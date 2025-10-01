@@ -1,0 +1,6 @@
+**/.env
+**/.env.*
+**/secrets/*
+**/data/*
+**/config/*/secrets/*
+.DS_Store

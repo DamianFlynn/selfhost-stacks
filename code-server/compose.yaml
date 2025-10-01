@@ -1,0 +1,21 @@
+---
+services:
+  code-server:
+    image: lscr.io/linuxserver/code-server:latest
+    container_name: code-server
+    env_file:
+      - /mnt/fast/stacks/code-server/.env
+    environment:
+      - TZ=Europe/Dublin
+      # strongly recommend running as the 'apps' account:
+      # id -u apps -> 568, id -g apps -> 568 on SCALE
+      - PUID=${PUID:-568}
+      - PGID=${PGID:-568}
+    volumes:
+      # AppData Configuration Presistance Dataset
+      - /mnt/fast/appdata/code-server:/config
+      # Access to edit the Stacks
+      - /mnt/fast/stacks:/stacks:rw
+    ports:
+      - "8443:8443"
+    restart: unless-stopped
