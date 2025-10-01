@@ -3,7 +3,8 @@ name: immich
 services:
   immich-server:
     container_name: immich_server
-    image: ghcr.io/immich-app/immich-server:${IMMICH_VERSION:-release}
+    # renovate: datasource=docker depName=ghcr.io/immich-app/immich-server
+    image: ghcr.io/immich-app/immich-server:release@sha256:f34203f6c2db130c26480ff21c412c6f0c37c24ee5261f6a6e4fe1eecaa921c0
     env_file:
       - /mnt/fast/stacks/immich/.env
     environment:
@@ -27,14 +28,17 @@ services:
       - /dev/dri:/dev/dri
 
   immich-machine-learning:
-    #devices:
-    #  - /dev/kfd:/dev/kfd
-    #  - /dev/dri:/dev/dri
     container_name: immich_machine_learning
-    #image: ghcr.io/immich-app/immich-machine-learning:${IMMICH_VERSION:-release}-rocm
-    image: ghcr.io/immich-app/immich-machine-learning:${IMMICH_VERSION:-release}
+    # renovate: datasource=docker depName=ghcr.io/immich-app/immich-machine-learning
+    image: ghcr.io/immich-app/immich-machine-learning:release@sha256:21b6a0bf02426336f456e8dca43c55b6a79b8e01ee2c25f91bc817fc3a745e52
     env_file:
       - /mnt/fast/stacks/immich/.env
+    environment:
+      # CPU-only (works great on your N5)
+      EXECUTION_PROVIDERS: CPUExecutionProvider
+      IMMICH_ML_FORCE_CPU: true        # hard force CPU provider
+      ROCR_VISIBLE_DEVICES:            # hide AMD GPUs from ROCm
+      HIP_VISIBLE_DEVICES:             # (belt-and-suspenders)
     volumes:
       - model-cache:/cache
     restart: always
@@ -44,23 +48,10 @@ services:
       - "${VIDEO_GID}"
       - "${RENDER_GID}"
     ipc: host
-    environment:
-      EXECUTION_PROVIDERS: CPUExecutionProvider
-      # Prefer ROCm, but fall back to CPU if ROCm fails
-      # EXECUTION_PROVIDERS: ROCMExecutionProvider,CPUExecutionProvider
-      # Spoof gfx1150 -> gfx1151 (present in the image’s Tensile libs)
-      #HSA_OVERRIDE_GFX_VERSION: "11.5.1"
-      # Persist MIOpen databases/caches (reduces first-run latency)
-      #MIOPEN_USER_DB_PATH: /cache/miopen
-      #MIOPEN_CACHE_DIR: /cache/miopen
-      # (Optional) reduce thread pressure
-      #OMP_NUM_THREADS: "4"
-      IMMICH_ML_FORCE_CPU: true        # hard force CPU provider
-      ROCR_VISIBLE_DEVICES:           # hide AMD GPUs from ROCm
-      HIP_VISIBLE_DEVICES:            # (belt-and-suspenders)
 
   redis:
     container_name: immich_redis
+    # already pinned – good
     image: docker.io/valkey/valkey:8-bookworm@sha256:fea8b3e67b15729d4bb70589eb03367bab9ad1ee89c876f54327fc7c6e618571
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -68,6 +59,7 @@ services:
 
   database:
     container_name: immich_postgres
+    # (Postgres intentionally excluded from Renovate)
     image: ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0@sha256:41eacbe83eca995561fe43814fd4891e16e39632806253848efaf04d3c8a8b84
     environment:
       POSTGRES_PASSWORD: ${DB_PASSWORD}

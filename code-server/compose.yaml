@@ -1,7 +1,11 @@
 ---
 services:
+  # Microsoft Visual Studio Code
   code-server:
-    image: lscr.io/linuxserver/code-server:latest
+    # Pin latest to digest so deploys are reproducible; Renovate will bump this digest.
+
+    # renovate: datasource=docker depName=lscr.io/linuxserver/code-server
+    image: lscr.io/linuxserver/code-server:latest@sha256:f0f4cc06a8c642e61299fe57b01fe2d5ded3934e923aba7456770e70a3c8cf97
     container_name: code-server
     env_file:
       - /mnt/fast/stacks/code-server/.env

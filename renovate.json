@@ -1,0 +1,77 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", ":pinDigests"],
+  "enabledManagers": ["docker-compose"],
+  "labels": ["renovate"],
+
+  "packageRules": [
+    /* ------- Update-type labelling ------- */
+    {
+      "description": "Label by update type",
+      "matchUpdateTypes": ["major", "minor", "patch", "digest", "pin"],
+      "labels": ["update:{{updateType}}"]
+    },
+    {
+      "description": "Security advisories",
+      "matchManagers": ["docker-compose"],
+      "matchDepTypes": ["dependencies"],
+      "matchConfidence": ["high"],
+      "matchSourceUrls": ["/security", "/advisories"],
+      "labels": ["security"]
+    },
+
+    /* ------- Safe stacks (automerge) ------- */
+    {
+      "description": "lscr.io/linuxserver/code-server (safe, automerge minor/patch/digest)",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["lscr.io/linuxserver/code-server"],
+      "matchFileNames": ["**/stacks/code-server/**"],
+      "matchUpdateTypes": ["minor", "patch", "digest"],
+      "labels": ["stack:code-server", "safe", "automerge"],
+      "automerge": true,
+      "platformAutomerge": true
+    },
+    {
+      "description": "valkey (redis) safe, automerge minor/patch/digest",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["docker.io/valkey/valkey"],
+      "matchFileNames": ["**/stacks/immich/**"],
+      "matchUpdateTypes": ["minor", "patch", "digest"],
+      "labels": ["stack:immich", "component:valkey", "safe", "automerge"],
+      "automerge": true,
+      "platformAutomerge": true
+    },
+
+    /* ------- Immich app images (manual merge) ------- */
+    {
+      "description": "Immich server requires manual review",
+      "matchDatasources": ["docker"],
+      "matchPackagePatterns": ["^ghcr\\.io/immich-app/immich-server$"],
+      "matchFileNames": ["**/stacks/immich/**"],
+      "labels": ["stack:immich", "component:server", "manual-merge"],
+      "automerge": false
+    },
+    {
+      "description": "Immich machine-learning requires manual review",
+      "matchDatasources": ["docker"],
+      "matchPackagePatterns": ["^ghcr\\.io/immich-app/immich-machine-learning$"],
+      "matchFileNames": ["**/stacks/immich/**"],
+      "labels": ["stack:immich", "component:ml", "manual-merge"],
+      "automerge": false
+    },
+
+    /* ------- Immich Postgres stays pinned (ignore) ------- */
+    {
+      "description": "Keep Immich Postgres locked; manual bump only",
+      "matchDatasources": ["docker"],
+      "matchPackagePatterns": ["^ghcr\\.io/immich-app/postgres$"],
+      "matchFileNames": ["**/stacks/immich/**"],
+      "enabled": false,
+      "labels": ["stack:immich", "component:postgres", "locked"]
+    }
+  ],
+
+  "prHourlyLimit": 4,
+  "stabilityDays": 1,
+  "schedule": ["after 02:00 and before 06:00 on sunday"]
+}
