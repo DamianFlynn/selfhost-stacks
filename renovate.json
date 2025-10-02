@@ -1,39 +1,25 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": ["config:recommended"],
+
+  // Pin image digests (replacement for the invalid ":pinDigests" preset)
   "pinDigests": true,
 
   "enabledManagers": ["docker-compose"],
   "labels": ["renovate"],
 
-  // ✅ Add credentials for hosts Renovate queries for source/changelogs
-  "hostRules": [
-    {
-      "matchHost": "api.github.com",
-      "token": "{{ env.GITHUB_TOKEN }}"
-    },
-    {
-      "matchHost": "github.com",
-      "token": "{{ env.GITHUB_TOKEN }}"
-    }
-  ],
+  // When GitHub raises a vulnerability alert that Renovate can fix,
+  // label those PRs as "security".
+  "vulnerabilityAlerts": {
+    "labels": ["security"]
+  },
 
   "packageRules": [
     /* ------- Update-type labelling ------- */
     {
       "description": "Label by update type",
       "matchUpdateTypes": ["major", "minor", "patch", "digest", "pin"],
-      "labels": ["update:{{updateType}}"]
-    },
-
-    /* ------- Security advisories (requires host auth) ------- */
-    {
-      "description": "Security advisories",
-      "matchManagers": ["docker-compose"],
-      "matchDepTypes": ["dependencies"],
-      "matchConfidence": ["high"],
-      "matchSourceUrls": ["/security", "/advisories"],
-      "labels": ["security"]
+      "addLabels": ["update:{{updateType}}"]
     },
 
     /* ------- Safe stacks (automerge) ------- */
@@ -43,7 +29,7 @@
       "matchPackageNames": ["lscr.io/linuxserver/code-server"],
       "matchFileNames": ["**/stacks/code-server/**"],
       "matchUpdateTypes": ["minor", "patch", "digest"],
-      "labels": ["stack:code-server", "safe", "automerge"],
+      "addLabels": ["stack:code-server", "safe", "automerge"],
       "automerge": true,
       "platformAutomerge": true
     },
@@ -53,7 +39,7 @@
       "matchPackageNames": ["docker.io/valkey/valkey"],
       "matchFileNames": ["**/stacks/immich/**"],
       "matchUpdateTypes": ["minor", "patch", "digest"],
-      "labels": ["stack:immich", "component:valkey", "safe", "automerge"],
+      "addLabels": ["stack:immich", "component:valkey", "safe", "automerge"],
       "automerge": true,
       "platformAutomerge": true
     },
@@ -64,7 +50,7 @@
       "matchDatasources": ["docker"],
       "matchPackagePatterns": ["^ghcr\\.io/immich-app/immich-server$"],
       "matchFileNames": ["**/stacks/immich/**"],
-      "labels": ["stack:immich", "component:server", "manual-merge"],
+      "addLabels": ["stack:immich", "component:server", "manual-merge"],
       "automerge": false
     },
     {
@@ -72,7 +58,7 @@
       "matchDatasources": ["docker"],
       "matchPackagePatterns": ["^ghcr\\.io/immich-app/immich-machine-learning$"],
       "matchFileNames": ["**/stacks/immich/**"],
-      "labels": ["stack:immich", "component:ml", "manual-merge"],
+      "addLabels": ["stack:immich", "component:ml", "manual-merge"],
       "automerge": false
     },
 
@@ -83,7 +69,7 @@
       "matchPackagePatterns": ["^ghcr\\.io/immich-app/postgres$"],
       "matchFileNames": ["**/stacks/immich/**"],
       "enabled": false,
-      "labels": ["stack:immich", "component:postgres", "locked"]
+      "addLabels": ["stack:immich", "component:postgres", "locked"]
     }
   ],
 
