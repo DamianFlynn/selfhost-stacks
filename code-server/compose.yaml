@@ -5,7 +5,7 @@ services:
     # Pin latest to digest so deploys are reproducible; Renovate will bump this digest.
 
     # renovate: datasource=docker depName=lscr.io/linuxserver/code-server
-    image: lscr.io/linuxserver/code-server:4.104.2-ls294
+    image: lscr.io/linuxserver/code-server:4.104.2
     pull_policy: always
     container_name: code-server
     env_file:
