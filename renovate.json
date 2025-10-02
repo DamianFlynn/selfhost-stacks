@@ -1,38 +1,54 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": ["config:recommended"],
-
-  // Pin image digests (replacement for the invalid ":pinDigests" preset)
   "pinDigests": true,
 
   "enabledManagers": ["docker-compose"],
   "labels": ["renovate"],
-
-  // When GitHub raises a vulnerability alert that Renovate can fix,
-  // label those PRs as "security".
-  "vulnerabilityAlerts": {
-    "labels": ["security"]
-  },
+  "vulnerabilityAlerts": { "labels": ["security"] },
 
   "packageRules": [
-    /* ------- Update-type labelling ------- */
+    /* ------- Label by update type ------- */
     {
       "description": "Label by update type",
       "matchUpdateTypes": ["major", "minor", "patch", "digest", "pin"],
       "addLabels": ["update:{{updateType}}"]
     },
 
-    /* ------- Safe stacks (automerge) ------- */
+    /* ------- Immich (server + ML) on v2.x, manual merge ------- */
     {
-      "description": "lscr.io/linuxserver/code-server (safe, automerge minor/patch/digest)",
+      "description": "Immich server requires manual review (v2.x only)",
+      "matchDatasources": ["docker"],
+      "matchPackagePatterns": [
+        "^ghcr\\.io/immich-app/immich-server$",
+        "^ghcr\\.io/immich-app/immich-machine-learning$"
+      ],
+      // Only track semver tags up to but not including v3
+      "allowedVersions": ">=2.0.0 <3.0.0",
+      "addLabels": ["stack:immich", "manual-merge"],
+      "automerge": false
+    },
+
+    /* ------- LinuxServer code-server: follow upstream semver, automerge safe ------- */
+    {
+      "description": "code-server (safe, automerge minor/patch/digest)",
       "matchDatasources": ["docker"],
       "matchPackageNames": ["lscr.io/linuxserver/code-server"],
       "matchFileNames": ["**/stacks/code-server/**"],
+
+      // Extract the leading upstream semver from tags like 4.104.2-ls294
+      "extractVersion": "^(?<version>\\d+\\.\\d+\\.\\d+)",
+
+      // Stay on v4 unless you intentionally opt into v5+
+      "allowedVersions": ">=4.0.0 <5.0.0",
+
       "matchUpdateTypes": ["minor", "patch", "digest"],
       "addLabels": ["stack:code-server", "safe", "automerge"],
       "automerge": true,
       "platformAutomerge": true
     },
+
+    /* ------- Valkey (unchanged) ------- */
     {
       "description": "valkey (redis) safe, automerge minor/patch/digest",
       "matchDatasources": ["docker"],
@@ -42,24 +58,6 @@
       "addLabels": ["stack:immich", "component:valkey", "safe", "automerge"],
       "automerge": true,
       "platformAutomerge": true
-    },
-
-    /* ------- Immich app images (manual merge) ------- */
-    {
-      "description": "Immich server requires manual review",
-      "matchDatasources": ["docker"],
-      "matchPackagePatterns": ["^ghcr\\.io/immich-app/immich-server$"],
-      "matchFileNames": ["**/stacks/immich/**"],
-      "addLabels": ["stack:immich", "component:server", "manual-merge"],
-      "automerge": false
-    },
-    {
-      "description": "Immich machine-learning requires manual review",
-      "matchDatasources": ["docker"],
-      "matchPackagePatterns": ["^ghcr\\.io/immich-app/immich-machine-learning$"],
-      "matchFileNames": ["**/stacks/immich/**"],
-      "addLabels": ["stack:immich", "component:ml", "manual-merge"],
-      "automerge": false
     },
 
     /* ------- Immich Postgres stays pinned (ignore) ------- */
