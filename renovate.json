@@ -1,6 +1,10 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:recommended", ":pinDigests"],
+  "extends": ["config:recommended"],
+
+  // Pin image digests to immutable SHAs (replaces the invalid :pinDigests preset)
+  "pinDigests": true,
+
   "enabledManagers": ["docker-compose"],
   "labels": ["renovate"],
 
