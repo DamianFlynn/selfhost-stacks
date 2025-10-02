@@ -51,7 +51,7 @@
       "addLabels": ["stack:code-server", "safe", "automerge"],
       "automerge": true,
       "platformAutomerge": true
-    }
+    },
 
 
     /* ------- Valkey (unchanged) ------- */
