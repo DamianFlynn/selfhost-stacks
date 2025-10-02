@@ -31,22 +31,38 @@
     },
     {
       "description": "Immich server requires manual review (v2.x only)",
-      "matchDatasources": ["docker"],
-      "matchPackagePatterns": [
-        "^ghcr\\.io/immich-app/immich-server$",
-        "^ghcr\\.io/immich-app/immich-machine-learning$"
+      "matchDatasources": [
+        "docker"
       ],
       "allowedVersions": ">=2.0.0 <3.0.0",
-      "addLabels": ["stack:immich", "manual-merge"],
-      "automerge": false
+      "addLabels": [
+        "stack:immich",
+        "manual-merge"
+      ],
+      "automerge": false,
+      "matchPackageNames": [
+        "/^ghcr\\.io/immich-app/immich-server$/",
+        "/^ghcr\\.io/immich-app/immich-machine-learning$/"
+      ]
     },
     {
       "description": "Keep Immich Postgres locked; manual bump only",
-      "matchDatasources": ["docker"],
-      "matchPackageNames": ["ghcr.io/immich-app/postgres"],
-      "matchFileNames": ["**/immich/**", "**/stacks/immich/**"],
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "ghcr.io/immich-app/postgres"
+      ],
+      "matchFileNames": [
+        "**/immich/**",
+        "**/stacks/immich/**"
+      ],
       "enabled": false,
-      "addLabels": ["stack:immich", "component:postgres", "locked"]
+      "addLabels": [
+        "stack:immich",
+        "component:postgres",
+        "locked"
+      ]
     },
     {
       "description": "code-server versioning (use upstream semver, stay on v4)",
@@ -136,4 +152,3 @@
     "after 02:00 and before 06:00 on sunday"
   ]
 }
-
