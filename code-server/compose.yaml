@@ -22,5 +22,5 @@ services:
       # Access to edit the Stacks
       - /mnt/fast/stacks:/stacks:rw
     ports:
-      - "8443:8443"
+      - "8444:8443"
     restart: unless-stopped
