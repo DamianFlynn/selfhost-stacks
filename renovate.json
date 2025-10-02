@@ -29,24 +29,30 @@
       "automerge": false
     },
 
-    /* ------- LinuxServer code-server: follow upstream semver, automerge safe ------- */
+    /* ------- LinuxServer code-server: versioning (stay on v4, parse upstream semver) ------- */
+    {
+      "description": "code-server versioning (use upstream semver, stay on v4)",
+      "matchDatasources": ["docker"],
+        "matchPackageNames": ["lscr.io/linuxserver/code-server"],
+        "matchFileNames": ["**/stacks/code-server/**"],
+        // Extract the upstream semver from tags like 4.104.2-ls294
+        "extractVersion": "^(?<version>\\d+\\.\\d+\\.\\d+)",
+        // Track v4.x only unless you opt in to v5+
+        "allowedVersions": ">=4.0.0 <5.0.0"
+      },
+
+      /* ------- LinuxServer code-server: automerge for safe updates ------- */
     {
       "description": "code-server (safe, automerge minor/patch/digest)",
       "matchDatasources": ["docker"],
       "matchPackageNames": ["lscr.io/linuxserver/code-server"],
       "matchFileNames": ["**/stacks/code-server/**"],
-
-      // Extract the leading upstream semver from tags like 4.104.2-ls294
-      "extractVersion": "^(?<version>\\d+\\.\\d+\\.\\d+)",
-
-      // Stay on v4 unless you intentionally opt into v5+
-      "allowedVersions": ">=4.0.0 <5.0.0",
-
       "matchUpdateTypes": ["minor", "patch", "digest"],
       "addLabels": ["stack:code-server", "safe", "automerge"],
       "automerge": true,
       "platformAutomerge": true
-    },
+    }
+
 
     /* ------- Valkey (unchanged) ------- */
     {
