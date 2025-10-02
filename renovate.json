@@ -1,12 +1,22 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": ["config:recommended"],
-
-  // Pin image digests to immutable SHAs (replaces the invalid :pinDigests preset)
   "pinDigests": true,
 
   "enabledManagers": ["docker-compose"],
   "labels": ["renovate"],
+
+  // ✅ Add credentials for hosts Renovate queries for source/changelogs
+  "hostRules": [
+    {
+      "matchHost": "api.github.com",
+      "token": "{{ env.GITHUB_TOKEN }}"
+    },
+    {
+      "matchHost": "github.com",
+      "token": "{{ env.GITHUB_TOKEN }}"
+    }
+  ],
 
   "packageRules": [
     /* ------- Update-type labelling ------- */
@@ -15,6 +25,8 @@
       "matchUpdateTypes": ["major", "minor", "patch", "digest", "pin"],
       "labels": ["update:{{updateType}}"]
     },
+
+    /* ------- Security advisories (requires host auth) ------- */
     {
       "description": "Security advisories",
       "matchManagers": ["docker-compose"],
