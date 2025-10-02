@@ -43,8 +43,8 @@
     {
       "description": "Keep Immich Postgres locked; manual bump only",
       "matchDatasources": ["docker"],
-      "matchFileNames": ["**/stacks/immich/**"],
-      "matchPackagePatterns": ["^ghcr\\.io/immich-app/postgres$"],
+      "matchPackageNames": ["ghcr.io/immich-app/postgres"],
+      "matchFileNames": ["**/immich/**", "**/stacks/immich/**"],
       "enabled": false,
       "addLabels": ["stack:immich", "component:postgres", "locked"]
     },
