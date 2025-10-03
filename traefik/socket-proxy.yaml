@@ -3,6 +3,7 @@ services:
   socket-proxy:
     container_name: socket-proxy
     image: tecnativa/docker-socket-proxy:v0.4.1
+    pull_policy: always
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped
