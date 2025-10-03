@@ -3,7 +3,7 @@
   "extends": [
     "config:recommended"
   ],
-  "pinDigests": true,
+  "pinDigests": false,
   "enabledManagers": [
     "docker-compose",
     "dockerfile"
@@ -76,6 +76,21 @@
         "at any time"
       ],
       "minimumReleaseAge": "3 hours"
+    },
+    {
+      "description": "Security: Pin digests for security-critical components",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "traefik",
+        "authelia/authelia"
+      ],
+      "pinDigests": true,
+      "addLabels": [
+        "security-critical",
+        "digest-pinned"
+      ]
     },
     {
       "description": "Default: Require manual review for major updates",
