@@ -8,6 +8,14 @@
     "docker-compose",
     "dockerfile"
   ],
+  "docker-compose": {
+    "fileMatch": [
+      "(^|/)(compose\\.ya?ml|docker-compose\\.ya?ml)$",
+      "traefik/authelia\\.ya?ml$",
+      "traefik/socket-proxy\\.ya?ml$", 
+      "traefik/traefik\\.ya?ml$"
+    ]
+  },
   "labels": [
     "renovate"
   ],
@@ -44,7 +52,11 @@
         "safe"
       ],
       "automerge": true,
-      "platformAutomerge": true
+      "platformAutomerge": true,
+      "schedule": [
+        "at any time"
+      ],
+      "minimumReleaseAge": "1 hour"
     },
     {
       "description": "Default: Auto-merge minor updates for all Docker images",
@@ -59,7 +71,11 @@
         "safe"
       ],
       "automerge": true,
-      "platformAutomerge": true
+      "platformAutomerge": true,
+      "schedule": [
+        "at any time"
+      ],
+      "minimumReleaseAge": "3 hours"
     },
     {
       "description": "Default: Require manual review for major updates",
@@ -178,9 +194,9 @@
       ]
     }
   ],
-  "prHourlyLimit": 4,
-  "minimumReleaseAge": "1 day",
+  "prHourlyLimit": 6,
+  "minimumReleaseAge": "3 hours",
   "schedule": [
-    "after 02:00 and before 06:00 on sunday"
+    "at any time"
   ]
 }
