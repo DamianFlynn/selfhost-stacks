@@ -9,11 +9,11 @@
     "dockerfile"
   ],
   "docker-compose": {
-    "fileMatch": [
-      "(^|/)(compose\\.ya?ml|docker-compose\\.ya?ml)$",
-      "traefik/authelia\\.ya?ml$",
-      "traefik/socket-proxy\\.ya?ml$", 
-      "traefik/traefik\\.ya?ml$"
+    "managerFilePatterns": [
+      "/(^|/)(compose\\.ya?ml|docker-compose\\.ya?ml)$/",
+      "/traefik/authelia\\.ya?ml$/",
+      "/traefik/socket-proxy\\.ya?ml$/",
+      "/traefik/traefik\\.ya?ml$/"
     ]
   },
   "labels": [
