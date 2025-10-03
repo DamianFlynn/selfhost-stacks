@@ -1,5 +1,16 @@
 name: immich
 
+########################### NETWORKS
+networks:
+  t3_proxy:
+    external: true
+  immich:
+    name: immich
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 192.168.80.0/24
+
 services:
   immich-server:
     container_name: immich_server
@@ -27,6 +38,18 @@ services:
       disable: false
     devices:
       - /dev/dri:/dev/dri
+    networks:
+      - t3_proxy
+      - immich
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.immich-rtr.entrypoints=websecure"
+      - "traefik.http.routers.immich-rtr.rule=Host(`photos.${DOMAINNAME}`)"
+      - "traefik.http.routers.immich-rtr.tls=true"
+      - "traefik.http.routers.immich-rtr.tls.certresolver=dns-cloudflare"
+      - "traefik.http.routers.immich-rtr.middlewares=chain-no-auth@file"
+      - "traefik.http.routers.immich-rtr.service=immich-svc"
+      - "traefik.http.services.immich-svc.loadbalancer.server.port=2283"
 
   immich-machine-learning:
     container_name: immich_machine_learning
@@ -50,6 +73,8 @@ services:
       - "${VIDEO_GID}"
       - "${RENDER_GID}"
     ipc: host
+    networks:
+      - immich
 
   redis:
     container_name: immich_redis
@@ -59,6 +84,8 @@ services:
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
     restart: always
+    networks:
+      - immich
 
   database:
     container_name: immich_postgres
@@ -74,6 +101,8 @@ services:
       - ${DB_DATA_LOCATION}:/var/lib/postgresql/data
     shm_size: 128mb
     restart: always
+    networks:
+      - immich
 
 volumes:
   model-cache: {}
