@@ -182,58 +182,179 @@ include:
 
 ---
 
-## Renovate
+## Renovate (Automated Dependency Updates)
 
-We use Renovate to keep images fresh **with pinned digests** for reproducible deploys.
+This repository uses **Renovate** to automatically keep Docker images updated with intelligent automation rules designed for security, stability, and minimal maintenance overhead.
 
-- **Automerge** safe services: `code-server`, `valkey` (minor/patch/digest)
-- **Manual review**: `immich-server`, `immich-machine-learning`
-- **Locked**: Immich **Postgres** (update manually when upstream changes their recommended tag)
+### 🎯 **Design Philosophy**
 
-`renovate.json` (at repo root) includes labels and rules like:
+- **Security-first**: Critical components (reverse proxy, auth) get digest pinning for supply chain protection
+- **Developer-friendly**: Development tools get fast updates without digest constraints
+- **Selective automation**: Auto-merge safe updates, manual review for breaking changes
+- **Stack-aware**: Different rules per service type with appropriate risk management
+
+### 📋 **Current Update Strategy**
+
+| Component Type | Auto-merge | Digest Pinned | Schedule | Reasoning |
+|---------------|------------|---------------|----------|-----------|
+| **Security-Critical** | ❌ Manual | ✅ Yes | Any time | Supply chain protection |
+| - traefik | ❌ Manual | ✅ Yes | Any time | Reverse proxy - security boundary |
+| - authelia | ❌ Manual | ✅ Yes | Any time | Authentication service |
+| **Development Tools** | ✅ Patch/Minor | ❌ No | Any time | Fast updates more valuable |
+| - code-server | ✅ Patch/Minor | ❌ No | Any time | Development environment |
+| - socket-proxy | ✅ Patch/Minor | ❌ No | Any time | Internal Docker proxy |
+| **Application Stack** | ❌ Manual | ❌ No | Any time | Breaking changes possible |
+| - immich-server | ❌ Manual | ❌ No | Any time | Photo management app |
+| - immich-machine-learning | ❌ Manual | ❌ No | Any time | ML models may break |
+| **Infrastructure** | 🔒 Disabled | 🔒 Pinned | Never | Critical stability |
+| - postgres (Immich) | 🔒 Disabled | 🔒 Pinned | Never | Database schema stability |
+| - valkey/redis (Immich) | 🔒 Disabled | 🔒 Pinned | Never | Data persistence safety |
+
+### ⚡ **Automation Behavior**
+
+**Immediate Auto-merge (1-3 hours after release):**
+- Patch updates for development tools (code-server, socket-proxy)
+- Minor updates for development tools (after 3 hour safety delay)
+
+**Manual Review Required:**
+- Major version updates for any component
+- Any updates to application stacks (Immich)
+- Security-critical component updates (traefik, authelia)
+
+**Completely Disabled:**
+- Database components (postgres, redis/valkey) 
+- Updates only via manual configuration changes
+
+### 🏗 **Configuration Structure**
 
 ```json
 {
-  "extends": ["config:recommended", ":pinDigests"],
-  "enabledManagers": ["docker-compose"],
-  "labels": ["renovate"],
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "pinDigests": false,  // Selective pinning only
+  "enabledManagers": ["docker-compose", "dockerfile"],
+  
+  // Custom file discovery for modular compose structure
+  "docker-compose": {
+    "fileMatch": [
+      "(^|/)(compose\\.ya?ml|docker-compose\\.ya?ml)$",
+      "traefik/authelia\\.ya?ml$",
+      "traefik/socket-proxy\\.ya?ml$", 
+      "traefik/traefik\\.ya?ml$"
+    ]
+  },
+  
   "packageRules": [
+    // Auto-merge safe updates (patch/minor for dev tools)
     {
-      "matchPackageNames": ["lscr.io/linuxserver/code-server", "docker.io/valkey/valkey"],
-      "matchUpdateTypes": ["minor", "patch", "digest"],
-      "labels": ["safe", "automerge"],
+      "matchDatasources": ["docker"],
+      "matchUpdateTypes": ["patch", "digest"],
       "automerge": true,
-      "platformAutomerge": true
+      "minimumReleaseAge": "1 hour"
     },
     {
-      "matchPackagePatterns": ["^ghcr\\.io/immich-app/immich-server$", "^ghcr\\.io/immich-app/immich-machine-learning$"],
-      "labels": ["stack:immich", "manual-merge"],
-      "automerge": false
+      "matchDatasources": ["docker"], 
+      "matchUpdateTypes": ["minor"],
+      "automerge": true,
+      "minimumReleaseAge": "3 hours"
     },
+    
+    // Security-critical components: digest pinning
     {
-      "matchPackagePatterns": ["^ghcr\\.io/immich-app/postgres$"],
+      "matchPackageNames": ["traefik", "authelia/authelia"],
+      "pinDigests": true,
+      "addLabels": ["security-critical", "digest-pinned"]
+    },
+    
+    // Immich components: manual review
+    {
+      "matchPackageNames": ["/immich-server/", "/immich-machine-learning/"],
+      "automerge": false,
+      "addLabels": ["stack:immich", "manual-review-required"]
+    },
+    
+    // Infrastructure: completely disabled
+    {
+      "matchPackageNames": ["postgres", "ghcr.io/immich-app/postgres"],
       "enabled": false,
-      "labels": ["stack:immich", "component:postgres", "locked"]
+      "addLabels": ["pinned", "manual-update-only"]
     }
   ]
 }
 ```
 
-### Pinning digests (once per image)
-```bash
-docker pull lscr.io/linuxserver/code-server:latest
-docker image inspect lscr.io/linuxserver/code-server:latest --format '{{index .RepoDigests 0}}'
-# copy the sha256 into compose.yaml after the tag:  :latest@sha256:...
+### 🔄 **Workflow Integration**
 
-docker pull ghcr.io/immich-app/immich-server:release
-docker image inspect ghcr.io/immich-app/immich-server:release --format '{{index .RepoDigests 0}}'
+1. **Dependency Detection**: Scans all compose files including modular traefik/*.yaml files
+2. **PR Creation**: Creates labeled PRs with appropriate update types
+3. **Auto-merge**: Safe updates merge automatically after release age delays
+4. **Manual Review**: Breaking changes wait for your approval
+5. **Dashboard**: [Dependency Dashboard](../../issues/3) shows all detected dependencies
 
-docker pull ghcr.io/immich-app/immich-machine-learning:release
-docker image inspect ghcr.io/immich-app/immich-machine-learning:release --format '{{index .RepoDigests 0}}'
+### 🏷 **Label Strategy**
+
+PRs are automatically labeled for easy filtering:
+
+- `renovate` - All renovate PRs
+- `update:major|minor|patch|digest` - Update type
+- `automerge` + `safe` - Auto-mergeable updates  
+- `manual-review-required` - Needs human approval
+- `security-critical` + `digest-pinned` - Security components
+- `stack:immich|traefik|code-server` - Service grouping
+- `pinned` + `manual-update-only` - Disabled updates
+
+### 🛡 **Security Features**
+
+**Digest Pinning** for security-critical components:
+```yaml
+# Before: version only
+image: traefik:v3.5.3
+
+# After: version + digest pin  
+image: traefik:v3.5.3@sha256:84eb6c0e67c99fa026bf1bf4b0afd9ad44350d375b4ebc5049c5f70543a729d6
 ```
 
-### Nice-to-have labels in your Git host
-Create labels like `automerge`, `manual-merge`, `stack:immich`, `stack:code-server`, `update:minor`, etc. Renovate will tag PRs accordingly.
+This prevents supply chain attacks where malicious code is injected into existing tags.
+
+**Controlled Release Ages**:
+- Patch updates: 1 hour minimum age
+- Minor updates: 3 hours minimum age  
+- Major updates: Manual review only
+
+### 📊 **Monitoring & Maintenance**
+
+- **Dashboard**: Check [Dependency Dashboard](../../issues/3) for status
+- **PR Queue**: Review open renovate PRs for manual approval
+- **Config Updates**: Renovate will create config migration PRs when needed
+- **Manual Triggers**: Check the dashboard checkbox to force immediate runs
+
+### 🛠 **Manual Operations**
+
+When you need to manually update disabled components:
+
+```bash
+# Check current digests
+docker pull ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0
+docker image inspect ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0 --format '{{index .RepoDigests 0}}'
+
+# Update compose.yaml with new digest
+# Commit changes and deploy
+```
+
+### 🎨 **Recommended GitHub Labels**
+
+Create these labels in your repository for better PR organization:
+- `renovate` (blue)
+- `automerge` (green) 
+- `manual-review-required` (orange)
+- `security-critical` (red)
+- `digest-pinned` (purple)
+- `stack:immich` (light blue)
+- `stack:traefik` (dark blue)
+- `stack:code-server` (yellow)
+- `update:major` (red)
+- `update:minor` (orange)  
+- `update:patch` (green)
 
 ---
 
