@@ -1,0 +1,27 @@
+services:
+
+  tsbridge:
+    image: ghcr.io/jtdowney/tsbridge:v0.12.1
+    command: ["--provider", "docker"]
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock # Required for label discovery
+      - /mnt/fast/appdata/traefik/tsbridge:/var/lib/tsbridge
+
+    environment:
+      - TS_OAUTH_CLIENT_ID=${TS_OAUTH_CLIENT_ID}
+      - TS_OAUTH_CLIENT_SECRET=${TS_OAUTH_CLIENT_SECRET}
+
+    labels:
+      - "tsbridge.tailscale.oauth_client_id_env=TS_OAUTH_CLIENT_ID"
+      - "tsbridge.tailscale.oauth_client_secret_env=TS_OAUTH_CLIENT_SECRET"
+      - "tsbridge.tailscale.state_dir=/var/lib/tsbridge"
+      - "tsbridge.tailscale.default_tags=tag:server" # Must match or be owned by your OAuth client's tag
+
+
+  whoami:
+    image: traefik/whoami
+    labels:
+      - "tsbridge.enabled=true"
+      - "tsbridge.service.name=whoami"
+      - "tsbridge.service.port=80"
+

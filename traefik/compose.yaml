@@ -37,4 +37,4 @@ include:
   - socket-proxy.yaml
   - traefik.yaml
   - authelia.yaml
-
+  - tsproxy.yaml
