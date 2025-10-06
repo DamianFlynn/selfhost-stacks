@@ -51,6 +51,14 @@ services:
       - "traefik.http.routers.immich-rtr.service=immich-svc"
       - "traefik.http.services.immich-svc.loadbalancer.server.port=2283"
 
+      - "tsbridge.enabled=true"
+      - "tsbridge.service.name=photos"                 # Default: container name
+      - "tsbridge.service.port=2283"                   # Port inside the container
+      - "tsbridge.service.access_log=false"            # Disable access log
+      - "tsbridge.service.tags=tag:dev,tag:prod"       # Override default tags
+      - "tsbridge.service.insecure_skip_verify=true"   # Skip TLS cert verification (HTTPS backends only)
+      - "tsbridge.service.whois_enabled=true"          # Add identity headers
+      
   immich-machine-learning:
     container_name: immich_machine_learning
     # renovate: datasource=docker depName=ghcr.io/immich-app/immich-machine-learning

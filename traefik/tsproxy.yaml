@@ -1,5 +1,5 @@
 services:
-
+  # https://github.com/jtdowney/tsbridge/blob/main/docs/configuration-reference.md#tag-ownership-and-oauth-security
   tsbridge:
     image: ghcr.io/jtdowney/tsbridge:v0.12.1
     command: ["--provider", "docker"]

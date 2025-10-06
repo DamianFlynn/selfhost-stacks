@@ -24,3 +24,12 @@ services:
     ports:
       - "8444:8443"
     restart: unless-stopped
+    labels:
+      - "tsbridge.enabled=true"
+      - "tsbridge.service.name=code"                   # Default: container name
+      - "tsbridge.service.port=8443"                   # Port inside the container
+      - "tsbridge.service.access_log=false"            # Disable access log
+      - "tsbridge.service.tags=tag:dev,tag:prod"       # Override default tags
+      - "tsbridge.service.insecure_skip_verify=true"   # Skip TLS cert verification (HTTPS backends only)
+      - "tsbridge.service.whois_enabled=true"          # Add identity headers
+      
