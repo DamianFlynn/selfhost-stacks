@@ -1,0 +1,47 @@
+services:
+
+  # --- Tailscale sidecar for VANILLA ---
+  tailscale-ygg:
+    image: ghcr.io/tailscale/tailscale:v1.88.3
+    container_name: tailscale_ygg
+    restart: unless-stopped
+    cap_add: [NET_ADMIN, SYS_MODULE, NET_RAW]
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    volumes:
+      - /mnt/fast/appdata/minecraft/yggdrasil/tailnet:/state
+    environment:
+      TS_STATE_DIR: /state
+      TS_HOSTNAME: mc-ygg
+      TS_AUTHKEY: ${TS_AUTHKEY_YGG}
+      TS_AUTH_ONCE: "true"
+      TS_USERSPACE: "false"
+      TS_EXTRA_ARGS: "--advertise-tags=tag:games"
+    healthcheck:
+      test: ["CMD-SHELL", "tailscale status >/dev/null 2>&1"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+
+  minecraft-yggdrasil:
+    image: itzg/minecraft-bedrock-server:2025.9.0
+    container_name: minecraft_yggdrasil
+    restart: unless-stopped
+    tty: true
+    stdin_open: true
+    network_mode: "service:tailscale-ygg"
+    depends_on:
+      tailscale-ygg:
+        condition: service_healthy
+    environment:
+      EULA: "true"
+      SERVER_NAME: "yggdrasil"
+      SERVER_PORT: 19132                         # also default (different TS IP)
+      SERVER_PORT_V6: 19133
+      ALLOW_CHEATS: "true"
+      DEFAULT_PLAYER_PERMISSION_LEVEL: "operator"
+      LEVEL_NAME: "Yggdrasil"
+    volumes:
+      - /mnt/fast/appdata/minecraft/yggdrasil:/data
+
+
