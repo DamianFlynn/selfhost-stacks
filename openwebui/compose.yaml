@@ -92,6 +92,13 @@ services:
       - "traefik.http.routers.ollama-rtr.tls=true"
       - "traefik.http.routers.ollama-rtr.tls.certresolver=dns-cloudflare"
       - "traefik.http.services.ollama-svc.loadbalancer.server.port=11434"
+
+      - "tsbridge.enabled=true"
+      - "tsbridge.service.name=ollama"                  # Default: container name
+      - "tsbridge.service.port=11434"                   # Port inside the container
+      - "tsbridge.service.access_log=false"             # Disable access log
+      - "tsbridge.service.tags=tag:dev,tag:prod"        # Override default tags
+      - "tsbridge.service.whois_enabled=true"           # Add identity headers
     healthcheck:
       interval: 30s
       retries: 5
@@ -121,6 +128,13 @@ services:
       - "traefik.http.routers.docling-rtr.tls=true"
       - "traefik.http.routers.docling-rtr.tls.certresolver=dns-cloudflare"
       - "traefik.http.services.docling-svc.loadbalancer.server.port=5001"
+
+      - "tsbridge.enabled=true"
+      - "tsbridge.service.name=docling"                 # Default: container name
+      - "tsbridge.service.port=5001"                    # Port inside the container
+      - "tsbridge.service.access_log=false"             # Disable access log
+      - "tsbridge.service.tags=tag:dev,tag:prod"        # Override default tags
+      - "tsbridge.service.whois_enabled=true"           # Add identity headers
     healthcheck:
       interval: 30s
       retries: 5
@@ -168,6 +182,13 @@ services:
       - "traefik.http.routers.mcp-rtr.tls=true"
       - "traefik.http.routers.mcp-rtr.tls.certresolver=dns-cloudflare"
       - "traefik.http.services.mcp-svc.loadbalancer.server.port=8000"
+
+      - "tsbridge.enabled=true"
+      - "tsbridge.service.name=mcp"                     # Default: container name
+      - "tsbridge.service.port=8000"                    # Port inside the container
+      - "tsbridge.service.access_log=false"             # Disable access log
+      - "tsbridge.service.tags=tag:dev,tag:prod"        # Override default tags
+      - "tsbridge.service.whois_enabled=true"           # Add identity headers
     healthcheck:
       interval: 30s
       retries: 5
@@ -210,6 +231,13 @@ services:
       - "traefik.http.routers.searxng-rtr.tls=true"
       - "traefik.http.routers.searxng-rtr.tls.certresolver=dns-cloudflare"
       - "traefik.http.services.searxng-svc.loadbalancer.server.port=8080"
+
+      - "tsbridge.enabled=true"
+      - "tsbridge.service.name=search"                  # Default: container name
+      - "tsbridge.service.port=8080"                    # Port inside the container
+      - "tsbridge.service.access_log=false"             # Disable access log
+      - "tsbridge.service.tags=tag:dev,tag:prod"        # Override default tags
+      - "tsbridge.service.whois_enabled=true"           # Add identity headers
 
     healthcheck:
       interval: 30s
@@ -270,6 +298,13 @@ services:
       - "traefik.http.routers.openwebui-rtr.tls=true"
       - "traefik.http.routers.openwebui-rtr.tls.certresolver=dns-cloudflare"
       - "traefik.http.services.openwebui-svc.loadbalancer.server.port=8080"
+
+      - "tsbridge.enabled=true"
+      - "tsbridge.service.name=chat"                    # Default: container name
+      - "tsbridge.service.port=8080"                    # Port inside the container
+      - "tsbridge.service.access_log=false"             # Disable access log
+      - "tsbridge.service.tags=tag:dev,tag:prod"        # Override default tags
+      - "tsbridge.service.whois_enabled=true"           # Add identity headers
     environment:
       - ANONYMIZED_TELEMETRY=false
       # Edge TTS configuration
