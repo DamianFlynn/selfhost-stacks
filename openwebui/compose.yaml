@@ -1,0 +1,328 @@
+
+name: openwebui
+
+########################### NETWORKS
+networks:
+  t3_proxy:
+    name: t3_proxy
+    external: true
+  openwebui:
+    name: openwebui
+    driver: bridge
+
+services:
+
+  # PostgreSQL database with pgvector extension for AI embeddings
+  # Internal service - no direct web access
+  # Connect via: postgresql://owui-user:171d29d40f07946b@localhost:5432/owui (when port exposed)
+  ai-postgress:
+    image: pgvector/pgvector:pg15
+    pull_policy: always
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=owui
+      - POSTGRES_PASSWORD=171d29d40f07946b
+      - POSTGRES_USER=owui-user
+    volumes:
+      - /mnt/fast/appdata/llm-ai/postgres:/var/lib/postgresql/data
+    networks:
+      - openwebui
+    healthcheck:
+      interval: 30s
+      retries: 5
+      start_period: 20s
+      test: ["CMD-SHELL", "pg_isready -d owui -U owui-user"]
+      timeout: 5s
+
+  # Redis Stack with search, JSON, time series, and bloom filter modules
+  # Web UI available at: http://localhost:8001 (if port exposed)
+  # Internal service for caching and session management
+  ai-redis:
+    image: redis/redis-stack:7.4.0-v7
+    pull_policy: always
+    restart: unless-stopped
+    environment:
+      - RI_PROXY_PATH=redis
+    networks:
+      - openwebui
+    healthcheck:
+      interval: 30s
+      retries: 5
+      start_period: 20s
+      test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
+      timeout: 3s
+
+  # Ollama AI model server with AMD GPU (ROCm) acceleration
+  # Public API: https://ollama.deercrest.info
+  # Internal API: http://ai-ollama:11434
+  # Manages and runs local LLMs (Large Language Models)
+  # Useful for Home Assistant AI integration
+  ai-ollama:
+    image: ollama/ollama:rocm     # AMD Ryzen AI 9 HX PRO 370 with Radeon 890M (gfx1150)
+    pull_policy: always
+    environment:
+      - OLLAMA_CONTEXT_LENGTH=8192
+      - OLLAMA_DEBUG=0
+      - OLLAMA_FLASH_ATTENTION=true
+      - OLLAMA_HOST=0.0.0.0:11434
+      - OLLAMA_LOAD_TIMOUT=10m
+      - OLLAMA_MLOCK=true
+      - OLLAMA_MMAP=true
+      - OLLAMA_NUM_GPU=1
+      - OLLAMA_NUM_THREAD=0
+      - HSA_OVERRIDE_GFX_VERSION=11.0.0
+      - ROCR_VISIBLE_DEVICES=0
+
+    ports:
+      - "11434:11434"
+    volumes:
+      - /mnt/fast/appdata/llm-ai/ollama:/root/.ollama
+    # For AMD GPU (ROCm), if available on your SCALE build:
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri:/dev/dri
+    restart: unless-stopped
+    networks:
+      - t3_proxy
+      - openwebui
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.ollama-rtr.entrypoints=websecure"
+      - "traefik.http.routers.ollama-rtr.rule=Host(`ollama.deercrest.info`)"
+      - "traefik.http.routers.ollama-rtr.tls=true"
+      - "traefik.http.routers.ollama-rtr.tls.certresolver=dns-cloudflare"
+      - "traefik.http.services.ollama-svc.loadbalancer.server.port=11434"
+    healthcheck:
+      interval: 30s
+      retries: 5
+      start_period: 10s
+      test: ps aux | grep  -v grep | grep '/bin/ollama serve' || exit 1
+      timeout: 5s
+
+  # Docling document processing server
+  # Public web UI: https://docling.deercrest.info/ui
+  # Public API docs: https://docling.deercrest.info/docs
+  # Internal API: http://ai-docling:5001
+  # Converts documents (PDF, Word, etc.) to structured formats
+  # Useful for external document processing integrations
+  ai-docling:
+    image: quay.io/docling-project/docling-serve:v1.6.0
+    pull_policy: always
+    restart: unless-stopped
+    environment:
+      - DOCLING_SERVE_ENABLE_UI=true
+    networks:
+      - t3_proxy
+      - openwebui
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.docling-rtr.entrypoints=websecure"
+      - "traefik.http.routers.docling-rtr.rule=Host(`docling.deercrest.info`)"
+      - "traefik.http.routers.docling-rtr.tls=true"
+      - "traefik.http.routers.docling-rtr.tls.certresolver=dns-cloudflare"
+      - "traefik.http.services.docling-svc.loadbalancer.server.port=5001"
+    healthcheck:
+      interval: 30s
+      retries: 5
+      start_period: 10s
+      test: wget -qO- http://127.0.0.1:5001/health > /dev/null || exit 1
+      timeout: 5s
+
+  # Edge TTS (Text-to-Speech) service using Microsoft Edge voices
+  # API available at: http://localhost:5050/v1 (if port exposed)
+  # Provides realistic AI voice synthesis
+  ai-edgetts:
+    image: travisvn/openai-edge-tts:latest
+    pull_policy: always
+    restart: unless-stopped
+    environment:
+      - DEFAULT_RESPONSE_FORMAT=mp3
+      - DEFAULT_SPEED=1.0
+      - DEFAULT_VOICE=en-AU-NatashaNeural
+    networks:
+      - openwebui
+
+  # MCP (Model Context Protocol) OpenAPI Proxy
+  # Public web interface: https://mcp.deercrest.info
+  # Internal API: http://ai-openwebui-mcp:8000
+  # Provides tool integrations (time, database queries, etc.)
+  # Can be used with VS Code MCP extensions and other MCP clients
+  # Extensible with custom MCP servers via config.json
+  ai-openwebui-mcp:
+    image: ghcr.io/open-webui/mcpo:latest
+    pull_policy: always
+    restart: unless-stopped
+    command: --config /app/conf/config.json
+    environment:
+      - DATABASE_URL=postgresql://owui-user:171d29d40f07946b@ai-postgress/owui
+      - TIMEZONE=Etc/UTC
+    volumes:
+      - /mnt/fast/appdata/llm-ai/open-webui/conf/mcp:/app/conf:ro
+    networks:
+      - t3_proxy
+      - openwebui
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.mcp-rtr.entrypoints=websecure"
+      - "traefik.http.routers.mcp-rtr.rule=Host(`mcp.deercrest.info`)"
+      - "traefik.http.routers.mcp-rtr.tls=true"
+      - "traefik.http.routers.mcp-rtr.tls.certresolver=dns-cloudflare"
+      - "traefik.http.services.mcp-svc.loadbalancer.server.port=8000"
+    healthcheck:
+      interval: 30s
+      retries: 5
+      start_period: 5s
+      test: "curl -fsSL http://127.0.0.1:8000/time/get_current_time -H 'Content-Type: application/json' -d '{\"timezone\": \"Europe/Dublin\"}' | grep -v grep | grep 'timezone' || exit 1"
+      timeout: 5s
+
+  # SearXNG privacy-focused search engine
+  # Public web interface: https://search.deercrest.info
+  # Internal API: http://ai-searxng:8080
+  # Aggregates results from multiple search engines without tracking
+  # Use as default search engine in browsers
+  ai-searxng:
+    image: searxng/searxng:2025.10.4-7bf65d68c
+    pull_policy: always
+    restart: unless-stopped
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+      - DAC_OVERRIDE
+    cap_drop:
+      - ALL
+    environment:
+      - SEARXNG_BASE_URL=https://search.deercrest.info
+      - SEARXNG_REDIS_URL=redis://ai-redis:6379/1
+      - SEARXNG_SECRET=a2bdf40d27a71225
+    volumes:
+      - /mnt/fast/appdata/llm-ai/searxng:/etc/searxng
+      
+    depends_on:
+      - ai-redis
+    networks:
+      - t3_proxy
+      - openwebui
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.searxng-rtr.entrypoints=websecure"
+      - "traefik.http.routers.searxng-rtr.rule=Host(`search.deercrest.info`)"
+      - "traefik.http.routers.searxng-rtr.tls=true"
+      - "traefik.http.routers.searxng-rtr.tls.certresolver=dns-cloudflare"
+      - "traefik.http.services.searxng-svc.loadbalancer.server.port=8080"
+
+    healthcheck:
+      interval: 30s
+      retries: 5
+      start_period: 10s
+      test: wget -qO- http://127.0.0.1:8080/ > /dev/null || exit 1
+      timeout: 5s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "1m"
+        max-file: "1"
+
+  # Apache Tika document parsing server
+  # Web interface at: http://localhost:9998 (if port exposed)
+  # Extracts text and metadata from various document formats
+  ai-tika:
+    image: apache/tika:3.2.3.0-full
+    pull_policy: always
+    restart: unless-stopped
+    networks:
+      - openwebui
+    healthcheck:
+      interval: 30s
+      retries: 5
+      start_period: 5s
+      test: wget -qO- http://127.0.0.1:9998/tika > /dev/null || exit 1
+      timeout: 5s
+
+  # OpenWebUI - Main AI chat interface
+  # Public web interface: https://chat.deercrest.info
+  # Primary web UI for interacting with AI models, RAG, and tools
+  # Features: Chat, document upload, web search, voice synthesis
+  openwebui:
+    image: ghcr.io/open-webui/open-webui:main
+    pull_policy: always
+    restart: unless-stopped
+    
+    depends_on:
+#      - auth
+      - ai-docling
+      - ai-postgress
+      - ai-redis
+      - ai-edgetts
+      - ai-openwebui-mcp
+#      - nginx
+      - ai-ollama
+      - ai-searxng
+      - ai-tika
+#      - watchtower
+    networks:
+      - t3_proxy
+      - openwebui
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.openwebui-rtr.entrypoints=websecure"
+      - "traefik.http.routers.openwebui-rtr.rule=Host(`chat.deercrest.info`)"
+      - "traefik.http.routers.openwebui-rtr.tls=true"
+      - "traefik.http.routers.openwebui-rtr.tls.certresolver=dns-cloudflare"
+      - "traefik.http.services.openwebui-svc.loadbalancer.server.port=8080"
+    environment:
+      - ANONYMIZED_TELEMETRY=false
+      # Edge TTS configuration
+      - AUDIO_TTS_API_KEY=your_api_key_here
+      - AUDIO_TTS_ENGINE=openai
+      - AUDIO_TTS_MODEL=tts-1-hd
+      - AUDIO_TTS_OPENAI_API_BASE_URL=http://ai-edgetts:5050/v1
+      - AUDIO_TTS_OPENAI_API_KEY=your_api_key_here
+      - AUDIO_TTS_VOICE=en-US-EmmaMultilingualNeural
+      # Extraction and Embedding configuration
+      - CONTENT_EXTRACTION_ENGINE=tika
+      - DATABASE_URL=postgresql://owui-user:171d29d40f07946b@ai-postgress/owui
+      # 
+      - DOCLING_SERVER_URL=http://ai-docling:5001
+      - ENABLE_EVALUATION_ARENA_MODELS=false
+      - ENABLE_IMAGE_GENERATION=false
+      - ENABLE_OLLAMA_API=true
+      - ENABLE_OPENAI_API=false
+      - ENABLE_RAG_WEB_SEARCH=true
+      - ENABLE_WEB_SEARCH=true
+      - ENABLE_WEBSOCKET_SUPPORT=true
+      - ENV=dev
+      - GLOBAL_LOG_LEVEL=info
+      - OLLAMA_BASE_URLS=http://ai-ollama:11434
+      - PDF_EXTRACT_IMAGES=true
+      - PGVECTOR_DB_URL=postgresql://owui-user:171d29d40f07946b@ai-postgress/owui
+      - RAG_EMBEDDING_ENGINE=ollama
+      - RAG_ENBEDDING_MODEL=nomic-embed-text:latest
+      - RAG_OLLAMA_BASE_URL=http://ai-ollama:11434
+      - RAG_TEXT_SPLITTER=token
+      - RAG_WEB_SEARCH_CONCURRENT_REQUESTS=10
+      - RAG_WEB_SEARCH_ENGINE=searxng
+      - RAG_WEB_SEARCH_RESULT_COUNT=6
+      - REDIS_KEY_PREFIX=open-webui
+      - REDIS_URL=redis://ai-redis:6379/2
+      - SEARXNG_QUERY_URL=https://search.deercrest.info/search?q=<query>
+      - TIKA_SERVER_URL=http://ai-tika:9998
+      - TOOL_SERVER_CONNECTIONS=[{"url":"http://ai-openwebui-mcp:8000/time","path":"openapi.json","auth_type":"none","key":"","config":{"enable":true,"access_control":null},"info":{"name":"time","description":""}},{"url":"http://ai-openwebui-mcp:8000/postgress","path":"openapi.json","auth_type":"none","key":"","config":{"enable":true,"access_control":null},"info":{"name":"postgres","description":""}}]
+      - USE_CUDA_DOCKER=false
+      - VECTOR_DB=pgvector
+      - WEB_SEARCH_ENGINE=searxng
+      - WEBUI_SECRET_KEY=a2bdf40d27a71225
+      - WEBUI_URL=http://deercrest.info
+      - WEBSOCKET_MANAGER=redis
+      - WEBSOCKET_REDIS_URL=redis://ai-redis:6379/3
+      - WHISPER_MODEL_AUTO_UPDATE=false
+
+    volumes:
+      - /mnt/fast/appdata/llm-ai/open-webui:/app/backend/data
+    healthcheck:
+      interval: 30s
+      retries: 5
+      start_period: 10s
+      test: curl --fail http://localhost:8080/health || exit 1
+      timeout: 5s
+
