@@ -2,6 +2,7 @@ services:
   # Docker Socket Proxy - Security Enhanced Proxy for Docker Socket
   socket-proxy:
     container_name: socket-proxy
+    # renovate: datasource=docker depName=tecnativa/docker-socket-proxy
     image: tecnativa/docker-socket-proxy:v0.4.1
     pull_policy: always
     security_opt:

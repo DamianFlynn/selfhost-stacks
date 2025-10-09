@@ -1,6 +1,7 @@
 services:
   # --- Tailscale sidecar for VANILLA ---
   tailscale-vanilla:
+    # renovate: datasource=docker depName=ghcr.io/tailscale/tailscale
     image: ghcr.io/tailscale/tailscale:v1.88.3
     container_name: tailscale_vanilla
     restart: unless-stopped
@@ -23,6 +24,7 @@ services:
       retries: 60
 
   minecraft-vanilla:
+    # renovate: datasource=docker depName=itzg/minecraft-bedrock-server
     image: itzg/minecraft-bedrock-server:2025.9.0
     container_name: minecraft_vanilla
     restart: unless-stopped

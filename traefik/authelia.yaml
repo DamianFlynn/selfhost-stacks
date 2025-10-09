@@ -3,6 +3,7 @@ services:
   # Authelia (Lite) - Self-Hosted Single Sign-On and Two-Factor Authentication
   authelia:
     container_name: authelia
+    # renovate: datasource=docker depName=authelia/authelia
     image: authelia/authelia:4.39.12@sha256:3d374f212b4e0d4b980e5e3fffced788c04912103b824649ae53b42110afeefb
     pull_policy: always
     security_opt:

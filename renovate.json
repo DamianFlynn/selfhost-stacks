@@ -3,17 +3,24 @@
   "extends": [
     "config:recommended"
   ],
-  "pinDigests": false,
   "enabledManagers": [
     "docker-compose",
     "dockerfile"
   ],
+  "ignorePaths": [
+    ".github/workflows/**"
+  ],
   "docker-compose": {
-    "managerFilePatterns": [
-      "/(^|/)(compose\\.ya?ml|docker-compose\\.ya?ml)$/",
-      "/traefik/authelia\\.ya?ml$/",
-      "/traefik/socket-proxy\\.ya?ml$/",
-      "/traefik/traefik\\.ya?ml$/"
+    "fileMatch": [
+      "(^|/)compose\\.ya?ml$",
+      "(^|/)docker-compose\\.ya?ml$",
+      "**/stacks/**/compose\\.ya?ml$",
+      "**/traefik/.*\\.ya?ml$",
+      "**/minecraft/.*\\.ya?ml$",
+      "**/openwebui/.*\\.ya?ml$",
+      "**/code-server/.*\\.ya?ml$",
+      "**/immich/.*\\.ya?ml$",
+      "**/core/.*\\.ya?ml$"
     ]
   },
   "labels": [
@@ -197,6 +204,36 @@
       ],
       "addLabels": [
         "stack:code-server"
+      ]
+    },
+    {
+      "description": "Auto-label by stack: Minecraft",
+      "matchFileNames": [
+        "**/minecraft/**",
+        "**/stacks/minecraft/**"
+      ],
+      "addLabels": [
+        "stack:minecraft"
+      ]
+    },
+    {
+      "description": "Auto-label by stack: OpenWebUI",
+      "matchFileNames": [
+        "**/openwebui/**",
+        "**/stacks/openwebui/**"
+      ],
+      "addLabels": [
+        "stack:openwebui"
+      ]
+    },
+    {
+      "description": "Auto-label by stack: Core (Traefik/Auth)",
+      "matchFileNames": [
+        "**/core/**",
+        "**/stacks/core/**"
+      ],
+      "addLabels": [
+        "stack:core"
       ]
     },
     {
