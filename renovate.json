@@ -11,7 +11,11 @@
   "docker-compose": {
     "managerFilePatterns": [
       "(^|/)(compose\\.ya?ml|docker-compose\\.ya?ml)$",
-      ".*\\.ya?ml$"
+      "traefik/.*\\.ya?ml$",
+      "minecraft/.*\\.ya?ml$",
+      "openwebui/.*\\.ya?ml$",
+      "immich/.*\\.ya?ml$",
+      "code-server/.*\\.ya?ml$"
     ]
   },
   "labels": [
