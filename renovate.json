@@ -11,7 +11,12 @@
   "docker-compose": {
     "managerFilePatterns": [
       "(^|/)(compose\\.ya?ml|docker-compose\\.ya?ml)$",
-      "traefik/.*\\.ya?ml$",
+      "/(^|/)(compose\\.ya?ml|docker-compose\\.ya?ml)$/",
+      "/traefik/authelia\\.ya?ml$/",
+      "/traefik/socket-proxy\\.ya?ml$/",
+      "/traefik/traefik\\.ya?ml$/",
+      "/minecraft/mc-vanilla\\.ya?ml$/",
+      "/minecraft/mc-yggdrasil\\.ya?ml$/",
       "minecraft/.*\\.ya?ml$",
       "openwebui/.*\\.ya?ml$",
       "immich/.*\\.ya?ml$",
