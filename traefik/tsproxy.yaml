@@ -1,6 +1,7 @@
 services:
   # https://github.com/jtdowney/tsbridge/blob/main/docs/configuration-reference.md#tag-ownership-and-oauth-security
   tsbridge:
+    container_name: tsbridge
     # renovate: datasource=docker depName=ghcr.io/jtdowney/tsbridge
     image: ghcr.io/jtdowney/tsbridge:v0.12.1
     command: ["--provider", "docker"]
@@ -20,10 +21,12 @@ services:
 
 
   whoami:
+    container_name: whoami
     # renovate: datasource=docker depName=traefik/whoami
     image: traefik/whoami
     labels:
       - "tsbridge.enabled=true"
       - "tsbridge.service.name=whoami"
       - "tsbridge.service.port=80"
+
 

@@ -5,7 +5,7 @@ services:
     # Pin latest to digest so deploys are reproducible; Renovate will bump this digest.
 
     # renovate: datasource=docker depName=lscr.io/linuxserver/code-server
-    image: lscr.io/linuxserver/code-server:4.104.3
+    image: lscr.io/linuxserver/code-server:4.104.2
     pull_policy: always
     container_name: code-server
     env_file:
@@ -30,6 +30,6 @@ services:
       - "tsbridge.service.port=8443"                   # Port inside the container
       - "tsbridge.service.access_log=false"            # Disable access log
       - "tsbridge.service.tags=tag:dev,tag:prod"       # Override default tags
-      - "tsbridge.service.insecure_skip_verify=true"   # Skip TLS cert verification (HTTPS backends only)
+      #- "tsbridge.service.insecure_skip_verify=true"   # Skip TLS cert verification (HTTPS backends only)
       - "tsbridge.service.whois_enabled=true"          # Add identity headers
       

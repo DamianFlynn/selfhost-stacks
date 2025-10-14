@@ -111,6 +111,47 @@ services:
     networks:
       - immich
 
+
+  # power-tools:
+  #   container_name: immich_power-tools
+  #   image: ghcr.io/varun-raj/immich-power-tools:latest
+  #   pull_policy: always
+  #   ports:
+  #     - "8001:3000"
+  #   environment:
+  #     # Data Locations
+  #     - UPLOAD_LOCATION=/pool/photos/upload
+  #     - DB_DATA_LOCATION=/srv/appdata/immich/database
+  #     - DOMAIN=deercrest.info
+  #     # Database
+  #     - DB_USERNAME=postgres
+  #     - DB_DATABASE_NAME=immich
+  #     - DB_PASSWORD=/run/secrets/immich_db_password
+  #     # Immich Server
+  #     - IMMICH_URL="http://172.16.1.21:2283" # Your immich instace ip address and port
+  #     - EXTERNAL_IMMICH_URL="https://photos.deercrest.info" # External address of immich
+  #     - IMMICH_API_KEY=/run/secrets/immich_api_key
+  #     # AP and Maps
+  #     - GOOGLE_MAPS_API_KEY=/run/secrets/google_maps_api_key
+  #     - GEMINI_API_KEY=/run/secrets/gemini_api_key
+  #   networks:
+  #     - t3_proxy
+  #     - immich
+  #   secrets:
+  #     - gemini_api_key
+  #     - google_maps_api_key
+  #     - immich_api_key
+  #     - immich_db_password 
+  #   labels:
+  #     - "traefik.enable=true"
+  #     - "traefik.http.routers.immichtools-rtr.entrypoints=websecure"
+  #     - "traefik.http.routers.immichtools-rtr.rule=Host(`photomagic.deercrest.info`)"
+  #     - "traefik.http.routers.immichtools-rtr.tls=true"
+  #     - "traefik.http.routers.immichtools-rtr.tls.certresolver=dns-cloudflare"
+  #     - "traefik.http.routers.immichtools-rtr.middlewares=chain-authelia@file"
+  #     - "traefik.http.routers.immichtools-rtr.service=immichtools-svc"
+  #     - "traefik.http.services.immichtools-svc.loadbalancer.server.port=3000"
+
 volumes:
   model-cache: {}
 

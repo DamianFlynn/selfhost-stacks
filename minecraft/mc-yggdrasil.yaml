@@ -4,7 +4,7 @@ services:
   tailscale-ygg:
     # renovate: datasource=docker depName=ghcr.io/tailscale/tailscale
     image: ghcr.io/tailscale/tailscale:v1.88.3
-    container_name: tailscale_ygg
+    container_name: mc_yggdrasil_ts
     restart: unless-stopped
     cap_add: [NET_ADMIN, SYS_MODULE, NET_RAW]
     devices:
@@ -27,7 +27,7 @@ services:
   minecraft-yggdrasil:
     # renovate: datasource=docker depName=itzg/minecraft-bedrock-server
     image: itzg/minecraft-bedrock-server:2025.9.0
-    container_name: minecraft_yggdrasil
+    container_name: mc_yggdrasil
     restart: unless-stopped
     tty: true
     stdin_open: true
@@ -45,5 +45,6 @@ services:
       LEVEL_NAME: "Yggdrasil"
     volumes:
       - /mnt/fast/appdata/minecraft/yggdrasil:/data
+
 
 

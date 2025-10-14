@@ -3,7 +3,7 @@ services:
   tailscale-vanilla:
     # renovate: datasource=docker depName=ghcr.io/tailscale/tailscale
     image: ghcr.io/tailscale/tailscale:v1.88.3
-    container_name: tailscale_vanilla
+    container_name: mc_vanilla_ts
     restart: unless-stopped
     cap_add: [NET_ADMIN, SYS_MODULE, NET_RAW]
     devices:
@@ -26,7 +26,7 @@ services:
   minecraft-vanilla:
     # renovate: datasource=docker depName=itzg/minecraft-bedrock-server
     image: itzg/minecraft-bedrock-server:2025.9.0
-    container_name: minecraft_vanilla
+    container_name: mc_vanilla
     restart: unless-stopped
     tty: true
     stdin_open: true
@@ -44,5 +44,6 @@ services:
       DEFAULT_PLAYER_PERMISSION_LEVEL: "operator"
     volumes:
       - /mnt/fast/appdata/minecraft/bedrock:/data
+
 
 
