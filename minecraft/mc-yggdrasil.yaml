@@ -3,7 +3,7 @@ services:
   # --- Tailscale sidecar for VANILLA ---
   tailscale-ygg:
     # renovate: datasource=docker depName=ghcr.io/tailscale/tailscale
-    image: ghcr.io/tailscale/tailscale:v1.88.3
+    image: ghcr.io/tailscale/tailscale:v1.88.4
     container_name: mc_yggdrasil_ts
     restart: unless-stopped
     cap_add: [NET_ADMIN, SYS_MODULE, NET_RAW]
