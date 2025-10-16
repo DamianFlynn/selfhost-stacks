@@ -1,0 +1,95 @@
+name: automation
+
+
+########################### NETWORKS
+networks:
+#  default:
+#    driver: bridge
+#  socket_proxy:
+#    name: socket_proxy
+  t3_proxy:
+     external: true
+  # automation:
+  #   name: automation
+  #   driver: bridge
+  #   ipam:
+  #     config:
+  #       - subnet: 192.168.85.0/24
+
+
+services:
+
+
+  n8n:    
+    hostname: "n8n"
+    container_name: "n8n"
+    #image: docker.n8n.io/n8nio/n8n
+    restart: unless-stopped
+    image: ghcr.io/damianflynn/custom-n8n:1.113.2
+    environment:
+      - N8N_HOST=n8n.${DOMAINNAME}
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=https
+      - NODE_ENV=production
+      - WEBHOOK_URL=https://n8n.deercrest.info/
+      - NODE_FUNCTION_ALLOW_BUILTIN=*
+      - NODE_FUNCTION_ALLOW_EXTERNAL=*
+      - GENERIC_TIMEZONE=${TZ}
+    networks:
+      - t3_proxy
+    ports:
+      - "127.0.0.1:5678:5678"
+    volumes:
+      - /mnt/fast/appdata/automation/n8n:/home/node/.n8n
+      - /mnt/fast/appdata/automation/n8n/local-files:/data/files
+      - /mnt/fast/appdata/automation/n8n/python_scripts:/data/py_scripts
+      - /mnt/fast/appdata/automation/n8n/.requirements.txt:/data/requirements.txt
+    labels:
+
+      - traefik.enable=true
+      - traefik.http.routers.n8n.rule=Host(`n8n.${DOMAINNAME}`)
+      - traefik.http.routers.n8n.tls=true
+      - traefik.http.routers.n8n.entrypoints=web,websecure
+      - traefik.http.routers.n8n.tls.certresolver=dns-cloudflare
+        #- traefik.http.routers.n8n.service=n8n-svc
+      - traefik.http.middlewares.n8n.headers.SSLRedirect=true
+      - traefik.http.middlewares.n8n.headers.STSSeconds=315360000
+      - traefik.http.middlewares.n8n.headers.browserXSSFilter=true
+      - traefik.http.middlewares.n8n.headers.contentTypeNosniff=true
+      - traefik.http.middlewares.n8n.headers.forceSTSHeader=true
+      - traefik.http.middlewares.n8n.headers.SSLHost=${DOMAINNAME}
+      - traefik.http.middlewares.n8n.headers.STSIncludeSubdomains=true
+      - traefik.http.middlewares.n8n.headers.STSPreload=true
+      - traefik.http.routers.n8n.middlewares=n8n@docker
+        #- traefik.http.routers.n8n.middlewares=chain-authelia@file
+      - traefik.http.services.n8n.loadbalancer.server.port=5678
+
+
+  oxidized:
+    container_name: oxidized
+    image: docker.io/oxidized/oxidized:latest
+    restart: unless-stopped
+    # user: 0:0
+    networks:
+      - t3_proxy
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "8888:8888"
+    volumes:
+      - /mnt/fast/appdata/automation/oxidized/config:/home/oxidized/.config/oxidized
+      - /mnt/fast/appdata/automation/oxidized/ssh:/home/oxidized/.ssh
+    environment:
+      # Reload hosts list once per day
+      CONFIG_RELOAD_INTERVAL: 86400
+      # # Needed when you push to a remote git repository
+      # OXIDIZED_SSH_PASSPHRASE: xxxxPassphasexxxx
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.oxidixed.entrypoints=web,websecure
+      - traefik.http.routers.oxidized.rule=Host(`oxidized.deercrest.info`)
+      - traefik.http.routers.oxidized.middlewares=chain-authelia@file
+      - traefik.http.routers.oxidized.tls=true
+      - traefik.http.routers.oxidized.tls.certresolver=dns-cloudflare
+      - traefik.http.routers.oxidized.service=oxidized
+      - traefik.http.services.oxidized.loadbalancer.server.port=8888
