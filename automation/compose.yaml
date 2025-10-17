@@ -97,7 +97,6 @@ services:
     image: docker.io/oxidized/oxidized:latest
     # Run oxidized with the TrueNAS apps UID so it can write to host-mounted
     # config and ssh directories owned by 568:568.
-    user: "568:568"
     restart: unless-stopped
     # user: 0:0
     networks:
