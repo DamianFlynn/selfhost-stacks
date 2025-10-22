@@ -1,0 +1,24 @@
+services:
+
+  podsync:
+    hostname: "podsync"
+    container_name: podsync
+    image: ghcr.io/mxpv/podsync:nightly
+    restart: 'unless-stopped'
+    ports:
+      - 18080:8080  # HTTP port (host:container)
+    networks:
+      - t3_proxy
+    volumes:
+      # This should be mapped a tank media folder...
+      - /mnt/fast/appdata/hoarder/podsync/podcasts:/app/data/:rw
+      - /mnt/fast/appdata/hoarder/podsync/config.toml:/app/config.toml:rw
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.podsync.entrypoints=web,websecure
+      - traefik.http.routers.podsync.rule=Host(`podsync.deercrest.info`)
+      #- traefik.http.routers.podsync.middlewares=chain-authelia@file
+      - traefik.http.routers.podsync.tls=true
+      - traefik.http.routers.podsync.tls.certresolver=dns-cloudflare
+      - traefik.http.routers.podsync.service=podsync-svc
+      - traefik.http.services.podsync-svc.loadbalancer.server.port=8080

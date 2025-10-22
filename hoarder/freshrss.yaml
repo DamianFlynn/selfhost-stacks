@@ -1,0 +1,29 @@
+services:
+  freshrss:
+    container_name: freshrss
+    image: ghcr.io/linuxserver/freshrss:1.27.1
+    hostname: 'feeds'
+    volumes:
+      - /mnt/fast/appdata/hoarder/freshrss:/config:rw
+    ports:
+      - 8181:8181
+    restart: 'unless-stopped'
+    environment:
+      - 'p:8181'
+      - 'PGID=$PGID'
+      - 'PUID=$PUID'
+      - 'TZ=$TZ'
+      - 'UMASK=022'
+    networks:
+      - t3_proxy
+    security_opt:
+      - 'no-new-privileges:true'
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.freshrss.entrypoints=web,websecure
+      - traefik.http.routers.freshrss.rule=Host(`feeds.deercrest.info`)
+      - traefik.http.routers.freshrss.middlewares=chain-authelia@file
+      - traefik.http.routers.freshrss.tls=true
+      - traefik.http.routers.freshrss.tls.certresolver=dns-cloudflare
+      - traefik.http.routers.freshss.service=freshrss-svc
+      - traefik.http.services.freshrss-svc.loadbalancer.server.port=8181
