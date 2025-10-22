@@ -17,108 +17,11 @@ networks:
   #       - subnet: 192.168.85.0/24
 
 
-services:
+include:
+  ########################### SERVICES
+
+  - n8n.yaml
+  - oxidized.yaml
+  - pwpush.yaml
 
 
-  n8n:    
-    hostname: "n8n"
-    container_name: "n8n"
-    # Run the container process as the TrueNAS 'apps' numeric UID/GID so mounted
-    # dataset ownership (568:568) matches the process identity and avoids EACCES
-    # on host-mounted files. This keeps the dataset owned by TrueNAS and is the
-    # recommended pattern on TrueNAS SCALE.
-    user: "568:568"
-    #image: docker.n8n.io/n8nio/n8n
-    restart: unless-stopped
-    image: ghcr.io/damianflynn/custom-n8n:1.116.1
-    # Environment variables (explanations below)
-    environment:
-      - N8N_HOST=n8n.${DOMAINNAME}
-      - N8N_PORT=5678
-      - N8N_PROTOCOL=https
-      - NODE_ENV=production
-      - WEBHOOK_URL=https://n8n.deercrest.info/
-      - NODE_FUNCTION_ALLOW_BUILTIN=*
-      - NODE_FUNCTION_ALLOW_EXTERNAL=*
-      # When running as a numeric UID that may not exist in /etc/passwd,
-      # set HOME so n8n uses /home/node instead of falling back to '/'.
-      - HOME=/home/node
-      # Let n8n enforce safe settings file permissions (it will change
-      # overly-wide perms to 0600). This requires the process to own the files
-      # (which is true when running as 568 and the dataset is chown'd to 568).
-      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
-      # Reduce deprecation noise and improve SQLite concurrency by setting a
-      # small read connection pool. Adjust if needed for load.
-      - DB_SQLITE_POOL_SIZE=10
-      # Enable task runners now (they will be enabled by default in future
-      # n8n releases). Useful for stability and future compatibility.
-      - N8N_RUNNERS_ENABLED=true
-      # Controls whether Code Node / expressions can access env vars. Set to
-      # false only if your workflows rely on reading env vars from these
-      # contexts. For stricter security set to true.
-      - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
-      - GENERIC_TIMEZONE=${TZ}
-    networks:
-      - t3_proxy
-    ports:
-      - "127.0.0.1:5678:5678"
-    volumes:
-      - /mnt/fast/appdata/automation/n8n:/home/node/.n8n
-      # Host-backed cache directory: precreate this directory on the TrueNAS
-      # host and chown to 568:568 so n8n (running as UID 568) can write to it
-      # without failing to mkdir inside the container.
-      - /mnt/fast/appdata/automation/n8n/cache:/home/node/.cache
-      - /mnt/fast/appdata/automation/n8n/local-files:/data/files
-      - /mnt/fast/appdata/automation/n8n/python_scripts:/data/py_scripts
-      - /mnt/fast/appdata/automation/n8n/.requirements.txt:/data/requirements.txt
-    labels:
-
-      - traefik.enable=true
-      - traefik.http.routers.n8n.rule=Host(`n8n.${DOMAINNAME}`)
-      - traefik.http.routers.n8n.tls=true
-      - traefik.http.routers.n8n.entrypoints=web,websecure
-      - traefik.http.routers.n8n.tls.certresolver=dns-cloudflare
-        #- traefik.http.routers.n8n.service=n8n-svc
-      - traefik.http.middlewares.n8n.headers.SSLRedirect=true
-      - traefik.http.middlewares.n8n.headers.STSSeconds=315360000
-      - traefik.http.middlewares.n8n.headers.browserXSSFilter=true
-      - traefik.http.middlewares.n8n.headers.contentTypeNosniff=true
-      - traefik.http.middlewares.n8n.headers.forceSTSHeader=true
-      - traefik.http.middlewares.n8n.headers.SSLHost=${DOMAINNAME}
-      - traefik.http.middlewares.n8n.headers.STSIncludeSubdomains=true
-      - traefik.http.middlewares.n8n.headers.STSPreload=true
-      - traefik.http.routers.n8n.middlewares=n8n@docker
-        #- traefik.http.routers.n8n.middlewares=chain-authelia@file
-      - traefik.http.services.n8n.loadbalancer.server.port=5678
-
-
-  oxidized:
-    container_name: oxidized
-    image: docker.io/oxidized/oxidized:latest
-    # Run oxidized with the TrueNAS apps UID so it can write to host-mounted
-    # config and ssh directories owned by 568:568.
-    restart: unless-stopped
-    # user: 0:0
-    networks:
-      - t3_proxy
-    security_opt:
-      - no-new-privileges:true
-    ports:
-      - "8888:8888"
-    volumes:
-      - /mnt/fast/appdata/automation/oxidized/config:/home/oxidized/.config/oxidized
-      - /mnt/fast/appdata/automation/oxidized/ssh:/home/oxidized/.ssh
-    environment:
-      # Reload hosts list once per day
-      CONFIG_RELOAD_INTERVAL: 86400
-      # # Needed when you push to a remote git repository
-      # OXIDIZED_SSH_PASSPHRASE: xxxxPassphasexxxx
-    labels:
-      - traefik.enable=true
-      - traefik.http.routers.oxidixed.entrypoints=web,websecure
-      - traefik.http.routers.oxidized.rule=Host(`oxidized.deercrest.info`)
-      - traefik.http.routers.oxidized.middlewares=chain-authelia@file
-      - traefik.http.routers.oxidized.tls=true
-      - traefik.http.routers.oxidized.tls.certresolver=dns-cloudflare
-      - traefik.http.routers.oxidized.service=oxidized
-      - traefik.http.services.oxidized.loadbalancer.server.port=8888

@@ -1,34 +1,48 @@
+networks:
+  pwpush:
+    name: pwpush
+    driver: bridge
+
 services:
 
-  db:
-    container_name: "pwpush_db"
+  pwpush-db:
+    container_name: "pwpush-db"
     image: docker.io/postgres:16
     volumes:
-      - ./postgres-data:/var/lib/postgresql/data
+      - /mnt/fast/appdata/automation/pwpush/db:/var/lib/postgresql/data
     ports:
       - "5432:5432"
+    networks:
+      - pwpush
     restart: unless-stopped
     environment:
-      POSTGRES_USER: pwpush_user
-      POSTGRES_PASSWORD: pwpush_passwd
+      POSTGRES_USER: svc_pwpush
+      POSTGRES_PASSWORD: MyN0tS3cr3tPssw0rd
       POSTGRES_DB: pwpush_db
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U svc_pwpush -d pwpush_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 
   pwpush:
     container_name: "pwpush"
     image: docker.io/pglombardo/pwpush:latest
-    ports:
-      - "80:80"
-      - "443:443"
+    #ports:
+    #  - "443:443"
+    #  - "80:80"
     restart: unless-stopped
     networks:
       - t3_proxy
+      - pwpush
     depends_on:
-      - db
+      pwpush-db:
+        condition: service_healthy
     links:
-     - db:db
+     - pwpush-db:pwpush-db
     environment:
-      DATABASE_URL: 'postgres://pwpush_user:pwpush_passwd@pwpush_db:5432/pwpush_db'
+      DATABASE_URL: 'postgres://svc_pwpush:MyN0tS3cr3tPssw0rd@pwpush-db:5432/pwpush_db'
       #
       # Specify a domain in the TLS_DOMAIN environment variable to automatically provision a TLS (SSL) certificate for the application.
       # Uncomment the following line to set the TLS_DOMAIN environment variable.
@@ -37,22 +51,14 @@ services:
       # You can set additional environment variables here, or in a .env file.  See:
       # https://docs.docker.com/compose/environment-variables/
       #
-      # Password Pusher provides an example Docker environment file:
-      # https://github.com/pglombardo/PasswordPusher/tree/master/containers/docker/pwpush-docker-env-file
-      #
-      # See also the Password Pusher Configuration documentation
-      # https://docs.pwpush.com/docs/config-strategies/
-      #
-      # Uncomment the following lines to set environment variables and add your own.
-      # PWP__PW__EXPIRE_AFTER_DAYS_DEFAULT: "1"
-      # PWP__PW__EXPIRE_AFTER_VIEWS_MIN: "1"
-      # PWP__PW__RETRIEVAL_STEP_DEFAULT: "true"
-      #
-      # Uncomment the following lines to mount a volume.
-      # volumes:
-      #   # Example of a persistent volume for the storage directory (file uploads)
-      #   - /path/to/directory:/opt/PasswordPusher/storage:rw
-      #
+
+      PWP__PW__EXPIRE_AFTER_DAYS_DEFAULT: "7"
+      PWP__PW__EXPIRE_AFTER_VIEWS_MIN: "1"
+      PWP__PW__RETRIEVAL_STEP_DEFAULT: "true"
+
+    volumes:
+      - /mnt/fast/appdata/automation/pwpush/data:/opt/PasswordPusher/storage:rw
+
       # Or you could override a single file in the container with a bind mount:
       # volumes:
       #   - type: bind
