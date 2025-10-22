@@ -1,0 +1,33 @@
+services:
+
+  oxidized:
+    container_name: oxidized
+    image: docker.io/oxidized/oxidized:latest
+    # Run oxidized with the TrueNAS apps UID so it can write to host-mounted
+    # config and ssh directories owned by 568:568.
+    restart: unless-stopped
+    # user: 0:0
+    networks:
+      - t3_proxy
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "8888:8888"
+    volumes:
+      - /mnt/fast/appdata/automation/oxidized/config:/home/oxidized/.config/oxidized
+      - /mnt/fast/appdata/automation/oxidized/ssh:/home/oxidized/.ssh
+    environment:
+      # Reload hosts list once per day
+      CONFIG_RELOAD_INTERVAL: 86400
+      # # Needed when you push to a remote git repository
+      # OXIDIZED_SSH_PASSPHRASE: xxxxPassphasexxxx
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.oxidixed.entrypoints=web,websecure
+      - traefik.http.routers.oxidized.rule=Host(`oxidized.deercrest.info`)
+      - traefik.http.routers.oxidized.middlewares=chain-authelia@file
+      - traefik.http.routers.oxidized.tls=true
+      - traefik.http.routers.oxidized.tls.certresolver=dns-cloudflare
+      - traefik.http.routers.oxidized.service=oxidized
+      - traefik.http.services.oxidized.loadbalancer.server.port=8888
+
