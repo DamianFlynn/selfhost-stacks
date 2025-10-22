@@ -25,5 +25,6 @@ services:
       - traefik.http.routers.freshrss.middlewares=chain-authelia@file
       - traefik.http.routers.freshrss.tls=true
       - traefik.http.routers.freshrss.tls.certresolver=dns-cloudflare
-      - traefik.http.routers.freshss.service=freshrss-svc
+      - traefik.http.routers.freshrss.service=freshrss-svc
       - traefik.http.services.freshrss-svc.loadbalancer.server.port=8181
+
