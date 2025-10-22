@@ -1,0 +1,18 @@
+services:
+  tesla-static:
+    image: nginx:alpine
+    container_name: tesla-static
+    restart: unless-stopped
+    networks:
+      - t3_proxy
+    volumes:
+      # This maps your host directory containing the .well-known folder
+      - /mnt/fast/appdata/automation/tesla-static:/usr/share/nginx/html:ro
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.tesla-public-key.rule=Host(`hass.deercrest.info`) && PathPrefix(`/.well-known`)"
+      - "traefik.http.routers.tesla-public-key.entrypoints=websecure"
+      - "traefik.http.routers.tesla-public-key.tls.certresolver=dns-cloudflare"
+      - "traefik.http.routers.tesla-public-key.priority=100"
+      - "traefik.http.services.tesla-public-key.loadbalancer.server.port=80"
+

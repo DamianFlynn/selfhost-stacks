@@ -23,5 +23,6 @@ include:
   - n8n.yaml
   - oxidized.yaml
   - pwpush.yaml
+  - tesla-static.yaml
 
 
