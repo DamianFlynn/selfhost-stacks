@@ -20,7 +20,9 @@
       "minecraft/.*\\.ya?ml$",
       "openwebui/.*\\.ya?ml$",
       "immich/.*\\.ya?ml$",
-      "code-server/.*\\.ya?ml$"
+      "code-server/.*\\.ya?ml$",
+      "automation/.*\\.ya?ml$",
+      "hoarder/.*\\.ya?ml$"
     ]
   },
   "labels": [
@@ -224,6 +226,26 @@
       ],
       "addLabels": [
         "stack:openwebui"
+      ]
+    },
+    {
+      "description": "Auto-label by stack: Hoarder",
+      "matchFileNames": [
+        "**/hoarder/**",
+        "**/stacks/hoarder/**"
+      ],
+      "addLabels": [
+        "stack:hoarder"
+      ]
+    },
+    {
+      "description": "Auto-label by stack: Automation",
+      "matchFileNames": [
+        "**/automation/**",
+        "**/stacks/automation/**"
+      ],
+      "addLabels": [
+        "stack:automation"
       ]
     },
     {
