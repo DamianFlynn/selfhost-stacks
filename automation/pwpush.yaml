@@ -7,7 +7,7 @@ services:
 
   pwpush-db:
     container_name: "pwpush-db"
-    image: docker.io/postgres:16
+    image: docker.io/postgres:18
     volumes:
       - /mnt/fast/appdata/automation/pwpush/db:/var/lib/postgresql/data
     ports:
