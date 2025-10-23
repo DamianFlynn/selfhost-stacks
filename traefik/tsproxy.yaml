@@ -23,7 +23,7 @@ services:
   whoami:
     container_name: whoami
     # renovate: datasource=docker depName=traefik/whoami
-    image: traefik/whoami
+    image: traefik/whoami:v1.10.3
     labels:
       - "tsbridge.enabled=true"
       - "tsbridge.service.name=whoami"
