@@ -21,5 +21,6 @@ include:
   ########################### SERVICES
 
   - sabnzbd.yaml
+  - qbittorrent.yaml
 
 

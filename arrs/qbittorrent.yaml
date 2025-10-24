@@ -1,0 +1,43 @@
+
+services:
+  # SABnzbd - Binary newsgrabber (NZB downloader)
+  # Disable SABNnzbd's built-in HTTPS support for traefik proxy to work
+  # Needs trailing / if using PathPrefix
+  qbittorrent:
+    hostname: "qbittorrent"
+    container_name: qbittorrent
+    image: ghcr.io/linuxserver/qbittorrent:5.1.2-r3-ls421
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    # profiles: ["apps", "downloads", "all"]
+    networks:
+      - t3_proxy
+    ports:
+      - "7889:7889"
+    volumes:
+      - /mnt/fast/appdata/arrs/qbittorrent/config:/config:rw
+      - /mnt/fast/appdata/arrs/qbittorrent/arr-scripts:/custom-cont-init.d
+      - /mnt/tank/downloads:/downloads:rw
+    environment:
+      PUID: $PUID
+      PGID: $PGID
+      TZ: $TZ
+      UMASK_SET: 002
+      DOCKER_MODS: ghcr.io/themepark-dev/theme.park:qbittorrent
+      TP_THEME: organizr
+    labels:
+      - traefik.enable=true
+
+      - traefik.http.routers.qbittorrent.entrypoints=web,websecure
+      - traefik.http.routers.qbittorrent.rule=Host(`qbittorrent.deercrest.info`)
+      - traefik.http.routers.qbittorrent.middlewares=chain-authelia@file
+      - traefik.http.routers.qbittorrent.tls=true
+      - traefik.http.routers.qbittorrent.tls.certresolver=dns-cloudflare
+      - traefik.http.routers.qbittorrent.priority=99
+      - traefik.http.routers.qbittorrent.service=qbittorrent-svc
+
+      - traefik.http.services.qbittorrent-svc.loadbalancer.server.port=8080
+
+
+
