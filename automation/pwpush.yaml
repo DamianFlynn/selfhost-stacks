@@ -7,7 +7,7 @@ services:
 
   pwpush-db:
     container_name: "pwpush-db"
-    image: docker.io/postgres:18
+    image: docker.io/postgres:16
     volumes:
       - /mnt/fast/appdata/automation/pwpush/db:/var/lib/postgresql/data
     ports:
@@ -73,7 +73,7 @@ services:
       - traefik.enable=true
       - traefik.http.routers.pwpush.entrypoints=web,websecure
       - traefik.http.routers.pwpush.rule=Host(`pwpush.deercrest.info`)
-      - traefik.http.routers.pwpush.middlewares=chain-authelia@file
+      #- traefik.http.routers.pwpush.middlewares=chain-authelia@file
       - traefik.http.routers.pwpush.tls=true
       - traefik.http.routers.pwpush.tls.certresolver=dns-cloudflare
       - traefik.http.routers.pwpush.service=pwpush

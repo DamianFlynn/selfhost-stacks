@@ -1,0 +1,25 @@
+name: arrs
+
+
+########################### NETWORKS
+networks:
+#  default:
+#    driver: bridge
+#  socket_proxy:
+#    name: socket_proxy
+  t3_proxy:
+     external: true
+  # automation:
+  #   name: automation
+  #   driver: bridge
+  #   ipam:
+  #     config:
+  #       - subnet: 192.168.85.0/24
+
+
+include:
+  ########################### SERVICES
+
+  - sabnzbd.yaml
+
+
