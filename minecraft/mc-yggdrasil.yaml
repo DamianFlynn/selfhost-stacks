@@ -43,6 +43,8 @@ services:
       ALLOW_CHEATS: "true"
       DEFAULT_PLAYER_PERMISSION_LEVEL: "operator"
       LEVEL_NAME: "Yggdrasil"
+      LEVEL_TYPE: "DEFAULT"                      # or FLAT, LEGACY
+      DIFFICULTY: "peaceful"                      # peaceful, easy, normal, hard
     volumes:
       - /mnt/fast/appdata/minecraft/yggdrasil:/data
 
