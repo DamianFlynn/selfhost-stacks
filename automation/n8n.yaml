@@ -10,7 +10,7 @@ services:
     user: "568:568"
     #image: docker.n8n.io/n8nio/n8n
     restart: unless-stopped
-    image: ghcr.io/damianflynn/custom-n8n:1.117.0
+    image: ghcr.io/damianflynn/custom-n8n:1.117.1
     # Environment variables (explanations below)
     environment:
       - N8N_HOST=n8n.${DOMAINNAME}
