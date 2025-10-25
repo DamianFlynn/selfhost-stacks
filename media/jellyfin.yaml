@@ -1,0 +1,56 @@
+services:
+
+  # Jellyfin - Media Server
+  jellyfin:
+    hostname: jellyfin
+    container_name: jellyfin
+    image: jellyfin/jellyfin:latest
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    # profiles: ["media", "all"]
+    # user: $PUID:$PGID
+    networks:
+      - t3_proxy
+    ports:
+      - target: 8096
+        published: 8096
+        protocol: tcp
+        mode: host
+      - target: 8920
+        published: 8920
+        protocol: tcp
+        mode: host
+      - 7359:7359/udp #optional local discovery
+      - 1900:1900/udp #optional
+    environment:
+      UMASK_SET: 022
+      TZ: $TZ
+      PUID: $PUID
+      PGID: $PGID
+      DOCKER_MODS: ghcr.io/themepark-dev/theme.park:jellyfin
+      TP_THEME: organizr
+      JELLYFIN_PublishedServerUrl: jellyfin.deercrest.info
+      
+    devices:
+      - /dev/dri:/dev/dri # for harware transcoding
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /mnt/fast/appdata/media/jellyfin:/config:rw
+      - /mnt/tank/media:/media
+      - /dev/shm:/data/transcode # Offload transcoding to RAM if you have enough RAM
+    labels:
+      - traefik.enable=true
+
+      # HTTP Routers
+      - traefik.http.routers.jellyfin.entrypoints=websecure
+      - traefik.http.routers.jellyfin.rule=Host(`jellyfin.deercrest.info`)
+      - traefik.http.routers.jellyfin.tls=true
+      - traefik.http.routers.jellyfin.tls.certresolver=dns-cloudflare
+      # Middlewares
+      - traefik.http.routers.jellyfin.middlewares=chain-authelia@file
+      # HTTP Services
+      - traefik.http.routers.jellyfin.service=jellyfin-svc
+      - traefik.http.services.jellyfin-svc.loadbalancer.server.port=8096
+
+

@@ -1,0 +1,116 @@
+
+########################### NETWORKS
+networks:
+
+  dispatcharr:
+    name: dispatcharr
+    driver: bridge
+
+services:
+  web:
+    hostname: "dispatcharr"
+    image: ghcr.io/dispatcharr/dispatcharr:0.11.1-20251025164819
+    container_name: dispatcharr
+    networks:
+      - t3_proxy
+      - dispatcharr
+    ports:
+      - 9191:9191
+    volumes:
+      - /mnt/fast/appdata/media/dispatcharr/data:/data:rw
+    depends_on:
+      - dispatcharr_db
+      - dispatcharr_redis
+    environment:
+      - POSTGRES_HOST=dispatcharr_db
+      - POSTGRES_DB=dispatcharr
+      - POSTGRES_USER=dispatch
+      - POSTGRES_PASSWORD=secret
+      - REDIS_HOST=dispatcharr_redis
+      - CELERY_BROKER_URL=redis://dispatcharr_redis:6379/0
+      - DISPATCHARR_LOG_LEVEL=info
+      # Process Priority Configuration (Optional)
+      # Lower values = higher priority. Range: -20 (highest) to 19 (lowest)
+      # Negative values require cap_add: SYS_NICE (uncomment below)
+      #- UWSGI_NICE_LEVEL=-5   # uWSGI/FFmpeg/Streaming (default: 0, recommended: -5 for high priority)
+      #- CELERY_NICE_LEVEL=5   # Celery/EPG/Background tasks (default: 5, low priority)
+    #
+    # Uncomment to enable high priority for streaming (required if UWSGI_NICE_LEVEL < 0)
+    cap_add:
+     - SYS_NICE
+    # Optional for hardware acceleration
+    group_add:
+     - video
+     - render # Uncomment if your GPU requires it
+    devices:
+      - /dev/dri:/dev/dri  # For Intel/AMD GPU acceleration (VA-API)
+    # Uncomment the following lines for NVIDIA GPU support
+    # NVidia GPU support (requires NVIDIA Container Toolkit)
+    #deploy:
+    #  resources:
+    #      reservations:
+    #          devices:
+    #              - driver: nvidia
+    #                count: all
+    #                capabilities: [gpu]
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.dispatcharr.entrypoints=web,websecure
+      - traefik.http.routers.dispatcharr.rule=Host(`dispatcharr.deercrest.info`)
+      - traefik.http.routers.dispatcharr.middlewares=chain-authelia@file
+      - traefik.http.routers.dispatcharr.tls=true
+      - traefik.http.routers.dispatcharr.tls.certresolver=dns-cloudflare
+      - traefik.http.routers.dispatcharr.priority=99
+      - traefik.http.routers.dispatcharr.service=dispatcharr-svc
+      - traefik.http.services.dispatcharr-svc.loadbalancer.server.port=9191
+
+
+  dispatcharr_celery:
+    hostname: dispatcharr_celery
+    image: ghcr.io/dispatcharr/dispatcharr:0.11.1-20251025164819
+    container_name: dispatcharr_celery
+    networks:
+      - dispatcharr
+    depends_on:
+      - dispatcharr_db
+      - dispatcharr_redis
+    volumes:
+      - /mnt/fast/appdata/media/dispatcharr/app:/app:rw
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      - POSTGRES_HOST=dispatcharr_db
+      - POSTGRES_DB=dispatcharr
+      - POSTGRES_USER=dispatch
+      - POSTGRES_PASSWORD=secret
+      - REDIS_HOST=dispatcharr_redis
+      - CELERY_BROKER_URL=redis://dispatcharr_redis:6379/0
+    command: >
+      bash -c "
+      cd /app &&
+      nice -n 5 celery -A dispatcharr worker -l info
+      "
+
+  dispatcharr_db:
+    hostname: dispatcharr_db
+    image: postgres:14
+    container_name: dispatcharr_db
+    networks:
+      - dispatcharr
+    ports:
+      - "5436:5432"
+    environment:
+      - POSTGRES_DB=dispatcharr
+      - POSTGRES_USER=dispatch
+      - POSTGRES_PASSWORD=secret
+    volumes:
+      - /mnt/fast/appdata/media/dispatcharr/db:/var/lib/postgresql/data:rw
+
+  dispatcharr_redis:
+    hostname: dispatcharr_redis
+    image: redis:latest
+    container_name: dispatcharr_redis
+    networks:
+      - dispatcharr
+
+
