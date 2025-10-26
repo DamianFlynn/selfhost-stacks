@@ -1,0 +1,69 @@
+services:
+  # Radarr - Movie management
+  # Set url_base in radarr settings if using PathPrefix
+  lidarr:
+    hostname: "lidarr"
+    container_name: lidarr
+    image: ghcr.io/linuxserver/lidarr:latest # latest was causing "Error parsing column 45"
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    # profiles: ["media", "arrs", "all"]
+    networks:
+      - t3_proxy
+    ports:
+      - "8686:8686"
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /mnt/fast/appdata/arrs/lidarr/config:/config:rw
+      - /mnt/tank/downloads:/downloads:rw
+      - /mnt/tank/media:/media:rw
+    environment:
+      TZ: $TZ
+      PUID: $PUID
+      PGID: $PGID
+      UMASK_SET: 002
+      DOCKER_MODS: ghcr.io/themepark-dev/theme.park:lidarr
+      TP_THEME: organizr
+    labels:
+      - traefik.enable=true
+
+      - traefik.http.routers.lidarr.entrypoints=web,websecure
+      - traefik.http.routers.lidarr.rule=Host(`lidarr.deercrest.info`)
+      - traefik.http.routers.lidarr.middlewares=chain-authelia@file
+      - traefik.http.routers.lidarr.tls=true
+      - traefik.http.routers.lidarr.tls.certresolver=dns-cloudflare
+      - traefik.http.routers.lidarr.priority=99
+      - traefik.http.routers.lidarr.service=lidarr-svc
+
+      - traefik.http.routers.lidarr-bypass.entrypoints=web,websecure
+      # - traefik.http.routers.sabnzbd-rtr-bypass.rule=Host(`sabnzbd.deercrest.info`) && Query(`apikey`, `$RADARR_API_KEY`)
+      - traefik.http.routers.lidarr-bypass.rule=Host(`lidarr.deercrest.info`) && Header(`lidarr-auth-bypass-key`, `$LIDARR_AUTH_BYPASS_KEY`) # Bypass Auth for LunaSea on iOS
+      - traefik.http.routers.lidarr-bypass.middlewares=chain-no-auth@file
+      - traefik.http.routers.lidarr-bypass.tls=true
+      - traefik.http.routers.lidarr-bypass.tls.certresolver=dns-cloudflare
+      - traefik.http.routers.lidarr-bypass.priority=100
+      - traefik.http.routers.lidarr-bypass.service=lidarr-svc
+
+      - traefik.http.services.lidarr-svc.loadbalancer.server.port=8686
+
+  # Radarr Exporter - Radarr metrics for Prometheus
+  lidarr-exporter:
+    image: ghcr.io/onedr0p/exportarr:latest
+    container_name: lidarr-exporter
+    security_opt:
+      - no-new-privileges:true
+    restart: "no"
+    # profiles: ["all", "media", "arrs"]
+    networks:
+      - t3_proxy
+    ports:
+      - "9709:9709"
+    environment:
+      PORT: 9709
+      URL: "http://lidarr:8686"
+      APIKEY: $LIDARR_API_KEY
+      ENABLE_ADDITIONAL_METRICS: TRUE
+    command: ["lidarr"]
+
+
