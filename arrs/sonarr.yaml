@@ -1,0 +1,69 @@
+services:
+  # Sonarr - TV Shows Management
+  # Set url_base in sonarr settings if using PathPrefix
+  sonarr:
+    hostname: "sonarr"
+    container_name: sonarr
+    image: lscr.io/linuxserver/sonarr:develop
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    # profiles: ["media", "arrs", "all"]
+    networks:
+      - t3_proxy
+    ports:
+      - "8989:8989"
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /mnt/fast/appdata/arrs/sonarr/config:/config:rw
+      - /mnt/tank/downloads:/downloads:rw
+      - /mnt/tank/media:/media:rw
+    environment:
+      TZ: $TZ
+      PUID: $PUID
+      PGID: $PGID
+      UMASK_SET: 002
+      DOCKER_MODS: ghcr.io/themepark-dev/theme.park:sonarr
+      TP_THEME: organizr
+    labels:
+      - traefik.enable=true
+
+      - traefik.http.routers.sonarr.entrypoints=web,websecure
+      - traefik.http.routers.sonarr.rule=Host(`sonarr.deercrest.info`)
+      - traefik.http.routers.sonarr.middlewares=chain-authelia@file
+      - traefik.http.routers.sonarr.tls=true
+      - traefik.http.routers.sonarr.tls.certresolver=dns-cloudflare
+      - traefik.http.routers.sonarr.priority=99
+      - traefik.http.routers.sonarr.service=sonarr-svc
+
+      - traefik.http.routers.sonarr-bypass.entrypoints=web,websecure
+      # - traefik.http.routers.sabnzbd-rtr-bypass.rule=Host(`sabnzbd.deercrest.info`) && Query(`apikey`, `$SONARR_API_KEY`)
+      - traefik.http.routers.sonarr-bypass.rule=Host(`sonarr.deercrest.info`) && Header(`sonarr-auth-bypass-key`, `$SONARR_AUTH_BYPASS_KEY`) # Bypass Auth for LunaSea on iOS
+      - traefik.http.routers.sonarr-bypass.middlewares=chain-no-auth@file
+      - traefik.http.routers.sonarr-bypass.tls=true
+      - traefik.http.routers.sonarr-bypass.tls.certresolver=dns-cloudflare
+      - traefik.http.routers.sonarr-bypass.priority=100
+      - traefik.http.routers.sonarr-bypass.service=sonarr-svc
+
+      - traefik.http.services.sonarr-svc.loadbalancer.server.port=8989
+
+
+  # Sonarr Exporter - Sonarr metrics for Prometheus
+  sonarr-exporter:
+    image: ghcr.io/onedr0p/exportarr:latest
+    container_name: sonarr-exporter
+    security_opt:
+      - no-new-privileges:true
+    restart: "no"
+    # profiles: ["all", "media", "arrs"]
+    networks:
+      - t3_proxy
+    ports:
+      - "9708:9708"
+    environment:
+      PORT: 9708
+      URL: "http://sonarr:8989"
+      APIKEY: $SONARR_API_KEY
+      ENABLE_ADDITIONAL_METRICS: TRUE
+    command: ["sonarr"]
+

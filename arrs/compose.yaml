@@ -22,5 +22,9 @@ include:
 
   - sabnzbd.yaml
   - qbittorrent.yaml
+  - prowlarr.yaml
+  - radarr.yaml
+  - sonarr.yaml
+
 
 

@@ -1,0 +1,61 @@
+services:
+  # Prowlarr - Torrent proxy
+  prowlarr:
+    hostname: "prowlarr"
+    container_name: prowlarr
+    image: ghcr.io/linuxserver/prowlarr:develop
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    # profiles: ["apps", "all"]
+    networks:
+      - t3_proxy
+    ports:
+      - "9696:9696"
+    volumes:
+      # - $DOCKERDIR/appdata/prowlarr:/config
+      - /etc/localtime:/etc/localtime:ro
+      - /mnt/fast/appdata/arrs/prowlarr/config:/config:rw
+      - /mnt/tank/downloads:/downloads:rw
+      - /mnt/tank/media:/media:rw
+    environment:
+      TZ: $TZ
+      PUID: $PUID
+      PGID: $PGID
+      UMASK_SET: 002
+      DOCKER_MODS: ghcr.io/themepark-dev/theme.park:prowlarr
+      TP_THEME: organizr
+    labels:
+      - traefik.enable=true
+      # HTTP Routers
+      - traefik.http.routers.prowlarr.entrypoints=websecure
+      - traefik.http.routers.prowlarr.rule=Host(`prowlarr.deercrest.info`)
+      - traefik.http.routers.prowlarr.tls=true
+      - traefik.http.routers.prowlarr.tls.certresolver=dns-cloudflare
+      # Middlewares
+      - traefik.http.routers.prowlarr.middlewares=chain-authelia@file
+      # HTTP Services
+      - traefik.http.routers.prowlarr.service=prowlarr-svc
+      - traefik.http.services.prowlarr-svc.loadbalancer.server.port=9696
+
+
+  # Prowlarr Exporter - Prowlarr metrics for Prometheus
+  prowlarr-exporter:
+    image: ghcr.io/onedr0p/exportarr:latest
+    container_name: prowlarr-exporter
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    # profiles: ["all", "apps"]
+    networks:
+      - t3_proxy
+    ports:
+      - "9710:9710"
+    environment:
+      PORT: 9710
+      URL: "http://prowlarr:9696"
+      APIKEY: $PROWLARR_API_KEY
+      ENABLE_ADDITIONAL_METRICS: TRUE
+    command: ["prowlarr"]
+
+
