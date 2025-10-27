@@ -48,7 +48,7 @@ services:
       - traefik.http.routers.jellyfin.tls=true
       - traefik.http.routers.jellyfin.tls.certresolver=dns-cloudflare
       # Middlewares
-      - traefik.http.routers.jellyfin.middlewares=chain-authelia@file
+      #- traefik.http.routers.jellyfin.middlewares=chain-authelia@file
       # HTTP Services
       - traefik.http.routers.jellyfin.service=jellyfin-svc
       - traefik.http.services.jellyfin-svc.loadbalancer.server.port=8096
