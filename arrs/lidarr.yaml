@@ -66,4 +66,3 @@ services:
       ENABLE_ADDITIONAL_METRICS: TRUE
     command: ["lidarr"]
 
-

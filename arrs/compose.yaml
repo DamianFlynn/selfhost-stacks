@@ -26,5 +26,6 @@ include:
   - radarr.yaml
   - sonarr.yaml
   - lidarr.yaml
+  - bazarr.yaml
 
 
