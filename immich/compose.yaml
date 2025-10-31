@@ -15,7 +15,7 @@ services:
   immich-server:
     container_name: immich_server
     # renovate: datasource=docker depName=ghcr.io/immich-app/immich-server
-    image: ghcr.io/immich-app/immich-server:v2.1.0@sha256:72a9b9de6c6abfa7a9c9cdc244ae4d2bd9fea2ae00997f194cbd10aca72ea210
+    image: ghcr.io/immich-app/immich-server:v2.2.1@sha256:2c951a4063b55ec2de197fdf6a85e32b05872d3a18a18eaf851b827ff2622814
     pull_policy: always
     env_file:
       - /mnt/fast/stacks/immich/.env
