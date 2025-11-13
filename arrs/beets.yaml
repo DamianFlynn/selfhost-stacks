@@ -1,0 +1,36 @@
+  ### Beets.io
+services:
+
+  beets:
+    hostname: beets
+    image: lscr.io/linuxserver/beets:2.5.1-ls295
+    container_name: beets
+    security_opt:
+      - no-new-privileges:true
+    restart: "no"  # Don't run 24/7, start manually or via cron
+    profiles: ["manual"]  # Exclude from 'docker compose up'
+    environment:
+      TZ: $TZ
+      PUID: $PUID
+      PGID: $PGID
+    volumes:
+      - /mnt/fast/appdata/arrs/beets/config:/config:rw
+      - /mnt/tank/downloads:/downloads:rw
+      - /mnt/tank/media:/media:rw
+    networks:
+      - t3_proxy
+    ports:
+      - 8337:8337
+    labels:
+      - traefik.enable=true
+
+      - traefik.http.routers.beets.entrypoints=web,websecure
+      - traefik.http.routers.beets.rule=Host(`beets.deercrest.info`)
+      - traefik.http.routers.beets.middlewares=chain-authelia@file
+      - traefik.http.routers.beets.tls=true
+      - traefik.http.routers.beets.tls.certresolver=dns-cloudflare
+      - traefik.http.routers.beets.priority=99
+      - traefik.http.routers.beets.service=beets-svc
+
+      - traefik.http.services.beets-svc.loadbalancer.server.port=8337
+
