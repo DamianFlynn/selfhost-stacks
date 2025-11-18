@@ -1,6 +1,6 @@
 services:
   tesla-static:
-    image: nginx:1.29.2-alpine
+    image: nginx:1.29.3-alpine
     container_name: tesla-static
     restart: unless-stopped
     networks:
