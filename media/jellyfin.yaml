@@ -1,6 +1,29 @@
 services:
 
   # Jellyfin - Media Server
+  # Hardware: AMD Ryzen AI 9 HX PRO 370 with AMD Radeon 890M GPU
+  # Jellyfin Transcoding Settings:
+  #   - Hardware acceleration: VAAPI
+  #   - Enable decoding for:
+  #     - H264 format: yes
+  #     - HEVC format: no
+  #     - MPEG2 format: no
+  #     - VC1 format: no
+  #     - VP8 format: no
+  #     - VP9 format: no
+  #     - AV1 format: no
+  #     - HEVC 10bit format: yes
+  #     - VP9 10bit format: yes
+  #   - Enable ecoding: yes
+  #      - HEVC format: no
+  #      - AV1 format: no
+  #   - Tone mapping: no
+  #      - Tone mapping algorithm: BT.2390
+  #      - Tone mapping mode: Auto
+  #      - Tone mapping range: Auto
+  #      - Tone mapping desat: 0
+  #      - Tone mapping peak: 100
+  #   - Transcoding thread count: Auto
   jellyfin:
     hostname: jellyfin
     container_name: jellyfin
@@ -10,6 +33,9 @@ services:
     restart: unless-stopped
     # profiles: ["media", "all"]
     # user: $PUID:$PGID
+    group_add:
+      - "44"   # video group for AMD GPU access (standard on TrueNAS)
+      - "107"  # render group for AMD Radeon 890M GPU access (standard on TrueNAS)
     networks:
       - t3_proxy
     ports:
@@ -33,12 +59,15 @@ services:
       JELLYFIN_PublishedServerUrl: jellyfin.deercrest.info
       
     devices:
-      - /dev/dri:/dev/dri # for harware transcoding
+      # AMD Radeon 890M GPU for hardware transcoding (AMD AMF)
+      # Supports H.264, HEVC (H.265), VP9, AV1 decode/encode
+      - /dev/dri:/dev/dri
     volumes:
       - /etc/localtime:/etc/localtime:ro
       - /mnt/fast/appdata/media/jellyfin:/config:rw
       - /mnt/tank/media:/media
-      - /dev/shm:/data/transcode # Offload transcoding to RAM if you have enough RAM
+      # Transcode to RAM for better performance and reduced disk wear
+      - /dev/shm:/data/transcode
     labels:
       - traefik.enable=true
 
@@ -52,5 +81,7 @@ services:
       # HTTP Services
       - traefik.http.routers.jellyfin.service=jellyfin-svc
       - traefik.http.services.jellyfin-svc.loadbalancer.server.port=8096
+
+
 
 
