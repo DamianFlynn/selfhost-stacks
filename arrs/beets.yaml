@@ -17,8 +17,8 @@ services:
       - /mnt/fast/appdata/arrs/beets/config:/config:rw
       - /mnt/tank/downloads:/downloads:rw
       - /mnt/tank/media:/media:rw
-    networks:
-      - t3_proxy
+  #  networks:
+  #    - t3_proxy
     ports:
       - 8337:8337
     labels:
