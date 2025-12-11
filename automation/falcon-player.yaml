@@ -1,0 +1,37 @@
+services:
+
+  fpp:
+    container_name: fpp
+    image: falconchristmas/fpp:latest
+    # Run oxidized with the TrueNAS apps UID so it can write to host-mounted
+    # config and ssh directories owned by 568:568.
+    restart: unless-stopped
+    # user: 0:0
+    # FPP will report this hostname via MultiSync
+    hostname: fpp-conductor
+    networks:
+      - t3_proxy
+    #security_opt:
+    #  - no-new-privileges:true
+    ports:
+      - "60080:80/tcp" # Web UI
+      - "4048:4048/udp" # DDP
+      - "5568:5568/udp" # sACN/E1.31
+      - "32320:32320/udp" # FPP MultiSyncC
+    volumes:
+      - /mnt/fast/appdata/automation/fpp/media:/home/fpp/media
+    environment:
+      # To allow the instance to report its external IP, you can optionally
+      # define a FPP_DOCKER_IP environment variable with the external IP
+      - FPP_DOCKER_IP=172.16.1.159
+      - TZ=Europe/Dubin
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.fpp.entrypoints=web,websecure
+      - traefik.http.routers.fpp.rule=Host(`fpp.deercrest.info`)
+      - traefik.http.routers.fpp.middlewares=chain-authelia@file
+      - traefik.http.routers.fpp.tls=true
+      - traefik.http.routers.fpp.tls.certresolver=dns-cloudflare
+      - traefik.http.routers.fpp.service=fpp
+      - traefik.http.services.fpp.loadbalancer.server.port=80
+
