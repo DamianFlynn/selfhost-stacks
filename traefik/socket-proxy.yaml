@@ -3,7 +3,7 @@ services:
   socket-proxy:
     container_name: socket-proxy
     # renovate: datasource=docker depName=tecnativa/docker-socket-proxy
-    image: tecnativa/docker-socket-proxy:v0.4.1
+    image: tecnativa/docker-socket-proxy:v0.4.2
     pull_policy: always
     security_opt:
       - no-new-privileges:true
