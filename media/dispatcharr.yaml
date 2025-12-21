@@ -7,9 +7,9 @@ networks:
     driver: bridge
 
 services:
-  web:
+  dispatcharr:
     hostname: "dispatcharr"
-    image: ghcr.io/dispatcharr/dispatcharr:0.11.1-20251025164819
+    image: ghcr.io/dispatcharr/dispatcharr:0.15.0
     container_name: dispatcharr
     networks:
       - t3_proxy
