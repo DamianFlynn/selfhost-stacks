@@ -15,7 +15,7 @@ services:
   immich-server:
     container_name: immich_server
     # renovate: datasource=docker depName=ghcr.io/immich-app/immich-server
-    image: ghcr.io/immich-app/immich-server:v2.3.1@sha256:f8d06a32b1b2a81053d78e40bf8e35236b9faefb5c3903ce9ca8712c9ed78445
+    image: ghcr.io/immich-app/immich-server:v2.4.1@sha256:e6a6298e67ae077808fdb7d8d5565955f60b0708191576143fc02d30ab1389d1
     pull_policy: always
     env_file:
       - /mnt/fast/stacks/immich/.env
@@ -61,7 +61,7 @@ services:
   immich-machine-learning:
     container_name: immich_machine_learning
     # renovate: datasource=docker depName=ghcr.io/immich-app/immich-machine-learning
-    image: ghcr.io/immich-app/immich-machine-learning:v2.3.1@sha256:379e31b8c75107b0af8141904baa8cc933d7454b88fdb204265ef11749d7d908
+    image: ghcr.io/immich-app/immich-machine-learning:v2.4.1@sha256:b3deefd1826f113824e9d7bc30d905e7f823535887d03f869330946b6db3b44a
     pull_policy: always
     env_file:
       - /mnt/fast/stacks/immich/.env
