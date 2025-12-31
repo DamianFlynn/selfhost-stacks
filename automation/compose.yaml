@@ -24,4 +24,5 @@ include:
   - oxidized.yaml
   - pwpush.yaml
   - tesla-static.yaml
+  - keeper-sh.yaml
 

@@ -1,0 +1,150 @@
+name: automation
+
+
+########################### NETWORKS
+networks:
+#  default:
+#    driver: bridge
+#  socket_proxy:
+#    name: socket_proxy
+  t3_proxy:
+     external: true
+  keeper-network:
+    driver: bridge
+    name: keeper
+#   ipam:
+#     config:
+#       - subnet: 192.168.85.0/24
+
+
+services:
+
+  postgres:
+    container_name: cal-postgres
+    image: postgres:17
+    environment:
+      POSTGRES_USER: keeper
+      POSTGRES_PASSWORD: my96Passw0rd
+      POSTGRES_DB: keeper
+    volumes:
+      - /mnt/fast/appdata/automation/keeper/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U keeper -d keeper"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - keeper-network
+
+  redis:
+    container_name: cal-redis
+    image: redis:7-alpine
+    volumes:
+      - /mnt/fast/appdata/automation/keeper/redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - keeper-network
+
+  api:
+    container_name: cal-api
+    hostname: keeper-api
+    image: ghcr.io/ridafkih/keeper-api:latest
+    restart: unless-stopped
+    environment:
+      API_PORT: 3001
+      DATABASE_URL: postgres://keeper:my96Passw0rd@cal-postgres:5432/keeper
+      REDIS_URL: redis://cal-redis:6379
+      WEBSOCKET_URL: ${WEBSOCKET_URL:-wss://keeper-api.${DOMAINNAME}/api/socket}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-https://keeper.${DOMAINNAME}}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      COMMERCIAL_MODE: false
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      MICROSOFT_CLIENT_ID: ${MICROSOFT_CLIENT_ID}
+      MICROSOFT_CLIENT_SECRET: ${MICROSOFT_CLIENT_SECRET}
+      TRUSTED_ORIGINS: ${TRUSTED_ORIGINS:-https://keeper.${DOMAINNAME}}
+    ports:
+      - "127.0.0.1:3001:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - keeper-network
+      - t3_proxy
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.keeper-api.rule=Host(`keeper-api.${DOMAINNAME}`)
+      - traefik.http.routers.keeper-api.tls=true
+      - traefik.http.routers.keeper-api.entrypoints=web,websecure
+      - traefik.http.routers.keeper-api.tls.certresolver=dns-cloudflare
+      - traefik.http.middlewares.keeper-api.headers.SSLRedirect=true
+      - traefik.http.middlewares.keeper-api.headers.STSSeconds=315360000
+      - traefik.http.middlewares.keeper-api.headers.browserXSSFilter=true
+      - traefik.http.middlewares.keeper-api.headers.contentTypeNosniff=true
+      - traefik.http.middlewares.keeper-api.headers.forceSTSHeader=true
+      - traefik.http.middlewares.keeper-api.headers.SSLHost=${DOMAINNAME}
+      - traefik.http.middlewares.keeper-api.headers.STSIncludeSubdomains=true
+      - traefik.http.middlewares.keeper-api.headers.STSPreload=true
+      - traefik.http.routers.keeper-api.middlewares=keeper-api@docker
+      - traefik.http.services.keeper-api.loadbalancer.server.port=3001
+
+  cron:
+    container_name: cal-cron
+    hostname: keeper-cron
+    image: ghcr.io/ridafkih/keeper-cron:latest
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://keeper:my96Passw0rd@cal-postgres:5432/keeper
+      REDIS_URL: redis://cal-redis:6379
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      MICROSOFT_CLIENT_ID: ${MICROSOFT_CLIENT_ID}
+      MICROSOFT_CLIENT_SECRET: ${MICROSOFT_CLIENT_SECRET}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - keeper-network
+
+  web:
+    container_name: cal-web
+    hostname: keeper-web
+    image: ghcr.io/ridafkih/keeper-web:latest
+    restart: unless-stopped
+    environment:
+      API_URL: http://cal-api:3001
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      - api
+    networks:
+      - keeper-network
+      - t3_proxy
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.keeper.rule=Host(`keeper.${DOMAINNAME}`)
+      - traefik.http.routers.keeper.tls=true
+      - traefik.http.routers.keeper.entrypoints=web,websecure
+      - traefik.http.routers.keeper.tls.certresolver=dns-cloudflare
+      - traefik.http.middlewares.keeper.headers.SSLRedirect=true
+      - traefik.http.middlewares.keeper.headers.STSSeconds=315360000
+      - traefik.http.middlewares.keeper.headers.browserXSSFilter=true
+      - traefik.http.middlewares.keeper.headers.contentTypeNosniff=true
+      - traefik.http.middlewares.keeper.headers.forceSTSHeader=true
+      - traefik.http.middlewares.keeper.headers.SSLHost=${DOMAINNAME}
+      - traefik.http.middlewares.keeper.headers.STSIncludeSubdomains=true
+      - traefik.http.middlewares.keeper.headers.STSPreload=true
+      - traefik.http.routers.keeper.middlewares=keeper@docker
+      - traefik.http.services.keeper.loadbalancer.server.port=3000
+
+
