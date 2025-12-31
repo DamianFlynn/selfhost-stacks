@@ -2,7 +2,7 @@ services:
   # --- Tailscale sidecar for VANILLA ---
   tailscale-vanilla:
     # renovate: datasource=docker depName=ghcr.io/tailscale/tailscale
-    image: ghcr.io/tailscale/tailscale:v1.92.3
+    image: ghcr.io/tailscale/tailscale:v1.92.4
     container_name: mc_vanilla_ts
     restart: unless-stopped
     cap_add: [NET_ADMIN, SYS_MODULE, NET_RAW]
