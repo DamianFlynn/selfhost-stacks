@@ -1,7 +1,7 @@
 services:
   freshrss:
     container_name: freshrss
-    image: ghcr.io/linuxserver/freshrss:1.27.1
+    image: ghcr.io/linuxserver/freshrss:1.28.0
     hostname: 'feeds'
     volumes:
       - /mnt/fast/appdata/hoarder/freshrss:/config:rw
