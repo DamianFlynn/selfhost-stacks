@@ -9,8 +9,9 @@ networks:
 services:
   dispatcharr:
     hostname: "dispatcharr"
-    image: ghcr.io/dispatcharr/dispatcharr:0.15.0
+    image: ghcr.io/dispatcharr/dispatcharr:0.15.1
     container_name: dispatcharr
+    restart: unless-stopped
     networks:
       - t3_proxy
       - dispatcharr
