@@ -123,6 +123,7 @@ services:
     restart: unless-stopped
     environment:
       API_URL: http://cal-api:3001
+      HOSTNAME: 0.0.0.0
     ports:
       - "127.0.0.1:3000:3000"
     depends_on:
@@ -146,5 +147,6 @@ services:
       - traefik.http.middlewares.keeper.headers.STSPreload=true
       - traefik.http.routers.keeper.middlewares=keeper@docker
       - traefik.http.services.keeper.loadbalancer.server.port=3000
+
 
 
