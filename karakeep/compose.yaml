@@ -19,7 +19,7 @@ services:
     volumes:
       - /mnt/fast/appdata/hoarder/karakeep/data:/data
     ports:
-      - 127.0.0.1:3000:3000
+      - 127.0.0.1:3002:3000
     env_file:
       - .env
     environment:
