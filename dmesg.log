@@ -1,0 +1,273 @@
+[19589.000714] amdgpu 0000:c7:00.0: amdgpu: [mmhub] page fault (src_id:0 ring:40 vmid:3 pasid:32770)
+[19589.000715] amdgpu 0000:c7:00.0: amdgpu:  in process ffmpeg pid 669921 thread ffmpeg:cs0 pid 669922)
+[19589.000716] amdgpu 0000:c7:00.0: amdgpu:   in page starting at address 0x0000800201217000 from client 18
+[19589.000717] amdgpu 0000:c7:00.0: amdgpu: MMVM_L2_PROTECTION_FAULT_STATUS:0x00000000
+[19589.000718] amdgpu 0000:c7:00.0: amdgpu:      Faulty UTCL2 client ID: VMC (0x0)
+[19589.000719] amdgpu 0000:c7:00.0: amdgpu:      MORE_FAULTS: 0x0
+[19589.000720] amdgpu 0000:c7:00.0: amdgpu:      WALKER_ERROR: 0x0
+[19589.000722] amdgpu 0000:c7:00.0: amdgpu:      PERMISSION_FAULTS: 0x0
+[19589.000723] amdgpu 0000:c7:00.0: amdgpu:      MAPPING_ERROR: 0x0
+[19589.000724] amdgpu 0000:c7:00.0: amdgpu:      RW: 0x0
+[19589.000727] amdgpu 0000:c7:00.0: amdgpu: [mmhub] page fault (src_id:0 ring:40 vmid:3 pasid:32770)
+[19589.000729] amdgpu 0000:c7:00.0: amdgpu:  in process ffmpeg pid 669921 thread ffmpeg:cs0 pid 669922)
+[19589.000731] amdgpu 0000:c7:00.0: amdgpu:   in page starting at address 0x0000800201216000 from client 18
+[19589.000732] amdgpu 0000:c7:00.0: amdgpu: MMVM_L2_PROTECTION_FAULT_STATUS:0x00000000
+[19589.000734] amdgpu 0000:c7:00.0: amdgpu:      Faulty UTCL2 client ID: VMC (0x0)
+[19589.000735] amdgpu 0000:c7:00.0: amdgpu:      MORE_FAULTS: 0x0
+[19589.000736] amdgpu 0000:c7:00.0: amdgpu:      WALKER_ERROR: 0x0
+[19589.000737] amdgpu 0000:c7:00.0: amdgpu:      PERMISSION_FAULTS: 0x0
+[19589.000738] amdgpu 0000:c7:00.0: amdgpu:      MAPPING_ERROR: 0x0
+[19589.000740] amdgpu 0000:c7:00.0: amdgpu:      RW: 0x0
+[19589.000919] amdgpu 0000:c7:00.0: amdgpu: [mmhub] page fault (src_id:0 ring:40 vmid:3 pasid:32770)
+[19589.000921] amdgpu 0000:c7:00.0: amdgpu:  in process ffmpeg pid 669921 thread ffmpeg:cs0 pid 669922)
+[19589.000923] amdgpu 0000:c7:00.0: amdgpu:   in page starting at address 0x0000800201216000 from client 18
+[19589.000924] amdgpu 0000:c7:00.0: amdgpu: MMVM_L2_PROTECTION_FAULT_STATUS:0x00343C51
+[19589.000926] amdgpu 0000:c7:00.0: amdgpu:      Faulty UTCL2 client ID: VCN (0x1e)
+[19589.000927] amdgpu 0000:c7:00.0: amdgpu:      MORE_FAULTS: 0x1
+[19589.000928] amdgpu 0000:c7:00.0: amdgpu:      WALKER_ERROR: 0x0
+[19589.000929] amdgpu 0000:c7:00.0: amdgpu:      PERMISSION_FAULTS: 0x5
+[19589.000930] amdgpu 0000:c7:00.0: amdgpu:      MAPPING_ERROR: 0x0
+[19589.000932] amdgpu 0000:c7:00.0: amdgpu:      RW: 0x1
+[19589.000934] amdgpu 0000:c7:00.0: amdgpu: [mmhub] page fault (src_id:0 ring:40 vmid:3 pasid:32770)
+[19589.000935] amdgpu 0000:c7:00.0: amdgpu:  in process ffmpeg pid 669921 thread ffmpeg:cs0 pid 669922)
+[19589.000937] amdgpu 0000:c7:00.0: amdgpu:   in page starting at address 0x0000800201217000 from client 18
+[19589.000939] amdgpu 0000:c7:00.0: amdgpu: MMVM_L2_PROTECTION_FAULT_STATUS:0x00000000
+[19589.000940] amdgpu 0000:c7:00.0: amdgpu:      Faulty UTCL2 client ID: VMC (0x0)
+[19589.000941] amdgpu 0000:c7:00.0: amdgpu:      MORE_FAULTS: 0x0
+[19589.000941] amdgpu 0000:c7:00.0: amdgpu:      WALKER_ERROR: 0x0
+[19589.000942] amdgpu 0000:c7:00.0: amdgpu:      PERMISSION_FAULTS: 0x0
+[19589.000943] amdgpu 0000:c7:00.0: amdgpu:      MAPPING_ERROR: 0x0
+[19589.000944] amdgpu 0000:c7:00.0: amdgpu:      RW: 0x0
+[19594.000705] gmc_v11_0_process_interrupt: 44148 callbacks suppressed
+[19594.000709] amdgpu 0000:c7:00.0: amdgpu: [mmhub] page fault (src_id:0 ring:40 vmid:3 pasid:32770)
+[19594.000718] amdgpu 0000:c7:00.0: amdgpu:  in process ffmpeg pid 669921 thread ffmpeg:cs0 pid 669922)
+[19594.000720] amdgpu 0000:c7:00.0: amdgpu:   in page starting at address 0x0000800201216000 from client 18
+[19594.000722] amdgpu 0000:c7:00.0: amdgpu: MMVM_L2_PROTECTION_FAULT_STATUS:0x00343C51
+[19594.000723] amdgpu 0000:c7:00.0: amdgpu:      Faulty UTCL2 client ID: VCN (0x1e)
+[19594.000725] amdgpu 0000:c7:00.0: amdgpu:      MORE_FAULTS: 0x1
+[19594.000726] amdgpu 0000:c7:00.0: amdgpu:      WALKER_ERROR: 0x0
+[19594.000727] amdgpu 0000:c7:00.0: amdgpu:      PERMISSION_FAULTS: 0x5
+[19594.000727] amdgpu 0000:c7:00.0: amdgpu:      MAPPING_ERROR: 0x0
+[19594.000728] amdgpu 0000:c7:00.0: amdgpu:      RW: 0x1
+[19594.000730] amdgpu 0000:c7:00.0: amdgpu: [mmhub] page fault (src_id:0 ring:40 vmid:3 pasid:32770)
+[19594.000731] amdgpu 0000:c7:00.0: amdgpu:  in process ffmpeg pid 669921 thread ffmpeg:cs0 pid 669922)
+[19594.000732] amdgpu 0000:c7:00.0: amdgpu:   in page starting at address 0x0000800201217000 from client 18
+[19594.000733] amdgpu 0000:c7:00.0: amdgpu: MMVM_L2_PROTECTION_FAULT_STATUS:0x00000000
+[19594.000734] amdgpu 0000:c7:00.0: amdgpu:      Faulty UTCL2 client ID: VMC (0x0)
+[19594.000735] amdgpu 0000:c7:00.0: amdgpu:      MORE_FAULTS: 0x0
+[19594.000736] amdgpu 0000:c7:00.0: amdgpu:      WALKER_ERROR: 0x0
+[19594.000736] amdgpu 0000:c7:00.0: amdgpu:      PERMISSION_FAULTS: 0x0
+[19594.000737] amdgpu 0000:c7:00.0: amdgpu:      MAPPING_ERROR: 0x0
+[19594.000738] amdgpu 0000:c7:00.0: amdgpu:      RW: 0x0
+[19594.000739] amdgpu 0000:c7:00.0: amdgpu: [mmhub] page fault (src_id:0 ring:40 vmid:3 pasid:32770)
+[19594.000740] amdgpu 0000:c7:00.0: amdgpu:  in process ffmpeg pid 669921 thread ffmpeg:cs0 pid 669922)
+[19594.000741] amdgpu 0000:c7:00.0: amdgpu:   in page starting at address 0x0000800201216000 from client 18
+[19594.000742] amdgpu 0000:c7:00.0: amdgpu: MMVM_L2_PROTECTION_FAULT_STATUS:0x00000000
+[19594.000743] amdgpu 0000:c7:00.0: amdgpu:      Faulty UTCL2 client ID: VMC (0x0)
+[19594.000744] amdgpu 0000:c7:00.0: amdgpu:      MORE_FAULTS: 0x0
+[19594.000745] amdgpu 0000:c7:00.0: amdgpu:      WALKER_ERROR: 0x0
+[19594.000745] amdgpu 0000:c7:00.0: amdgpu:      PERMISSION_FAULTS: 0x0
+[19594.000746] amdgpu 0000:c7:00.0: amdgpu:      MAPPING_ERROR: 0x0
+[19594.000747] amdgpu 0000:c7:00.0: amdgpu:      RW: 0x0
+[19594.000920] amdgpu 0000:c7:00.0: amdgpu: [mmhub] page fault (src_id:0 ring:40 vmid:3 pasid:32770)
+[19594.000921] amdgpu 0000:c7:00.0: amdgpu:  in process ffmpeg pid 669921 thread ffmpeg:cs0 pid 669922)
+[19594.000922] amdgpu 0000:c7:00.0: amdgpu:   in page starting at address 0x0000800201216000 from client 18
+[19594.000923] amdgpu 0000:c7:00.0: amdgpu: MMVM_L2_PROTECTION_FAULT_STATUS:0x00343C51
+[19594.000924] amdgpu 0000:c7:00.0: amdgpu:      Faulty UTCL2 client ID: VCN (0x1e)
+[19594.000925] amdgpu 0000:c7:00.0: amdgpu:      MORE_FAULTS: 0x1
+[19594.000926] amdgpu 0000:c7:00.0: amdgpu:      WALKER_ERROR: 0x0
+[19594.000926] amdgpu 0000:c7:00.0: amdgpu:      PERMISSION_FAULTS: 0x5
+[19594.000927] amdgpu 0000:c7:00.0: amdgpu:      MAPPING_ERROR: 0x0
+[19594.000928] amdgpu 0000:c7:00.0: amdgpu:      RW: 0x1
+[19594.000930] amdgpu 0000:c7:00.0: amdgpu: [mmhub] page fault (src_id:0 ring:40 vmid:3 pasid:32770)
+[19594.000931] amdgpu 0000:c7:00.0: amdgpu:  in process ffmpeg pid 669921 thread ffmpeg:cs0 pid 669922)
+[19594.000932] amdgpu 0000:c7:00.0: amdgpu:   in page starting at address 0x0000800201217000 from client 18
+[19594.000933] amdgpu 0000:c7:00.0: amdgpu: MMVM_L2_PROTECTION_FAULT_STATUS:0x00000000
+[19594.000933] amdgpu 0000:c7:00.0: amdgpu:      Faulty UTCL2 client ID: VMC (0x0)
+[19594.000934] amdgpu 0000:c7:00.0: amdgpu:      MORE_FAULTS: 0x0
+[19594.000935] amdgpu 0000:c7:00.0: amdgpu:      WALKER_ERROR: 0x0
+[19594.000935] amdgpu 0000:c7:00.0: amdgpu:      PERMISSION_FAULTS: 0x0
+[19594.000936] amdgpu 0000:c7:00.0: amdgpu:      MAPPING_ERROR: 0x0
+[19594.000937] amdgpu 0000:c7:00.0: amdgpu:      RW: 0x0
+[19594.000938] amdgpu 0000:c7:00.0: amdgpu: [mmhub] page fault (src_id:0 ring:40 vmid:3 pasid:32770)
+[19594.000939] amdgpu 0000:c7:00.0: amdgpu:  in process ffmpeg pid 669921 thread ffmpeg:cs0 pid 669922)
+[19594.000940] amdgpu 0000:c7:00.0: amdgpu:   in page starting at address 0x0000800201216000 from client 18
+[19594.000941] amdgpu 0000:c7:00.0: amdgpu: MMVM_L2_PROTECTION_FAULT_STATUS:0x00000000
+[19594.000942] amdgpu 0000:c7:00.0: amdgpu:      Faulty UTCL2 client ID: VMC (0x0)
+[19594.000943] amdgpu 0000:c7:00.0: amdgpu:      MORE_FAULTS: 0x0
+[19594.000943] amdgpu 0000:c7:00.0: amdgpu:      WALKER_ERROR: 0x0
+[19594.000944] amdgpu 0000:c7:00.0: amdgpu:      PERMISSION_FAULTS: 0x0
+[19594.000945] amdgpu 0000:c7:00.0: amdgpu:      MAPPING_ERROR: 0x0
+[19594.000945] amdgpu 0000:c7:00.0: amdgpu:      RW: 0x0
+[19594.001796] amdgpu 0000:c7:00.0: amdgpu: [mmhub] page fault (src_id:0 ring:40 vmid:3 pasid:32770)
+[19594.001797] amdgpu 0000:c7:00.0: amdgpu:  in process ffmpeg pid 669921 thread ffmpeg:cs0 pid 669922)
+[19594.001798] amdgpu 0000:c7:00.0: amdgpu:   in page starting at address 0x0000800201216000 from client 18
+[19594.001799] amdgpu 0000:c7:00.0: amdgpu: MMVM_L2_PROTECTION_FAULT_STATUS:0x00343C51
+[19594.001800] amdgpu 0000:c7:00.0: amdgpu:      Faulty UTCL2 client ID: VCN (0x1e)
+[19594.001801] amdgpu 0000:c7:00.0: amdgpu:      MORE_FAULTS: 0x1
+[19594.001802] amdgpu 0000:c7:00.0: amdgpu:      WALKER_ERROR: 0x0
+[19594.001802] amdgpu 0000:c7:00.0: amdgpu:      PERMISSION_FAULTS: 0x5
+[19594.001803] amdgpu 0000:c7:00.0: amdgpu:      MAPPING_ERROR: 0x0
+[19594.001804] amdgpu 0000:c7:00.0: amdgpu:      RW: 0x1
+[19594.001805] amdgpu 0000:c7:00.0: amdgpu: [mmhub] page fault (src_id:0 ring:40 vmid:3 pasid:32770)
+[19594.001806] amdgpu 0000:c7:00.0: amdgpu:  in process ffmpeg pid 669921 thread ffmpeg:cs0 pid 669922)
+[19594.001807] amdgpu 0000:c7:00.0: amdgpu:   in page starting at address 0x0000800201217000 from client 18
+[19594.001808] amdgpu 0000:c7:00.0: amdgpu: MMVM_L2_PROTECTION_FAULT_STATUS:0x00000000
+[19594.001809] amdgpu 0000:c7:00.0: amdgpu:      Faulty UTCL2 client ID: VMC (0x0)
+[19594.001810] amdgpu 0000:c7:00.0: amdgpu:      MORE_FAULTS: 0x0
+[19594.001810] amdgpu 0000:c7:00.0: amdgpu:      WALKER_ERROR: 0x0
+[19594.001811] amdgpu 0000:c7:00.0: amdgpu:      PERMISSION_FAULTS: 0x0
+[19594.001812] amdgpu 0000:c7:00.0: amdgpu:      MAPPING_ERROR: 0x0
+[19594.001812] amdgpu 0000:c7:00.0: amdgpu:      RW: 0x0
+[19594.001814] amdgpu 0000:c7:00.0: amdgpu: [mmhub] page fault (src_id:0 ring:40 vmid:3 pasid:32770)
+[19594.001815] amdgpu 0000:c7:00.0: amdgpu:  in process ffmpeg pid 669921 thread ffmpeg:cs0 pid 669922)
+[19594.001816] amdgpu 0000:c7:00.0: amdgpu:   in page starting at address 0x0000800201216000 from client 18
+[19594.001817] amdgpu 0000:c7:00.0: amdgpu: MMVM_L2_PROTECTION_FAULT_STATUS:0x00000000
+[19594.001818] amdgpu 0000:c7:00.0: amdgpu:      Faulty UTCL2 client ID: VMC (0x0)
+[19594.001818] amdgpu 0000:c7:00.0: amdgpu:      MORE_FAULTS: 0x0
+[19594.001819] amdgpu 0000:c7:00.0: amdgpu:      WALKER_ERROR: 0x0
+[19594.001820] amdgpu 0000:c7:00.0: amdgpu:      PERMISSION_FAULTS: 0x0
+[19594.001820] amdgpu 0000:c7:00.0: amdgpu:      MAPPING_ERROR: 0x0
+[19594.001821] amdgpu 0000:c7:00.0: amdgpu:      RW: 0x0
+[19594.002012] amdgpu 0000:c7:00.0: amdgpu: [mmhub] page fault (src_id:0 ring:40 vmid:3 pasid:32770)
+[19594.002014] amdgpu 0000:c7:00.0: amdgpu:  in process ffmpeg pid 669921 thread ffmpeg:cs0 pid 669922)
+[19594.002015] amdgpu 0000:c7:00.0: amdgpu:   in page starting at address 0x0000800201216000 from client 18
+[19594.002016] amdgpu 0000:c7:00.0: amdgpu: MMVM_L2_PROTECTION_FAULT_STATUS:0x00343C51
+[19594.002017] amdgpu 0000:c7:00.0: amdgpu:      Faulty UTCL2 client ID: VCN (0x1e)
+[19594.002017] amdgpu 0000:c7:00.0: amdgpu:      MORE_FAULTS: 0x1
+[19594.002018] amdgpu 0000:c7:00.0: amdgpu:      WALKER_ERROR: 0x0
+[19594.002019] amdgpu 0000:c7:00.0: amdgpu:      PERMISSION_FAULTS: 0x5
+[19594.002019] amdgpu 0000:c7:00.0: amdgpu:      MAPPING_ERROR: 0x0
+[19594.002020] amdgpu 0000:c7:00.0: amdgpu:      RW: 0x1
+[19599.005882] gmc_v11_0_process_interrupt: 41112 callbacks suppressed
+[19599.005887] amdgpu 0000:c7:00.0: amdgpu: [mmhub] page fault (src_id:0 ring:40 vmid:3 pasid:32770)
+[19599.005896] amdgpu 0000:c7:00.0: amdgpu:  in process ffmpeg pid 669921 thread ffmpeg:cs0 pid 669922)
+[19599.005898] amdgpu 0000:c7:00.0: amdgpu:   in page starting at address 0x0000800201216000 from client 18
+[19599.005900] amdgpu 0000:c7:00.0: amdgpu: MMVM_L2_PROTECTION_FAULT_STATUS:0x00343C51
+[19599.005901] amdgpu 0000:c7:00.0: amdgpu:      Faulty UTCL2 client ID: VCN (0x1e)
+[19599.005903] amdgpu 0000:c7:00.0: amdgpu:      MORE_FAULTS: 0x1
+[19599.005904] amdgpu 0000:c7:00.0: amdgpu:      WALKER_ERROR: 0x0
+[19599.005904] amdgpu 0000:c7:00.0: amdgpu:      PERMISSION_FAULTS: 0x5
+[19599.005905] amdgpu 0000:c7:00.0: amdgpu:      MAPPING_ERROR: 0x0
+[19599.005906] amdgpu 0000:c7:00.0: amdgpu:      RW: 0x1
+[19599.005907] amdgpu 0000:c7:00.0: amdgpu: [mmhub] page fault (src_id:0 ring:40 vmid:3 pasid:32770)
+[19599.005909] amdgpu 0000:c7:00.0: amdgpu:  in process ffmpeg pid 669921 thread ffmpeg:cs0 pid 669922)
+[19599.005910] amdgpu 0000:c7:00.0: amdgpu:   in page starting at address 0x0000800201217000 from client 18
+[19599.005911] amdgpu 0000:c7:00.0: amdgpu: MMVM_L2_PROTECTION_FAULT_STATUS:0x00000000
+[19599.005912] amdgpu 0000:c7:00.0: amdgpu:      Faulty UTCL2 client ID: VMC (0x0)
+[19599.005913] amdgpu 0000:c7:00.0: amdgpu:      MORE_FAULTS: 0x0
+[19599.005914] amdgpu 0000:c7:00.0: amdgpu:      WALKER_ERROR: 0x0
+[19599.005915] amdgpu 0000:c7:00.0: amdgpu:      PERMISSION_FAULTS: 0x0
+[19599.005915] amdgpu 0000:c7:00.0: amdgpu:      MAPPING_ERROR: 0x0
+[19599.005916] amdgpu 0000:c7:00.0: amdgpu:      RW: 0x0
+[19599.005918] amdgpu 0000:c7:00.0: amdgpu: [mmhub] page fault (src_id:0 ring:40 vmid:3 pasid:32770)
+[19599.005919] amdgpu 0000:c7:00.0: amdgpu:  in process ffmpeg pid 669921 thread ffmpeg:cs0 pid 669922)
+[19599.005920] amdgpu 0000:c7:00.0: amdgpu:   in page starting at address 0x0000800201216000 from client 18
+[19599.005921] amdgpu 0000:c7:00.0: amdgpu: MMVM_L2_PROTECTION_FAULT_STATUS:0x00000000
+[19599.005922] amdgpu 0000:c7:00.0: amdgpu:      Faulty UTCL2 client ID: VMC (0x0)
+[19599.005922] amdgpu 0000:c7:00.0: amdgpu:      MORE_FAULTS: 0x0
+[19599.005923] amdgpu 0000:c7:00.0: amdgpu:      WALKER_ERROR: 0x0
+[19599.005924] amdgpu 0000:c7:00.0: amdgpu:      PERMISSION_FAULTS: 0x0
+[19599.005924] amdgpu 0000:c7:00.0: amdgpu:      MAPPING_ERROR: 0x0
+[19599.005925] amdgpu 0000:c7:00.0: amdgpu:      RW: 0x0
+[19599.006097] amdgpu 0000:c7:00.0: amdgpu: [mmhub] page fault (src_id:0 ring:40 vmid:3 pasid:32770)
+[19599.006099] amdgpu 0000:c7:00.0: amdgpu:  in process ffmpeg pid 669921 thread ffmpeg:cs0 pid 669922)
+[19599.006100] amdgpu 0000:c7:00.0: amdgpu:   in page starting at address 0x0000800201216000 from client 18
+[19599.006101] amdgpu 0000:c7:00.0: amdgpu: MMVM_L2_PROTECTION_FAULT_STATUS:0x00343C51
+[19599.006102] amdgpu 0000:c7:00.0: amdgpu:      Faulty UTCL2 client ID: VCN (0x1e)
+[19599.006103] amdgpu 0000:c7:00.0: amdgpu:      MORE_FAULTS: 0x1
+[19599.006103] amdgpu 0000:c7:00.0: amdgpu:      WALKER_ERROR: 0x0
+[19599.006104] amdgpu 0000:c7:00.0: amdgpu:      PERMISSION_FAULTS: 0x5
+[19599.006105] amdgpu 0000:c7:00.0: amdgpu:      MAPPING_ERROR: 0x0
+[19599.006105] amdgpu 0000:c7:00.0: amdgpu:      RW: 0x1
+[19599.006107] amdgpu 0000:c7:00.0: amdgpu: [mmhub] page fault (src_id:0 ring:40 vmid:3 pasid:32770)
+[19599.006108] amdgpu 0000:c7:00.0: amdgpu:  in process ffmpeg pid 669921 thread ffmpeg:cs0 pid 669922)
+[19599.006109] amdgpu 0000:c7:00.0: amdgpu:   in page starting at address 0x0000800201217000 from client 18
+[19599.006110] amdgpu 0000:c7:00.0: amdgpu: MMVM_L2_PROTECTION_FAULT_STATUS:0x00000000
+[19599.006111] amdgpu 0000:c7:00.0: amdgpu:      Faulty UTCL2 client ID: VMC (0x0)
+[19599.006111] amdgpu 0000:c7:00.0: amdgpu:      MORE_FAULTS: 0x0
+[19599.006112] amdgpu 0000:c7:00.0: amdgpu:      WALKER_ERROR: 0x0
+[19599.006113] amdgpu 0000:c7:00.0: amdgpu:      PERMISSION_FAULTS: 0x0
+[19599.006113] amdgpu 0000:c7:00.0: amdgpu:      MAPPING_ERROR: 0x0
+[19599.006114] amdgpu 0000:c7:00.0: amdgpu:      RW: 0x0
+[19599.006115] amdgpu 0000:c7:00.0: amdgpu: [mmhub] page fault (src_id:0 ring:40 vmid:3 pasid:32770)
+[19599.006116] amdgpu 0000:c7:00.0: amdgpu:  in process ffmpeg pid 669921 thread ffmpeg:cs0 pid 669922)
+[19599.006117] amdgpu 0000:c7:00.0: amdgpu:   in page starting at address 0x0000800201216000 from client 18
+[19599.006118] amdgpu 0000:c7:00.0: amdgpu: MMVM_L2_PROTECTION_FAULT_STATUS:0x00000000
+[19599.006119] amdgpu 0000:c7:00.0: amdgpu:      Faulty UTCL2 client ID: VMC (0x0)
+[19599.006120] amdgpu 0000:c7:00.0: amdgpu:      MORE_FAULTS: 0x0
+[19599.006121] amdgpu 0000:c7:00.0: amdgpu:      WALKER_ERROR: 0x0
+[19599.006121] amdgpu 0000:c7:00.0: amdgpu:      PERMISSION_FAULTS: 0x0
+[19599.006122] amdgpu 0000:c7:00.0: amdgpu:      MAPPING_ERROR: 0x0
+[19599.006123] amdgpu 0000:c7:00.0: amdgpu:      RW: 0x0
+[19599.007572] amdgpu 0000:c7:00.0: amdgpu: [mmhub] page fault (src_id:0 ring:40 vmid:3 pasid:32770)
+[19599.007573] amdgpu 0000:c7:00.0: amdgpu:  in process ffmpeg pid 669921 thread ffmpeg:cs0 pid 669922)
+[19599.007574] amdgpu 0000:c7:00.0: amdgpu:   in page starting at address 0x0000800201216000 from client 18
+[19599.007575] amdgpu 0000:c7:00.0: amdgpu: MMVM_L2_PROTECTION_FAULT_STATUS:0x00343C51
+[19599.007576] amdgpu 0000:c7:00.0: amdgpu:      Faulty UTCL2 client ID: VCN (0x1e)
+[19599.007577] amdgpu 0000:c7:00.0: amdgpu:      MORE_FAULTS: 0x1
+[19599.007578] amdgpu 0000:c7:00.0: amdgpu:      WALKER_ERROR: 0x0
+[19599.007578] amdgpu 0000:c7:00.0: amdgpu:      PERMISSION_FAULTS: 0x5
+[19599.007579] amdgpu 0000:c7:00.0: amdgpu:      MAPPING_ERROR: 0x0
+[19599.007580] amdgpu 0000:c7:00.0: amdgpu:      RW: 0x1
+[19599.007581] amdgpu 0000:c7:00.0: amdgpu: [mmhub] page fault (src_id:0 ring:40 vmid:3 pasid:32770)
+[19599.007582] amdgpu 0000:c7:00.0: amdgpu:  in process ffmpeg pid 669921 thread ffmpeg:cs0 pid 669922)
+[19599.007583] amdgpu 0000:c7:00.0: amdgpu:   in page starting at address 0x0000800201217000 from client 18
+[19599.007584] amdgpu 0000:c7:00.0: amdgpu: MMVM_L2_PROTECTION_FAULT_STATUS:0x00000000
+[19599.007585] amdgpu 0000:c7:00.0: amdgpu:      Faulty UTCL2 client ID: VMC (0x0)
+[19599.007586] amdgpu 0000:c7:00.0: amdgpu:      MORE_FAULTS: 0x0
+[19599.007586] amdgpu 0000:c7:00.0: amdgpu:      WALKER_ERROR: 0x0
+[19599.007587] amdgpu 0000:c7:00.0: amdgpu:      PERMISSION_FAULTS: 0x0
+[19599.007588] amdgpu 0000:c7:00.0: amdgpu:      MAPPING_ERROR: 0x0
+[19599.007588] amdgpu 0000:c7:00.0: amdgpu:      RW: 0x0
+[19599.007590] amdgpu 0000:c7:00.0: amdgpu: [mmhub] page fault (src_id:0 ring:40 vmid:3 pasid:32770)
+[19599.007591] amdgpu 0000:c7:00.0: amdgpu:  in process ffmpeg pid 669921 thread ffmpeg:cs0 pid 669922)
+[19599.007592] amdgpu 0000:c7:00.0: amdgpu:   in page starting at address 0x0000800201216000 from client 18
+[19599.007593] amdgpu 0000:c7:00.0: amdgpu: MMVM_L2_PROTECTION_FAULT_STATUS:0x00000000
+[19599.007593] amdgpu 0000:c7:00.0: amdgpu:      Faulty UTCL2 client ID: VMC (0x0)
+[19599.007594] amdgpu 0000:c7:00.0: amdgpu:      MORE_FAULTS: 0x0
+[19599.007595] amdgpu 0000:c7:00.0: amdgpu:      WALKER_ERROR: 0x0
+[19599.007596] amdgpu 0000:c7:00.0: amdgpu:      PERMISSION_FAULTS: 0x0
+[19599.007596] amdgpu 0000:c7:00.0: amdgpu:      MAPPING_ERROR: 0x0
+[19599.007597] amdgpu 0000:c7:00.0: amdgpu:      RW: 0x0
+[19599.008804] amdgpu 0000:c7:00.0: amdgpu: [mmhub] page fault (src_id:0 ring:40 vmid:3 pasid:32770)
+[19599.008807] amdgpu 0000:c7:00.0: amdgpu:  in process ffmpeg pid 669921 thread ffmpeg:cs0 pid 669922)
+[19599.008810] amdgpu 0000:c7:00.0: amdgpu:   in page starting at address 0x0000800201216000 from client 18
+[19599.008813] amdgpu 0000:c7:00.0: amdgpu: MMVM_L2_PROTECTION_FAULT_STATUS:0x00343C51
+[19599.008815] amdgpu 0000:c7:00.0: amdgpu:      Faulty UTCL2 client ID: VCN (0x1e)
+[19599.008817] amdgpu 0000:c7:00.0: amdgpu:      MORE_FAULTS: 0x1
+[19599.008819] amdgpu 0000:c7:00.0: amdgpu:      WALKER_ERROR: 0x0
+[19599.008821] amdgpu 0000:c7:00.0: amdgpu:      PERMISSION_FAULTS: 0x5
+[19599.008822] amdgpu 0000:c7:00.0: amdgpu:      MAPPING_ERROR: 0x0
+[19599.008824] amdgpu 0000:c7:00.0: amdgpu:      RW: 0x1
+[19599.036585] amdgpu 0000:c7:00.0: amdgpu: Dumping IP State
+[19599.039748] amdgpu 0000:c7:00.0: amdgpu: Dumping IP State Completed
+[19599.039757] amdgpu 0000:c7:00.0: amdgpu: ring vcn_unified_0 timeout, signaled seq=61925, emitted seq=61927
+[19599.039760] amdgpu 0000:c7:00.0: amdgpu: Process information: process ffmpeg pid 669921 thread ffmpeg:cs0 pid 669922
+[19599.039763] amdgpu 0000:c7:00.0: amdgpu: GPU reset begin!
+[19599.216596] [drm] Register(0) [regUVD_POWER_STATUS] failed to reach value 0x00000001 != 0x00000002n
+[19599.392144] [drm] Register(0) [regUVD_RB_RPTR] failed to reach value 0x00000180 != 0x00000100n
+[19599.567666] [drm] Register(0) [regUVD_POWER_STATUS] failed to reach value 0x00000001 != 0x00000002n
+[19599.571386] amdgpu 0000:c7:00.0: amdgpu: MODE2 reset
+[19599.596938] amdgpu 0000:c7:00.0: amdgpu: GPU reset succeeded, trying to resume
+[19599.597186] [drm] PCIE GART of 512M enabled (table at 0x000000807FB00000).
+[19599.597223] amdgpu 0000:c7:00.0: amdgpu: SMU is resuming...
+[19599.600875] amdgpu 0000:c7:00.0: amdgpu: SMU is resumed successfully!
+[19599.608053] [drm] DMUB hardware initialized: version=0x09001B00
+[19599.610926] amdgpu 0000:c7:00.0: amdgpu: ring gfx_0.0.0 uses VM inv eng 0 on hub 0
+[19599.610927] amdgpu 0000:c7:00.0: amdgpu: ring comp_1.0.0 uses VM inv eng 1 on hub 0
+[19599.610928] amdgpu 0000:c7:00.0: amdgpu: ring comp_1.1.0 uses VM inv eng 4 on hub 0
+[19599.610929] amdgpu 0000:c7:00.0: amdgpu: ring comp_1.2.0 uses VM inv eng 6 on hub 0
+[19599.610929] amdgpu 0000:c7:00.0: amdgpu: ring comp_1.3.0 uses VM inv eng 7 on hub 0
+[19599.610929] amdgpu 0000:c7:00.0: amdgpu: ring comp_1.0.1 uses VM inv eng 8 on hub 0
+[19599.610930] amdgpu 0000:c7:00.0: amdgpu: ring comp_1.1.1 uses VM inv eng 9 on hub 0
+[19599.610930] amdgpu 0000:c7:00.0: amdgpu: ring comp_1.2.1 uses VM inv eng 10 on hub 0
+[19599.610931] amdgpu 0000:c7:00.0: amdgpu: ring comp_1.3.1 uses VM inv eng 11 on hub 0
+[19599.610931] amdgpu 0000:c7:00.0: amdgpu: ring sdma0 uses VM inv eng 12 on hub 0
+[19599.610932] amdgpu 0000:c7:00.0: amdgpu: ring vcn_unified_0 uses VM inv eng 0 on hub 8
+[19599.610932] amdgpu 0000:c7:00.0: amdgpu: ring jpeg_dec_0 uses VM inv eng 1 on hub 8
+[19599.610933] amdgpu 0000:c7:00.0: amdgpu: ring mes_kiq_3.1.0 uses VM inv eng 13 on hub 0
+[19599.610933] amdgpu 0000:c7:00.0: amdgpu: ring vpe uses VM inv eng 4 on hub 8
+[19599.624728] amdgpu 0000:c7:00.0: amdgpu: GPU reset(2) succeeded!
+[19599.625321] [drm:amdgpu_cs_ioctl [amdgpu]] *ERROR* Failed to initialize parser -125!
+[49733.208757] perf: interrupt took too long (2512 > 2500), lowering kernel.perf_event_max_sample_rate to 79500

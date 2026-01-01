@@ -1,0 +1,79 @@
+name: karakeep
+
+
+########################### NETWORKS
+networks:
+  default:
+    driver: bridge
+  t3_proxy:
+     external: true
+
+
+services:
+  web:
+    container_name: karakeep
+    hostname: karakeep
+    image: ghcr.io/karakeep-app/karakeep:${KARAKEEP_VERSION:-release}
+    restart: unless-stopped
+    volumes:
+      # By default, the data is stored in a docker volume called "data".
+      # If you want to mount a custom directory, change the volume mapping to:
+      # - /path/to/your/directory:/data
+      - /mnt/fast/appdata/hoarder/karakeep/data:/data
+    ports:
+      - 127.0.0.1:3000:3000
+    env_file:
+      - .env
+    environment:
+      MEILI_ADDR: http://meilisearch:7700
+      BROWSER_WEB_URL: http://chrome:9222
+      # OPENAI_API_KEY: ...
+
+      # You almost never want to change the value of the DATA_DIR variable.
+      # If you want to mount a custom directory, change the volume mapping above instead.
+      DATA_DIR: /data # DON'T CHANGE THIS
+    networks:
+      - default
+      - t3_proxy
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.karakeep.rule=Host(`karakeep.${DOMAINNAME}`)
+      - traefik.http.routers.karakeep.entrypoints=web,websecure
+      - traefik.http.routers.karakeep.tls=true
+      - traefik.http.routers.karakeep.tls.certresolver=dns-cloudflare
+      - traefik.http.middlewares.karakeep.headers.SSLRedirect=true
+      - traefik.http.middlewares.karakeep.headers.STSSeconds=315360000
+      - traefik.http.middlewares.karakeep.headers.browserXSSFilter=true
+      - traefik.http.middlewares.karakeep.headers.contentTypeNosniff=true
+      - traefik.http.middlewares.karakeep.headers.forceSTSHeader=true
+      - traefik.http.middlewares.karakeep.headers.SSLHost=${DOMAINNAME}
+      - traefik.http.middlewares.karakeep.headers.STSIncludeSubdomains=true
+      - traefik.http.middlewares.karakeep.headers.STSPreload=true
+      - traefik.http.routers.karakeep.middlewares=karakeep@docker
+      - traefik.http.services.karakeep.loadbalancer.server.port=3000
+  chrome:
+    container_name: karakeep-chrome
+    image: gcr.io/zenika-hub/alpine-chrome:124
+    restart: unless-stopped
+    command:
+      - --no-sandbox
+      - --disable-gpu
+      - --disable-dev-shm-usage
+      - --remote-debugging-address=0.0.0.0
+      - --remote-debugging-port=9222
+      - --hide-scrollbars
+    networks:
+      - default
+      
+  meilisearch:
+    container_name: karakeep-meilisearch
+    image: getmeili/meilisearch:v1.13.3
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      MEILI_NO_ANALYTICS: "true"
+    volumes:
+      - /mnt/fast/appdata/hoarder/karakeep/meili:/meili_data
+    networks:
+      - default
