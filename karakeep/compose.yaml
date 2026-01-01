@@ -11,27 +11,26 @@ networks:
 
 services:
   web:
-    container_name: karakeep
-    hostname: karakeep
-    image: ghcr.io/karakeep-app/karakeep:${KARAKEEP_VERSION:-release}
+    container_name: karakeep-web
+    hostname: karakeep-web
+    # renovate: datasource=docker depName=ghcr.io/karakeep-app/karakeep-web
+    image: ghcr.io/karakeep-app/karakeep-web:0.30.0
     restart: unless-stopped
     volumes:
-      # By default, the data is stored in a docker volume called "data".
-      # If you want to mount a custom directory, change the volume mapping to:
-      # - /path/to/your/directory:/data
       - /mnt/fast/appdata/hoarder/karakeep/data:/data
     ports:
       - 127.0.0.1:3000:3000
     env_file:
       - .env
     environment:
+      DATA_DIR: /data
       MEILI_ADDR: http://meilisearch:7700
       BROWSER_WEB_URL: http://chrome:9222
-      # OPENAI_API_KEY: ...
-
-      # You almost never want to change the value of the DATA_DIR variable.
-      # If you want to mount a custom directory, change the volume mapping above instead.
-      DATA_DIR: /data # DON'T CHANGE THIS
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+    depends_on:
+      - meilisearch
+      - chrome
+      - workers
     networks:
       - default
       - t3_proxy
@@ -51,8 +50,56 @@ services:
       - traefik.http.middlewares.karakeep.headers.STSPreload=true
       - traefik.http.routers.karakeep.middlewares=karakeep@docker
       - traefik.http.services.karakeep.loadbalancer.server.port=3000
+
+  workers:
+    container_name: karakeep-workers
+    hostname: karakeep-workers
+    # renovate: datasource=docker depName=ghcr.io/karakeep-app/karakeep-workers
+    image: ghcr.io/karakeep-app/karakeep-workers:0.30.0
+    restart: unless-stopped
+    volumes:
+      - /mnt/fast/appdata/hoarder/karakeep/data:/data
+    env_file:
+      - .env
+    environment:
+      DATA_DIR: /data
+      MEILI_ADDR: http://meilisearch:7700
+      BROWSER_WEB_URL: http://chrome:9222
+    depends_on:
+      - meilisearch
+      - chrome
+    networks:
+      - default
+
+  mcp:
+    container_name: karakeep-mcp
+    hostname: karakeep-mcp
+    # renovate: datasource=docker depName=ghcr.io/karakeep-app/karakeep-mcp
+    image: ghcr.io/karakeep-app/karakeep-mcp:0.30.0
+    restart: unless-stopped
+    volumes:
+      - /mnt/fast/appdata/hoarder/karakeep/data:/data
+    env_file:
+      - .env
+    environment:
+      DATA_DIR: /data
+    depends_on:
+      - web
+    networks:
+      - default
+      - t3_proxy
+    ports:
+      - 127.0.0.1:3001:3001
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.karakeep-mcp.rule=Host(`karakeep-mcp.${DOMAINNAME}`)
+      - traefik.http.routers.karakeep-mcp.entrypoints=web,websecure
+      - traefik.http.routers.karakeep-mcp.tls=true
+      - traefik.http.routers.karakeep-mcp.tls.certresolver=dns-cloudflare
+      - traefik.http.services.karakeep-mcp.loadbalancer.server.port=3001
   chrome:
     container_name: karakeep-chrome
+    # renovate: datasource=docker depName=gcr.io/zenika-hub/alpine-chrome
     image: gcr.io/zenika-hub/alpine-chrome:124
     restart: unless-stopped
     command:
@@ -67,6 +114,7 @@ services:
       
   meilisearch:
     container_name: karakeep-meilisearch
+    # renovate: datasource=docker depName=getmeili/meilisearch
     image: getmeili/meilisearch:v1.13.3
     restart: unless-stopped
     env_file:

@@ -1,0 +1,4 @@
+include:
+  - /mnt/fast/stacks/freshrss/compose.yaml
+services: {}
+

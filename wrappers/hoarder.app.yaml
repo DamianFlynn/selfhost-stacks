@@ -1,4 +1,0 @@
-include:
-  - /mnt/fast/stacks/hoarder/compose.yaml
-services: {}
-
