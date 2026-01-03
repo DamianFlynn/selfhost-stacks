@@ -1,0 +1,103 @@
+name: open-archiver
+
+########################### NETWORKS
+networks:
+  t3_proxy:
+    external: true
+  open-archiver:
+    name: open-archiver
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 192.168.95.0/24
+
+services:
+  # Main web application for archiving and managing digital content
+  open-archiver:
+    image: logiclabshq/open-archiver:latest
+    container_name: open-archiver
+    hostname: archiver
+    restart: unless-stopped
+    ports:
+      - '127.0.0.1:3005:3000'
+    env_file:
+      - .env
+    environment:
+      - TZ=${TZ}
+    volumes:
+      - /mnt/tank/archive/open-archiver:/var/data/open-archiver
+    depends_on:
+      - postgres
+      - valkey
+      - meilisearch
+    networks:
+      - t3_proxy
+      - open-archiver
+    security_opt:
+      - no-new-privileges:true
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.archiver-rtr.entrypoints=websecure
+      - traefik.http.routers.archiver-rtr.rule=Host(`archiver.${DOMAINNAME}`)
+      - traefik.http.routers.archiver-rtr.tls=true
+      - traefik.http.routers.archiver-rtr.tls.certresolver=dns-cloudflare
+      - traefik.http.routers.archiver-rtr.middlewares=chain-authelia@file
+      - traefik.http.routers.archiver-rtr.service=archiver-svc
+      - traefik.http.services.archiver-svc.loadbalancer.server.port=3000
+
+  # PostgreSQL database for storing application data
+  postgres:
+    image: postgres:17-alpine
+    container_name: open-archiver_postgres
+    hostname: postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-open_archive}
+      POSTGRES_USER: ${POSTGRES_USER:-admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+    volumes:
+      - /mnt/fast/appdata/open-archiver/postgres:/var/lib/postgresql/data
+    networks:
+      - open-archiver
+    security_opt:
+      - no-new-privileges:true
+# Redis-compatible cache/queue for session management and job processing
+  
+  valkey:
+    image: valkey/valkey:8-alpine
+    container_name: open-archiver_valkey
+    hostname: valkey
+    restart: unless-stopped
+    command: valkey-server --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - /mnt/fast/appdata/open-archiver/valkey:/data
+    networks:
+      - open-archiver
+    security_opt:
+      - no-new-privileges:true
+# Fast search engine for full-text search across archived content
+  
+  meilisearch:
+    image: getmeili/meilisearch:v1.15
+    container_name: open-archiver_meilisearch
+    hostname: meilisearch
+    restart: unless-stopped
+    environment:
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-aSampleMasterKey}
+    volumes:
+      - /mnt/fast/appdata/open-archiver/meilisearch:/meili_data
+    networks:
+      - open-archiver
+    security_opt:
+      - no-new-privileges:true
+# Apache Tika for content extraction and metadata parsing from documents
+  
+  tika:
+    image: apache/tika:3.2.2.0-full
+    container_name: open-archiver_tika
+    hostname: tika
+    restart: unless-stopped
+    networks:
+      - open-archiver
+    security_opt:
+      - no-new-privileges:true
