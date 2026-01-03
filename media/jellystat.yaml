@@ -35,7 +35,7 @@ services:
     networks:
       - t3_proxy
     ports:
-      - "3001:3000"
+      - "127.0.0.1:3003:3000"
     volumes:
       - /mnt/fast/appdata/media/jellystat/backup:/app/backend/backup-data:rw  # Database backup storage
     environment:
