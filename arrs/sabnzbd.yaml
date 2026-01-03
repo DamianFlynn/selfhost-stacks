@@ -37,7 +37,7 @@ services:
       - traefik.http.routers.sabnzbd.priority=99
       - traefik.http.routers.sabnzbd.service=sabnzbd-svc
 
-      - traefik.http.routers.sabnzbd-bypass.entrypoints=web,websecure
+      - traefik.http.routers.sabnzbd-bypass.entrypoints=websecure
       # - traefik.http.routers.sabnzbd-rtr-bypass.rule=Host(`sabnzbd.deercrest.info`) && Query(`apikey`, `$SABNZBD_API_KEY`)
       - traefik.http.routers.sabnzbd-bypass.rule=Host(`sabnzbd.deercrest.info`) && Header(`traefik-auth-bypass-key`, `$SABNZBD_AUTH_BYPASS_KEY`) # Bypass Auth for LunaSea on iOS
       - traefik.http.routers.sabnzbd-bypass.middlewares=chain-no-auth@file
