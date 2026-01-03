@@ -1,0 +1,30 @@
+services:
+  # FlareSolverr - Proxy server to bypass Cloudflare protection
+  # Used by Prowlarr to access protected indexers
+  flaresolverr:
+    hostname: "flaresolverr"
+    container_name: flaresolverr
+    image: ghcr.io/flaresolverr/flaresolverr:latest
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    networks:
+      - t3_proxy
+    ports:
+      - "8191:8191"
+    environment:
+      LOG_LEVEL: info
+      LOG_HTML: false
+      CAPTCHA_SOLVER: none
+      TZ: $TZ
+    labels:
+      - traefik.enable=true
+
+      - traefik.http.routers.flaresolverr-rtr.entrypoints=web,websecure
+      - traefik.http.routers.flaresolverr-rtr.rule=Host(`flaresolverr.deercrest.info`)
+      - traefik.http.routers.flaresolverr-rtr.middlewares=chain-authelia@file
+      - traefik.http.routers.flaresolverr-rtr.tls=true
+      - traefik.http.routers.flaresolverr-rtr.tls.certresolver=dns-cloudflare
+      - traefik.http.routers.flaresolverr-rtr.service=flaresolverr-svc
+
+      - traefik.http.services.flaresolverr-svc.loadbalancer.server.port=8191

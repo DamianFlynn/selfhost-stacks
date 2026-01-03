@@ -27,6 +27,7 @@ include:
   - sonarr.yaml
   - lidarr.yaml
   - bazarr.yaml
+  - flaresolverr.yaml
 #  - beets.yaml
 
 
