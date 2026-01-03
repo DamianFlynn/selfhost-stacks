@@ -28,13 +28,12 @@ services:
     labels:
       - traefik.enable=true
 
-      - traefik.http.routers.radarr.entrypoints=web,websecure
-      - traefik.http.routers.radarr.rule=Host(`radarr.deercrest.info`)
-      - traefik.http.routers.radarr.middlewares=chain-authelia@file
-      - traefik.http.routers.radarr.tls=true
-      - traefik.http.routers.radarr.tls.certresolver=dns-cloudflare
-      - traefik.http.routers.radarr.priority=99
-      - traefik.http.routers.radarr.service=radarr-svc
+      - traefik.http.routers.radarr-rtr.entrypoints=web,websecure
+      - traefik.http.routers.radarr-rtr.rule=Host(`radarr.deercrest.info`)
+      - traefik.http.routers.radarr-rtr.middlewares=chain-authelia@file
+      - traefik.http.routers.radarr-rtr.tls=true
+      - traefik.http.routers.radarr-rtr.tls.certresolver=dns-cloudflare
+      - traefik.http.routers.radarr-rtr.service=radarr-svc
 
       - traefik.http.routers.radarr-bypass.entrypoints=websecure
       # - traefik.http.routers.sabnzbd-rtr-bypass.rule=Host(`sabnzbd.deercrest.info`) && Query(`apikey`, `$RADARR_API_KEY`)

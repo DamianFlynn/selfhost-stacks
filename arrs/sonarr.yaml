@@ -28,13 +28,12 @@ services:
     labels:
       - traefik.enable=true
 
-      - traefik.http.routers.sonarr.entrypoints=web,websecure
-      - traefik.http.routers.sonarr.rule=Host(`sonarr.deercrest.info`)
-      - traefik.http.routers.sonarr.middlewares=chain-authelia@file
-      - traefik.http.routers.sonarr.tls=true
-      - traefik.http.routers.sonarr.tls.certresolver=dns-cloudflare
-      - traefik.http.routers.sonarr.priority=99
-      - traefik.http.routers.sonarr.service=sonarr-svc
+      - traefik.http.routers.sonarr-rtr.entrypoints=web,websecure
+      - traefik.http.routers.sonarr-rtr.rule=Host(`sonarr.deercrest.info`)
+      - traefik.http.routers.sonarr-rtr.middlewares=chain-authelia@file
+      - traefik.http.routers.sonarr-rtr.tls=true
+      - traefik.http.routers.sonarr-rtr.tls.certresolver=dns-cloudflare
+      - traefik.http.routers.sonarr-rtr.service=sonarr-svc
 
       - traefik.http.routers.sonarr-bypass.entrypoints=websecure
       # - traefik.http.routers.sabnzbd-rtr-bypass.rule=Host(`sabnzbd.deercrest.info`) && Query(`apikey`, `$SONARR_API_KEY`)

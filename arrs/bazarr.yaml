@@ -28,13 +28,12 @@ services:
     labels:
       - traefik.enable=true
 
-      - traefik.http.routers.bazarr.entrypoints=web,websecure
-      - traefik.http.routers.bazarr.rule=Host(`bazarr.deercrest.info`)
-      - traefik.http.routers.bazarr.middlewares=chain-authelia@file
-      - traefik.http.routers.bazarr.tls=true
-      - traefik.http.routers.bazarr.tls.certresolver=dns-cloudflare
-      - traefik.http.routers.bazarr.priority=99
-      - traefik.http.routers.bazarr.service=bazarr-svc
+      - traefik.http.routers.bazarr-rtr.entrypoints=web,websecure
+      - traefik.http.routers.bazarr-rtr.rule=Host(`bazarr.deercrest.info`)
+      - traefik.http.routers.bazarr-rtr.middlewares=chain-authelia@file
+      - traefik.http.routers.bazarr-rtr.tls=true
+      - traefik.http.routers.bazarr-rtr.tls.certresolver=dns-cloudflare
+      - traefik.http.routers.bazarr-rtr.service=bazarr-svc
 
       - traefik.http.routers.bazarr-bypass.entrypoints=websecure
       # - traefik.http.routers.sabnzbd-rtr-bypass.rule=Host(`sabnzbd.deercrest.info`) && Query(`apikey`, `$bazarr_API_KEY`)

@@ -29,13 +29,12 @@ services:
     labels:
       - traefik.enable=true
 
-      - traefik.http.routers.sabnzbd.entrypoints=web,websecure
-      - traefik.http.routers.sabnzbd.rule=Host(`sabnzbd.deercrest.info`)
-      - traefik.http.routers.sabnzbd.middlewares=chain-authelia@file
-      - traefik.http.routers.sabnzbd.tls=true
-      - traefik.http.routers.sabnzbd.tls.certresolver=dns-cloudflare
-      - traefik.http.routers.sabnzbd.priority=99
-      - traefik.http.routers.sabnzbd.service=sabnzbd-svc
+      - traefik.http.routers.sabnzbd-rtr.entrypoints=web,websecure
+      - traefik.http.routers.sabnzbd-rtr.rule=Host(`sabnzbd.deercrest.info`)
+      - traefik.http.routers.sabnzbd-rtr.middlewares=chain-authelia@file
+      - traefik.http.routers.sabnzbd-rtr.tls=true
+      - traefik.http.routers.sabnzbd-rtr.tls.certresolver=dns-cloudflare
+      - traefik.http.routers.sabnzbd-rtr.service=sabnzbd-svc
 
       - traefik.http.routers.sabnzbd-bypass.entrypoints=websecure
       # - traefik.http.routers.sabnzbd-rtr-bypass.rule=Host(`sabnzbd.deercrest.info`) && Query(`apikey`, `$SABNZBD_API_KEY`)
