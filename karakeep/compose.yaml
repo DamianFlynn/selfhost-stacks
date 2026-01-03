@@ -115,7 +115,7 @@ services:
   meilisearch:
     container_name: karakeep-meilisearch
     # renovate: datasource=docker depName=getmeili/meilisearch
-    image: getmeili/meilisearch:v1.13.3
+    image: getmeili/meilisearch:v1.31.0
     restart: unless-stopped
     env_file:
       - .env
