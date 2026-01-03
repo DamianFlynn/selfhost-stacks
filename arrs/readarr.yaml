@@ -76,9 +76,9 @@ services:
     networks:
       - t3_proxy
     ports:
-      - "9710:9710"
+      - "9713:9713"
     environment:
-      PORT: 9710
+      PORT: 9713
       URL: "http://readarr:8787"
       APIKEY: $READARR_API_KEY
       ENABLE_ADDITIONAL_METRICS: TRUE
