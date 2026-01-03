@@ -1,3 +1,24 @@
+# FlareSolverr - Cloudflare and Anti-Bot Bypass Proxy
+#
+# Purpose:
+#   Acts as a proxy server to bypass Cloudflare protection and bot detection
+#   Used by Prowlarr/Jackett to access indexers with Cloudflare challenges
+#
+# Key Features:
+#   - Cloudflare challenge solver (JavaScript, CAPTCHA)
+#   - User-Agent rotation
+#   - Cookie persistence
+#   - Browser automation (headless Chrome)
+#   - Request queueing
+#
+# How It Works:
+#   Prowlarr → FlareSolverr → Solves Challenge → Returns Cookies → Prowlarr accesses indexer
+#
+# Access:
+#   URL: https://flaresolverr.deercrest.info (web UI)
+#   Middleware: chain-authelia (protected - admin only)
+#   Internal URL: http://flaresolverr:8191 (used by Prowlarr)
+#
 services:
   # FlareSolverr - Proxy server to bypass Cloudflare protection
   # Used by Prowlarr to access protected indexers

@@ -1,5 +1,24 @@
+# Bazarr - Subtitle Management for Radarr and Sonarr
+#
+# Purpose:
+#   Automatically downloads and manages subtitles for movies and TV shows
+#   Integrates with Radarr/Sonarr to sync media libraries
+#
+# Key Features:
+#   - Multi-language subtitle support
+#   - Multiple subtitle provider integration (OpenSubtitles, Subscene, etc.)
+#   - Automatic subtitle sync and cleanup
+#   - Subtitle upgrade system (better quality)
+#   - Manual search and download
+#   - Hearing impaired subtitle filtering
+#
+# Access:
+#   URL: https://bazarr.deercrest.info
+#   Middleware: chain-authelia (protected - admin access)
+#   Bypass URL: Header-based bypass for mobile apps (Helmarr/LunaSea)
+#
 services:
-  # bazarr - Movie management
+  # bazarr - Subtitle management
   # Set url_base in bazarr settings if using PathPrefix
   bazarr:
     hostname: "bazarr"
@@ -14,10 +33,10 @@ services:
     ports:
       - "6767:6767"
     volumes:
-      - /etc/localtime:/etc/localtime:ro
-      - /mnt/fast/appdata/arrs/bazarr/config:/config:rw
-      - /mnt/tank/downloads:/downloads:rw
-      - /mnt/tank/media:/media:rw
+      - /etc/localtime:/etc/localtime:ro  # System timezone
+      - /mnt/fast/appdata/arrs/bazarr/config:/config:rw  # Application config and database
+      - /mnt/tank/downloads:/downloads:rw  # Download directory for subtitle files
+      - /mnt/tank/media:/media:rw  # Media library for subtitle placement
     environment:
       TZ: $TZ
       PUID: $PUID

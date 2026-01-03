@@ -1,5 +1,28 @@
+# Prowlarr - Indexer Manager and Proxy for Arr Stack
+#
+# Purpose:
+#   Centralized indexer management for Radarr/Sonarr/Lidarr
+#   Acts as a proxy between Arrs and torrent/Usenet indexers
+#
+# Key Features:
+#   - Single point of indexer configuration
+#   - Automatic sync to all Arrs (add once, use everywhere)
+#   - Indexer health monitoring and testing
+#   - FlareSolverr integration for Cloudflare bypass
+#   - Statistics and indexer performance tracking
+#   - Category mapping (Movies/TV/Music)
+#   - Custom format and quality filtering
+#   - Built-in search across all indexers
+#
+# Workflow:
+#   Configure indexers in Prowlarr → Auto-sync to Radarr/Sonarr/Lidarr → Arrs search via Prowlarr
+#
+# Access:
+#   URL: https://prowlarr.deercrest.info
+#   Middleware: chain-authelia (protected - admin only)
+#
 services:
-  # Prowlarr - Torrent proxy
+  # Prowlarr - Indexer manager and proxy
   prowlarr:
     hostname: "prowlarr"
     container_name: prowlarr
@@ -13,11 +36,10 @@ services:
     ports:
       - "9696:9696"
     volumes:
-      # - $DOCKERDIR/appdata/prowlarr:/config
-      - /etc/localtime:/etc/localtime:ro
-      - /mnt/fast/appdata/arrs/prowlarr/config:/config:rw
-      - /mnt/tank/downloads:/downloads:rw
-      - /mnt/tank/media:/media:rw
+      - /etc/localtime:/etc/localtime:ro  # System timezone
+      - /mnt/fast/appdata/arrs/prowlarr/config:/config:rw  # Application config, indexers, and app sync
+      - /mnt/tank/downloads:/downloads:rw  # Optional: Manual search downloads
+      - /mnt/tank/media:/media:rw  # Optional: Media library access
     environment:
       TZ: $TZ
       PUID: $PUID

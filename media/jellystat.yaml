@@ -1,0 +1,77 @@
+# Jellystat - Jellyfin Analytics and Statistics Platform
+#
+# Purpose:
+#   Provides detailed analytics and insights into Jellyfin media library usage
+#   Tracks viewing habits, popular content, and user activity
+#
+# Key Features:
+#   - Real-time playback tracking
+#   - User activity analytics (watch time, favorite content)
+#   - Library statistics (most watched, trending)
+#   - Historical data with graphs and charts
+#   - Geographic playback data
+#   - Bandwidth and transcoding metrics
+#
+# Use Cases:
+#   - Understand what content is popular
+#   - Identify content to remove (never watched)
+#   - Track server usage patterns
+#   - Optimize transcoding settings
+#
+# Access:
+#   URL: https://jellystats.deercrest.info
+#   Middleware: chain-authelia (protected - admin only)
+#
+services:
+  # Jellystat - Statistics and monitoring for Jellyfin
+  # Provides detailed analytics on media library usage and viewing habits
+  jellystat:
+    hostname: "jellystat"
+    container_name: jellystat
+    image: cyfershepard/jellystat:latest
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    networks:
+      - t3_proxy
+    ports:
+      - "3001:3000"
+    volumes:
+      - /mnt/fast/appdata/media/jellystat/backup:/app/backend/backup-data:rw  # Database backup storage
+    environment:
+      TZ: $TZ
+      POSTGRES_USER: ${JELLYSTATDB_USER:-postgres}
+      POSTGRES_PASSWORD: ${JELLYSTATDB_PASS:-password}
+      POSTGRES_IP: jellystat-db
+      POSTGRES_PORT: 5432
+      JWT_SECRET: ${JWT_SECRET:-my-secret-jwt-key}
+    depends_on:
+      - jellystat-db
+    labels:
+      - traefik.enable=true
+
+      - traefik.http.routers.jellystat-rtr.entrypoints=web,websecure
+      - traefik.http.routers.jellystat-rtr.rule=Host(`jellystats.deercrest.info`)
+      - traefik.http.routers.jellystat-rtr.middlewares=chain-authelia@file
+      - traefik.http.routers.jellystat-rtr.tls=true
+      - traefik.http.routers.jellystat-rtr.tls.certresolver=dns-cloudflare
+      - traefik.http.routers.jellystat-rtr.service=jellystat-svc
+
+      - traefik.http.services.jellystat-svc.loadbalancer.server.port=3000
+
+  # Jellystat Database - PostgreSQL backend for Jellystat
+  jellystat-db:
+    hostname: "jellystat-db"
+    container_name: jellystat-db
+    image: postgres:15.2
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    networks:
+      - t3_proxy
+    volumes:
+      - /mnt/fast/appdata/media/jellystat/postgres:/var/lib/postgresql/data:rw  # PostgreSQL database files
+    environment:
+      POSTGRES_DB: jfstat
+      POSTGRES_USER: ${JELLYSTATDB_USER:-postgres}
+      POSTGRES_PASSWORD: ${JELLYSTATDB_PASS:-password}

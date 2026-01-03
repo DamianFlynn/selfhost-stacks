@@ -1,5 +1,28 @@
+# Lidarr - Music Collection Manager and Downloader
+#
+# Purpose:
+#   Automatically searches, downloads, and organizes music albums and artists
+#   Monitors for new releases and integrates with MusicBrainz
+#
+# Key Features:
+#   - Automated music album search via torrent/Usenet
+#   - Artist and album monitoring
+#   - Quality profiles (Lossless FLAC, 320kbps MP3)
+#   - Metadata tagging (ID3, MusicBrainz)
+#   - Automatic file organization and renaming
+#   - Missing album search
+#   - Import existing library with matching
+#
+# Workflow:
+#   Add artist → Monitor releases → Search via Prowlarr → Download → Tag → Import to library
+#
+# Access:
+#   URL: https://lidarr.deercrest.info
+#   Middleware: chain-authelia (protected - admin access)
+#   Bypass URL: Header-based bypass for mobile apps (Helmarr/LunaSea)
+#
 services:
-  # Radarr - Movie management
+  # Lidarr - Music management
   # Set url_base in radarr settings if using PathPrefix
   lidarr:
     hostname: "lidarr"
@@ -14,10 +37,10 @@ services:
     ports:
       - "8686:8686"
     volumes:
-      - /etc/localtime:/etc/localtime:ro
-      - /mnt/fast/appdata/arrs/lidarr/config:/config:rw
-      - /mnt/tank/downloads:/downloads:rw
-      - /mnt/tank/media:/media:rw
+      - /etc/localtime:/etc/localtime:ro  # System timezone
+      - /mnt/fast/appdata/arrs/lidarr/config:/config:rw  # Application config and database
+      - /mnt/tank/downloads:/downloads:rw  # Download client output directory
+      - /mnt/tank/media:/media:rw  # Music library destination
     environment:
       TZ: $TZ
       PUID: $PUID

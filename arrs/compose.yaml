@@ -26,8 +26,11 @@ include:
   - radarr.yaml
   - sonarr.yaml
   - lidarr.yaml
+  - readarr.yaml
   - bazarr.yaml
   - flaresolverr.yaml
+  - autobrr.yaml
+  - janitorr.yaml
 #  - beets.yaml
 
 

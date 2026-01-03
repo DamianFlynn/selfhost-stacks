@@ -1,8 +1,28 @@
-
+# qBittorrent - BitTorrent Client with Web UI
+#
+# Purpose:
+#   Downloads torrent files for media acquisition
+#   Primary download client for torrent-based content
+#
+# Key Features:
+#   - Web-based UI for remote management
+#   - Category-based organization
+#   - RSS feed downloader with filters
+#   - Sequential downloading
+#   - IP filtering and encryption
+#   - Torrent creation and management
+#   - Speed limits and scheduling
+#   - API for integration with Radarr/Sonarr
+#
+# Workflow:
+#   Radarr/Sonarr → Sends torrent to qBittorrent → Downloads → Seeds → Moves to category folder
+#
+# Access:
+#   URL: https://qbittorrent.deercrest.info
+#   Middleware: chain-authelia (protected - admin access)
+#
 services:
-  # SABnzbd - Binary newsgrabber (NZB downloader)
-  # Disable SABNnzbd's built-in HTTPS support for traefik proxy to work
-  # Needs trailing / if using PathPrefix
+  # qBittorrent - BitTorrent download client
   qbittorrent:
     hostname: "qbittorrent"
     container_name: qbittorrent
@@ -16,9 +36,9 @@ services:
     ports:
       - "7889:7889"
     volumes:
-      - /mnt/fast/appdata/arrs/qbittorrent/config:/config:rw
-      - /mnt/fast/appdata/arrs/qbittorrent/arr-scripts:/custom-cont-init.d
-      - /mnt/tank/downloads:/downloads:rw
+      - /mnt/fast/appdata/arrs/qbittorrent/config:/config:rw  # Application config, torrents, and state
+      - /mnt/fast/appdata/arrs/qbittorrent/arr-scripts:/custom-cont-init.d  # Custom initialization scripts
+      - /mnt/tank/downloads:/downloads:rw  # Download output directory (incomplete and complete)
     environment:
       PUID: $PUID
       PGID: $PGID

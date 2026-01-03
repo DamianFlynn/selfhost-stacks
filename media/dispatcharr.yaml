@@ -1,3 +1,25 @@
+# Dispatcharr - Live TV Proxy and DVR Processor for Jellyfin/Plex/Emby
+#
+# Purpose:
+#   Processes live TV streams through Radarr/Sonarr for commercials removal
+#   Provides DVR-like functionality with automatic quality upgrades
+#
+# Key Features:
+#   - Live TV stream proxying with on-the-fly processing
+#   - Commercial detection and removal (Comskip integration)
+#   - Automatic quality upgrade when better version available
+#   - Hardware-accelerated transcoding (VA-API)
+#   - EPG (Electronic Program Guide) management
+#   - Recording scheduling and conflict resolution
+#   - Post-processing integration with Radarr/Sonarr
+#
+# Workflow:
+#   Live TV → Dispatcharr → Transcode/Remove commercials → Send to Radarr/Sonarr → Library
+#
+# Access:
+#   URL: https://dispatcharr.deercrest.info
+#   Middleware: chain-authelia (protected - admin only)
+#
 
 ########################### NETWORKS
 networks:
@@ -18,7 +40,7 @@ services:
     ports:
       - 9191:9191
     volumes:
-      - /mnt/fast/appdata/media/dispatcharr/data:/data:rw
+      - /mnt/fast/appdata/media/dispatcharr/data:/data:rw  # Application config, recordings queue, and processing state
     environment:
       - DISPATCHARR_ENV=aio
       - REDIS_HOST=localhost

@@ -1,0 +1,85 @@
+# Readarr - Ebook and Audiobook Collection Manager
+#
+# Purpose:
+#   Automatically searches, downloads, and organizes ebooks and audiobooks
+#   Integrates with indexers via Prowlarr and download clients
+#
+# Key Features:
+#   - Automated book search via torrent/Usenet
+#   - Author and series monitoring
+#   - Multiple edition support (ebook, audiobook, hardcover, etc.)
+#   - Quality profiles (EPUB, MOBI, PDF, M4B, MP3)
+#   - Metadata management (Goodreads, Google Books)
+#   - Calibre integration for ebook library management
+#   - Automatic renaming and organization
+#   - Import existing library with matching
+#
+# Workflow:
+#   Add author → Monitor releases → Search via Prowlarr → Download → Import to library
+#
+# Access:
+#   URL: https://readarr.deercrest.info
+#   Middleware: chain-authelia (protected - admin access)
+#   Bypass URL: Header-based bypass for mobile apps (Helmarr/LunaSea)
+#
+services:
+  # Readarr - Ebook and audiobook management
+  # Note: Using Bookshelf (Readarr fork) which has better audiobook support
+  readarr:
+    hostname: "readarr"
+    container_name: readarr
+    image: ghcr.io/pennydreadful/bookshelf:softcover
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    networks:
+      - t3_proxy
+    ports:
+      - "8787:8787"
+    volumes:
+      - /etc/localtime:/etc/localtime:ro  # System timezone
+      - /mnt/fast/appdata/arrs/readarr/config:/config:rw  # Application config and database
+      - /mnt/tank/downloads:/downloads:rw  # Download client output directory
+      - /mnt/tank/media:/media:rw  # Book library destination
+    environment:
+      TZ: $TZ
+      PUID: $PUID
+      PGID: $PGID
+      UMASK_SET: 002
+    labels:
+      - traefik.enable=true
+
+      - traefik.http.routers.readarr-rtr.entrypoints=web,websecure
+      - traefik.http.routers.readarr-rtr.rule=Host(`readarr.deercrest.info`)
+      - traefik.http.routers.readarr-rtr.middlewares=chain-authelia@file
+      - traefik.http.routers.readarr-rtr.tls=true
+      - traefik.http.routers.readarr-rtr.tls.certresolver=dns-cloudflare
+      - traefik.http.routers.readarr-rtr.service=readarr-svc
+
+      - traefik.http.routers.readarr-bypass.entrypoints=websecure
+      - traefik.http.routers.readarr-bypass.rule=Host(`readarr.deercrest.info`) && Header(`readarr-auth-bypass-key`, `$READARR_AUTH_BYPASS_KEY`)
+      - traefik.http.routers.readarr-bypass.middlewares=chain-no-auth@file
+      - traefik.http.routers.readarr-bypass.tls=true
+      - traefik.http.routers.readarr-bypass.tls.certresolver=dns-cloudflare
+      - traefik.http.routers.readarr-bypass.priority=100
+      - traefik.http.routers.readarr-bypass.service=readarr-svc
+
+      - traefik.http.services.readarr-svc.loadbalancer.server.port=8787
+
+  # Readarr Exporter - Readarr metrics for Prometheus
+  readarr-exporter:
+    image: ghcr.io/onedr0p/exportarr:latest
+    container_name: readarr-exporter
+    security_opt:
+      - no-new-privileges:true
+    restart: "no"
+    networks:
+      - t3_proxy
+    ports:
+      - "9710:9710"
+    environment:
+      PORT: 9710
+      URL: "http://readarr:8787"
+      APIKEY: $READARR_API_KEY
+      ENABLE_ADDITIONAL_METRICS: TRUE
+    command: ["readarr"]

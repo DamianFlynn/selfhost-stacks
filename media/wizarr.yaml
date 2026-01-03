@@ -1,0 +1,61 @@
+# Wizarr - Media Server Invitation and Onboarding System
+#
+# Purpose:
+#   Creates and manages invite links for new users to join your Jellyfin server
+#   Automates user creation and provides welcome/onboarding experience
+#
+# Key Features:
+#   - Shareable invite links with custom expiration
+#   - Automatic Jellyfin/Plex/Emby user creation
+#   - Customizable welcome screens and tutorials
+#   - User limit per invite code
+#   - Request information from users during signup
+#   - Discord webhook notifications for new users
+#   - Multiple invitation types (single-use, multi-use, unlimited)
+#
+# Workflow:
+#   Admin creates invite \u2192 Share link with friends/family \u2192 User signs up \u2192 Auto-created in Jellyfin
+#
+# Complements Jellyseerr:
+#   Wizarr handles user invitations and onboarding
+#   Jellyseerr handles content requests from those users
+#
+# Access:
+#   URL: https://invite.deercrest.info
+#   Middleware: chain-no-auth (public access for invite links)
+#   Admin panel: Requires authentication via built-in auth or external provider
+#
+services:
+  # Wizarr - User invitation and onboarding system
+  # Allows creation of shareable invite links for media server access
+  wizarr:
+    hostname: "wizarr"
+    container_name: wizarr
+    image: ghcr.io/wizarrrr/wizarr:latest
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    networks:
+      - t3_proxy
+    ports:
+      - "5690:5690"
+    volumes:
+      - /mnt/fast/appdata/media/wizarr/database:/data/database:rw  # User invites, codes, and configuration
+      - /mnt/fast/appdata/media/wizarr/cache:/.cache:rw  # Application cache
+    environment:
+      TZ: $TZ
+      PUID: $PUID
+      PGID: $PGID
+      APP_URL: ${WIZARR_URL:-https://invite.deercrest.info}  # Public URL for invite links
+      DISABLE_BUILTIN_AUTH: false  # Set to true if using Authelia/Authentik for admin access
+    labels:
+      - traefik.enable=true
+
+      - traefik.http.routers.wizarr-rtr.entrypoints=web,websecure
+      - traefik.http.routers.wizarr-rtr.rule=Host(`invite.deercrest.info`)
+      - traefik.http.routers.wizarr-rtr.middlewares=chain-no-auth@file
+      - traefik.http.routers.wizarr-rtr.tls=true
+      - traefik.http.routers.wizarr-rtr.tls.certresolver=dns-cloudflare
+      - traefik.http.routers.wizarr-rtr.service=wizarr-svc
+
+      - traefik.http.services.wizarr-svc.loadbalancer.server.port=5690

@@ -1,3 +1,26 @@
+# Radarr - Movie Collection Manager and Downloader
+#
+# Purpose:
+#   Automatically searches, downloads, and organizes movies
+#   Integrates with indexers via Prowlarr and download clients
+#
+# Key Features:
+#   - Automated movie search and download via torrent/Usenet
+#   - Quality profile management (4K, 1080p, 720p)
+#   - Release monitoring (in theaters, digital, physical)
+#   - Metadata and artwork management
+#   - Custom format scoring (HDR, Dolby Vision, x265)
+#   - Integration with lists (IMDb, Trakt, TMDb)
+#   - Automatic renaming and file organization
+#
+# Workflow:
+#   Add movie → Search via Prowlarr → Send to download client → Import to library → Notify
+#
+# Access:
+#   URL: https://radarr.deercrest.info
+#   Middleware: chain-authelia (protected - admin access)
+#   Bypass URL: Header-based bypass for mobile apps (Helmarr/LunaSea)
+#
 services:
   # Radarr - Movie management
   # Set url_base in radarr settings if using PathPrefix
@@ -14,10 +37,10 @@ services:
     ports:
       - "7878:7878"
     volumes:
-      - /etc/localtime:/etc/localtime:ro
-      - /mnt/fast/appdata/arrs/radarr/config:/config:rw
-      - /mnt/tank/downloads:/downloads:rw
-      - /mnt/tank/media:/media:rw
+      - /etc/localtime:/etc/localtime:ro  # System timezone
+      - /mnt/fast/appdata/arrs/radarr/config:/config:rw  # Application config and database
+      - /mnt/tank/downloads:/downloads:rw  # Download client output directory
+      - /mnt/tank/media:/media:rw  # Movie library destination
     environment:
       TZ: $TZ
       PUID: $PUID

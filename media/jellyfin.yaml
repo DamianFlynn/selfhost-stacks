@@ -1,3 +1,28 @@
+# Jellyfin - Free Open-Source Media Server
+#
+# Purpose:
+#   Self-hosted media streaming platform for movies, TV shows, music, and photos
+#   Alternative to Plex and Emby with no premium features or tracking
+#
+# Key Features:
+#   - Hardware-accelerated transcoding (VA-API on AMD Radeon 890M)
+#   - Multi-user support with individual libraries and watch history
+#   - Apps for all platforms (Android, iOS, Roku, Fire TV, etc.)
+#   - Live TV and DVR with HDHomeRun/M3U support
+#   - Subtitle support and automatic downloading
+#   - Rich metadata from TMDb, TVDb, MusicBrainz
+#   - Plugin system (intro skipper, playback reporting, etc.)
+#
+# Hardware Acceleration:
+#   AMD Ryzen AI 9 HX PRO 370 with AMD Radeon 890M GPU
+#   VA-API transcoding for H.264, HEVC 10-bit, VP9 10-bit
+#   Reduces CPU load and power consumption
+#
+# Access:
+#   URL: https://jellyfin.deercrest.info
+#   Middleware: chain-no-auth (public access for all users)
+#   Local Discovery: Port 7359/UDP, 1900/UDP
+#
 services:
 
   # Jellyfin - Media Server
@@ -63,11 +88,11 @@ services:
       # Supports H.264, HEVC (H.265), VP9, AV1 decode/encode
       - /dev/dri:/dev/dri
     volumes:
-      - /etc/localtime:/etc/localtime:ro
-      - /mnt/fast/appdata/media/jellyfin:/config:rw
-      - /mnt/tank/media:/media
+      - /etc/localtime:/etc/localtime:ro  # System timezone for scheduling
+      - /mnt/fast/appdata/media/jellyfin:/config:rw  # Application config, metadata, and database
+      - /mnt/tank/media:/media  # Media library (movies, TV, music, photos)
       # Transcode to RAM for better performance and reduced disk wear
-      - /dev/shm:/data/transcode
+      - /dev/shm:/data/transcode  # RAM disk for temporary transcoding files
     labels:
       - traefik.enable=true
 

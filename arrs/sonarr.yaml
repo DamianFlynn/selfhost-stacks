@@ -1,3 +1,27 @@
+# Sonarr - TV Show Collection Manager and Downloader
+#
+# Purpose:
+#   Automatically searches, downloads, and organizes TV shows and episodes
+#   Tracks airdates and monitors for new episodes
+#
+# Key Features:
+#   - Automated TV show/episode search via torrent/Usenet
+#   - Calendar tracking for upcoming episodes
+#   - Season pack and daily/anime show support
+#   - Quality profiles (4K, 1080p, 720p)
+#   - Custom format scoring (WEB-DL, BluRay, x265)
+#   - Series and season monitoring
+#   - Automatic renaming (S01E01 format)
+#   - Integration with lists (Trakt, TMDb, TVDb)
+#
+# Workflow:
+#   Add show → Monitor airdate → Search via Prowlarr → Download → Import → Rename → Notify
+#
+# Access:
+#   URL: https://sonarr.deercrest.info
+#   Middleware: chain-authelia (protected - admin access)
+#   Bypass URL: Header-based bypass for mobile apps (Helmarr/LunaSea)
+#
 services:
   # Sonarr - TV Shows Management
   # Set url_base in sonarr settings if using PathPrefix
@@ -14,10 +38,10 @@ services:
     ports:
       - "8989:8989"
     volumes:
-      - /etc/localtime:/etc/localtime:ro
-      - /mnt/fast/appdata/arrs/sonarr/config:/config:rw
-      - /mnt/tank/downloads:/downloads:rw
-      - /mnt/tank/media:/media:rw
+      - /etc/localtime:/etc/localtime:ro  # System timezone
+      - /mnt/fast/appdata/arrs/sonarr/config:/config:rw  # Application config and database
+      - /mnt/tank/downloads:/downloads:rw  # Download client output directory
+      - /mnt/tank/media:/media:rw  # TV show library destination
     environment:
       TZ: $TZ
       PUID: $PUID

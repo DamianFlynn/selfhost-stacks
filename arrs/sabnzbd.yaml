@@ -1,4 +1,27 @@
-
+# SABnzbd - Usenet Binary Newsreader and Downloader
+#
+# Purpose:
+#   Downloads NZB files from Usenet newsgroups
+#   Primary download client for Usenet-based media acquisition
+#
+# Key Features:
+#   - Automated NZB processing and extraction
+#   - Multi-server Usenet support (primary + backup)
+#   - Automatic PAR2 repair and verification
+#   - Password archive handling
+#   - Category-based processing and scripts
+#   - Download scheduling (off-peak hours)
+#   - RSS feed monitoring
+#   - API for integration with Radarr/Sonarr
+#
+# Workflow:
+#   Radarr/Sonarr → Sends NZB to SABnzbd → Downloads → Unpacks/Repairs → Moves to category folder
+#
+# Access:
+#   URL: https://sabnzbd.deercrest.info
+#   Middleware: chain-authelia (protected - admin access)
+#   Bypass URL: Header-based bypass for mobile apps (LunaSea)
+#
 services:
   # SABnzbd - Binary newsgrabber (NZB downloader)
   # Disable SABNnzbd's built-in HTTPS support for traefik proxy to work
@@ -16,9 +39,9 @@ services:
     ports:
       - "8084:8080"
     volumes:
-      - /mnt/fast/appdata/arrs/sabnzbd/config:/config:rw
-      - /mnt/fast/appdata/arrs/sabnzbd/arr-scripts:/custom-cont-init.d
-      - /mnt/tank/downloads:/downloads:rw
+      - /mnt/fast/appdata/arrs/sabnzbd/config:/config:rw  # Application config, queue, and history database
+      - /mnt/fast/appdata/arrs/sabnzbd/arr-scripts:/custom-cont-init.d  # Post-processing scripts
+      - /mnt/tank/downloads:/downloads:rw  # Download output directory (incomplete and complete)
     environment:
       PUID: $PUID
       PGID: $PGID

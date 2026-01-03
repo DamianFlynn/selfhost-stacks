@@ -15,6 +15,9 @@ include:
   ########################### SERVICES
 
   - jellyfin.yaml
+  - jellyseerr.yaml
+  - jellystat.yaml
+  - wizarr.yaml
   - dispatcharr.yaml
 
 

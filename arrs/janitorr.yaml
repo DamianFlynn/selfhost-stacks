@@ -1,0 +1,59 @@
+# Janitorr - Automated Media Cleanup and Space Management
+#
+# Purpose:
+#   Automatically removes media based on configurable rules to free up disk space
+#   Works with Radarr/Sonarr/Lidarr to manage media lifecycle
+#
+# Key Features:
+#   - Rule-based deletion (watched, age, quality, disk space)
+#   - Integration with Radarr/Sonarr/Lidarr/Jellyfin/Plex/Tautulli
+#   - Preserve favorites/collections/highly-rated content
+#   - Dry-run mode for testing rules
+#   - Tag-based protection (keep specific content)
+#   - Free space thresholds (delete when disk < X%)
+#
+# Common Rules:
+#   - Delete watched movies older than 30 days
+#   - Remove old/low-quality releases when better version available
+#   - Clean up failed/stalled downloads
+#   - Free space when disk usage > 90%
+#
+# Access:
+#   URL: https://janitorr.deercrest.info
+#   Middleware: chain-authelia (protected - admin only)
+#
+services:
+  # Janitorr - Automated media cleanup and management
+  # Removes watched/old media to free up space based on rules
+  janitorr:
+    hostname: "janitorr"
+    container_name: janitorr
+    image: ghcr.io/schaka/janitorr:stable
+    user: "${PUID}:${PGID}"
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    networks:
+      - t3_proxy
+    ports:
+      - "8081:8081"
+    volumes:
+      - /mnt/fast/appdata/media/janitorr/application.yml:/workspace/application.yml:rw  # Main configuration file
+      - /mnt/fast/appdata/media/janitorr/logs:/logs:rw  # Application logs
+      - /mnt/tank/media:/data:rw  # Media library for cleanup operations
+    healthcheck:
+      test: "wget -T5 -qO- http://localhost:8081/health | grep UP || exit 1"
+      start_period: 30s
+      interval: 5s
+      retries: 3
+    labels:
+      - traefik.enable=true
+
+      - traefik.http.routers.janitorr-rtr.entrypoints=web,websecure
+      - traefik.http.routers.janitorr-rtr.rule=Host(`janitorr.deercrest.info`)
+      - traefik.http.routers.janitorr-rtr.middlewares=chain-authelia@file
+      - traefik.http.routers.janitorr-rtr.tls=true
+      - traefik.http.routers.janitorr-rtr.tls.certresolver=dns-cloudflare
+      - traefik.http.routers.janitorr-rtr.service=janitorr-svc
+
+      - traefik.http.services.janitorr-svc.loadbalancer.server.port=8081

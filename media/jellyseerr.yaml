@@ -1,0 +1,54 @@
+# Jellyseerr - Media Request Management System
+#
+# Purpose:
+#   User-friendly interface for requesting movies and TV shows
+#   Integrates with Jellyfin for authentication and library management
+#   Automatically sends approved requests to Radarr/Sonarr for download
+#
+# Key Features:
+#   - Self-service media requests with approval workflow
+#   - Jellyfin user integration (SSO)
+#   - Automatic availability checking
+#   - Request notifications via Discord/Email/Slack
+#   - User quotas and request limits
+#   - 4K/1080p quality selection
+#
+# Workflow:
+#   User requests → Approval (optional) → Radarr/Sonarr → Download → Jellyfin library
+#
+# Access:
+#   URL: https://requests.deercrest.info
+#   Middleware: chain-no-auth (public access for users)
+#
+services:
+  # Jellyseerr - Media request management for Jellyfin
+  # Allows users to request movies/TV shows that get automatically added to Radarr/Sonarr
+  jellyseerr:
+    hostname: "jellyseerr"
+    container_name: jellyseerr
+    image: fallenbagel/jellyseerr:latest
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    networks:
+      - t3_proxy
+    ports:
+      - "5055:5055"
+    volumes:
+      - /mnt/fast/appdata/media/jellyseerr/config:/app/config:rw  # Application config and database
+      - /mnt/tank/media:/data:ro  # Read-only access to media library for availability checks
+    environment:
+      TZ: $TZ
+      PUID: $PUID
+      PGID: $PGID
+    labels:
+      - traefik.enable=true
+
+      - traefik.http.routers.jellyseerr-rtr.entrypoints=web,websecure
+      - traefik.http.routers.jellyseerr-rtr.rule=Host(`requests.deercrest.info`)
+      - traefik.http.routers.jellyseerr-rtr.middlewares=chain-no-auth@file
+      - traefik.http.routers.jellyseerr-rtr.tls=true
+      - traefik.http.routers.jellyseerr-rtr.tls.certresolver=dns-cloudflare
+      - traefik.http.routers.jellyseerr-rtr.service=jellyseerr-svc
+
+      - traefik.http.services.jellyseerr-svc.loadbalancer.server.port=5055

@@ -1,0 +1,55 @@
+# Autobrr - IRC Announce Auto-Downloader for Private Trackers
+#
+# Purpose:
+#   Connects to private tracker IRC channels to grab torrents immediately
+#   Enables "racing" for ratio building by getting content before RSS feeds
+#
+# Key Features:
+#   - IRC announce monitoring from multiple trackers
+#   - Filter-based auto-grabbing (quality, size, release group)
+#   - Integration with qBittorrent/Deluge/Transmission
+#   - Smart duplicate detection
+#   - Release group preferences
+#   - Auto-brr (cross-seeding) support
+#
+# Use Cases:
+#   - Private tracker racing (seed before others)
+#   - Prefer specific release groups
+#   - Grab content faster than RSS (seconds vs minutes)
+#   - Build upload ratio on private trackers
+#
+# Access:
+#   URL: https://autobrr.deercrest.info
+#   Middleware: chain-authelia (protected - admin only)
+#
+services:
+  # Autobrr - IRC-based torrent grabber for racing/early seeding
+  # Grabs torrents from tracker IRC announces before RSS feeds
+  autobrr:
+    hostname: "autobrr"
+    container_name: autobrr
+    image: ghcr.io/autobrr/autobrr:latest
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    networks:
+      - t3_proxy
+    ports:
+      - "7474:7474"
+    volumes:
+      - /mnt/fast/appdata/arrs/autobrr/config:/config:rw  # Application config, filters, and IRC credentials
+    environment:
+      TZ: $TZ
+      PUID: $PUID
+      PGID: $PGID
+    labels:
+      - traefik.enable=true
+
+      - traefik.http.routers.autobrr-rtr.entrypoints=web,websecure
+      - traefik.http.routers.autobrr-rtr.rule=Host(`autobrr.deercrest.info`)
+      - traefik.http.routers.autobrr-rtr.middlewares=chain-authelia@file
+      - traefik.http.routers.autobrr-rtr.tls=true
+      - traefik.http.routers.autobrr-rtr.tls.certresolver=dns-cloudflare
+      - traefik.http.routers.autobrr-rtr.service=autobrr-svc
+
+      - traefik.http.services.autobrr-svc.loadbalancer.server.port=7474
