@@ -75,7 +75,7 @@ services:
       RAILS_LOG_TO_STDOUT: true
       SELF_HOSTED: true
       STORE_GEODATA: true
-      DISABLE_REGISTRATION: false
+      DISABLE_REGISTRATION: "false"
     logging:
       driver: "json-file"
       options:
