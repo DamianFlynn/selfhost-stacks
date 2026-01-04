@@ -1,18 +1,58 @@
 # BYO-NAS Stacks (TrueNAS SCALE + Docker Compose)
 
-This repository contains the **Docker Compose stacks** and **TrueNAS Apps wrappers** for a self‑hosted media and productivity server. It’s built for a Minisforum **N5 Pro** (AMD iGPU) running **TrueNAS SCALE 25.10** with:
+This repository contains the **Docker Compose stacks** and **TrueNAS Apps wrappers** for a comprehensive self‑hosted media and productivity server. It's built for a Minisforum **N5 Pro** (AMD iGPU) running **TrueNAS SCALE 25.10** with:
 
 - NVMe pool `fast` for app data/config
-- HDD pool `tank` for media
+- HDD pool `tank` for media/downloads
 - TrueNAS **Apps → Install via YAML** using an *include* wrapper
+- **Traefik** reverse proxy with **Authelia** authentication
 - **GitOps** workflow (+ **Renovate**) to keep images fresh with pinned digests
 - **Users/permissions** pattern: `apps:apps` service account owns stacks and appdata; you work as `damian` (member of `apps`)
 
-Current stacks:
-- **code-server** (LinuxServer) – browser VS Code
-- **Immich** (server + CPU‑ML + valkey + pinned Postgres) – private photo library with face/thing detection
+## 📦 Current Stacks
 
-> Traefik & Pangolin can be layered later using the same include pattern.
+### 🎬 Media Acquisition & Management (Arrs)
+- **Prowlarr** – Indexer proxy/aggregator for Usenet & torrent trackers
+- **Radarr** – Movie collection manager with automated downloads
+- **Sonarr** – TV series collection manager with automated downloads
+- **Lidarr** – Music collection manager with automated downloads
+- **Readarr** – Ebook & audiobook collection manager (Bookshelf fork)
+- **Bazarr** – Subtitle companion for Radarr/Sonarr
+- **SABnzbd** – Usenet downloader (NZB client)
+- **qBittorrent** – Torrent downloader
+- **FlareSolverr** – Cloudflare/DDoS protection bypass proxy
+- **Autobrr** – IRC announce grabber for racing/tracker automation
+- **Janitorr** – Media library cleanup automation
+
+### 🎥 Media Serving & Requests
+- **Jellyfin** – Media server with hardware transcoding (AMD VAAPI)
+- **Jellyseerr** – Media request & discovery management
+- **Jellystat** – Jellyfin analytics and statistics dashboard
+- **Wizarr** – User invitation & management system for Jellyfin
+- **Dispatcharr** – Arr app notification & management
+
+### 🖼️ Photos & Files
+- **Immich** – Private photo library with face/object detection, ML features
+- **Open-Archiver** – Email archiving service with search (Meilisearch, Tika)
+
+### 🔧 Development & Tools
+- **code-server** – Browser-based VS Code
+- **Keeper.sh** – Secrets management
+- **Karakeep** – Additional utility service
+- **FreshRSS** – RSS/Atom feed aggregator
+
+### 🤖 Automation & Infrastructure
+- **N8N** – Workflow automation platform
+- **Oxidized** – Network device configuration backup
+- **PWPush** – Password sharing with expiration
+- **Falcon Player (FPP)** – Holiday lighting/audio controller
+- **Podsync** – Podcast sync service
+
+### 🛡️ Security & Networking
+- **Traefik** – Reverse proxy with automatic HTTPS (Cloudflare DNS)
+- **Authelia** – SSO authentication middleware
+- **Socket Proxy** – Docker socket security proxy
+- **TailScale Proxy** – Wireguard mesh VPN proxy
 
 ---
 
@@ -33,54 +73,221 @@ git commit -m "init: code-server + immich stacks with pinned images"
 Deploy each stack in TrueNAS: **Apps → Discover Apps → Install via YAML → paste wrapper**
 
 ```yaml
-# stacks/wrappers/code-server.app.yaml
+# wrappers/arrs.app.yaml
 services: {}
 include:
-  - /mnt/fast/stacks/code-server/compose.yaml
+  - /mnt/fast/stacks/arrs/compose.yaml
 ```
 
 ```yaml
-# stacks/wrappers/immich.app.yaml
+# wrappers/media.app.yaml
 services: {}
 include:
-  - /mnt/fast/stacks/immich/compose.yaml
+  - /mnt/fast/stacks/media/compose.yaml
 ```
+
+---
+
+## 🌐 Service Overview & Access
+
+### Media Acquisition Stack (Arrs)
+
+| Service | URL | Port(s) | Middleware | Bypass Router | Purpose |
+|---------|-----|---------|------------|---------------|---------|
+| **Prowlarr** | https://prowlarr.deercrest.info | 9696, 9710 (exporter) | Authelia | No | Indexer proxy & aggregator |
+| **Radarr** | https://radarr.deercrest.info | 7878, 9707 (exporter) | Authelia | ✅ Header-based | Movie collection manager |
+| **Sonarr** | https://sonarr.deercrest.info | 8989, 9708 (exporter) | Authelia | ✅ Header-based | TV series manager |
+| **Lidarr** | https://lidarr.deercrest.info | 8686, 9709 (exporter) | Authelia | ✅ Header-based | Music collection manager |
+| **Readarr** | https://readarr.deercrest.info | 8787, 9713 (exporter) | Authelia | ✅ Header-based | Ebook/audiobook manager |
+| **Bazarr** | https://bazarr.deercrest.info | 6767, 9711 (exporter) | Authelia | ✅ Header-based | Subtitle downloader |
+| **SABnzbd** | https://sabnzbd.deercrest.info | 8084, 9712 (exporter) | Authelia | ✅ Header-based | Usenet NZB client |
+| **qBittorrent** | https://qbittorrent.deercrest.info | 7889 | Authelia | No | Torrent client |
+| **FlareSolverr** | https://flaresolverr.deercrest.info | 8191 | Authelia | No | Cloudflare bypass proxy |
+| **Autobrr** | https://autobrr.deercrest.info | 7474 | Authelia | No | IRC announce grabber |
+| **Janitorr** | https://janitorr.deercrest.info | (internal) | Authelia | No | Media cleanup automation |
+
+**Bypass Routers**: Services marked with ✅ have a secondary router (priority 100) that accepts requests with a custom header (`{service}-auth-bypass-key`) without requiring Authelia authentication. This enables mobile apps like LunaSea, Helmarr, and nzb360 to connect directly.
+
+### Media Serving Stack
+
+| Service | URL | Port(s) | Middleware | Purpose |
+|---------|-----|---------|------------|---------|
+| **Jellyfin** | https://jellyfin.deercrest.info | 8096, 7359/udp, 1900/udp | None | Media server (VAAPI transcoding) |
+| **Jellyseerr** | https://requests.deercrest.info | (via Traefik) | None | Media requests & discovery |
+| **Jellystat** | https://jellystats.deercrest.info | 127.0.0.1:3003 | Authelia | Jellyfin analytics dashboard |
+| **Wizarr** | https://invite.deercrest.info | (via Traefik) | None | User invitation system |
+| **Dispatcharr** | https://dispatcharr.deercrest.info | 9191 | Authelia | Arr notifications |
+
+### Photos & Archiving
+
+| Service | URL | Port(s) | Middleware | Purpose |
+|---------|-----|---------|------------|---------|
+| **Immich** | https://photos.deercrest.info | 2283 | None | Photo library with ML |
+| **Open-Archiver** | https://archiver.deercrest.info | 127.0.0.1:3005 | Authelia | Email archiving |
+
+### Development Tools
+
+| Service | URL | Port(s) | Middleware | Purpose |
+|---------|-----|---------|------------|---------|
+| **code-server** | N/A | 8444 | N/A | Browser VS Code |
+| **Keeper.sh (API)** | https://keeper-api.deercrest.info | 127.0.0.1:3001 | Varies | Secrets management API |
+| **Keeper.sh (UI)** | https://keeper.deercrest.info | 127.0.0.1:3000 | Varies | Secrets management UI |
+| **Karakeep** | https://karakeep.deercrest.info | 127.0.0.1:3002 | Varies | Utility service |
+| **FreshRSS** | https://freshrss.deercrest.info | (via Traefik) | Authelia | RSS aggregator |
+
+### Automation & Infrastructure
+
+| Service | URL | Port(s) | Middleware | Purpose |
+|---------|-----|---------|------------|---------|
+| **N8N** | https://n8n.deercrest.info | (via Traefik) | None (commented) | Workflow automation |
+| **Oxidized** | https://oxidized.deercrest.info | (via Traefik) | Authelia | Network config backup |
+| **PWPush** | https://pwpush.deercrest.info | (via Traefik) | None (commented) | Password sharing |
+| **FPP** | https://fpp.deercrest.info | (via Traefik) | Authelia | Falcon Player lighting |
+| **Podsync** | N/A | (via Traefik) | None (commented) | Podcast sync |
+| **Traefik** | https://traefik.deercrest.info | 80, 443 | Authelia | Reverse proxy dashboard |
+| **Authelia** | https://auth.deercrest.info | (via Traefik) | None | SSO authentication |
+
+### Port Allocation Summary
+
+**Application Ports:**
+- `2283` - Immich
+- `3000` - Keeper.sh UI (127.0.0.1)
+- `3001` - Keeper.sh API (127.0.0.1)
+- `3002` - Karakeep (127.0.0.1)
+- `3003` - Jellystat (127.0.0.1)
+- `3005` - Open-Archiver (127.0.0.1)
+- `6767` - Bazarr
+- `7474` - Autobrr
+- `7878` - Radarr
+- `7889` - qBittorrent
+- `8084` - SABnzbd
+- `8096` - Jellyfin
+- `8191` - FlareSolverr
+- `8444` - code-server
+- `8686` - Lidarr
+- `8787` - Readarr
+- `8989` - Sonarr
+- `9191` - Dispatcharr
+- `9696` - Prowlarr
+
+**Prometheus Exporter Ports:**
+- `9707` - radarr-exporter
+- `9708` - sonarr-exporter
+- `9709` - lidarr-exporter
+- `9710` - prowlarr-exporter
+- `9711` - bazarr-exporter
+- `9712` - sabnzbd-exporter
+- `9713` - readarr-exporter
+
+**Network Ports:**
+- `80/443` - Traefik (HTTP/HTTPS)
+- `2375` - Docker Socket Proxy (internal only)
+- `7359/udp` - Jellyfin local discovery
+- `1900/udp` - Jellyfin DLNA
+
+### Middleware Configuration
+
+**chain-authelia**: Full SSO authentication via Authelia (default for admin services)
+- Requires login at https://auth.deercrest.info
+- Session management with Redis backend
+- MFA support (TOTP, WebAuthn)
+
+**chain-no-auth**: No authentication required (public services)
+- Direct access without login
+- Used for: Jellyfin, Immich, Jellyseerr, Wizarr, Authelia itself
+
+**Bypass Routers**: Header-based bypass for mobile apps
+- Header format: `{service}-auth-bypass-key: {SECRET_FROM_ENV}`
+- Priority: 100 (evaluated before main router)
+- Entrypoint: websecure only
+- Used by: LunaSea, nzb360, Helmarr iOS apps
 
 ---
 
 ## Repository Layout
 
 ```text
-repo-root/
-├─ renovate.json
-└─ stacks/
-   ├─ code-server/
-   │  ├─ compose.yaml
-   │  ├─ .env            # ignored (PUID/PGID/TZ)
-   │  └─ .env.sample     # non-secret template
-   ├─ immich/
-   │  ├─ compose.yaml
-   │  ├─ .env            # ignored (paths, DB creds, TZ)
-   │  └─ .env.sample
-   └─ wrappers/
-      ├─ code-server.app.yaml
-      └─ immich.app.yaml
+/
+├── renovate.json                    # Renovate configuration
+├── DEPLOYMENT.md                    # Deployment procedures
+├── README.md                        # This file
+├── scripts/
+│   └── check-renovate.sh           # Renovate validation script
+├── arrs/                           # Media acquisition stack
+│   ├── compose.yaml                # Main orchestrator (includes below)
+│   ├── prowlarr.yaml              # Indexer proxy
+│   ├── radarr.yaml                # Movies
+│   ├── sonarr.yaml                # TV series
+│   ├── lidarr.yaml                # Music
+│   ├── readarr.yaml               # Ebooks/audiobooks
+│   ├── bazarr.yaml                # Subtitles
+│   ├── sabnzbd.yaml               # Usenet client
+│   ├── qbittorrent.yaml           # Torrent client
+│   ├── flaresolverr.yaml          # Cloudflare bypass
+│   ├── autobrr.yaml               # IRC announce grabber
+│   ├── janitorr.yaml              # Media cleanup
+│   └── beets/                     # Music tagging (optional)
+│       └── beets.yaml
+├── media/                          # Media serving stack
+│   ├── compose.yaml               # Main orchestrator
+│   ├── jellyfin.yaml              # Media server
+│   ├── jellyseerr.yaml            # Request management
+│   ├── jellystat.yaml             # Analytics
+│   ├── wizarr.yaml                # User invitations
+│   └── dispatcharr.yaml           # Notifications
+├── traefik/                        # Reverse proxy stack
+│   ├── compose.yaml               # Main orchestrator
+│   ├── traefik.yaml               # Reverse proxy
+│   ├── authelia.yaml              # SSO authentication
+│   ├── socket-proxy.yaml          # Docker API security
+│   └── tsproxy.yaml               # TailScale proxy
+├── automation/                     # Automation stack
+│   ├── compose.yaml
+│   ├── n8n.yaml                   # Workflow automation
+│   ├── oxidized.yaml              # Network backup
+│   ├── pwpush.yaml                # Password sharing
+│   ├── falcon-player.yaml         # Holiday lighting
+│   └── tesla-static.yaml          # Home Assistant integration
+├── immich/                         # Photo library stack
+│   └── compose.yaml               # Immich + ML + Postgres + Valkey
+├── open-archiver/                  # Email archiving
+│   ├── compose.yaml               # Archiver + Postgres + Redis + Meilisearch
+│   ├── .env                       # Secrets (ignored)
+│   └── .env.sample                # Template
+├── code-server/                    # Development IDE
+│   └── compose.yaml
+├── keeper-sh/                      # Secrets management
+│   └── compose.yaml
+├── karakeep/                       # Utility service
+│   └── compose.yaml
+├── freshrss/                       # RSS aggregator
+│   └── compose.yaml
+├── podsync/                        # Podcast sync
+│   └── compose.yaml
+├── minecraft/                      # Game servers
+│   ├── compose.yaml
+│   ├── mc-vanilla.yaml
+│   └── mc-yggdrasil.yaml
+└── wrappers/                       # TrueNAS Apps YAML wrappers
+    ├── arrs.app.yaml
+    ├── media.app.yaml
+    ├── traefik.app.yaml
+    ├── automation.app.yaml
+    ├── immich.app.yaml
+    ├── code-server.app.yaml
+    ├── keeper-sh.app.yaml
+    ├── karakeep.app.yaml
+    ├── freshrss.app.yaml
+    ├── openweb-ai.app.yaml
+    ├── podsync.app.yaml
+    └── minecraft.app.yaml
 ```
 
-```mermaid
-flowchart TD
-    A[repo-root] --> B[renovate.json]
-    A --> C[stacks/]
-    C --> C1[code-server/]
-    C1 --> C1a[compose.yaml]
-    C1 --> C1b[.env.sample]
-    C --> C2[immich/]
-    C2 --> C2a[compose.yaml]
-    C2 --> C2b[.env.sample]
-    C --> C3[wrappers/]
-    C3 --> C3a[code-server.app.yaml]
-    C3 --> C3b[immich.app.yaml]
-```
+**Key Patterns:**
+- Each stack has a main `compose.yaml` that uses `include:` for modular service files
+- `.env` files contain secrets and are ignored by Git
+- `.env.sample` files provide templates for initial setup
+- Wrappers in `wrappers/` are minimal YAML files for TrueNAS Apps deployment
 
 ---
 
@@ -395,10 +602,22 @@ Create these labels in your repository for better PR organization:
 
 ## Roadmap
 
-- Add **Traefik** network + labels to stacks (t3_proxy), Authelia chain
+✅ **Completed:**
+- ~~Add **Traefik** network + labels to stacks (t3_proxy), Authelia chain~~ - Fully implemented
+- ~~Add more stacks (Arrs/Jellyfin/N8N/Immich add‑ons)~~ - Complete media & automation stacks deployed
+- ~~Add Renovate rules per stack with appropriate risk labels~~ - Comprehensive Renovate config active
+
+🚀 **In Progress:**
+- Fine-tune Authelia SSO configuration and user provisioning
+- Optimize Prometheus exporter monitoring and dashboards
+- Configure mobile app bypass headers for all services
+
+📋 **Future Enhancements:**
 - Enable **ROCm** ML when supported (`/dev/kfd` present; image supports your GPU)
-- Add more stacks (Arrs/Jellyfin/N8N/Immich add‑ons) using the same include pattern
-- Add Renovate rules per new stack with appropriate risk labels
+- Add automated backup strategies for databases and app configs
+- Implement monitoring stack (Prometheus + Grafana)
+- Add VPN integration for remote access (WireGuard/TailScale)
+- Expand automation workflows with N8N integrations
 
 ---
 
