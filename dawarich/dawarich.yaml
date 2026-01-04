@@ -40,7 +40,6 @@ services:
   dawarich_app:
     image: freikin/dawarich:latest
     container_name: dawarich_app
-    user: "568:568" # Run as apps:apps to match TrueNAS permissions
     volumes:
       - dawarich_public:/var/app/public
       - dawarich_watched:/var/app/tmp/imports/watched
@@ -113,7 +112,6 @@ services:
   dawarich_sidekiq:
     image: freikin/dawarich:latest
     container_name: dawarich_sidekiq
-    user: "568:568" # Run as apps:apps to match TrueNAS permissions
     volumes:
       - dawarich_public:/var/app/public
       - dawarich_watched:/var/app/tmp/imports/watched

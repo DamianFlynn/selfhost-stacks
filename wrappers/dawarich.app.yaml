@@ -1,9 +1,4 @@
-# Dawarich Stack Wrapper
-# Self-hosted location tracking and visualization
-# URL: https://dawarich.deercrest.info
 
-services:
-  dawarich:
-    extends:
-      file: ../dawarich/compose.yaml
-      service: dawarich_app
+include:
+  - /mnt/fast/stacks/dawarich/compose.yaml
+services: {}
