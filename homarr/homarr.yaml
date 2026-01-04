@@ -3,12 +3,15 @@ services:
     image: ghcr.io/homarr-labs/homarr:v1.49.1
     container_name: homarr
     restart: unless-stopped
+    env_file:
+      - .env
     networks:
       - t3_proxy
     volumes:
       - homarr_configs:/app/data/configs
       - homarr_data:/data
       - homarr_icons:/app/public/icons
+      - homarr_appdata:/appdata
       - /var/run/docker.sock:/var/run/docker.sock:ro # Optional: Docker integration
     environment:
       - TZ=${TZ}

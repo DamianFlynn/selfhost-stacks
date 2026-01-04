@@ -27,3 +27,9 @@ volumes:
       type: none
       o: bind
       device: /mnt/fast/appdata/homarr/icons
+  homarr_appdata:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/fast/appdata/homarr/appdata
