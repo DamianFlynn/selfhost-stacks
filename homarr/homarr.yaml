@@ -19,6 +19,7 @@ services:
       - AUTH_SESSION_EXPIRY_TIME=7 # Days
       - NEXTAUTH_URL=https://home.deercrest.info
       - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+      - SECRET_ENCRYPTION_KEY=${SECRET_ENCRYPTION_KEY}
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=t3_proxy"
