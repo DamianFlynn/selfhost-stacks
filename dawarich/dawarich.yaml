@@ -80,19 +80,17 @@ services:
       options:
         max-size: "100m"
         max-file: "5"
-    healthcheck:
-      test: ["CMD-SHELL", "wget --no-check-certificate -qO- http://127.0.0.1:3000/api/v1/health 2>&1 | grep -q 'ok' || exit 1"]
-      interval: 15s
-      retries: 30
-      start_period: 45s
-      timeout: 10s
+    # healthcheck:
+    #   test: ["CMD-SHELL", "wget --no-check-certificate -qO- http://127.0.0.1:3000/api/v1/health 2>&1 | grep -q 'ok' || exit 1"]
+    #   interval: 15s
+    #   retries: 30
+    #   start_period: 45s
+    #   timeout: 10s
     depends_on:
       dawarich_db:
-        condition: service_healthy
-        restart: true
+        condition: service_started
       dawarich_redis:
-        condition: service_healthy
-        restart: true
+        condition: service_started
     deploy:
       resources:
         limits:
@@ -104,7 +102,7 @@ services:
       
       # Main router with authentication
       - "traefik.http.routers.dawarich.entrypoints=web,websecure"
-      - "traefik.http.routers.dawarich.rule=Host(`dawarich.deercrest.info`)"
+      - "traefik.http.routers.dawarich.rule=Host(`findme.deercrest.info`)"
       - "traefik.http.routers.dawarich.middlewares=chain-authelia@file"
       - "traefik.http.routers.dawarich.service=dawarich"
       - "traefik.http.services.dawarich.loadbalancer.server.port=3000"
@@ -146,19 +144,16 @@ services:
       options:
         max-size: "100m"
         max-file: "5"
-    healthcheck:
-      test: ["CMD-SHELL", "pgrep -f sidekiq"]
-      interval: 10s
-      retries: 30
-      start_period: 30s
-      timeout: 10s
+    # healthcheck:
+    #   test: ["CMD-SHELL", "pgrep -f sidekiq"]
+    #   interval: 10s
+    #   retries: 30
+    #   start_period: 30s
+    #   timeout: 10s
     depends_on:
       dawarich_db:
-        condition: service_healthy
-        restart: true
+        condition: service_started
       dawarich_redis:
-        condition: service_healthy
-        restart: true
+        condition: service_started
       dawarich_app:
-        condition: service_healthy
-        restart: true
+        condition: service_started
