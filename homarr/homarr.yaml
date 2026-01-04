@@ -1,0 +1,35 @@
+services:
+  homarr:
+    image: ghcr.io/ajnart/homarr:latest
+    container_name: homarr
+    restart: unless-stopped
+    networks:
+      - t3_proxy
+    volumes:
+      - homarr_configs:/app/data/configs
+      - homarr_data:/data
+      - homarr_icons:/app/public/icons
+      - /var/run/docker.sock:/var/run/docker.sock:ro # Optional: Docker integration
+    environment:
+      - TZ=${TZ}
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - BASE_URL=https://home.deercrest.info
+      - AUTH_PROVIDER=credentials # Use built-in multi-user authentication
+      - AUTH_SESSION_EXPIRY_TIME=7 # Days
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=t3_proxy"
+      
+      # Main router - NO Authelia since Homarr has its own multi-user auth
+      - "traefik.http.routers.homarr.entrypoints=web,websecure"
+      - "traefik.http.routers.homarr.rule=Host(`home.deercrest.info`)"
+      - "traefik.http.routers.homarr.middlewares=chain-no-auth@file"
+      - "traefik.http.routers.homarr.service=homarr"
+      - "traefik.http.services.homarr.loadbalancer.server.port=7575"
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:7575 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
