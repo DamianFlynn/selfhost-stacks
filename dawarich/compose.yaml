@@ -1,0 +1,43 @@
+# Dawarich - Self-hosted location tracking and visualization
+# https://github.com/Freika/dawarich
+
+include:
+  - dawarich.yaml
+
+networks:
+  dawarich:
+    driver: bridge
+  t3_proxy:
+    external: true
+
+volumes:
+  dawarich_db_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/fast/appdata/dawarich/db
+  dawarich_shared:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/fast/appdata/dawarich/shared
+  dawarich_public:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/fast/appdata/dawarich/public
+  dawarich_watched:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/fast/appdata/dawarich/watched
+  dawarich_storage:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/fast/appdata/dawarich/storage
