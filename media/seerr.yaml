@@ -29,6 +29,7 @@ services:
     hostname: "seerr"
     container_name: seerr
     image: ghcr.io/seerr-team/seerr:develop
+    user: "568:568"  # Run as apps:apps to match TrueNAS permissions
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped
@@ -41,8 +42,6 @@ services:
       - /mnt/tank/media:/data:ro  # Read-only access to media library for availability checks
     environment:
       TZ: $TZ
-      PUID: $PUID
-      PGID: $PGID
     labels:
       - traefik.enable=true
 
