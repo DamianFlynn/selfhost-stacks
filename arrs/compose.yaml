@@ -31,6 +31,8 @@ include:
   - flaresolverr.yaml
   - autobrr.yaml
   - janitorr.yaml
+  - blockbusterr.yaml
+  - boxarr.yaml
 #  - beets.yaml
 
 

@@ -1,0 +1,68 @@
+# ====================================================================================
+# Boxarr - Automated Box Office Tracking for Radarr
+# ====================================================================================
+# 
+# PURPOSE:
+#   Automated box office tracking application that integrates with Radarr to monitor,
+#   add, and manage the latest theatrical releases. Provides a beautiful dashboard
+#   showing the current box office top 10, their status in your Radarr library, and
+#   allows quality profile management.
+#
+# KEY FEATURES:
+#   - Real-time box office top 10 tracking
+#   - Automatic theatrical release monitoring
+#   - Seamless Radarr integration for library management
+#   - Beautiful dashboard with status indicators
+#   - Quality profile management per movie
+#   - One-click addition to Radarr
+#   - Web UI for all configuration (no env vars needed)
+#
+# WORKFLOW:
+#   1. Boxarr pulls current box office top 10 data
+#   2. Displays movies with their Radarr library status
+#   3. Allows quick addition to Radarr with quality profile selection
+#   4. Monitors and updates as box office rankings change
+#   5. Tracks which theatrical releases you already have
+#
+# ACCESS:
+#   - Web UI: https://boxarr.deercrest.info (protected by Authelia SSO)
+#   - Port: 8888
+#   - Middleware: chain-authelia (requires authentication)
+#
+# VOLUMES:
+#   - /mnt/fast/appdata/arrs/boxarr/config - Configuration and data persistence
+#
+# ====================================================================================
+
+services:
+  boxarr:
+    image: iongpt/boxarr:latest
+    container_name: boxarr
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - t3_proxy
+    ports:
+      - "8888:8888"
+    volumes:
+      - /mnt/fast/appdata/arrs/boxarr/config:/config  # Configuration and data persistence
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8888/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    labels:
+      - traefik.enable=true
+      ## HTTP Routers
+      - traefik.http.routers.boxarr-rtr.entrypoints=web,websecure
+      - traefik.http.routers.boxarr-rtr.rule=Host(`boxarr.deercrest.info`)
+      - traefik.http.routers.boxarr-rtr.middlewares=chain-authelia@file
+      ## HTTP Services
+      - traefik.http.routers.boxarr-rtr.service=boxarr-svc
+      - traefik.http.services.boxarr-svc.loadbalancer.server.port=8888
+
+networks:
+  t3_proxy:
+    external: true

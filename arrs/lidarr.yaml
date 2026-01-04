@@ -60,7 +60,7 @@ services:
 
       - traefik.http.routers.lidarr-bypass.entrypoints=websecure
       # - traefik.http.routers.sabnzbd-rtr-bypass.rule=Host(`sabnzbd.deercrest.info`) && Query(`apikey`, `$RADARR_API_KEY`)
-      - traefik.http.routers.lidarr-bypass.rule=Host(`lidarr.deercrest.info`) && Header(`lidarr-auth-bypass-key`, `$LIDARR_AUTH_BYPASS_KEY`) # Bypass Auth for LunaSea on iOS
+      - traefik.http.routers.lidarr-bypass.rule=Host(`lidarr.deercrest.info`) && Header(`auth-bypass-key`, `$LIDARR_AUTH_BYPASS_KEY`) # Bypass Auth for mobile apps
       - traefik.http.routers.lidarr-bypass.middlewares=chain-no-auth@file
       - traefik.http.routers.lidarr-bypass.tls=true
       - traefik.http.routers.lidarr-bypass.tls.certresolver=dns-cloudflare

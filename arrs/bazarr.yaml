@@ -56,7 +56,7 @@ services:
 
       - traefik.http.routers.bazarr-bypass.entrypoints=websecure
       # - traefik.http.routers.sabnzbd-rtr-bypass.rule=Host(`sabnzbd.deercrest.info`) && Query(`apikey`, `$bazarr_API_KEY`)
-      - traefik.http.routers.bazarr-bypass.rule=Host(`bazarr.deercrest.info`) && Header(`bazarr-auth-bypass-key`, `$bazarr_AUTH_BYPASS_KEY`) # Bypass Auth for LunaSea on iOS
+      - traefik.http.routers.bazarr-bypass.rule=Host(`bazarr.deercrest.info`) && Header(`auth-bypass-key`, `$BAZARR_AUTH_BYPASS_KEY`) # Bypass Auth for mobile apps
       - traefik.http.routers.bazarr-bypass.middlewares=chain-no-auth@file
       - traefik.http.routers.bazarr-bypass.tls=true
       - traefik.http.routers.bazarr-bypass.tls.certresolver=dns-cloudflare

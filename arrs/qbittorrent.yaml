@@ -54,8 +54,16 @@ services:
       - traefik.http.routers.qbittorrent.middlewares=chain-authelia@file
       - traefik.http.routers.qbittorrent.tls=true
       - traefik.http.routers.qbittorrent.tls.certresolver=dns-cloudflare
-      - traefik.http.routers.qbittorrent.priority=99
       - traefik.http.routers.qbittorrent.service=qbittorrent-svc
+
+      # Bypass router for mobile apps (priority 100 evaluated before main router)
+      - traefik.http.routers.qbittorrent-bypass.entrypoints=websecure
+      - traefik.http.routers.qbittorrent-bypass.rule=Host(`qbittorrent.deercrest.info`) && Header(`auth-bypass-key`, `$QBITTORRENT_AUTH_BYPASS_KEY`) # Bypass Auth for mobile apps
+      - traefik.http.routers.qbittorrent-bypass.middlewares=chain-no-auth@file
+      - traefik.http.routers.qbittorrent-bypass.priority=100
+      - traefik.http.routers.qbittorrent-bypass.tls=true
+      - traefik.http.routers.qbittorrent-bypass.tls.certresolver=dns-cloudflare
+      - traefik.http.routers.qbittorrent-bypass.service=qbittorrent-svc
 
       - traefik.http.services.qbittorrent-svc.loadbalancer.server.port=8080
 

@@ -1,0 +1,69 @@
+# ====================================================================================
+# Blockbusterr - Automated Trakt Content Discovery for Radarr/Sonarr
+# ====================================================================================
+# 
+# PURPOSE:
+#   Automate your media library by pulling trending, popular, and highly-rated content
+#   from Trakt and automatically adding it to Radarr/Sonarr. Smart filters ensure you
+#   only get the content you actually want, eliminating manual list management.
+#
+# KEY FEATURES:
+#   - Automatic content discovery from Trakt trending/popular/highly-rated lists
+#   - Smart filtering to match your quality and preference criteria
+#   - Seamless integration with Radarr (movies) and Sonarr (TV series)
+#   - Web UI for configuration and monitoring (port 9090)
+#   - Activity logging and database persistence
+#   - Configurable via YAML or environment variables
+#
+# WORKFLOW:
+#   1. Blockbusterr polls Trakt lists based on configured schedules
+#   2. Applies smart filters (genre, rating, release year, etc.)
+#   3. Automatically adds matching content to Radarr/Sonarr
+#   4. Tracks additions and provides activity logs via Web UI
+#
+# ACCESS:
+#   - Web UI: https://blockbusterr.deercrest.info (protected by Authelia SSO)
+#   - Port: 9090
+#   - Middleware: chain-authelia (requires authentication)
+#
+# VOLUMES:
+#   - /mnt/fast/appdata/arrs/blockbusterr/data - Database, logs, and configuration
+#
+# ====================================================================================
+
+services:
+  blockbusterr:
+    image: ghcr.io/mahcks/blockbusterr:latest
+    container_name: blockbusterr
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - t3_proxy
+    ports:
+      - "9090:9090"
+    volumes:
+      - /mnt/fast/appdata/arrs/blockbusterr/data:/app/data  # Database, activity logs, and configuration
+    environment:
+      TZ: $TZ
+      # Optional: Override config values with environment variables
+      # TRAKT_CLIENT_ID: $TRAKT_CLIENT_ID
+      # TRAKT_CLIENT_SECRET: $TRAKT_CLIENT_SECRET
+      # RADARR_URL: http://radarr:7878
+      # RADARR_API_KEY: $RADARR_API_KEY
+      # SONARR_URL: http://sonarr:8989
+      # SONARR_API_KEY: $SONARR_API_KEY
+      # DISABLE_UI: false
+    labels:
+      - traefik.enable=true
+      ## HTTP Routers
+      - traefik.http.routers.blockbusterr-rtr.entrypoints=web,websecure
+      - traefik.http.routers.blockbusterr-rtr.rule=Host(`blockbusterr.deercrest.info`)
+      - traefik.http.routers.blockbusterr-rtr.middlewares=chain-authelia@file
+      ## HTTP Services
+      - traefik.http.routers.blockbusterr-rtr.service=blockbusterr-svc
+      - traefik.http.services.blockbusterr-svc.loadbalancer.server.port=9090
+
+networks:
+  t3_proxy:
+    external: true
