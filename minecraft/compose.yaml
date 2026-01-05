@@ -1,3 +1,6 @@
+# Minecraft Stack - Vanilla and Yggdrasil servers
+# Multiple Minecraft server instances
+
 name: minecraft
 
 include:

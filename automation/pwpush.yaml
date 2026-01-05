@@ -1,3 +1,25 @@
+# PWPush - Password/Secret Sharing Service
+#
+# Purpose:
+#   Securely share passwords and secrets with automatic expiration
+#   Alternative to sending passwords via email or chat
+#
+# Key Features:
+#   - Time-based and view-based expiration
+#   - One-time secret links that auto-delete
+#   - Optional password protection for secrets
+#   - Audit log of secret access attempts
+#   - No registration required for recipients
+#   - PostgreSQL backend for persistence
+#
+# Workflow:
+#   Create secret → Set expiration → Share link → Recipient views once → Auto-delete
+#
+# Access:
+#   URL: https://pwpush.deercrest.info
+#   Middleware: chain-no-auth (public access for recipients)
+#
+
 networks:
   pwpush:
     name: pwpush

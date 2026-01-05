@@ -1,5 +1,7 @@
-name: arrs
+# Arrs Stack - Media automation suite
+# SABnzbd, qBittorrent, Prowlarr, Radarr, Sonarr, Lidarr, Readarr, Bazarr
 
+name: arrs
 
 ########################### NETWORKS
 networks:

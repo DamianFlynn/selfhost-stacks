@@ -1,3 +1,6 @@
+# Code Server Stack - VS Code in the browser
+# Self-hosted Visual Studio Code accessible via web browser
+
 ---
 services:
   # Microsoft Visual Studio Code

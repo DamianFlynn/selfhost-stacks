@@ -1,3 +1,27 @@
+# Traefik - Modern HTTP Reverse Proxy and Load Balancer
+#
+# Purpose:
+#   Cloud-native edge router for microservices and containers
+#   Automatic SSL, routing, and middleware for all web services
+#
+# Key Features:
+#   - Automatic service discovery from Docker labels
+#   - Let's Encrypt SSL with Cloudflare DNS challenge
+#   - Middleware chains (authentication, rate limiting, compression)
+#   - HTTP/2 and HTTP/3 support
+#   - WebSocket and gRPC proxying
+#   - Dynamic configuration reloading
+#   - Prometheus metrics and access logs
+#   - Dashboard for monitoring routes
+#
+# Workflow:
+#   Incoming request → Entrypoint → Middleware chain → Route to backend service
+#
+# Access:
+#   Dashboard: https://traefik.deercrest.info
+#   Middleware: chain-authelia (protected)
+#
+
 services:
   # Traefik 3 - Reverse Proxy
   traefik:

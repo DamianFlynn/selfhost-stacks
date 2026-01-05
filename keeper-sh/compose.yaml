@@ -1,4 +1,7 @@
-name: automation
+# Keeper.sh Stack - Calendar and scheduling service
+# Self-hosted Cal.com alternative for appointment booking
+
+name: keeper-sh
 
 
 ########################### NETWORKS

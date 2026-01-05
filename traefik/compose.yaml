@@ -1,3 +1,6 @@
+# Traefik Stack - Reverse proxy and load balancer
+# Modern HTTP reverse proxy with automatic SSL, routing, and middleware
+
 name: traefik
 
 ########################### NETWORKS

@@ -1,3 +1,23 @@
+# Tesla Static - Tesla Fleet API Public Key Server
+#
+# Purpose:
+#   Serves Tesla Fleet API public key for vehicle authentication
+#   Required for Home Assistant Tesla integration
+#
+# Key Features:
+#   - Static file server for .well-known directory
+#   - Tesla Fleet API public key hosting
+#   - HTTPS with valid SSL certificate
+#   - High priority routing for .well-known path
+#
+# Workflow:
+#   Tesla API → Verify domain → Fetch .well-known/appspecific/com.tesla.3p.public-key.pem
+#
+# Access:
+#   URL: https://hass.deercrest.info/.well-known
+#   Middleware: chain-no-auth (public - Tesla API needs access)
+#
+
 services:
   tesla-static:
     image: nginx:1.29.4-alpine

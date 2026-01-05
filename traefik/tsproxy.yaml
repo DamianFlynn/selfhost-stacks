@@ -1,3 +1,25 @@
+# TSBridge - Tailscale Bridge for Docker Services
+#
+# Purpose:
+#   Automatically exposes Docker containers to Tailscale VPN
+#   Creates Tailscale endpoints for services without manual configuration
+#
+# Key Features:
+#   - Automatic service discovery via Docker labels
+#   - OAuth-based Tailscale authentication
+#   - Per-service Tailscale hostname assignment
+#   - Tag-based access control integration
+#   - HTTPS support with identity headers
+#   - WebSocket and gRPC passthrough
+#
+# Workflow:
+#   Docker labels → TSBridge discovers → Creates Tailscale endpoint → Service accessible on VPN
+#
+# Access:
+#   Configured via Docker labels: tsbridge.enabled=true
+#   Services exposed on Tailscale network with custom hostnames
+#
+
 services:
   # https://github.com/jtdowney/tsbridge/blob/main/docs/configuration-reference.md#tag-ownership-and-oauth-security
   tsbridge:

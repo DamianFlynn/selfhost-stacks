@@ -1,3 +1,24 @@
+# Docker Socket Proxy - Secure Docker API Access
+#
+# Purpose:
+#   Security layer between Traefik and Docker socket
+#   Restricts Docker API access to read-only container discovery
+#
+# Key Features:
+#   - Read-only Docker socket access
+#   - Fine-grained permission control
+#   - Network isolation for socket access
+#   - Prevents container manipulation via Traefik
+#   - HAProxy-based filtering
+#
+# Workflow:
+#   Traefik → Socket Proxy (filtered API) → Docker socket → Container discovery
+#
+# Access:
+#   Internal only: socket_proxy network on 192.168.91.254:2375
+#   No external web access
+#
+
 services:
   # Docker Socket Proxy - Security Enhanced Proxy for Docker Socket
   socket-proxy:

@@ -1,5 +1,7 @@
-name: media
+# Media Stack - Jellyfin, Overseerr, Jellystat, Wizarr, Dispatcharr
+# Media server and request management
 
+name: media
 
 ########################### NETWORKS
 networks:
@@ -15,6 +17,7 @@ include:
   ########################### SERVICES
 
   - jellyfin.yaml
+  - dispatcharr.yaml
   - seerr.yaml
   - jellystat.yaml
   - wizarr.yaml

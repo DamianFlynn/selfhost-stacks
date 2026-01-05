@@ -1,3 +1,26 @@
+# Authelia - Single Sign-On and Two-Factor Authentication
+#
+# Purpose:
+#   Self-hosted authentication and authorization server
+#   Provides SSO and 2FA for services behind Traefik
+#
+# Key Features:
+#   - Multi-factor authentication (TOTP, WebAuthn, Duo)
+#   - Single sign-on across all services
+#   - LDAP and Active Directory integration
+#   - Access control policies (per-user, per-group, per-domain)
+#   - Password reset workflow
+#   - Session management and cookie-based auth
+#   - Bypass rules for specific IPs/networks
+#
+# Workflow:
+#   User access protected service → Authelia login page → 2FA → Set cookie → Access granted
+#
+# Access:
+#   URL: https://auth.deercrest.info
+#   Middleware: chain-authelia@file (protects other services)
+#
+
 services:
 
   # Authelia (Lite) - Self-Hosted Single Sign-On and Two-Factor Authentication

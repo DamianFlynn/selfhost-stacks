@@ -1,3 +1,25 @@
+# Minecraft Yggdrasil Server - Modded Minecraft Instance
+#
+# Purpose:
+#   Custom Minecraft server with Yggdrasil authentication via Tailscale
+#   Supports modded gameplay and custom authentication
+#
+# Key Features:
+#   - Custom authentication system (Yggdrasil)
+#   - Mod support and custom plugins
+#   - Tailscale networking for secure access
+#   - Independent world and configuration
+#   - Custom server properties
+#
+# Workflow:
+#   Players authenticate → Connect via Tailscale → Join modded server → Play with mods
+#
+# Access:
+#   Tailscale hostname: mc-ygg
+#   Tags: tag:games
+#   Port: 25565 (Minecraft default)
+#
+
 services:
 
   # --- Tailscale sidecar for VANILLA ---

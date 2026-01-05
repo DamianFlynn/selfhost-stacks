@@ -13,18 +13,9 @@ services:
     environment:
       - TELEPORT_PUBLIC_ADDR=${TELEPORT_PUBLIC_ADDR}
       - TELEPORT_AUTH_TOKEN=${TELEPORT_AUTH_TOKEN}
-    entrypoint: /bin/sh
-    command: >
-      -c "if [ ! -f /etc/teleport/teleport.yaml ]; then
-            teleport configure -o file \
-              --cluster-name=${CLUSTER_NAME} \
-              --public-addr=${TELEPORT_PUBLIC_ADDR}:443 \
-              --data-dir=/var/lib/teleport \
-              --output=/etc/teleport/teleport.yaml \
-              --acme=false \
-              --acme-email=${ACME_EMAIL};
-          fi &&
-          teleport start --config=/etc/teleport/teleport.yaml"
+    # Distroless image - no shell available, requires pre-created config file
+    # Create /mnt/fast/appdata/teleport/config/teleport.yaml manually or use teleport configure in a separate container
+    command: ["start", "--config=/etc/teleport/teleport.yaml"]
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=t3_proxy"

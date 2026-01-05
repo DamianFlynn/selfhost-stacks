@@ -1,3 +1,25 @@
+# Oxidized - Network Device Configuration Backup
+#
+# Purpose:
+#   Automated backup and version control for network device configurations
+#   Supports routers, switches, firewalls from multiple vendors
+#
+# Key Features:
+#   - Multi-vendor device support (Cisco, Juniper, Mikrotik, etc.)
+#   - Git-based version control for config changes
+#   - Scheduled configuration pulls
+#   - Web UI for viewing configs and diffs
+#   - REST API for automation integration
+#   - Email/webhook notifications on changes
+#
+# Workflow:
+#   Schedule → SSH/Telnet to devices → Pull config → Git commit → Notify changes
+#
+# Access:
+#   URL: https://oxidized.deercrest.info
+#   Middleware: chain-authelia (protected - admin only)
+#
+
 services:
 
   oxidized:

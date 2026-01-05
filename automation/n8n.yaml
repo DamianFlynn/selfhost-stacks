@@ -1,3 +1,25 @@
+# n8n - Workflow Automation Platform
+#
+# Purpose:
+#   Self-hosted workflow automation tool for connecting apps and services
+#   Alternative to Zapier/Make with visual workflow editor
+#
+# Key Features:
+#   - Visual workflow builder with 400+ integrations
+#   - Custom function nodes (JavaScript/Python)
+#   - Webhook triggers and HTTP requests
+#   - Schedule-based automation
+#   - Error handling and retry logic
+#   - Credential management and encryption
+#
+# Workflow:
+#   Trigger (webhook/schedule/manual) → Process nodes → Actions → External APIs
+#
+# Access:
+#   URL: https://n8n.deercrest.info
+#   Middleware: chain-authelia (protected - admin only)
+#
+
 services:
 
   n8n:    

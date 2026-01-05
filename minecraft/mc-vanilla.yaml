@@ -1,3 +1,25 @@
+# Minecraft Vanilla Server - Official Minecraft Java Edition
+#
+# Purpose:
+#   Standard Minecraft Java Edition server accessible via Tailscale
+#   Provides vanilla gameplay experience without modifications
+#
+# Key Features:
+#   - Official Minecraft server (no mods or plugins)
+#   - Tailscale networking for secure remote access
+#   - Automatic backups and world persistence
+#   - Server properties customization
+#   - Whitelist and operator management
+#
+# Workflow:
+#   Players connect via Tailscale → Server validates → Join world → Auto-save periodically
+#
+# Access:
+#   Tailscale hostname: mc-vanilla
+#   Tags: tag:games
+#   Port: 25565 (Minecraft default)
+#
+
 services:
   # --- Tailscale sidecar for VANILLA ---
   tailscale-vanilla:
