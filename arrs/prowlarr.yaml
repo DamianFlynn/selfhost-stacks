@@ -59,6 +59,10 @@ services:
       # HTTP Services
       - traefik.http.routers.prowlarr.service=prowlarr-svc
       - traefik.http.services.prowlarr-svc.loadbalancer.server.port=9696
+      # Pass proper headers for reverse proxy
+      - traefik.http.services.prowlarr-svc.loadbalancer.passhostheader=true
+      - traefik.http.middlewares.prowlarr-headers.headers.customrequestheaders.X-Forwarded-Proto=https
+      - traefik.http.middlewares.prowlarr-headers.headers.customrequestheaders.X-Forwarded-Ssl=on
 
 
   # Prowlarr Exporter - Prowlarr metrics for Prometheus
