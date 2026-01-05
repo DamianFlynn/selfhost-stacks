@@ -44,6 +44,8 @@ services:
       - --entrypoints.web.address=:80
       - --entrypoints.websecure.address=:443
       - --entrypoints.traefik.address=:8080
+      - --entrypoints.teleport-proxy.address=:3023
+      - --entrypoints.teleport-tunnel.address=:3024
       - --entrypoints.web.http.redirections.entrypoint.to=websecure
       - --entrypoints.web.http.redirections.entrypoint.scheme=https
       - --entrypoints.web.http.redirections.entrypoint.permanent=true
@@ -83,6 +85,14 @@ services:
         mode: host
       - target: 443
         published: 443
+        protocol: tcp
+        mode: host
+      - target: 3023
+        published: 3023
+        protocol: tcp
+        mode: host
+      - target: 3024
+        published: 3024
         protocol: tcp
         mode: host
 
