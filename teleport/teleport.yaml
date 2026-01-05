@@ -14,7 +14,7 @@ services:
       - TELEPORT_PUBLIC_ADDR=${TELEPORT_PUBLIC_ADDR}
       - TELEPORT_AUTH_TOKEN=${TELEPORT_AUTH_TOKEN}
     # Distroless image - no shell available, requires pre-created config file
-    # Create /mnt/fast/appdata/teleport/config/teleport.yaml manually or use teleport configure in a separate container
+    # Config must exist at /etc/teleport/teleport.yaml before container starts
     command: ["start", "--config=/etc/teleport/teleport.yaml"]
     labels:
       - "traefik.enable=true"
