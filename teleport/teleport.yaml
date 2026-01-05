@@ -1,6 +1,6 @@
 services:
   teleport:
-    image: public.ecr.aws/gravitational/teleport:17
+    image: public.ecr.aws/gravitational/teleport-distroless:18.6.0
     container_name: teleport
     restart: unless-stopped
     hostname: teleport
