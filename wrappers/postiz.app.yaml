@@ -1,0 +1,7 @@
+# Postiz - Social media scheduling platform
+# Wrapper for TrueNAS SCALE Apps
+
+services: {}
+
+include:
+  - path: /mnt/fast/stacks/postiz/compose.yaml

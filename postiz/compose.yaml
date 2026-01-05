@@ -1,0 +1,37 @@
+# Postiz - Open-source social media scheduling platform
+# https://postiz.com
+
+include:
+  - postiz.yaml
+
+networks:
+  t3_proxy:
+    external: true
+  postiz:
+    driver: bridge
+
+volumes:
+  postiz_postgres:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/fast/appdata/postiz/postgres
+  postiz_redis:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/fast/appdata/postiz/redis
+  postiz_config:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/fast/appdata/postiz/config
+  postiz_uploads:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/fast/appdata/postiz/uploads
