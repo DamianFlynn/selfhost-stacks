@@ -34,6 +34,7 @@ include:
   - autobrr.yaml
   - janitorr.yaml
   - blockbusterr.yaml
+  - soulbeet.yaml
 #  - boxarr.yaml  # Commented out - image not published to Docker Hub yet (needs to be built from source)
 #  - beets.yaml
 

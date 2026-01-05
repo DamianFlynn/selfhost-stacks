@@ -1,0 +1,60 @@
+# Soulbeet - Automated Music Downloader and Organizer
+#
+# Purpose:
+#   Searches and downloads music from Soulseek (via slskd)
+#   Automatically organizes and tags music files with beets
+#
+# Key Features:
+#   - Web-based search interface for Soulseek
+#   - Integration with slskd for P2P downloads
+#   - Automatic music tagging and organization with beets
+#   - SQLite database for tracking downloads
+#   - Music library management
+#
+# Workflow:
+#   Search music → Queue download via slskd → Auto-tag with beets → Organize to library
+#
+# Access:
+#   URL: https://soulbeet.deercrest.info
+#   Middleware: chain-authelia (protected - admin only)
+#
+
+services:
+  soulbeet:
+    image: ghcr.io/terry90/soulbeet:latest
+    container_name: soulbeet
+    hostname: soulbeet
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - t3_proxy
+    ports:
+      - "9765:9765"
+    volumes:
+      - /mnt/fast/appdata/arrs/soulbeet/data:/data  # Database and app data
+      - /mnt/tank/downloads:/downloads              # Download folder (shared with slskd)
+      - /mnt/tank/media/Music:/music                # Music library destination
+      # Custom beets config for existing library integration
+      - /mnt/fast/appdata/arrs/soulbeet/beets_config.yaml:/app/beets_config.yaml
+    environment:
+      - TZ=$TZ
+      - PUID=$PUID
+      - PGID=$PGID
+      - DATABASE_URL=sqlite:/data/soulbeet.db
+      - SLSKD_URL=${SLSKD_URL:-http://slskd:5030}
+      - SLSKD_API_KEY=${SLSKD_API_KEY}
+      - SLSKD_DOWNLOAD_PATH=/downloads
+      - SECRET_KEY=${SOULBEET_SECRET_KEY}
+    labels:
+      - traefik.enable=true
+      # HTTP Routers
+      - traefik.http.routers.soulbeet.entrypoints=websecure
+      - traefik.http.routers.soulbeet.rule=Host(`soulbeet.deercrest.info`)
+      - traefik.http.routers.soulbeet.tls=true
+      - traefik.http.routers.soulbeet.tls.certresolver=dns-cloudflare
+      # Middlewares
+      - traefik.http.routers.soulbeet.middlewares=chain-authelia@file
+      # HTTP Services
+      - traefik.http.routers.soulbeet.service=soulbeet-svc
+      - traefik.http.services.soulbeet-svc.loadbalancer.server.port=9765

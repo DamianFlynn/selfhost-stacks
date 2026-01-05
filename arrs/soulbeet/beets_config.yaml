@@ -1,0 +1,81 @@
+# Beets Configuration for Soulbeet
+# Custom configuration for music library management
+
+directory: /music
+library: /data/beets_library.db
+
+# Import settings
+import:
+  move: yes          # Move files (not copy) to library
+  write: yes         # Write tags to files
+  log: /data/beets_import.log
+  
+# Path formats - matches Lidarr structure
+paths:
+  default: $albumartist/$album%aunique{}/$track $title
+  singleton: Non-Album/$artist/$title
+  comp: Compilations/$album%aunique{}/$track $title
+
+# Plugins
+plugins: 
+  - fetchart      # Download album art
+  - embedart      # Embed art in files
+  - lastgenre     # Fetch genres from Last.fm
+  - scrub         # Clean tags
+  - replaygain    # Calculate ReplayGain for volume normalization
+  - missing       # Track missing albums
+  - duplicates    # Find duplicate tracks
+
+# Plugin configurations
+fetchart:
+  auto: yes
+  cautious: yes
+  
+embedart:
+  auto: yes
+  
+lastgenre:
+  auto: yes
+  source: album
+  
+replaygain:
+  auto: no  # Set to 'yes' if you want automatic ReplayGain calculation
+  backend: ffmpeg
+
+# File handling
+replace:
+  '[\\]': _
+  '[/]': _
+  '^\.': _
+  '[\x00-\x1f]': _
+  '[<>:"\?\*\|]': _
+  '\.$': _
+  '\s+$': ''
+
+# Only import audio formats
+ignore: 
+  - .AppleDouble
+  - ._*
+  - .DS_Store
+  - '*~'
+  - .directory
+  - Thumbs.db
+
+# MusicBrainz settings
+musicbrainz:
+  enabled: yes
+  
+# Match settings
+match:
+  strong_rec_thresh: 0.04
+  medium_rec_thresh: 0.25
+  ignored_media: 
+    - Data CD
+    - DVD
+    - DVD-Video
+    - Blu-ray
+    - HD-DVD
+    - VCD
+    - SVCD
+    - UMD
+    - VHS
