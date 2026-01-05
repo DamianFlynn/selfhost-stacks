@@ -96,7 +96,7 @@ services:
 # Apache Tika for content extraction and metadata parsing from documents
   
   tika:
-    image: apache/tika:3.2.2.0-full
+    image: apache/tika:3.2.3.0-full
     container_name: open-archiver_tika
     hostname: tika
     restart: unless-stopped
