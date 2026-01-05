@@ -1,0 +1,17 @@
+# Termix - Web-based terminal for infrastructure management
+# https://github.com/lukegus/termix
+
+include:
+  - termix.yaml
+
+networks:
+  t3_proxy:
+    external: true
+
+volumes:
+  termix_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/fast/appdata/termix/data

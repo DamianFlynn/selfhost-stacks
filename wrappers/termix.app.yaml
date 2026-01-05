@@ -1,0 +1,7 @@
+# Termix - Web-based terminal for infrastructure management
+# Wrapper for TrueNAS SCALE Apps
+
+services: {}
+
+include:
+  - path: /mnt/fast/stacks/termix/compose.yaml

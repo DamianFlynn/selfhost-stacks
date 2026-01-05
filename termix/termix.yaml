@@ -1,0 +1,21 @@
+services:
+  termix:
+    image: ghcr.io/lukegus/termix:latest
+    container_name: termix
+    restart: unless-stopped
+    networks:
+      - t3_proxy
+    volumes:
+      - termix_data:/app/data
+    environment:
+      - PORT=8080
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=t3_proxy"
+      
+      # HTTP Router with Authelia (management tool - needs auth)
+      - "traefik.http.routers.termix.entrypoints=web,websecure"
+      - "traefik.http.routers.termix.rule=Host(`terminal.deercrest.info`)"
+      - "traefik.http.routers.termix.middlewares=chain-authelia@file"
+      - "traefik.http.routers.termix.service=termix"
+      - "traefik.http.services.termix.loadbalancer.server.port=8080"
