@@ -1,0 +1,31 @@
+# Teleport - Modern access platform for SSH, RDP, Kubernetes, databases
+# https://goteleport.com
+
+include:
+  - teleport.yaml
+
+networks:
+  t3_proxy:
+    external: true
+  teleport:
+    driver: bridge
+
+volumes:
+  teleport_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/fast/appdata/teleport/data
+  teleport_config:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/fast/appdata/teleport/config
+  teleport_postgres:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/fast/appdata/teleport/postgres

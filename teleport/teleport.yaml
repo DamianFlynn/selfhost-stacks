@@ -1,0 +1,71 @@
+services:
+  teleport:
+    image: public.ecr.aws/gravitational/teleport:17
+    container_name: teleport
+    restart: unless-stopped
+    hostname: teleport
+    networks:
+      - t3_proxy
+      - teleport
+    volumes:
+      - teleport_data:/var/lib/teleport
+      - teleport_config:/etc/teleport
+    environment:
+      - TELEPORT_PUBLIC_ADDR=${TELEPORT_PUBLIC_ADDR}
+      - TELEPORT_AUTH_TOKEN=${TELEPORT_AUTH_TOKEN}
+    entrypoint: /bin/sh
+    command: >
+      -c "if [ ! -f /etc/teleport/teleport.yaml ]; then
+            teleport configure -o file \
+              --cluster-name=${CLUSTER_NAME} \
+              --public-addr=${TELEPORT_PUBLIC_ADDR}:443 \
+              --data-dir=/var/lib/teleport \
+              --output=/etc/teleport/teleport.yaml \
+              --acme=false \
+              --acme-email=${ACME_EMAIL};
+          fi &&
+          teleport start --config=/etc/teleport/teleport.yaml"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=t3_proxy"
+      
+      # Web UI (port 3080)
+      - "traefik.http.routers.teleport-web.entrypoints=web,websecure"
+      - "traefik.http.routers.teleport-web.rule=Host(`access.deercrest.info`)"
+      - "traefik.http.routers.teleport-web.middlewares=chain-no-auth@file"
+      - "traefik.http.routers.teleport-web.service=teleport-web"
+      - "traefik.http.services.teleport-web.loadbalancer.server.port=3080"
+      
+      # Proxy (port 3023) - SSH/RDP proxy
+      - "traefik.tcp.routers.teleport-proxy.entrypoints=teleport-proxy"
+      - "traefik.tcp.routers.teleport-proxy.rule=HostSNI(`*`)"
+      - "traefik.tcp.routers.teleport-proxy.service=teleport-proxy"
+      - "traefik.tcp.services.teleport-proxy.loadbalancer.server.port=3023"
+      
+      # Reverse tunnel (port 3024) - for agents
+      - "traefik.tcp.routers.teleport-tunnel.entrypoints=teleport-tunnel"
+      - "traefik.tcp.routers.teleport-tunnel.rule=HostSNI(`*`)"
+      - "traefik.tcp.routers.teleport-tunnel.service=teleport-tunnel"
+      - "traefik.tcp.services.teleport-tunnel.loadbalancer.server.port=3024"
+    depends_on:
+      teleport_postgres:
+        condition: service_healthy
+
+  teleport_postgres:
+    image: postgres:17-alpine
+    container_name: teleport_postgres
+    restart: unless-stopped
+    networks:
+      - teleport
+    volumes:
+      - teleport_postgres:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_DB=${POSTGRES_DB}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 30s
