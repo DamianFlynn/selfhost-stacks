@@ -31,7 +31,7 @@ networks:
 services:
   dispatcharr:
     hostname: "dispatcharr"
-    image: ghcr.io/dispatcharr/dispatcharr:0.15.1
+    image: ghcr.io/dispatcharr/dispatcharr:0.17.0
     container_name: dispatcharr
     restart: unless-stopped
     networks:
