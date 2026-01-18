@@ -67,7 +67,7 @@ services:
 # Redis-compatible cache/queue for session management and job processing
   
   valkey:
-    image: valkey/valkey:8-alpine
+    image: valkey/valkey:9-alpine
     container_name: open-archiver_valkey
     hostname: valkey
     restart: unless-stopped
