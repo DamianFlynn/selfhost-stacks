@@ -11,6 +11,8 @@ networks:
 #    name: socket_proxy
   t3_proxy:
      external: true
+  iot_macvlan:
+     external: true
 
 
 include:
