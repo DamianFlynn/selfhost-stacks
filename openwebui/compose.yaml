@@ -123,7 +123,7 @@ services:
   ai-docling:
     container_name: ai-docling
     # renovate: datasource=docker depName=quay.io/docling-project/docling-serve
-    image: quay.io/docling-project/docling-serve:v1.9.0
+    image: quay.io/docling-project/docling-serve:v1.10.0
     pull_policy: always
     restart: unless-stopped
     environment:
