@@ -23,6 +23,12 @@
 #   Middleware: chain-no-auth (public access for all users)
 #   Local Discovery: Port 7359/UDP, 1900/UDP
 #
+
+networks:
+  iot_macvlan:
+    external: true
+
+
 services:
 
   # Jellyfin - Media Server
@@ -62,7 +68,9 @@ services:
       - "44"   # video group for AMD GPU access (standard on TrueNAS)
       - "107"  # render group for AMD Radeon 890M GPU access (standard on TrueNAS)
     networks:
-      - t3_proxy
+      t3_proxy:
+      iot_macvlan:
+        ipv4_address: 172.16.1.76
     ports:
       - target: 8096
         published: 8096

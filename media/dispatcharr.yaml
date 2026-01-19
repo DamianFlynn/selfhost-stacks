@@ -27,6 +27,9 @@ networks:
   dispatcharr:
     name: dispatcharr
     driver: bridge
+  
+  iot_macvlan:
+    external: true
 
 services:
   dispatcharr:
@@ -35,8 +38,10 @@ services:
     container_name: dispatcharr
     restart: unless-stopped
     networks:
-      - t3_proxy
-      - dispatcharr
+      iot_macvlan:
+        ipv4_address: 172.16.1.75
+      t3_proxy:
+      dispatcharr:
     ports:
       - 9191:9191
     volumes:
