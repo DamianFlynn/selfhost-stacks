@@ -1,0 +1,68 @@
+# wrtag - Music Tagging and Organization Tool
+#
+# Purpose:
+#   Automatically tags and organizes music files using online databases
+#   Designed for DJ collections (Mastermix, CD Pool, DMC, Music Factory)
+#
+# Key Features:
+#   - Web-based interface for batch music processing
+#   - Automatic metadata lookup from MusicBrainz, Discogs, and other sources
+#   - Embedded cover art from multiple sources
+#   - Customizable file and folder naming patterns
+#   - Support for various audio formats (MP3, FLAC, AAC, etc.)
+#   - Research links for manual verification
+#
+# Workflow:
+#   Upload/scan music → Match metadata → Review/edit → Apply tags → Organize files
+#
+# Access:
+#   URL: https://wrtag.deercrest.info
+#   Middleware: chain-authelia (protected - admin only)
+#
+
+services:
+  wrtag:
+    image: sentriz/wrtag:latest
+    container_name: wrtag
+    hostname: wrtag
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - t3_proxy
+    ports:
+      - "127.0.0.1:9091:80"
+    volumes:
+      # Database and job queue
+      - /mnt/fast/appdata/media/wrtag/data:/data
+      # Source music (unsorted downloads)
+      - /mnt/tank/downloads/complete/nzb/unsorted:/music/source
+      # Destination organized library
+      - /mnt/tank/media/Music:/music/library
+    environment:
+      - TZ=${TZ}
+      - PUID=${PUID}
+      - PGID=${PGID}
+      # wrtag specific configuration
+      - WRTAG_WEB_API_KEY=${WRTAG_API_KEY}
+      - WRTAG_WEB_LISTEN_ADDR=:80
+      - WRTAG_WEB_PUBLIC_URL=https://wrtag.${DOMAINNAME}
+      - WRTAG_WEB_DB_PATH=/data/wrtag.db
+      - WRTAG_LOG_LEVEL=info
+      # Path format for compilations (DJ mixes, multi-artist albums)
+      # Uses: Compilations/Album/Disc X/Track - Title
+      - WRTAG_PATH_FORMAT=/music/library/Compilations/{{ .Release.Title | safepath }}{{ if not (eq .ReleaseDisambiguation "") }} ({{ .ReleaseDisambiguation | safepath }}){{ end }}/{{ if gt (len .Release.Media) 1 }}Disc {{ .Media.Position }}/{{ end }}{{ pad0 2 .Track.Position }} - {{ if .IsCompilation }}{{ artistsString .Track.Artists | safepath }} - {{ end }}{{ .Track.Title | safepath }}{{ .Ext }}
+      # Research links for manual verification
+      - WRTAG_RESEARCH_LINK=https://www.discogs.com/search/?q={query},https://musicbrainz.org/search?query={query}
+    labels:
+      - traefik.enable=true
+      # HTTP Routers
+      - traefik.http.routers.wrtag.entrypoints=websecure
+      - traefik.http.routers.wrtag.rule=Host(`wrtag.${DOMAINNAME}`)
+      - traefik.http.routers.wrtag.tls=true
+      - traefik.http.routers.wrtag.tls.certresolver=dns-cloudflare
+      # Middlewares
+      - traefik.http.routers.wrtag.middlewares=chain-authelia@file
+      # HTTP Services
+      - traefik.http.routers.wrtag.service=wrtag-svc
+      - traefik.http.services.wrtag-svc.loadbalancer.server.port=80

@@ -1,0 +1,13 @@
+# Music Stack - wrtag for DJ music organization
+# Automated tagging and organization for DJ collections
+
+name: music
+
+########################### NETWORKS
+networks:
+  t3_proxy:
+    external: true
+
+include:
+  ########################### SERVICES
+  - wrtag.yaml
