@@ -23,6 +23,5 @@ include:
   - seerr.yaml
   - jellystat.yaml
   - wizarr.yaml
-  - dispatcharr.yaml
 
 
