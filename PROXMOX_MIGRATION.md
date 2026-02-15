@@ -359,142 +359,164 @@ docker logs immich-machine-learning | grep -i "gpu\|cuda\|device"
 
 ## Phase 4.5: Configure OpenClaw LXC with Ollama + AMD GPU
 
-The `openclaw` LXC (172.16.1.160) is designed for AI workloads with GPU acceleration. After Terraform provisioning, you need to:
-1. Install and configure Ollama with AMD GPU support
-2. Fix GPU device permissions (idmap quirks)
-3. Test GPU-accelerated inference
+The `openclaw` LXC (172.16.1.160) is designed for AI workloads with GPU acceleration via Vulkan. After Terraform provisioning:
 
-### 4.5.1 Run the Ollama Setup Script
+**Important:** The LXC idmap must have render GID 110 passthrough (not 105). Terraform handles this automatically, but if upgrading from an older config, manually fix the idmap and restart the LXC.
 
-The automated script handles driver installation, GPU configuration, and Ollama setup:
+### 4.5.1 Verify GPU Passthrough
 
 ```bash
-# From Proxmox host
-pct exec <openclaw_vmid> -- bash -c "$(cat /mnt/fast/stacks/scripts/setup-ollama-amd-gpu.sh)"
+# Check GPU devices inside LXC
+ssh root@172.16.1.160 "ls -la /dev/dri/"
 
-# Or copy and run inside the LXC
-ssh root@172.16.1.160
-cd /root
-curl -fsSL https://raw.githubusercontent.com/damianflynn/selfhost-stacks/main/scripts/setup-ollama-amd-gpu.sh -o setup-ollama-amd-gpu.sh
-bash setup-ollama-amd-gpu.sh
+# Expected output:
+#   crw-rw---- 1 nobody video  226,   1 card1
+#   crw-rw---- 1 nobody render 226, 128 renderD128
+
+# If renderD128 shows "nogroup" instead of "render", fix the idmap:
+# On Proxmox host:
+ssh root@172.16.1.158 "pct stop 101 && \
+  sed -i 's/^lxc\\.idmap: g 105 105 1$/lxc.idmap: g 110 110 1/' /etc/pve/lxc/101.conf && \
+  sed -i 's/^lxc\\.idmap: g 106 100106 65430$/lxc.idmap: g 111 100111 65425/' /etc/pve/lxc/101.conf && \
+  pct start 101"
 ```
-
-The script will:
-- ✅ Fix `/dev/dri/renderD128` and `card1` permissions (root:render, root:video)
-- ✅ Install Mesa AMDGPU drivers + ROCm HIP runtime (if available)
-- ✅ Configure Ollama systemd service with AMD GPU environment variables
-- ✅ Set `HSA_OVERRIDE_GFX_VERSION=11.0.3` (for Radeon 890M / RDNA 3.5)
-- ✅ Test GPU detection with vainfo, clinfo, and DRM access
 
 ### 4.5.2 Install and Test Ollama
 
-After the setup script completes:
+Terraform pre-configures Ollama with Vulkan GPU support. Verify it's working:
 
 ```bash
 ssh root@172.16.1.160
 
-# Verify Ollama is running
-systemctl status ollama
+# Check Ollama service configuration
+systemctl cat ollama.service | grep -A10 '\[Service\]'
 
-# Pull a model (e.g., Llama 3.2 1B)
+# Expected to see:
+#   Environment="OLLAMA_VULKAN=1"
+#   SupplementaryGroups=video render
+#   DeviceAllow=/dev/dri/renderD128 rw
+
+# Pull a model (Llama 3.2 3B)
 ollama pull llama3.2
 
-# Run a test query
-time ollama run llama3.2 "Explain quantum entanglement in 20 words"
+# Test inference
+time ollama run llama3.2 "Explain quantum physics in 10 words"
 
-# Monitor GPU usage during inference
-watch -n1 'grep -r . /sys/class/drm/card1/device/gpu_busy_percent 2>/dev/null || echo "N/A"'
+# Expected response time: 1-2 seconds (cached) or 5-10 seconds (first run)
 ```
 
 ### 4.5.3 Verify GPU Acceleration
 
-Check if Ollama detected the AMD GPU:
+Check if Ollama is using the AMD Radeon 890M GPU:
 
 ```bash
 # View Ollama logs for GPU detection
-journalctl -u ollama -n 50 --no-pager | grep -i "gpu\|amd\|rocm\|hip"
+journalctl -u ollama -n 100 --no-pager | grep -i "vulkan\|gpu\|offload"
 
-# Expected output (successful GPU detection):
-#   level=INFO msg="GPU detected: AMD Radeon 890M"
-#   level=INFO msg="Using ROCm/HIP for AMD GPU acceleration"
+# Expected output (GPU working):
+#   deviceName = AMD Radeon Graphics (RADV GFX1150)
+#   load_tensors: offloaded 29/29 layers to GPU
+#   load_tensors: Vulkan0 model buffer size = 1918.35 MiB
+#   runner.vram="2.6 GiB"
 
-# Test DRM device access
-ls -la /dev/dri/
+# Check Vulkan devices
+su - ollama -s /bin/bash -c "vulkaninfo 2>&1 | grep -i deviceName"
+
 # Expected:
-#   crw-rw---- 1 root video  226,   1 card1
-#   crw-rw---- 1 root render 226, 128 renderD128
+#   deviceName = AMD Radeon Graphics (RADV GFX1150)
+#   deviceName = llvmpipe (LLVM 19.1.7, 256 bits)  ← CPU fallback
 
-# Verify ollama user is in video and render groups
-id ollama
-# Expected: groups=... video(44) ... render(110)
+# Monitor GPU usage during inference
+# Terminal 1:
+watch -n 0.5 'cat /sys/class/drm/card1/device/gpu_busy_percent 2>/dev/null'
+
+# Terminal 2:
+time ollama run llama3.2 "Write a detailed explanation of relativity in 100 words"
+
+# GPU usage should spike to 70-98% during inference
 ```
 
 ### 4.5.4 Troubleshooting GPU Issues
 
 If GPU is **not** detected by Ollama:
 
-**1. Check device permissions:**
+**1. Check render group GID mismatch:**
 ```bash
-# Fix renderD128 ownership (common issue with LXC idmap)
-chown root:render /dev/dri/renderD128
-chmod 660 /dev/dri/renderD128
+# Inside LXC
+getent group render
+# Should show: render:x:110:ollama
 
-# Restart Ollama
-systemctl restart ollama
+# If it shows render:x:992 or any other GID != 110:
+groupmod -g 110 render
+
+# Then restart LXC from Proxmox host:
+ssh root@172.16.1.158 "pct restart 101"
 ```
 
-**2. Verify GPU architecture override:**
-
-For AMD Radeon 890M (Strix/RDNA 3.5), try different `HSA_OVERRIDE_GFX_VERSION` values:
-
+**2. Verify Ollama service configuration:**
 ```bash
-# Edit systemd override
-nano /etc/systemd/system/ollama.service.d/amd-gpu.conf
+# Check systemd override
+cat /etc/systemd/system/ollama.service.d/amd-gpu.conf
 
-# Try these values (one at a time):
-# HSA_OVERRIDE_GFX_VERSION=11.0.3  ← Default (gfx1103)
-# HSA_OVERRIDE_GFX_VERSION=11.0.0  ← Generic RDNA 3
-# HSA_OVERRIDE_GFX_VERSION=11.0.1  ← Alternative
+# Should contain:
+#   Environment="OLLAMA_VULKAN=1"
+#   Environment="HSA_OVERRIDE_GFX_VERSION=11.0.3"
+#   SupplementaryGroups=video render
+#   DeviceAllow=/dev/dri/renderD128 rw
+
+# If missing or incorrect, recreate:
+cat > /etc/systemd/system/ollama.service.d/amd-gpu.conf <<'EOF'
+[Service]
+Environment="HSA_OVERRIDE_GFX_VERSION=11.0.3"
+Environment="OLLAMA_DEBUG=1"
+Environment="OLLAMA_VULKAN=1"
+User=ollama
+SupplementaryGroups=video render
+DeviceAllow=/dev/dri/card1 rw
+DeviceAllow=/dev/dri/renderD128 rw
+EOF
 
 systemctl daemon-reload
 systemctl restart ollama
 ```
 
-**3. Test Mesa/VA-API acceleration:**
+**3. Test Vulkan access:**
 ```bash
-vainfo --display drm --device /dev/dri/renderD128
-# Should show VAProfile lists for H264, HEVC, AV1
+# As ollama user
+su - ollama -s /bin/bash -c "vulkaninfo --summary"
+
+# Should show AMD Radeon Graphics (RADV GFX1150) as GPU 0
+# If Permission denied, check device ownership and groups
 ```
 
-**4. Check for ROCm/HIP runtime:**
+**4. Check logs for errors:**
 ```bash
-# If ROCm is installed
-rocminfo 2>/dev/null | grep -i "name\|gfx"
+journalctl -u ollama -f
 
-# Check clinfo (OpenCL)
-clinfo | head -30
-```
-
-**5. Fallback: CPU-only mode**
-
-If GPU acceleration fails, Ollama will fall back to CPU inference (slower but functional). You can force CPU mode:
-
-```bash
-# Remove GPU environment variables
-rm /etc/systemd/system/ollama.service.d/amd-gpu.conf
-systemctl daemon-reload
-systemctl restart ollama
+# Run a query in another terminal and watch for errors
+# Look for: "initial_count=0" (bad) vs "offloaded 29/29 layers" (good)
 ```
 
 ### 4.5.5 Performance Expectations
 
-| Model | Size | CPU (Ryzen AI 9 HX 370) | GPU (Radeon 890M) |
-|-------|------|-------------------------|-------------------|
-| Llama 3.2 1B | 1.3GB | ~15 tok/s | ~40-60 tok/s* |
-| Llama 3.2 3B | 3.2GB | ~8 tok/s | ~25-35 tok/s* |
-| Llama 3.1 8B | 8.5GB | ~3 tok/s | ~12-18 tok/s* |
+| Model | Size | CPU (Ryzen AI 9 HX 370) | GPU (Radeon 890M Vulkan) |
+|-------|------|-------------------------|--------------------------|
+| Llama 3.2 3B | 3.2GB | ~40-50 seconds | ~7-10 seconds |
+| Llama 3.1 8B | 8.5GB | ~120+ seconds | ~15-25 seconds |
 
-*GPU performance depends on ROCm driver quality and whether full HIP acceleration is available. Mesa-only may be 20-40% slower than native ROCm.
+GPU performance with Vulkan/Mesa RADV:
+- ✅ All model layers offloaded to GPU VRAM
+- ✅ GPU usage spikes to 70-98% during inference
+- ✅ VRAM usage: ~2.6 GB for Llama 3.2 3B
+- ⚠️ Integrated GPU shares system RAM (slower than discrete GPU)
+- ⚠️ Vulkan/Mesa slightly slower than native ROCm (ROCm not practical in LXC)
+
+**Why Vulkan instead of ROCm:**
+- ROCm repositories don't support Debian 13 (designed for Ubuntu)
+- ROCm primarily targets datacenter GPUs (MI series), limited consumer GPU support
+- Vulkan via Mesa RADV works out-of-the-box with Debian's built-in drivers
+- Lighter weight and more reliable in LXC environments
+- Performance difference is minimal (10-20%) for consumer GPUs
 
 ---
 

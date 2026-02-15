@@ -1,12 +1,14 @@
 #!/bin/bash
 #
-# setup-ollama-amd-gpu.sh — Configure Ollama with AMD GPU acceleration for OpenClaw LXC
+# setup-ollama-amd-gpu.sh — Configure Ollama with AMD GPU acceleration (Vulkan)
 #
 # This script:
-#   1. Fixes /dev/dri/renderD128 permissions (should be render group, not nogroup)
-#   2. Installs ROCm drivers and dependencies for AMD Radeon 890M (Strix)
-#   3. Configures Ollama to use AMD GPU via ROCm/HIP
+#   1. Ensures render/video groups have correct GIDs (110/44)
+#   2. Installs Vulkan drivers and Mesa for AMD Radeon 890M (Strix/RDNA 3.5)
+#   3. Configures Ollama systemd service for Vulkan GPU acceleration
 #   4. Tests GPU detection and availability
+#
+# Supports: AMD Radeon 890M (RDNA 3.5/Strix) via Mesa RADV Vulkan drivers
 #
 # Usage:
 #   Run this script inside the openclaw LXC container as root:
@@ -15,37 +17,37 @@
 #   Or from Proxmox host:
 #     pct exec <vmid> -- bash -c "$(cat setup-ollama-amd-gpu.sh)"
 #
+# Note: This script assumes GPU device passthrough is already configured
+#       in the LXC config (/etc/pve/lxc/<vmid>.conf)
+#
 
 set -e
 
-echo "=== Ollama AMD GPU Setup for Radeon 890M (Strix) ==="
+echo "=== Ollama AMD GPU Setup for Radeon 890M (Strix/RDNA 3.5) ==="
+echo ""
+echo "Strategy: Vulkan GPU acceleration via Mesa RADV drivers"
 echo ""
 
-# ── Step 1: Fix /dev/dri permissions ─────────────────────────────────────────
-echo "[1/5] Fixing /dev/dri device permissions..."
+# ── Step 1: Fix render/video groups ─────────────────────────────────────────
+echo "[1/5] Ensuring render and video groups have correct GIDs..."
 
-# Ensure render and video groups exist with correct GIDs (passed through from host)
-getent group video  >/dev/null 2>&1 || groupadd -g 44 video
+# Ensure video group exists with GID 44
+getent group video >/dev/null 2>&1 || groupadd -g 44 video
+
+# Ensure render group exists with GID 110 (NOT dynamic GID like 992)
 getent group render >/dev/null 2>&1 || groupadd -g 110 render
 
-# Fix renderD128 ownership (should be root:render, not nobody:nogroup)
-if [ -e /dev/dri/renderD128 ]; then
-    chown root:render /dev/dri/renderD128
-    chmod 660 /dev/dri/renderD128
-    echo "  ✓ Fixed /dev/dri/renderD128 → root:render (660)"
-else
-    echo "  ⚠ WARNING: /dev/dri/renderD128 not found — GPU passthrough may not be configured"
+# Force render group to GID 110 if it exists with wrong GID
+current_render_gid=$(getent group render | cut -d: -f3)
+if [ "$current_render_gid" != "110" ]; then
+    echo "  ⚠ Render group has wrong GID ($current_render_gid), fixing to 110..."
+    groupmod -g 110 render
+    echo "  ✓ Render group changed from GID $current_render_gid → 110"
+    echo "  ⚠ Container restart required for device ownership to update"
 fi
 
-# Fix card1 ownership
-if [ -e /dev/dri/card1 ]; then
-    chown root:video /dev/dri/card1
-    chmod 660 /dev/dri/card1
-    echo "  ✓ Fixed /dev/dri/card1 → root:video (660)"
-fi
-
-echo "  Current /dev/dri devices:"
-ls -la /dev/dri/
+echo "  Current groups:"
+getent group video render
 echo ""
 
 # ── Step 2: Add ollama user to GPU groups ───────────────────────────────────
@@ -61,120 +63,66 @@ else
 fi
 echo ""
 
-# ── Step 3: Install ROCm drivers ─────────────────────────────────────────────
-echo "[3/5] Installing ROCm drivers and dependencies..."
-echo "  Note: This may take several minutes..."
+# ── Step 3: Install Vulkan drivers ──────────────────────────────────────────
+echo "[3/5] Installing Vulkan drivers and Mesa for AMD GPU..."
+echo "  Note: This may take a minute..."
 
-# Remove any existing ROCm/AMDGPU packages to start clean
-apt-get remove -y --purge rocm-* amdgpu-* 2>/dev/null || true
-
-# Install build dependencies
 apt-get update -qq
+
+# Install Vulkan tools and Mesa RADV drivers
 DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
-    wget \
-    gnupg2 \
-    software-properties-common \
+    vulkan-tools \
+    mesa-vulkan-drivers \
     mesa-utils \
-    clinfo \
     vainfo \
     libva-dev \
-    libdrm-amdgpu1 \
-    libdrm-dev
+    libdrm-amdgpu1
 
-# For AMD Radeon 890M (RDNA 3.5/Strix), we need ROCm 6.1+ or Mesa 24.0+
-# Debian 13 (Trixie) includes Mesa 24.x which has good RDNA 3.5 support
-# We'll use Mesa/libdrm approach instead of full ROCm stack (lighter weight)
-
-echo "  Installing Mesa AMDGPU drivers..."
-DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
-    mesa-va-drivers \
-    mesa-vulkan-drivers \
-    libgl1-mesa-dri \
-    libegl1-mesa \
-    libgbm1 \
-    xserver-xorg-video-amdgpu
-
-# Install HIP runtime for Ollama GPU support
-# Note: Full ROCm is heavy; for LLM inference, we primarily need:
-#   - Proper Mesa drivers (installed above)
-#   - HIP runtime (if available)
-#   - Or rely on Ollama's CPU fallback with partial acceleration
-
-# Try to install ROCm HIP runtime from Debian repos
-DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
-    rocm-hip-runtime \
-    rocm-hip-libraries 2>/dev/null || {
-    echo "  Note: ROCm HIP not available in Debian repos"
-    echo "  Ollama will use Mesa/OpenCL for GPU acceleration"
-}
-
-echo "  ✓ AMD GPU drivers installed"
+echo "  ✓ Vulkan drivers installed"
 echo ""
 
-# ── Step 4: Configure Ollama environment ────────────────────────────────────
-echo "[4/5] Configuring Ollama for AMD GPU..."
+# ── Step 4: Configure Ollama for Vulkan GPU ─────────────────────────────────
+echo "[4/5] Configuring Ollama for Vulkan GPU acceleration..."
 
-# Create systemd override directory if it doesn't exist
+# Create systemd override directory
 mkdir -p /etc/systemd/system/ollama.service.d/
 
-# Create environment override for Ollama
+# Create Ollama GPU configuration
 cat > /etc/systemd/system/ollama.service.d/amd-gpu.conf <<'EOF'
 [Service]
-# AMD GPU configuration for ROCm/HIP
-Environment="ROCm_PATH=/opt/rocm"
-Environment="HIP_VISIBLE_DEVICES=0"
-Environment="HSA_OVERRIDE_GFX_VERSION=11.0.0"
-Environment="OLLAMA_GPU_DEVICE=/dev/dri/renderD128"
-
-# For AMD Radeon 890M (gfx1103), we may need to override the architecture
-# Common values: gfx1100 (RDNA 3), gfx1103 (RDNA 3.5/Strix)
+# AMD GPU configuration for Radeon 890M (RDNA 3.5/Strix)
 Environment="HSA_OVERRIDE_GFX_VERSION=11.0.3"
-
-# Increase log verbosity for debugging
 Environment="OLLAMA_DEBUG=1"
+Environment="OLLAMA_VULKAN=1"
 
-# Ensure ollama can access GPU devices
+# Run as ollama user with GPU group access
+User=ollama
 SupplementaryGroups=video render
+
+# Ensure GPU devices are accessible
+DeviceAllow=/dev/dri/card1 rw
+DeviceAllow=/dev/dri/renderD128 rw
 EOF
 
-# Reload systemd and restart Ollama
+# Reload and restart Ollama
 systemctl daemon-reload
 systemctl restart ollama
 
-echo "  ✓ Ollama configured for AMD GPU (HSA_OVERRIDE_GFX_VERSION=11.0.3)"
+echo "  ✓ Ollama configured for Vulkan GPU (HSA_OVERRIDE_GFX_VERSION=11.0.3)"
 echo "  ✓ Ollama service restarted"
 echo ""
 
 # ── Step 5: Test GPU detection ──────────────────────────────────────────────
 echo "[5/5] Testing GPU detection..."
 
-# Check if GPU is visible to the system
-echo "  Checking GPU with lspci:"
-lspci 2>/dev/null | grep -i vga || echo "  Note: lspci not showing VGA (expected in LXC)"
-lspci 2>/dev/null | grep -i amd || echo "  Note: No AMD devices in lspci (expected in LXC)"
+# Check GPU device permissions
+echo "  /dev/dri devices:"
+ls -la /dev/dri/ 2>/dev/null || echo "  ⚠ /dev/dri not found"
 echo ""
 
-# Check GPU with lshw
-echo "  Checking display controller:"
-lshw -C display 2>/dev/null | grep -E "(product|vendor|bus info|logical name)" || echo "  Note: lshw display info not available"
-echo ""
-
-# Test DRM/Mesa
-echo "  Testing DRM device access:"
-if [ -e /dev/dri/renderD128 ]; then
-    test -r /dev/dri/renderD128 && echo "  ✓ renderD128 is readable" || echo "  ✗ renderD128 is NOT readable"
-    test -w /dev/dri/renderD128 && echo "  ✓ renderD128 is writable" || echo "  ✗ renderD128 is NOT writable"
-fi
-echo ""
-
-# Test VA-API (video acceleration)
-echo "  Testing VA-API:"
-vainfo --display drm --device /dev/dri/renderD128 2>&1 | head -10 || echo "  Note: VA-API test skipped (not critical for LLMs)"
-echo ""
-
-# Test clinfo (OpenCL)
-echo "  Testing OpenCL:"
-clinfo 2>&1 | head -20 || echo "  Note: OpenCL not available (ROCm may be needed)"
+# Check Vulkan devices as ollama user
+echo "  Vulkan devices (as ollama user):"
+su - ollama -s /bin/bash -c "vulkaninfo 2>&1 | grep -i 'deviceName\|driverInfo' | head -10" || echo "  ⚠ Vulkan check failed"
 echo ""
 
 # Check Ollama status
@@ -182,20 +130,29 @@ echo "  Ollama service status:"
 systemctl status ollama --no-pager | head -15
 echo ""
 
+# Wait for Ollama to be ready
+sleep 3
+
 echo "=== Setup Complete ==="
+echo ""
+echo "Expected GPU detection in logs:"
+echo "  • deviceName: AMD Radeon Graphics (RADV GFX1150)"
+echo "  • offloaded 29/29 layers to GPU"
+echo "  • Vulkan0 model buffer size = ~1900 MiB"
 echo ""
 echo "Next steps:"
 echo "  1. Pull a model:    ollama pull llama3.2"
 echo "  2. Run a model:     ollama run llama3.2"
-echo "  3. Check GPU usage: watch -n1 'grep -r . /sys/class/drm/card1/device/gpu_busy_percent 2>/dev/null || echo N/A'"
+echo "  3. Check GPU logs:  journalctl -u ollama -n 50 | grep -i 'vulkan\|gpu'"
+echo "  4. Monitor GPU:     watch -n 0.5 'cat /sys/class/drm/card1/device/gpu_busy_percent'"
+echo ""
+echo "Performance expectations:"
+echo "  • Llama 3.2 3B: ~7-10 seconds for 100-word response"
+echo "  • GPU usage should spike to 70-98% during inference"
+echo "  • Cold start (first run) is slower due to model loading"
 echo ""
 echo "Troubleshooting:"
-echo "  • Check Ollama logs:    journalctl -u ollama -f"
-echo "  • Verify GPU in Ollama: curl http://localhost:11434/api/tags (should show loaded models)"
-echo "  • Test inference:       time ollama run llama3.2 'explain quantum physics in 10 words'"
-echo ""
-echo "If GPU is not detected:"
-echo "  • Verify /dev/dri/renderD128 permissions: ls -la /dev/dri/"
-echo "  • Check HSA_OVERRIDE_GFX_VERSION matches your GPU (gfx1103 for Radeon 890M)"
-echo "  • Try: HSA_OVERRIDE_GFX_VERSION=11.0.0 or 11.0.1 if 11.0.3 doesn't work"
+echo "  • If render group was changed, restart LXC: pct restart <vmid>"
+echo "  • Check logs: journalctl -u ollama -f"
+echo "  • Verify GPU: su - ollama -s /bin/bash -c 'vulkaninfo | grep deviceName'"
 echo ""

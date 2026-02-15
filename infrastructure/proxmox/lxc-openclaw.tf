@@ -202,15 +202,23 @@ resource "null_resource" "provision_openclaw" {
       # ── OS baseline ───────────────────────────────────────────────────────
       "apt-get update -qq",
       "DEBIAN_FRONTEND=noninteractive apt-get upgrade -y -qq",
-      # Node.js LTS via NodeSource + pnpm + VA-API tools for GPU inference
+      # Node.js LTS via NodeSource + pnpm + Vulkan/VA-API tools for GPU inference
       "curl -fsSL https://deb.nodesource.com/setup_lts.x | bash -",
-      "DEBIAN_FRONTEND=noninteractive apt-get install -y -qq nodejs git curl ca-certificates build-essential vainfo libva-dev",
+      "DEBIAN_FRONTEND=noninteractive apt-get install -y -qq nodejs git curl ca-certificates build-essential vainfo libva-dev vulkan-tools mesa-vulkan-drivers",
       "npm install -g pnpm",
 
       # ── GPU groups ────────────────────────────────────────────────────────
       # idmap passes gid 44 (video) and 110 (render) through 1:1.
       "getent group video  >/dev/null 2>&1 || groupadd -g ${var.video_gid} video",
       "getent group render >/dev/null 2>&1 || groupadd -g ${var.render_gid} render",
+      # Force render group to correct GID if it exists with wrong GID
+      "groupmod -g ${var.render_gid} render 2>/dev/null || true",
+
+      # ── Configure Ollama for AMD GPU (Vulkan) ────────────────────────────
+      "mkdir -p /etc/systemd/system/ollama.service.d/",
+      "cat > /etc/systemd/system/ollama.service.d/amd-gpu.conf <<'OLLAMA_EOF'\n[Service]\n# AMD GPU configuration for Radeon 890M (RDNA 3.5/Strix)\nEnvironment=\"HSA_OVERRIDE_GFX_VERSION=11.0.3\"\nEnvironment=\"OLLAMA_DEBUG=1\"\nEnvironment=\"OLLAMA_VULKAN=1\"\n\n# Run as ollama user with GPU group access\nUser=ollama\nSupplementaryGroups=video render\n\n# Ensure GPU devices are accessible\nDeviceAllow=/dev/dri/card${var.gpu_card_index} rw\nDeviceAllow=/dev/dri/renderD${var.gpu_render_index} rw\nOLLAMA_EOF",
+      "systemctl daemon-reload",
+      "systemctl restart ollama 2>/dev/null || echo 'NOTE: Ollama not installed yet'",
 
       # ── Smoke tests ───────────────────────────────────────────────────────
       "ls -la /dev/dri/ 2>/dev/null || echo 'NOTE: /dev/dri not present — check GPU passthrough'",
