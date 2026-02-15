@@ -518,6 +518,42 @@ GPU performance with Vulkan/Mesa RADV:
 - Lighter weight and more reliable in LXC environments
 - Performance difference is minimal (10-20%) for consumer GPUs
 
+### 4.5.6 Recommended Models for AMD Radeon 890M
+
+The AMD Radeon 890M has ~2.6-4GB effective VRAM capacity (shared with system RAM). These models are tested and perform well:
+
+**Best for Coding Tasks:**
+```bash
+# Qwen2.5-Coder 3B (RECOMMENDED - excellent balance)
+ollama pull qwen2.5-coder:3b
+
+# Test it:
+ollama run qwen2.5-coder:3b "Write a Python function to reverse a linked list"
+```
+
+**Other Recommended Models:**
+```bash
+# General purpose - fast
+ollama pull llama3.2:3b          # Multi-purpose, fast
+ollama pull qwen2.5-coder:1.5b   # Coding, even faster
+
+# Larger models (requires 8-16GB LXC RAM)
+ollama pull llama3.1:8b          # Better quality, slower
+ollama pull qwen2.5-coder:7b     # Advanced coding, slower
+```
+
+**Model Size Guidelines:**
+
+| Model | VRAM | Full GPU Offload | LXC RAM | Performance |
+|-------|------|------------------|---------|-------------|
+| qwen2.5-coder:1.5b | ~1.5GB | ✅ Yes | 4GB OK | ⚡⚡⚡ Excellent |
+| **qwen2.5-coder:3b** | **~2.5GB** | **✅ Yes** | **4GB OK** | **⚡⚡ Great** |
+| llama3.2:3b | ~2.6GB | ✅ Yes | 4GB OK | ⚡⚡ Great |
+| qwen2.5-coder:7b | ~4-5GB | ⚠️ Partial | 8-16GB | ⚡ Good |
+| llama3.1:8b | ~5-6GB | ⚠️ Partial | 8-16GB | ⚡ Good |
+
+**Note:** Models >4GB will partially offload to GPU and use system RAM for overflow, which is slower but still functional.
+
 ---
 
 ## Phase 5: Post-Migration Cleanup & Validation
