@@ -571,7 +571,21 @@ ssh root@172.16.1.159 "ls -la /root/.ssh && git -C /mnt/fast/stacks status"
 
 ### 4.7 Create Traefik Docker network (prerequisite for stacks)
 
-The `t3_proxy` network is defined in `traefik/compose.yaml` but all other stacks declare it as `external: true`, so it must exist before other stacks start:
+The `t3_proxy` network is defined in `traefik/compose.yaml` but all other stacks declare it as `external: true`, so it must exist before other stacks start.
+
+The `iot_macvlan` network is created automatically by Terraform during LXC provisioning. If you need to recreate it manually:
+
+```bash
+# iot_macvlan - Direct LAN IPs for jellyfin (172.16.1.76) and dispatcharr (172.16.1.77)
+docker network create -d macvlan \
+  --subnet=172.16.1.0/24 \
+  --gateway=172.16.1.1 \
+  --ip-range=172.16.1.64/26 \
+  -o parent=eth0 \
+  iot_macvlan
+```
+
+Then start the traefik stack:
 
 ```bash
 # Start traefik stack first — it creates t3_proxy and socket_proxy
@@ -579,7 +593,15 @@ cd /mnt/fast/stacks/traefik
 docker compose up -d
 ```
 
-Verify: `docker network ls | grep -E 't3_proxy|socket_proxy'`
+Verify: `docker network ls | grep -E 't3_proxy|socket_proxy|iot_macvlan'`
+
+**Note on GitHub SSH access**: Terraform adds `github.com` to known_hosts, but you must manually copy your SSH private key to `/root/.ssh/` inside the LXC for git operations:
+
+```bash
+# From your dev machine
+scp ~/.ssh/id_ed25519* root@172.16.1.159:/root/.ssh/
+ssh root@172.16.1.159 'chmod 600 /root/.ssh/id_ed25519'
+```
 
 ---
 

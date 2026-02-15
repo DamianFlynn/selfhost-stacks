@@ -451,10 +451,21 @@ resource "null_resource" "provision_lxc" {
       # ── Enable Docker ─────────────────────────────────────────────────────
       "systemctl enable --now docker",
 
+      # ── Docker macvlan network for direct LAN IPs ─────────────────────────
+      # Required by jellyfin.yaml and dispatcharr.yaml for fixed IPs on the LAN.
+      # Subnet: 172.16.1.0/24, IP pool: 172.16.1.64-127 (172.16.1.64/26).
+      # Parent interface: eth0 (LXC's network interface on vmbr0).
+      "docker network create -d macvlan --subnet=172.16.1.0/24 --gateway=172.16.1.1 --ip-range=172.16.1.64/26 -o parent=eth0 iot_macvlan 2>/dev/null || echo 'iot_macvlan network already exists'",
+
       # ── Git safe directory ────────────────────────────────────────────────
       # The stacks repo is bind-mounted from the host; git refuses to operate
       # in directories owned by a different user without this setting.
       "git config --global --add safe.directory /mnt/fast/stacks",
+
+      # ── GitHub SSH key ────────────────────────────────────────────────────
+      # Add github.com to known_hosts for git operations over SSH.
+      "mkdir -p ~/.ssh && chmod 700 ~/.ssh",
+      "ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null || true",
 
       # ── Smoke tests ──────────────────────────────────────────────────────
       "docker info | grep -E 'Storage Driver|Cgroup'",

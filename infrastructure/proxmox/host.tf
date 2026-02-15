@@ -80,6 +80,8 @@ resource "null_resource" "host_setup" {
       "getent group render | grep -q ':${var.render_gid}:' || groupmod -g ${var.render_gid} render",
       # Re-trigger udev so /dev/dri/renderD128 picks up the corrected GID immediately.
       "udevadm trigger /dev/dri/ 2>/dev/null || true",
+      # Force correct group ownership — udev rules may not apply immediately on first boot.
+      "chgrp render /dev/dri/renderD* 2>/dev/null || true",
 
       # ── /etc/subuid — UID passthrough for unprivileged LXC idmap ─────────
       # root needs delegation rights for: apps uid (568) + standard range (100000+).
