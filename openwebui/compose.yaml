@@ -90,7 +90,6 @@ services:
       - "44"
       - "110"
     devices:
-      - /dev/kfd:/dev/kfd
       - /dev/dri:/dev/dri
     restart: unless-stopped
     networks:
