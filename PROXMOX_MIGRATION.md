@@ -357,6 +357,147 @@ docker logs immich-machine-learning | grep -i "gpu\|cuda\|device"
 
 ---
 
+## Phase 4.5: Configure OpenClaw LXC with Ollama + AMD GPU
+
+The `openclaw` LXC (172.16.1.160) is designed for AI workloads with GPU acceleration. After Terraform provisioning, you need to:
+1. Install and configure Ollama with AMD GPU support
+2. Fix GPU device permissions (idmap quirks)
+3. Test GPU-accelerated inference
+
+### 4.5.1 Run the Ollama Setup Script
+
+The automated script handles driver installation, GPU configuration, and Ollama setup:
+
+```bash
+# From Proxmox host
+pct exec <openclaw_vmid> -- bash -c "$(cat /mnt/fast/stacks/scripts/setup-ollama-amd-gpu.sh)"
+
+# Or copy and run inside the LXC
+ssh root@172.16.1.160
+cd /root
+curl -fsSL https://raw.githubusercontent.com/damianflynn/selfhost-stacks/main/scripts/setup-ollama-amd-gpu.sh -o setup-ollama-amd-gpu.sh
+bash setup-ollama-amd-gpu.sh
+```
+
+The script will:
+- ✅ Fix `/dev/dri/renderD128` and `card1` permissions (root:render, root:video)
+- ✅ Install Mesa AMDGPU drivers + ROCm HIP runtime (if available)
+- ✅ Configure Ollama systemd service with AMD GPU environment variables
+- ✅ Set `HSA_OVERRIDE_GFX_VERSION=11.0.3` (for Radeon 890M / RDNA 3.5)
+- ✅ Test GPU detection with vainfo, clinfo, and DRM access
+
+### 4.5.2 Install and Test Ollama
+
+After the setup script completes:
+
+```bash
+ssh root@172.16.1.160
+
+# Verify Ollama is running
+systemctl status ollama
+
+# Pull a model (e.g., Llama 3.2 1B)
+ollama pull llama3.2
+
+# Run a test query
+time ollama run llama3.2 "Explain quantum entanglement in 20 words"
+
+# Monitor GPU usage during inference
+watch -n1 'grep -r . /sys/class/drm/card1/device/gpu_busy_percent 2>/dev/null || echo "N/A"'
+```
+
+### 4.5.3 Verify GPU Acceleration
+
+Check if Ollama detected the AMD GPU:
+
+```bash
+# View Ollama logs for GPU detection
+journalctl -u ollama -n 50 --no-pager | grep -i "gpu\|amd\|rocm\|hip"
+
+# Expected output (successful GPU detection):
+#   level=INFO msg="GPU detected: AMD Radeon 890M"
+#   level=INFO msg="Using ROCm/HIP for AMD GPU acceleration"
+
+# Test DRM device access
+ls -la /dev/dri/
+# Expected:
+#   crw-rw---- 1 root video  226,   1 card1
+#   crw-rw---- 1 root render 226, 128 renderD128
+
+# Verify ollama user is in video and render groups
+id ollama
+# Expected: groups=... video(44) ... render(110)
+```
+
+### 4.5.4 Troubleshooting GPU Issues
+
+If GPU is **not** detected by Ollama:
+
+**1. Check device permissions:**
+```bash
+# Fix renderD128 ownership (common issue with LXC idmap)
+chown root:render /dev/dri/renderD128
+chmod 660 /dev/dri/renderD128
+
+# Restart Ollama
+systemctl restart ollama
+```
+
+**2. Verify GPU architecture override:**
+
+For AMD Radeon 890M (Strix/RDNA 3.5), try different `HSA_OVERRIDE_GFX_VERSION` values:
+
+```bash
+# Edit systemd override
+nano /etc/systemd/system/ollama.service.d/amd-gpu.conf
+
+# Try these values (one at a time):
+# HSA_OVERRIDE_GFX_VERSION=11.0.3  ← Default (gfx1103)
+# HSA_OVERRIDE_GFX_VERSION=11.0.0  ← Generic RDNA 3
+# HSA_OVERRIDE_GFX_VERSION=11.0.1  ← Alternative
+
+systemctl daemon-reload
+systemctl restart ollama
+```
+
+**3. Test Mesa/VA-API acceleration:**
+```bash
+vainfo --display drm --device /dev/dri/renderD128
+# Should show VAProfile lists for H264, HEVC, AV1
+```
+
+**4. Check for ROCm/HIP runtime:**
+```bash
+# If ROCm is installed
+rocminfo 2>/dev/null | grep -i "name\|gfx"
+
+# Check clinfo (OpenCL)
+clinfo | head -30
+```
+
+**5. Fallback: CPU-only mode**
+
+If GPU acceleration fails, Ollama will fall back to CPU inference (slower but functional). You can force CPU mode:
+
+```bash
+# Remove GPU environment variables
+rm /etc/systemd/system/ollama.service.d/amd-gpu.conf
+systemctl daemon-reload
+systemctl restart ollama
+```
+
+### 4.5.5 Performance Expectations
+
+| Model | Size | CPU (Ryzen AI 9 HX 370) | GPU (Radeon 890M) |
+|-------|------|-------------------------|-------------------|
+| Llama 3.2 1B | 1.3GB | ~15 tok/s | ~40-60 tok/s* |
+| Llama 3.2 3B | 3.2GB | ~8 tok/s | ~25-35 tok/s* |
+| Llama 3.1 8B | 8.5GB | ~3 tok/s | ~12-18 tok/s* |
+
+*GPU performance depends on ROCm driver quality and whether full HIP acceleration is available. Mesa-only may be 20-40% slower than native ROCm.
+
+---
+
 ## Phase 5: Post-Migration Cleanup & Validation
 
 ### 5.1 Verify ACME Certificates

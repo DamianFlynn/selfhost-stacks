@@ -32,6 +32,12 @@ locals {
   oc_g_r3_count = var.render_gid - var.video_gid - 1 # 58
   oc_g_r5_host  = 100000 + var.render_gid + 1        # 100104
   oc_g_r5_count = 65536 - var.render_gid - 1         # 65432
+
+  # GPU device mappings (shared with lxc-selfhost.tf)
+  gpu_card         = "card${var.gpu_card_index}"
+  gpu_render       = "renderD${var.gpu_render_index}"
+  gpu_card_minor   = var.gpu_card_index
+  gpu_render_minor = var.gpu_render_index
 }
 
 # ── Phase 1: OpenClaw LXC (started=false) ───────────────────────────────────
