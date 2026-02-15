@@ -240,6 +240,25 @@ lxc_ip = "172.16.1.159"
 lxc_ssh = "ssh root@172.16.1.159"
 ```
 
+> **⚠️ Important: Reprovisioning After Failed Runs**
+> 
+> Terraform `null_resource` provisioners only run when the resource is **created**, not on subsequent applies.
+> If the initial `terraform apply` fails partway through (network timeout, SSH issues, etc.), you must
+> explicitly force terraform to re-run the provisioners:
+> 
+> ```bash
+> terraform apply \
+>   -replace=null_resource.patch_lxc_config \
+>   -replace=null_resource.start_lxc \
+>   -replace=null_resource.provision_lxc \
+>   -replace=null_resource.copy_ssh_keys
+> ```
+> 
+> This recreates the entire dependency chain: patch LXC config → start LXC → provision Docker/users → copy SSH keys.
+> 
+> **After first successful apply**, if you only need to re-run specific steps (e.g., SSH keys changed),
+> you can replace just that resource: `terraform apply -replace=null_resource.copy_ssh_keys`
+
 ### 3.4 Verify Deployment
 
 ```bash
@@ -249,6 +268,7 @@ ssh root@172.16.1.159
 # Inside LXC, verify:
 docker info | grep -E 'Storage Driver|Cgroup'   # Should show: overlay2, systemd, v2
 ls -la /dev/dri/                                 # Should show: card1, renderD128
+getent group render video                        # render:x:110  video:x:44
 id apps                                          # uid=568, groups: 568(apps),44(video),110(render),991(docker)
 docker network ls | grep iot_macvlan             # Should exist
 ls /mnt/fast/stacks                              # Should show git repo
@@ -258,6 +278,19 @@ git -C /mnt/fast/stacks status                   # Should work (SSH keys deploye
 docker run --rm --device /dev/dri/card1 --device /dev/dri/renderD128 --group-add video --group-add render \
   debian:13 ls -la /dev/dri/
 ```
+
+> **⚠️ Critical: Render Group GID Check**
+> 
+> Ubuntu 24.04 creates the `render` group with a **dynamic GID** (typically 992) instead of the expected
+> static GID 110. If `getent group render` shows the wrong GID, the GPU devices will appear as `nobody:110`
+> and hardware acceleration will fail.
+> 
+> **Fix immediately if needed:**
+> ```bash
+> ssh root@172.16.1.159 'groupmod -g 110 render && usermod -aG render apps'
+> ```
+> 
+> After fixing, verify: `ls -la /dev/dri/` should show `renderD128` owned by `nobody:render` (not `nobody:110`).
 
 ---
 
@@ -507,6 +540,82 @@ zfs list -r -H -o name fast/appdata fast/home | while read ds; do
     echo "lxc.mount.entry: $mp ${mp#/} none bind,create=dir 0 0" >> /etc/pve/lxc/100.conf
 done
 pct start 100
+```
+
+### Issue: Terraform Provisioners Didn't Run / LXC Not Configured
+
+**Symptom:** After `terraform apply`, LXC exists but:
+- `/dev/dri/` doesn't exist inside LXC
+- Docker is not installed
+- `apps` user doesn't exist
+- Networks not created
+
+**Cause:** Terraform `null_resource` provisioners only run when the resource is **created**. If you ran
+`terraform apply` after the LXC already existed (from a previous run), terraform sees the resources in
+state and skips the provisioners.
+
+**Fix:**
+
+Force terraform to recreate the provisioner resources (this does NOT destroy the LXC itself):
+
+```bash
+cd infrastructure/proxmox
+terraform apply \
+  -replace=null_resource.patch_lxc_config \
+  -replace=null_resource.start_lxc \
+  -replace=null_resource.provision_lxc \
+  -replace=null_resource.copy_ssh_keys
+```
+
+This re-runs the entire dependency chain:
+1. **patch_lxc_config** — Adds GPU devices and idmap to `/etc/pve/lxc/100.conf`
+2. **start_lxc** — Starts the LXC and enables SSH password auth
+3. **provision_lxc** — Installs Docker, creates users/groups, configures networks
+4. **copy_ssh_keys** — Deploys SSH keys from Proxmox host to LXC
+
+**Important:** After the first successful deployment, if you need to modify terraform code or re-run
+provisioners, you must use `-replace` for the specific resources you want to recreate. Plain `terraform apply`
+will do nothing because terraform considers them already complete.
+
+### Issue: Render Group Has Wrong GID Inside LXC
+
+**Symptom:** 
+- `ls -la /dev/dri/` shows `renderD128` as `nobody:110` (not `nobody:render`)
+- `getent group render` shows `render:x:992` (or other number != 110)
+- Jellyfin/Immich logs show "Permission denied" accessing `/dev/dri/renderD128`
+
+**Cause:** Ubuntu 24.04 creates the `render` group with a dynamic GID (typically 992) on first boot,
+but the LXC idmap is configured to pass through host GID 110. The mismatch means the device appears
+ownership belongs to a GID that has no matching group name.
+
+**Fix:**
+
+```bash
+# Inside LXC
+ssh root@172.16.1.159 'groupmod -g 110 render'
+
+# Verify the fix
+ssh root@172.16.1.159 'getent group render && ls -la /dev/dri/'
+# Should show: render:x:110  and  renderD128 owned by nobody:render
+
+# Add apps user to render group (if not already)
+ssh root@172.16.1.159 'usermod -aG render apps && id apps'
+```
+
+**Why this happens:** The terraform provisioner creates groups in this order:
+```bash
+groupadd -g 44 video
+groupadd -g 110 render    # ← Should work, but sometimes Ubuntu creates it during boot first
+groupadd -g 568 apps
+```
+
+If the LXC template already has a `render` group (with dynamic GID), `groupadd` silently fails and
+the group keeps its original GID. The `groupmod` command forces the GID to change.
+
+**Permanent fix:** This issue should be rare after the first successful build. If it happens repeatedly,
+add this to the terraform provisioner in `lxc-selfhost.tf` (after the `groupadd` commands):
+```bash
+groupmod -g 110 render || true
 ```
 
 ### Issue: Terraform `HTTP 500 hostname lookup failed`
