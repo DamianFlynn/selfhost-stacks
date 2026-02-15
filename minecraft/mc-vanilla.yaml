@@ -21,30 +21,6 @@
 #
 
 services:
-  # --- Tailscale sidecar for VANILLA ---
-  tailscale-vanilla:
-    # renovate: datasource=docker depName=ghcr.io/tailscale/tailscale
-    image: ghcr.io/tailscale/tailscale:v1.94.1
-    container_name: mc_vanilla_ts
-    restart: unless-stopped
-    cap_add: [NET_ADMIN, SYS_MODULE, NET_RAW]
-    devices:
-      - /dev/net/tun:/dev/net/tun
-    volumes:
-      - /mnt/fast/appdata/minecraft/bedrock/tailnet:/state
-    environment:
-      TS_STATE_DIR: /state
-      TS_HOSTNAME: mc-vanilla            # how it appears on your tailnet
-      TS_AUTHKEY: ${TS_AUTHKEY_VANILLA}
-      TS_AUTH_ONCE: "true"               # use key once; persists via /state
-      TS_USERSPACE: "false"
-      TS_EXTRA_ARGS: "--advertise-tags=tag:games"
-    healthcheck:
-      test: ["CMD-SHELL", "tailscale status >/dev/null 2>&1"]
-      interval: 5s
-      timeout: 5s
-      retries: 60
-
   minecraft-vanilla:
     # renovate: datasource=docker depName=itzg/minecraft-bedrock-server
     image: itzg/minecraft-bedrock-server:2025.12.2
@@ -52,20 +28,25 @@ services:
     restart: unless-stopped
     tty: true
     stdin_open: true
-    network_mode: "service:tailscale-vanilla"   # shares the Tailscale IP
-    depends_on:
-      tailscale-vanilla:
-        condition: service_healthy
+    ports:
+      - "19132:19132/udp"  # Bedrock main port
+      - "19133:19133/udp"  # Bedrock IPv6 port
     environment:
       EULA: "true"
       GAMEMODE: "creative"
-      SERVER_NAME: "vanilla"                     # (fix typo)
-      SERVER_PORT: 19132                         # default Bedrock port
+      SERVER_NAME: "vanilla"
+      SERVER_PORT: 19132
       SERVER_PORT_V6: 19133
       ALLOW_CHEATS: "true"
       DEFAULT_PLAYER_PERMISSION_LEVEL: "operator"
     volumes:
       - /mnt/fast/appdata/minecraft/bedrock:/data
+    labels:
+      # Expose to Tailscale via tsbridge (no sidecar needed!)
+      - tsbridge.enabled=true
+      - tsbridge.hostname=mc-vanilla
+      - tsbridge.backend=mc_vanilla:19132
+      - tsbridge.tags=tag:games
 
 
 

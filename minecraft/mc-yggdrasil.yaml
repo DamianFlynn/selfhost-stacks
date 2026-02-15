@@ -21,31 +21,6 @@
 #
 
 services:
-
-  # --- Tailscale sidecar for VANILLA ---
-  tailscale-ygg:
-    # renovate: datasource=docker depName=ghcr.io/tailscale/tailscale
-    image: ghcr.io/tailscale/tailscale:v1.94.1
-    container_name: mc_yggdrasil_ts
-    restart: unless-stopped
-    cap_add: [NET_ADMIN, SYS_MODULE, NET_RAW]
-    devices:
-      - /dev/net/tun:/dev/net/tun
-    volumes:
-      - /mnt/fast/appdata/minecraft/yggdrasil/tailnet:/state
-    environment:
-      TS_STATE_DIR: /state
-      TS_HOSTNAME: mc-ygg
-      TS_AUTHKEY: ${TS_AUTHKEY_YGG}
-      TS_AUTH_ONCE: "true"
-      TS_USERSPACE: "false"
-      TS_EXTRA_ARGS: "--advertise-tags=tag:games"
-    healthcheck:
-      test: ["CMD-SHELL", "tailscale status >/dev/null 2>&1"]
-      interval: 5s
-      timeout: 5s
-      retries: 60
-
   minecraft-yggdrasil:
     # renovate: datasource=docker depName=itzg/minecraft-bedrock-server
     image: itzg/minecraft-bedrock-server:2025.12.2
@@ -53,22 +28,27 @@ services:
     restart: unless-stopped
     tty: true
     stdin_open: true
-    network_mode: "service:tailscale-ygg"
-    depends_on:
-      tailscale-ygg:
-        condition: service_healthy
+    ports:
+      - "19142:19132/udp"  # Different host port to avoid conflict with vanilla
+      - "19143:19133/udp"
     environment:
       EULA: "true"
       SERVER_NAME: "yggdrasil"
-      SERVER_PORT: 19132                         # also default (different TS IP)
+      SERVER_PORT: 19132
       SERVER_PORT_V6: 19133
       ALLOW_CHEATS: "true"
       DEFAULT_PLAYER_PERMISSION_LEVEL: "operator"
       LEVEL_NAME: "Yggdrasil"
-      LEVEL_TYPE: "DEFAULT"                      # or FLAT, LEGACY
-      DIFFICULTY: "peaceful"                      # peaceful, easy, normal, hard
+      LEVEL_TYPE: "DEFAULT"
+      DIFFICULTY: "peaceful"
     volumes:
       - /mnt/fast/appdata/minecraft/yggdrasil:/data
+    labels:
+      # Expose to Tailscale via tsbridge (no sidecar needed!)
+      - tsbridge.enabled=true
+      - tsbridge.hostname=mc-ygg
+      - tsbridge.backend=mc_yggdrasil:19132
+      - tsbridge.tags=tag:games
 
 
 

@@ -92,7 +92,7 @@ services:
       - default
       - t3_proxy
     ports:
-      - 127.0.0.1:3001:3001
+      - 127.0.0.1:3003:3001
     labels:
       - traefik.enable=true
       - traefik.http.routers.karakeep-mcp.rule=Host(`karakeep-mcp.${DOMAINNAME}`)
