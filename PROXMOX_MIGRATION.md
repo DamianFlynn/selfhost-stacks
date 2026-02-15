@@ -324,11 +324,29 @@ docker compose -f media/compose.yaml up -d
 # 4. Photo library
 docker compose -f immich/compose.yaml up -d
 
-# 5. All other stacks
-for stack in automation code-server dawarich freshrss homarr karakeep keeper-sh minecraft openwebui podsync postiz teleport termix; do
+# 5. AI workloads (OpenWebUI + Ollama with Vulkan GPU)
+docker compose -f openwebui/compose.yaml up -d
+
+# 6. All other stacks
+for stack in automation code-server dawarich freshrss homarr karakeep keeper-sh minecraft podsync postiz teleport termix; do
   docker compose -f $stack/compose.yaml up -d
 done
 ```
+
+### 4.3 Deployed Container Versions (Verified with GPU)
+
+| Container | Version | GPU API | Status |
+|-----------|---------|---------|--------|
+| jellyfin | latest | VA-API | ✅ Hardware transcoding verified |
+| dispatcharr | v0.19.0 | VA-API | ✅ Live TV transcoding verified |
+| immich-server | v2.5.6 | VA-API | ✅ Video transcoding configured |
+| immich-machine-learning | v2.5.6 | CPU-only | ✅ Face recognition (CPU mode) |
+| ai-ollama | 0.15.6 | Vulkan | ✅ LLM GPU offloading verified |
+
+**Key Updates:**
+- **Dispatcharr v0.19.0**: 50% reduction in XtreamCodes API calls, system notifications, auto-update checking
+- **Immich v2.5.6**: Fixed thumbnail generation bug, iOS performance, Android free-up space
+- **Ollama Vulkan**: Switched from ROCm (requires /dev/kfd) to Vulkan (works in unprivileged LXC)
 
 ```bash
 # Check containers are healthy
@@ -337,8 +355,20 @@ docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | sort
 
 ### 4.4 Verify GPU Hardware Acceleration
 
+All media and AI containers require `group_add: ["44", "110"]` for GPU access in unprivileged LXC:
+- `44` = video group (for /dev/dri/card1)
+- `110` = render group (for /dev/dri/renderD128)
+
+**Critical**: Use numeric GIDs, not group names. Docker resolves names *inside* the container where GIDs may differ.
+
+#### 4.4.1 Test Jellyfin (VA-API Hardware Transcoding)
+
 ```bash
-# Test Jellyfin GPU access
+# Verify GPU device access
+docker exec jellyfin ls -la /dev/dri/
+docker exec jellyfin id  # Should show: groups=44(video),110
+
+# Test VA-API
 docker exec jellyfin vainfo --display drm --device /dev/dri/renderD128
 
 # Expected output (AMD Radeon 890M):
@@ -350,10 +380,59 @@ docker exec jellyfin vainfo --display drm --device /dev/dri/renderD128
 # VAProfileVP9Profile0: Decode
 # VAProfileVP9Profile2: Decode
 # VAProfileAV1Profile0: Decode, Encode
-
-# Test Immich ML (if using GPU)
-docker logs immich-machine-learning | grep -i "gpu\|cuda\|device"
 ```
+
+#### 4.4.2 Test Dispatcharr (VA-API Live TV Transcoding)
+
+```bash
+# Verify GPU access
+docker exec dispatcharr id  # Should show: groups=44(video),110
+docker logs dispatcharr | grep -i "VAAPI\|GPU"
+
+# Expected output:
+# VAAPI: AVAILABLE
+# GPU: Advanced Micro Devices, Inc. [AMD/ATI] (RADV GFX1150)
+# Driver: radeonsi (recommended for AMD GPUs)
+```
+
+#### 4.4.3 Test Immich (VA-API Video Transcoding)
+
+```bash
+# Verify GPU access
+docker exec immich_server id  # Should show: groups=44(video),110
+docker exec immich_server ls -la /dev/dri/
+docker exec immich_server ffmpeg -hide_banner -hwaccels | grep vaapi
+
+# Hardware transcoding activates automatically when playing videos
+# Check Server Settings → Video Transcoding in web UI:
+#   - Hardware Acceleration: VA-API
+#   - Device: /dev/dri/renderD128
+```
+
+#### 4.4.4 Test Ollama (Vulkan GPU Inference)
+
+```bash
+# Verify GPU access (OpenWebUI stack)
+docker exec ai-ollama id  # Should show: groups=44(video),110
+docker logs ai-ollama | grep -i "inference compute"
+
+# Expected output:
+# inference compute Vulkan0 "AMD Radeon 890M (RADV GFX1150)" 
+#   type=iGPU total="16.5 GiB" available="16.3 GiB"
+
+# Note: Ollama uses Vulkan (not ROCm) in unprivileged LXC
+# OLLAMA_VULKAN=true, no /dev/kfd required
+```
+
+**Configuration Summary**:
+
+| Container | API | Environment | Purpose |
+|-----------|-----|-------------|---------|
+| jellyfin | VA-API | - | H.264/HEVC/VP9/AV1 transcoding |
+| dispatcharr | VA-API | - | Live TV transcoding |
+| immich-server | VA-API | IMMICH_FFMPEG_HWACCEL=vaapi | Video thumbnail generation |
+| immich-machine-learning | CPU | IMMICH_ML_FORCE_CPU=true | Face recognition (CPU-only) |
+| ai-ollama | Vulkan | OLLAMA_VULKAN=true | LLM inference offloading |
 
 ---
 
