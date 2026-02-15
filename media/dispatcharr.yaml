@@ -59,8 +59,8 @@ services:
     cap_add:
      - SYS_NICE
     group_add:
-     - video
-     - render # Uncomment if your GPU requires it
+      - "44"   # video group for AMD GPU access
+      - "110"  # render group for AMD Radeon 890M GPU access (must match LXC idmap passthrough)
     devices:
       - /dev/dri:/dev/dri  # For Intel/AMD GPU acceleration (VA-API)
     # Uncomment the following lines for NVIDIA GPU support
