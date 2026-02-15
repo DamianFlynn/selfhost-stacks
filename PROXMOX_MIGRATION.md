@@ -931,6 +931,54 @@ docker exec jellyfin id jellyfin
 # User should be member of groups: 44(video), 110(render)
 ```
 
+### Issue: n8n Container Restarts with "EACCES: permission denied, mkdir '/home/node/.n8n'"
+
+**Symptom:** n8n container continuously restarts with permission errors:
+```
+Error: EACCES: permission denied, mkdir '/home/node/.n8n'
+Error: EACCES: permission denied, open '/home/node/.n8n/config'
+```
+
+**Cause:** When running n8n with `user: "568:568"` override, the container's `/home/node` directory is owned by root (from the base image where user `node` is UID 1000). User 568 cannot write to `/home/node` to create the `.n8n` subdirectory, even though the volume mount for `/home/node/.n8n` exists.
+
+**Root Issue:** Docker volume mounts can only override specific paths, not their parent directories. The mount for `/home/node/.n8n` doesn't help if the user can't traverse `/home/node` itself.
+
+**Fix:** Mount `/home/node` as a separate volume owned by user 568:
+
+```bash
+# Create home directory on host
+ssh root@172.16.1.159 "mkdir -p /mnt/fast/appdata/automation/n8n-home && chown 568:568 /mnt/fast/appdata/automation/n8n-home"
+
+# Update automation/n8n.yaml volumes section:
+volumes:
+  # Mount /home/node to give user 568 ownership of home directory
+  - /mnt/fast/appdata/automation/n8n-home:/home/node
+  - /mnt/fast/appdata/automation/n8n:/home/node/.n8n
+  - /mnt/fast/appdata/automation/n8n/cache:/home/node/.cache
+  # ... other mounts
+
+# Recreate container
+cd /mnt/fast/stacks/automation
+docker compose down n8n
+docker compose up -d n8n
+```
+
+**Verification:**
+```bash
+# Check container is running (not restarting)
+docker ps --filter name=n8n
+# Should show: Up X seconds (not "Restarting")
+
+# Check n8n logs for successful startup
+docker logs n8n 2>&1 | tail -20
+# Should see workflow activation messages, not EACCES errors
+```
+
+**Note:** This pattern applies to any container where:
+1. You override the user with `user: "UID:GID"` different from the image default
+2. The application needs to write to its home directory
+3. The home directory's parent path is owned by a different user in the base image
+
 ---
 
 ## Rollback & Safety

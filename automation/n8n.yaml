@@ -65,6 +65,8 @@ services:
     ports:
       - "127.0.0.1:5678:5678"
     volumes:
+      # Mount /home/node to give user 568 ownership of home directory
+      - /mnt/fast/appdata/automation/n8n-home:/home/node
       - /mnt/fast/appdata/automation/n8n:/home/node/.n8n
       # Host-backed cache directory: precreate this directory on the TrueNAS
       # host and chown to 568:568 so n8n (running as UID 568) can write to it
