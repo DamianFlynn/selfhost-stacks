@@ -345,7 +345,7 @@ resource "null_resource" "patch_lxc_config" {
       "echo 'lxc.idmap: u ${local.u_r3_start} ${local.u_r3_host} ${local.u_r3_count}' >> ${local.conf}",
 
       # ── GID idmap lines ──────────────────────────────────────────────────
-      # video(44), render(105), and apps(568) all pass through 1:1.
+      # video(44), render(110), and apps(568) all pass through 1:1.
       # The gaps between them are remapped to the high container namespace.
       "echo 'lxc.idmap: g ${local.g_r1_start} ${local.g_r1_host} ${local.g_r1_count}' >> ${local.conf}",
       "echo 'lxc.idmap: g ${local.g_r2_start} ${local.g_r2_host} ${local.g_r2_count}' >> ${local.conf}",
@@ -440,10 +440,14 @@ resource "null_resource" "provision_lxc" {
       "useradd -r -u ${var.apps_uid} -g ${var.apps_gid} -M -s /usr/sbin/nologin apps 2>/dev/null || true",
 
       # ── GPU groups inside LXC ─────────────────────────────────────────────
-      # The idmap passes gid 44 and 105 through 1:1, so the in-container GIDs
+      # The idmap passes gid 44 and 110 through 1:1, so the in-container GIDs
       # must match exactly so /dev/dri devices have the right group ownership.
       "getent group video  >/dev/null 2>&1 || groupadd -g ${var.video_gid} video",
       "getent group render >/dev/null 2>&1 || groupadd -g ${var.render_gid} render",
+      # Ubuntu 24.04 may create render group with dynamic GID during boot.
+      # Force correct GIDs even if groups already exist with wrong GIDs.
+      "groupmod -g ${var.video_gid} video   2>/dev/null || true",
+      "groupmod -g ${var.render_gid} render 2>/dev/null || true",
 
       # apps user needs docker, video, render group membership.
       "usermod -aG docker,video,render apps",
