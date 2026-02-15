@@ -86,6 +86,9 @@ services:
     volumes:
       - /mnt/fast/appdata/llm-ai/ollama:/root/.ollama
     # For AMD GPU (ROCm), if available on your SCALE build:
+    group_add:
+      - "44"
+      - "110"
     devices:
       - /dev/kfd:/dev/kfd
       - /dev/dri:/dev/dri
