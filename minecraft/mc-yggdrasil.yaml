@@ -47,7 +47,7 @@ services:
       # Expose to Tailscale via tsbridge (no sidecar needed!)
       - tsbridge.enabled=true
       - tsbridge.hostname=mc-ygg
-      - tsbridge.backend=mc_yggdrasil:19132
+      - tsbridge.service.port=19132
       - tsbridge.tags=tag:games
 
 

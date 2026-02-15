@@ -45,7 +45,7 @@ services:
       # Expose to Tailscale via tsbridge (no sidecar needed!)
       - tsbridge.enabled=true
       - tsbridge.hostname=mc-vanilla
-      - tsbridge.backend=mc_vanilla:19132
+      - tsbridge.service.port=19132
       - tsbridge.tags=tag:games
 
 
