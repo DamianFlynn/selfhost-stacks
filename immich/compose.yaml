@@ -39,6 +39,9 @@ services:
     restart: always
     healthcheck:
       disable: false
+    group_add:
+      - "44"
+      - "110"
     devices:
       - /dev/dri:/dev/dri
     networks:
