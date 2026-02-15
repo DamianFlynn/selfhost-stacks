@@ -180,7 +180,7 @@ lxc_ip             = "172.16.1.159"
 lxc_gateway        = "172.16.1.1"
 lxc_vmid           = 100
 lxc_root_password  = "your-lxc-root-password"
-lxc_template       = "ubuntu-24.04-standard_24.04-2_amd64.tar.zst"  # ⚠️ Verify: pveam available --section system | grep ubuntu-24
+lxc_template       = "debian-13-standard_13.1-2_amd64.tar.zst"  # ⚠️ Verify: pveam available --section system | grep debian-13
 
 # SSH Keys (for LXC root user)
 lxc_ssh_public_keys           = ["ssh-ed25519 AAAAC3NzaC... your-key-here"]
@@ -202,7 +202,7 @@ gpu_render_index = 128  # Verify: ls /dev/dri/  (renderD128)
 ssh root@172.16.1.158 'hostname'  # Should return: atlantis
 
 # 2. Template must be available
-ssh root@172.16.1.158 'pveam available --section system | grep ubuntu-24.04'
+ssh root@172.16.1.158 'pveam available --section system | grep debian-13'
 
 # 3. SSH key must be in agent
 ssh-add -l  # Check if loaded
@@ -222,7 +222,7 @@ terraform apply  # Creates full infrastructure
 
 Terraform will:
 1. Configure Proxmox host (groups, subuid/subgid, GPU ownership, vmbr0 promiscuous mode)
-2. Download Ubuntu 24.04 LXC template
+2. Download Debian 13 LXC template
 3. Create unprivileged LXC with GPU passthrough and bind mounts
 4. Patch LXC config with custom idmap and GPU devices
 5. Start LXC and wait for SSH
@@ -281,7 +281,7 @@ docker run --rm --device /dev/dri/card1 --device /dev/dri/renderD128 --group-add
 
 > **⚠️ Critical: Render Group GID Check**
 > 
-> Ubuntu 24.04 creates the `render` group with a **dynamic GID** (typically 992) instead of the expected
+> Debian 13 creates the `render` group with a **dynamic GID** (typically 992) instead of the expected
 > static GID 110. If `getent group render` shows the wrong GID, the GPU devices will appear as `nobody:110`
 > and hardware acceleration will fail.
 > 
@@ -584,7 +584,7 @@ will do nothing because terraform considers them already complete.
 - `getent group render` shows `render:x:992` (or other number != 110)
 - Jellyfin/Immich logs show "Permission denied" accessing `/dev/dri/renderD128`
 
-**Cause:** Ubuntu 24.04 creates the `render` group with a dynamic GID (typically 992) on first boot,
+**Cause:** Debian 13 creates the `render` group with a dynamic GID (typically 992) on first boot,
 but the LXC idmap is configured to pass through host GID 110. The mismatch means the device appears
 ownership belongs to a GID that has no matching group name.
 
@@ -605,18 +605,15 @@ ssh root@172.16.1.159 'usermod -aG render apps && id apps'
 **Why this happens:** The terraform provisioner creates groups in this order:
 ```bash
 groupadd -g 44 video
-groupadd -g 110 render    # ← Should work, but sometimes Ubuntu creates it during boot first
+groupadd -g 110 render    # ← Should work, but sometimes Debian creates it during boot first
 groupadd -g 568 apps
 ```
 
 If the LXC template already has a `render` group (with dynamic GID), `groupadd` silently fails and
 the group keeps its original GID. The `groupmod` command forces the GID to change.
 
-**Permanent fix:** This issue should be rare after the first successful build. If it happens repeatedly,
-add this to the terraform provisioner in `lxc-selfhost.tf` (after the `groupadd` commands):
-```bash
-groupmod -g 110 render || true
-```
+**Note:** This issue is now automatically fixed by terraform (commit 12fa0ac). The provisioner includes
+`groupmod -g 110 render || true` to force the correct GID even if the group already exists.
 
 ### Issue: Terraform `HTTP 500 hostname lookup failed`
 

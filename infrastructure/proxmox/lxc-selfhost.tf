@@ -444,7 +444,7 @@ resource "null_resource" "provision_lxc" {
       # must match exactly so /dev/dri devices have the right group ownership.
       "getent group video  >/dev/null 2>&1 || groupadd -g ${var.video_gid} video",
       "getent group render >/dev/null 2>&1 || groupadd -g ${var.render_gid} render",
-      # Ubuntu 24.04 may create render group with dynamic GID during boot.
+      # Debian 13 may create render group with dynamic GID during boot.
       # Force correct GIDs even if groups already exist with wrong GIDs.
       "groupmod -g ${var.video_gid} video   2>/dev/null || true",
       "groupmod -g ${var.render_gid} render 2>/dev/null || true",
