@@ -475,3 +475,30 @@ resource "null_resource" "provision_lxc" {
     ]
   }
 }
+
+# ── Copy SSH keys from Proxmox host to LXC ──────────────────────────────────
+
+resource "null_resource" "copy_ssh_keys" {
+  depends_on = [null_resource.provision_lxc]
+
+  connection {
+    type     = "ssh"
+    host     = var.proxmox_host
+    user     = "root"
+    password = var.proxmox_password
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      # Copy SSH private keys from Proxmox host to LXC for GitHub access.
+      # Keys must be present on Proxmox host at /root/.ssh/id_ed25519*.
+      "test -f /root/.ssh/id_ed25519 && pct push ${var.lxc_vmid} /root/.ssh/id_ed25519 /root/.ssh/id_ed25519 || echo 'WARNING: id_ed25519 not found on Proxmox host'",
+      "test -f /root/.ssh/id_ed25519.pub && pct push ${var.lxc_vmid} /root/.ssh/id_ed25519.pub /root/.ssh/id_ed25519.pub || true",
+      "test -f /root/.ssh/id_ed25519_sk && pct push ${var.lxc_vmid} /root/.ssh/id_ed25519_sk /root/.ssh/id_ed25519_sk || true",
+      "test -f /root/.ssh/id_ed25519_sk.pub && pct push ${var.lxc_vmid} /root/.ssh/id_ed25519_sk.pub /root/.ssh/id_ed25519_sk.pub || true",
+      # Set correct permissions on private keys inside LXC.
+      "pct exec ${var.lxc_vmid} -- chmod 600 /root/.ssh/id_ed25519* 2>/dev/null || true",
+      "pct exec ${var.lxc_vmid} -- chmod 644 /root/.ssh/*.pub 2>/dev/null || true",
+    ]
+  }
+}

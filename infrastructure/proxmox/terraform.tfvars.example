@@ -1,0 +1,56 @@
+# Copy this file to terraform.tfvars and fill in your real values.
+# terraform.tfvars is listed in .gitignore — NEVER commit it (contains secrets).
+
+# ── Proxmox connection ──────────────────────────────────────────────────────
+proxmox_host         = "172.16.1.158"
+proxmox_node         = "pve"   # must match the hostname shown in the Proxmox web UI sidebar
+proxmox_username     = "root@pam"
+proxmox_password     = "CHANGE_ME"
+proxmox_ssh_user     = "root"
+proxmox_ssh_password = "CHANGE_ME"
+
+# ── Docker LXC ──────────────────────────────────────────────────────────────
+lxc_vmid            = 100
+lxc_hostname        = "selfhost"
+lxc_ip              = "172.16.1.159"   # same as old TrueNAS — zero DNS/firewall changes
+lxc_gateway         = "172.16.1.1"
+nameserver          = "172.16.1.1"
+lxc_memory_mb       = 16384
+lxc_cores           = 8
+lxc_disk_gb         = 64
+lxc_storage         = "local-lvm"
+template_storage    = "local"
+lxc_root_password   = "CHANGE_ME"
+lxc_ssh_public_keys             = ["ssh-ed25519 AAAA...your-key user@host"]
+terraform_ssh_private_key_path  = "~/.ssh/id_ed25519"   # private key matching the above
+
+# ── Template (shared by both LXCs) ──────────────────────────────────────────
+# Verify exact filename first: pveam update && pveam available --section system | grep debian-13
+lxc_template = "debian-13-standard_13.1-2_amd64.tar.zst"
+
+# ── UID/GID — only change if your system differs from the defaults below ────
+# These match TrueNAS apps:apps (568) and Proxmox/Debian video(44)/render(103)
+#
+# IMPORTANT: Debian 13 assigns the 'render' group a dynamic GID (~993) instead
+# of the old static 103.  You MUST fix the host before running terraform:
+#   getent group 103          # confirm 103 is free
+#   groupmod -g 103 render    # reassign render to static GID 103
+#   udevadm trigger /dev/dri/renderD128
+#   ls -lan /dev/dri/         # verify renderD128 shows GID 103
+# The idmap math in lxc-selfhost.tf requires video(44) < render < apps(568).
+apps_uid       = 568
+apps_gid       = 568
+video_gid      = 44
+render_gid     = 103
+gpu_card_index   = 1   # card1  → /dev/dri/card1,     cgroup 226:1   — verify: ls /dev/dri/
+gpu_render_index = 128 # renderD128 → /dev/dri/renderD128, cgroup 226:128 — NOT always 128+card_index
+
+# ── OpenClaw LXC ─────────────────────────────────────────────────────────────
+openclaw_vmid            = 101
+openclaw_hostname        = "openclaw"
+openclaw_ip              = "172.16.1.160"
+openclaw_memory_mb       = 4096
+openclaw_cores           = 4
+openclaw_disk_gb         = 64
+openclaw_root_password   = "CHANGE_ME"
+openclaw_ssh_public_keys = ["ssh-ed25519 AAAA...your-key user@host"]

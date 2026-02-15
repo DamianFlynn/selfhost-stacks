@@ -4,3 +4,5 @@
 **/data/*
 **/config/*/secrets/*
 .DS_Store
+backups/
+temp.md

@@ -1,0 +1,24 @@
+# Terraform secrets — never commit
+terraform.tfvars
+
+# Terraform state — use remote backend in production; local state is fine for personal infra
+*.tfstate
+*.tfstate.backup
+*.tfstate.lock.info
+
+# Terraform working directory
+.terraform/
+.terraform.lock.hcl
+
+# Crash logs
+crash.log
+crash.*.log
+
+# Override files (local dev)
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Plan files (may contain secrets)
+*.tfplan

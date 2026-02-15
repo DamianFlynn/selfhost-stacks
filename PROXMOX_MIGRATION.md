@@ -1,106 +1,30 @@
 # Migration: TrueNAS SCALE 25.10 → Proxmox VE 9.1
 
-> **Phases 2–4 below are now automated by Terraform.**
-> After completing Phase 1 (Proxmox install), run:
->
-> ```bash
-> cd infrastructure/proxmox
-> cp terraform.tfvars.example terraform.tfvars   # fill in passwords + SSH key
-> terraform init && terraform apply
-> ```
->
-> Terraform handles: ZFS pool import, apps user/groups, subuid/subgid, LXC creation,
-> idmap + GPU passthrough config patch, Docker CE install, and SDL2 deps for OpenClaw.
-> The manual steps in Phases 2–4 are kept below as reference / fallback only.
+## Quick Start (Automated with Terraform)
 
-### Terraform `terraform.tfvars` — known gotchas
-
-Before running `terraform apply`, verify three things in your `terraform.tfvars`:
-
-**1. `proxmox_node` must match the actual Proxmox hostname**
-
-The node name is whatever hostname you set during the Proxmox installer — NOT always `pve`.
-Verify with:
+This migration is **fully automated** using Terraform. After installing Proxmox, simply run:
 
 ```bash
-ssh root@172.16.1.158 'hostname'    # or: pvecm nodename
+cd infrastructure/proxmox
+cp terraform.tfvars.example terraform.tfvars   # fill in passwords + SSH keys
+terraform init && terraform apply
 ```
 
-If it returns `atlantis` (or anything other than `pve`), set:
-
-```hcl
-proxmox_node = "atlantis"
-```
-
-Symptom if wrong: `HTTP 500 - hostname lookup 'pve' failed`.
-
-**2. `lxc_template` must exactly match what `pveam` knows about**
-
-The template filename changes with each Debian release. Check what's currently available:
-
-```bash
-ssh root@172.16.1.158 'pveam update && pveam available --section system | grep debian-13'
-```
-
-Use the exact filename returned (e.g. `debian-13-standard_13.1-2_amd64.tar.zst`).
-
-Symptom if wrong: `400 Parameter verification failed. template: no such template`.
-
-**3. Your SSH private key must be in the macOS SSH agent**
-
-Terraform provisioners use the SSH agent, not key files directly. Before running apply:
-
-```bash
-ssh-add -l                                          # check what's loaded
-ssh-add --apple-use-keychain ~/.ssh/id_ed25519      # add if missing
-```
-
-The public key in `lxc_ssh_public_keys` / `terraform_ssh_private_key_path` must match.
-
-Symptom if missing: provisioner loops on "Connecting to remote host via SSH..." or gets
-`SSH authentication failed: attempted methods [none password publickey], no supported methods remain`.
-
-**4. `render` group GID on Debian 13 is dynamic (~993), not the static 110**
-
-Debian 13 assigns the `render` group a dynamic GID (e.g. `993`) instead of a static value.
-Additionally, GID 103 is taken by `tcpdump` and GID 105 is taken by `postdrop` on Proxmox/Debian.
-The idmap in `lxc-selfhost.tf` requires `video(44) < render < apps(568)`,
-so `render_gid = 993` is **not** usable — it would break the idmap math.
-
-Fix the host before running `terraform apply`:
-
-```bash
-getent group 110           # confirm 110 is not already taken
-groupmod -g 110 render     # reassign render to the expected static GID
-udevadm trigger /dev/dri/renderD128
-ls -lan /dev/dri/          # verify renderD128 now shows GID 110
-```
-
-Symptom if skipped: `renderD128` inside the LXC appears owned by `nobody:nogroup`
-and GPU-accelerated containers (Jellyfin, Immich ML) can't open the device.
-
-**5. ZFS child datasets require individual bind mounts**
-
-Proxmox's `mp<N>` bind mount for `/mnt/fast/appdata` covers only the parent ZFS dataset.
-Every `fast/appdata/<service>` is a *separate* ZFS child dataset with its own mount — they
-are invisible to the LXC through a plain bind mount (the directories exist but appear empty).
-
-Terraform's `patch_lxc_config` handles this automatically by iterating `zfs list` and
-writing an `lxc.mount.entry` for each child.  If you ever need to fix this manually:
-
-```bash
-pct stop 100
-zfs list -r -H -o name fast/appdata fast/home | while read ds; do
-  case "$ds" in fast/appdata|fast/home) continue ;; esac
-  mp="/mnt/$ds"
-  echo "lxc.mount.entry: $mp ${mp#/} none bind,create=dir 0 0" >> /etc/pve/lxc/100.conf
-done
-pct start 100
-```
+Terraform automates:
+- ✅ ZFS pool import and mountpoint configuration
+- ✅ User/group creation (apps:568, video:44, render:110)
+- ✅ GPU passthrough configuration (/dev/dri/* device ownership)
+- ✅ LXC creation with unprivileged idmap for GPU + bind mounts
+- ✅ Docker CE installation and configuration
+- ✅ Docker macvlan network creation (for Jellyfin/Dispatcharr direct LAN IPs)
+- ✅ GitHub SSH key deployment from Proxmox host to LXC
+- ✅ All subuid/subgid delegation for idmap passthrough
 
 ---
 
-## Hardware Context
+## Prerequisites
+
+### 1. Hardware Requirements
 
 | Drive | Device | Size | Role |
 |-------|--------|------|------|
@@ -108,138 +32,40 @@ pct start 100
 | Samsung 990 EVO Plus × 2 | `nvme1n1`, `nvme2n1` | 1.8 TB each | `fast` pool (mirror) — **untouched** |
 | Seagate ST26000NM × 3 | `sda`, `sdb`, `sdc` | 23.6 TB each | `tank` pool (raidz1) — **untouched** |
 
-**Data is 100% safe**: the `fast` and `tank` pools live on different drives from the OS. Installing Proxmox to `nvme0n1` only destroys the TrueNAS boot-pool.
+**Data Safety**: `fast` and `tank` pools are on separate drives. Installing Proxmox to `nvme0n1` **only destroys the TrueNAS boot-pool**.
 
----
-
-## Pre-Migration Checklist (on TrueNAS while running)
-
-### 1. Verify git repo is fully committed
+### 2. Pre-Migration Backups (on TrueNAS while running)
 
 ```bash
-# On your dev machine
-git -C /path/to/selfhost-stacks status
-git -C /path/to/selfhost-stacks push
-```
+# 1. Commit and push git repo
+git -C /mnt/fast/stacks status && git -C /mnt/fast/stacks push
 
-### 2. Back up all `.env` files to a safe location
-
-`.env` files live on `fast/stacks` (which survives), but take an extra copy:
-
-```bash
-# On TrueNAS
+# 2. Back up .env files (belt-and-suspenders)
 find /mnt/fast/stacks -name '.env' | while read f; do
   echo "=== $f ==="; cat "$f"; echo
 done > ~/env-backup-$(date +%Y%m%d).txt
-```
+# Copy this file off-box
 
-Copy that file off-box (to your dev machine or another server) — it contains all secrets.
-
-### 3. Record the Traefik ACME certificate info
-
-The `acme.json` at `/mnt/fast/appdata/traefik/acme/acme.json` is on the `fast` pool and will survive. Just confirm the file exists and is non-empty:
-
-```bash
+# 3. Verify Traefik ACME certificate exists
 wc -c /mnt/fast/appdata/traefik/acme/acme.json  # should be >1KB
-```
 
-### 4. Export current ZFS pool GUIDs (for safe import later)
+# 4. Export ZFS pool GUIDs (for verification later)
+zpool get guid fast tank boot-pool > ~/zpool-guids.txt
 
-```bash
-zpool get guid fast tank boot-pool
-```
+# 5. Note current user/group IDs
+id apps                          # uid=568(apps) gid=568(apps)
+getent group render video        # render:x:107  video:x:44
 
-NAME       PROPERTY  VALUE                 SOURCE
-boot-pool  guid      9529240032720272052   -
-fast       guid      12508074045973134637  -
-tank       guid      6438135609734591747   -
-
-
-Save that output — if you ever need `-f` (force) on import, these confirm you have the right pools.
-
-### 5. Note the `apps` user/group IDs
-
-```bash
-id apps       # expect: uid=568(apps) gid=568(apps)
-getent group render video   # render:x:110  video:x:44
-```
-❯ id apps
-uid=568(apps) gid=568(apps) groups=568(apps)
-
-damian in 🌐 truenas in ~ 
-❯ getent group render video 
-render:x:107:
-video:x:44:
-
-### 6. Back up personal dotfiles, SSH keys, and shell settings
-
-
-Everything on the TrueNAS **boot pool** (`nvme0n1`) will be wiped — this includes `/root/`,
-`/home/damian/`, crontabs, and SSH host keys. Run the backup script to capture them to the
-`fast` pool before the wipe:
-
-```bash
-# From your dev machine — no need to copy anything to TrueNAS first
+# 6. Back up personal settings to fast pool
 ssh root@<truenas-ip> 'bash -s' < scripts/backup-truenas-settings.sh
-```
-
-This saves two copies to `/mnt/fast/home/` (which survives the Proxmox install):
-
-- **Directory**: `/mnt/fast/home/.backup-truenas-YYYYMMDD-HHMM/`
-- **Tarball**: `/mnt/fast/home/backup-truenas-YYYYMMDD-HHMM.tar.gz`
-
-What gets captured:
-
-| Category | Paths |
-|----------|-------|
-| SSH keys | `~/.ssh/` for root + damian |
-| SSH host keys | `/etc/ssh/ssh_host_*` (optional restore — keeps server fingerprint) |
-| Shell configs | `.bashrc` `.zshrc` `.profile` `.bash_history` etc. |
-| Git | `.gitconfig` `.gitconfig.local` `.gitignore_global` |
-| GPG | `.gnupg/` |
-| App config | `.config/` |
-| Editor | `.vimrc` `.vim/` `.tmux.conf` `.nanorc` |
-| Crontabs | `crontab -l` for root + damian; `/etc/cron.d/` |
-| `.env` files | All stack `.env` files (belt-and-suspenders copy alongside fast pool originals) |
-
-After the script finishes, confirm the backup exists:
-
-```bash
 ssh root@<truenas-ip> "ls -lh /mnt/fast/home/backup-truenas-*.tar.gz"
-```
 
-### 7. Stop all services and cleanly export ZFS pools — LAST STEP BEFORE SHUTDOWN
-
-A clean `zpool export` flushes all pending writes and marks the pools as unmounted.
-This means Proxmox can import them with a plain `zpool import` — **no `-f` force flag needed**,
-no hostid mismatch warnings.
-
-**Do this immediately before shutting TrueNAS down. Nothing else uses the pools after this point.**
-
-```bash
-# On TrueNAS — stop all Docker workloads first
-# (TrueNAS Apps UI: stop every app, or run this to stop all containers)
+# 7. FINAL STEP: Stop services and cleanly export pools
 docker stop $(docker ps -q) 2>/dev/null || true
-
-# Confirm nothing has the pools open
-lsof /mnt/fast /mnt/tank 2>/dev/null | grep -v COMMAND || echo "pools are idle"
-
-# Export both pools
 zpool export fast
 zpool export tank
-
-# Confirm export succeeded (both should now show as EXPORTED or not listed)
-zpool status fast 2>&1
-zpool status tank 2>&1
-# Expected: "cannot open 'fast': no such pool" — that means clean export
-
-# Now power off
 shutdown -h now
 ```
-
-> If `zpool export` refuses because something still has the pool open, check `lsof /mnt/fast`
-> and stop the offending process, then retry. As a last resort you can `zpool export -f fast`
-> (force-export) which is still cleaner than a cold shutdown with no export at all.
 
 ---
 
@@ -247,336 +73,389 @@ shutdown -h now
 
 ### 1.1 Boot from USB
 
-Create a Proxmox VE 9.1 USB (Rufus/Balena Etcher → ISO mode, not DD).
+Create Proxmox VE 9.1 USB installer (Rufus/Balena Etcher, ISO mode).
 
-### 1.2 Disk selection — the critical step
-
-When the installer shows the disk selector, choose:
+### 1.2 Disk Selection — CRITICAL STEP
 
 ```
 Target disk: /dev/nvme0n1   (Kingston SNV3S500G, 465.8 GB)
+Filesystem:  ZFS (RAID0)
 ```
 
-**Do NOT select `nvme1n1`, `nvme2n1`, `sda`, `sdb`, or `sdc`.**
+**DO NOT select nvme1n1, nvme2n1, sda, sdb, or sdc** — these contain your data pools.
 
-Use the default filesystem (ext4 or ZFS — either works; Proxmox will create its own ZFS pool named `rpool` on `nvme0n1` if you choose ZFS, or use LVM otherwise).
-
-Recommended: choose **ZFS (RAID0)** on just `nvme0n1` for the Proxmox OS. This gives you full ZFS features on the boot drive without touching your data drives.
-
-### 1.3 Network configuration during install
+### 1.3 Network Configuration
 
 | Field | Value |
 |-------|-------|
 | Management interface | `eno1` |
-| Hostname | `pve.deercrest.info` (or your choice) |
-| IP Address | `172.16.1.158/24` ← Proxmox management, new IP |
+| Hostname (FQDN) | `atlantis.deercrest.info` |
+| IP Address | `172.16.1.158/24` |
 | Gateway | `172.16.1.1` |
-| DNS | `172.16.1.1` (or your DNS) |
+| DNS Server | `172.16.1.1` |
 
-The Docker LXC will get `172.16.1.159` (same IP as TrueNAS had), so existing firewall rules and DNS entries continue to work.
+The LXC will use `172.16.1.159` (same as TrueNAS), preserving firewall/DNS rules.
 
 ---
 
-## Phase 2: First Boot — ZFS Pools & Basic Proxmox Config *(automated by Terraform `host.tf`)*
+## Phase 2: First Boot — Prepare Proxmox Host
 
 SSH into Proxmox: `ssh root@172.16.1.158`
 
-### 2.1 Configure package repos (remove enterprise subscription nag)
-
-PVE 9.x ships **two sets** of enterprise source files: legacy `.list` format and the newer
-DEB822 `.sources` format. Both must be disabled or `apt-get update` returns 401 errors.
+### 2.1 Remove Enterprise Repo (No Subscription)
 
 ```bash
-# Overwrite the legacy .list files with a comment
+# Disable enterprise repos
 echo "# pve-enterprise disabled" > /etc/apt/sources.list.d/pve-enterprise.list
 echo "# ceph-enterprise disabled" > /etc/apt/sources.list.d/ceph.list
+mv /etc/apt/sources.list.d/pve-enterprise.sources /etc/apt/sources.list.d/pve-enterprise.sources.disabled
+mv /etc/apt/sources.list.d/ceph.sources /etc/apt/sources.list.d/ceph.sources.disabled
 
-# Rename (disable) the DEB822 .sources files — these are what PVE 9.x actually reads
-mv /etc/apt/sources.list.d/pve-enterprise.sources \
-   /etc/apt/sources.list.d/pve-enterprise.sources.disabled
-mv /etc/apt/sources.list.d/ceph.sources \
-   /etc/apt/sources.list.d/ceph.sources.disabled
-
-# Add no-subscription repo — PVE 9.x is based on Debian trixie, NOT bookworm (that was PVE 8.x)
+# Add no-subscription repo (Debian trixie for PVE 9.x)
 echo "deb http://download.proxmox.com/debian/pve trixie pve-no-subscription" \
   > /etc/apt/sources.list.d/pve-no-subscription.list
 
 apt-get update && apt-get full-upgrade -y
 ```
 
-### 2.2 Import the ZFS data pools
-
-If you ran `zpool export` in pre-migration step 7, the pools import cleanly with no flags:
+### 2.2 Import ZFS Pools
 
 ```bash
+# Clean import (if pools were exported before shutdown)
 zpool import fast
 zpool import tank
-```
 
-If you see a **hostid mismatch** error (pools were not cleanly exported before shutdown):
+# Force import (if you skipped export — shows hostid mismatch)
+# zpool import -f fast
+# zpool import -f tank
 
-```bash
-zpool import -f fast
-zpool import -f tank
-```
-
-> **TrueNAS altroot quirk** — TrueNAS SCALE imports pools with an implicit altroot of `/mnt`,
-> which means the pool's stored mountpoint is `/<pool>` but it physically appeared at
-> `/mnt/<pool>`. On Proxmox there is no altroot, so the pools mount at `/fast` and `/tank`
-> instead of `/mnt/fast` and `/mnt/tank`. Fix this immediately after import:
-
-```bash
+# Fix TrueNAS altroot mountpoint quirk
 zfs set mountpoint=/mnt/fast fast
 zfs set mountpoint=/mnt/tank tank
-```
 
-This permanently changes the mountpoint stored in the pool and atomically remounts the root
-dataset and all child datasets that inherit their mountpoint (e.g. `fast/appdata`,
-`fast/stacks`, etc.) in one step. No reboot needed.
-
-Verify both pools are now mounted at the correct paths:
-
-```bash
+# Verify
 ls /mnt/               # should show: fast  tank
 zfs get mountpoint fast tank
-# Expected:
-#   fast  mountpoint  /mnt/fast  local
-#   tank  mountpoint  /mnt/tank  local
 
-df -h | grep mnt       # should show /mnt/fast and /mnt/tank and all child datasets
-```
-
-### 2.3 Register pools with Proxmox so they import at boot
-
-```bash
+# Enable auto-import on boot
 zpool set cachefile=/etc/zfs/zpool.cache fast
 zpool set cachefile=/etc/zfs/zpool.cache tank
-
-# Enable the ZFS import service
-systemctl enable zfs-import-cache.service
-systemctl enable zfs-mount.service
+systemctl enable zfs-import-cache.service zfs-mount.service
 ```
 
-### 2.4 Create the `apps` group and user on the Proxmox host
+### 2.3 Copy SSH Keys to Proxmox Host
 
-This must match the UIDs in the ZFS datasets. Privileged LXC uses 1:1 UID mapping.
-
-```bash
-groupadd -g 568 apps
-# -r (system account) is required — Proxmox/Debian rejects UIDs below UID_MIN (1000)
-# without it, even when the UID is explicitly specified.
-useradd -r -u 568 -g 568 -M -s /usr/sbin/nologin apps
-
-# GPU groups (must match device ownership in /dev/dri)
-# Check actual device names on this machine first — the card may be card1, not card0:
-ls -la /dev/dri/
-# This machine: card1 (root:video, gid 44) and renderD128 (root:render, gid 110)
-# If those groups/GIDs don't exist on Proxmox host, create them:
-getent group video  || groupadd -g 44 video
-getent group render || groupadd -g 110 render
-```
-
-### 2.5 Restore correct permissions on appdata
-
-TrueNAS should have had these correct already, but confirm:
-
-```bash
-# appdata and stacks: apps:apps, group-writable
-chown -R apps:apps /mnt/fast/appdata /mnt/fast/stacks
-find /mnt/fast/appdata /mnt/fast/stacks -type d -exec chmod 2775 {} \;
-find /mnt/fast/appdata /mnt/fast/stacks -type f -exec chmod 0664 {} \;
-
-# Postgres data dir is the exception: must be postgres:postgres 700
-# Do NOT chown the postgres dir above — skip it or fix it after:
-chown -R 999:999 /mnt/fast/appdata/immich/postgres
-chmod 700 /mnt/fast/appdata/immich/postgres
-```
-
----
-
-## Phase 3: Create the Docker LXC *(automated by Terraform `lxc-selfhost.tf`)*
-
-### 3.1 Download Ubuntu 24.04 LTS template
-
-```bash
-pveam update
-pveam download local ubuntu-24.04-standard_24.04-2_amd64.tar.zst
-# Verify download:
-pveam list local
-```
-
-### 3.2 Create a privileged LXC
-
-Privileged is required for:
-- Docker (no nested namespace issues)
-- GPU passthrough (direct device binding with correct GIDs)
-- 1:1 UID mapping (files owned by apps/568 work without remapping)
-
-```bash
-pct create 100 local:vztmpl/ubuntu-24.04-standard_24.04-2_amd64.tar.zst \
-  --hostname selfhost \
-  --arch amd64 \
-  --ostype ubuntu \
-  --cores 8 \
-  --memory 16384 \
-  --swap 0 \
-  --rootfs local-lvm:64 \
-  --net0 name=eth0,bridge=vmbr0,ip=172.16.1.159/24,gw=172.16.1.1 \
-  --nameserver 172.16.1.1 \
-  --unprivileged 0 \
-  --features nesting=1 \
-  --start 0
-```
-
-Adjust `--cores`, `--memory`, and the rootfs size (`64` = 64 GB) for your needs. The N5 Pro has sufficient RAM/CPU to give the LXC nearly everything.
-
-### 3.3 Add GPU passthrough and ZFS bind mounts to the LXC config
-
-Edit `/etc/pve/lxc/100.conf` and append:
-
-```
-# AMD GPU passthrough (VAAPI for Jellyfin/Immich)
-# This machine: card1 (226:1) + renderD128 (226:128)
-# NOTE: card and render indices are INDEPENDENT — renderD is NOT always renderD(128+card_index).
-# Always verify with: ls -la /dev/dri/
-lxc.cgroup2.devices.allow: c 226:1 rwm
-lxc.cgroup2.devices.allow: c 226:128 rwm
-lxc.mount.entry: /dev/dri/card1 dev/dri/card1 none bind,optional,create=file
-lxc.mount.entry: /dev/dri/renderD128 dev/dri/renderD128 none bind,optional,create=file
-
-# ZFS dataset bind mounts
-lxc.mount.entry: /mnt/fast/stacks mnt/fast/stacks none bind,create=dir
-lxc.mount.entry: /mnt/fast/appdata mnt/fast/appdata none bind,create=dir
-lxc.mount.entry: /mnt/fast/home mnt/fast/home none bind,create=dir
-lxc.mount.entry: /mnt/fast/transcode mnt/fast/transcode none bind,create=dir
-lxc.mount.entry: /mnt/fast/tools mnt/fast/tools none bind,create=dir
-lxc.mount.entry: /mnt/tank mnt/tank none bind,create=dir
-```
-
-These paths must exist on the Proxmox host before starting the LXC.
-
-### 3.4 Start the LXC
-
-```bash
-pct start 100
-pct enter 100   # opens a shell inside the container
-```
-
----
-
-## Phase 4: Inside the LXC — Users, Docker, GPU *(automated by Terraform `lxc-selfhost.tf`)*
-
-All commands in this section run **inside** the LXC (`pct enter 100`).
-
-### 4.1 OS baseline
-
-```bash
-apt update && apt upgrade -y
-apt install -y curl git ca-certificates gnupg lsb-release \
-  libva-utils vainfo intel-gpu-tools   # vainfo/vaapi tools for testing GPU
-```
-
-### 4.2 Create `apps` user and GPU groups
-
-```bash
-# Must match host GIDs (568 for apps, 44 for video, 110 for render)
-groupadd -g 568 apps
-# -r required: Debian rejects UIDs below UID_MIN 1000 without system-account flag
-useradd -r -u 568 -g 568 -M -s /usr/sbin/nologin apps
-
-getent group video  || groupadd -g 44  video
-getent group render || groupadd -g 110 render
-
-# Verify /dev/dri devices are visible and have correct ownership
-ls -la /dev/dri/
-# This machine: card1 (root:video) and renderD129 (root:render)
-```
-
-### 4.3 Install Docker CE
-
-```bash
-install -m 0755 -d /etc/apt/keyrings
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
-  | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-chmod a+r /etc/apt/keyrings/docker.gpg
-
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
-  https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" \
-  > /etc/apt/sources.list.d/docker.list
-
-apt update
-apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-
-# Add apps user to docker, video, render groups
-usermod -aG docker,video,render apps
-
-systemctl enable docker
-systemctl start docker
-```
-
-### 4.4 Configure Docker daemon for IPv6 and performance
-
-Create `/etc/docker/daemon.json`:
-
-```json
-{
-  "log-driver": "json-file",
-  "log-opts": {
-    "max-size": "10m",
-    "max-file": "3"
-  },
-  "storage-driver": "overlay2",
-  "userland-proxy": false
-}
-```
-
-```bash
-systemctl restart docker
-```
-
-### 4.5 Test GPU access
-
-```bash
-# As root inside LXC — this machine: card1 + renderD128
-vainfo --display drm --device /dev/dri/renderD128
-# Should show AMD VAAPI profiles (H264, HEVC, AV1, etc.)
-
-# Test Docker can access GPU
-docker run --rm --device /dev/dri/card1 --device /dev/dri/renderD128 \
-  debian:13 ls -la /dev/dri/
-```
-
-### 4.6 Restore personal settings from the TrueNAS backup
-
-The backup created in Pre-Migration step 6 is available via the `/mnt/fast/home` bind mount.
-Run the restore script inside the LXC:
+**Required for Terraform to deploy keys to LXC:**
 
 ```bash
 # From your dev machine
-ssh root@172.16.1.159 'bash /mnt/fast/stacks/scripts/restore-settings-to-lxc.sh'
+scp ~/.ssh/id_ed25519* root@172.16.1.158:/root/.ssh/
+ssh root@172.16.1.158 'chmod 600 /root/.ssh/id_ed25519*'
 ```
 
-The script:
-- Auto-detects the most recent backup under `/mnt/fast/home/.backup-truenas-*/`
-- Restores `/root/.ssh/`, shell configs, `.gitconfig`, `.gnupg/`, `.config/` for root
-- Creates the `damian` user (home at `/mnt/fast/home/damian` — persists across LXC rebuilds)
-- Restores all of the above for damian with correct permissions
-- **Prompts** before restoring SSH host keys (say yes to keep the old server fingerprint) and crontabs
+Terraform will copy these from Proxmox → LXC automatically during provisioning.
 
-Verify after restore:
+---
+
+## Phase 3: Run Terraform (Full Automation)
+
+### 3.1 Prepare terraform.tfvars
 
 ```bash
-ssh root@172.16.1.159 "ls -la /root/.ssh && git -C /mnt/fast/stacks status"
+cd infrastructure/proxmox
+cp terraform.tfvars.example terraform.tfvars
 ```
 
-### 4.7 Create Traefik Docker network (prerequisite for stacks)
+Edit `terraform.tfvars` and configure:
 
-The `t3_proxy` network is defined in `traefik/compose.yaml` but all other stacks declare it as `external: true`, so it must exist before other stacks start.
+```hcl
+# Proxmox Connection
+proxmox_host     = "172.16.1.158"
+proxmox_node     = "atlantis"           # ⚠️ MUST match: ssh root@172.16.1.158 'hostname'
+proxmox_password = "your-proxmox-root-password"
 
-The `iot_macvlan` network is created automatically by Terraform during LXC provisioning. If you need to recreate it manually:
+# LXC Configuration
+lxc_hostname       = "selfhost"
+lxc_ip             = "172.16.1.159"
+lxc_gateway        = "172.16.1.1"
+lxc_vmid           = 100
+lxc_root_password  = "your-lxc-root-password"
+lxc_template       = "ubuntu-24.04-standard_24.04-2_amd64.tar.zst"  # ⚠️ Verify: pveam available --section system | grep ubuntu-24
+
+# SSH Keys (for LXC root user)
+lxc_ssh_public_keys           = ["ssh-ed25519 AAAAC3NzaC... your-key-here"]
+terraform_ssh_private_key_path = "/Users/damian/.ssh/id_ed25519"  # ⚠️ Must be in SSH agent
+
+# GPU & UID/GID Configuration (usually no changes needed)
+apps_uid    = 568
+apps_gid    = 568
+video_gid   = 44   # Standard Debian video group
+render_gid  = 110  # Avoiding tcpdump(103) and postdrop(105)
+gpu_card_index   = 1    # Verify: ls /dev/dri/  (this machine: card1)
+gpu_render_index = 128  # Verify: ls /dev/dri/  (renderD128)
+```
+
+### 3.2 Verify Prerequisites
 
 ```bash
-# iot_macvlan - Direct LAN IPs for jellyfin (172.16.1.76) and dispatcharr (172.16.1.77)
+# 1. Hostname must match
+ssh root@172.16.1.158 'hostname'  # Should return: atlantis
+
+# 2. Template must be available
+ssh root@172.16.1.158 'pveam available --section system | grep ubuntu-24.04'
+
+# 3. SSH key must be in agent
+ssh-add -l  # Check if loaded
+ssh-add --apple-use-keychain ~/.ssh/id_ed25519  # Add if missing
+
+# 4. ZFS pools must be imported
+ssh root@172.16.1.158 'zfs list | grep -E "fast|tank"'
+```
+
+### 3.3 Run Terraform
+
+```bash
+terraform init
+terraform plan   # Review changes
+terraform apply  # Creates full infrastructure
+```
+
+Terraform will:
+1. Configure Proxmox host (groups, subuid/subgid, GPU ownership, vmbr0 promiscuous mode)
+2. Download Ubuntu 24.04 LXC template
+3. Create unprivileged LXC with GPU passthrough and bind mounts
+4. Patch LXC config with custom idmap and GPU devices
+5. Start LXC and wait for SSH
+6. Install Docker CE, create users/groups, configure daemon
+7. Create iot_macvlan network for Jellyfin/Dispatcharr
+8. Copy SSH keys from Proxmox host to LXC for GitHub access
+9. Run smoke tests
+
+Expected output includes:
+```
+Apply complete! Resources: 9 added, 0 changed, 0 destroyed.
+
+Outputs:
+lxc_ip = "172.16.1.159"
+lxc_ssh = "ssh root@172.16.1.159"
+```
+
+### 3.4 Verify Deployment
+
+```bash
+# Test LXC access
+ssh root@172.16.1.159
+
+# Inside LXC, verify:
+docker info | grep -E 'Storage Driver|Cgroup'   # Should show: overlay2, systemd, v2
+ls -la /dev/dri/                                 # Should show: card1, renderD128
+id apps                                          # uid=568, groups: 568(apps),44(video),110(render),991(docker)
+docker network ls | grep iot_macvlan             # Should exist
+ls /mnt/fast/stacks                              # Should show git repo
+git -C /mnt/fast/stacks status                   # Should work (SSH keys deployed)
+
+# Test GPU hardware acceleration
+docker run --rm --device /dev/dri/card1 --device /dev/dri/renderD128 --group-add video --group-add render \
+  debian:13 ls -la /dev/dri/
+```
+
+---
+
+## Phase 4: Deploy Docker Stacks
+
+### 4.1 Pull Latest Git Changes
+
+```bash
+ssh root@172.16.1.159
+cd /mnt/fast/stacks
+git pull  # SSH key was copied by terraform
+```
+
+### 4.2 Start Stacks in Dependency Order
+
+```bash
+cd /mnt/fast/stacks
+
+# 1. Infrastructure (creates t3_proxy network)
+docker compose -f traefik/compose.yaml up -d
+
+# Verify networks
+docker network ls | grep -E 't3_proxy|socket_proxy|iot_macvlan'
+
+# 2. Media acquisition
+docker compose -f arrs/compose.yaml up -d
+
+# 3. Media serving (uses iot_macvlan for direct LAN IPs)
+docker compose -f media/compose.yaml up -d
+
+# 4. Photo library
+docker compose -f immich/compose.yaml up -d
+
+# 5. All other stacks
+for stack in automation code-server dawarich freshrss homarr karakeep keeper-sh minecraft openwebui podsync postiz teleport termix; do
+  docker compose -f $stack/compose.yaml up -d
+done
+```
+
+```bash
+# Check containers are healthy
+docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | sort
+```
+
+### 4.4 Verify GPU Hardware Acceleration
+
+```bash
+# Test Jellyfin GPU access
+docker exec jellyfin vainfo --display drm --device /dev/dri/renderD128
+
+# Expected output (AMD Radeon 890M):
+# VAProfileH264ConstrainedBaseline: Decode, Encode
+# VAProfileH264Main: Decode, Encode
+# VAProfileH264High: Decode, Encode
+# VAProfileHEVCMain: Decode, Encode
+# VAProfileHEVCMain10: Decode, Encode
+# VAProfileVP9Profile0: Decode
+# VAProfileVP9Profile2: Decode
+# VAProfileAV1Profile0: Decode, Encode
+
+# Test Immich ML (if using GPU)
+docker logs immich-machine-learning | grep -i "gpu\|cuda\|device"
+```
+
+---
+
+## Phase 5: Post-Migration Cleanup & Validation
+
+### 5.1 Verify ACME Certificates
+
+Traefik's `acme.json` should have survived intact on the `fast` pool. Check logs to confirm Traefik reused existing certificates (not requesting new ones):
+
+```bash
+docker logs traefik 2>&1 | grep -i "certificate\|acme" | head -20
+```
+
+Look for: `"Using existing ACME account"` or similar messages indicating cert reuse.
+
+### 5.2 Test External Access
+
+```bash
+# Test Traefik routing
+curl -I https://jellyfin.deercrest.info    # Should return 200 OK
+curl -I https://immich.deercrest.info      # Should return 200 OK
+curl -I https://homarr.deercrest.info      # Should return 200 OK
+```
+
+### 5.3 Remove Old TrueNAS Datasets (Optional)
+
+**⚠️ Only after confirming everything works for 24+ hours:**
+
+```bash
+# TrueNAS Apps storage (ix-apps) — no longer needed
+zfs list | grep ix-apps                    # Verify what will be destroyed
+# zfs destroy -r fast/ix-apps              # Frees ~238GB
+
+# TrueNAS system datasets
+# zfs destroy -r fast/.system              # Frees ~2GB
+```
+
+Wait at least a week before destroying these — they contain no essential data but serve as a rollback safety net.
+
+### 5.4 Git Configuration (if needed)
+
+If git complains about safe directory:
+
+```bash
+git config --global --add safe.directory /mnt/fast/stacks
+```
+
+---
+
+## Phase 6: Ongoing Proxmox Operations
+
+### 6.1 ZFS Maintenance
+
+Replace TrueNAS's automatic scrubs with Proxmox cron jobs:
+
+```bash
+# On Proxmox host (not LXC)
+cat <<'EOF' >> /etc/cron.d/zfs-scrub
+# ZFS scrubs: fast pool Sunday 3am, tank pool Sunday 4am
+0 3 * * 0 root /sbin/zpool scrub fast
+0 4 * * 0 root /sbin/zpool scrub tank
+EOF
+```
+
+Optional: Install `sanoid` for automated ZFS snapshots:
+
+```bash
+apt install -y sanoid
+# Configure /etc/sanoid/sanoid.conf per documentation
+```
+
+### 6.2 LXC Management Commands
+
+```bash
+# List all containers
+pct list
+
+# Container control
+pct start 100
+pct stop 100
+pct restart 100
+
+# Shell access
+pct enter 100
+
+# View logs
+journalctl -u pve-container@100
+
+# Backup/restore
+vzdump 100 --dumpdir /mnt/tank/backups --mode snapshot
+pct restore 100 /mnt/tank/backups/vzdump-lxc-100-*.tar.zst
+```
+
+### 6.3 Proxmox Web UI
+
+Access at: `https://172.16.1.158:8006`
+
+Default credentials: `root@pam` + password set during install
+
+---
+
+## Troubleshooting
+
+### Issue: GPU Devices Show `nobody:nogroup` in LXC
+
+**Symptom:** `ls -la /dev/dri/` inside LXC shows `nobody:nogroup` for `renderD128`
+
+**Cause:** Host GID doesn't match idmap passthrough or `/etc/subgid` is missing delegation
+
+**Fix:**
+
+```bash
+# On Proxmox host
+getent group render           # Verify GID is 110
+cat /etc/subgid | grep 110    # Should show: root:110:1
+
+# If missing, add it:
+echo 'root:110:1' >> /etc/subgid
+pct stop 100 && pct start 100
+
+# Force device ownership
+chgrp render /dev/dri/renderD*
+udevadm trigger /dev/dri/renderD*
+```
+
+### Issue: `iot_macvlan` Network Missing
+
+**Symptom:** Jellyfin/Dispatcharr containers fail to start with "network not found"
+
+**Cause:** Network wasn't created by terraform or was deleted
+
+**Fix:**
+
+```bash
+# Inside LXC
 docker network create -d macvlan \
   --subnet=172.16.1.0/24 \
   --gateway=172.16.1.1 \
@@ -585,132 +464,153 @@ docker network create -d macvlan \
   iot_macvlan
 ```
 
-Then start the traefik stack:
+### Issue: Git Operations Fail with "Permission denied (publickey)"
+
+**Symptom:** `git pull` fails, SSH keys not found
+
+**Cause:** SSH keys weren't copied from Proxmox host during terraform provisioning
+
+**Fix:**
 
 ```bash
-# Start traefik stack first — it creates t3_proxy and socket_proxy
-cd /mnt/fast/stacks/traefik
-docker compose up -d
+# On Proxmox host — verify keys exist
+ls -la /root/.ssh/id_ed25519*
+
+# If missing, copy from dev machine
+# scp ~/.ssh/id_ed25519* root@172.16.1.158:/root/.ssh/
+
+# Re-run terraform to deploy keys
+cd infrastructure/proxmox
+terraform apply -replace=null_resource.copy_ssh_keys
+
+# Or manually copy into LXC
+pct push 100 /root/.ssh/id_ed25519 /root/.ssh/id_ed25519
+pct push 100 /root/.ssh/id_ed25519.pub /root/.ssh/id_ed25519.pub
+pct exec 100 -- chmod 600 /root/.ssh/id_ed25519
 ```
 
-Verify: `docker network ls | grep -E 't3_proxy|socket_proxy|iot_macvlan'`
+### Issue: ZFS Child Datasets Not Visible in LXC
 
-**Note on GitHub SSH access**: Terraform adds `github.com` to known_hosts, but you must manually copy your SSH private key to `/root/.ssh/` inside the LXC for git operations:
+**Symptom:** `/mnt/fast/appdata/<service>` directories exist but are empty inside LXC
 
-```bash
-# From your dev machine
-scp ~/.ssh/id_ed25519* root@172.16.1.159:/root/.ssh/
-ssh root@172.16.1.159 'chmod 600 /root/.ssh/id_ed25519'
-```
+**Cause:** Proxmox bind mounts only show parent dataset, not children (each ZFS dataset has independent mount)
 
----
-
-## Phase 5: Bring Up the Stacks
-
-All stacks live at `/mnt/fast/stacks/` — already on the `fast` pool, already in git, `.env` files already there from TrueNAS.
+**Fix:** Terraform handles this automatically via `patch_lxc_config`. If manual fix needed:
 
 ```bash
-# Start stacks in dependency order
-cd /mnt/fast/stacks
-
-# 1. Infrastructure first (Traefik/Authelia creates t3_proxy)
-docker compose -f traefik/compose.yaml up -d
-
-# 2. Media acquisition
-docker compose -f arrs/compose.yaml up -d
-
-# 3. Media serving
-docker compose -f media/compose.yaml up -d
-
-# 4. Photo library
-docker compose -f immich/compose.yaml up -d
-
-# 5. Everything else
-for stack in automation code-server freshrss karakeep keeper-sh openwebui; do
-  docker compose -f $stack/compose.yaml up -d
+# On Proxmox host
+pct stop 100
+zfs list -r -H -o name fast/appdata fast/home | while read ds; do
+  case "$ds" in fast/appdata|fast/home) continue ;; esac
+  mp="/mnt/$ds"
+  grep -q "$mp" /etc/pve/lxc/100.conf || \
+    echo "lxc.mount.entry: $mp ${mp#/} none bind,create=dir 0 0" >> /etc/pve/lxc/100.conf
 done
+pct start 100
 ```
 
-Check all containers are healthy:
+### Issue: Terraform `HTTP 500 hostname lookup failed`
+
+**Symptom:** `terraform apply` fails with "hostname lookup 'pve' failed - server offline?"
+
+**Cause:** `proxmox_node` in `terraform.tfvars` doesn't match actual hostname
+
+**Fix:**
 
 ```bash
-docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | sort
+# Check actual hostname
+ssh root@172.16.1.158 'hostname'    # Returns: atlantis (or your choice)
+
+# Update terraform.tfvars
+proxmox_node = "atlantis"  # Must match exactly
+```
+
+### Issue: Containers Can't Access GPU
+
+**Symptom:** Jellyfin/Immich logs show "Cannot open /dev/dri/renderD128: Permission denied"
+
+**Cause:** Container user not in `render` group, or group_add incorrect
+
+**Fix:**
+
+```bash
+# Verify compose file has correct GID
+grep -A5 group_add media/jellyfin.yaml
+# Should show: group_add: ["44", "110"]
+
+# Recreate container (restart is not enough)
+docker compose -f media/compose.yaml up -d --force-recreate jellyfin
+
+# Verify inside container
+docker exec jellyfin ls -la /dev/dri/
+docker exec jellyfin id jellyfin
+# User should be member of groups: 44(video), 110(render)
 ```
 
 ---
 
-## Post-Migration Cleanup
+## Rollback & Safety
 
-### Remove TrueNAS-specific ZFS datasets (optional, when confident)
+### Data Safety Guarantees
 
-These are no longer needed after migration but contain no important data:
+- **ZFS pools (`fast`, `tank`)** are on physically separate drives (`nvme1n1`, `nvme2n1`, `sda-c`) from the Proxmox OS (`nvme0n1`)
+- Installing Proxmox **only touches `nvme0n1`** (destroys TrueNAS boot-pool)
+- If Proxmox install fails, pools remain intact and can be imported on any Debian/Ubuntu live USB
+
+### Emergency Rollback
+
+If critical issues arise within first 48 hours:
+
+1. **Boot TrueNAS SCALE USB installer again**
+2. **Reinstall to `nvme0n1`** (overwrites Proxmox)
+3. **Import pools:** `zpool import fast && zpool import tank`
+4. **Fix mountpoints:** `zfs set mountpoint=/mnt/fast fast && zfs set mountpoint=/mnt/tank tank`
+5. **Restore settings:** Extract from `/mnt/fast/home/backup-truenas-*.tar.gz`
+6. **Start Docker stacks** (all `.env` files and appdata survived)
+
+### Backup Before Destroying Old Datasets
+
+Before running `zfs destroy -r fast/ix-apps`, take one final backup:
 
 ```bash
-# TrueNAS Apps internal storage (ix-apps)
-# WARNING: verify Proxmox is fully running before destroying anything
-# zfs destroy -r fast/ix-apps     # ~238GB of old TrueNAS Docker data
-# zfs destroy -r fast/.system     # ~2GB TrueNAS system datasets
+zfs snapshot fast/ix-apps@pre-delete
+# If you need to roll back: zfs rollback fast/ix-apps@pre-delete
+# Delete snapshot later: zfs destroy fast/ix-apps@pre-delete
 ```
-
-Do this only **after** you've confirmed all stacks are healthy on Proxmox.
-
-### ACME certificate validation
-
-Traefik's `acme.json` survived intact on `fast/appdata/traefik`. Verify Traefik started without requesting new certs (check logs for "Using existing certificate"):
-
-```bash
-docker logs traefik 2>&1 | grep -i "acme\|certif\|tls" | head -20
-```
-
-### Update CLAUDE.md repo reference
-
-The git repo is now accessed at:
-- Host path: `/mnt/fast/stacks` (via bind mount)
-- LXC path: `/mnt/fast/stacks` (same path)
-
-`git config --global --add safe.directory /mnt/fast/stacks`
 
 ---
 
-## Ongoing: Proxmox-Specific Operations
+## Validation Checklist
 
-### ZFS scrubs (replace TrueNAS scheduled scrubs)
+After completing all phases, verify these items:
 
-```bash
-# Add to Proxmox crontab (runs on Proxmox host, not LXC)
-echo "0 3 * * 0 root zpool scrub fast" >> /etc/cron.d/zfs-scrub
-echo "0 4 * * 0 root zpool scrub tank" >> /etc/cron.d/zfs-scrub
-```
-
-### ZFS snapshots (replace TrueNAS periodic snapshots)
-
-Proxmox has a built-in ZFS snapshot tool, or use `sanoid`:
-
-```bash
-apt install -y sanoid
-# Configure /etc/sanoid/sanoid.conf per sanoid docs
-```
-
-### LXC management
-
-```bash
-pct list                    # show all containers
-pct start/stop/restart 100  # manage the Docker LXC
-pct enter 100               # shell into LXC
-```
-
-### Proxmox web UI
-
-Access at: `https://172.16.1.158:8006`
+- [ ] Proxmox host has correct groups: `getent group apps video render`
+- [ ] ZFS pools mount at boot: `systemctl status zfs-import-cache zfs-mount`
+- [ ] LXC starts automatically: `pct config 100 | grep onboot`
+- [ ] GPU devices visible in LXC: `ssh root@172.16.1.159 'ls -la /dev/dri/'`
+- [ ] Docker daemon running: `ssh root@172.16.1.159 'docker info'`
+- [ ] Networks exist: `ssh root@172.16.1.159 'docker network ls | grep -E "t3_proxy|iot_macvlan"'`
+- [ ] Git repo accessible: `ssh root@172.16.1.159 'git -C /mnt/fast/stacks status'`
+- [ ] SSH keys deployed: `ssh root@172.16.1.159 'ssh -T git@github.com'`
+- [ ] All containers running: `ssh root@172.16.1.159 'docker ps -a | grep -v Up'` (should return nothing)
+- [ ] GPU acceleration working: `ssh root@172.16.1.159 'docker exec jellyfin vainfo --display drm --device /dev/dri/renderD128'`
+- [ ] Traefik certificates valid: `curl -I https://jellyfin.deercrest.info`
+- [ ] External services accessible via HTTPS
+- [ ] ZFS scrubs scheduled: `cat /etc/cron.d/zfs-scrub`
 
 ---
 
-## Rollback Plan
+## Summary: What Changed
 
-If anything goes wrong before you destroy TrueNAS data:
+| Component | TrueNAS SCALE | Proxmox VE 9.1 | Notes |
+|-----------|---------------|----------------|-------|
+| OS | TrueNAS SCALE 25.10 (Debian 12) | Proxmox VE 9.1 (Debian 13) | Debian upgrade changes default group GIDs |
+| Container Runtime | Docker CE in privileged jail | Docker CE in unprivileged LXC | Safer isolation, requires idmap |
+| GPU Access | Direct passthrough | LXC idmap passthrough (video:44, render:110) | render group moved from 105→110 to avoid tcpdump/postdrop conflicts |
+| Management | TrueNAS Web UI | Proxmox Web UI + Terraform IaC | Infrastructure as Code for reproducibility |
+| Networking | macvlan on host | macvlan inside LXC (iot_macvlan) | Same IP scheme, compatible with existing firewall rules |
+| ZFS Management | TrueNAS GUI | CLI + Proxmox GUI | More control, same ZFS features |
+| SSH Keys | Manually managed | Terraform-deployed via pct push | Automated deployment from Proxmox→LXC |
+| Docker Networks | Manually created | Terraform provisioner creates | Fully automated setup |
 
-1. **Proxmox ZFS pool import failed**: Boot a live Linux USB, run `zpool import -f fast` to verify pools are intact before proceeding
-2. **LXC won't start**: Check Proxmox host for bind mount path issues (`pct start 100 2>&1`)
-3. **Docker stacks broken**: The `.env` files and appdata are all on `fast` pool — re-installing TrueNAS to `nvme0n1` and re-importing the pools restores everything to the previous state
-
-The data pools are on completely separate physical drives from the OS install target. There is no scenario where installing Proxmox to `nvme0n1` destroys any data.
+**Key Benefit:** Entire infrastructure is now defined in Terraform — can recreate from scratch in <10 minutes with `terraform apply`.
