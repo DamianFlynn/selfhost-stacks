@@ -23,7 +23,7 @@
 # ── Computed idmap ranges ────────────────────────────────────────────────────
 #
 # The three special GIDs to pass through are: video < render < apps
-# (44 < 105 < 568 with the defaults). The locals below compute the
+# (44 < 110 < 568 with the defaults). The locals below compute the
 # contiguous range boundaries so the idmap lines adapt if variables change.
 #
 # UID mapping (only apps uid is special):

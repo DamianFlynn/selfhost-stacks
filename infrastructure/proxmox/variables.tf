@@ -147,9 +147,9 @@ variable "video_gid" {
 }
 
 variable "render_gid" {
-  description = "GID for the render group — must match /dev/dri/renderD* group on Proxmox host (using 105 to avoid tcpdump conflict at 103)"
+  description = "GID for the render group — must match /dev/dri/renderD* group on Proxmox host (using 110 to avoid tcpdump at 103 and postdrop at 105)"
   type        = number
-  default     = 105
+  default     = 110
 }
 
 variable "gpu_card_index" {

@@ -64,7 +64,7 @@ services:
     # user: $PUID:$PGID
     group_add:
       - "44"   # video group for AMD GPU access
-      - "105"  # render group for AMD Radeon 890M GPU access
+      - "110"  # render group for AMD Radeon 890M GPU access
     networks:
       iot_macvlan:
         ipv4_address: 172.16.1.76

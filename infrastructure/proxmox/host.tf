@@ -72,9 +72,9 @@ resource "null_resource" "host_setup" {
       # ── GPU groups ────────────────────────────────────────────────────────
       # /dev/dri/card0      is owned by root:video  (gid 44 on Proxmox/Debian)
       # /dev/dri/renderD128 is owned by root:render
-      # NOTE: Debian 13 assigns render a dynamic GID (~993). GID 103 is taken by tcpdump.
-      # We force it to render_gid (105) so the LXC idmap passthrough works correctly.
-      # The idmap math requires video(44) < render < apps(568) — 993 breaks this.
+      # NOTE: Debian 13 assigns render a dynamic GID (~993). GID 103 is taken by tcpdump,
+      # and GID 105 is taken by postdrop. We force it to render_gid (110) so the LXC
+      # idmap passthrough works. The idmap math requires video(44) < render < apps(568).
       "getent group video  >/dev/null 2>&1 || groupadd -g ${var.video_gid} video",
       "getent group render >/dev/null 2>&1 || groupadd -g ${var.render_gid} render",
       "getent group render | grep -q ':${var.render_gid}:' || groupmod -g ${var.render_gid} render",
@@ -87,7 +87,7 @@ resource "null_resource" "host_setup" {
       "grep -q 'root:100000:65536' /etc/subuid || echo 'root:100000:65536' >> /etc/subuid",
 
       # ── /etc/subgid — GID passthrough for unprivileged LXC idmap ─────────
-      # root needs delegation rights for: video(44), render(105), apps(568) + standard range.
+      # root needs delegation rights for: video(44), render(110), apps(568) + standard range.
       "grep -q 'root:${var.video_gid}:1' /etc/subgid  || echo 'root:${var.video_gid}:1'  >> /etc/subgid",
       "grep -q 'root:${var.render_gid}:1' /etc/subgid || echo 'root:${var.render_gid}:1' >> /etc/subgid",
       "grep -q 'root:${var.apps_gid}:1' /etc/subgid   || echo 'root:${var.apps_gid}:1'   >> /etc/subgid",

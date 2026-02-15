@@ -19,7 +19,7 @@ Docker Compose stacks for a self-hosted media/productivity server running **Prox
 | LXC 100 `selfhost` | Docker — all compose stacks | `172.16.1.159` |
 | LXC 101 `openclaw` | OpenClaw game engine | `172.16.1.160` |
 
-The Docker LXC is **unprivileged** with a custom `lxc.idmap` that passes through UID/GID 568 (apps), GID 44 (video), and GID 105 (render) 1:1 so bind-mounted ZFS files retain correct ownership and AMD GPU devices work.
+The Docker LXC is **unprivileged** with a custom `lxc.idmap` that passes through UID/GID 568 (apps), GID 44 (video), and GID 110 (render) 1:1 so bind-mounted ZFS files retain correct ownership and AMD GPU devices work.
 
 ## Architecture
 
@@ -67,7 +67,7 @@ Middleware chains are defined in Traefik's dynamic file provider at `/mnt/fast/a
 - **Working user**: `damian` is a member of `apps` group
 - Set `PUID=568` / `PGID=568` in `.env` for LinuxServer images
 - **Exception**: Postgres data dirs must be `postgres:postgres` / `700`
-- GPU devices (`/dev/dri/card0`, `/dev/dri/renderD128`) are owned by `video:44` / `render:105` — the LXC idmap passes these GIDs through 1:1
+- GPU devices (`/dev/dri/card0`, `/dev/dri/renderD128`) are owned by `video:44` / `render:110` — the LXC idmap passes these GIDs through 1:1
 
 ## Infrastructure — Terraform
 

@@ -14,7 +14,7 @@
 #
 # Simpler than selfhost: no apps(568) uid/gid passthrough is needed because
 # this LXC has no bind mounts from the fast pool.
-# Only video(44) and render(105) GIDs pass through 1:1 for /dev/dri access.
+# Only video(44) and render(110) GIDs pass through 1:1 for /dev/dri access.
 #
 #   u 0  100000  65536             (all UIDs → high namespace)
 #   g 0  100000  video_gid         (0 … video_gid-1)
@@ -129,7 +129,7 @@ resource "null_resource" "patch_openclaw_config" {
       # UID: map all container UIDs to the high namespace (no passthrough needed)
       "echo 'lxc.idmap: u 0 100000 65536' >> ${local.oc_conf}",
 
-      # GID: video(44) and render(105) pass through 1:1; gaps go to high namespace
+      # GID: video(44) and render(110) pass through 1:1; gaps go to high namespace
       "echo 'lxc.idmap: g 0 100000 ${local.oc_g_r1_count}'                        >> ${local.oc_conf}",
       "echo 'lxc.idmap: g ${var.video_gid} ${var.video_gid} 1'                    >> ${local.oc_conf}",
       "echo 'lxc.idmap: g ${var.video_gid + 1} ${local.oc_g_r3_host} ${local.oc_g_r3_count}' >> ${local.oc_conf}",
@@ -202,7 +202,7 @@ resource "null_resource" "provision_openclaw" {
       "npm install -g pnpm",
 
       # ── GPU groups ────────────────────────────────────────────────────────
-      # idmap passes gid 44 (video) and 105 (render) through 1:1.
+      # idmap passes gid 44 (video) and 110 (render) through 1:1.
       "getent group video  >/dev/null 2>&1 || groupadd -g ${var.video_gid} video",
       "getent group render >/dev/null 2>&1 || groupadd -g ${var.render_gid} render",
 

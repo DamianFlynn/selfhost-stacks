@@ -60,20 +60,20 @@ The public key in `lxc_ssh_public_keys` / `terraform_ssh_private_key_path` must 
 Symptom if missing: provisioner loops on "Connecting to remote host via SSH..." or gets
 `SSH authentication failed: attempted methods [none password publickey], no supported methods remain`.
 
-**4. `render` group GID on Debian 13 is dynamic (~993), not the static 105**
+**4. `render` group GID on Debian 13 is dynamic (~993), not the static 110**
 
 Debian 13 assigns the `render` group a dynamic GID (e.g. `993`) instead of a static value.
-Additionally, GID 103 is already taken by the `tcpdump` group on Proxmox/Debian.
+Additionally, GID 103 is taken by `tcpdump` and GID 105 is taken by `postdrop` on Proxmox/Debian.
 The idmap in `lxc-selfhost.tf` requires `video(44) < render < apps(568)`,
 so `render_gid = 993` is **not** usable — it would break the idmap math.
 
 Fix the host before running `terraform apply`:
 
 ```bash
-getent group 105           # confirm 105 is not already taken
-groupmod -g 105 render     # reassign render to the expected static GID
+getent group 110           # confirm 110 is not already taken
+groupmod -g 110 render     # reassign render to the expected static GID
 udevadm trigger /dev/dri/renderD128
-ls -lan /dev/dri/          # verify renderD128 now shows GID 105
+ls -lan /dev/dri/          # verify renderD128 now shows GID 110
 ```
 
 Symptom if skipped: `renderD128` inside the LXC appears owned by `nobody:nogroup`
@@ -161,7 +161,7 @@ Save that output — if you ever need `-f` (force) on import, these confirm you 
 
 ```bash
 id apps       # expect: uid=568(apps) gid=568(apps)
-getent group render video   # render:x:105  video:x:44
+getent group render video   # render:x:110  video:x:44
 ```
 ❯ id apps
 uid=568(apps) gid=568(apps) groups=568(apps)
@@ -370,10 +370,10 @@ useradd -r -u 568 -g 568 -M -s /usr/sbin/nologin apps
 # GPU groups (must match device ownership in /dev/dri)
 # Check actual device names on this machine first — the card may be card1, not card0:
 ls -la /dev/dri/
-# This machine: card1 (root:video, gid 44) and renderD128 (root:render, gid 105)
+# This machine: card1 (root:video, gid 44) and renderD128 (root:render, gid 110)
 # If those groups/GIDs don't exist on Proxmox host, create them:
 getent group video  || groupadd -g 44 video
-getent group render || groupadd -g 105 render
+getent group render || groupadd -g 110 render
 ```
 
 ### 2.5 Restore correct permissions on appdata
@@ -479,13 +479,13 @@ apt install -y curl git ca-certificates gnupg lsb-release \
 ### 4.2 Create `apps` user and GPU groups
 
 ```bash
-# Must match host GIDs (568 for apps, 44 for video, 105 for render)
+# Must match host GIDs (568 for apps, 44 for video, 110 for render)
 groupadd -g 568 apps
 # -r required: Debian rejects UIDs below UID_MIN 1000 without system-account flag
 useradd -r -u 568 -g 568 -M -s /usr/sbin/nologin apps
 
 getent group video  || groupadd -g 44  video
-getent group render || groupadd -g 105 render
+getent group render || groupadd -g 110 render
 
 # Verify /dev/dri devices are visible and have correct ownership
 ls -la /dev/dri/
