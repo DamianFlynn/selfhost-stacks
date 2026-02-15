@@ -85,14 +85,8 @@ locals {
 
   conf = "/etc/pve/lxc/${var.lxc_vmid}.conf"
 
-  # GPU device names and cgroup2 minor numbers.
-  # card and render indices are INDEPENDENT — do not assume renderD = renderD(128+card).
-  # Verify on the Proxmox host: ls -la /dev/dri/
-  # This machine: card1 (226:1) + renderD128 (226:128)
-  gpu_card         = "card${var.gpu_card_index}"
-  gpu_render       = "renderD${var.gpu_render_index}"
-  gpu_card_minor   = var.gpu_card_index
-  gpu_render_minor = var.gpu_render_index
+  # GPU device names and cgroup2 minor numbers defined in lxc-openclaw.tf
+  # Both LXC containers share the same GPU device locals
 }
 
 # ── Phase 1: LXC container (started=false) ───────────────────────────────────

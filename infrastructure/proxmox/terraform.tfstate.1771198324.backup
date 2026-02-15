@@ -1,0 +1,1026 @@
+{
+  "version": 4,
+  "terraform_version": "1.14.5",
+  "serial": 127,
+  "lineage": "55b1c1d1-4d59-893a-174c-f56b3328c955",
+  "outputs": {
+    "lxc_ip": {
+      "value": "172.16.1.159",
+      "type": "string"
+    },
+    "lxc_ssh": {
+      "value": "ssh root@172.16.1.159",
+      "type": "string"
+    },
+    "lxc_vmid": {
+      "value": 100,
+      "type": "number"
+    },
+    "pct_shell": {
+      "value": "ssh root@172.16.1.158 pct enter 100",
+      "type": "string"
+    },
+    "proxmox_ui_url": {
+      "value": "https://172.16.1.158:8006",
+      "type": "string"
+    },
+    "verify_commands": {
+      "value": "# On Proxmox host:\nssh root@172.16.1.158 \"zfs list | grep -E 'fast|tank'\"\nssh root@172.16.1.158 \"pct list\"\nssh root@172.16.1.158 \"grep -E 'idmap|cgroup2|mount.entry' /etc/pve/lxc/100.conf\"\n\n# Inside LXC:\nssh root@172.16.1.159 \"docker info | grep 'Storage Driver'\"\nssh root@172.16.1.159 \"ls /mnt/fast/stacks\"\nssh root@172.16.1.159 \"ls -la /dev/dri/\"\nssh root@172.16.1.159 \"id apps\"\nssh root@172.16.1.159 \"ls -la /mnt/fast/appdata/traefik | head\"\n",
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "mode": "managed",
+      "type": "null_resource",
+      "name": "copy_ssh_keys",
+      "provider": "provider[\"registry.terraform.io/hashicorp/null\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "id": "846225439303678084",
+            "triggers": null
+          },
+          "sensitive_attributes": [],
+          "identity_schema_version": 0,
+          "dependencies": [
+            "null_resource.host_setup",
+            "null_resource.patch_lxc_config",
+            "null_resource.provision_lxc",
+            "null_resource.start_lxc",
+            "proxmox_virtual_environment_container.selfhost"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "null_resource",
+      "name": "host_setup",
+      "provider": "provider[\"registry.terraform.io/hashicorp/null\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "id": "8739043003962213384",
+            "triggers": null
+          },
+          "sensitive_attributes": [],
+          "identity_schema_version": 0
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "null_resource",
+      "name": "patch_lxc_config",
+      "provider": "provider[\"registry.terraform.io/hashicorp/null\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "id": "6527165114509707633",
+            "triggers": null
+          },
+          "sensitive_attributes": [],
+          "identity_schema_version": 0,
+          "dependencies": [
+            "null_resource.host_setup",
+            "proxmox_virtual_environment_container.selfhost"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "null_resource",
+      "name": "patch_openclaw_config",
+      "provider": "provider[\"registry.terraform.io/hashicorp/null\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "id": "3136176411754690634",
+            "triggers": null
+          },
+          "sensitive_attributes": [],
+          "identity_schema_version": 0,
+          "dependencies": [
+            "null_resource.host_setup",
+            "proxmox_virtual_environment_container.openclaw"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "null_resource",
+      "name": "provision_lxc",
+      "provider": "provider[\"registry.terraform.io/hashicorp/null\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "id": "3245546985982411627",
+            "triggers": null
+          },
+          "sensitive_attributes": [],
+          "identity_schema_version": 0,
+          "dependencies": [
+            "null_resource.host_setup",
+            "null_resource.patch_lxc_config",
+            "null_resource.start_lxc",
+            "proxmox_virtual_environment_container.selfhost"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "null_resource",
+      "name": "provision_openclaw",
+      "provider": "provider[\"registry.terraform.io/hashicorp/null\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "id": "6934959180070435733",
+            "triggers": null
+          },
+          "sensitive_attributes": [],
+          "identity_schema_version": 0,
+          "dependencies": [
+            "null_resource.host_setup",
+            "null_resource.patch_openclaw_config",
+            "null_resource.start_openclaw",
+            "proxmox_virtual_environment_container.openclaw"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "null_resource",
+      "name": "start_lxc",
+      "provider": "provider[\"registry.terraform.io/hashicorp/null\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "id": "170581700761079279",
+            "triggers": null
+          },
+          "sensitive_attributes": [],
+          "identity_schema_version": 0,
+          "dependencies": [
+            "null_resource.host_setup",
+            "null_resource.patch_lxc_config",
+            "proxmox_virtual_environment_container.selfhost"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "null_resource",
+      "name": "start_openclaw",
+      "provider": "provider[\"registry.terraform.io/hashicorp/null\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "id": "5864146358850674643",
+            "triggers": null
+          },
+          "sensitive_attributes": [],
+          "identity_schema_version": 0,
+          "dependencies": [
+            "null_resource.host_setup",
+            "null_resource.patch_openclaw_config",
+            "proxmox_virtual_environment_container.openclaw"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "proxmox_virtual_environment_container",
+      "name": "openclaw",
+      "provider": "provider[\"registry.terraform.io/bpg/proxmox\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "clone": [],
+            "console": [],
+            "cpu": [
+              {
+                "architecture": "amd64",
+                "cores": 4,
+                "units": 1024
+              }
+            ],
+            "description": "OpenClaw AI assistant LXC\n",
+            "device_passthrough": [],
+            "disk": [
+              {
+                "acl": false,
+                "datastore_id": "local-lvm",
+                "mount_options": null,
+                "path_in_datastore": "local-lvm:vm-101-disk-0",
+                "quota": false,
+                "replicate": false,
+                "size": 64
+              }
+            ],
+            "environment_variables": null,
+            "features": [
+              {
+                "fuse": true,
+                "keyctl": false,
+                "mount": null,
+                "nesting": true
+              }
+            ],
+            "hook_script_file_id": null,
+            "id": "101",
+            "initialization": [
+              {
+                "dns": [
+                  {
+                    "domain": "",
+                    "server": "",
+                    "servers": [
+                      "172.16.1.1"
+                    ]
+                  }
+                ],
+                "hostname": "openclaw",
+                "ip_config": [
+                  {
+                    "ipv4": [
+                      {
+                        "address": "172.16.1.160/24",
+                        "gateway": "172.16.1.1"
+                      }
+                    ],
+                    "ipv6": []
+                  }
+                ],
+                "user_account": [
+                  {
+                    "keys": [
+                      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGU3N9Zb7efkRkYItZkK3WpC1elqJfTazDmkLyntpafw damian@macos"
+                    ],
+                    "password": "\u003cSc0rp10n!/\u003e"
+                  }
+                ]
+              }
+            ],
+            "ipv4": {},
+            "ipv6": {},
+            "memory": [
+              {
+                "dedicated": 4096,
+                "swap": 0
+              }
+            ],
+            "mount_point": [],
+            "network_interface": [
+              {
+                "bridge": "vmbr0",
+                "enabled": true,
+                "firewall": false,
+                "mac_address": "BC:24:11:EE:B0:53",
+                "mtu": 0,
+                "name": "eth0",
+                "rate_limit": 0,
+                "vlan_id": 0
+              }
+            ],
+            "node_name": "atlantis",
+            "operating_system": [
+              {
+                "template_file_id": "local:vztmpl/debian-13-standard_13.1-2_amd64.tar.zst",
+                "type": "debian"
+              }
+            ],
+            "pool_id": null,
+            "protection": false,
+            "start_on_boot": true,
+            "started": false,
+            "startup": [],
+            "tags": null,
+            "template": false,
+            "timeout_clone": 1800,
+            "timeout_create": 1800,
+            "timeout_delete": 60,
+            "timeout_start": 300,
+            "timeout_update": 1800,
+            "unprivileged": true,
+            "vm_id": 101,
+            "wait_for_ip": []
+          },
+          "sensitive_attributes": [
+            [
+              {
+                "type": "get_attr",
+                "value": "initialization"
+              },
+              {
+                "type": "index",
+                "value": {
+                  "value": 0,
+                  "type": "number"
+                }
+              },
+              {
+                "type": "get_attr",
+                "value": "user_account"
+              },
+              {
+                "type": "index",
+                "value": {
+                  "value": 0,
+                  "type": "number"
+                }
+              },
+              {
+                "type": "get_attr",
+                "value": "password"
+              }
+            ]
+          ],
+          "identity_schema_version": 0,
+          "private": "bnVsbA==",
+          "dependencies": [
+            "null_resource.host_setup"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "proxmox_virtual_environment_container",
+      "name": "selfhost",
+      "provider": "provider[\"registry.terraform.io/bpg/proxmox\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "clone": [],
+            "console": [],
+            "cpu": [
+              {
+                "architecture": "amd64",
+                "cores": 8,
+                "units": 1024
+              }
+            ],
+            "description": "Docker selfhost — all compose stacks\n",
+            "device_passthrough": [],
+            "disk": [
+              {
+                "acl": false,
+                "datastore_id": "local-lvm",
+                "mount_options": [],
+                "path_in_datastore": "local-lvm:vm-100-disk-0",
+                "quota": false,
+                "replicate": false,
+                "size": 128
+              }
+            ],
+            "environment_variables": {},
+            "features": [
+              {
+                "fuse": true,
+                "keyctl": false,
+                "mount": [],
+                "nesting": true
+              }
+            ],
+            "hook_script_file_id": null,
+            "id": "100",
+            "initialization": [
+              {
+                "dns": [
+                  {
+                    "domain": "",
+                    "server": "",
+                    "servers": [
+                      "172.16.1.1"
+                    ]
+                  }
+                ],
+                "hostname": "selfhost",
+                "ip_config": [
+                  {
+                    "ipv4": [
+                      {
+                        "address": "172.16.1.159/24",
+                        "gateway": "172.16.1.1"
+                      }
+                    ],
+                    "ipv6": []
+                  }
+                ],
+                "user_account": [
+                  {
+                    "keys": [
+                      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGU3N9Zb7efkRkYItZkK3WpC1elqJfTazDmkLyntpafw damian@macos"
+                    ],
+                    "password": "\u003cSc0rp10n!/\u003e"
+                  }
+                ]
+              }
+            ],
+            "ipv4": {
+              "br-24eabc34f8ed": "172.21.0.1",
+              "br-33af5e842edf": "192.168.95.1",
+              "br-4ce5a1200695": "172.22.0.1",
+              "br-5f6e3091a491": "172.19.0.1",
+              "br-64722b40f8fb": "192.168.80.1",
+              "br-74deb4cb9369": "172.24.0.1",
+              "br-7540d3819010": "172.26.0.1",
+              "br-833b0c2d7c3b": "172.18.0.1",
+              "br-8a584e528811": "172.27.0.1",
+              "br-8f40e177e381": "192.168.90.1",
+              "br-92b51c3bd2c1": "192.168.91.1",
+              "br-a3e7f169202a": "172.23.0.1",
+              "br-a64b830ee859": "172.20.0.1",
+              "br-cd94349b2739": "172.25.0.1",
+              "docker0": "172.17.0.1",
+              "eth0": "172.16.1.159"
+            },
+            "ipv6": {
+              "br-24eabc34f8ed": "fe80::4007:17ff:fe47:fdc8",
+              "br-33af5e842edf": "fe80::704e:f0ff:fe77:4346",
+              "br-4ce5a1200695": "fe80::c099:f6ff:fe22:be1a",
+              "br-5f6e3091a491": "fe80::24be:1aff:fe5f:6542",
+              "br-64722b40f8fb": "fe80::b8ac:6bff:fe4d:8827",
+              "br-74deb4cb9369": "fe80::dc38:90ff:fe89:6f9e",
+              "br-7540d3819010": "fe80::fc96:a0ff:fe29:5556",
+              "br-833b0c2d7c3b": "fe80::10d7:8fff:fe9c:ebaf",
+              "br-8a584e528811": "fe80::985b:8cff:fee8:a82e",
+              "br-8f40e177e381": "fe80::8c86:f5ff:fe5f:c2e9",
+              "br-92b51c3bd2c1": "fe80::3c11:8aff:fef6:f2d4",
+              "br-a3e7f169202a": "fe80::d4d9:87ff:febf:d169",
+              "br-a64b830ee859": "fe80::ec2f:1cff:fec6:6fd1",
+              "br-cd94349b2739": "fe80::cb8:73ff:fe8a:deb7",
+              "docker0": "fe80::dce9:4cff:fe50:a0e9",
+              "eth0": "fd57:3a26:a7fa:f8b6:be24:11ff:fe40:bed1",
+              "veth01d4142": "fe80::74a1:19ff:fe74:eb62",
+              "veth0626a7d": "fe80::34ed:65ff:fe95:4a02",
+              "veth07782a1": "fe80::d44d:eeff:fe24:9588",
+              "veth092132f": "fe80::28cc:ceff:fe11:6bd1",
+              "veth0a9fbe0": "fe80::ac21:28ff:fe94:9d1c",
+              "veth0ad143e": "fe80::74d6:2dff:fe70:c433",
+              "veth0b289c6": "fe80::d8ba:34ff:feef:eecf",
+              "veth0bdc0a1": "fe80::74c8:2eff:fee4:e524",
+              "veth1396f2b": "fe80::cd6:38ff:feb8:3a47",
+              "veth14e1f1e": "fe80::c80c:2aff:fe11:84e9",
+              "veth1ce8cbb": "fe80::e482:acff:feac:a9bc",
+              "veth1dd0df6": "fe80::50ce:d7ff:fe98:c593",
+              "veth206b3cd": "fe80::a05a:fbff:fed3:bad",
+              "veth227a07a": "fe80::a479:c9ff:fe86:9926",
+              "veth23e2503": "fe80::a056:a7ff:fe85:e0f8",
+              "veth23edcc4": "fe80::2cab:62ff:fe9e:8f28",
+              "veth2a97c68": "fe80::e0:14ff:fe82:b8b0",
+              "veth2b0874c": "fe80::3011:4bff:febb:ec87",
+              "veth2f29598": "fe80::e843:f1ff:fe59:7fb2",
+              "veth3096c3a": "fe80::f8b3:aaff:fe76:147f",
+              "veth33a728e": "fe80::8081:fdff:fe03:7c7b",
+              "veth37c0161": "fe80::645c:3aff:fee5:8666",
+              "veth3d38193": "fe80::84a5:f4ff:feed:cf32",
+              "veth3dca09f": "fe80::b8e3:78ff:fe0e:50be",
+              "veth3fa4ecc": "fe80::24ad:a7ff:fef8:ad93",
+              "veth46148ff": "fe80::d452:fcff:fe05:7bb4",
+              "veth4644e55": "fe80::2cc9:b9ff:fe9d:71bd",
+              "veth47da211": "fe80::303d:10ff:fe5b:ec98",
+              "veth48c8242": "fe80::fc57:4ff:fee2:2691",
+              "veth4f4c4cf": "fe80::401e:b7ff:fe36:be1f",
+              "veth508c16f": "fe80::2472:80ff:fe75:ebbd",
+              "veth562efd1": "fe80::f0de:e5ff:feb3:587c",
+              "veth56a322c": "fe80::d47b:47ff:fef5:f592",
+              "veth578538f": "fe80::4c5d:35ff:fe81:80b9",
+              "veth5e809d4": "fe80::38b8:81ff:fee8:e52d",
+              "veth604ef96": "fe80::ec6c:cfff:feb0:972f",
+              "veth610112b": "fe80::488b:1dff:fe3f:4380",
+              "veth625c095": "fe80::9c4b:c8ff:fe04:27c1",
+              "veth62e18d0": "fe80::2ca3:e1ff:fe9a:9de7",
+              "veth67bd6aa": "fe80::94a0:13ff:fefc:c26",
+              "veth684f731": "fe80::7052:24ff:fef8:4d35",
+              "veth6cb8203": "fe80::100a:9cff:fecd:bc9e",
+              "veth71410dc": "fe80::a80b:4eff:fedb:89f6",
+              "veth727c202": "fe80::c045:40ff:fe4e:1130",
+              "veth75e96e5": "fe80::d01b:77ff:fe65:2514",
+              "veth7747e69": "fe80::1822:3bff:fed2:4393",
+              "veth7966e9b": "fe80::6c2e:18ff:feb6:6038",
+              "veth7b60b24": "fe80::9843:53ff:fe75:bf5d",
+              "veth7e88b8b": "fe80::2c41:e6ff:fe8f:4e90",
+              "veth8794481": "fe80::8c06:f2ff:feb6:ea54",
+              "veth8adbe02": "fe80::54ff:16ff:fee6:5341",
+              "veth8c834fd": "fe80::a886:eaff:feac:1c29",
+              "veth8ff8c7b": "fe80::d4:f0ff:fe62:a85c",
+              "veth90a3018": "fe80::a864:e5ff:fead:7911",
+              "veth9187734": "fe80::7c82:4ff:fe94:b0fb",
+              "veth92acfb3": "fe80::8cdb:e4ff:fe10:a1c7",
+              "veth99c43df": "fe80::d8aa:58ff:fe1b:f547",
+              "veth9f2c9ed": "fe80::7ccd:aeff:feee:cdc",
+              "vetha2ec232": "fe80::1ce8:e3ff:fec5:850b",
+              "vetha3a313d": "fe80::1464:81ff:fe18:bb46",
+              "vetha4d6664": "fe80::b864:60ff:fec4:73b2",
+              "vetha5ec535": "fe80::78d8:e9ff:fe16:b086",
+              "vethab4e59e": "fe80::c0c5:d1ff:fe78:334d",
+              "vethab5adfe": "fe80::c8f8:11ff:fed8:e6c9",
+              "vethb01360c": "fe80::38d6:80ff:feba:f9e6",
+              "vethb121d4e": "fe80::10ca:bff:fecc:1b9c",
+              "vethb4ea647": "fe80::3c7d:84ff:fec7:e0ea",
+              "vethbf983d0": "fe80::44c0:12ff:fef7:7ac7",
+              "vethc82fe21": "fe80::e0f8:18ff:fea8:fbbf",
+              "vethcaffc85": "fe80::70b6:90ff:fe9b:536",
+              "vethd89f7db": "fe80::5c2a:5aff:febf:cae2",
+              "vethdd0b8ce": "fe80::f47e:c7ff:fe55:9beb",
+              "vethddb6a45": "fe80::289b:78ff:fefc:47f6",
+              "vethdf20103": "fe80::e089:5dff:fec1:87ca",
+              "vethdf7df84": "fe80::6816:baff:fe5c:e4f3",
+              "vethe0309ce": "fe80::f854:fdff:fe92:a830",
+              "vethe288f25": "fe80::7034:99ff:fefa:d87a",
+              "vethe4541de": "fe80::486e:70ff:fefc:50e1",
+              "vethe58931a": "fe80::3489:3eff:fec4:701e",
+              "vethed4ff72": "fe80::6815:aeff:fec7:e8c2",
+              "vethf0c1afb": "fe80::949e:99ff:fec3:9034",
+              "vethf103628": "fe80::708d:4bff:fe29:dbfb",
+              "vethf56b9cd": "fe80::8455:74ff:fe78:1848",
+              "vethf624a0a": "fe80::781e:e1ff:fe71:ace0",
+              "vethf62eed1": "fe80::c2c:18ff:fe63:a17a",
+              "vethf952bc2": "fe80::4066:aff:fe7d:6d8d",
+              "vethfa344d3": "fe80::9871:fff:fe6c:adaa",
+              "vethfa498e6": "fe80::2844:18ff:fec1:81ef",
+              "vethfc1a99e": "fe80::2c13:f4ff:fedf:743",
+              "vethfcb6d13": "fe80::78da:8bff:fe46:d6ef",
+              "vethfdbbb72": "fe80::fc95:fdff:fefa:8cce",
+              "vethffe6290": "fe80::483:c4ff:fee2:e920"
+            },
+            "memory": [
+              {
+                "dedicated": 16384,
+                "swap": 0
+              }
+            ],
+            "mount_point": [
+              {
+                "acl": false,
+                "backup": false,
+                "mount_options": [],
+                "path": "/mnt/fast/stacks",
+                "path_in_datastore": "/mnt/fast/stacks",
+                "quota": false,
+                "read_only": false,
+                "replicate": true,
+                "shared": false,
+                "size": "",
+                "volume": "/mnt/fast/stacks"
+              },
+              {
+                "acl": false,
+                "backup": false,
+                "mount_options": [],
+                "path": "/mnt/fast/appdata/arrs",
+                "path_in_datastore": "/mnt/fast/appdata/arrs",
+                "quota": false,
+                "read_only": false,
+                "replicate": true,
+                "shared": false,
+                "size": "",
+                "volume": "/mnt/fast/appdata/arrs"
+              },
+              {
+                "acl": false,
+                "backup": false,
+                "mount_options": [],
+                "path": "/mnt/fast/appdata/automation",
+                "path_in_datastore": "/mnt/fast/appdata/automation",
+                "quota": false,
+                "read_only": false,
+                "replicate": true,
+                "shared": false,
+                "size": "",
+                "volume": "/mnt/fast/appdata/automation"
+              },
+              {
+                "acl": false,
+                "backup": false,
+                "mount_options": [],
+                "path": "/mnt/fast/appdata/code-server",
+                "path_in_datastore": "/mnt/fast/appdata/code-server",
+                "quota": false,
+                "read_only": false,
+                "replicate": true,
+                "shared": false,
+                "size": "",
+                "volume": "/mnt/fast/appdata/code-server"
+              },
+              {
+                "acl": false,
+                "backup": false,
+                "mount_options": [],
+                "path": "/mnt/fast/appdata/dawarich",
+                "path_in_datastore": "/mnt/fast/appdata/dawarich",
+                "quota": false,
+                "read_only": false,
+                "replicate": true,
+                "shared": false,
+                "size": "",
+                "volume": "/mnt/fast/appdata/dawarich"
+              },
+              {
+                "acl": false,
+                "backup": false,
+                "mount_options": [],
+                "path": "/mnt/fast/appdata/hoarder",
+                "path_in_datastore": "/mnt/fast/appdata/hoarder",
+                "quota": false,
+                "read_only": false,
+                "replicate": true,
+                "shared": false,
+                "size": "",
+                "volume": "/mnt/fast/appdata/hoarder"
+              },
+              {
+                "acl": false,
+                "backup": false,
+                "mount_options": [],
+                "path": "/mnt/fast/appdata/homarr",
+                "path_in_datastore": "/mnt/fast/appdata/homarr",
+                "quota": false,
+                "read_only": false,
+                "replicate": true,
+                "shared": false,
+                "size": "",
+                "volume": "/mnt/fast/appdata/homarr"
+              },
+              {
+                "acl": false,
+                "backup": false,
+                "mount_options": [],
+                "path": "/mnt/fast/appdata/immich",
+                "path_in_datastore": "/mnt/fast/appdata/immich",
+                "quota": false,
+                "read_only": false,
+                "replicate": true,
+                "shared": false,
+                "size": "",
+                "volume": "/mnt/fast/appdata/immich"
+              },
+              {
+                "acl": false,
+                "backup": false,
+                "mount_options": [],
+                "path": "/mnt/fast/appdata/immich/postgres",
+                "path_in_datastore": "/mnt/fast/appdata/immich/postgres",
+                "quota": false,
+                "read_only": false,
+                "replicate": true,
+                "shared": false,
+                "size": "",
+                "volume": "/mnt/fast/appdata/immich/postgres"
+              },
+              {
+                "acl": false,
+                "backup": false,
+                "mount_options": [],
+                "path": "/mnt/fast/appdata/llm-ai",
+                "path_in_datastore": "/mnt/fast/appdata/llm-ai",
+                "quota": false,
+                "read_only": false,
+                "replicate": true,
+                "shared": false,
+                "size": "",
+                "volume": "/mnt/fast/appdata/llm-ai"
+              },
+              {
+                "acl": false,
+                "backup": false,
+                "mount_options": [],
+                "path": "/mnt/fast/appdata/media",
+                "path_in_datastore": "/mnt/fast/appdata/media",
+                "quota": false,
+                "read_only": false,
+                "replicate": true,
+                "shared": false,
+                "size": "",
+                "volume": "/mnt/fast/appdata/media"
+              },
+              {
+                "acl": false,
+                "backup": false,
+                "mount_options": [],
+                "path": "/mnt/fast/appdata/minecraft",
+                "path_in_datastore": "/mnt/fast/appdata/minecraft",
+                "quota": false,
+                "read_only": false,
+                "replicate": true,
+                "shared": false,
+                "size": "",
+                "volume": "/mnt/fast/appdata/minecraft"
+              },
+              {
+                "acl": false,
+                "backup": false,
+                "mount_options": [],
+                "path": "/mnt/fast/appdata/postiz",
+                "path_in_datastore": "/mnt/fast/appdata/postiz",
+                "quota": false,
+                "read_only": false,
+                "replicate": true,
+                "shared": false,
+                "size": "",
+                "volume": "/mnt/fast/appdata/postiz"
+              },
+              {
+                "acl": false,
+                "backup": false,
+                "mount_options": [],
+                "path": "/mnt/fast/appdata/teleport",
+                "path_in_datastore": "/mnt/fast/appdata/teleport",
+                "quota": false,
+                "read_only": false,
+                "replicate": true,
+                "shared": false,
+                "size": "",
+                "volume": "/mnt/fast/appdata/teleport"
+              },
+              {
+                "acl": false,
+                "backup": false,
+                "mount_options": [],
+                "path": "/mnt/fast/appdata/termix",
+                "path_in_datastore": "/mnt/fast/appdata/termix",
+                "quota": false,
+                "read_only": false,
+                "replicate": true,
+                "shared": false,
+                "size": "",
+                "volume": "/mnt/fast/appdata/termix"
+              },
+              {
+                "acl": false,
+                "backup": false,
+                "mount_options": [],
+                "path": "/mnt/fast/appdata/traefik",
+                "path_in_datastore": "/mnt/fast/appdata/traefik",
+                "quota": false,
+                "read_only": false,
+                "replicate": true,
+                "shared": false,
+                "size": "",
+                "volume": "/mnt/fast/appdata/traefik"
+              },
+              {
+                "acl": false,
+                "backup": false,
+                "mount_options": [],
+                "path": "/mnt/fast/home/breege",
+                "path_in_datastore": "/mnt/fast/home/breege",
+                "quota": false,
+                "read_only": false,
+                "replicate": true,
+                "shared": false,
+                "size": "",
+                "volume": "/mnt/fast/home/breege"
+              },
+              {
+                "acl": false,
+                "backup": false,
+                "mount_options": [],
+                "path": "/mnt/fast/home/damian",
+                "path_in_datastore": "/mnt/fast/home/damian",
+                "quota": false,
+                "read_only": false,
+                "replicate": true,
+                "shared": false,
+                "size": "",
+                "volume": "/mnt/fast/home/damian"
+              },
+              {
+                "acl": false,
+                "backup": false,
+                "mount_options": [],
+                "path": "/mnt/fast/transcode",
+                "path_in_datastore": "/mnt/fast/transcode",
+                "quota": false,
+                "read_only": false,
+                "replicate": true,
+                "shared": false,
+                "size": "",
+                "volume": "/mnt/fast/transcode"
+              },
+              {
+                "acl": false,
+                "backup": false,
+                "mount_options": [],
+                "path": "/mnt/fast/tools",
+                "path_in_datastore": "/mnt/fast/tools",
+                "quota": false,
+                "read_only": false,
+                "replicate": true,
+                "shared": false,
+                "size": "",
+                "volume": "/mnt/fast/tools"
+              },
+              {
+                "acl": false,
+                "backup": false,
+                "mount_options": [],
+                "path": "/mnt/tank/downloads",
+                "path_in_datastore": "/mnt/tank/downloads",
+                "quota": false,
+                "read_only": false,
+                "replicate": true,
+                "shared": false,
+                "size": "",
+                "volume": "/mnt/tank/downloads"
+              },
+              {
+                "acl": false,
+                "backup": false,
+                "mount_options": [],
+                "path": "/mnt/tank/isos",
+                "path_in_datastore": "/mnt/tank/isos",
+                "quota": false,
+                "read_only": false,
+                "replicate": true,
+                "shared": false,
+                "size": "",
+                "volume": "/mnt/tank/isos"
+              },
+              {
+                "acl": false,
+                "backup": false,
+                "mount_options": [],
+                "path": "/mnt/tank/media",
+                "path_in_datastore": "/mnt/tank/media",
+                "quota": false,
+                "read_only": false,
+                "replicate": true,
+                "shared": false,
+                "size": "",
+                "volume": "/mnt/tank/media"
+              },
+              {
+                "acl": false,
+                "backup": false,
+                "mount_options": [],
+                "path": "/mnt/tank/media/Books",
+                "path_in_datastore": "/mnt/tank/media/Books",
+                "quota": false,
+                "read_only": false,
+                "replicate": true,
+                "shared": false,
+                "size": "",
+                "volume": "/mnt/tank/media/Books"
+              },
+              {
+                "acl": false,
+                "backup": false,
+                "mount_options": [],
+                "path": "/mnt/tank/media/Movies",
+                "path_in_datastore": "/mnt/tank/media/Movies",
+                "quota": false,
+                "read_only": false,
+                "replicate": true,
+                "shared": false,
+                "size": "",
+                "volume": "/mnt/tank/media/Movies"
+              },
+              {
+                "acl": false,
+                "backup": false,
+                "mount_options": [],
+                "path": "/mnt/tank/media/Music",
+                "path_in_datastore": "/mnt/tank/media/Music",
+                "quota": false,
+                "read_only": false,
+                "replicate": true,
+                "shared": false,
+                "size": "",
+                "volume": "/mnt/tank/media/Music"
+              },
+              {
+                "acl": false,
+                "backup": false,
+                "mount_options": [],
+                "path": "/mnt/tank/media/Photos",
+                "path_in_datastore": "/mnt/tank/media/Photos",
+                "quota": false,
+                "read_only": false,
+                "replicate": true,
+                "shared": false,
+                "size": "",
+                "volume": "/mnt/tank/media/Photos"
+              },
+              {
+                "acl": false,
+                "backup": false,
+                "mount_options": [],
+                "path": "/mnt/tank/media/TV",
+                "path_in_datastore": "/mnt/tank/media/TV",
+                "quota": false,
+                "read_only": false,
+                "replicate": true,
+                "shared": false,
+                "size": "",
+                "volume": "/mnt/tank/media/TV"
+              },
+              {
+                "acl": false,
+                "backup": false,
+                "mount_options": [],
+                "path": "/mnt/tank/timemachine",
+                "path_in_datastore": "/mnt/tank/timemachine",
+                "quota": false,
+                "read_only": false,
+                "replicate": true,
+                "shared": false,
+                "size": "",
+                "volume": "/mnt/tank/timemachine"
+              }
+            ],
+            "network_interface": [
+              {
+                "bridge": "vmbr0",
+                "enabled": true,
+                "firewall": false,
+                "mac_address": "BC:24:11:40:BE:D1",
+                "mtu": 0,
+                "name": "eth0",
+                "rate_limit": 0,
+                "vlan_id": 0
+              }
+            ],
+            "node_name": "atlantis",
+            "operating_system": [
+              {
+                "template_file_id": "local:vztmpl/debian-13-standard_13.1-2_amd64.tar.zst",
+                "type": "debian"
+              }
+            ],
+            "pool_id": null,
+            "protection": false,
+            "start_on_boot": true,
+            "started": true,
+            "startup": [],
+            "tags": [],
+            "template": false,
+            "timeout_clone": 1800,
+            "timeout_create": 1800,
+            "timeout_delete": 60,
+            "timeout_start": 300,
+            "timeout_update": 1800,
+            "unprivileged": true,
+            "vm_id": 100,
+            "wait_for_ip": []
+          },
+          "sensitive_attributes": [
+            [
+              {
+                "type": "get_attr",
+                "value": "initialization"
+              },
+              {
+                "type": "index",
+                "value": {
+                  "value": 0,
+                  "type": "number"
+                }
+              },
+              {
+                "type": "get_attr",
+                "value": "user_account"
+              },
+              {
+                "type": "index",
+                "value": {
+                  "value": 0,
+                  "type": "number"
+                }
+              },
+              {
+                "type": "get_attr",
+                "value": "password"
+              }
+            ]
+          ],
+          "identity_schema_version": 0,
+          "private": "bnVsbA==",
+          "dependencies": [
+            "null_resource.host_setup"
+          ]
+        }
+      ]
+    }
+  ],
+  "check_results": null
+}

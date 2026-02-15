@@ -91,7 +91,7 @@ variable "lxc_cores" {
 variable "lxc_disk_gb" {
   description = "Root filesystem size for the Docker LXC in GB — lands on local-lvm (Kingston boot SSD)"
   type        = number
-  default     = 64
+  default     = 128
 }
 
 variable "lxc_storage" {

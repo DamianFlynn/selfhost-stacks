@@ -60,11 +60,14 @@ ps aux | grep openclaw
 # View logs
 tail -f /tmp/openclaw-gateway.log
 
-# Start gateway manually
-nohup openclaw gateway start > /tmp/openclaw-gateway.log 2>&1 &
+# Start gateway manually (accessible from network)
+nohup openclaw gateway --bind lan --token Atlant1s! > /tmp/openclaw-gateway.log 2>&1 &
+
+# Start gateway (localhost only)
+nohup openclaw gateway > /tmp/openclaw-gateway.log 2>&1 &
 
 # Stop gateway
-pkill -f 'openclaw gateway'
+pkill -f 'openclaw-gateway'
 
 # Test Ollama connectivity
 curl http://127.0.0.1:11434/api/tags
@@ -88,34 +91,17 @@ cat /root/.openclaw/openclaw.json
 ### Current Configuration
 ```json
 {
-  "version": "2026.2",
   "gateway": {
+    "mode": "local",
     "port": 18789,
-    "bind": "0.0.0.0",
     "auth": {
-      "type": "token",
       "token": "Atlant1s!"
     }
-  },
-  "models": {
-    "providers": {
-      "ollama": {
-        "base_url": "http://127.0.0.1:11434/v1",
-        "api_key": "not-required"
-      }
-    },
-    "default": "ollama/qwen2.5-coder:3b"
-  },
-  "agent": {
-    "workspace": "/root/.openclaw/workspace",
-    "tools_enabled": true,
-    "hooks": {
-      "enabled": ["command-logger", "session-memory"]
-    }
-  },
-  "channels": {}
+  }
 }
 ```
+
+**Note**: Bind mode (`lan` for network access) is specified via command line flag `--bind lan` when starting the gateway, not in the config file.
 
 ### Adding New Models
 
@@ -150,10 +136,23 @@ tail -50 /tmp/openclaw-gateway.log
 # Check Ollama connectivity
 curl http://127.0.0.1:11434/api/tags
 
-# Kill existing process and restart
-pkill -f 'openclaw gateway'
+# Kill existing process and restart (with network access)
+pkill -f 'openclaw-gateway'
 sleep 2
-nohup openclaw gateway start > /tmp/openclaw-gateway.log 2>&1 &
+nohup openclaw gateway --bind lan --token Atlant1s! > /tmp/openclaw-gateway.log 2>&1 &
+```
+
+#### Cannot access web UI from network
+```bash
+# Check if gateway is bound to correct interface
+ss -tlnp | grep 18789
+
+# Should show 0.0.0.0:18789 (not 127.0.0.1:18789)
+# If showing 127.0.0.1, gateway started without --bind lan flag
+
+# Restart with --bind lan
+pkill -f 'openclaw-gateway'
+nohup openclaw gateway --bind lan --token Atlant1s! > /tmp/openclaw-gateway.log 2>&1 &
 ```
 
 #### Model not found

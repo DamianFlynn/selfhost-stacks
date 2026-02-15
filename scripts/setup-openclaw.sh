@@ -106,8 +106,8 @@ start_gateway() {
         return 0
     fi
     
-    # Start gateway in background using nohup
-    run_cmd "nohup openclaw gateway start > /tmp/openclaw-gateway.log 2>&1 &"
+    # Start gateway in background with --bind lan to listen on all interfaces
+    run_cmd "nohup openclaw gateway --bind lan --token ${GATEWAY_TOKEN} > /tmp/openclaw-gateway.log 2>&1 &"
     
     sleep 2
     
