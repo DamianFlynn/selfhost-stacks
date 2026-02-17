@@ -182,9 +182,13 @@ resource "null_resource" "start_openclaw" {
 
 # ── Phase 4: OS baseline inside the OpenClaw LXC ────────────────────────────
 #
-# Installs Node.js LTS + pnpm and VA-API tools for GPU-accelerated inference.
+# Installs systemd (required for OpenClaw and Ollama service management),
+# Node.js LTS + pnpm, and VA-API tools for GPU-accelerated inference.
 # OpenClaw (https://openclaw.ai) is Node.js-based; actual install via:
 #   curl -fsSL https://openclaw.ai/install.sh | bash
+#
+# NOTE: If systemd is not running during initial provisioning, the container
+# will need a restart for services to start properly: pct reboot 101
 
 resource "null_resource" "provision_openclaw" {
   depends_on = [null_resource.start_openclaw]
@@ -202,8 +206,14 @@ resource "null_resource" "provision_openclaw" {
       # ── OS baseline ───────────────────────────────────────────────────────
       "apt-get update -qq",
       "DEBIAN_FRONTEND=noninteractive apt-get upgrade -y -qq",
-      # Install base tools and GPU drivers first (zstd needed for Ollama installer)
+      
+      # ── Ensure systemd is installed and configured ───────────────────────
+      # Required for OpenClaw and Ollama service management
+      "DEBIAN_FRONTEND=noninteractive apt-get install -y -qq systemd systemd-sysv dbus",
+      
+      # Install base tools and GPU drivers (zstd needed for Ollama installer)
       "DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git curl ca-certificates build-essential vainfo libva-dev vulkan-tools mesa-vulkan-drivers zstd",
+      
       # Node.js LTS via NodeSource (includes npm)
       "curl -fsSL https://deb.nodesource.com/setup_lts.x | bash -",
       "DEBIAN_FRONTEND=noninteractive apt-get install -y -qq nodejs",
@@ -229,8 +239,9 @@ resource "null_resource" "provision_openclaw" {
       # ── Configure Ollama for AMD GPU (Vulkan) ────────────────────────────
       "mkdir -p /etc/systemd/system/ollama.service.d/",
       "cat > /etc/systemd/system/ollama.service.d/amd-gpu.conf <<'OLLAMA_EOF'\n[Service]\n# AMD GPU configuration for Radeon 890M (RDNA 3.5/Strix)\nEnvironment=\"HSA_OVERRIDE_GFX_VERSION=11.0.3\"\nEnvironment=\"OLLAMA_DEBUG=1\"\nEnvironment=\"OLLAMA_VULKAN=1\"\n\n# Run as ollama user with GPU group access\nUser=ollama\nSupplementaryGroups=video render\n\n# Ensure GPU devices are accessible\nDeviceAllow=/dev/dri/card${var.gpu_card_index} rw\nDeviceAllow=/dev/dri/renderD${var.gpu_render_index} rw\nOLLAMA_EOF",
-      "systemctl daemon-reload",
-      "systemctl restart ollama",
+      
+      # Check if systemd is running; if not, note that a reboot is needed
+      "if systemctl is-system-running >/dev/null 2>&1 || [ -d /run/systemd/system ]; then systemctl daemon-reload && systemctl enable ollama && systemctl restart ollama; else echo 'NOTE: systemd not running yet - Ollama will start on next boot'; fi",
 
       # ── Smoke tests ───────────────────────────────────────────────────────
       "ls -la /dev/dri/ 2>/dev/null || echo 'NOTE: /dev/dri not present — check GPU passthrough'",
