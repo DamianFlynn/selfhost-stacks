@@ -180,15 +180,17 @@ resource "null_resource" "start_openclaw" {
   }
 }
 
-# ── Phase 4: OS baseline inside the OpenClaw LXC ────────────────────────────
+# ── Phase 4: Complete OpenClaw setup ────────────────────────────────────────
 #
-# Installs systemd (required for OpenClaw and Ollama service management),
-# Node.js LTS + pnpm, and VA-API tools for GPU-accelerated inference.
-# OpenClaw (https://openclaw.ai) is Node.js-based; actual install via:
-#   curl -fsSL https://openclaw.ai/install.sh | bash
+# Fully provisions OpenClaw with:
+# - openclaw user with sudo + GPU access + Homebrew
+# - Ollama + GPU acceleration + models (qwen2.5:3b + 32K variant)
+# - OpenClaw installation + configuration
+# - Samba server for workspace sharing
+# - systemd user service for OpenClaw gateway
 #
-# NOTE: If systemd is not running during initial provisioning, the container
-# will need a restart for services to start properly: pct reboot 101
+# NOTE: This is a long-running provisioner (10-15 min) due to Homebrew,
+# model downloads, and OpenClaw installation.
 
 resource "null_resource" "provision_openclaw" {
   depends_on = [null_resource.start_openclaw]
@@ -198,54 +200,190 @@ resource "null_resource" "provision_openclaw" {
     host        = var.openclaw_ip
     user        = "root"
     private_key = file(var.terraform_ssh_private_key_path)
-    timeout     = "10m"
+    timeout     = "30m"
   }
 
   provisioner "remote-exec" {
     inline = [
       # ── OS baseline ───────────────────────────────────────────────────────
+      "echo '==> Updating system packages...'",
       "apt-get update -qq",
       "DEBIAN_FRONTEND=noninteractive apt-get upgrade -y -qq",
       
       # ── Ensure systemd is installed and configured ───────────────────────
-      # Required for OpenClaw and Ollama service management
-      "DEBIAN_FRONTEND=noninteractive apt-get install -y -qq systemd systemd-sysv dbus",
+      "echo '==> Installing systemd and base tools...'",
+      "DEBIAN_FRONTEND=noninteractive apt-get install -y -qq systemd systemd-sysv dbus sudo",
       
-      # Install base tools and GPU drivers (zstd needed for Ollama installer)
-      "DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git curl ca-certificates build-essential vainfo libva-dev vulkan-tools mesa-vulkan-drivers zstd",
+      # Install base tools, GPU drivers, and Samba (zstd needed for Ollama)
+      "DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git curl ca-certificates build-essential vainfo libva-dev vulkan-tools mesa-vulkan-drivers clinfo zstd samba samba-common-bin",
       
-      # Node.js LTS via NodeSource (includes npm)
-      "curl -fsSL https://deb.nodesource.com/setup_lts.x | bash -",
+      # Node.js 22 LTS via NodeSource (includes npm)
+      "echo '==> Installing Node.js 22 LTS...'",
+      "curl -fsSL https://deb.nodesource.com/setup_22.x | bash -",
       "DEBIAN_FRONTEND=noninteractive apt-get install -y -qq nodejs",
-      "npm install -g pnpm",
 
       # ── GPU groups ────────────────────────────────────────────────────────
-      # idmap passes gid 44 (video) and 110 (render) through 1:1.
+      "echo '==> Configuring GPU groups...'",
       "getent group video  >/dev/null 2>&1 || groupadd -g ${var.video_gid} video",
       "getent group render >/dev/null 2>&1 || groupadd -g ${var.render_gid} render",
-      # Force render group to correct GID if it exists with wrong GID
       "groupmod -g ${var.render_gid} render 2>/dev/null || true",
 
-      # ── Install Ollama ────────────────────────────────────────────────────
-      "curl -fsSL https://ollama.com/install.sh | sh",
-      
-      # Wait for ollama user to be created by installer
-      "sleep 2",
-      
-      # Add ollama user to GPU groups
-      "usermod -aG video ollama",
-      "usermod -aG render ollama",
+      # ── Create openclaw user ──────────────────────────────────────────────
+      "echo '==> Creating openclaw user...'",
+      "useradd -m -s /bin/bash -G sudo,video,render openclaw",
+      "echo 'openclaw ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/openclaw",
+      "chmod 440 /etc/sudoers.d/openclaw",
 
-      # ── Configure Ollama for AMD GPU (Vulkan) ────────────────────────────
+      # ── Install Ollama ────────────────────────────────────────────────────
+      "echo '==> Installing Ollama...'",
+      "curl -fsSL https://ollama.com/install.sh | sh",
+      "sleep 2",
+      "usermod -aG video,render ollama",
+
+      # ── Configure Ollama for AMD GPU ──────────────────────────────────────
+      "echo '==> Configuring Ollama for AMD GPU...'",
       "mkdir -p /etc/systemd/system/ollama.service.d/",
-      "cat > /etc/systemd/system/ollama.service.d/amd-gpu.conf <<'OLLAMA_EOF'\n[Service]\n# AMD GPU configuration for Radeon 890M (RDNA 3.5/Strix)\nEnvironment=\"HSA_OVERRIDE_GFX_VERSION=11.0.3\"\nEnvironment=\"OLLAMA_DEBUG=1\"\nEnvironment=\"OLLAMA_VULKAN=1\"\n\n# Run as ollama user with GPU group access\nUser=ollama\nSupplementaryGroups=video render\n\n# Ensure GPU devices are accessible\nDeviceAllow=/dev/dri/card${var.gpu_card_index} rw\nDeviceAllow=/dev/dri/renderD${var.gpu_render_index} rw\nOLLAMA_EOF",
+      "cat > /etc/systemd/system/ollama.service.d/amd-gpu.conf <<'OLLAMA_EOF'\n[Service]\nEnvironment=\"HSA_OVERRIDE_GFX_VERSION=11.0.3\"\nEnvironment=\"OLLAMA_VULKAN=1\"\nUser=ollama\nSupplementaryGroups=video render\nDeviceAllow=/dev/dri/card${var.gpu_card_index} rw\nDeviceAllow=/dev/dri/renderD${var.gpu_render_index} rw\nOLLAMA_EOF",
       
-      # Check if systemd is running; if not, note that a reboot is needed
-      "if systemctl is-system-running >/dev/null 2>&1 || [ -d /run/systemd/system ]; then systemctl daemon-reload && systemctl enable ollama && systemctl restart ollama; else echo 'NOTE: systemd not running yet - Ollama will start on next boot'; fi",
+      "systemctl daemon-reload",
+      "systemctl enable ollama",
+      "systemctl restart ollama",
+      "sleep 5",
+
+      # ── Pull Ollama models ────────────────────────────────────────────────
+      "echo '==> Pulling Ollama models (this takes several minutes)...'",
+      "sudo -u ollama ollama pull qwen2.5:3b",
+      
+      # Create 32K context variant
+      "cat > /tmp/qwen-32k.modelfile <<'MODEL_EOF'\nFROM qwen2.5:3b\nPARAMETER num_ctx 32768\nMODEL_EOF",
+      "sudo -u ollama ollama create qwen2.5:3b-32k -f /tmp/qwen-32k.modelfile",
+      "rm /tmp/qwen-32k.modelfile",
+
+      # ── Install Homebrew as openclaw user ─────────────────────────────────
+      "echo '==> Installing Homebrew for openclaw user (this takes 5-10 minutes)...'",
+      "sudo -u openclaw bash -c 'NONINTERACTIVE=1 /bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"'",
+      
+      # Add Homebrew to openclaw's profile
+      "sudo -u openclaw bash -c 'echo \"eval \\\"\\$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)\\\"\" >> /home/openclaw/.bashrc'",
+      "sudo -u openclaw bash -c 'echo \"eval \\\"\\$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)\\\"\" >> /home/openclaw/.profile'",
+
+      # ── Install OpenClaw ──────────────────────────────────────────────────
+      "echo '==> Installing OpenClaw...'",
+      "sudo -u openclaw bash -c 'eval \"$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)\" && npm install -g openclaw'",
+
+      # ── Add OpenClaw to PATH ──────────────────────────────────────────────
+      "echo '==> Adding OpenClaw to PATH...'",
+      "sudo -u openclaw bash -c 'echo \"export PATH=\\\"/home/openclaw/.npm-global/bin:\\$PATH\\\"\" >> /home/openclaw/.bashrc'",
+      "sudo -u openclaw bash -c 'echo \"export PATH=\\\"/home/openclaw/.npm-global/bin:\\$PATH\\\"\" >> /home/openclaw/.profile'",
+      "echo \"export PATH=\\\"/home/openclaw/.npm-global/bin:\\$PATH\\\"\" >> /root/.bashrc",
+      "echo \"export PATH=\\\"/home/openclaw/.npm-global/bin:\\$PATH\\\"\" >> /root/.profile",
+
+      # ── Configure sudoers for service management ──────────────────────────
+      "echo '==> Configuring sudoers for OpenClaw service management...'",
+      "cat > /etc/sudoers.d/openclaw-service <<'SUDOERS_EOF'\n# Allow openclaw user to manage its own systemd service\nopenclaw ALL=(ALL) NOPASSWD: /bin/systemctl restart openclaw-gateway\nopenclaw ALL=(ALL) NOPASSWD: /bin/systemctl stop openclaw-gateway\nopenclaw ALL=(ALL) NOPASSWD: /bin/systemctl start openclaw-gateway\nopenclaw ALL=(ALL) NOPASSWD: /bin/systemctl status openclaw-gateway\n\n# Allow openclaw user to pkill its own processes\nopenclaw ALL=(ALL) NOPASSWD: /usr/bin/pkill openclaw\nopenclaw ALL=(ALL) NOPASSWD: /usr/bin/killall openclaw\nSUDOERS_EOF",
+      "chmod 0440 /etc/sudoers.d/openclaw-service",
+
+      # ── Enable systemd user services (lingering) ──────────────────────────
+      "echo '==> Enabling user services for openclaw...'",
+      "loginctl enable-linger openclaw",
+
+      # ── Configure Samba for workspace sharing ─────────────────────────────
+      "echo '==> Configuring Samba for workspace sharing...'",
+      "mkdir -p /home/openclaw/.openclaw/workspace",
+      "chown -R openclaw:openclaw /home/openclaw/.openclaw",
+      
+      # Set Samba password (using same as root for simplicity)
+      "(echo '${var.openclaw_root_password}'; echo '${var.openclaw_root_password}') | smbpasswd -a openclaw -s",
+      
+      # Configure Samba share
+      "cat >> /etc/samba/smb.conf <<'SAMBA_EOF'\n\n[openclaw-workspace]\n   path = /home/openclaw/.openclaw/workspace\n   browseable = yes\n   read only = no\n   guest ok = no\n   valid users = openclaw\n   create mask = 0644\n   directory mask = 0755\n   comment = OpenClaw Workspace\nSAMBA_EOF",
+      
+      "systemctl enable smbd",
+      "systemctl restart smbd",
 
       # ── Smoke tests ───────────────────────────────────────────────────────
-      "ls -la /dev/dri/ 2>/dev/null || echo 'NOTE: /dev/dri not present — check GPU passthrough'",
-      "vainfo --display drm --device /dev/dri/${local.gpu_render} 2>/dev/null | head -5 || echo 'NOTE: vainfo check skipped'",
+      "echo '==> Running smoke tests...'",
+      "ls -la /dev/dri/",
+      "id openclaw",
+      "sudo -u openclaw which openclaw",
+      "systemctl status ollama --no-pager",
+      "sudo -u ollama ollama list",
+      "testparm -s 2>/dev/null | grep -A 5 openclaw-workspace",
+      
+      "echo '==> OpenClaw LXC provisioned successfully!'",
+      "echo '    - Ollama models: qwen2.5:3b, qwen2.5:3b-32k'",
+      "echo '    - User: openclaw (with sudo + Homebrew)'",
+      "echo '    - Samba share: //172.16.1.160/openclaw-workspace'",
+      "echo '    - Next: Run OpenClaw installer as openclaw user'",
+    ]
+  }
+}
+
+# ── Phase 5: OpenClaw initialization ─────────────────────────────────────────
+#
+# Creates systemd system service for OpenClaw gateway (not user service).
+# System service is used because unprivileged LXC containers don't support
+# systemd user services reliably.
+#
+# Service includes health monitoring features:
+#  - WatchdogSec=600: Restarts if service becomes unresponsive for 10 minutes
+#  - Restart=on-failure: Auto-restart on crashes, timeouts, or watchdog triggers
+#  - Timeout protection: StartSec=120s, StopSec=30s
+#
+# This prevents silent failures (e.g., Telegram polling disconnections) by
+# automatically restarting the service if it stops responding.
+#
+# The OpenClaw configuration will need to be set up manually after first run:
+#   1. SSH as openclaw user: ssh openclaw@172.16.1.160
+#   2. Run: openclaw gateway --bind lan
+#   3. Follow onboarding wizard (or restore config from backup)
+#
+# NOTE: The systemd service will need to be enabled after OpenClaw configuration exists.
+# NOTE: Memory feature is enabled by default in ~/.openclaw/workspace/memory/
+
+resource "null_resource" "configure_openclaw_service" {
+  depends_on = [null_resource.provision_openclaw]
+
+  connection {
+    type        = "ssh"
+    host        = var.openclaw_ip
+    user        = "root"
+    private_key = file(var.terraform_ssh_private_key_path)
+    timeout     = "5m"
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      "echo '==> Creating systemd system service for OpenClaw...'",
+      
+      # Create OpenClaw gateway system service file with health monitoring
+      "cat > /etc/systemd/system/openclaw-gateway.service <<'SERVICE_EOF'\n[Unit]\nDescription=OpenClaw Gateway\nDocumentation=https://docs.openclaw.ai/\nAfter=network-online.target ollama.service\nWants=network-online.target\n\n[Service]\nType=simple\nUser=openclaw\nGroup=openclaw\nWorkingDirectory=/home/openclaw\nExecStart=/home/openclaw/.npm-global/bin/openclaw gateway --bind lan\n\n# Restart on failure, watchdog timeout, or abnormal termination\nRestart=on-failure\nRestartSec=10\n\n# Health monitoring - restart if service becomes unresponsive (10 min)\nWatchdogSec=600\n\n# Timeout protection\nTimeoutStartSec=120\nTimeoutStopSec=30\n\nStandardOutput=journal\nStandardError=journal\nEnvironment=\"DEEPSEEK_API_KEY=sk-placeholder\"\n\n[Install]\nWantedBy=multi-user.target\nSERVICE_EOF",
+      
+      "systemctl daemon-reload",
+      
+      # Note: Service will be enabled after OpenClaw configuration exists
+      "echo '==> OpenClaw system service created (enable after configuration with: systemctl enable openclaw-gateway)'",
+      "echo ''",
+      "echo '╔════════════════════════════════════════════════════════════════╗'",
+      "echo '║  OpenClaw LXC Ready!                                           ║'",
+      "echo '╠════════════════════════════════════════════════════════════════╣'",
+      "echo '║  IP Address: 172.16.1.160                                      ║'",
+      "echo '║  Samba Share: //172.16.1.160/openclaw-workspace                ║'",
+      "echo '║               (user: openclaw, password: <root-password>)      ║'",
+      "echo '║                                                                ║'",
+      "echo '║  Next Steps:                                                   ║'",
+      "echo '║  1. Mount Samba share in Obsidian                              ║'",
+      "echo '║  2. SSH as openclaw: ssh openclaw@172.16.1.160                 ║'",
+      "echo '║  3. Run: openclaw gateway --bind lan                           ║'",
+      "echo '║  4. Follow wizard OR restore backup config                     ║'",
+      "echo '║  5. Enable service: sudo systemctl enable openclaw-gateway     ║'",
+      "echo '║  6. Start service: sudo systemctl start openclaw-gateway       ║'",
+      "echo '║                                                                ║'",
+      "echo '║  Commands available without full path:                         ║'",
+      "echo '║  - openclaw models list                                        ║'",
+      "echo '║  - openclaw gateway status                                     ║'",
+      "echo '║  - sudo systemctl restart openclaw-gateway                     ║'",
+      "echo '╚════════════════════════════════════════════════════════════════╝'",
     ]
   }
 }
