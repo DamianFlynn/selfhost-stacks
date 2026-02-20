@@ -153,6 +153,21 @@ resource "proxmox_virtual_environment_vm" "cerebro" {
   }
 }
 
+resource "null_resource" "cerebro_passthrough_tune" {
+  depends_on = [proxmox_virtual_environment_vm.cerebro]
+
+  triggers = {
+    vm_id      = tostring(var.cerebro_vmid)
+    gpu_pci_id = trimspace(var.cerebro_gpu_pci_id)
+  }
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      ssh -o StrictHostKeyChecking=accept-new ${var.proxmox_ssh_user}@${var.proxmox_host} "qm set ${var.cerebro_vmid} --vga none --hostpci0 '${var.cerebro_gpu_pci_id},pcie=1,rombar=0,x-vga=0'"
+    EOT
+  }
+}
+
 # ── Phase 2: Wait for Ubuntu installation ──────────────────────────────────
 #
 # After VM creation, manually:
@@ -166,7 +181,7 @@ resource "proxmox_virtual_environment_vm" "cerebro" {
 #   8. Test SSH: ssh cerebro@172.16.1.160
 
 resource "null_resource" "cerebro_wait_install" {
-  depends_on = [proxmox_virtual_environment_vm.cerebro]
+  depends_on = [null_resource.cerebro_passthrough_tune]
 
   # This resource is a placeholder for manual installation
   # Comment this out and run terraform apply after Ubuntu is installed

@@ -56,7 +56,7 @@ cerebro_root_password   = "CHANGE_ME"
 cerebro_ssh_public_keys = ["ssh-ed25519 AAAA...your-key user@host"]
 
 # GPU passthrough (set one, not both):
-# - Direct PCI ID example: "0000:c5:00.0"
+# - Direct primary GPU PCI ID example: "0000:c5:00.0"
 # - Resource mapping example: "gpu"
 cerebro_gpu_pci_id      = "CHANGE_ME"
 cerebro_gpu_mapping     = ""
