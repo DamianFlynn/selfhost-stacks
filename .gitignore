@@ -4,5 +4,6 @@
 **/data/*
 **/config/*/secrets/*
 .DS_Store
+.vscode/
 backups/
 temp.md

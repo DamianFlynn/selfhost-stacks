@@ -232,8 +232,13 @@ resource "null_resource" "cerebro_provision" {
   provisioner "remote-exec" {
     inline = [
       "set -e",
-      "echo '==> Installing Docker CE'",
+      "echo '==> Installing QEMU guest agent'",
       "sudo -n apt-get update -y",
+      "sudo -n apt-get install -y qemu-guest-agent",
+      "sudo -n systemctl enable --now qemu-guest-agent",
+      "systemctl is-active qemu-guest-agent",
+      "",
+      "echo '==> Installing Docker CE'",
       "sudo -n apt-get install -y ca-certificates curl gnupg",
       "sudo -n install -m 0755 -d /etc/apt/keyrings",
       "curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo -n gpg --dearmor --yes -o /etc/apt/keyrings/docker.gpg",
