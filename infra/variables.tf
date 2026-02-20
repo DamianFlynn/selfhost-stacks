@@ -164,52 +164,52 @@ variable "gpu_render_index" {
   default     = 128
 }
 
-# ── Cerebro VM (Ubuntu 24.04) ──────────────────────────────────────────────
+# ── Cerebro LXC (Debian 13 + Docker) ───────────────────────────────────────
 
 variable "cerebro_vmid" {
-  description = "VM ID for the Cerebro VM"
+  description = "VM ID for the Cerebro LXC"
   type        = number
-  default     = 102
+  default     = 101
 }
 
 variable "cerebro_hostname" {
-  description = "Proxmox VM name for Cerebro"
+  description = "Proxmox LXC hostname for Cerebro"
   type        = string
-  default     = "Cerebro"
+  default     = "cerebro"
 }
 
 variable "cerebro_ip" {
-  description = "Static IP for the Cerebro VM"
+  description = "Static IP for the Cerebro LXC"
   type        = string
   default     = "172.16.1.160"
 }
 
 variable "cerebro_memory_mb" {
-  description = "RAM allocated to the Cerebro VM (MB)"
+  description = "RAM allocated to the Cerebro LXC (MB)"
   type        = number
   default     = 8192
 }
 
 variable "cerebro_cores" {
-  description = "CPU cores allocated to the Cerebro VM"
+  description = "CPU cores allocated to the Cerebro LXC"
   type        = number
   default     = 6
 }
 
 variable "cerebro_disk_gb" {
-  description = "Root filesystem size for the Cerebro VM (GB)"
+  description = "Root filesystem size for the Cerebro LXC (GB)"
   type        = number
   default     = 64
 }
 
 variable "cerebro_root_password" {
-  description = "Password for initial Cerebro VM user provisioning"
+  description = "Root password for Cerebro LXC provisioning"
   type        = string
   sensitive   = true
 }
 
 variable "cerebro_ssh_public_keys" {
-  description = "SSH public keys to inject into the Cerebro VM user account"
+  description = "SSH public keys to inject into the Cerebro LXC root account"
   type        = list(string)
   default     = []
 }

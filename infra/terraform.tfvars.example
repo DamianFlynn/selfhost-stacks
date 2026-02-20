@@ -1,6 +1,21 @@
 # Copy this file to terraform.tfvars and fill in your real values.
 # terraform.tfvars is listed in .gitignore — NEVER commit it (contains secrets).
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      - OLLAMA_HOST=0.0.0.0:11434    environment:      - /opt/ollama:/root/.ollama    volumes:      - "11434:11434"    ports:      - "110"      - "44"    group_add:      - /dev/dri:/dev/dri    devices:    restart: unless-stopped    container_name: ollama-gpu-test    image: ollama/ollama:latest
 # ── Proxmox connection ──────────────────────────────────────────────────────
 proxmox_host         = "172.16.1.158"
 proxmox_node         = "pve"   # must match the hostname shown in the Proxmox web UI sidebar
@@ -45,9 +60,9 @@ render_gid     = 103
 gpu_card_index   = 1   # card1  → /dev/dri/card1,     cgroup 226:1   — verify: ls /dev/dri/
 gpu_render_index = 128 # renderD128 → /dev/dri/renderD128, cgroup 226:128 — NOT always 128+card_index
 
-# ── Cerebro VM (Ubuntu 24.04) ──────────────────────────────────────────────
-cerebro_vmid            = 102
-cerebro_hostname        = "Cerebro"
+# ── Cerebro LXC (Debian 13 + Docker) ───────────────────────────────────────
+cerebro_vmid            = 101
+cerebro_hostname        = "cerebro"
 cerebro_ip              = "172.16.1.160"
 cerebro_memory_mb       = 8192
 cerebro_cores           = 6
@@ -55,8 +70,6 @@ cerebro_disk_gb         = 64
 cerebro_root_password   = "CHANGE_ME"
 cerebro_ssh_public_keys = ["ssh-ed25519 AAAA...your-key user@host"]
 
-# GPU passthrough (set one, not both):
-# - Direct primary GPU PCI ID example: "0000:c5:00.0"
-# - Resource mapping example: "gpu"
-cerebro_gpu_pci_id      = "CHANGE_ME"
+# Optional VM passthrough fields (unused by LXC mode; keep empty)
+cerebro_gpu_pci_id      = ""
 cerebro_gpu_mapping     = ""
