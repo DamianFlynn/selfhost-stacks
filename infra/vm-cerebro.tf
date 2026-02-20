@@ -142,11 +142,6 @@ resource "proxmox_virtual_environment_vm" "cerebro" {
     ]
 
     precondition {
-      condition     = trimspace(var.cerebro_gpu_pci_id) != "" || trimspace(var.cerebro_gpu_mapping) != ""
-      error_message = "Set either cerebro_gpu_pci_id or cerebro_gpu_mapping to enable GPU passthrough for Cerebro VM."
-    }
-
-    precondition {
       condition     = !(trimspace(var.cerebro_gpu_pci_id) != "" && trimspace(var.cerebro_gpu_mapping) != "")
       error_message = "Set only one of cerebro_gpu_pci_id or cerebro_gpu_mapping, not both."
     }
@@ -154,6 +149,7 @@ resource "proxmox_virtual_environment_vm" "cerebro" {
 }
 
 resource "null_resource" "cerebro_passthrough_tune" {
+  count      = trimspace(var.cerebro_gpu_pci_id) != "" ? 1 : 0
   depends_on = [proxmox_virtual_environment_vm.cerebro]
 
   triggers = {
@@ -181,7 +177,7 @@ resource "null_resource" "cerebro_passthrough_tune" {
 #   8. Test SSH: ssh cerebro@172.16.1.160
 
 resource "null_resource" "cerebro_wait_install" {
-  depends_on = [null_resource.cerebro_passthrough_tune]
+  depends_on = [proxmox_virtual_environment_vm.cerebro]
 
   # This resource is a placeholder for manual installation
   # Comment this out and run terraform apply after Ubuntu is installed

@@ -25,14 +25,6 @@ resource "null_resource" "host_setup" {
       # name internally. If 'pve' isn't in /etc/hosts the API returns HTTP 500.
       "grep -qE '\\b${var.proxmox_node}\\b' /etc/hosts || echo '${var.proxmox_host} ${var.proxmox_node}' >> /etc/hosts",
 
-      # ── AMD IOMMU + VFIO boot prerequisites ──────────────────────────────
-      # Required for stable AMD GPU passthrough into VM workloads.
-      "grep -q 'amd_iommu=on' /etc/default/grub || sed -i 's/^GRUB_CMDLINE_LINUX=\"\\(.*\\)\"/GRUB_CMDLINE_LINUX=\"\\1 amd_iommu=on iommu=pt video=efifb:off\"/' /etc/default/grub",
-      "cat > /etc/modprobe.d/vfio-amd-gpu.conf <<'EOF'\noptions vfio-pci ids=1002:150e,1002:1640 disable_vga=1\nsoftdep amdgpu pre: vfio-pci\nEOF",
-      "cat > /etc/modules-load.d/vfio.conf <<'EOF'\nvfio\nvfio_pci\nvfio_iommu_type1\nEOF",
-      "update-initramfs -u -k all",
-      "update-grub",
-
       # ── Package repos ─────────────────────────────────────────────────────
       # PVE 9.x ships BOTH legacy .list files AND DEB822 .sources files for the
       # enterprise repos. Both must be disabled or apt-get update returns 401.
