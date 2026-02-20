@@ -12,17 +12,17 @@
     "managerFilePatterns": [
       "(^|/)(compose\\.ya?ml|docker-compose\\.ya?ml)$",
       "/(^|/)(compose\\.ya?ml|docker-compose\\.ya?ml)$/",
-      "/traefik/authelia\\.ya?ml$/",
-      "/traefik/socket-proxy\\.ya?ml$/",
-      "/traefik/tsproxy\\.ya?ml$/",
-      "/traefik/traefik\\.ya?ml$/",
-      "/traefik/compose\\.ya?ml$/",
-      "/minecraft/.*\\.ya?ml$/",
-      "/automation/.*\\.ya?ml$/",
-      "/openwebui/.*\\.ya?ml$/",
-      "/immich/.*\\.ya?ml$/",
-      "/code-server/.*\\.ya?ml$/",
-      "/hoarder/.*\\.ya?ml$/"
+      "/stacks/traefik/authelia\\.ya?ml$/",
+      "/stacks/traefik/socket-proxy\\.ya?ml$/",
+      "/stacks/traefik/tsproxy\\.ya?ml$/",
+      "/stacks/traefik/traefik\\.ya?ml$/",
+      "/stacks/traefik/compose\\.ya?ml$/",
+      "/stacks/minecraft/.*\\.ya?ml$/",
+      "/stacks/automation/.*\\.ya?ml$/",
+      "/stacks/openwebui/.*\\.ya?ml$/",
+      "/stacks/immich/.*\\.ya?ml$/",
+      "/stacks/code-server/.*\\.ya?ml$/",
+      "/stacks/hoarder/.*\\.ya?ml$/"
     ]
   },
   "labels": [
@@ -125,8 +125,8 @@
         "ghcr.io/immich-app/postgres"
       ],
       "matchFileNames": [
-        "**/immich/**",
-        "**/stacks/immich/**"
+        "**/stacks/immich/**",
+        "**/stacks/stacks/immich/**"
       ],
       "enabled": false,
       "addLabels": [
@@ -147,8 +147,8 @@
         "docker.io/valkey/valkey"
       ],
       "matchFileNames": [
-        "**/immich/**",
-        "**/stacks/immich/**"
+        "**/stacks/immich/**",
+        "**/stacks/stacks/immich/**"
       ],
       "enabled": false,
       "addLabels": [
@@ -168,8 +168,8 @@
         "/immich-machine-learning/"
       ],
       "matchFileNames": [
-        "**/immich/**",
-        "**/stacks/immich/**"
+        "**/stacks/immich/**",
+        "**/stacks/stacks/immich/**"
       ],
       "automerge": false,
       "addLabels": [
@@ -181,8 +181,8 @@
     {
       "description": "Auto-label by stack: Immich",
       "matchFileNames": [
-        "**/immich/**",
-        "**/stacks/immich/**"
+        "**/stacks/immich/**",
+        "**/stacks/stacks/immich/**"
       ],
       "addLabels": [
         "stack:immich"
@@ -191,8 +191,8 @@
     {
       "description": "Auto-label by stack: Traefik",
       "matchFileNames": [
-        "**/traefik/**",
-        "**/stacks/traefik/**"
+        "**/stacks/traefik/**",
+        "**/stacks/stacks/traefik/**"
       ],
       "addLabels": [
         "stack:traefik"
@@ -201,8 +201,8 @@
     {
       "description": "Auto-label by stack: Code Server",
       "matchFileNames": [
-        "**/code-server/**",
-        "**/stacks/code-server/**"
+        "**/stacks/code-server/**",
+        "**/stacks/stacks/code-server/**"
       ],
       "addLabels": [
         "stack:code-server"
@@ -211,8 +211,8 @@
     {
       "description": "Auto-label by stack: Minecraft",
       "matchFileNames": [
-        "**/minecraft/**",
-        "**/stacks/minecraft/**"
+        "**/stacks/minecraft/**",
+        "**/stacks/stacks/minecraft/**"
       ],
       "addLabels": [
         "stack:minecraft"
@@ -221,8 +221,8 @@
     {
       "description": "Auto-label by stack: OpenWebUI",
       "matchFileNames": [
-        "**/openwebui/**",
-        "**/stacks/openwebui/**"
+        "**/stacks/openwebui/**",
+        "**/stacks/stacks/openwebui/**"
       ],
       "addLabels": [
         "stack:openwebui"
@@ -231,8 +231,8 @@
     {
       "description": "Auto-label by stack: Hoarder",
       "matchFileNames": [
-        "**/hoarder/**",
-        "**/stacks/hoarder/**"
+        "**/stacks/hoarder/**",
+        "**/stacks/stacks/hoarder/**"
       ],
       "addLabels": [
         "stack:hoarder"
@@ -241,8 +241,8 @@
     {
       "description": "Auto-label by stack: Automation",
       "matchFileNames": [
-        "**/automation/**",
-        "**/stacks/automation/**"
+        "**/stacks/automation/**",
+        "**/stacks/stacks/automation/**"
       ],
       "addLabels": [
         "stack:automation"
