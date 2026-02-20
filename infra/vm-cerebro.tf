@@ -263,6 +263,7 @@ resource "null_resource" "cerebro_provision" {
       "sudo -n apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin",
       "sudo -n systemctl enable --now docker",
       "sudo -n usermod -aG docker cerebro",
+      "sudo -n usermod -aG video,render cerebro || true",
       "docker --version",
     ]
   }
@@ -283,6 +284,8 @@ resource "null_resource" "cerebro_provision" {
   provisioner "remote-exec" {
     inline = [
       "set -e",
+      "echo '==> Installing AMD user-space stack (VAAPI/Vulkan tools)'",
+      "sudo -n apt-get install -y mesa-va-drivers mesa-vulkan-drivers vainfo vulkan-tools || true",
       "echo '==> Installing Ollama'",
       "curl -fsSL https://ollama.com/install.sh | sudo -n sh >/tmp/ollama-install.log 2>&1 || { sudo -n tail -n 200 /tmp/ollama-install.log; exit 1; }",
       "sudo -n systemctl enable ollama",
