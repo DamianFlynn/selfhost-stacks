@@ -45,12 +45,18 @@ render_gid     = 103
 gpu_card_index   = 1   # card1  → /dev/dri/card1,     cgroup 226:1   — verify: ls /dev/dri/
 gpu_render_index = 128 # renderD128 → /dev/dri/renderD128, cgroup 226:128 — NOT always 128+card_index
 
-# ── OpenClaw LXC ─────────────────────────────────────────────────────────────
-openclaw_vmid            = 101
-openclaw_hostname        = "openclaw"
-openclaw_ip              = "172.16.1.160"
-openclaw_memory_mb       = 4096
-openclaw_cores           = 4
-openclaw_disk_gb         = 64
-openclaw_root_password   = "CHANGE_ME"
-openclaw_ssh_public_keys = ["ssh-ed25519 AAAA...your-key user@host"]
+# ── Cerebro VM (Ubuntu 24.04) ──────────────────────────────────────────────
+cerebro_vmid            = 102
+cerebro_hostname        = "Cerebro"
+cerebro_ip              = "172.16.1.160"
+cerebro_memory_mb       = 8192
+cerebro_cores           = 6
+cerebro_disk_gb         = 64
+cerebro_root_password   = "CHANGE_ME"
+cerebro_ssh_public_keys = ["ssh-ed25519 AAAA...your-key user@host"]
+
+# GPU passthrough (set one, not both):
+# - Direct PCI ID example: "0000:c5:00.0"
+# - Resource mapping example: "gpu"
+cerebro_gpu_pci_id      = "CHANGE_ME"
+cerebro_gpu_mapping     = ""

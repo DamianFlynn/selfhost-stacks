@@ -39,7 +39,7 @@ variable "proxmox_ssh_password" {
 # ── SSH provisioner ─────────────────────────────────────────────────────────
 
 variable "terraform_ssh_private_key_path" {
-  description = "Path to the SSH private key used by Terraform provisioners to connect to the LXCs. Must correspond to one of the public keys in lxc_ssh_public_keys / openclaw_ssh_public_keys."
+  description = "Path to the SSH private key used by Terraform provisioners to connect to the LXCs. Must correspond to one of the public keys in lxc_ssh_public_keys / cerebro_ssh_public_keys."
   type        = string
   default     = "~/.ssh/id_ed25519"
 }
@@ -164,52 +164,64 @@ variable "gpu_render_index" {
   default     = 128
 }
 
-# ── OpenClaw LXC ─────────────────────────────────────────────────────────────
+# ── Cerebro VM (Ubuntu 24.04) ──────────────────────────────────────────────
 
-variable "openclaw_vmid" {
-  description = "VM ID for the OpenClaw LXC"
+variable "cerebro_vmid" {
+  description = "VM ID for the Cerebro VM"
   type        = number
-  default     = 101
+  default     = 102
 }
 
-variable "openclaw_hostname" {
-  description = "Hostname inside the OpenClaw LXC"
+variable "cerebro_hostname" {
+  description = "Proxmox VM name for Cerebro"
   type        = string
-  default     = "openclaw"
+  default     = "Cerebro"
 }
 
-variable "openclaw_ip" {
-  description = "Static IP for the OpenClaw LXC"
+variable "cerebro_ip" {
+  description = "Static IP for the Cerebro VM"
   type        = string
   default     = "172.16.1.160"
 }
 
-variable "openclaw_memory_mb" {
-  description = "RAM allocated to the OpenClaw LXC (MB)"
+variable "cerebro_memory_mb" {
+  description = "RAM allocated to the Cerebro VM (MB)"
   type        = number
-  default     = 4096
+  default     = 8192
 }
 
-variable "openclaw_cores" {
-  description = "CPU cores allocated to the OpenClaw LXC"
+variable "cerebro_cores" {
+  description = "CPU cores allocated to the Cerebro VM"
   type        = number
-  default     = 4
+  default     = 6
 }
 
-variable "openclaw_disk_gb" {
-  description = "Root filesystem size for the OpenClaw LXC (GB)"
+variable "cerebro_disk_gb" {
+  description = "Root filesystem size for the Cerebro VM (GB)"
   type        = number
   default     = 64
 }
 
-variable "openclaw_root_password" {
-  description = "Root password for the OpenClaw LXC"
+variable "cerebro_root_password" {
+  description = "Password for initial Cerebro VM user provisioning"
   type        = string
   sensitive   = true
 }
 
-variable "openclaw_ssh_public_keys" {
-  description = "SSH public keys to inject into the OpenClaw LXC root account"
+variable "cerebro_ssh_public_keys" {
+  description = "SSH public keys to inject into the Cerebro VM user account"
   type        = list(string)
   default     = []
+}
+
+variable "cerebro_gpu_pci_id" {
+  description = "PCI ID(s) for GPU passthrough to Cerebro VM. Format: 0000:bb:dd.f (or semicolon-separated multi-function IDs)."
+  type        = string
+  default     = ""
+}
+
+variable "cerebro_gpu_mapping" {
+  description = "Optional Proxmox resource mapping name for GPU passthrough (alternative to cerebro_gpu_pci_id)."
+  type        = string
+  default     = ""
 }

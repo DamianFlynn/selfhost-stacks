@@ -85,8 +85,11 @@ locals {
 
   conf = "/etc/pve/lxc/${var.lxc_vmid}.conf"
 
-  # GPU device names and cgroup2 minor numbers defined in lxc-openclaw.tf
-  # Both LXC containers share the same GPU device locals
+  # GPU device names and cgroup2 minor numbers
+  gpu_card         = "card${var.gpu_card_index}"
+  gpu_render       = "renderD${var.gpu_render_index}"
+  gpu_card_minor   = var.gpu_card_index
+  gpu_render_minor = var.gpu_render_index
 }
 
 # ── Phase 1: LXC container (started=false) ───────────────────────────────────
