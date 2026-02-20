@@ -34,10 +34,10 @@ resource "proxmox_virtual_environment_vm" "cerebro" {
     RAM: ${var.cerebro_memory_mb}MB | CPU: ${var.cerebro_cores} cores
     IP: ${var.cerebro_ip}
 
-    Authoritative Terraform-managed Cerebro VM on ${timestamp()}
+    Authoritative Terraform-managed Cerebro VM
   EOT
 
-  started = false
+  started = true
   on_boot = true
 
   # BIOS and machine type
@@ -135,6 +135,12 @@ resource "proxmox_virtual_environment_vm" "cerebro" {
   }
 
   lifecycle {
+    ignore_changes = [
+      description,
+      cdrom,
+      initialization,
+    ]
+
     precondition {
       condition     = trimspace(var.cerebro_gpu_pci_id) != "" || trimspace(var.cerebro_gpu_mapping) != ""
       error_message = "Set either cerebro_gpu_pci_id or cerebro_gpu_mapping to enable GPU passthrough for Cerebro VM."
@@ -192,10 +198,9 @@ resource "null_resource" "cerebro_wait_install" {
 # Run after Ubuntu installation: terraform apply -target=null_resource.cerebro_provision
 
 resource "null_resource" "cerebro_provision" {
-  depends_on = [null_resource.cerebro_wait_install]
-
   triggers = {
-    vm_id = proxmox_virtual_environment_vm.cerebro.vm_id
+    vm_id              = tostring(var.cerebro_vmid)
+    provisioner_schema = "2"
   }
 
   connection {
@@ -205,32 +210,50 @@ resource "null_resource" "cerebro_provision" {
     password = var.cerebro_root_password
   }
 
+  # Bootstrap SSH keys and non-interactive sudo access
+  provisioner "remote-exec" {
+    inline = [
+      "set -e",
+      "echo '==> Bootstrapping SSH keys and sudo policy'",
+      "install -d -m 700 ~/.ssh",
+      "touch ~/.ssh/authorized_keys",
+      "chmod 600 ~/.ssh/authorized_keys",
+      "cat <<'EOF' >> ~/.ssh/authorized_keys",
+      "${join("\n", var.cerebro_ssh_public_keys)}",
+      "EOF",
+      "sort -u ~/.ssh/authorized_keys -o ~/.ssh/authorized_keys",
+      "echo '${var.cerebro_root_password}' | sudo -S sh -c 'printf \"%s\\n\" \"cerebro ALL=(ALL) NOPASSWD:ALL\" > /etc/sudoers.d/99-cerebro'",
+      "echo '${var.cerebro_root_password}' | sudo -S chmod 440 /etc/sudoers.d/99-cerebro",
+      "echo '${var.cerebro_root_password}' | sudo -S visudo -cf /etc/sudoers.d/99-cerebro",
+    ]
+  }
+
   # Install Docker CE
   provisioner "remote-exec" {
     inline = [
       "set -e",
       "echo '==> Installing Docker CE'",
-      "sudo apt-get update -y",
-      "sudo apt-get install -y ca-certificates curl gnupg",
-      "sudo install -m 0755 -d /etc/apt/keyrings",
-      "curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg",
-      "sudo chmod a+r /etc/apt/keyrings/docker.gpg",
-      "echo \"deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable\" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null",
-      "sudo apt-get update -y",
-      "sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin",
-      "sudo systemctl enable --now docker",
-      "sudo usermod -aG docker cerebro",
+      "sudo -n apt-get update -y",
+      "sudo -n apt-get install -y ca-certificates curl gnupg",
+      "sudo -n install -m 0755 -d /etc/apt/keyrings",
+      "curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo -n gpg --dearmor --yes -o /etc/apt/keyrings/docker.gpg",
+      "sudo -n chmod a+r /etc/apt/keyrings/docker.gpg",
+      "echo \"deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable\" | sudo -n tee /etc/apt/sources.list.d/docker.list > /dev/null",
+      "sudo -n apt-get update -y",
+      "sudo -n apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin",
+      "sudo -n systemctl enable --now docker",
+      "sudo -n usermod -aG docker cerebro",
       "docker --version",
     ]
   }
 
-  # Install Node.js 20.x via NodeSource
+  # Install Node.js 24.x via NodeSource
   provisioner "remote-exec" {
     inline = [
       "set -e",
-      "echo '==> Installing Node.js 20.x'",
-      "curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -",
-      "sudo apt-get install -y nodejs",
+      "echo '==> Installing Node.js 24.x'",
+      "curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -n -E bash -",
+      "sudo -n apt-get install -y nodejs",
       "node --version",
       "npm --version",
     ]
@@ -241,21 +264,11 @@ resource "null_resource" "cerebro_provision" {
     inline = [
       "set -e",
       "echo '==> Installing Ollama'",
-      "curl -fsSL https://ollama.com/install.sh | sh",
-      "sudo systemctl enable ollama",
-      "sudo systemctl start ollama",
+      "curl -fsSL https://ollama.com/install.sh | sudo -n sh >/tmp/ollama-install.log 2>&1 || { sudo -n tail -n 200 /tmp/ollama-install.log; exit 1; }",
+      "sudo -n systemctl enable ollama",
+      "sudo -n systemctl start ollama",
       "sleep 5",
       "ollama --version",
-    ]
-  }
-
-  # Install Cerebro
-  provisioner "remote-exec" {
-    inline = [
-      "set -e",
-      "echo '==> Installing Cerebro'",
-      "npm install -g cerebro@latest",
-      "cerebro --version",
     ]
   }
 
@@ -265,44 +278,47 @@ resource "null_resource" "cerebro_provision" {
       "set -e",
       "echo '==> Pulling Ollama models'",
       "ollama pull qwen2.5:3b",
-      "ollama pull qwen2.5:3b-32k",
+      "ollama pull llama3.2:latest",
       "ollama list",
     ]
   }
 
-  # Create systemd service
-  provisioner "remote-exec" {
-    inline = [
-      "set -e",
-      "echo '==> Creating Cerebro systemd service'",
-      "sudo tee /etc/systemd/system/cerebro-gateway.service > /dev/null <<'EOF'",
-      "[Unit]",
-      "Description=Cerebro AI Gateway",
-      "After=network.target ollama.service",
-      "Wants=ollama.service",
-      "",
-      "[Service]",
-      "Type=simple",
-      "User=cerebro",
-      "Group=cerebro",
-      "WorkingDirectory=/home/cerebro",
-      "ExecStart=/usr/bin/cerebro gateway --bind lan",
-      "Restart=on-failure",
-      "RestartSec=10",
-      "WatchdogSec=600",
-      "TimeoutStartSec=120",
-      "TimeoutStopSec=30",
-      "StandardOutput=journal",
-      "StandardError=journal",
-      "",
-      "[Install]",
-      "WantedBy=multi-user.target",
-      "EOF",
-      "",
-      "sudo systemctl daemon-reload",
-      "sudo systemctl enable cerebro-gateway",
-    ]
-  }
+  # Install the Apps: tmux
+  # SWAP Disk - i need to add this to the VM also for better utilization
+  
+  # Create systemd service - not used at the moment
+  #provisioner "remote-exec" {
+  #  inline = [
+  #    "set -e",
+  #    "echo '==> Creating Cerebro systemd service'",
+  #    "sudo -n tee /etc/systemd/system/cerebro-gateway.service > /dev/null <<'EOF'",
+  #    "[Unit]",
+  #    "Description=Cerebro AI Gateway",
+  #    "After=network.target ollama.service",
+  #    "Wants=ollama.service",
+  #    "",
+  #    "[Service]",
+  #    "Type=simple",
+  #    "User=cerebro",
+  #    "Group=cerebro",
+  #    "WorkingDirectory=/home/cerebro",
+  #    "ExecStart=/usr/bin/cerebro gateway --bind lan",
+  #    "Restart=on-failure",
+  #    "RestartSec=10",
+  #    "WatchdogSec=600",
+  #    "TimeoutStartSec=120",
+  #    "TimeoutStopSec=30",
+  #    "StandardOutput=journal",
+  #    "StandardError=journal",
+  #    "",
+  #    "[Install]",
+  #    "WantedBy=multi-user.target",
+  #    "EOF",
+  #    "",
+  #    "sudo -n systemctl daemon-reload",
+  #    "sudo -n systemctl enable cerebro-gateway",
+  #  ]
+  #}
 
   provisioner "local-exec" {
     command = <<-EOT
