@@ -4,7 +4,7 @@ Repository guidance for code agents and maintainers.
 
 ## Scope Split
 
-- `infrastructure/proxmox/`: Terraform for Proxmox host setup + workload provisioning
+- `infra/`: Terraform for Proxmox host setup + workload provisioning
 - `stacks/`: Docker Compose stack definitions deployed to LXC `100` (`selfhost`)
 
 ## Platform
@@ -17,7 +17,7 @@ Repository guidance for code agents and maintainers.
 
 - Terraform is authoritative for host/LXC/VM resources.
 - Do not manually drift critical Proxmox config Terraform manages.
-- Keep provisioning logic in `infrastructure/proxmox/` only.
+- Keep provisioning logic in `infra/` only.
 
 ## Stack Rules
 
@@ -29,7 +29,7 @@ Repository guidance for code agents and maintainers.
 
 ```bash
 # Terraform
-cd infrastructure/proxmox
+cd infra
 terraform plan
 terraform apply
 

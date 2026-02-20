@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Setup script for Teleport stack
-# Creates required directory structure on TrueNAS
+# Creates required directory structure on selfhost storage
 
 set -e
 

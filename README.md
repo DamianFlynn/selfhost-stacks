@@ -2,7 +2,7 @@
 
 This repository is split into two clean domains:
 
-- `infrastructure/proxmox/` — Terraform for Proxmox host prep + workload provisioning
+- `infra/` — Terraform for Proxmox host prep + workload provisioning
 - `stacks/` — Docker Compose stacks that run in `selfhost` LXC (`VMID 100`)
 
 ## Current Platform
@@ -13,7 +13,7 @@ This repository is split into two clean domains:
 
 ## Repository Layout
 
-- `infrastructure/proxmox/`
+- `infra/`
   - Host bootstrap and ZFS prep
   - LXC `100` provisioning (Docker + mounts + GPU device mapping)
   - VM `102` provisioning (Ubuntu 24.04 + static IP + GPU passthrough + Docker/Ollama/Cerebro provisioning)
@@ -26,7 +26,7 @@ This repository is split into two clean domains:
 ## Terraform
 
 ```bash
-cd infrastructure/proxmox
+cd infra
 terraform init
 terraform plan
 terraform apply
