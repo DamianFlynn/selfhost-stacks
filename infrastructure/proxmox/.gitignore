@@ -4,6 +4,7 @@ terraform.tfvars
 # Terraform state — use remote backend in production; local state is fine for personal infra
 *.tfstate
 *.tfstate.backup
+terraform.tfstate.*.backup
 *.tfstate.lock.info
 
 # Terraform working directory
