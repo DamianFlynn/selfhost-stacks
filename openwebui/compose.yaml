@@ -66,7 +66,7 @@ services:
   ai-ollama:
     container_name: ai-ollama
     # renovate: datasource=docker depName=ollama/ollama
-    image: ollama/ollama:0.15.6     # AMD Ryzen AI 9 HX PRO 370 with Radeon 890M (gfx1150) + Vulkan
+    image: ollama/ollama:0.17.5     # AMD Ryzen AI 9 HX PRO 370 with Radeon 890M (gfx1150) + Vulkan
     pull_policy: always
     environment:
       - OLLAMA_CONTEXT_LENGTH=8192
