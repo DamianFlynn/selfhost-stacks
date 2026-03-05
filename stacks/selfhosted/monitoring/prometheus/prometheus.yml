@@ -45,7 +45,7 @@ scrape_configs:
   # Traefik reverse proxy metrics
   - job_name: 'traefik'
     static_configs:
-      - targets: ['traefik:8080']
+      - targets: ['192.168.90.254:8080']  # Using static IP due to DNS search domain conflict
     relabel_configs:
       - source_labels: [__address__]
         target_label: instance
