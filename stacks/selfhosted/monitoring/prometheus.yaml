@@ -1,0 +1,33 @@
+services:
+  prometheus:
+    image: prom/prometheus:v3.2.2
+    container_name: prometheus
+    hostname: prometheus
+    restart: unless-stopped
+    user: "${PUID}:${PGID}"
+    networks:
+      - t3_proxy
+    # ports:
+    #   - "9090:9090"  # Uncomment for direct access or expose via Traefik
+    volumes:
+      - ${APPDATA_DIR}/monitoring/prometheus:/prometheus
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-30d}'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.prometheus.rule=Host(`prometheus.${DOMAINNAME}`)"
+      - "traefik.http.routers.prometheus.entrypoints=websecure"
+      - "traefik.http.routers.prometheus.tls=true"
+      - "traefik.http.routers.prometheus.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.prometheus.middlewares=authelia@docker"
+      - "traefik.http.services.prometheus.loadbalancer.server.port=9090"
+
+networks:
+  t3_proxy:
+    external: true

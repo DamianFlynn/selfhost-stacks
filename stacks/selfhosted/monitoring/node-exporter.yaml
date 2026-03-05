@@ -1,0 +1,28 @@
+services:
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    container_name: node-exporter
+    hostname: node-exporter
+    restart: unless-stopped
+    networks:
+      - t3_proxy
+    # ports:
+    #   - "9100:9100"  # Uncomment for direct access
+    pid: host
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--path.rootfs=/rootfs'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+      - '--collector.netclass.ignored-devices=^(veth.*|br.*|docker.*|virbr.*|lo)$$'
+      - '--collector.netdev.device-exclude=^(veth.*|br.*|docker.*|virbr.*|lo)$$'
+    labels:
+      - "traefik.enable=false"  # Internal metrics only, no web UI
+
+networks:
+  t3_proxy:
+    external: true

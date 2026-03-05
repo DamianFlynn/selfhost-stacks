@@ -1,0 +1,3 @@
+include:
+  - /mnt/fast/stacks/stacks/selfhosted/monitoring/compose.yaml
+services: {}

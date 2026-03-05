@@ -1,0 +1,40 @@
+# Selfhost Monitoring Stack
+# Prometheus + Grafana + cAdvisor + node-exporter
+# Provides unified observability for all selfhost containers, Home Assistant, and Cerebro VM
+
+include:
+  - prometheus.yaml
+  - grafana.yaml
+  - cadvisor.yaml
+  - node-exporter.yaml
+
+# All services connect to the t3_proxy network (Traefik)
+# Access URLs:
+#   - Grafana: https://grafana.deercrest.info (dashboards and visualization)
+#   - Prometheus: https://prometheus.deercrest.info (requires Authelia auth)
+#   - cAdvisor: https://cadvisor.deercrest.info (requires Authelia auth)
+#   - node-exporter: Internal only (no web UI)
+
+# Default credentials:
+#   Grafana: admin / admin (change on first login)
+
+# Scrape targets configured in prometheus/prometheus.yml:
+#   - 7 exportarr instances (prowlarr, radarr, sonarr, lidarr, readarr, bazarr, sabnzbd)
+#   - Traefik metrics
+#   - cAdvisor (container metrics)
+#   - node-exporter (host system metrics)
+#   - Future: Home Assistant (add to prometheus.yml when ready)
+#   - Future: Cerebro VM node-exporter (add to prometheus.yml when deployed)
+
+# Recommended Grafana Dashboards to Import:
+#   - Traefik Dashboard: https://grafana.com/grafana/dashboards/17347
+#   - Exportarr Media Stack: https://grafana.com/grafana/dashboards/15709
+#   - cAdvisor Docker: https://grafana.com/grafana/dashboards/11600
+#   - Node Exporter Full: https://grafana.com/grafana/dashboards/1860
+
+# Resource Usage (approximate):
+#   - Prometheus: 200-400MB RAM, 5-10GB disk (30 day retention)
+#   - Grafana: 100-200MB RAM, 500MB disk
+#   - cAdvisor: 100-150MB RAM, minimal disk
+#   - node-exporter: 10-20MB RAM, minimal disk
+#   - Total: ~500MB RAM, 6-11GB disk

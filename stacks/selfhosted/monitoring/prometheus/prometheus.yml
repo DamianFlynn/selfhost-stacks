@@ -1,0 +1,130 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'selfhost'
+    environment: 'production'
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+          # - alertmanager:9093
+
+# Load rules once and periodically evaluate them
+rule_files:
+  # - "first_rules.yml"
+  # - "second_rules.yml"
+
+# Scrape configuration
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Docker container metrics via cAdvisor
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'selfhost-lxc100'
+
+  # Host system metrics via node-exporter
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'selfhost-lxc100'
+
+  # Traefik reverse proxy metrics
+  - job_name: 'traefik'
+    static_configs:
+      - targets: ['traefik:8080']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'traefik'
+
+  # Exportarr - Prowlarr indexer manager
+  - job_name: 'exportarr-prowlarr'
+    static_configs:
+      - targets: ['prowlarr-exporter:9707']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'prowlarr'
+
+  # Exportarr - Radarr movie management
+  - job_name: 'exportarr-radarr'
+    static_configs:
+      - targets: ['radarr-exporter:9707']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'radarr'
+
+  # Exportarr - Sonarr TV management
+  - job_name: 'exportarr-sonarr'
+    static_configs:
+      - targets: ['sonarr-exporter:9707']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'sonarr'
+
+  # Exportarr - Lidarr music management
+  - job_name: 'exportarr-lidarr'
+    static_configs:
+      - targets: ['lidarr-exporter:9707']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'lidarr'
+
+  # Exportarr - Readarr book management
+  - job_name: 'exportarr-readarr'
+    static_configs:
+      - targets: ['readarr-exporter:9707']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'readarr'
+
+  # Exportarr - Bazarr subtitle management
+  - job_name: 'exportarr-bazarr'
+    static_configs:
+      - targets: ['bazarr-exporter:9707']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'bazarr'
+
+  # Exportarr - Sabnzbd download client
+  - job_name: 'exportarr-sabnzbd'
+    static_configs:
+      - targets: ['sabnzbd-exporter:9707']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'sabnzbd'
+
+  # Future: Home Assistant metrics
+  # - job_name: 'homeassistant'
+  #   static_configs:
+  #     - targets: ['homeassistant.local:8123']
+  #   metrics_path: '/api/prometheus'
+
+  # Future: Cerebro VM (OpenClaw) node-exporter
+  # - job_name: 'cerebro-node'
+  #   static_configs:
+  #     - targets: ['172.16.1.160:9100']
+  #   relabel_configs:
+  #     - source_labels: [__address__]
+  #       target_label: instance
+  #       replacement: 'cerebro-vm102'
