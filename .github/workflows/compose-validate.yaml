@@ -9,6 +9,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
+      
+      - name: Prepare environment files for validation
+        run: |
+          # Create directory structure matching server paths
+          sudo mkdir -p /mnt/fast/stacks/stacks/selfhosted/{code-server,immich}
+          # Copy .env.sample to expected .env locations
+          sudo cp stacks/selfhosted/code-server/.env.sample /mnt/fast/stacks/stacks/selfhosted/code-server/.env
+          sudo cp stacks/selfhosted/immich/.env.sample /mnt/fast/stacks/stacks/selfhosted/immich/.env
+      
       - name: Validate code-server compose
         run: docker compose -f stacks/selfhosted/code-server/compose.yaml config >/dev/null
       - name: Validate immich compose
