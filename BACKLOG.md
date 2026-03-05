@@ -18,6 +18,32 @@ Services and applications to evaluate for future deployment.
 - **Status**: To evaluate
 - **Notes**: Would integrate with existing Immich deployment
 
+### Audiobookshelf
+- **Repository**: https://github.com/advplyr/audiobookshelf
+- **Purpose**: Audiobook and podcast server
+- **Status**: To evaluate
+- **Notes**: Self-hosted audiobook and podcast library manager with mobile apps
+
+### Listenarr
+- **Repository**: https://github.com/Listenarrs/Listenarr
+- **Purpose**: Audiobook automation for *arr stack
+- **Status**: To evaluate
+- **Notes**: Integrates with existing Radarr/Sonarr/Lidarr workflow
+
+### ROMM
+- **Repository**: https://github.com/rommapp/romm
+- **Purpose**: ROM library management
+- **Status**: To evaluate
+- **Notes**: Beautiful ROM collection manager for retro gaming
+
+## Social Media
+
+### Rybbit
+- **Repository**: https://github.com/rybbit-io/rybbit
+- **Purpose**: Reddit client/reader
+- **Status**: To evaluate
+- **Notes**: Self-hosted Reddit browsing experience
+
 ## Document Management
 
 ### Paperless GPT
