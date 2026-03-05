@@ -1,0 +1,67 @@
+services:
+  rybbit:
+    # renovate: datasource=docker depName=ghcr.io/rybbit-io/rybbit
+    image: ghcr.io/rybbit-io/rybbit:latest
+    container_name: rybbit
+    restart: unless-stopped
+    env_file:
+      - .env
+    networks:
+      - t3_proxy
+      - social
+    volumes:
+      - rybbit_data:/data
+    environment:
+      # Database connection from .env
+      - DATABASE_URL=${RYBBIT_DATABASE_URL:-postgresql://rybbit:rybbit@rybbit_postgres:5432/rybbit}
+      
+      # Session secret
+      - SESSION_SECRET=${RYBBIT_SESSION_SECRET}
+      
+      # Reddit API credentials
+      - REDDIT_CLIENT_ID=${REDDIT_CLIENT_ID}
+      - REDDIT_CLIENT_SECRET=${REDDIT_CLIENT_SECRET}
+      
+      # Optional Hugo integration
+      - HUGO_CONTENT_PATH=${HUGO_CONTENT_PATH:-/hugo/content}
+      - HUGO_STATIC_PATH=${HUGO_STATIC_PATH:-/hugo/static}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=t3_proxy"
+      
+      # HTTP Router with Authelia
+      - "traefik.http.routers.rybbit.entrypoints=web,websecure"
+      - "traefik.http.routers.rybbit.rule=Host(`rybbit.deercrest.info`)"
+      - "traefik.http.routers.rybbit.middlewares=chain-authelia@file"
+      - "traefik.http.routers.rybbit.service=rybbit"
+      - "traefik.http.services.rybbit.loadbalancer.server.port=3000"
+    depends_on:
+      rybbit_postgres:
+        condition: service_healthy
+
+  rybbit_postgres:
+    image: postgres:17-alpine
+    container_name: rybbit_postgres
+    restart: unless-stopped
+    networks:
+      - social
+    volumes:
+      - rybbit_postgres:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_PASSWORD=${RYBBIT_POSTGRES_PASSWORD:-rybbit}
+      - POSTGRES_USER=${RYBBIT_POSTGRES_USER:-rybbit}
+      - POSTGRES_DB=${RYBBIT_POSTGRES_DB:-rybbit}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${RYBBIT_POSTGRES_USER:-rybbit} -d ${RYBBIT_POSTGRES_DB:-rybbit}"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  rybbit_postgres:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/fast/appdata/social/rybbit/postgres

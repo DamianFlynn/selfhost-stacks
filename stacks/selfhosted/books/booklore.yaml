@@ -1,0 +1,58 @@
+services:
+  booklore:
+    # renovate: datasource=docker depName=ghcr.io/booklore-app/booklore
+    image: ghcr.io/booklore-app/booklore:latest
+    container_name: booklore
+    restart: unless-stopped
+    env_file:
+      - .env
+    networks:
+      - t3_proxy
+      - books
+    volumes:
+      - booklore_data:/data
+    environment:
+      # Database
+      - DATABASE_URL=postgresql://${BOOKLORE_POSTGRES_USER:-booklore}:${BOOKLORE_POSTGRES_PASSWORD}@booklore_postgres:5432/${BOOKLORE_POSTGRES_DB:-booklore}
+      
+      # Application
+      - NODE_ENV=production
+      - PORT=3000
+      
+      # Security
+      - SESSION_SECRET=${BOOKLORE_SESSION_SECRET}
+      
+      # Time zone
+      - TZ=${TZ:-America/New_York}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=t3_proxy"
+      
+      # HTTP Router with Authelia
+      - "traefik.http.routers.booklore.entrypoints=web,websecure"
+      - "traefik.http.routers.booklore.rule=Host(`books.deercrest.info`)"
+      - "traefik.http.routers.booklore.middlewares=chain-authelia@file"
+      - "traefik.http.routers.booklore.service=booklore"
+      - "traefik.http.services.booklore.loadbalancer.server.port=3000"
+    depends_on:
+      booklore_postgres:
+        condition: service_healthy
+
+  booklore_postgres:
+    image: postgres:17-alpine
+    container_name: booklore_postgres
+    restart: unless-stopped
+    networks:
+      - books
+    volumes:
+      - booklore_postgres:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=${BOOKLORE_POSTGRES_DB:-booklore}
+      - POSTGRES_USER=${BOOKLORE_POSTGRES_USER:-booklore}
+      - POSTGRES_PASSWORD=${BOOKLORE_POSTGRES_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${BOOKLORE_POSTGRES_USER:-booklore} -d ${BOOKLORE_POSTGRES_DB:-booklore}"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 30s

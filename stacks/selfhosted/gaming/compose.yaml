@@ -1,0 +1,42 @@
+# Gaming Stack - ROMM
+# ROM library management for retro gaming collections
+
+name: gaming
+
+########################### NETWORKS
+networks:
+  t3_proxy:
+    external: true
+  gaming:
+    driver: bridge
+
+########################### VOLUMES
+volumes:
+  romm_resources:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/fast/appdata/gaming/romm/resources
+  romm_redis:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/fast/appdata/gaming/romm/redis
+  romm_mariadb:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/fast/appdata/gaming/romm/mariadb
+  romm_library:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/fast/media/roms
+
+########################### SERVICES
+include:
+  - romm.yaml

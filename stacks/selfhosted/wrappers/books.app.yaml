@@ -1,0 +1,7 @@
+# Books Stack
+# Booklore: Book tracking and library management
+
+services:
+  books:
+    extends:
+      file: ../books/compose.yaml

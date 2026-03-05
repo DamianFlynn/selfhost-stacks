@@ -1,0 +1,34 @@
+# Audiobookshelf - Audiobook and podcast server
+# Self-hosted audiobook and podcast library manager with mobile apps
+
+services:
+  audiobookshelf:
+    # renovate: datasource=docker depName=ghcr.io/advplyr/audiobookshelf
+    image: ghcr.io/advplyr/audiobookshelf:latest
+    container_name: audiobookshelf
+    restart: unless-stopped
+    env_file:
+      - .env
+    networks:
+      - t3_proxy
+    volumes:
+      - ${APPDATA}/audiobookshelf:/config
+      - ${APPDATA}/audiobookshelf/metadata:/metadata
+      - ${MEDIA}/audiobooks:/audiobooks
+      - ${MEDIA}/podcasts:/podcasts
+    environment:
+      - PUID=568
+      - PGID=568
+      - TZ=${TZ}
+    ports:
+      - 13378:80  # Optional direct access
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=t3_proxy"
+      
+      # HTTP Router with Authelia
+      - "traefik.http.routers.audiobookshelf.entrypoints=web,websecure"
+      - "traefik.http.routers.audiobookshelf.rule=Host(`audiobooks.deercrest.info`)"
+      - "traefik.http.routers.audiobookshelf.middlewares=chain-authelia@file"
+      - "traefik.http.routers.audiobookshelf.service=audiobookshelf"
+      - "traefik.http.services.audiobookshelf.loadbalancer.server.port=80"

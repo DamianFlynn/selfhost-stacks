@@ -1,0 +1,9 @@
+# Social Media Management Stack
+# Postiz: Social media scheduling and publishing
+# Rybbit: Reddit content discovery and curation
+# Integration: Hugo static site, automation workflows
+
+services:
+  social:
+    extends:
+      file: ../social/compose.yaml

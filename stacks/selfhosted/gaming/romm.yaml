@@ -1,0 +1,89 @@
+services:
+  romm:
+    # renovate: datasource=docker depName=rommapp/romm
+    image: rommapp/romm:latest
+    container_name: romm
+    restart: unless-stopped
+    env_file:
+      - .env
+    networks:
+      - t3_proxy
+      - gaming
+    volumes:
+      - romm_resources:/romm/resources
+      - romm_library:/romm/library
+    environment:
+      # Database
+      - DB_HOST=romm_mariadb
+      - DB_NAME=${ROMM_DB_NAME:-romm}
+      - DB_USER=${ROMM_DB_USER:-romm}
+      - DB_PASSWD=${ROMM_DB_PASSWORD}
+      
+      # Redis
+      - REDIS_HOST=romm_redis
+      - REDIS_PORT=6379
+      
+      # IGDB API (for game metadata)
+      - IGDB_CLIENT_ID=${IGDB_CLIENT_ID}
+      - IGDB_CLIENT_SECRET=${IGDB_CLIENT_SECRET}
+      
+      # Security
+      - ROMM_AUTH_SECRET_KEY=${ROMM_AUTH_SECRET_KEY}
+      - ROMM_AUTH_ENABLED=${ROMM_AUTH_ENABLED:-true}
+      
+      # User and group
+      - PUID=568
+      - PGID=568
+      
+      # Time zone
+      - TZ=${TZ:-America/New_York}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=t3_proxy"
+      
+      # HTTP Router with Authelia
+      - "traefik.http.routers.romm.entrypoints=web,websecure"
+      - "traefik.http.routers.romm.rule=Host(`roms.deercrest.info`)"
+      - "traefik.http.routers.romm.middlewares=chain-authelia@file"
+      - "traefik.http.routers.romm.service=romm"
+      - "traefik.http.services.romm.loadbalancer.server.port=8080"
+    depends_on:
+      romm_mariadb:
+        condition: service_healthy
+      romm_redis:
+        condition: service_healthy
+
+  romm_mariadb:
+    image: mariadb:11
+    container_name: romm_mariadb
+    restart: unless-stopped
+    networks:
+      - gaming
+    volumes:
+      - romm_mariadb:/var/lib/mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=${ROMM_DB_ROOT_PASSWORD}
+      - MYSQL_DATABASE=${ROMM_DB_NAME:-romm}
+      - MYSQL_USER=${ROMM_DB_USER:-romm}
+      - MYSQL_PASSWORD=${ROMM_DB_PASSWORD}
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--su-mysql", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 30s
+
+  romm_redis:
+    image: redis:7.4-alpine
+    container_name: romm_redis
+    restart: unless-stopped
+    networks:
+      - gaming
+    volumes:
+      - romm_redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s

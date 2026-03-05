@@ -1,0 +1,44 @@
+services:
+  paperless-gpt:
+    # renovate: datasource=docker depName=icereed/paperless-gpt
+    image: icereed/paperless-gpt:latest
+    container_name: paperless-gpt
+    restart: unless-stopped
+    env_file:
+      - .env
+    networks:
+      - t3_proxy
+      - documents
+    environment:
+      # Paperless connection
+      - PAPERLESS_BASE_URL=http://paperless:8000
+      - PAPERLESS_API_TOKEN=${PAPERLESS_GPT_API_TOKEN}
+      
+      # OpenAI/LLM configuration
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      
+      # Optional: Use local LLM (Ollama/OpenClaw)
+      # - OPENAI_BASE_URL=http://172.16.1.160:11434/v1
+      # - OPENAI_MODEL=llama3
+      
+      # Features
+      - AUTO_TAG=${PAPERLESS_GPT_AUTO_TAG:-true}
+      - AUTO_CORRESPONDENT=${PAPERLESS_GPT_AUTO_CORRESPONDENT:-true}
+      - AUTO_DOCUMENT_TYPE=${PAPERLESS_GPT_AUTO_DOCUMENT_TYPE:-true}
+      
+      # Processing
+      - PROCESSING_INTERVAL=${PAPERLESS_GPT_INTERVAL:-300}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=t3_proxy"
+      
+      # HTTP Router with Authelia (management interface)
+      - "traefik.http.routers.paperless-gpt.entrypoints=web,websecure"
+      - "traefik.http.routers.paperless-gpt.rule=Host(`docs-ai.deercrest.info`)"
+      - "traefik.http.routers.paperless-gpt.middlewares=chain-authelia@file"
+      - "traefik.http.routers.paperless-gpt.service=paperless-gpt"
+      - "traefik.http.services.paperless-gpt.loadbalancer.server.port=8080"
+    depends_on:
+      - paperless

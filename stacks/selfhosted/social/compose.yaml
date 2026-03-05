@@ -1,0 +1,59 @@
+# Social Stack - Postiz, Rybbit
+# Social media scheduling, Reddit client for content discovery
+# Integrates with Hugo static site and automation workflows
+
+name: social
+
+########################### NETWORKS
+networks:
+  t3_proxy:
+    external: true
+  social:
+    driver: bridge
+
+########################### VOLUMES
+volumes:
+  # Postiz
+  postiz_postgres:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/fast/appdata/social/postiz/postgres
+  postiz_redis:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/fast/appdata/social/postiz/redis
+  postiz_config:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/fast/appdata/social/postiz/config
+  postiz_uploads:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/fast/appdata/social/postiz/uploads
+
+  # Rybbit
+  rybbit_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/fast/appdata/social/rybbit/data
+  rybbit_postgres:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/fast/appdata/social/rybbit/postgres
+
+########################### SERVICES
+include:
+  - postiz.yaml
+  - rybbit.yaml

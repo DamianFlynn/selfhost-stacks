@@ -1,0 +1,32 @@
+# SaaS Stack - Cal.com
+# Resource booking and scheduling platform
+# Self-hosted Calendly alternative for business operations
+
+name: saas
+
+########################### NETWORKS
+networks:
+  t3_proxy:
+    external: true
+  saas:
+    driver: bridge
+
+########################### VOLUMES
+volumes:
+  # Cal.com
+  calcom_postgres:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/fast/appdata/saas/calcom/postgres
+  calcom_uploads:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/fast/appdata/saas/calcom/uploads
+
+########################### SERVICES
+include:
+  - calcom.yaml

@@ -1,0 +1,34 @@
+# Listenarr - Audiobook automation for *arr stack
+# Automates audiobook downloading and organization
+# Integrates with Prowlarr, SABnzbd/qBittorrent, and existing media management
+
+services:
+  listenarr:
+    # renovate: datasource=docker depName=ghcr.io/listenarrs/listenarr
+    image: ghcr.io/listenarrs/listenarr:latest
+    container_name: listenarr
+    restart: unless-stopped
+    env_file:
+      - .env
+    networks:
+      - t3_proxy
+      - arrs
+    volumes:
+      - ${APPDATA}/listenarr:/config
+      - ${MEDIA}/audiobooks:/audiobooks
+      - ${DOWNLOADS}:/downloads
+    environment:
+      - PUID=568
+      - PGID=568
+      - TZ=${TZ}
+      - UMASK=002
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=t3_proxy"
+      
+      # HTTP Router with Authelia
+      - "traefik.http.routers.listenarr.entrypoints=web,websecure"
+      - "traefik.http.routers.listenarr.rule=Host(`listenarr.deercrest.info`)"
+      - "traefik.http.routers.listenarr.middlewares=chain-authelia@file"
+      - "traefik.http.routers.listenarr.service=listenarr"
+      - "traefik.http.services.listenarr.loadbalancer.server.port=8686"

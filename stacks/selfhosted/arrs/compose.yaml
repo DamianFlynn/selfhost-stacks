@@ -29,6 +29,7 @@ include:
   - sonarr.yaml
   - lidarr.yaml
   - readarr.yaml
+  - listenarr.yaml
   - bazarr.yaml
   - flaresolverr.yaml
   - autobrr.yaml

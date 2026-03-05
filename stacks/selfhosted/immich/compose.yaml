@@ -117,6 +117,47 @@ services:
     networks:
       - immich
 
+  # Immich Kiosk - Display mode for photo slideshows
+  immich-kiosk:
+    # renovate: datasource=docker depName=damongolding/immich-kiosk
+    image: damongolding/immich-kiosk:latest
+    container_name: immich_kiosk
+    restart: unless-stopped
+    env_file:
+      - .env
+    networks:
+      - t3_proxy
+      - immich
+    environment:
+      # Immich connection
+      - IMMICH_URL=${IMMICH_KIOSK_URL:-http://immich_server:2283}
+      - IMMICH_API_KEY=${IMMICH_KIOSK_API_KEY}
+      
+      # Kiosk settings
+      - KIOSK_SHOW_TIME=${KIOSK_SHOW_TIME:-true}
+      - KIOSK_SHOW_DATE=${KIOSK_SHOW_DATE:-true}
+      - KIOSK_SHOW_LOCATION=${KIOSK_SHOW_LOCATION:-false}
+      - KIOSK_TRANSITION_DURATION=${KIOSK_TRANSITION_DURATION:-5000}
+      - KIOSK_IMAGE_FIT=${KIOSK_IMAGE_FIT:-contain}
+      
+      # Filters
+      - KIOSK_ALBUM_ID=${KIOSK_ALBUM_ID:-}
+      - KIOSK_PERSON_ID=${KIOSK_PERSON_ID:-}
+      
+      # Display
+      - TZ=${TZ}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=t3_proxy"
+      
+      # HTTP Router (public or protected based on use case)
+      - "traefik.http.routers.immich-kiosk.entrypoints=web,websecure"
+      - "traefik.http.routers.immich-kiosk.rule=Host(`kiosk.deercrest.info`)"
+      - "traefik.http.routers.immich-kiosk.service=immich-kiosk"
+      - "traefik.http.services.immich-kiosk.loadbalancer.server.port=3000"
+    depends_on:
+      - immich-server
+
   # power-tools:
   #   container_name: immich_power_tools
   #   image: ghcr.io/varun-raj/immich-power-tools:latest

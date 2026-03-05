@@ -19,6 +19,7 @@ include:
   ########################### SERVICES
 
   - jellyfin.yaml
+  - audiobookshelf.yaml
   - dispatcharr.yaml
   - seerr.yaml
   - jellystat.yaml

@@ -1,0 +1,9 @@
+# Document Management Stack
+# Paperless-ngx: Document management with OCR and search
+# Paperless-GPT: AI-powered tagging and classification
+# Complete stack: PostgreSQL, Redis, Tika OCR, Gotenberg PDF conversion
+
+services:
+  documents:
+    extends:
+      file: ../documents/compose.yaml

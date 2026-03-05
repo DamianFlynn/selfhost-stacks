@@ -1,0 +1,8 @@
+# SaaS Stack
+# Cal.com: Resource booking and scheduling platform
+# Self-hosted Calendly alternative for business operations
+
+services:
+  saas:
+    extends:
+      file: ../saas/compose.yaml

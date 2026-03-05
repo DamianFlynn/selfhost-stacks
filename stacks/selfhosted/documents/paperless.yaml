@@ -1,0 +1,125 @@
+services:
+  paperless:
+    # renovate: datasource=docker depName=ghcr.io/paperless-ngx/paperless-ngx
+    image: ghcr.io/paperless-ngx/paperless-ngx:latest
+    container_name: paperless
+    restart: unless-stopped
+    env_file:
+      - .env
+    networks:
+      - t3_proxy
+      - documents
+    volumes:
+      - paperless_data:/usr/src/paperless/data
+      - paperless_media:/usr/src/paperless/media
+      - paperless_export:/usr/src/paperless/export
+      - paperless_consume:/usr/src/paperless/consume
+    environment:
+      # Redis
+      - PAPERLESS_REDIS=redis://paperless_redis:6379
+      
+      # Database
+      - PAPERLESS_DBHOST=paperless_postgres
+      - PAPERLESS_DBNAME=${PAPERLESS_DBNAME:-paperless}
+      - PAPERLESS_DBUSER=${PAPERLESS_DBUSER:-paperless}
+      - PAPERLESS_DBPASS=${PAPERLESS_DBPASS}
+      
+      # OCR
+      - PAPERLESS_OCR_LANGUAGE=${PAPERLESS_OCR_LANGUAGE:-eng}
+      - PAPERLESS_OCR_LANGUAGES=${PAPERLESS_OCR_LANGUAGES:-eng fra deu spa}
+      - PAPERLESS_TIKA_ENABLED=1
+      - PAPERLESS_TIKA_GOTENBERG_ENDPOINT=http://gotenberg:3000
+      - PAPERLESS_TIKA_ENDPOINT=http://tika:9998
+      
+      # URLs and Security
+      - PAPERLESS_URL=https://docs.deercrest.info
+      - PAPERLESS_SECRET_KEY=${PAPERLESS_SECRET_KEY}
+      - PAPERLESS_ADMIN_USER=${PAPERLESS_ADMIN_USER:-admin}
+      - PAPERLESS_ADMIN_PASSWORD=${PAPERLESS_ADMIN_PASSWORD}
+      - PAPERLESS_ADMIN_MAIL=${PAPERLESS_ADMIN_MAIL:-admin@deercrest.info}
+      
+      # Time zone
+      - PAPERLESS_TIME_ZONE=${TZ:-America/New_York}
+      
+      # Consumer
+      - PAPERLESS_CONSUMER_POLLING=60
+      - PAPERLESS_CONSUMER_DELETE_DUPLICATES=true
+      - PAPERLESS_CONSUMER_RECURSIVE=true
+      - PAPERLESS_CONSUMER_SUBDIRS_AS_TAGS=true
+      
+      # User and group
+      - USERMAP_UID=568
+      - USERMAP_GID=568
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=t3_proxy"
+      
+      # HTTP Router with Authelia
+      - "traefik.http.routers.paperless.entrypoints=web,websecure"
+      - "traefik.http.routers.paperless.rule=Host(`docs.deercrest.info`)"
+      - "traefik.http.routers.paperless.middlewares=chain-authelia@file"
+      - "traefik.http.routers.paperless.service=paperless"
+      - "traefik.http.services.paperless.loadbalancer.server.port=8000"
+    depends_on:
+      paperless_postgres:
+        condition: service_healthy
+      paperless_redis:
+        condition: service_healthy
+      gotenberg:
+        condition: service_started
+      tika:
+        condition: service_started
+
+  paperless_postgres:
+    image: postgres:17-alpine
+    container_name: paperless_postgres
+    restart: unless-stopped
+    networks:
+      - documents
+    volumes:
+      - paperless_postgres:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=${PAPERLESS_DBNAME:-paperless}
+      - POSTGRES_USER=${PAPERLESS_DBUSER:-paperless}
+      - POSTGRES_PASSWORD=${PAPERLESS_DBPASS}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PAPERLESS_DBUSER:-paperless} -d ${PAPERLESS_DBNAME:-paperless}"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 30s
+
+  paperless_redis:
+    image: redis:7.4-alpine
+    container_name: paperless_redis
+    restart: unless-stopped
+    networks:
+      - documents
+    volumes:
+      - paperless_redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+  gotenberg:
+    # renovate: datasource=docker depName=gotenberg/gotenberg
+    image: gotenberg/gotenberg:latest
+    container_name: paperless_gotenberg
+    restart: unless-stopped
+    networks:
+      - documents
+    command:
+      - "gotenberg"
+      - "--chromium-disable-javascript=true"
+      - "--chromium-allow-list=file:///tmp/.*"
+
+  tika:
+    # renovate: datasource=docker depName=apache/tika
+    image: apache/tika:latest
+    container_name: paperless_tika
+    restart: unless-stopped
+    networks:
+      - documents

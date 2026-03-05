@@ -1,0 +1,61 @@
+# Documents Stack - Paperless-ngx, Paperless-GPT
+# Document management system with OCR, full-text search, and AI features
+# Complete stack: Paperless + PostgreSQL + Redis + Tika + Gotenberg + GPT
+
+name: documents
+
+########################### NETWORKS
+networks:
+  t3_proxy:
+    external: true
+  documents:
+    driver: bridge
+
+########################### VOLUMES
+volumes:
+  # Paperless
+  paperless_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/fast/appdata/documents/paperless/data
+  paperless_media:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/fast/appdata/documents/paperless/media
+  paperless_export:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/fast/appdata/documents/paperless/export
+  paperless_consume:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/fast/appdata/documents/paperless/consume
+  
+  # PostgreSQL
+  paperless_postgres:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/fast/appdata/documents/postgres
+  
+  # Redis
+  paperless_redis:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/fast/appdata/documents/redis
+
+########################### SERVICES
+include:
+  - paperless.yaml
+  - paperless-gpt.yaml

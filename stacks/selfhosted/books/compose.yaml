@@ -1,0 +1,30 @@
+# Books Stack - Booklore
+# Book tracking and library management
+
+name: books
+
+########################### NETWORKS
+networks:
+  t3_proxy:
+    external: true
+  books:
+    driver: bridge
+
+########################### VOLUMES
+volumes:
+  booklore_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/fast/appdata/books/booklore/data
+  booklore_postgres:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/fast/appdata/books/booklore/postgres
+
+########################### SERVICES
+include:
+  - booklore.yaml

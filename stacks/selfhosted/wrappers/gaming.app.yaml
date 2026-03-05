@@ -1,0 +1,7 @@
+# Gaming Stack
+# ROMM: ROM library management for retro gaming collections
+
+services:
+  gaming:
+    extends:
+      file: ../gaming/compose.yaml
