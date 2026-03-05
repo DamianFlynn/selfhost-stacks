@@ -54,7 +54,7 @@ services:
         condition: service_healthy
 
   romm_mariadb:
-    image: mariadb:11
+    image: mariadb:12
     container_name: romm_mariadb
     restart: unless-stopped
     networks:
