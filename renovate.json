@@ -116,8 +116,7 @@
         "ghcr.io/immich-app/postgres"
       ],
       "matchFileNames": [
-        "**/stacks/selfhosted/immich/**",
-        "**/stacks/stacks/selfhosted/immich/**"
+        "**/stacks/selfhosted/immich/**"
       ],
       "enabled": false,
       "addLabels": [
@@ -138,8 +137,7 @@
         "docker.io/valkey/valkey"
       ],
       "matchFileNames": [
-        "**/stacks/selfhosted/immich/**",
-        "**/stacks/stacks/selfhosted/immich/**"
+        "**/stacks/selfhosted/immich/**"
       ],
       "enabled": false,
       "addLabels": [
@@ -159,8 +157,7 @@
         "/immich-machine-learning/"
       ],
       "matchFileNames": [
-        "**/stacks/selfhosted/immich/**",
-        "**/stacks/stacks/selfhosted/immich/**"
+        "**/stacks/selfhosted/immich/**"
       ],
       "automerge": false,
       "addLabels": [
@@ -172,8 +169,7 @@
     {
       "description": "Auto-label by stack: Immich",
       "matchFileNames": [
-        "**/stacks/selfhosted/immich/**",
-        "**/stacks/stacks/selfhosted/immich/**"
+        "**/stacks/selfhosted/immich/**"
       ],
       "addLabels": [
         "stack:immich"
@@ -182,8 +178,7 @@
     {
       "description": "Auto-label by stack: Traefik",
       "matchFileNames": [
-        "**/stacks/selfhosted/traefik/**",
-        "**/stacks/stacks/selfhosted/traefik/**"
+        "**/stacks/selfhosted/traefik/**"
       ],
       "addLabels": [
         "stack:traefik"
@@ -192,8 +187,7 @@
     {
       "description": "Auto-label by stack: Code Server",
       "matchFileNames": [
-        "**/stacks/selfhosted/code-server/**",
-        "**/stacks/stacks/selfhosted/code-server/**"
+        "**/stacks/selfhosted/code-server/**"
       ],
       "addLabels": [
         "stack:code-server"
@@ -202,8 +196,7 @@
     {
       "description": "Auto-label by stack: Minecraft",
       "matchFileNames": [
-        "**/stacks/selfhosted/minecraft/**",
-        "**/stacks/stacks/selfhosted/minecraft/**"
+        "**/stacks/selfhosted/minecraft/**"
       ],
       "addLabels": [
         "stack:minecraft"
@@ -212,8 +205,7 @@
     {
       "description": "Auto-label by stack: OpenWebUI",
       "matchFileNames": [
-        "**/stacks/selfhosted/openwebui/**",
-        "**/stacks/stacks/selfhosted/openwebui/**"
+        "**/stacks/selfhosted/openwebui/**"
       ],
       "addLabels": [
         "stack:openwebui"
@@ -223,11 +215,8 @@
       "description": "Auto-label by stack: Hoarder",
       "matchFileNames": [
         "**/stacks/selfhosted/karakeep/**",
-        "**/stacks/stacks/selfhosted/karakeep/**",
         "**/stacks/selfhosted/freshrss/**",
-        "**/stacks/stacks/selfhosted/freshrss/**",
-        "**/stacks/selfhosted/podsync/**",
-        "**/stacks/stacks/selfhosted/podsync/**"
+        "**/stacks/selfhosted/podsync/**"
       ],
       "addLabels": [
         "stack:hoarder"
@@ -236,8 +225,7 @@
     {
       "description": "Auto-label by stack: Automation",
       "matchFileNames": [
-        "**/stacks/selfhosted/automation/**",
-        "**/stacks/stacks/selfhosted/automation/**"
+        "**/stacks/selfhosted/automation/**"
       ],
       "addLabels": [
         "stack:automation"
