@@ -68,15 +68,17 @@ services:
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped
-    # profiles: ["all", "apps"]
+    # profiles: ["all", "media", "arrs"]
     networks:
       - t3_proxy
     ports:
-      - "9710:9710"
+      - "9712:9712"
+    env_file:
+      - .env
     environment:
-      PORT: 9710
+      PORT: 9712
       URL: "http://prowlarr:9696"
-      APIKEY: $PROWLARR_API_KEY
+      APIKEY: ${PROWLARR_API_KEY}
       ENABLE_ADDITIONAL_METRICS: TRUE
     command: ["prowlarr"]
 

@@ -75,16 +75,18 @@ services:
     container_name: radarr-exporter
     security_opt:
       - no-new-privileges:true
-    restart: "no"
+    restart: unless-stopped
     # profiles: ["all", "media", "arrs"]
     networks:
       - t3_proxy
     ports:
       - "9707:9707"
+    env_file:
+      - .env
     environment:
       PORT: 9707
       URL: "http://radarr:7878"
-      APIKEY: $RADARR_API_KEY
+      APIKEY: ${RADARR_API_KEY}
       ENABLE_ADDITIONAL_METRICS: TRUE
     command: ["radarr"]
 

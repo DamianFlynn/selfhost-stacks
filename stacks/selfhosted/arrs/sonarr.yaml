@@ -77,16 +77,18 @@ services:
     container_name: sonarr-exporter
     security_opt:
       - no-new-privileges:true
-    restart: "no"
+    restart: unless-stopped
     # profiles: ["all", "media", "arrs"]
     networks:
       - t3_proxy
     ports:
       - "9708:9708"
+    env_file:
+      - .env
     environment:
       PORT: 9708
       URL: "http://sonarr:8989"
-      APIKEY: $SONARR_API_KEY
+      APIKEY: ${SONARR_API_KEY}
       ENABLE_ADDITIONAL_METRICS: TRUE
     command: ["sonarr"]
 

@@ -75,16 +75,18 @@ services:
     container_name: lidarr-exporter
     security_opt:
       - no-new-privileges:true
-    restart: "no"
+    restart: unless-stopped
     # profiles: ["all", "media", "arrs"]
     networks:
       - t3_proxy
     ports:
       - "9709:9709"
+    env_file:
+      - .env
     environment:
       PORT: 9709
       URL: "http://lidarr:8686"
-      APIKEY: $LIDARR_API_KEY
+      APIKEY: ${LIDARR_API_KEY}
       ENABLE_ADDITIONAL_METRICS: TRUE
     command: ["lidarr"]
 

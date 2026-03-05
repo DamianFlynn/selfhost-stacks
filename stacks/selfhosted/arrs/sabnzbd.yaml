@@ -77,16 +77,18 @@ services:
     container_name: sabnzbd-exporter
     security_opt:
       - no-new-privileges:true
-    restart: "unless-stopped"
-    # profiles: ["all", "downloads"]
+    restart: unless-stopped
+    # profiles: ["all", "media", "arrs"]
     networks:
       - t3_proxy
     ports:
-      - "9712:9712"
+      - "9713:9713"
+    env_file:
+      - .env
     environment:
-      PORT: 9712
+      PORT: 9713
       URL: "http://sabnzbd:8080"
-      APIKEY: $SABNZBD_API_KEY
+      APIKEY: ${SABNZBD_API_KEY}
       ENABLE_ADDITIONAL_METRICS: TRUE
     command: ["sabnzbd"]
 

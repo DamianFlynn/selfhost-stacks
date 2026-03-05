@@ -71,16 +71,18 @@ services:
     container_name: bazarr-exporter
     security_opt:
       - no-new-privileges:true
-    restart: "no"
+    restart: unless-stopped
     # profiles: ["all", "media", "arrs"]
     networks:
       - t3_proxy
     ports:
       - "9711:9711"
+    env_file:
+      - .env
     environment:
       PORT: 9711
       URL: "http://bazarr:6767"
-      APIKEY: $BAZARR_API_KEY
+      APIKEY: ${BAZARR_API_KEY}
       ENABLE_ADDITIONAL_METRICS: TRUE
     command: ["bazarr"]
 
