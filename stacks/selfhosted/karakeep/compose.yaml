@@ -58,7 +58,7 @@ services:
     container_name: karakeep-workers
     hostname: karakeep-workers
     # renovate: datasource=docker depName=ghcr.io/karakeep-app/karakeep-workers
-    image: ghcr.io/karakeep-app/karakeep-workers:0.30.0
+    image: ghcr.io/karakeep-app/karakeep-workers:0.31.0
     restart: unless-stopped
     volumes:
       - /mnt/fast/appdata/hoarder/karakeep/data:/data
