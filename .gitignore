@@ -7,3 +7,5 @@
 .vscode/
 backups/
 temp.md
+# Local .env backups (contain secrets - DO NOT COMMIT)
+*.env.backup
