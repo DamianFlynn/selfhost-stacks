@@ -28,7 +28,7 @@ services:
   jellystat:
     hostname: "jellystat"
     container_name: jellystat
-    image: cyfershepard/jellystat:latest
+    image: cyfershepard/jellystat:1.1.8
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped
