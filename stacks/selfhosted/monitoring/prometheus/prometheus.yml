@@ -54,7 +54,7 @@ scrape_configs:
   # Exportarr - Prowlarr indexer manager
   - job_name: 'exportarr-prowlarr'
     static_configs:
-      - targets: ['prowlarr-exporter:9707']
+      - targets: ['prowlarr-exporter:9712']
     relabel_configs:
       - source_labels: [__address__]
         target_label: instance
@@ -72,7 +72,7 @@ scrape_configs:
   # Exportarr - Sonarr TV management
   - job_name: 'exportarr-sonarr'
     static_configs:
-      - targets: ['sonarr-exporter:9707']
+      - targets: ['sonarr-exporter:9708']
     relabel_configs:
       - source_labels: [__address__]
         target_label: instance
@@ -81,7 +81,7 @@ scrape_configs:
   # Exportarr - Lidarr music management
   - job_name: 'exportarr-lidarr'
     static_configs:
-      - targets: ['lidarr-exporter:9707']
+      - targets: ['lidarr-exporter:9709']
     relabel_configs:
       - source_labels: [__address__]
         target_label: instance
@@ -90,7 +90,7 @@ scrape_configs:
   # Exportarr - Readarr book management
   - job_name: 'exportarr-readarr'
     static_configs:
-      - targets: ['readarr-exporter:9707']
+      - targets: ['readarr-exporter:9710']
     relabel_configs:
       - source_labels: [__address__]
         target_label: instance
@@ -99,7 +99,7 @@ scrape_configs:
   # Exportarr - Bazarr subtitle management
   - job_name: 'exportarr-bazarr'
     static_configs:
-      - targets: ['bazarr-exporter:9707']
+      - targets: ['bazarr-exporter:9711']
     relabel_configs:
       - source_labels: [__address__]
         target_label: instance
@@ -108,7 +108,7 @@ scrape_configs:
   # Exportarr - Sabnzbd download client
   - job_name: 'exportarr-sabnzbd'
     static_configs:
-      - targets: ['sabnzbd-exporter:9707']
+      - targets: ['sabnzbd-exporter:9713']
     relabel_configs:
       - source_labels: [__address__]
         target_label: instance
