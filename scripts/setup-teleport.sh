@@ -55,9 +55,9 @@ db_service:
 EOF
 
 # Replace env vars in config
-sed -i "s/\${TELEPORT_AUTH_TOKEN}/$(grep TELEPORT_AUTH_TOKEN /mnt/fast/stacks/stacks/teleport/.env | cut -d '=' -f2)/" "${APPDATA_BASE}/config/teleport.yaml"
-sed -i "s/\${CLUSTER_NAME}/$(grep CLUSTER_NAME /mnt/fast/stacks/stacks/teleport/.env | cut -d '=' -f2)/" "${APPDATA_BASE}/config/teleport.yaml"
-sed -i "s/\${TELEPORT_PUBLIC_ADDR}/$(grep TELEPORT_PUBLIC_ADDR /mnt/fast/stacks/stacks/teleport/.env | cut -d '=' -f2)/" "${APPDATA_BASE}/config/teleport.yaml"
+sed -i "s/\${TELEPORT_AUTH_TOKEN}/$(grep TELEPORT_AUTH_TOKEN /mnt/fast/stacks/stacks/selfhosted/teleport/.env | cut -d '=' -f2)/" "${APPDATA_BASE}/config/teleport.yaml"
+sed -i "s/\${CLUSTER_NAME}/$(grep CLUSTER_NAME /mnt/fast/stacks/stacks/selfhosted/teleport/.env | cut -d '=' -f2)/" "${APPDATA_BASE}/config/teleport.yaml"
+sed -i "s/\${TELEPORT_PUBLIC_ADDR}/$(grep TELEPORT_PUBLIC_ADDR /mnt/fast/stacks/stacks/selfhosted/teleport/.env | cut -d '=' -f2)/" "${APPDATA_BASE}/config/teleport.yaml"
 
 chown 568:568 "${APPDATA_BASE}/config/teleport.yaml"
 chmod 644 "${APPDATA_BASE}/config/teleport.yaml"
@@ -77,7 +77,7 @@ echo ""
 echo "Next steps:"
 echo "1. Update Traefik config with entrypoints above"
 echo "2. Restart Traefik to load new entrypoints"
-echo "3. Deploy: docker compose -f /mnt/fast/stacks/stacks/wrappers/teleport.app.yaml up -d"
+echo "3. Deploy: docker compose -f /mnt/fast/stacks/stacks/selfhosted/wrappers/teleport.app.yaml up -d"
 echo "4. Access at: https://access.deercrest.info"
 echo "5. Create first admin: docker exec -it teleport tctl users add admin --roles=editor,access --logins=root,ubuntu,administrator"
 echo ""

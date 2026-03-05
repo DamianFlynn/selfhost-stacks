@@ -12,17 +12,8 @@
     "managerFilePatterns": [
       "(^|/)(compose\\.ya?ml|docker-compose\\.ya?ml)$",
       "/(^|/)(compose\\.ya?ml|docker-compose\\.ya?ml)$/",
-      "/stacks/traefik/authelia\\.ya?ml$/",
-      "/stacks/traefik/socket-proxy\\.ya?ml$/",
-      "/stacks/traefik/tsproxy\\.ya?ml$/",
-      "/stacks/traefik/traefik\\.ya?ml$/",
-      "/stacks/traefik/compose\\.ya?ml$/",
-      "/stacks/minecraft/.*\\.ya?ml$/",
-      "/stacks/automation/.*\\.ya?ml$/",
-      "/stacks/openwebui/.*\\.ya?ml$/",
-      "/stacks/immich/.*\\.ya?ml$/",
-      "/stacks/code-server/.*\\.ya?ml$/",
-      "/stacks/hoarder/.*\\.ya?ml$/"
+      "/stacks/selfhosted/.*\\.ya?ml$/",
+      "/stacks/cerebro/.*\\.ya?ml$/"
     ]
   },
   "labels": [
@@ -125,8 +116,8 @@
         "ghcr.io/immich-app/postgres"
       ],
       "matchFileNames": [
-        "**/stacks/immich/**",
-        "**/stacks/stacks/immich/**"
+        "**/stacks/selfhosted/immich/**",
+        "**/stacks/stacks/selfhosted/immich/**"
       ],
       "enabled": false,
       "addLabels": [
@@ -147,8 +138,8 @@
         "docker.io/valkey/valkey"
       ],
       "matchFileNames": [
-        "**/stacks/immich/**",
-        "**/stacks/stacks/immich/**"
+        "**/stacks/selfhosted/immich/**",
+        "**/stacks/stacks/selfhosted/immich/**"
       ],
       "enabled": false,
       "addLabels": [
@@ -168,8 +159,8 @@
         "/immich-machine-learning/"
       ],
       "matchFileNames": [
-        "**/stacks/immich/**",
-        "**/stacks/stacks/immich/**"
+        "**/stacks/selfhosted/immich/**",
+        "**/stacks/stacks/selfhosted/immich/**"
       ],
       "automerge": false,
       "addLabels": [
@@ -181,8 +172,8 @@
     {
       "description": "Auto-label by stack: Immich",
       "matchFileNames": [
-        "**/stacks/immich/**",
-        "**/stacks/stacks/immich/**"
+        "**/stacks/selfhosted/immich/**",
+        "**/stacks/stacks/selfhosted/immich/**"
       ],
       "addLabels": [
         "stack:immich"
@@ -191,8 +182,8 @@
     {
       "description": "Auto-label by stack: Traefik",
       "matchFileNames": [
-        "**/stacks/traefik/**",
-        "**/stacks/stacks/traefik/**"
+        "**/stacks/selfhosted/traefik/**",
+        "**/stacks/stacks/selfhosted/traefik/**"
       ],
       "addLabels": [
         "stack:traefik"
@@ -201,8 +192,8 @@
     {
       "description": "Auto-label by stack: Code Server",
       "matchFileNames": [
-        "**/stacks/code-server/**",
-        "**/stacks/stacks/code-server/**"
+        "**/stacks/selfhosted/code-server/**",
+        "**/stacks/stacks/selfhosted/code-server/**"
       ],
       "addLabels": [
         "stack:code-server"
@@ -211,8 +202,8 @@
     {
       "description": "Auto-label by stack: Minecraft",
       "matchFileNames": [
-        "**/stacks/minecraft/**",
-        "**/stacks/stacks/minecraft/**"
+        "**/stacks/selfhosted/minecraft/**",
+        "**/stacks/stacks/selfhosted/minecraft/**"
       ],
       "addLabels": [
         "stack:minecraft"
@@ -221,8 +212,8 @@
     {
       "description": "Auto-label by stack: OpenWebUI",
       "matchFileNames": [
-        "**/stacks/openwebui/**",
-        "**/stacks/stacks/openwebui/**"
+        "**/stacks/selfhosted/openwebui/**",
+        "**/stacks/stacks/selfhosted/openwebui/**"
       ],
       "addLabels": [
         "stack:openwebui"
@@ -231,8 +222,12 @@
     {
       "description": "Auto-label by stack: Hoarder",
       "matchFileNames": [
-        "**/stacks/hoarder/**",
-        "**/stacks/stacks/hoarder/**"
+        "**/stacks/selfhosted/karakeep/**",
+        "**/stacks/stacks/selfhosted/karakeep/**",
+        "**/stacks/selfhosted/freshrss/**",
+        "**/stacks/stacks/selfhosted/freshrss/**",
+        "**/stacks/selfhosted/podsync/**",
+        "**/stacks/stacks/selfhosted/podsync/**"
       ],
       "addLabels": [
         "stack:hoarder"
@@ -241,8 +236,8 @@
     {
       "description": "Auto-label by stack: Automation",
       "matchFileNames": [
-        "**/stacks/automation/**",
-        "**/stacks/stacks/automation/**"
+        "**/stacks/selfhosted/automation/**",
+        "**/stacks/stacks/selfhosted/automation/**"
       ],
       "addLabels": [
         "stack:automation"

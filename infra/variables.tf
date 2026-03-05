@@ -190,6 +190,12 @@ variable "cerebro_memory_mb" {
   default     = 8192
 }
 
+variable "cerebro_swap_mb" {
+  description = "Swap allocated to the Cerebro LXC (MB)"
+  type        = number
+  default     = 8192
+}
+
 variable "cerebro_cores" {
   description = "CPU cores allocated to the Cerebro LXC"
   type        = number

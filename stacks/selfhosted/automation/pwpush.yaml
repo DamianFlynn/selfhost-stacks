@@ -1,0 +1,103 @@
+# PWPush - Password/Secret Sharing Service
+#
+# Purpose:
+#   Securely share passwords and secrets with automatic expiration
+#   Alternative to sending passwords via email or chat
+#
+# Key Features:
+#   - Time-based and view-based expiration
+#   - One-time secret links that auto-delete
+#   - Optional password protection for secrets
+#   - Audit log of secret access attempts
+#   - No registration required for recipients
+#   - PostgreSQL backend for persistence
+#
+# Workflow:
+#   Create secret → Set expiration → Share link → Recipient views once → Auto-delete
+#
+# Access:
+#   URL: https://pwpush.deercrest.info
+#   Middleware: chain-no-auth (public access for recipients)
+#
+
+networks:
+  pwpush:
+    name: pwpush
+    driver: bridge
+
+services:
+
+  pwpush-db:
+    container_name: "pwpush-db"
+    image: docker.io/postgres:16
+    volumes:
+      - /mnt/fast/appdata/automation/pwpush/db:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - pwpush
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: svc_pwpush
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: pwpush_db
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U svc_pwpush -d pwpush_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+
+  pwpush:
+    container_name: "pwpush"
+    image: docker.io/pglombardo/pwpush:latest
+    #ports:
+    #  - "443:443"
+    #  - "80:80"
+    restart: unless-stopped
+    networks:
+      - t3_proxy
+      - pwpush
+    depends_on:
+      pwpush-db:
+        condition: service_healthy
+    links:
+     - pwpush-db:pwpush-db
+    environment:
+      DATABASE_URL: 'postgres://svc_pwpush:MyN0tS3cr3tPssw0rd@pwpush-db:5432/pwpush_db'
+      #
+      # Specify a domain in the TLS_DOMAIN environment variable to automatically provision a TLS (SSL) certificate for the application.
+      # Uncomment the following line to set the TLS_DOMAIN environment variable.
+      # TLS_DOMAIN: 'pwpush.example.com'
+      #
+      # You can set additional environment variables here, or in a .env file.  See:
+      # https://docs.docker.com/compose/environment-variables/
+      #
+
+      PWP__PW__EXPIRE_AFTER_DAYS_DEFAULT: "7"
+      PWP__PW__EXPIRE_AFTER_VIEWS_MIN: "1"
+      PWP__PW__RETRIEVAL_STEP_DEFAULT: "true"
+
+    volumes:
+      - /mnt/fast/appdata/automation/pwpush/data:/opt/PasswordPusher/storage:rw
+
+      # Or you could override a single file in the container with a bind mount:
+      # volumes:
+      #   - type: bind
+      #     source: /path/to/my/custom/settings.yml
+      #     target: /opt/PasswordPusher/config/settings.yml
+      #
+      # To customise the application via configuration file, see settings.yml:
+      # https://github.com/pglombardo/PasswordPusher/blob/master/config/settings.yml
+      #
+      # Then you can use the above bind mount to overlay the file into the container on boot.
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.pwpush.entrypoints=web,websecure
+      - traefik.http.routers.pwpush.rule=Host(`pwpush.deercrest.info`)
+      #- traefik.http.routers.pwpush.middlewares=chain-authelia@file
+      - traefik.http.routers.pwpush.tls=true
+      - traefik.http.routers.pwpush.tls.certresolver=dns-cloudflare
+      - traefik.http.routers.pwpush.service=pwpush
+      - traefik.http.services.pwpush.loadbalancer.server.port=80
+

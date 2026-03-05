@@ -47,7 +47,7 @@ Copy the stack files to your TrueNAS Scale server:
 scp -r core/* your-truenas-ip:/mnt/fast/stacks/core/
 
 # Copy the immich stack  
-scp -r immich/* your-truenas-ip:/mnt/fast/stacks/immich/
+scp -r stacks/selfhosted/immich/* your-truenas-ip:/mnt/fast/stacks/stacks/selfhosted/immich/
 
 # Copy the middleware rules
 scp traefik-rules/*.yml your-truenas-ip:/mnt/fast/appdata/traefik3/rules/
@@ -63,7 +63,7 @@ cp .env.sample .env
 nano .env  # Edit with your domain and settings
 
 # Configure Immich environment
-cd /mnt/fast/stacks/immich  
+cd /mnt/fast/stacks/stacks/selfhosted/immich  
 cp .env.sample .env
 nano .env  # Edit with your paths and database credentials
 ```
@@ -110,7 +110,7 @@ sudo chmod -R 600 /mnt/fast/appdata/traefik/secrets/*
    ```yaml
    services: {}
    include:
-     - /mnt/fast/stacks/immich/compose.yaml
+    - /mnt/fast/stacks/stacks/selfhosted/immich/compose.yaml
    ```
 4. Click **Save** and name it "immich"
 

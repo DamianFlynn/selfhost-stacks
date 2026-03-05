@@ -60,7 +60,7 @@ resource "null_resource" "host_setup" {
       # ── Bind-mount source dirs ────────────────────────────────────────────
       # These paths must exist on the host before the LXC container starts,
       # otherwise pct start will fail with "mount: special device not found".
-      "mkdir -p /mnt/fast/stacks /mnt/fast/appdata /mnt/fast/home /mnt/fast/transcode /mnt/fast/tools /mnt/tank",
+      "mkdir -p /mnt/fast/stacks /mnt/fast/stacks/cerebro /mnt/fast/appdata /mnt/fast/appdata/cerebro /mnt/fast/home /mnt/fast/transcode /mnt/fast/tools /mnt/tank",
 
       # ── apps user/group ───────────────────────────────────────────────────
       # Must match the ownership of files already on the fast pool (uid/gid 568).

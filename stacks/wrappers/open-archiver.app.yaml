@@ -1,4 +1,0 @@
-include:
-  - /mnt/fast/stacks/open-archiver/compose.yaml
-services: {}
-

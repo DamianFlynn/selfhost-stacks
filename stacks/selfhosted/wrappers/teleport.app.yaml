@@ -1,0 +1,7 @@
+# Teleport - Modern access platform
+# Wrapper for TrueNAS SCALE Apps
+
+services: {}
+
+include:
+  - path: /mnt/fast/stacks/stacks/selfhosted/teleport/compose.yaml

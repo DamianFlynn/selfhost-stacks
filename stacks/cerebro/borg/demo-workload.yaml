@@ -1,0 +1,9 @@
+services:
+  demo-workload:
+    image: nginx:alpine
+    container_name: demo-workload
+    restart: unless-stopped
+    ports:
+      - "18080:80"
+    volumes:
+      - /mnt/fast/appdata/demo-workload/html:/usr/share/nginx/html:ro

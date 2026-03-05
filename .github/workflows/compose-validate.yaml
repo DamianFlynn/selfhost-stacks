@@ -10,6 +10,6 @@ jobs:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
       - name: Validate code-server compose
-        run: docker compose -f stacks/code-server/compose.yaml config >/dev/null
+        run: docker compose -f stacks/selfhosted/code-server/compose.yaml config >/dev/null
       - name: Validate immich compose
-        run: docker compose -f stacks/immich/compose.yaml config >/dev/null
+        run: docker compose -f stacks/selfhosted/immich/compose.yaml config >/dev/null

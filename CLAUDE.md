@@ -21,8 +21,9 @@ Repository guidance for code agents and maintainers.
 
 ## Stack Rules
 
-- Keep all compose stacks under `stacks/<stack>/`.
-- `stacks/traefik/compose.yaml` defines shared proxy network(s).
+- Keep selfhosted compose stacks under `stacks/selfhosted/<stack>/`.
+- Keep Cerebro compose stacks under `stacks/cerebro/<stack>/`.
+- `stacks/selfhosted/traefik/compose.yaml` defines shared proxy network(s).
 - Stack ops run from repo root at `/mnt/fast/stacks`.
 
 ## Common Commands
@@ -36,8 +37,8 @@ terraform apply
 # Compose
 ssh root@172.16.1.159
 cd /mnt/fast/stacks
-docker compose -f stacks/traefik/compose.yaml up -d
-docker compose -f stacks/arrs/compose.yaml up -d
+docker compose -f stacks/selfhosted/traefik/compose.yaml up -d
+docker compose -f stacks/selfhosted/arrs/compose.yaml up -d
 ```
 
 ## Storage and Permissions

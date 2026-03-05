@@ -18,8 +18,9 @@ This repository is split into two clean domains:
   - LXC `100` provisioning (Docker + mounts + GPU device mapping)
   - VM `102` provisioning (Ubuntu 24.04 + static IP + GPU passthrough + Docker/Ollama/Cerebro provisioning)
 - `stacks/`
-  - `arrs/`, `media/`, `traefik/`, `openwebui/`, etc.
-  - `wrappers/` (legacy app wrappers)
+  - `selfhosted/` for LXC 100 runtime stacks
+  - `cerebro/` for Cerebro-specific stacks
+  - `selfhosted/wrappers/` (legacy app wrappers)
 - `scripts/`
   - Utility scripts for backup/restore/ops
 
@@ -37,10 +38,10 @@ terraform apply
 Run these inside `selfhost` (`ssh root@172.16.1.159`) from repo root `/mnt/fast/stacks`:
 
 ```bash
-docker compose -f stacks/traefik/compose.yaml config
-docker compose -f stacks/traefik/compose.yaml up -d
-docker compose -f stacks/arrs/compose.yaml up -d
-docker compose -f stacks/media/compose.yaml up -d
+docker compose -f stacks/selfhosted/traefik/compose.yaml config
+docker compose -f stacks/selfhosted/traefik/compose.yaml up -d
+docker compose -f stacks/selfhosted/arrs/compose.yaml up -d
+docker compose -f stacks/selfhosted/media/compose.yaml up -d
 ```
 
 ## Notes
