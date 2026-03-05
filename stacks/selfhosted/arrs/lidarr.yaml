@@ -27,7 +27,7 @@ services:
   lidarr:
     hostname: "lidarr"
     container_name: lidarr
-    image: ghcr.io/linuxserver/lidarr:latest # latest was causing "Error parsing column 45"
+    image: ghcr.io/linuxserver/lidarr:3.1.0.4875-ls21
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped

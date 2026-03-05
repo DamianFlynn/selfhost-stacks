@@ -28,7 +28,7 @@ services:
   autobrr:
     hostname: "autobrr"
     container_name: autobrr
-    image: ghcr.io/autobrr/autobrr:latest
+    image: ghcr.io/autobrr/autobrr:v1.73.0
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped

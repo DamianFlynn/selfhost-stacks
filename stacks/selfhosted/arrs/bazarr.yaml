@@ -23,7 +23,7 @@ services:
   bazarr:
     hostname: "bazarr"
     container_name: bazarr
-    image: ghcr.io/linuxserver/bazarr:latest # latest was causing "Error parsing column 45"
+    image: ghcr.io/linuxserver/bazarr:v1.5.6-ls340
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped

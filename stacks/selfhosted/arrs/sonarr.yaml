@@ -28,7 +28,7 @@ services:
   sonarr:
     hostname: "sonarr"
     container_name: sonarr
-    image: lscr.io/linuxserver/sonarr:develop
+    image: lscr.io/linuxserver/sonarr:4.0.16.2944-ls303
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped

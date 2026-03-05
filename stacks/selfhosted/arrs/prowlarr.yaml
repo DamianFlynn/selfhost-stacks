@@ -26,7 +26,7 @@ services:
   prowlarr:
     hostname: "prowlarr"
     container_name: prowlarr
-    image: ghcr.io/linuxserver/prowlarr:develop
+    image: ghcr.io/linuxserver/prowlarr:2.3.0.5236-ls138
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped
