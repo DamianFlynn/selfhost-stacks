@@ -73,7 +73,7 @@ services:
       start_period: 30s
 
   postiz_redis:
-    image: redis:7.2-alpine
+    image: redis:8.6-alpine
     container_name: postiz_redis
     restart: unless-stopped
     networks:
