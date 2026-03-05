@@ -36,6 +36,8 @@ services:
     networks:
       t3_proxy:
         ipv4_address: 192.168.90.254 # You can specify a static IP
+        aliases:
+          - traefik
       socket_proxy:
 
     command: # CLI arguments
