@@ -4,6 +4,65 @@ Services and applications to evaluate for future deployment.
 
 ---
 
+## 📋 Stack Kanban Board
+
+Drag services between stacks to reorganize. **Bold** = deployed, *Italic* = proposed
+
+| **arrs** (Automation) | **media** (Servers) | **social** | **documents** | **books** | **gaming** | **saas** | **automation** |
+|---|---|---|---|---|---|---|---|
+| **sabnzbd** | **jellyfin** | **postiz** | **paperless-ngx** | **booklore** | **romm** | **cal.com** | **n8n** |
+| **qbittorrent** | **audiobookshelf** | **rybbit** | **paperless-gpt** | | | | **oxidized** |
+| **prowlarr** | **seerr** | | **tika** | | | | **pwpush** |
+| **radarr** | **jellystat** | | **gotenberg** | | | | **tesla-static** |
+| **sonarr** | **wizarr** | | | | | | *bitwarden-mcp* |
+| **lidarr** | **dispatcharr** | | | | | | *autoresume* |
+| **readarr** | *tunarr* | | | | | | *mcp-arr* |
+| **listenarr** | *karaoke* | | | | | | |
+| **bazarr** | *swiparr?* | | | | | | |
+| **flaresolverr** | | | | | | | |
+| **autobrr** | | | | | | | |
+| **janitorr** | | | | | | | |
+| **blockbusterr** | | | | | | | |
+| *boxarr* ⚠️ | | | | | | | |
+| *trailarr* | | | | | | | |
+| *scraparr* | | | | | | | |
+| *codebarr* | | | | | | | |
+
+| **immich** | **monitoring** | **traefik** | 🔍 **Research** | 💡 **New Stack Ideas** |
+|---|---|---|---|---|
+| **immich-server** | **prometheus** | **traefik** | *atlas* | **security** (vault, secrets) |
+| **immich-ml** | **grafana** | **authelia** | | **career** (resume, portfolio) |
+| **immich-redis** | **cadvisor** | **socket-proxy** | | **dev** (code libraries, tools) |
+| **immich-postgres** | **node-exporter** | **tsproxy** | | |
+| **immich-kiosk** | exportarr x7 | | | |
+
+---
+
+## 🎯 Reorganization Suggestions
+
+### Move to Consider:
+
+**Swiparr** → From `arrs` to `media`
+- **Reason**: User-facing discovery UI, better fits with Jellyfin/Seerr
+- **Current**: Automation stack
+- **Proposed**: Media consumption stack
+- **Integration**: Works with Jellyfin for "What should I watch tonight?"
+
+**MCP-Arr** → From `arrs` to `automation`
+- **Reason**: AI/automation tool, not media-specific
+- **Better fit**: Alongside n8n, Bitwarden MCP, other AI agents
+
+**Blockbusterr** → Could move to `media`
+- **Current**: In arrs (automation)
+- **Reason**: User-facing randomizer, entertainment feature
+- **Alternative**: Keep in arrs if it's primarily for Radarr integration
+
+**Tunarr** → Definitely `media`
+- **Reason**: Live TV streaming from library = media server feature
+- **Sits with**: Jellyfin, Audiobookshelf (consumption vs automation)
+
+---
+
 ## ✅ Implemented
 
 ### Immich Kiosk
