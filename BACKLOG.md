@@ -47,9 +47,10 @@ Drag services between stacks to reorganize. **Bold** = deployed, *Italic* = prop
 - **Proposed**: Media consumption stack
 - **Integration**: Works with Jellyfin for "What should I watch tonight?"
 
-**MCP-Arr** → From `arrs` to `automation`
-- **Reason**: AI/automation tool, not media-specific
-- **Better fit**: Alongside n8n, Bitwarden MCP, other AI agents
+**MCP-Arr** → From `arrs` to `mcp`
+- **Reason**: MCP server for AI agent integration, not automation workflow
+- **Better fit**: Alongside Atlassian, Notion, D365FO MCP servers
+- **Purpose**: Provides AI agents programmatic access to *arr applications
 
 **Blockbusterr** → Could move to `media`
 - **Current**: In arrs (automation)
