@@ -1,0 +1,2 @@
+include:
+  - ../mcp/compose.yaml

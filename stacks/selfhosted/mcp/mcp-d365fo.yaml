@@ -1,0 +1,30 @@
+services:
+  mcp-d365fo:
+    image: ghcr.io/mafzaal/d365fo-client:latest
+    container_name: mcp-d365fo
+    restart: unless-stopped
+    
+    environment:
+      - D365FO_BASE_URL=${D365FO_BASE_URL}
+      - D365FO_TENANT_ID=${D365FO_TENANT_ID}
+      - D365FO_CLIENT_ID=${D365FO_CLIENT_ID}
+      - D365FO_CLIENT_SECRET=${D365FO_CLIENT_SECRET}
+      - D365FO_LOG_LEVEL=${D365FO_LOG_LEVEL:-INFO}
+    
+    volumes:
+      - d365fo-data:/home/mcp_user
+    
+    stdin_open: true
+    tty: true
+    
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.mcp-d365fo.rule=Host(`mcp-d365fo.deercrest.info`)"
+      - "traefik.http.routers.mcp-d365fo.entrypoints=websecure"
+      - "traefik.http.routers.mcp-d365fo.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.mcp-d365fo.middlewares=authelia@file"
+      - "traefik.http.services.mcp-d365fo.loadbalancer.server.port=3000"
+
+volumes:
+  d365fo-data:
+    name: d365fo-data

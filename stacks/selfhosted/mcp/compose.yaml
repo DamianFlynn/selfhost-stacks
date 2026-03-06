@@ -1,0 +1,37 @@
+services:
+  # MCP Server Stack - AI Agent Interfaces
+  # https://modelcontextprotocol.io/
+  
+  # Atlassian MCP - Jira and Confluence integration
+  mcp-atlassian:
+    extends:
+      file: mcp-atlassian.yaml
+      service: mcp-atlassian
+    networks:
+      - t3_proxy
+      - mcp
+
+  # Notion MCP - Notion workspace integration
+  mcp-notion:
+    extends:
+      file: mcp-notion.yaml
+      service: mcp-notion
+    networks:
+      - t3_proxy
+      - mcp
+
+  # D365 Finance & Operations MCP
+  mcp-d365fo:
+    extends:
+      file: mcp-d365fo.yaml
+      service: mcp-d365fo
+    networks:
+      - t3_proxy
+      - mcp
+
+networks:
+  t3_proxy:
+    external: true
+  mcp:
+    driver: bridge
+    name: mcp

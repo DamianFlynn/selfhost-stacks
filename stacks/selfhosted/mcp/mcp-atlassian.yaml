@@ -1,0 +1,26 @@
+services:
+  mcp-atlassian:
+    image: ghcr.io/sooperset/mcp-atlassian:0.13
+    container_name: mcp-atlassian
+    restart: unless-stopped
+    
+    environment:
+      - JIRA_URL=${JIRA_URL}
+      - JIRA_USERNAME=${JIRA_USERNAME}
+      - JIRA_API_TOKEN=${JIRA_API_TOKEN}
+      - CONFLUENCE_URL=${CONFLUENCE_URL}
+      - CONFLUENCE_USERNAME=${CONFLUENCE_USERNAME}
+      - CONFLUENCE_API_TOKEN=${CONFLUENCE_API_TOKEN}
+    
+    # MCP servers can run in stdio mode (for VS Code/agents)
+    # or HTTP/SSE mode for persistent access
+    stdin_open: true
+    tty: true
+    
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.mcp-atlassian.rule=Host(`mcp-atlassian.deercrest.info`)"
+      - "traefik.http.routers.mcp-atlassian.entrypoints=websecure"
+      - "traefik.http.routers.mcp-atlassian.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.mcp-atlassian.middlewares=authelia@file"
+      - "traefik.http.services.mcp-atlassian.loadbalancer.server.port=3000"

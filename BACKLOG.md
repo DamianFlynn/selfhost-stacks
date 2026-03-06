@@ -8,25 +8,24 @@ Services and applications to evaluate for future deployment.
 
 Drag services between stacks to reorganize. **Bold** = deployed, *Italic* = proposed
 
-| **arrs** (Automation) | **media** (Servers) | **social** | **documents** | **books** | **gaming** | **saas** | **automation** |
-|---|---|---|---|---|---|---|---|
-| **sabnzbd** | **jellyfin** | **postiz** | **paperless-ngx** | **booklore** | **romm** | **cal.com** | **n8n** |
-| **qbittorrent** | **audiobookshelf** | **rybbit** | **paperless-gpt** | | | | **oxidized** |
-| **prowlarr** | **seerr** | | **tika** | | | | **pwpush** |
-| **radarr** | **jellystat** | | **gotenberg** | | | | **tesla-static** |
-| **sonarr** | **wizarr** | | | | | | *bitwarden-mcp* |
-| **lidarr** | **dispatcharr** | | | | | | *autoresume* |
-| **readarr** | *tunarr* | | | | | | *mcp-arr* |
-| **listenarr** | *karaoke* | | | | | | |
-| **bazarr** | *swiparr?* | | | | | | |
-| **flaresolverr** | | | | | | | |
-| **autobrr** | | | | | | | |
-| **janitorr** | | | | | | | |
-| **blockbusterr** | | | | | | | |
-| *boxarr* ⚠️ | | | | | | | |
-| *trailarr* | | | | | | | |
-| *scraparr* | | | | | | | |
-| *codebarr* | | | | | | | |
+| **arrs** (Automation) | **media** (Servers) | **social** | **documents** | **books** | **gaming** | **saas** | **automation** | **mcp** (AI Agents) |
+|---|---|---|---|---|---|---|---|---|
+| **sabnzbd** | **jellyfin** | **postiz** | **paperless-ngx** | **booklore** | **romm** | **cal.com** | **n8n** | **atlassian** |
+| **qbittorrent** | **seerr** | **rybbit** | **paperless-gpt** | **audiobookshelf** | | | **oxidized** | **notion** |
+| **prowlarr** | **jellystat** | | **tika** | *readarr?* | | | **pwpush** | **d365fo** |
+| **radarr** | **wizarr** | | **gotenberg** | | | | **tesla-static** | *home-assistant* |
+| **sonarr** | **dispatcharr** | | | | | | *bitwarden-mcp* | *azure-devops* |
+| **lidarr** | *swiparr* | | | | | | *autoresume* | *mcp-arr* |
+| **readarr** | *tunarr* | | | | | | | |
+| **listenarr** | *karaoke* | | | | | | | |
+| **bazarr** | *blockbusterr?* | | | | | | | |
+| **flaresolverr** | | | | | | | | |
+| **autobrr** | | | | | | | | |
+| **janitorr** | | | | | | | | |
+| *boxarr* ⚠️ | | | | | | | | |
+| *trailarr* | | | | | | | | |
+| *scraparr* | | | | | | | | |
+| *codebarr* | | | | | | | | |
 
 | **immich** | **monitoring** | **traefik** | 🔍 **Research** | 💡 **New Stack Ideas** |
 |---|---|---|---|---|

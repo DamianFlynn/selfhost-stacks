@@ -1,0 +1,19 @@
+services:
+  mcp-notion:
+    image: mcp/notion
+    container_name: mcp-notion
+    restart: unless-stopped
+    
+    environment:
+      - NOTION_API_KEY=${NOTION_API_KEY}
+    
+    stdin_open: true
+    tty: true
+    
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.mcp-notion.rule=Host(`mcp-notion.deercrest.info`)"
+      - "traefik.http.routers.mcp-notion.entrypoints=websecure"
+      - "traefik.http.routers.mcp-notion.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.mcp-notion.middlewares=authelia@file"
+      - "traefik.http.services.mcp-notion.loadbalancer.server.port=3000"
