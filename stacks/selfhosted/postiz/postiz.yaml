@@ -1,6 +1,6 @@
 services:
   postiz:
-    image: ghcr.io/gitroomhq/postiz-app:v2.19.0
+    image: ghcr.io/gitroomhq/postiz-app:v2.20.1
     container_name: postiz
     restart: unless-stopped
     env_file:
