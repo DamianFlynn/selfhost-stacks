@@ -50,7 +50,7 @@ services:
 
   pwpush:
     container_name: "pwpush"
-    image: docker.io/pglombardo/pwpush:1.69.2
+    image: docker.io/pglombardo/pwpush:1.69.3
     #ports:
     #  - "443:443"
     #  - "80:80"
