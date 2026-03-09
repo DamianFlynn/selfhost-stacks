@@ -11,12 +11,12 @@ networks:
 #    name: socket_proxy
   t3_proxy:
      external: true
-  # automation:
-  #   name: automation
-  #   driver: bridge
-  #   ipam:
-  #     config:
-  #       - subnet: 192.168.85.0/24
+  arrs:
+    name: arrs
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 192.168.85.0/24
 
 
 include:
