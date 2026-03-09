@@ -29,7 +29,7 @@ include:
   - sonarr.yaml
   - lidarr.yaml
   - readarr.yaml
-  - listenarr.yaml
+#  - listenarr.yaml  # Image not yet published
   - bazarr.yaml
   - flaresolverr.yaml
   - autobrr.yaml
