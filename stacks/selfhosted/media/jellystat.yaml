@@ -29,6 +29,8 @@ services:
     hostname: "jellystat"
     container_name: jellystat
     image: cyfershepard/jellystat:1.1.8
+    env_file:
+      - /mnt/fast/stacks/stacks/selfhosted/media/.env
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped
@@ -64,6 +66,8 @@ services:
     hostname: "jellystat-db"
     container_name: jellystat-db
     image: postgres:15.17
+    env_file:
+      - /mnt/fast/stacks/stacks/selfhosted/media/.env
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped

@@ -33,6 +33,8 @@ services:
     #image: docker.n8n.io/n8nio/n8n
     restart: unless-stopped
     image: ghcr.io/damianflynn/custom-n8n:2.11.1
+    env_file:
+      - /mnt/fast/stacks/stacks/selfhosted/automation/.env
     # Environment variables (explanations below)
     environment:
       - N8N_HOST=n8n.${DOMAINNAME}
