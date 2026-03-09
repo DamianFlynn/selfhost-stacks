@@ -25,7 +25,7 @@ services:
       - "traefik.http.routers.prometheus.entrypoints=websecure"
       - "traefik.http.routers.prometheus.tls=true"
       - "traefik.http.routers.prometheus.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.prometheus.middlewares=authelia@docker"
+      - "traefik.http.routers.prometheus.middlewares=chain-authelia@file"
       - "traefik.http.services.prometheus.loadbalancer.server.port=9090"
 
 networks:
