@@ -67,7 +67,7 @@ services:
       - traefik.http.routers.jellystat-api-rtr.tls=true
       - traefik.http.routers.jellystat-api-rtr.tls.certresolver=dns-cloudflare
       - traefik.http.routers.jellystat-api-rtr.service=jellystat-svc
-      - traefik.http.routers.jellystat-api-rtr.priority=10
+      - traefik.http.routers.jellystat-api-rtr.priority=100
 
       - traefik.http.services.jellystat-svc.loadbalancer.server.port=3000
 
