@@ -23,6 +23,7 @@ networks:
 include:
   ########################### SERVICES
 
+  - n8n-postgres.yaml
   - n8n.yaml
   - oxidized.yaml
   - pwpush.yaml

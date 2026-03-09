@@ -1,0 +1,34 @@
+# n8n PostgreSQL Database
+#
+# Purpose:
+#   PostgreSQL backend for n8n workflow automation.
+#   Replaces SQLite which grew to 21GB due to execution history accumulation.
+#
+# Migration Note:
+#   Migrated from SQLite on 2026-03-09.
+#   Workflows and credentials exported to /mnt/fast/appdata/automation/n8n-export/
+#   Encryption key preserved in N8N_ENCRYPTION_KEY env var.
+
+services:
+
+  n8n-db:
+    image: postgres:16-alpine
+    container_name: n8n-db
+    hostname: n8n-db
+    restart: unless-stopped
+    mem_limit: 1g
+    mem_reservation: 256m
+    networks:
+      - t3_proxy
+    environment:
+      - POSTGRES_DB=n8n
+      - POSTGRES_USER=n8n
+      - POSTGRES_PASSWORD=${N8N_DB_PASSWORD}
+    volumes:
+      - ${APPDATA_DIR}/automation/n8n-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U n8n -d n8n"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s

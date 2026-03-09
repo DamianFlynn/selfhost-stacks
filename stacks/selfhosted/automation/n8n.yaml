@@ -35,6 +35,9 @@ services:
     image: ghcr.io/damianflynn/custom-n8n:2.11.1
     env_file:
       - /mnt/fast/stacks/stacks/selfhosted/automation/.env
+    depends_on:
+      n8n-db:
+        condition: service_healthy
     # Environment variables (explanations below)
     environment:
       - N8N_HOST=n8n.${DOMAINNAME}
@@ -47,19 +50,26 @@ services:
       # When running as a numeric UID that may not exist in /etc/passwd,
       # set HOME so n8n uses /home/node instead of falling back to '/'.
       - HOME=/home/node
-      # Let n8n enforce safe settings file permissions (it will change
-      # overly-wide perms to 0600). This requires the process to own the files
-      # (which is true when running as 568 and the dataset is chown'd to 568).
+      # Preserve the encryption key from the old SQLite instance so
+      # all existing credentials can still be decrypted.
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
+      # Let n8n enforce safe settings file permissions
       - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
-      # Reduce deprecation noise and improve SQLite concurrency by setting a
-      # small read connection pool. Adjust if needed for load.
-      - DB_SQLITE_POOL_SIZE=10
+      # PostgreSQL database (replaces SQLite - no more 21GB DB in RAM)
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=n8n-db
+      - DB_POSTGRESDB_PORT=5432
+      - DB_POSTGRESDB_DATABASE=n8n
+      - DB_POSTGRESDB_USER=n8n
+      - DB_POSTGRESDB_PASSWORD=${N8N_DB_PASSWORD}
+      # Prune execution history to prevent DB bloat (keep 7 days, max 10k)
+      - EXECUTIONS_DATA_PRUNE=true
+      - EXECUTIONS_DATA_MAX_AGE=7
+      - EXECUTIONS_DATA_PRUNE_MAX_COUNT=10000
       # Enable task runners now (they will be enabled by default in future
       # n8n releases). Useful for stability and future compatibility.
       - N8N_RUNNERS_ENABLED=true
-      # Controls whether Code Node / expressions can access env vars. Set to
-      # false only if your workflows rely on reading env vars from these
-      # contexts. For stricter security set to true.
+      # Controls whether Code Node / expressions can access env vars.
       - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
       - GENERIC_TIMEZONE=${TZ}
     mem_limit: 4g
