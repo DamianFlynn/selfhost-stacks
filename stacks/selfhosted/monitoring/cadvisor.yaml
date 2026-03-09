@@ -17,12 +17,8 @@ services:
       - /dev/disk/:/dev/disk:ro
     devices:
       - /dev/kmsg
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-        reservations:
-          memory: 256M
+    mem_limit: 1g
+    mem_reservation: 256m
     command:
       - '--housekeeping_interval=30s'
       - '--docker_only=true'
