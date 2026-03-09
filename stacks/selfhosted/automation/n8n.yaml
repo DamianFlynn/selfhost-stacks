@@ -62,6 +62,8 @@ services:
       # contexts. For stricter security set to true.
       - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
       - GENERIC_TIMEZONE=${TZ}
+    mem_limit: 4g
+    mem_reservation: 512m
     networks:
       - t3_proxy
     ports:
