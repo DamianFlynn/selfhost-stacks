@@ -60,8 +60,9 @@ services:
       - traefik.http.routers.jellystat-rtr.service=jellystat-svc
 
       # API router - bypasses Authelia so apps like Helmarr can use x-api-token
+      # Covers all backend API paths: /api, /stats, /sync, /proxy, /backup, /logs, /utils, /auth
       - traefik.http.routers.jellystat-api-rtr.entrypoints=web,websecure
-      - traefik.http.routers.jellystat-api-rtr.rule=Host(`jellystats.deercrest.info`) && PathPrefix(`/api`)
+      - traefik.http.routers.jellystat-api-rtr.rule=Host(`jellystats.deercrest.info`) && (PathPrefix(`/api`) || PathPrefix(`/stats`) || PathPrefix(`/sync`) || PathPrefix(`/proxy`) || PathPrefix(`/backup`) || PathPrefix(`/logs`) || PathPrefix(`/utils`) || PathPrefix(`/auth`))
       - traefik.http.routers.jellystat-api-rtr.middlewares=chain-no-auth@file
       - traefik.http.routers.jellystat-api-rtr.tls=true
       - traefik.http.routers.jellystat-api-rtr.tls.certresolver=dns-cloudflare
