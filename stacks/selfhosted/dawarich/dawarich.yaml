@@ -101,10 +101,10 @@ services:
       - "traefik.enable=true"
       - "traefik.docker.network=t3_proxy"
       
-      # Main router with authentication
+      # Main router - Dawarich handles its own auth (Authelia causes 431 header-too-large with Puma)
       - "traefik.http.routers.dawarich.entrypoints=web,websecure"
       - "traefik.http.routers.dawarich.rule=Host(`findme.deercrest.info`)"
-      - "traefik.http.routers.dawarich.middlewares=chain-authelia@file"
+      - "traefik.http.routers.dawarich.middlewares=chain-no-auth@file"
       - "traefik.http.routers.dawarich.tls=true"
       - "traefik.http.routers.dawarich.tls.certresolver=dns-cloudflare"
       - "traefik.http.routers.dawarich.service=dawarich"
