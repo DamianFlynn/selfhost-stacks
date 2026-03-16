@@ -12,7 +12,7 @@
 #   - Slash commands and integrations
 #
 # Access:
-#   URL: https://chat.deercrest.info
+#   URL: https://messages.deercrest.info
 #   Middleware: chain-no-auth (Mattermost handles its own auth)
 #
 # Integration Notes:
@@ -39,7 +39,7 @@ services:
       TZ: ${TZ:-Europe/Dublin}
       MM_SQLSETTINGS_DRIVERNAME: postgres
       MM_SQLSETTINGS_DATASOURCE: postgres://${MATTERMOST_DB_USER:-mattermost}:${MATTERMOST_DB_PASSWORD}@mattermost-db:5432/${MATTERMOST_DB_NAME:-mattermost}?sslmode=disable&connect_timeout=10
-      MM_SERVICESETTINGS_SITEURL: https://chat.deercrest.info
+      MM_SERVICESETTINGS_SITEURL: https://messages.deercrest.info
       MM_SERVICESETTINGS_LISTENADDRESS: :8065
       MM_PLUGINSETTINGS_ENABLEUPLOADS: "true"
       MM_LOGSETTINGS_CONSOLELEVEL: INFO
@@ -67,7 +67,7 @@ services:
 
       # Main router - Mattermost handles its own authentication
       - traefik.http.routers.mattermost-rtr.entrypoints=web,websecure
-      - traefik.http.routers.mattermost-rtr.rule=Host(`chat.deercrest.info`)
+      - traefik.http.routers.mattermost-rtr.rule=Host(`messages.deercrest.info`)
       - traefik.http.routers.mattermost-rtr.middlewares=chain-no-auth@file,mattermost-headers@docker
       - traefik.http.routers.mattermost-rtr.tls=true
       - traefik.http.routers.mattermost-rtr.tls.certresolver=dns-cloudflare
