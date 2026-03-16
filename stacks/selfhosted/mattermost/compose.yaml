@@ -1,0 +1,62 @@
+# Mattermost - Self-hosted team messaging
+# https://mattermost.com
+
+include:
+  - mattermost-db.yaml
+  - mattermost.yaml
+
+networks:
+  mattermost:
+    driver: bridge
+  t3_proxy:
+    external: true
+
+volumes:
+  mattermost_db_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/fast/appdata/mattermost/db
+
+  mattermost_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/fast/appdata/mattermost/data
+
+  mattermost_logs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/fast/appdata/mattermost/logs
+
+  mattermost_config:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/fast/appdata/mattermost/config
+
+  mattermost_plugins:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/fast/appdata/mattermost/plugins
+
+  mattermost_client_plugins:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/fast/appdata/mattermost/client-plugins
+
+  mattermost_bleve_indexes:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/fast/appdata/mattermost/bleve-indexes

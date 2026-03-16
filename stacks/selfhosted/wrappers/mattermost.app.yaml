@@ -1,0 +1,4 @@
+
+include:
+  - /mnt/fast/stacks/stacks/selfhosted/mattermost/compose.yaml
+services: {}

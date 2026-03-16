@@ -1,0 +1,81 @@
+# Mattermost - Self-hosted team messaging platform
+#
+# Purpose:
+#   Family communications hub and Cerebro/OpenClaw interface.
+#   Mattermost Team Edition (free, open source).
+#
+# Key Features:
+#   - Persistent messaging with channels, DMs, threads
+#   - File sharing and search
+#   - Webhooks/bots for Cerebro OpenClaw integration
+#   - Mobile apps (iOS/Android)
+#   - Slash commands and integrations
+#
+# Access:
+#   URL: https://chat.deercrest.info
+#   Middleware: chain-no-auth (Mattermost handles its own auth)
+#
+# Integration Notes:
+#   - Incoming webhooks for OpenClaw notifications
+#   - Outgoing webhooks / slash commands for OpenClaw queries
+#   - Bot accounts for automated Cerebro responses
+
+services:
+
+  mattermost:
+    image: mattermost/mattermost-team-edition:10
+    container_name: mattermost
+    hostname: mattermost
+    restart: unless-stopped
+    mem_limit: 1g
+    mem_reservation: 256m
+    networks:
+      - mattermost
+      - t3_proxy
+    depends_on:
+      mattermost-db:
+        condition: service_healthy
+    environment:
+      TZ: ${TZ:-Europe/Dublin}
+      MM_SQLSETTINGS_DRIVERNAME: postgres
+      MM_SQLSETTINGS_DATASOURCE: postgres://${MATTERMOST_DB_USER:-mattermost}:${MATTERMOST_DB_PASSWORD}@mattermost-db:5432/${MATTERMOST_DB_NAME:-mattermost}?sslmode=disable&connect_timeout=10
+      MM_SERVICESETTINGS_SITEURL: https://chat.deercrest.info
+      MM_SERVICESETTINGS_LISTENADDRESS: :8065
+      MM_PLUGINSETTINGS_ENABLEUPLOADS: "true"
+      MM_LOGSETTINGS_CONSOLELEVEL: INFO
+      MM_LOGSETTINGS_ENABLEFILE: "false"
+      MM_FILESETTINGS_DRIVERNAME: local
+      MM_FILESETTINGS_DIRECTORY: /mattermost/data/
+      # Limit to registered users only (family)
+      MM_TEAMSETTINGS_ENABLEOPENSERVER: "false"
+      MM_TEAMSETTINGS_ENABLEUSERDEACTIVATION: "true"
+      # Email - configure after deploy
+      MM_EMAILSETTINGS_ENABLESMTPAUTH: "false"
+      MM_EMAILSETTINGS_SENDEMAILNOTIFICATIONS: "false"
+    volumes:
+      - mattermost_data:/mattermost/data
+      - mattermost_logs:/mattermost/logs
+      - mattermost_config:/mattermost/config
+      - mattermost_plugins:/mattermost/plugins
+      - mattermost_client_plugins:/mattermost/client/plugins
+      - mattermost_bleve_indexes:/mattermost/bleve-indexes
+    security_opt:
+      - no-new-privileges:true
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=t3_proxy
+
+      # Main router - Mattermost handles its own authentication
+      - traefik.http.routers.mattermost-rtr.entrypoints=web,websecure
+      - traefik.http.routers.mattermost-rtr.rule=Host(`chat.deercrest.info`)
+      - traefik.http.routers.mattermost-rtr.middlewares=chain-no-auth@file,mattermost-headers@docker
+      - traefik.http.routers.mattermost-rtr.tls=true
+      - traefik.http.routers.mattermost-rtr.tls.certresolver=dns-cloudflare
+      - traefik.http.routers.mattermost-rtr.service=mattermost-svc
+
+      - traefik.http.services.mattermost-svc.loadbalancer.server.port=8065
+      - traefik.http.services.mattermost-svc.loadbalancer.server.scheme=http
+
+      # Pass correct proto headers so Mattermost knows it's behind TLS
+      - traefik.http.middlewares.mattermost-headers.headers.customrequestheaders.X-Forwarded-Proto=https
+      - traefik.http.middlewares.mattermost-headers.headers.customrequestheaders.X-Forwarded-Ssl=on

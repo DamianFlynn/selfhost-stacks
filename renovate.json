@@ -242,6 +242,33 @@
       ]
     },
     {
+      "description": "Auto-label by stack: Mattermost",
+      "matchFileNames": [
+        "**/stacks/selfhosted/mattermost/**"
+      ],
+      "addLabels": [
+        "stack:mattermost"
+      ]
+    },
+    {
+      "description": "Mattermost: Require manual review for major updates",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "mattermost/mattermost-team-edition"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "automerge": false,
+      "addLabels": [
+        "stack:mattermost",
+        "major-update",
+        "manual-review-required"
+      ]
+    },
+    {
       "description": "Auto-label by stack: Generic stacks",
       "matchFileNames": [
         "**/stacks/**"

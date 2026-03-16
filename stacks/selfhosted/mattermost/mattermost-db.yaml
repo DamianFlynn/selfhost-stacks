@@ -1,0 +1,31 @@
+# Mattermost PostgreSQL Database
+#
+# Purpose:
+#   PostgreSQL backend for Mattermost Team Edition.
+#   Stores all messages, channels, users, and file metadata.
+
+services:
+
+  mattermost-db:
+    image: postgres:16-alpine
+    container_name: mattermost-db
+    hostname: mattermost-db
+    restart: unless-stopped
+    mem_limit: 512m
+    mem_reservation: 128m
+    networks:
+      - mattermost
+    environment:
+      POSTGRES_DB: ${MATTERMOST_DB_NAME:-mattermost}
+      POSTGRES_USER: ${MATTERMOST_DB_USER:-mattermost}
+      POSTGRES_PASSWORD: ${MATTERMOST_DB_PASSWORD}
+    volumes:
+      - mattermost_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${MATTERMOST_DB_USER:-mattermost} -d ${MATTERMOST_DB_NAME:-mattermost}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    security_opt:
+      - no-new-privileges:true
