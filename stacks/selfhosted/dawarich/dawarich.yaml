@@ -67,7 +67,7 @@ services:
       MIN_MINUTES_SPENT_IN_CITY: ${MIN_MINUTES_SPENT_IN_CITY}
       APPLICATION_HOSTS: ${APPLICATION_HOSTS}
       TIME_ZONE: ${TZ}
-      APPLICATION_PROTOCOL: https
+      APPLICATION_PROTOCOL: http
       PROMETHEUS_EXPORTER_ENABLED: ${PROMETHEUS_EXPORTER_ENABLED}
       PROMETHEUS_EXPORTER_HOST: 0.0.0.0
       PROMETHEUS_EXPORTER_PORT: ${PROMETHEUS_EXPORTER_PORT}
@@ -105,6 +105,8 @@ services:
       - "traefik.http.routers.dawarich.entrypoints=web,websecure"
       - "traefik.http.routers.dawarich.rule=Host(`findme.deercrest.info`)"
       - "traefik.http.routers.dawarich.middlewares=chain-authelia@file"
+      - "traefik.http.routers.dawarich.tls=true"
+      - "traefik.http.routers.dawarich.tls.certresolver=dns-cloudflare"
       - "traefik.http.routers.dawarich.service=dawarich"
       - "traefik.http.services.dawarich.loadbalancer.server.port=3000"
 
@@ -132,7 +134,7 @@ services:
       DATABASE_NAME: ${POSTGRES_DB}
       APPLICATION_HOSTS: ${APPLICATION_HOSTS}
       BACKGROUND_PROCESSING_CONCURRENCY: ${BACKGROUND_PROCESSING_CONCURRENCY}
-      APPLICATION_PROTOCOL: https
+      APPLICATION_PROTOCOL: http
       PROMETHEUS_EXPORTER_ENABLED: ${PROMETHEUS_EXPORTER_ENABLED}
       PROMETHEUS_EXPORTER_HOST: dawarich_app
       PROMETHEUS_EXPORTER_PORT: ${PROMETHEUS_EXPORTER_PORT}
