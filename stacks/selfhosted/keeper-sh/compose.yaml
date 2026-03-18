@@ -55,11 +55,11 @@ services:
   api:
     container_name: cal-api
     hostname: keeper-api
-    image: ghcr.io/ridafkih/keeper-api:latest
+    image: ghcr.io/ridafkih/keeper-api:2.9
     restart: unless-stopped
     environment:
       API_PORT: 3001
-      DATABASE_URL: postgres://keeper:my96Passw0rd@cal-postgres:5432/keeper
+      DATABASE_URL: postgres://keeper:${POSTGRES_PASSWORD}@cal-postgres:5432/keeper
       REDIS_URL: redis://cal-redis:6379
       WEBSOCKET_URL: ${WEBSOCKET_URL:-wss://keeper-api.${DOMAINNAME}/api/socket}
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:-https://keeper.${DOMAINNAME}}
@@ -101,10 +101,32 @@ services:
   cron:
     container_name: cal-cron
     hostname: keeper-cron
-    image: ghcr.io/ridafkih/keeper-cron:latest
+    image: ghcr.io/ridafkih/keeper-cron:2.9
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgres://keeper:my96Passw0rd@cal-postgres:5432/keeper
+      DATABASE_URL: postgres://keeper:${POSTGRES_PASSWORD}@cal-postgres:5432/keeper
+      REDIS_URL: redis://cal-redis:6379
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      WORKER_JOB_QUEUE_ENABLED: "true"
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      MICROSOFT_CLIENT_ID: ${MICROSOFT_CLIENT_ID}
+      MICROSOFT_CLIENT_SECRET: ${MICROSOFT_CLIENT_SECRET}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - keeper-network
+
+  worker:
+    container_name: cal-worker
+    hostname: keeper-worker
+    image: ghcr.io/ridafkih/keeper-worker:2.9
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://keeper:${POSTGRES_PASSWORD}@cal-postgres:5432/keeper
       REDIS_URL: redis://cal-redis:6379
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
@@ -122,7 +144,7 @@ services:
   web:
     container_name: cal-web
     hostname: keeper-web
-    image: ghcr.io/ridafkih/keeper-web:latest
+    image: ghcr.io/ridafkih/keeper-web:2.9
     restart: unless-stopped
     environment:
       API_URL: http://cal-api:3001
