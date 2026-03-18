@@ -152,9 +152,12 @@ services:
     env_file: .env
     environment:
       VITE_API_URL: http://cal-api:3001
-      API_URL: http://cal-api:3001
       PORT: "3000"
       HOSTNAME: 0.0.0.0
+    extra_hosts:
+      # Resolve public domains directly to Traefik to avoid Cloudflare hairpin during SSR
+      - "keeper.deercrest.info:172.16.1.159"
+      - "keeper-api.deercrest.info:172.16.1.159"
     ports:
       - "127.0.0.1:3000:3000"
     depends_on:
