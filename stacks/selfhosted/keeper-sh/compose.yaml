@@ -57,6 +57,7 @@ services:
     hostname: keeper-api
     image: ghcr.io/ridafkih/keeper-api:2.9
     restart: unless-stopped
+    env_file: .env
     environment:
       API_PORT: 3001
       DATABASE_URL: postgres://keeper:${POSTGRES_PASSWORD}@cal-postgres:5432/keeper
@@ -103,6 +104,7 @@ services:
     hostname: keeper-cron
     image: ghcr.io/ridafkih/keeper-cron:2.9
     restart: unless-stopped
+    env_file: .env
     environment:
       DATABASE_URL: postgres://keeper:${POSTGRES_PASSWORD}@cal-postgres:5432/keeper
       REDIS_URL: redis://cal-redis:6379
@@ -125,6 +127,7 @@ services:
     hostname: keeper-worker
     image: ghcr.io/ridafkih/keeper-worker:2.9
     restart: unless-stopped
+    env_file: .env
     environment:
       DATABASE_URL: postgres://keeper:${POSTGRES_PASSWORD}@cal-postgres:5432/keeper
       REDIS_URL: redis://cal-redis:6379
@@ -146,6 +149,7 @@ services:
     hostname: keeper-web
     image: ghcr.io/ridafkih/keeper-web:2.9
     restart: unless-stopped
+    env_file: .env
     environment:
       VITE_API_URL: http://cal-api:3001
       API_URL: http://cal-api:3001
