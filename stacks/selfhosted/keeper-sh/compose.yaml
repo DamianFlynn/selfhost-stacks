@@ -147,7 +147,9 @@ services:
     image: ghcr.io/ridafkih/keeper-web:2.9
     restart: unless-stopped
     environment:
+      VITE_API_URL: http://cal-api:3001
       API_URL: http://cal-api:3001
+      PORT: "3000"
       HOSTNAME: 0.0.0.0
     ports:
       - "127.0.0.1:3000:3000"
