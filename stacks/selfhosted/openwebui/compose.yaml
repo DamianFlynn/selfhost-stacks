@@ -274,7 +274,7 @@ services:
   ai-tika:
     container_name: ai-tika
     # renovate: datasource=docker depName=apache/tika
-    image: apache/tika:3.2.3.0-full
+    image: apache/tika:3.3.0.0-full
     pull_policy: always
     restart: unless-stopped
     networks:
