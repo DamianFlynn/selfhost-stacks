@@ -9,3 +9,26 @@ backups/
 temp.md
 # Local .env backups (contain secrets - DO NOT COMMIT)
 *.env.backup
+
+# ===================================================================
+# Oracle Platform Archive — Migrated to agent-os vault (2026-06-09)
+# ===================================================================
+# All content below has been archived to:
+# ~/Development/damianflynn/agent-os/Archives/Projects/Oracle-Agent-Platform/
+# Branch: archive/oracle-platform-2026
+# See: CLEANUP-PLAN.md for migration details
+
+# Mac Mini Oracle agent platform experiments (abandoned)
+mac mini/
+
+# Keeper Secrets Manager OAuth experiments (failed)
+scripts/keeper-inject-token.py
+scripts/keeper-refresh-ms-token.py
+scripts/ms-device-code-auth.py
+
+# Keeper-sh business justification docs (archived)
+stacks/selfhosted/keeper-sh/business-justification-graph-permissions.md
+stacks/selfhosted/keeper-sh/email-draft-graph-permissions.md
+
+# Cerebro LXC notes (AI workload moved to Data platform)
+stacks/cerebro/
