@@ -28,7 +28,7 @@ services:
   jellystat:
     hostname: "jellystat"
     container_name: jellystat
-    image: cyfershepard/jellystat:1.1.8
+    image: cyfershepard/jellystat:1.1.10
     env_file:
       - /mnt/fast/stacks/stacks/selfhosted/media/.env
     security_opt:
