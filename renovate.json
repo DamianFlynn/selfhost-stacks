@@ -12,8 +12,7 @@
     "managerFilePatterns": [
       "(^|/)(compose\\.ya?ml|docker-compose\\.ya?ml)$",
       "/(^|/)(compose\\.ya?ml|docker-compose\\.ya?ml)$/",
-      "/stacks/selfhosted/.*\\.ya?ml$/",
-      "/stacks/cerebro/.*\\.ya?ml$/"
+      "/stacks/selfhosted/.*\.ya?ml$/"
     ]
   },
   "labels": [
