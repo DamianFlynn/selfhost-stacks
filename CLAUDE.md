@@ -2,6 +2,10 @@
 
 Repository guidance for code agents and maintainers.
 
+## Documentation
+
+- **[NETWORK.md](NETWORK.md)**: Complete network infrastructure map, all hosts, IPs, access methods, and cleanup tasks
+
 ## Scope Split
 
 - `infra/`: Terraform for Proxmox host setup + workload provisioning
@@ -9,9 +13,9 @@ Repository guidance for code agents and maintainers.
 
 ## Platform
 
-- Proxmox host: `172.16.1.158`
-- LXC `100` (`selfhost`): `172.16.1.159`
-- VM `102` (`Cerebro`, Ubuntu 24.04): `172.16.1.160`
+- Hardware: Minisforum NS5Pro
+- Proxmox host "atlantis": `172.16.1.158` (Proxmox VE 9.1)
+- LXC `100` (`selfhost`): `172.16.1.159` (main Docker host - 78+ containers)
 
 ## Infrastructure Rules
 
@@ -22,9 +26,9 @@ Repository guidance for code agents and maintainers.
 ## Stack Rules
 
 - Keep selfhosted compose stacks under `stacks/selfhosted/<stack>/`.
-- Keep Cerebro compose stacks under `stacks/cerebro/<stack>/`.
 - `stacks/selfhosted/traefik/compose.yaml` defines shared proxy network(s).
 - Stack ops run from repo root at `/mnt/fast/stacks`.
+- Cerebro VM stacks archived to agent-os/Archives (no longer managed here).
 
 ## Common Commands
 

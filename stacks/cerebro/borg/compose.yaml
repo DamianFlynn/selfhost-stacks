@@ -1,5 +1,0 @@
-name: borg
-
-include:
-  - ollama.yaml
-  - cerebro.yaml
