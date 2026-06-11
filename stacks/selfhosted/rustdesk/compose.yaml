@@ -1,0 +1,5 @@
+# RustDesk self-hosted relay/ID server
+# Standalone direct ports (not via Traefik)
+
+include:
+  - rustdesk.yaml

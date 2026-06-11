@@ -1,0 +1,24 @@
+services:
+  rustdesk-hbbs:
+    image: rustdesk/rustdesk-server:1.1.14
+    container_name: rustdesk-hbbs
+    command: hbbs -r desktop.deercrest.info:21117
+    restart: unless-stopped
+    volumes:
+      - /mnt/fast/appdata/rustdesk:/root
+    ports:
+      - "21115:21115"
+      - "21116:21116"
+      - "21116:21116/udp"
+      - "21118:21118"
+
+  rustdesk-hbbr:
+    image: rustdesk/rustdesk-server:1.1.14
+    container_name: rustdesk-hbbr
+    command: hbbr
+    restart: unless-stopped
+    volumes:
+      - /mnt/fast/appdata/rustdesk:/root
+    ports:
+      - "21117:21117"
+      - "21119:21119"
