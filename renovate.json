@@ -148,6 +148,25 @@
       ]
     },
     {
+      "description": "GLOBAL: PostgreSQL major versions require manual migration (pg_dump/restore)",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "postgres",
+        "docker.io/postgres"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "enabled": false,
+      "addLabels": [
+        "component:postgres",
+        "major-migration-required",
+        "manual-only"
+      ]
+    },
+    {
       "description": "Immich: Main applications (server/ML) - Manual review for all updates",
       "matchDatasources": [
         "docker"
@@ -266,6 +285,168 @@
         "stack:mattermost",
         "major-update",
         "manual-review-required"
+      ]
+    },
+    {
+      "description": "Auto-label by stack: Keeper.sh (Calendar Sync)",
+      "matchFileNames": [
+        "**/stacks/selfhosted/keeper-sh/**"
+      ],
+      "addLabels": [
+        "stack:keeper-sh"
+      ]
+    },
+    {
+      "description": "Auto-label by stack: RustDesk (Remote Desktop)",
+      "matchFileNames": [
+        "**/stacks/selfhosted/rustdesk/**"
+      ],
+      "addLabels": [
+        "stack:rustdesk"
+      ]
+    },
+    {
+      "description": "Auto-label by stack: Open Archiver",
+      "matchFileNames": [
+        "**/stacks/selfhosted/open-archiver/**"
+      ],
+      "addLabels": [
+        "stack:open-archiver"
+      ]
+    },
+    {
+      "description": "Auto-label by stack: Dawarich (Location Tracking)",
+      "matchFileNames": [
+        "**/stacks/selfhosted/dawarich/**"
+      ],
+      "addLabels": [
+        "stack:dawarich"
+      ]
+    },
+    {
+      "description": "Auto-label by stack: Books",
+      "matchFileNames": [
+        "**/stacks/selfhosted/books/**"
+      ],
+      "addLabels": [
+        "stack:books"
+      ]
+    },
+    {
+      "description": "Auto-label by stack: Social",
+      "matchFileNames": [
+        "**/stacks/selfhosted/social/**"
+      ],
+      "addLabels": [
+        "stack:social"
+      ]
+    },
+    {
+      "description": "Auto-label by stack: SaaS",
+      "matchFileNames": [
+        "**/stacks/selfhosted/saas/**"
+      ],
+      "addLabels": [
+        "stack:saas"
+      ]
+    },
+    {
+      "description": "Auto-label by stack: Documents",
+      "matchFileNames": [
+        "**/stacks/selfhosted/documents/**"
+      ],
+      "addLabels": [
+        "stack:documents"
+      ]
+    },
+    {
+      "description": "Auto-label by stack: Media",
+      "matchFileNames": [
+        "**/stacks/selfhosted/media/**"
+      ],
+      "addLabels": [
+        "stack:media"
+      ]
+    },
+    {
+      "description": "Auto-label by stack: Teleport",
+      "matchFileNames": [
+        "**/stacks/selfhosted/teleport/**"
+      ],
+      "addLabels": [
+        "stack:teleport"
+      ]
+    },
+    {
+      "description": "Auto-label by stack: Postiz (Social Media Manager)",
+      "matchFileNames": [
+        "**/stacks/selfhosted/postiz/**"
+      ],
+      "addLabels": [
+        "stack:postiz"
+      ]
+    },
+    {
+      "description": "Auto-label by stack: ARRs (Media Automation)",
+      "matchFileNames": [
+        "**/stacks/selfhosted/arrs/**"
+      ],
+      "addLabels": [
+        "stack:arrs"
+      ]
+    },
+    {
+      "description": "Auto-label by stack: MCP (Model Context Protocol)",
+      "matchFileNames": [
+        "**/stacks/selfhosted/mcp/**"
+      ],
+      "addLabels": [
+        "stack:mcp"
+      ]
+    },
+    {
+      "description": "Auto-label by stack: Monitoring",
+      "matchFileNames": [
+        "**/stacks/selfhosted/monitoring/**"
+      ],
+      "addLabels": [
+        "stack:monitoring"
+      ]
+    },
+    {
+      "description": "Auto-label by stack: Gaming",
+      "matchFileNames": [
+        "**/stacks/selfhosted/gaming/**"
+      ],
+      "addLabels": [
+        "stack:gaming"
+      ]
+    },
+    {
+      "description": "Auto-label by stack: Music",
+      "matchFileNames": [
+        "**/stacks/selfhosted/music/**"
+      ],
+      "addLabels": [
+        "stack:music"
+      ]
+    },
+    {
+      "description": "Auto-label by stack: FreshRSS",
+      "matchFileNames": [
+        "**/stacks/selfhosted/freshrss/**"
+      ],
+      "addLabels": [
+        "stack:freshrss"
+      ]
+    },
+    {
+      "description": "Auto-label by stack: Termix",
+      "matchFileNames": [
+        "**/stacks/selfhosted/termix/**"
+      ],
+      "addLabels": [
+        "stack:termix"
       ]
     },
     {
