@@ -73,3 +73,13 @@ cerebro_ssh_public_keys = ["ssh-ed25519 AAAA...your-key user@host"]
 # Optional VM passthrough fields (unused by LXC mode; keep empty)
 cerebro_gpu_pci_id      = ""
 cerebro_gpu_mapping     = ""
+
+# ── MPE LXC 102 (dedicated isolated client stack — see lxc-mpe.tf) ──────────
+# Reuses proxmox_*, template, apps/uid-gid and SSH key vars above. No GPU.
+mpe_vmid          = 102
+mpe_hostname      = "mpe"
+mpe_ip            = "172.16.1.163"   # next free in 16x (.160 freed by cerebro removal; .161/.162 used)
+mpe_memory_mb     = 20480            # 20 GB
+mpe_cores         = 8
+mpe_disk_gb       = 100
+mpe_root_password = "CHANGE_ME"

@@ -1,0 +1,32 @@
+# MPE Traefik dynamic config — reusable middlewares (file provider).
+# Referenced from container labels as e.g. middlewares=mpe-secure-headers@file.
+#
+# Authelia is deferred for the PoC, so there is no auth chain yet. When Google
+# OAuth SSO (OIDC via Authelia or oauth2-proxy) is added, define a forward-auth
+# middleware here and append it to the chains below.
+
+http:
+  middlewares:
+    # Sensible security headers for apps fronted by the Cloudflare edge.
+    mpe-secure-headers:
+      headers:
+        browserXssFilter: true
+        contentTypeNosniff: true
+        frameDeny: true
+        referrerPolicy: "strict-origin-when-cross-origin"
+        customRequestHeaders:
+          # Cloudflare already terminated TLS; tell upstreams the original scheme.
+          X-Forwarded-Proto: "https"
+
+    # No-auth chain (current PoC default).
+    mpe-chain-no-auth:
+      chain:
+        middlewares:
+          - mpe-secure-headers
+
+    # Placeholder auth chain — identical to no-auth until SSO is wired.
+    # Swap mpe-secure-headers list to include a forward-auth middleware later.
+    mpe-chain-sso:
+      chain:
+        middlewares:
+          - mpe-secure-headers

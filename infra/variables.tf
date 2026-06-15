@@ -231,3 +231,48 @@ variable "cerebro_gpu_mapping" {
   type        = string
   default     = ""
 }
+
+# ── MPE LXC 102 (Debian 13 + Docker — dedicated isolated client stack) ──────
+# See lxc-mpe.tf. No GPU. Reuses the shared proxmox/template/apps/SSH variables.
+
+variable "mpe_vmid" {
+  description = "VM ID for the MPE LXC"
+  type        = number
+  default     = 102
+}
+
+variable "mpe_hostname" {
+  description = "Hostname inside the MPE LXC"
+  type        = string
+  default     = "mpe"
+}
+
+variable "mpe_ip" {
+  description = "Static IP for the MPE LXC — next free in 172.16.1.16x (.160 freed by cerebro removal; .161/.162 in use)"
+  type        = string
+  default     = "172.16.1.163"
+}
+
+variable "mpe_memory_mb" {
+  description = "RAM allocated to the MPE LXC (MB)"
+  type        = number
+  default     = 20480
+}
+
+variable "mpe_cores" {
+  description = "CPU cores allocated to the MPE LXC"
+  type        = number
+  default     = 8
+}
+
+variable "mpe_disk_gb" {
+  description = "Root filesystem size for the MPE LXC in GB"
+  type        = number
+  default     = 100
+}
+
+variable "mpe_root_password" {
+  description = "Root password for the MPE LXC (set in terraform.tfvars — sensitive, no default)"
+  type        = string
+  sensitive   = true
+}

@@ -1,0 +1,39 @@
+# Cloudflared - MPE Cloudflare Tunnel
+#
+# Purpose:
+#   Outbound-only tunnel from this LXC to the Cloudflare edge. Removes the need
+#   for any port-forward / public IP for MPE. Cloudflare terminates public TLS
+#   (edge cert) and forwards requests over the tunnel to mpe-traefik:80.
+#
+# Mode: remotely-managed (token-based). The tunnel and its public-hostname
+#   ingress rules are created with scripts/setup-mpe-cloudflare.sh (or the CF
+#   dashboard). Each public hostname routes to service http://mpe-traefik:80.
+#
+#   Public hostnames to configure on the tunnel (flat naming — free TLS under
+#   the existing *.diginerve.net Universal SSL):
+#     mpe-erp.diginerve.net  -> http://mpe-traefik:80
+#     mpe-n8n.diginerve.net  -> http://mpe-traefik:80
+#     mpe-shop.diginerve.net -> http://mpe-traefik:80   (later, for WP/Woo)
+#
+# Secret: TUNNEL_TOKEN lives in .env (gitignored), emitted when the tunnel is
+#   created. Do NOT commit it.
+
+services:
+  cloudflared:
+    container_name: mpe-cloudflared
+    # renovate: datasource=docker depName=cloudflare/cloudflared
+    image: cloudflare/cloudflared:2025.6.1
+    pull_policy: always
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      - TZ=${TZ}
+      - TUNNEL_TOKEN=${TUNNEL_TOKEN}
+    networks:
+      - mpe_proxy
+    depends_on:
+      - traefik
+
+networks:
+  mpe_proxy:
+    external: true

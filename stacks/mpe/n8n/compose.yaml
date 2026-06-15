@@ -1,0 +1,14 @@
+# MPE Automation Stack - n8n (integration spine)
+# MPE's own n8n + Postgres in LXC 102. Joins the edge stack's mpe_proxy network.
+
+name: mpe-n8n
+
+########################### NETWORKS
+networks:
+  mpe_proxy:
+    external: true
+
+include:
+  ########################### SERVICES
+  - n8n-postgres.yaml
+  - n8n.yaml
