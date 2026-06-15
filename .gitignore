@@ -32,3 +32,6 @@ stacks/selfhosted/keeper-sh/email-draft-graph-permissions.md
 
 # Cerebro LXC notes (AI workload moved to Data platform)
 stacks/cerebro/
+
+# MPE ERPNext upstream clone (not committed)
+stacks/mpe/erpnext/frappe_docker/

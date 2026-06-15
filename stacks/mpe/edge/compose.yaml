@@ -1,0 +1,36 @@
+# MPE Edge Stack - Traefik + Cloudflared + Socket Proxy
+# MPE Renewables dedicated ingress (LXC 102 "mpe"). Fully isolated from the
+# personal stack (LXC 100). Public TLS is terminated at the Cloudflare edge and
+# carried to this Traefik over a Cloudflare Tunnel — there is NO Cloudflare token
+# inside this Traefik and NO Let's Encrypt / DNS-01 here (cert approach "a").
+#
+# Flow: Internet --TLS--> Cloudflare edge --tunnel--> cloudflared --> mpe-traefik:80 (HTTP) --> service
+#
+# Authelia is intentionally DEFERRED for the PoC. Google OAuth SSO (OIDC) for
+# ERPNext / WordPress / WooCommerce / n8n is planned later — see ../README.md.
+
+name: mpe-edge
+
+########################### NETWORKS
+networks:
+  # Shared reverse-proxy network. DEFINED here; erpnext/n8n join it as external.
+  mpe_proxy:
+    name: mpe_proxy
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 192.168.92.0/24
+  # Isolated network for the filtered Docker socket.
+  mpe_socket_proxy:
+    name: mpe_socket_proxy
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 192.168.93.0/24
+
+include:
+  ########################### SERVICES
+  - socket-proxy.yaml
+  - traefik.yaml
+  - cloudflared.yaml
+  # - authelia.yaml   # DEFERRED for PoC — enable when SSO is wired (see README)

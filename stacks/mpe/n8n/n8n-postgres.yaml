@@ -1,0 +1,27 @@
+# n8n PostgreSQL Database - MPE
+#
+# Purpose:
+#   PostgreSQL backend for MPE's n8n instance. Isolated from the personal n8n DB.
+
+services:
+  n8n-db:
+    image: postgres:16-alpine
+    container_name: mpe-n8n-db
+    hostname: n8n-db
+    restart: unless-stopped
+    mem_limit: 1g
+    mem_reservation: 256m
+    networks:
+      - mpe_proxy
+    environment:
+      - POSTGRES_DB=n8n
+      - POSTGRES_USER=n8n
+      - POSTGRES_PASSWORD=${N8N_DB_PASSWORD}
+    volumes:
+      - /mnt/fast/appdata/mpe/n8n/n8n-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U n8n -d n8n"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s

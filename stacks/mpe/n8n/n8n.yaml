@@ -1,0 +1,66 @@
+# n8n - MPE Workflow Automation (integration glue)
+#
+# Purpose:
+#   MPE's OWN n8n instance (separate from the personal automation stack). It is
+#   the integration spine: ERPNext -> WooCommerce (F01/F02) and ERPNext -> Xero
+#   (F08), later order ingestion + status sync.
+#
+# Image: reuses the proven custom build ghcr.io/damianflynn/custom-n8n.
+#
+# Access (via tunnel): https://mpe-n8n.diginerve.net
+#   Routed on Traefik's HTTP "web" entrypoint (CF edge does TLS).
+#   PoC: no auth chain (Authelia deferred). Lock down before real credentials
+#   hold live Xero/Woo tokens — see ../README.md SSO plan.
+
+services:
+  n8n:
+    hostname: n8n
+    container_name: mpe-n8n
+    user: "568:568"
+    image: ghcr.io/damianflynn/custom-n8n:2.11.1
+    restart: unless-stopped
+    env_file:
+      - /mnt/fast/stacks/stacks/mpe/n8n/.env
+    depends_on:
+      n8n-db:
+        condition: service_healthy
+    environment:
+      - N8N_HOST=mpe-n8n.${DOMAINNAME}
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=https
+      - NODE_ENV=production
+      - WEBHOOK_URL=https://mpe-n8n.${DOMAINNAME}/
+      - N8N_EDITOR_BASE_URL=https://mpe-n8n.${DOMAINNAME}/
+      - N8N_PROXY_HOPS=1
+      - NODE_FUNCTION_ALLOW_BUILTIN=*
+      - NODE_FUNCTION_ALLOW_EXTERNAL=*
+      - HOME=/home/node
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
+      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=n8n-db
+      - DB_POSTGRESDB_PORT=5432
+      - DB_POSTGRESDB_DATABASE=n8n
+      - DB_POSTGRESDB_USER=n8n
+      - DB_POSTGRESDB_PASSWORD=${N8N_DB_PASSWORD}
+      - EXECUTIONS_DATA_PRUNE=true
+      - EXECUTIONS_DATA_MAX_AGE=168
+      - EXECUTIONS_DATA_PRUNE_MAX_COUNT=10000
+      - N8N_RUNNERS_ENABLED=true
+      - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
+      - GENERIC_TIMEZONE=${TZ}
+    mem_limit: 4g
+    mem_reservation: 512m
+    networks:
+      - mpe_proxy
+    volumes:
+      - /mnt/fast/appdata/mpe/n8n/n8n-home:/home/node
+      - /mnt/fast/appdata/mpe/n8n/n8n:/home/node/.n8n
+      - /mnt/fast/appdata/mpe/n8n/cache:/home/node/.cache
+      - /mnt/fast/appdata/mpe/n8n/local-files:/data/files
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.mpe-n8n.rule=Host(`mpe-n8n.${DOMAINNAME}`)
+      - traefik.http.routers.mpe-n8n.entrypoints=web
+      - traefik.http.routers.mpe-n8n.middlewares=mpe-chain-no-auth@file
+      - traefik.http.services.mpe-n8n.loadbalancer.server.port=5678

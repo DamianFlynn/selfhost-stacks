@@ -1,0 +1,77 @@
+# Traefik - MPE Reverse Proxy (edge-cert / tunnel mode)
+#
+# Purpose:
+#   Internal reverse proxy for the MPE stack. Receives plain HTTP from cloudflared
+#   (which has already terminated public TLS at the Cloudflare edge) and routes by
+#   Host header to ERPNext / n8n / WordPress.
+#
+# Key differences vs the personal Traefik:
+#   - HTTP-only entrypoint (:80). No :443, no ACME, no Cloudflare DNS token.
+#   - TLS is handled entirely by Cloudflare (edge cert) + the tunnel transport.
+#   - Discovers services from the filtered Docker socket (socket-proxy).
+#   - Dashboard is internal-only (NOT published through the tunnel).
+#
+# Access (via the tunnel, once public hostnames are created):
+#   https://mpe-erp.diginerve.net  -> erpnext frontend
+#   https://mpe-n8n.diginerve.net  -> n8n
+#   https://mpe-shop.diginerve.net -> wordpress/woocommerce (later)
+# Flat naming under *.diginerve.net is covered free by Cloudflare Universal SSL
+# (third-level *.mpe.diginerve.net would have needed paid ACM).
+
+services:
+  traefik:
+    container_name: mpe-traefik
+    # renovate: datasource=docker depName=traefik
+    image: traefik:v3.7.5
+    pull_policy: always
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+    networks:
+      mpe_proxy:
+        ipv4_address: 192.168.92.254
+        aliases:
+          - mpe-traefik
+      mpe_socket_proxy:
+
+    command:
+      - --global.checkNewVersion=true
+      - --global.sendAnonymousUsage=false
+      # Single HTTP entrypoint — cloudflared connects here; CF edge does TLS.
+      - --entrypoints.web.address=:80
+      - --entrypoints.traefik.address=:8080
+      # Trust the tunnel/proxy network so X-Forwarded-* (incl. original HTTPS
+      # scheme set by Cloudflare) are honoured for redirects and app host_url.
+      - --entrypoints.web.forwardedHeaders.trustedIPs=192.168.92.0/24,127.0.0.1/32
+      - --api=true
+      - --api.dashboard=true
+      - --providers.docker=true
+      - --providers.docker.endpoint=tcp://mpe-socket-proxy:2375
+      - --providers.docker.exposedByDefault=false
+      - --providers.docker.network=mpe_proxy
+      - --providers.file.directory=/rules
+      - --providers.file.watch=true
+      - --log=true
+      - --log.level=INFO
+      - --accessLog=true
+      - --accessLog.filePath=/logs/access.log
+      - --accessLog.bufferingSize=100
+      - --accessLog.filters.statusCodes=204-299,400-499,500-599
+
+    # No host ports published. cloudflared reaches Traefik over mpe_proxy on :80.
+    # (Add a published :80 only if you ever want LAN-direct access for testing.)
+
+    volumes:
+      - /mnt/fast/appdata/mpe/edge/traefik/rules:/rules
+      - /mnt/fast/appdata/mpe/edge/traefik/logs:/logs
+
+    environment:
+      - TZ=${TZ}
+
+    labels:
+      - "traefik.enable=true"
+      # Dashboard — bound to the internal :8080 entrypoint only (not tunnelled).
+      - "traefik.http.routers.mpe-traefik-rtr.entrypoints=traefik"
+      - "traefik.http.routers.mpe-traefik-rtr.rule=Host(`mpe-traefik.diginerve.net`)"
+      - "traefik.http.routers.mpe-traefik-rtr.service=api@internal"

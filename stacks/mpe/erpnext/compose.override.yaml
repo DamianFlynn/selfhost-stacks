@@ -1,0 +1,54 @@
+# MPE ERPNext - compose.override.yaml
+#
+# Layered on top of the upstream frappe_docker compose files (cloned at deploy
+# time into ./frappe_docker — see README.md). This override:
+#   1. Joins the ERPNext frontend to MPE's mpe_proxy network.
+#   2. Adds Traefik labels so mpe-erp.diginerve.net routes to it (HTTP "web"
+#      entrypoint — Cloudflare edge terminates public TLS via the tunnel).
+#   3. Bind-mounts persistent data under /mnt/fast/appdata/mpe/erpnext so it sits
+#      on the dedicated ZFS dataset (Proxmox snapshots / backups).
+#
+# Invocation (from README): docker compose ... -f compose.override.yaml ...
+#
+# NOTE on volume names: frappe_docker's named volumes are `sites`, `db-data`,
+# `redis-queue-data`. Verify for the pinned version with:
+#   docker compose <all -f flags> config --volumes
+# Adjust the volumes: block below if upstream renames them.
+
+services:
+  frontend:
+    networks:
+      - mpe_proxy
+      - default
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=mpe_proxy"
+      - "traefik.http.routers.mpe-erp.rule=Host(`mpe-erp.diginerve.net`)"
+      - "traefik.http.routers.mpe-erp.entrypoints=web"
+      - "traefik.http.routers.mpe-erp.middlewares=mpe-chain-no-auth@file"
+      - "traefik.http.services.mpe-erp.loadbalancer.server.port=8080"
+
+networks:
+  mpe_proxy:
+    external: true
+
+# Bind upstream named volumes to the dedicated MPE appdata dataset.
+volumes:
+  sites:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/fast/appdata/mpe/erpnext/sites
+  db-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/fast/appdata/mpe/erpnext/db
+  redis-queue-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/fast/appdata/mpe/erpnext/redis-queue
