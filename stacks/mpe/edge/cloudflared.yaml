@@ -33,7 +33,5 @@ services:
       - mpe_proxy
     depends_on:
       - traefik
-
-networks:
-  mpe_proxy:
-    external: true
+# Note: mpe_proxy is defined by the parent edge compose.yaml (this file is
+# included into that project), so it is NOT redeclared here.
