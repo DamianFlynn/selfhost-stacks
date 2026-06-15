@@ -5,15 +5,15 @@
 #   1. Joins the ERPNext frontend to MPE's mpe_proxy network.
 #   2. Adds Traefik labels so mpe-erp.diginerve.net routes to it (HTTP "web"
 #      entrypoint — Cloudflare edge terminates public TLS via the tunnel).
-#   3. Bind-mounts persistent data under /mnt/fast/appdata/mpe/erpnext so it sits
-#      on the dedicated ZFS dataset (Proxmox snapshots / backups).
+#
+# Persistence: uses frappe_docker's DEFAULT named volumes (not host binds).
+# Reason: the frappe/mariadb/redis containers run as UID 1000 / 999, which under
+# this unprivileged LXC's 568-only idmap cannot write a 568-owned bind path.
+# Named volumes let Docker manage ownership. Data lives on the 100 GB LXC disk,
+# protected by Proxmox LXC snapshots + `bench backup`. (To land backups on the
+# ZFS dataset later, schedule `bench backup` + copy into /mnt/fast/appdata/mpe.)
 #
 # Invocation (from README): docker compose ... -f compose.override.yaml ...
-#
-# NOTE on volume names: frappe_docker's named volumes are `sites`, `db-data`,
-# `redis-queue-data`. Verify for the pinned version with:
-#   docker compose <all -f flags> config --volumes
-# Adjust the volumes: block below if upstream renames them.
 
 services:
   frontend:
@@ -31,24 +31,3 @@ services:
 networks:
   mpe_proxy:
     external: true
-
-# Bind upstream named volumes to the dedicated MPE appdata dataset.
-volumes:
-  sites:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: /mnt/fast/appdata/mpe/erpnext/sites
-  db-data:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: /mnt/fast/appdata/mpe/erpnext/db
-  redis-queue-data:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: /mnt/fast/appdata/mpe/erpnext/redis-queue
