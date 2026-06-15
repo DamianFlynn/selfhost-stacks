@@ -8,11 +8,13 @@
 # Cloudflare terminates public TLS at the edge; nothing else is needed in Traefik.
 #
 # Requirements (export before running):
-#   CF_API_TOKEN   API token with: Account > Cloudflare Tunnel:Edit
-#                                   Zone    > DNS:Edit   (zone diginerve.net)
+#   CF_API_TOKEN   API token with Account > Cloudflare Tunnel:Edit (creates tunnel)
 #   CF_ACCOUNT_ID  Cloudflare account id
 #   CF_ZONE_ID     Zone id for diginerve.net
 # Optional:
+#   CF_DNS_API_TOKEN  token with Zone > DNS:Edit for the zone, used for the CNAME
+#                     records (default: CF_API_TOKEN). Set this when your tunnel
+#                     token only has Account perms — e.g. reuse the Traefik DNS token.
 #   TUNNEL_NAME    (default: mpe)
 #   HOSTS          (default: "mpe-erp mpe-n8n mpe-shop")  flat hosts under diginerve.net
 #   ORIGIN         (default: http://mpe-traefik:80)
@@ -24,14 +26,17 @@ set -euo pipefail
 : "${CF_API_TOKEN:?set CF_API_TOKEN}"
 : "${CF_ACCOUNT_ID:?set CF_ACCOUNT_ID}"
 : "${CF_ZONE_ID:?set CF_ZONE_ID}"
+CF_DNS_API_TOKEN="${CF_DNS_API_TOKEN:-$CF_API_TOKEN}"
 TUNNEL_NAME="${TUNNEL_NAME:-mpe}"
 HOSTS="${HOSTS:-mpe-erp mpe-n8n mpe-shop}"
 ORIGIN="${ORIGIN:-http://mpe-traefik:80}"
 BASE="diginerve.net"
 API="https://api.cloudflare.com/client/v4"
 auth=(-H "Authorization: Bearer ${CF_API_TOKEN}" -H "Content-Type: application/json")
+dauth=(-H "Authorization: Bearer ${CF_DNS_API_TOKEN}" -H "Content-Type: application/json")
 
-api() { curl -fsS "${auth[@]}" "$@"; }
+api()  { curl -fsS "${auth[@]}" "$@"; }
+dapi() { curl -fsS "${dauth[@]}" "$@"; }
 
 echo "==> Looking up existing tunnel '${TUNNEL_NAME}'..."
 tunnel_id="$(api "${API}/accounts/${CF_ACCOUNT_ID}/cfd_tunnel?name=${TUNNEL_NAME}&is_deleted=false" \
@@ -60,14 +65,14 @@ api -X PUT "${API}/accounts/${CF_ACCOUNT_ID}/cfd_tunnel/${tunnel_id}/configurati
 echo "==> Creating proxied DNS CNAMEs -> ${tunnel_id}.cfargotunnel.com ..."
 for h in ${HOSTS}; do
   fqdn="${h}.${BASE}"
-  rec_id="$(api "${API}/zones/${CF_ZONE_ID}/dns_records?type=CNAME&name=${fqdn}" | jq -r '.result[0].id // empty')"
+  rec_id="$(dapi "${API}/zones/${CF_ZONE_ID}/dns_records?type=CNAME&name=${fqdn}" | jq -r '.result[0].id // empty')"
   body="$(jq -n --arg n "$fqdn" --arg c "${tunnel_id}.cfargotunnel.com" \
     '{type:"CNAME", name:$n, content:$c, proxied:true}')"
   if [[ -z "$rec_id" ]]; then
-    api -X POST "${API}/zones/${CF_ZONE_ID}/dns_records" --data "$body" >/dev/null
+    dapi -X POST "${API}/zones/${CF_ZONE_ID}/dns_records" --data "$body" >/dev/null
     echo "    created ${fqdn}"
   else
-    api -X PUT "${API}/zones/${CF_ZONE_ID}/dns_records/${rec_id}" --data "$body" >/dev/null
+    dapi -X PUT "${API}/zones/${CF_ZONE_ID}/dns_records/${rec_id}" --data "$body" >/dev/null
     echo "    updated ${fqdn}"
   fi
 done
