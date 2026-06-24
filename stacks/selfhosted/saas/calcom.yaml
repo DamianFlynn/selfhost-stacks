@@ -68,7 +68,7 @@ services:
         condition: service_healthy
 
   calcom_postgres:
-    image: postgres:17-alpine
+    image: postgres:18-alpine
     container_name: calcom_postgres
     restart: unless-stopped
     networks:

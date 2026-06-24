@@ -39,7 +39,7 @@ services:
         condition: service_healthy
 
   booklore_postgres:
-    image: postgres:17-alpine
+    image: postgres:18-alpine
     container_name: booklore_postgres
     restart: unless-stopped
     networks:
