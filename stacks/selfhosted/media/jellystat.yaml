@@ -75,7 +75,7 @@ services:
   jellystat-db:
     hostname: "jellystat-db"
     container_name: jellystat-db
-    image: postgres:15.17
+    image: postgres:15.18
     env_file:
       - /mnt/fast/stacks/stacks/selfhosted/media/.env
     security_opt:
