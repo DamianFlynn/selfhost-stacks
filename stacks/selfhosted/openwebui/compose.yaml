@@ -177,8 +177,8 @@ services:
   # Extensible with custom MCP servers via config.json
   ai-openwebui-mcp:
     container_name: ai-openwebui-mcp
-    # renovate: datasource=docker depName=ghcr.io/open-webui/mcpo
-    image: ghcr.io/open-webui/mcpo:v0.0.20
+    # renovate: datasource=docker depName=ghcr.io/open-webui/mcpo versioning=loose
+    image: ghcr.io/open-webui/mcpo:main
     pull_policy: always
     restart: unless-stopped
     command: --config /app/conf/config.json
