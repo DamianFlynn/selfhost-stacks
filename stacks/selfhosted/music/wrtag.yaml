@@ -23,7 +23,7 @@
 services:
   wrtag:
     # v0.30.0 changed path-format fields — pinned to last compatible version; update path-format before upgrading
-    image: sentriz/wrtag:v0.20.0
+    image: sentriz/wrtag:v0.32.0
     container_name: wrtag
     hostname: wrtag
     restart: unless-stopped
