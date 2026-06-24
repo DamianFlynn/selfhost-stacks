@@ -20,7 +20,7 @@ services:
   ai-postgress:
     container_name: ai-postgress
     # renovate: datasource=docker depName=pgvector/pgvector
-    image: pgvector/pgvector:pg15
+    image: pgvector/pgvector:0.8.3-pg15
     pull_policy: always
     restart: unless-stopped
     environment:
@@ -44,7 +44,7 @@ services:
   ai-redis:
     container_name: ai-redis
     # renovate: datasource=docker depName=redis/redis-stack
-    image: redis/redis-stack:7.4.0-v7
+    image: redis/redis-stack:7.4.0-v8
     pull_policy: always
     restart: unless-stopped
     environment:
@@ -124,7 +124,7 @@ services:
   ai-docling:
     container_name: ai-docling
     # renovate: datasource=docker depName=quay.io/docling-project/docling-serve
-    image: quay.io/docling-project/docling-serve:v1.14.3
+    image: quay.io/docling-project/docling-serve:v1.25.0
     pull_policy: always
     restart: unless-stopped
     environment:
@@ -178,7 +178,7 @@ services:
   ai-openwebui-mcp:
     container_name: ai-openwebui-mcp
     # renovate: datasource=docker depName=ghcr.io/open-webui/mcpo
-    image: ghcr.io/open-webui/mcpo:latest
+    image: ghcr.io/open-webui/mcpo:v0.0.20
     pull_policy: always
     restart: unless-stopped
     command: --config /app/conf/config.json
@@ -219,7 +219,7 @@ services:
   ai-searxng:
     container_name: ai-searxng
     # renovate: datasource=docker depName=searxng/searxng
-    image: searxng/searxng:2025.10.4-7bf65d68c
+    image: searxng/searxng:2026.6.23-e3713717f
     pull_policy: always
     restart: unless-stopped
     cap_add:
@@ -293,7 +293,7 @@ services:
   openwebui:
     container_name: ai-openwebui
     # renovate: datasource=docker depName=ghcr.io/open-webui/open-webui
-    image: ghcr.io/open-webui/open-webui:main
+    image: ghcr.io/open-webui/open-webui:v0.9.6
     pull_policy: always
     restart: unless-stopped
     

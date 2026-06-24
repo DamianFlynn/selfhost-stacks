@@ -22,7 +22,7 @@
 
 services:
   wrtag:
-    image: sentriz/wrtag:latest
+    image: sentriz/wrtag:v0.32.0
     container_name: wrtag
     hostname: wrtag
     restart: unless-stopped

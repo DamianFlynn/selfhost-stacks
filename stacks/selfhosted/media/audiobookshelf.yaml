@@ -4,7 +4,7 @@
 services:
   audiobookshelf:
     # renovate: datasource=docker depName=ghcr.io/advplyr/audiobookshelf
-    image: ghcr.io/advplyr/audiobookshelf:latest
+    image: ghcr.io/advplyr/audiobookshelf:v2.35.1
     container_name: audiobookshelf
     restart: unless-stopped
     env_file:

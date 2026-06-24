@@ -2,7 +2,7 @@ services:
 
   fpp:
     container_name: fpp
-    image: falconchristmas/fpp:latest
+    image: falconchristmas/fpp:v9.5
     # Run oxidized with the TrueNAS apps UID so it can write to host-mounted
     # config and ssh directories owned by 568:568.
     restart: unless-stopped

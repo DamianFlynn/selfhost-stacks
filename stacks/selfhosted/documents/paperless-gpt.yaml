@@ -1,7 +1,7 @@
 services:
   paperless-gpt:
     # renovate: datasource=docker depName=icereed/paperless-gpt
-    image: icereed/paperless-gpt:latest
+    image: icereed/paperless-gpt:v0.25.1
     container_name: paperless-gpt
     restart: unless-stopped
     env_file:
