@@ -1,7 +1,7 @@
 services:
   rybbit:
     # renovate: datasource=docker depName=ghcr.io/rybbit-io/rybbit
-    image: ghcr.io/rybbit-io/rybbit:latest
+    image: ghcr.io/rybbit-io/rybbit:v2.6.0
     container_name: rybbit
     restart: unless-stopped
     env_file:

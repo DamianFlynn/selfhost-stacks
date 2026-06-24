@@ -1,7 +1,7 @@
 services:
   calcom:
     # renovate: datasource=docker depName=calcom/cal.com
-    image: calcom/cal.com:latest
+    image: calcom/cal.com:v6.2.0
     container_name: calcom
     restart: unless-stopped
     env_file:

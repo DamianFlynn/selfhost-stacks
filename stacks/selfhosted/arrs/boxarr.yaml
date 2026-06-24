@@ -36,7 +36,7 @@
 
 services:
   boxarr:
-    image: iongpt/boxarr:latest
+    image: ghcr.io/iongpt/boxarr:1.7.0
     container_name: boxarr
     restart: unless-stopped
     security_opt:

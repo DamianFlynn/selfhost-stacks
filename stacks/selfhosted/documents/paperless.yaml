@@ -1,7 +1,7 @@
 services:
   paperless:
     # renovate: datasource=docker depName=ghcr.io/paperless-ngx/paperless-ngx
-    image: ghcr.io/paperless-ngx/paperless-ngx:latest
+    image: ghcr.io/paperless-ngx/paperless-ngx:v2.20.15
     container_name: paperless
     restart: unless-stopped
     env_file:
@@ -106,7 +106,7 @@ services:
 
   gotenberg:
     # renovate: datasource=docker depName=gotenberg/gotenberg
-    image: gotenberg/gotenberg:latest
+    image: gotenberg/gotenberg:8.34
     container_name: paperless_gotenberg
     restart: unless-stopped
     networks:
@@ -118,7 +118,7 @@ services:
 
   tika:
     # renovate: datasource=docker depName=apache/tika
-    image: apache/tika:latest
+    image: apache/tika:3.3.1.0-full
     container_name: paperless_tika
     restart: unless-stopped
     networks:
