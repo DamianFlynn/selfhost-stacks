@@ -21,7 +21,7 @@
 
 services:
   soulbeet:
-    image: ghcr.io/terry90/soulbeet:latest
+    image: ghcr.io/terry90/soulbeet:v0.6.0
     container_name: soulbeet
     hostname: soulbeet
     restart: unless-stopped

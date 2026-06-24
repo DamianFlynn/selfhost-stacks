@@ -104,7 +104,7 @@ Drag services between stacks to reorganize. **Bold** = deployed, *Italic* = prop
 - **Stack**: `social` (new)
 - **Status**: ✅ Created social/rybbit.yaml
 - **Access**: https://rybbit.deercrest.info
-- **Database**: PostgreSQL 17
+- **Database**: PostgreSQL 18
 - **Notes**: Integrates with Postiz for social posting and Hugo static site
 
 ### Paperless-ngx (Full Stack)
@@ -113,7 +113,7 @@ Drag services between stacks to reorganize. **Bold** = deployed, *Italic* = prop
 - **Stack**: `documents` (new)
 - **Status**: ✅ Created documents/paperless.yaml
 - **Access**: https://docs.deercrest.info
-- **Database**: PostgreSQL 17 + Redis
+- **Database**: PostgreSQL 18 + Redis
 - **Components**: Paperless + Tika OCR + Gotenberg PDF + Paperless-GPT
 - **Notes**: Complete DMS with AI-powered tagging via Paperless-GPT
 
@@ -131,7 +131,7 @@ Drag services between stacks to reorganize. **Bold** = deployed, *Italic* = prop
 - **Stack**: `books` (new)
 - **Status**: ✅ Created books/booklore.yaml
 - **Access**: https://books.deercrest.info
-- **Database**: PostgreSQL 17
+- **Database**: PostgreSQL 18
 - **Notes**: Personal book collection tracker with reading progress
 
 ### Cal.com
@@ -140,7 +140,7 @@ Drag services between stacks to reorganize. **Bold** = deployed, *Italic* = prop
 - **Stack**: `saas` (new)
 - **Status**: ✅ Created saas/calcom.yaml
 - **Access**: https://cal.deercrest.info
-- **Database**: PostgreSQL 17
+- **Database**: PostgreSQL 18
 - **Notes**: Self-hosted Calendly alternative for SaaS booking business
 
 ---

@@ -46,6 +46,7 @@ selfhost-stacks/
 │   └── cerebro/              # Services for VM 102
 │       └── borg/             # OpenClaw AI gateway
 ├── scripts/                   # Operational utilities
+│   ├── pg-migrate.sh         # PostgreSQL major-version migration (dump/restore)
 │   ├── setup-teleport.sh     # Teleport agent bootstrap
 │   └── check-renovate.sh     # Renovate dependency validation
 └── .github/
@@ -147,6 +148,28 @@ GitHub Actions automatically validate compose files on every pull request:
 4. Document service in compose file comments
 5. Commit and push to GitHub
 6. SSH to LXC and deploy: `docker compose -f stacks/selfhosted/<stack-name>/compose.yaml up -d`
+
+### PostgreSQL Major Version Migration
+
+PostgreSQL major version upgrades (e.g. PG17 → PG18) require a dump/restore cycle — data is not forward-compatible. All postgres volumes now mount at `/var/lib/postgresql` (PG18 layout); data lives in a versioned subdir (`18/docker/`).
+
+```bash
+ssh root@172.16.1.159
+cd /mnt/fast/stacks
+
+# Pull updated compose files (with new image tags)
+git pull
+
+# Run the migration script for a single instance
+bash scripts/pg-migrate.sh mattermost
+
+# Or migrate all instances in correct order
+bash scripts/pg-migrate.sh all
+```
+
+The script handles dump, old-data removal, PG18 init, restore, and service restart. Backups are retained in `/tmp/pg-backups/` on the host.
+
+**Note:** `pgvector/pgvector` images are blocked from Renovate major-version auto-merge — they must be migrated manually using the same procedure.
 
 ### Update Existing Stack
 
@@ -303,5 +326,5 @@ Private repository - All rights reserved
 ---
 
 **Maintained by:** Damian Flynn  
-**Last Updated:** March 2026  
+**Last Updated:** June 2026  
 **Repository:** [github.com/DamianFlynn/selfhost-stacks](https://github.com/DamianFlynn/selfhost-stacks)

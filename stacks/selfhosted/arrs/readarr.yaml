@@ -68,7 +68,7 @@ services:
 
   # Readarr Exporter - Readarr metrics for Prometheus
   readarr-exporter:
-    image: ghcr.io/onedr0p/exportarr:latest
+    image: ghcr.io/onedr0p/exportarr:v2.3.0
     container_name: readarr-exporter
     security_opt:
       - no-new-privileges:true

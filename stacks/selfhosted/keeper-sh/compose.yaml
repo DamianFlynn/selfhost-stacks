@@ -24,13 +24,13 @@ services:
 
   postgres:
     container_name: cal-postgres
-    image: postgres:17
+    image: postgres:18
     environment:
       POSTGRES_USER: keeper
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: keeper
     volumes:
-      - /mnt/fast/appdata/automation/keeper/postgres:/var/lib/postgresql/data
+      - /mnt/fast/appdata/automation/keeper/postgres:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U keeper -d keeper"]
       interval: 5s

@@ -22,7 +22,8 @@
 
 services:
   wrtag:
-    image: sentriz/wrtag:latest
+    # v0.30.0 changed path-format fields — pinned to last compatible version; update path-format before upgrading
+    image: sentriz/wrtag:v0.20.0
     container_name: wrtag
     hostname: wrtag
     restart: unless-stopped
@@ -30,8 +31,6 @@ services:
       - no-new-privileges:true
     networks:
       - t3_proxy
-    ports:
-      - "127.0.0.1:9091:80"
     volumes:
       # Database and job queue
       - /mnt/fast/appdata/media/wrtag/data:/data

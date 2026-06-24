@@ -1,7 +1,7 @@
 services:
   rybbit:
     # renovate: datasource=docker depName=ghcr.io/rybbit-io/rybbit
-    image: ghcr.io/rybbit-io/rybbit:latest
+    image: ghcr.io/rybbit-io/rybbit:v2.6.0
     container_name: rybbit
     restart: unless-stopped
     env_file:
@@ -40,13 +40,13 @@ services:
         condition: service_healthy
 
   rybbit_postgres:
-    image: postgres:17-alpine
+    image: postgres:18-alpine
     container_name: rybbit_postgres
     restart: unless-stopped
     networks:
       - social
     volumes:
-      - rybbit_postgres:/var/lib/postgresql/data
+      - rybbit_postgres:/var/lib/postgresql
     environment:
       - POSTGRES_PASSWORD=${RYBBIT_POSTGRES_PASSWORD:-rybbit}
       - POSTGRES_USER=${RYBBIT_POSTGRES_USER:-rybbit}

@@ -1,7 +1,7 @@
 services:
   booklore:
     # renovate: datasource=docker depName=ghcr.io/booklore-app/booklore
-    image: ghcr.io/booklore-app/booklore:latest
+    image: ghcr.io/booklore-app/booklore:v2.3.0
     container_name: booklore
     restart: unless-stopped
     env_file:
@@ -39,13 +39,13 @@ services:
         condition: service_healthy
 
   booklore_postgres:
-    image: postgres:17-alpine
+    image: postgres:18-alpine
     container_name: booklore_postgres
     restart: unless-stopped
     networks:
       - books
     volumes:
-      - booklore_postgres:/var/lib/postgresql/data
+      - booklore_postgres:/var/lib/postgresql
     environment:
       - POSTGRES_DB=${BOOKLORE_POSTGRES_DB:-booklore}
       - POSTGRES_USER=${BOOKLORE_POSTGRES_USER:-booklore}

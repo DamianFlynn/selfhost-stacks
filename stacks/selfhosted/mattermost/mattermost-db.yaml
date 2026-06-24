@@ -7,7 +7,7 @@
 services:
 
   mattermost-db:
-    image: postgres:16-alpine
+    image: postgres:18-alpine
     container_name: mattermost-db
     hostname: mattermost-db
     restart: unless-stopped
@@ -20,7 +20,7 @@ services:
       POSTGRES_USER: ${MATTERMOST_DB_USER:-mattermost}
       POSTGRES_PASSWORD: ${MATTERMOST_DB_PASSWORD}
     volumes:
-      - mattermost_db_data:/var/lib/postgresql/data
+      - mattermost_db_data:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${MATTERMOST_DB_USER:-mattermost} -d ${MATTERMOST_DB_NAME:-mattermost}"]
       interval: 10s

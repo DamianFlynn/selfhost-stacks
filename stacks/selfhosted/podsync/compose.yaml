@@ -24,7 +24,7 @@ services:
   podsync:
     hostname: "podsync"
     container_name: podsync
-    image: ghcr.io/mxpv/podsync:nightly
+    image: ghcr.io/mxpv/podsync:v2.8.0
     restart: 'unless-stopped'
     user: "568:568"
     ports:

@@ -1,7 +1,7 @@
 services:
   romm:
     # renovate: datasource=docker depName=rommapp/romm
-    image: rommapp/romm:latest
+    image: rommapp/romm:4.9.2
     container_name: romm
     restart: unless-stopped
     env_file:

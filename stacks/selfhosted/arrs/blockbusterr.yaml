@@ -33,7 +33,7 @@
 
 services:
   blockbusterr:
-    image: ghcr.io/mahcks/blockbusterr:latest
+    image: ghcr.io/mahcks/blockbusterr:v1.4.0
     container_name: blockbusterr
     restart: unless-stopped
     security_opt:

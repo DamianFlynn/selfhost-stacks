@@ -17,7 +17,7 @@ networks:
 services:
   # Main web application for archiving and managing digital content
   open-archiver:
-    image: logiclabshq/open-archiver:latest
+    image: logiclabshq/open-archiver:v0.5.0
     container_name: open-archiver
     hostname: archiver
     restart: unless-stopped
@@ -50,7 +50,7 @@ services:
 
   # PostgreSQL database for storing application data
   postgres:
-    image: postgres:17-alpine
+    image: postgres:18-alpine
     container_name: open-archiver_postgres
     hostname: postgres
     restart: unless-stopped
@@ -59,7 +59,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-admin}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
     volumes:
-      - /mnt/fast/appdata/open-archiver/postgres:/var/lib/postgresql/data
+      - /mnt/fast/appdata/open-archiver/postgres:/var/lib/postgresql
     networks:
       - open-archiver
     security_opt:
@@ -81,7 +81,7 @@ services:
 # Fast search engine for full-text search across archived content
   
   meilisearch:
-    image: getmeili/meilisearch:v1.46
+    image: getmeili/meilisearch:v1.48
     container_name: open-archiver_meilisearch
     hostname: meilisearch
     restart: unless-stopped
