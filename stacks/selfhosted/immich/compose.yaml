@@ -119,8 +119,8 @@ services:
 
   # Immich Kiosk - Display mode for photo slideshows
   immich-kiosk:
-    # renovate: datasource=docker depName=damongolding/immich-kiosk
-    image: damongolding/immich-kiosk:0.17.2
+    # renovate: datasource=docker depName=ghcr.io/damongolding/immich-kiosk
+    image: ghcr.io/damongolding/immich-kiosk:0.39.3
     container_name: immich_kiosk
     restart: unless-stopped
     env_file:
