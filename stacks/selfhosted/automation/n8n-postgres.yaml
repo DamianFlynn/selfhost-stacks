@@ -25,7 +25,7 @@ services:
       - POSTGRES_USER=n8n
       - POSTGRES_PASSWORD=${N8N_DB_PASSWORD}
     volumes:
-      - ${APPDATA_DIR}/automation/n8n-postgres:/var/lib/postgresql/data
+      - ${APPDATA_DIR}/automation/n8n-postgres:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U n8n -d n8n"]
       interval: 10s

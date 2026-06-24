@@ -59,7 +59,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-admin}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
     volumes:
-      - /mnt/fast/appdata/open-archiver/postgres:/var/lib/postgresql/data
+      - /mnt/fast/appdata/open-archiver/postgres:/var/lib/postgresql
     networks:
       - open-archiver
     security_opt:

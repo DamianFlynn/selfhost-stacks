@@ -47,32 +47,108 @@ migrate_pg() {
   fi
 
   # Show current PG version
-  local old_ver
-  old_ver=$(docker exec "$container" psql -U postgres -tAc "SHOW server_version;" 2>/dev/null || \
-            docker exec "$container" sh -c 'psql -U "$(echo ${POSTGRES_USER:-postgres})" -tAc "SHOW server_version;"' 2>/dev/null || echo "unknown")
-  echo "  Current version: $old_ver"
+  local old_ver dump_user restore_user
+  old_ver=$(docker exec "$container" sh -c \
+    'psql -U "${POSTGRES_USER:-postgres}" -tAc "SHOW server_version;" 2>/dev/null || echo unknown')
+  dump_user=$(docker exec "$container" sh -c 'echo ${POSTGRES_USER:-postgres}' 2>/dev/null || echo "postgres")
+  restore_user="$dump_user"
+  echo "  Current version: $old_ver  (user: $dump_user)"
 
   # 1. Dump all databases
   echo "  → Dumping to $backup ..."
-  docker exec "$container" pg_dumpall -U postgres > "$backup" 2>/dev/null || \
-    docker exec "$container" sh -c \
-      'pg_dumpall -U "$(echo ${POSTGRES_USER:-postgres})"' > "$backup"
+  docker exec "$container" pg_dumpall -U "$dump_user" > "$backup"
   echo "  → Dump complete ($(du -sh "$backup" | cut -f1))"
 
-  # 2. Stop all services in the stack that depend on this postgres
+  # 2. Locate the data directory on the host so we can clear it for PG18.
+  #
+  # PG18 Docker images changed their storage layout: they expect the volume
+  # mounted at /var/lib/postgresql and init data inside a versioned subdir
+  # (e.g. 18/docker/ for Alpine, 18/main/ for Debian).  Old data at the
+  # volume root triggers a "PostgreSQL data already here" abort.
+  #
+  # Three mount patterns to handle:
+  #   a) Direct bind mount at /var/lib/postgresql/data (pre-PG18 standard)
+  #   b) Direct bind mount at /var/lib/postgresql (PG18 standard)
+  #   c) Named volume (type: none, o: bind) — Docker reports Type=volume but
+  #      the real data is at the "device" path in the volume options, NOT at
+  #      /var/lib/docker/volumes/…/_data.  We must use `docker volume inspect`
+  #      to find the actual host path.
+  local pgdata_src
+  pgdata_src=""
+
+  # Case a: direct bind at /var/lib/postgresql/data
+  pgdata_src=$(docker inspect "$container" \
+    --format '{{range .Mounts}}{{if and (eq .Type "bind") (eq .Destination "/var/lib/postgresql/data")}}{{.Source}}{{end}}{{end}}' \
+    2>/dev/null || echo "")
+
+  # Case b: direct bind at /var/lib/postgresql
+  if [ -z "$pgdata_src" ]; then
+    pgdata_src=$(docker inspect "$container" \
+      --format '{{range .Mounts}}{{if and (eq .Type "bind") (eq .Destination "/var/lib/postgresql")}}{{.Source}}{{end}}{{end}}' \
+      2>/dev/null || echo "")
+  fi
+
+  # Case c: named volume (look up the real device path)
+  if [ -z "$pgdata_src" ]; then
+    local vol_name
+    vol_name=$(docker inspect "$container" \
+      --format '{{range .Mounts}}{{if and (eq .Type "volume") (eq .Destination "/var/lib/postgresql/data")}}{{.Name}}{{end}}{{end}}' \
+      2>/dev/null || echo "")
+    if [ -z "$vol_name" ]; then
+      vol_name=$(docker inspect "$container" \
+        --format '{{range .Mounts}}{{if and (eq .Type "volume") (eq .Destination "/var/lib/postgresql")}}{{.Name}}{{end}}{{end}}' \
+        2>/dev/null || echo "")
+    fi
+    if [ -n "$vol_name" ]; then
+      # Bind-type named volume? Check for a "device" option.
+      local dev_path
+      dev_path=$(docker volume inspect "$vol_name" \
+        --format '{{index .Options "device"}}' 2>/dev/null || echo "")
+      if [ -n "$dev_path" ]; then
+        pgdata_src="$dev_path"
+        echo "  → Named volume $vol_name → bind device: $pgdata_src"
+      else
+        pgdata_src=$(docker volume inspect "$vol_name" --format '{{.Mountpoint}}' 2>/dev/null || echo "")
+        echo "  → Named volume $vol_name → Docker-managed: $pgdata_src"
+      fi
+    fi
+  fi
+
+  # 3. Stop all services in the stack that depend on this postgres
   echo "  → Stopping stack ..."
   docker compose -f "${stack_dir}/${compose_file}" stop
 
-  # 3. Remove old container (volume is preserved)
+  # 4. Remove old container (volume data is preserved on the host)
   echo "  → Removing old container ..."
   docker rm "$container" 2>/dev/null || true
 
-  # 4. Pull new image and start PG18
+  # 4b. Clear old PG data so PG18 can initialise a fresh cluster, then restore.
+  #
+  # PG18 stores data inside a versioned subdirectory (18/ for PG18).  The
+  # postgres:18-alpine entrypoint runs two phases:
+  #   1. As root: creates 18/ (mode 0770 due to root umask 007), then re-execs
+  #      as the postgres user (UID 70 on Alpine, 999 on Debian).
+  #   2. As postgres: mkdir -p 18/docker — but 18/ is root:root 0770 at this
+  #      point, so "others" (UID 70) cannot traverse it → Permission denied.
+  #
+  # Fix: pre-create 18/ with chmod 777 BEFORE starting the container.  When
+  # root's mkdir -p finds 18/ already exists, it skips creation (and thus does
+  # not reset the mode), so UID 70 can still traverse it on the second pass.
+  if [ -n "$pgdata_src" ] && [ -d "$pgdata_src" ]; then
+    echo "  → Clearing old data at: $pgdata_src"
+    find "${pgdata_src:?}" -mindepth 1 -delete
+    chmod 755 "${pgdata_src:?}"
+    mkdir -p "${pgdata_src:?}/18"
+    chmod 777 "${pgdata_src:?}/18"
+    echo "  → Pre-created 18/ with 0777 (world-traversable for UID 70/999)"
+  fi
+
+  # 5. Pull new image and start PG18
   echo "  → Starting PG18 container ..."
   docker compose -f "${stack_dir}/${compose_file}" pull "$pg_service"
   docker compose -f "${stack_dir}/${compose_file}" up -d "$pg_service"
 
-  # 5. Wait for PG18 to be ready
+  # 6. Wait for PG18 to be ready
   echo "  → Waiting for PG18 to accept connections ..."
   local attempts=0
   until docker exec "$container" pg_isready -q 2>/dev/null; do
@@ -86,22 +162,21 @@ migrate_pg() {
   done
   echo "  → PG18 is ready"
 
-  # 6. Restore
+  # 7. Restore
+  # Always connect to 'postgres' as the initial database — pg_dumpall output
+  # begins with \connect commands that switch databases, and the custom
+  # POSTGRES_USER database may not yet exist at connect time.
   echo "  → Restoring dump ..."
-  docker exec -i "$container" psql -U postgres < "$backup" 2>/dev/null || \
-    docker exec -i "$container" sh -c \
-      'psql -U "$(echo ${POSTGRES_USER:-postgres})"' < "$backup"
+  docker exec -i "$container" psql -U "$restore_user" -d postgres < "$backup"
   echo "  → Restore complete"
 
-  # 7. Optional extra SQL (e.g. ALTER EXTENSION vector UPDATE)
+  # 8. Optional extra SQL (e.g. ALTER EXTENSION vector UPDATE)
   if [ -n "$extra_sql" ]; then
     echo "  → Running post-restore SQL: $extra_sql"
-    docker exec "$container" psql -U postgres -c "$extra_sql" 2>/dev/null || \
-      docker exec "$container" sh -c \
-        "psql -U \"\$(echo \${POSTGRES_USER:-postgres})\" -c \"${extra_sql}\""
+    docker exec "$container" psql -U "$restore_user" -d postgres -c "$extra_sql"
   fi
 
-  # 8. Start remaining services
+  # 9. Start remaining services
   echo "  → Starting remaining services ..."
   docker compose -f "${stack_dir}/${compose_file}" up -d
 
@@ -120,34 +195,38 @@ do_openwebui() {
 }
 
 do_jellystat() {
+  # jellystat.yaml is included by media/compose.yaml which defines t3_proxy network
   migrate_pg \
     "jellystat-db" \
     "$STACKS/media" \
-    "jellystat.yaml" \
+    "compose.yaml" \
     "jellystat-db"
 }
 
 do_n8n() {
+  # n8n-postgres.yaml is included by automation/compose.yaml
   migrate_pg \
     "n8n-db" \
     "$STACKS/automation" \
-    "n8n-postgres.yaml" \
+    "compose.yaml" \
     "n8n-db"
 }
 
 do_pwpush() {
+  # pwpush.yaml is included by automation/compose.yaml
   migrate_pg \
     "pwpush-db" \
     "$STACKS/automation" \
-    "pwpush.yaml" \
+    "compose.yaml" \
     "pwpush-db"
 }
 
 do_mattermost() {
+  # mattermost-db.yaml is included by mattermost/compose.yaml which defines network
   migrate_pg \
     "mattermost-db" \
     "$STACKS/mattermost" \
-    "mattermost-db.yaml" \
+    "compose.yaml" \
     "mattermost-db"
 }
 
@@ -155,7 +234,7 @@ do_booklore() {
   migrate_pg \
     "booklore_postgres" \
     "$STACKS/books" \
-    "booklore.yaml" \
+    "compose.yaml" \
     "booklore_postgres"
 }
 
@@ -163,7 +242,7 @@ do_paperless() {
   migrate_pg \
     "paperless_postgres" \
     "$STACKS/documents" \
-    "paperless.yaml" \
+    "compose.yaml" \
     "paperless_postgres"
 }
 
@@ -184,10 +263,11 @@ do_open_archiver() {
 }
 
 do_postiz() {
+  # postiz.yaml is included by postiz/compose.yaml which defines volumes
   migrate_pg \
     "postiz_postgres" \
     "$STACKS/postiz" \
-    "postiz.yaml" \
+    "compose.yaml" \
     "postiz_postgres"
 }
 
@@ -195,15 +275,16 @@ do_calcom() {
   migrate_pg \
     "calcom_postgres" \
     "$STACKS/saas" \
-    "calcom.yaml" \
+    "compose.yaml" \
     "calcom_postgres"
 }
 
 do_social_postiz() {
+  # social/compose.yaml is self-contained (defines networks+volumes inline)
   migrate_pg \
     "postiz_postgres" \
     "$STACKS/social" \
-    "postiz.yaml" \
+    "compose.yaml" \
     "postiz_postgres"
 }
 
@@ -211,7 +292,7 @@ do_rybbit() {
   migrate_pg \
     "rybbit_postgres" \
     "$STACKS/social" \
-    "rybbit.yaml" \
+    "compose.yaml" \
     "rybbit_postgres"
 }
 
@@ -219,14 +300,14 @@ do_teleport() {
   migrate_pg \
     "teleport_postgres" \
     "$STACKS/teleport" \
-    "teleport.yaml" \
+    "compose.yaml" \
     "teleport_postgres"
 }
 
 # ─── dispatch ─────────────────────────────────────────────────────────────────
 
 run_all() {
-  echo "Running all PG migrations in order (PG15 → PG16 → PG17)"
+  echo "Running all PG migrations in order (PG15 → PG16 → PG17 → PG18)"
   echo "Backups will be saved to: $BACKUP_DIR"
   echo ""
   # PG15 first (most behind)

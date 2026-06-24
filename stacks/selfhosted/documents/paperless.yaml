@@ -77,7 +77,7 @@ services:
     networks:
       - documents
     volumes:
-      - paperless_postgres:/var/lib/postgresql/data
+      - paperless_postgres:/var/lib/postgresql
     environment:
       - POSTGRES_DB=${PAPERLESS_DBNAME:-paperless}
       - POSTGRES_USER=${PAPERLESS_DBUSER:-paperless}

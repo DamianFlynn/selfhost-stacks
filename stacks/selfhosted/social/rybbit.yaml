@@ -46,7 +46,7 @@ services:
     networks:
       - social
     volumes:
-      - rybbit_postgres:/var/lib/postgresql/data
+      - rybbit_postgres:/var/lib/postgresql
     environment:
       - POSTGRES_PASSWORD=${RYBBIT_POSTGRES_PASSWORD:-rybbit}
       - POSTGRES_USER=${RYBBIT_POSTGRES_USER:-rybbit}

@@ -31,7 +31,7 @@ services:
     container_name: "pwpush-db"
     image: docker.io/postgres:18
     volumes:
-      - /mnt/fast/appdata/automation/pwpush/db:/var/lib/postgresql/data
+      - /mnt/fast/appdata/automation/pwpush/db:/var/lib/postgresql
     ports:
       - "5432:5432"
     networks:
