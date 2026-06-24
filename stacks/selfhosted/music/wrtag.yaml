@@ -30,8 +30,6 @@ services:
       - no-new-privileges:true
     networks:
       - t3_proxy
-    ports:
-      - "127.0.0.1:9091:80"
     volumes:
       # Database and job queue
       - /mnt/fast/appdata/media/wrtag/data:/data
