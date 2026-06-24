@@ -129,9 +129,9 @@ services:
       - t3_proxy
       - immich
     environment:
-      # Immich connection
-      - IMMICH_URL=${IMMICH_KIOSK_URL:-http://immich_server:2283}
-      - IMMICH_API_KEY=${IMMICH_KIOSK_API_KEY}
+      # Immich connection (v0.14+ uses KIOSK_ prefix for all env vars)
+      - KIOSK_IMMICH_URL=${IMMICH_KIOSK_URL:-http://immich_server:2283}
+      - KIOSK_IMMICH_API_KEY=${IMMICH_KIOSK_API_KEY}
       
       # Kiosk settings
       - KIOSK_SHOW_TIME=${KIOSK_SHOW_TIME:-true}
