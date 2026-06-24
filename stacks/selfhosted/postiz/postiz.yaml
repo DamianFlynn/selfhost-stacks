@@ -47,6 +47,15 @@ services:
       - "traefik.http.routers.postiz.middlewares=chain-authelia@file"
       - "traefik.http.routers.postiz.service=postiz"
       - "traefik.http.services.postiz.loadbalancer.server.port=5000"
+
+      # MCP Router — no Authelia; API key in URL path authenticates the request
+      # Endpoint: https://social.deercrest.info/mcp/<API_KEY>/sse
+      # Get key: Postiz → Settings → Developers → Public API
+      - "traefik.http.routers.postiz-mcp.entrypoints=web,websecure"
+      - "traefik.http.routers.postiz-mcp.rule=Host(`social.deercrest.info`) && PathPrefix(`/mcp`)"
+      - "traefik.http.routers.postiz-mcp.middlewares=chain-no-auth@file"
+      - "traefik.http.routers.postiz-mcp.service=postiz"
+      - "traefik.http.routers.postiz-mcp.priority=10"
     depends_on:
       postiz_postgres:
         condition: service_healthy
