@@ -25,6 +25,11 @@ output "pct_shell" {
   value       = "ssh root@${var.proxmox_host} pct enter ${var.lxc_vmid}"
 }
 
+output "mpe_lxc_ssh" {
+  description = "SSH command to access the MPE LXC (102)"
+  value       = "ssh root@${var.mpe_ip}"
+}
+
 output "verify_commands" {
   description = "Quick verification commands to run after apply"
   value       = <<-EOT

@@ -1,0 +1,33 @@
+# MPE ERPNext - compose.override.yaml
+#
+# Layered on top of the upstream frappe_docker compose files (cloned at deploy
+# time into ./frappe_docker — see README.md). This override:
+#   1. Joins the ERPNext frontend to MPE's mpe_proxy network.
+#   2. Adds Traefik labels so mpe-erp.diginerve.net routes to it (HTTP "web"
+#      entrypoint — Cloudflare edge terminates public TLS via the tunnel).
+#
+# Persistence: uses frappe_docker's DEFAULT named volumes (not host binds).
+# Reason: the frappe/mariadb/redis containers run as UID 1000 / 999, which under
+# this unprivileged LXC's 568-only idmap cannot write a 568-owned bind path.
+# Named volumes let Docker manage ownership. Data lives on the 100 GB LXC disk,
+# protected by Proxmox LXC snapshots + `bench backup`. (To land backups on the
+# ZFS dataset later, schedule `bench backup` + copy into /mnt/fast/appdata/mpe.)
+#
+# Invocation (from README): docker compose ... -f compose.override.yaml ...
+
+services:
+  frontend:
+    networks:
+      - mpe_proxy
+      - default
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=mpe_proxy"
+      - "traefik.http.routers.mpe-erp.rule=Host(`mpe-erp.diginerve.net`)"
+      - "traefik.http.routers.mpe-erp.entrypoints=web"
+      - "traefik.http.routers.mpe-erp.middlewares=mpe-chain-no-auth@file"
+      - "traefik.http.services.mpe-erp.loadbalancer.server.port=8080"
+
+networks:
+  mpe_proxy:
+    external: true
