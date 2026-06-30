@@ -50,8 +50,8 @@ services:
       - WRTAG_LOG_LEVEL=info
       # Path format for compilations (DJ mixes, multi-artist albums)
       # Uses: Compilations/Album (Year)/Disc X/Track - Artist - Title
-      # Year added to disambiguate e.g. "Now 100" volumes with same title
-      - WRTAG_PATH_FORMAT=/music/library/Compilations/{{ .Release.Title | safepath }}{{ if not (eq .ReleaseDisambiguation "") }} ({{ .ReleaseDisambiguation | safepath }}){{ else }} ({{ .Release.Year }}){{ end }}/{{ if gt (len .Release.Media) 1 }}Disc {{ .Media.Position }}/{{ end }}{{ pad0 2 .Track.Position }} - {{ if .IsCompilation }}{{ artistsString .Track.Artists | safepath }} - {{ end }}{{ .Track.Title | safepath }}{{ .Ext }}
+      # Release.Date.Year disambiguates volumes with the same title (e.g. "Now 100" from different years)
+      - WRTAG_PATH_FORMAT=/music/library/Compilations/{{ .Release.Title | safepath }} ({{ .Release.Date.Year }})/{{ if gt (len .Release.Media) 1 }}Disc {{ .Media.Position }}/{{ end }}{{ pad0 2 .Track.Position }} - {{ if .IsCompilation }}{{ artistsString .Track.Artists | safepath }} - {{ end }}{{ .Track.Title | safepath }}{{ .Ext }}
       # Research links for manual verification
       - WRTAG_RESEARCH_LINK=https://www.discogs.com/search/?q={query},https://musicbrainz.org/search?query={query}
     labels:
