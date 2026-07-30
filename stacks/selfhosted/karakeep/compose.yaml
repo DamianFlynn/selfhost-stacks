@@ -74,32 +74,49 @@ services:
     networks:
       - default
 
-  mcp:
-    container_name: karakeep-mcp
-    hostname: karakeep-mcp
-    # renovate: datasource=docker depName=ghcr.io/karakeep-app/karakeep-mcp
-    image: ghcr.io/karakeep-app/karakeep-mcp:0.31.0
-    restart: unless-stopped
-    volumes:
-      - /mnt/fast/appdata/hoarder/karakeep/data:/data
-    env_file:
-      - .env
-    environment:
-      DATA_DIR: /data
-    depends_on:
-      - web
-    networks:
-      - default
-      - t3_proxy
-    ports:
-      - 127.0.0.1:3004:3001
-    labels:
-      - traefik.enable=true
-      - traefik.http.routers.karakeep-mcp.rule=Host(`karakeep-mcp.${DOMAINNAME}`)
-      - traefik.http.routers.karakeep-mcp.entrypoints=web,websecure
-      - traefik.http.routers.karakeep-mcp.tls=true
-      - traefik.http.routers.karakeep-mcp.tls.certresolver=dns-cloudflare
-      - traefik.http.services.karakeep-mcp.loadbalancer.server.port=3001
+  # DISABLED 2026-07-30 -- karakeep-mcp is a STDIO MCP server, not an HTTP one.
+  #
+  # It is designed to be launched on demand by an MCP client (Claude Desktop etc.)
+  # via `docker run` with stdin attached, per
+  # https://docs.karakeep.app/integrations/mcp/ -- the only documented settings are
+  # KARAKEEP_API_ADDR and KARAKEEP_API_KEY. There is no HTTP transport or port option.
+  #
+  # Run as a long-lived service with no stdin it gets EOF immediately and exits 0,
+  # producing a silent restart loop (71 restarts observed, zero log output). The
+  # `ports:` and traefik labels below implied an HTTP server that this image does not
+  # provide, and KARAKEEP_API_ADDR / KARAKEEP_API_KEY were never set either.
+  #
+  # Streamable HTTP support exists only in an UNMERGED upstream PR:
+  #   https://github.com/karakeep-app/karakeep/pull/1971
+  # Re-enable this (with the transport flag and API vars) once that ships in a release.
+  #
+  # mcp:
+  #   container_name: karakeep-mcp
+  #   hostname: karakeep-mcp
+  #   # renovate: datasource=docker depName=ghcr.io/karakeep-app/karakeep-mcp
+  #   image: ghcr.io/karakeep-app/karakeep-mcp:0.31.0
+  #   restart: unless-stopped
+  #   volumes:
+  #     - /mnt/fast/appdata/hoarder/karakeep/data:/data
+  #   env_file:
+  #     - .env
+  #   environment:
+  #     DATA_DIR: /data
+  #   depends_on:
+  #     - web
+  #   networks:
+  #     - default
+  #     - t3_proxy
+  #   ports:
+  #     - 127.0.0.1:3004:3001
+  #   labels:
+  #     - traefik.enable=true
+  #     - traefik.http.routers.karakeep-mcp.rule=Host(`karakeep-mcp.${DOMAINNAME}`)
+  #     - traefik.http.routers.karakeep-mcp.entrypoints=web,websecure
+  #     - traefik.http.routers.karakeep-mcp.tls=true
+  #     - traefik.http.routers.karakeep-mcp.tls.certresolver=dns-cloudflare
+  #     - traefik.http.services.karakeep-mcp.loadbalancer.server.port=3001
+
   chrome:
     container_name: karakeep-chrome
     # renovate: datasource=docker depName=gcr.io/zenika-hub/alpine-chrome
