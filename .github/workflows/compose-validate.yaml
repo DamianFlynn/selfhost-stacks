@@ -14,9 +14,15 @@ jobs:
         run: |
           # Create directory structure matching server paths
           sudo mkdir -p /mnt/fast/stacks/stacks/selfhosted/{code-server,immich}
-          # Copy .env.sample to expected .env locations
+          # Copy .env.sample to expected .env locations (satisfies `env_file:` absolute paths)
           sudo cp stacks/selfhosted/code-server/.env.sample /mnt/fast/stacks/stacks/selfhosted/code-server/.env
           sudo cp stacks/selfhosted/immich/.env.sample /mnt/fast/stacks/stacks/selfhosted/immich/.env
+          # Also place .env in each project directory. `env_file:` only injects vars into the
+          # container -- it does NOT feed ${VAR} interpolation in the compose file itself, which
+          # reads the .env next to the compose file. Without this, ${DB_DATA_LOCATION} resolves
+          # to an empty string and `config` fails on ":/var/lib/postgresql/data".
+          cp stacks/selfhosted/code-server/.env.sample stacks/selfhosted/code-server/.env
+          cp stacks/selfhosted/immich/.env.sample stacks/selfhosted/immich/.env
       
       - name: Validate code-server compose
         run: docker compose -f stacks/selfhosted/code-server/compose.yaml config >/dev/null
