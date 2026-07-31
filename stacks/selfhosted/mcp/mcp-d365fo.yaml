@@ -1,6 +1,6 @@
 services:
   mcp-d365fo:
-    image: ghcr.io/mafzaal/d365fo-client:v0.3.7
+    image: ghcr.io/mafzaal/d365fo-client:0.3.8
     container_name: mcp-d365fo
     restart: unless-stopped
     
