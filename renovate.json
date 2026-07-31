@@ -4,7 +4,8 @@
     "config:recommended"
   ],
   "pinDigests": false,
-  "// internalChecksFilter": "Do NOT hold updates whose release age cannot be determined. minimumReleaseAge needs a release timestamp, which GHCR/quay/lscr/ECR do not reliably expose. With the default 'strict', every non-Docker-Hub image sat in the Dependency Dashboard's 'Pending Status Checks' forever -- 30 updates stuck, including immich, karakeep, open-webui and keeper, while Docker Hub images updated normally.",
+  "// minimumReleaseAge": "REMOVED deliberately -- do not reinstate without reading this. It requires a release timestamp, which GHCR/quay/lscr/ECR do not reliably expose. When the age cannot be determined Renovate leaves the 'renovate/stability-days' status check PENDING FOREVER, not just for the configured window. Observed 2026-07-30: booklore v2.3.1 and d365fo-client v0.3.8 (both months old) reported 'Updates have not met minimum release age requirement'. That pending check makes every PR UNSTABLE, which blocks automerge, and under the default internalChecksFilter it also stopped the PRs being created at all -- 30 updates frozen on the Dependency Dashboard, 25 of them GHCR, while Docker Hub images flowed normally.",
+  "// internalChecksFilter": "Belt-and-braces alongside removing minimumReleaseAge: never withhold PR creation because an internal check cannot be satisfied.",
   "internalChecksFilter": "none",
   "enabledManagers": [
     "docker-compose",
@@ -56,8 +57,7 @@
       "platformAutomerge": true,
       "schedule": [
         "at any time"
-      ],
-      "minimumReleaseAge": "1 hour"
+      ]
     },
     {
       "description": "Default: Auto-merge minor updates for all Docker images",
@@ -75,8 +75,22 @@
       "platformAutomerge": true,
       "schedule": [
         "at any time"
+      ]
+    },
+    {
+      "description": "wrtag: HOLD at v0.20.x -- v0.30.0 changed path-format fields. WRTAG_PATH_FORMAT in stacks/selfhosted/music/wrtag.yaml uses .Release.Date.Year, .Release.Media, .Track.Position and artistsString, which that release reworked. PR #191 was already a rollback for exactly this. Rewrite the path-format first, then raise allowedVersions. Without this rule the automerge rules above would silently land v0.33.0 and break music tagging again.",
+      "matchDatasources": [
+        "docker"
       ],
-      "minimumReleaseAge": "3 hours"
+      "matchPackageNames": [
+        "sentriz/wrtag"
+      ],
+      "allowedVersions": "<0.30.0",
+      "addLabels": [
+        "stack:music",
+        "pinned",
+        "manual-update-only"
+      ]
     },
     {
       "description": "Security: Pin digests for security-critical components",
@@ -464,7 +478,6 @@
   "// prConcurrentLimit": "Raised from the config:recommended default of 10. Major updates are automerge:false by design and sit open awaiting review; at a limit of 10 those permanently occupy slots and eventually block ALL other updates -- which is how the pipeline jammed in 2026-07.",
   "prConcurrentLimit": 20,
   "prHourlyLimit": 6,
-  "minimumReleaseAge": "3 hours",
   "schedule": [
     "at any time"
   ]
