@@ -55,7 +55,7 @@ services:
     tty: true
     entrypoint: web-entrypoint.sh
     command: ['bin/rails', 'server', '-p', '3000', '-b', '::']
-    restart: on-failure
+    restart: unless-stopped
     environment:
       RAILS_ENV: ${RAILS_ENV}
       REDIS_URL: redis://dawarich_redis:6379
@@ -123,7 +123,7 @@ services:
     tty: true
     entrypoint: sidekiq-entrypoint.sh
     command: ['sidekiq']
-    restart: on-failure
+    restart: unless-stopped
     environment:
       RAILS_ENV: ${RAILS_ENV}
       REDIS_URL: redis://dawarich_redis:6379

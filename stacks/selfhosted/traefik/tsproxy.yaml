@@ -26,6 +26,7 @@ services:
     container_name: tsbridge
     # renovate: datasource=docker depName=ghcr.io/jtdowney/tsbridge
     image: ghcr.io/jtdowney/tsbridge:v0.13.1
+    restart: unless-stopped
     command: ["--provider", "docker"]
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock # Required for label discovery

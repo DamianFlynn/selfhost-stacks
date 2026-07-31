@@ -25,6 +25,7 @@ services:
   postgres:
     container_name: cal-postgres
     image: postgres:18
+    restart: unless-stopped
     environment:
       POSTGRES_USER: keeper
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -42,6 +43,7 @@ services:
   redis:
     container_name: cal-redis
     image: redis:7-alpine
+    restart: unless-stopped
     volumes:
       - /mnt/fast/appdata/automation/keeper/redis:/data
     healthcheck:
