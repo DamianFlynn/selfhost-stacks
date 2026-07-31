@@ -40,7 +40,19 @@ services:
       - "8084:8080"
     volumes:
       - /mnt/fast/appdata/arrs/sabnzbd/config:/config:rw  # Application config, queue, and history database
-      - /mnt/fast/appdata/arrs/sabnzbd/arr-scripts:/custom-cont-init.d  # Post-processing scripts
+      # Init scripts. NOTE (2026-07-31): arr-scripts/scripts_init.bash is a VENDORED copy of
+      # RandomNinjaAtk/arr-scripts sabnzbd/setup.bash v3.2, with the blocks that download and
+      # overwrite /config/scripts/{video,audio,audiobook}.bash removed. It no longer does
+      # `curl <upstream> | bash` on every container start.
+      #
+      # Why: SABnzbd 5.0 runs post-processing scripts for FAILED jobs too (empty_postproc was
+      # removed upstream), and arr-scripts has no job-status check. Those three scripts now carry
+      # a local SAB_PP_STATUS guard, and are only durable because setup no longer re-downloads
+      # them. Restoring the stock setup.bash silently reverts the guard and lets failed
+      # downloads be post-processed into the library.
+      #
+      # The scripts live in /config/scripts (persistent) -- see each file's header for provenance.
+      - /mnt/fast/appdata/arrs/sabnzbd/arr-scripts:/custom-cont-init.d  # Post-processing scripts (vendored, see above)
       - /mnt/tank/downloads:/downloads:rw  # Download output directory (incomplete and complete)
     environment:
       PUID: $PUID
