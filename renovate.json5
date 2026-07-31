@@ -4,8 +4,18 @@
     "config:recommended"
   ],
   "pinDigests": false,
-  "// minimumReleaseAge": "REMOVED deliberately -- do not reinstate without reading this. It requires a release timestamp, which GHCR/quay/lscr/ECR do not reliably expose. When the age cannot be determined Renovate leaves the 'renovate/stability-days' status check PENDING FOREVER, not just for the configured window. Observed 2026-07-30: booklore v2.3.1 and d365fo-client v0.3.8 (both months old) reported 'Updates have not met minimum release age requirement'. That pending check makes every PR UNSTABLE, which blocks automerge, and under the default internalChecksFilter it also stopped the PRs being created at all -- 30 updates frozen on the Dependency Dashboard, 25 of them GHCR, while Docker Hub images flowed normally.",
-  "// internalChecksFilter": "Belt-and-braces alongside removing minimumReleaseAge: never withhold PR creation because an internal check cannot be satisfied.",
+  // minimumReleaseAge:
+  // REMOVED deliberately -- do not reinstate without reading this. It requires a release timestamp,
+  // which GHCR/quay/lscr/ECR do not reliably expose. When the age cannot be determined Renovate
+  // leaves the 'renovate/stability-days' status check PENDING FOREVER, not just for the configured
+  // window. Observed 2026-07-30: booklore v2.3.1 and d365fo-client v0.3.8 (both months old) reported
+  // 'Updates have not met minimum release age requirement'. That pending check makes every PR
+  // UNSTABLE, which blocks automerge, and under the default internalChecksFilter it also stopped the
+  // PRs being created at all -- 30 updates frozen on the Dependency Dashboard, 25 of them GHCR,
+  // while Docker Hub images flowed normally.
+  // internalChecksFilter:
+  // Belt-and-braces alongside removing minimumReleaseAge: never withhold PR creation because an
+  // internal check cannot be satisfied.
   "internalChecksFilter": "none",
   "enabledManagers": [
     "docker-compose",
@@ -475,7 +485,10 @@
       ]
     }
   ],
-  "// prConcurrentLimit": "Raised from the config:recommended default of 10. Major updates are automerge:false by design and sit open awaiting review; at a limit of 10 those permanently occupy slots and eventually block ALL other updates -- which is how the pipeline jammed in 2026-07.",
+  // prConcurrentLimit:
+  // Raised from the config:recommended default of 10. Major updates are automerge:false by design
+  // and sit open awaiting review; at a limit of 10 those permanently occupy slots and eventually
+  // block ALL other updates -- which is how the pipeline jammed in 2026-07.
   "prConcurrentLimit": 20,
   "prHourlyLimit": 6,
   "schedule": [
