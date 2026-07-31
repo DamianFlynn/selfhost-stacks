@@ -1,6 +1,6 @@
 services:
   mcp-atlassian:
-    image: ghcr.io/sooperset/mcp-atlassian:0.21
+    image: ghcr.io/sooperset/mcp-atlassian:0.23
     container_name: mcp-atlassian
     restart: unless-stopped
     
