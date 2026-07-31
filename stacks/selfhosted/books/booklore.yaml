@@ -1,7 +1,7 @@
 services:
   booklore:
     # renovate: datasource=docker depName=ghcr.io/booklore-app/booklore
-    image: ghcr.io/booklore-app/booklore:v2.3.0
+    image: ghcr.io/booklore-app/booklore:v2.3.1
     container_name: booklore
     restart: unless-stopped
     env_file:
