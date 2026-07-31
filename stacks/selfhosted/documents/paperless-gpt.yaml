@@ -14,22 +14,33 @@ services:
       - PAPERLESS_BASE_URL=http://paperless:8000
       - PAPERLESS_API_TOKEN=${PAPERLESS_GPT_API_TOKEN}
       
-      # OpenAI/LLM configuration
+      # LLM configuration.
+      # NOTE: paperless-gpt >= v0.2x uses LLM_PROVIDER + LLM_MODEL. The older
+      # OPENAI_MODEL / OPENAI_BASE_URL pair is NOT read any more -- without
+      # LLM_PROVIDER the container exits with:
+      #   fatal msg="Please set the LLM_PROVIDER environment variable."
+      - LLM_PROVIDER=${LLM_PROVIDER:-openai}
+      - LLM_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
-      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-https://api.openai.com/v1}
-      
-      # Optional: Use local LLM (Ollama/OpenClaw)
-      # - OPENAI_BASE_URL=http://172.16.1.160:11434/v1
-      # - OPENAI_MODEL=llama3
-      
-      # Features
-      - AUTO_TAG=${PAPERLESS_GPT_AUTO_TAG:-true}
-      - AUTO_CORRESPONDENT=${PAPERLESS_GPT_AUTO_CORRESPONDENT:-true}
-      - AUTO_DOCUMENT_TYPE=${PAPERLESS_GPT_AUTO_DOCUMENT_TYPE:-true}
-      
-      # Processing
-      - PROCESSING_INTERVAL=${PAPERLESS_GPT_INTERVAL:-300}
+      - LLM_LANGUAGE=${LLM_LANGUAGE:-English}
+
+      # Optional: use a local LLM instead (e.g. the ai-ollama container)
+      # - LLM_PROVIDER=ollama
+      # - LLM_MODEL=qwen2.5:3b
+      # - OLLAMA_HOST=http://ai-ollama:11434
+
+      # Features.
+      # IMPORTANT: AUTO_TAG is the NAME of the paperless tag that triggers auto-processing
+      # (upstream default: paperless-gpt-auto). It is NOT a boolean -- the old value of
+      # "true" made paperless-gpt watch for a tag literally named "true", which it logged as
+      #   Using true as auto tag
+      # AUTO_CORRESPONDENT / AUTO_DOCUMENT_TYPE / PROCESSING_INTERVAL do not exist upstream
+      # and were silently ignored; the real names are AUTO_GENERATE_*. There is no
+      # processing-interval setting upstream at all.
+      - AUTO_TAG=${PAPERLESS_GPT_AUTO_TAG:-paperless-gpt-auto}
+      - AUTO_GENERATE_TAGS=${PAPERLESS_GPT_AUTO_GENERATE_TAGS:-true}
+      - AUTO_GENERATE_CORRESPONDENTS=${PAPERLESS_GPT_AUTO_CORRESPONDENT:-true}
+      - AUTO_GENERATE_DOCUMENT_TYPE=${PAPERLESS_GPT_AUTO_DOCUMENT_TYPE:-true}
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=t3_proxy"
