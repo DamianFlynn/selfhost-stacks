@@ -14,15 +14,21 @@ services:
       - PAPERLESS_BASE_URL=http://paperless:8000
       - PAPERLESS_API_TOKEN=${PAPERLESS_GPT_API_TOKEN}
       
-      # OpenAI/LLM configuration
+      # LLM configuration.
+      # NOTE: paperless-gpt >= v0.2x uses LLM_PROVIDER + LLM_MODEL. The older
+      # OPENAI_MODEL / OPENAI_BASE_URL pair is NOT read any more -- without
+      # LLM_PROVIDER the container exits with:
+      #   fatal msg="Please set the LLM_PROVIDER environment variable."
+      - LLM_PROVIDER=${LLM_PROVIDER:-openai}
+      - LLM_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
-      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-https://api.openai.com/v1}
-      
-      # Optional: Use local LLM (Ollama/OpenClaw)
-      # - OPENAI_BASE_URL=http://172.16.1.160:11434/v1
-      # - OPENAI_MODEL=llama3
-      
+      - LLM_LANGUAGE=${LLM_LANGUAGE:-English}
+
+      # Optional: use a local LLM instead (e.g. the ai-ollama container)
+      # - LLM_PROVIDER=ollama
+      # - LLM_MODEL=qwen2.5:3b
+      # - OLLAMA_HOST=http://ai-ollama:11434
+
       # Features
       - AUTO_TAG=${PAPERLESS_GPT_AUTO_TAG:-true}
       - AUTO_CORRESPONDENT=${PAPERLESS_GPT_AUTO_CORRESPONDENT:-true}
