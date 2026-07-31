@@ -4,6 +4,8 @@
     "config:recommended"
   ],
   "pinDigests": false,
+  "// internalChecksFilter": "Do NOT hold updates whose release age cannot be determined. minimumReleaseAge needs a release timestamp, which GHCR/quay/lscr/ECR do not reliably expose. With the default 'strict', every non-Docker-Hub image sat in the Dependency Dashboard's 'Pending Status Checks' forever -- 30 updates stuck, including immich, karakeep, open-webui and keeper, while Docker Hub images updated normally.",
+  "internalChecksFilter": "none",
   "enabledManagers": [
     "docker-compose",
     "dockerfile"
@@ -12,7 +14,7 @@
     "managerFilePatterns": [
       "(^|/)(compose\\.ya?ml|docker-compose\\.ya?ml)$",
       "/(^|/)(compose\\.ya?ml|docker-compose\\.ya?ml)$/",
-      "/stacks/selfhosted/.*\.ya?ml$/"
+      "/stacks/selfhosted/.*\\.ya?ml$/"
     ]
   },
   "labels": [
@@ -459,6 +461,8 @@
       ]
     }
   ],
+  "// prConcurrentLimit": "Raised from the config:recommended default of 10. Major updates are automerge:false by design and sit open awaiting review; at a limit of 10 those permanently occupy slots and eventually block ALL other updates -- which is how the pipeline jammed in 2026-07.",
+  "prConcurrentLimit": 20,
   "prHourlyLimit": 6,
   "minimumReleaseAge": "3 hours",
   "schedule": [
