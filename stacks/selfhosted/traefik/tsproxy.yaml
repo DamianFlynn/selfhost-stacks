@@ -25,7 +25,7 @@ services:
   tsbridge:
     container_name: tsbridge
     # renovate: datasource=docker depName=ghcr.io/jtdowney/tsbridge
-    image: ghcr.io/jtdowney/tsbridge:v0.13.1
+    image: ghcr.io/jtdowney/tsbridge:v0.15.0
     restart: unless-stopped
     command: ["--provider", "docker"]
     volumes:
