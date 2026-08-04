@@ -1,5 +1,11 @@
 # Podsync Stack - YouTube/Vimeo to podcast converter
 # Create RSS podcast feeds from video platforms
+#
+# SEE README.md IN THIS DIRECTORY before changing anything about yt-dlp.
+# Short version: podsync's `self_update` cannot work here (fails silently), the bundled yt-dlp
+# goes stale and YouTube then blocks every download. yt-dlp is bind-mounted from appdata and
+# refreshed weekly by the `podsync-ytdlp-update.timer` systemd timer on LXC 100, which runs
+# ./update-ytdlp.sh from this repo.
 
 name: podsync
 
