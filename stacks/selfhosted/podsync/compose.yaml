@@ -31,13 +31,39 @@ services:
       - 18080:8080  # HTTP port (host:container)
     networks:
       - t3_proxy
+    environment:
+      # yt-dlp caches the YouTube player JS under $HOME/.cache. The image sets HOME=/
+      # which uid 568 cannot write, producing
+      #   PermissionError: [Errno 13] Permission denied: '/.cache'
+      # and degrading nsig extraction ("Falling back to generic n function search").
+      # /app/db is a writable bind mount, so point HOME there.
+      - HOME=/app/db
     volumes:
       # Downloaded podcasts/videos
       - /mnt/fast/appdata/hoarder/podsync/downloads:/app/downloads:rw
-      # Database files
+      # Database files (also yt-dlp's HOME -> cache lives here)
       - /mnt/fast/appdata/hoarder/podsync/db:/app/db:rw
       # Config file
       - /mnt/fast/appdata/hoarder/podsync/config.toml:/app/config.toml:ro
+      # yt-dlp binary, managed by us -- see NOTE below.
+      #
+      # The image ships yt-dlp 2025.06.30 and podsync's `self_update` CANNOT work here:
+      # it needs to write into /usr/local/bin, which is not writable by uid 568, and it
+      # failed silently for ~13 months. YouTube's SABR rollout then broke that old
+      # version completely -- every download failed with
+      #   ERROR: [youtube] <id>: The following content is not available on this app.
+      # (792 such errors in 6h, 0 successful downloads).
+      #
+      # podsync v2.8.0 is the LATEST podsync release, so upgrading podsync does not help;
+      # the stale yt-dlp is the problem. self_update is now false in config.toml.
+      #
+      # REFRESH PERIODICALLY (YouTube breaks old yt-dlp regularly):
+      #   curl -sL -o /mnt/fast/appdata/hoarder/podsync/bin/yt-dlp \
+      #     https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux
+      #   chown 568:568 /mnt/fast/appdata/hoarder/podsync/bin/yt-dlp
+      #   chmod 755     /mnt/fast/appdata/hoarder/podsync/bin/yt-dlp
+      #   docker restart podsync
+      - /mnt/fast/appdata/hoarder/podsync/bin/yt-dlp:/usr/local/bin/youtube-dl:ro
     labels:
       - traefik.enable=true
       - traefik.http.routers.podsync.entrypoints=web,websecure
