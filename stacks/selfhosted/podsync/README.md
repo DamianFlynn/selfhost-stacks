@@ -12,20 +12,61 @@ available).
 
 ## Feeds
 
-| ID | Title | Notes |
-|----|-------|-------|
-| `ID1` | Youtube Feeds | general |
-| `ID2` | Youtube Solar | |
-| `ID3` | Youtube AI | main feed; mixed AI + other content |
-| `ID4` | Youtube Notion | |
+| ID | Title | YouTube playlist | Notes |
+|----|-------|------------------|-------|
+| `ID1` | Youtube Feeds | Interesting Videos | general |
+| `ID2` | Youtube Solar | @solar | |
+| `ID3` | Youtube AI | @ai | main feed; mixed AI + other content |
+| `ID4` | Youtube Notion | @Notion | |
+| `ID5` | Youtube BBQ | BBQ | added 2026-08-11; `Arts`/`Food`, `explicit = false` |
 
 Each keeps the last 199 episodes (`clean = { keep_last = 199 }`) and prunes the oldest when new
 ones arrive — that is why episodes disappear over time. Feeds are `private_feed = true` so they
 are not indexed by podcast directories.
 
-Playlists are **unlisted**, not private. That matters: podsync authenticates with a plain YouTube
-Data API key, which can read unlisted playlists but *cannot* read genuinely private ones (those
-need OAuth or cookies, which podsync does not support).
+Subscribe at `https://podsync.deercrest.info/<FEED_ID>.xml`. Note the XML is only written when a
+feed cycle **completes**, so a newly added feed 404s until its first full run finishes — on a large
+playlist that can take an hour or more.
+
+### Playlists must be Unlisted, not Private
+
+podsync authenticates with a plain YouTube Data API **key**, which is anonymous: it can read public
+and unlisted playlists but **cannot** read genuinely private ones. Private playlists need OAuth 2.0
+(or cookies), and podsync supports neither — its only credential is `[tokens] youtube`.
+
+A private playlist fails at enumeration, so nothing downloads:
+
+```
+WARNING: [youtube:tab] YouTube said: ERROR - The caller does not have permission
+ERROR: [youtube:tab] <PLAYLIST_ID>: Unable to download API page: HTTP Error 403: Forbidden
+```
+
+This bit us with the BBQ playlist (`ID5`) on 2026-08-11 — it was set to Private and had to be
+flipped to Unlisted. Unlisted is not searchable and not shown on the channel; it only means
+"reachable with the 34-character playlist ID".
+
+To test a playlist before adding it:
+
+```bash
+docker exec podsync /usr/local/bin/youtube-dl --flat-playlist --no-warnings \
+  --print "%(playlist_title)s" --playlist-items 1 \
+  "https://www.youtube.com/playlist?list=<PLAYLIST_ID>"
+```
+
+It prints the playlist title if readable, or the 403 above if still private.
+
+### config.toml is not in this repo
+
+It lives only at `/mnt/fast/appdata/hoarder/podsync/config.toml` on LXC 100, because it contains
+the YouTube API key. Adding a feed is a host-side edit — back it up first, and validate before
+restarting:
+
+```bash
+cp -a config.toml config.toml.bak-$(date +%Y%m%d)
+python3 -c "import tomllib; print(list(tomllib.load(open('config.toml','rb'))['feeds'].keys()))"
+```
+
+Keep this table in sync when feeds are added.
 
 ---
 
