@@ -52,10 +52,15 @@ services:
       # The container sat in `created` state, never started, from 2026-06-30 to 2026-08-11
       # because of this. See NETWORK.md -> "Host-level services on LXC 100".
       #
-      # The host publish is deliberately kept (rather than relying on Traefik) because Jellyfin
-      # consumes dispatcharr as a TV tuner and the Traefik route carries chain-authelia@file,
-      # which would bounce a tuner client to a login page. Point Jellyfin and the HDHomeRun
-      # integration at http://172.16.1.159:9192.
+      # NOTE: this publish is largely vestigial. dispatcharr is on iot_macvlan with its own LAN
+      # IP (172.16.1.75), and that is the real endpoint -- dispatcharr advertises
+      # BaseURL http://172.16.1.75:9191/hdhr itself. The published port answers on 127.0.0.1
+      # from inside the LXC but FAILS from other hosts, because dispatcharr's default route goes
+      # out the macvlan interface and replies via the docker-proxy path are asymmetric.
+      #
+      # Point Jellyfin at http://172.16.1.75:9191 (verified from inside the jellyfin container),
+      # NOT at this port and NOT at dispatcharr.deercrest.info (that route has chain-authelia).
+      # Kept only because removing a published port is a separate change; it is harmless on 9192.
       - 9192:9191
     volumes:
       - /mnt/fast/appdata/media/dispatcharr/data:/data:rw  # Application config, recordings queue, and processing state
