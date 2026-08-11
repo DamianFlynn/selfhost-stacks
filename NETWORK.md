@@ -227,16 +227,32 @@ use`. dispatcharr now publishes on host port **9192**. Do not reassign 9191.
 | 7655 | `pulse.service` | Pulse web UI (host service, not Docker) |
 | 9091 | `pulse.service` | internal, localhost only |
 | **9191** | **`pulse-agent.service`** | **reserved — do not reassign** (see above) |
-| 9192 | dispatcharr (Docker) | → container 9191; Jellyfin tuner endpoint |
+| 9192 | dispatcharr (Docker) | → container 9191. Localhost only in practice (macvlan asymmetric routing) — **not** the Jellyfin endpoint; use `172.16.1.75:9191` |
 | 8084 | sabnzbd (Docker) | |
 | 18080 | podsync (Docker) | |
 
 ### TV / tuner chain
-HDHomeRun (**172.16.1.161**) + IPTV streams → **dispatcharr** (`http://172.16.1.159:9192`) →
-**Jellyfin** as a TV tuner source.
+HDHomeRun (**172.16.1.161**) + IPTV streams → **dispatcharr** → **Jellyfin** as a TV tuner source.
 
-Jellyfin must use the direct host port, **not** `dispatcharr.deercrest.info` — the Traefik route
-carries `chain-authelia@file` and would redirect a tuner client to a login page.
+**Use the macvlan address — `http://172.16.1.75:9191`.** Both dispatcharr and Jellyfin sit on
+`iot_macvlan` with real LAN IPs (dispatcharr `172.16.1.75`, Jellyfin `172.16.1.76`), and dispatcharr
+advertises that address itself:
+
+```json
+{"FriendlyName": "Dispatcharr HDHomeRun", "BaseURL": "http://172.16.1.75:9191/hdhr",
+ "LineupURL": "http://172.16.1.75:9191/hdhr/lineup.json"}
+```
+
+Verified from inside the Jellyfin container: `172.16.1.75:9191` → 200, and `/hdhr/discover.json`
+returns valid HDHomeRun JSON. `http://dispatcharr:9191` also works (shared `t3_proxy`).
+
+Do **not** use:
+- `dispatcharr.deercrest.info` — the Traefik route carries `chain-authelia@file` and would bounce a
+  tuner client to a login page.
+- `172.16.1.159:9192` (the host publish) — it answers on `127.0.0.1` from inside the LXC but **fails
+  from other hosts**. dispatcharr's default route goes out its macvlan interface, so replies to the
+  docker-proxy path are asymmetric and get dropped. The publish exists only as a legacy of the
+  original config; the macvlan address is the real endpoint.
 
 ---
 
