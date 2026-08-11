@@ -184,8 +184,34 @@ From the UniFi data, current naming patterns include:
 | cgate | 172.16.1.128 | pi | C-Bus gateway |
 | UCG Max | 172.16.1.1 | - | Network gateway |
 
+### Host-level services on LXC 100 (NOT Docker, NOT in `stacks/`)
+
+These run as **systemd services directly on the selfhost LXC**, so they do not appear in any
+compose file and `docker ps` will not show them. They still consume host ports — check here before
+assigning a new host port, or a container will fail to start.
+
+**Pulse** — Proxmox/Docker monitoring (`/opt/pulse`, v6.2.1, installed 2026-03-10)
+
+| Unit | Listens | Purpose |
+|------|---------|---------|
+| `pulse.service` | `*:7655` | Pulse server / web UI |
+| `pulse.service` | `127.0.0.1:9091` | internal |
+| `pulse-agent.service` | **`127.0.0.1:9191`** | agent health/metrics (`-health-addr`, empty disables) |
+
+The agent reports to `http://172.16.1.159:7655` with `--enable-host --enable-docker
+--enable-commands`, which is what provides host and container metrics. It self-updates via
+`pulse-auto-update.sh` + `pulse-update.timer`, so its version moves independently of this repo.
+
+⚠️ **`pulse-agent` owning 9191 silently blocked dispatcharr for ~6 weeks** (2026-06-30 →
+2026-08-11): the container sat in `created` state, never started, failing with `address already in
+use`. dispatcharr now publishes on host port **9192**. Do not reassign 9191.
+
+> Note: `docker ps` alone hides this class of failure — a container stuck in `created` is not
+> `running`, but is also not `exited`, `dead` or `restarting`. Use
+> `docker ps -a --format '{{.State}}' | sort | uniq -c` for a true census.
+
 ### Services by Host
-- **selfhost (159):** Traefik, Authelia, Sonarr, Radarr, Lidarr, Prowlarr, qBittorrent, Grafana, Dawarich, Open WebUI, Ollama, Immich, FreshRSS, and 60+ others
+- **selfhost (159):** Traefik, Authelia, Sonarr, Radarr, Lidarr, Prowlarr, qBittorrent, Grafana, Dawarich, Open WebUI, Ollama, Immich, FreshRSS, and 60+ others — plus host-level Pulse (above)
 - **cerebro (160):** Qdrant, Redis, SearXNG
 - **Home Assistant (31):** Home Assistant Core + addons
 - **zgate (135):** Z-Wave2MQTT, Zigbee2MQTT
@@ -194,6 +220,23 @@ From the UniFi data, current naming patterns include:
 ### Port Forwards
 - **443** → 172.16.1.159:443 (Traefik ingress)
 - **21115-21119** → 172.16.1.159:21115-21119 (Rustdesk)
+
+### Notable host ports on 172.16.1.159 (LXC 100)
+| Port | Owner | Notes |
+|------|-------|-------|
+| 7655 | `pulse.service` | Pulse web UI (host service, not Docker) |
+| 9091 | `pulse.service` | internal, localhost only |
+| **9191** | **`pulse-agent.service`** | **reserved — do not reassign** (see above) |
+| 9192 | dispatcharr (Docker) | → container 9191; Jellyfin tuner endpoint |
+| 8084 | sabnzbd (Docker) | |
+| 18080 | podsync (Docker) | |
+
+### TV / tuner chain
+HDHomeRun (**172.16.1.161**) + IPTV streams → **dispatcharr** (`http://172.16.1.159:9192`) →
+**Jellyfin** as a TV tuner source.
+
+Jellyfin must use the direct host port, **not** `dispatcharr.deercrest.info` — the Traefik route
+carries `chain-authelia@file` and would redirect a tuner client to a login page.
 
 ---
 

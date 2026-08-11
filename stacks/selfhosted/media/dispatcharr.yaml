@@ -43,7 +43,20 @@ services:
       t3_proxy:
       dispatcharr:
     ports:
-      - 9191:9191
+      # HOST PORT 9192, CONTAINER PORT 9191 -- do not "tidy" this back to 9191:9191.
+      #
+      # pulse-agent (the Pulse monitoring agent, a bare-metal systemd service on this LXC --
+      # NOT a compose stack) binds 127.0.0.1:9191 for its health/metrics endpoint. Publishing
+      # dispatcharr on 9191 therefore fails at container start with:
+      #   failed to bind host port 0.0.0.0:9191/tcp: address already in use
+      # The container sat in `created` state, never started, from 2026-06-30 to 2026-08-11
+      # because of this. See NETWORK.md -> "Host-level services on LXC 100".
+      #
+      # The host publish is deliberately kept (rather than relying on Traefik) because Jellyfin
+      # consumes dispatcharr as a TV tuner and the Traefik route carries chain-authelia@file,
+      # which would bounce a tuner client to a login page. Point Jellyfin and the HDHomeRun
+      # integration at http://172.16.1.159:9192.
+      - 9192:9191
     volumes:
       - /mnt/fast/appdata/media/dispatcharr/data:/data:rw  # Application config, recordings queue, and processing state
     environment:
