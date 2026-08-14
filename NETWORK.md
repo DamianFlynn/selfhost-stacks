@@ -284,9 +284,50 @@ Do **not** use:
   docker-proxy path are asymmetric and get dropped. The publish exists only as a legacy of the
   original config; the macvlan address is the real endpoint.
 
+#### ⚠️ OPEN: HDHomeRun aerial signal is unstable (diagnosed 2026-08-14)
+
+Saorview channels (1–10) freeze intermittently. **The freeze produces no server-side event** —
+dispatcharr holds `state: active` with no teardown or error — which is what makes it look like a
+network fault when it isn't.
+
+65 samples of `http://172.16.1.161/status.json`, 10s apart, while tuned to RTÉ One:
+
+```
+signal strength :  100%  on EVERY sample — pegged
+symbol quality  :  100%  on EVERY sample — FEC still coping
+signal quality  :  degraded on 30/65 (46%), floor 59%, in ~60–90s bursts
+```
+
+Proven **not** to be network or bandwidth: France 24 (DigitalIPTV, **6.96 Mbps**) is stable over the
+identical downstream path while RTÉ One (aerial, **5.93 Mbps**) freezes. The heavier stream is the
+stable one.
+
+**Strength pegged at 100% with quality collapsing = strong but dirty**, not weak. The aerial is a
+small **powered** antenna in the attic, and an amplifier overdriving the tuner front-end produces
+exactly this. HDHomeRun's sweet spot is ~75–85% strength.
+
+**Fix requires attic access — LESS gain, not more.** Add a 6–10 dB inline attenuator or bypass the
+amplifier; then check connectors for corrosion and look for impulse noise (switch-mode PSUs, LED
+lighting) near the run. Do **not** reposition the aerial or add amplification.
+
+> `status.json` returns only `{"Resource": "tunerN"}` when idle — signal fields appear **only while
+> a tuner is locked**, so hold a stream open first or the output looks empty.
+
 ---
 
 ## Maintenance Tasks
+
+### TV chain — open items (revisit ~2026-08-28, needs physical access)
+- [ ] **Attenuate the attic aerial amplifier** — strength railed at 100%, quality dipping to 59%.
+      Target 75–85% strength / >95% quality. See the HDHomeRun section above.
+- [ ] **Retire `tv.deercrest.info`** — built as a fallback before Tailscale worked; now redundant
+      since TiviMate reaches dispatcharr over the tailnet. It is the estate's only grey-cloud
+      record, so it publishes the origin IP. Delete the A record, drop the `dispatcharr-tv` router
+      labels, and return `XC_API`/`STREAMS` to private ranges **plus `100.64.0.0/10`** (omitting the
+      Tailscale range would cut off the TV).
+- [ ] **Fix `deinterlace_vaapi` on the Radeon 890M** — ffmpeg exits 251 whenever a Jellyfin client
+      forces a re-encode of an interlaced-flagged Live TV stream. Native clients direct-play and are
+      unaffected, but **DVR recordings will hit it**.
 
 ### Immediate Cleanup
 - [ ] Remove 19 offline devices from UniFi
