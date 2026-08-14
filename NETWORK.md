@@ -284,13 +284,47 @@ Do **not** use:
   docker-proxy path are asymmetric and get dropped. The publish exists only as a legacy of the
   original config; the macvlan address is the real endpoint.
 
-#### ⚠️ OPEN: HDHomeRun aerial signal is unstable (diagnosed 2026-08-14)
+#### RESOLVED: the 2026-08-14 Fosse Road freezes were `stream_limit`, not the aerial
 
-Saorview channels (1–10) freeze intermittently. **The freeze produces no server-side event** —
-dispatcharr holds `state: active` with no teardown or error — which is what makes it look like a
-network fault when it isn't.
+Symptom was 6–10s picture freezes every ~15–40 min on the remote TV, on **both** aerial and IPTV
+channels. Root cause was a **conflation of two different limits**:
 
-90 samples of `http://172.16.1.161/status.json`, 10s apart over 15 min, while tuned to RTÉ One:
+| Setting | Governs |
+|---|---|
+| `M3UAccount.max_streams` | concurrent **upstream provider** connections |
+| `User.stream_limit` | concurrent **dispatcharr clients** for that user |
+
+`stream_limit: 1` had been set on the `fosse-tv` XC user to "mirror" account 7's `max_streams: 1`.
+TiviMate renews its connection every ~15–40 min, and for a fraction of a second the old and new
+clients coexist — tripping 1/1 and making dispatcharr force-terminate the **live** client:
+
+```
+WARNING proxy [stream limits] User fosse-tv (ID: 2) has reached stream limit (1/1 streams)
+INFO    proxy [stream limits] Terminating client ... (connected_at=...)
+```
+
+**14 terminations in one evening.** Fixed by raising `stream_limit` to **2**, which permits the
+reconnect overlap. This does *not* consume a second provider slot — clients on the same channel
+share one upstream connection. Result: 14 → **0**, and a 40+ minute unbroken session, well past the
+previous failure interval.
+
+> **`channel_shutdown_delay` must stay `0` here.** It was briefly raised to 5 to stop the resulting
+> cold-start race — but that race was *triggered* by the `stream_limit` terminations, not by the
+> delay. With the real cause fixed, a non-zero delay prevents nothing and actively breaks channel
+> changes: it holds the old channel's upstream open, so switching between two IPTV channels hits
+> `max_streams: 1` and returns HTTP 503 (observed BBC One → ITV1, 5.5s to recover). `0` is correct
+> for this estate **because** the provider allows only one stream.
+
+**Diagnostic lesson:** the aerial was initially blamed, on a differential of RTÉ One (aerial)
+freezing while France 24 and BBC One (IPTV) were clean. That comparison was **confounded** —
+`channel_shutdown_delay` was changed between the two sets of observations, so a config difference
+was read as a source difference. BBC One later froze too, disproving it. Never compare observations
+taken either side of your own change.
+
+#### Latent: aerial signal is unstable (measured 2026-08-14, no symptom attributed)
+
+Separate, unresolved, and **not currently causing anything**. 90 samples of
+`http://172.16.1.161/status.json`, 10s apart, tuned to RTÉ One:
 
 ```
 signal strength :  100%  on ALL 90 samples — pegged, never varies
@@ -298,23 +332,14 @@ signal quality  :  degraded on 48/90 (53%), floor 59%, in ~60–90s bursts
 symbol quality  :  100%  on ALL 90 samples — ZERO uncorrected errors
 ```
 
-**What this does and does not show.** The instability is real and abnormal: quality collapsing to
-59% while strength never leaves 100% is not normal behaviour. But **symbol quality held at 100%
-throughout — no failure event was actually captured.** FEC absorbed every dip observed, so that
-window would have played cleanly, and no freeze was reported during it. Dips to ~59% are evidently
-survivable; the freezes must involve deeper or longer dips than 10s polling can catch.
+Symbol quality never broke, so error correction absorbed every dip — consistent with the aerial
+having caused none of the freezes above. Strength pegged at 100% while quality collapses is still
+abnormal ("strong but dirty"), and the aerial is a small **powered** antenna in the attic, so
+amplifier overdrive of the tuner front-end remains the best explanation. HDHomeRun's sweet spot is
+~75–85% strength.
 
-**Before spending money, capture a real failure:** poll at **1–2s** and correlate with an on-screen
-freeze. `SymbolQualityPercent` **< 100** is the moment error correction fails and the picture
-breaks. Until that is observed the causal link is inference, not measurement.
-
-The independent evidence that it is **not** network or bandwidth is the differential: France 24
-(DigitalIPTV, **6.96 Mbps**) is stable over the identical downstream path while RTÉ One (aerial,
-**5.93 Mbps**) freezes. The heavier stream is the stable one.
-
-**Strength pegged at 100% with quality collapsing = strong but dirty**, not weak. The aerial is a
-small **powered** antenna in the attic, and an amplifier overdriving the tuner front-end produces
-exactly this. HDHomeRun's sweet spot is ~75–85% strength.
+**Do not act on this alone.** If it ever becomes symptomatic, the smoking gun is
+`SymbolQualityPercent` **< 100** coincident with an on-screen freeze — poll at 1–2s, not 10s.
 
 **Fix requires attic access — LESS gain, not more.** Add a 6–10 dB inline attenuator or bypass the
 amplifier; then check connectors for corrosion and look for impulse noise (switch-mode PSUs, LED
@@ -328,11 +353,11 @@ lighting) near the run. Do **not** reposition the aerial or add amplification.
 ## Maintenance Tasks
 
 ### TV chain — open items (revisit ~2026-08-28, needs physical access)
-- [ ] **Capture a real aerial failure first** — poll `status.json` at 1–2s and correlate with an
-      on-screen freeze. `SymbolQualityPercent` < 100 is the smoking gun; it was never observed in
-      the 15-min baseline, so overdrive is a strong suspect rather than a confirmed cause.
-- [ ] **Then attenuate the attic aerial amplifier** — strength railed at 100%, quality dipping to
-      59%. Target 75–85% strength / >95% quality. See the HDHomeRun section above.
+- [ ] **Aerial — LOW priority, do not act without a symptom.** The freezes turned out to be
+      `stream_limit`, not the aerial. The measured instability (strength railed at 100%, quality
+      dipping to 59%) is latent and caused nothing observable. If a freeze ever survives on an
+      aerial channel *only*, capture it at 1–2s polling first — `SymbolQualityPercent` < 100 is the
+      smoking gun — and only then consider a 6–10 dB attenuator (less gain, never more).
 - [ ] **Retire `tv.deercrest.info`** — built as a fallback before Tailscale worked; now redundant
       since TiviMate reaches dispatcharr over the tailnet. It is the estate's only grey-cloud
       record, so it publishes the origin IP. Delete the A record, drop the `dispatcharr-tv` router
