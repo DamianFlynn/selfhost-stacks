@@ -232,7 +232,18 @@ use`. dispatcharr now publishes on host port **9192**. Do not reassign 9191.
 | 18080 | podsync (Docker) | |
 
 ### TV / tuner chain
-HDHomeRun (**172.16.1.161**) + IPTV streams → **dispatcharr** → **Jellyfin** as a TV tuner source.
+HDHomeRun (**172.16.1.161**) + IPTV streams → **dispatcharr** → two independent consumers:
+
+| Consumer | Path | Protocol |
+|---|---|---|
+| Jellyfin (Deer Crest) | `172.16.1.75:9191/hdhr` + `/output/epg` | HDHR tuner + XMLTV |
+| TiviMate (Fosse Road TV) | `172.16.1.75:9191` over **Tailscale** | Xtream Codes (`fosse-tv`) |
+
+Jellyfin is for the media library; **TiviMate is the live-TV client**. Jellyfin's Live TV path
+adds ~7.7s to every channel change (3s ffprobe + 3s HLS segment build + ~1s tuner connect) and
+that is inherent to how it does Live TV — not tunable. TiviMate plays the MPEG-TS natively and
+switches in roughly the ~1.1s dispatcharr actually needs. Since 2026-08-14 the physical
+HDHomeRun is **no longer a direct Jellyfin tuner** — dispatcharr is the single source.
 
 **Use the macvlan address — `http://172.16.1.75:9191`.** Both dispatcharr and Jellyfin sit on
 `iot_macvlan` with real LAN IPs (dispatcharr `172.16.1.75`, Jellyfin `172.16.1.76`), and dispatcharr
@@ -245,6 +256,25 @@ advertises that address itself:
 
 Verified from inside the Jellyfin container: `172.16.1.75:9191` → 200, and `/hdhr/discover.json`
 returns valid HDHomeRun JSON. `http://dispatcharr:9191` also works (shared `t3_proxy`).
+
+#### Off-LAN clients (Fosse Road)
+
+`tv.deercrest.info` is a **second Traefik router with no authelia**, allow-listing only the XC
+paths (`/player_api.php`, `/panel_api.php`, `/get.php`, `/xmltv.php`, `/live/`, `/timeshift/`,
+`/streaming/`, `/api/channels/logos/`) plus a 30/min rate limit. Everything else on that host
+404s. It is the **one grey-cloud record** in the estate — Cloudflare's proxy breaks long-lived
+MPEG-TS — so it publishes the origin IP. It exists only as a fallback; the TV normally reaches
+dispatcharr over Tailscale and this route can be retired.
+
+dispatcharr's own `network_access` ACLs are the second layer, and they are effective because
+`get_client_ip` trusts `X-Forwarded-For` from private-range proxies (Traefik), so the **real**
+client IP is evaluated:
+
+| Key | Value | Why |
+|---|---|---|
+| `M3U_EPG` | private ranges **+ `100.64.0.0/10`** | `/output/*` has no auth of its own. The Tailscale CGNAT range must be listed explicitly or tailnet clients get 403 |
+| `XC_API` / `STREAMS` | `0.0.0.0/0` | needed by the off-LAN TV; auth is the XC credential |
+| `UI` | `0.0.0.0/0` | do **not** restrict to LAN — it would lock out remote admin via the Traefik route |
 
 Do **not** use:
 - `dispatcharr.deercrest.info` — the Traefik route carries `chain-authelia@file` and would bounce a
