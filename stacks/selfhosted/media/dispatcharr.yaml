@@ -101,5 +101,54 @@ services:
       - traefik.http.routers.dispatcharr.service=dispatcharr-svc
       - traefik.http.services.dispatcharr-svc.loadbalancer.server.port=9191
 
+      # --- tv.deercrest.info : Xtream Codes endpoint for off-LAN TV clients ---
+      #
+      # The Samsung Tizen TV at Fosse Road is not on Tailscale, so it needs a public
+      # endpoint. It CANNOT use dispatcharr.deercrest.info -- that router carries
+      # chain-authelia, and an IPTV player has no browser to complete an auth flow.
+      #
+      # This router therefore has NO authelia. Authentication is the XC credential
+      # (user `fosse-tv` + custom_properties.xc_password, a dispatcharr STREAMER-level
+      # account capped at stream_limit=1). Two things keep that acceptable:
+      #
+      #   1. The rule allow-lists ONLY the XC paths below. Anything else on this host
+      #      matches no router and Traefik returns 404 -- default-deny. In particular
+      #      /output/m3u, /output/epg and /hdhr are NOT reachable here; those carry no
+      #      auth of their own and are additionally pinned to private ranges via
+      #      dispatcharr's own network_access.M3U_EPG ACL.
+      #   2. /api/ is deliberately narrowed to /api/channels/logos/ -- channel icons are
+      #      unauthenticated PNGs and the TV needs them. The rest of /api/ (the admin
+      #      surface) 401s anyway, but it is not exposed here regardless.
+      #
+      # XC puts username+password in the query string / URL path, so they WILL appear in
+      # Traefik access logs, and there is no lockout on failed XC auth -- hence the rate
+      # limit below. Rotate the xc_password if those logs are ever shared.
+      #
+      # DNS: this record MUST be grey-cloud (DNS-only), which makes it the ONE exception
+      # in this estate -- dispatcharr.deercrest.info and jellyfin.deercrest.info are both
+      # orange-clouded (they resolve to 172.67.x / 104.21.x). It cannot be proxied because
+      # Cloudflare's proxy breaks long-lived MPEG-TS (100s timeout) and serving video
+      # through the free tier is against their ToS.
+      #
+      # TRADE-OFF, accept before deploying: grey-cloud publishes the home origin IP in
+      # public DNS, losing the origin-hiding the other records get. If that is not
+      # acceptable, the alternative is the Tailscale subnet-router option (a travel
+      # router at Fosse Road), which exposes nothing at all.
+      #
+      # (dns-cloudflare on the cert resolver is DNS-01 for issuance only -- unaffected
+      # by the record being grey-clouded.)
+      - traefik.http.routers.dispatcharr-tv.entrypoints=websecure
+      - traefik.http.routers.dispatcharr-tv.rule=Host(`tv.deercrest.info`) && (PathPrefix(`/player_api.php`) || PathPrefix(`/panel_api.php`) || PathPrefix(`/get.php`) || PathPrefix(`/xmltv.php`) || PathPrefix(`/live/`) || PathPrefix(`/timeshift/`) || PathPrefix(`/streaming/`) || PathPrefix(`/api/channels/logos/`))
+      - traefik.http.routers.dispatcharr-tv.tls=true
+      - traefik.http.routers.dispatcharr-tv.tls.certresolver=dns-cloudflare
+      - traefik.http.routers.dispatcharr-tv.priority=100
+      - traefik.http.routers.dispatcharr-tv.middlewares=dispatcharr-tv-ratelimit
+      - traefik.http.routers.dispatcharr-tv.service=dispatcharr-svc
+      # Streaming is one long-lived request, so a low average is fine; the burst covers
+      # a client fetching categories + logos on startup.
+      - traefik.http.middlewares.dispatcharr-tv-ratelimit.ratelimit.average=30
+      - traefik.http.middlewares.dispatcharr-tv-ratelimit.ratelimit.burst=60
+      - traefik.http.middlewares.dispatcharr-tv-ratelimit.ratelimit.period=1m
+
 
 
