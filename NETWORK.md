@@ -315,6 +315,29 @@ previous failure interval.
 > `max_streams: 1` and returns HTTP 503 (observed BBC One → ITV1, 5.5s to recover). `0` is correct
 > for this estate **because** the provider allows only one stream.
 
+##### Residual IPTV channel-switch latency is the SUBSCRIPTION, not config — stop tuning
+
+With `stream_limit: 2` and `channel_shutdown_delay: 0` in place, measured switching between two
+DigitalIPTV channels:
+
+```
+22:50:10 → 22:50:13.594   2.7s   clean
+22:54:20 → 22:54:22.796   2.0s   clean
+22:53:46 → 22:53:54.994   8.6s   3 attempts, 2x HTTP 503
+```
+
+The slow case is **not** a dispatcharr setting. TiviMate holds the old connection open while it
+opens the new one, so for a few seconds two distinct IPTV channels are live — which account 7's
+`max_streams: 1` forbids. It 503s until the old connection lets go. Sometimes the old one drops
+first (2s), sometimes it doesn't (8.6s).
+
+**Do not go re-tuning `channel_shutdown_delay`, buffer sizes or timeouts to chase this** — that loop
+was already run once on 2026-08-14 and it made things worse. The only real fix is a provider plan
+with `max_streams >= 2`, which would also allow simultaneous viewing at Deer Crest and Fosse Road
+(currently impossible on anything IPTV-sourced). Subscription runs to **2026-12-29**.
+
+Aerial channels 1–10 are unaffected — the HDHomeRun has 4 tuners.
+
 **Diagnostic lesson:** the aerial was initially blamed, on a differential of RTÉ One (aerial)
 freezing while France 24 and BBC One (IPTV) were clean. That comparison was **confounded** —
 `channel_shutdown_delay` was changed between the two sets of observations, so a config difference
