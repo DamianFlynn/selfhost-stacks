@@ -290,17 +290,27 @@ Saorview channels (1–10) freeze intermittently. **The freeze produces no serve
 dispatcharr holds `state: active` with no teardown or error — which is what makes it look like a
 network fault when it isn't.
 
-65 samples of `http://172.16.1.161/status.json`, 10s apart, while tuned to RTÉ One:
+90 samples of `http://172.16.1.161/status.json`, 10s apart over 15 min, while tuned to RTÉ One:
 
 ```
-signal strength :  100%  on EVERY sample — pegged
-symbol quality  :  100%  on EVERY sample — FEC still coping
-signal quality  :  degraded on 30/65 (46%), floor 59%, in ~60–90s bursts
+signal strength :  100%  on ALL 90 samples — pegged, never varies
+signal quality  :  degraded on 48/90 (53%), floor 59%, in ~60–90s bursts
+symbol quality  :  100%  on ALL 90 samples — ZERO uncorrected errors
 ```
 
-Proven **not** to be network or bandwidth: France 24 (DigitalIPTV, **6.96 Mbps**) is stable over the
-identical downstream path while RTÉ One (aerial, **5.93 Mbps**) freezes. The heavier stream is the
-stable one.
+**What this does and does not show.** The instability is real and abnormal: quality collapsing to
+59% while strength never leaves 100% is not normal behaviour. But **symbol quality held at 100%
+throughout — no failure event was actually captured.** FEC absorbed every dip observed, so that
+window would have played cleanly, and no freeze was reported during it. Dips to ~59% are evidently
+survivable; the freezes must involve deeper or longer dips than 10s polling can catch.
+
+**Before spending money, capture a real failure:** poll at **1–2s** and correlate with an on-screen
+freeze. `SymbolQualityPercent` **< 100** is the moment error correction fails and the picture
+breaks. Until that is observed the causal link is inference, not measurement.
+
+The independent evidence that it is **not** network or bandwidth is the differential: France 24
+(DigitalIPTV, **6.96 Mbps**) is stable over the identical downstream path while RTÉ One (aerial,
+**5.93 Mbps**) freezes. The heavier stream is the stable one.
 
 **Strength pegged at 100% with quality collapsing = strong but dirty**, not weak. The aerial is a
 small **powered** antenna in the attic, and an amplifier overdriving the tuner front-end produces
@@ -318,8 +328,11 @@ lighting) near the run. Do **not** reposition the aerial or add amplification.
 ## Maintenance Tasks
 
 ### TV chain — open items (revisit ~2026-08-28, needs physical access)
-- [ ] **Attenuate the attic aerial amplifier** — strength railed at 100%, quality dipping to 59%.
-      Target 75–85% strength / >95% quality. See the HDHomeRun section above.
+- [ ] **Capture a real aerial failure first** — poll `status.json` at 1–2s and correlate with an
+      on-screen freeze. `SymbolQualityPercent` < 100 is the smoking gun; it was never observed in
+      the 15-min baseline, so overdrive is a strong suspect rather than a confirmed cause.
+- [ ] **Then attenuate the attic aerial amplifier** — strength railed at 100%, quality dipping to
+      59%. Target 75–85% strength / >95% quality. See the HDHomeRun section above.
 - [ ] **Retire `tv.deercrest.info`** — built as a fallback before Tailscale worked; now redundant
       since TiviMate reaches dispatcharr over the tailnet. It is the estate's only grey-cloud
       record, so it publishes the origin IP. Delete the A record, drop the `dispatcharr-tv` router
