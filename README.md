@@ -1,6 +1,11 @@
 # Selfhost Stacks
 
-Production-ready self-hosted infrastructure running on Proxmox, managed with Infrastructure as Code (Terraform) and GitOps workflows. Currently hosting 70+ containerized services across media streaming, home automation, development tools, and AI workloads.
+Production-ready self-hosted infrastructure running on Proxmox, managed with Infrastructure as Code (Terraform) and GitOps workflows. Currently hosting 90+ containerized services across media streaming, home automation, development tools, and AI workloads.
+
+> **Memory headroom is the binding constraint.** The host has ~29GB usable and typically runs at
+> 24–25GB. New stacks should set explicit `mem_limit` values rather than running unbounded.
+> (Corrected 2026-08-16: this README previously claimed 64GB. Actual is 32GB physical, ~29GB usable
+> after the Radeon 890M iGPU carve-out.)
 
 ## 🏗️ Architecture
 
@@ -13,7 +18,7 @@ This repository is split into two clean domains:
 
 | Resource | IP | Purpose | Specs |
 |----------|------------|---------|-------|
-| **Proxmox Host** | `172.16.1.158` | Type-1 hypervisor | AMD Ryzen AI 9 HX PRO 370, 64GB RAM, ZFS pool |
+| **Proxmox Host** | `172.16.1.158` | Type-1 hypervisor | AMD Ryzen AI 9 HX PRO 370 (24 cores), 32GB RAM (~29GB usable), ZFS pool |
 | **LXC 100** (`selfhost`) | `172.16.1.159` | Primary Docker runtime | Unprivileged LXC, GPU passthrough (AMD Radeon 890M) |
 | **VM 102** (`Cerebro`) | `172.16.1.160` | AI/ML workloads | Ubuntu 24.04, GPU passthrough, Ollama, OpenClaw |
 

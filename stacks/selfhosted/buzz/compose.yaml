@@ -11,6 +11,10 @@
 #
 # RELAY_URL is the community's identity, matched byte-for-byte. Changing it
 # creates a new, empty community. Do not change it after members are added.
+#
+# MEMORY: this host has ~29GB usable and typically sits at 24-25GB, so every
+# service here is capped. Total ceiling ~2GB. These are first-pass numbers --
+# measure actual usage with `docker stats` and tighten or raise them.
 
 name: buzz
 
@@ -25,6 +29,7 @@ services:
 
   relay:
     container_name: buzz-relay
+    mem_limit: 512m
     image: ${BUZZ_IMAGE}
     restart: unless-stopped
     env_file: .env
@@ -77,10 +82,41 @@ services:
   # MUST be `entrypoint:` — Compose `command:` silently runs the relay binary instead.
   pairing-relay:
     container_name: buzz-pairing-relay
+    mem_limit: 128m
     image: ${BUZZ_IMAGE}
     restart: unless-stopped
     entrypoint: ["/usr/local/bin/buzz-pair-relay"]
     env_file: .env
+    environment:
+      # Defaults to 127.0.0.1:5000 — loopback only, so cloudflared gets a 502.
+      # Upstream's Helm chart sets this; their compose never does, because it
+      # ships no pairing sidecar at all.
+      BUZZ_PAIR_RELAY_BIND_ADDR: 0.0.0.0:5000
+    depends_on:
+      relay:
+        condition: service_healthy
+    networks:
+      - buzz-net
+
+  # Public ingress. Outbound-only tunnel to the Cloudflare edge — no port-forward,
+  # no exposed origin IP. Remotely-managed (config_src: cloudflare): the ingress
+  # rules live on the tunnel itself, not in a local config file.
+  #
+  #   buzz.deercrest.info -> http://buzz-relay:3000
+  #   pair.deercrest.info -> http://buzz-pairing-relay:5000
+  #   everything else     -> 404 (default deny)
+  #
+  # Because cloudflared sits on buzz-net it addresses the containers directly,
+  # which is why the relay needs no published host port.
+  cloudflared:
+    container_name: buzz-cloudflared
+    mem_limit: 128m
+    # renovate: datasource=docker depName=cloudflare/cloudflared
+    image: cloudflare/cloudflared:2026.8.2
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?set TUNNEL_TOKEN}
     depends_on:
       relay:
         condition: service_healthy
@@ -89,6 +125,7 @@ services:
 
   postgres:
     container_name: buzz-postgres
+    mem_limit: 512m
     image: postgres:17-alpine
     restart: unless-stopped
     environment:
@@ -110,9 +147,11 @@ services:
 
   redis:
     container_name: buzz-redis
+    mem_limit: 256m
     image: redis:7-alpine
     restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?set REDIS_PASSWORD}"]
+    # maxmemory sits under mem_limit so redis evicts rather than being OOM-killed
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?set REDIS_PASSWORD}", "--maxmemory", "200mb", "--maxmemory-policy", "noeviction"]
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD}
     volumes:
@@ -130,6 +169,7 @@ services:
   # irreplaceable data (family photos and video shared in channels).
   minio:
     container_name: buzz-minio
+    mem_limit: 512m
     image: minio/minio:RELEASE.2025-09-07T16-13-09Z
     restart: unless-stopped
     command: server /data --console-address ":9001"
