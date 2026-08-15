@@ -57,7 +57,7 @@ services:
   api:
     container_name: cal-api
     hostname: keeper-api
-    image: ghcr.io/ridafkih/keeper-api:2.15
+    image: ghcr.io/ridafkih/keeper-api:2.18
     restart: unless-stopped
     env_file: .env
     environment:
