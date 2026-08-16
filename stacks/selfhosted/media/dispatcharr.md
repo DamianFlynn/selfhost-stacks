@@ -8,7 +8,7 @@ This file documents the **lineup and guide data**, which live in Dispatcharr's d
 than in this repo. Nothing here is applied by `docker compose`; it is the record of how the
 lineup is put together and the traps found building it.
 
-State as of 2026-08-16: **138 channels, 317 stream links, ~21,400 programmes.**
+State as of 2026-08-16: **139 channels, 319 stream links, ~21,800 programmes.**
 
 ---
 
@@ -22,7 +22,7 @@ State as of 2026-08-16: **138 channels, 317 stream links, ~21,400 programmes.**
 | 110–122 | Sky entertainment (Showcase, Atlantic, Witness, Comedy, Crime, Documentaries, Nature, Arts, History, Sci-Fi, Replay, Kids, Max) | IPTV |
 | 141–149 | Food & lifestyle (Food Network UK/US, Cooking Channel, Tastemade, HGTV UK/US, Really, Magnolia, Travel) | IPTV |
 | 301–311 | Sky Cinema (Premiere, Select, Hits, Greats, Drama, Comedy, Action, Thriller, Sci-Fi/Horror, Family, Animation) | IPTV |
-| 401–447 | Sport — Sky Sports 401–403, TNT Sports 410–413, ESPN 420–423, US sport 430–447 | IPTV |
+| 401–447 | Sport — Sky Sports 401–403, TNT Sports 410–413, LFC TV 415, ESPN 420–423, US sport 430–447 | IPTV |
 | 501–505 | Los Angeles locals (KABC, KCBS, KNBC, KTTV, KTLA) | IPTV |
 | 511–513 | US news (CNN, FOX News, MSNBC) | IPTV |
 | 520–544 | US cable (USA, Bravo, Syfy, FX, AMC, History, Nat Geo, Comedy Central, TLC, Nickelodeon, CMT, Oxygen, …) | IPTV |
@@ -60,6 +60,15 @@ Id conventions differ per source and are easy to guess wrong:
 > **Search by display name, never guess the id.** Several channels were wrongly written off as
 > "no EPG available" on a guessed id when they were present all along under a different one.
 > `EPGData.objects.filter(name__icontains=…)` first; only then conclude something is missing.
+
+> **A programme count of 0 on an unlinked `EPGData` row means nothing.** Dispatcharr only
+> ingests programmes for rows a channel actually points at, so *every* prospective channel looks
+> like it has no guide until the moment you create it. LFC TV (415) was nearly rejected on this:
+> `LFCTV.uk` showed 0 programmes, and it imported 246 the instant the channel existed. The tell
+> is per-source arithmetic — entries-with-programmes tracks linked-channels, not source size
+> (source 3: 60 linked / 60 populated of 12,835 rows; source 4: 5 / 5 of 763). To judge coverage
+> before committing, check that the `<channel>` element exists in the source, not that
+> programmes are already stored.
 
 ### Channels deliberately without a guide
 
