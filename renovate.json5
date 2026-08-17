@@ -440,15 +440,6 @@
       ]
     },
     {
-      "description": "Auto-label by stack: Gaming",
-      "matchFileNames": [
-        "**/stacks/selfhosted/gaming/**"
-      ],
-      "addLabels": [
-        "stack:gaming"
-      ]
-    },
-    {
       "description": "Auto-label by stack: Music",
       "matchFileNames": [
         "**/stacks/selfhosted/music/**"

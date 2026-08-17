@@ -10,7 +10,7 @@ Drag services between stacks to reorganize. **Bold** = deployed, *Italic* = prop
 
 | **arrs** (Automation) | **media** (Servers) | **social** | **documents** | **books** | **gaming** | **saas** | **automation** | **mcp** (AI Agents) |
 |---|---|---|---|---|---|---|---|---|
-| **sabnzbd** | **jellyfin** | **postiz** | **paperless-ngx** | **booklore** | **romm** | **cal.com** | **n8n** | **atlassian** |
+| **sabnzbd** | **jellyfin** | **postiz** | **paperless-ngx** | **booklore** | *romm* ⏸️ | **cal.com** | **n8n** | **atlassian** |
 | **qbittorrent** | **seerr** | **rybbit** | **paperless-gpt** | **audiobookshelf** | | | **oxidized** | **notion** |
 | **prowlarr** | **jellystat** | | **tika** | *readarr?* | | | **pwpush** | **d365fo** |
 | **radarr** | **wizarr** | | **gotenberg** | | | | **tesla-static** | *home-assistant* |
@@ -92,11 +92,31 @@ Drag services between stacks to reorganize. **Bold** = deployed, *Italic* = prop
 ### ROMM
 - **Repository**: https://github.com/rommapp/romm
 - **Purpose**: ROM library management for retro gaming
-- **Stack**: `gaming` (new)
-- **Status**: ✅ Created gaming/romm.yaml
-- **Access**: https://roms.deercrest.info
-- **Database**: MariaDB 11 + Redis
+- **Stack**: `gaming` — **removed from the repo 2026-08-17**
+- **Status**: ⏸️ Parked. Compose was written but **never deployed**
+- **Access**: was to be https://roms.deercrest.info (no DNS record was ever created)
+- **Database**: MariaDB 12 + Redis
 - **Notes**: Beautiful ROM collection manager with IGDB metadata integration
+
+**Why it was released.** It sat as a definition-only stack for months: no container, no image
+pulled, no `/mnt/fast/appdata/gaming/` directory, no `/mnt/fast/media/roms` library, no DNS.
+It was still generating Renovate PRs (#212, romm 4.9.2 → 5.1.0 — a major with a DB migration for
+a database that does not exist), so it cost review attention while delivering nothing.
+
+**To bring it back**, restore the deleted files from git — they are complete and were the whole
+stack:
+
+```bash
+git checkout <commit-before-removal> -- stacks/selfhosted/gaming stacks/selfhosted/wrappers/gaming.app.yaml
+```
+
+Then, before `up -d`: create `stacks/selfhosted/gaming/.env` from `.env.sample` (needs
+`ROMM_DB_PASSWORD`, `ROMM_DB_ROOT_PASSWORD`, `ROMM_AUTH_SECRET_KEY` 32 chars, and IGDB
+`IGDB_CLIENT_ID`/`IGDB_CLIENT_SECRET` from a Twitch dev app); `mkdir -p` the four bind targets
+(`/mnt/fast/appdata/gaming/romm/{resources,redis,mariadb}` and `/mnt/fast/media/roms`) owned
+`568:568`; add the `roms` DNS record; and re-add the `stack:gaming` auto-label rule to
+`renovate.json5`. Start from current ROMM v5+, not the pinned 4.9.2 — there is no data to
+migrate, so take the latest rather than replaying the 4→5 upgrade.
 
 ### Rybbit
 - **Repository**: https://github.com/rybbit-io/rybbit
@@ -150,7 +170,7 @@ Drag services between stacks to reorganize. **Bold** = deployed, *Italic* = prop
 - **social**: Postiz (social media scheduling) + Rybbit (Reddit client)
 - **documents**: Paperless-ngx + Paperless-GPT + Tika + Gotenberg
 - **books**: Booklore (book tracking)
-- **gaming**: ROMM (ROM library management)
+- ~~**gaming**: ROMM (ROM library management)~~ — released 2026-08-17, never deployed (see ROMM above)
 - **saas**: Cal.com (booking and scheduling platform)
 
 ---
