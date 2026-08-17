@@ -119,8 +119,20 @@ services:
 
   chrome:
     container_name: karakeep-chrome
-    # renovate: datasource=docker depName=gcr.io/zenika-hub/alpine-chrome
-    image: gcr.io/zenika-hub/alpine-chrome:124
+    # renovate: datasource=docker depName=zenika/alpine-chrome
+    #
+    # MOVED 2026-08-17: was gcr.io/zenika-hub/alpine-chrome:124. That GCR mirror is GONE --
+    # `docker manifest inspect` returns not-found and Renovate reported it on the Dependency
+    # Dashboard as "Failed to look up docker package ... no-result".
+    #
+    # The container kept running the whole time on a locally cached image (674 MB, pulled
+    # ~2026-08-03), so nothing looked broken -- but any recreate on a host without that cache
+    # would have failed to start, taking karakeep's headless Chrome (link preview/archiving)
+    # with it. Same class of silent trap as the `created`-state blind spot.
+    #
+    # zenika/alpine-chrome on Docker Hub is the project's canonical home and carries the same
+    # :124 tag, so this is a registry move, not a version change.
+    image: zenika/alpine-chrome:124
     restart: unless-stopped
     command:
       - --no-sandbox
