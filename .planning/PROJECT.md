@@ -39,13 +39,14 @@ outcome that must not happen.
 - [ ] DJ content on its own library path, not mixed into `Compilations/`
 - [ ] DJ metadata normalised — field mapping repaired across releases
 - [ ] DJ artwork/tracklists sourced for releases that have neither tags nor local scans
+- [ ] **Music Assistant reads the same library** — the store mounted from the NUC (HAOS) so the
+      tagged tree is playable there, not just in Jellyfin. Phase verification must confirm
+      Music Assistant sees the content, not only that files landed on disk.
 
 ### Out of Scope
 
 - **Clearing the entire 97 GB backlog** — the goal is a working pipeline plus bucket A proven.
   Buckets B and C become routine work at Damian's own pace, not a project deliverable.
-- **Music Assistant integration** — noted in `beets.md` as not yet connected; a separate concern
-  from tagging.
 - **Re-importing the existing 34 GB tagged library** — it is already correct and Jellyfin reads
   it. Reconciling the separate beets `library.db` files would mean re-importing one side; treat
   as a known hazard, not a task.
@@ -90,6 +91,13 @@ faithfully preserve the wrong mapping.
 (54 files total). Where present they carry full tracklistings and are more reliable than any
 autotagger. Where absent, artwork and tracklists can be sourced externally — Internet Archive,
 or the Mastermix / Music Factory services directly.
+
+**Two consumers, not one.** `/mnt/tank/media/Music` is currently the Jellyfin source only.
+Music Assistant — running on the NUC under Home Assistant OS, a separate box from the Proxmox
+host — must mount the same store. That makes "tagged correctly" insufficient as a success test:
+a phase is only done when the content is visible in **both** Jellyfin and Music Assistant. HAOS
+is a locked-down appliance OS, so the mount has to be added through Home Assistant's own storage
+configuration rather than by editing fstab.
 
 **Prior art:** `stacks/selfhosted/arrs/beets.md` already documents the library state, the A–D
 bucket triage, the two config gaps, and the hard-won gotchas. This project executes and extends
