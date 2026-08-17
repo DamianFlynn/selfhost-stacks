@@ -62,7 +62,8 @@ outcome that must not happen.
 | `beets` (manual) | `arrs/beets/beets.yaml` | Last import **18 Nov 2025**. `library.db` untouched since. Profile-gated, runs only when invoked. |
 | `soulbeet` | `arrs/soulbeet.yaml` | Image `ghcr.io/terry90/soulbeet` **gone from GHCR**. Never deployed. Issue #306. |
 | `wrtag` | `music/wrtag.yaml` | Container up, `wrtag.db` unchanged since **23 Jan 2026**. Pinned `<0.30.0` by a Renovate rule blocking a `WRTAG_PATH_FORMAT` rewrite. |
-| `audio.bash` beets | sabnzbd post-proc, `music` category | Runs per download, but `rm`s its own `library.blb` each run (stateless by design) and imports `-q` in place. Last two jobs (1 Aug, 8 Aug) both logged `skip`. |
+| `audio.bash` beets | sabnzbd post-proc, `music` category | Runs per download, but `rm`s its own `library.blb` each run (stateless by design) and imports `-q` in place. Last two jobs (1 Aug, 8 Aug) both logged `skip`. **Cause now known:** `/config/scripts/beets-config.yaml` declares `plugins: embedart` and nothing else — since beets 2.4.0 MusicBrainz is a plugin, so that config has *no metadata source at all* and every album must skip. Do not "fix" this with `quiet_fallback: asis`. |
+| **Lidarr** *(added 2026-08-17)* | `arrs/lidarr.yaml` | **The fifth writer, never counted.** Root folder is `/media/Music` with `renameTracks: True` — it has been actively renaming files inside the shared library tree. |
 
 **The backlog:**
 
@@ -94,10 +95,17 @@ or the Mastermix / Music Factory services directly.
 
 **Two consumers, not one.** `/mnt/tank/media/Music` is currently the Jellyfin source only.
 Music Assistant — running on the NUC under Home Assistant OS, a separate box from the Proxmox
-host — must mount the same store. That makes "tagged correctly" insufficient as a success test:
-a phase is only done when the content is visible in **both** Jellyfin and Music Assistant. HAOS
-is a locked-down appliance OS, so the mount has to be added through Home Assistant's own storage
-configuration rather than by editing fstab.
+host — must read the same store. That makes "tagged correctly" insufficient as a success test:
+a phase is only done when the content is visible in **both** Jellyfin and Music Assistant.
+
+**The mount route is an OPEN QUESTION** *(corrected 2026-08-17 — previously asserted as fact)*.
+HAOS is a locked-down appliance OS so fstab is out, but the two candidate routes conflict between
+primary sources: HA Supervisor's own source supports Settings → System → Storage with usage Media
+(and the MA add-on maps `media:rw`), while Music Assistant's documentation states verbatim that a
+folder cannot be mounted from HA into `/media` and points to its "Filesystem (remote share)"
+provider instead. Phase 2 settles this empirically on three albums, with route B pre-specified so
+a failure does not stall the phase. Both routes need the same NFS export, so that work is not
+blocked by the answer.
 
 **Prior art:** `stacks/selfhosted/arrs/beets.md` already documents the library state, the A–D
 bucket triage, the two config gaps, and the hard-won gotchas. This project executes and extends
@@ -109,14 +117,32 @@ that plan rather than restating it.
   the source rather than copying. First passes must switch to `copy`; `tank` has 9 T free, so
   the duplication is affordable and reversible.
 - **Filesystem**: `rsync -a` fails writing to `tank` (`mkstemp ... Operation not permitted`) due
-  to `acltype=nfsv4` + `aclmode=restricted`, while printing stats that look like success and
-  exiting 23. Use `rsync -rlt --no-p --no-o --no-g`, then `chown -R 568:545`.
+  to `acltype=nfsv4` + `aclmode=restricted` (confirmed on both `tank/media` and `tank/downloads`),
+  while printing stats that look like success and exiting 23. Use `rsync -rlt --no-p --no-o --no-g`.
+- **Ownership is undecided, not merely inconsistent** *(corrected 2026-08-17)*: 12 of 13 artist
+  folders are `apps:nogroup` (**568:65534**), one is `apps:apps` (**568:568**) — matching neither
+  `beets.md`'s `568:545` nor `CLAUDE.md`'s `568:568`. Something has been writing with an unmapped
+  gid. The value must be *decided* and normalised, not assumed, because it also sets `anonuid`/
+  `anongid` on the NFS export. Note ZFS `acltype=nfsv4` ACLs are not exported by knfsd, so mode
+  bits govern access over NFS — the lever is `chmod`, not ACL surgery.
 - **Jellyfin side effects**: `SaveLocalMetadata: true` means Jellyfin writes `.nfo`/`.jpg`/`.lrc`
   into any folder placed under `/media/Music` within minutes. Never stage untagged content there.
-- **Autotagging ceiling**: Mastermix, DMC, Music Factory, Crate, Toolkit and Essential Hits are
-  not catalogued in MusicBrainz. No autotagger will ever match them — this is expected, not a
-  misconfiguration.
-- **Reversibility**: back up both beets `library.db` files before any bulk run. They are small.
+- **Autotagging ceiling** *(corrected 2026-08-17 after research)*: MusicBrainz coverage of these
+  labels stops around 2016 (~46 entries: 18 `Mastermix Issue`, 19 `DMC Commercial Collection`,
+  9 `Music Factory Mastermix`; `Crate` and `Toolkit` are genuinely zero) and **excludes this
+  backlog** — issues 430/433/441/444 all return nothing. Worse, surviving entries are often 5–10
+  track *stubs* against 15–20 track releases, so a confident wrong match is more likely than no
+  match. **Discogs carries 430, 433 and DMC 350 outright** and is the correct source for this
+  content. Never accept a match without a track-count check.
+- **Storage layout**: `/mnt/tank/downloads` and `/mnt/tank/media/Music` are **separate ZFS
+  datasets**. Every library "move" is copy-then-unlink, not an atomic rename — interruptible, needs
+  transient double space, and `cp --reflink` fails `EXDEV` across them despite
+  `feature@block_cloning` being active on the pool. Reflink only helps *within* `tank/downloads`,
+  which is why staging belongs there.
+- **Reversibility**: **beets has no `undo` command** — verified against the live CLI. Backing up the
+  `library.db` files is necessary but insufficient: take a `zfs snapshot` of `tank/media/Music` in
+  the *same step*, because rolling back only the tree leaves `incremental` state claiming the work
+  is done. Add the `ffprobe` tag-dump of `dj-mixes` and the cover-scan archive to the same fence.
 - **ZFS**: frees space asynchronously; `zfs list` can lag a large delete by ~20 s.
 
 ## Key Decisions

@@ -51,6 +51,10 @@ Requirements for the milestone as PROJECT.md scopes it: pipeline fixed, bucket A
 - [ ] **TAGR-04**: soulbeet is removed (issue #306) and the beets block stripped from `audio.bash`
 - [ ] **TAGR-05**: Every remaining beets config declares the `musicbrainz` plugin — the defect that
       silently disabled autotagging since beets 2.4.0
+- [ ] **TAGR-06**: Operator ergonomics is a weighted, recorded factor in the tagger decision, not
+      an afterthought — including a reviewable-queue front end (e.g. beets-flask) rather than a
+      raw terminal prompt. A tool that is painful to use is a tool that stops being used, and that
+      is the documented cause of three prior abandonments
 
 ### Configuration — the traps closed
 
@@ -72,6 +76,22 @@ Requirements for the milestone as PROJECT.md scopes it: pipeline fixed, bucket A
       misfiled Harry Potter BluRay rip
 - [ ] **INBX-03**: The 45 GB `Now! 1-115` folder is split per volume before it can become one
       un-abortable import
+
+### Quality — better, not worse
+
+The library is not empty and much of it is already tagged. An import that "succeeds" while
+dropping fields the file arrived with is a regression, and at scale it is unrecoverable.
+
+- [ ] **QUAL-01**: A before-state tag snapshot exists for every file staged for import — not just
+      the DJ content — so any change is comparable field by field
+- [ ] **QUAL-02**: No import causes net metadata loss. A field-level before/after diff over the
+      pilot shows what was gained and what was dropped; any dropped field is either deliberate and
+      recorded, or the import is rejected
+- [ ] **QUAL-03**: The pilot sample deliberately includes the historically painful cases — at
+      least one various-artist compilation and one multi-disc release — not only clean
+      single-artist albums, so the proven flow is one that has faced the hard shape
+- [ ] **QUAL-04**: A rejected or regressed import can be undone and re-run without hand-repair,
+      demonstrated at least once
 
 ### Import — a countable win, then scale
 
@@ -105,6 +125,13 @@ Deferred. Real work, deliberately outside this milestone so it cannot consume it
 - **NOWB-01**: UK vs US releases disambiguated per volume with a manual confirmation budget
 - **NOWB-02**: The 115-volume set imported volume by volume
 
+### Acquisition front end
+
+- **LIDR-01**: Evaluate replacing Lidarr as the grabber. Noted as wanted 2026-08-17. Deliberately
+  outside this milestone: Phase 1 already stops Lidarr writing to the library (WRIT-03), which
+  removes the harm it does here. Swapping the acquisition tool is a separate project with its own
+  migration, and folding it in is exactly how this milestone would stop finishing.
+
 ### Bucket C — DJ content
 
 - **DJCC-01**: DJ field mapping normalised per release convention, BPM separated from titles,
@@ -120,7 +147,7 @@ Deferred. Real work, deliberately outside this milestone so it cannot consume it
 |---------|--------|
 | Clearing the whole 97 GB backlog | The failure mode is abandonment, not slowness. Pipeline + bucket A proven is the milestone; the rest is routine work at your own pace |
 | Re-importing the existing 34 GB library | Already correct and Jellyfin reads it. Reconciling separate beets databases means re-importing one side — a known hazard, not a task |
-| Lidarr replacement | Lidarr stays as the grabber. This project is about what happens after files land |
+| Lidarr replacement | Out of *this milestone*, not off the table — see LIDR-01 (v2). Lidarr stays as the grabber for now; WRIT-03 stops it writing to the library, which removes the harm it does here. This project is about what happens after files land |
 | Music Assistant's Jellyfin provider | MA's own docs advise against it — no dedicated maintainer, "consider sharing your music directly with MA instead". The NFS mount is the supported route |
 | AcoustID/chroma fingerprinting | Counterproductive here — beets #360 documents it degrading compilation matching, and bucket B is entirely compilations |
 | Zero-touch automatic tagging | The pattern that killed all three prior attempts. Automation produces a decision; a human ratifies later; the decision persists |
@@ -128,17 +155,89 @@ Deferred. Real work, deliberately outside this milestone so it cannot consume it
 
 ## Traceability
 
-Populated during roadmap creation.
+Populated during roadmap creation (2026-08-17). Every v1 requirement maps to exactly one phase.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| (pending roadmap) | — | Pending |
+| SAFE-01 | Phase 1 | Pending |
+| SAFE-02 | Phase 1 | Pending |
+| SAFE-03 | Phase 1 | Pending |
+| SAFE-04 | Phase 1 | Pending |
+| SAFE-05 | Phase 1 | Pending |
+| WRIT-01 | Phase 1 | Pending |
+| WRIT-02 | Phase 1 | Pending |
+| WRIT-03 | Phase 1 | Pending |
+| WRIT-04 | Phase 1 | Pending |
+| QUAL-01 | Phase 1 | Pending |
+| CONS-01 | Phase 2 | Pending |
+| CONS-02 | Phase 2 | Pending |
+| CONS-03 | Phase 2 | Pending |
+| CONS-04 | Phase 7 | Pending |
+| TAGR-01 | Phase 3 | Pending |
+| TAGR-02 | Phase 3 | Pending |
+| TAGR-06 | Phase 3 | Pending |
+| TAGR-03 | Phase 4 | Pending |
+| TAGR-04 | Phase 4 | Pending |
+| TAGR-05 | Phase 4 | Pending |
+| INBX-01 | Phase 5 | Pending |
+| INBX-02 | Phase 5 | Pending |
+| INBX-03 | Phase 5 | Pending |
+| CONF-01 | Phase 6 | Pending |
+| CONF-02 | Phase 6 | Pending |
+| CONF-03 | Phase 6 | Pending |
+| CONF-04 | Phase 6 | Pending |
+| CONF-05 | Phase 6 | Pending |
+| CONF-06 | Phase 6 | Pending |
+| IMPT-01 | Phase 7 | Pending |
+| IMPT-02 | Phase 7 | Pending |
+| QUAL-02 | Phase 7 | Pending |
+| QUAL-03 | Phase 7 | Pending |
+| QUAL-04 | Phase 7 | Pending |
+| INGS-01 | Phase 8 | Pending |
+| INGS-02 | Phase 8 | Pending |
+| INGS-03 | Phase 8 | Pending |
+| INGS-04 | Phase 8 | Pending |
+| IMPT-03 | Phase 9 | Pending |
 
 **Coverage:**
-- v1 requirements: 33 total
-- Mapped to phases: 0 (roadmap not yet created)
-- Unmapped: 33 ⚠️
+- v1 requirements: 39 total
+- Mapped to phases: 39 ✓
+- Unmapped: 0
+
+**Arithmetic, both ways:**
+
+By category: SAFE 5 + WRIT 4 + CONS 4 + TAGR 6 + CONF 6 + INBX 3 + QUAL 4 + IMPT 3 + INGS 4 = **39**
+
+By phase: 10 + 3 + 3 + 3 + 3 + 6 + 6 + 4 + 1 = **39**
+
+Both totals agree, and every requirement appears in exactly one phase row above.
+
+> **Revision 2026-08-17:** v1 grew from 34 to 39. Five requirements were added on user feedback —
+> the QUAL category (QUAL-01…04, closing the "an import can succeed while making the library worse"
+> hole) and TAGR-06 (operator ergonomics as a weighted factor in the tagger decision). No existing
+> requirement changed phase.
+>
+> **Earlier count correction:** this document once stated 33 v1 requirements when the true count was
+> 34. No requirement was missing — the header total was off by one. That is now superseded by the
+> figure of 39 above.
+
+**By phase:**
+
+| Phase | Requirements | Count |
+|-------|--------------|-------|
+| 1 — Safety Harness and Freeze the Writers | SAFE-01…05, WRIT-01…04, QUAL-01 | 10 |
+| 2 — NFS Export and Music Assistant Reachability | CONS-01, CONS-02, CONS-03 | 3 |
+| 3 — Tagger Spike | TAGR-01, TAGR-02, TAGR-06 | 3 |
+| 4 — Collapse to One Tagger | TAGR-03, TAGR-04, TAGR-05 | 3 |
+| 5 — Inbox Structure and the Junk Gate | INBX-01, INBX-02, INBX-03 | 3 |
+| 6 — Tagger Configuration and Dry Run | CONF-01…06 | 6 |
+| 7 — Pilot — 12 Albums End to End | IMPT-01, IMPT-02, CONS-04, QUAL-02, QUAL-03, QUAL-04 | 6 |
+| 8 — Close the Inflow | INGS-01…04 | 4 |
+| 9 — Bucket A in Batches | IMPT-03 | 1 |
+
+v2 requirements (DUPE-*, NOWB-*, LIDR-01, DJCC-*) are deliberately unscheduled — see
+ROADMAP.md § Beyond This Milestone.
 
 ---
 *Requirements defined: 2026-08-17*
-*Last updated: 2026-08-17 after initial definition*
+*Last updated: 2026-08-17 after roadmap revision (QUAL-01…04 and TAGR-06 mapped; v1 total 39)*
