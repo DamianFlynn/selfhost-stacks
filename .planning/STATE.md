@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-08-18T11:40:11.529Z"
-last_activity: 2026-08-18 -- Phase 01 execution started
+last_updated: "2026-08-18T11:55:54.429Z"
+last_activity: 2026-08-18
 progress:
   total_phases: 9
   completed_phases: 0
   total_plans: 9
-  completed_plans: 0
-  percent: 0
+  completed_plans: 1
+  percent: 11
 ---
 
 # Project State
@@ -29,30 +29,30 @@ pipeline that someone owns.
 ## Current Position
 
 Phase: 01 (safety-harness-and-freeze-the-writers) — EXECUTING
-Plan: 1 of 9
-Status: Executing Phase 01
-Last activity: 2026-08-18 -- Phase 01 execution started
+Plan: 2 of 9
+Status: Executing Phase 01 — plan 01-01 complete
+Last activity: 2026-08-18
 phase requirements, run sequentially in waves 1–9
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [█░░░░░░░░░] 11%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 0
-- Average duration: —
-- Total execution time: —
+- Total plans completed: 1
+- Average duration: 20m
+- Total execution time: 20m
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| - | - | - | - |
+| 01 | 1 | 20m | 20m |
 
 **Recent Trend:**
 
-- Last 5 plans: —
+- Last 5 plans: 01-01 (20m, 3 tasks, 1 file)
 - Trend: —
 
 *Updated after each plan completion*
@@ -97,6 +97,10 @@ Recent decisions affecting current work:
   in this milestone. WRIT-03 already stops it writing to the library, which removes the harm; the
   rest is a separate project with its own migration.
 
+- [01-01]: zfs is not resolvable inside LXC 100 (unprivileged); harness zfs queries are delegated over ssh to the Proxmox host 172.16.1.158
+- [01-01]: audit scripts exit 1 on any failed assertion, exit 0 only in --baseline mode; the estate had no such convention and its silence hid a six-week outage
+- [01-01]: WRIT-04 is ~2x its assumed size — 2,543 of 2,673 library entries have the wrong owner and every file and directory is mode 0777, so D-13's chmod pass touches 100% of the tree
+
 ### Pending Todos
 
 None yet.
@@ -127,6 +131,8 @@ None yet.
   recorded spike output, and QUAL-04 makes a clean undo something proven at pilot scale rather than
   hoped for at backlog scale.
 
+- SAFE-05 blind spot (found in the 01-01 baseline): the library holds 43 .png and 175 .txt files outside D-18's .nfo/.jpg/.lrc sidecar definition. Jellyfin writes .png for logo/clearart, so plan 01-06's one-hour watched-folder test would not detect a new .png. Widen the extension set or record why it is excluded.
+
 ## Deferred Items
 
 | Category | Item | Status | Deferred At |
@@ -138,9 +144,9 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-08-18T00:19:00.000Z
-Stopped at: Phase 1 planned — 9 plans, sequential (parallelization: false)
-Resume file: .planning/phases/01-safety-harness-and-freeze-the-writers/01-01-PLAN.md
+Last session: 2026-08-18T11:55:05.835Z
+Stopped at: Completed 01-01-PLAN.md — harness audit built, baseline recorded (12 findings)
+Resume file: .planning/phases/01-safety-harness-and-freeze-the-writers/01-02-PLAN.md
 
 Plans 01-02, 01-04, 01-06, 01-07, 01-08 and 01-09 are `autonomous: false` — they carry blocking
 human checkpoints (the fence run, the ~140 GB capture, the Lidarr/Jellyfin freeze and its one-hour
