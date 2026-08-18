@@ -19,7 +19,9 @@ provides:
   - /mnt/fast/safety/music-pre-project/audit/postflight-01-08.txt
   - "PROVEN: chown is impossible from LXC 100 — the normalisation must run on the Proxmox host"
   - "PROVEN: the 01-01 ownership census recorded the CONTAINER's view, not the disk"
-  - "EVIDENCE for D-11: Music was the only media subtree on gid 545; Movies was already 568:568"
+  - "EVIDENCE for D-11: gid 545 is an orphan gid (no group entry, unmapped in the LXC idmap); the estate is split, Music+TV on 545 and Photos+Movies+Books on 568"
+  - "FLAG: /mnt/tank/media/TV is 114,218 entries on the same orphan gid 545 - unowned, out of scope"
+  - "FLAG: uid 3000 owns 197,776 of tank/downloads' 209,039 entries (94.6%) and also the library's .DS_Store"
 affects:
   - "01-09 (phase closure — must not fold a permanently-red mode assertion into quick-health-check.sh)"
   - "01-09 (beets.md record — D-14's 568:568 correction now has positive evidence, not just convention)"
@@ -384,27 +386,70 @@ Proxmox host, and a scratch-file probe on `tank/media`. **No `zfs set` of any pr
 
 ### 6. [Finding] `.DS_Store` is `3000:545`, and uid 3000 is a recurring estate writer
 
-On disk the stray was **`3000:545`**, not the `65534:65534` the container reported. uid 3000 also
-owns **124 entries under `tank/downloads`** (43 at `3000:545`, 81 at `3000:568` in a shallow
-census), so it is a real, recurring writer in this estate rather than one macOS drive-by.
+On disk the stray was **`3000:545`**, not the `65534:65534` the container reported.
+
+**Corrected after the full census completed** — I first reported "124 entries under
+`tank/downloads`" from a `-maxdepth 3` sample. The complete walk of all 209,039 entries shows uid
+3000 owns **197,776 of them (94.6%)**:
+
+| Owner | Entries under `tank/downloads` |
+|---|---|
+| **`3000:568`** | **197,733** |
+| `568:568` | 10,652 |
+| `100911:100911` | 599 |
+| **`3000:545`** | **43** |
+| `0:568` | 11 |
+| `0:0` | 1 |
+
+So uid 3000 is not a minor recurring writer — **it is the dominant owner of the entire downloads
+dataset**, i.e. the download client's service identity. The `.DS_Store` in the music library
+carries that same uid, which means either that identity is shared with whatever SMB share a Mac
+mounted, or the file did not arrive the way 01-01 and 01-06 assumed. Worth resolving before Phase 5
+builds `_inbox` staging on this dataset.
+
 **It was chowned to `568:568` along with everything else and was NOT deleted**, per the briefing.
 
-### 7. [Finding — evidence that confirms D-11 and D-14] gid 545 was the anomaly
+### 7. [Finding, and a CORRECTION I made to my own first answer] gid 545 is a *shared legacy*, not a Music-only anomaly
 
 The moment the real gid turned out to be **545** — exactly what `beets.md`'s
 `chown -R 568:545` instructs, and what D-14 calls wrong — D-11's target needed re-justifying rather
-than assuming. Per-subtree census on the host settles it:
+than assuming.
 
-| Subtree | Dominant owners |
-|---|---|
-| Movies | **22,903 `568:568`**, 12,533 `0:568`, 635 `100000:100000` |
-| Books | 42 `568:0`, 5 `568:568` |
-| **Music** | **1,186 `0:545`, 1,171 `568:545`** ← the only subtree on gid 545 |
+**I first answered this from a census that was still running, and got it wrong.** My initial
+reading covered Books, Movies and Music only, and I concluded "Music is the only subtree on gid
+545". The completed census shows **TV is also on gid 545, and dwarfs Music**:
 
-**Music was the only media subtree carrying gid 545; Movies — by far the largest — was already
-predominantly `568:568`.** So `568:568` aligns Music with the estate's own de facto standard,
-`beets.md`'s `568:545` describes the drift rather than the convention, and **D-11 and D-14 both
-stand — now on positive evidence rather than on four documents agreeing with each other.**
+| Subtree | Dominant owners | gid 545? |
+|---|---|---|
+| Photos | 368,826 `0:568`, 9,522 `100000:100000`, 2 `568:568` | no |
+| **TV** | **64,546 `0:545`, 49,672 `568:545`**, 2,466 `100000:100000` | **YES — 114,218 entries** |
+| Movies | 22,903 `568:568`, 12,533 `0:568`, 635 `100000:100000` | no |
+| **Music** | **1,186 `0:545`, 1,171 `568:545`**, 155 `100000:100000` | **YES — 2,357 entries** |
+| Books | 42 `568:0`, 5 `568:568`, 1 `0:0` | no |
+
+So the estate is **split**, not uniform: Photos + Movies + Books on gid `568`/`0` (~414k entries),
+**Music + TV on gid `545` (~116.6k entries)**. TV carries **48× more gid-545 entries than Music
+did**. The two were almost certainly bulk-imported together from a system where 545 was meaningful
+(545 is the Windows/SMB `Users` well-known RID, and the TrueNAS `builtin_users` gid).
+
+**Does D-11 still stand? Yes — but on its original basis, not on the claim I first made.**
+
+- gid **545 has no group entry on the Proxmox host** (`getent group 545` returns nothing). It is an
+  orphan gid. gid 568 is `apps`.
+- 545 is **unmapped in LXC 100's idmap**, which is exactly why the container saw `65534` and why
+  `chown` was impossible from there. Normalising to 568 made the container and host views agree.
+- `568:568` is stated independently in `STANDARDS.md:141`, `DEPLOYMENT.md:31`, `README.md:29` and
+  `CLAUDE.md:52` — which is what D-11 always rested on.
+- By entry count `568` remains the estate majority (~78%).
+
+What I can **no longer** claim is that Music was uniquely wrong. `beets.md`'s `568:545` was
+describing something real and shared with TV, not a typo — D-14's correction is still right for
+Music, but the reason is "545 is an orphan gid we are migrating away from", not "545 was a
+Music-only mistake".
+
+**Open and unowned:** `/mnt/tank/media/TV` is 114,218 entries on the same orphan gid. Nothing in
+this project's scope touches it, no requirement covers it, and it will present the identical
+`chown`-from-LXC-100 `EPERM` to anyone who tries. Flagged, not actioned.
 
 ---
 
@@ -429,7 +474,8 @@ predates every mutation in the phase.
 |------|------|-------------|
 | threat_flag: privileged-delegation | `scripts/freeze-music-apply.sh` | The `ownership` subcommand now runs `chown -R` as **real root on the Proxmox hypervisor** over ssh, not as a namespaced container root. Mitigated by a `LIBRARY` literal scope guard and a remote `test -d`, but the blast radius of a future edit to that constant is now the hypervisor. The ssh channel itself is pre-existing (01-01 established it; the `fence` subcommand already runs `zfs snapshot` over it). |
 | threat_flag: instrument-distortion | `scripts/check-music-freeze.sh` | Section 4's uid:gid figures are the **container's** view and collapse distinct on-disk uids. Any future ownership decision taken from this output alone will be taken on distorted data. Documented in-script with the mapping table and the ground-truth command. |
-| threat_flag: uncounted-writer | `/mnt/tank/media/Music/.DS_Store` | Now known to be uid **3000**, which also owns 124 entries under `tank/downloads`. A recurring estate writer, not a one-off. No requirement covers it. |
+| threat_flag: uncounted-writer | `/mnt/tank/media/Music/.DS_Store` | Now known to be uid **3000** — which owns **197,776 of `tank/downloads`' 209,039 entries (94.6%)**, i.e. the download client's identity, not an incidental one. Either that identity is shared with an SMB share a Mac mounted, or the `.DS_Store` did not arrive the way 01-01/01-06 assumed. No requirement covers it; worth resolving before Phase 5 stages `_inbox` on this dataset. |
+| threat_flag: orphan-gid-at-scale | `/mnt/tank/media/TV` | **114,218 entries on gid 545**, the same orphan gid Music carried (no group entry on the host, unmapped in LXC 100's idmap) — 48× the size of the tree this plan normalised. Out of scope, unowned, and it will present the identical `chown`-from-LXC-100 `EPERM` to anyone who tries. Flagged, not actioned. |
 | threat_flag: acl-vs-modebits | `tank/media/Music` | Unchanged and now confirmed from the host: the tree is permanently 0777. Phase 2's export is governed by mode bits (knfsd does not export NFSv4 ACLs), so it **must stay read-only**. |
 
 ## Known Stubs
@@ -455,8 +501,10 @@ None. Every task ran against live state and every claim above is backed by a rec
 1. **01-09 — three things, one of them a trap.**
    - Do **not** fold section 4's mode assertion into `quick-health-check.sh` as-is; it is a
      permanent red. Scope it to ownership, or to what the dataset can enforce.
-   - The `beets.md` D-14 record should now say **`568:568`, and why**: Music was the only media
-     subtree on gid 545 while Movies was already `568:568`. It should also name the
+   - The `beets.md` D-14 record should say **`568:568`, and why**: gid 545 is an **orphan gid**
+     (no group entry on the host, unmapped in LXC 100's idmap) that Music shared **with TV**;
+     `568` is `apps` and the documented estate convention. It should **not** repeat my first
+     answer that Music was uniquely on 545 — see Deviation 7. It should also name the
      `aclmode=restricted` constraint and correct 01-01's writer attributions.
    - `beets.md` should record that **the normalisation cannot be re-run from LXC 100** — anyone
      repeating it will hit `EPERM` and reasonably but wrongly blame the ACLs.
@@ -466,9 +514,15 @@ None. Every task ran against live state and every claim above is backed by a rec
 3. **Anyone reading 01-01's census** — it is the container's view. Six on-disk owners, not five,
    and the writer attributions in it are wrong. The ground truth command is in
    `check-music-freeze.sh`'s section 4 comment block.
-4. **The phase's recurring pattern, now at five.** A false-pass YAML audit, a harness failing
-   closed on a missing PATH entry, a path-set diff reading 0/0 while 83 files were rewritten,
-   `find -xdev` skipping every appdata dataset — and now **a census that measured the wrong
-   filesystem view entirely, and an assertion that could not see the one directory criterion 5
-   names.** Every instrument in this phase has needed a second, independent instrument before it
-   could be trusted. Here that second instrument was `zfs diff` from the Proxmox host.
+4. **`/mnt/tank/media/TV` — 114,218 entries on the same orphan gid 545.** Unowned, out of scope
+   for this project, and it will hit the identical `chown`-from-LXC-100 `EPERM`. Someone should
+   decide whether it gets normalised too, because leaving Music and TV divergent is arguably worse
+   than leaving them both wrong.
+5. **The phase's recurring pattern, now at six — and I contributed one of them.** A false-pass
+   YAML audit, a harness failing closed on a missing PATH entry, a path-set diff reading 0/0 while
+   83 files were rewritten, `find -xdev` skipping every appdata dataset, **a census that measured
+   the wrong filesystem view entirely and an assertion that could not see the one directory
+   criterion 5 names** — and **my own "Music is the only subtree on gid 545", asserted from a
+   census that was still running.** The sweep itself was verified properly, with a second
+   independent instrument (`zfs diff` from the Proxmox host). The *justification* was not, and it
+   was wrong. Same failure class, one layer up: **partial data, stated as settled.**

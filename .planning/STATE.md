@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-08-18T21:49:42.985Z"
+last_updated: "2026-08-18T22:01:17.952Z"
 last_activity: 2026-08-18
 progress:
   total_phases: 9
@@ -137,6 +137,8 @@ Recent decisions affecting current work:
 - [Phase ?]: 01-08: the 01-01 ownership census recorded the CONTAINER's view, not the disk - six on-disk owners collapse to five, and its writer attributions are wrong
 - [Phase ?]: 01-08: D-11's 568:568 confirmed on evidence - Music was the only media subtree on gid 545 while Movies was already 568:568, so beets.md's 568:545 describes drift and D-14 stands
 - [Phase ?]: 01-08: mode pass skipped with a printed explanation rather than run or swallowed; no zfs set of any property was executed
+- [Phase ?]: 01-08 CORRECTION: gid 545 is NOT Music-specific - TV carries 114,218 entries on the same orphan gid (48x Music). The estate is split: Music+TV on 545, Photos+Movies+Books on 568. D-11's 568:568 still stands, but because 545 is an orphan gid (no group entry, unmapped in the LXC idmap) and 568 is the documented convention - not because Music was uniquely wrong
+- [Phase ?]: 01-08: uid 3000 owns 197,776 of tank/downloads' 209,039 entries (94.6%) - the download client's identity, and the same uid as the library's .DS_Store; resolve before Phase 5 stages _inbox there
 
 ### Pending Todos
 
@@ -221,6 +223,7 @@ Recent decisions affecting current work:
 - 01-03: a duplicated audio_md5 makes the diff join last-wins, so in Phase 7 (BEFORE holds both backlog copies, AFTER holds one import) tag differences between duplicate sources are invisible. DUPE-01 should be resolved before QUAL-02 is treated as complete. The diff always lists such pairs in its informational section.
 - 01-03: unsorted WAV content is NOT tag-free - all 40 sampled Now! 120 WAV records carry 6 format tags (title/artist/album/track/date/comment) plus an embedded cover-art stream. Plan 01-04 and Phase 7 must not assume an empty before-state for unsorted's 134 WAV files.
 - 01-07: the manual beets container is NOT inert — its BEETSDIR config.yaml is a docker-compose file, so beets ran on defaults and left 47 items / 1.4 GB of WAV in /config/Music/__/. Phase 4 must account for it, plus a fifth latent entry point at beets/config/beets.sh.
+- OPEN/UNOWNED: /mnt/tank/media/TV is 114,218 entries on orphan gid 545, the same gid 01-08 normalised Music away from. Out of scope, no requirement covers it, and it will hit the identical chown-from-LXC-100 EPERM. Leaving Music and TV divergent may be worse than leaving both wrong.
 
 ## Deferred Items
 
