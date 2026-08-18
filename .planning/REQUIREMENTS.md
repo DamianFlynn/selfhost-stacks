@@ -82,7 +82,7 @@ Requirements for the milestone as PROJECT.md scopes it: pipeline fixed, bucket A
 The library is not empty and much of it is already tagged. An import that "succeeds" while
 dropping fields the file arrived with is a regression, and at scale it is unrecoverable.
 
-- [ ] **QUAL-01**: A before-state tag snapshot exists for every file staged for import — not just
+- [x] **QUAL-01**: A before-state tag snapshot exists for every file staged for import — not just
       the DJ content — so any change is comparable field by field
 - [ ] **QUAL-02**: No import causes net metadata loss. A field-level before/after diff over the
       pilot shows what was gained and what was dropped; any dropped field is either deliberate and
@@ -168,7 +168,7 @@ Populated during roadmap creation (2026-08-17). Every v1 requirement maps to exa
 | WRIT-02 | Phase 1 | Pending |
 | WRIT-03 | Phase 1 | Pending |
 | WRIT-04 | Phase 1 | Pending |
-| QUAL-01 | Phase 1 | Pending |
+| QUAL-01 | Phase 1 | Complete |
 | CONS-01 | Phase 2 | Pending |
 | CONS-02 | Phase 2 | Pending |
 | CONS-03 | Phase 2 | Pending |
