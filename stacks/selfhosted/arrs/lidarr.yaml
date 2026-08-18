@@ -14,7 +14,13 @@
 #   - Import existing library with matching
 #
 # Workflow:
-#   Add artist → Monitor releases → Search via Prowlarr → Download → Tag → Import to library
+#   Add artist → Monitor releases → Search via Prowlarr → Download → Import to the staging root
+#
+#   Library scope (2026-08-18, plan 01-06 / WRIT-03):
+#     Lidarr is the GRABBER only. It no longer tags, renames or writes anything into
+#     /mnt/tank/media/Music. Its root folder is the staging directory on the downloads dataset;
+#     its view of the media library is read-only. Replacing it as the grabber is LIDR-01, an
+#     explicitly v2 concern — this freeze removes the harm without touching the acquisition role.
 #
 # Access:
 #   URL: https://lidarr.deercrest.info
@@ -39,8 +45,30 @@ services:
     volumes:
       - /etc/localtime:/etc/localtime:ro  # System timezone
       - /mnt/fast/appdata/arrs/lidarr/config:/config:rw  # Application config and database
-      - /mnt/tank/downloads:/downloads:rw  # Download client output directory
-      - /mnt/tank/media:/media:rw  # Music library destination
+      - /mnt/tank/downloads:/downloads:rw  # Download client output directory (also carries the import staging root)
+      # NOTE (2026-08-18, plan 01-06 / WRIT-03, D-25): this mount was READ-WRITE and it was the
+      # last tagger-class writer on the music library. Lidarr's root folder pointed straight at
+      # /media/Music with track renaming on, so it was actively renaming files inside the shared
+      # library tree — the fifth writer the project roadmap never counted.
+      #
+      # What changed: the root folder now resolves to /downloads/lidarr-import (D-23) — outside
+      # the library, on the downloads dataset where staging belongs, and absorbable into Phase 5's
+      # _inbox structure later. Track renaming is off and every metadata consumer is off (D-24).
+      #
+      # Why the mount stays broad rather than being narrowed to a subtree: D-25 keeps library
+      # visibility on purpose, for existing-library matching and duplicate awareness. Read-only
+      # removes the harm without removing the awareness. Narrowing it to Music would cost Lidarr
+      # its cross-library duplicate view for no additional safety once it is :ro.
+      #
+      # Why :ro is load-bearing and not belt-and-braces: deleting the old root folder did NOT
+      # detach the 22 existing artists from the library. Lidarr stores an absolute path per
+      # artist, so all 22 still read /media/Music/<Artist>. The root-folder change governs where
+      # NEW artists land; this :ro suffix is the only thing that actually stops writes to the
+      # existing tree.
+      #
+      # What breaks if someone reverts this: Lidarr regains write access to /mnt/tank/media/Music
+      # for 22 artists it already tracks, and the music library silently gains a second writer.
+      - /mnt/tank/media:/media:ro  # Read-only library visibility for existing-library matching and duplicate awareness (D-25) — see above
     environment:
       TZ: $TZ
       PUID: $PUID
