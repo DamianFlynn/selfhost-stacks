@@ -329,19 +329,55 @@ if [[ -d "$LIBRARY" ]]; then
     fi
   done <<< "$(find "$LIBRARY" -mindepth 1 -maxdepth 1 | sort || true)"
 
-  CENSUS="$(find "$LIBRARY" -mindepth 1 -printf '%U:%G %m %y\n' 2>/dev/null || true)"
+  # WIDENED 2026-08-18 (plan 01-08): the census now includes the library ROOT itself.
+  #
+  # It used to be `-mindepth 1`, which silently excluded /mnt/tank/media/Music from its own
+  # ownership assertion - and the root is mis-owned (01-01 recorded it at 568:65534, outside the
+  # 13-folder census). A chown -R fixes it, but the audit could not see it either way, so this
+  # assertion could have reported "0 entries differ" while the directory every NFS client mounts
+  # was still wrong. That is the same false-pass class this phase has now hit five times.
+  #
+  # Consequence for comparability: totals move from 2673 to 2674 and the ownership mismatch count
+  # from 2543 to 2544 against the 01-01 baseline. The tree did not change - the instrument did.
+  # The -mindepth 1 subtotal is still printed below so the 01-01 numbers stay directly comparable.
+  CENSUS="$(find "$LIBRARY" -printf '%U:%G %m %y\n' 2>/dev/null || true)"
   OWN_MISMATCH="$(printf '%s\n' "$CENSUS" | awk -v want="$UIDGID" 'NF && $1 != want' | grep -c . || true)"
   DIRMODE_MISMATCH="$(printf '%s\n' "$CENSUS" | awk -v want="$DIR_MODE" '$3 == "d" && $2 != want' | grep -c . || true)"
   FILEMODE_MISMATCH="$(printf '%s\n' "$CENSUS" | awk -v want="$FILE_MODE" '$3 == "f" && $2 != want' | grep -c . || true)"
   TOTAL_ENTRIES="$(printf '%s\n' "$CENSUS" | grep -c . || true)"
+  SUBTREE_CENSUS="$(find "$LIBRARY" -mindepth 1 -printf '%U:%G %m %y\n' 2>/dev/null || true)"
+  SUBTREE_OWN="$(printf '%s\n' "$SUBTREE_CENSUS" | awk -v want="$UIDGID" 'NF && $1 != want' | grep -c . || true)"
+  SUBTREE_TOTAL="$(printf '%s\n' "$SUBTREE_CENSUS" | grep -c . || true)"
 
   echo ""
-  info "$ARTIST_COUNT artist folders, $STRAY_COUNT stray top-level files, $TOTAL_ENTRIES entries under the library"
+  info "$ARTIST_COUNT artist folders, $STRAY_COUNT stray top-level files, $TOTAL_ENTRIES entries including the library root"
+  echo "      (of which $SUBTREE_TOTAL are below the root, $SUBTREE_OWN mis-owned — the -mindepth 1"
+  echo "       figures this section used to report, kept for comparability with the 01-01 baseline)"
   echo "  Distinct uid:gid present:"
   printf '%s\n' "$CENSUS" | awk 'NF {print $1}' | sort | uniq -c | sed 's/^/      /'
   echo "  Distinct modes present (mode type count):"
   printf '%s\n' "$CENSUS" | awk 'NF {print $2, $3}' | sort | uniq -c | sed 's/^/      /'
   echo ""
+  # ⚠️  READ THIS BEFORE TRUSTING THE uid:gid FIGURES ABOVE (plan 01-08, 2026-08-18).
+  #
+  # When this script runs on LXC 100 it reports the CONTAINER's view, not what is on disk.
+  # LXC 100 is unprivileged with a sparse idmap (/etc/pve/lxc/100.conf): uid/gid 568 map
+  # identity, but everything outside the mapped ranges surfaces as 65534 (nobody/nogroup).
+  # So the real on-disk owners collapse as follows:
+  #
+  #     on disk (Proxmox host)   this script on LXC 100
+  #     0:545                 -> 65534:65534
+  #     3000:545              -> 65534:65534     (the .DS_Store - a DIFFERENT uid, hidden)
+  #     568:545               -> 568:65534
+  #     100000:100000         -> 0:0             (i.e. root INSIDE the container)
+  #     100911:100911         -> 911:911
+  #
+  # Two consequences that cost this plan a false start:
+  #   1. Distinct-owner counts here UNDERCOUNT - two different on-disk uids can collapse to one.
+  #   2. chown CANNOT be run from LXC 100 at all. Unmapped ids are not chownable from inside a
+  #      user namespace, so `chown -R` fails EPERM on every entry even as container root. The
+  #      normalisation must run on the Proxmox host. See freeze-music-apply.sh `ownership`.
+  # Ground truth: ssh root@172.16.1.158 'find /mnt/tank/media/Music -printf "%U:%G\n" | sort | uniq -c'
 
   if [[ "$OWN_MISMATCH" -eq 0 ]]; then
     pass "ownership: 0 entries differ from $UIDGID"

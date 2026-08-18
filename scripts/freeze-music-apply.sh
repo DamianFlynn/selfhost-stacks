@@ -21,9 +21,13 @@
 # ⚠️  This script MUTATES live state. Review, then run deliberately.
 #     `fence`      creates two ZFS snapshots on the `tank` pool and writes ~350 MB under
 #                  /mnt/fast/safety. It reads /mnt/tank; it never writes there.
-#     `ownership`  recursively rewrites uid:gid and mode bits across the ENTIRE Music dataset
-#                  (2,673 entries as of 2026-08-18). It refuses to run unless the Music
+#     `ownership`  recursively rewrites uid:gid across the ENTIRE Music dataset, library root
+#                  included (2,674 entries as of 2026-08-18). It refuses to run unless the Music
 #                  snapshot exists, because that snapshot is its only rollback.
+#                  It does NOT touch mode bits - chmod is impossible on this pool and D-12 is
+#                  scoped out by user decision. See the long comment in do_ownership().
+#                  The chown itself executes on the Proxmox host: LXC 100 is unprivileged and
+#                  physically cannot chown the library's unmapped uids/gids.
 #
 # Idempotent:
 #   `fence`      re-run reports every stage as already present and changes nothing. An existing
@@ -88,7 +92,9 @@ usage: bash scripts/freeze-music-apply.sh <fence|ownership|all>
   fence      Build the recovery fence: two ZFS snapshots, every beets library database,
              a full ffprobe JSON dump of the dj-mixes tree, the DJ cover scans, checksums
              and a manifest. Reads /mnt/tank; writes only under /mnt/fast/safety.
-  ownership  Normalise /mnt/tank/media/Music to 568:568, dirs 755, files 644.
+  ownership  Normalise /mnt/tank/media/Music (root included) to 568:568. Mode bits are NOT
+             touched - chmod is impossible on this pool (aclmode=restricted), D-12 scoped out.
+             The chown runs on the Proxmox host; it cannot work from inside LXC 100.
              REFUSES to run unless tank/media/Music@pre-project exists.
   all        fence, then ownership.
 EOF
@@ -515,8 +521,11 @@ do_fence() {
 #  ownership  (WRIT-04, D-11/D-12) - shipped here, RUN BY PLAN 01-08
 # ══════════════════════════════════════════════════════════════════════════════
 census_counts() { # prints "own dirmode filemode total"
+  # Includes the library ROOT (no -mindepth 1). The root is itself mis-owned and is not one of
+  # the 13 artist folders, so excluding it would let this report "0 mismatches" while the
+  # directory every NFS client mounts was still wrong. Totals are therefore 2674, not 2673.
   local census own dm fm tot
-  census="$(find "$LIBRARY" -mindepth 1 -printf '%U:%G %m %y\n' 2>/dev/null || true)"
+  census="$(find "$LIBRARY" -printf '%U:%G %m %y\n' 2>/dev/null || true)"
   own="$(printf '%s\n' "$census" | awk -v w="$UIDGID" 'NF && $1 != w' | grep -c . || true)"
   dm="$(printf '%s\n' "$census" | awk -v w="$DIR_MODE" '$3 == "d" && $2 != w' | grep -c . || true)"
   fm="$(printf '%s\n' "$census" | awk -v w="$FILE_MODE" '$3 == "f" && $2 != w' | grep -c . || true)"
@@ -525,7 +534,7 @@ census_counts() { # prints "own dirmode filemode total"
 }
 
 do_ownership() {
-  banner "ownership - normalising $LIBRARY to ${UIDGID}, dirs ${DIR_MODE}, files ${FILE_MODE}"
+  banner "ownership - normalising $LIBRARY to ${UIDGID} (mode pass scoped out, D-12)"
 
   # Precondition guard (pg-migrate.sh guard-then-SKIP shape). The snapshot is the only rollback
   # for a bad recursive chown across 2,673 entries. Without it this must not execute.
@@ -546,6 +555,14 @@ do_ownership() {
     return 1
   fi
 
+  # SCOPE GUARD (T-01-46). The chown below runs as REAL root on the Proxmox host, not as a
+  # namespaced container root, so a wrong LIBRARY constant here is a hypervisor-wide recursive
+  # chown rather than a contained mistake. Assert the literal before delegating anything.
+  if [[ "$LIBRARY" != "/mnt/tank/media/Music" ]]; then
+    err "SKIP: LIBRARY is '$LIBRARY', expected '/mnt/tank/media/Music'. Refusing to run a recursive chown as real root against an unexpected path."
+    return 1
+  fi
+
   read -r b_own b_dm b_fm b_tot <<< "$(census_counts)"
   echo ""
   echo "    BEFORE: $b_tot entries"
@@ -553,29 +570,71 @@ do_ownership() {
   echo "      dirs not ${DIR_MODE}:      $b_dm"
   echo "      files not ${FILE_MODE}:     $b_fm"
 
+  # ── the chown runs on the POOL HOST, not here ───────────────────────────────
+  # Discovered 2026-08-18 (plan 01-08) by piloting one artist folder: `chown -R` fails with
+  # `Operation not permitted` on EVERY entry when run from LXC 100, even as container root.
+  #
+  # Cause: LXC 100 is unprivileged with a sparse idmap. The library's real on-disk owners are
+  # 0:545, 3000:545, 568:545, 100000:100000 and 100911:100911; of those, uid 0/3000 and gid 545
+  # are OUTSIDE the container's map and surface as 65534. A process in a user namespace cannot
+  # chown a file whose current uid or gid is unmapped - CAP_CHOWN in a nested namespace does not
+  # reach ids the namespace cannot name. This is NOT the aclmode=restricted problem; it is a
+  # different mechanism with the same errno, which is exactly why it was mistaken for one.
+  #
+  # Verified on the Proxmox host: chown succeeds, chmod still does not (see the mode pass below).
+  # Delegation reuses the route detect_zfs_route() already established, so running this script
+  # ON the pool host executes locally and nothing is ssh'd.
   echo ""
-  echo "==> Setting ownership ${UIDGID}..."
-  chown -R "${UIDGID}" "${LIBRARY}"
+  echo "==> Setting ownership ${UIDGID} (route: ${ZFS_ROUTE})..."
+  if [[ "$ZFS_ROUTE" == "local" ]]; then
+    chown -R "${UIDGID}" "${LIBRARY}"
+  else
+    # Re-assert the path on the far side: a bind mount present here but absent there would
+    # otherwise make `chown -R` a silent no-op against a path the remote auto-creates.
+    ssh -o BatchMode=yes -o ConnectTimeout=15 "root@${ZFS_HOST}" \
+      "test -d '${LIBRARY}' && chown -R '${UIDGID}' '${LIBRARY}'" \
+      || { err "remote chown failed or ${LIBRARY} is absent on root@${ZFS_HOST}"; return 1; }
+  fi
+  ok "chown complete"
 
-  echo "==> Setting directory mode ${DIR_MODE}..."
-  find "${LIBRARY}" -type d -exec chmod "${DIR_MODE}" {} +
-
-  echo "==> Setting file mode ${FILE_MODE}..."
-  find "${LIBRARY}" -type f -exec chmod "${FILE_MODE}" {} +
+  # ── the mode pass is DELIBERATELY NOT RUN (D-12 scoped out, user decision 2026-08-18) ───────
+  # Not skipped by accident, not swallowed with `|| true`, and not retried. `chmod` is IMPOSSIBLE
+  # on this pool: it returns EPERM as real root for every mode, including a no-op `chmod 0777` on
+  # a file already at 0777. Cause is `acltype=nfsv4` + `aclmode=restricted` on tank/media,
+  # tank/media/Music and tank/downloads - `restricted` makes a chmod that would alter a
+  # non-trivial NFSv4 ACL an error rather than a silent partial apply. Reproduced independently
+  # three times: plan 01-06 on tank/downloads, the user on tank/media/Music, and plan 01-08's
+  # pilot (37/37 invocations failed). It is also the root cause of PROJECT.md's `rsync -a`
+  # failure, and it explains why every entry in the library reads 0777 - the mode is a projection
+  # of the ACL, not a value anyone set.
+  #
+  # `zfs set aclmode=passthrough` WOULD make chmod work and is explicitly REJECTED: it is a
+  # persistent property change on a live pool, and under passthrough a chmod REWRITES the ACL -
+  # so it would overwrite the existing NFSv4 ACLs on all 2,674 entries to satisfy a cosmetic
+  # half of a requirement. Do not "fix" this.
+  #
+  # Phase 2 inherits the consequence: knfsd does not export NFSv4 ACLs, so NFS clients see mode
+  # bits only, and those will read 0777. That is tolerable ONLY while the export stays read-only.
+  echo ""
+  echo "==> Directory mode ${DIR_MODE} / file mode ${FILE_MODE}: SKIPPED BY DECISION"
+  warn "D-12 is scoped out - chmod cannot succeed on this pool (acltype=nfsv4 + aclmode=restricted)."
+  warn "The tree stays 0777. This is a recorded outcome, not a failure. See the comment above."
 
   read -r a_own a_dm a_fm a_tot <<< "$(census_counts)"
   echo ""
   echo "    AFTER:  $a_tot entries"
   echo "      not ${UIDGID}:        $a_own"
-  echo "      dirs not ${DIR_MODE}:      $a_dm"
-  echo "      files not ${FILE_MODE}:     $a_fm"
+  echo "      dirs not ${DIR_MODE}:      $a_dm   (expected non-zero - mode pass scoped out)"
+  echo "      files not ${FILE_MODE}:     $a_fm   (expected non-zero - mode pass scoped out)"
 
   echo ""
-  if [[ "$a_own" -eq 0 && "$a_dm" -eq 0 && "$a_fm" -eq 0 ]]; then
-    echo -e "${GREEN}ownership: normalised${NC}"
+  # Success is the OWNERSHIP half only. Asserting on a_dm/a_fm here would make this subcommand
+  # permanently red for a reason the user has already decided to accept.
+  if [[ "$a_own" -eq 0 ]]; then
+    echo -e "${GREEN}ownership: normalised (WRIT-04 ownership half; mode half scoped out per D-12)${NC}"
     return 0
   fi
-  echo -e "${RED}ownership: residual mismatches remain${NC}"
+  echo -e "${RED}ownership: $a_own residual mismatches remain${NC}"
   return 1
 }
 
