@@ -87,7 +87,9 @@ established before any tool is chosen and before any file is staged or imported.
      it is trusted to prove anything. This is QUAL-01, and it must exist *now*: once content has
      been staged or imported, the before-state can no longer be recovered, and Phase 7's diff has
      nothing to compare against.
-**Plans**: TBD
+**Plans**: 9 (01-01 … 01-09), sequential — audit script, fence, snapshot tooling, the QUAL-01
+capture, mount narrowing, Lidarr + Jellyfin freeze, beets config vendoring, ownership normalisation,
+and the repo record + phase closure
 **Research**: not needed — every item is a documented config change or a standard ZFS/rsync/ffprobe
 operation.
 
