@@ -311,14 +311,20 @@ OWN_MISMATCH=0
 DIRMODE_MISMATCH=0
 FILEMODE_MISMATCH=0
 ARTIST_COUNT=0
+STRAY_COUNT=0
 if [[ -d "$LIBRARY" ]]; then
   echo "      $(stat -c '%u:%g %a %n' "$LIBRARY")   <- library root"
   echo ""
-  echo "  Immediate children (the artist folders):"
+  echo "  Immediate children (artist folders, plus any stray top-level file):"
   while IFS= read -r d; do
     [[ -z "$d" ]] && continue
-    ARTIST_COUNT=$((ARTIST_COUNT + 1))
-    echo "      $(stat -c '%u:%g %a %n' "$d")"
+    if [[ -d "$d" ]]; then
+      ARTIST_COUNT=$((ARTIST_COUNT + 1))
+      echo "      $(stat -c '%u:%g %a %n' "$d")"
+    else
+      STRAY_COUNT=$((STRAY_COUNT + 1))
+      echo "      $(stat -c '%u:%g %a %n' "$d")   <- STRAY top-level file, not an artist folder"
+    fi
   done <<< "$(find "$LIBRARY" -mindepth 1 -maxdepth 1 | sort || true)"
 
   CENSUS="$(find "$LIBRARY" -mindepth 1 -printf '%U:%G %m %y\n' 2>/dev/null || true)"
@@ -328,7 +334,7 @@ if [[ -d "$LIBRARY" ]]; then
   TOTAL_ENTRIES="$(printf '%s\n' "$CENSUS" | grep -c . || true)"
 
   echo ""
-  info "$ARTIST_COUNT artist folders, $TOTAL_ENTRIES entries under the library"
+  info "$ARTIST_COUNT artist folders, $STRAY_COUNT stray top-level files, $TOTAL_ENTRIES entries under the library"
   echo "  Distinct uid:gid present:"
   printf '%s\n' "$CENSUS" | awk 'NF {print $1}' | sort | uniq -c | sed 's/^/      /'
   echo "  Distinct modes present (mode type count):"
@@ -433,7 +439,8 @@ echo "  unclassified writers:        $UNCLASSIFIED_COUNT   (target 0)"
 echo "  declared /mnt/tank/media:    $DECLARED_COUNT volume lines"
 echo "  declared rw reaching Music:  $DECLARED_MUSIC_RW_COUNT   (target 0, jellyfin.yaml excluded)"
 echo "  media subtrees found:        $MEDIA_COUNT"
-echo "  artist folders:              $ARTIST_COUNT"
+echo "  artist folders:              $ARTIST_COUNT   (directories only)"
+echo "  stray top-level files:       $STRAY_COUNT"
 echo "  ownership mismatches:        $OWN_MISMATCH   (target 0, want $UIDGID)"
 echo "  dir-mode mismatches:         $DIRMODE_MISMATCH   (target 0, want $DIR_MODE)"
 echo "  file-mode mismatches:        $FILEMODE_MISMATCH   (target 0, want $FILE_MODE)"
