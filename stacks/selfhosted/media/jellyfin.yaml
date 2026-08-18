@@ -90,7 +90,33 @@ services:
     volumes:
       - /etc/localtime:/etc/localtime:ro  # System timezone for scheduling
       - /mnt/fast/appdata/media/jellyfin:/config:rw  # Application config, metadata, and database
-      - /mnt/tank/media:/media  # Media library (movies, TV, music, photos)
+      # NOTE (2026-08-18): this mount stays BROAD and READ-WRITE on purpose. Every other
+      # /mnt/tank/media mount in the estate was narrowed to its own subtree in Phase 1
+      # (D-19), which leaves Jellyfin as the sole read-write holder on
+      # /mnt/tank/media/Music. That is a deliberate carve-out (D-21), not an oversight —
+      # and until now it looked exactly like one, because this was the only volume in this
+      # file with no :ro/:rw suffix. The suffix is now explicit so nobody has to guess.
+      #
+      # Classification: Jellyfin is CONSUMER-class, not tagger-class, and is therefore
+      # excluded from the WRIT-01 tagger-class count. scripts/check-music-freeze.sh reports
+      # it by name as "consumer-class writers: 1 (documented exception, D-21)" rather than
+      # folding it into a bare total, because a count of one would otherwise read as a
+      # failure to whoever inherits this.
+      #
+      # Why: Jellyfin's writing is disabled at the APPLICATION layer instead of the mount —
+      # SaveLocalMetadata off for the Music library, and real-time file monitoring off for
+      # that library. Both are applied in plan 01-06 and both are PERMANENT (D-17). Once one
+      # tagger owns the tree, Jellyfin writing metadata into it is a second writer by
+      # another name.
+      #
+      # Why not :ro: going read-only risks extracted-subtitle and trickplay behaviour on an
+      # instance actively serving the house. Revisit once the tagger owns the tree.
+      #
+      # What breaks if someone reverts this: Jellyfin resumes writing .nfo, .jpg and .lrc
+      # sidecars into any folder under /media/Music within minutes of a scan, and the music
+      # library silently gains a second writer. There are already 1,123 such sidecars
+      # inventoried under the Phase 1 fence as the baseline for that test.
+      - /mnt/tank/media:/media:rw  # Media library (movies, TV, music, photos) — documented rw exception, see above
       # Transcode to RAM for better performance and reduced disk wear
       - /dev/shm:/data/transcode  # RAM disk for temporary transcoding files
     labels:
