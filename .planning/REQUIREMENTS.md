@@ -24,7 +24,7 @@ Requirements for the milestone as PROJECT.md scopes it: pipeline fixed, bucket A
 
 - [ ] **WRIT-01**: Exactly one process holds a read-write path to `/mnt/tank/media/Music`,
       verified by inspecting the mounts of *running* containers, not by reading compose files
-- [ ] **WRIT-02**: wrtag is stopped and its library mount removed from the definition
+- [x] **WRIT-02**: wrtag is stopped and its library mount removed from the definition
 - [ ] **WRIT-03**: Lidarr no longer renames or organises in the library — `renameTracks` off,
       root folder repointed off `/media/Music`
 - [ ] **WRIT-04**: Library ownership is normalised to one decided `uid:gid` and recorded in the
@@ -165,7 +165,7 @@ Populated during roadmap creation (2026-08-17). Every v1 requirement maps to exa
 | SAFE-04 | Phase 1 | Complete |
 | SAFE-05 | Phase 1 | Pending |
 | WRIT-01 | Phase 1 | Pending |
-| WRIT-02 | Phase 1 | Pending |
+| WRIT-02 | Phase 1 | Complete |
 | WRIT-03 | Phase 1 | Pending |
 | WRIT-04 | Phase 1 | Pending |
 | QUAL-01 | Phase 1 | Complete |
