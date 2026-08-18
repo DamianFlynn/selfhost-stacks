@@ -36,21 +36,27 @@ decisions:
   - "cover-scan extension set includes bmp; 24 of the 54 live scans are BMP and the plan's jpg/jpeg/png/webp list would have archived 30 of 54"
   - "library-db discovery widened to *library* so the eleven arr-scripts .bak database states are fenced"
   - "dj-mixes-ffprobe mirrors the source tree rather than using a flattened slug — release folder plus track filename exceeds ext4's 255-byte filename limit here"
+  - "the Mac Mini's non-interactive ssh PATH lacks head/basename/sqlite3; verification harnesses against it must use absolute tool paths and keep stderr, or they fail closed and report false corruption"
+off_box:
+  destination: "data@datas-mac-mini.pirate-clownfish.ts.net:~/archive/music-pre-project"
+  cover_scans: 54
+  library_db: 15
+  verified: "54/54 sha256 + 15/15 integrity_check"
 metrics:
   duration: ~25 minutes
   completed: 2026-08-18
-  tasks: 2 of 3 (task 3 is a blocking human-action checkpoint)
-  commits: 2
+  tasks: 3
+  commits: 3
   files_created: 1
   host_artifacts: 833 files + 2 ZFS snapshots
 ---
 
 # Phase 01 Plan 02: Recovery Fence Summary
 
-The pre-project recovery fence is built and proven: two ZFS snapshots taken before anything in this
-phase writes, 15 beets databases, a 764-file full-`ffprobe` dump carrying `TKEY` and `EnergyLevel`,
-and all 54 DJ cover scans — 303 MB on a path no running container mounts. **Task 3 (the off-box copy
-to the Mac Mini) is a blocking human-action checkpoint and has NOT been performed.**
+The pre-project recovery fence is built, proven and replicated off-box: two ZFS snapshots taken
+before anything in this phase writes, 15 beets databases, a 764-file full-`ffprobe` dump carrying
+`TKEY` and `EnergyLevel`, and all 54 DJ cover scans — 303 MB on a path no running container mounts,
+with the two irreplaceable classes now also on a second physical machine.
 
 ## What Was Built
 
@@ -58,7 +64,7 @@ to the Mac Mini) is a blocking human-action checkpoint and has NOT been performe
 |------|--------|--------|
 | 1 | `scripts/freeze-music-apply.sh` — `fence` / `ownership` / `all`, mode 0755 | `8bf47c6`, widened in `025175c` |
 | 2 | The fence populated on LXC 100, D-08 proven | host state, not tracked |
-| 3 | Off-box copy to the Mac Mini | **BLOCKED — checkpoint, see below** |
+| 3 | Off-box copy to the Mac Mini (D-07), operator-executed at the blocking checkpoint | host state, not tracked |
 
 ## Snapshots (D-09) — both taken, route recorded
 
@@ -138,6 +144,50 @@ write it.
 **69 / 69 copies verified.** 54 cover scans by strict sha256 equality against source; 15 library
 databases by `PRAGMA integrity_check` (see deviation 1). Zero mismatches. `/tmp` on LXC 100 holds
 only pre-existing systemd/X11 sockets — nothing this task created.
+
+## Off-box copy (D-07, task 3) — operator-executed at the blocking checkpoint
+
+**Destination:** `data@datas-mac-mini.pirate-clownfish.ts.net:~/archive/music-pre-project`
+Host confirmed by the user: `hostname` = `DATAs-Mac-mini.local`, `hw.model` = `Mac16,11`, 380 GiB
+free. A second physical machine, as D-07 requires — not the Proxmox box, and not the MacBook Pro
+workstation.
+
+**Method.** `rsync` is absent on LXC 100 (deviation 6), and the Mac Mini and LXC 100 cannot reach
+each other directly, so the copy was a `tar` stream over ssh piped through the workstation — the
+only machine that can reach both ends. Nothing was staged on the workstation, and no `rsync -a`
+appears anywhere:
+
+```bash
+ssh root@172.16.1.159 'tar -C /mnt/fast/safety/music-pre-project -cf - library-db cover-scans MANIFEST.txt' \
+  | ssh data@<mini> 'mkdir -p ~/archive/music-pre-project && tar -C ~/archive/music-pre-project -xf -'
+```
+
+**Verified on the Mac Mini:**
+
+| Class | Files | Check | Result |
+|-------|------:|-------|--------|
+| `cover-scans/` | 54 | sha256 against `MANIFEST.txt` | **pass=54 fail=0** |
+| `library-db/` | 15 | `PRAGMA integrity_check` | **ok=15 bad=0** |
+
+Total 312,330,060 bytes; 24 bmp + 30 jpg, matching the on-host formats exactly. Both counts equal
+the on-host counts. `dj-mixes-ffprobe/` and `tags/` were deliberately **not** copied, per D-07 scope.
+
+### The trap this cost two false results on — record it
+
+**The Mac Mini's non-interactive shell has a restricted `PATH`.** `head`, `basename` and `sqlite3`
+all resolve in an interactive shell but **not** over plain `ssh`. The first two verification passes
+reported `library-db ok=0 bad=15` — which was the *harness* failing, not the databases. `sqlite3`
+was silently not found and its stderr was discarded, so "command not found" was indistinguishable
+from "integrity check failed". Only the third pass, using absolute `/usr/bin/...` tool paths, was
+trustworthy.
+
+This matters beyond this plan. **A verification harness that fails *closed* — reporting corruption
+when the real fault is a missing tool — is arguably worse than one that fails open, because it
+invites a destructive re-copy over data that was fine.** Anything later in this project that scripts
+against the Mac Mini over ssh must use absolute tool paths and must not discard stderr from the tool
+it is testing with. The same hazard applies to the `ssh root@172.16.1.158` zfs delegation in
+`freeze-music-apply.sh`, which is why `detect_zfs_route()` probes and reports the route explicitly
+rather than assuming a binary resolves.
 
 ## Idempotency proof (D-27)
 
@@ -244,19 +294,27 @@ from `sqlite3-backup` to `pre-existing` once a copy is in place.
 4. **`TKEY` covers only 148 files and `EnergyLevel` only 45** — see above.
 5. **A second `.DS_Store`**, plus a stray `.rtf`, sit in `dj-mixes`. 01-01 found one in the library
    root. A Mac has had write access to both trees.
+6. **The Mac Mini's non-interactive ssh `PATH` does not carry `head`, `basename` or `sqlite3`** —
+   see the off-box section. This produced two false "15 databases corrupt" results before being
+   caught. Any later automation in this project that reaches that host over ssh must use absolute
+   tool paths and keep the tool's stderr.
 
 ## Requirements Status
 
-**SAFE-03 and SAFE-04 are satisfied on-host.** **SAFE-02 is satisfied on-host but not complete** —
-D-07 requires the databases and cover scans to exist on a second physical machine, and that is
-task 3, which is blocked at the checkpoint below. None of the three are marked complete in
-REQUIREMENTS.md until 01-09's assert-mode re-run closes them.
+**SAFE-02, SAFE-03 and SAFE-04 are all satisfied.** SAFE-02 needed the off-box leg (D-07) and now
+has it: both irreplaceable classes exist on `DATAs-Mac-mini`, verified. They are marked complete in
+REQUIREMENTS.md here; 01-09's assert-mode re-run is the standing regression check, not the thing
+that first closes them.
+
+The one artifact class still outstanding inside the fence is `tags/`, filled by plan 01-03's
+QUAL-01 NDJSON — a different requirement, not a gap in these three.
 
 ## Threat Flags
 
 | Flag | File | Description |
 |------|------|-------------|
 | threat_flag: trust-boundary | `scripts/freeze-music-apply.sh` | Extends the LXC 100 → Proxmox root ssh channel established in 01-01 from read-only `zfs list` to **`zfs snapshot`**, i.e. from observation to mutation of the pool. Bounded deliberately: the script issues only `zfs list`, `zfs get` and `zfs snapshot`, and contains no destroy or rollback subcommand — asserted by `grep -cE 'zfs (destroy\|rollback)'` returning 0. Undoing a snapshot stays a deliberate human command. |
+| threat_flag: trust-boundary | off-box copy (host state) | A new machine boundary is now load-bearing: `data@datas-mac-mini.pirate-clownfish.ts.net` holds copies of every beets database and all 54 cover scans, reached over Tailscale. T-01-11 dispositioned this **accept** — the payload is music metadata and local file paths, no credentials — and the destination is the operator's own machine, recorded here as Phase 7 evidence. |
 
 ## Known Stubs
 
@@ -275,3 +333,5 @@ requires now exists.
 - `tank/downloads@pre-project` — FOUND via `root@172.16.1.158`
 - `/mnt/fast/safety/music-pre-project/MANIFEST.txt` — FOUND, non-empty, 854 lines
 - `library-db/` 15 files, `dj-mixes-ffprobe/` 764 files, `cover-scans/` 54 files — all FOUND
+- Off-box `~/archive/music-pre-project` on `DATAs-Mac-mini` — FOUND, 54 + 15 files, 54/54 sha256
+  and 15/15 `integrity_check` verified by the operator (third pass, absolute tool paths)

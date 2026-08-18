@@ -12,11 +12,11 @@ Requirements for the milestone as PROJECT.md scopes it: pipeline fixed, bucket A
 
 - [ ] **SAFE-01**: Destructive beets defaults are off in *every* beets config in the estate —
       `scrub.auto: no`, `lastgenre.auto: no`, `embedart.auto: no`
-- [ ] **SAFE-02**: A recoverable snapshot exists before any import — ZFS snapshot of the Music
+- [x] **SAFE-02**: A recoverable snapshot exists before any import — ZFS snapshot of the Music
       dataset plus copies of every beets library database, taken together as one fence
-- [ ] **SAFE-03**: The DJ tag evidence is captured to a file no tagger can overwrite — `ffprobe`
+- [x] **SAFE-03**: The DJ tag evidence is captured to a file no tagger can overwrite — `ffprobe`
       JSON dump of all 794 `dj-mixes` files, including `TKEY` and `EnergyLevel`
-- [ ] **SAFE-04**: The 54 DJ cover scans are archived outside any tagger-writable path
+- [x] **SAFE-04**: The 54 DJ cover scans are archived outside any tagger-writable path
 - [ ] **SAFE-05**: Jellyfin stops writing into the library — `SaveLocalMetadata` off for Music,
       scheduled scans paused, database backed up
 
@@ -160,9 +160,9 @@ Populated during roadmap creation (2026-08-17). Every v1 requirement maps to exa
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | SAFE-01 | Phase 1 | Pending |
-| SAFE-02 | Phase 1 | Pending |
-| SAFE-03 | Phase 1 | Pending |
-| SAFE-04 | Phase 1 | Pending |
+| SAFE-02 | Phase 1 | Complete |
+| SAFE-03 | Phase 1 | Complete |
+| SAFE-04 | Phase 1 | Complete |
 | SAFE-05 | Phase 1 | Pending |
 | WRIT-01 | Phase 1 | Pending |
 | WRIT-02 | Phase 1 | Pending |

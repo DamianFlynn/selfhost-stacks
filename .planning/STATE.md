@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-08-18T12:54:30.312Z"
+last_updated: "2026-08-18T13:04:04.287Z"
 last_activity: 2026-08-18
 progress:
   total_phases: 9
@@ -29,7 +29,7 @@ pipeline that someone owns.
 ## Current Position
 
 Phase: 01 (safety-harness-and-freeze-the-writers) — EXECUTING
-Plan: 3 of 9
+Plan: 4 of 9
 Status: Ready to execute
 Last activity: 2026-08-18
 phase requirements, run sequentially in waves 1–9
@@ -40,23 +40,30 @@ Progress: [███░░░░░░░] 33%
 
 **Velocity:**
 
-- Total plans completed: 1
-- Average duration: 20m
-- Total execution time: 20m
+- Total plans completed: 3
+- Average duration: 30m
+- Total execution time: 90m
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01 | 1 | 20m | 20m |
+| 01 | 3 | 90m | 30m |
+
+**Per Plan:**
+
+| Plan | Duration | Tasks | Files |
+|------|----------|-------|-------|
+| 01-01 | 20m | 3 tasks | 1 file |
+| 01-02 | 25m | 3 tasks | 1 file |
+| 01-03 | 45m | 3 tasks | 2 files |
 
 **Recent Trend:**
 
-- Last 5 plans: 01-01 (20m, 3 tasks, 1 file)
-- Trend: —
+- Last 5 plans: 01-01 (20m), 01-02 (25m), 01-03 (45m)
+- Trend: rising — 01-03 carried a 9,736-file measurement run, not just script authoring
 
 *Updated after each plan completion*
-| Phase 01 P03 | 45m | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -104,6 +111,9 @@ Recent decisions affecting current work:
 - [Phase ?]: [01-03]: audio_md5 (ffmpeg -map 0:a -c copy -f md5) is the QUAL-01/QUAL-02 join key; proven by a flat 2CD set where all 21 track numbers collide and neither path nor filename disambiguates the disc
 - [Phase ?]: [01-03]: D-02 scope is 9,736 audio files and 170.12 GiB, not 9,764 and ~140 GB; plan 01-04 projects to ~36 min, CPU-bound on md5 hashing and single-threaded, so it can run attended
 - [Phase ?]: [01-03]: the unsorted and dj-mixes copies of Now! 120 are the SAME rip - 20/20 audio_md5 shared, 0 unique to either side; first hard DUPE-01 measurement, covering 1 of the 85 shared folder names
+- [Phase ?]: [01-02]: fence copies made with sqlite3 .backup are verified with PRAGMA integrity_check, not sha256 equality — the plan mandated both and they are mutually unsatisfiable; cover scans still held to strict sha256
+- [Phase ?]: [01-02]: the Mac Mini's non-interactive ssh PATH lacks head/basename/sqlite3 — verification over ssh must use absolute tool paths and keep stderr, or it fails closed and reports false corruption (cost two false 'all 15 databases bad' results)
+- [Phase ?]: [01-02]: '794 dj-mixes files' is wrong — there are 764 audio files; the 794 figure was 764 audio + 30 jpg and missed the 24 BMP cover scans entirely
 
 ### Pending Todos
 
@@ -136,7 +146,7 @@ None yet.
   hoped for at backlog scale.
 
 - SAFE-05 blind spot (found in the 01-01 baseline): the library holds 43 .png and 175 .txt files outside D-18's .nfo/.jpg/.lrc sidecar definition. Jellyfin writes .png for logo/clearart, so plan 01-06's one-hour watched-folder test would not detect a new .png. Widen the extension set or record why it is excluded.
-- 01-02 task 3 blocked at checkpoint: off-box copy of library-db/ and cover-scans/ to the Mac Mini (D-07) needs a human-chosen destination path
+- ~~01-02 task 3 blocked at checkpoint: off-box copy to the Mac Mini (D-07)~~ **RESOLVED 2026-08-18** — operator copied library-db/ (15) and cover-scans/ (54) to `data@datas-mac-mini:~/archive/music-pre-project`, verified 54/54 sha256 + 15/15 integrity_check. Left in place as a hazard note: that host's non-interactive ssh PATH lacks `head`/`basename`/`sqlite3`, which produced two false "all 15 databases corrupt" results before absolute tool paths were used.
 - 01-03: a duplicated audio_md5 makes the diff join last-wins, so in Phase 7 (BEFORE holds both backlog copies, AFTER holds one import) tag differences between duplicate sources are invisible. DUPE-01 should be resolved before QUAL-02 is treated as complete. The diff always lists such pairs in its informational section.
 - 01-03: unsorted WAV content is NOT tag-free - all 40 sampled Now! 120 WAV records carry 6 format tags (title/artist/album/track/date/comment) plus an embedded cover-art stream. Plan 01-04 and Phase 7 must not assume an empty before-state for unsorted's 134 WAV files.
 
@@ -151,8 +161,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-08-18T12:54:19.746Z
-Stopped at: Completed 01-01-PLAN.md — harness audit built, baseline recorded (12 findings)
+Last session: 2026-08-18T13:04:04.279Z
+Stopped at: Completed 01-02-PLAN.md (off-box checkpoint resolved)
 Resume file: None
 
 Plans 01-02, 01-04, 01-06, 01-07, 01-08 and 01-09 are `autonomous: false` — they carry blocking
