@@ -234,6 +234,12 @@ echo "==> Resume ledger: $DONE_LOADED path(s) already captured"
 # succeeds it must not stay on the list. Anything still failing is re-appended below.
 : > "$FAILED_LIST"
 
+# Create the ledger up front rather than on the first successful record. A run that legitimately
+# processes zero files - every path already done, or a root holding only non-audio - must still
+# leave a readable ledger; otherwise the summary below reads a file that does not exist and prints
+# a "No such file or directory" error on what is actually a clean run.
+[[ -f "$DONE_LEDGER" ]] || : > "$DONE_LEDGER"
+
 build_iname_expr "${AUDIO_EXT[@]}"
 
 TOT_SEEN=0 TOT_NEW=0 TOT_SKIP=0 TOT_FAIL=0 TOT_BYTES=0
@@ -359,8 +365,22 @@ echo "  Wall clock:         ${RUN_SECS}s"
 printf '  Throughput:         %.3f s/file, %.2f MB/s\n' \
   "$(awk -v s="$RUN_SECS" -v n="$TOT_NEW" 'BEGIN{print (n>0)? s/n : 0}')" \
   "$(awk -v b="$TOT_BYTES" -v s="$RUN_SECS" 'BEGIN{print b/1048576/s}')"
-echo "  ndjson:             $OUT"
-echo "  ledger:             $DONE_LEDGER ($(wc -l < "$DONE_LEDGER" 2>/dev/null | tr -d ' ') lines)"
+if [[ -f "$OUT" ]]; then
+  echo "  ndjson:             $OUT"
+else
+  echo "  ndjson:             (not created - 0 records written)"
+fi
+echo "  ledger:             $DONE_LEDGER ($(wc -l < "$DONE_LEDGER" | tr -d ' ') lines)"
+
+# Keep the fence's stated invariant (568:568, files 644) true. freeze-music-apply.sh sets it for
+# everything it writes; without this the capture lands root:root 644 and the next `check-music-
+# freeze.sh` run reports fence drift caused by this tool. Best-effort: a non-root operator can
+# still produce a usable capture, so a failure here is a warning, not an error.
+for artifact in "$OUT" "$DONE_LEDGER" "$FAILED_LIST"; do
+  [[ -e "$artifact" ]] || continue
+  chown 568:568 "$artifact" 2>/dev/null || warn "could not chown $artifact to 568:568"
+  chmod 644 "$artifact" 2>/dev/null || true
+done
 echo ""
 
 if [[ $TOT_FAIL -gt 0 ]]; then
