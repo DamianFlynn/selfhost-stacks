@@ -14,9 +14,15 @@ services:
       PUID: $PUID
       PGID: $PGID
     volumes:
-      - /mnt/fast/appdata/arrs/beets/config:/config:rw
-      - /mnt/tank/downloads:/downloads:rw
-      - /mnt/tank/media:/media:rw
+      - /mnt/fast/appdata/arrs/beets/config:/config:rw  # Application config and library.db
+      - /mnt/tank/downloads:/downloads:rw  # Import source — backlog staging area
+      # NOTE (2026-08-18): :ro is deliberate (D-20). Nobody holds read-write on
+      # /mnt/tank/media/Music during Phases 1-3, including this container. Phase 3 chooses
+      # the one tagger and Phase 6 grants it rw — that is the first time anything holds it
+      # again. Until then beets can read the library for match context but cannot write it.
+      # If you flip this back to :rw to "just run one import", you have re-created the exact
+      # failure this project exists to prevent: a fourth half-built tagging path.
+      - /mnt/tank/media:/media:ro  # Existing library — READ-ONLY until Phase 6 (see above)
   #  networks:
   #    - t3_proxy
     ports:

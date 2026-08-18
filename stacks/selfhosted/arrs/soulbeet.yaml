@@ -32,11 +32,22 @@ services:
     ports:
       - "9765:9765"
     volumes:
-      - /mnt/fast/appdata/arrs/soulbeet/data:/data  # Database and app data
-      - /mnt/tank/downloads:/downloads              # Download folder (shared with slskd)
-      - /mnt/tank/media/Music:/music                # Music library destination
+      - /mnt/fast/appdata/arrs/soulbeet/data:/data:rw       # Database and app data
+      - /mnt/tank/downloads:/downloads:rw                   # Download folder (shared with slskd)
+      # NOTE (2026-08-18): this line previously carried NO suffix, which docker defaults to
+      # read-write — soulbeet declared a read-write path straight at the music library.
+      #
+      # Why :ro now: the container cannot currently run (its image is gone from GHCR) and this
+      # file is commented out of arrs/compose.yaml, so a running-container audit scores it green
+      # either way. That is precisely the false pass. Uncommenting one include line would re-arm
+      # a fifth writer against a library that by then holds the pilot import.
+      #
+      # What breaks if you revert it: nothing visible today, and a silent second writer the day
+      # someone restores the image. Deletion belongs to Phase 4 under issue #306 — freeze it
+      # here, retire it there. Do not "helpfully" restore the write access.
+      - /mnt/tank/media/Music:/music:ro                     # Music library — READ-ONLY, see above
       # Custom beets config for existing library integration
-      - /mnt/fast/appdata/arrs/soulbeet/beets_config.yaml:/app/beets_config.yaml
+      - /mnt/fast/appdata/arrs/soulbeet/beets_config.yaml:/app/beets_config.yaml:rw
     environment:
       - TZ=$TZ
       - PUID=$PUID
