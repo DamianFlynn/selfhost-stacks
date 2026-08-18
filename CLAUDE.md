@@ -79,14 +79,28 @@ outcome that must not happen.
 - **Filesystem**: `rsync -a` fails writing to `tank` (`mkstemp ... Operation not permitted`) due
   to `acltype=nfsv4` + `aclmode=restricted` (confirmed on both `tank/media` and `tank/downloads`),
   while printing stats that look like success and exiting 23. Use `rsync -rlt --no-p --no-o --no-g`.
-- **Ownership is undecided, not merely inconsistent** *(corrected 2026-08-17)*: 12 of 13 artist
-  folders are `apps:nogroup` (**568:65534**), one is `apps:apps` (**568:568**) — matching neither
-  `beets.md`'s `568:545` nor `CLAUDE.md`'s `568:568`. Something has been writing with an unmapped
-  gid. The value must be *decided* and normalised, not assumed, because it also sets `anonuid`/
-  `anongid` on the NFS export. Note ZFS `acltype=nfsv4` ACLs are not exported by knfsd, so mode
-  bits govern access over NFS — the lever is `chmod`, not ACL surgery.
-- **Jellyfin side effects**: `SaveLocalMetadata: true` means Jellyfin writes `.nfo`/`.jpg`/`.lrc`
-  into any folder placed under `/media/Music` within minutes. Never stage untagged content there.
+- **Ownership is DECIDED and normalised** *(resolved 2026-08-18 by Phase 1 plan 01-08; supersedes
+  the 2026-08-17 "undecided" reading)*: the library is **`568:568` (`apps:apps`)** across all 2,674
+  entries, library root included, verified from the Proxmox host and by `zfs diff`. Chosen because
+  `568` is `apps` — stated independently in `STANDARDS.md:141`, `DEPLOYMENT.md:31`, `README.md:29`
+  and this file — while the gid it replaced, **545, is an orphan**: `getent group 545` returns
+  nothing on atlantis. **Modes are the unresolved half: everything is `0777` and stays that way.**
+  `chmod` fails `EPERM` on `tank` even as real root, because `aclmode=restricted` +
+  `aclinherit=passthrough` gives even new files a non-trivial NFSv4 ACL; the target of `0755`/`0644`
+  is recorded but not achieved, and forcing it means `zfs set aclmode=passthrough`, which rewrites
+  the ACL on every entry. Phase 2's export inherits `568:568` as `anonuid`/`anongid`, and since ZFS
+  `acltype=nfsv4` ACLs are not exported by knfsd, **mode bits are the only lever NFS clients see** —
+  so with the tree world-writable the export must be read-only.
+  *How the drift happened, kept because it is the signal to watch for:* the earlier reading of
+  `apps:nogroup` (`568:65534`) was **LXC 100's view, not the disk**. The container is unprivileged
+  with a sparse idmap, so unmapped on-disk ids surface as `65534` — `0:545` and `568:545` both
+  collapsed. If `65534` reappears in a container-side listing, check from atlantis before believing
+  it. `/mnt/tank/media/TV` still carries 114,218 entries on gid 545 and is deliberately untouched.
+- **Jellyfin side effects** *(updated 2026-08-18 by plan 01-06)*: `SaveLocalMetadata`, real-time
+  monitoring and `SaveLyricsWithMedia` are now **off for the Music library and permanently so**;
+  Movies and TV keep theirs. Still never stage untagged content under `/media/Music`: the freeze
+  gates the *automatic* save path only — an explicit "Refresh metadata" (`FullRefresh`) still
+  writes, and did rewrite 83 of the library's 91 `.nfo` when tested.
 - **Autotagging ceiling** *(corrected 2026-08-17 after research)*: MusicBrainz coverage of these
   labels stops around 2016 (~46 entries: 18 `Mastermix Issue`, 19 `DMC Commercial Collection`,
   9 `Music Factory Mastermix`; `Crate` and `Toolkit` are genuinely zero) and **excludes this
