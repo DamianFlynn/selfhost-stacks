@@ -10,7 +10,7 @@ Requirements for the milestone as PROJECT.md scopes it: pipeline fixed, bucket A
 
 ### Safety — protect what cannot be recreated
 
-- [ ] **SAFE-01**: Destructive beets defaults are off in *every* beets config in the estate —
+- [x] **SAFE-01**: Destructive beets defaults are off in *every* beets config in the estate —
       `scrub.auto: no`, `lastgenre.auto: no`, `embedart.auto: no`
 - [x] **SAFE-02**: A recoverable snapshot exists before any import — ZFS snapshot of the Music
       dataset plus copies of every beets library database, taken together as one fence
@@ -185,7 +185,7 @@ Populated during roadmap creation (2026-08-17). Every v1 requirement maps to exa
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SAFE-01 | Phase 1 | Pending |
+| SAFE-01 | Phase 1 | Complete (01-07) |
 | SAFE-02 | Phase 1 | Complete |
 | SAFE-03 | Phase 1 | Complete |
 | SAFE-04 | Phase 1 | Complete |

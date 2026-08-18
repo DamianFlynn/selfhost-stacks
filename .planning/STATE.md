@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: completed
-last_updated: "2026-08-18T21:04:27.290Z"
+status: executing
+last_updated: "2026-08-18T21:25:09.302Z"
 last_activity: 2026-08-18
 progress:
   total_phases: 9
   completed_phases: 0
   total_plans: 9
-  completed_plans: 6
+  completed_plans: 7
   percent: 0
 ---
 
@@ -29,12 +29,12 @@ pipeline that someone owns.
 ## Current Position
 
 Phase: 01 (safety-harness-and-freeze-the-writers) — EXECUTING
-Plan: 7 of 9
-Status: 01-06 COMPLETE (WRIT-03 and SAFE-05 met); ready to execute 01-07
+Plan: 8 of 9
+Status: Ready to execute
 Last activity: 2026-08-18
 phase requirements, run sequentially in waves 1–9
 
-Progress: [███████░░░] 67%
+Progress: [████████░░] 78%
 
 ## Performance Metrics
 
@@ -67,6 +67,7 @@ Progress: [███████░░░] 67%
 | Phase 01 P04 | 55m | 2 tasks | 1 files |
 | Phase 01 P05 | 35 minutes | 3 tasks | 10 files |
 | Phase 01 P06 | 65m + 374m watch | 3 tasks | 3 files |
+| Phase 01 P07 | ~40 minutes | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -128,6 +129,9 @@ Recent decisions affecting current work:
 - 01-06: **the SAFE-05 test as the roadmap words it is a path-set diff, and a path-set diff is structurally blind to the most likely form of Jellyfin pollution.** Measured: it returned 0 added / 0 removed while Jellyfin rewrote 83 of the library's 91 .nfo in place, 66 with genuinely changed content. Widening the extension set does NOT fix this — the comparison had to change. The watch now checks sha256 content, a whole-library size/mtime manifest, and a ZFS snapshot cross-check
 - 01-06: **SaveLocalMetadata=false does NOT stop an explicit Jellyfin FullRefresh writing .nfo.** It gates the automatic scan-time save path only. The first .nfo was rewritten 1 second after the refresh POST, with the setting already false and read back from the API. SAFE-05 is true for "Jellyfin writes nothing unprompted" and FALSE for "Jellyfin cannot write" — a UI "Refresh metadata" click still writes. The only structural control would be an :ro mount, which D-21 deliberately rejected
 - 01-06: the @pre-project ZFS snapshot was used in anger and works — SAFE-02 proven, not asserted. `snapdir=hidden`, so `/mnt/tank/media/Music/.zfs/snapshot/pre-project` must be typed; it will not list
+- [Phase ?]: There are five beets configs in the estate, not three — beets' scrub/lastgenre/embedart/fetchart auto keys all DEFAULT to on, so an absent key was an armed key
+- [Phase ?]: appdata/arrs/beets/config/config.yaml is a docker-compose file saved into BEETSDIR — beets ran on pure defaults and imported 47 tracks into /config/Music/__/
+- [Phase ?]: find -xdev is unsafe for estate sweeps: /mnt/fast/appdata/* are separate ZFS datasets, so a sweep from /mnt/fast silently skips appdata and exits 0
 
 ### Pending Todos
 
@@ -211,6 +215,7 @@ Recent decisions affecting current work:
 - ~~01-02 task 3 blocked at checkpoint: off-box copy to the Mac Mini (D-07)~~ **RESOLVED 2026-08-18** — operator copied library-db/ (15) and cover-scans/ (54) to `data@datas-mac-mini:~/archive/music-pre-project`, verified 54/54 sha256 + 15/15 integrity_check. Left in place as a hazard note: that host's non-interactive ssh PATH lacks `head`/`basename`/`sqlite3`, which produced two false "all 15 databases corrupt" results before absolute tool paths were used.
 - 01-03: a duplicated audio_md5 makes the diff join last-wins, so in Phase 7 (BEFORE holds both backlog copies, AFTER holds one import) tag differences between duplicate sources are invisible. DUPE-01 should be resolved before QUAL-02 is treated as complete. The diff always lists such pairs in its informational section.
 - 01-03: unsorted WAV content is NOT tag-free - all 40 sampled Now! 120 WAV records carry 6 format tags (title/artist/album/track/date/comment) plus an embedded cover-art stream. Plan 01-04 and Phase 7 must not assume an empty before-state for unsorted's 134 WAV files.
+- 01-07: the manual beets container is NOT inert — its BEETSDIR config.yaml is a docker-compose file, so beets ran on defaults and left 47 items / 1.4 GB of WAV in /config/Music/__/. Phase 4 must account for it, plus a fifth latent entry point at beets/config/beets.sh.
 
 ## Deferred Items
 
@@ -223,8 +228,8 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-08-18T21:04:27.281Z
-Stopped at: Completed 01-06-PLAN.md — WRIT-03 and SAFE-05 met, SAFE-05 watch PASSED after 374 minutes
+Last session: 2026-08-18T21:25:00.682Z
+Stopped at: Completed 01-07-PLAN.md — SAFE-01 met, six beets configs disarmed, SABnzbd config vendored
 Resume file: None
 
 Plans 01-02, 01-04, 01-06, 01-07, 01-08 and 01-09 are `autonomous: false` — they carry blocking
