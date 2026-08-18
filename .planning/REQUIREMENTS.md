@@ -17,16 +17,42 @@ Requirements for the milestone as PROJECT.md scopes it: pipeline fixed, bucket A
 - [x] **SAFE-03**: The DJ tag evidence is captured to a file no tagger can overwrite — `ffprobe`
       JSON dump of all 764 `dj-mixes` audio files, including `TKEY` and `EnergyLevel`
 - [x] **SAFE-04**: The 54 DJ cover scans are archived outside any tagger-writable path
-- [ ] **SAFE-05**: Jellyfin stops writing into the library — `SaveLocalMetadata` off for Music,
+- [x] **SAFE-05**: Jellyfin stops writing into the library — `SaveLocalMetadata` off for Music,
       scheduled scans paused, database backed up
+      *(01-06. Three switches, not two: `SaveLocalMetadata`, `EnableRealtimeMonitor` and
+      `SaveLyricsWithMedia` — the last gated independently and wrote 944 of the 1,123 baseline
+      sidecars. Scoped to Music only; the global 12-hourly scan task is deliberately left running
+      per D-16, so "scheduled scans paused" is met as real-time monitoring off rather than the
+      global task disabled. Databases backed up with `sqlite3 .backup`, integrity-checked, in the
+      manifest. Proven by a 374-minute quiet watch: 0 sidecars added, removed or content-changed,
+      0 library stat deltas, and `zfs diff` clean apart from one ctime bump we caused ourselves.*
+      **Known limitation, measured not assumed:** `SaveLocalMetadata=false` gates the automatic
+      scan-time save path only. An explicit `MetadataRefreshMode=FullRefresh` — what the Jellyfin
+      UI's "Refresh metadata" button issues — still writes `.nfo`. SAFE-05 is true for "Jellyfin
+      writes nothing **unprompted**" and false for "Jellyfin cannot write". The only structural
+      control would be an `:ro` mount, which D-21 deliberately rejected.)
 
 ### Writers — one process owns the tree
 
 - [ ] **WRIT-01**: Exactly one process holds a read-write path to `/mnt/tank/media/Music`,
       verified by inspecting the mounts of *running* containers, not by reading compose files
+      *(Substantively true as of 01-06: the running-container audit reports `tagger-class writers:
+      0`, `unclassified writers: 0`, `consumer-class writers: 1 (jellyfin, documented exception
+      D-21)`, and `declared rw reaching Music: 0`. It took **01-05 and 01-06 together** — 01-05
+      narrowed or deleted nine mounts, 01-06 flipped the tenth (lidarr) to `:ro`. Left unchecked
+      deliberately: 01-09 owns phase closure and closes it with an assert-mode re-run.)*
 - [x] **WRIT-02**: wrtag is stopped and its library mount removed from the definition
-- [ ] **WRIT-03**: Lidarr no longer renames or organises in the library — `renameTracks` off,
+- [x] **WRIT-03**: Lidarr no longer renames or organises in the library — `renameTracks` off,
       root folder repointed off `/media/Music`
+      *(01-06, all read back from Lidarr's API after a container recreate per D-26, never from the
+      UI. Root folder now `/downloads/lidarr-import` on the downloads dataset; `renameTracks`
+      false; all three metadata consumers off (already were); plus two write paths the requirement
+      does not name — `deleteEmptyFolders` (a **delete** path) and `embedCoverArt` — closed under
+      D-24's intent. The media mount is `:ro` and proven so by an in-container write attempt.*
+      **Load-bearing nuance:** deleting the old root folder did **not** repoint the 22 existing
+      artists — an *arr stores an absolute path per artist, so all 22 still target
+      `/media/Music/<Artist>`. The `:ro` mount (D-25), not the root-folder move (D-23), is what
+      actually closes the library.)
 - [ ] **WRIT-04**: Library ownership is normalised to one decided `uid:gid` and recorded in the
       repo, replacing today's mix of `apps:nogroup` and `apps:apps`
 
@@ -163,10 +189,10 @@ Populated during roadmap creation (2026-08-17). Every v1 requirement maps to exa
 | SAFE-02 | Phase 1 | Complete |
 | SAFE-03 | Phase 1 | Complete |
 | SAFE-04 | Phase 1 | Complete |
-| SAFE-05 | Phase 1 | Pending |
-| WRIT-01 | Phase 1 | Pending |
+| SAFE-05 | Phase 1 | Complete |
+| WRIT-01 | Phase 1 | Pending (audit green via 01-05 + 01-06; 01-09 asserts) |
 | WRIT-02 | Phase 1 | Complete |
-| WRIT-03 | Phase 1 | Pending |
+| WRIT-03 | Phase 1 | Complete |
 | WRIT-04 | Phase 1 | Pending |
 | QUAL-01 | Phase 1 | Complete |
 | CONS-01 | Phase 2 | Pending |

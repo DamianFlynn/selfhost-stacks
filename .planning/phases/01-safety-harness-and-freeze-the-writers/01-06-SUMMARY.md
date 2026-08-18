@@ -2,7 +2,7 @@
 phase: 01-safety-harness-and-freeze-the-writers
 plan: 06
 subsystem: writer-freeze
-status: INCOMPLETE — Task 3 watch RESTARTED content-aware, evaluable from 2026-08-18T15:43:13Z
+status: COMPLETE — SAFE-05 watch PASSED after 374 minutes (2026-08-18T20:54:49Z)
 tags: [lidarr, jellyfin, api, WRIT-03, SAFE-05, sqlite, sidecars, zfs-acl]
 requires:
   - scripts/check-music-freeze.sh (01-01)
@@ -26,8 +26,8 @@ provides:
   - "PROVEN: SaveLocalMetadata=false does NOT stop an explicit Jellyfin FullRefresh writing .nfo"
 affects:
   - 01-07 (beets config vendoring — unaffected)
-  - 01-08 (BLOCKED as written — chmod is impossible on tank; see the ZFS aclmode finding)
-  - 01-09 (phase closure — must first evaluate the running watch, then re-run in assert mode)
+  - 01-08 (D-12 scoped out on the chmod finding, b02dfb7; ownership half of WRIT-04 only)
+  - 01-09 (phase closure — re-run in assert mode to close WRIT-01)
   - "Phase 2 (the NFS export inherits mode bits that cannot currently be set)"
   - "Phase 5 (absorbs /mnt/tank/downloads/lidarr-import into its _inbox structure, D-23)"
 tech-stack:
@@ -47,30 +47,38 @@ decisions:
   - "the Lidarr root folder change is NOT what closes the library; all 22 artists keep absolute /media/Music paths, so the :ro mount (D-25) is the load-bearing control"
   - "chmod is impossible anywhere on tank (aclmode=restricted) — recorded as a finding, NOT worked around by changing a dataset property that belongs to 01-08's decision"
   - "the SAFE-05 test as the roadmap words it is a path-set diff, and a path-set diff returned a perfect pass while Jellyfin rewrote 83 of 91 .nfo in place — the watch was restarted with sha256 content hashes, a whole-library stat manifest and a ZFS snapshot"
+  - "the passing watch was kept QUIET on purpose: an explicit FullRefresh is now known to write, so triggering one inside the window would provoke the failure rather than test the claim"
+  - "the 66 rewritten .nfo are NOT restored — Jellyfin's own current metadata, both snapshots hold the originals, and restoring means writing into a library just sealed"
 metrics:
-  duration: ~60 minutes so far (watch pending)
-  completed: null
-  tasks: 2 of 3
-  commits: 3
+  duration: ~65 minutes of work + a 374-minute observation window
+  completed: 2026-08-18
+  tasks: 3
+  commits: 6
+  files_modified: 3
+  host_artifacts: 11
 ---
 
 # Phase 01 Plan 06: Freeze Lidarr and Jellyfin Summary
 
-**STATUS: INCOMPLETE.** Tasks 1 and 2 are complete, committed, applied live and verified from
-both APIs. Task 3's watch is **running now** — restarted content-aware at `2026-08-18T14:43:13Z`
-and evaluable from `2026-08-18T15:43:13Z` with a single command (below).
+**STATUS: COMPLETE.** All three tasks done. **WRIT-03 met** and **SAFE-05 met**, the latter proven
+by a 374-minute watch that passed all four content-aware gates.
 
 Lidarr's write paths into the music library are closed and **tagger-class rw holders on the
-library is now 0** — WRIT-01 is structurally true for the first time. Jellyfin's Music library is
-frozen at the application layer with three switches, not the two the phase context names.
+library is now 0** — WRIT-01's audit is green for the first time (01-05 + 01-06 together; 01-09
+asserts it). Jellyfin's Music library is frozen at the application layer with three switches, not
+the two the phase context names.
 
-> **Read the Task 3 section before treating SAFE-05 as nearly done.** The test as the roadmap
-> words it is a path-set diff. It was run with an active Jellyfin refresh and returned a perfect
-> pass — 0 added, 0 removed — while Jellyfin **rewrote 83 of the library's 91 `.nfo` files in
-> place and changed the content of 66 of them.** The instrument was replaced. A second, real
-> limit was found at the same time: `SaveLocalMetadata=false` does **not** stop an explicit
-> `FullRefresh` from writing `.nfo`. Nothing was lost — two ZFS snapshots hold the originals and
-> no file was deleted or restored.
+> **Two findings here matter more than the pass, and neither is hidden behind it.**
+>
+> 1. **The SAFE-05 test as the roadmap words it is a path-set diff, and a path-set diff gave a
+>    false pass.** Run against an active Jellyfin refresh it returned 0 added / 0 removed while
+>    Jellyfin **rewrote 83 of the library's 91 `.nfo` files in place, 66 with genuinely changed
+>    content.** The instrument was replaced with content hashes before the passing watch was run.
+> 2. **`SaveLocalMetadata=false` does not stop an explicit `FullRefresh` writing `.nfo`.** SAFE-05
+>    is true for "Jellyfin writes nothing **unprompted**" and false for "Jellyfin cannot write".
+>
+> Nothing was lost — two ZFS snapshots hold the originals, no audio file was touched, and no file
+> was deleted or restored.
 
 ## What Was Built
 
@@ -78,7 +86,7 @@ frozen at the application layer with three switches, not the two the phase conte
 |------|--------|--------|--------|
 | 1 | Lidarr repointed, de-fanged, `:ro` — API evidence recorded | `07c69de` | COMPLETE |
 | 2 | Jellyfin DBs fenced; Music library frozen; API evidence recorded | `219dc4d` | COMPLETE |
-| 3 | Section 5 widened; widened baseline taken; watch started | `fb57d76` | **RUNNING — not evaluated** |
+| 3 | Section 5 widened; content-aware watch run and evaluated | `fb57d76` | **COMPLETE — PASSED** |
 
 ---
 
@@ -326,7 +334,83 @@ largest writer. There is nothing here on a list of things to remember to undo.
 
 ---
 
-## Task 3 — RUNNING, NOT EVALUATED
+## Task 3 — PASSED
+
+### The result
+
+Evaluated by the user with `sidecar-watch-eval.sh`, and independently re-run by me afterwards —
+both returned identical numbers and exit 0.
+
+| | T+0 | T+60 |
+|---|---|---|
+| timestamp (UTC) | `2026-08-18T14:43:13Z` | `2026-08-18T20:54:49Z` |
+| elapsed | — | **374 minutes** (minimum 60) |
+| sidecars | 1,341 | 1,341 |
+| library entries | 2,674 | 2,674 |
+
+| # | Gate | Result |
+|---|---|---|
+| 1 | sidecars ADDED | **0** |
+| 2 | sidecars REMOVED | **0** |
+| 3 | sidecars CONTENT-CHANGED in place (sha256) | **0** |
+| 4 | whole-library stat lines differing (type/size/mtime, all 2,674) | **0** |
+
+`PASS`, exit 0. **SAFE-05 is met.**
+
+### The `zfs diff` cross-check returned one line — and it is ours
+
+The pass must not be read as "nothing touched the tree", because the independent block-level
+check did not come back empty:
+
+```
+$ ssh root@172.16.1.158 'zfs diff tank/media/Music@safe05-watch-t0 tank/media/Music'
+M  /mnt/tank/media/Music/P!nk/I’m Not Dead (2006)/Digital Media 01-04 P!nk - Nobody Knows.mp3
+```
+
+That is a **permission probe against a library file during the `aclmode=restricted` investigation**
+— the user's own independent reproduction of the EPERM finding (my probes ran in a scratch
+directory under `/mnt/tank/downloads`, since removed). It is ours, not a tagger's.
+
+Content provably untouched, verified against **both** snapshots:
+
+| | live | `@safe05-watch-t0` | `@pre-project` |
+|---|---|---|---|
+| sha256 | `4dde1ec8…9835e` | `4dde1ec8…9835e` | `4dde1ec8…9835e` |
+| size | 9498376 | 9498376 | 9498376 |
+| mtime (epoch) | 1785598006 | 1785598006 | 1785598006 |
+| owner / mode | `apps:apps` 777 | `apps:apps` 777 | `apps:apps` 777 |
+| **ctime (epoch)** | **1787064587** | 1785598089 | 1785598089 |
+
+Only `ctime` moved — to `2026-08-18T14:49:47Z`, six minutes into the watch. A `chown` bumps
+`ctime` and leaves `mtime` alone, which is exactly why gate 4 passed.
+
+**That is a real, named limitation of gate 4, not a lucky escape.** The stat manifest records
+`%T@` (mtime), so an ownership or permission change anywhere in the library is invisible to it.
+`zfs diff` sees it. This is precisely why the watch carries two independent instruments, and the
+lesson generalises: **the second instrument earned its place on its first outing.** If a future
+watch is ever run with only the script, a `chown` sweep would pass silently. 01-08's ownership
+normalisation will move `ctime` on ~2,543 entries and must be run against a fresh snapshot
+baseline, or its `zfs diff` will be unreadable.
+
+### Decisions recorded (the user's, made on this evidence)
+
+1. **The 66 rewritten `.nfo` are NOT restored.** They are Jellyfin's own current metadata rather
+   than damage, both snapshots hold the originals indefinitely, no audio file was touched, and
+   restoring would mean writing into a library this phase just finished sealing in order to undo
+   a write.
+2. **The watch stayed QUIET — `RefreshLibrary` was deliberately not triggered.** The reasoning is
+   the important part: now that an explicit `FullRefresh` is *known* to write, an "active" window
+   would be deliberately provoking the failure rather than testing the claim. The quiet result
+   proves exactly what SAFE-05 can honestly support — **nothing writes unprompted** — and the
+   explicit-refresh hole is recorded as a named limitation beside the pass, not behind it.
+3. **D-12 is scoped out of 01-08** on the `chmod` finding below; `01-08-PLAN.md` now delivers the
+   ownership half of WRIT-04 only, and `zfs set aclmode=passthrough` is explicitly rejected
+   (commit `b02dfb7`). The EPERM finding was independently reproduced by the user before that
+   decision was taken.
+
+---
+
+## Task 3 — how the passing watch was built
 
 ### Section 5 widened, committed, pushed, pulled, and the baseline re-taken
 
@@ -494,36 +578,19 @@ would have rewritten every `.nfo` in the tree within minutes.
 | State record | `.../audit/sidecar-watch-STATE.txt` |
 | Evaluation script | `.../audit/sidecar-watch-eval.sh` |
 
-### The exact command that evaluates it
+### The evaluation command
 
 ```bash
 ssh root@172.16.1.159 'bash /mnt/fast/safety/music-pre-project/audit/sidecar-watch-eval.sh'
 ```
 
-It **refuses to evaluate early** — run before `15:43:13Z` it prints `TOO EARLY` and exits `3`
+It **refuses to evaluate early** — before `T+0 + 3600s` it prints `TOO EARLY` and exits `3`
 without producing a T+60 file, so "at least one full hour of real elapsed time" cannot be quietly
-bypassed. Verified twice: exited 3 correctly at `14:35:56Z` and `14:45:07Z`.
+bypassed. Verified refusing at `14:35:56Z` and `14:45:07Z`; ran clean at `20:54:49Z`.
 
 Exit codes: `0` PASS, `1` FAIL (files listed with mtimes), `2` harness/precondition error,
 `3` too early. Its stderr is captured, never discarded — the wave-2 lesson that a verification
 harness failing *closed* and silent is more dangerous than one failing open.
-
-**GATE: all four checks must be zero.** If anything appears, do not delete it, do not restore it
-(D-18) and do not retry silently — record the filename and mtime. Both ZFS snapshots are the undo.
-
-### One thing this window does NOT yet have: an active scan
-
-**No scan has been triggered inside the current window.** The `FullRefresh` ran *before* T+0 and
-had finished by `14:35:04Z`. As it stands the current hour is a **quiet** one, and the plan is
-explicit that an active hour is much stronger evidence.
-
-The realistic, in-threat-model way to make it active is the scheduled task —
-`POST /ScheduledTasks/Running/RefreshLibrary`, default refresh mode, the path that actually runs
-every 12 hours — with the T+0 manifests re-taken immediately before it. **I did not do this: it
-is a further scan against the household's live Jellyfin, and it was outside the authorisation I
-had once the watch had been started and handed back.** It needs an explicit go-ahead. The
-12-hourly task may also fire on its own inside the window, in which case the evaluation captures
-it either way.
 
 **No sidecar was deleted or restored at any point in this plan.**
 
@@ -531,7 +598,7 @@ it either way.
 
 ## Deviations from Plan
 
-### 1. [BLOCKER for 01-08 — Rule 4, escalated not worked around] `chmod` is impossible anywhere on `tank`
+### 1. [Rule 4, escalated not worked around — since RESOLVED by scoping] `chmod` is impossible anywhere on `tank`
 
 - **Found during:** Task 1, creating `/mnt/tank/downloads/lidarr-import` at `568:568 0755`.
 - **Issue:** `chmod` fails with `Operation not permitted` **as root**, for every mode, on both
@@ -572,6 +639,12 @@ it either way.
   not `0755`. `chown` worked; only `chmod` is refused. 0777 matches every sibling under
   `/mnt/tank/downloads`, and Lidarr runs as `568:568` and owns it. Task 1's acceptance criterion
   `stat` returning `568:568 755` is **not met and cannot be met** without the decision above.
+- **RESOLVED after this plan.** The user independently reproduced the EPERM result and then scoped
+  D-12 out: `01-08-PLAN.md` (commit `b02dfb7`) now delivers the **ownership half of WRIT-04 only**,
+  its Task 2 becomes a confirmation rather than a mode-change pilot, and `zfs set
+  aclmode=passthrough` is explicitly rejected. Escalating rather than self-healing was the right
+  call — a silent property flip on a live pool would have pre-empted a decision that also governs
+  Phase 2's export semantics.
 
 ### 2. [Rule 2 - Missing critical] `SaveLyricsWithMedia` — the `.lrc` writer D-15/D-16 do not name
 
@@ -663,10 +736,11 @@ Same for the Lidarr key read from `config.xml`.
 
 ## Findings
 
-1. **`chmod` is impossible on `tank`.** See deviation 1. This is the most consequential finding of
-   the plan and it blocks 01-08, resizes D-12/D-13, and changes what Phase 2's NFS export can
-   promise. It also explains two previously-unexplained observations: 01-01's "every entry is 0777
-   with no exceptions", and PROJECT.md's `rsync -a` failure.
+1. **`chmod` is impossible on `tank`.** See deviation 1. It resized D-12/D-13 out of 01-08
+   entirely (`b02dfb7`) and changes what Phase 2's NFS export can promise. It also explains two
+   previously-unexplained observations: 01-01's "every entry is 0777 with no exceptions", and
+   PROJECT.md's `rsync -a` failure. Independently reproduced by the user before the scoping
+   decision was taken.
 2. **`SaveLyricsWithMedia` is an independent Jellyfin write switch** that `SaveLocalMetadata` does
    not gate, and it was responsible for 84% of the library's sidecars. Any future audit of "is
    Jellyfin frozen?" that checks only `SaveLocalMetadata` gives a false pass.
@@ -693,6 +767,17 @@ Same for the Lidarr key read from `config.xml`.
     was proven in anger this run, not just asserted: it is what the 66-file content comparison was
     made against, read live from `/mnt/tank/media/Music/.zfs/snapshot/pre-project` on the Proxmox
     host (`snapdir=hidden`, so the path must be typed, it will not list).
+11. **A stat manifest keyed on `mtime` cannot see a `chown` or `chmod`; `zfs diff` can.** The one
+    `zfs diff` line the watch produced was a permission probe whose `ctime` moved while `mtime`,
+    size, owner, mode and sha256 all stayed identical. Gate 4 passed correctly, and it passed
+    *because* it measures `mtime`. The second instrument earned its place on its first outing.
+    **Consequence for 01-08:** its `chown` sweep will move `ctime` on ~2,543 entries, so it must
+    take a fresh snapshot baseline first or its own `zfs diff` will be unreadable afterwards.
+12. **Three of this phase's six waves have now hit the same failure class** — a check that reports
+    a pass it did not earn. 01-01's declared-YAML false pass, 01-02's harness failing closed and
+    silent, and 01-06's path-set diff. Worth naming as a pattern in 01-09 rather than three
+    coincidences: every verification instrument in this phase needed a second, independent
+    instrument before it could be trusted.
 
 ## Requirements Status
 
@@ -700,15 +785,27 @@ Same for the Lidarr key read from `config.xml`.
   off; every metadata consumer off (and two further write paths closed); the mount read-only on the
   running container and proven so at the filesystem. All confirmed from Lidarr's API after a
   container recreate, per D-26, never from the UI.
-- **WRIT-01 — now structurally true and ready for 01-09 to assert.** `tagger-class writers: 0`,
-  `unclassified writers: 0`, `declared rw reaching Music: 0`. Not marked complete here; 01-09 owns
-  phase closure.
-- **SAFE-05 — NOT MET, and partially disproven as written.** Databases backed up and verified,
-  three switches closed and read back, section 5 widened, content-aware T+0 recorded. The watch is
-  running and unevaluated. Beyond that, two things must be resolved before SAFE-05 can be called
-  met: the current window has **no active scan in it**, and `SaveLocalMetadata=false` is now
-  **proven not to stop an explicit FullRefresh**. SAFE-05's wording should be tightened to
-  "Jellyfin writes nothing into Music *unprompted*" — the absolute claim is false and measured so.
+- **WRIT-01 — audit green, deliberately left unchecked.** `tagger-class writers: 0`,
+  `unclassified writers: 0`, `consumer-class writers: 1` (jellyfin, D-21), `declared rw reaching
+  Music: 0`. **It took 01-05 and 01-06 together** — 01-05 narrowed or deleted nine mounts, 01-06
+  flipped the tenth. Marked `Pending (audit green via 01-05 + 01-06; 01-09 asserts)` in
+  REQUIREMENTS.md; 01-09 owns phase closure and closes it with an assert-mode re-run.
+- **SAFE-05 — MET, with one named limitation.** Databases backed up, integrity-checked and
+  manifested; three switches closed and read back from the API; the sidecar set widened; and a
+  **374-minute watch passing all four content-aware gates** with a `zfs diff` cross-check whose
+  single line is attributable to our own permission probe and is provably content-identical.
+
+  **The limitation is part of the result, not a footnote.** `SaveLocalMetadata=false` gates the
+  automatic scan-time save path only; an explicit `FullRefresh` still writes `.nfo`. SAFE-05's
+  claim is therefore **"Jellyfin writes nothing into Music *unprompted*"** — true and measured.
+  The absolute reading, "Jellyfin cannot write into Music", is **false and measured so**. The only
+  structural control would be an `:ro` mount, which D-21 deliberately rejected and the phase's
+  Deferred Ideas already flags as worth revisiting once the tagger owns the tree.
+
+  The passing window was deliberately **quiet**: since an explicit `FullRefresh` is now *known* to
+  write, triggering one inside the window would be provoking the failure rather than testing the
+  claim. That was the user's call and it is the right one — the quiet result is exactly the
+  evidence the honest version of SAFE-05 needs.
 
 ## Threat Flags
 
@@ -716,12 +813,12 @@ Same for the Lidarr key read from `config.xml`.
 |------|------|-------------|
 | threat_flag: credential-at-rest | `/mnt/fast/safety/music-pre-project/library-db/jellyfin-jellyfin.db` | The Jellyfin backup contains an `ApiKeys` table with 4 admin-scoped rows (`jellystats`, `Wizarr`, `Seerr`, `QuarterMaster`). Set to mode `0600` `apps:apps` rather than the fence's usual `0644`. Nothing mounts `/mnt/fast/safety` (D-08, re-proven this run). If the fence is ever copied off-box (D-07 sends `library-db/` to the Mac Mini), these keys travel with it. |
 | threat_flag: uncounted-writer | `/mnt/tank/media/Music/.DS_Store` | A macOS client holds write access to the library over a share. Outside every control this phase applies; no requirement covers it. |
-| threat_flag: acl-vs-modebits | `tank/media/Music`, `tank/downloads` | `aclmode=restricted` makes mode bits unsettable. Phase 2's NFS export is governed by mode bits (knfsd does not export NFSv4 ACLs), so the export currently cannot be constrained below 0777 by the mechanism D-12 assumes. |
+| threat_flag: acl-vs-modebits | `tank/media/Music`, `tank/downloads` | `aclmode=restricted` makes mode bits unsettable. Phase 2's NFS export is governed by mode bits (knfsd does not export NFSv4 ACLs), so the export currently cannot be constrained below 0777 by the mechanism D-12 assumes. D-12 has since been scoped out of 01-08 (`b02dfb7`); Phase 2 must plan around a 0777 tree. |
+| threat_flag: residual-write-path | `stacks/selfhosted/media/jellyfin.yaml` | Jellyfin retains `:rw` on the library (D-21) and an explicit UI "Refresh metadata" on the Music library still writes `.nfo` despite `SaveLocalMetadata=false`. Measured, not theorised. No control closes this short of an `:ro` mount. |
 
 ## Known Stubs
 
-None in code. **One incomplete deliverable by design:** the Task 3 watch result. Everything needed
-to close it is recorded on `/mnt/fast` and it evaluates with one command.
+None. All three tasks are complete and every artefact was produced against the live host.
 
 ## Self-Check
 
@@ -737,33 +834,33 @@ to close it is recorded on `/mnt/fast` and it evaluates with one command.
 - `/mnt/fast/safety/music-pre-project/audit/sidecar-watch-t0.epoch` — FOUND, `1787064193`
 - `/mnt/fast/safety/music-pre-project/audit/sidecar-watch-STATE.txt` — FOUND
 - `/mnt/fast/safety/music-pre-project/audit/sidecar-watch-eval.sh` — FOUND, executable, refuses early (exit 3)
+- `/mnt/fast/safety/music-pre-project/audit/sidecar-watch-t60-sha256-20260818T205449Z.txt` — FOUND, 218,333 B
+- `/mnt/fast/safety/music-pre-project/audit/sidecar-watch-t60-stat-20260818T205449Z.txt` — FOUND, 348,039 B
 - `zfs list -t snapshot tank/media/Music` — `@pre-project` and `@safe05-watch-t0` both FOUND
-- Commits `07c69de`, `219dc4d`, `fb57d76` — all FOUND, all pushed to `origin/main`
-- LXC 100 `/mnt/fast/stacks` at `fb57d76`, confirmed by `git log --oneline -1` after `git pull --ff-only`
+- `sidecar-watch-eval.sh` re-run independently at `20:57:24Z` — 0/0/0/0, exit 0, identical to the user's run
+- `zfs diff tank/media/Music@safe05-watch-t0` — exactly 1 line, verified content-identical across live and both snapshots
+- Commits `07c69de`, `219dc4d`, `fb57d76`, `01d415e`, `851bed9` — all FOUND, all pushed to `origin/main`
 - Live state confirmed by `docker inspect`, an in-container write attempt, and API read-back — not by the repo diff
 
-**Result: PASSED for Tasks 1 and 2. Task 3 is INCOMPLETE by design — the watch is running.**
+**Result: PASSED. All three tasks complete.**
 
-## What Closes This Plan
+## What This Hands Forward
 
-1. **Decide whether to make the window active.** The current hour is quiet. To test the realistic
-   threat, re-take the T+0 manifests and then trigger the scheduled task
-   (`POST /ScheduledTasks/Running/RefreshLibrary`, default refresh mode) — this needs an explicit
-   go-ahead, and it restarts the hour. Otherwise accept a quiet hour and say so.
-2. At or after `2026-08-18T15:43:13Z` (or one hour after any restart), run:
-   `ssh root@172.16.1.159 'bash /mnt/fast/safety/music-pre-project/audit/sidecar-watch-eval.sh'`
-3. Cross-check independently:
-   `ssh root@172.16.1.158 'zfs diff tank/media/Music@safe05-watch-t0 tank/media/Music'` — expect
-   no output.
-4. Record the T+60 timestamp, all four counts, and the exit code in this SUMMARY.
-5. Only if all four are 0: mark SAFE-05 met **with the FullRefresh caveat stated**, set this
-   plan's status to complete, and advance STATE.md.
-6. Decide whether to restore the 66 changed `.nfo` from `tank/media/Music@pre-project`. My
-   recommendation is **no** — the content is fresher provider metadata, not damage; QUAL-01's
-   before-state covers audio tags rather than sidecars; and restoring is a write into a tree this
-   phase just finished sealing. The snapshot keeps the option open indefinitely.
-7. Independently of the watch, **01-08 must resolve the `aclmode=restricted` blocker before its
-   mode normalisation can run at all.**
-8. **01-09 should carry two things into PROJECT.md** beyond D-17: that the Jellyfin freeze is not
-   absolute against an explicit refresh, and that SAFE-05-style tests must compare content, not
-   paths.
+1. **01-07** — unaffected. SAFE-01's beets config vendoring is independent of everything here.
+2. **01-08** — takes the **ownership half of WRIT-04 only** (`b02dfb7`); D-12's mode normalisation
+   is scoped out because `chmod` cannot run on `tank`. One operational note it must honour: its
+   `chown` sweep will move `ctime` on ~2,543 entries, so it should take a fresh ZFS snapshot as its
+   own baseline first, or the `zfs diff` cross-check becomes unreadable afterwards.
+3. **01-09** — phase closure. Three things to carry:
+   - Re-run `check-music-freeze.sh` in **assert** mode to close WRIT-01 (it is green now, but
+     unchecked deliberately).
+   - Carry into PROJECT.md alongside D-17: the Jellyfin freeze is **not absolute** against an
+     explicit refresh, and a SAFE-05-style test must compare **content**, not paths.
+   - The D-30 `beets.md` record should name the `aclmode=restricted` constraint and the
+     `568:65534` / `911:911` / `65534:65534` writer attributions.
+4. **Phase 2** — the NFS export inherits a tree that will stay mode 0777, because mode bits cannot
+   be set. `root_squash` + world-read ("Option A") still works; the `0755`/`0644` precondition
+   D-12 assumed does not exist.
+5. **Phase 5** — absorbs `/mnt/tank/downloads/lidarr-import` into its `_inbox` structure (D-23).
+6. **Open, owned by nobody:** the `.DS_Store` proves a macOS client has write access to the library
+   over a share. No requirement covers it and no control in this phase touches it.

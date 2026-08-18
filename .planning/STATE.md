@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-last_updated: "2026-08-18T14:08:41.915Z"
+status: completed
+last_updated: "2026-08-18T21:04:27.290Z"
 last_activity: 2026-08-18
 progress:
   total_phases: 9
   completed_phases: 0
   total_plans: 9
-  completed_plans: 5
+  completed_plans: 6
   percent: 0
 ---
 
@@ -29,12 +29,12 @@ pipeline that someone owns.
 ## Current Position
 
 Phase: 01 (safety-harness-and-freeze-the-writers) — EXECUTING
-Plan: 6 of 9
-Status: **01-06 PAUSED — SAFE-05 one-hour watch RUNNING, not yet evaluated**
+Plan: 7 of 9
+Status: 01-06 COMPLETE (WRIT-03 and SAFE-05 met); ready to execute 01-07
 Last activity: 2026-08-18
 phase requirements, run sequentially in waves 1–9
 
-Progress: [██████░░░░] 56%
+Progress: [███████░░░] 67%
 
 ## Performance Metrics
 
@@ -66,6 +66,7 @@ Progress: [██████░░░░] 56%
 *Updated after each plan completion*
 | Phase 01 P04 | 55m | 2 tasks | 1 files |
 | Phase 01 P05 | 35 minutes | 3 tasks | 10 files |
+| Phase 01 P06 | 65m + 374m watch | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -130,26 +131,22 @@ Recent decisions affecting current work:
 
 ### Pending Todos
 
-- **01-06 Task 3 — the SAFE-05 watch is RUNNING and unevaluated.** Restarted content-aware after the
-  first attempt proved the specified test cannot detect what actually happens.
-  - Watch start (UTC): `2026-08-18T14:43:13Z` — earliest valid evaluation `2026-08-18T15:43:13Z`
-  - ZFS snapshot at watch start: `tank/media/Music@safe05-watch-t0`
-  - Evaluate with: `ssh root@172.16.1.159 'bash /mnt/fast/safety/music-pre-project/audit/sidecar-watch-eval.sh'`
-  - Cross-check: `ssh root@172.16.1.158 'zfs diff tank/media/Music@safe05-watch-t0 tank/media/Music'`
-    — expect no output.
-  - The script refuses to run before the hour elapses (exit 3). 0 = PASS, 1 = FAIL with filenames
-    and mtimes, 2 = harness error. Four gates, all must be zero: sidecars added, sidecars removed,
-    sidecar content changed (sha256), whole-library stat delta.
-  - **The current window is QUIET — no scan has been triggered inside it.** To make it active,
-    re-take the T+0 manifests then `POST /ScheduledTasks/Running/RefreshLibrary` (default refresh
-    mode, the realistic 12-hourly path) — this needs an explicit go-ahead and restarts the hour.
-  - Until it returns clean, **SAFE-05 is not met and 01-06 is not complete.**
-  - Full context: `/mnt/fast/safety/music-pre-project/audit/sidecar-watch-STATE.txt` on LXC 100.
+- ~~01-06 Task 3 — the SAFE-05 watch~~ **PASSED 2026-08-18T20:54:49Z**, 374 minutes elapsed. All
+  four content-aware gates zero: sidecars added 0, removed 0, content-changed 0, whole-library stat
+  delta 0. `zfs diff` returned exactly one line — a permission probe from the `aclmode`
+  investigation whose `ctime` moved while sha256, size, mtime, owner and mode stayed identical
+  across live, `@safe05-watch-t0` and `@pre-project`. Independently re-run and reproduced.
 
-- **01-06 open question for the user: restore the 66 changed `.nfo` or not?** They are recoverable
-  from `tank/media/Music@pre-project`. Recommendation is **no** — the new content is fresher
-  provider metadata rather than damage, QUAL-01's before-state covers audio tags not sidecars, and
-  restoring is a write into a tree this phase just finished sealing.
+- ~~01-06 open question: restore the 66 changed `.nfo`?~~ **DECIDED: no.** They are Jellyfin's own
+  current metadata rather than damage, both ZFS snapshots hold the originals indefinitely, no audio
+  file was touched, and restoring would mean writing into a library this phase just finished
+  sealing in order to undo a write.
+
+- **Decision recorded: the SAFE-05 window was kept QUIET on purpose.** `RefreshLibrary` was
+  deliberately not triggered. Since an explicit `FullRefresh` is now *known* to write, an "active"
+  window would be provoking the failure rather than testing the claim. The quiet result proves what
+  SAFE-05 can honestly support — nothing writes unprompted — and the explicit-refresh hole is
+  recorded beside the pass, not behind it.
 
 ### Blockers/Concerns
 
@@ -179,21 +176,29 @@ Recent decisions affecting current work:
 
 - ~~SAFE-05 blind spot (found in the 01-01 baseline): the library holds 43 .png and 175 .txt files outside D-18's .nfo/.jpg/.lrc sidecar definition.~~ **RESOLVED 2026-08-18 by 01-06** — `check-music-freeze.sh` section 5 now inventories `.nfo/.jpg/.lrc/.png/.txt` (1,341 files) and prints the narrow D-18 subtotal (1,123) alongside it so the widening stays auditable against the 01-01 baseline. `.DS_Store` is counted separately.
 
-- **BLOCKER for 01-08 — `chmod` is impossible anywhere on `tank`.** `tank/media`, `tank/media/Music`
+- ~~**BLOCKER for 01-08**~~ **RESOLVED by scoping (`b02dfb7`): D-12 is out; 01-08 delivers the
+  ownership half of WRIT-04 only, its Task 2 is a confirmation rather than a mode-change pilot, and
+  `zfs set aclmode=passthrough` is explicitly rejected. The finding itself stands and still governs
+  Phase 2.** — `chmod` is impossible anywhere on `tank`. `tank/media`, `tank/media/Music`
   and `tank/downloads` all carry `acltype=nfsv4` + `aclmode=restricted` + `aclinherit=passthrough`.
   Every child inherits a non-trivial NFSv4 ACL, and `restricted` makes `chmod` on a non-trivial ACL
   return `EPERM` — **as root, for every mode, including a no-op `chmod 0777` on a file already at
   0777.** Measured directly during 01-06. Consequences:
+
   - **D-12/D-13's mode normalisation (87 dirs → 0755, 2,586 files → 0644) cannot be done with
-    `chmod`, so 01-08 is blocked as written.** `chown` is unaffected and still works.
+    `chmod`.** `chown` is unaffected and still works, which is why 01-08 keeps the ownership half.
+
   - It explains 01-01's "every entry is mode 0777 with no exceptions" — nothing can change them.
   - It is the same root cause as PROJECT.md's documented `rsync -a` failure
     (`mkstemp ... Operation not permitted`).
+
   - Phase 2 inherits it: knfsd does not export NFSv4 ACLs, so mode bits are all an NFS client sees,
     and mode bits currently cannot be set below 0777.
-  - Routes out, all belonging to 01-08's decision: (a) `zfs set aclmode=passthrough|discard` on the
-    datasets, (b) install `nfs4-acl-tools` (absent on LXC 100 and on the Proxmox host), or
-    (c) accept 0777 and adjust D-12. 01-06 deliberately changed nothing.
+
+  - Routes considered: (a) `zfs set aclmode=passthrough|discard` on the datasets, (b) install
+    `nfs4-acl-tools` (absent on LXC 100 and on the Proxmox host), or (c) accept 0777 and drop D-12.
+    **(c) was chosen** — 01-06 deliberately changed nothing and escalated; the user reproduced the
+    result independently and scoped D-12 out in `b02dfb7`, explicitly rejecting (a).
 
 - 01-06: a `.DS_Store` owned `65534:65534` sits in the library root — a macOS client has write access
   over a share. It is an uncounted writer that no container mount audit and no Lidarr or Jellyfin
@@ -202,6 +207,7 @@ Recent decisions affecting current work:
 - 01-06: the fenced `jellyfin-jellyfin.db` carries an `ApiKeys` table with 4 admin-scoped rows. It is
   mode `0600` rather than the fence's usual `0644`. If `library-db/` is copied off-box again under
   D-07, those credentials travel with it.
+
 - ~~01-02 task 3 blocked at checkpoint: off-box copy to the Mac Mini (D-07)~~ **RESOLVED 2026-08-18** — operator copied library-db/ (15) and cover-scans/ (54) to `data@datas-mac-mini:~/archive/music-pre-project`, verified 54/54 sha256 + 15/15 integrity_check. Left in place as a hazard note: that host's non-interactive ssh PATH lacks `head`/`basename`/`sqlite3`, which produced two false "all 15 databases corrupt" results before absolute tool paths were used.
 - 01-03: a duplicated audio_md5 makes the diff join last-wins, so in Phase 7 (BEFORE holds both backlog copies, AFTER holds one import) tag differences between duplicate sources are invisible. DUPE-01 should be resolved before QUAL-02 is treated as complete. The diff always lists such pairs in its informational section.
 - 01-03: unsorted WAV content is NOT tag-free - all 40 sampled Now! 120 WAV records carry 6 format tags (title/artist/album/track/date/comment) plus an embedded cover-art stream. Plan 01-04 and Phase 7 must not assume an empty before-state for unsorted's 134 WAV files.
@@ -217,9 +223,9 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-08-18T14:40:00Z
-Stopped at: 01-06 tasks 1-2 complete and committed; task 3 watch STARTED at 2026-08-18T14:33:14Z and left running
-Resume file: /mnt/fast/safety/music-pre-project/audit/sidecar-watch-STATE.txt (on LXC 100)
+Last session: 2026-08-18T21:04:27.281Z
+Stopped at: Completed 01-06-PLAN.md — WRIT-03 and SAFE-05 met, SAFE-05 watch PASSED after 374 minutes
+Resume file: None
 
 Plans 01-02, 01-04, 01-06, 01-07, 01-08 and 01-09 are `autonomous: false` — they carry blocking
 human checkpoints (the fence run, the ~140 GB capture, the Lidarr/Jellyfin freeze and its one-hour

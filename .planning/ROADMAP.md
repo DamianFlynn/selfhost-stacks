@@ -66,13 +66,27 @@ established before any tool is chosen and before any file is staged or imported.
   1. Inspecting the mounts of every *running* container returns exactly one with a read-write path
      to `/mnt/tank/media/Music`. wrtag is stopped and its library mount is deleted from
      `wrtag.yaml` — the mount, not just the restart policy.
+     **✅ TRUE as of 01-06** (01-05 + 01-06 together): `tagger-class writers: 0`, `unclassified: 0`,
+     `consumer-class: 1` (jellyfin, D-21), `declared rw reaching Music: 0`. 01-09 asserts it.
   2. Lidarr no longer touches the library tree: root folder repointed off `/media/Music` and
      `renameTracks` off, confirmed from Lidarr's API rather than the UI.
+     **✅ TRUE as of 01-06.** Note the nuance: deleting the root folder did *not* repoint the 22
+     existing artists, which keep absolute `/media/Music/<Artist>` paths. The `:ro` mount (D-25),
+     not the root-folder move, is what actually closes the library.
   3. Destructive defaults are off in *every* beets config in the estate — the repo ones and the
      on-host `/config/scripts/beets-config.yaml` — with `scrub.auto: no`, `lastgenre.auto: no`,
      `embedart.auto: no` present in each; and Jellyfin writes nothing into Music: `SaveLocalMetadata`
      off, scheduled scans paused, database backed up, and no new `.nfo`/`.jpg`/`.lrc` appearing in a
      watched folder over an hour.
+     **Jellyfin half ✅ TRUE as of 01-06**; the beets-config half (SAFE-01) is 01-07 and still open.
+     Two corrections this criterion needs, both measured rather than assumed:
+     (a) the watch must compare sidecar **content**, not the set of paths — a path-set diff returned
+     a perfect pass while Jellyfin rewrote 83 of the library's 91 `.nfo` in place, 66 with changed
+     content. The watch that passed used sha256 hashes, a whole-library size/mtime manifest and a
+     `zfs diff` cross-check, over a widened `.nfo/.jpg/.lrc/.png/.txt` set (1,341 files, not 1,123).
+     (b) `SaveLocalMetadata: false` gates the *automatic* save path only — an explicit
+     `FullRefresh` (the UI's "Refresh metadata" button) still writes. "Jellyfin writes nothing into
+     Music" is true **unprompted** and false as an absolute.
   4. The recovery fence exists and is readable: `tank/media/Music@pre-project` snapshot plus copies
      of every beets `library.db` taken in the same step, an `ffprobe` JSON dump of all 764
      `dj-mixes` files including `TKEY` and `EnergyLevel`, and the 54 DJ cover scans — all on paths
@@ -363,7 +377,7 @@ Phase 7. Plans within a phase run sequentially.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Safety Harness and Freeze the Writers | 5/9 | In Progress|  |
+| 1. Safety Harness and Freeze the Writers | 6/9 | In Progress|  |
 | 2. NFS Export and Music Assistant Reachability | 0/TBD | Not started | - |
 | 3. Tagger Spike | 0/TBD | Not started | - |
 | 4. Collapse to One Tagger | 0/TBD | Not started | - |
