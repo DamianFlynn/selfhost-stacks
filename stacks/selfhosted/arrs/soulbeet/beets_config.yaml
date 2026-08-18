@@ -27,17 +27,39 @@ plugins:
   - duplicates    # Find duplicate tracks
 
 # Plugin configurations
-fetchart:
-  auto: yes
-  cautious: yes
-  
+
+# ------------------------------------------------------------------------------
+# SAFE-01 — destructive defaults, all three explicitly OFF (plan 01-07, 2026-08-18)
+# ------------------------------------------------------------------------------
+# All three of these were armed before this edit — embedart and lastgenre by an
+# explicit affirmative value, and scrub by omission, which is the same thing:
+# scrub.auto DEFAULTS to on in beets 2.13.1 and `scrub` is listed in the `plugins:`
+# block above. Measured with `beet config -d`, not taken from documentation.
+#
+# Edited even though this container cannot currently run (its image is gone from
+# GHCR and arrs/compose.yaml:38 has it commented out). Two reasons: Phase 4 deletes
+# this stack, and deleting from a known-safe state is worth more than deleting from
+# an unknown one; and a repo file that arms these plugins is a template someone copies.
+#
+# The `plugins:` list above is deliberately NOT edited here — Phase 4 owns it.
+
+scrub:
+  auto: no        # scrub STRIPS all existing tags on import. Was armed by omission.
+
 embedart:
-  auto: yes
-  
+  auto: no        # embedart REWRITES the audio file to embed artwork. Was: yes.
+
 lastgenre:
-  auto: yes
+  auto: no        # lastgenre OVERWRITES genre from Last.fm. Was armed explicitly.
   source: album
-  
+
+fetchart:
+  auto: no        # Not one of SAFE-01's three, turned off anyway (plan 01-07, Rule 2):
+                  # fetchart writes cover.jpg INTO the album folder, which is the same
+                  # sidecar pollution SAFE-05 just closed on Jellyfin, from a source the
+                  # roadmap does not count. Was armed explicitly.
+  cautious: yes
+
 replaygain:
   auto: no  # Set to 'yes' if you want automatic ReplayGain calculation
   backend: ffmpeg

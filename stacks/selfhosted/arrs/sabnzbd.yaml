@@ -53,6 +53,36 @@ services:
       #
       # The scripts live in /config/scripts (persistent) -- see each file's header for provenance.
       - /mnt/fast/appdata/arrs/sabnzbd/arr-scripts:/custom-cont-init.d  # Post-processing scripts (vendored, see above)
+      # beets config. NOTE (2026-08-18): sabnzbd/beets-config.yaml is now VENDORED in
+      # this repo (plan 01-07, SAFE-01 / D-28). It is the config audio.bash line 285
+      # hands to beets on EVERY music download:
+      #     beet -c /config/scripts/beets-config.yaml -l /config/scripts/library.blb \
+      #          -d "$1" import -q "$1"
+      # Until now it existed only on the host and had never been reviewed.
+      #
+      # Why the three auto keys in it are deliberately `no`: scrub.auto, lastgenre.auto
+      # and embedart.auto ALL DEFAULT TO YES in beets 2.13.1 — verified by running
+      # `beet config -d` against a config that names each plugin, not assumed from docs.
+      # scrub strips every existing tag on import, lastgenre overwrites genre from
+      # Last.fm, and embedart rewrites the audio file to embed artwork. All three fire
+      # automatically. There is no `beet undo`; the only reversal is a ZFS rollback.
+      # The keys are present even for plugins not in the `plugins:` line, because an
+      # absent key is not "off" — it is "on the moment someone adds the plugin".
+      #
+      # What breaks if you revert this: the container goes back to a beets config that
+      # nothing tracks, and the upstream arr-scripts setup.bash re-downloads
+      # beets-config.yaml from GitHub (see the NOTE above — that is exactly the class of
+      # silent revert the scripts_init.bash vendoring exists to stop). The replacement
+      # config carries upstream's defaults, so the next music download scrubs its own
+      # tags, overwrites its genres and rewrites its files, against a 34 GB library and
+      # a 97 GB backlog with no undo. The bind mount is real protection and not just
+      # documentation: upstream overwrites via `curl -o tmp && mv tmp dest`, and `mv`
+      # onto a bind-mounted file fails EBUSY.
+      #
+      # The repo copy is for review and history; THIS appdata path is authoritative at
+      # runtime. Same hybrid shape as arrs/soulbeet.yaml. The file's `plugins:` line is
+      # knowingly broken and is knowingly NOT fixed here — Phase 4 TAGR-05 owns it.
+      - /mnt/fast/appdata/arrs/sabnzbd/config/scripts/beets-config.yaml:/config/scripts/beets-config.yaml:rw  # Vendored beets config (see above)
       - /mnt/tank/downloads:/downloads:rw  # Download output directory (incomplete and complete)
     environment:
       PUID: $PUID

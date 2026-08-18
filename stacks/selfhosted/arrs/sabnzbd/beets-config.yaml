@@ -1,0 +1,144 @@
+# beets configuration for the SABnzbd post-processing pipeline
+#
+# Consumed by:
+#   container  sabnzbd  (ghcr.io/linuxserver/sabnzbd — beets 2.13.1 ships inside the image)
+#   script     /config/scripts/audio.bash, line 285:
+#              beet -c /config/scripts/beets-config.yaml \
+#                   -l /config/scripts/library.blb -d "$1" import -q "$1"
+#   trigger    every SABnzbd music download that completes post-processing
+#
+# VENDORED 2026-08-18 (plan 01-07, SAFE-01 / D-28). This file lived only on the host
+# until now. The repo copy is for review and history; the compose mount in
+# ../sabnzbd.yaml points at the appdata copy, which is authoritative at runtime.
+# Same hybrid shape as soulbeet/beets_config.yaml. See ../sabnzbd.yaml for the
+# provenance NOTE and for what breaks if the mount is removed.
+#
+# Seeded verbatim from /mnt/fast/appdata/arrs/sabnzbd/config/scripts/beets-config.yaml
+# (sha256 c12a811088319c850630a16414f785ad07a59194ea3b0d7e2d2db8e37be6f3d8,
+#  mtime 2026-06-24). No credential of any kind was present. Screened for a Discogs
+# user credential, for any field named after a credential class, for URLs carrying
+# embedded credentials, for e-mail addresses, and for high-entropy strings. All seven
+# checks returned clean, so nothing here is redacted and there is no placeholder to
+# substitute. Re-screen before committing any future change to this file.
+
+# --------------------------------------------------------------------------------
+# KNOWN DEFECT — DO NOT "FIX" IT HERE. Phase 4, TAGR-05 owns it.
+# --------------------------------------------------------------------------------
+# `plugins: embedart` names embedart and nothing else. Since beets 2.4.0 MusicBrainz
+# is itself a plugin, so a customised plugins list that omits `musicbrainz` silently
+# disables autotagging entirely — the symptom looks like "no match found", never like
+# a config error. This is the confirmed cause of the 1 Aug and 8 Aug 2026 ingest skips.
+#
+# It is deliberately left UNCHANGED by plan 01-07. That plan's job was to get this
+# file under version control before it is edited, so Phase 4 edits a known state
+# rather than a guessed one. Repairing it changes ingest behaviour mid-safety-phase.
+plugins: embedart
+
+art_filename: folder
+threaded: no
+per_disc_numbering: yes
+id3v23: no
+asciify_paths: true
+
+# --------------------------------------------------------------------------------
+# Autotagger match thresholds (unchanged from the host original)
+# --------------------------------------------------------------------------------
+match:
+    strong_rec_thresh: 0.10 # 0.04
+    medium_rec_thresh: 0.25 # 0.25
+    rec_gap_thresh: 0.25 # 0.25
+    max_rec:
+        missing_tracks: medium # medium
+        unmatched_tracks: medium # medium
+        track_length: medium
+        track_index: medium
+    distance_weights:
+        source: 2.0 # 2.0
+        artist: 3.0 # 3.0
+        album: 3.0 # 3.0
+        media: 1.0 # 1.0
+        mediums: 1.0 # 1.0
+        year: 1.0 # 1.0
+        country: 0.5 # 0.5
+        label: 0.5 # 0.5
+        catalognum: 0.5 # 0.5
+        albumdisambig: 0.5 # 0.5
+        album_id: 5.0 # 5.0
+        tracks: 2.0 # 2.0
+        missing_tracks: 0.9 # 0.9
+        unmatched_tracks: 0.6 # 0.6
+        track_title: 3.0 # 3.0
+        track_artist: 2.0 # 2.0
+        track_index: 1.0 # 1.0
+        track_length: 2.0 # 2.0
+        track_id: 5.0 # 5.0
+    preferred:
+        countries: [] # []
+        media: [] # []
+        original_year: no # no
+    ignored: ['missing_tracks', 'track_length', 'unmatched_tracks', 'track_index'] # []
+    required: [] # []
+    ignored_media: [] # []
+    ignore_data_tracks: yes # yes
+    ignore_video_tracks: yes # yes
+    track_length_grace: 10 # 10
+    track_length_max: 30 # 30
+
+# --------------------------------------------------------------------------------
+# Path formats (unchanged). audio.bash passes -d "$1", so these are relative to the
+# download folder being processed — this pipeline tags in place and never writes to
+# /mnt/tank/media/Music.
+# --------------------------------------------------------------------------------
+paths:
+    default: $disc$track - $title
+    singleton: $disc$track - $title
+    comp: $disc$track - $title
+    albumtype_soundtrack: $disc$track - $title
+
+# --------------------------------------------------------------------------------
+# Import behaviour (unchanged from the host original)
+# --------------------------------------------------------------------------------
+import:
+    write: yes
+    copy: no
+    move: no
+    resume: ask
+    incremental: no
+    quiet_fallback: skip
+    timid: no
+    duplicate_action: skip
+    log: /config/scripts/beets.log
+    languages: ['en']
+    group_albums: no
+
+# --------------------------------------------------------------------------------
+# SAFE-01 — destructive defaults, all three explicitly OFF (plan 01-07, 2026-08-18)
+# --------------------------------------------------------------------------------
+# Every one of these keys defaults to `yes` in beets 2.13.1. Measured, not assumed:
+#
+#     beet -c <cfg naming the plugin> -l /tmp/throwaway.blb config -d
+#       scrub.auto      -> yes
+#       lastgenre.auto  -> yes
+#       embedart.auto   -> yes
+#
+# So an ABSENT key is not an off switch — it is the on switch, waiting for someone to
+# add the plugin name to the `plugins:` line above. Two of these three plugins are not
+# enabled here today; the keys are set anyway, precisely so that enabling a plugin
+# later cannot silently re-arm automatic tag destruction.
+#
+# There is no `beet undo`. These run against a 34 GB library that is already correctly
+# tagged and a 97 GB backlog carrying irreplaceable DJ metadata that exists nowhere
+# else. Reversal is a ZFS rollback, not a command.
+
+scrub:
+    auto: no   # scrub STRIPS all existing tags from a file on import. Off: this pipeline
+               # ingests content whose existing tags are the only metadata it has.
+
+lastgenre:
+    auto: no   # lastgenre OVERWRITES the genre field from Last.fm. Off: it discards
+               # hand-curated and DJ-service genre data in favour of crowd tags.
+
+embedart:
+    auto: no   # embedart REWRITES the audio file to embed cover artwork. Off: a file
+               # rewrite is the one operation here that can corrupt the stream itself.
+               # (This was already `no` on the host — the only one of the three that was.)
