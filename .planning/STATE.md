@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-08-18T11:55:54.429Z"
+last_updated: "2026-08-18T12:14:07.452Z"
 last_activity: 2026-08-18
 progress:
   total_phases: 9
   completed_phases: 0
   total_plans: 9
-  completed_plans: 1
-  percent: 11
+  completed_plans: 2
+  percent: 0
 ---
 
 # Project State
@@ -110,7 +110,7 @@ None yet.
 - **v1 is now 39 requirements** (was 34; earlier the header wrongly said 33). Arithmetic checks
   both ways: by category SAFE 5 + WRIT 4 + CONS 4 + TAGR 6 + CONF 6 + INBX 3 + QUAL 4 + IMPT 3 +
   INGS 4 = 39; by phase 10 + 3 + 3 + 3 + 3 + 6 + 6 + 4 + 1 = 39. No requirement is unmapped and
-  none appears twice.
+  appears twice.
 
 - **Ordering hazard: QUAL-01 must complete before Phase 5 stages anything.** Once content is moved
   into the inbox or imported, the before-state can no longer be recovered and Phase 7's diff has
@@ -132,6 +132,7 @@ None yet.
   hoped for at backlog scale.
 
 - SAFE-05 blind spot (found in the 01-01 baseline): the library holds 43 .png and 175 .txt files outside D-18's .nfo/.jpg/.lrc sidecar definition. Jellyfin writes .png for logo/clearart, so plan 01-06's one-hour watched-folder test would not detect a new .png. Widen the extension set or record why it is excluded.
+- 01-02 task 3 blocked at checkpoint: off-box copy of library-db/ and cover-scans/ to the Mac Mini (D-07) needs a human-chosen destination path
 
 ## Deferred Items
 
@@ -144,9 +145,9 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-08-18T11:55:05.835Z
+Last session: 2026-08-18T12:14:00.507Z
 Stopped at: Completed 01-01-PLAN.md — harness audit built, baseline recorded (12 findings)
-Resume file: .planning/phases/01-safety-harness-and-freeze-the-writers/01-02-PLAN.md
+Resume file: None
 
 Plans 01-02, 01-04, 01-06, 01-07, 01-08 and 01-09 are `autonomous: false` — they carry blocking
 human checkpoints (the fence run, the ~140 GB capture, the Lidarr/Jellyfin freeze and its one-hour
