@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-08-18T12:14:07.452Z"
+last_updated: "2026-08-18T12:54:30.312Z"
 last_activity: 2026-08-18
 progress:
   total_phases: 9
   completed_phases: 0
   total_plans: 9
-  completed_plans: 2
+  completed_plans: 3
   percent: 0
 ---
 
@@ -29,12 +29,12 @@ pipeline that someone owns.
 ## Current Position
 
 Phase: 01 (safety-harness-and-freeze-the-writers) — EXECUTING
-Plan: 2 of 9
-Status: Executing Phase 01 — plan 01-01 complete
+Plan: 3 of 9
+Status: Ready to execute
 Last activity: 2026-08-18
 phase requirements, run sequentially in waves 1–9
 
-Progress: [█░░░░░░░░░] 11%
+Progress: [███░░░░░░░] 33%
 
 ## Performance Metrics
 
@@ -56,6 +56,7 @@ Progress: [█░░░░░░░░░] 11%
 - Trend: —
 
 *Updated after each plan completion*
+| Phase 01 P03 | 45m | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -100,6 +101,9 @@ Recent decisions affecting current work:
 - [01-01]: zfs is not resolvable inside LXC 100 (unprivileged); harness zfs queries are delegated over ssh to the Proxmox host 172.16.1.158
 - [01-01]: audit scripts exit 1 on any failed assertion, exit 0 only in --baseline mode; the estate had no such convention and its silence hid a six-week outage
 - [01-01]: WRIT-04 is ~2x its assumed size — 2,543 of 2,673 library entries have the wrong owner and every file and directory is mode 0777, so D-13's chmod pass touches 100% of the tree
+- [Phase ?]: [01-03]: audio_md5 (ffmpeg -map 0:a -c copy -f md5) is the QUAL-01/QUAL-02 join key; proven by a flat 2CD set where all 21 track numbers collide and neither path nor filename disambiguates the disc
+- [Phase ?]: [01-03]: D-02 scope is 9,736 audio files and 170.12 GiB, not 9,764 and ~140 GB; plan 01-04 projects to ~36 min, CPU-bound on md5 hashing and single-threaded, so it can run attended
+- [Phase ?]: [01-03]: the unsorted and dj-mixes copies of Now! 120 are the SAME rip - 20/20 audio_md5 shared, 0 unique to either side; first hard DUPE-01 measurement, covering 1 of the 85 shared folder names
 
 ### Pending Todos
 
@@ -133,6 +137,8 @@ None yet.
 
 - SAFE-05 blind spot (found in the 01-01 baseline): the library holds 43 .png and 175 .txt files outside D-18's .nfo/.jpg/.lrc sidecar definition. Jellyfin writes .png for logo/clearart, so plan 01-06's one-hour watched-folder test would not detect a new .png. Widen the extension set or record why it is excluded.
 - 01-02 task 3 blocked at checkpoint: off-box copy of library-db/ and cover-scans/ to the Mac Mini (D-07) needs a human-chosen destination path
+- 01-03: a duplicated audio_md5 makes the diff join last-wins, so in Phase 7 (BEFORE holds both backlog copies, AFTER holds one import) tag differences between duplicate sources are invisible. DUPE-01 should be resolved before QUAL-02 is treated as complete. The diff always lists such pairs in its informational section.
+- 01-03: unsorted WAV content is NOT tag-free - all 40 sampled Now! 120 WAV records carry 6 format tags (title/artist/album/track/date/comment) plus an embedded cover-art stream. Plan 01-04 and Phase 7 must not assume an empty before-state for unsorted's 134 WAV files.
 
 ## Deferred Items
 
@@ -145,7 +151,7 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-08-18T12:14:00.507Z
+Last session: 2026-08-18T12:54:19.746Z
 Stopped at: Completed 01-01-PLAN.md — harness audit built, baseline recorded (12 findings)
 Resume file: None
 
