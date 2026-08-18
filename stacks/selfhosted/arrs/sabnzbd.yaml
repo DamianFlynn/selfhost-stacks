@@ -75,9 +75,19 @@ services:
       # silent revert the scripts_init.bash vendoring exists to stop). The replacement
       # config carries upstream's defaults, so the next music download scrubs its own
       # tags, overwrites its genres and rewrites its files, against a 34 GB library and
-      # a 97 GB backlog with no undo. The bind mount is real protection and not just
-      # documentation: upstream overwrites via `curl -o tmp && mv tmp dest`, and `mv`
-      # onto a bind-mounted file fails EBUSY.
+      # a 97 GB backlog with no undo.
+      #
+      # How much the bind mount actually protects — measured 2026-08-18 in a throwaway
+      # container, NOT assumed, because the honest answer is "partly":
+      #   `mv tmp dest`  -> BLOCKED, "Resource busy" (EBUSY). This is the pattern
+      #                     scripts_init.bash itself uses for sma.ini, i.e. the real
+      #                     upstream overwrite path, so the mount does stop it.
+      #   `> dest`       -> SUCCEEDS, and the write reaches the host file.
+      # So the mount is a genuine barrier against rename-based replacement and NOT a
+      # barrier against in-place truncation. The durable guarantee is the pair: the
+      # mount stops the overwrite upstream actually performs, and the repo copy makes
+      # any divergence detectable. Plan 01-09 folds that comparison into
+      # scripts/quick-health-check.sh. Do not read this mount as tamper-proof.
       #
       # The repo copy is for review and history; THIS appdata path is authoritative at
       # runtime. Same hybrid shape as arrs/soulbeet.yaml. The file's `plugins:` line is
