@@ -20,7 +20,8 @@
 #   1. Running-container rw holders       WRIT-01, D-08, D-26
 #   2. Declared rw mounts in stack YAML   WRIT-01 false-pass guard, D-22
 #   3. /mnt/tank/media layout             D-19 precondition (never asserts)
-#   4. Ownership census                   WRIT-04, D-11, D-12
+#   4. Ownership census                   WRIT-04, D-11 (owner asserted); D-12 mode half is
+#                                         REPORTED, not asserted - see MODE SCOPE below
 #   5. Sidecar inventory                  SAFE-05, D-18 (never asserts)
 #                                         widened 2026-08-18 by plan 01-06 to include .png and
 #                                         .txt — see the block above section 5 for why
@@ -38,6 +39,23 @@
 #
 #   --sidecars    - emit the sorted sidecar path list on stdout and route the whole report to
 #                   stderr, so the list can be redirected to a file on its own.
+#
+# MODE SCOPE (2026-08-18, plan 01-09 acting on plan 01-08's finding):
+#   Section 4 asserts OWNERSHIP but only REPORTS the two mode counts. It used to assert all
+#   three, and the mode pair is a PERMANENT red: every entry under the library is 0777 (88 dirs,
+#   2,586 files) and cannot be changed. `chmod` fails EPERM on `tank` even as real root on the
+#   Proxmox host - re-verified against a brand-new scratch file - because acltype=nfsv4 with
+#   aclmode=restricted plus aclinherit=passthrough gives even freshly created files a non-trivial
+#   NFSv4 ACL that chmod may not rewrite. The only fix is `zfs set aclmode=passthrough`, under
+#   which a chmod then rewrites the ACL on all 2,674 entries - a bigger change than the problem.
+#   D-12 is therefore SCOPED OUT by user decision and the modes stay 0777.
+#
+#   Why report instead of assert: plan 01-09 folds this script into quick-health-check.sh, which
+#   runs routinely. A check that is red forever trains the reader to ignore it, which is the exact
+#   failure the fold-in exists to prevent - see the docker `created`-state blind spot below. The
+#   counts are still printed in section 4 and in the summary, so a REGRESSION is still visible;
+#   what is removed is only the assertion that they must be 755/644.
+#   If the ACL constraint is ever lifted, restore the two fail() calls in section 4.
 #
 # ZFS NOTE (2026-08-18, deviation from plan 01-01 as written):
 #   LXC 100 is an unprivileged container. The tank datasets are bind-mounted into it, but the
@@ -384,15 +402,17 @@ if [[ -d "$LIBRARY" ]]; then
   else
     fail "ownership: $OWN_MISMATCH entries differ from $UIDGID"
   fi
+  # The two mode counts are REPORTED, never asserted - see MODE SCOPE in the header. D-12 is
+  # scoped out because chmod is impossible on this pool, so asserting here is a permanent red.
   if [[ "$DIRMODE_MISMATCH" -eq 0 ]]; then
     pass "directory mode: 0 directories differ from $DIR_MODE"
   else
-    fail "directory mode: $DIRMODE_MISMATCH directories differ from $DIR_MODE"
+    warn "directory mode: $DIRMODE_MISMATCH differ from $DIR_MODE — REPORTED not asserted (D-12 scoped out, chmod impossible on tank)"
   fi
   if [[ "$FILEMODE_MISMATCH" -eq 0 ]]; then
     pass "file mode: 0 files differ from $FILE_MODE"
   else
-    fail "file mode: $FILEMODE_MISMATCH files differ from $FILE_MODE"
+    warn "file mode: $FILEMODE_MISMATCH differ from $FILE_MODE — REPORTED not asserted (D-12 scoped out, chmod impossible on tank)"
   fi
 else
   fail "$LIBRARY not present on this host"
@@ -506,8 +526,8 @@ echo "  media subtrees found:        $MEDIA_COUNT"
 echo "  artist folders:              $ARTIST_COUNT   (directories only)"
 echo "  stray top-level files:       $STRAY_COUNT"
 echo "  ownership mismatches:        $OWN_MISMATCH   (target 0, want $UIDGID)"
-echo "  dir-mode mismatches:         $DIRMODE_MISMATCH   (target 0, want $DIR_MODE)"
-echo "  file-mode mismatches:        $FILEMODE_MISMATCH   (target 0, want $FILE_MODE)"
+echo "  dir-mode mismatches:         $DIRMODE_MISMATCH   (REPORTED not asserted — D-12 scoped out)"
+echo "  file-mode mismatches:        $FILEMODE_MISMATCH   (REPORTED not asserted — D-12 scoped out)"
 echo "  sidecars found (widened):    $SIDECAR_TOTAL   (nfo $NFO_COUNT / jpg $JPG_COUNT / lrc $LRC_COUNT / png $PNG_COUNT / txt $TXT_COUNT)"
 echo "  sidecars found (narrow D-18):$NARROW_TOTAL   (nfo/jpg/lrc only — comparable to the 01-01 baseline)"
 echo "  .DS_Store under the library: $DSSTORE_COUNT   (macOS client — an uncounted writer)"
