@@ -30,7 +30,7 @@ pipeline that someone owns.
 
 Phase: 01 (safety-harness-and-freeze-the-writers) — EXECUTING
 Plan: 6 of 9
-Status: Ready to execute
+Status: **01-06 PAUSED — SAFE-05 one-hour watch RUNNING, not yet evaluated**
 Last activity: 2026-08-18
 phase requirements, run sequentially in waves 1–9
 
@@ -119,10 +119,24 @@ Recent decisions affecting current work:
 - [Phase ?]: 01-05: Photos gets no mount in any narrowed container — only Jellyfin retains it via its D-21 carve-out; containers able to reach it went 8 -> 1
 - [Phase ?]: 01-05: wrtag frozen via 'compose --profile manual down'; a plain 'compose up -d' on the music stack now returns 'no service selected' — the gate is proven, not asserted
 - [Phase ?]: 01-05: lidarr deliberately untouched (01-06 owns WRIT-03), so it is the single remaining rw holder in BOTH audit classes — expected, not a regression
+- 01-06: WRIT-03 met — lidarr root folder off the library, renameTracks off, all metadata consumers off (already were), media mount :ro proven by an in-container write attempt; tagger-class rw holders on the library is now 0
+- 01-06: deleting an *arr root folder does NOT repoint its artists — all 22 lidarr artists keep absolute /media/Music paths, so D-25's :ro mount is the load-bearing control, not D-23's root-folder move
+- 01-06: SaveLyricsWithMedia is a THIRD Jellyfin write switch that SaveLocalMetadata does not gate; it wrote 944 of the 1,123 baseline sidecars. Any "is Jellyfin frozen?" check that reads only SaveLocalMetadata gives a false pass
+- 01-06: lidarr had a DELETE path into the library (mediamanagement.deleteEmptyFolders: true) that WRIT-03 and D-24 do not count as a write path; now false
+- 01-06: the SAFE-05 sidecar set is widened to .nfo/.jpg/.lrc/.png/.txt — 1,341 files, 19.4% more than D-18's 1,123; the narrow subtotal is still printed for comparability with the 01-01 baseline
 
 ### Pending Todos
 
-None yet.
+- **01-06 Task 3 — the SAFE-05 one-hour watch is RUNNING and unevaluated.**
+  - Watch start (UTC): `2026-08-18T14:33:14Z`
+  - Earliest valid evaluation: `2026-08-18T15:33:14Z`
+  - Evaluate with: `ssh root@172.16.1.159 'bash /mnt/fast/safety/music-pre-project/audit/sidecar-watch-eval.sh'`
+  - The script refuses to run before the hour has elapsed (exit 3). Exit 0 = PASS, 1 = FAIL with
+    filenames and mtimes, 2 = harness error.
+  - A Jellyfin `FullRefresh` of the whole Music library was triggered at `2026-08-18T14:33:55Z` and
+    confirmed running in the container logs, so this is an active hour, not a quiet one.
+  - Gate: zero added sidecars. Until it returns, **SAFE-05 is not met and 01-06 is not complete.**
+  - Full context: `.../audit/sidecar-watch-STATE.txt` on LXC 100.
 
 ### Blockers/Concerns
 
@@ -150,7 +164,31 @@ None yet.
   recorded spike output, and QUAL-04 makes a clean undo something proven at pilot scale rather than
   hoped for at backlog scale.
 
-- SAFE-05 blind spot (found in the 01-01 baseline): the library holds 43 .png and 175 .txt files outside D-18's .nfo/.jpg/.lrc sidecar definition. Jellyfin writes .png for logo/clearart, so plan 01-06's one-hour watched-folder test would not detect a new .png. Widen the extension set or record why it is excluded.
+- ~~SAFE-05 blind spot (found in the 01-01 baseline): the library holds 43 .png and 175 .txt files outside D-18's .nfo/.jpg/.lrc sidecar definition.~~ **RESOLVED 2026-08-18 by 01-06** — `check-music-freeze.sh` section 5 now inventories `.nfo/.jpg/.lrc/.png/.txt` (1,341 files) and prints the narrow D-18 subtotal (1,123) alongside it so the widening stays auditable against the 01-01 baseline. `.DS_Store` is counted separately.
+
+- **BLOCKER for 01-08 — `chmod` is impossible anywhere on `tank`.** `tank/media`, `tank/media/Music`
+  and `tank/downloads` all carry `acltype=nfsv4` + `aclmode=restricted` + `aclinherit=passthrough`.
+  Every child inherits a non-trivial NFSv4 ACL, and `restricted` makes `chmod` on a non-trivial ACL
+  return `EPERM` — **as root, for every mode, including a no-op `chmod 0777` on a file already at
+  0777.** Measured directly during 01-06. Consequences:
+  - **D-12/D-13's mode normalisation (87 dirs → 0755, 2,586 files → 0644) cannot be done with
+    `chmod`, so 01-08 is blocked as written.** `chown` is unaffected and still works.
+  - It explains 01-01's "every entry is mode 0777 with no exceptions" — nothing can change them.
+  - It is the same root cause as PROJECT.md's documented `rsync -a` failure
+    (`mkstemp ... Operation not permitted`).
+  - Phase 2 inherits it: knfsd does not export NFSv4 ACLs, so mode bits are all an NFS client sees,
+    and mode bits currently cannot be set below 0777.
+  - Routes out, all belonging to 01-08's decision: (a) `zfs set aclmode=passthrough|discard` on the
+    datasets, (b) install `nfs4-acl-tools` (absent on LXC 100 and on the Proxmox host), or
+    (c) accept 0777 and adjust D-12. 01-06 deliberately changed nothing.
+
+- 01-06: a `.DS_Store` owned `65534:65534` sits in the library root — a macOS client has write access
+  over a share. It is an uncounted writer that no container mount audit and no Lidarr or Jellyfin
+  setting can close, and no current requirement covers it. The harness now counts it every run.
+
+- 01-06: the fenced `jellyfin-jellyfin.db` carries an `ApiKeys` table with 4 admin-scoped rows. It is
+  mode `0600` rather than the fence's usual `0644`. If `library-db/` is copied off-box again under
+  D-07, those credentials travel with it.
 - ~~01-02 task 3 blocked at checkpoint: off-box copy to the Mac Mini (D-07)~~ **RESOLVED 2026-08-18** — operator copied library-db/ (15) and cover-scans/ (54) to `data@datas-mac-mini:~/archive/music-pre-project`, verified 54/54 sha256 + 15/15 integrity_check. Left in place as a hazard note: that host's non-interactive ssh PATH lacks `head`/`basename`/`sqlite3`, which produced two false "all 15 databases corrupt" results before absolute tool paths were used.
 - 01-03: a duplicated audio_md5 makes the diff join last-wins, so in Phase 7 (BEFORE holds both backlog copies, AFTER holds one import) tag differences between duplicate sources are invisible. DUPE-01 should be resolved before QUAL-02 is treated as complete. The diff always lists such pairs in its informational section.
 - 01-03: unsorted WAV content is NOT tag-free - all 40 sampled Now! 120 WAV records carry 6 format tags (title/artist/album/track/date/comment) plus an embedded cover-art stream. Plan 01-04 and Phase 7 must not assume an empty before-state for unsorted's 134 WAV files.
@@ -166,9 +204,9 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-08-18T14:08:19.630Z
-Stopped at: Completed 01-04-PLAN.md (QUAL-01 capture complete)
-Resume file: None
+Last session: 2026-08-18T14:40:00Z
+Stopped at: 01-06 tasks 1-2 complete and committed; task 3 watch STARTED at 2026-08-18T14:33:14Z and left running
+Resume file: /mnt/fast/safety/music-pre-project/audit/sidecar-watch-STATE.txt (on LXC 100)
 
 Plans 01-02, 01-04, 01-06, 01-07, 01-08 and 01-09 are `autonomous: false` — they carry blocking
 human checkpoints (the fence run, the ~140 GB capture, the Lidarr/Jellyfin freeze and its one-hour
