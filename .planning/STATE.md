@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-08-18T21:25:09.302Z"
+last_updated: "2026-08-18T21:49:42.985Z"
 last_activity: 2026-08-18
 progress:
   total_phases: 9
   completed_phases: 0
   total_plans: 9
-  completed_plans: 7
+  completed_plans: 8
   percent: 0
 ---
 
@@ -29,12 +29,12 @@ pipeline that someone owns.
 ## Current Position
 
 Phase: 01 (safety-harness-and-freeze-the-writers) — EXECUTING
-Plan: 8 of 9
+Plan: 9 of 9
 Status: Ready to execute
 Last activity: 2026-08-18
 phase requirements, run sequentially in waves 1–9
 
-Progress: [████████░░] 78%
+Progress: [█████████░] 89%
 
 ## Performance Metrics
 
@@ -68,6 +68,7 @@ Progress: [████████░░] 78%
 | Phase 01 P05 | 35 minutes | 3 tasks | 10 files |
 | Phase 01 P06 | 65m + 374m watch | 3 tasks | 3 files |
 | Phase 01 P07 | ~40 minutes | 2 tasks | 3 files |
+| Phase 01 P08 | ~35 minutes | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -132,6 +133,10 @@ Recent decisions affecting current work:
 - [Phase ?]: There are five beets configs in the estate, not three — beets' scrub/lastgenre/embedart/fetchart auto keys all DEFAULT to on, so an absent key was an armed key
 - [Phase ?]: appdata/arrs/beets/config/config.yaml is a docker-compose file saved into BEETSDIR — beets ran on pure defaults and imported 47 tracks into /config/Music/__/
 - [Phase ?]: find -xdev is unsafe for estate sweeps: /mnt/fast/appdata/* are separate ZFS datasets, so a sweep from /mnt/fast silently skips appdata and exits 0
+- [Phase ?]: 01-08: the WRIT-04 chown must run on the Proxmox host - LXC 100 is unprivileged and physically cannot chown the library's unmapped uids/gids (EPERM, a different mechanism from aclmode=restricted with the same errno)
+- [Phase ?]: 01-08: the 01-01 ownership census recorded the CONTAINER's view, not the disk - six on-disk owners collapse to five, and its writer attributions are wrong
+- [Phase ?]: 01-08: D-11's 568:568 confirmed on evidence - Music was the only media subtree on gid 545 while Movies was already 568:568, so beets.md's 568:545 describes drift and D-14 stands
+- [Phase ?]: 01-08: mode pass skipped with a printed explanation rather than run or swallowed; no zfs set of any property was executed
 
 ### Pending Todos
 
@@ -228,8 +233,8 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-08-18T21:25:00.682Z
-Stopped at: Completed 01-07-PLAN.md — SAFE-01 met, six beets configs disarmed, SABnzbd config vendored
+Last session: 2026-08-18T21:49:42.975Z
+Stopped at: Completed 01-08-PLAN.md (WRIT-04 ownership half)
 Resume file: None
 
 Plans 01-02, 01-04, 01-06, 01-07, 01-08 and 01-09 are `autonomous: false` — they carry blocking

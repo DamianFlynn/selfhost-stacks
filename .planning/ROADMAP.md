@@ -377,7 +377,7 @@ Phase 7. Plans within a phase run sequentially.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Safety Harness and Freeze the Writers | 7/9 | In Progress|  |
+| 1. Safety Harness and Freeze the Writers | 8/9 | In Progress|  |
 | 2. NFS Export and Music Assistant Reachability | 0/TBD | Not started | - |
 | 3. Tagger Spike | 0/TBD | Not started | - |
 | 4. Collapse to One Tagger | 0/TBD | Not started | - |

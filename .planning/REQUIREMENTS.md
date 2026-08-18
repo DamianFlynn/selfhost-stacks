@@ -55,6 +55,15 @@ Requirements for the milestone as PROJECT.md scopes it: pipeline fixed, bucket A
       actually closes the library.)
 - [ ] **WRIT-04**: Library ownership is normalised to one decided `uid:gid` and recorded in the
       repo, replacing today's mix of `apps:nogroup` and `apps:apps`
+      (**Normalisation half DONE in 01-08** — all 2,674 entries incl. the library root are
+      `568:568` on disk, verified from the Proxmox host and by `zfs diff` against `@pre-chown`.
+      Two corrections this surfaced: the mix was never `apps:nogroup`/`apps:apps` — that was the
+      *container's* view; on disk it was `0:545`, `3000:545`, `568:545`, `100000:100000`,
+      `100911:100911` and `568:568`. And `chown` cannot be run from LXC 100 at all, only from the
+      pool host. The **mode** half of the original decision (D-12, `0755`/`0644`) is **scoped out
+      and unachievable** — `aclmode=restricted` makes `chmod` EPERM pool-wide, so the tree stays
+      0777. Remaining for **01-09**: record the decided value in the repo and correct `beets.md`'s
+      `chown -R 568:545` (D-14).)
 
 ### Consumers — two, not one
 
@@ -193,7 +202,7 @@ Populated during roadmap creation (2026-08-17). Every v1 requirement maps to exa
 | WRIT-01 | Phase 1 | Pending (audit green via 01-05 + 01-06; 01-09 asserts) |
 | WRIT-02 | Phase 1 | Complete |
 | WRIT-03 | Phase 1 | Complete |
-| WRIT-04 | Phase 1 | Pending |
+| WRIT-04 | Phase 1 | Pending (normalisation done via 01-08; 01-09 records it in the repo) |
 | QUAL-01 | Phase 1 | Complete |
 | CONS-01 | Phase 2 | Pending |
 | CONS-02 | Phase 2 | Pending |
