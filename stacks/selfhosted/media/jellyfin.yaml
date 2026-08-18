@@ -103,11 +103,33 @@ services:
       # folding it into a bare total, because a count of one would otherwise read as a
       # failure to whoever inherits this.
       #
-      # Why: Jellyfin's writing is disabled at the APPLICATION layer instead of the mount —
-      # SaveLocalMetadata off for the Music library, and real-time file monitoring off for
-      # that library. Both are applied in plan 01-06 and both are PERMANENT (D-17). Once one
-      # tagger owns the tree, Jellyfin writing metadata into it is a second writer by
-      # another name.
+      # Why: Jellyfin's writing is disabled at the APPLICATION layer instead of the mount.
+      # APPLIED 2026-08-18 (plan 01-06) via the REST API, Music library ONLY, and all of it
+      # is PERMANENT (D-17) — there is nothing here on a list of things to remember to undo.
+      # Three switches, not the two D-15/D-16 name:
+      #
+      #   1. SaveLocalMetadata      true -> false   (D-15) — the .nfo and image writer
+      #   2. EnableRealtimeMonitor  true -> false   (D-16) — the second layer
+      #   3. SaveLyricsWithMedia    true -> false   (found during 01-06, NOT in D-15/D-16)
+      #
+      # The third one matters more than it looks. SaveLocalMetadata does NOT gate lyric
+      # saving in Jellyfin 10.10+; SaveLyricsWithMedia is an independent switch, and with
+      # LyricFetcherOrder = ["LrcLib Lyrics"] it is what wrote 944 of the 1,123 sidecars
+      # inventoried at baseline. Turning off only the two settings the phase context names
+      # would have left the single largest sidecar writer running while the one-hour
+      # SAFE-05 watch reported a pass. Music was the only library with it enabled.
+      #
+      # Movies, Shows and Collections are deliberately UNCHANGED — they keep
+      # SaveLocalMetadata and real-time monitoring. So is the global "Scan Media Library"
+      # scheduled task (12h interval), so other libraries keep updating; with the three
+      # switches above off, a scan cannot write sidecars into Music anyway.
+      #
+      # Still true and deliberately left alone: SaveSubtitlesWithMedia is on for every
+      # library including Music. Inert there — no subtitle fetchers are configured and audio
+      # files carry no subtitle streams — so it was not changed rather than changed blind.
+      #
+      # Once one tagger owns the tree, Jellyfin writing metadata into it is a second writer
+      # by another name.
       #
       # Why not :ro: going read-only risks extracted-subtitle and trickplay behaviour on an
       # instance actively serving the house. Revisit once the tagger owns the tree.
