@@ -70,9 +70,19 @@ outcome that must not happen.
 | Location | Files | Size | Tagged? |
 |---|---|---|---|
 | `downloads/complete/nzb/unsorted` | 7,451 | 97 G | no |
-| `downloads/complete/nzb/dj-mixes` | 794 | 25 G | partially — see below |
+| `downloads/complete/nzb/dj-mixes` | 764 | 25 G | partially — see below |
 | `downloads/complete/nzb/music` | 275 | 18 G | no — Lidarr inbox, has `_FAILED_`/`_UNPACK_`/`.rar` |
 | `media/Music` (13 artist folders) | 1,244 | 34 G | yes — the Jellyfin source |
+
+*Corrected 2026-08-18 by the Phase 1 measurements.* The `dj-mixes` figure was **794**; that number
+counted the 30 JPEG cover scans as tracks and missed the 24 BMPs entirely (`764 audio + 30 jpg =
+794`). Real composition: 630 mp3 + 134 wav audio, plus 60 nfo, 30 jpg, 24 bmp, 20 lrc, 1 rtf and a
+`.DS_Store`. The **capture scope across all four roots is 9,736 audio files / 170.12 GiB**, not the
+~9,764 / ~140 GB assumed — a read ~22% larger than planned, though measured throughput puts it at
+roughly 36 minutes because the job is CPU-bound on md5 and single-threaded, not disk-bound.
+
+`media/Music` is 1,244 **audio** files but **2,674 total entries** (87 dirs + 2,586 files), every
+one of them at mode **0777**, across five distinct `uid:gid`. That is the real WRIT-04 scope.
 
 **The DJ content is a normalisation problem, not an acquisition problem.** Sampling 8 tracks
 across `dj-mixes` found 7 tagged — but with the field convention differing between releases in
@@ -140,7 +150,11 @@ that plan rather than restating it.
   `feature@block_cloning` being active on the pool. Reflink only helps *within* `tank/downloads`,
   which is why staging belongs there.
 - **Reversibility**: **beets has no `undo` command** — verified against the live CLI. Backing up the
-  `library.db` files is necessary but insufficient: take a `zfs snapshot` of `tank/media/Music` in
+  `library.db` files is necessary but insufficient — and there are **four** beets databases, not the
+  two this document assumed: the manual `beets` one, plus **two under `sabnzbd/`** that nobody
+  counted, of which `sabnzbd/config/scripts/library.blb` is the most recently written of the whole
+  set (8 Aug 2026). The `soulbeet` database does not exist at all — its data directory is empty.
+  Phase 4 is therefore retiring more state than it was scoped for. Take a `zfs snapshot` of `tank/media/Music` in
   the *same step*, because rolling back only the tree leaves `incremental` state claiming the work
   is done. Add the `ffprobe` tag-dump of `dj-mixes` and the cover-scan archive to the same fence.
 - **ZFS**: frees space asynchronously; `zfs list` can lag a large delete by ~20 s.

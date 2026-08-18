@@ -15,7 +15,7 @@ Requirements for the milestone as PROJECT.md scopes it: pipeline fixed, bucket A
 - [x] **SAFE-02**: A recoverable snapshot exists before any import — ZFS snapshot of the Music
       dataset plus copies of every beets library database, taken together as one fence
 - [x] **SAFE-03**: The DJ tag evidence is captured to a file no tagger can overwrite — `ffprobe`
-      JSON dump of all 794 `dj-mixes` files, including `TKEY` and `EnergyLevel`
+      JSON dump of all 764 `dj-mixes` audio files, including `TKEY` and `EnergyLevel`
 - [x] **SAFE-04**: The 54 DJ cover scans are archived outside any tagger-writable path
 - [ ] **SAFE-05**: Jellyfin stops writing into the library — `SaveLocalMetadata` off for Music,
       scheduled scans paused, database backed up

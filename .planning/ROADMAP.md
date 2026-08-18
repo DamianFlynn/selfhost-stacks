@@ -74,7 +74,7 @@ established before any tool is chosen and before any file is staged or imported.
      off, scheduled scans paused, database backed up, and no new `.nfo`/`.jpg`/`.lrc` appearing in a
      watched folder over an hour.
   4. The recovery fence exists and is readable: `tank/media/Music@pre-project` snapshot plus copies
-     of every beets `library.db` taken in the same step, an `ffprobe` JSON dump of all 794
+     of every beets `library.db` taken in the same step, an `ffprobe` JSON dump of all 764
      `dj-mixes` files including `TKEY` and `EnergyLevel`, and the 54 DJ cover scans — all on paths
      no tagger container mounts read-write, with spot-checks confirming the copies match source.
   5. `stat` over all 13 artist folders returns one decided `uid:gid` (today: 12 are `568:65534`,
