@@ -253,9 +253,13 @@ do_fence() {
   echo "==> 3. Copying every beets library database (SAFE-02)..."
   local db_list db_count=0 db_live=0 db_bak=0
   local db_map="$FENCE/audit/library-db-sources.tsv"
+  # `*library*` rather than an extension list, deliberately. arr-scripts leaves eleven
+  # library.blb-before-<migration>.bak copies under sabnzbd/config/scripts - real pre-project
+  # beets database state, on /mnt/fast, with no snapshot behind it. An extension-anchored
+  # pattern silently drops all eleven. Verified 2026-08-18: this pattern matches 15 files,
+  # 766 KB, all of them beets, and nothing unrelated.
   db_list="$(find "$APPDATA" -maxdepth 6 -type f \
-               \( -iname 'library.db' -o -iname '*library*.blb' -o -iname '*.blb' \
-                  -o -iname '*library*.db' \) 2>/dev/null | sort || true)"
+               \( -iname '*library*' -o -iname '*.blb' \) 2>/dev/null | sort -u || true)"
 
   if [[ -z "$db_list" ]]; then
     err "no beets library database found under $APPDATA - SAFE-02 cannot be satisfied"
