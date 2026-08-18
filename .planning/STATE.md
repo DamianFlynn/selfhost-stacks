@@ -124,19 +124,32 @@ Recent decisions affecting current work:
 - 01-06: SaveLyricsWithMedia is a THIRD Jellyfin write switch that SaveLocalMetadata does not gate; it wrote 944 of the 1,123 baseline sidecars. Any "is Jellyfin frozen?" check that reads only SaveLocalMetadata gives a false pass
 - 01-06: lidarr had a DELETE path into the library (mediamanagement.deleteEmptyFolders: true) that WRIT-03 and D-24 do not count as a write path; now false
 - 01-06: the SAFE-05 sidecar set is widened to .nfo/.jpg/.lrc/.png/.txt — 1,341 files, 19.4% more than D-18's 1,123; the narrow subtotal is still printed for comparability with the 01-01 baseline
+- 01-06: **the SAFE-05 test as the roadmap words it is a path-set diff, and a path-set diff is structurally blind to the most likely form of Jellyfin pollution.** Measured: it returned 0 added / 0 removed while Jellyfin rewrote 83 of the library's 91 .nfo in place, 66 with genuinely changed content. Widening the extension set does NOT fix this — the comparison had to change. The watch now checks sha256 content, a whole-library size/mtime manifest, and a ZFS snapshot cross-check
+- 01-06: **SaveLocalMetadata=false does NOT stop an explicit Jellyfin FullRefresh writing .nfo.** It gates the automatic scan-time save path only. The first .nfo was rewritten 1 second after the refresh POST, with the setting already false and read back from the API. SAFE-05 is true for "Jellyfin writes nothing unprompted" and FALSE for "Jellyfin cannot write" — a UI "Refresh metadata" click still writes. The only structural control would be an :ro mount, which D-21 deliberately rejected
+- 01-06: the @pre-project ZFS snapshot was used in anger and works — SAFE-02 proven, not asserted. `snapdir=hidden`, so `/mnt/tank/media/Music/.zfs/snapshot/pre-project` must be typed; it will not list
 
 ### Pending Todos
 
-- **01-06 Task 3 — the SAFE-05 one-hour watch is RUNNING and unevaluated.**
-  - Watch start (UTC): `2026-08-18T14:33:14Z`
-  - Earliest valid evaluation: `2026-08-18T15:33:14Z`
+- **01-06 Task 3 — the SAFE-05 watch is RUNNING and unevaluated.** Restarted content-aware after the
+  first attempt proved the specified test cannot detect what actually happens.
+  - Watch start (UTC): `2026-08-18T14:43:13Z` — earliest valid evaluation `2026-08-18T15:43:13Z`
+  - ZFS snapshot at watch start: `tank/media/Music@safe05-watch-t0`
   - Evaluate with: `ssh root@172.16.1.159 'bash /mnt/fast/safety/music-pre-project/audit/sidecar-watch-eval.sh'`
-  - The script refuses to run before the hour has elapsed (exit 3). Exit 0 = PASS, 1 = FAIL with
-    filenames and mtimes, 2 = harness error.
-  - A Jellyfin `FullRefresh` of the whole Music library was triggered at `2026-08-18T14:33:55Z` and
-    confirmed running in the container logs, so this is an active hour, not a quiet one.
-  - Gate: zero added sidecars. Until it returns, **SAFE-05 is not met and 01-06 is not complete.**
-  - Full context: `.../audit/sidecar-watch-STATE.txt` on LXC 100.
+  - Cross-check: `ssh root@172.16.1.158 'zfs diff tank/media/Music@safe05-watch-t0 tank/media/Music'`
+    — expect no output.
+  - The script refuses to run before the hour elapses (exit 3). 0 = PASS, 1 = FAIL with filenames
+    and mtimes, 2 = harness error. Four gates, all must be zero: sidecars added, sidecars removed,
+    sidecar content changed (sha256), whole-library stat delta.
+  - **The current window is QUIET — no scan has been triggered inside it.** To make it active,
+    re-take the T+0 manifests then `POST /ScheduledTasks/Running/RefreshLibrary` (default refresh
+    mode, the realistic 12-hourly path) — this needs an explicit go-ahead and restarts the hour.
+  - Until it returns clean, **SAFE-05 is not met and 01-06 is not complete.**
+  - Full context: `/mnt/fast/safety/music-pre-project/audit/sidecar-watch-STATE.txt` on LXC 100.
+
+- **01-06 open question for the user: restore the 66 changed `.nfo` or not?** They are recoverable
+  from `tank/media/Music@pre-project`. Recommendation is **no** — the new content is fresher
+  provider metadata rather than damage, QUAL-01's before-state covers audio tags not sidecars, and
+  restoring is a write into a tree this phase just finished sealing.
 
 ### Blockers/Concerns
 

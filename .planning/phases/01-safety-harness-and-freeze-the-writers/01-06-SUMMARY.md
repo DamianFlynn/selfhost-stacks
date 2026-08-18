@@ -2,7 +2,7 @@
 phase: 01-safety-harness-and-freeze-the-writers
 plan: 06
 subsystem: writer-freeze
-status: INCOMPLETE — Task 3 watch RUNNING, evaluable from 2026-08-18T15:33:14Z
+status: INCOMPLETE — Task 3 watch RESTARTED content-aware, evaluable from 2026-08-18T15:43:13Z
 tags: [lidarr, jellyfin, api, WRIT-03, SAFE-05, sqlite, sidecars, zfs-acl]
 requires:
   - scripts/check-music-freeze.sh (01-01)
@@ -19,9 +19,11 @@ provides:
   - scripts/check-music-freeze.sh section 5 widened to .png and .txt
   - /mnt/fast/safety/music-pre-project/audit/lidarr-api-after.json
   - /mnt/fast/safety/music-pre-project/audit/jellyfin-library-options-after.json
-  - /mnt/fast/safety/music-pre-project/audit/sidecar-watch-t0-20260818.txt
+  - /mnt/fast/safety/music-pre-project/audit/sidecar-watch-t0-{20260818,sha256,stat}.txt
   - /mnt/fast/safety/music-pre-project/audit/sidecar-watch-STATE.txt
-  - /mnt/fast/safety/music-pre-project/audit/sidecar-watch-eval.sh
+  - /mnt/fast/safety/music-pre-project/audit/sidecar-watch-eval.sh (content-aware, 4 gates)
+  - "zfs snapshot tank/media/Music@safe05-watch-t0"
+  - "PROVEN: SaveLocalMetadata=false does NOT stop an explicit Jellyfin FullRefresh writing .nfo"
 affects:
   - 01-07 (beets config vendoring — unaffected)
   - 01-08 (BLOCKED as written — chmod is impossible on tank; see the ZFS aclmode finding)
@@ -44,6 +46,7 @@ decisions:
   - "SaveLyricsWithMedia is a third, independent Jellyfin write switch that D-15/D-16 do not name — it wrote 944 of the 1,123 baseline sidecars and was closed under Rule 2"
   - "the Lidarr root folder change is NOT what closes the library; all 22 artists keep absolute /media/Music paths, so the :ro mount (D-25) is the load-bearing control"
   - "chmod is impossible anywhere on tank (aclmode=restricted) — recorded as a finding, NOT worked around by changing a dataset property that belongs to 01-08's decision"
+  - "the SAFE-05 test as the roadmap words it is a path-set diff, and a path-set diff returned a perfect pass while Jellyfin rewrote 83 of 91 .nfo in place — the watch was restarted with sha256 content hashes, a whole-library stat manifest and a ZFS snapshot"
 metrics:
   duration: ~60 minutes so far (watch pending)
   completed: null
@@ -54,13 +57,20 @@ metrics:
 # Phase 01 Plan 06: Freeze Lidarr and Jellyfin Summary
 
 **STATUS: INCOMPLETE.** Tasks 1 and 2 are complete, committed, applied live and verified from
-both APIs. Task 3's one-hour watch is **running now** — it started at `2026-08-18T14:33:14Z` and
-is evaluable from `2026-08-18T15:33:14Z` with a single command (below). This plan must not be
-marked complete until that evaluation returns zero added sidecars.
+both APIs. Task 3's watch is **running now** — restarted content-aware at `2026-08-18T14:43:13Z`
+and evaluable from `2026-08-18T15:43:13Z` with a single command (below).
 
-Lidarr's two write paths into the music library are closed and **tagger-class rw holders on the
+Lidarr's write paths into the music library are closed and **tagger-class rw holders on the
 library is now 0** — WRIT-01 is structurally true for the first time. Jellyfin's Music library is
 frozen at the application layer with three switches, not the two the phase context names.
+
+> **Read the Task 3 section before treating SAFE-05 as nearly done.** The test as the roadmap
+> words it is a path-set diff. It was run with an active Jellyfin refresh and returned a perfect
+> pass — 0 added, 0 removed — while Jellyfin **rewrote 83 of the library's 91 `.nfo` files in
+> place and changed the content of 66 of them.** The instrument was replaced. A second, real
+> limit was found at the same time: `SaveLocalMetadata=false` does **not** stop an explicit
+> `FullRefresh` from writing `.nfo`. Nothing was lost — two ZFS snapshots hold the originals and
+> no file was deleted or restored.
 
 ## What Was Built
 
@@ -364,7 +374,93 @@ extension spread.
 
 The recorded enumeration is **library-wide**, which is strictly stronger than watching one folder.
 
-### The scan — triggered and confirmed actually running
+### THE TEST AS SPECIFIED FAILED — a path-set diff cannot see an in-place rewrite
+
+This is the single most important result in this plan, and it invalidates the instrument the
+roadmap specifies rather than the freeze itself.
+
+The first watch ran the specified test: enumerate sidecar **paths** at T+0, trigger a scan,
+enumerate again, diff. Against a live, actively-scanning Jellyfin it returned:
+
+```
+path-set diff lines: 0        (0 added, 0 removed)
+```
+
+A perfect pass. In the same window:
+
+| Measurement | Result |
+|---|---|
+| library files modified after watch start | **83** |
+| of those, `.nfo` | **83** (100% — no other extension touched) |
+| of the library's 91 `.nfo` total | **91% rewritten** |
+| audio files (`.flac`/`.mp3`/`.wav`) touched | **0** |
+| content byte-identical to `@pre-project` | 17 |
+| **content genuinely CHANGED** | **66** |
+| first write | `2026-08-18T14:33:56Z` — **1 second after the scan POST** |
+| last write | `2026-08-18T14:35:04Z` |
+
+Verified byte-for-byte against the `tank/media/Music@pre-project` snapshot (12:08Z). A sample
+diff, `Taylor Swift/Lover (2019)/album.nfo`:
+
+```diff
+-  <premiered>2019-08-22</premiered>
+-  <releasedate>2019-08-22</releasedate>
++  <premiered>2019-08-23</premiered>
++  <releasedate>2019-08-23</releasedate>
+-  <country />
+```
+
+**A test that reports a clean pass while 91% of the library's `.nfo` files are rewritten is
+worse than no test at all.** It is the exact failure class this phase already met twice — 01-01's
+declared-YAML false pass, and 01-02's harness failing closed and silent.
+
+### The second finding: `SaveLocalMetadata=false` does not stop an explicit FullRefresh
+
+`SaveLocalMetadata` was `false` at the time — set, read back from the API, and recorded. The
+writes still happened, one second after the refresh request. The conclusion is unavoidable:
+
+> **`SaveLocalMetadata: false` gates the *automatic*, scan-time metadata save path only. An
+> explicit `MetadataRefreshMode=FullRefresh` — which is exactly what Jellyfin's UI "Refresh
+> metadata" button issues — still runs the `Nfo` saver and writes into the library.**
+
+What this means for SAFE-05, stated plainly:
+
+- The freeze **holds** against the threat PROJECT.md actually describes: "`SaveLocalMetadata:
+  true` means Jellyfin writes `.nfo`/`.jpg`/`.lrc` into any folder placed under `/media/Music`
+  within minutes" — the automatic path, and the scheduled 12-hourly scan.
+- The freeze **does not hold** against a human clicking "Refresh metadata" on the Music library
+  in the Jellyfin UI, or any equivalent explicit API call. That remains an open write path, and
+  the only structural control for it would be making the mount `:ro` — which D-21 deliberately
+  rejected and the phase's Deferred Ideas already flags as "worth revisiting once the tagger
+  owns the tree".
+
+This belongs in PROJECT.md alongside D-17 when 01-09 carries the permanence decision across.
+
+### Nothing was lost, and nothing was restored
+
+- `tank/media/Music@pre-project` (2026-08-18T12:08Z) holds every original. Proven readable and
+  usable this run — it is what the 66-file content comparison was made against.
+- `tank/media/Music@safe05-watch-t0` (2026-08-18T14:42Z) was taken as the new watch baseline.
+- **No sidecar was deleted (D-18) and none was restored.** Restoring is a mutation this plan did
+  not authorise, the changed content is arguably fresher provider metadata rather than damage,
+  and QUAL-01's before-state snapshot covers *audio file tags*, not `.nfo` sidecars. The
+  snapshot is the undo if one is ever wanted; that is a decision for the user, not for me.
+
+### The watch was restarted with content-aware instruments
+
+`sidecar-watch-eval.sh` now checks four things, **all of which must be zero**:
+
+| # | Check | Catches |
+|---|---|---|
+| 1 | sidecar paths ADDED | the original roadmap criterion |
+| 2 | sidecar paths REMOVED | D-18 deletes nothing |
+| 3 | **sidecar content changed (sha256)** | **in-place rewrites — the check that was missing** |
+| 4 | whole-library stat (type/size/mtime, all 2,674 entries) | touch-without-change, and any write to a non-sidecar file including audio |
+
+Plus an independent block-level cross-check from the Proxmox host:
+`zfs diff tank/media/Music@safe05-watch-t0 tank/media/Music` — expect no output.
+
+### The scan — triggered and confirmed actually running (first window)
 
 ```
 POST /Items/7e64e319657a9516ec78490da03edccb/Refresh
@@ -388,11 +484,13 @@ would have rewritten every `.nfo` in the tree within minutes.
 
 | | |
 |---|---|
-| T+0 enumeration | `/mnt/fast/safety/music-pre-project/audit/sidecar-watch-t0-20260818.txt` (1,341 lines) |
-| T+0 report | `.../audit/sidecar-watch-t0-report-20260818.txt` |
-| **Watch start (UTC)** | **`2026-08-18T14:33:14Z`** (epoch `1787063594`) |
-| Scan triggered (UTC) | `2026-08-18T14:33:55Z` — 41 s after T+0 |
-| **Earliest valid evaluation** | **`2026-08-18T15:33:14Z`** |
+| **Watch start (UTC)** | **`2026-08-18T14:43:13Z`** (epoch `1787064193`, in `.../audit/sidecar-watch-t0.epoch`) |
+| **Earliest valid evaluation** | **`2026-08-18T15:43:13Z`** |
+| ZFS snapshot at T+0 | `tank/media/Music@safe05-watch-t0` (created 15:42 local) |
+| T+0 content manifest | `.../audit/sidecar-watch-t0-sha256.txt` — 1,341 lines, sha256 per sidecar |
+| T+0 stat manifest | `.../audit/sidecar-watch-t0-stat.txt` — 2,674 lines, type/size/mtime for every library entry |
+| T+0 path list | `.../audit/sidecar-watch-t0-20260818.txt` — 1,341 lines (retained, comparable to 01-01) |
+| T+0 harness report | `.../audit/sidecar-watch-t0-report-20260818.txt` |
 | State record | `.../audit/sidecar-watch-STATE.txt` |
 | Evaluation script | `.../audit/sidecar-watch-eval.sh` |
 
@@ -402,23 +500,32 @@ would have rewritten every `.nfo` in the tree within minutes.
 ssh root@172.16.1.159 'bash /mnt/fast/safety/music-pre-project/audit/sidecar-watch-eval.sh'
 ```
 
-The script re-enumerates with the same widened harness, writes
-`audit/sidecar-watch-20260818.txt`, and prints ADDED and REMOVED with mtimes.
-
-It **refuses to evaluate early** — run before `15:33:14Z` it prints `TOO EARLY` and exits `3`
-without producing a T+60 file, so the acceptance criterion "at least one full hour of real elapsed
-time" cannot be quietly bypassed. Verified: a test run at `14:35:56Z` exited 3 correctly.
+It **refuses to evaluate early** — run before `15:43:13Z` it prints `TOO EARLY` and exits `3`
+without producing a T+60 file, so "at least one full hour of real elapsed time" cannot be quietly
+bypassed. Verified twice: exited 3 correctly at `14:35:56Z` and `14:45:07Z`.
 
 Exit codes: `0` PASS, `1` FAIL (files listed with mtimes), `2` harness/precondition error,
-`3` too early. It captures the harness's stderr to a file rather than discarding it — the wave-2
-lesson that a verification harness failing *closed* and silent is more dangerous than one failing
-open.
+`3` too early. Its stderr is captured, never discarded — the wave-2 lesson that a verification
+harness failing *closed* and silent is more dangerous than one failing open.
 
-**GATE: the ADDED list must be empty.** If any file appears, do not delete it (D-18) and do not
-retry silently — record the filename and mtime. A new sidecar after this freeze means either a
-setting did not take or there is a writer that neither the mount audit nor D-24 accounted for.
+**GATE: all four checks must be zero.** If anything appears, do not delete it, do not restore it
+(D-18) and do not retry silently — record the filename and mtime. Both ZFS snapshots are the undo.
 
-**No sidecar was deleted at any point in this plan.**
+### One thing this window does NOT yet have: an active scan
+
+**No scan has been triggered inside the current window.** The `FullRefresh` ran *before* T+0 and
+had finished by `14:35:04Z`. As it stands the current hour is a **quiet** one, and the plan is
+explicit that an active hour is much stronger evidence.
+
+The realistic, in-threat-model way to make it active is the scheduled task —
+`POST /ScheduledTasks/Running/RefreshLibrary`, default refresh mode, the path that actually runs
+every 12 hours — with the T+0 manifests re-taken immediately before it. **I did not do this: it
+is a further scan against the household's live Jellyfin, and it was outside the authorisation I
+had once the watch had been started and handed back.** It needs an explicit go-ahead. The
+12-hourly task may also fire on its own inside the window, in which case the evaluation captures
+it either way.
+
+**No sidecar was deleted or restored at any point in this plan.**
 
 ---
 
@@ -504,14 +611,48 @@ Covered in full in Task 1. Recorded here as a deviation because the plan framed 
 either "Lidarr refuses the deletion" or "Lidarr orphans the artists", and the real answer is a
 third one: it accepts cleanly and changes nothing about where the 22 existing artists point.
 
-### 7. [Design decision] The evaluation script refuses to run early
+### 7. [Rule 1 - Bug in the specified test] The SAFE-05 path-set diff is blind to in-place rewrites
+
+- **Found during:** Task 3, cross-checking file mtimes after the scan rather than trusting the
+  path diff.
+- **Issue:** the roadmap's criterion — "no new `.nfo`/`.jpg`/`.lrc` appearing" — is a path-set
+  comparison. It returned **0 added, 0 removed** while Jellyfin rewrote **83 of 91 `.nfo`** files
+  in place, **66 with genuinely changed content**. Widening the extension set (which this plan
+  also did) does not help at all: the blind spot is the *comparison*, not the *set*.
+- **Fix:** the watch was restarted with sha256 content hashes per sidecar, a whole-library
+  type/size/mtime manifest covering all 2,674 entries, and a ZFS snapshot for an independent
+  block-level cross-check. The path check is retained as one gate of four.
+- **Cost:** the first hour was discarded and the watch restarted at `14:43:13Z`.
+- **This is the third instance of the same failure class in this phase** (01-01's declared-YAML
+  false pass, 01-02's harness failing closed and silent, and now this). Worth naming as a
+  pattern for 01-09.
+
+### 8. [Finding — a real limit on SAFE-05] `SaveLocalMetadata=false` does not stop an explicit FullRefresh
+
+Covered in full in Task 3. `SaveLocalMetadata` gates the automatic scan-time save path only; an
+explicit `MetadataRefreshMode=FullRefresh` — what Jellyfin's UI "Refresh metadata" button issues
+— still runs the `Nfo` saver and writes into the library. SAFE-05 as written is met for the
+automatic path and **not** met for the manual one. The only structural control would be an `:ro`
+mount, which D-21 deliberately rejected.
+
+### 9. [Self-inflicted, disclosed] The FullRefresh I chose caused 66 files to change
+
+The plan says "trigger a Jellyfin library scan so the hour is an active test". I chose
+`MetadataRefreshMode=FullRefresh&ImageRefreshMode=FullRefresh` — deliberately the most aggressive
+option short of `ReplaceAllMetadata`, on the reasoning that a scan writing nothing is stronger
+evidence than an idle hour. It is more aggressive than any automatic path Jellyfin would take on
+its own, and it wrote to the library. That is how the two findings above were surfaced, but it
+should be stated plainly rather than buried: **I caused 66 `.nfo` files to change.** Both ZFS
+snapshots hold the originals, no audio file was touched, and nothing was deleted.
+
+### 10. [Design decision] The evaluation script refuses to run early
 
 `sidecar-watch-eval.sh` exits `3` before `T+0 + 3600s` rather than producing a T+60 file. The
 acceptance criterion is one hour of **real elapsed time**; a script that would happily diff two
 enumerations five minutes apart makes that criterion honour-system. Verified refusing at
 `14:35:56Z`.
 
-### 8. [Credential handling] An existing Jellyfin API key was borrowed, not a new one minted
+### 11. [Credential handling] An existing Jellyfin API key was borrowed, not a new one minted
 
 Jellyfin's API needs an admin key to change library options. Rather than create a permanent new
 credential, the existing `QuarterMaster` key was read from the live database into a shell variable
@@ -542,6 +683,16 @@ Same for the Lidarr key read from `config.xml`.
    The harness now counts it every run so it stays visible.
 7. **The widened sidecar set is 19.4% larger than D-18's.** 218 files (43 `.png` + 175 `.txt`) were
    outside the definition SAFE-05 was written against.
+8. **The SAFE-05 test as specified is structurally incapable of detecting the most likely form of
+   Jellyfin pollution.** A path-set diff returned a perfect pass while 91% of the library's `.nfo`
+   files were rewritten. Widening the extension set does not fix it — the comparison had to change.
+9. **`SaveLocalMetadata=false` is not an absolute freeze.** It stops the automatic path; an explicit
+   UI-initiated "Refresh metadata" still writes `.nfo` into the library. SAFE-05 should be read as
+   "Jellyfin does not write unprompted", not "Jellyfin cannot write".
+10. **The `@pre-project` ZFS snapshot works and is genuinely usable as a content baseline.** SAFE-02
+    was proven in anger this run, not just asserted: it is what the 66-file content comparison was
+    made against, read live from `/mnt/tank/media/Music/.zfs/snapshot/pre-project` on the Proxmox
+    host (`snapdir=hidden`, so the path must be typed, it will not list).
 
 ## Requirements Status
 
@@ -552,9 +703,12 @@ Same for the Lidarr key read from `config.xml`.
 - **WRIT-01 — now structurally true and ready for 01-09 to assert.** `tagger-class writers: 0`,
   `unclassified writers: 0`, `declared rw reaching Music: 0`. Not marked complete here; 01-09 owns
   phase closure.
-- **SAFE-05 — NOT MET YET.** Databases backed up and verified, three switches closed and read back,
-  section 5 widened, T+0 recorded. **The one-hour watch is running and unevaluated.** Marking
-  SAFE-05 complete before that command returns zero would be false.
+- **SAFE-05 — NOT MET, and partially disproven as written.** Databases backed up and verified,
+  three switches closed and read back, section 5 widened, content-aware T+0 recorded. The watch is
+  running and unevaluated. Beyond that, two things must be resolved before SAFE-05 can be called
+  met: the current window has **no active scan in it**, and `SaveLocalMetadata=false` is now
+  **proven not to stop an explicit FullRefresh**. SAFE-05's wording should be tightened to
+  "Jellyfin writes nothing into Music *unprompted*" — the absolute claim is false and measured so.
 
 ## Threat Flags
 
@@ -578,8 +732,12 @@ to close it is recorded on `/mnt/fast` and it evaluates with one command.
 - `/mnt/fast/safety/music-pre-project/audit/jellyfin-library-options-after.json` — FOUND, 23,751 B, no API key
 - `/mnt/fast/safety/music-pre-project/library-db/jellyfin-{jellyfin,playback_reporting,introskipper}.db` — all FOUND, all `integrity_check` ok, all in `MANIFEST.txt`
 - `/mnt/fast/safety/music-pre-project/audit/sidecar-watch-t0-20260818.txt` — FOUND, 1,341 lines
+- `/mnt/fast/safety/music-pre-project/audit/sidecar-watch-t0-sha256.txt` — FOUND, 1,341 lines
+- `/mnt/fast/safety/music-pre-project/audit/sidecar-watch-t0-stat.txt` — FOUND, 2,674 lines
+- `/mnt/fast/safety/music-pre-project/audit/sidecar-watch-t0.epoch` — FOUND, `1787064193`
 - `/mnt/fast/safety/music-pre-project/audit/sidecar-watch-STATE.txt` — FOUND
 - `/mnt/fast/safety/music-pre-project/audit/sidecar-watch-eval.sh` — FOUND, executable, refuses early (exit 3)
+- `zfs list -t snapshot tank/media/Music` — `@pre-project` and `@safe05-watch-t0` both FOUND
 - Commits `07c69de`, `219dc4d`, `fb57d76` — all FOUND, all pushed to `origin/main`
 - LXC 100 `/mnt/fast/stacks` at `fb57d76`, confirmed by `git log --oneline -1` after `git pull --ff-only`
 - Live state confirmed by `docker inspect`, an in-container write attempt, and API read-back — not by the repo diff
@@ -588,10 +746,24 @@ to close it is recorded on `/mnt/fast` and it evaluates with one command.
 
 ## What Closes This Plan
 
-1. At or after `2026-08-18T15:33:14Z`, run:
+1. **Decide whether to make the window active.** The current hour is quiet. To test the realistic
+   threat, re-take the T+0 manifests and then trigger the scheduled task
+   (`POST /ScheduledTasks/Running/RefreshLibrary`, default refresh mode) — this needs an explicit
+   go-ahead, and it restarts the hour. Otherwise accept a quiet hour and say so.
+2. At or after `2026-08-18T15:43:13Z` (or one hour after any restart), run:
    `ssh root@172.16.1.159 'bash /mnt/fast/safety/music-pre-project/audit/sidecar-watch-eval.sh'`
-2. Record the T+60 timestamp, both difference counts, and the exit code in this SUMMARY.
-3. Only if ADDED is 0 and REMOVED is 0: mark SAFE-05 met, set this plan's status to complete, and
-   advance STATE.md.
-4. Independently of the watch, **01-08 must resolve the `aclmode=restricted` blocker before its
+3. Cross-check independently:
+   `ssh root@172.16.1.158 'zfs diff tank/media/Music@safe05-watch-t0 tank/media/Music'` — expect
+   no output.
+4. Record the T+60 timestamp, all four counts, and the exit code in this SUMMARY.
+5. Only if all four are 0: mark SAFE-05 met **with the FullRefresh caveat stated**, set this
+   plan's status to complete, and advance STATE.md.
+6. Decide whether to restore the 66 changed `.nfo` from `tank/media/Music@pre-project`. My
+   recommendation is **no** — the content is fresher provider metadata, not damage; QUAL-01's
+   before-state covers audio tags rather than sidecars; and restoring is a write into a tree this
+   phase just finished sealing. The snapshot keeps the option open indefinitely.
+7. Independently of the watch, **01-08 must resolve the `aclmode=restricted` blocker before its
    mode normalisation can run at all.**
+8. **01-09 should carry two things into PROJECT.md** beyond D-17: that the Jellyfin freeze is not
+   absolute against an explicit refresh, and that SAFE-05-style tests must compare content, not
+   paths.
