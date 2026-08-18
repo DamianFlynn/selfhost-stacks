@@ -430,6 +430,7 @@ do_fence() {
   echo ""
   echo "==> 7. Writing $FENCE/MANIFEST.txt..."
   local man="$FENCE/MANIFEST.txt"
+  local snap_found nd recs keys base donec failc
   {
     echo "# music-pre-project recovery fence - MANIFEST"
     echo "# generated: $(date -u +%Y-%m-%dT%H:%M:%SZ)  host: $(hostname)"
@@ -453,6 +454,36 @@ do_fence() {
       b="$(find "$FENCE/$sub" -type f -printf '%s\n' 2>/dev/null | awk '{s+=$1} END {print s+0}')"
       printf '%-18s files=%-8s bytes=%s\n' "$sub" "$n" "$b"
     done
+    echo ""
+    # QUAL-01 snapshots are the one fenced class whose integrity is not fully described by a
+    # byte count and a digest: the thing that matters downstream is how many RECORDS it holds
+    # and how many distinct audio_md5 join keys those collapse to, because Phase 7's diff joins
+    # on the key and a short capture is indistinguishable from a complete one by size alone.
+    # Emitted here, by the generator, rather than appended by hand after a capture run - section
+    # 7 rewrites this file wholesale, so a hand-appended line survives exactly until the next
+    # `fence` invocation and then silently disappears.
+    echo "## QUAL-01 tag snapshots"
+    snap_found=0
+    while IFS= read -r nd; do
+      [[ -n "$nd" ]] || continue
+      snap_found=1
+      recs="?"; keys="?"
+      if command -v gzip >/dev/null 2>&1; then
+        recs="$(gzip -cd -- "$nd" 2>/dev/null | wc -l | tr -d ' ')"
+        if command -v jq >/dev/null 2>&1; then
+          keys="$(gzip -cd -- "$nd" 2>/dev/null | jq -r '.audio_md5 // empty' 2>/dev/null \
+                  | sort -u | wc -l | tr -d ' ')"
+        fi
+      fi
+      base="${nd%.ndjson.gz}"
+      donec="$( [[ -f "${base}.done"   ]] && wc -l < "${base}.done"   | tr -d ' ' || echo '-' )"
+      failc="$( [[ -f "${base}.failed" ]] && wc -l < "${base}.failed" | tr -d ' ' || echo '-' )"
+      printf '%s  records=%s  distinct_audio_md5=%s  done=%s  failed=%s  bytes=%s\n' \
+        "$(basename "$nd")" "$recs" "$keys" "$donec" "$failc" "$(stat -c %s "$nd" 2>/dev/null || echo '?')"
+      printf '  sha256=%s\n' "$(sha "$nd")"
+    done < <(find "$FENCE/tags" -type f -name '*.ndjson.gz' 2>/dev/null | sort)
+    [[ $snap_found -eq 1 ]] || echo "(none - QUAL-01 capture has not been run; see plan 01-04)"
+
     echo ""
     echo "## sha256 of every fenced artifact"
     echo "# library-db copies made with sqlite3 .backup are NOT byte-identical to their source"
