@@ -28,27 +28,31 @@ pipeline that someone owns.
 
 ## Current Position
 
-Phase: 01 (safety-harness-and-freeze-the-writers) — EXECUTING
+Phase: 01 (safety-harness-and-freeze-the-writers) — COMPLETE
 Plan: 9 of 9
-Status: Ready to execute
+Status: Phase 1 closed on a criterion-by-criterion verdict (final audit exit 0)
 Last activity: 2026-08-18
-phase requirements, run sequentially in waves 1–9
+All 10 phase requirements met: SAFE-01…05, WRIT-01…04, QUAL-01
 
-Progress: [█████████░] 89%
+Progress: [██████████] 100%
+
+Next phase: 02 (NFS Export and Music Assistant Reachability) — needs `--research-phase`.
+It inherits `anonuid=568,anongid=568` from WRIT-04, and the export **must be read-only**: the
+library tree is `0777` and mode bits are the only lever NFS clients see.
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 3
-- Average duration: 30m
-- Total execution time: 90m
+- Total plans completed: 9
+- Average duration: ~42m (excluding 01-06's 374-minute observation window)
+- Total execution time: ~375m of work
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01 | 3 | 90m | 30m |
+| 01 | 9 | ~375m | ~42m |
 
 **Per Plan:**
 
@@ -69,6 +73,7 @@ Progress: [█████████░] 89%
 | Phase 01 P06 | 65m + 374m watch | 3 tasks | 3 files |
 | Phase 01 P07 | ~40 minutes | 2 tasks | 3 files |
 | Phase 01 P08 | ~35 minutes | 3 tasks | 2 files |
+| Phase 01 P09 | ~55 minutes | 4 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -90,6 +95,31 @@ Recent decisions affecting current work:
   get worse" is.** QUAL-01 puts a re-runnable before-state tag snapshot in Phase 1, before anything
   is staged; QUAL-02 gates the pilot on a field-level before/after diff with no net metadata loss.
   A file can pass CONS-04 in full while having lost fields it arrived with.
+
+- [01-09 / Phase 1 closure]: **Library ownership is `568:568`; modes stay `0777`.** `568` is `apps`
+  (four independent repo references, 76% of 535,298 media entries); the gid it replaced, **545, is
+  an orphan** — `getent group 545` returns nothing on atlantis. The `0755`/`0644` target is recorded
+  but **not achieved**: `chmod` fails `EPERM` on `tank` even as real root. Phase 2's export must be
+  read-only as a result.
+
+- [01-09 / Phase 1 closure]: **Jellyfin's Music metadata freeze is permanent, and Jellyfin stays the
+  documented sole `rw` holder rather than going `:ro`** — consumer-class, frozen at the application
+  layer, counted in its own audit class. Measured limit: `SaveLocalMetadata: false` does not stop an
+  explicit `FullRefresh`.
+
+- [01-09 / Phase 1 closure]: **`quick-health-check.sh` can now exit non-zero**, and the freeze
+  harness runs on it. The library **mode** assertion was scoped to a report inside
+  `check-music-freeze.sh` — a permanently-red check trains the reader to ignore it, which is the
+  failure the fold-in exists to prevent. Ownership stays a hard assertion.
+
+- [01-09 / Phase 1 closure]: **`/mnt/tank/media/TV` — 114,218 entries on orphan gid 545 — is
+  recorded, not actioned.** No requirement covers it, and scope growth followed by abandonment is
+  this project's documented failure mode. Working method recorded in `beets.md` (run `chown` from
+  the Proxmox host, never LXC 100).
+
+- [01-09 / Phase 1 closure]: **Six times this phase a check reported a pass it had not earned**, all
+  from the same root: partial data stated as settled. The rule now written into `beets.md` — verify
+  with a second independent instrument before writing it down.
 
 - [Revision 2026-08-17]: **Ergonomics is a scored axis in the Phase 3 spike, not a footnote**
   (TAGR-06). Two separate questions: which engine (beets vs wrtag) and how the human meets it (raw
@@ -236,12 +266,12 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-08-18T21:49:42.975Z
-Stopped at: Completed 01-08-PLAN.md (WRIT-04 ownership half)
+Last session: 2026-08-18T22:45:00Z
+Stopped at: Completed 01-09-PLAN.md — Phase 1 COMPLETE
 Resume file: None
 
 Plans 01-02, 01-04, 01-06, 01-07, 01-08 and 01-09 are `autonomous: false` — they carry blocking
 human checkpoints (the fence run, the ~140 GB capture, the Lidarr/Jellyfin freeze and its one-hour
 watch, the beets config vendoring, the recursive chown, and the phase-closure verdict).
 
-Next: `/gsd-execute-phase 1`
+Next: `/gsd-plan-phase 2 --research-phase`

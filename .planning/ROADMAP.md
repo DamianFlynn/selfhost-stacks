@@ -44,7 +44,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Execution:** plans within a phase run one at a time (`parallelization: false`). Most phases touch
 the same filesystem paths and the same beets state.
 
-- [ ] **Phase 1: Safety Harness and Freeze the Writers** - One writer on the library, everything irreplaceable copied somewhere no tagger can reach, and a before-state tag snapshot taken while the library is still untouched
+- [x] **Phase 1: Safety Harness and Freeze the Writers** - One writer on the library, everything irreplaceable copied somewhere no tagger can reach, and a before-state tag snapshot taken while the library is still untouched
 - [ ] **Phase 2: NFS Export and Music Assistant Reachability** - The second consumer proven on three albums, before any content flows
 - [ ] **Phase 3: Tagger Spike** - One tagger *and* one front end chosen on numbers from this library's own content, against thresholds committed in advance
 - [ ] **Phase 4: Collapse to One Tagger** - One tagger, one database, no idle container holding a rw mount — independently shippable
@@ -91,9 +91,25 @@ established before any tool is chosen and before any file is staged or imported.
      of every beets `library.db` taken in the same step, an `ffprobe` JSON dump of all 764
      `dj-mixes` files including `TKEY` and `EnergyLevel`, and the 54 DJ cover scans — all on paths
      no tagger container mounts read-write, with spot-checks confirming the copies match source.
+     **✅ TRUE as of 01-02**, re-verified in 01-09: 18 `library.db` copies (each integrity-checked),
+     764 `ffprobe` JSON with `TKEY` in 148 and `EnergyLevel` in 45, 54 scans (**30 jpg + 24 bmp** —
+     a jpg/png-only extension list archives 30 of 54), both `@pre-project` snapshots, and **no
+     running container mounting any path under `/mnt/fast/safety`**, proven from the same
+     enumeration WRIT-01 uses. Note the figure: this criterion originally said "794 `dj-mixes`
+     files"; **764 is the audio count** — 794 was 764 audio + the 30 JPEG scans counted as tracks.
   5. `stat` over all 13 artist folders returns one decided `uid:gid` (today: 12 are `568:65534`,
      1 is `568:568`, matching neither `beets.md` nor `CLAUDE.md`), and that decided value is
      recorded in the repo — it also sets `anonuid`/`anongid` on the Phase 2 export.
+     **✅ TRUE as of 01-09** (01-08 + 01-09). Both halves: **2,674 of 2,674** entries are `568:568`
+     on disk — library root included — verified from the Proxmox host and by `zfs diff`; and the
+     value is recorded in `beets.md`, `PROJECT.md` and `CLAUDE.md`. Three corrections this criterion
+     needs: (a) the `568:65534` census it quotes was **LXC 100's view, not the disk** — on disk it
+     was `0:545`, `3000:545`, `568:545`, `100000:100000`, `100911:100911` and `568:568`;
+     (b) "13 artist folders" understates the work by two orders of magnitude — 2,674 entries needed
+     it; (c) **`chown` cannot be run from LXC 100 at all**, only from the Proxmox host.
+     **Not met and not part of this criterion:** D-12's `0755`/`0644`. Every entry is `0777` and
+     stays so — `chmod` fails `EPERM` on `tank` even as real root under `aclmode=restricted` +
+     `aclinherit=passthrough`. Phase 2's export must therefore be **read-only**.
   6. A **re-runnable** before-state tag snapshot exists covering every file that is a candidate for
      import — not just the DJ content that SAFE-03 covers. It records the full tag set per file
      keyed by a stable identifier, is stored where no tagger can write it, and a trial diff of the
@@ -101,6 +117,11 @@ established before any tool is chosen and before any file is staged or imported.
      it is trusted to prove anything. This is QUAL-01, and it must exist *now*: once content has
      been staged or imported, the before-state can no longer be recovered, and Phase 7's diff has
      nothing to compare against.
+     **✅ TRUE as of 01-04** (01-03 tooling + 01-04 capture): 9,736 records over 182.67 GB, zero
+     failures, keyed on `audio_md5` (the encoded bitstream, so a rename cannot break the join);
+     recorded self-diff exits 0 across 8,672 matched keys with all five difference categories at
+     zero, paired with 01-03's mutated-copy negative control which exits 1 with exactly the right
+     rows.
 **Plans**: 9 (01-01 … 01-09), sequential — audit script, fence, snapshot tooling, the QUAL-01
 capture, mount narrowing, Lidarr + Jellyfin freeze, beets config vendoring, ownership normalisation,
 and the repo record + phase closure
@@ -377,7 +398,7 @@ Phase 7. Plans within a phase run sequentially.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Safety Harness and Freeze the Writers | 8/9 | In Progress|  |
+| 1. Safety Harness and Freeze the Writers | 9/9 | Complete | 2026-08-18 |
 | 2. NFS Export and Music Assistant Reachability | 0/TBD | Not started | - |
 | 3. Tagger Spike | 0/TBD | Not started | - |
 | 4. Collapse to One Tagger | 0/TBD | Not started | - |

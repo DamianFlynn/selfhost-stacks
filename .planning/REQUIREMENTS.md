@@ -34,7 +34,7 @@ Requirements for the milestone as PROJECT.md scopes it: pipeline fixed, bucket A
 
 ### Writers — one process owns the tree
 
-- [ ] **WRIT-01**: Exactly one process holds a read-write path to `/mnt/tank/media/Music`,
+- [x] **WRIT-01**: Exactly one process holds a read-write path to `/mnt/tank/media/Music`,
       verified by inspecting the mounts of *running* containers, not by reading compose files
       *(Substantively true as of 01-06: the running-container audit reports `tagger-class writers:
       0`, `unclassified writers: 0`, `consumer-class writers: 1 (jellyfin, documented exception
@@ -53,7 +53,7 @@ Requirements for the milestone as PROJECT.md scopes it: pipeline fixed, bucket A
       artists — an *arr stores an absolute path per artist, so all 22 still target
       `/media/Music/<Artist>`. The `:ro` mount (D-25), not the root-folder move (D-23), is what
       actually closes the library.)
-- [ ] **WRIT-04**: Library ownership is normalised to one decided `uid:gid` and recorded in the
+- [x] **WRIT-04**: Library ownership is normalised to one decided `uid:gid` and recorded in the
       repo, replacing today's mix of `apps:nogroup` and `apps:apps`
       (**Normalisation half DONE in 01-08** — all 2,674 entries incl. the library root are
       `568:568` on disk, verified from the Proxmox host and by `zfs diff` against `@pre-chown`.
@@ -199,10 +199,10 @@ Populated during roadmap creation (2026-08-17). Every v1 requirement maps to exa
 | SAFE-03 | Phase 1 | Complete |
 | SAFE-04 | Phase 1 | Complete |
 | SAFE-05 | Phase 1 | Complete |
-| WRIT-01 | Phase 1 | Pending (audit green via 01-05 + 01-06; 01-09 asserts) |
+| WRIT-01 | Phase 1 | Complete (01-05 + 01-06; asserted 01-09, audit exit 0) |
 | WRIT-02 | Phase 1 | Complete |
 | WRIT-03 | Phase 1 | Complete |
-| WRIT-04 | Phase 1 | Pending (normalisation done via 01-08; 01-09 records it in the repo) |
+| WRIT-04 | Phase 1 | Complete (01-08 normalisation, 01-09 repo record; mode half scoped out) |
 | QUAL-01 | Phase 1 | Complete |
 | CONS-01 | Phase 2 | Pending |
 | CONS-02 | Phase 2 | Pending |
