@@ -16,6 +16,10 @@
 #
 # Workflow:
 #   Configure indexers in Prowlarr → Auto-sync to Radarr/Sonarr/Lidarr → Arrs search via Prowlarr
+#   Library scope (D-19, 2026-08-18): none. Prowlarr's media mount was deleted outright —
+#   an indexer manager brokers searches and never touches the media library. "Category mapping
+#   (Movies/TV/Music)" above refers to indexer categories, not filesystem paths. Do not re-add a
+#   media mount here. The downloads mount stays; manual-search downloads are a real use.
 #
 # Access:
 #   URL: https://prowlarr.deercrest.info
@@ -39,7 +43,6 @@ services:
       - /etc/localtime:/etc/localtime:ro  # System timezone
       - /mnt/fast/appdata/arrs/prowlarr/config:/config:rw  # Application config, indexers, and app sync
       - /mnt/tank/downloads:/downloads:rw  # Optional: Manual search downloads
-      - /mnt/tank/media:/media:rw  # Optional: Media library access
     environment:
       TZ: $TZ
       PUID: $PUID

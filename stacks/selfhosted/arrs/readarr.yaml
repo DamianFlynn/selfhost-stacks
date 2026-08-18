@@ -16,6 +16,9 @@
 #
 # Workflow:
 #   Add author → Monitor releases → Search via Prowlarr → Download → Import to library
+#   Library scope (D-19, 2026-08-18): /mnt/tank/media/Books only. Readarr has no filesystem
+#   path into Music, Movies, TV or Photos. Container-internal path is unchanged at /media/Books,
+#   which is the configured root folder, so no Readarr reconfiguration is required.
 #
 # Access:
 #   URL: https://readarr.deercrest.info
@@ -40,7 +43,7 @@ services:
       - /etc/localtime:/etc/localtime:ro  # System timezone
       - /mnt/fast/appdata/arrs/readarr/config:/config:rw  # Application config and database
       - /mnt/tank/downloads:/downloads:rw  # Download client output directory
-      - /mnt/tank/media:/media:rw  # Book library destination
+      - /mnt/tank/media/Books:/media/Books:rw  # Book library destination — books subtree only (D-19)
     environment:
       TZ: $TZ
       PUID: $PUID

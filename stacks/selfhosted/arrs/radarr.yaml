@@ -15,6 +15,9 @@
 #
 # Workflow:
 #   Add movie → Search via Prowlarr → Send to download client → Import to library → Notify
+#   Library scope (D-19, 2026-08-18): /mnt/tank/media/Movies only. Radarr has no filesystem
+#   path into Music, TV, Books or Photos. Container-internal path is unchanged at /media/Movies,
+#   which is the configured root folder, so no Radarr reconfiguration is required.
 #
 # Access:
 #   URL: https://radarr.deercrest.info
@@ -40,7 +43,7 @@ services:
       - /etc/localtime:/etc/localtime:ro  # System timezone
       - /mnt/fast/appdata/arrs/radarr/config:/config:rw  # Application config and database
       - /mnt/tank/downloads:/downloads:rw  # Download client output directory
-      - /mnt/tank/media:/media:rw  # Movie library destination
+      - /mnt/tank/media/Movies:/media/Movies:rw  # Movie library destination — movies subtree only (D-19)
     environment:
       TZ: $TZ
       PUID: $PUID

@@ -12,6 +12,14 @@
 #   - Manual search and download
 #   - Hearing impaired subtitle filtering
 #
+# Workflow:
+#   Sync library from Radarr/Sonarr → Search providers → Download subtitle → Write beside media file
+#   Library scope (D-19, 2026-08-18): /mnt/tank/media/Movies and /mnt/tank/media/TV only. Bazarr
+#   places subtitles beside both movies and episodes, so it needs both subtrees and nothing else —
+#   it has no filesystem path into Music, Books or Photos. Container-internal paths are unchanged
+#   at /media/Movies and /media/TV, which match Radarr's and Sonarr's root folders, so no Bazarr
+#   path mapping needs reconfiguring.
+#
 # Access:
 #   URL: https://bazarr.deercrest.info
 #   Middleware: chain-authelia (protected - admin access)
@@ -36,7 +44,8 @@ services:
       - /etc/localtime:/etc/localtime:ro  # System timezone
       - /mnt/fast/appdata/arrs/bazarr/config:/config:rw  # Application config and database
       - /mnt/tank/downloads:/downloads:rw  # Download directory for subtitle files
-      - /mnt/tank/media:/media:rw  # Media library for subtitle placement
+      - /mnt/tank/media/Movies:/media/Movies:rw  # Movie library for subtitle placement — movies subtree only (D-19)
+      - /mnt/tank/media/TV:/media/TV:rw  # TV library for subtitle placement — TV subtree only (D-19)
     environment:
       TZ: $TZ
       PUID: $PUID

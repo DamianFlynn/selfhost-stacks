@@ -18,6 +18,14 @@
 #   - Clean up failed/stalled downloads
 #   - Free space when disk usage > 90%
 #
+# Workflow:
+#   Poll Radarr/Sonarr/Jellyfin → Evaluate expiry rules → Move to "Leaving Soon" → Delete media file
+#   Library scope (D-19, 2026-08-18): /mnt/tank/media/Movies and /mnt/tank/media/TV only, mounted
+#   per-subtree under /data. Janitorr's job is deleting, so a delete-capable container with a path
+#   into the music library is the sharpest instance of the problem WRIT-01 closes. The music subtree
+#   is deliberately excluded and Janitorr must never be given one — its Lidarr integration would
+#   delete tracks out of the library this project is rebuilding.
+#
 # Access:
 #   URL: https://janitorr.deercrest.info
 #   Middleware: chain-authelia (protected - admin only)
@@ -40,7 +48,8 @@ services:
     volumes:
       - /mnt/fast/appdata/media/janitorr/application.yml:/workspace/application.yml:rw  # Main configuration file
       - /mnt/fast/appdata/media/janitorr/logs:/logs:rw  # Application logs
-      - /mnt/tank/media:/data:rw  # Media library for cleanup operations
+      - /mnt/tank/media/Movies:/data/Movies:rw  # Movie library for cleanup operations — movies subtree only (D-19)
+      - /mnt/tank/media/TV:/data/TV:rw  # TV library for cleanup operations — TV subtree only (D-19)
     healthcheck:
       test: "wget -T5 -qO- http://localhost:8081/health | grep UP || exit 1"
       start_period: 30s
