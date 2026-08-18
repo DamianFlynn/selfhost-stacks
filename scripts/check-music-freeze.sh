@@ -22,6 +22,8 @@
 #   3. /mnt/tank/media layout             D-19 precondition (never asserts)
 #   4. Ownership census                   WRIT-04, D-11, D-12
 #   5. Sidecar inventory                  SAFE-05, D-18 (never asserts)
+#                                         widened 2026-08-18 by plan 01-06 to include .png and
+#                                         .txt — see the block above section 5 for why
 #   6. Fence presence and spot-check      SAFE-02, SAFE-03, SAFE-04, D-06, D-08, D-10
 #   7. Summary
 #
@@ -362,20 +364,46 @@ fi
 echo ""
 
 # 5. Sidecar inventory (SAFE-05, D-18) - never asserts
-echo "🖼  5. Sidecar inventory (SAFE-05, D-18)"
+#
+# WIDENED 2026-08-18 (plan 01-06). D-18 and the roadmap name .nfo/.jpg/.lrc and nothing else.
+# The 01-01 baseline run measured 43 .png and 175 .txt already sitting in the library that the
+# narrow definition never counted - and Jellyfin writes .png for logo, clearart and disc art. An
+# hour of watching only the narrow set can therefore report a clean pass while Jellyfin writes a
+# .png in plain sight. The set below is the one the SAFE-05 watch uses; the narrow D-18 subtotal
+# is still printed separately so the widening stays auditable against the 01-01 numbers.
+#
+# .DS_Store is counted but deliberately NOT part of the watched set: it is written by a macOS
+# client over a share, which is an uncounted writer this phase can neither see from a container
+# mount audit nor close from Jellyfin or Lidarr settings. Counting it here keeps it visible.
+echo "🖼  5. Sidecar inventory (SAFE-05, D-18, widened by 01-06)"
 rule
 SIDECARS=""
+DSSTORE=""
 if [[ -d "$LIBRARY" ]]; then
-  SIDECARS="$(find "$LIBRARY" -type f \( -name '*.nfo' -o -name '*.jpg' -o -name '*.lrc' \) -printf '%p\n' 2>/dev/null | sort || true)"
+  SIDECARS="$(find "$LIBRARY" -type f \
+    \( -name '*.nfo' -o -name '*.jpg' -o -name '*.lrc' -o -name '*.png' -o -name '*.txt' \) \
+    -printf '%p\n' 2>/dev/null | sort || true)"
+  DSSTORE="$(find "$LIBRARY" -type f -name '.DS_Store' -printf '%p\n' 2>/dev/null | sort || true)"
 fi
 SIDECAR_TOTAL="$(count_lines "$SIDECARS")"
 NFO_COUNT="$(printf '%s\n' "$SIDECARS" | grep -c '\.nfo$' || true)"
 JPG_COUNT="$(printf '%s\n' "$SIDECARS" | grep -c '\.jpg$' || true)"
 LRC_COUNT="$(printf '%s\n' "$SIDECARS" | grep -c '\.lrc$' || true)"
-info "$SIDECAR_TOTAL sidecars found"
+PNG_COUNT="$(printf '%s\n' "$SIDECARS" | grep -c '\.png$' || true)"
+TXT_COUNT="$(printf '%s\n' "$SIDECARS" | grep -c '\.txt$' || true)"
+DSSTORE_COUNT="$(count_lines "$DSSTORE")"
+NARROW_TOTAL=$((NFO_COUNT + JPG_COUNT + LRC_COUNT))
+info "$SIDECAR_TOTAL sidecars found (widened set)"
 echo "      .nfo: $NFO_COUNT"
 echo "      .jpg: $JPG_COUNT"
 echo "      .lrc: $LRC_COUNT"
+echo "      .png: $PNG_COUNT   <- added by 01-06; Jellyfin writes .png for logo/clearart/disc"
+echo "      .txt: $TXT_COUNT   <- added by 01-06"
+echo ""
+echo "      narrow D-18 subtotal (.nfo/.jpg/.lrc only): $NARROW_TOTAL"
+echo "      widened total (what the SAFE-05 watch measures): $SIDECAR_TOTAL"
+echo "      .DS_Store files under the library: $DSSTORE_COUNT   <- macOS client, an uncounted writer"
+[[ -n "$DSSTORE" ]] && printf '%s\n' "$DSSTORE" | sed 's/^/         /'
 echo ""
 echo "  D-18: these are inventoried and left in place. This inventory is the baseline the"
 echo "  SAFE-05 one-hour watched-folder test diffs against — without it a pre-existing .nfo is"
@@ -444,7 +472,9 @@ echo "  stray top-level files:       $STRAY_COUNT"
 echo "  ownership mismatches:        $OWN_MISMATCH   (target 0, want $UIDGID)"
 echo "  dir-mode mismatches:         $DIRMODE_MISMATCH   (target 0, want $DIR_MODE)"
 echo "  file-mode mismatches:        $FILEMODE_MISMATCH   (target 0, want $FILE_MODE)"
-echo "  sidecars found:              $SIDECAR_TOTAL   (nfo $NFO_COUNT / jpg $JPG_COUNT / lrc $LRC_COUNT)"
+echo "  sidecars found (widened):    $SIDECAR_TOTAL   (nfo $NFO_COUNT / jpg $JPG_COUNT / lrc $LRC_COUNT / png $PNG_COUNT / txt $TXT_COUNT)"
+echo "  sidecars found (narrow D-18):$NARROW_TOTAL   (nfo/jpg/lrc only — comparable to the 01-01 baseline)"
+echo "  .DS_Store under the library: $DSSTORE_COUNT   (macOS client — an uncounted writer)"
 echo "  fence assertions failed:     $FENCE_FAILURES"
 echo "  toolchain missing:           $TOOLS_MISSING"
 echo "  FAILURES total:              $FAILURES"
