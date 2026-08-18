@@ -372,8 +372,21 @@ path already in use — a harness nobody runs is the same failure as no harness.
 
 ### Recorded, not actioned: `/mnt/tank/media/TV`
 
-`/mnt/tank/media/TV` carries **114,218 entries on the same orphan gid 545** — 64,546 `0:545` plus
-49,672 `568:545`, against Music's 2,357 before normalisation. So Music was never the outlier;
+Full census, run from atlantis on 2026-08-18 —
+`find /mnt/tank/media/<subtree> -printf '%U:%G\n' | sort | uniq -c`:
+
+| Subtree | Dominant owners | On gid 545? |
+|---|---|---|
+| Photos | 368,826 `0:568`, 9,522 `100000:100000` | no |
+| **TV** | **64,546 `0:545`, 49,672 `568:545`**, 2,466 `100000:100000`, 1,448 `568:568` | **yes — 114,218** |
+| Movies | 22,903 `568:568`, 12,533 `0:568`, 635 `100000:100000` | no |
+| Music | 2,674 `568:568` (all of it, post-normalisation) | no — was 2,357 |
+| Books | 42 `568:0`, 5 `568:568` | no |
+
+408,391 of 535,298 media entries (**76%**) carry gid `568`, which is what "estate convention"
+means concretely. `/mnt/tank/media/TV` carries **114,218 entries on the same orphan gid 545** —
+64,546 `0:545` plus 49,672 `568:545`, against Music's 2,357 before normalisation. Music was never
+the outlier;
 Music and TV almost certainly arrived together from a system where 545 was meaningful (the
 Windows/SMB `Users` RID, the TrueNAS `builtin_users` gid). Music is now normalised and TV is not,
 which leaves the two divergent.
