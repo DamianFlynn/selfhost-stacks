@@ -127,7 +127,7 @@ services:
   worker:
     container_name: cal-worker
     hostname: keeper-worker
-    image: ghcr.io/ridafkih/keeper-worker:2.21
+    image: ghcr.io/ridafkih/keeper-worker:2.22
     restart: unless-stopped
     env_file: .env
     environment:
