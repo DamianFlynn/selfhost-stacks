@@ -29,7 +29,7 @@ services:
   sabnzbd:
     hostname: "sabnzbd"
     container_name: sabnzbd
-    image: ghcr.io/linuxserver/sabnzbd:5.1.0
+    image: ghcr.io/linuxserver/sabnzbd:5.1.1
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped
