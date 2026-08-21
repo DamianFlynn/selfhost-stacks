@@ -149,7 +149,7 @@ services:
   web:
     container_name: cal-web
     hostname: keeper-web
-    image: ghcr.io/ridafkih/keeper-web:2.21
+    image: ghcr.io/ridafkih/keeper-web:2.22
     restart: unless-stopped
     env_file: .env
     environment:
