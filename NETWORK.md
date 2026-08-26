@@ -5,6 +5,8 @@
 **VLAN:** Default (single VLAN currently)
 
 **See also:** [DEVICE-INVENTORY.md](DEVICE-INVENTORY.md) for complete device tables and naming plan
+**See also:** [TAILSCALE.md](TAILSCALE.md) for remote access — tailnet topology, the two subnet
+routers and their failover, exit nodes, `tsbridge` service publishing, and the recovery runbook
 
 ## Core Infrastructure
 
@@ -24,6 +26,22 @@
 ### WiFi Networks
 - **Deer Crest** (Main): WPA2, 2.4GHz + 5GHz, 49 clients
 - **Deer Crest Guests**: Open, Main Building (5 APs)
+
+### Remote Access (Tailscale)
+Full design and runbook: **[TAILSCALE.md](TAILSCALE.md)**
+
+- **Tailnet:** `pirate-clownfish.ts.net` — MagicDNS on
+- **Subnet routers for `172.16.1.0/24`** (two, since 2026-08-25):
+  - UCG Max `172.16.1.1` / `100.78.147.125` — **primary**, also an exit node
+  - Home Assistant NUC `172.16.1.31` / `100.73.196.51` — **standby**, also an exit node
+- **Failover:** automatic, ~30s measured. **Sticky — it does not fail back on its own.**
+- **Gotcha:** whichever router is *standby* has its own LAN IP unreachable from the tailnet.
+  Use its tailnet address instead. Expected behaviour, self-heals on promotion — see TAILSCALE.md §5.
+- **Service publishing:** `tsbridge` on LXC 100 gives nine services their own tailnet nodes
+  (`chat`, `code`, `photos`, `search`, `ollama`, …) via compose labels.
+- **Why two routers:** on 2026-08-25 a firmware update wiped the gateway's Tailscale and the
+  entire LAN route disappeared from the tailnet for 18h — including the route needed to reach
+  the gateway and fix it.
 
 ## Compute Infrastructure
 

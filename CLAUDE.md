@@ -5,6 +5,9 @@ Repository guidance for code agents and maintainers.
 ## Documentation
 
 - **[NETWORK.md](NETWORK.md)**: Complete network infrastructure map, all hosts, IPs, access methods, and cleanup tasks
+- **[TAILSCALE.md](TAILSCALE.md)**: Tailscale low-level design — tailnet topology, the four
+  deployment patterns (UCG-Max `tailscale-udm`, HAOS add-on, `tsbridge`, stock clients), dual
+  subnet routers and failover, failure modes, and the recovery runbook
 
 ## Scope Split
 
