@@ -293,7 +293,7 @@ services:
   openwebui:
     container_name: ai-openwebui
     # renovate: datasource=docker depName=ghcr.io/open-webui/open-webui
-    image: ghcr.io/open-webui/open-webui:v0.11.0
+    image: ghcr.io/open-webui/open-webui:v0.11.1
     pull_policy: always
     restart: unless-stopped
     
