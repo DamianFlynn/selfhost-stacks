@@ -16,7 +16,7 @@ routers and their failover, exit nodes, `tsbridge` service publishing, and the r
 - **Role:** Router, DHCP Server, Firewall
 - **Version:** UniFi OS 5.1.15, Network 10.4.57
 - **Access:** SSH enabled, Web UI
-- **Credentials:** `<Sc0rp10n!/>`
+- **Credentials:** `UNIFI_USG_SSH_USER` / `UNIFI_USG_SSH_PASS` in `~/.claude/secrets/ha-deercrest.env` — **never in this repo** (public)
 - **WAN:** Westnet Broadband (88.81.97.90)
 - **DHCP Range:** 83/249 leases active, 162 available
 - **Port Forwarding:**
