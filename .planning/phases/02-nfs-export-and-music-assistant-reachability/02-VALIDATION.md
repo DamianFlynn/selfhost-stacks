@@ -61,7 +61,7 @@ what hid the `created`-state blind spot for six weeks.
 | 1d | Visible from the NUC | integration | `showmount -e 172.16.1.158` (falls back to the mount attempt if `showmount` is absent on HAOS) | ❌ Wave 0 |
 | 1e | NFSv4 actually negotiated | integration | `findmnt -no FSTYPE,OPTIONS <mountpoint>` → expect `nfs4` and `vers=4.x` | ❌ Wave 0 |
 | 2 | A write from the NUC fails **at the export layer** | integration | Stage 4b: hand `mount -o rw` then `touch`; assert EROFS | ❌ Wave 0 |
-| 3 | Three albums under the correct album artist within one sync cycle | integration | `music/sync` then `music/albums/library_items`, compared against `pilot-albums.txt` | ❌ Wave 0 |
+| 3 | Three albums under the correct album artist within one sync cycle | integration | `music/sync` then `music/albums/library_items`, compared against the album set pinned in `check-music-consumers.sh` (D-09) | ❌ Wave 0 |
 | 4a | Positive reboot: mount active, albums present, no intervention | manual trigger + automated assert | `ha host reboot`, wait, then `check-music-consumers.sh` | ❌ Wave 0 |
 | 4b | Negative control: the race actually fires and recovers unattended | manual trigger + automated assert | assert on `emergency/music` in `mount`, the `read-only fallback` log line, MA's `Aborting sync` line, then unattended recovery | ❌ Wave 0 |
 | 5 | Winning route + losing route's failure symptom recorded in PROJECT.md; the current mount-route assertion corrected | doc assert | `grep -q 'Key Decision' .planning/PROJECT.md` plus a manual read | manual-only |
@@ -71,11 +71,14 @@ what hid the `created`-state blind spot for six weeks.
 
 ## Wave 0 Requirements
 
-- [ ] `scripts/check-music-consumers.sh` — covers CONS-01, CONS-02, CONS-03; exit-code contract in the header
-- [ ] `.planning/phases/02-nfs-export-and-music-assistant-reachability/pilot-albums.txt` — the three albums as `Album|Album Artist`, chosen from content that is *already correctly tagged*
-- [ ] `~/.claude/secrets/ma-deercrest.env` — `MA_URL`, `MA_TOKEN_FILE`, and the credentials used to mint the token (outside the repo — the repo is public)
-- [ ] A one-line addition to `scripts/quick-health-check.sh` invoking the consumers check
+- [ ] `scripts/check-music-consumers.sh` — covers CONS-01, CONS-02, CONS-03; exit-code contract in the header, matching `check-music-freeze.sh:31-42` / `:539-549` (three branches: `--baseline` exits 0 after the summary, `FAILURES>0` exits 1, `exit 2` for usage errors)
+- [ ] The three pilot albums **pinned in `scripts/check-music-consumers.sh`** — path, expected album and album artist (CONTEXT.md D-09). *No external `pilot-albums.txt`* — RESEARCH.md § Validation Architecture proposed one, but CONTEXT.md D-09 supersedes it, and Phase 1 committed zero non-`.md` artifacts under `.planning/`.
+- [ ] MA long-lived token at `/mnt/fast/secrets/` on LXC 100, `0600` (CONTEXT.md D-39). *Not* `~/.claude/secrets/ma-deercrest.env` — RESEARCH.md's location is superseded by D-39.
+- [ ] Jellyfin API key, newly minted and purpose-named (e.g. `music-consumers-audit`), same location (CONTEXT.md D-40)
+- [ ] A one-line addition to `scripts/quick-health-check.sh` invoking the consumers check — copy the `:63-91` fold-in block verbatim, including `MUSIC_RC=$?` captured before any pipe, `$'\033'` ANSI stripping (the script runs on macOS), and empty-output → `UNKNOWN` + `EXIT_CODE=1`
 - [ ] Framework install: **none** — bash + `jq` + `curl` only
+
+**Where the script runs** must be stated explicitly in the file header. Jellyfin (`192.168.90.31:8096` on `t3_proxy`) is reachable only from LXC 100, and D-39/D-40 place both tokens there — but the NUC SSH key exists only on the workstation. The header's `# Where it runs:` block resolves this; the planner must not leave it implicit.
 
 ---
 
