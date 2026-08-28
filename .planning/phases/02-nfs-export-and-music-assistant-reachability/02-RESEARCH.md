@@ -1596,9 +1596,14 @@ not a third-party repo).
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Does the MA provider setup flow run headlessly?**
+*All five were settled during `/gsd-discuss-phase` and are superseded by `02-CONTEXT.md`: Q1 by
+**D-31**, Q2 by **D-06 / D-07**, Q3 by **D-33 / D-34**, Q4 by **D-49**, Q5 by **D-19 / D-20**. The
+reasoning below is kept because it is why those decisions read the way they do — where a
+recommendation here differs from the decision, **the decision governs**.*
+
+1. **Does the MA provider setup flow run headlessly?** — **RESOLVED — see D-31**
    - Known: `config/providers/setup` and `config/flows/submit` exist as API commands with
      `Scope.CONFIG_PROVIDERS_WRITE`; `/api-docs/commands.json` is served unauthenticated and
      enumerates every command with its argument schema.
@@ -1609,7 +1614,7 @@ not a third-party repo).
      Everything downstream (`config/providers/save`, `music/sync`, `music/albums/library_items`) is
      confirmed headless.
 
-2. **Which three albums?**
+2. **Which three albums?** — **RESOLVED — see D-06, D-07**
    - Criterion 3 says "already-correct albums". Choosing them requires reading the live library,
      which was not possible this session.
    - Recommendation: pick from the Phase 1 QUAL-01 snapshot (9,736 records keyed on `audio_md5`) —
@@ -1619,7 +1624,10 @@ not a third-party repo).
      shapes, not just the easy one. This anticipates QUAL-03's "include the historically painful
      cases" one phase early, at negligible cost.
 
-3. **Does the estate want the M4 boot-time sync automation?**
+3. **Does the estate want the M4 boot-time sync automation?** — **RESOLVED — see D-33, D-34.** The
+   estate does want it: D-33 builds M4 and D-34 gates it on a *verified* `rest_command` with the
+   token confined to the NUC's `secrets.yaml`, superseding the "defer to a follow-up" recommendation
+   below.
    - Known: without it, a mount that recovers 15 minutes after boot leaves MA stale until the next
      12-hourly sync.
    - Unclear: whether MA's HA integration exposes a callable sync service, or whether this needs a
@@ -1627,12 +1635,13 @@ not a third-party repo).
    - Recommendation: defer to a follow-up. Criterion 4 does not require it, and the token-placement
      question deserves its own decision. Record as a deferred idea.
 
-4. **Is `xprtsec=` / RPC-with-TLS worth it here?**
+4. **Is `xprtsec=` / RPC-with-TLS worth it here?** — **RESOLVED — see D-49**
    - Known: `exports(5)` documents it (RFC 9289); it needs `tlshd` configured on both ends.
    - Recommendation: **no**, for a read-only LAN-local music library. Record it as an explicitly
      considered and rejected control so V6 has an answer rather than a silence.
 
-5. **What is atlantis's current export state?**
+5. **What is atlantis's current export state?** — **RESOLVED — see D-19, D-20**, and measured by
+   plan 02-01 Task 1's Stage 0 probes
    - Could not be measured (§ Session Limitation). A2/A3/A4 all hang off it.
    - Recommendation: Stage 0 is a mandatory first task, not a formality.
 

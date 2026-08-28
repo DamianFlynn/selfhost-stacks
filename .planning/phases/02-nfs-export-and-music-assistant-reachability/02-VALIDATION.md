@@ -61,6 +61,7 @@ auditable and no assertion gets softened to manufacture a green run.
 | 02-01-T1 | 02-01 | 1 | CONS-01 | T-02-06, T-02-10, T-02-SC | No competing export table; package provenance from a Debian archive | integration | `ssh root@172.16.1.158 'zfs list -H -o mounted …; mountpoint -q …; test -z "$(ls -A /etc/exports.d/)"'` | ✅ (probe only) | ⬜ pending |
 | 02-01-T2 | 02-01 | 1 | CONS-01 | T-02-06 | Drift cannot be swept into this phase's apply | integration | `cd infra && terraform plan -detailed-exitcode` | ✅ | ⬜ pending |
 | 02-01-T3 | 02-01 | 1 | CONS-02, CONS-03 | T-02-04, T-02-05 | NUC source address measured, not assumed | integration | `ssh root@172.16.1.159 'curl -s -o /dev/null -w %{http_code} http://172.16.1.31:8095/info'` ∈ {200,401,403} | ✅ (probe only) | ⬜ pending |
+| 02-01-T4 | 02-01 | 1 | CONS-02, CONS-03 | T-02-05 | MA `/setup` completed at a blocking operator checkpoint, not autonomously; account name recorded, password and token never | manual trigger + automated assert | `ssh root@172.16.1.159 'curl -s -o /dev/null -w %{http_code} http://172.16.1.31:8095/info'` ∈ {200,401,403}; then `auth/login` → `config/providers` HTTP 200 | ✅ (probe only; conditional — fires only if 02-01-T3 found no MA account) | ⬜ pending |
 | 02-02-T1 | 02-02 | 2 | CONS-01 | T-02-08 | Tailnet exclusion recorded in the variable description | static | `cd infra && terraform fmt -check variables.tf && terraform validate` | ❌ → created here | ⬜ pending |
 | 02-02-T2 | 02-02 | 2 | CONS-01 | T-02-01, T-02-02, T-02-03, T-02-06, T-02-11 | `ro`+`all_squash`+`anonuid` interpolated; apply fails on `no_root_squash` | static | `cd infra && terraform validate && grep -q 'anonuid=${var.apps_uid}' nfs-music-export.tf && ! grep -qE '^[^#]*fsid=' nfs-music-export.tf` | ❌ → created here | ⬜ pending |
 | 02-02-T3 | 02-02 | 2 | CONS-01 | T-02-12 | Temp export invisible unless deliberately enabled | static | `cd infra && terraform plan -detailed-exitcode` shows exactly 1 to add | ❌ → created here | ⬜ pending |
@@ -108,9 +109,10 @@ auditable and no assertion gets softened to manufacture a green run.
 
 ## Wave 0 Requirements
 
-All Wave 0 items are assigned to **plan 02-04 (Wave 2)**, which is why 02-04 runs in parallel with the
-Terraform authoring rather than after the export is live. Its own verification uses `--baseline`, so it
-does not depend on anything the export provides.
+All Wave 0 items are assigned to **plan 02-04 (Wave 2)**, which is why 02-04 sits alongside the
+Terraform authoring rather than after the export is live — it is eligible to run in parallel with
+02-02, and correct in either order. Its own verification uses `--baseline`, so it does not depend on
+anything the export provides.
 
 - [ ] `scripts/check-music-consumers.sh` — covers CONS-01, CONS-02, CONS-03; exit-code contract in the header, matching `check-music-freeze.sh:31-42` / `:539-549` (three branches: `--baseline` exits 0 after the summary, `FAILURES>0` exits 1, `exit 2` for usage errors) → **02-04-T3**
 - [ ] The three pilot albums **pinned in `scripts/check-music-consumers.sh`** — path, expected album and album artist, keyed on the QUAL-01 `audio_md5` (CONTEXT.md D-09). *No external `pilot-albums.txt`* — RESEARCH.md § Validation Architecture proposed one, but CONTEXT.md D-09 supersedes it, and Phase 1 committed zero non-`.md` artifacts under `.planning/`. → **02-04-T2, 02-04-T3**
@@ -140,20 +142,21 @@ and exact-match assertions fail. The key is deliberately *not* replicated to LXC
 | Negative control that the mount-timing race actually fired (4b) | CONS-03 | Requires deliberately provoking the race and reading log lines that only exist during the window, plus a ~900 s unattended wait | Capture three pieces of evidence: `emergency/music` present in `mount`, the `read-only fallback` log line, MA's `Aborting sync` line — then confirm unattended recovery (02-08-T3) |
 | MA provider initial creation, if the config flow cannot be driven headlessly | CONS-02 | The flow's intermediate step ids are runtime values, not documented outside the running server | Run `/api-docs/commands.json` discovery first; fall back to the GUI click path for the initial creation only, keeping everything downstream headless (02-06-T1, D-31) |
 | PROJECT.md Key Decision prose is correct and the losing route's symptom is named (criterion 5) | CONS-01 | Prose correctness is not machine-checkable; `grep` can only prove the section exists | Read the Key Decision entries; confirm the winning route, the losing route's failure symptom, and that PROJECT.md's prior mount-route assertion is corrected rather than supplemented (02-09-T2) |
+| MA `/setup`, if Music Assistant has no admin user at all (02-01-T4) | CONS-02, CONS-03 | MA's first-run onboarding cannot be driven from the API without an existing credential — that absence is the gap. Conditional: fires only when 02-01-T3 records no account | Open `http://172.16.1.31:8095/setup`, create the admin account, then Claude mints the long-lived token over `auth/login` → `auth/token/create` and writes it per D-39 (02-01-T4, D-43, D-53) |
 | Operator sees the three albums in Music Assistant (closure gate) | CONS-02 | Criterion 3 is ultimately about what a person sees; this project exists because pipelines were declared working three times and were not | Open Music Assistant, confirm the three pinned albums appear under the correct album artists (02-09-T3, D-55) |
 
 ---
 
 ## Validation Sign-Off
 
-- [x] All tasks have `<automated>` verify or Wave 0 dependencies — 26/26 tasks carry an `<automated>` command
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies — 27/27 tasks carry an `<automated>` command
 - [x] Sampling continuity: no 3 consecutive tasks without automated verify
 - [x] Wave 0 covers all MISSING references — assigned to 02-04 (script, albums, credentials) and 02-06 (instance id)
 - [x] No watch-mode flags
 - [x] Feedback latency < 30s
 - [x] `nyquist_compliant: true` set in frontmatter
 
-**Note on the three `checkpoint:*` tasks** (02-01-T2, 02-08-T2, 02-08-T3): each carries both an
+**Note on the four `checkpoint:*` tasks** (02-01-T2, 02-01-T4, 02-08-T2, 02-08-T3): each carries both an
 `<automated>` command and a `<human-check>` or `<resume-signal>`. The automated half is what the
 harness samples; the human half is the blocking gate D-53 requires. Neither substitutes for the other.
 
