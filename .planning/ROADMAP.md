@@ -150,7 +150,16 @@ with Phase 1. The export's `anonuid`/`anongid` take the ownership value decided 
   5. The winning mount route is recorded as a Key Decision in PROJECT.md, with the losing route's
      failure symptom noted, and PROJECT.md's current assertion (that HA's storage configuration is
      the route) corrected either way.
-**Plans**: TBD
+**Plans**: 9 plans in 8 waves
+- [ ] 02-01-PLAN.md — Stage 0 preconditions: atlantis probes, the Terraform drift gate, and the NUC/MA measurements (wave 1, blocking checkpoint)
+- [ ] 02-02-PLAN.md — Author `infra/nfs-music-export.tf`: the export line, guarded server install, M1 `mountpoint` and M2 ordering drop-in (wave 2)
+- [ ] 02-03-PLAN.md — Apply, prove criterion 1a/1b/1c, prove M1 by simulated unmount, and measure the blast radius (wave 3)
+- [ ] 02-04-PLAN.md — Credentials, the three pre-verified proof albums, and `scripts/check-music-consumers.sh` (wave 2)
+- [ ] 02-05-PLAN.md — Mount on the NUC, decide Route A vs B, prove criterion 2 at the export layer, prove bytes arrive (wave 4)
+- [ ] 02-06-PLAN.md — Create the MA provider with `content_type: music` and `folder_name`; pin its instance id (wave 5)
+- [ ] 02-07-PLAN.md — Criterion 3's exact-match assertion, prove the `folder_name` fallback fires, tear down the control (wave 6)
+- [ ] 02-08-PLAN.md — M4 + `MOUNT_FAILED` alert, criterion 4a positive reboot, criterion 4b negative control (wave 7, blocking checkpoints)
+- [ ] 02-09-PLAN.md — Fold into `quick-health-check.sh`, record criterion 5 in PROJECT.md/beets.md/NETWORK.md, closure verdict (wave 8, blocking checkpoint)
 **Research**: `--research-phase` — the HAOS `/media` mount versus MA's own remote-share provider is
 genuinely unresolved between primary sources (Supervisor source says one thing, MA's own docs say
 verbatim that a folder cannot be mounted from HA into `/media`), and the mount-timing race is
