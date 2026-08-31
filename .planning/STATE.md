@@ -273,9 +273,19 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-08-31T14:20:30.846Z
+Last session: 2026-08-31T15:25:00Z
 Stopped at: 02-01 Task 2 blocking checkpoint - atlantis amdgpu HMM incident
-Resume file: .planning/phases/02-nfs-export-and-music-assistant-reachability/02-01-SUMMARY.md
+Resume file: .planning/phases/02-nfs-export-and-music-assistant-reachability/02-01-PARTIAL.md
+
+Decision 2026-08-31: `recover-first`. Phase 2 is paused until atlantis is healthy. On resume,
+02-01 restarts at Task 2 (`terraform plan` drift gate) and takes D-44's before-snapshot against a
+recovered host; Tasks 1 and 3-4 findings are in `02-01-PARTIAL.md`.
+
+The plan-01 record is named `02-01-PARTIAL.md`, NOT `-SUMMARY.md`, deliberately: `phase-plan-index`
+treats any `*-SUMMARY.md` as plan-complete on file existence alone, regardless of its `status:`
+frontmatter. Naming it `-SUMMARY.md` made 02-01 read as done and would have sent the next
+`/gsd-execute-phase 2` straight into 02-02 — authoring Terraform against measurements never taken.
+Do not rename it back until 02-01 genuinely completes.
 
 Plans 01-02, 01-04, 01-06, 01-07, 01-08 and 01-09 are `autonomous: false` — they carry blocking
 human checkpoints (the fence run, the ~140 GB capture, the Lidarr/Jellyfin freeze and its one-hour
