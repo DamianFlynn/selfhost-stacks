@@ -295,13 +295,48 @@ resource "proxmox_virtual_environment_container" "selfhost" {
     path   = "/mnt/tank/timemachine"
   }
 
+  # DO NOT REMOVE prevent_destroy WITHOUT READING THIS.
+  #
+  # This resource IS the Docker host: LXC 100, ~102 running containers, every
+  # compose stack in the estate. Replacing it is never a routine act.
+  #
+  # Added 2026-08-31 after `terraform plan -detailed-exitcode` returned 2 with
+  #   Plan: 2 to add, 1 to change, 1 to destroy
+  #   # proxmox_virtual_environment_container.selfhost must be replaced
+  # on a config nobody had edited since February. A bare `terraform apply` would
+  # have destroyed and recreated the Docker host. The landmine had been armed for
+  # months, waiting for the next person to run apply without reading the plan.
+  #
+  # Root cause: 33 `mount_point` blocks each diffed as
+  #     - mount_options     = [] -> null
+  #     ~ path_in_datastore = "/mnt/..." -> (known after apply)
+  #   marked "# forces replacement". This config never sets `mount_options`;
+  #   bpg/proxmox 0.95.0 holds `[]` in state, reads config's absence as `null`,
+  #   and treats that transition on a nested block as replacement-forcing. It is a
+  #   provider representation artifact, NOT real infrastructure drift — the actual
+  #   bind mounts on the host are correct and unchanged.
+  #
+  # Two independent guards, deliberately. ignore_changes alone would have been
+  # enough to silence THIS diff, but it only covers the failure mode we happen to
+  # have diagnosed; prevent_destroy covers the ones we have not.
   lifecycle {
+    prevent_destroy = true
+
     ignore_changes = [
       # started is managed externally by null_resource.start_lxc after the
       # config patch. Tracking it here would cause a perpetual drift.
       started,
       # Password is set once; rotating it does not need a container replace.
       initialization[0].user_account[0].password,
+      # See the block above. Suppresses the spurious mount_options [] -> null
+      # replacement diff from bpg/proxmox 0.95.0.
+      #
+      # TRADE-OFF, stated so it is not discovered the hard way: with this here,
+      # Terraform will no longer act on REAL mount_point changes either. Adding or
+      # removing a bind mount by editing this file will plan clean and do nothing.
+      # Until the provider bug is fixed, bind-mount changes are a deliberate manual
+      # act: edit /etc/pve/lxc/100.conf (or use `pct set`), then reconcile here.
+      mount_point,
     ]
   }
 }

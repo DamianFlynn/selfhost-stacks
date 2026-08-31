@@ -141,9 +141,20 @@ resource "proxmox_virtual_environment_container" "mpe" {
   }
 
   lifecycle {
+    # Same bpg/proxmox 0.95.0 mount_point artifact as selfhost — see the long
+    # comment on proxmox_virtual_environment_container.selfhost in
+    # lxc-selfhost.tf. mpe planned as "updated in-place" rather than replaced on
+    # 2026-08-31, so it was the milder half of the same bug; it is guarded the
+    # same way because the difference was luck, not design.
+    #
+    # No prevent_destroy here: mpe is a single-purpose container, not the estate's
+    # Docker host, so an intentional replace should not need a code edit first.
     ignore_changes = [
       started,
       initialization[0].user_account[0].password,
+      # Real mount_point changes will NOT be applied while this is set — edit
+      # /etc/pve/lxc/<vmid>.conf directly, then reconcile here.
+      mount_point,
     ]
   }
 }
