@@ -254,9 +254,20 @@ variable "mpe_ip" {
 }
 
 variable "mpe_memory_mb" {
-  description = "RAM allocated to the MPE LXC (MB)"
+  description = <<-DESC
+    RAM cap for the MPE LXC 102 (MB). Reconciled DOWN 20480 -> 8192 on 2026-08-31
+    to match the running host, which had been set to 8192 by hand and never
+    reflected here. The code was the drifted side, not the host.
+
+    Do not raise this without a reason. atlantis has 28 GB total and a live kernel
+    bug where memory pressure drives compaction, compaction fires the amdgpu MMU
+    notifier, and amdgpu_hmm_invalidate_gfx NULL-derefs — which wedged the whole
+    estate for ~6 hours on 2026-08-31. This is a cgroup cap, not a reservation, so
+    raising it consumes nothing on its own; it simply permits mpe to grow into the
+    pressure that arms that bug.
+  DESC
   type        = number
-  default     = 20480
+  default     = 8192
 }
 
 variable "mpe_cores" {
