@@ -276,3 +276,26 @@ variable "mpe_root_password" {
   type        = string
   sensitive   = true
 }
+
+# ── NFS music export — CONS-01 ──────────────────────────────────────────────
+# See nfs-music-export.tf. Reuses apps_uid/apps_gid above as the export's
+# anonuid/anongid, so the library ownership normalised in Phase 1 is what the
+# NFS client is squashed to — not a coincidence of two literals both being 568.
+
+variable "ha_nuc_ip" {
+  description = "LAN IP of the Home Assistant NUC — the ONLY client permitted to mount the music export. The tailnet address 100.73.196.51 is deliberately NOT exported: traffic the NUC originates toward 172.16.1.158 egresses its LAN interface with source 172.16.1.31, NFS never crosses the tailnet in this design, and a second host spec would widen the blast radius of a read-only export for nothing. Off-LAN mounting, if ever needed, is a deliberate new export line — not a pre-emptive one. NOTE: this default is NETWORK.md's value; confirm the NUC's actual source address on the route to the Proxmox host before the first apply."
+  type        = string
+  default     = "172.16.1.31"
+}
+
+variable "music_temp_export_enabled" {
+  description = "Whether to serve the temporary scratch export used to prove Music Assistant's missing_album_artist_action fallback actually fires against a deliberately untagged control album. false is the TEARDOWN state, not merely a default — flipping it off and re-applying is how the scratch export is provably removed rather than left behind because nobody remembered it. Keep it false except while that one control is being run."
+  type        = bool
+  default     = false
+}
+
+variable "music_temp_export_path" {
+  description = "Host path served by the temporary control export. Lives under /mnt/tank/downloads and never under the tagged library, because untagged content staged beneath the library root gets picked up by the media scanners that read it — the staging rule recorded in CLAUDE.md. Created as its own ZFS dataset so the export's mountpoint option holds for it too."
+  type        = string
+  default     = "/mnt/tank/downloads/_phase2-albumartist-control"
+}
