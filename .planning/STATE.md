@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-08-31T15:16:11.731Z"
+last_updated: "2026-08-31T19:11:55.602Z"
 last_activity: 2026-08-31
 progress:
   total_phases: 9
   completed_phases: 1
   total_plans: 18
-  completed_plans: 10
-  percent: 11
+  completed_plans: 11
+  percent: 61
 ---
 
 # Project State
@@ -29,16 +29,20 @@ pipeline that someone owns.
 ## Current Position
 
 Phase: 02 (nfs-export-and-music-assistant-reachability) — EXECUTING
-Plan: 2 of 9
+Plan: 3 of 9
 Status: Ready to execute
 Last activity: 2026-08-31
-All 10 phase requirements met: SAFE-01…05, WRIT-01…04, QUAL-01
+Phase 1 complete: SAFE-01…05, WRIT-01…04, QUAL-01
 
-Progress: [██████░░░░] 56%
+Progress: [██████░░░░] 61%
 
-Next phase: 02 (NFS Export and Music Assistant Reachability) — needs `--research-phase`.
-It inherits `anonuid=568,anongid=568` from WRIT-04, and the export **must be read-only**: the
+Plans 02-01 (Stage 0 measurement) and 02-02 (export authoring) are complete. Next is **02-03**, the
+apply. The export inherits `anonuid=568,anongid=568` from WRIT-04 and **must be read-only**: the
 library tree is `0777` and mode bits are the only lever NFS clients see.
+
+Before 02-03 runs, read the CORRECTION entries under Blockers/Concerns — a bare `terraform apply`
+was measured to be one command away from destroying LXC 100, and port 111 was already open so only
+2049 is this phase's delta.
 
 ## Performance Metrics
 
@@ -75,6 +79,7 @@ library tree is `0777` and mode bits are the only lever NFS clients see.
 | Phase 01 P08 | ~35 minutes | 3 tasks | 2 files |
 | Phase 01 P09 | ~55 minutes | 4 tasks | 5 files |
 | Phase 02 P02 | 28min | 3 tasks | 3 files |
+| Phase 02 P01 | 75m | 4 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -258,7 +263,13 @@ Recent decisions affecting current work:
 - 01-03: unsorted WAV content is NOT tag-free - all 40 sampled Now! 120 WAV records carry 6 format tags (title/artist/album/track/date/comment) plus an embedded cover-art stream. Plan 01-04 and Phase 7 must not assume an empty before-state for unsorted's 134 WAV files.
 - 01-07: the manual beets container is NOT inert — its BEETSDIR config.yaml is a docker-compose file, so beets ran on defaults and left 47 items / 1.4 GB of WAV in /config/Music/__/. Phase 4 must account for it, plus a fifth latent entry point at beets/config/beets.sh.
 - OPEN/UNOWNED: /mnt/tank/media/TV is 114,218 entries on orphan gid 545, the same gid 01-08 normalised Music away from. Out of scope, no requirement covers it, and it will hit the identical chown-from-LXC-100 EPERM. Leaving Music and TV divergent may be worse than leaving both wrong.
-- BLOCKING 2026-08-31 (02-01 Stage 0): atlantis is mid-incident on the documented amdgpu_hmm_invalidate_gfx NULL deref - 4 oopses today (07:56 kcompactd0, 10:43 postgres, 12:00 prometheus, 12:15 apt-get), kernel tainted [D]=DIE, load 358 rising, io pressure full 96% with ZERO in-flight block IO, 331 procs in D state on mmap_lock wchans. The July 2026 mitigation (THP=never + vm.compaction_proactiveness=0) is fully applied and did NOT prevent it - proactiveness=0 does not stop reactive compaction. Side effects: LXC 100 sshd accepts TCP but never sends a banner (reproduced from atlantis on the LAN, so not a Tailscale artefact); terraform plan hangs against the Proxmox API. Phase 2 cannot proceed - plan 02-02 installs nfs-kernel-server via apt-get, the same call that oopsed at 12:15. Recovery needs a host reboot, documented to hang gracefully and need sysrq s+b.
+- ~~BLOCKING 2026-08-31 (02-01 Stage 0): atlantis is mid-incident on the documented amdgpu_hmm_invalidate_gfx NULL deref~~ **RESOLVED 2026-08-31 18:48:08** — rebooted via sysrq s+b; io pressure full avg300 96.22 -> 0.59, zero amdgpu_hmm_invalidate_gfx events this boot, taint 4225 (P+D+O) -> 4097 (P+O), both zpools ONLINE, 102 containers running, LXC 100 sshd normal. Root cause was NOT compaction: a Jellyfin VAAPI transcode started 07:56:56 and the kernel oopsed at 07:56:58. VAAPI disabled (encoding.xml HardwareAccelerationType=none, backup encoding.xml.bak.20260831T182741Z, scripts/disable-jellyfin-hwaccel.sh, commit b1ad9c1). **The correction that survives:** the July 2026 mitigation (THP=never + vm.compaction_proactiveness=0) was fully applied and did NOT prevent the recurrence, so the project-memory entry reading as "resolved" is wrong and should be corrected to name VAAPI as the trigger.
+- BLOCKING for 02-06/02-07 (02-01 Task 3): the estate runs **Music Assistant (BETA) 2.11.0b0**, slug `d5369777_music_assistant_beta`, `auto_update: true`. The **stable add-on is not installed at all**. D-21 requires the phase be proven against stable — that cannot be satisfied as written. Operator must choose: install stable alongside, migrate off the BETA, or accept the BETA and stamp every criterion `2.11.0b0`. Auto-update on a beta channel means the stamped version can move before Phase 7. Does NOT block 02-03 (server-side only).
+- BLOCKING for 02-06 (02-01 Task 3 measurement 5): D-30's provider enumeration is **unmeasured**. MA has an admin account (`onboard_done: true`; `auth/login` returns "Invalid username or password") but **no credential for it is recorded anywhere** — not `~/.claude/secrets/`, not `/mnt/fast/secrets/` on LXC 100. MA 2.11 gates `config/providers` behind scope `config.providers.read` and exposes only five unauthenticated commands. Three off-ramps measured closed: no `/addon_configs` entry for MA, no docker socket in the SSH add-on, `homeassistant` login provider `requires_redirect: true`. Obtain the credential and mint the D-39 token BEFORE adding any provider, so the baseline is taken against an untouched library.
+- CORRECTION for 02-03 (02-01 Task 2): **never run a bare `terraform apply`.** The D-17 gate returned exit 2 with `Plan: 2 to add, 1 to change, 1 to destroy` and `proxmox_virtual_environment_container.selfhost must be replaced` — that is LXC 100, the Docker host with ~102 containers. Cause was a bpg/proxmox 0.95.0 artefact (33 mount_point blocks diffing `mount_options = [] -> null`, each forces-replacement) plus one real drift (`mpe_memory_mb` 20480 vs a host running 8192). Remediated in 1588f19 + 3051695; bare plan is now 1 add / 0 change / 0 destroy with zero forces-replacement. 02-03 must `terraform plan -out=`, read it, assert exactly `null_resource.nfs_music_export` and zero destroys, then apply the saved plan.
+- CORRECTION for 02-04 (02-01 Task 3 measurement 6): **Jellyfin's t3_proxy address is 192.168.90.25, not the 192.168.90.31 pinned in 02-01 and 02-04** — the pin is wrong today, not merely fragile. Two further traps: the bare Docker DNS name `jellyfin` resolves to **Cloudflare's public edge** from the LXC 100 host because of `search deercrest.info` in /etc/resolv.conf (a health check would silently pass against the public site while the container was down), and `172.16.1.76` is unreachable from LXC 100 by macvlan host-to-container isolation despite working from the LAN. Use runtime resolution: `docker inspect jellyfin --format '{{(index .NetworkSettings.Networks "t3_proxy").IPAddress}}'` — verified 200, no IP literal.
+- CORRECTION for 02-03/02-05 (02-01 Task 3 measurement 7): **`showmount` and `findmnt` are both ABSENT on the NUC.** `nfs-music-export.tf`'s `verify_commands` output suggests `showmount -e 172.16.1.158` "from the HA NUC" — that line will not run; use `exportfs -v` on atlantis. Criterion 1e's `findmnt` proof of NFSv4 negotiation needs `/proc/self/mountinfo` instead (verified readable from the SSH add-on; its fstype column is where `nfs4` will appear). `sha256sum` and `nc` ARE present, so D-11's read-through hash is sha256.
+- LATENT, suppressed not fixed (02-01 Task 2): `bpg/proxmox 0.95.0` plans a replacement for any container carrying `mount_point` blocks. `ignore_changes = [mount_point]` now silences it on both LXC resources, which means **real bind-mount edits to lxc-selfhost.tf / lxc-mpe.tf will plan clean and do nothing**. Bind-mount changes are a deliberate manual act (`pct set` / edit `/etc/pve/lxc/<vmid>.conf`, then reconcile) until the provider is upgraded. Trade-off documented in both files.
 
 ## Deferred Items
 
@@ -277,19 +288,24 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-08-31T15:16:11.721Z
-Stopped at: Completed 02-02-PLAN.md (authoring only; no host contacted)
+Last session: 2026-08-31T19:00:00.000Z
+Stopped at: Completed 02-01-PLAN.md (all 4 tasks; Task 4 not-fired; entirely read-only)
 Resume file: None
 
-Decision 2026-08-31: `recover-first`. Phase 2 is paused until atlantis is healthy. On resume,
-02-01 restarts at Task 2 (`terraform plan` drift gate) and takes D-44's before-snapshot against a
-recovered host; Tasks 1 and 3-4 findings are in `02-01-PARTIAL.md`.
+**02-01 is complete.** The `recover-first` pause is discharged: atlantis recovered 18:48:08, Task 2's
+drift gate ran and returned exit 2 with a pending destroy of LXC 100 (remediated), Task 3's eight
+measurements are recorded, and Task 4 did not fire because MA already has an admin account. The
+record was renamed `02-01-PARTIAL.md` → `02-01-SUMMARY.md` on completion and the PARTIAL removed, so
+there is one record, not two.
 
-The plan-01 record is named `02-01-PARTIAL.md`, NOT `-SUMMARY.md`, deliberately: `phase-plan-index`
-treats any `*-SUMMARY.md` as plan-complete on file existence alone, regardless of its `status:`
-frontmatter. Naming it `-SUMMARY.md` made 02-01 read as done and would have sent the next
-`/gsd-execute-phase 2` straight into 02-02 — authoring Terraform against measurements never taken.
-Do not rename it back until 02-01 genuinely completes.
+**The PARTIAL naming convention is still the rule for halted plans.** `phase-plan-index` treats any
+`*-SUMMARY.md` as plan-complete on file existence alone, regardless of its `status:` frontmatter — so
+a halted plan's record must be `-PARTIAL.md` and only becomes `-SUMMARY.md` when the plan genuinely
+finishes. That is what happened here.
+
+Next in phase 2: **02-03** (apply the export). Read the four CORRECTION entries under
+Blockers/Concerns first — in particular, 02-03 must plan-then-apply-a-saved-plan and must assert on
+port **2049 only** (111 was already open from the pre-existing `nfs-common`).
 
 Plans 01-02, 01-04, 01-06, 01-07, 01-08 and 01-09 are `autonomous: false` — they carry blocking
 human checkpoints (the fence run, the ~140 GB capture, the Lidarr/Jellyfin freeze and its one-hour

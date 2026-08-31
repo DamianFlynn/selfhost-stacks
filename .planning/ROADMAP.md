@@ -166,7 +166,7 @@ with Phase 1. The export's `anonuid`/`anongid` take the ownership value decided 
      the route) corrected either way.**Plans**: 9 plans in 8 waves
 **Wave 1**
 
-- [ ] 02-01-PLAN.md — Stage 0 preconditions: atlantis probes, the Terraform drift gate, and the NUC/MA measurements (wave 1, blocking checkpoint)
+- [x] 02-01-PLAN.md — Stage 0 preconditions: atlantis probes, the Terraform drift gate, and the NUC/MA measurements (wave 1, blocking checkpoint)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -490,7 +490,7 @@ Phase 7. Plans within a phase run sequentially.
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Safety Harness and Freeze the Writers | 9/9 | Complete | 2026-08-18 |
-| 2. NFS Export and Music Assistant Reachability | 1/9 | In Progress|  |
+| 2. NFS Export and Music Assistant Reachability | 2/9 | In Progress|  |
 | 3. Tagger Spike | 0/TBD | Not started | - |
 | 4. Collapse to One Tagger | 0/TBD | Not started | - |
 | 5. Inbox Structure and the Junk Gate | 0/TBD | Not started | - |
