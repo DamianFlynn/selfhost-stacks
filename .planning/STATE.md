@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-08-31T19:49:01.684Z"
+last_updated: "2026-08-31T22:35:20.575Z"
 last_activity: 2026-08-31
 progress:
   total_phases: 9
   completed_phases: 1
   total_plans: 18
-  completed_plans: 12
-  percent: 67
+  completed_plans: 13
+  percent: 72
 ---
 
 # Project State
@@ -29,20 +29,29 @@ pipeline that someone owns.
 ## Current Position
 
 Phase: 02 (nfs-export-and-music-assistant-reachability) — EXECUTING
-Plan: 4 of 9
+Plan: 5 of 9
 Status: Ready to execute
 Last activity: 2026-08-31
 Phase 1 complete: SAFE-01…05, WRIT-01…04, QUAL-01
 
-Progress: [███████░░░] 67%
+Progress: [███████░░░] 72%
 
-Plans 02-01 (Stage 0 measurement) and 02-02 (export authoring) are complete. Next is **02-03**, the
-apply. The export inherits `anonuid=568,anongid=568` from WRIT-04 and **must be read-only**: the
-library tree is `0777` and mode bits are the only lever NFS clients see.
+Plans 02-01 (Stage 0), 02-02 (export authoring), 02-03 (apply) and 02-04 (the consumers audit
+script) are complete. Next is **02-05**, the client-side mount on the HA NUC. The export is LIVE
+and now has a standing detector: `scripts/check-music-consumers.sh` section 1 asserts all ten
+export properties on every run and is green. The export inherits `anonuid=568,anongid=568` from
+WRIT-04 and **is read-only**: the library tree is `0777` and mode bits are the only lever NFS
+clients see.
 
-Before 02-03 runs, read the CORRECTION entries under Blockers/Concerns — a bare `terraform apply`
-was measured to be one command away from destroying LXC 100, and port 111 was already open so only
-2049 is this phase's delta.
+**02-05 and 02-06 must set `MA_LOCAL_PROVIDER_INSTANCE` in `scripts/check-music-consumers.sh`.**
+Until the local filesystem provider exists and its instance id is pinned there, sections 2, 3 and 5
+fail by design — the script refuses to credit an album match to an NFS export it cannot prove the
+match came through. A Spotify provider is live with albums already in MA's library, including two
+Various Artists titles, so an unfiltered query would report green with no mount at all.
+
+Before any Terraform work, read the CORRECTION entries under Blockers/Concerns — a bare
+`terraform apply` was measured to be one command away from destroying LXC 100, and port 111 was
+already open so only 2049 is this phase's delta.
 
 ## Performance Metrics
 
@@ -81,6 +90,7 @@ was measured to be one command away from destroying LXC 100, and port 111 was al
 | Phase 02 P02 | 28min | 3 tasks | 3 files |
 | Phase 02 P01 | 75m | 4 tasks | 3 files |
 | Phase 02 P03 | 25min | 3 tasks | 2 files |
+| Phase 02 P04 | 78min | 3 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -182,6 +192,9 @@ Recent decisions affecting current work:
 - [Phase ?]: 02-03: NFS export APPLIED and live — ro,all_squash,anonuid=568,anongid=568,mountpoint to 172.16.1.31 only; re-apply exit 0; served from atlantis, LXC 100 proven unable (unprivileged)
 - [Phase ?]: 02-03: M1 (mountpoint export option) is NOT enforced at exportfs time on nfs-utils 1:2.8.3-1 — exportfs -au + -a silently re-creates the line while the dataset is unmounted. Configured-but-UNPROVEN; M2 (After=zfs-mount.service) is the proven guard; 02-05 must settle it client-side
 - [Phase ?]: 02-03: CONS-01 deliberately NOT ticked — criterion 1 parts 1d/1e need a client and belong to 02-05; traceability row records the interim state
+- [Phase 2]: 02-04: MA 2.11 has no API-token UI — check-music-consumers.sh logs in per run rather than caching the 90-day JWT, so the credential cannot expire silently inside an unattended check (D-39 intent, not its literal 365-day wording)
+- [Phase 2]: 02-04: music/albums/count has NO provider parameter (returned 87 with and without one) — mount liveness uses provider-filtered music/albums/library_items instead; count would report green off Spotify's catalogue with the NFS mount absent
+- [Phase 2]: 02-04: D-08 fired — the library has no Various Artists compilation (all 13 folders are single named artists), so the VA shape is substituted by VA-Mastermix.Essential.Hits.Pop.4 from the backlog, staged by 02-07 under the temporary export
 
 ### Pending Todos
 
@@ -293,8 +306,8 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-08-31T19:49:01.668Z
-Stopped at: Completed 02-03-PLAN.md — export LIVE; M1 unproven, carried to 02-05
+Last session: 2026-08-31T22:35:13.183Z
+Stopped at: Completed 02-04-PLAN.md
 Resume file: None
 
 **02-01 is complete.** The `recover-first` pause is discharged: atlantis recovered 18:48:08, Task 2's
