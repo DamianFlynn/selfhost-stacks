@@ -394,9 +394,15 @@ access to know to ask:
 - **Issue:** `ssh root@172.16.1.159` fails with `Connection timed out during banner exchange`. Not a
   network fault — TCP opens and `sshd` is listening (`pid=118`); it never sends a banner. Reproduced
   from atlantis on the LAN, so it is not a Tailscale artefact.
-- **Fix:** Probes re-routed via `ssh root@172.16.1.158 'pct exec 100 -- …'`, which works. **No
-  attempt was made to restart `sshd`** — this plan is read-only by contract except Task 4, and the
-  host is mid-incident.
+- **Fix:** Probes re-routed via `ssh root@172.16.1.158 'pct exec 100 -- …'`. **No attempt was made to
+  restart `sshd`** — this plan is read-only by contract except Task 4, and the host is mid-incident.
+- **Caveat — the fallback is not reliable either.** `pct exec 100 -- hostname` and
+  `pct exec 100 -- ss -lntp` returned fine, but `pct exec 100 -- systemctl is-active ssh sshd` and
+  `pct exec 100 -- free -h` both **hung indefinitely** and had to be killed. Short commands get
+  through; anything that walks `/proc` or talks to systemd joins the D-state pile. Wrap every
+  `pct exec` in `timeout N` and read a hang as a symptom of the incident, not as a script bug.
+  This caveat exists so nobody resuming reads "which works" above and burns time debugging their
+  own command.
 - **Impact on later plans:** every `ssh root@172.16.1.159` in plans 02-03 and 02-04, including
   Task 3's own automated verify, currently fails. `check-music-consumers.sh` is specified to be
   host-resident on LXC 100 (D-41).
