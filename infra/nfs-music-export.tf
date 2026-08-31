@@ -1,0 +1,169 @@
+# nfs-music-export.tf — Phase 2: read-only NFSv4 export of the tagged music library
+#
+# CONS-01: /mnt/tank/media/Music is served read-only to the Home Assistant NUC
+# and the export is DEFINED IN TERRAFORM. It is served from the Proxmox host
+# rather than from LXC 100 because nfsd is privileged-only — an unprivileged
+# container cannot run it — and because the host is where the ZFS datasets are
+# actually mounted.
+#
+# Runs over SSH on the Proxmox host to:
+#   1. Install nfs-kernel-server if absent (PVE ships only nfs-common, the
+#      client half) and ensure /etc/exports.d/ exists
+#   2. Write /etc/exports.d/music.exports — the single Terraform-managed export
+#      table, leaving /etc/exports untouched for anything else
+#   3. Order nfs-server after zfs-mount.service via a systemd drop-in
+#   4. Refuse to proceed unless the library dataset is genuinely mounted
+#   5. Enable + start nfs-server and converge the kernel export table
+#   6. Assert the export is present and that no_root_squash is not
+#
+# All operations are idempotent — safe to re-run if the resource is tainted.
+#
+# ── Why this resource has `triggers` when host.tf's does not ────────────────
+# A null_resource re-creates only when a triggers value changes. host.tf's
+# null_resource.host_setup has no triggers at all, so it never re-runs even
+# when its inline script is edited — its provisioners fire once, at create.
+# Copying that here would make an edit to the export line silently inert, and
+# would make "a re-apply is clean" measure nothing. local.music_export_file is
+# a pure function of variables, so keying triggers on it makes this resource
+# both stable across repeated plans and responsive to a real change.
+#
+# ── Security note: transport and authentication ─────────────────────────────
+# The export runs sec=sys — the client asserts its own uids and the server
+# believes it. Two stronger options were considered and REJECTED:
+#
+#   * xprtsec= / RPC-with-TLS (RFC 9289): rejected. It requires tlshd running
+#     and configured with certificates on BOTH ends, and the client end is a
+#     Home Assistant OS appliance. That is a certificate lifecycle to own
+#     forever, for one read-only LAN-local music share.
+#   * sec=krb5: rejected. It means standing up and operating a KDC for a
+#     single read-only share, and HAOS-side krb5 support for a Supervisor
+#     mount is unproven.
+#
+# Accepted residual risk: on a trusted LAN, any device that can spoof the
+# NUC's address can read the library read-only. That is bounded by ro +
+# all_squash + a single-host specification, and 2049 is not forwarded at the
+# perimeter. Recorded here rather than left as a silence.
+
+# ── Export definition ───────────────────────────────────────────────────────
+# The option list is deliberate and each absence is as deliberate as each
+# presence:
+#   ro               the library tree is mode 0777 and knfsd does not export
+#                    ZFS NFSv4 ACLs, so mode bits are all a client sees —
+#                    server-side ro is the only real write control there is
+#   all_squash       maps EVERY client uid, including 0, to anonuid/anongid.
+#                    This is what makes the root_squash question moot
+#   anonuid/anongid  interpolated from var.apps_uid/var.apps_gid, the same
+#                    values Phase 1 normalised the library to. Never write 568
+#                    as a literal — the point is that the inheritance is
+#                    visible in the code
+#   mountpoint       export nothing rather than the empty stub directory if
+#                    nfs-server ever starts before the dataset is mounted
+#   no_subtree_check the default and recommended setting; subtree checking is
+#                    unreliable across renames
+#   sec=sys          see the security note above
+#
+# Deliberately ABSENT:
+#   fsid=            would relocate the NFSv4 pseudo-root; both consumers
+#                    address this share as server:/full/path and would break
+#   crossmnt         would implicitly export any child dataset created under
+#                    the library later — a silent scope expansion
+#   no_root_squash   forbidden outright, and moot under all_squash
+locals {
+  music_export_path = "/mnt/tank/media/Music"
+
+  music_export_line = "${local.music_export_path} ${var.ha_nuc_ip}(ro,all_squash,anonuid=${var.apps_uid},anongid=${var.apps_gid},mountpoint,no_subtree_check,sec=sys)"
+
+  music_export_file = <<-EOT
+    # Managed by Terraform (infra/nfs-music-export.tf). Do not edit by hand.
+    # CONS-01: read-only export of the tagged music library to the HA NUC.
+    ${local.music_export_line}
+  EOT
+}
+
+# ── The music export, its server, and its boot ordering ─────────────────────
+# One resource owns all of it deliberately: a guarded install that lives in the
+# same place as the file it exists to serve cannot drift apart from it, and a
+# re-apply of the pair is a no-op.
+resource "null_resource" "nfs_music_export" {
+  depends_on = [null_resource.host_setup]
+
+  triggers = {
+    # Re-run whenever the generated export table changes — this is the whole
+    # reason triggers exist here (see the file header).
+    exports_content = local.music_export_file
+    # Bump to force a re-run without changing the export itself.
+    revision = "1"
+  }
+
+  connection {
+    type     = "ssh"
+    host     = var.proxmox_host
+    user     = var.proxmox_ssh_user
+    password = var.proxmox_ssh_password
+    timeout  = "5m"
+  }
+
+  # Runs BEFORE the file provisioner below, and must: scp/sftp will not create
+  # a missing parent directory, and /etc/exports.d/ does not exist on a stock
+  # PVE host — the file write would fail on a first apply without this.
+  provisioner "remote-exec" {
+    inline = [
+      # PVE ships only nfs-common (the client half); the server comes from the
+      # Debian archive, which host.tf has already configured and updated.
+      # Guarded so a re-apply is a no-op rather than a package transaction.
+      "dpkg -s nfs-kernel-server >/dev/null 2>&1 || (apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq nfs-kernel-server)",
+
+      # exports(5) reads /etc/exports.d/*.exports as extra export tables. The
+      # directory is not guaranteed to exist even after the package install.
+      "mkdir -p /etc/exports.d",
+    ]
+  }
+
+  # A whole-file write is idempotent by construction; the repo's usual
+  # `grep -q … || echo … >>` append-guard is not, and cannot express a removal.
+  # This is the first provisioner "file" in infra/ — noted so the departure
+  # from the neighbouring remote-exec idiom reads as a choice, not an accident.
+  # The destination is a /etc/exports.d/ drop-in and NOT /etc/exports, so the
+  # Terraform-managed surface is exactly one file.
+  provisioner "file" {
+    content     = local.music_export_file
+    destination = "/etc/exports.d/music.exports"
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      # ZFS datasets are not systemd .mount units, so RequiresMountsFor= has
+      # nothing to resolve against. After=/Wants= is the only available lever
+      # for making nfs-server start after the pools are mounted at boot.
+      "mkdir -p /etc/systemd/system/nfs-server.service.d",
+      # printf, not a here-doc: the inline list is a list of shell commands and
+      # a multi-line here-doc does not survive that shape.
+      "printf '[Unit]\\nAfter=zfs-mount.service\\nWants=zfs-mount.service\\n' > /etc/systemd/system/nfs-server.service.d/10-zfs-order.conf",
+      # A drop-in that systemd has not re-read is a drop-in that does nothing.
+      "systemctl daemon-reload",
+
+      # The mountpoint export option protects the running server; this protects
+      # the apply. Exporting the empty stub directory beneath an unmounted
+      # dataset is the failure this pair exists to make impossible.
+      "mountpoint -q ${local.music_export_path} || { echo 'FATAL: ${local.music_export_path} is not a mount point'; exit 1; }",
+
+      # enable, not merely start — the ordering drop-in above is written for a
+      # host reboot, and a unit that is not enabled will not be there to order.
+      "systemctl enable --now nfs-server",
+      # exportfs -ra re-syncs the kernel table to the files on disk. It
+      # converges rather than appending, so running it every apply is safe.
+      "exportfs -ra",
+
+      # Gate 1 of 2 (the second is the standing consumers audit): a missing
+      # export line means the apply reported success while serving nothing.
+      "exportfs -v | grep -q '${var.ha_nuc_ip}' || { echo 'FATAL: export for ${var.ha_nuc_ip} not present after exportfs -ra'; exit 1; }",
+      # Fail the apply outright if this ever appears. It is forbidden, it is
+      # moot under all_squash, and its reappearance would mean someone edited
+      # the option list without reading why it is absent.
+      "exportfs -v | grep -q 'no_root_squash' && { echo 'FATAL: no_root_squash present in the kernel export table'; exit 1; } || true",
+
+      # Leave the evidence in the apply log rather than requiring a follow-up.
+      "echo '--- music export ready ---' && exportfs -v",
+    ]
+  }
+}
