@@ -309,9 +309,117 @@ Last written **2025-10-01** — nearly 11 months ago. The writer is real but not
 
 ---
 
-## Task 2 — Terraform drift gate (HALTED — OPERATOR RULING REQUIRED)
+## Task 2 — Terraform drift gate (RESOLVED 2026-08-31 19:5x — ruling `update-code`)
 
-### `terraform plan` did not return an exit code — it hung
+### Resolution summary (read this before the halted transcript below)
+
+The host recovered at **2026-08-31 18:48:08** (reboot via `sysrq s+b`; io pressure `full avg300`
+96.22 → 0.59; `dmesg -T | grep -c amdgpu_hmm_invalidate_gfx` = **0** this boot). The Proxmox API
+serves again, so `terraform plan` was re-run and **returned a real exit code for the first time.**
+
+**D-17's answer is `2`, and the plan that produced it would have destroyed the Docker host.**
+
+```
+Plan: 2 to add, 1 to change, 1 to destroy
+# proxmox_virtual_environment_container.selfhost must be replaced
+```
+
+`proxmox_virtual_environment_container.selfhost` **is LXC 100** — the estate's Docker host, ~102
+running containers, every compose stack in the repo. A bare `terraform apply` in plan 02-03 would
+have destroyed and recreated it. The landmine had been armed since February, on a config nobody had
+edited, waiting for the first person to run `apply` without reading the plan.
+
+**Cause was a provider artefact, not real infrastructure drift.** 33 `mount_point` blocks each
+diffed as `mount_options = [] -> null` plus `path_in_datastore -> (known after apply)`, every one
+marked `# forces replacement`. This config never sets `mount_options`; `bpg/proxmox 0.95.0` holds
+`[]` in state, reads the config's absence as `null`, and treats that transition on a nested block as
+replacement-forcing. The actual bind mounts on the host are correct and unchanged.
+
+**A second, genuinely real drift was found underneath it.** `var.mpe_memory_mb` defaulted to `20480`
+while LXC 102 had been running at `8192` — set by hand months ago and never reflected in code. **The
+code was the drifted side, not the host.**
+
+### Ruling recorded: `update-code`
+
+Of the plan's five options, the operator's ruling is **`update-code`** — absorb the drift into the
+Terraform rather than push code values at a running estate. Applied in two commits, nothing applied
+to infrastructure:
+
+| Commit | Change | Reasoning |
+|--------|--------|-----------|
+| `1588f19` | `prevent_destroy = true` **and** `ignore_changes = [mount_point]` on `selfhost`; `ignore_changes = [mount_point]` on `mpe` | Two independent guards on the Docker host deliberately: `ignore_changes` alone silences the failure mode we diagnosed, `prevent_destroy` covers the ones we have not. `mpe` gets no `prevent_destroy` — it is single-purpose, not the Docker host. |
+| `3051695` | `var.mpe_memory_mb` default `20480` → `8192`, with the rationale on the variable | Adopting the host value, not pushing the code value. Raising a memory cap is the wrong direction on a 28 GB host with a live kernel bug where memory pressure drives compaction and compaction fires the amdgpu MMU notifier. |
+
+**Trade-off, recorded in both `.tf` files so it is not discovered the hard way:** with
+`ignore_changes = [mount_point]` set, Terraform will no longer act on **real** `mount_point` changes
+either. Adding or removing a bind mount by editing `lxc-selfhost.tf` will now plan clean and do
+nothing. Until the provider bug is fixed, bind-mount changes are a deliberate manual act — edit
+`/etc/pve/lxc/100.conf` (or `pct set`), then reconcile the code.
+
+### Post-remediation plan — verbatim, re-run by this executor
+
+```
+$ cd infra && terraform init -input=false -no-color        # INIT_EXIT=0
+$ terraform plan -detailed-exitcode -input=false -no-color
+null_resource.host_setup: Refreshing state... [id=840970196947308370]
+null_resource.mpe_dataset: Refreshing state... [id=5470274411816671512]
+proxmox_virtual_environment_container.mpe: Refreshing state... [id=102]
+proxmox_virtual_environment_container.selfhost: Refreshing state... [id=100]
+null_resource.patch_lxc_config_mpe: Refreshing state... [id=1685583725846800294]
+null_resource.start_lxc_mpe: Refreshing state... [id=3344723184432828451]
+null_resource.provision_lxc_mpe: Refreshing state... [id=4125812078130848173]
+null_resource.patch_lxc_config: Refreshing state... [id=6527165114509707633]
+null_resource.start_lxc: Refreshing state... [id=170581700761079279]
+null_resource.provision_lxc: Refreshing state... [id=3245546985982411627]
+null_resource.copy_ssh_keys: Refreshing state... [id=846225439303678084]
+
+  # null_resource.nfs_music_export will be created
+  + resource "null_resource" "nfs_music_export" {
+      + id       = (known after apply)
+      + triggers = {
+          + "exports_content" = <<-EOT
+                # Managed by Terraform (infra/nfs-music-export.tf). Do not edit by hand.
+                # CONS-01: read-only export of the tagged music library to the HA NUC.
+                /mnt/tank/media/Music 172.16.1.31(ro,all_squash,anonuid=568,anongid=568,mountpoint,no_subtree_check,sec=sys)
+            EOT
+          + "revision"        = "1"
+        }
+    }
+
+Plan: 1 to add, 0 to change, 0 to destroy.
+
+Changes to Outputs:
+  ~ verify_commands = <<-EOT   (the nfs-music-export verify block, additive)
+
+TF_PLAN_EXIT=2
+```
+
+Terraform v1.15.8 on darwin_arm64, `bpg/proxmox v0.95.0`, `hashicorp/null v3.2.4`.
+`infra/terraform.tfvars` present; contents deliberately not printed (T-02-05).
+
+**Zero resources marked `forces replacement`. Zero destroys. The only pending resource is this
+phase's own `null_resource.nfs_music_export`.** The residual exit code of `2` is that resource
+itself — which is the *correct* reading of D-17: `infra/` now has nothing pending except Phase 2's
+own change, so criterion 1's "a re-apply is clean" will measure only the export.
+
+### What this changes for plan 02-03 — read before applying
+
+1. **Do not run a bare `terraform apply`.** Run `terraform plan -detailed-exitcode -out=…` first,
+   read it, and assert that the plan contains **exactly one** resource — `null_resource.nfs_music_export` —
+   and **zero** destroys. Then apply the saved plan file. The whole point of this finding is that a
+   plan nobody read was one command away from taking the estate down.
+2. Criterion 1's "a re-apply is clean" is measured **unnarrowed** — a bare
+   `terraform plan -detailed-exitcode` expecting **0** after the apply. The `targeted` option was
+   *not* chosen, so no `-target=` expression narrows it.
+3. `prevent_destroy = true` on `selfhost` is now a live guard. If a future plan legitimately needs to
+   replace LXC 100, that is a code edit and a deliberate act, which is the intent.
+
+### Historical record — the halted attempt (2026-08-31 ~16:00, host mid-incident)
+
+Kept because it is the evidence that a hang is not an exit code, and that the July amdgpu mitigation
+was insufficient.
+
+#### `terraform plan` did not return an exit code — it hung
 
 ```
 $ cd infra && terraform init -input=false
@@ -336,20 +444,12 @@ all four resources and never returned, which is in-band confirmation of the head
 Terraform v1.15.8, provider `bpg/proxmox v0.95.0`. `infra/terraform.tfvars` is present (55 lines,
 contents deliberately not printed — T-02-05).
 
-**Task 2's acceptance criterion "exit code is captured and recorded verbatim (0, 1, or 2)" cannot be
-satisfied while the host is in this state.** D-17's precondition — "`terraform plan` must be clean
-before `infra/` is touched" — is therefore **unproven, not disproven**.
+At the time, Task 2's acceptance criterion "exit code is captured and recorded verbatim (0, 1, or 2)"
+could not be satisfied. D-17's precondition was **unproven, not disproven** — and it has since been
+proven, badly, above.
 
-### What the operator is being asked
-
-This is a **wider decision than the plan anticipated**. The plan's five options (`clean`,
-`reconcile`, `update-code`, `targeted`, `reconcile-shares`) all presume a host that answers. None
-fits.
-
-Note what *is* settled, so the ruling is narrow: **`reconcile-shares` is ruled out on evidence** —
-probe 4 is clean, there is no competing export table, and D-19's blocking condition does not fire.
-
-The live question is the incident. See the checkpoint message returned alongside this SUMMARY.
+**`reconcile-shares` was ruled out on evidence** and remains so — probe 4 is clean, there is no
+competing export table, D-19's blocking condition does not fire.
 
 ---
 
