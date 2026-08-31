@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-08-29T00:05:10.323Z"
-last_activity: 2026-08-29 -- Phase 2 planning complete
+last_updated: "2026-08-31T14:20:30.862Z"
+last_activity: 2026-08-31 -- Phase 02 execution started
 progress:
   total_phases: 9
   completed_phases: 1
   total_plans: 18
-  completed_plans: 9
+  completed_plans: 10
   percent: 11
 ---
 
@@ -21,17 +21,17 @@ See: .planning/PROJECT.md (updated 2026-08-17)
 
 **Core value:** New music downloads land in the library correctly tagged, through exactly one
 pipeline that someone owns.
-**Current focus:** Phase 01 — safety-harness-and-freeze-the-writers
+**Current focus:** Phase 02 — nfs-export-and-music-assistant-reachability
 
 **Definition of done (CONS-04):** a file is imported only when verified with `ffprobe` on the file
 *and* visible in both Jellyfin and Music Assistant. Never "tool configured".
 
 ## Current Position
 
-Phase: 01 — COMPLETE
-Plan: 9 of 9
-Status: Ready to execute
-Last activity: 2026-08-29 -- Phase 2 planning complete
+Phase: 02 (nfs-export-and-music-assistant-reachability) — EXECUTING
+Plan: 1 of 9
+Status: Executing Phase 02
+Last activity: 2026-08-31 -- Phase 02 execution started
 All 10 phase requirements met: SAFE-01…05, WRIT-01…04, QUAL-01
 
 Progress: [██████████] 100%
@@ -254,6 +254,7 @@ Recent decisions affecting current work:
 - 01-03: unsorted WAV content is NOT tag-free - all 40 sampled Now! 120 WAV records carry 6 format tags (title/artist/album/track/date/comment) plus an embedded cover-art stream. Plan 01-04 and Phase 7 must not assume an empty before-state for unsorted's 134 WAV files.
 - 01-07: the manual beets container is NOT inert — its BEETSDIR config.yaml is a docker-compose file, so beets ran on defaults and left 47 items / 1.4 GB of WAV in /config/Music/__/. Phase 4 must account for it, plus a fifth latent entry point at beets/config/beets.sh.
 - OPEN/UNOWNED: /mnt/tank/media/TV is 114,218 entries on orphan gid 545, the same gid 01-08 normalised Music away from. Out of scope, no requirement covers it, and it will hit the identical chown-from-LXC-100 EPERM. Leaving Music and TV divergent may be worse than leaving both wrong.
+- BLOCKING 2026-08-31 (02-01 Stage 0): atlantis is mid-incident on the documented amdgpu_hmm_invalidate_gfx NULL deref - 4 oopses today (07:56 kcompactd0, 10:43 postgres, 12:00 prometheus, 12:15 apt-get), kernel tainted [D]=DIE, load 358 rising, io pressure full 96% with ZERO in-flight block IO, 331 procs in D state on mmap_lock wchans. The July 2026 mitigation (THP=never + vm.compaction_proactiveness=0) is fully applied and did NOT prevent it - proactiveness=0 does not stop reactive compaction. Side effects: LXC 100 sshd accepts TCP but never sends a banner (reproduced from atlantis on the LAN, so not a Tailscale artefact); terraform plan hangs against the Proxmox API. Phase 2 cannot proceed - plan 02-02 installs nfs-kernel-server via apt-get, the same call that oopsed at 12:15. Recovery needs a host reboot, documented to hang gracefully and need sysrq s+b.
 
 ## Deferred Items
 
@@ -272,9 +273,9 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-08-28T22:56:01.038Z
-Stopped at: Phase 2 context gathered
-Resume file: .planning/phases/02-nfs-export-and-music-assistant-reachability/02-CONTEXT.md
+Last session: 2026-08-31T14:20:30.846Z
+Stopped at: 02-01 Task 2 blocking checkpoint - atlantis amdgpu HMM incident
+Resume file: .planning/phases/02-nfs-export-and-music-assistant-reachability/02-01-SUMMARY.md
 
 Plans 01-02, 01-04, 01-06, 01-07, 01-08 and 01-09 are `autonomous: false` — they carry blocking
 human checkpoints (the fence run, the ~140 GB capture, the Lidarr/Jellyfin freeze and its one-hour
