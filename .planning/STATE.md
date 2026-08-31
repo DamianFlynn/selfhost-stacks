@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-08-31T19:11:55.602Z"
+last_updated: "2026-08-31T19:49:01.684Z"
 last_activity: 2026-08-31
 progress:
   total_phases: 9
   completed_phases: 1
   total_plans: 18
-  completed_plans: 11
-  percent: 61
+  completed_plans: 12
+  percent: 67
 ---
 
 # Project State
@@ -29,12 +29,12 @@ pipeline that someone owns.
 ## Current Position
 
 Phase: 02 (nfs-export-and-music-assistant-reachability) — EXECUTING
-Plan: 3 of 9
+Plan: 4 of 9
 Status: Ready to execute
 Last activity: 2026-08-31
 Phase 1 complete: SAFE-01…05, WRIT-01…04, QUAL-01
 
-Progress: [██████░░░░] 61%
+Progress: [███████░░░] 67%
 
 Plans 02-01 (Stage 0 measurement) and 02-02 (export authoring) are complete. Next is **02-03**, the
 apply. The export inherits `anonuid=568,anongid=568` from WRIT-04 and **must be read-only**: the
@@ -80,6 +80,7 @@ was measured to be one command away from destroying LXC 100, and port 111 was al
 | Phase 01 P09 | ~55 minutes | 4 tasks | 5 files |
 | Phase 02 P02 | 28min | 3 tasks | 3 files |
 | Phase 02 P01 | 75m | 4 tasks | 3 files |
+| Phase 02 P03 | 25min | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -178,6 +179,9 @@ Recent decisions affecting current work:
 - [Phase ?]: 02-02: NFS music export defined in Terraform (infra/nfs-music-export.tf) - ro,all_squash,anonuid/anongid interpolated from var.apps_uid/gid, mountpoint, no_subtree_check, sec=sys, to 172.16.1.31 only; fsid=, crossmnt and no_root_squash absent with recorded reasons
 - [Phase ?]: 02-02: xprtsec= (RFC 9289) and sec=krb5 considered and rejected in the file header; sec=sys on a trusted LAN recorded as an accepted residual risk
 - [Phase ?]: 02-02: temporary control export is count-gated on music_temp_export_enabled (default false) - teardown is a terraform apply, not a memory
+- [Phase ?]: 02-03: NFS export APPLIED and live — ro,all_squash,anonuid=568,anongid=568,mountpoint to 172.16.1.31 only; re-apply exit 0; served from atlantis, LXC 100 proven unable (unprivileged)
+- [Phase ?]: 02-03: M1 (mountpoint export option) is NOT enforced at exportfs time on nfs-utils 1:2.8.3-1 — exportfs -au + -a silently re-creates the line while the dataset is unmounted. Configured-but-UNPROVEN; M2 (After=zfs-mount.service) is the proven guard; 02-05 must settle it client-side
+- [Phase ?]: 02-03: CONS-01 deliberately NOT ticked — criterion 1 parts 1d/1e need a client and belong to 02-05; traceability row records the interim state
 
 ### Pending Todos
 
@@ -270,6 +274,7 @@ Recent decisions affecting current work:
 - CORRECTION for 02-04 (02-01 Task 3 measurement 6): **Jellyfin's t3_proxy address is 192.168.90.25, not the 192.168.90.31 pinned in 02-01 and 02-04** — the pin is wrong today, not merely fragile. Two further traps: the bare Docker DNS name `jellyfin` resolves to **Cloudflare's public edge** from the LXC 100 host because of `search deercrest.info` in /etc/resolv.conf (a health check would silently pass against the public site while the container was down), and `172.16.1.76` is unreachable from LXC 100 by macvlan host-to-container isolation despite working from the LAN. Use runtime resolution: `docker inspect jellyfin --format '{{(index .NetworkSettings.Networks "t3_proxy").IPAddress}}'` — verified 200, no IP literal.
 - CORRECTION for 02-03/02-05 (02-01 Task 3 measurement 7): **`showmount` and `findmnt` are both ABSENT on the NUC.** `nfs-music-export.tf`'s `verify_commands` output suggests `showmount -e 172.16.1.158` "from the HA NUC" — that line will not run; use `exportfs -v` on atlantis. Criterion 1e's `findmnt` proof of NFSv4 negotiation needs `/proc/self/mountinfo` instead (verified readable from the SSH add-on; its fstype column is where `nfs4` will appear). `sha256sum` and `nc` ARE present, so D-11's read-through hash is sha256.
 - LATENT, suppressed not fixed (02-01 Task 2): `bpg/proxmox 0.95.0` plans a replacement for any container carrying `mount_point` blocks. `ignore_changes = [mount_point]` now silences it on both LXC resources, which means **real bind-mount edits to lxc-selfhost.tf / lxc-mpe.tf will plan clean and do nothing**. Bind-mount changes are a deliberate manual act (`pct set` / edit `/etc/pve/lxc/<vmid>.conf`, then reconcile) until the provider is upgraded. Trade-off documented in both files.
+- 02-05 MUST re-test M1 from the client side: the mountpoint export option did not refuse an unmounted dataset at exportfs time on nfs-utils 1:2.8.3-1 (02-03 finding)
 
 ## Deferred Items
 
@@ -288,8 +293,8 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-08-31T19:00:00.000Z
-Stopped at: Completed 02-01-PLAN.md (all 4 tasks; Task 4 not-fired; entirely read-only)
+Last session: 2026-08-31T19:49:01.668Z
+Stopped at: Completed 02-03-PLAN.md — export LIVE; M1 unproven, carried to 02-05
 Resume file: None
 
 **02-01 is complete.** The `recover-first` pause is discharged: atlantis recovered 18:48:08, Task 2's

@@ -175,7 +175,7 @@ with Phase 1. The export's `anonuid`/`anongid` take the ownership value decided 
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 02-03-PLAN.md — Apply, prove criterion 1a/1b/1c, prove M1 by simulated unmount, and measure the blast radius (wave 3)
+- [x] 02-03-PLAN.md — Apply, prove criterion 1a/1b/1c, prove M1 by simulated unmount, and measure the blast radius (wave 3)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -490,7 +490,7 @@ Phase 7. Plans within a phase run sequentially.
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Safety Harness and Freeze the Writers | 9/9 | Complete | 2026-08-18 |
-| 2. NFS Export and Music Assistant Reachability | 2/9 | In Progress|  |
+| 2. NFS Export and Music Assistant Reachability | 3/9 | In Progress|  |
 | 3. Tagger Spike | 0/TBD | Not started | - |
 | 4. Collapse to One Tagger | 0/TBD | Not started | - |
 | 5. Inbox Structure and the Junk Gate | 0/TBD | Not started | - |
