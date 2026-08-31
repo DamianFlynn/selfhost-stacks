@@ -54,7 +54,12 @@ output "verify_commands" {
     # from the pre-existing nfs-common client packages.
     ssh root@${var.proxmox_host} "ss -lntp | grep -E ':(111|2049)'"
 
-    # From the HA NUC (LAN, not tailnet — the export names ${var.ha_nuc_ip} only):
-    showmount -e ${var.proxmox_host}
+    # From the HA NUC (LAN, not tailnet — the export names ${var.ha_nuc_ip} only).
+    # NOT showmount / findmnt: BOTH are absent from the HA SSH add-on's userland
+    # (measured, plan 02-01 Task 3 measurement 7). Server-side enumeration is the
+    # exportfs -v line above; client-side proof reads the fstype column of
+    # /proc/self/mountinfo, which is verified readable from the add-on.
+    nc -z -w 5 ${var.proxmox_host} 2049 && echo "2049 reachable"
+    grep -E 'nfs|/media/music' /proc/self/mountinfo
   EOT
 }
