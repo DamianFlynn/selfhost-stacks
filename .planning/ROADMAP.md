@@ -170,7 +170,7 @@ with Phase 1. The export's `anonuid`/`anongid` take the ownership value decided 
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 02-02-PLAN.md — Author `infra/nfs-music-export.tf`: the export line, guarded server install, M1 `mountpoint` and M2 ordering drop-in (wave 2)
+- [x] 02-02-PLAN.md — Author `infra/nfs-music-export.tf`: the export line, guarded server install, M1 `mountpoint` and M2 ordering drop-in (wave 2)
 - [ ] 02-04-PLAN.md — Credentials, the three pre-verified proof albums, and `scripts/check-music-consumers.sh` (wave 2)
 
 **Wave 3** *(blocked on Wave 2 completion)*
@@ -490,7 +490,7 @@ Phase 7. Plans within a phase run sequentially.
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Safety Harness and Freeze the Writers | 9/9 | Complete | 2026-08-18 |
-| 2. NFS Export and Music Assistant Reachability | 0/TBD | Not started | - |
+| 2. NFS Export and Music Assistant Reachability | 1/9 | In Progress|  |
 | 3. Tagger Spike | 0/TBD | Not started | - |
 | 4. Collapse to One Tagger | 0/TBD | Not started | - |
 | 5. Inbox Structure and the Junk Gate | 0/TBD | Not started | - |

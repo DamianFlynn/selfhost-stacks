@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-08-31T14:20:30.862Z"
-last_activity: 2026-08-31 -- Phase 02 execution started
+last_updated: "2026-08-31T15:16:11.731Z"
+last_activity: 2026-08-31
 progress:
   total_phases: 9
   completed_phases: 1
@@ -29,12 +29,12 @@ pipeline that someone owns.
 ## Current Position
 
 Phase: 02 (nfs-export-and-music-assistant-reachability) — EXECUTING
-Plan: 1 of 9
-Status: Executing Phase 02
-Last activity: 2026-08-31 -- Phase 02 execution started
+Plan: 2 of 9
+Status: Ready to execute
+Last activity: 2026-08-31
 All 10 phase requirements met: SAFE-01…05, WRIT-01…04, QUAL-01
 
-Progress: [██████████] 100%
+Progress: [██████░░░░] 56%
 
 Next phase: 02 (NFS Export and Music Assistant Reachability) — needs `--research-phase`.
 It inherits `anonuid=568,anongid=568` from WRIT-04, and the export **must be read-only**: the
@@ -74,6 +74,7 @@ library tree is `0777` and mode bits are the only lever NFS clients see.
 | Phase 01 P07 | ~40 minutes | 2 tasks | 3 files |
 | Phase 01 P08 | ~35 minutes | 3 tasks | 2 files |
 | Phase 01 P09 | ~55 minutes | 4 tasks | 5 files |
+| Phase 02 P02 | 28min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -169,6 +170,9 @@ Recent decisions affecting current work:
 - [Phase ?]: 01-08: mode pass skipped with a printed explanation rather than run or swallowed; no zfs set of any property was executed
 - [Phase ?]: 01-08 CORRECTION: gid 545 is NOT Music-specific - TV carries 114,218 entries on the same orphan gid (48x Music). The estate is split: Music+TV on 545, Photos+Movies+Books on 568. D-11's 568:568 still stands, but because 545 is an orphan gid (no group entry, unmapped in the LXC idmap) and 568 is the documented convention - not because Music was uniquely wrong
 - [Phase ?]: 01-08: uid 3000 owns 197,776 of tank/downloads' 209,039 entries (94.6%) - the download client's identity, and the same uid as the library's .DS_Store; resolve before Phase 5 stages _inbox there
+- [Phase ?]: 02-02: NFS music export defined in Terraform (infra/nfs-music-export.tf) - ro,all_squash,anonuid/anongid interpolated from var.apps_uid/gid, mountpoint, no_subtree_check, sec=sys, to 172.16.1.31 only; fsid=, crossmnt and no_root_squash absent with recorded reasons
+- [Phase ?]: 02-02: xprtsec= (RFC 9289) and sec=krb5 considered and rejected in the file header; sec=sys on a trusted LAN recorded as an accepted residual risk
+- [Phase ?]: 02-02: temporary control export is count-gated on music_temp_export_enabled (default false) - teardown is a terraform apply, not a memory
 
 ### Pending Todos
 
@@ -273,9 +277,9 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-08-31T15:25:00Z
-Stopped at: 02-01 Task 2 blocking checkpoint - atlantis amdgpu HMM incident
-Resume file: .planning/phases/02-nfs-export-and-music-assistant-reachability/02-01-PARTIAL.md
+Last session: 2026-08-31T15:16:11.721Z
+Stopped at: Completed 02-02-PLAN.md (authoring only; no host contacted)
+Resume file: None
 
 Decision 2026-08-31: `recover-first`. Phase 2 is paused until atlantis is healthy. On resume,
 02-01 restarts at Task 2 (`terraform plan` drift gate) and takes D-44's before-snapshot against a
