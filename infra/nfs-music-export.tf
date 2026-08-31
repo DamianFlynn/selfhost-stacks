@@ -78,6 +78,24 @@ locals {
     # CONS-01: read-only export of the tagged music library to the HA NUC.
     ${local.music_export_line}
   EOT
+
+  # ── Temporary control export (see the second resource below) ──────────────
+  # The scratch path is created as its OWN ZFS dataset rather than as a plain
+  # directory. Reason: the option list below keeps `mountpoint`, and a plain
+  # directory is not a mount point, so knfsd would refuse to export it. The
+  # alternative — dropping `mountpoint` from this line only — would mean two
+  # divergent option sets to review instead of one. A dataset under
+  # tank/downloads is cheap, so keeping the option sets identical wins.
+  music_temp_export_dataset = trimprefix(var.music_temp_export_path, "/mnt/")
+
+  music_temp_export_line = "${var.music_temp_export_path} ${var.ha_nuc_ip}(ro,all_squash,anonuid=${var.apps_uid},anongid=${var.apps_gid},mountpoint,no_subtree_check,sec=sys)"
+
+  music_temp_export_file = <<-EOT
+    # Managed by Terraform (infra/nfs-music-export.tf). Do not edit by hand.
+    # TEMPORARY: scratch export for the album-artist fallback control.
+    # Removed by setting music_temp_export_enabled = false and re-applying.
+    ${local.music_temp_export_line}
+  EOT
 }
 
 # ── The music export, its server, and its boot ordering ─────────────────────
@@ -164,6 +182,76 @@ resource "null_resource" "nfs_music_export" {
 
       # Leave the evidence in the apply log rather than requiring a follow-up.
       "echo '--- music export ready ---' && exportfs -v",
+    ]
+  }
+}
+
+# ── Temporary control export — OFF by default ───────────────────────────────
+# This export exists for exactly one job: proving that Music Assistant's
+# missing_album_artist_action fallback actually fires, by scanning a control
+# album that deliberately carries no album artist. Configuring that setting
+# without observing it fire would leave its first real exercise to be the
+# import pilot, at scale.
+#
+# It points at var.music_temp_export_path, a scratch dataset under
+# tank/downloads. It NEVER points inside the tagged library — untagged content
+# staged beneath the library root is exactly what the estate's staging rule
+# forbids, and the control album is untagged on purpose.
+#
+# It is Terraform-managed behind an enable flag rather than hand-run, because
+# a hand-run `exportfs` would drift the host from infra/ (which this repo
+# forbids) and would leave removal as something a person has to remember.
+# Teardown is `terraform apply` with music_temp_export_enabled = false: the
+# resource is destroyed, the drop-in file is removed and the kernel table is
+# re-converged. Provably gone, and visible in a plan diff.
+#
+# The package install and the systemd ordering drop-in are deliberately NOT
+# repeated here — the main resource owns them, and this one depends on it.
+resource "null_resource" "nfs_music_temp_export" {
+  count = var.music_temp_export_enabled ? 1 : 0
+
+  depends_on = [null_resource.nfs_music_export]
+
+  triggers = {
+    exports_content = local.music_temp_export_file
+    revision        = "1"
+  }
+
+  connection {
+    type     = "ssh"
+    host     = var.proxmox_host
+    user     = var.proxmox_ssh_user
+    password = var.proxmox_ssh_password
+    timeout  = "5m"
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      # A dataset, not a plain directory — see the locals block for why the
+      # option list keeps `mountpoint` and this therefore has to be one.
+      "zfs list ${local.music_temp_export_dataset} >/dev/null 2>&1 || zfs create -p ${local.music_temp_export_dataset}",
+      # all_squash maps the client to apps:apps, so apps must be able to read
+      # the scratch tree or the control scans as an empty provider.
+      "chown ${var.apps_uid}:${var.apps_gid} ${var.music_temp_export_path}",
+    ]
+  }
+
+  # Second drop-in file, same whole-file-write reasoning as the main export.
+  # A separate file so that disabling this one cannot disturb the other.
+  provisioner "file" {
+    content     = local.music_temp_export_file
+    destination = "/etc/exports.d/music-temp.exports"
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      # Converge the kernel table onto both drop-ins.
+      "exportfs -ra",
+      # Same gate as the main export: a silently-absent line would let the
+      # control "pass" by finding nothing rather than by finding the fallback.
+      "exportfs -v | grep -q '${var.music_temp_export_path}' || { echo 'FATAL: temporary control export not present after exportfs -ra'; exit 1; }",
+      # Evidence in the apply log.
+      "echo '--- temporary control export ready ---' && exportfs -v",
     ]
   }
 }

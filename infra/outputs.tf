@@ -44,5 +44,17 @@ output "verify_commands" {
     ssh root@${var.lxc_ip} "ls -la /dev/dri/"
     ssh root@${var.lxc_ip} "id apps"
     ssh root@${var.lxc_ip} "ls -la /mnt/fast/appdata/traefik | head"
+
+    # NFS music export, on Proxmox host (see nfs-music-export.tf):
+    ssh root@${var.proxmox_host} "exportfs -v"
+    ssh root@${var.proxmox_host} "cat /etc/exports.d/music.exports"
+    ssh root@${var.proxmox_host} "systemctl is-active nfs-server; systemctl is-enabled nfs-server"
+    ssh root@${var.proxmox_host} "systemctl show nfs-server -p After | tr ' ' '\n' | grep zfs-mount"
+    # 2049 is this phase's only port delta — 111 (rpcbind) was already open
+    # from the pre-existing nfs-common client packages.
+    ssh root@${var.proxmox_host} "ss -lntp | grep -E ':(111|2049)'"
+
+    # From the HA NUC (LAN, not tailnet — the export names ${var.ha_nuc_ip} only):
+    showmount -e ${var.proxmox_host}
   EOT
 }
