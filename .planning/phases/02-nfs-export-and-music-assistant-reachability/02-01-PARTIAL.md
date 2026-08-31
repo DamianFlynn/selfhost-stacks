@@ -453,6 +453,385 @@ competing export table, D-19's blocking condition does not fire.
 
 ---
 
+## Task 3 — NUC, Music Assistant, and audit-script reachability (COMPLETE, with one gap)
+
+**Vantage-point disclosure, because it changes how two results should be read.** These probes were
+run from the workstation **over the tailnet**, not from the LAN. HA is currently the *standby*
+subnet router for `172.16.1.0/24`, so `172.16.1.31` is unreachable from the tailnet by design
+(ha-deercrest skill, documented behaviour). All NUC probes therefore went via
+`$HA_TAILNET_HOST` (`100.73.196.51`); `172.16.1.31:22` timed out, which is expected and **not** a
+finding. Where "unreachable from the workstation" is recorded below, read it as *unreachable from a
+tailnet vantage point*, not as a property of the estate.
+
+### Measurement 1 — the NUC's real source address toward atlantis (D-20, A5) — MEASURED-TRUE
+
+```
+$ ip route get 172.16.1.158
+172.16.1.158 dev enp0s25 src 172.16.1.31 uid 1000
+    cache
+
+$ ip -4 -o addr show
+1: lo          inet 127.0.0.1/8 scope host lo
+2: enp0s25     inet 172.16.1.31/24 brd 172.16.1.255 scope global noprefixroute enp0s25
+3: hassio      inet 172.30.32.1/23 brd 172.30.33.255 scope global hassio
+4: docker0     inet 172.30.232.1/23 brd 172.30.233.255 scope global docker0
+258: tailscale0 inet 100.73.196.51/32 scope global tailscale0
+
+$ ip route show
+default via 172.16.1.1 dev enp0s25 proto static metric 100
+172.16.1.0/24 dev enp0s25 proto kernel scope link src 172.16.1.31 metric 100
+172.30.32.0/23 dev hassio proto kernel scope link src 172.30.32.1
+172.30.232.0/23 dev docker0 proto kernel scope link src 172.30.232.1
+```
+
+**`src` is `172.16.1.31`. It equals the documented value.** D-12's export line is correct as written
+and needs no change; D-13's exclusion of the tailnet address is confirmed correct — `172.16.1.0/24`
+is a directly-connected route on `enp0s25`, so nothing toward atlantis is ever sourced from
+`100.73.196.51`.
+
+Interface names (`enp0s25`, `hassio`, `docker0`) confirm this was read in the **host** network
+namespace, not the add-on's — the Advanced SSH add-on runs `host_network: true`. The Supervisor
+mount that plan 02-05 creates is a host-side systemd mount unit, so this is the right namespace to
+have measured.
+
+### Measurement 2 — reachability to atlantis:2049 (A6, B-4) — MEASURED-TRUE, path is not filtered
+
+```
+$ nc -z -w 5 172.16.1.158 111  ; echo exit=$?   ->  exit=0     (rpcbind, already open)
+$ nc -z -w 5 172.16.1.158 22   ; echo exit=$?   ->  exit=0     (control)
+$ nc -w 8 -z 172.16.1.158 2049 ; echo exit=$?   ->  exit=1     in 0.002s total
+```
+
+`nc` **is present** — the "HAOS busybox may lack `nc`" caveat does not apply to the Advanced SSH
+add-on's userland, so no fallback is needed.
+
+The 2049 result is the informative one: **0.002 s to a refusal is a TCP RST, not a drop.** A
+filtered port yields a silent discard and burns the full 8 s timeout. So the path `.31 → .158:2049`
+is **open and unfiltered**; 2049 is closed only because `nfs-kernel-server` is not installed yet
+(Task 1 probe 5). **A6 is measured-true on positive evidence, not by absence.**
+
+### Measurement 3 — MA add-on version and channel (D-21, D-56, A7) — **MEASURED-FALSE**
+
+This is the most consequential finding of Task 3.
+
+```
+$ ha apps --raw-json | jq …
+d5369777_music_assistant_beta   Music Assistant (BETA)   2.11.0b0   2.11.0b0   started   d5369777
+
+$ ha apps info d5369777_music_assistant_beta --raw-json | jq .data
+{
+  "slug": "d5369777_music_assistant_beta",
+  "name": "Music Assistant (BETA)",
+  "version": "2.11.0b0",
+  "version_latest": "2.11.0b0",
+  "update_available": false,
+  "auto_update": true,
+  "state": "started",
+  "repository": "d5369777",
+  "host_network": true,
+  "stage": "stable",
+  "startup": "application"
+}
+
+$ curl http://172.16.1.31:8095/info            # 200
+{"server_id":"d2b06ba2931245ba9133cce867f7ff42","server_version":"2.11.0b0",
+ "schema_version":63,"min_supported_schema_version":28,
+ "base_url":"http://172.16.1.31:8095","homeassistant_addon":true,
+ "onboard_done":true,"name":"Music Assistant (d5369777-music-assistant-beta)",
+ "status":"running","internal_url":"http://172.16.1.31:8095",
+ "external_url":null,"has_remote_access":true}
+```
+
+**The installed add-on is the BETA, at `2.11.0b0`.** RESEARCH.md assumed `2.9.13` stable; D-21
+anticipated `2.10.0rc6` as the risk case. The estate is a **further major version beyond both**, and
+the **stable add-on is not installed at all** — there is no `music_assistant` slug in the inventory,
+only `music_assistant_beta`.
+
+**This directly conflicts with D-21's instruction to "prove the phase against stable."** It cannot
+be satisfied without either installing the stable add-on alongside (two MA servers, two libraries)
+or migrating off the BETA. That is an operator decision and is **flagged as a blocking finding for
+plans 02-06 and 02-07**, which are where MA behaviour is actually asserted. It does **not** block
+plan 02-03 — the export is a server-side artefact and MA's version has no bearing on it.
+
+**D-56 confirmed:** `auto_update: true`. On a **beta** channel, that means the version every
+criterion is stamped with can move to another beta between now and Phase 7. The audit script
+(D-41/D-56) is not merely load-bearing here; it is the only detector.
+
+`stage: stable` in the add-on metadata is Supervisor's classification of the *add-on repository*,
+not of the software. Do not read it as contradicting the above.
+
+**Also recorded (not a Phase 2 issue, but adjacent):** the NUC runs `core_samba` (Samba share
+12.10.0, started). It shares HAOS's own `/config`, `/media`, `/share` — **not** `/mnt/tank/media/Music`,
+which does not exist on the NUC. It is not T-02-10's writer. Noted so a later reader who greps for
+"samba" does not mistake it for one.
+
+### Measurement 4 — MA admin user (D-43, A8) — MEASURED: **account exists**
+
+Two independent instruments agree:
+
+```
+# 1. /info reports onboarding state directly
+"onboard_done": true
+
+# 2. auth/login with a deliberately-nonexistent credential
+$ curl -s -X POST -H 'Content-Type: application/json' \
+    -d '{"command":"auth/login","message_id":1,
+         "args":{"username":"__gsd_probe_nonexistent__","password":"__gsd_probe_nonexistent__"}}' \
+    http://172.16.1.31:8095/api
+{"success":false,"error":"Invalid username or password"}
+```
+
+The plan required these two failure shapes be distinguished explicitly. This is
+**rejected-credential**, not un-onboarded: the server has an account store and evaluated a lookup
+against it. `onboard_done: true` corroborates independently.
+
+**Therefore Task 4 does not fire.** See its section below.
+
+No real credential was submitted at any point. The probe username and password are literal
+throwaway sentinels, recorded here verbatim precisely because they are worthless.
+
+### Measurement 5 — existing MA providers (D-30) — **NOT COMPLETED — blocked on a credential**
+
+This is Task 3's one gap, and the plan has no branch for the state that actually exists.
+
+```
+$ curl -s -X POST -d '{"command":"config/providers","message_id":3}' http://172.16.1.31:8095/api
+Authentication required
+```
+
+The command's own schema confirms this is not bypassable:
+
+```
+config/providers   authenticated: true   required_scope: "config.providers.read"
+```
+
+And MA 2.11.0b0 exposes exactly **five** unauthenticated commands — the complete list, measured:
+
+```
+auth/authorization_url
+auth/join_code/exchange
+auth/login
+auth/providers
+time
+```
+
+`auth/providers` returns the *login* providers, not the music providers:
+
+```
+[{"provider_id":"builtin","provider_type":"builtin","requires_redirect":false},
+ {"provider_id":"homeassistant","provider_type":"homeassistant","requires_redirect":true}]
+```
+
+**Why it cannot be completed autonomously.** The plan assumed a binary: either an MA credential is
+in hand, or no account exists and Task 4 creates one. The real state is a **third case the plan does
+not cover — an account exists, but no credential for it is recorded anywhere.** Searched and empty:
+`~/.claude/secrets/` (holds `dispatcharr-xc.env`, `ha-deercrest.env`, `ha-deercrest.token`,
+`postiz.env`) and `/mnt/fast/secrets/` on LXC 100 (holds `discogs.env` only). D-39's MA token file
+does not exist yet — it is created by a later plan.
+
+Three off-ramps were tried and each is measured closed, so nobody re-tries them:
+
+| Route | Result |
+|---|---|
+| Read MA's provider config off disk | MA has no `/addon_configs/` entry (it uses the legacy `/data` dir), which is not mapped into the SSH add-on. |
+| `docker exec` into the MA container from the SSH add-on | `permission denied … unix:///var/run/docker.sock` — the socket is not exposed to the add-on. |
+| `auth/authorization_url` via the `homeassistant` login provider | `requires_redirect: true` — a browser OAuth round-trip. Not drivable headlessly. |
+
+**Disposition: deferred, with a named owner.** D-30's purpose is to stop a later album match being
+miscredited to a pre-existing provider (Spotify et al). That risk first bites at plan **02-06**
+(provider creation) and **02-07** (the three-album assertion) — **not** at 02-03, which is
+server-side only. So this is recorded as a **hard precondition on plan 02-06**: obtain the MA
+credential, mint the long-lived token per D-39, and enumerate `config/providers` **before** any
+provider is added, so the baseline is taken against a library nobody has touched.
+
+Deliberately **not** escalated to Task 4's checkpoint: Task 4's fire condition is "no admin user",
+which is measured false. Firing it anyway would have created a *second* MA account to work around
+not knowing the first one's password — which is worse than the gap.
+
+### Measurement 6 — where `check-music-consumers.sh` will run — MEASURED, and it overturns a plan pin
+
+**Music Assistant, from LXC 100 (`root@172.16.1.159`):**
+
+```
+$ curl -s -o /dev/null -w "%{http_code}" --max-time 10 http://172.16.1.31:8095/info
+200
+$ command -v curl  ->  /usr/bin/curl
+$ command -v jq    ->  /usr/bin/jq
+```
+
+**Jellyfin — the plan's `192.168.90.31:8096` pin is wrong, not merely fragile.**
+
+```
+$ docker inspect jellyfin --format '{{range $k,$v := .NetworkSettings.Networks}}{{$k}}={{$v.IPAddress}} {{end}}'
+iot_macvlan=172.16.1.76  t3_proxy=192.168.90.25
+```
+
+Jellyfin's `t3_proxy` address is **`192.168.90.25`**. `.31` is not Jellyfin and is not anything —
+`.continue-here.md` flagged the pin as unstable; it is in fact **already incorrect today**. Measured
+from LXC 100:
+
+| Target | From LXC 100 host | From workstation (tailnet) |
+|---|---|---|
+| `http://192.168.90.31:8096/System/Info/Public` | `000`, `curl_exit=7` (no route/refused) | `000`, `curl_exit=28` (timeout) |
+| `http://192.168.90.25:8096/System/Info/Public` | **`200`** | `000`, `curl_exit=28` |
+| `http://172.16.1.76:8096/System/Info/Public` | `000`, **`curl_exit=7`** | **`200`** |
+| `http://172.16.1.31:8095/info` (MA) | **`200`** | `000`, `curl_exit=28` |
+| `http://jellyfin:8096/…` **from a container on `t3_proxy`** | **`200`** | n/a |
+
+Three findings fall out, and two of them are traps:
+
+1. **The bare Docker DNS name `jellyfin` is POISONED on the LXC 100 host.** `.continue-here.md`
+   recommends preferring it over an IP literal. That is correct *inside a container on `t3_proxy`*
+   and **actively dangerous from the LXC host**:
+
+   ```
+   $ cat /etc/resolv.conf
+   # --- BEGIN PVE ---
+   search deercrest.info
+   nameserver 172.16.1.1
+   # --- END PVE ---
+
+   $ getent hosts jellyfin
+   2606:4700:3031::ac43:af8f  jellyfin.deercrest.info
+   2606:4700:3030::6815:5375  jellyfin.deercrest.info
+   ```
+
+   The `search deercrest.info` suffix turns `jellyfin` into `jellyfin.deercrest.info`, which resolves
+   to **Cloudflare's public edge**. A host-resident script doing `curl http://jellyfin:8096` would
+   silently probe the internet and could return `200` from the public site while the local container
+   was down — the exact silent-pass class this phase exists to avoid.
+
+2. **`172.16.1.76` does not work from LXC 100** (`curl_exit=7`) although it works from the LAN. That
+   is standard macvlan host-to-container isolation: the container's parent host cannot reach its own
+   macvlan endpoint. So `.continue-here.md`'s stated fallback is unavailable to a host-resident
+   script.
+
+3. **The one route that is both host-resident and stable is to resolve it at runtime**, with no IP
+   literal in the script at all — verified working:
+
+   ```
+   $ JF=$(docker inspect jellyfin --format '{{(index .NetworkSettings.Networks "t3_proxy").IPAddress}}')
+   resolved: 192.168.90.25
+   $ curl -s -o /dev/null -w "http=%{http_code}" --max-time 8 "http://$JF:8096/System/Info/Public"
+   http=200
+   ```
+
+   **This is the recommendation for plan 02-04.** It survives Docker IPAM reassignment, needs no
+   `search`-domain assumptions, cannot silently succeed against the public site, and preserves
+   host-residency because `docker inspect` only works on LXC 100.
+
+**Host-residency, stated honestly.** For Jellyfin it is a real property: `192.168.90.0/24` is a
+Docker bridge and is unreachable from anywhere but the LXC host. For **MA it is not** — the
+workstation's `curl_exit=28` is the tailnet standby-subnet-router artefact, and any LAN client would
+reach `172.16.1.31:8095` fine. The script should be host-resident on LXC 100 for the Jellyfin half
+and for `docker inspect`; the MA half would work from the LAN too.
+
+### Measurement 7 — NUC command availability (A13) — MEASURED, with a scope correction
+
+Measured **inside the Advanced SSH & Web Terminal add-on**, which is where every automated NUC step
+in this phase runs. That is a richer userland than the HAOS host busybox A13 was written about, so
+the result is better than the assumption feared:
+
+| Command | Present | Note |
+|---|---|---|
+| `sha256sum` | **yes** (`/usr/bin/sha256sum`) | **D-11's hash algorithm is `sha256sum`** — present on both ends, matching the estate convention. `md5sum` fallback not needed. |
+| `md5sum` | yes | Fallback, unused. |
+| `nc` | **yes** | Measurement 2's refused-vs-filtered test was possible. |
+| `mount` | yes (`/bin/mount`) | |
+| `curl` / `wget` / `python3` / `timeout` | yes | |
+| `showmount` | **NO** | Cannot enumerate exports from the NUC. Use `exportfs -v` on atlantis instead; the `verify_commands` output in `nfs-music-export.tf` currently suggests `showmount -e 172.16.1.158` "from the HA NUC" — **that line will not run**. Flagged for plan 02-03/02-05. |
+| `findmnt` | **NO** | **Criterion 1e's stated instrument is unavailable.** Use `/proc/self/mountinfo` or `mount` output, both of which name the fstype (`nfs4`) explicitly — verified readable, see below. |
+
+Two supporting measurements that make the `findmnt` substitute concrete, and that also settle D-26:
+
+```
+$ grep -E 'nfs|media' /proc/self/mountinfo
+2115 2110 8:8 /supervisor/media /media rw,relatime master:112 - ext4 /dev/sda8 rw,commit=30
+
+$ ls -la /media/
+drwxr-xr-x 3 root root 4096 Feb 28  2026 .
+drwxr-xr-x 1 root root 4096 Aug 30 01:10 ..
+drwxr-xr-x 5 root root 4096 Feb 28  2026 frigate
+$ ls -la /media/music
+ls: /media/music: No such file or directory
+
+$ ha mounts info --raw-json
+{"result":"ok","data":{"default_backup_mount":null,"mounts":[]}}
+```
+
+- The SSH add-on sees the **same `/supervisor/media` bind Supervisor manages**, so a Supervisor
+  mount at `/media/music` will be visible and hashable from here. D-11's read-through proof has a
+  working vantage point.
+- **`/media/music` is absent and `ha mounts` is empty.** D-26's "assert the target is absent or
+  empty before mounting" precondition is **satisfied today**, and there is no pre-existing mount to
+  reconcile. The fstype column in `mountinfo` (`- ext4 …`) is exactly where `nfs4` will appear,
+  which is the `findmnt` substitute.
+
+### Measurement 8 — D-44 blast-radius before-snapshot — CAPTURED
+
+Run from the workstation at 2026-08-31, **after** the 18:48:08 recovery and **before** anything in
+this phase is applied. ANSI stripped, otherwise unedited:
+
+```
+$ bash scripts/quick-health-check.sh
+=== Quick Server Health Check ===
+Traefik: ✅ Running
+  Health:
+no healthcheck
+Authelia: ✅ Running
+Containers running: 102
+✅ No unhealthy containers
+Traefik dashboard: ❌ Not accessible
+Music freeze harness: ✅ Intact
+    tagger-class writers:        0   (target 0)
+    unclassified writers:        0   (target 0)
+    declared rw reaching Music:  0   (target 0, jellyfin.yaml excluded)
+    ownership mismatches:        0   (target 0, want 568:568)
+
+QHC_EXIT=0
+```
+
+**Exit code 0.** 102 containers running, no unhealthy containers, freeze harness intact on all four
+assertions. This is a usable baseline — the reason it was refused during the incident (it would have
+been red for unrelated reasons) no longer applies.
+
+One line needs reading correctly so it is not mistaken for a regression later: **"Traefik dashboard:
+❌ Not accessible" is expected from this vantage point** and is a tailnet artefact, not an estate
+fault. It is `❌` in the *before* snapshot, so an identical `❌` after the export is applied proves
+nothing changed. The script's own header documents that only the freeze-harness block is fatal.
+
+**D-44's before half is now on the record.** Plan 02-03 takes the after half.
+
+### Task 3 automated verify
+
+```
+$ ssh root@172.16.1.159 "command -v curl >/dev/null && command -v jq >/dev/null && \
+    curl -s -o /dev/null -w %{http_code} --max-time 10 http://172.16.1.31:8095/info" \
+  | grep -qE "^(200|401|403)$" && echo "ma-reachable-from-lxc100=yes"
+ma-reachable-from-lxc100=yes
+```
+
+---
+
+## Task 4 — conditional MA `/setup` — **NOT FIRED**
+
+**`not-fired — MA admin user already present.`**
+
+Task 4's fire condition is Task 3 measurement 4 recording that Music Assistant has **no admin user**.
+It recorded the opposite, on two independent instruments: `/info` reports `"onboard_done": true`, and
+`auth/login` with a nonexistent credential returns `{"success":false,"error":"Invalid username or
+password"}` — a credential rejection, which requires an account store to reject against.
+
+Per the task's own text, when the condition is false the correct behaviour is to record `not-fired`
+and present nothing to the operator. **Nothing was created. Nothing was mutated. This plan therefore
+executed entirely read-only** — its single stated exception did not occur. Nothing on atlantis,
+nothing in `infra/`, and nothing under `/mnt/tank/media/Music` was changed by this plan.
+
+No account name is recorded because no account was created. No password and no token value appears
+anywhere in this record.
+
+---
+
 ## Stage 0 measured-state table (RESEARCH.md A1–A15)
 
 | # | Assumption | Verdict | Measured value |
