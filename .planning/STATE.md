@@ -40,7 +40,13 @@ it asked for: the operator browsed MA's Filesystem (local disk) provider, spot-c
 **played tracks to confirm the audio matches the metadata**. No assertion in this phase could do
 that — every automated check verifies MA's *database* says the right thing, never that the *bytes*
 are the right song, and the documented stale state is precisely "entries exist, playback fails".
-Last activity: 2026-09-01
+Last activity: 2026-09-01 — quick task 260901-u96: read-write NFS export on atlantis for Home
+Assistant backups. **Correction worth carrying into any future export work:** `nfs-music-export.tf`'s
+"`ro` is forced, not a preference" is a property of the *TrueNAS-era datasets*, not of `tank`.
+`tank` is `acltype=posix` (local); `tank/media/*`, `tank/downloads` and `tank/timemachine` each set
+`acltype=nfsv4` locally. A new child of `tank` therefore has enforceable mode bits and `chmod`
+works on it — which is the only reason a writable export is defensible. Do not generalise that `rw`
+back onto anything under `/mnt/tank/media`.
 Phase 1 complete: SAFE-01…05, WRIT-01…04, QUAL-01
 Phase 2 complete: CONS-01, CONS-02, CONS-03
 
@@ -531,6 +537,7 @@ Recent decisions affecting current work:
 | ID | Task | Date | Status |
 |----|------|------|--------|
 | 260826-0u0 | Document Tailscale configuration and low-level design across all systems | 2026-08-26 | complete ✓ |
+| 260901-u96 | Read-write NFS export on atlantis for Home Assistant backups (external RES-04) | 2026-09-01 | complete ✓ |
 
 ## Session Continuity
 
