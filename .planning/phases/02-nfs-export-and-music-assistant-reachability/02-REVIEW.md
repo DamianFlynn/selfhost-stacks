@@ -21,6 +21,37 @@ findings:
   info: 8
   total: 25
 status: issues_found
+remediation:
+  applied: 2026-09-01
+  fixed: 22
+  partial: 1
+  skipped: 2
+  outcomes:
+    CR-01: fixed
+    CR-02: fixed
+    CR-03: fixed
+    CR-04: skipped        # operator-accepted; needs credential rotation, not a code change
+    WR-01: fixed
+    WR-02: fixed
+    WR-03: fixed
+    WR-04: fixed
+    WR-05: fixed
+    WR-06: fixed
+    WR-07: fixed
+    WR-08: fixed
+    WR-09: fixed
+    WR-10: fixed
+    WR-11: partial        # exposure recorded as accepted risk; token mint NOT done
+    WR-12: fixed
+    WR-13: fixed
+    IN-01: fixed
+    IN-02: fixed
+    IN-03: fixed
+    IN-04: fixed
+    IN-05: fixed
+    IN-06: fixed
+    IN-07: fixed
+    IN-08: skipped        # needs the Jellyfin EncodingOptions element order; judgement call
 ---
 
 # Phase 02: Code Review Report
@@ -73,6 +104,35 @@ export on atlantis breaks every future apply.
 Two documentation notes, both good: no credential appears in `NETWORK.md`, `beets.md`,
 `TAILSCALE.md` or `CLAUDE.md` (verified by pattern scan), and the export line published in the docs
 matches byte-for-byte what `infra/nfs-music-export.tf` generates plus knfsd's defaults.
+
+---
+
+## Remediation summary (added 2026-09-01)
+
+Every finding below carries an **Outcome** line recording what was done. 22 fixed, 1 partial,
+2 skipped. Nothing was weakened to make it pass; no assertion was made quieter. The commits are
+`5d94d4e`, `26c3908`, `f0fc92a`, `a29fa95`, `fedbbdc`, `c18474e` — one per cluster, each scoped to
+one file.
+
+**Verified after the fixes, not assumed:**
+
+- `bash scripts/quick-health-check.sh` exits **0** with both music blocks green and output
+  identical to the pre-fix baseline.
+- `terraform plan -detailed-exitcode` returns **0**. The saved plan holds 13 no-ops, **zero
+  destroys**, and `proxmox_virtual_environment_container.selfhost` unchanged. **No apply was run** —
+  CR-03 concerns the enable transition, which is disabled and torn down, so the graph edge was
+  fixed and verified by plan alone.
+- Every behavioural fix was **positive-controlled**: each new or changed detector was shown to FIRE
+  on the state it is meant to catch, and the pre-fix code was run against the same input to
+  confirm it did not. A detector that has only ever been seen to pass is the defect this phase
+  exists to catch, and adding more of those would have been the wrong kind of fix.
+
+**Still outstanding after this pass — these are NOT closed:**
+
+1. **CR-04** — the UCG-Max root password rotation. Operator-accepted; only rotation fixes it.
+2. **WR-11** — minting the revocable MA audit token. The exposure is now recorded as an accepted
+   risk with its fix written down, but the account password is still what the audit replays.
+3. **IN-08** — element ordering in `set_hwaccel`'s XML writer. Latent, and deliberately untouched.
 
 ---
 
@@ -139,6 +199,29 @@ ma_api() {
 
 (or `curl -K -` with the header written on stdin alongside `--data @file`). Then correct the
 comments at :122-126 and :296 so they describe what the code does.
+
+**Outcome: fixed** (`5d94d4e`)
+
+Both mechanisms applied as suggested. `jq` reads `$ENV.MA_USERNAME` / `$ENV.MA_PASSWORD` placed in
+its environment by a `VAR=... jq` command prefix; `curl` reads both Authorization headers via
+`-H @<(printf ...)` (curl on LXC 100 is 8.14.1; `@file` is >= 7.55.0). `-K -` was not used because
+the request body already owns stdin. The false claim at `:122-126` and the one above `ma_login`
+are replaced with a description of the mechanism at each of the three sites.
+
+**Proven, not asserted.** `jq` and `curl` were shimmed to record their own `/proc/$$/cmdline`, and
+the pre-fix script at HEAD was run through the identical shims as a positive control:
+
+| | invocations captured | argv carrying a secret or auth header |
+|---|---|---|
+| pre-fix (control) | 44 | **7** — MA username + password in jq's argv, `Authorization: Bearer <jwt>`, `MediaBrowser Token="<key>"` |
+| fixed | 44 | **0**, with 6 × `-H @/dev/fd/63` |
+
+Note for anyone repeating this: the obvious sampler (polling `/proc/*/cmdline` in a loop) is not
+good enough — jq lives ~10 ms and a 7 Hz sampler misses it. The first attempt at this test returned
+"0 leaks" for the *pre-fix* script too, which would have been a false all-clear.
+
+WR-13's `set -a` removal landed in the same commit and is part of this fix: without it the values
+were in `/proc/<pid>/environ` for every child regardless of argv.
 
 ---
 
@@ -210,6 +293,25 @@ report_drm() {
 and have `do_disable`'s verification block at :244-249 propagate that non-zero into its own
 return value.
 
+**Outcome: fixed** (`a29fa95`)
+
+Applied as suggested. `drm_clients` exits 3 on an unreadable table, no longer swallows ssh's own
+stderr, and returns its status; `report_drm` returns non-zero on UNKNOWN and spells out what each
+rc means (3 = debugfs unreadable, 124 = timed out, 255 = ssh failed, "and an unreachable atlantis
+is itself a symptom"). `do_disable` propagates it — VAAPI-off with an unreadable DRM table now
+exits 1 and says explicitly not to close an incident on that run.
+
+Verified on LXC 100 in both directions:
+
+- against the real atlantis: `✓ no processes hold amdgpu DRM handles (table read successfully and
+  was empty)` — the parenthetical is the point, it is now a statement about a read that happened.
+- against an unreachable probe host: `✗ UNKNOWN — could not read the DRM client table … (probe
+  rc=255)`, with ssh's `Connection timed out` now visible. The pre-fix code printed a green tick
+  for this exact input.
+
+`do_check` still exits 0 on findings — that is its documented contract (`:86-89`), and only the
+mutating action's return value was in scope.
+
 ---
 
 ### CR-03: the temp-export reconciler races the resource it reconciles against
@@ -265,6 +367,20 @@ This is correct in both directions: on enable the reconciler runs after the expo
 teardown `nfs_music_temp_export[0]` is destroyed (a state-only no-op) before the reconciler runs,
 which is the ordering the disabled branch already assumes.
 
+**Outcome: fixed** (`c18474e`)
+
+Edge added exactly as suggested, with the race and both of its outcomes written into the code
+above the resource so the edge is not removed as redundant later.
+
+**No apply was run, and none was needed.** The control is disabled and torn down, so the enable
+transition exists only on the graph. Verified by plan alone:
+
+- `terraform validate` — success; `terraform fmt -check` — clean.
+- `terraform plan -detailed-exitcode` — **0**, before and after.
+- the **saved plan file** (read as JSON, not trusted from the human output): 13 resource changes,
+  all `no-op`; **destroy count 0**; `proxmox_virtual_environment_container.selfhost` present but
+  unchanged.
+
 ---
 
 ### CR-04: the UCG-Max root password is still recoverable from this public repository
@@ -301,6 +417,22 @@ this to "requires LAN or tailnet access first", and the tailnet now has two exit
 `~/.claude/secrets/ha-deercrest.env`, and record the rotation date in `NETWORK.md`. History
 rewriting is not worth attempting on a public repo with forks; rotation is the only real fix. Until
 it is done, treat the value as compromised.
+
+**Outcome: skipped — operator-accepted 2026-09-01.**
+
+Reason: this can only be resolved by **rotating the credential on the device**, which is an
+operator action on the UniFi console, not a code change. The operator reviewed and accepted the
+finding as it stands.
+
+Explicitly NOT done, and not to be attempted: no history rewrite, no `filter-branch`, no
+force-push. The repository is public and may have forks and mirrors; rewriting would be
+destructive, would not remove the value from anything already cloned, and was not asked for. The
+finding's own text says the same.
+
+**The finding stays open.** It is unchanged above and the analysis stands: the value has been in
+public history since `b9c67e0` (2026-02-15), the gateway is the sole primary subnet router for
+`172.16.1.0/24` and an exit node, and until rotation happens the credential is compromised.
+Nothing in this remediation pass reduces that.
 
 ---
 
@@ -342,6 +474,24 @@ HA_SSH_HOST="${HA_SSH_HOST:-}"
 then in the route block at `:396-407`, on a missing key set `JELLYFIN_ROUTE="unavailable"` so
 section 4 takes its existing `jellyfin_fail "... UNKNOWN, not green"` branch; and require
 `[[ -n "$HA_SSH_HOST" ]]` before setting `HA_ROUTE` at `:442`.
+
+**Outcome: fixed** (`5d94d4e`)
+
+Both halves applied. Every externally-sourced variable is defaulted at the top of the file *and*
+re-defaulted after sourcing (the file may legitimately not define a key, or may have been refused
+by WR-13's new gate). Defaulting alone would have been the wrong fix — it converts an abort into a
+skip — so each precondition is gated at the **route**, which fires the existing "UNKNOWN, not
+green" branches:
+
+- missing `MA_URL`/`MA_USERNAME`/`MA_PASSWORD` → the MA route fails before `ma_login` is reached.
+- missing `JELLYFIN_API_KEY` → the Jellyfin route fails before `docker inspect` sets an address, so
+  section 4 cannot reach `jf_api` at all.
+- `HA_SSH_KEY` set but `HA_SSH_HOST` empty — the exact combination the old `${HA_SSH_HOST:-nuc}`
+  anticipated — is now its own branch, distinguished in the output from the by-design skip so it
+  reads as the configuration gap it is.
+
+A comment at the defaults names the coupling ("Do not add a default here without also adding its
+gate there"), since a future default without a gate re-creates the silent skip.
 
 ---
 
@@ -386,6 +536,33 @@ if [[ $MOUNT_RC -ne 0 ]]; then
 elif ...
 ```
 
+**Outcome: fixed** (`26c3908`)
+
+Took the second option: replaced with the proof 02-08 actually established, rather than deleting
+the check. The probe reads `/media/music`'s type, mode, owner and **entry count** in one remote
+command, and captures the ssh exit status.
+
+The load-bearing assertion is **"0 entries is a failure"**. Mode and owner are reported alongside
+but deliberately **not** asserted — a future Supervisor could plausibly move them while emptiness
+stayed the tell, and asserting a mode that later changes produces a permanent red, which is the
+failure mode 01-09 already recorded. Both reasons for the old check being unfailable are written
+into the code above it, including that the `emergency/music` string can never match on this
+Supervisor version.
+
+This branch cannot run on LXC 100 (`HA_ROUTE=skipped` there by design), so it was verified against
+six stubbed probe results:
+
+| stub | verdict |
+|---|---|
+| ssh refused (exit 255) | FAIL — UNKNOWN, not green |
+| empty output, exit 0 (timeout) | FAIL — UNKNOWN, not green |
+| `/media/music` absent | FAIL — mount not in place |
+| **`444\|root\|0`** — the 02-08 degraded signature | **FAIL** — the case the old check could never catch |
+| `755\|root\|13` — healthy | pass |
+| unparseable entry count | FAIL — UNKNOWN, not green |
+
+Only a real, non-empty mount passes.
+
 ---
 
 ### WR-03: section 5's album count silently ignores `MA_LIBRARY_SCAN_LIMIT` and has no truncation guard
@@ -427,6 +604,11 @@ if [[ "$MA_PROVIDER_ALBUM_COUNT" -ge "$MA_LIBRARY_SCAN_LIMIT" ]]; then
 fi
 ```
 
+**Outcome: fixed** (`26c3908`)
+
+Applied as suggested, both halves. Verified live on LXC 100: the count still reads 70 and the
+truncation warning correctly stays silent at 70 < 2000.
+
 ---
 
 ### WR-04: the apply gate for the music export matches anywhere in the table
@@ -458,6 +640,23 @@ scratch export. Gate 1 of 2 (per the comment at `:200`) is satisfied by the wron
 ```hcl
 "exportfs -v | awk '/^[^[:space:]]/ { if (NR>1) printf \"\\n\"; printf \"%s\", $0; next } { printf \" %s\", $1 } END { printf \"\\n\" }' | grep -q '^${local.music_export_path}[[:space:]]\\+${var.ha_nuc_ip}(' || { echo 'FATAL: ${local.music_export_path} not exported to ${var.ha_nuc_ip} after exportfs -ra'; exit 1; }",
 ```
+
+**Outcome: fixed** (`c18474e`)
+
+Applied. The join is factored into `local.exportfs_joined` rather than repeated, because this same
+gate shape is now needed in four places and four hand-copied awk programs would drift. The same
+treatment was applied to the temp export's own presence gate at `:280`, which had the identical
+defect in the other direction.
+
+Verified by rendering the gate through `terraform console` — the exact string Terraform will send
+to the host — and running it against synthetic `exportfs -v` output, including the real wrapped
+two-line form:
+
+| export table | old gate | new gate |
+|---|---|---|
+| **temp export only, music export GONE** (the failure scenario) | **passes — wrongly** | fails: `FATAL-music-export-missing` |
+| music only | passes | passes |
+| music + temp | passes | passes |
 
 ---
 
@@ -495,6 +694,32 @@ and replace the counts with presence/absence tests on the two known paths
 `^/mnt/tank`. If a global `no_root_squash` scan is genuinely wanted as a whole-host guard, make
 that a separate, separately-named check so its failure is not attributed to the music export.
 
+**Outcome: fixed** (`c18474e`)
+
+All three scoped as suggested. The counts became presence/absence tests on the two named paths, and
+one assertion was **added** that the old code did not have: the disabled branch now checks the
+load-bearing music export survived the teardown. The old `-eq 1` would have been satisfied by the
+*wrong* export.
+
+Confirmed the failure scenario is real before fixing it — with an unrelated
+`/mnt/tank/backup 172.16.1.50(rw,no_root_squash,...)` export on the host and the control disabled,
+the old gates produce:
+
+```
+n=$(exportfs -v|grep -cE ^/mnt/tank); test $n -eq 1  -> FATAL: expected exactly 1 ... found 2
+exportfs -v | grep -q no_root_squash                 -> FATAL: no_root_squash present ...
+```
+
+Both would fail every `terraform apply` in `infra/`. The new gates return 0 against that same
+table, and the `no_root_squash` gate still fires on a Terraform-owned drop-in that contains it.
+
+One thing found while testing that is worth keeping: the suggested
+`grep -q 'no_root_squash' music.exports music-temp.exports` is **implementation-dependent**, because
+`music-temp.exports` is absent in steady state and grep's exit status with an unreadable operand
+varies. It fires correctly under GNU grep 3.11 on atlantis but reports *clean* under BSD grep
+against a drop-in that does contain `no_root_squash`. It was written as `cat f1 f2 2>/dev/null |
+grep -q` instead, which is unambiguous on both. Verified on atlantis and on the workstation.
+
 ---
 
 ### WR-06: `remote-exec` inline lists are not run under `set -e`; failed installs and chowns do not fail the apply
@@ -520,6 +745,16 @@ guard and are not last in their list:
 
 **Fix:** Make `"set -e"` the first element of every `inline` list in this file. It costs one line
 per provisioner and converts both of the above into an apply failure at the point of the failure.
+
+**Outcome: fixed** (`c18474e`)
+
+`"set -e"` is now the first element of all five `inline` lists in the file, with the reasoning
+recorded once in full and cross-referenced from the other four. Every existing guard uses an
+explicit `|| { ...; exit 1; }` or ends `|| true`, so none of them changes behaviour under `set -e`
+— checked one by one.
+
+`triggers` are untouched by this, so no resource re-runs and the plan stays clean; the change takes
+effect the next time each provisioner runs for its own reasons.
 
 ---
 
@@ -561,6 +796,19 @@ backup=$(ls -1 "${JELLYFIN_CONFIG}".bak.* 2>/dev/null | sort | tail -1)
 
 and print the timestamp and the value being restored so the operator can refuse it.
 
+**Outcome: fixed** (`a29fa95`)
+
+Applied, including the second half — `do_enable` now prints the backup path, the timestamp taken
+**from the filename** (with a note that mtime is unreliable and why), the `HardwareAccelerationType`
+it is about to restore, and how many backups exist, before it writes anything.
+
+Verified with two backups whose mtimes are deliberately inverted against their names:
+
+```
+OLD  ls -1t | head -1   -> enc.xml.bak.20260101T000000Z   <-- restores the JANUARY config
+NEW  ls -1 | sort|tail  -> enc.xml.bak.20260901T120000Z   <-- restores the SEPTEMBER config
+```
+
 ---
 
 ### WR-08: `preconditions()` proceeds when it could not measure, and treats an unparseable pressure value as healthy
@@ -601,6 +849,27 @@ fi
 
 `awk -v` passes the value as data rather than as program text, which also removes the injection
 surface.
+
+**Outcome: fixed** (`a29fa95`)
+
+Applied verbatim. Both gaps confirmed against the old code before replacing it:
+
+```
+io_full='avg10'                              OLD -> REPORTED HEALTHY   NEW -> REFUSE (not a number)
+io_full='0){system("echo INJECTED")};{'      OLD -> REPORTED HEALTHY   NEW -> REFUSE (not a number)
+io_full=''                                   OLD -> warn, proceeds     NEW -> REFUSE (UNKNOWN)
+io_full='96.10'                              OLD -> REFUSE             NEW -> REFUSE (wedged)
+io_full='12.34'                              OLD -> ok                 NEW -> ok
+```
+
+**One correction to the finding**, recorded because the next reader should not inherit an
+overstatement: the review calls the interpolation an "injection surface", and it is one — the value
+is concatenated into awk *program* text. But an attempt to demonstrate an executing payload
+**failed**. Three were tried; all three either failed to parse or parsed into a program where
+`exit` runs before `system()`, so none executed. The demonstrated harm is therefore the
+false-healthy fallthrough above, which is real and reproducible, not code execution. `awk -v` is
+still the right fix — it closes the surface and fixes the fallthrough in one move — but it is
+being adopted for the fallthrough.
 
 ---
 
@@ -645,6 +914,16 @@ elif [ "$CONSUMERS_RC" -eq 0 ]; then
     fi
 ```
 
+**Outcome: fixed** (`fedbbdc`)
+
+Applied to **both** blocks — the consumers block and the freeze block's `📊 7. Summary` anchor,
+which had the identical defect.
+
+Verified by simulating exactly the change the finding warns about (a renumbered heading, here
+`📊 6b. Summary`): the block now prints `⚠️ UNKNOWN — the audit exited 0 but its '📊 6. Summary'
+block was not found` and the script exits 1. Before the fix that same input printed a green tick
+with no evidence lines and exited 0.
+
 ---
 
 ### WR-10: pre-existing silent pass in the same file — an unreachable host reports "✅ No unhealthy containers"
@@ -681,6 +960,30 @@ fi
 ```
 
 and add `-o BatchMode=yes -o ConnectTimeout=10` to the five legacy ssh calls so they cannot hang.
+
+**Outcome: fixed** (`fedbbdc`)
+
+Both halves applied — the single probe gates the file, and all five legacy calls now carry
+`BatchMode`/`ConnectTimeout` via a shared `$SSH_OPTS`.
+
+Reproduced the exact transcript the finding predicts, by pointing a copy at `192.0.2.1`:
+
+```
+Traefik: ssh: connect to host 192.0.2.1 port 22: Operation timed out
+❌ Not running
+Authelia: ❌ Not running
+Containers running:
+quick-health-check.sh: line 69: [: : integer expected
+✅ No unhealthy containers
+```
+
+After: one statement, `⚠️ UNKNOWN — 192.0.2.1 (LXC 100) is unreachable over ssh`, exit 1. It is
+also much faster — one bounded probe instead of five unbounded connect attempts.
+
+One addition beyond the finding: the unhealthy count now rejects a **non-numeric** result even when
+the host answered. `dockerd` can be blocked behind the amdgpu `mmap_lock` while `sshd` stays
+perfectly healthy — that is precisely the Aug 31 signature this estate has already lived through —
+so the reachability probe alone does not make `[ "$UNHEALTHY" -gt 0 ]` safe.
 
 ---
 
@@ -720,6 +1023,24 @@ the stored bearer. Keep the per-run version banner as the expiry-drift detector.
 `token_id` next to the rotation list in `02-09-SUMMARY.md`. If password auth must be retained,
 record the plaintext-HTTP exposure as an accepted risk the way `sec=sys` was.
 
+**Outcome: partial — the risk is recorded, the token is NOT minted** (`f0fc92a`)
+
+Took the finding's stated fallback, and only that. What was done:
+
+- The header's `MA 2.11 has NO API-token UI` note now carries an explicit correction that it is a
+  fact about the **UI** and not a justification for the **API** choice, naming
+  `auth/token/create` and the `beets.md` evidence that it works.
+- The plaintext-HTTP exposure is recorded as an **accepted risk**, in the same shape
+  `infra/nfs-music-export.tf:30-45` records `sec=sys` — with its bound (LAN/tailnet only, 8095 not
+  forwarded, and CR-01 means it is no longer in the process table as well) and with the real fix
+  written out step by step.
+
+**What was NOT done, and is still true today:** the audit still stores and replays the MA **account
+password**, over plaintext HTTP, on every `quick-health-check.sh`. Minting the token is an operator
+action against the live MA server — it creates and stores a credential and changes what is in
+`/mnt/fast/secrets/ma-deercrest.env` — so it was deliberately left outstanding rather than
+half-done from a fixer script. **Treat this finding as open.**
+
 ---
 
 ### WR-12: the standing audit does not detect the two option additions the Terraform names as forbidden
@@ -757,6 +1078,26 @@ printf '%s' "$OPTS" | grep -qE '(^|,)fsid=' && export_fail "CONS-01: fsid= prese
 ```
 
 and add `sec=sys` to the required list.
+
+**Outcome: fixed** (`26c3908`)
+
+Applied as suggested. `no_subtree_check` was added to the required list as well — it is in the
+Terraform's deliberate option list with a stated reason and had no detector either.
+
+Each detector was positive-controlled against a synthetic option string containing the thing it is
+meant to catch, because a forbidden-options loop that has only ever been seen to pass is the same
+defect in a new place:
+
+| synthetic option set | missing-required | forbidden-present |
+|---|---|---|
+| the live export | none | none |
+| live + `crossmnt` | none | **crossmnt** |
+| live + `fsid=0` | none | **fsid=** |
+| `rw,no_root_squash,no_all_squash,insecure` | ro, all_squash | **no_root_squash, rw, insecure, no_all_squash** |
+| live minus `sec=sys` | **sec=sys** | none |
+
+Confirmed live on LXC 100 against the real export: all seven required present, all six forbidden
+absent, `FAILURES total: 0`.
 
 ---
 
@@ -804,6 +1145,18 @@ fixed with `$ENV.VAR`, which reads the *shell's* environment and does require ex
 export only the two variables that need it, immediately around the `jq` call, rather than
 everything in both files.)
 
+**Outcome: fixed** (`5d94d4e`, alongside CR-01 — the two are the same fix seen from two angles)
+
+Both halves applied, for both credential files. A file that fails its mode/owner assertion is
+**refused**, with the refusal stated in the output and `TOOLS_MISSING` incremented; the route gate
+added for WR-01 then turns the resulting empty credential into a red "UNKNOWN, not green" rather
+than a skip. `set -a` is gone.
+
+The parenthetical's suggestion is exactly what CR-01 does: `MA_USERNAME="$MA_USERNAME"
+MA_PASSWORD="$MA_PASSWORD" jq ...` is a command prefix, so the two values are in **jq's**
+environment for that one command and are not exported to anything else. The argv/environ measurement
+under CR-01 covers this: 0 of 44 invocations carried either value.
+
 ---
 
 ## Info
@@ -821,6 +1174,8 @@ stamp is described as "the drift detector" (`:61-68`), so it should not be able 
 
 **Fix:** `[[ -z "$MA_VERSION_LIVE" ]] && MA_VERSION_LIVE="unknown"` after the assignment.
 
+**Outcome: fixed** (`5d94d4e`) — applied verbatim.
+
 ### IN-02: `grep -F "$LIBRARY "` is an unanchored substring match
 
 **File:** `scripts/check-music-consumers.sh:483`
@@ -834,6 +1189,27 @@ fails loudly rather than passing, but the diagnostic would be misleading.
 **Fix:** `grep -E "^${LIBRARY//\//\\/}[[:space:]]"` after the continuation join, and fail
 explicitly if more than one line matches.
 
+**Outcome: fixed** (`26c3908`) — but **not with the suggested regex, which does not work.**
+
+`^/mnt/tank/media/Music[[:space:]]` still matches `/mnt/tank/media/Music Videos 172.16.1.31(...)`,
+because the space inside `Music Videos` *is* the `[[:space:]]`. Measured, not reasoned about — the
+anchored form was written first and tested, and it selected the sibling exactly as the unanchored
+one did.
+
+Selection is instead an exact literal prefix (`index($0, p " ") == 1`, no regex over the path at
+all) plus a shape check that what follows is a client field — one unspaced token ending in `(` —
+which `Videos ` is not. Verified across four table shapes:
+
+| table | selected |
+|---|---|
+| `Music Videos` sibling + the real export | the real export only |
+| the `Music Videos` sibling alone | **nothing** → "not exported at all" |
+| two clients on the same path | both → the new AMBIGUOUS branch |
+| the live table | the real export |
+
+The multi-line case is its own branch and reports AMBIGUOUS rather than falling through to "not
+exported at all", which would have been a misleading second diagnosis.
+
 ### IN-03: the audit hardcodes `anonuid=568` where the Terraform forbids the literal
 
 **File:** `scripts/check-music-consumers.sh:507` vs `infra/nfs-music-export.tf:55-58`
@@ -844,6 +1220,13 @@ guards that export then hardcodes `anonuid=568 anongid=568` in its required-opti
 `var.apps_uid` would apply cleanly and then fail the health check with a message that reads like an
 export defect. Worth at least a comment naming the coupling, or reading the values from a shared
 source.
+
+**Outcome: fixed** (`26c3908`) — the comment, not the shared source.
+
+The audit runs on LXC 100 and has no access to Terraform's variables, so a genuinely shared source
+would mean a generated file or a new artifact for one pair of integers. The coupling is named
+instead, in both directions and with the diagnosis spelled out ("if you are here because this line
+went red after a var.apps_uid change, that is the reason, and both places must move together").
 
 ### IN-04: `do_check` presents an unreadable config as "VAAPI is ON"
 
@@ -857,6 +1240,9 @@ never falsely reports OFF) but it states a determinate fact it did not measure, 
 
 **Fix:** add an explicit `""|UNREADABLE*)` case reporting UNKNOWN.
 
+**Outcome: fixed** (`a29fa95`) — applied as suggested, and the UNKNOWN arm points the operator at
+`disable`, which does call `preconditions()` and will refuse with a specific reason.
+
 ### IN-05: the two new ssh calls in `quick-health-check.sh` omit `-n`
 
 **File:** `scripts/quick-health-check.sh:88`, `:120`
@@ -867,6 +1253,13 @@ reason ("so a nested ssh cannot eat this script's stdin"). Both remote invocatio
 kept away from — and neither carries `-n`. No current consequence (neither remote script reads
 stdin), but the first ssh can drain the outer script's stdin if it is ever run with input attached,
 leaving the second with nothing.
+
+**Outcome: fixed** (`fedbbdc`) — `-n` added to both, with a comment recording why it is correct
+here and where it must *not* go.
+
+Re-confirmed by accident during this remediation: a nested `ssh A "ssh -n B 'bash -s'" <<EOF`
+produced no output at all, because the inner `-n` fed the remote `bash -s` from `/dev/null`. That
+is exactly the boundary the convention draws, met live.
 
 ### IN-06: `do_enable` has no post-restore verification
 
@@ -879,6 +1272,11 @@ is completely silent.
 
 **Fix:** mirror `do_disable`: `after=$(current_hwaccel)`, report the restored value, and fail if it
 is `none` or unreadable.
+
+**Outcome: fixed** (`a29fa95`) — mirrored as suggested. `do_enable` now re-reads after the restart
+and fails on unreadable, on `none` and on `absent`, with the `none` case naming the actual cause
+("the selected backup was taken while VAAPI was already off") and pointing at
+`ls -1 <config>.bak.*` so the operator can pick another.
 
 ### IN-07: the temp-export reconciler is a transition hook, not a reconciler
 
@@ -894,6 +1292,15 @@ transition.
 **Fix:** either document the limitation in the header, or add `timestamp()`/a run counter to make
 it always-run (accepting a permanent "1 to change" in every plan), or move the assertion into the
 standing consumers audit, which already reaches atlantis.
+
+**Outcome: fixed** (`c18474e`) — took the first option of the three.
+
+`timestamp()` was rejected for the reason the finding itself flags: it puts a permanent
+"1 to change" in every plan of this repo, and a plan that is never clean is a plan nobody reads —
+which would trade a narrow drift for a broad one. The limitation is documented in the header, and
+the header no longer calls the resource a reconciler without qualification. The standing detector
+for the drift is the consumers audit, which reaches atlantis on every health check and (after
+WR-12) now asserts the export's full option set.
 
 ### IN-08: `set_hwaccel` appends missing elements to the end of a .NET-serialised XML config
 
@@ -916,7 +1323,23 @@ any comments and rewrites the declaration.
 **Fix:** insert at the correct index rather than appending, or refuse and tell the operator to set
 it once in the UI (the same stance `do_enable` already takes at `:257-258`).
 
----
+**Outcome: skipped — not trivially safe, needs a fact this pass does not have.**
+
+"Insert at the correct index" requires knowing the canonical element order of Jellyfin's
+`EncodingOptions` schema, which is not derivable from the file in front of me and was not measured.
+Guessing an index is a worse failure than appending: it would reorder a config that currently
+deserialises fine, in the normal case where the element already exists and nothing needs inserting
+at all.
+
+The alternative — refuse and tell the operator to set it in the UI — changes what `disable` does in
+a case nobody has observed, and `disable` is the remediation path for a six-hour outage. Narrowing
+it on an unmeasured hypothesis is not a trade worth making from a fix pass.
+
+The finding's own assessment stands: **latent, not active.** On this estate's live config both
+elements are present (`HardwareAccelType: none`, `HardwareEncoding: false`, read on 2026-09-01),
+so `setel` only rewrites text and preserves order. Left as-is deliberately. If it is ever worth
+closing, the missing input is the schema's element order, and the check is whether Jellyfin
+re-reads a config with an appended element.
 
 ## What was checked and found sound
 
