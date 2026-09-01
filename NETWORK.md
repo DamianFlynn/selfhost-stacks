@@ -242,30 +242,84 @@ use`. dispatcharr now publishes on host port **9192**. Do not reassign 9191.
 
 ### Host-level services on atlantis (Proxmox host, NOT Docker, NOT in `stacks/`)
 
-**NFS server** — serves the music library to the Home Assistant NUC. Managed by Terraform in
-**[`infra/nfs-music-export.tf`](infra/nfs-music-export.tf)**, which is the source of truth: it
-installs `nfs-kernel-server` (guarded, so a re-apply is a no-op), writes
-`/etc/exports.d/music.exports`, and adds an `After=zfs-mount.service` ordering drop-in.
+**NFS server** — serves two exports to the Home Assistant NUC, and to no other host. Managed by
+Terraform, which is the source of truth for both; neither `/etc/exports.d/` file may be hand-edited
+and `exportfs` may not be hand-run (that drifts the host from `infra/`, which this repo forbids).
+
+| Export | Terraform | Drop-in | Mode |
+|---|---|---|---|
+| `/mnt/tank/media/Music` | [`infra/nfs-music-export.tf`](infra/nfs-music-export.tf) | `music.exports` | **`ro`** |
+| `/mnt/tank/backups/homeassistant` | [`infra/nfs-ha-backup-export.tf`](infra/nfs-ha-backup-export.tf) | `ha-backup.exports` | **`rw`** |
+
+`nfs-music-export.tf` owns the shared machinery: the guarded `nfs-kernel-server` install (so a
+re-apply is a no-op) and the `After=zfs-mount.service` ordering drop-in, which is a property of the
+unit rather than of any one export.
 
 | Unit | Listens | Purpose |
 |------|---------|---------|
-| `nfs-server.service` | **`172.16.1.158:2049`** | NFSv4 export of `/mnt/tank/media/Music`, **`ro`**, to **`172.16.1.31` only** |
-| `rpcbind` | `:111` | Pre-existing from `nfs-common`; **not** part of this change |
+| `nfs-server.service` | **`172.16.1.158:2049`** | Both NFSv4 exports below, to **`172.16.1.31` only** |
+| `rpcbind` | `:111` | Pre-existing from `nfs-common`; **not** part of either change |
 
-The export line, `all_squash` to the estate service account:
+The export lines, both `all_squash` to the estate service account:
 
 ```
 /mnt/tank/media/Music 172.16.1.31(sync,wdelay,hide,no_subtree_check,mountpoint,anonuid=568,anongid=568,sec=sys,ro,secure,root_squash,all_squash)
+/mnt/tank/backups/homeassistant 172.16.1.31(sync,wdelay,hide,no_subtree_check,mountpoint,anonuid=568,anongid=568,sec=sys,rw,secure,root_squash,all_squash)
 ```
+
+⚠️ **`no_root_squash` is forbidden on both, and each apply asserts it absent** from the drop-in it
+owns. `all_squash` makes it moot: every client uid including 0 lands as `568:568`, so HA's
+Supervisor writing as root inside its own container still writes to disk unprivileged. Scope the
+assertion to the Terraform-managed drop-ins — **never** to `/proc/fs/nfsd/exports`, which shows four
+`no_root_squash` hits once a client mounts. Those are auto-generated `v4root` pseudo-root traversal
+entries, not a regression.
 
 ⚠️ **This runs on atlantis, not on LXC 100 — and it cannot move there.** LXC 100 is unprivileged
 and `nfsd` is privileged-only. Anyone looking for the music share on `.159` will not find it, and
 `docker ps` cannot see it from either host.
 
-⚠️ **`ro` is forced, not a preference.** The library tree is `0777` and ZFS `acltype=nfsv4` ACLs
-are not exported by knfsd, so mode bits are the only lever an NFS client sees. A writable export
-would hand every client full write access to the library. Read-only is enforced at the **export**
-layer: a hand-rolled `mount -o rw` from the NUC succeeds and every write is still refused `EROFS`.
+⚠️ **`ro` is forced on the music export, not a preference.** The library tree is `0777` and ZFS
+`acltype=nfsv4` ACLs are not exported by knfsd, so mode bits are the only lever an NFS client sees.
+A writable export would hand every client full write access to the library. Read-only is enforced at
+the **export** layer: a hand-rolled `mount -o rw` from the NUC succeeds and every write is still
+refused `EROFS`.
+
+⚠️ **`rw` on the backup export is safe for a reason that does not generalise to the media
+datasets.** That `ro` argument is a property of *those datasets*, not of the pool. Measured with
+`zfs get -s source`: `tank` itself is `acltype=posix` / `aclmode=discard` (**local**), while
+`tank/media/*`, `tank/downloads` and `tank/timemachine` each set `acltype=nfsv4` **locally**
+— a TrueNAS-era inheritance. So a *new* child of `tank` has genuinely enforceable mode bits, and
+`tank/backups/homeassistant` sits behind a real `0770` rather than the media tree's decorative
+`0777`. `nfs-ha-backup-export.tf` sets `acltype=posix` explicitly rather than relying on that
+inheritance, and asserts both the observed `acltype` and the observed `stat` mode on every apply —
+so a later `zfs set acltype=nfsv4 tank` cannot silently turn a writable export world-writable.
+**Do not copy this export's `rw` to anything under `/mnt/tank/media`.**
+
+**The Home Assistant backup dataset** (`tank/backups/homeassistant`, RES-04):
+
+| Property | Value | Why |
+|---|---|---|
+| Ownership / mode | `568:568`, `0770` | `all_squash` target; `0770` because unencrypted HA backups contain `.storage` secrets |
+| Parent `/mnt/tank/backups` | `0755 root:root`, **not exported** | Only has to be traversable — an NFSv4 client walks the pseudo-root down to the export, and every ancestor is permission-checked against the squashed credential |
+| `refquota` | `50G` | A bound so a mis-set retention policy cannot eat a pool shared with 35 T of media. ~440 MB per backup ≈ 113 retained. Matches `tank/timemachine`'s `refquota=2T` precedent. Raise it in `var.ha_backup_refquota`, not on the host |
+| `recordsize` | `1M` | Large sequential tarballs |
+| `crossmnt` | **absent** | The *leaf* is exported, never the parent — so a future sibling backup dataset under `tank/backups` is not silently exported too |
+| `async` | **absent** | A backup target must not acknowledge writes the server has not committed |
+
+HA-side: the Supervisor mount is `usage: backup`, which lands at
+`/mnt/data/supervisor/mounts/<name>`. Supervisor hardcodes its NFS options to
+`softerr,timeo=100,retrans=2` (plus `port=` if given) — `ha mounts add` cannot pass others, and
+there is no `vers=`, so the kernel negotiates: **the live music mount reports `vers=4.2`**. Note
+`--read-only` is rejected by the CLI for backup mounts, so a writable export is Supervisor's
+requirement, not a convenience. `softerr` means a LAN stall during a write returns an error rather
+than hanging — a transient blip surfaces as a *failed* backup, not a retried one, so a restore drill
+should confirm the newest backup is complete rather than merely present.
+
+```bash
+# On the NUC. --path (not --share) is the NFS flag; --share is CIFS-only.
+ha mounts add hass-backup --type nfs --usage backup \
+  --server 172.16.1.158 --path /mnt/tank/backups/homeassistant
+```
 
 ⚠️ **Do not remove the `mountpoint` option.** It makes `rpc.mountd` refuse to serve the export when
 the ZFS dataset is not mounted — the guard against a boot race exporting an empty directory and
@@ -283,9 +337,9 @@ Standing check: `bash scripts/check-music-consumers.sh` on LXC 100, which also r
 
 ### Services by Host
 - **selfhost (159):** Traefik, Authelia, Sonarr, Radarr, Lidarr, Prowlarr, qBittorrent, Grafana, Dawarich, Open WebUI, Ollama, Immich, FreshRSS, and 60+ others — plus host-level Pulse (above)
-- **atlantis (158):** Proxmox VE — plus host-level `nfs-server` on **2049** serving the music library `ro` to the NUC (above)
+- **atlantis (158):** Proxmox VE — plus host-level `nfs-server` on **2049** serving the music library `ro` and the Home Assistant backup dataset `rw` to the NUC (above)
 - **cerebro (160):** Qdrant, Redis, SearXNG
-- **Home Assistant (31):** Home Assistant Core + addons — including **Music Assistant** (`:8095`), which reads the music library through the Supervisor NFS mount at `/media/music`
+- **Home Assistant (31):** Home Assistant Core + addons — including **Music Assistant** (`:8095`), which reads the music library through the Supervisor NFS mount at `/media/music`. Also the only client of the `rw` backup export on atlantis (RES-04)
 - **zgate (135):** Z-Wave2MQTT, Zigbee2MQTT
 - **cgate (128):** C-Bus integration (3 containers)
 

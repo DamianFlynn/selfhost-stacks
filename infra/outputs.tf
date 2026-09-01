@@ -54,12 +54,36 @@ output "verify_commands" {
     # from the pre-existing nfs-common client packages.
     ssh root@${var.proxmox_host} "ss -lntp | grep -E ':(111|2049)'"
 
-    # From the HA NUC (LAN, not tailnet — the export names ${var.ha_nuc_ip} only).
+    # NFS Home Assistant backup export (see nfs-ha-backup-export.tf):
+    ssh root@${var.proxmox_host} "cat /etc/exports.d/ha-backup.exports"
+    # Must show rw, all_squash and NO no_root_squash. Scope the no_root_squash
+    # check to the drop-ins Terraform owns — /proc/fs/nfsd/exports shows four
+    # auto-generated v4root traversal hits once a client mounts, which are not
+    # a regression.
+    ssh root@${var.proxmox_host} "grep -c no_root_squash /etc/exports.d/ha-backup.exports"
+    # Dataset must be acltype=posix (mode bits are only enforceable there — the
+    # whole basis for this export being rw) and 568:568 0770.
+    ssh root@${var.proxmox_host} "zfs get -H -o value acltype ${trimprefix(var.ha_backup_export_path, "/mnt/")}"
+    ssh root@${var.proxmox_host} "stat -c '%u:%g %a' ${var.ha_backup_export_path}"
+    ssh root@${var.proxmox_host} "zfs list -o name,used,refquota ${trimprefix(var.ha_backup_export_path, "/mnt/")}"
+
+    # From the HA NUC (LAN, not tailnet — the exports name ${var.ha_nuc_ip} only).
     # NOT showmount / findmnt: BOTH are absent from the HA SSH add-on's userland
     # (measured, plan 02-01 Task 3 measurement 7). Server-side enumeration is the
     # exportfs -v line above; client-side proof reads the fstype column of
     # /proc/self/mountinfo, which is verified readable from the add-on.
     nc -z -w 5 ${var.proxmox_host} 2049 && echo "2049 reachable"
     grep -E 'nfs|/media/music' /proc/self/mountinfo
+
+    # THE ONLY CHECK THAT PROVES EXPORT HEALTH is a real client mount: plan 02-08
+    # measured `exportfs -v` printing an intact line for an export that refused
+    # every client. For the writable export the mount alone is not enough either —
+    # a read-only regression mounts perfectly and fails on the first write — so
+    # the round-trip is the assertion. Run from the NUC:
+    sudo mkdir -p /tmp/habackupprobe
+    sudo mount -t nfs4 -o softerr,timeo=100,retrans=2 ${var.proxmox_host}:${var.ha_backup_export_path} /tmp/habackupprobe
+    sudo dd if=/dev/urandom of=/tmp/habackupprobe/rw-probe.bin bs=1M count=8
+    # then on ${var.proxmox_host}: ls -ln ${var.ha_backup_export_path}  -> 8388608, owned ${var.apps_uid}:${var.apps_gid}
+    sudo rm -f /tmp/habackupprobe/rw-probe.bin && sudo umount /tmp/habackupprobe && sudo rmdir /tmp/habackupprobe
   EOT
 }
