@@ -120,10 +120,28 @@
 #     resolved fresh on every run. That is what JELLYFIN_ROUTE below reports.
 #
 # SECRETS (D-39, D-40). Both are read at runtime from /mnt/fast/secrets/ on LXC 100, mode 0600,
-# root-owned, and were written there via stdin so neither value ever entered the process list on
-# a host running 100+ containers. NO TOKEN, PASSWORD OR KEY APPEARS IN THIS FILE OR ANYWHERE ELSE
-# IN THIS REPOSITORY. The repo is public and has one prior credential exposure still recoverable
-# via `git log -S`; a value committed here stays recoverable forever even after redaction.
+# root-owned, and were written there via stdin so the WRITE never entered the process list.
+# NO TOKEN, PASSWORD OR KEY APPEARS IN THIS FILE OR ANYWHERE ELSE IN THIS REPOSITORY. The repo is
+# public and has one prior credential exposure still recoverable via `git log -S`; a value
+# committed here stays recoverable forever even after redaction.
+#
+# ⚠ CORRECTED 2026-09-01 (CR-01). The sentence above used to continue "...so neither value ever
+#   entered the process list on a host running 100+ containers", asserting a property of THIS
+#   SCRIPT that this script did not have. It was true of how the files were written and false of
+#   how they were read: `jq --arg p "$MA_PASSWORD"` put the MA account password in jq's argv, and
+#   `-H "Authorization: Bearer ..."` put both bearer credentials in curl's argv, on every run —
+#   continuously, since plan 02-09 folded this script into quick-health-check.sh.
+#   /proc/<pid>/cmdline is world-readable here; hidepid is not set on LXC 100.
+#
+#   What is true NOW, and the only reason it is true, is stated at each site rather than only
+#   here — see ma_login(), ma_api() and jf_api():
+#     * jq reads MA_USERNAME/MA_PASSWORD from its own environment via $ENV.NAME, placed there by
+#       a `VAR=... jq` command prefix (environment, not argv, and not inherited by anything else).
+#     * curl reads both Authorization headers from a file with `-H @file`, where the file is a
+#       process substitution — argv carries a /dev/fd path and nothing else.
+#     * the secrets files are sourced WITHOUT `set -a`, so the values are not exported into the
+#       environment of the ssh/docker/jq/curl children this script spawns either.
+#   If any of those three is ever changed back, change this paragraph in the same commit.
 
 set -euo pipefail
 
@@ -290,12 +308,44 @@ MA_URL=""
 MA_TOKEN=""
 MA_VERSION_LIVE="unknown"
 
+# WR-01: EVERY variable that arrives from an external file or from the caller's environment is
+# defaulted HERE, before any code path can read it. This script runs under `set -u` (:128), and
+# `set -u` turns "the credential file was renamed upstream" into `unbound variable` — the run dies
+# mid-section, sections 5 and 6 never execute, and the caller gets a failed exit code with an
+# EMPTY summary block. That is strictly worse than a failed assertion: a failed assertion says
+# which consumer is broken, an abort says nothing at all.
+#
+# Defaulting is only half the fix. A variable that is empty because the file was unreadable must
+# still turn into a RED assertion, never a skipped one — that is done at the route blocks below,
+# which set the corresponding *_ROUTE to "unavailable" so the existing "UNKNOWN, not green"
+# branches fire. Do not add a default here without also adding its gate there.
+MA_USERNAME="${MA_USERNAME:-}"
+MA_PASSWORD="${MA_PASSWORD:-}"
+JELLYFIN_API_KEY="${JELLYFIN_API_KEY:-}"
+HA_SSH_KEY="${HA_SSH_KEY:-}"
+HA_SSH_HOST="${HA_SSH_HOST:-}"
+HA_SSH_PORT="${HA_SSH_PORT:-22}"
+HA_SSH_USER="${HA_SSH_USER:-root}"
+
 ma_login() {
   # Logs in fresh. See API SHAPE NOTE 2 for why the JWT is deliberately not cached.
-  # The password reaches curl through a jq-built body on stdin-equivalent (-d @-), never argv.
+  #
+  # CREDENTIALS AND argv (CR-01, fixed 2026-09-01). The previous version of this comment claimed
+  # the password "never entered argv" while the line beneath it passed the plaintext password to
+  # `jq --arg p "$MA_PASSWORD"`, i.e. as jq's argv[4]. /proc/<pid>/cmdline is world-readable on
+  # LXC 100 (no hidepid), so anything sampling the process table captured it. A comment asserting
+  # a control that is not implemented is worse than no comment: it stops the next reader looking.
+  #
+  # What the code below actually does, and why each half is needed:
+  #   * jq reads the two values from ITS OWN ENVIRONMENT via $ENV.NAME. The `VAR=... jq ...`
+  #     command-prefix form puts them in jq's environment ONLY — it is not an argv word, and it
+  #     does not export them to the rest of this script's children (see the secrets block, which
+  #     no longer uses `set -a` for the same reason).
+  #   * the request body reaches curl on stdin (--data-binary @-), unchanged and already correct.
+  # Neither MA_USERNAME nor MA_PASSWORD appears in any process's argv on this host.
   local body resp
-  body="$(jq -nc --arg u "$MA_USERNAME" --arg p "$MA_PASSWORD" \
-          '{command:"auth/login",args:{username:$u,password:$p}}')"
+  body="$(MA_USERNAME="$MA_USERNAME" MA_PASSWORD="$MA_PASSWORD" jq -nc \
+          '{command:"auth/login",args:{username:$ENV.MA_USERNAME,password:$ENV.MA_PASSWORD}}')"
   resp="$(printf '%s' "$body" | curl -s --max-time 20 -X POST "${MA_URL}/api" \
           -H 'Content-Type: application/json' --data-binary @- || true)"
   # NOT .result.access_token - see API SHAPE NOTE 1.
@@ -305,12 +355,19 @@ ma_login() {
 
 ma_api() {
   # $1 = command, $2 = args object as JSON (default {}). Returns the raw body on stdout.
+  #
+  # CR-01: the bearer JWT is NOT passed as `-H "Authorization: Bearer $MA_TOKEN"`. curl's
+  # `-H @file` form (>= 7.55.0; LXC 100 runs 8.14.1) reads the header text FROM A FILE, so argv
+  # carries only the path. The file is a process substitution, so the token never touches disk
+  # either, and `printf` is a bash builtin so it has no argv of its own.
+  # The body still goes on stdin, which is why a config file (-K) is not used here: -K would need
+  # stdin as well, and only one of the two can have it.
   local cmd="$1" args="${2:-}" body
   [[ -z "$args" ]] && args='{}'
   body="$(jq -nc --arg c "$cmd" --argjson a "$args" '{command:$c,args:$a}')"
   printf '%s' "$body" | curl -s --max-time 30 -X POST "${MA_URL}/api" \
     -H 'Content-Type: application/json' \
-    -H "Authorization: Bearer ${MA_TOKEN}" --data-binary @- || true
+    -H @<(printf 'Authorization: Bearer %s\n' "$MA_TOKEN") --data-binary @- || true
 }
 
 # The provider filter, as its own function so the intent is greppable and impossible to drop by
@@ -333,9 +390,11 @@ JELLYFIN_ADDR=""
 
 jf_api() {
   # $1 = path, remaining args are passed to curl (use --data-urlencode for query params).
+  # CR-01: same `-H @file` treatment as ma_api — the API key reaches curl through a process
+  # substitution, never through argv. See ma_api's comment for the mechanism.
   local path="$1"; shift
   curl -s --max-time 20 -G \
-    -H "Authorization: MediaBrowser Token=\"${JELLYFIN_API_KEY}\"" \
+    -H @<(printf 'Authorization: MediaBrowser Token="%s"\n' "$JELLYFIN_API_KEY") \
     "http://${JELLYFIN_ADDR}${path}" "$@" || true
 }
 
@@ -379,14 +438,31 @@ done
 
 echo ""
 # --- secrets ---
+#
+# WR-13: THE PERMISSION ASSERTION IS A GATE, NOT A REMARK. The previous version recorded the
+# `fail` and then sourced the file anyway. `.` executes arbitrary shell, not just assignments —
+# so the exact state the assertion detects (the file is writable by, or owned by, somebody other
+# than root) was the state in which this script handed that somebody root code execution on
+# LXC 100, on every quick-health-check run. Refuse instead.
+#
+# `set -a` is also gone, deliberately. It marked EVERY key in both files for export, putting the
+# MA password and the Jellyfin API key into the environment of every child this script spawns —
+# ssh to atlantis, ssh to the NUC, docker inspect, every jq and curl — i.e. into
+# /proc/<pid>/environ for a large process tree. Nothing here needs them in a child's environment:
+# `.` sets ordinary shell variables, and the one place a child genuinely needs them (jq, for
+# CR-01's $ENV.NAME) exports exactly those two, for exactly that one command, via a command prefix.
 if [[ -r "$MA_SECRETS" ]]; then
   MA_MODE="$(stat -c '%a %U' "$MA_SECRETS" 2>/dev/null || echo '? ?')"
   if [[ "$MA_MODE" == "600 root" ]]; then
     pass "MA credential $MA_SECRETS ($MA_MODE)"
+    # shellcheck disable=SC1090
+    . "$MA_SECRETS"          # no `set -a`: in-process only
   else
-    fail "MA credential $MA_SECRETS has mode/owner '$MA_MODE', want '600 root' (D-39)"
+    fail "MA credential $MA_SECRETS has mode/owner '$MA_MODE', want '600 root' (D-39) — REFUSING"
+    echo "         to source it. A file this script cannot vouch for is shell code it will not run"
+    echo "         as root. Fix the mode/owner, then re-run. Sections 2, 3 and 5 are UNKNOWN below."
+    TOOLS_MISSING=$((TOOLS_MISSING + 1))
   fi
-  set -a; . "$MA_SECRETS"; set +a
   MA_URL="${MA_URL:-}"
 else
   fail "MA credential $MA_SECRETS missing or unreadable — sections 2, 3 and 5 cannot run (D-39)"
@@ -397,14 +473,24 @@ if [[ -r "$JELLYFIN_SECRETS" ]]; then
   JF_MODE="$(stat -c '%a %U' "$JELLYFIN_SECRETS" 2>/dev/null || echo '? ?')"
   if [[ "$JF_MODE" == "600 root" ]]; then
     pass "Jellyfin credential $JELLYFIN_SECRETS ($JF_MODE)"
+    # shellcheck disable=SC1090
+    . "$JELLYFIN_SECRETS"    # no `set -a`: in-process only
   else
-    fail "Jellyfin credential $JELLYFIN_SECRETS has mode/owner '$JF_MODE', want '600 root' (D-40)"
+    fail "Jellyfin credential $JELLYFIN_SECRETS has mode/owner '$JF_MODE', want '600 root' (D-40) — REFUSING"
+    echo "         to source it. See the WR-13 note above. Section 4 is UNKNOWN below."
+    TOOLS_MISSING=$((TOOLS_MISSING + 1))
   fi
-  set -a; . "$JELLYFIN_SECRETS"; set +a
 else
   fail "Jellyfin credential $JELLYFIN_SECRETS missing or unreadable — section 4 cannot run (D-40)"
   TOOLS_MISSING=$((TOOLS_MISSING + 1))
 fi
+
+# Re-default after sourcing. The files may legitimately not define every key (or may have been
+# refused above), and `set -u` must not be able to abort a run mid-section — see the WR-01 note
+# at the top. Empty is turned into a RED route below, never into a skip.
+MA_USERNAME="${MA_USERNAME:-}"
+MA_PASSWORD="${MA_PASSWORD:-}"
+JELLYFIN_API_KEY="${JELLYFIN_API_KEY:-}"
 
 echo ""
 # --- routes ---
@@ -416,16 +502,34 @@ else
   TOOLS_MISSING=$((TOOLS_MISSING + 1))
 fi
 
-if [[ -n "$MA_URL" ]] && ma_login; then
+# WR-01: credentials are a PRECONDITION of the route, not a thing discovered halfway through
+# section 2. Missing MA_USERNAME/MA_PASSWORD used to reach ma_login and abort the whole run on
+# `set -u`; now it fails the route, and every downstream section takes its existing
+# "MA unreachable — ... UNKNOWN, not green" branch.
+if [[ -z "$MA_URL" || -z "$MA_USERNAME" || -z "$MA_PASSWORD" ]]; then
+  fail "MA credentials incomplete (url=${MA_URL:+set}${MA_URL:-unset} user=${MA_USERNAME:+set}${MA_USERNAME:-unset} pass=${MA_PASSWORD:+set}${MA_PASSWORD:-unset})"
+  echo "         — sections 2, 3 and 5 are UNKNOWN, not green. Check $MA_SECRETS (D-39)."
+  TOOLS_MISSING=$((TOOLS_MISSING + 1))
+elif ma_login; then
   MA_ROUTE="$MA_URL"
   MA_VERSION_LIVE="$(curl -s --max-time 15 "${MA_URL}/info" | jq -r '.server_version // "unknown"' 2>/dev/null || echo unknown)"
+  # IN-01: when curl fails, jq gets empty input, prints nothing and exits 0 — so `|| echo unknown`
+  # never fires and this lands as the EMPTY STRING, which the drift guard below reads as "not
+  # unknown" and prints `MA version drift: running , ...`. The version stamp is described in the
+  # header as THE drift detector; it must not be able to read blank.
+  [[ -z "$MA_VERSION_LIVE" ]] && MA_VERSION_LIVE="unknown"
   pass "Music Assistant reachable at $MA_URL, auth/login OK (fresh JWT, not cached)"
 else
   fail "Music Assistant login failed at '${MA_URL:-unset}' — sections 2, 3 and 5 cannot be asserted"
   TOOLS_MISSING=$((TOOLS_MISSING + 1))
 fi
 
-if command -v docker >/dev/null 2>&1; then
+# WR-01: the API key gates the route too. Without it, `docker inspect` would still resolve an
+# address, JELLYFIN_ROUTE would be set, and the first jf_api call would abort the run on `set -u`.
+if [[ -z "$JELLYFIN_API_KEY" ]]; then
+  fail "Jellyfin API key unavailable (see $JELLYFIN_SECRETS, D-40) — section 4 is UNKNOWN, not green"
+  TOOLS_MISSING=$((TOOLS_MISSING + 1))
+elif command -v docker >/dev/null 2>&1; then
   JELLYFIN_ADDR="$(docker inspect jellyfin \
     --format '{{(index .NetworkSettings.Networks "t3_proxy").IPAddress}}' 2>/dev/null || true):8096"
   if [[ "$JELLYFIN_ADDR" == ":8096" ]]; then
@@ -439,9 +543,17 @@ if command -v docker >/dev/null 2>&1; then
 fi
 
 # HA_ROUTE - the one credential that lives on the workstation, not here. See the header.
-if [[ -n "${HA_SSH_KEY:-}" && -r "${HA_SSH_KEY:-/nonexistent}" ]]; then
-  HA_ROUTE="ssh:${HA_SSH_HOST:-nuc}"
+# WR-01: HA_SSH_HOST is required, not optional. Section 5 builds `user@${HA_SSH_HOST}` with no
+# default, so setting HA_SSH_KEY alone — the exact combination the old `${HA_SSH_HOST:-nuc}`
+# here anticipated — used to abort the run on `set -u` instead of skipping the enrichment.
+if [[ -n "$HA_SSH_KEY" && -r "$HA_SSH_KEY" && -n "$HA_SSH_HOST" ]]; then
+  HA_ROUTE="ssh:${HA_SSH_HOST}"
   pass "HAOS SSH key available — section 5's mount-state enrichment will run"
+elif [[ -n "$HA_SSH_KEY" && -r "$HA_SSH_KEY" && -z "$HA_SSH_HOST" ]]; then
+  HA_ROUTE="skipped"
+  warn "HA_SSH_KEY is set and readable but HA_SSH_HOST is EMPTY — section 5's enrichment is SKIPPED."
+  echo "      This is a configuration gap, not the by-design skip below: set HA_SSH_HOST to the"
+  echo "      NUC's address alongside the key. The MA-side assertions still run and still assert."
 else
   HA_ROUTE="skipped"
   warn "HA_SSH_KEY not set/readable on this host — section 5's 'ha mounts info' enrichment is SKIPPED."
