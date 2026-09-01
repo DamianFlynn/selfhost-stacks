@@ -592,9 +592,34 @@ if [[ "$EXPORT_ROUTE" != "unavailable" ]]; then
     | awk '/^[^[:space:]]/ { if (NR>1) printf "\n"; printf "%s", $0; next }
            { printf " %s", $1 }
            END { printf "\n" }')"
-  EXPORT_LINE="$(printf '%s\n' "$EXPORT_TABLE" | grep -F "$LIBRARY " || true)"
+  # IN-02: select the export line by EXACT PATH, not by substring.
+  #
+  # `grep -F "$LIBRARY "` selected any line CONTAINING "/mnt/tank/media/Music " — so a sibling
+  # export at "/mnt/tank/media/Music Videos" (an entirely plausible path in this estate) was
+  # selected too, and a two-line EXPORT_LINE makes the client and option parsing below produce
+  # multi-line values.
+  #
+  # An anchored regex is NOT sufficient either, and that is worth stating because it is the
+  # obvious fix and it does not work: `^/mnt/tank/media/Music[[:space:]]` still matches
+  # "/mnt/tank/media/Music Videos ...", because the space in "Music Videos" IS the [[:space:]].
+  # Measured, not reasoned about.
+  #
+  # So: an exact literal prefix (index(...)==1, no regex over the path at all), plus a shape check
+  # that what follows the path is a CLIENT FIELD — one unspaced token ending in `(` — which is
+  # what the joined `exportfs -v` line always looks like and which "Videos " is not.
+  EXPORT_LINE="$(printf '%s\n' "$EXPORT_TABLE" \
+    | awk -v p="$LIBRARY" 'index($0, p " ") == 1 {
+        rest = substr($0, length(p) + 2)
+        if (rest ~ /^[^ ]*\(/) print
+      }' || true)"
+  EXPORT_LINE_COUNT="$(printf '%s' "$EXPORT_LINE" | grep -c . || true)"
 
-  if [[ -z "$EXPORT_LINE" ]]; then
+  if [[ "${EXPORT_LINE_COUNT:-0}" -gt 1 ]]; then
+    export_fail "CONS-01: $LIBRARY matched $EXPORT_LINE_COUNT export lines — the table is AMBIGUOUS,"
+    echo "         so no option or client assertion below can be attributed to one export. UNKNOWN,"
+    echo "         not green. The matching lines were:"
+    printf '%s\n' "$EXPORT_LINE" | sed 's/^/      /'
+  elif [[ -z "$EXPORT_LINE" ]]; then
     export_fail "CONS-01: $LIBRARY is not exported at all"
     echo "$EXPORT_TABLE" | sed 's/^/      /'
   else
@@ -616,7 +641,23 @@ if [[ "$EXPORT_ROUTE" != "unavailable" ]]; then
       pass "CONS-01: client field is neither '*' nor a CIDR"
     fi
 
-    for opt in ro all_squash anonuid=568 anongid=568 mountpoint; do
+    # REQUIRED options.
+    #
+    # IN-03: `anonuid=568` / `anongid=568` are LITERALS HERE while infra/nfs-music-export.tf:55-58
+    # forbids the literal on its side and interpolates var.apps_uid/var.apps_gid, precisely so the
+    # inheritance from Phase 1's normalisation stays visible in the code. That coupling is real and
+    # it is one-directional: changing var.apps_uid would apply cleanly on atlantis and then fail
+    # HERE, with a message that reads like an export defect rather than like a deliberate change.
+    # It is left as a literal rather than plumbed through, because this script runs on LXC 100 and
+    # has no access to Terraform's variables — but if you are here because this line went red after
+    # a var.apps_uid change, that is the reason, and both places must move together.
+    # 568 is `apps`, stated independently in CLAUDE.md, STANDARDS.md:141, DEPLOYMENT.md:31 and
+    # README.md:29.
+    #
+    # WR-12: sec=sys is asserted. It is named in the Terraform's security note as a considered
+    # choice with two rejected alternatives; without a detector, a change of security flavour
+    # (which would change who can read this share) would pass every gate silently.
+    for opt in ro all_squash anonuid=568 anongid=568 mountpoint no_subtree_check sec=sys; do
       # grep -F: 'anonuid=568' is a literal, and ugrep-family greps parse {...} style
       # metacharacters in ways a plain -q does not survive. -F removes the whole question.
       if printf '%s' ",$OPTS," | grep -qF ",$opt,"; then
@@ -626,12 +667,31 @@ if [[ "$EXPORT_ROUTE" != "unavailable" ]]; then
       fi
     done
 
-    # D-51 gate 2. Gate 1 is the Terraform apply assertion; this is the standing detector that a
-    # one-off check at apply time would miss.
-    if printf '%s' "$OPTS" | grep -qF 'no_root_squash'; then
-      export_fail "CONS-01: no_root_squash IS PRESENT — forbidden by CLAUDE.md (T-02-06, D-51 gate 2)"
+    # FORBIDDEN options (WR-12). D-51 gate 2 covered no_root_squash and nothing else. Gate 1 is
+    # the Terraform apply assertion; this loop is the standing detector a one-off apply-time check
+    # would miss, and it now mirrors the full "Deliberately ABSENT" list at
+    # infra/nfs-music-export.tf:90-95 rather than one third of it.
+    #
+    # `crossmnt` is the one that motivated this. The Terraform calls it "a silent scope expansion"
+    # — it would implicitly export any child dataset created under the library later — and it is
+    # also the natural-looking fix somebody reaches for when a child dataset "isn't visible". It
+    # had no detector anywhere. Adding it would have widened the export's scope with every gate
+    # in this estate still green.
+    for opt in no_root_squash crossmnt rw insecure no_all_squash; do
+      if printf '%s' ",$OPTS," | grep -qF ",$opt,"; then
+        export_fail "CONS-01: FORBIDDEN option PRESENT — $opt (see infra/nfs-music-export.tf:90-95)"
+      else
+        pass "CONS-01: forbidden option absent — $opt"
+      fi
+    done
+
+    # fsid= takes a value, so it needs a prefix match rather than an exact-token match. It would
+    # relocate the NFSv4 pseudo-root; both consumers address this share as server:/full/path and
+    # would break.
+    if printf '%s' ",$OPTS," | grep -qE '(^|,)fsid='; then
+      export_fail "CONS-01: FORBIDDEN option PRESENT — fsid= relocates the NFSv4 pseudo-root (nfs-music-export.tf:91-93)"
     else
-      pass "CONS-01: no_root_squash absent (D-51 gate 2)"
+      pass "CONS-01: forbidden option absent — fsid="
     fi
   fi
 
@@ -922,10 +982,25 @@ else
   # against /api-docs/commands.json AND empirically: it returned 87 with and without a provider
   # arg, while the provider-filtered list held 9). Using it here would report GREEN off Spotify's
   # catalogue with the NFS mount broken or absent. See API SHAPE NOTE 3.
-  CNT_JSON="$(ma_api music/albums/library_items "$(provider_filter '{"limit":2000}')")"
+  #
+  # WR-03: the limit comes from MA_LIBRARY_SCAN_LIMIT, NOT from a repeated `2000` literal. Two
+  # things were wrong with the literal. It silently diverged from section 3's query, so the remedy
+  # section 3 PRINTS on a truncated result — "raise MA_LIBRARY_SCAN_LIMIT before trusting a miss" —
+  # had no effect on this one. And the number below is published in the committed transcript that
+  # 02-09 treats as the drift record, where a ceiling that looks like a measurement is exactly the
+  # kind of number a later reader compares against.
+  CNT_JSON="$(ma_api music/albums/library_items \
+              "$(provider_filter "$(jq -nc --argjson l "$MA_LIBRARY_SCAN_LIMIT" '{limit:$l}')")")"
   if printf '%s' "$CNT_JSON" | jq -e 'type == "array"' >/dev/null 2>&1; then
     MA_PROVIDER_ALBUM_COUNT="$(printf '%s' "$CNT_JSON" | jq -r 'length')"
     info "albums attributed to $MA_LOCAL_PROVIDER_INSTANCE: $MA_PROVIDER_ALBUM_COUNT"
+    # A list that came back exactly at the limit is a FLOOR, not a count — same guard section 3
+    # already carries. The `>= 3` gate below cannot produce a false pass from it today (70 albums
+    # against a 2000 limit), but the number is transcribed into the drift record either way.
+    if [[ "$MA_PROVIDER_ALBUM_COUNT" -ge "$MA_LIBRARY_SCAN_LIMIT" ]]; then
+      warn "CONS-03: the album count came back AT the query limit ($MA_LIBRARY_SCAN_LIMIT) — this is a"
+      echo "         FLOOR, not a count. Raise MA_LIBRARY_SCAN_LIMIT before recording it anywhere."
+    fi
     if [[ "$MA_PROVIDER_ALBUM_COUNT" -ge 3 ]]; then
       pass "CONS-03: at least 3 albums are attributed to the local provider"
     else
@@ -952,10 +1027,48 @@ else
   else
     ma_fail "CONS-03: Supervisor reports mount 'music' state='$MOUNT_STATE', want 'active'"
   fi
-  if "${HA_SSH[@]}" "mount" 2>/dev/null | grep -qF 'emergency/music'; then
-    ma_fail "CONS-03: the Supervisor EMERGENCY BIND is in place for music — the real mount failed"
+  # WR-02: THE DEGRADED-MOUNT SIGNATURE, measured rather than assumed.
+  #
+  # What used to be here was `mount | grep -qF 'emergency/music'`, and it could only ever pass,
+  # for two independent reasons:
+  #   1. On any ssh failure the pipeline produced nothing, grep found nothing, and the script
+  #      printed a GREEN "no emergency bind for music". Unreachable and healthy were
+  #      indistinguishable — the one thing this file's header refuses to accept anywhere else.
+  #   2. The instrument was already known dead. Plan 02-08 measured that THIS Supervisor version
+  #      does NOT bind-mount an /emergency/ path for a failed mount; it makes /media/music
+  #      READ-ONLY IN PLACE. `mount | grep emergency/music` matched 0 and CAN NEVER MATCH here.
+  #      02-09-SUMMARY.md retired it as a false-negative instrument and it was left wired up
+  #      anyway, as an assertion whose only possible outcome was `pass`.
+  #
+  # The signature 02-08 actually established is the STATE OF /media/music itself: on a failed
+  # mount it is present, a directory, root-owned, mode dr--r--r-- (0444) and EMPTY. So that is
+  # what is asserted, and the ssh exit status is captured so an unreachable NUC is UNKNOWN.
+  #
+  # Note the direction: the load-bearing half is "0 entries is a failure". Mode and owner are
+  # REPORTED alongside it, not asserted, because a future Supervisor could plausibly change them
+  # while the emptiness — the thing that actually breaks the library — stayed the tell.
+  NUC_MEDIA="$("${HA_SSH[@]}" \
+    'if [ -d /media/music ]; then printf "%s|%s|%s\n" "$(stat -c %a /media/music 2>/dev/null)" "$(stat -c %U /media/music 2>/dev/null)" "$(ls -A /media/music 2>/dev/null | wc -l)"; else echo ABSENT; fi' \
+    2>/dev/null)" && NUC_MEDIA_RC=0 || NUC_MEDIA_RC=$?
+
+  if [[ $NUC_MEDIA_RC -ne 0 || -z "$NUC_MEDIA" ]]; then
+    ma_fail "CONS-03: could not read /media/music on ${HA_SSH_HOST} (rc=$NUC_MEDIA_RC) — UNKNOWN, not green."
+    echo "         This is NOT 'the mount is fine'. Check the NUC by hand before trusting this run."
+  elif [[ "$NUC_MEDIA" == "ABSENT" ]]; then
+    ma_fail "CONS-03: /media/music does not exist as a directory on ${HA_SSH_HOST} — the mount is not in place"
   else
-    pass "CONS-03: no emergency bind for music"
+    IFS='|' read -r NUC_MODE NUC_OWNER NUC_ENTRIES <<< "$NUC_MEDIA"
+    if [[ ! "$NUC_ENTRIES" =~ ^[0-9]+$ ]]; then
+      ma_fail "CONS-03: unparseable /media/music entry count '$NUC_ENTRIES' — UNKNOWN, not green"
+    elif [[ "$NUC_ENTRIES" -eq 0 ]]; then
+      ma_fail "CONS-03: /media/music is EMPTY (mode ${NUC_MODE:-?}, owner ${NUC_OWNER:-?}) — this is the"
+      echo "         degraded-mount signature plan 02-08 measured: the Supervisor makes the path"
+      echo "         read-only in place rather than binding an /emergency/ path, so an empty"
+      echo "         /media/music IS the failed mount. MA then scans zero files."
+    else
+      pass "CONS-03: /media/music holds $NUC_ENTRIES entries (mode ${NUC_MODE:-?}, owner ${NUC_OWNER:-?}) — not the"
+      echo "         empty read-only-in-place signature of a failed Supervisor mount (02-08)"
+    fi
   fi
 fi
 echo ""
