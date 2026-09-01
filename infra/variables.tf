@@ -310,3 +310,23 @@ variable "music_temp_export_path" {
   type        = string
   default     = "/mnt/tank/downloads/_phase2-albumartist-control"
 }
+
+# ── NFS Home Assistant backup export — RES-04 ───────────────────────────────
+# See nfs-ha-backup-export.tf. Reuses ha_nuc_ip above (the same single client)
+# and apps_uid/apps_gid as the export's anonuid/anongid — so root inside HA's
+# Supervisor container lands on disk as apps:apps and no_root_squash is never
+# needed. Requested by the home-assistant-os project, Phase 2, requirement
+# RES-04: "daily automated backups stored off-NUC; a full restore tested and
+# documented".
+
+variable "ha_backup_export_path" {
+  description = "Host path served READ-WRITE to the Home Assistant NUC as a Supervisor backup target. Its own ZFS dataset under tank/backups, NOT under tank/media — media datasets set acltype=nfsv4 locally, which makes their mode bits unenforceable (CLAUDE.md records chmod failing EPERM there even as root). tank itself is acltype=posix, so a child of it has real, settable mode bits — which is what makes a WRITABLE export defensible here when it would not be under /mnt/tank/media."
+  type        = string
+  default     = "/mnt/tank/backups/homeassistant"
+}
+
+variable "ha_backup_refquota" {
+  description = "refquota on the Home Assistant backup dataset — a bound so a mis-set retention policy cannot eat a pool shared with 35 T of media. refquota rather than quota, matching tank/timemachine (2T), because it should bound the data and not be inflated by snapshots taken of it. Default 50G against ~440 MB per backup is roughly 113 retained backups; raise it here rather than on the host. Set to 'none' to remove the bound."
+  type        = string
+  default     = "50G"
+}
