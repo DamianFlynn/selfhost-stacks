@@ -2,15 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-last_updated: "2026-09-01T14:35:00.000Z"
+status: ready_to_plan
+last_updated: 2026-09-01T16:27:50.966Z
 last_activity: "2026-09-01 -- PHASE 02 CLOSED: operator approved D-55 after playing tracks; all five criteria proven"
 progress:
   total_phases: 9
   completed_phases: 2
   total_plans: 18
   completed_plans: 18
-  percent: 100
+  percent: 22
+stopped_at: Phase 02 complete (9/9) — ready to discuss Phase 03
 ---
 
 # Project State
@@ -21,28 +22,29 @@ See: .planning/PROJECT.md (updated 2026-08-17)
 
 **Core value:** New music downloads land in the library correctly tagged, through exactly one
 pipeline that someone owns.
-**Current focus:** Phase 02 — nfs-export-and-music-assistant-reachability
+**Current focus:** Phase 03 — tagger spike
 
 **Definition of done (CONS-04):** a file is imported only when verified with `ffprobe` on the file
 *and* visible in both Jellyfin and Music Assistant. Never "tool configured".
 
 ## Current Position
 
-Phase: 02 (nfs-export-and-music-assistant-reachability) — **COMPLETE**
-Plan: 9 of 9 — all executed. **Next: `/gsd-discuss-phase 3`, then `/gsd-plan-phase 3` (Tagger Spike).**
-Status: **PHASE CLOSED 2026-09-01.** All nine plans executed, all five criteria proven, CONS-01/02/03
-complete. The consumers audit is folded into `quick-health-check.sh`, criterion 5 is recorded in
+Phase: 03 (tagger-spike) — not started
+Plan: Not started
+Status: Ready to plan. **Phase 02 CLOSED 2026-09-01** — all nine plans executed, all five criteria
+proven, CONS-01/02/03 complete, verification `passed` 5/5. The consumers audit is folded into
+`quick-health-check.sh`, criterion 5 is recorded in
 PROJECT.md with Route B's failure symptom and the old assertion rewritten, and the operational record
 is in `beets.md` and `NETWORK.md`. **D-55's human gate is SATISFIED** — and by a stronger test than
 it asked for: the operator browsed MA's Filesystem (local disk) provider, spot-checked albums, and
 **played tracks to confirm the audio matches the metadata**. No assertion in this phase could do
 that — every automated check verifies MA's *database* says the right thing, never that the *bytes*
 are the right song, and the documented stale state is precisely "entries exist, playback fails".
-Last activity: 2026-09-01 -- PHASE 02 CLOSED: operator approved D-55 after playing tracks; all five criteria proven
+Last activity: 2026-09-01
 Phase 1 complete: SAFE-01…05, WRIT-01…04, QUAL-01
 Phase 2 complete: CONS-01, CONS-02, CONS-03
 
-Progress: [██████████] 100%  *(18 of 18 plans **written and executed**; phases 3-9 are not planned yet, so this bar is not milestone progress — **the MILESTONE is 2 of 9 phases**)*
+Progress: [██░░░░░░░░] 22%  *(MILESTONE progress: **2 of 9 phases** complete. All 18 plans written so far are executed 18/18 — but phases 3-9 are not planned yet, so plan-count is not milestone progress.)*
 
 Plans 02-01 through 02-09 are executed. **CONS-01, CONS-02 and CONS-03 are all complete.**
 
@@ -198,7 +200,7 @@ already open so only 2049 is this phase's delta.
 
 **Velocity:**
 
-- Total plans completed: 9
+- Total plans completed: 18
 - Average duration: ~42m (excluding 01-06's 374-minute observation window)
 - Total execution time: ~375m of work
 
@@ -207,6 +209,7 @@ already open so only 2049 is this phase's delta.
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01 | 9 | ~375m | ~42m |
+| 02 | 9 | - | - |
 
 **Per Plan:**
 
