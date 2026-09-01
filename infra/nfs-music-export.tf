@@ -57,10 +57,35 @@
 #                    as a literal — the point is that the inheritance is
 #                    visible in the code
 #   mountpoint       export nothing rather than the empty stub directory if
-#                    nfs-server ever starts before the dataset is mounted
+#                    nfs-server ever starts before the dataset is mounted.
+#                    PROVEN 2026-09-01 (plan 02-08) — see the note below.
 #   no_subtree_check the default and recommended setting; subtree checking is
 #                    unreliable across renames
 #   sec=sys          see the security note above
+#
+# ── `mountpoint` IS ENFORCED. Measured 2026-09-01. Do not remove it. ─────────
+# Plans 02-03 and 02-05 both recorded this option as "configured but UNPROVEN"
+# and 02-03 raised a threat flag against this file for it. Both were wrong, and
+# the reason is worth keeping because it is an instrument error, not a defect:
+#
+#   `exportfs -v` KEEPS PRINTING THE EXPORT LINE while the dataset is unmounted.
+#   That observation was correct. The inference drawn from it — that the option
+#   does nothing — was not. The export TABLE is non-discriminating; the SERVED
+#   MOUNT is genuinely refused.
+#
+# The discriminating pair, same command, same client (the HA NUC), minutes apart,
+# `sudo mount -t nfs4 -o ro,soft,timeo=50,retrans=2 <server>:<path> /tmp/m1probe`:
+#   dataset MOUNTED    -> exit 0,   14 entries visible
+#   dataset UNMOUNTED  -> exit 255, "failed: No such file or directory", 0 entries
+# (`zfs unmount` without -f, behind a dead-man restore. `exportfs -v` printed the
+#  identical line in both states.)
+#
+# So: never assert export health from `exportfs -v` alone. It will pass against
+# an export that refuses every client. The `mountpoint`-quality check is a real
+# client mount attempt, or nothing.
+#
+# M2 (`After=zfs-mount.service`, installed below) remains the boot-race guard;
+# `mountpoint` is a proven second layer beneath it rather than an untested hope.
 #
 # Deliberately ABSENT:
 #   fsid=            would relocate the NFSv4 pseudo-root; both consumers
