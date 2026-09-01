@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-08-31T22:35:20.575Z"
-last_activity: 2026-08-31
+last_updated: "2026-09-01T09:48:27.258Z"
+last_activity: 2026-09-01 -- Completed 02-05 (mount live, Route A, criterion 2 proven)
 progress:
   total_phases: 9
   completed_phases: 1
   total_plans: 18
-  completed_plans: 13
-  percent: 72
+  completed_plans: 14
+  percent: 78
 ---
 
 # Project State
@@ -29,25 +29,39 @@ pipeline that someone owns.
 ## Current Position
 
 Phase: 02 (nfs-export-and-music-assistant-reachability) — EXECUTING
-Plan: 5 of 9
+Plan: 6 of 9
 Status: Ready to execute
-Last activity: 2026-08-31
+Last activity: 2026-09-01 -- Completed 02-05 (mount live, Route A, criterion 2 proven)
 Phase 1 complete: SAFE-01…05, WRIT-01…04, QUAL-01
 
-Progress: [███████░░░] 72%
+Progress: [████████░░] 78%
 
-Plans 02-01 (Stage 0), 02-02 (export authoring), 02-03 (apply) and 02-04 (the consumers audit
-script) are complete. Next is **02-05**, the client-side mount on the HA NUC. The export is LIVE
-and now has a standing detector: `scripts/check-music-consumers.sh` section 1 asserts all ten
-export properties on every run and is green. The export inherits `anonuid=568,anongid=568` from
-WRIT-04 and **is read-only**: the library tree is `0777` and mode bits are the only lever NFS
-clients see.
+Plans 02-01 (Stage 0), 02-02 (export authoring), 02-03 (apply), 02-04 (the consumers audit script)
+and 02-05 (the client mount) are complete. Next is **02-06**, the Music Assistant local filesystem
+provider.
 
-**02-05 and 02-06 must set `MA_LOCAL_PROVIDER_INSTANCE` in `scripts/check-music-consumers.sh`.**
-Until the local filesystem provider exists and its instance id is pinned there, sections 2, 3 and 5
-fail by design — the script refuses to credit an album match to an NFS export it cannot prove the
-match came through. A Spotify provider is live with albums already in MA's library, including two
-Various Artists titles, so an unfiltered query would report green with no mount at all.
+**The mount is LIVE and proven.** Route A won on measurement: a HAOS Supervisor NFS mount named
+`music`, `state: active`, `read_only: true`, `user_path: /media/music`, fstype `nfs4` at
+`vers=4.2` — and `/media/music` is readable **inside the running Music Assistant container**,
+propagated `rslave` into a container that started two days before the mount existed. Music
+Assistant's own documentation says that is impossible; it means *local bind* mounts.
+**CONS-01 is COMPLETE** (1d and 1e closed here) and **criterion 2 is proven at the export layer**:
+a hand-rolled `mount -o rw` succeeded and every write was still refused `EROFS`, on NFSv3 *and*
+NFSv4.2. Three read-through `sha256` pairs match, 243 MB including a 201 MB FLAC on a non-ASCII
+path.
+
+**02-06 must set `MA_LOCAL_PROVIDER_INSTANCE` in `scripts/check-music-consumers.sh`.** 02-05
+deliberately did not, because it created no provider. Until the local filesystem provider exists
+and its instance id is pinned there, sections 2, 3 and 5 fail by design — the script refuses to
+credit an album match to an NFS export it cannot prove the match came through. A Spotify provider
+is live with albums already in MA's library, including two Various Artists titles, so an
+unfiltered query would report green with no mount at all.
+
+**Two things 02-06 inherits.** The script is still not on LXC 100 and a `git pull` there cannot
+land it (commits `16a9fb2`/`6d4f8de` are local-only; this tree is ahead 33 / behind 9 of origin) —
+push first. And the pinned Various Artists proof album is confirmed **structurally unreachable**
+through this export: it lives under `tank/downloads`, so only 02-07's temporary export can serve
+it.
 
 Before any Terraform work, read the CORRECTION entries under Blockers/Concerns — a bare
 `terraform apply` was measured to be one command away from destroying LXC 100, and port 111 was
@@ -91,6 +105,7 @@ already open so only 2049 is this phase's delta.
 | Phase 02 P01 | 75m | 4 tasks | 3 files |
 | Phase 02 P03 | 25min | 3 tasks | 2 files |
 | Phase 02 P04 | 78min | 3 tasks | 1 files |
+| Phase 02 P05 | 13min | 3 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -195,6 +210,11 @@ Recent decisions affecting current work:
 - [Phase 2]: 02-04: MA 2.11 has no API-token UI — check-music-consumers.sh logs in per run rather than caching the 90-day JWT, so the credential cannot expire silently inside an unattended check (D-39 intent, not its literal 365-day wording)
 - [Phase 2]: 02-04: music/albums/count has NO provider parameter (returned 87 with and without one) — mount liveness uses provider-filtered music/albums/library_items instead; count would report green off Spotify's catalogue with the NFS mount absent
 - [Phase 2]: 02-04: D-08 fired — the library has no Various Artists compilation (all 13 folders are single named artists), so the VA shape is substituted by VA-Mastermix.Essential.Hits.Pop.4 from the backlog, staged by 02-07 under the temporary export
+- [Phase 2]: 02-05: ROUTE A WINS on measurement — /media/music is readable INSIDE the running Music Assistant container (rslave, master:1105, container up 2 days before the mount existed). MA's own docs say this is impossible; they mean local bind mounts. Route B's failure symptom: it exposes no client-side ro option at all
+- [Phase 2]: 02-05: CRITERION 2 PROVEN AT THE EXPORT LAYER — a hand-rolled mount -o rw succeeded and every write was still refused EROFS. Re-run over NFSv4.2 because the plain mount -o rw negotiated vers=3, which is NOT the version MA reads through. Read-only holds on both
+- [Phase 2]: 02-05: CONS-01 is COMPLETE — 1d proven by nc 2049 exit 0 plus a successful mount (showmount is absent on the NUC), 1e by /proc/self/mountinfo fstype nfs4 vers=4.2 (findmnt is absent too)
+- [Phase 2]: 02-05: ssh -n EATS A HEREDOC — -n points stdin at /dev/null so 'ssh -n host bash -s <<EOF' discards the whole script and exits 0. Use -n for inline 'ssh host cmd' ONLY; never when feeding a script over stdin
+- [Phase 2]: 02-05: the NFSv4 pseudo-root entries in /proc/fs/nfsd/exports carry no_root_squash (/, /mnt, /mnt/tank, /mnt/tank/media — all v4root and ro). Not a T-02-06 regression, but a grep of that table returns 4. Assert on exportfs -v, which check-music-consumers.sh already does
 
 ### Pending Todos
 
@@ -288,6 +308,9 @@ Recent decisions affecting current work:
 - CORRECTION for 02-03/02-05 (02-01 Task 3 measurement 7): **`showmount` and `findmnt` are both ABSENT on the NUC.** `nfs-music-export.tf`'s `verify_commands` output suggests `showmount -e 172.16.1.158` "from the HA NUC" — that line will not run; use `exportfs -v` on atlantis. Criterion 1e's `findmnt` proof of NFSv4 negotiation needs `/proc/self/mountinfo` instead (verified readable from the SSH add-on; its fstype column is where `nfs4` will appear). `sha256sum` and `nc` ARE present, so D-11's read-through hash is sha256.
 - LATENT, suppressed not fixed (02-01 Task 2): `bpg/proxmox 0.95.0` plans a replacement for any container carrying `mount_point` blocks. `ignore_changes = [mount_point]` now silences it on both LXC resources, which means **real bind-mount edits to lxc-selfhost.tf / lxc-mpe.tf will plan clean and do nothing**. Bind-mount changes are a deliberate manual act (`pct set` / edit `/etc/pve/lxc/<vmid>.conf`, then reconcile) until the provider is upgraded. Trade-off documented in both files.
 - 02-05 MUST re-test M1 from the client side: the mountpoint export option did not refuse an unmounted dataset at exportfs time on nfs-utils 1:2.8.3-1 (02-03 finding)
+- 02-05: M1 (the mountpoint export option) is STILL UNPROVEN. The client-side re-test was attempted — the dataset was unmounted with a dead-man restore, 02-03's finding reproduced (exportfs -v keeps the line), and the estate was fully restored — but the definitive fresh-mount probe was blocked by the sandbox permission classifier and was NOT worked around. NEW instrument for the next attempt: /proc/fs/nfsd/exports DOES populate once a client has mounted (02-03 recorded it as non-discriminating because no client existed) and it emptied when the dataset went away. M2 (After=zfs-mount.service) remains the proven guard; 02-03's threat_flag on infra/nfs-music-export.tf stands.
+- 02-05: check-music-consumers.sh is STILL not on LXC 100 and a git pull there CANNOT land it — commits 16a9fb2 and 6d4f8de are local-only on the workstation, not pushed to origin. This working tree is 'ahead 33, behind 9' of origin/main. The script was scp'd in for the wave gate and removed again. 02-06/02-09 must push before relying on a pull.
+- 02-05: ACCEPTED CONSEQUENCE (D-27/T-02-21) — Route A's usage:media also surfaces the music library in Home Assistant's own Media browser to anyone with HA access. Measured: HA Core reads the same 13 artist directories. Accepted: usage:media is what makes Route A work, the mount is ro on both client and export, and the audience already has HA access. Belongs in PROJECT.md per D-47.
 
 ## Deferred Items
 
@@ -306,24 +329,32 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-08-31T22:35:13.183Z
-Stopped at: Completed 02-04-PLAN.md
+Last session: 2026-09-01T09:47:23.654Z
+Stopped at: Completed 02-05-PLAN.md
 Resume file: None
 
-**02-01 is complete.** The `recover-first` pause is discharged: atlantis recovered 18:48:08, Task 2's
-drift gate ran and returned exit 2 with a pending destroy of LXC 100 (remediated), Task 3's eight
-measurements are recorded, and Task 4 did not fire because MA already has an admin account. The
-record was renamed `02-01-PARTIAL.md` → `02-01-SUMMARY.md` on completion and the PARTIAL removed, so
-there is one record, not two.
+**02-05 is complete and CONS-01 is ticked.** The Supervisor mount is live, Route A won on
+measurement with Route B's failure symptom recorded (it exposes no client-side `ro` option at all),
+and criterion 2 is proven at the export layer rather than by configuration politeness. Nothing was
+written into `/mnt/tank/media/Music`: 2,674 entries, 33.9 G, zero files newer than the task start.
+Both wave gates pass — `check-music-consumers.sh --baseline` exit 0 with section 1 green 10/10, and
+`check-music-freeze.sh` exit 0 with FAILURES 0.
 
 **The PARTIAL naming convention is still the rule for halted plans.** `phase-plan-index` treats any
 `*-SUMMARY.md` as plan-complete on file existence alone, regardless of its `status:` frontmatter — so
 a halted plan's record must be `-PARTIAL.md` and only becomes `-SUMMARY.md` when the plan genuinely
-finishes. That is what happened here.
+finishes.
 
-Next in phase 2: **02-03** (apply the export). Read the four CORRECTION entries under
-Blockers/Concerns first — in particular, 02-03 must plan-then-apply-a-saved-plan and must assert on
-port **2049 only** (111 was already open from the pre-existing `nfs-common`).
+Next in phase 2: **02-06** (the Music Assistant local filesystem provider). Read 02-05's blockers
+first — `MA_LOCAL_PROVIDER_INSTANCE` is still unpinned by design, the audit script must be **pushed**
+before LXC 100 can pull it, and MA is still BETA `2.11.0b0` with `auto_update: true`, so stamp the
+version on every assertion.
+
+**Two hazards carried from 02-05 for anyone touching the export.** `ssh -n` points stdin at
+`/dev/null`, so `ssh -n host 'bash -s' <<EOF` silently discards the entire script and exits 0 — use
+`-n` for inline `ssh host 'cmd'` only. And `/proc/fs/nfsd/exports` shows four `no_root_squash` hits
+once a client mounts; they are auto-generated `v4root` traversal entries, not a T-02-06 regression.
+Assert on `exportfs -v`.
 
 Plans 01-02, 01-04, 01-06, 01-07, 01-08 and 01-09 are `autonomous: false` — they carry blocking
 human checkpoints (the fence run, the ~140 GB capture, the Lidarr/Jellyfin freeze and its one-hour

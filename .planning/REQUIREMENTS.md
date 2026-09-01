@@ -67,7 +67,7 @@ Requirements for the milestone as PROJECT.md scopes it: pipeline fixed, bucket A
 
 ### Consumers — two, not one
 
-- [ ] **CONS-01**: An NFSv4 export serves the Music dataset read-only from the Proxmox host,
+- [x] **CONS-01**: An NFSv4 export serves the Music dataset read-only from the Proxmox host,
       defined in Terraform, restricted to the NUC
 - [ ] **CONS-02**: Music Assistant reads the library and shows albums under the correct album
       artist
@@ -204,7 +204,7 @@ Populated during roadmap creation (2026-08-17). Every v1 requirement maps to exa
 | WRIT-03 | Phase 1 | Complete |
 | WRIT-04 | Phase 1 | Complete (01-08 normalisation, 01-09 repo record; mode half scoped out) |
 | QUAL-01 | Phase 1 | Complete |
-| CONS-01 | Phase 2 | In progress — export LIVE and proven server-side (02-02 defined, 02-03 applied): 1a export correct, 1b re-apply exit 0, 1c served from the host not LXC 100. **1d (visible from the NUC) and 1e (NFSv4 negotiated) need a client — 02-05 owns the checkbox.** M1 (`mountpoint`) configured but unproven |
+| CONS-01 | Phase 2 | **COMPLETE (02-05).** All five parts of criterion 1: 1a export correct, 1b re-apply exit 0, 1c served from the host not LXC 100 (02-03); **1d visible from the NUC — `nc` 2049 exit 0 and the mount succeeded (`showmount` is absent there), 1e NFSv4 negotiated — `/proc/self/mountinfo` fstype `nfs4`, `vers=4.2` (`findmnt` is absent there) (02-05)**. **Criterion 2 proven at the EXPORT layer**, not the client: `touch` refused `EROFS` despite an explicit `mount -o rw`, on NFSv3 and NFSv4.2 alike. Residual: M1 (`mountpoint`) remains configured-but-unproven — M2 (`After=zfs-mount.service`) is the proven boot-race guard |
 | CONS-02 | Phase 2 | Pending |
 | CONS-03 | Phase 2 | Pending |
 | CONS-04 | Phase 7 | Pending |
