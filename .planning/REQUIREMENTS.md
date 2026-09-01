@@ -69,7 +69,7 @@ Requirements for the milestone as PROJECT.md scopes it: pipeline fixed, bucket A
 
 - [x] **CONS-01**: An NFSv4 export serves the Music dataset read-only from the Proxmox host,
       defined in Terraform, restricted to the NUC
-- [ ] **CONS-02**: Music Assistant reads the library and shows albums under the correct album
+- [x] **CONS-02**: Music Assistant reads the library and shows albums under the correct album
       artist
 - [ ] **CONS-03**: Music Assistant's view survives a NUC reboot
 - [ ] **CONS-04**: A file is only "imported" when verified with `ffprobe` *and* visible in both
@@ -205,7 +205,7 @@ Populated during roadmap creation (2026-08-17). Every v1 requirement maps to exa
 | WRIT-04 | Phase 1 | Complete (01-08 normalisation, 01-09 repo record; mode half scoped out) |
 | QUAL-01 | Phase 1 | Complete |
 | CONS-01 | Phase 2 | **COMPLETE (02-05).** All five parts of criterion 1: 1a export correct, 1b re-apply exit 0, 1c served from the host not LXC 100 (02-03); **1d visible from the NUC — `nc` 2049 exit 0 and the mount succeeded (`showmount` is absent there), 1e NFSv4 negotiated — `/proc/self/mountinfo` fstype `nfs4`, `vers=4.2` (`findmnt` is absent there) (02-05)**. **Criterion 2 proven at the EXPORT layer**, not the client: `touch` refused `EROFS` despite an explicit `mount -o rw`, on NFSv3 and NFSv4.2 alike. Residual: M1 (`mountpoint`) remains configured-but-unproven — M2 (`After=zfs-mount.service`) is the proven boot-race guard |
-| CONS-02 | Phase 2 | Pending |
+| CONS-02 | Phase 2 | **COMPLETE (02-06).** MA provider `filesystem_local--XJaJWNUS` at `/media/music`, created headlessly (`config/providers/setup` → `config/flows/submit`), `type=music`, `enabled`, `status: loaded`, `last_error: null`. `content_type` read back as `music` (`read_only: true`) and `missing_album_artist_action` read back as `folder_name` against a `various_artists` default — D-28 and D-01 both proven by read-back, not by submission. Instance id pinned into `check-music-consumers.sh` (`e1c4f93`), so both library proof albums match with provider attribution confirmed server-side **and** client-side against `provider_mappings[]`. 20 albums attributed to the local provider. Caveat: MA 2.11 does not expose the provider's `path` via the API — it is proven functionally via `music/browse` and recorded only in `02-06-SUMMARY.md` |
 | CONS-03 | Phase 2 | Pending |
 | CONS-04 | Phase 7 | Pending |
 | TAGR-01 | Phase 3 | Pending |

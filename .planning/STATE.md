@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-01T09:48:27.258Z"
-last_activity: 2026-09-01 -- Completed 02-05 (mount live, Route A, criterion 2 proven)
+last_updated: "2026-09-01T10:01:18.885Z"
+last_activity: 2026-09-01 -- Completed 02-06 (MA filesystem provider live, instance id pinned)
 progress:
   total_phases: 9
   completed_phases: 1
   total_plans: 18
-  completed_plans: 14
-  percent: 78
+  completed_plans: 15
+  percent: 83
 ---
 
 # Project State
@@ -29,39 +29,58 @@ pipeline that someone owns.
 ## Current Position
 
 Phase: 02 (nfs-export-and-music-assistant-reachability) — EXECUTING
-Plan: 6 of 9
+Plan: 7 of 9
 Status: Ready to execute
-Last activity: 2026-09-01 -- Completed 02-05 (mount live, Route A, criterion 2 proven)
+Last activity: 2026-09-01 -- Completed 02-06 (MA filesystem provider live, instance id pinned)
 Phase 1 complete: SAFE-01…05, WRIT-01…04, QUAL-01
 
-Progress: [████████░░] 78%
+Progress: [████████░░] 83%
 
-Plans 02-01 (Stage 0), 02-02 (export authoring), 02-03 (apply), 02-04 (the consumers audit script)
-and 02-05 (the client mount) are complete. Next is **02-06**, the Music Assistant local filesystem
-provider.
+Plans 02-01 through 02-06 are complete. Next is **02-07**, the deliberate `music/sync` and the
+temporary export that serves the Various Artists proof album.
 
-**The mount is LIVE and proven.** Route A won on measurement: a HAOS Supervisor NFS mount named
-`music`, `state: active`, `read_only: true`, `user_path: /media/music`, fstype `nfs4` at
+**The mount is LIVE and proven** (02-05). Route A won on measurement: a HAOS Supervisor NFS mount
+named `music`, `state: active`, `read_only: true`, `user_path: /media/music`, fstype `nfs4` at
 `vers=4.2` — and `/media/music` is readable **inside the running Music Assistant container**,
 propagated `rslave` into a container that started two days before the mount existed. Music
 Assistant's own documentation says that is impossible; it means *local bind* mounts.
-**CONS-01 is COMPLETE** (1d and 1e closed here) and **criterion 2 is proven at the export layer**:
-a hand-rolled `mount -o rw` succeeded and every write was still refused `EROFS`, on NFSv3 *and*
-NFSv4.2. Three read-through `sha256` pairs match, 243 MB including a 201 MB FLAC on a non-ASCII
-path.
+**CONS-01 is COMPLETE** and **criterion 2 is proven at the export layer**: a hand-rolled
+`mount -o rw` succeeded and every write was still refused `EROFS`, on NFSv3 *and* NFSv4.2.
 
-**02-06 must set `MA_LOCAL_PROVIDER_INSTANCE` in `scripts/check-music-consumers.sh`.** 02-05
-deliberately did not, because it created no provider. Until the local filesystem provider exists
-and its instance id is pinned there, sections 2, 3 and 5 fail by design — the script refuses to
-credit an album match to an NFS export it cannot prove the match came through. A Spotify provider
-is live with albums already in MA's library, including two Various Artists titles, so an
-unfiltered query would report green with no mount at all.
+**CONS-02 is COMPLETE (02-06). The provider exists and is pinned:**
 
-**Two things 02-06 inherits.** The script is still not on LXC 100 and a `git pull` there cannot
-land it (commits `16a9fb2`/`6d4f8de` are local-only; this tree is ahead 33 / behind 9 of origin) —
-push first. And the pinned Various Artists proof album is confirmed **structurally unreachable**
-through this export: it lives under `tank/downloads`, so only 02-07's temporary export can serve
-it.
+```
+instance_id                  filesystem_local--XJaJWNUS      <-- pinned in check-music-consumers.sh
+domain                       filesystem_local   (Route A)
+path                         /media/music       <-- NOT readable via the API; see below
+content_type                 music              (read_only after setup — D-28)
+missing_album_artist_action  folder_name        (default is various_artists — D-01, PERMANENT per D-02)
+enabled / status / error     true / loaded / null
+```
+
+Created **entirely headlessly** (D-31): `config/providers/setup` → `config/flows/submit` →
+`config/providers/save`. The GUI was never opened. `providers/manifests` is the command that lists
+addable domains — `providers/available` does not exist.
+
+**⚠ MA 2.11 does NOT expose the provider's `path`.** `config/providers/get` omits it entirely and
+`config/providers/get_value {"key":"path"}` returns `Internal server error`. The path is proven
+**functionally** via `music/browse "filesystem_local--XJaJWNUS://"`, which lists the 13 exported
+artist directories. `02-06-SUMMARY.md` is the **only** record that the value is `/media/music`; a
+rebuild must re-run the setup flow with it set explicitly, because the form's default is `/media`.
+
+**MA's `check_write_access()` created nothing** across provider load, reload and a full initial
+sync of 2,674 entries — T-02-19 closed on the real code path, not a synthetic probe.
+
+**02-07 inherits exactly one red.** `check-music-consumers.sh` now exits **1** on a single failure:
+the Various Artists proof album, `scope: temp-export`, which lives under `tank/downloads` and is
+structurally outside this export. Everything else is green — sections 0, 1, 2, 4 and 5, with **20
+albums attributed to `filesystem_local--XJaJWNUS`** and both library proof albums matched with
+provider attribution confirmed server-side and client-side. Stage the VA album as
+`Various Artists/Mastermix Essential Hits - Pop 4 - 2005-2009/` under the temporary export.
+
+**Still not on LXC 100:** the script must be `scp`'d for every run — `git pull` there cannot land it
+(commits `16a9fb2`/`6d4f8de`/`e1c4f93` are local-only; this tree is ahead 34 / behind 9 of origin).
+**02-09 must resolve the push/pull.** Do not push 34 unreviewed commits to this public repo casually.
 
 Before any Terraform work, read the CORRECTION entries under Blockers/Concerns — a bare
 `terraform apply` was measured to be one command away from destroying LXC 100, and port 111 was
@@ -106,6 +125,7 @@ already open so only 2049 is this phase's delta.
 | Phase 02 P03 | 25min | 3 tasks | 2 files |
 | Phase 02 P04 | 78min | 3 tasks | 1 files |
 | Phase 02 P05 | 13min | 3 tasks | 1 files |
+| Phase 02 P06 | 6min | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -215,6 +235,9 @@ Recent decisions affecting current work:
 - [Phase 2]: 02-05: CONS-01 is COMPLETE — 1d proven by nc 2049 exit 0 plus a successful mount (showmount is absent on the NUC), 1e by /proc/self/mountinfo fstype nfs4 vers=4.2 (findmnt is absent too)
 - [Phase 2]: 02-05: ssh -n EATS A HEREDOC — -n points stdin at /dev/null so 'ssh -n host bash -s <<EOF' discards the whole script and exits 0. Use -n for inline 'ssh host cmd' ONLY; never when feeding a script over stdin
 - [Phase 2]: 02-05: the NFSv4 pseudo-root entries in /proc/fs/nfsd/exports carry no_root_squash (/, /mnt, /mnt/tank, /mnt/tank/media — all v4root and ro). Not a T-02-06 regression, but a grep of that table returns 4. Assert on exportfs -v, which check-music-consumers.sh already does
+- [Phase 2]: 02-06: missing_album_artist_action=folder_name on the MA filesystem_local provider is PERMANENT (D-02), not a pilot setting
+- [Phase 2]: 02-06: the MA provider was created entirely HEADLESSLY via config/providers/setup + config/flows/submit + config/providers/save (D-31); the GUI was never opened
+- [Phase 2]: 02-06: MA 2.11 does NOT expose the filesystem provider's path via config/providers/get; /media/music is proven functionally via music/browse and recorded only in 02-06-SUMMARY.md
 
 ### Pending Todos
 
@@ -329,8 +352,8 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-09-01T09:47:23.654Z
-Stopped at: Completed 02-05-PLAN.md
+Last session: 2026-09-01T10:00:58.988Z
+Stopped at: Completed 02-06-PLAN.md
 Resume file: None
 
 **02-05 is complete and CONS-01 is ticked.** The Supervisor mount is live, Route A won on
