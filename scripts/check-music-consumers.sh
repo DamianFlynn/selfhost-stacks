@@ -82,6 +82,34 @@
 #      quick-health-check.sh - a silently-expiring credential inside the estate's only regression
 #      detector is precisely the failure mode this project exists to prevent.
 #
+#      ⚠ THAT NOTE IS ABOUT THE **UI** AND IT IS NOT A JUSTIFICATION FOR THE **API** CHOICE.
+#        Correction recorded 2026-09-01 (WR-11), because the two were being read as one thing.
+#        `auth/token/create` EXISTS and WORKS on this same server: stacks/selfhosted/arrs/beets.md
+#        records a 1-year, named, token_id-revocable token minted through it for the HA sync
+#        integration ("HA M4 music sync (phase 02-08)"). So a scoped, revocable, individually
+#        auditable credential was available and demonstrably usable, and this script stores the
+#        full ACCOUNT PASSWORD instead. The password is strictly more powerful than the token it
+#        replaces - among other things it can mint further tokens - and it cannot be revoked
+#        without changing the account, which would also break the HA sync integration and every
+#        browser session.
+#
+#      ACCEPTED RISK, recorded here the way the sec=sys risk is recorded in
+#      infra/nfs-music-export.tf:30-45, rather than left as a silence:
+#        * MA_URL is http://172.16.1.31:8095 - PLAINTEXT HTTP, no TLS. `auth/login` therefore
+#          puts the MA account password on the wire on EVERY RUN, which since 02-09 means every
+#          quick-health-check.sh. Anyone with LAN or tailnet visibility of traffic to that
+#          address can capture it. This is a DIFFERENT exposure from the accepted sec=sys NFS
+#          risk and was not previously recorded as a considered choice anywhere.
+#        * Bounded by: LAN/tailnet only, 8095 is not forwarded at the perimeter, and CR-01's fix
+#          means the value is no longer also in the process table.
+#        * THE FIX IS NOT DONE. It is: mint a second named token via `auth/token/create`
+#          ("music consumers audit"), store MA_TOKEN in /mnt/fast/secrets/ma-deercrest.env in
+#          place of MA_PASSWORD, drop ma_login in favour of the stored bearer, and record the
+#          token_id next to the rotation list in 02-09-SUMMARY.md. Keep the per-run version
+#          banner - with no login round-trip it becomes the only expiry-drift detector.
+#          That is an operator action against the live MA server (it mints and stores a
+#          credential); it is deliberately NOT done as a code change here.
+#
 #   3. `music/albums/count` HAS NO PROVIDER PARAMETER. Verified twice: against
 #      /api-docs/commands.json (parameters are favorite_only and album_types, and nothing else)
 #      and empirically - `music/albums/count` returned 87 both with and without a `provider` arg
