@@ -133,9 +133,30 @@ preconditions() {
   oops=$(timeout 15 ssh -o ConnectTimeout=8 -o BatchMode=yes "root@${PROXMOX_HOST}" \
               "dmesg -T 2>/dev/null | grep -c amdgpu_hmm_invalidate_gfx" 2>/dev/null)
 
+  # WR-08: THIS BLOCK IS THE REFUSAL, SO IT HAS TO ACTUALLY REFUSE.
+  #
+  # The contract stated four lines above is "refuse before touching anything". The previous code
+  # did not. Two separate ways through:
+  #
+  #   1. An empty probe emitted `warn` and left fail=0, so preconditions returned 0 and do_disable
+  #      went on to rewrite encoding.xml and restart the container. The single state that most
+  #      strongly indicates a wedged host - atlantis not answering ssh - produced the WEAKEST
+  #      response in the function whose whole job is to detect a wedged host.
+  #   2. `awk "BEGIN{exit !(${io_full} > 50)}"` interpolated the value into the awk PROGRAM, not
+  #      into data. Any non-numeric value (a partial line from cut, a locale-formatted number, an
+  #      ssh banner fragment surviving the pipeline) is an awk SYNTAX ERROR, awk exits 2, the elif
+  #      is therefore false, and control fell through to `ok "host io pressure full=..."` - an
+  #      unparseable reading reported as HEALTHY.
+  #
+  # `awk -v` passes the value as data. That fixes the false-healthy path and removes the code
+  # injection surface in the same move.
   if [ -z "$io_full" ]; then
-    warn "could not read io pressure from ${PROXMOX_HOST} - verify the host by hand"
-  elif awk "BEGIN{exit !(${io_full:-0} > 50)}"; then
+    bad "could not read io pressure from ${PROXMOX_HOST} - UNKNOWN, not healthy."
+    bad "An unreachable atlantis is itself a symptom of the fault this script exists for."
+    bad "Refusing to mutate. Verify the host by hand, then re-run."; fail=1
+  elif ! printf '%s' "$io_full" | grep -qE '^[0-9]+(\.[0-9]+)?$'; then
+    bad "io pressure value '${io_full}' is not a number - UNKNOWN, not healthy. Refusing."; fail=1
+  elif awk -v v="$io_full" 'BEGIN{exit !(v > 50)}'; then
     bad "host io pressure full=${io_full} - still wedged; docker will hang. Reboot first."; fail=1
   else
     ok "host io pressure full=${io_full}"
@@ -149,22 +170,50 @@ preconditions() {
 }
 
 # --- DRM client table (must run on the Proxmox host; debugfs is not in the container) -----
+#
+# CR-02: "NOTHING HELD" AND "COULD NOT LOOK" ARE DIFFERENT ANSWERS AND MUST NOT SHARE A VERDICT.
+#
+# The previous version returned bare stdout and report_drm() treated empty output as proof of
+# absence, printing "no processes hold amdgpu DRM handles". Every one of these produces empty
+# output: ssh refused, ssh timed out on `timeout 20`, the BatchMode key not accepted, debugfs not
+# mounted on atlantis so the glob matches nothing, the clients files unreadable, and the outer
+# 2>/dev/null discarding whatever ssh had to say about any of it. The exit status was thrown away
+# entirely - `clients=$(drm_clients)` was never tested.
+#
+# That sat in the worst possible place. do_disable() calls report_drm as its POST-CHANGE
+# VERIFICATION, after the config edit and the container restart. An operator remediating the
+# amdgpu wedge would read a green DRM table and conclude the orphaned ffmpeg was gone - when the
+# more likely truth is that atlantis did not answer, BECAUSE A WEDGED HOST IS WHY THEY ARE
+# RUNNING THIS SCRIPT AT ALL.
+#
+# So the probe now: distinguishes "the table is unreadable" (exit 3) from "the table is readable
+# and empty" (exit 0, no output), does NOT swallow ssh's own stderr into the void, and returns its
+# status to the caller. report_drm returns non-zero on an unknown, and do_disable propagates it.
 drm_clients() {
   timeout 20 ssh -o ConnectTimeout=8 -o BatchMode=yes "root@${PROXMOX_HOST}" '
-    for f in /sys/kernel/debug/dri/*/clients; do
-      [ -r "$f" ] && cat "$f"
-    done 2>/dev/null | awk "NR>1 && \$1 != \"command\" {print \$1, \$2}" | sort -u
-  ' 2>/dev/null
+    ls /sys/kernel/debug/dri/*/clients >/dev/null 2>&1 || exit 3
+    cat /sys/kernel/debug/dri/*/clients 2>/dev/null \
+      | awk "NR>1 && \$1 != \"command\" {print \$1, \$2}" | sort -u
+  '
 }
 
 report_drm() {
-  local clients; clients=$(drm_clients)
+  local clients rc
+  clients=$(drm_clients); rc=$?
+  if [ "$rc" -ne 0 ]; then
+    bad "UNKNOWN - could not read the DRM client table on ${PROXMOX_HOST} (probe rc=$rc)."
+    bad "This is NOT 'no handles held'. rc=3 means debugfs/dri was unreadable there; 124 means the"
+    bad "probe timed out; 255 means ssh failed - and an unreachable atlantis is itself a symptom."
+    bad "Check the host by hand before trusting anything else this run printed."
+    return 1
+  fi
   if [ -z "$clients" ]; then
-    ok "no processes hold amdgpu DRM handles"
+    ok "no processes hold amdgpu DRM handles (table read successfully and was empty)"
   else
     warn "processes still holding amdgpu DRM handles:"
     printf '      %s\n' "$clients"
   fi
+  return 0
 }
 
 current_hwaccel() {
@@ -209,9 +258,18 @@ do_check() {
   say "== amdgpu DRM clients (via ${PROXMOX_HOST}) =="
   report_drm
   say ""
+  # IN-04: do_check does not call preconditions() and current_hwaccel runs under 2>/dev/null, so
+  # a missing python3 or an unparseable encoding.xml yields an EMPTY state - which used to fall
+  # through to the `*)` arm and print "VAAPI is ON ()", a determinate claim about something that
+  # was never measured. The direction was safe (it never falsely said OFF) but "ON ()" with a
+  # blank HardwareAccelType two lines above is a diagnosis, not an observation.
   case "${state%%|*}" in
-    none|absent) ok  "VAAPI is OFF - the orphaned-transcode trigger cannot fire" ;;
-    *)           warn "VAAPI is ON (${state%%|*}) - run 'disable' to remove the trigger" ;;
+    none|absent)   ok   "VAAPI is OFF - the orphaned-transcode trigger cannot fire" ;;
+    ""|UNREADABLE*)
+      warn "UNKNOWN - could not read $JELLYFIN_CONFIG (python3 missing, or the file is not"
+      warn "parseable XML). This is NOT 'VAAPI is off' and NOT 'VAAPI is on'. Read the file by"
+      warn "hand, or run 'disable' - it calls preconditions() and will refuse with a reason." ;;
+    *)             warn "VAAPI is ON (${state%%|*}) - run 'disable' to remove the trigger" ;;
   esac
   return 0
 }
@@ -243,24 +301,94 @@ do_disable() {
   sleep 5
   say ""
   say "== post-change verification =="
-  report_drm
+  # CR-02: an unreadable DRM table FAILS this action. The config edit itself may well have
+  # succeeded, but "VAAPI is off" is only half of what do_disable claims to have verified - the
+  # other half is that nothing is still holding a handle, and that half is genuinely unknown.
+  # Returning 0 here would tell an operator mid-incident that the GPU is clear when nobody looked.
+  local drm_rc=0
+  report_drm || drm_rc=1
+
   local after; after=$(current_hwaccel)
-  if [ "${after%%|*}" = "none" ]; then ok "verified: VAAPI off"; else bad "verify failed: ${after%%|*}"; return 1; fi
+  if [ "${after%%|*}" != "none" ]; then
+    bad "verify failed: ${after%%|*}"
+    return 1
+  fi
+  ok "verified: VAAPI off"
+
+  if [ "$drm_rc" -ne 0 ]; then
+    bad "VAAPI is off, but the DRM client table could not be read - the GPU state is UNKNOWN."
+    bad "Exiting non-zero deliberately: do not close an amdgpu incident on this run."
+    return 1
+  fi
   return 0
 }
 
 do_enable() {
   preconditions || { bad "preconditions failed - refusing to mutate"; return 1; }
 
-  local backup; backup=$(ls -1t "${JELLYFIN_CONFIG}".bak.* 2>/dev/null | head -1)
+  # WR-07: SORT BY THE TIMESTAMP IN THE NAME, NOT BY mtime.
+  #
+  # `ls -1t` sorts by mtime, and mtime is the wrong key here BECAUSE OF THIS SCRIPT'S OWN
+  # `cp -p`: -p preserves timestamps, so <config>.bak.20260901T120000Z carries encoding.xml's
+  # mtime rather than the moment the backup was taken. Concretely: disable -> backup A (mtime M1);
+  # enable restores A with cp -p, so encoding.xml's mtime becomes M1 again; a second disable with
+  # no UI change in between -> backup B, also mtime M1. Two backups, identical mtime, and `ls -t`'s
+  # tie-break is unspecified. The filename already carries the true creation time in sortable ISO
+  # form and it was being ignored.
+  #
+  # The consequence was silent: do_enable restores the WHOLE FILE, so a stale backup reverts
+  # everything else the operator changed in Jellyfin's Playback settings too, and nothing reported
+  # it (see the post-restore verification added below).
+  local backup; backup=$(ls -1 "${JELLYFIN_CONFIG}".bak.* 2>/dev/null | sort | tail -1)
   if [ -z "$backup" ]; then
     bad "no backup found next to $JELLYFIN_CONFIG - refusing to guess a previous value"
     bad "set it in the Jellyfin UI instead: Dashboard > Playback > Transcoding"
     return 1
   fi
+
+  # Show what is about to be restored, and from when, so the operator can refuse it. The whole
+  # file is restored, not just the accel type - say so.
+  local from_ts; from_ts="${backup##*.bak.}"
+  local will; will=$(python3 - "$backup" <<'PY' 2>/dev/null
+import sys, xml.etree.ElementTree as ET
+try:
+    r = ET.parse(sys.argv[1]).getroot()
+except Exception as e:
+    print(f"UNREADABLE ({e})"); sys.exit(0)
+t = r.find("HardwareAccelerationType")
+print((t.text or "none").strip() if t is not None else "absent")
+PY
+  )
+  say "  restoring from    : $backup"
+  say "  backup taken at   : ${from_ts:-unknown} (from the FILENAME; mtime is unreliable, see WR-07)"
+  say "  HardwareAccelType : ${will:-UNKNOWN} (the ENTIRE encoding.xml is restored, not just this)"
+  local others; others=$(ls -1 "${JELLYFIN_CONFIG}".bak.* 2>/dev/null | wc -l | tr -d ' ')
+  [ "${others:-0}" -gt 1 ] && say "  ($others backups present; this is the newest by filename timestamp)"
+
   cp -p "$backup" "$JELLYFIN_CONFIG" || { bad "restore failed"; return 1; }
   ok "restored from $backup"
   timeout 120 docker restart "$JELLYFIN_CONTAINER" >/dev/null 2>&1 && ok "restarted" || { bad "restart failed"; return 1; }
+
+  # IN-06: mirror do_disable's post-change verification. do_enable used to restore, restart and
+  # warn without ever re-reading what it had restored - so combined with WR-07's wrong-backup
+  # selection, restoring a stale or unreadable config was completely silent.
+  sleep 5
+  say ""
+  say "== post-restore verification =="
+  local after; after=$(current_hwaccel)
+  case "${after%%|*}" in
+    "" |UNREADABLE*)
+      bad "restored config is not readable back (${after%%|*}) - UNKNOWN state. Check by hand."
+      bad "the backup is still at $backup"
+      return 1 ;;
+    none|absent)
+      bad "restored config reads HardwareAccelerationType=${after%%|*} - the restore did NOT"
+      bad "re-enable VAAPI. The selected backup was taken while VAAPI was already off."
+      bad "Pick another: ls -1 ${JELLYFIN_CONFIG}.bak.*"
+      return 1 ;;
+    *)
+      ok "verified: HardwareAccelerationType=${after%%|*}, EnableHardwareEncoding=${after##*|}" ;;
+  esac
   warn "VAAPI is back ON - the orphaned-transcode trigger is re-armed"
   return 0
 }
