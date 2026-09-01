@@ -96,6 +96,15 @@
 locals {
   music_export_path = "/mnt/tank/media/Music"
 
+  # ── Reading `exportfs -v` correctly, once, in one place ────────────────────
+  # `exportfs -v` WRAPS: when the path is long the client(options) field lands
+  # on its own continuation line. Assertions that grep the raw output can
+  # therefore credit a client string to the wrong export entirely.
+  # scripts/check-music-consumers.sh:477-482 already carried this join; the
+  # apply gates below did not, which is what WR-04 was. Defined as a local so
+  # the two gates that need it cannot drift apart from each other.
+  exportfs_joined = "exportfs -v | awk '/^[^[:space:]]/ { if (NR>1) printf \"\\n\"; printf \"%s\", $0; next } { printf \" %s\", $1 } END { printf \"\\n\" }'"
+
   music_export_line = "${local.music_export_path} ${var.ha_nuc_ip}(ro,all_squash,anonuid=${var.apps_uid},anongid=${var.apps_gid},mountpoint,no_subtree_check,sec=sys)"
 
   music_export_file = <<-EOT
@@ -151,6 +160,20 @@ resource "null_resource" "nfs_music_export" {
   # PVE host — the file write would fail on a first apply without this.
   provisioner "remote-exec" {
     inline = [
+      # WR-06: `set -e` FIRST, in every inline list in this file.
+      # Terraform concatenates `inline` into one script and reports the
+      # provisioner's success as that script's exit status — i.e. the LAST
+      # command's. It does not inject `set -e`. Every load-bearing gate here
+      # uses an explicit `|| { ...; exit 1; }`, which is why they work, but a
+      # command without one that is not last in its list fails silently.
+      # The install below is exactly that case: a failed install (no archive
+      # reachable, dpkg lock held, disk full) returned non-zero, `mkdir -p`
+      # then succeeded, and the provisioner reported success. The failure
+      # surfaced two provisioners later as "unit not found" from
+      # `systemctl enable --now nfs-server` — a message that does not point at
+      # the package that did not install.
+      "set -e",
+
       # PVE ships only nfs-common (the client half); the server comes from the
       # Debian archive, which host.tf has already configured and updated.
       # Guarded so a re-apply is a no-op rather than a package transaction.
@@ -175,6 +198,9 @@ resource "null_resource" "nfs_music_export" {
 
   provisioner "remote-exec" {
     inline = [
+      # WR-06 — see the note on the first inline list above.
+      "set -e",
+
       # ZFS datasets are not systemd .mount units, so RequiresMountsFor= has
       # nothing to resolve against. After=/Wants= is the only available lever
       # for making nfs-server start after the pools are mounted at boot.
@@ -199,11 +225,45 @@ resource "null_resource" "nfs_music_export" {
 
       # Gate 1 of 2 (the second is the standing consumers audit): a missing
       # export line means the apply reported success while serving nothing.
-      "exportfs -v | grep -q '${var.ha_nuc_ip}' || { echo 'FATAL: export for ${var.ha_nuc_ip} not present after exportfs -ra'; exit 1; }",
+      #
+      # WR-04: THIS ASSERTS THE PATH AND THE CLIENT ON THE SAME LINE.
+      # It used to be `exportfs -v | grep -q '<nuc-ip>'`, which asserted only
+      # that the client string appeared SOMEWHERE in the whole kernel export
+      # table, never which export line it appeared on. With
+      # music_temp_export_enabled = true the temporary export at
+      # var.music_temp_export_path names the SAME client — so this gate passed
+      # off the temp line even if /mnt/tank/media/Music had failed to export
+      # entirely, and the apply would print "--- music export ready ---" while
+      # serving only the scratch export.
+      # local.exportfs_joined undoes the line wrapping first; without it the
+      # path and its client are on different lines and cannot be matched
+      # together at all. Same treatment check-music-consumers.sh:477-482
+      # already applied, and the same reasoning as the NOTE at the bottom of
+      # this file.
+      "${local.exportfs_joined} | grep -qE '^${local.music_export_path}[[:space:]]+${var.ha_nuc_ip}\\(' || { echo 'FATAL: ${local.music_export_path} is not exported to ${var.ha_nuc_ip} after exportfs -ra'; exit 1; }",
+
       # Fail the apply outright if this ever appears. It is forbidden, it is
       # moot under all_squash, and its reappearance would mean someone edited
       # the option list without reading why it is absent.
-      "exportfs -v | grep -q 'no_root_squash' && { echo 'FATAL: no_root_squash present in the kernel export table'; exit 1; } || true",
+      #
+      # WR-05: SCOPED TO THE DROP-INS TERRAFORM OWNS. This used to scan the
+      # whole kernel export table. The design statement at the top of this file
+      # is explicit that Terraform owns exactly /etc/exports.d/music.exports
+      # "leaving /etc/exports untouched for anything else" — so a whole-table
+      # scan meant that the moment somebody added an unrelated no_root_squash
+      # backup share to /etc/exports (a common Proxmox pattern), EVERY
+      # terraform apply in infra/ would hard-fail with a FATAL about the music
+      # export, for a condition the music export did not cause, from the far
+      # end of a remote-exec where the message does not point at the real one.
+      # If a whole-host no_root_squash guard is wanted, it belongs in its own
+      # separately-named check so its failure is attributed correctly.
+      # `cat ... | grep`, NOT `grep <file> <file>`: music-temp.exports is
+      # ABSENT in steady state, and grep's exit status with an unreadable
+      # operand is 2-or-0 depending on the grep. That ambiguity would decide
+      # whether this gate fires. cat drops the missing file and grep then sees
+      # one unambiguous stream. Measured, not assumed — the two-operand form
+      # tested clean against a drop-in that DID contain no_root_squash.
+      "cat /etc/exports.d/music.exports /etc/exports.d/music-temp.exports 2>/dev/null | grep -q 'no_root_squash' && { echo 'FATAL: no_root_squash in a Terraform-managed export drop-in'; exit 1; } || true",
 
       # Leave the evidence in the apply log rather than requiring a follow-up.
       "echo '--- music export ready ---' && exportfs -v",
@@ -252,6 +312,16 @@ resource "null_resource" "nfs_music_temp_export" {
 
   provisioner "remote-exec" {
     inline = [
+      # WR-06: without this, a failed `chown` below was not surfaced AT ALL —
+      # it is not the last command in the list, the next provisioner is the
+      # file upload, and the one after that runs exportfs -ra and a presence
+      # check that passes. The comment on the chown states the exact
+      # consequence ("apps must be able to read the scratch tree or the control
+      # scans as an empty provider"), which is a silent pass by construction:
+      # the control would report "no albums" and read as a fallback that did
+      # not fire, rather than as a permissions failure.
+      "set -e",
+
       # A dataset, not a plain directory — see the locals block for why the
       # option list keeps `mountpoint` and this therefore has to be one.
       "zfs list ${local.music_temp_export_dataset} >/dev/null 2>&1 || zfs create -p ${local.music_temp_export_dataset}",
@@ -273,11 +343,15 @@ resource "null_resource" "nfs_music_temp_export" {
 
   provisioner "remote-exec" {
     inline = [
+      # WR-06 — see the note on the first inline list of this resource.
+      "set -e",
+
       # Converge the kernel table onto both drop-ins.
       "exportfs -ra",
-      # Same gate as the main export: a silently-absent line would let the
-      # control "pass" by finding nothing rather than by finding the fallback.
-      "exportfs -v | grep -q '${var.music_temp_export_path}' || { echo 'FATAL: temporary control export not present after exportfs -ra'; exit 1; }",
+      # Same gate as the main export, and WR-04 applies here identically: match
+      # the PATH AND THE CLIENT ON THE SAME (joined) LINE, so this cannot be
+      # satisfied by the music export's line.
+      "${local.exportfs_joined} | grep -qE '^${var.music_temp_export_path}[[:space:]]+${var.ha_nuc_ip}\\(' || { echo 'FATAL: temporary control export for ${var.ha_nuc_ip} not present after exportfs -ra'; exit 1; }",
       # Evidence in the apply log.
       "echo '--- temporary control export ready ---' && exportfs -v",
     ]
@@ -329,8 +403,50 @@ resource "null_resource" "nfs_music_temp_export" {
 # every time the scratch flag moved, and re-running `systemctl enable --now
 # nfs-server` against a live export to clean up a scratch one is the wrong
 # blast radius.
+#
+# ── CR-03: THE ORDERING EDGE. Do not remove either entry from depends_on. ────
+# This resource previously declared only `depends_on = [nfs_music_export]`,
+# which is the SAME edge nfs_music_temp_export declares — so the two were
+# siblings in the graph and Terraform walked them IN PARALLEL (default
+# -parallelism=10). Nothing sequenced them at all.
+#
+# That is only invisible while the flag is steady. On the ENABLE transition
+# (false -> true) both change in the same apply: nfs_music_temp_export[0] is
+# created, and this resource's trigger flips, replacing it. Its enabled branch
+# then asserts the temp export exists. Whichever won the race decided the
+# outcome: if the reconciler won, the drop-in had not been written yet and the
+# apply hard-failed with a FATAL describing a condition that was never true;
+# if it lost, the assertion passed for a reason unconnected to the assertion.
+# Both resources also ran `exportfs -ra` concurrently against the same kernel
+# export table.
+#
+# The header above argues at length that this resource must exist so teardown
+# is "still an apply, still visible in a plan diff, and still provable". The
+# enable half was none of those things while the ordering was undefined.
+#
+# `depends_on` on a counted resource is valid when the count is 0, so this is
+# correct in both directions: on enable the reconciler runs AFTER the export
+# exists; on teardown nfs_music_temp_export[0] is destroyed (a state-only
+# no-op) BEFORE the reconciler runs, which is the ordering the disabled branch
+# already assumed without saying so.
+#
+# ── IN-07: this is a TRANSITION HOOK, not a reconciler. Known limitation. ────
+# `triggers` is keyed on the flag alone, so it re-runs only when the flag
+# CHANGES. With the flag steady at false a later `terraform apply` does not
+# re-run the `rm -f` or the `exportfs -ra` — so a hand-recreated
+# /etc/exports.d/music-temp.exports would persist across applies with a clean
+# plan. That is a smaller instance of the drift this resource was created to
+# close, and it is accepted rather than fixed: making it always-run needs
+# timestamp() in triggers, which puts a permanent "1 to change" in every plan
+# of this repo, and a plan that is never clean is a plan nobody reads.
+# The standing detector for that drift is scripts/check-music-consumers.sh,
+# which reaches atlantis on every health check and now asserts the export's
+# full option set. If this limitation ever needs closing, close it there.
 resource "null_resource" "nfs_music_temp_export_teardown" {
-  depends_on = [null_resource.nfs_music_export]
+  depends_on = [
+    null_resource.nfs_music_export,
+    null_resource.nfs_music_temp_export,
+  ]
 
   triggers = {
     # The flag itself IS the trigger. tostring() because triggers are strings.
@@ -347,6 +463,9 @@ resource "null_resource" "nfs_music_temp_export_teardown" {
 
   provisioner "remote-exec" {
     inline = [
+      # WR-06 — see the note on the first inline list of nfs_music_export.
+      "set -e",
+
       var.music_temp_export_enabled
       ? "echo 'temporary control export is ENABLED — leaving /etc/exports.d/music-temp.exports in place'"
       : "rm -f /etc/exports.d/music-temp.exports",
@@ -356,17 +475,35 @@ resource "null_resource" "nfs_music_temp_export_teardown" {
       "exportfs -ra",
 
       # Prove the end state rather than trusting the two commands above.
-      # NOTE: `exportfs -v` WRAPS — the client(options) field lands on its own
-      # continuation line for these paths — so count the PATH lines (^/mnt/tank)
-      # and never the client lines, or a client string gets credited to the
-      # wrong export.
+      #
+      # WR-05: ASSERT THE TWO KNOWN PATHS, NOT A COUNT OF EVERYTHING UNDER
+      # ^/mnt/tank. The `-eq 2` / `-eq 1` counts these replaced were wrong in
+      # two ways at once. They evaluated GLOBAL state, so any second
+      # /mnt/tank/* export created by any mechanism — by a person, by another
+      # config, by a future phase — hard-failed every subsequent
+      # `terraform apply` in infra/ with a FATAL about the music export, which
+      # is not what caused it. And the magic numbers named nothing: neither 1
+      # nor 2 said WHICH exports were meant, so the coupling between them and
+      # the two paths this file manages was invisible.
+      #
+      # Presence/absence of the two named paths is the assertion that was
+      # actually intended, it is unaffected by unrelated exports, and its
+      # failure message says which export is wrong. local.exportfs_joined
+      # handles the line wrapping — the reason the old code counted PATH lines
+      # rather than client lines, which is still the right instinct and is now
+      # handled properly rather than by avoidance.
       var.music_temp_export_enabled
-      ? "n=$(exportfs -v | grep -cE '^/mnt/tank'); test \"$n\" -eq 2 || { echo \"FATAL: expected 2 /mnt/tank exports while the control is enabled, found $n\"; exit 1; }"
+      ? "${local.exportfs_joined} | grep -qE '^${var.music_temp_export_path}[[:space:]]+${var.ha_nuc_ip}\\(' || { echo 'FATAL: the control is ENABLED but ${var.music_temp_export_path} is not exported to ${var.ha_nuc_ip}'; exit 1; }"
       : "test ! -e /etc/exports.d/music-temp.exports || { echo 'FATAL: temporary drop-in still on disk after rm'; exit 1; }",
 
       var.music_temp_export_enabled
       ? "true"
-      : "n=$(exportfs -v | grep -cE '^/mnt/tank'); test \"$n\" -eq 1 || { echo \"FATAL: expected exactly 1 /mnt/tank export after teardown, found $n\"; exit 1; }",
+      : "${local.exportfs_joined} | grep -qE '^${var.music_temp_export_path}[[:space:]]' && { echo 'FATAL: ${var.music_temp_export_path} is STILL in the kernel export table after teardown'; exit 1; } || true",
+
+      # The load-bearing music export must survive the teardown either way.
+      # Nothing asserted this before: the disabled branch counted "exactly 1
+      # /mnt/tank export" and would have been satisfied by the WRONG one.
+      "${local.exportfs_joined} | grep -qE '^${local.music_export_path}[[:space:]]+${var.ha_nuc_ip}\\(' || { echo 'FATAL: ${local.music_export_path} is not exported to ${var.ha_nuc_ip} after the temp-export reconcile'; exit 1; }",
 
       "echo '--- export table after temp-export reconcile ---' && exportfs -v",
     ]
