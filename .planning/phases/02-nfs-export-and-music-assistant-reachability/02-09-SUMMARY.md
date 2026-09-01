@@ -20,6 +20,9 @@ provides:
   - "The six silent-pass mechanisms collected in one durable in-repo place"
   - "D-54b carried forward as an explicitly open item with its diagnosis and its recorded fix"
   - "A five-criterion closure verdict, each row naming its evidence and its producing plan"
+  - "PHASE 02 CLOSED — operator approved 2026-09-01 by a STRONGER test than the gate asked for: tracks were PLAYED to confirm the audio matches the metadata, which no assertion in this phase could reach"
+  - "D-08 independently confirmed from the consumer side: MA's browse root lists exactly 13 single-named-artist folders, no Various Artists entry anywhere"
+  - "D-46's two-sided teardown confirmed from the consumer side after the fact — the temporary-export album is ABSENT from MA"
 
 affects:
   - "Phase 7 — check-music-consumers.sh with its pinned album set is the tool CONS-04 calls; the folder_name precondition is a blocker it must check rather than assume"
@@ -48,6 +51,7 @@ key-decisions:
   - "The six silent-pass mechanisms live in `beets.md`, not in PROJECT.md. They are operational knowledge about instruments, and beets.md is the document-beside-the-stack that a future operator reaches for"
   - "D-54b is carried forward as OPEN with its recorded fix, not quietly closed. Its trigger is correct and proven; it is blind at boot by deterministic integration-setup ordering"
   - "The MA-side notify path against a genuinely bad mount is recorded as NOT proven by firing. Saying so is the point of a closure verdict"
+  - "D-55's human gate earned its place. Every automated check here verifies that MA's DATABASE says the right thing, never that the BYTES behind the entry are the right song — and the documented stale state is exactly 'entries exist, playback fails'. Playback is the only test that closes it, and it is not automatable from here. The operator's approval is NOT an approval of the two items recorded open"
 
 requirements-completed: []
 requirements-carried: []
@@ -78,7 +82,7 @@ written down in one place, in the repo, beside the stack.
 |------|-------------|
 | 1 — fold the consumers check into `quick-health-check.sh` | **Complete, PASS.** All three traps copied verbatim; full run exit 0 with both blocks green; the unreachable-host branch fired for real and exited 1. |
 | 2 — criterion 5 in PROJECT.md, the record in beets.md and NETWORK.md | **Complete.** Seven Key Decision rows; the old assertion rewritten (11 deletions); a dated `## Phase 2` section beside the stack; atlantis:2049 mapped. No credential anywhere. |
-| 3 — closure verdict | **Complete on the machine half. AWAITING the operator's confirmation** — see "The human gate" below. |
+| 3 — closure verdict | **Complete, PASS.** Machine gate green three ways; **operator approved** — and by a stronger test than the gate asked for. See "Closure response". |
 
 ## Commits
 
@@ -203,11 +207,13 @@ Music consumers audit: ✅ Both consumers see the library
 The `Traefik dashboard: ❌ Not accessible` line is a **tailnet-vantage artefact** and is present in
 D-44's *before* snapshot too. Not a regression.
 
-### The human gate (D-55) — OUTSTANDING
+### The human gate (D-55) — SATISFIED
 
 `check-music-consumers.sh` exiting 0 is the machine verdict. Criterion 3 is ultimately about what a
 person sees, and **this project exists because pipelines were declared working three times and were
-not.** The operator's confirmation is recorded in "Closure response" below.
+not.** The operator approved on 2026-09-01 — and closed a gap the machine gate cannot reach, by
+**playing tracks** to confirm the audio matches the metadata. Full record in "Closure response"
+below.
 
 ---
 
@@ -479,11 +485,69 @@ No requirement was ticked by this plan. It completes none that was not already e
 
 ## Closure response
 
-**⏳ AWAITING THE OPERATOR (D-55).** The machine gate is green on all three scripts and all five
-criteria have a verdict. The remaining half is the operator opening Music Assistant and confirming
-the albums appear under the right album artists — recorded here on reply.
+**✅ APPROVED 2026-09-01. D-55's closure gate is SATISFIED and the phase is CLOSED.**
 
-> *(operator's response to be recorded here)*
+Operator's words, verbatim:
+
+> "i have spot checked a couple and played them to make sure the song matchs - all good, no various
+> artists, no singles . mastermix is not there"
+
+### The operator did MORE than the gate asked, and that is the finding
+
+The gate asked for the albums to *appear* under the right album artists. The operator browsed Music
+Assistant's **Filesystem (local disk)** provider directly, spot-checked several albums, and
+**played tracks to confirm the audio matches the metadata**.
+
+**No assertion in this phase could have done that last part.** Every automated check in
+`check-music-consumers.sh` verifies that **MA's database says the right thing** — album name,
+`artists[0].name`, `provider_mappings[]` — and not that **the bytes behind the entry are the right
+song**. And the documented stale state this phase spent two plans characterising is precisely
+*"entries exist, playback of any of them fails"*: during the negative control MA held 70 albums that
+were all unplayable, and every database-level assertion about them would still have passed.
+**Playback is the only test that closes that gap, and it is not automatable from here.**
+
+So the human gate caught a class of failure the machine gate is **structurally** unable to reach.
+That is the whole reason D-55 exists, and it is the seventh entry in this project's running theme:
+a check can be green for a reason that has nothing to do with the thing you care about.
+
+### What was observed
+
+| Observation | Significance |
+|---|---|
+| Browse root of `Filesystem (local disk)` lists **exactly 13 artist folders**, every one a single named artist — Benson Boone, BLACKPINK, Chris Norman, Def Leppard, Ed Sheeran, Garth Brooks, Hawthorne Heights, Katy Perry, Lady Gaga, P!nk, Sabrina Carpenter, Taylor Swift, Vengaboys | Independently confirms **D-08** (the library holds no Various Artists compilation) **from the consumer side**, and matches `sensor.music_library_nfs_mount` = 13 exactly — two instruments, one number |
+| `Chris Norman / Lifelines (2026)` opened: **15 tracks, every row attributed `Chris Norman • Lifelines • 2026`** | Criterion 3's exact match on album name AND album artist, confirmed **by eye** rather than only by API — and at track level, not just album level |
+| **Tracks played; the audio matches the metadata** | The one thing no assertion in this phase could reach. See above |
+| **No `Various Artists` entry anywhere** | The `missing_album_artist_action` fallback never misfired on real library content. The 02-07 matrix showed it *can* yield `Various Artists` on an album-tag/album-folder mismatch; on this library's actual content it did not |
+| **No stray singles** — no loose tracks promoted to album entries | The provider's `content_type: music` and the tree's `ALBUMARTIST/Album/NN Title` shape are behaving as intended |
+| **`Mastermix Essential Hits - Pop 4 - 2005-2009` is ABSENT** | **The correct result, and it is positive evidence.** It was served through the temporary export, and both it and provider `filesystem_local--f5gkrCpU` were torn down in 02-07. Its absence is **D-46's two-sided teardown confirmed from the consumer side, after the fact** — a fourth, independent check on top of the four assertions 02-07 executed |
+
+### One thing that is present and must not be misread
+
+**The `Def Leppard` folder IS visible in the browse listing. That is expected and is NOT the defect
+being resolved.** The known defect is at the album/track level *inside* it:
+`Def Leppard/Def Leppard (2015)/` derives an **empty** album artist and hard-errors
+`CD 01-06 … Sea of Love.flac`, because the album folder name equals the artist folder name. The
+artist folder itself is perfectly normal and holds other albums. **The defect remains deliberately
+unrepaired under D-05** — nobody holds `rw` on Music until Phase 6 and the export is `ro` — and it is
+still owned by Phase 7. Stated explicitly so a future reader does not read the folder's presence as
+the defect having gone away.
+
+### What this approval does NOT sweep up
+
+The operator approved **criterion 3 — what a person sees in Music Assistant**. It is not an approval
+of the two items recorded open above, and neither is closed by it:
+
+1. **D-54b (`music02_supervisor_issue_raised`) is blind at boot and NOT fixed** — diagnosed, with its
+   fix recorded and deliberately deferred.
+2. **The mount-failure notification has never been delivered against a genuinely bad mount** — its
+   trigger path and action gate are proven by firing; delivery is proven only as "service registered
+   + templates render".
+
+Both remain in `.planning/STATE.md` § Blockers/Concerns and in
+`stacks/selfhosted/arrs/beets.md` § "Still open".
+
+**PHASE 02 IS CLOSED.** All five criteria proven, CONS-01/02/03 complete, standing coverage in
+place, and the human gate satisfied by a stronger test than it asked for.
 
 ## Self-Check
 

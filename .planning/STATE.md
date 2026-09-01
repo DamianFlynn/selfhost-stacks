@@ -3,11 +3,11 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-01T14:23:42.498Z"
-last_activity: "2026-09-01 -- 02-09 executed: criterion 5 recorded, fold-in done, awaiting the D-55 operator confirmation"
+last_updated: "2026-09-01T14:35:00.000Z"
+last_activity: "2026-09-01 -- PHASE 02 CLOSED: operator approved D-55 after playing tracks; all five criteria proven"
 progress:
   total_phases: 9
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 18
   completed_plans: 18
   percent: 100
@@ -28,21 +28,42 @@ pipeline that someone owns.
 
 ## Current Position
 
-Phase: 02 (nfs-export-and-music-assistant-reachability) — **AWAITING THE D-55 CLOSURE GATE**
-Plan: 9 of 9
-Status: **All nine plans executed.** 02-09's work is complete and committed — the consumers audit is
-folded into `quick-health-check.sh`, criterion 5 is recorded in PROJECT.md with Route B's failure
-symptom and the old assertion rewritten, and the operational record is in `beets.md` and
-`NETWORK.md`. **The phase does not close until the operator opens Music Assistant and confirms the
-albums appear under the right album artists (D-55).** That is a human judgement on purpose: this
-project exists because pipelines were declared working three times and were not. Record the reply in
-`02-09-SUMMARY.md` § "Closure response", then transition.
-Last activity: 2026-09-01 -- 02-09 executed: criterion 5 recorded, fold-in done, awaiting the D-55 operator confirmation
+Phase: 02 (nfs-export-and-music-assistant-reachability) — **COMPLETE**
+Plan: 9 of 9 — all executed. **Next: `/gsd-transition`, then Phase 3 (Tagger Spike).**
+Status: **PHASE CLOSED 2026-09-01.** All nine plans executed, all five criteria proven, CONS-01/02/03
+complete. The consumers audit is folded into `quick-health-check.sh`, criterion 5 is recorded in
+PROJECT.md with Route B's failure symptom and the old assertion rewritten, and the operational record
+is in `beets.md` and `NETWORK.md`. **D-55's human gate is SATISFIED** — and by a stronger test than
+it asked for: the operator browsed MA's Filesystem (local disk) provider, spot-checked albums, and
+**played tracks to confirm the audio matches the metadata**. No assertion in this phase could do
+that — every automated check verifies MA's *database* says the right thing, never that the *bytes*
+are the right song, and the documented stale state is precisely "entries exist, playback fails".
+Last activity: 2026-09-01 -- PHASE 02 CLOSED: operator approved D-55 after playing tracks; all five criteria proven
 Phase 1 complete: SAFE-01…05, WRIT-01…04, QUAL-01
+Phase 2 complete: CONS-01, CONS-02, CONS-03
 
-Progress: [██████████] 100%  *(18 of 18 plans **written and executed**; phases 3-9 are not planned yet, so this bar is not milestone progress)*
+Progress: [██████████] 100%  *(18 of 18 plans **written and executed**; phases 3-9 are not planned yet, so this bar is not milestone progress — **the MILESTONE is 2 of 9 phases**)*
 
 Plans 02-01 through 02-09 are executed. **CONS-01, CONS-02 and CONS-03 are all complete.**
+
+**What the operator observed, from the consumer side — two of these are independent confirmations
+of things this phase proved by other means:**
+- MA's browse root lists **exactly 13 artist folders**, every one a single named artist. Confirms
+  **D-08** (no Various Artists compilation in this library) from the consumer side, and matches
+  `sensor.music_library_nfs_mount` = 13 exactly.
+- `Chris Norman / Lifelines (2026)`: 15 tracks, every row `Chris Norman • Lifelines • 2026`.
+  Criterion 3 confirmed **by eye**, at track level.
+- **No `Various Artists` entry anywhere; no stray singles.** The `folder_name` fallback never
+  misfired on real library content.
+- **`Mastermix Essential Hits - Pop 4 - 2005-2009` is ABSENT — the correct result.** It was served
+  through the temporary export, torn down in 02-07. Its absence is **D-46's teardown confirmed from
+  the consumer side, after the fact**.
+- The `Def Leppard` **folder** is visible and that is expected — the known empty-album-artist defect
+  is at album/track level *inside* it and remains deliberately unrepaired under D-05. **Do not read
+  the folder's presence as the defect being resolved.**
+
+**⚠ THE APPROVAL COVERS CRITERION 3 ONLY.** It does not close D-54b's boot blindness or the
+never-delivered mount-failure notification. Both stay open — see Blockers/Concerns.
 
 **⚠ NOTHING IS PUSHED.** The operator's 02-08 approval covered `aa2b502..90cdddc`. The tree is
 **5 ahead of `origin/main`**: `a4174e6` + `6ff2332` (02-08) and `9f915a9` + `e37039b` + the 02-09
@@ -510,24 +531,31 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-09-01T14:26:00.000Z
-Stopped at: Completed 02-09-PLAN.md (all 3 tasks) — **HALTED AT THE D-55 CLOSURE GATE**
-Resume file: `.planning/phases/02-nfs-export-and-music-assistant-reachability/02-09-SUMMARY.md`
+Last session: 2026-09-01T14:35:00.000Z
+Stopped at: **PHASE 02 COMPLETE** — 02-09-PLAN.md all 3 tasks, D-55 approved
+Resume file: None. Next action is `/gsd-transition`, then plan Phase 3 (Tagger Spike).
 
-**02-09 IS EXECUTED AND COMMITTED. The phase closes on one human confirmation and nothing else.**
+**02-09 IS COMPLETE AND THE PHASE IS CLOSED.**
 
-The machine gate is green three ways: `check-music-consumers.sh` **0** (FAILURES 0, `--baseline` 0,
+Machine gate green three ways: `check-music-consumers.sh` **0** (FAILURES 0, `--baseline` 0,
 `--bogus` 2), `check-music-freeze.sh` **0**, `quick-health-check.sh` **0** with both blocks green.
 `terraform plan -detailed-exitcode` **0**. All five ROADMAP criteria have an explicit verdict with
 named evidence in `02-09-SUMMARY.md`, including criterion 1's five sub-parts individually.
 
-**What remains (D-55):** the operator opens Music Assistant and confirms the albums appear under the
-right album artists — `Lifelines` under **Chris Norman** and `The Ultimate Hits` under **Garth
-Brooks**. The third pinned album (`Mastermix Essential Hits - Pop 4 - 2005-2009` / Various Artists)
-is **NOT expected to be there**: it was served through the temporary export, which was torn down by
-design in 02-07. Record the reply in `02-09-SUMMARY.md` § "Closure response", then transition.
+**D-55 APPROVED, verbatim:** *"i have spot checked a couple and played them to make sure the song
+matchs - all good, no various artists, no singles . mastermix is not there"*
 
-**Do NOT push without asking.** 5 commits ahead of `origin/main`.
+**The lesson worth carrying:** the operator **played tracks**. Every automated check in this phase
+verifies that MA's **database** says the right thing — album name, album artist, provider
+attribution — and none of them can verify that the **bytes behind the entry are the right song**.
+The stale state this phase spent two plans characterising is exactly *"entries exist, playback of
+any of them fails"* — 70 albums, all unplayable, every database assertion still passing. **Playback
+is the only test that closes that, and it is not automatable from here.** D-55 earned its place.
+
+**⚠ Do NOT push without asking.** **5 commits ahead of `origin/main`** — `a4174e6` + `6ff2332`
+(02-08) and `9f915a9` + `e37039b` + the 02-09 close. `/mnt/fast/stacks` on LXC 100 is still at
+`90cdddc`, so it does not yet carry the folded-in `quick-health-check.sh` — which does not matter,
+because that script runs from the workstation.
 
 ---
 
