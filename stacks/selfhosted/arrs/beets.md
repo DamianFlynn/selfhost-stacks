@@ -212,9 +212,12 @@ gives even freshly created files a non-trivial NFSv4 ACL that `chmod` may not re
 would be `zfs set aclmode=passthrough`, which under passthrough makes a `chmod` rewrite the ACL
 on all 2,674 entries — a larger change than the problem. Modes stay `0777`.
 
-**Phase 2 inherits both halves.** `568:568` becomes the export's `anonuid`/`anongid`, and because
-ZFS `acltype=nfsv4` ACLs are not exported by knfsd, **mode bits are the only lever NFS clients
-see** — so the export must remain read-only, since the tree is world-writable.
+**Phase 2 inherited both halves, and did — this is DONE, not pending** *(2026-09-01)*. `568:568`
+**is** the export's `anonuid`/`anongid`, and because ZFS `acltype=nfsv4` ACLs are not exported by
+knfsd, **mode bits are the only lever NFS clients see** — so the export **is** read-only, since the
+tree is world-writable. Proven at the export layer, not by configuration politeness: a hand-rolled
+`mount -o rw` from the NUC *succeeded* and every write was still refused `EROFS`. See
+§ "Phase 2 — the NFS export and Music Assistant" below.
 
 ### One writer on the library
 
@@ -405,3 +408,524 @@ chown -R 568:568 /mnt/tank/media/TV
 Also unowned and recorded here rather than fixed: **uid 3000 owns 197,776 of `tank/downloads`'
 209,039 entries (94.6%)** and also wrote the library's `.DS_Store`. Something writes as uid 3000;
 nothing in this repo declares it.
+
+---
+
+## Phase 2 — the NFS export and Music Assistant (2026-09-01)
+
+The library had one consumer. It now has two: **Jellyfin on LXC 100 and Music Assistant on the
+HA NUC read the same tree**, MA over a read-only NFSv4 export served from the Proxmox host. This
+section records **what is true now and how to operate it**; the narrative lives in
+`.planning/phases/02-nfs-export-and-music-assistant-reachability/02-0N-SUMMARY.md`.
+
+Music Assistant runs as a **Home Assistant add-on on the NUC**, so it has no stack in this repo
+for a document to sit beside. This file is its document-beside-the-stack home, because the library
+it reads is the one this file is about.
+
+**Every assertion below was proven at Music Assistant `2.11.0b0`** — a BETA, with `auto_update`
+**on**, and stable not installed at all. That version stamp is not decoration: it is the drift
+detector. `scripts/check-music-consumers.sh` records the live version on every run, so an MA
+release that changes provider behaviour surfaces as a failed assertion beside a changed version,
+rather than as a silent pass.
+
+### The export
+
+Source of truth is **`infra/nfs-music-export.tf`**. Terraform writes `/etc/exports.d/music.exports`
+on atlantis; never hand-edit it. Live line, from `exportfs -v` on atlantis (continuations joined —
+see the traps below):
+
+```
+/mnt/tank/media/Music 172.16.1.31(sync,wdelay,hide,no_subtree_check,mountpoint,anonuid=568,anongid=568,sec=sys,ro,secure,root_squash,all_squash)
+```
+
+| Option | Value | Why |
+|---|---|---|
+| client | **`172.16.1.31`**, a bare address | The NUC's LAN IP and nothing else. No wildcard, no CIDR. Measured, not taken from `NETWORK.md`: `ip route get 172.16.1.158` on the NUC returns `src 172.16.1.31` |
+| — | *(tailnet `100.73.196.51` deliberately absent)* | NFS never crosses the tailnet in this design; adding it widens the blast radius for nothing. Off-LAN mounting would be a deliberate new export line |
+| `ro` | read-only | **Forced, not chosen.** The tree is `0777` (Phase 1, above) and ZFS `acltype=nfsv4` ACLs are not exported by knfsd, so mode bits are the only lever a client sees. A world-writable tree therefore *must* be exported `ro` |
+| `all_squash` | every client identity | With `anonuid`/`anongid` below, every access lands as the service account regardless of who the client claims to be |
+| `anonuid=568` `anongid=568` | `apps:apps` | Inherits Phase 1's WRIT-04 normalisation directly |
+| **`mountpoint`** | — | **The single highest-value option, and it is in NEITHER of `CLAUDE.md`'s two original candidate option sets.** It makes `rpc.mountd` refuse to serve the export when the ZFS dataset is not mounted, so a boot race cannot export an empty directory and make the library look deleted. **Proven** — see the trap about `exportfs -v` below |
+| `no_subtree_check` | — | Standard for a whole-dataset export |
+| `sec=sys` | — | Accepted residual risk, recorded as a choice in `.planning/PROJECT.md` § Key Decisions. `xprtsec=` (RFC 9289) and `sec=krb5` were both considered and rejected |
+| `root_squash`, `secure` | — | `no_root_squash` is forbidden by `CLAUDE.md` and is moot under `all_squash` anyway |
+
+Server side: `nfs-kernel-server 1:2.8.3-1` from `deb.debian.org/debian trixie/main`, on **atlantis**
+(the Proxmox host), never on LXC 100 — that container is unprivileged and `nfsd` is privileged-only.
+The unit is **enabled**, so it survives a host reboot, and carries an ordering drop-in
+`After=zfs-mount.service` (guard M2). **Port 2049 is this phase's only delta.** 111 (rpcbind) was
+already open from the pre-existing `nfs-common` — asserting on 111 claims a transition this work
+did not cause.
+
+### The client half — the mount and the provider
+
+On the NUC, through HA Supervisor. Route A (Supervisor network storage) beat Route B (MA's own
+remote-share provider); the decision and Route B's failure symptom are in `.planning/PROJECT.md`.
+
+```bash
+# Supervisor mount. The name must match ^[A-Za-z0-9_]+$ — `tank-music` is rejected opaquely.
+# The server is an IP because HAOS has no guaranteed resolver.
+ha mounts add music --type nfs --usage media --server 172.16.1.158 \
+    --path /mnt/tank/media/Music --read-only --no-progress
+
+ha mounts info --raw-json
+# -> {"path":"/mnt/tank/media/Music","server":"172.16.1.158","name":"music","type":"nfs",
+#     "usage":"media","read_only":true,"state":"active","user_path":"/media/music"}
+```
+
+MA then reads `/media/music` through a **filesystem_local** provider created headlessly. Note the
+**second save**: the provider is created first, and `missing_album_artist_action` is set by a
+follow-up `config/providers/save`.
+
+```
+config/providers/setup  {"provider_domain":"filesystem_local"}                    -> flow_id
+config/flows/submit     {values:{content_type:"music", path:"/media/music"}}      -> instance_id
+config/providers/save   {values:{missing_album_artist_action:"folder_name"}}      <- the second call
+```
+
+**PINNED IDENTITIES — these are identities, not settings. Changing them silently breaks things:**
+
+| | Value |
+|---|---|
+| MA provider instance | `filesystem_local--XJaJWNUS` |
+| MA endpoint (from the LAN) | `http://172.16.1.31:8095/api` |
+| MA endpoint (from a tailnet vantage) | `http://100.73.196.51:8095/api` — the NUC's LAN IP is unreachable from the tailnet while it is the *standby* subnet router |
+| Supervisor mount name / user path | `music` / `/media/music` |
+| MA version every assertion was proven at | **`2.11.0b0`** (BETA, `auto_update` on) |
+
+Credentials are referenced **by variable name only** — this repo is public and has one prior
+exposure on record. `/mnt/fast/secrets/ma-deercrest.env` and
+`/mnt/fast/secrets/jellyfin-deercrest.env` on LXC 100 (both `0600 root`, the Jellyfin key is named
+`music-consumers-audit`); `~/.claude/secrets/music-assistant.env` and
+`~/.claude/secrets/ha-deercrest.env` on the workstation; `/config/secrets.yaml` key
+`ma_ha_sync_authorization` on the NUC.
+
+### The API assertion shapes
+
+MA 2.11's API has three traps that each produce a *silent pass* — a green result with the mount
+broken or absent. Use these shapes, not the obvious ones.
+
+```bash
+# Authenticate. There is no API-token screen in MA 2.11's UI (there IS an auth/token/create
+# API command). Log in per run rather than caching — a cached JWT expires silently.
+POST /api  {"command":"auth/login","args":{"username":"...","password":"..."}}  -> .access_token
+#   then: Authorization: Bearer <token>          <- MA rejects a bare token outright
+#   Responses are NOT wrapped in .result — auth/login returns {access_token,...},
+#   config/providers returns a BARE ARRAY. A `.result[]` filter errors, and under `|| true`
+#   that reads as "no providers".
+
+# Trigger a sync rather than waiting out the 12 h default sync_interval.
+{"command":"music/sync","args":{"providers":["filesystem_local--XJaJWNUS"],
+                                "media_types":["track"]}}
+#   Poll tasks/get for status; the concurrency guard logs "Library sync already running"
+#   and returns, which otherwise looks like a completed sync.
+
+# Count / list albums. The filter argument here is `provider`, and it takes an instance id.
+{"command":"music/albums/library_items","args":{"provider":"filesystem_local--XJaJWNUS"}}
+#   ⚠ NEVER use music/albums/count — IT HAS NO PROVIDER PARAMETER. Measured: 87 with and
+#     without the arg while the provider-filtered list held 9. It reports green off Spotify's
+#     catalogue with no mount at all. Spotify is live on this MA instance.
+#   ⚠ NEVER pass the album name as `search`. It is not a substring match: an album's own exact
+#     name returned [] while a shorter token returned the same album from the same provider in
+#     the same second. Filter on `provider`, pull the list, and compare byte-exact locally.
+```
+
+Provider-filtered counts and the two library proof albums, at plan close:
+
+```
+music/albums/library_items, provider=filesystem_local--XJaJWNUS   ->  70
+Lifelines            / Chris Norman     EXACT on album name AND artists[0].name
+The Ultimate Hits    / Garth Brooks     EXACT on album name AND artists[0].name
+```
+
+### The album-artist fallback, and its precondition
+
+`missing_album_artist_action` is **`folder_name`**, permanently — not MA's `various_artists`
+default, which is a trap for a library heavy on DJ compilations that legitimately *are* Various
+Artists. It fired **183 times** across the live library during the criterion-3 sync.
+
+**⚠ IT IS CONDITIONAL, AND THE API CANNOT TELL YOU IT DID NOT FIRE.** It fires only when a file's
+`album` **tag** agrees with its album **folder** name (a trailing `(year)` is ignored). On a
+mismatch MA silently falls back to `Various Artists` **while `config/providers/get` still reads
+back `folder_name`**. Isolated with a four-cell variant matrix, not inferred:
+
+| artist folder | album folder | `album` TAG | track `artist` TAG | MA's own log line | result |
+|---|---|---|---|---|---|
+| `ZZ Phase2 Fallback Control` | `Untagged Control Album (2026)` | **mismatch** | decoy | `using Various Artists as fallback` | `Various Artists` |
+| `QQ Control Bravo` | `Bravo Album (2026)` | **match** | matches | `using foldername QQ Control Bravo as fallback` | `QQ Control Bravo` ✅ |
+| `QQ Control Charlie` | `Charlie Album (2026)` | **match** | **decoy** | `using foldername QQ Control Charlie as fallback` | `QQ Control Charlie` ✅ |
+| `QQ Control Delta` | `Delta Album (2026)` | **mismatch** | matches | `using Various Artists as fallback` | `Various Artists` |
+
+The track-artist tag is irrelevant. **Reading the setting back is not proof it applies.** Album
+identity in MA is `albumartist + os.sep + album`, so a wrong album artist is durable, and clearing
+it means removing the provider — which purges every item exclusive to it, favourites and play
+counts included.
+
+**A live library defect, recorded and deliberately NOT repaired:**
+`/mnt/tank/media/Music/Def Leppard/Def Leppard (2015)/` derives an **empty** album artist and hard-
+errors `CD 01-06 Def Leppard - Sea of Love.flac`, because the album folder name equals the artist
+folder name — MA appears to match the album tag against the path and take the *parent*, which lands
+on the provider root. The remedy is never tag repair (nobody holds `rw` on Music until Phase 6 and
+the export is `ro`), and the file itself is fine: `zpool status -v tank` reports no known data
+errors, so it is not 2026-07 scrub damage. Handed to Phase 7.
+
+### Reboot evidence
+
+Both transcripts below are **ANSI stripped, otherwise unedited**.
+
+**Positive reboot** — NUC rebooted with atlantis healthy, `boot_id` proven changed
+(`b86dada0…` → `3a7906c0…`), **zero manual intervention**: no remount, no `ha mounts reload`, no
+add-on restart, no hand sync.
+
+```
+mount state          {"state":"active","read_only":true}
+ls -1 /media/music   13        (artist folders)
+MA albums, provider-filtered   70
+proof albums                   2/2 EXACT
+M4a fired unprompted at        2026-09-01T12:43:25.944109+00:00   (~120 s after HA start)
+check-music-consumers.sh       exit 0, FAILURES 0
+```
+
+**Negative control** — `nfs-server` stopped on atlantis *before* the reboot. This is the case the
+`mountpoint` option and M4 exist for, and a green positive reboot proves nothing about it.
+
+```
+2026-09-01 13:50:58.310 ERROR   [supervisor.mounts.mount] Mounting music did not succeed. Check host logs for errors from mount or systemd unit mnt-data-supervisor-mounts-music.mount for details.
+2026-09-01 13:50:58.311 INFO    [supervisor.resolution.module] Create new issue mount_failed - mount / music
+2026-09-01 13:50:58.312 WARNING [supervisor.mounts.manager] Mount music failed to mount, mounting read-only fallback for /mnt/data/supervisor/media/music
+```
+
+```
+2026-09-01 13:54:22.020 ERROR [music_assistant.Filesystem (local disk)] Aborting sync for Filesystem (local disk): scan found no files but 1244 were previously indexed
+```
+
+**MA's deletion guard held — the whole point.** Provider-filtered albums: **70 before, 70 during
+the degraded window, 70 after recovery.** The library went **stale, not empty**.
+
+**Supervisor recovered UNATTENDED in 432 s (7 m 12 s)** from `nfs-server` returning — NUC untouched
+throughout, polled every 60 s. This settles a question community reports dispute. Note the measured
+interval is ~7 minutes, **not** the ~900 s the research assumed. `M4b` then fired on its own at
+`13:12:06.616219Z` and re-synced MA; nothing was hand-triggered.
+
+**What Supervisor's failure actually looks like — and a check that can never match it:**
+
+```
+mount | grep -c -i emergency   ->  0            (there is NO /emergency/ bind mount here)
+ls -ld /media/music            ->  dr--r--r--  2 root root
+ls -A /media/music | wc -l     ->  0
+                        healthy, for contrast:  drwxrwxrwx 15 568 568, 13 artist folders
+```
+
+Supervisor makes the media directory **read-only in place and leaves it empty**. So "does
+`/media/music` exist" is exactly the check that returns a false green, and
+`mount | grep emergency/music` — which several sources suggest — can never match on this version.
+**The working proof line is the entry count.**
+
+### The Home Assistant automations (M4 + the mount alerting)
+
+These live at **`/config/packages/music02_ma_nfs_mount.yaml` on the NUC**. This repo contains no HA
+configuration at all, so they have no home in git — the record is here and in `02-08-SUMMARY.md`,
+which carries the fully-annotated original including the diagnosis comments. The token appears only
+as its `!secret` reference and **must never be committed**.
+
+```yaml
+rest_command:
+  music_assistant_sync_local:
+    url: "http://172.16.1.31:8095/api"
+    method: post
+    content_type: "application/json"
+    headers:
+      # Holds the COMPLETE header value ("Bearer <token>") — MA rejects a bare token.
+      Authorization: !secret ma_ha_sync_authorization
+    payload: >-
+      {"command": "music/sync",
+       "args": {"providers": ["filesystem_local--XJaJWNUS"],
+                "media_types": ["track"]}}
+    timeout: 30
+
+# `ls -1` deliberately, not `ls -A`: the library root carries a .DS_Store, so `ls -A` reads 14
+# where `ls -1` reads 13. Expected value is 13. Runs in the HA Core container, which receives
+# the same /media bind. This is the instrument that works — see the empty-directory note above.
+command_line:
+  - sensor:
+      name: "Music library NFS mount"
+      unique_id: music02_music_library_nfs_mount
+      command: "ls -1 /media/music 2>/dev/null | wc -l"
+      unit_of_measurement: "folders"
+      scan_interval: 300
+      command_timeout: 20
+
+automation:
+  # M4a — collapses the post-reboot staleness window from <=12 h to ~2 min.
+  - id: music02_ma_sync_after_ha_start
+    alias: "Music: re-sync Music Assistant 120 s after Home Assistant starts"
+    mode: single
+    triggers:
+      - trigger: homeassistant
+        event: start
+    conditions: []
+    actions:
+      - delay: "00:02:00"
+      - action: rest_command.music_assistant_sync_local
+
+  # M4b — the case M4a does NOT cover: mount failed at boot, Supervisor re-mounted it later,
+  # MA still holding a stale library. Fired unprompted during the live negative control.
+  - id: music02_ma_sync_on_mount_restored
+    alias: "Music: re-sync Music Assistant when the NFS library mount returns"
+    mode: single
+    triggers:
+      - trigger: numeric_state
+        entity_id: sensor.music_library_nfs_mount
+        above: 0
+    conditions:
+      - condition: template
+        value_template: >-
+          {{ trigger.from_state is not none
+             and (trigger.from_state.state in ['0', 'unknown', 'unavailable']) }}
+    actions:
+      - action: rest_command.music_assistant_sync_local
+      - action: notify.mobile_app_crusader
+        data:
+          title: "Music library mount recovered"
+          message: >-
+            /media/music is back ({{ states('sensor.music_library_nfs_mount') }}
+            artist folders) and Music Assistant has been told to re-sync.
+          data:
+            push: { sound: { name: default } }
+            interruption-level: active
+
+  # The failure alert. THREE triggers, and `boot` is the load-bearing one — see the trap below.
+  - id: music02_nfs_mount_failed_alert
+    alias: "Music: NFS library mount failed or is empty"
+    mode: single
+    triggers:
+      - trigger: homeassistant          # fires AT ATTACH TIME — catches a mount that was
+        event: start                    # already broken before this automation existed
+        id: boot
+      - trigger: numeric_state          # the original: the mount failing mid-run
+        entity_id: sensor.music_library_nfs_mount
+        below: 1
+        id: crossing
+      - trigger: state                  # the sensor LANDS on a bad value without crossing
+        entity_id: sensor.music_library_nfs_mount
+        to: ["0", "unknown", "unavailable"]
+        id: landed
+    conditions: []
+    actions:
+      # Hold, then RE-READ. This replaces a `for:` that used to sit on the trigger.
+      - delay: "00:05:00"
+      - condition: template
+        value_template: >-
+          {{ states('sensor.music_library_nfs_mount')
+             in ['0', 'unknown', 'unavailable'] }}
+      - action: notify.mobile_app_crusader
+        data:
+          title: "Music library mount is down"
+          message: >-
+            /media/music has {{ states('sensor.music_library_nfs_mount') }}
+            artist folders (expected 13). Music Assistant will still list the
+            albums but none of them will play. Check nfs-server on atlantis
+            (172.16.1.158). Supervisor does retry on its own — measured
+            2026-09-01, it recovered unattended 7 min after the server returned.
+          data:
+            push: { sound: { name: default } }
+            interruption-level: active
+
+  # ⚠ OPEN ITEM — see "still open" below. Correct, proven by a synthetic event, and BLIND AT
+  # BOOT by integration-setup ordering, which is when it is needed.
+  - id: music02_supervisor_issue_raised
+    alias: "Music: Supervisor raised a system issue"
+    mode: queued
+    max: 10
+    triggers:
+      - trigger: event
+        event_type: repairs_issue_registry_updated
+        event_data:
+          action: create
+          domain: hassio
+    conditions: []
+    actions:
+      - action: notify.mobile_app_crusader
+        data:
+          title: "Supervisor raised a system issue"
+          message: >-
+            Home Assistant Supervisor raised a new repairs issue
+            ({{ trigger.event.data.issue_id }}). If the music library is
+            involved this is MOUNT_FAILED — check Settings > System > Repairs.
+          data:
+            push: { sound: { name: default } }
+            interruption-level: active
+```
+
+`/config/secrets.yaml` gained exactly one key, `ma_ha_sync_authorization`, holding the complete
+`Bearer <token>` header value. Minted via MA `auth/token/create`, name
+`"HA M4 music sync (phase 02-08)"`, 1-year expiry, no auto-renew, revocable by `token_id` through
+`auth/token/revoke`. It is **separate** from the audit-script credential on LXC 100 so either can
+be replaced without breaking the other. A NUC rebuild restores everything above from this document
+except the token, which must be re-minted.
+
+### How to re-run
+
+`check-music-consumers.sh` is host-resident on LXC 100 and runs from `/mnt/fast/stacks` after a
+`git pull` — same as the Phase 1 scripts. It is host-resident for **credentials and reachability**,
+not command length: Jellyfin publishes no host port and is reachable only from LXC 100, and both
+credentials live at `/mnt/fast/secrets/` there.
+
+| Command | Does |
+|---|---|
+| `bash scripts/check-music-consumers.sh` | audits all 6 sections — export, MA reachability and provider identity, the three proof albums in MA, the same three in Jellyfin, mount liveness; **exits 1** on any failed assertion, **2** on a bad flag. Read-only by contract: it never calls `music/sync` |
+| `bash scripts/check-music-consumers.sh --baseline` | same report, always exits 0 — for recording a before-state |
+| `bash scripts/check-music-consumers.sh -h` | usage, exit 0 |
+| `MA_TEMP_PROVIDER_INSTANCE=<id> bash scripts/check-music-consumers.sh` | additionally **asserts** the `scope=temp-export` proof album. Unset (the normal state) that row is *reported with its reason inline*, never silently passed and never permanently red |
+| `bash scripts/quick-health-check.sh` *(workstation)* | runs the freeze harness **and** the consumers audit over ssh; exits 1 if either fails or is unreachable |
+
+The consumers audit runs on every `quick-health-check.sh` from the workstation, which is the path
+already in use — a harness nobody runs is the same failure as no harness. It is also the tool
+Phase 7's CONS-04 calls: its pinned album set is the definition-of-done instrument.
+
+Server-side, from atlantis: `exportfs -v`. Client-side, from the NUC: `/proc/self/mountinfo`.
+**`showmount` and `findmnt` are both ABSENT on the NUC** — measured. Do not write a runbook step
+that asks for them there. `sha256sum` and `nc` *are* present.
+
+### Rollback — a TESTED two-sided teardown
+
+Executed against real state on 2026-09-01 for the *temporary* control export and provider (02-07),
+so this is a tested procedure rather than a hoped-for one — **including the step that did not work
+as authored**, which is the half a runbook most needs. Run in this order (B-9: client before
+server, so nothing holds an open file handle when the export goes away).
+
+**1. Remove the MA provider.**
+
+```
+{"command":"config/providers/remove","args":{"instance_id":"filesystem_local--XJaJWNUS"}}
+```
+
+Returns `null` and completes. **Know what this costs before running it:** measured on the
+disposable instance, it is a *complete purge* of every item exclusive to that provider — albums,
+tracks and artists all to 0, with no orphans — and it takes every favourite and play count attached
+to them. Albums on other providers are untouched.
+
+**2. Unmount on the NUC.**
+
+```bash
+ha mounts remove music
+grep -c '/media/music' /proc/self/mountinfo          # -> 0, from the host AND inside the MA container
+sudo rmdir /media/music                              # Supervisor leaves an empty stub behind
+```
+
+**3. Disable the export in Terraform — through the plan gate, never a bare apply.**
+
+```bash
+cd infra
+terraform plan -out=/tmp/tf.plan          # then READ it
+terraform show -json /tmp/tf.plan | ...   # assert: zero destroys of the LXC, no forces-replacement
+terraform apply /tmp/tf.plan              # apply the SAVED plan
+```
+
+⚠ **A `null_resource` destroy removes NOTHING from the host.** Setting the flag false and
+destroying the resource drops Terraform state only: the drop-in would stay on disk and the export
+would stay **live**, while `terraform plan` reported clean. That is why the teardown lives in an
+**always-present reconciler resource** that removes the drop-in and re-converges `exportfs` at
+*apply* time. A destroy-time provisioner was tried and rejected twice: `terraform validate` refuses
+one that reaches the resource `connection` block, and the only workaround persists the **Proxmox
+root password** into state in plaintext and into every plan diff — in a public repo.
+
+**Assert afterwards, all four:** `exportfs -v` shows only the expected lines; the removed provider's
+`music/albums/library_items` returns `[]`; the provider is absent from `config/providers`; and
+`terraform plan -detailed-exitcode` exits **0**.
+
+### Traps that will mislead the next person
+
+1. **`exportfs -v` printing an export line does NOT mean that export will serve.** This one cost
+   three plans. `mountpoint` was recorded as configured-but-unproven in 02-03 and 02-05 because the
+   export stays listed while the dataset is unmounted. The observation was right and the inference
+   wrong: **the export TABLE is non-discriminating; the SERVED MOUNT is genuinely refused.** The
+   only `mountpoint`-quality check is a real client mount attempt, control-probe-control:
+
+   ```
+   A  dataset mounted    -> mount exit 0,   14 entries
+   B  dataset unmounted  -> mount exit 255, "No such file or directory", 0 entries
+   C  dataset remounted  -> mount exit 0,   14 entries
+   #  sudo mount -t nfs4 -o ro,soft,timeo=50,retrans=2 \
+   #       172.16.1.158:/mnt/tank/media/Music /tmp/m1probe
+   ```
+
+   Run the control **first**. Without it, a failure cannot be distinguished from incapacity.
+
+2. **A different route needs a different evidence set.** Route A's observables (`ha mounts info`
+   state, the `nfs4` line in `/proc/self/mountinfo`, `emergency_count=0`) do not describe Route B at
+   all. Running Route A's checks against a Route B installation passes **vacuously**. If the route
+   is ever changed, the checks change with it.
+
+3. **Measure the NUC's source address; do not take it from `NETWORK.md`.**
+   `ip route get 172.16.1.158` on the NUC. The export is restricted to a single bare address and a
+   documented-but-wrong one fails opaquely.
+
+4. **`exportfs -v` wraps.** The `client(options)` field lands on its own continuation line for these
+   paths. Join continuations before parsing or a client string can be credited to the wrong export.
+
+5. **A nested `ssh` eats the outer script's stdin** — use `ssh -n` for inline `ssh host 'cmd'`.
+   **But `ssh -n` also eats a heredoc**: `ssh -n host 'bash -s' <<EOF` points stdin at `/dev/null`,
+   discards the script and exits 0. `-n` for inline commands ONLY.
+
+6. **Never reach Jellyfin by an IP literal or by the bare name from LXC 100.** Its `t3_proxy`
+   address moves (`192.168.90.25` today, not the `.31` two earlier plans pinned), and the bare name
+   `jellyfin` resolves to **Cloudflare's public edge** because of `search deercrest.info` — a check
+   would pass against the public site with the container down. Resolve fresh:
+   `docker inspect jellyfin --format '{{(index .NetworkSettings.Networks "t3_proxy").IPAddress}}'`.
+
+7. **Never edit `mount_point` in `infra/lxc-*.tf` expecting it to apply.** `ignore_changes` is set
+   on both, so real bind-mount edits plan clean and do nothing.
+
+### The six silent-pass mechanisms found in Phase 2
+
+Collected in one place because the count is the point — six is not bad luck, it is the shape of
+this estate's failures. Every one of them produces a **green result from a broken system**.
+
+| # | Mechanism | Found in |
+|---|---|---|
+| 1 | `music/albums/count` has **no provider parameter** — 87 with and without the arg while the provider-filtered list held 9. It reports green off Spotify's catalogue with no mount at all | 02-04 |
+| 2 | MA `POST /api` responses are **not `.result`-wrapped** — a `.result[]` filter errors, and under `\|\| true` that reads as "no providers" | 02-04 |
+| 3 | `missing_album_artist_action` **reads back `folder_name` while silently using `Various Artists`** — the API cannot tell you the setting did not apply | 02-07 |
+| 4 | **Destroying a `null_resource` removes nothing from the host** — the export stayed live while `terraform plan` reported clean and state said the resource was gone | 02-07 |
+| 5 | **Default `ha supervisor logs` depth does not reach back to boot** — a default-depth `grep -i 'read-only fallback'` returns nothing and is indistinguishable from "it did not happen". `-n 2000` was required | 02-08 |
+| 6 | **`exportfs -v` showing an export line does not mean that export will serve** — see trap 1 | 02-08 |
+
+Listed apart because it is the *opposite* failure mode: `mount \| grep emergency/music` produces a
+false **negative** — it can never match on this Supervisor version, so it argues that a working
+guard did not fire.
+
+And one more, from MA 2.11's API rather than this estate: `search` on `library_items` is **not a
+substring match**. An album's own exact name returned `[]` while a shorter token returned the same
+album from the same provider in the same second — a false *failure* on a gate whose whole value is
+being trusted.
+
+### Still open
+
+- **The Supervisor repairs-issue alert (`music02_supervisor_issue_raised`) is BLIND AT BOOT.**
+  Diagnosed, not fixed, and deliberately so. The trigger configuration is **correct** — a synthetic
+  `repairs_issue_registry_updated` event fired it in 542 ms. It is blind by **ordering, not by
+  race**: `hassio` mirrors Supervisor issues into HA's repairs registry **13–18 s before the
+  `automation` domain sets up**, consistently across four observed starts. A genuine
+  `{action: create, domain: hassio}` event at `12:51:53.032Z` hit a trigger that attached at
+  `12:52:21.951Z`. `hassio` is a bootstrap-stage integration and `automation` is not, so this misses
+  **every** time rather than sometimes. **The recorded fix:** a state-based check of Supervisor's
+  resolution centre at startup — a `command_line` sensor against `http://supervisor/resolution/info`
+  using `$SUPERVISOR_TOKEN`, which the SSH add-on's sudoers already `env_keep`s — instead of the
+  create event. Rejected *for now* on two grounds: for the only issue type this phase cares about it
+  duplicates `music02_nfs_mount_failed_alert`, which has its own boot trigger; and scoped any wider
+  it would immediately and repeatedly page for pre-existing issues nobody has chosen to act on.
+- **The notify path has never been reached against a genuinely bad mount.** The failure alert's
+  *trigger* path is proven by firing (both new triggers, trace-confirmed) and its action gate is
+  proven to swallow a transient. Delivery is proven only as "`notify.mobile_app_crusader` is a
+  registered service and both message templates render against live state". Closing this needs
+  another fault injection.
+- **MA's token table holds 100 entries, 99 of them `WebSocket Session - damian`** — one per audit
+  run, each on a 30-day sliding expiry, and `auth/tokens` caps its response at 100. The fix is a
+  named long-lived token for the audit script too, now that `auth/token/create` is known to exist.
+- **Rotate at project close:** the MA audit credential, the Jellyfin `music-consumers-audit` API
+  key, the MA HA-sync token, and Discogs. Also `Xonora` — a pre-existing MA long-lived token created
+  2026-02-21, expiring **2036**, unused since 2026-03-29, unattributed.
+- **Spotify is enabled and `auth_required`** on this MA instance and still returns library items.
+  Every assertion in this section is provider-filtered on `filesystem_local--XJaJWNUS`; that filter
+  is load-bearing and was never relaxed.

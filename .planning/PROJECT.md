@@ -103,19 +103,40 @@ faithfully preserve the wrong mapping.
 autotagger. Where absent, artwork and tracklists can be sourced externally — Internet Archive,
 or the Mastermix / Music Factory services directly.
 
-**Two consumers, not one.** `/mnt/tank/media/Music` is currently the Jellyfin source only.
+**Two consumers, not one.** `/mnt/tank/media/Music` was the Jellyfin source only.
 Music Assistant — running on the NUC under Home Assistant OS, a separate box from the Proxmox
 host — must read the same store. That makes "tagged correctly" insufficient as a success test:
 a phase is only done when the content is visible in **both** Jellyfin and Music Assistant.
+*(2026-09-01: the second consumer is live. atlantis serves `/mnt/tank/media/Music` `ro` over NFSv4
+to the NUC alone; MA holds 70 albums attributed to the local provider and the three pinned proof
+albums exact-match on album name AND album artist. `scripts/check-music-consumers.sh` asserts this
+on every `scripts/quick-health-check.sh` run, so the both-consumers test is now a standing check
+rather than a one-off.)*
 
-**The mount route is an OPEN QUESTION** *(corrected 2026-08-17 — previously asserted as fact)*.
-HAOS is a locked-down appliance OS so fstab is out, but the two candidate routes conflict between
-primary sources: HA Supervisor's own source supports Settings → System → Storage with usage Media
-(and the MA add-on maps `media:rw`), while Music Assistant's documentation states verbatim that a
-folder cannot be mounted from HA into `/media` and points to its "Filesystem (remote share)"
-provider instead. Phase 2 settles this empirically on three albums, with route B pre-specified so
-a failure does not stall the phase. Both routes need the same NFS export, so that work is not
-blocked by the answer.
+**The mount route is SETTLED — Route A, on measurement** *(resolved 2026-09-01 by Phase 2 plans
+02-05 through 02-08; supersedes both the 2026-08-17 "asserted as fact" reading and the "OPEN
+QUESTION" reading that replaced it)*. HAOS is a locked-down appliance OS so fstab is out, and the
+two candidate routes conflicted between primary sources. **The conflict is resolved, and Music
+Assistant's own documentation is the side that is wrong.** MA's docs state verbatim that a folder
+cannot be mounted from Home Assistant into `/media`; it is mounted there and readable **from inside
+the running Music Assistant container** — `docker exec … ls /media/music` returns the 13 artist
+directories. That sentence in MA's docs is about *local* bind mounts, not Supervisor network
+storage.
+
+The live route: an HA Supervisor NFS mount named `music` (Settings → System → Storage, usage
+**Media**, read-only), `state: active`, `read_only: true`, `user_path: /media/music`, negotiated
+`vers=4.2`, propagated `rslave` into the MA add-on container (`master:1105` in
+`/proc/self/mountinfo`) — into a container that had started two days before the mount existed. MA
+then reads it through a **Local Directory / filesystem** provider, `content_type: music`, instance
+`filesystem_local--XJaJWNUS`, pointed at `/media/music`.
+
+**Route B — MA's own "Filesystem (remote share)" NFS provider — was not needed, and its failure
+symptom is recorded so this is not re-litigated:** it exposes **no client-side `ro` option at
+all** (MA hardcodes its NFS option list), so choosing it would have discarded a whole layer of
+defence in depth and left the server-side `ro` as the only guarantee. Route A's mount carries
+`ro,relatime,vers=4.2` client-side *and* the export is `ro` server-side.
+
+Both routes needed the same NFS export, so that work was never blocked by the answer.
 
 **Prior art:** `stacks/selfhosted/arrs/beets.md` already documents the library state, the A–D
 bucket triage, the two config gaps, and the hard-won gotchas. This project executes and extends
@@ -186,6 +207,12 @@ that plan rather than restating it.
 | Library ownership normalised to `568:568`; modes stay `0777` | `568` is `apps`, the estate service account named independently in `STANDARDS.md:141`, `DEPLOYMENT.md:31` and `README.md:29`; the gid it replaced, 545, is an orphan (`getent group 545` returns nothing). `568:568` also sets the Phase 2 export's `anonuid`/`anongid`. The `0755`/`0644` target is **recorded but not achieved** — `chmod` fails `EPERM` on `tank` even as real root under `aclmode=restricted` | Done 2026-08-18 (01-08 ownership, 01-09 record). Mode half scoped out; export must stay `ro` |
 | Jellyfin's Music metadata freeze is permanent | Once one tagger owns the tree, Jellyfin writing metadata into it is a second writer by another name. Nothing to remember to undo. Caveat measured, not assumed: the freeze gates the automatic path only — an explicit `FullRefresh` still writes | Done 2026-08-18 (01-06) |
 | Jellyfin retained as the documented sole `rw` holder, not made `:ro` | Consumer-class, frozen at the application layer; going `:ro` risks extracted-subtitle and trickplay behaviour across Movies and TV for no gain while that freeze holds. The audit counts it in its own class so a bare "one writer" cannot read as a pass | Done 2026-08-18 (01-05/01-06). Revisit once the tagger owns the tree |
+| **Route A wins: Music Assistant reads the library through an HA Supervisor NFS network-storage mount, not through MA's own remote-share provider** | Chosen on measurement, not on a documentation reading. **The losing route's failure symptom, which is the reason not to revisit it:** MA's "Filesystem (remote share)" provider exposes **no client-side `ro` option at all** — MA hardcodes its NFS option list — so Route B would have discarded a layer of defence in depth and left the server-side `ro` as the sole guarantee. Route A carries `ro,relatime,vers=4.2` client-side *and* `ro` at the export. **MA's own documentation is empirically disproven** on the sentence that drove the whole open question: it states verbatim that a folder cannot be mounted from HA into `/media`, and `docker exec … ls /media/music` inside the running MA add-on returns the 13 artist directories (propagated `rslave`, `master:1105`, into a container that started two days before the mount existed). That sentence is about *local* bind mounts. Measured limit: this is Supervisor's behaviour at the version running on this NUC, proven by `docker exec` and `/proc/self/mountinfo`, not by reading either project's source | Done 2026-09-01 (02-05, re-asserted through 02-08). PROJECT.md's earlier "OPEN QUESTION" passage is corrected above. Accepted consequence (D-27, measured not assumed): `usage: media` also surfaces the library in **Home Assistant's own Media browser**, playable by anyone with HA access — Supervisor offers no finer-grained usage, the mount is `ro`, and the audience already has HA access |
+| `missing_album_artist_action: folder_name`, permanently — never MA's `various_artists` default | The target tree is `ALBUMARTIST/Album/NN Title`, so `folder_name` and a correct tag **agree** when the tag is present and **disagree loudly** when it is absent. MA's default is a trap for *this* library specifically: it is heavy on DJ compilations that legitimately *are* Various Artists, so a missing tag would produce an entry indistinguishable from a correct one. Permanent for the same reason the Jellyfin freeze is (row above) — once one tagger owns the tree the path contract is permanent, so a folder/tag disagreement is always a real defect worth surfacing. Nothing to remember to undo. **Measured limit, and it is a large one: the setting is CONDITIONAL.** It fires only when a file's `album` **tag** agrees with its album **folder** name; on a mismatch MA silently uses `Various Artists` **while `config/providers/get` still reads back `folder_name`**. Isolated with a four-cell variant matrix (02-07), not inferred — the track-artist tag is irrelevant. Proven to fire against a deliberate control album *and* 183 times against the real library, so it is working, not merely configured | Done 2026-09-01 (02-06 configured, 02-07 proven to fire). **Carried to Phase 7 as a blocker:** album-tag/album-folder agreement is a precondition to CHECK, not to assume, and reading the setting back is not proof it applies. Live defect found and deliberately **not** repaired: `Def Leppard/Def Leppard (2015)/` derives an EMPTY album artist and hard-errors one FLAC, because the album folder name equals the artist folder name. D-05 forbids tag repair, nobody holds `rw` on Music until Phase 6, and the export is `ro`. `zpool status -v tank` is clean, so it is not scrub damage |
+| The export line: `ro,all_squash,anonuid=568,anongid=568,mountpoint,no_subtree_check,sec=sys,root_squash,secure,sync` to `172.16.1.31` alone | `ro` is forced, not chosen: Phase 1 left the tree world-writable at `0777` and ZFS `acltype=nfsv4` ACLs are **not** exported by knfsd, so mode bits are the only lever an NFS client sees (`stacks/selfhosted/arrs/beets.md:215-217`, and the ownership row above). `anonuid`/`anongid` inherit Phase 1's WRIT-04 `568:568`. **`mountpoint` is the single highest-value option and appears in NEITHER of `CLAUDE.md`'s two original candidate option sets** — it makes `rpc.mountd` refuse to serve the export when the ZFS dataset is not mounted, which is the guard against a boot-race where NFS exports an empty directory and MA scans a library that looks deleted. Measured limit, and it corrects three plans of doubt: it was recorded unproven in 02-03 and 02-05 because `exportfs -v` keeps listing the export while the dataset is unmounted. **That observation was right and the inference wrong — the export TABLE is non-discriminating, the SERVED MOUNT is genuinely refused.** Proven by control-probe-control from the NUC: dataset mounted → `exit 0`, 14 entries; unmounted → `exit 255`, `No such file or directory`, 0 entries; remounted → `exit 0`, 14 entries | Done 2026-08-31 (02-03 applied), **M1 PROVEN 2026-09-01 (02-08, commit `a4174e6`)**. Source of truth is `infra/nfs-music-export.tf`; NETWORK.md cross-links it. `M2` (`After=zfs-mount.service` on `nfs-server`) remains the first guard; `mountpoint` is a proven second. Do NOT remove the `mountpoint` option |
+| The export is restricted to the NUC's **LAN address `172.16.1.31` only** — the tailnet address is deliberately absent | Traffic the NUC originates toward `172.16.1.158` egresses its LAN interface with source `172.16.1.31` — measured, `ip route get 172.16.1.158` → `src 172.16.1.31`, not taken from `NETWORK.md`. NFS never crosses the tailnet in this design, so adding `100.73.196.51` would widen the blast radius for nothing. Recorded as a decision so it is not re-litigated: if off-LAN mounting is ever wanted, that is a deliberate new export line, not a pre-emptive one. Measured limit: while the NUC is the *standby* subnet router its own LAN IP is unreachable **from a tailnet vantage** (`NETWORK.md:38`, `TAILSCALE.md` §5) — that affects how a human reaches MA's API, and not the NFS path at all, which is LAN-local on both ends | Done 2026-08-31 (02-01 measured, 02-03 applied) |
+| **Accepted residual risk: `sec=sys` on a trusted LAN.** Anything that can present as `172.16.1.31` can read the library | Recorded as a **choice, not an oversight or a silence**, so a future security review meets a reasoned answer. Both alternatives were considered and rejected: **`xprtsec=` / RPC-with-TLS (RFC 9289)** needs `tlshd` configured on both ends for a read-only LAN-local music library, and MA itself documents that it adds no encryption or access control and assumes a local network; **`sec=krb5`** means standing up a KDC on this estate for one read-only share, with unproven `sec=krb5` support on the HAOS side. The compensating controls are real and were asserted: single-host client restriction (no wildcard, no CIDR — checked), `all_squash` to `568:568`, `ro` at the export layer, `no_root_squash` forbidden and moot under `all_squash`, and 2049 not port-forwarded. **Criterion 2 was proven at the EXPORT layer, not client-side**: a hand-rolled `mount -o rw` *succeeded* and every write was still refused `EROFS` — re-run over both NFSv3 and NFSv4.2, because a client-side refusal alone would have passed against a writable export | Done 2026-09-01 (02-03 applied, 02-05 proven). Revisit only if the LAN stops being a trust boundary |
+| Three pieces of Phase 2 runtime state live **only on the NUC** and in no git repository | Stated so a NUC rebuild is a known cost rather than a discovery: (1) Supervisor's `mounts.json` — the `music` NFS mount; (2) **MA's provider settings** — MA 2.11 does not expose a filesystem provider's `path` through its API at all, so the configuration is recoverable only from a SUMMARY; (3) MA's `library.db`. Plus `/config/packages/music02_ma_nfs_mount.yaml` and one `/config/secrets.yaml` key, both reproduced verbatim in `02-08-SUMMARY.md` and in `stacks/selfhosted/arrs/beets.md` — the token excepted, which must be re-minted | Recorded 2026-09-01 (02-06, 02-07, 02-08). Mitigation is the written record, not a backup |
 
 ## Evolution
 
@@ -205,4 +232,6 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-17 after initialization*
+*Last updated: 2026-09-01 after Phase 2 (NFS export and Music Assistant reachability) — the mount
+route corrected from OPEN QUESTION to Route A on measurement, and seven Key Decisions recorded.
+Operational detail lives beside the stack in `stacks/selfhosted/arrs/beets.md` § "Phase 2".*

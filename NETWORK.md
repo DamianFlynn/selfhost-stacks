@@ -1,6 +1,6 @@
 # Network Infrastructure Map
 
-**Last Updated:** 2026-06-11  
+**Last Updated:** 2026-09-01  
 **Network:** 172.16.1.0/24  
 **VLAN:** Default (single VLAN currently)
 
@@ -66,12 +66,24 @@ Full design and runbook: **[TAILSCALE.md](TAILSCALE.md)**
 
 ### Home Automation
 **Host: Home Assistant** (Intel NUC)
-- **IP:** 172.16.1.31
+- **IP:** 172.16.1.31 / tailnet `100.73.196.51`
 - **Hostname:** a0d7b954-ssh
 - **OS:** Home Assistant OS (Linux 6.12.85-haos)
-- **SSH:** sysadmin@172.16.1.31
-- **Role:** Home automation hub
-- **Notes:** Docker not accessible via sysadmin account (runs HA Supervisor)
+- **SSH:** sysadmin@172.16.1.31 (`sudo` is `NOPASSWD: ALL`; the SSH add-on runs with Protection
+  mode off and carries `CAP_SYS_ADMIN` — it is **not** privilege-limited, an earlier reading said
+  otherwise and was wrong)
+- **Role:** Home automation hub; also the **standby subnet router** for `172.16.1.0/24` and an
+  **exit node** (see TAILSCALE.md)
+- **Music Assistant** runs here as an HA add-on on **`:8095`** (8097 stream server, 1780 Snapcast;
+  443 closed, remote access is WebRTC via HA Cloud)
+- **Network storage mount** (since 2026-09-01): a **Supervisor NFS mount named `music`**,
+  read-only, usage *Media*, from `172.16.1.158:/mnt/tank/media/Music`, surfaced at
+  **`/media/music`** and propagated `rslave` into the Music Assistant add-on container. Configured
+  via Settings → System → Storage, or `ha mounts add|info|remove`. See
+  `stacks/selfhosted/arrs/beets.md` § "Phase 2" for the full operational record
+- **Notes:** Docker not accessible via sysadmin account (runs HA Supervisor).
+  **`showmount` and `findmnt` do not exist on this host** — use `/proc/self/mountinfo` for mount
+  facts and `exportfs -v` on atlantis for export facts. `sha256sum` and `nc` are present
 
 ### Raspberry Pi Hosts
 
@@ -228,10 +240,52 @@ use`. dispatcharr now publishes on host port **9192**. Do not reassign 9191.
 > `running`, but is also not `exited`, `dead` or `restarting`. Use
 > `docker ps -a --format '{{.State}}' | sort | uniq -c` for a true census.
 
+### Host-level services on atlantis (Proxmox host, NOT Docker, NOT in `stacks/`)
+
+**NFS server** — serves the music library to the Home Assistant NUC. Managed by Terraform in
+**[`infra/nfs-music-export.tf`](infra/nfs-music-export.tf)**, which is the source of truth: it
+installs `nfs-kernel-server` (guarded, so a re-apply is a no-op), writes
+`/etc/exports.d/music.exports`, and adds an `After=zfs-mount.service` ordering drop-in.
+
+| Unit | Listens | Purpose |
+|------|---------|---------|
+| `nfs-server.service` | **`172.16.1.158:2049`** | NFSv4 export of `/mnt/tank/media/Music`, **`ro`**, to **`172.16.1.31` only** |
+| `rpcbind` | `:111` | Pre-existing from `nfs-common`; **not** part of this change |
+
+The export line, `all_squash` to the estate service account:
+
+```
+/mnt/tank/media/Music 172.16.1.31(sync,wdelay,hide,no_subtree_check,mountpoint,anonuid=568,anongid=568,sec=sys,ro,secure,root_squash,all_squash)
+```
+
+⚠️ **This runs on atlantis, not on LXC 100 — and it cannot move there.** LXC 100 is unprivileged
+and `nfsd` is privileged-only. Anyone looking for the music share on `.159` will not find it, and
+`docker ps` cannot see it from either host.
+
+⚠️ **`ro` is forced, not a preference.** The library tree is `0777` and ZFS `acltype=nfsv4` ACLs
+are not exported by knfsd, so mode bits are the only lever an NFS client sees. A writable export
+would hand every client full write access to the library. Read-only is enforced at the **export**
+layer: a hand-rolled `mount -o rw` from the NUC succeeds and every write is still refused `EROFS`.
+
+⚠️ **Do not remove the `mountpoint` option.** It makes `rpc.mountd` refuse to serve the export when
+the ZFS dataset is not mounted — the guard against a boot race exporting an empty directory and
+making the library look deleted. It is measured to work, and **`exportfs -v` cannot show you that**:
+the export stays listed while the dataset is unmounted, so the export *table* is non-discriminating
+while the served mount is genuinely refused. The only valid check is a real client mount attempt.
+
+⚠️ **The tailnet address is deliberately not in the export line.** The NUC reaches atlantis over
+the LAN (`ip route get 172.16.1.158` → `src 172.16.1.31`); NFS never crosses the tailnet here.
+Accepted residual risk, recorded as a choice in `.planning/PROJECT.md`: under `sec=sys`, anything
+that can present as `172.16.1.31` can read the library. 2049 is not port-forwarded.
+
+Standing check: `bash scripts/check-music-consumers.sh` on LXC 100, which also runs on every
+`scripts/quick-health-check.sh` from the workstation.
+
 ### Services by Host
 - **selfhost (159):** Traefik, Authelia, Sonarr, Radarr, Lidarr, Prowlarr, qBittorrent, Grafana, Dawarich, Open WebUI, Ollama, Immich, FreshRSS, and 60+ others — plus host-level Pulse (above)
+- **atlantis (158):** Proxmox VE — plus host-level `nfs-server` on **2049** serving the music library `ro` to the NUC (above)
 - **cerebro (160):** Qdrant, Redis, SearXNG
-- **Home Assistant (31):** Home Assistant Core + addons
+- **Home Assistant (31):** Home Assistant Core + addons — including **Music Assistant** (`:8095`), which reads the music library through the Supervisor NFS mount at `/media/music`
 - **zgate (135):** Z-Wave2MQTT, Zigbee2MQTT
 - **cgate (128):** C-Bus integration (3 containers)
 
