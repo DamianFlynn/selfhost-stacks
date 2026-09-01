@@ -1,8 +1,8 @@
 ---
 phase: 3
 slug: tagger-spike
-status: draft
-nyquist_compliant: false
+status: approved
+nyquist_compliant: true
 wave_0_complete: false
 created: 2026-09-01
 ---
@@ -115,12 +115,16 @@ Every number this spike produces gets **two independent readings before it is wr
 
 ## Validation Sign-Off
 
-- [ ] All tasks have an automated verify or a Wave 0 dependency
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 90 s
-- [ ] Every recorded number has both instruments named and agreeing
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have an automated verify or a Wave 0 dependency — every task in all 11 plans carries
+      an `<automated>` command; no `<automated>MISSING</automated>` reference exists
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify — trivially satisfied at
+      100% task coverage
+- [x] Wave 0 covers all MISSING references
+- [x] No watch-mode flags
+- [x] Feedback latency < 90 s
+- [ ] Every recorded number has both instruments named and agreeing — *verified at execution, not
+      at planning; this is the one box the plans cannot tick in advance*
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** approved 2026-09-01 (plan-checker Dimension 8 pass over 11 plans; the one open box is
+an execution-time gate by design)

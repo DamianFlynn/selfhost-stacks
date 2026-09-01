@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: ready_to_plan
-last_updated: 2026-09-01T16:27:50.966Z
-last_activity: "2026-09-01 -- PHASE 02 CLOSED: operator approved D-55 after playing tracks; all five criteria proven"
+status: executing
+last_updated: "2026-09-01T21:26:50.599Z"
+last_activity: 2026-09-01 -- Phase 03 planning complete
 progress:
   total_phases: 9
   completed_phases: 2
-  total_plans: 18
+  total_plans: 29
   completed_plans: 18
   percent: 22
-stopped_at: Phase 02 complete (9/9) — ready to discuss Phase 03
+stopped_at: Phase 03 planned (11 plans, 8 waves) — ready to execute
 ---
 
 # Project State
@@ -29,9 +29,16 @@ pipeline that someone owns.
 
 ## Current Position
 
-Phase: 03 (tagger-spike) — not started
-Plan: Not started
-Status: Ready to plan. **Phase 02 CLOSED 2026-09-01** — all nine plans executed, all five criteria
+Phase: 03 (tagger-spike) — PLANNED, not started
+Plan: 11 plans in 8 waves, not started
+Status: **Ready to execute.** Phase 03 planned 2026-09-01 — 11 plans, 8 waves, plan-checker passed
+after one revision. Research falsified parts of CONTEXT.md and six operator decisions (OD-1…OD-6)
+now override it where they conflict; they are recorded in the plan set and must be carried into
+execution. **Wave 1 (03-01) is a hard gate:** LXC 100's `/` is at 99% with 2.2 GB free and holds
+`/var/lib/docker`, against ~2.0–2.3 GB of new images — nothing else may start until an inventoried
+prune (operator-approved) clears a ≥ 8 GB floor.
+
+**Phase 02 CLOSED 2026-09-01** — all nine plans executed, all five criteria
 proven, CONS-01/02/03 complete, verification `passed` 5/5. The consumers audit is folded into
 `quick-health-check.sh`, criterion 5 is recorded in
 PROJECT.md with Route B's failure symptom and the old assertion rewritten, and the operational record
@@ -40,7 +47,9 @@ it asked for: the operator browsed MA's Filesystem (local disk) provider, spot-c
 **played tracks to confirm the audio matches the metadata**. No assertion in this phase could do
 that — every automated check verifies MA's *database* says the right thing, never that the *bytes*
 are the right song, and the documented stale state is precisely "entries exist, playback fails".
-Last activity: 2026-09-01 — quick task 260901-u96: read-write NFS export on atlantis for Home
+Last activity: 2026-09-01 — Phase 03 planning complete (research → 11 plans → checker → revision)
+
+Prior activity: 2026-09-01 — quick task 260901-u96: read-write NFS export on atlantis for Home
 Assistant backups. **Correction worth carrying into any future export work:** `nfs-music-export.tf`'s
 "`ro` is forced, not a preference" is a property of the *TrueNAS-era datasets*, not of `tank`.
 `tank` is `acltype=posix` (local); `tank/media/*`, `tank/downloads` and `tank/timemachine` each set
@@ -56,16 +65,21 @@ Plans 02-01 through 02-09 are executed. **CONS-01, CONS-02 and CONS-03 are all c
 
 **What the operator observed, from the consumer side — two of these are independent confirmations
 of things this phase proved by other means:**
+
 - MA's browse root lists **exactly 13 artist folders**, every one a single named artist. Confirms
   **D-08** (no Various Artists compilation in this library) from the consumer side, and matches
   `sensor.music_library_nfs_mount` = 13 exactly.
+
 - `Chris Norman / Lifelines (2026)`: 15 tracks, every row `Chris Norman • Lifelines • 2026`.
   Criterion 3 confirmed **by eye**, at track level.
+
 - **No `Various Artists` entry anywhere; no stray singles.** The `folder_name` fallback never
   misfired on real library content.
+
 - **`Mastermix Essential Hits - Pop 4 - 2005-2009` is ABSENT — the correct result.** It was served
   through the temporary export, torn down in 02-07. Its absence is **D-46's teardown confirmed from
   the consumer side, after the fact**.
+
 - The `Def Leppard` **folder** is visible and that is expected — the known empty-album-artist defect
   is at album/track level *inside* it and remains deliberately unrepaired under D-05. **Do not read
   the folder's presence as the defect being resolved.**
@@ -586,10 +600,13 @@ one is the output worth having.
 1. **`mount | grep emergency/music` can never match on this Supervisor version.** There is no
    `/emergency/` bind. Supervisor makes the media directory read-only **in place** and leaves it
    empty. The working proof line is `/media/music` present, `dr--r--r--`, root-owned, 0 entries.
+
 2. **`exportfs -v` cannot tell you an export will serve.** It prints the line whether or not
    `rpc.mountd` will honour it. This is how M1 was mis-recorded as unproven for three plans.
+
 3. **The default `ha supervisor logs` depth does not reach back to boot.** A default-depth grep
    returns nothing and looks exactly like "it did not happen". Use `-n 2000` or deeper.
+
 4. **The HAOS SSH add-on is not privilege-limited.** `sudo` is `NOPASSWD: ALL`, `CapBnd` carries
    `CAP_SYS_ADMIN`, Protection mode is already off. Two earlier probes were recorded as blocked by a
    privilege limit; they were blocked by a missing `sudo`.

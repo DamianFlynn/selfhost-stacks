@@ -1445,42 +1445,60 @@ and the beets-flask trial is not published through Traefik.
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **D-01 says wrtag v0.33.0; v0.34.0 shipped 26 Aug 2026.**
+**All six are closed.** Questions 1–3 were put to the operator and answered as OD-5 / OD-3 / OD-4;
+questions 4–6 are answered *by* the spike's own measurement tasks rather than before it, which was
+always the honest disposition. Resolution is recorded inline against each below.
+
+1. **D-01 says wrtag v0.33.0; v0.34.0 shipped 26 Aug 2026.** — **RESOLVED (OD-5, plan 03-08):**
+   neither version is substituted for the other; criterion 3 runs at **v0.20.0, v0.33.0 and v0.34.0**,
+   so D-01 is honoured as written and the question is settled by measurement.
    - Known: v0.34.0 changes nothing in `pathformat`; its only breaking change is the Go toolchain.
    - Unclear: whether D-01's number is a deliberate pin or simply the latest at the time of writing.
    - Recommendation: **test at v0.34.0**, record the v0.33→v0.34 changelog as a path-format no-op,
      and flag the substitution for operator approval at plan sign-off.
 
-2. **D-06 stratifies over `dj-mixes`, which contains no DMC content — but criterion 4 names DMC.**
+2. **D-06 stratifies over `dj-mixes`, which contains no DMC content — but criterion 4 names DMC.** — **RESOLVED (OD-3, plans 03-02 / 03-03 / 03-07):**
+   the operator chose to **widen** rather than add a separate stratum: ~20 folders drawn across
+   `dj-mixes` ∪ `unsorted` as ONE de-duplicated population, superseding D-06's population. The
+   widening was decided **before any evidence was collected**, so T1's 40% is committed against the
+   widened population and criterion 5 is preserved.
    - Known: all DMC folders live in `unsorted` only; `dj-mixes` is a Mastermix-only duplicate subset.
    - Unclear: whether the operator wants the ~40% threshold bound to Mastermix alone.
    - Recommendation: keep D-06's population and threshold **exactly as decided**, and add DMC as a
      **separately reported** stratum. Present as a scope question; do not merge unilaterally.
 
-3. **D-08's stated defect ("`artist`/`album` swapped") is not present in the data.**
+3. **D-08's stated defect ("`artist`/`album` swapped") is not present in the data.** — **RESOLVED (OD-4, plan 03-05):**
+   D-08's *constraint* stands unchanged (minimum viable, `--dry-run` default, committed under
+   `scripts/`, explicitly not DJCC-01); its *worked example* is replaced by the three measured rules.
    - Known: measured over all 764 files; `album` is largely correct, `artist` is a placeholder,
      107 files have no `album` at all.
    - Unclear: nothing technical. This is a documentation correction that needs acknowledging.
    - Recommendation: keep D-08's *constraint* (minimum viable, dry-run, committed, not DJCC-01) and
      replace its *example* with the three measured rules in § *The normalisation script*.
 
-4. **Does Discogs' `index_tracks` treatment change the track count for these releases?**
+4. **Does Discogs' `index_tracks` treatment change the track count for these releases?** — **RESOLVED as designed-in (plan 03-07):**
+   the strict scoring runs at **both** `index_tracks` settings and the artefact states which produced
+   the headline number. Answerable only by running the spike, and the spike now runs it.
    - Known: `index_tracks` defaults to `no`; the plugin has `_coalesce_index_track` and
      `_merge_subtracks`; Mastermix/DMC releases commonly use headings.
    - Unclear: by how much, on this content.
    - Recommendation: **run the strict scoring at both settings** and state which produced the
      headline number. Cannot be settled without running the spike.
 
-5. **Are the 134 WAV files tractable for either tool?**
+5. **Are the 134 WAV files tractable for either tool?** — **RESOLVED as designed-in (plans 03-07 / 03-09):**
+   format is recorded per sampled folder and a `## By dominant format` breakdown is required, so a
+   WAV-dominant stratum surfaces as a finding rather than as noise.
    - Known: `tags.CanRead` includes `.wav`; mutagen's WAV/ID3 support is weaker than its FLAC/MP3
      support; 17.5% of the DJ corpus is WAV.
    - Unclear: whether a WAV-heavy stratum systematically under-performs.
    - Recommendation: record format per sampled folder; if a stratum is WAV-dominant, report its rate
      separately. Cannot be settled without running the spike.
 
-6. **Does beets-flask's "laggy past some hundred folders" limitation bite at 143?**
+6. **Does beets-flask's "laggy past some hundred folders" limitation bite at 143?** — **RESOLVED as out-of-scope, recorded (plan 03-11):**
+   the trial is 5 albums and cannot exercise it. Carried into the decision record as an axis-two risk
+   and an explicit Phase 9 handoff rather than left implicit.
    - Known: the number is documented as approximate, with two open upstream issues (#164, #175).
    - Unclear: whether 143 is under or over the practical threshold.
    - Recommendation: **out of scope for the trial** (which is 5 albums). Record it as an axis-two
