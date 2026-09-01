@@ -258,7 +258,43 @@ that four independent lines of evidence already agree on.
   8. The record includes an honest ergonomics verdict in the operator's own terms — whether the
      chosen combination is one that will still be used in week six. "It works" is not the finding;
      "it works and I will still open it" is.
-**Plans**: TBD
+**Plans**: 11 plans in 8 waves
+
+**Wave 1**
+
+- [ ] 03-01-PLAN.md — Disk-headroom gate on LXC 100: inventory, operator-approved prune, ≥ 8 GB floor, four pinned image pulls (wave 1, blocking checkpoint; OD-1 gates the whole phase)
+
+**Wave 2** *(blocked on Wave 1)*
+
+- [ ] 03-02-PLAN.md — Commit T1/T2/T3, the corrected 143-folder denominator, the OD-2 version split and the OD-3 widening, plus the empty ergonomics scoring sheet — all before any evidence exists (wave 2)
+- [ ] 03-03-PLAN.md — Variant survey over the Phase 1 ffprobe fence, the widened de-duplicated 24-folder draw across `dj-mixes` ∪ `unsorted`, and the reflinked scratch tree behind `@spike-03-t0` (wave 2)
+
+**Wave 3** *(blocked on Wave 2)*
+
+- [ ] 03-04-PLAN.md — Throwaway beets 2.13.1 spike container, spike config with `musicbrainz` explicit, both plugins proven loaded, Music unreachable (wave 3)
+- [ ] 03-08-PLAN.md — Criterion 3: wrtag at v0.20.0 / v0.33.0 / v0.34.0 on single-disc and multi-disc, with the corrected pin-inversion proof (wave 3)
+
+**Wave 4** *(blocked on Wave 3)*
+
+- [ ] 03-05-PLAN.md — `scripts/normalise-dj-tags.py`, dry-run by default, the three measured rules (OD-4), applied on copies with a field-loss gate (wave 4)
+- [ ] 03-06-PLAN.md — `scripts/spike03-discogs-probe.py`, the `tag_album()` NDJSON emitter, and its A1 smoke gate on a known-good album (wave 4)
+
+**Wave 5** *(blocked on Wave 4)*
+
+- [ ] 03-07-PLAN.md — Criteria 1 and 2: the four-cell probe matrix at both `index_tracks` settings, timing and requests, T1 and T2 resolved (wave 5)
+
+**Wave 6** *(blocked on Wave 5)*
+
+- [ ] 03-09-PLAN.md — D-13: wrtag `metadata` versus the mutagen script, same folders, same before-state, same scoring instrument (wave 6)
+
+**Wave 7** *(blocked on Wave 6)*
+
+- [ ] 03-10-PLAN.md — beets-flask v2.0.0-rc6 evaluated by name, and the operator's timed five-album ergonomics trial (wave 7, blocking checkpoints)
+
+**Wave 8** *(blocked on Wave 7)*
+
+- [ ] 03-11-PLAN.md — The two-axis decision record, criterion 4's concrete answer, teardown and closure (wave 8, blocking checkpoint)
+
 **Research**: `--research-phase` — the spike is itself research, and without a defined evidence
 protocol with pre-committed thresholds it drifts into tool advocacy. The normalisation pre-step is
 easy to omit and omitting it invalidates the result. The ergonomics axis needs a defined way to be
@@ -491,7 +527,7 @@ Phase 7. Plans within a phase run sequentially.
 |-------|----------------|--------|-----------|
 | 1. Safety Harness and Freeze the Writers | 9/9 | Complete | 2026-08-18 |
 | 2. NFS Export and Music Assistant Reachability | 9/9 | Complete    | 2026-09-01 |
-| 3. Tagger Spike | 0/TBD | Not started | - |
+| 3. Tagger Spike | 0/11 | Planned | - |
 | 4. Collapse to One Tagger | 0/TBD | Not started | - |
 | 5. Inbox Structure and the Junk Gate | 0/TBD | Not started | - |
 | 6. Tagger Configuration and Dry Run | 0/TBD | Not started | - |
