@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-01T14:05:00.000Z"
-last_activity: "2026-09-01 -- 02-08 complete: criterion 4a PASSED, 4b FIRED, M1 PROVEN, D-54a fixed"
+last_updated: "2026-09-01T14:23:42.498Z"
+last_activity: "2026-09-01 -- 02-09 executed: criterion 5 recorded, fold-in done, awaiting the D-55 operator confirmation"
 progress:
   total_phases: 9
   completed_phases: 1
   total_plans: 18
-  completed_plans: 17
-  percent: 94
+  completed_plans: 18
+  percent: 100
 ---
 
 # Project State
@@ -28,17 +28,36 @@ pipeline that someone owns.
 
 ## Current Position
 
-Phase: 02 (nfs-export-and-music-assistant-reachability) — EXECUTING
+Phase: 02 (nfs-export-and-music-assistant-reachability) — **AWAITING THE D-55 CLOSURE GATE**
 Plan: 9 of 9
-Status: Ready to execute — **02-08 is COMPLETE**, record `02-08-SUMMARY.md` (the `-PARTIAL.md` has
-been folded in and removed, so there is one record, not two). Next is **02-09**, the last plan in
-the phase.
-Last activity: 2026-09-01 -- 02-08 complete: criterion 4a PASSED, 4b FIRED, M1 PROVEN, D-54a fixed
+Status: **All nine plans executed.** 02-09's work is complete and committed — the consumers audit is
+folded into `quick-health-check.sh`, criterion 5 is recorded in PROJECT.md with Route B's failure
+symptom and the old assertion rewritten, and the operational record is in `beets.md` and
+`NETWORK.md`. **The phase does not close until the operator opens Music Assistant and confirms the
+albums appear under the right album artists (D-55).** That is a human judgement on purpose: this
+project exists because pipelines were declared working three times and were not. Record the reply in
+`02-09-SUMMARY.md` § "Closure response", then transition.
+Last activity: 2026-09-01 -- 02-09 executed: criterion 5 recorded, fold-in done, awaiting the D-55 operator confirmation
 Phase 1 complete: SAFE-01…05, WRIT-01…04, QUAL-01
 
-Progress: [█████████░] 94%
+Progress: [██████████] 100%  *(18 of 18 plans **written and executed**; phases 3-9 are not planned yet, so this bar is not milestone progress)*
 
-Plans 02-01 through 02-08 are complete. Next is **02-09**.
+Plans 02-01 through 02-09 are executed. **CONS-01, CONS-02 and CONS-03 are all complete.**
+
+**⚠ NOTHING IS PUSHED.** The operator's 02-08 approval covered `aa2b502..90cdddc`. The tree is
+**5 ahead of `origin/main`**: `a4174e6` + `6ff2332` (02-08) and `9f915a9` + `e37039b` + the 02-09
+close. `/mnt/fast/stacks` on LXC 100 is therefore still at `90cdddc` and does not carry the folded-in
+`quick-health-check.sh` — which does not matter, because that script runs from the workstation.
+
+**THE FIVE CRITERIA — every one PROVEN, evidence and producing plan in `02-09-SUMMARY.md`:**
+1a-1e export/re-apply/host/NUC/NFSv4.2 (02-03 + 02-05) · 2 by Stage **4b** not 4a, at the **export**
+layer (02-05) · 3 exact on album name AND album artist, provider-attributed, in one 177 s sync
+(02-07) · 4 by **both** 4a and 4b, a green 4a alone explicitly insufficient (02-08) · 5 this plan.
+
+**⚠ WHAT IS NOT PROVEN, carried deliberately:** the mount-failure **notification** has never been
+delivered against a genuinely bad mount (trigger path and action gate are proven by firing; delivery
+is proven only as "service registered + templates render"); the literal `"0"` in that automation's
+`to:` list has not fired in isolation; and **D-54b is blind at boot and NOT fixed** (see Blockers).
 
 **CONS-03 IS COMPLETE (02-08) — the NUC was rebooted twice and both criteria are met.**
 
@@ -196,6 +215,7 @@ already open so only 2049 is this phase's delta.
 | Phase 02 P06 | 6min | 2 tasks | 1 files |
 | Phase 02 P07 | 27min | 3 tasks | 2 files |
 | Phase 02 P08 | 195m | 3 tasks | 3 files |
+| Phase 02 P09 | 50 min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -228,6 +248,36 @@ Recent decisions affecting current work:
   documented sole `rw` holder rather than going `:ro`** — consumer-class, frozen at the application
   layer, counted in its own audit class. Measured limit: `SaveLocalMetadata: false` does not stop an
   explicit `FullRefresh`.
+
+- [02-09 / Phase 2 closure]: **Route A wins — Music Assistant reads the library through an HA
+  Supervisor NFS network-storage mount, not through MA's own remote-share provider.** The losing
+  route's failure symptom, recorded so it is not revisited: **Route B exposes no client-side `ro`
+  option at all** (MA hardcodes its NFS option list), so it would have discarded a layer of defence
+  in depth. MA's own documentation is **empirically disproven** on the sentence that created the open
+  question — `docker exec … ls /media/music` inside the running add-on returns the 13 artist
+  directories. PROJECT.md's prior "OPEN QUESTION" passage is **rewritten**, not supplemented.
+
+- [02-09 / Phase 2 closure]: **`missing_album_artist_action: folder_name` is permanent — and it is
+  CONDITIONAL.** It fires only when a file's `album` **tag** agrees with its album **folder** name;
+  on a mismatch MA silently yields `Various Artists` while `config/providers/get` still reads back
+  `folder_name`. **Reading the setting back is not proof it applies, and the API cannot tell you it
+  did not fire.** Phase 7 must check the precondition, not assume it.
+
+- [02-09 / Phase 2 closure]: **The export's `mountpoint` option stays, and is PROVEN** by
+  control-probe-control (mounted → exit 0/14 entries; unmounted → exit 255/ENOENT/0; remounted →
+  exit 0/14). It is in **neither** of CLAUDE.md's original candidate option sets. `ro` is **forced**,
+  not chosen: the tree is `0777` and ZFS NFSv4 ACLs are not exported by knfsd, so mode bits are the
+  only lever a client sees.
+
+- [02-09 / Phase 2 closure]: **`sec=sys` on a trusted LAN is an accepted residual risk, recorded as a
+  CHOICE.** Anything that can present as `172.16.1.31` can read the library. `xprtsec=` (RFC 9289,
+  needs `tlshd` both ends) and `sec=krb5` (needs a KDC, unproven on HAOS) were both considered and
+  rejected. The tailnet address is deliberately absent from the export line.
+
+- [02-09 / Phase 2 closure]: **Standing coverage beats a one-off proof.**
+  `scripts/check-music-consumers.sh` is folded into `scripts/quick-health-check.sh`, the path already
+  in use. With the MA add-on on `auto_update` against a BETA (`2.11.0b0`), this is the only detector
+  of an MA release changing provider behaviour under the pipeline.
 
 - [01-09 / Phase 1 closure]: **`quick-health-check.sh` can now exit non-zero**, and the freeze
   harness runs on it. The library **mode** assertion was scoped to a report inside
@@ -354,10 +404,28 @@ Recent decisions affecting current work:
   into the inbox or imported, the before-state can no longer be recovered and Phase 7's diff has
   nothing to compare against. This is now an explicit dependency on Phase 5.
 
-- **Phase 2 route unresolved:** HAOS `/media` mount vs Music Assistant's own remote-share provider.
-  Primary sources contradict each other. Both routes need the same NFSv4 export, so the export is
-  built first and the empirical test discriminates afterwards. Route B must be pre-specified in the
-  plan so a FAIL does not stall the phase.
+- ~~**Phase 2 route unresolved:** HAOS `/media` mount vs Music Assistant's own remote-share
+  provider.~~ **RESOLVED 2026-09-01 (02-05, recorded 02-09): Route A, on measurement.** MA's own
+  documentation is the side that was wrong. Route B's failure symptom is recorded in PROJECT.md so
+  this is not re-litigated: it exposes no client-side `ro` option at all.
+
+- **⚠ OPEN, carried past Phase 2: `music02_supervisor_issue_raised` (D-54b) is BLIND AT BOOT.** Its
+  trigger config is correct — a synthetic event fired it in 542 ms — but `hassio` mirrors Supervisor
+  issues into HA's repairs registry **13–18 s before the `automation` domain sets up**, consistently
+  across four observed starts. A genuine `{action: create, domain: hassio}` event at `12:51:53.032Z`
+  hit a trigger that attached at `12:52:21.951Z`. `hassio` is bootstrap-stage and `automation` is
+  not, so it misses **every** time, not sometimes. **Recorded fix:** a state-based `command_line`
+  sensor against `http://supervisor/resolution/info` using `$SUPERVISOR_TOKEN` at startup, instead of
+  the create event. Rejected for now because it duplicates `music02_nfs_mount_failed_alert` (which
+  now has its own boot trigger) for the only issue type in scope, and scoped wider it would page
+  repeatedly for pre-existing issues nobody has chosen to act on. Also open: the mount-failure
+  **notification** has never been delivered against a genuinely bad mount.
+
+- **⚠ A live library defect, recorded and deliberately UNREPAIRED:**
+  `/mnt/tank/media/Music/Def Leppard/Def Leppard (2015)/` derives an **empty** album artist and
+  hard-errors `CD 01-06 … Sea of Love.flac`, because the album folder name equals the artist folder
+  name. D-05 forbids tag repair, nobody holds `rw` on Music until Phase 6, and the export is `ro`.
+  `zpool status -v tank` is clean, so it is **not** scrub damage. Handed to Phase 7.
 
 - **Phase 3 drift risk:** the spike must carry pre-committed overturning thresholds and a
   ~20-folder normalisation pre-step, or the Discogs number is invalid and the phase becomes tool
@@ -442,9 +510,26 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-09-01T14:04:40.400Z
-Stopped at: Completed 02-08-PLAN.md (all 3 tasks + the defect fix)
-Resume file: None
+Last session: 2026-09-01T14:26:00.000Z
+Stopped at: Completed 02-09-PLAN.md (all 3 tasks) — **HALTED AT THE D-55 CLOSURE GATE**
+Resume file: `.planning/phases/02-nfs-export-and-music-assistant-reachability/02-09-SUMMARY.md`
+
+**02-09 IS EXECUTED AND COMMITTED. The phase closes on one human confirmation and nothing else.**
+
+The machine gate is green three ways: `check-music-consumers.sh` **0** (FAILURES 0, `--baseline` 0,
+`--bogus` 2), `check-music-freeze.sh` **0**, `quick-health-check.sh` **0** with both blocks green.
+`terraform plan -detailed-exitcode` **0**. All five ROADMAP criteria have an explicit verdict with
+named evidence in `02-09-SUMMARY.md`, including criterion 1's five sub-parts individually.
+
+**What remains (D-55):** the operator opens Music Assistant and confirms the albums appear under the
+right album artists — `Lifelines` under **Chris Norman** and `The Ultimate Hits` under **Garth
+Brooks**. The third pinned album (`Mastermix Essential Hits - Pop 4 - 2005-2009` / Various Artists)
+is **NOT expected to be there**: it was served through the temporary export, which was torn down by
+design in 02-07. Record the reply in `02-09-SUMMARY.md` § "Closure response", then transition.
+
+**Do NOT push without asking.** 5 commits ahead of `origin/main`.
+
+---
 
 **02-08 IS COMPLETE. All three tasks ran, plus a fix for the defect the live test found.** The
 record is `02-08-SUMMARY.md`; `02-08-PARTIAL.md` has been folded into it and removed, so there is

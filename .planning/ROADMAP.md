@@ -46,7 +46,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 the same filesystem paths and the same beets state.
 
 - [x] **Phase 1: Safety Harness and Freeze the Writers** - One writer on the library, everything irreplaceable copied somewhere no tagger can reach, and a before-state tag snapshot taken while the library is still untouched
-- [ ] **Phase 2: NFS Export and Music Assistant Reachability** - The second consumer proven on three albums, before any content flows
+- [x] **Phase 2: NFS Export and Music Assistant Reachability** - The second consumer proven on three albums, before any content flows (all 9 plans executed 2026-09-01; closes on the D-55 operator confirmation)
 - [ ] **Phase 3: Tagger Spike** - One tagger *and* one front end chosen on numbers from this library's own content, against thresholds committed in advance
 - [ ] **Phase 4: Collapse to One Tagger** - One tagger, one database, no idle container holding a rw mount — independently shippable
 - [ ] **Phase 5: Inbox Structure and the Junk Gate** - A staging queue outside the library, with the junk already out of it
@@ -195,7 +195,7 @@ with Phase 1. The export's `anonuid`/`anongid` take the ownership value decided 
 
 **Wave 8** *(blocked on Wave 7 completion)*
 
-- [ ] 02-09-PLAN.md — Fold into `quick-health-check.sh`, record criterion 5 in PROJECT.md/beets.md/NETWORK.md, closure verdict (wave 8, blocking checkpoint)
+- [x] 02-09-PLAN.md — Fold into `quick-health-check.sh`, record criterion 5 in PROJECT.md/beets.md/NETWORK.md, closure verdict (wave 8, blocking checkpoint)
 
 **Research**: `--research-phase` — the HAOS `/media` mount versus MA's own remote-share provider is
 genuinely unresolved between primary sources (Supervisor source says one thing, MA's own docs say
@@ -490,7 +490,7 @@ Phase 7. Plans within a phase run sequentially.
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Safety Harness and Freeze the Writers | 9/9 | Complete | 2026-08-18 |
-| 2. NFS Export and Music Assistant Reachability | 8/9 | In Progress|  |
+| 2. NFS Export and Music Assistant Reachability | 9/9 | Complete — awaiting the D-55 operator confirmation | 2026-09-01 |
 | 3. Tagger Spike | 0/TBD | Not started | - |
 | 4. Collapse to One Tagger | 0/TBD | Not started | - |
 | 5. Inbox Structure and the Junk Gate | 0/TBD | Not started | - |
