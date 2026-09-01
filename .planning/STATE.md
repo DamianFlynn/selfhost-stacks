@@ -31,12 +31,31 @@ pipeline that someone owns.
 
 Phase: 03 (tagger-spike) — PLANNED, not started
 Plan: 11 plans in 8 waves, not started
-Status: **Ready to execute.** Phase 03 planned 2026-09-01 — 11 plans, 8 waves, plan-checker passed
-after one revision. Research falsified parts of CONTEXT.md and six operator decisions (OD-1…OD-6)
+Status: **Ready to execute.** Phase 03 planned 2026-09-01 — 11 plans, 8 waves, plan-checker passed,
+then **cross-AI reviewed (codex / gh copilot / gemini) and revised against 13 findings**, and passed
+the checker again clean. Research falsified parts of CONTEXT.md and six operator decisions (OD-1…OD-6)
 now override it where they conflict; they are recorded in the plan set and must be carried into
-execution. **Wave 1 (03-01) is a hard gate:** LXC 100's `/` is at 99% with 2.2 GB free and holds
-`/var/lib/docker`, against ~2.0–2.3 GB of new images — nothing else may start until an inventoried
-prune (operator-approved) clears a ≥ 8 GB floor.
+execution. **Wave 1 gates everything:** 03-01 is LXC 100's disk gate — `/` at 99% with 2.2 GB free,
+holding `/var/lib/docker` for 103 containers, against ~2.0–2.3 GB of new images; nothing else may
+start until an operator-approved inventoried prune clears a ≥ 8 GB floor.
+
+**⚠ Two review findings changed how the headline number is computed — carry these into execution:**
+- **The 24-folder sample is a COVERAGE sample, not a population estimate.** It is stratified and
+  deliberately never random. T1's headline strict rate and T2's extrapolation are therefore a
+  **per-stratum roll-up weighted by each stratum's prevalence across the 143-folder backlog**
+  (`Σ_s rate_s × weight_s`), never an unweighted average over the 24. The unweighted figure is
+  reported beside it and is explicitly *not* what T1 is tested against. **The 40% threshold value is
+  unchanged** — only the estimator was specified, and it was specified before any weight or rate
+  existed, which is why criterion 5 survives. A stratum with backlog weight but no sampled folder is
+  a **named hole**, enters the roll-up with a 0%/100% band, and if that band straddles 40% **T1 is
+  recorded `indeterminate`** rather than resolved by picking an end.
+- **Criterion 5's custody is a pushed commit, not local history.** 03-02 must reach `origin` before
+  any evidence plan starts, and 03-07 re-asserts the SHA is reachable from `origin/main` before it
+  measures anything. `git log -p` on a mutable local branch is evidence, not proof.
+
+**Operator decisions taken at review:** the weighted roll-up (not a second random sample); and the
+spike compose configs are **archived** under `.planning/` with a `THROWAWAY — DO NOT DEPLOY` banner
+rather than deleted — containers and every credential-bearing runtime file are still purged.
 
 **Phase 02 CLOSED 2026-09-01** — all nine plans executed, all five criteria
 proven, CONS-01/02/03 complete, verification `passed` 5/5. The consumers audit is folded into
@@ -47,7 +66,8 @@ it asked for: the operator browsed MA's Filesystem (local disk) provider, spot-c
 **played tracks to confirm the audio matches the metadata**. No assertion in this phase could do
 that — every automated check verifies MA's *database* says the right thing, never that the *bytes*
 are the right song, and the documented stale state is precisely "entries exist, playback fails".
-Last activity: 2026-09-01 — Phase 03 planning complete (research → 11 plans → checker → revision)
+Last activity: 2026-09-01 — Phase 03 cross-AI reviewed (codex/copilot/gemini) and revised against
+13 findings; checker re-passed clean. Ready to execute.
 
 Prior activity: 2026-09-01 — quick task 260901-u96: read-write NFS export on atlantis for Home
 Assistant backups. **Correction worth carrying into any future export work:** `nfs-music-export.tf`'s
