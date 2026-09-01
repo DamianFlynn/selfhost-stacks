@@ -187,7 +187,7 @@ with Phase 1. The export's `anonuid`/`anongid` take the ownership value decided 
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 02-07-PLAN.md — Criterion 3's exact-match assertion, prove the `folder_name` fallback fires, tear down the control (wave 6)
+- [x] 02-07-PLAN.md — Criterion 3's exact-match assertion, prove the `folder_name` fallback fires, tear down the control (wave 6)
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
@@ -490,7 +490,7 @@ Phase 7. Plans within a phase run sequentially.
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Safety Harness and Freeze the Writers | 9/9 | Complete | 2026-08-18 |
-| 2. NFS Export and Music Assistant Reachability | 6/9 | In Progress|  |
+| 2. NFS Export and Music Assistant Reachability | 7/9 | In Progress|  |
 | 3. Tagger Spike | 0/TBD | Not started | - |
 | 4. Collapse to One Tagger | 0/TBD | Not started | - |
 | 5. Inbox Structure and the Junk Gate | 0/TBD | Not started | - |

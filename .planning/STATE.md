@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-01T10:01:18.885Z"
-last_activity: 2026-09-01 -- Completed 02-06 (MA filesystem provider live, instance id pinned)
+last_updated: "2026-09-01T10:35:57.304Z"
+last_activity: 2026-09-01 -- Completed 02-07 (criterion 3 proven; folder_name fallback proven conditional)
 progress:
   total_phases: 9
   completed_phases: 1
   total_plans: 18
-  completed_plans: 15
-  percent: 83
+  completed_plans: 16
+  percent: 89
 ---
 
 # Project State
@@ -29,15 +29,14 @@ pipeline that someone owns.
 ## Current Position
 
 Phase: 02 (nfs-export-and-music-assistant-reachability) — EXECUTING
-Plan: 7 of 9
+Plan: 8 of 9
 Status: Ready to execute
-Last activity: 2026-09-01 -- Completed 02-06 (MA filesystem provider live, instance id pinned)
+Last activity: 2026-09-01 -- Completed 02-07 (criterion 3 proven; folder_name fallback proven conditional)
 Phase 1 complete: SAFE-01…05, WRIT-01…04, QUAL-01
 
-Progress: [████████░░] 83%
+Progress: [█████████░] 89%
 
-Plans 02-01 through 02-06 are complete. Next is **02-07**, the deliberate `music/sync` and the
-temporary export that serves the Various Artists proof album.
+Plans 02-01 through 02-07 are complete. Next is **02-08**.
 
 **The mount is LIVE and proven** (02-05). Route A won on measurement: a HAOS Supervisor NFS mount
 named `music`, `state: active`, `read_only: true`, `user_path: /media/music`, fstype `nfs4` at
@@ -71,16 +70,37 @@ rebuild must re-run the setup flow with it set explicitly, because the form's de
 **MA's `check_write_access()` created nothing** across provider load, reload and a full initial
 sync of 2,674 entries — T-02-19 closed on the real code path, not a synthetic probe.
 
-**02-07 inherits exactly one red.** `check-music-consumers.sh` now exits **1** on a single failure:
-the Various Artists proof album, `scope: temp-export`, which lives under `tank/downloads` and is
-structurally outside this export. Everything else is green — sections 0, 1, 2, 4 and 5, with **20
-albums attributed to `filesystem_local--XJaJWNUS`** and both library proof albums matched with
-provider attribution confirmed server-side and client-side. Stage the VA album as
-`Various Artists/Mastermix Essential Hits - Pop 4 - 2005-2009/` under the temporary export.
+**CRITERION 3 IS PROVEN and CONS-02/CONS-03 are both COMPLETE (02-07).** All three proof albums
+exact-matched on album name **and** `artists[0].name`, provider-attributed, inside one deliberately
+triggered `music/sync` — **177 s**, not the 12-hour default, which stays untouched per D-38.
+`check-music-consumers.sh` exits **0** in steady state. Provider-filtered album count went 20 → 70.
+
+**⚠ THE BIGGEST FINDING IN THE PHASE: `missing_album_artist_action: folder_name` is CONDITIONAL.**
+It fires only when a file's `album` **TAG** agrees with its album **FOLDER** name. When it does not,
+MA silently falls back to `Various Artists` — while `config/providers/get` still reads back
+`folder_name`. Isolated with a 4-cell variant matrix; the track artist tag is irrelevant (a decoy
+artist still produced the folder name). **A configured setting is not a firing setting**, and album
+identity is `albumartist + os.sep + album`, so a wrong album artist is durable. Phase 7 must treat
+album-tag/album-folder agreement as a precondition it *checks*, not one it assumes.
+
+It does fire, at scale: **183 times** across the real library in that one sync (Def Leppard 57,
+Taylor Swift 36, Ed Sheeran 28, Katy Perry 27, Hawthorne Heights 17, Sabrina Carpenter 16).
+
+**⚠ A live library defect, recorded and NOT repaired:** `Def Leppard/Def Leppard (2015)/` derives an
+**empty** album artist (the album folder name equals the artist folder name) and hard-errors
+`CD 01-06 … Sea of Love.flac`. D-05 forbids tag repair and the export is `ro`, so no remedy was
+available or attempted. `zpool status -v tank` is clean — this is not scrub damage. Phase 7 inherits it.
+
+**Both temporary artefacts are provably gone**, asserted on both sides (D-46), and those four
+assertions are D-45's rollback test — **now executed once against real state**, so 02-09 documents a
+tested procedure. `exportfs -v` shows one `/mnt/tank` line, byte-identical to 02-03's; the second
+provider is absent; its `library_items` is `[]`; `terraform plan -detailed-exitcode` is 0. The
+scratch dataset was destroyed too (Terraform recreates it on the next enable).
 
 **Still not on LXC 100:** the script must be `scp`'d for every run — `git pull` there cannot land it
-(commits `16a9fb2`/`6d4f8de`/`e1c4f93` are local-only; this tree is ahead 34 / behind 9 of origin).
-**02-09 must resolve the push/pull.** Do not push 34 unreviewed commits to this public repo casually.
+(commits `16a9fb2`/`6d4f8de`/`e1c4f93`/`ed1d367`/`d7430ee` are local-only; this tree is ahead 36 /
+behind 9 of origin). **02-09 must resolve the push/pull.** Do not push unreviewed commits to this
+public repo casually.
 
 Before any Terraform work, read the CORRECTION entries under Blockers/Concerns — a bare
 `terraform apply` was measured to be one command away from destroying LXC 100, and port 111 was
@@ -126,6 +146,7 @@ already open so only 2049 is this phase's delta.
 | Phase 02 P04 | 78min | 3 tasks | 1 files |
 | Phase 02 P05 | 13min | 3 tasks | 1 files |
 | Phase 02 P06 | 6min | 2 tasks | 1 files |
+| Phase 02 P07 | 27min | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -238,6 +259,12 @@ Recent decisions affecting current work:
 - [Phase 2]: 02-06: missing_album_artist_action=folder_name on the MA filesystem_local provider is PERMANENT (D-02), not a pilot setting
 - [Phase 2]: 02-06: the MA provider was created entirely HEADLESSLY via config/providers/setup + config/flows/submit + config/providers/save (D-31); the GUI was never opened
 - [Phase 2]: 02-06: MA 2.11 does NOT expose the filesystem provider's path via config/providers/get; /media/music is proven functionally via music/browse and recorded only in 02-06-SUMMARY.md
+- [Phase 2]: 02-07: CRITERION 3 PROVEN — three albums exact-matched on album name AND artists[0].name, provider-attributed, in 177s via a deliberate music/sync rather than the 12-hour default (D-38 untouched)
+- [Phase 2]: 02-07: missing_album_artist_action=folder_name is CONDITIONAL — it fires ONLY when the album TAG matches the album FOLDER name; otherwise MA silently uses Various Artists while config/providers/get still reads back folder_name. Isolated with a 4-cell variant matrix; the track artist tag is irrelevant
+- [Phase 2]: 02-07: Def Leppard/Def Leppard (2015)/ derives an EMPTY album artist and hard-errors one file, because the album folder name equals the artist folder name. Recorded NOT repaired — D-05 forbids tag repair and the export is ro
+- [Phase 2]: 02-07: a null_resource destroy removes NOTHING from the host — music_temp_export_enabled=false was not a teardown until 02-07 added an always-present reconciler resource. A destroy-time provisioner cannot be used: terraform validate refuses it, and the workaround puts the Proxmox root password in plaintext state and in every plan diff
+- [Phase 2]: 02-07: MA 2.11's search arg on music/albums/library_items is NOT a substring match — searching an album's OWN EXACT NAME returned [] while a one-word prefix returned it. Filter on provider only and do the exact match locally, or the gate reports a false FAILURE
+- [Phase 2]: 02-07: config/providers/remove is a COMPLETE purge of everything exclusive to that instance (84->79 albums, exactly -5; 55 tracks, 47 artists), no orphans — and it drops every favourite and play count attached to them
 
 ### Pending Todos
 
@@ -334,6 +361,10 @@ Recent decisions affecting current work:
 - 02-05: M1 (the mountpoint export option) is STILL UNPROVEN. The client-side re-test was attempted — the dataset was unmounted with a dead-man restore, 02-03's finding reproduced (exportfs -v keeps the line), and the estate was fully restored — but the definitive fresh-mount probe was blocked by the sandbox permission classifier and was NOT worked around. NEW instrument for the next attempt: /proc/fs/nfsd/exports DOES populate once a client has mounted (02-03 recorded it as non-discriminating because no client existed) and it emptied when the dataset went away. M2 (After=zfs-mount.service) remains the proven guard; 02-03's threat_flag on infra/nfs-music-export.tf stands.
 - 02-05: check-music-consumers.sh is STILL not on LXC 100 and a git pull there CANNOT land it — commits 16a9fb2 and 6d4f8de are local-only on the workstation, not pushed to origin. This working tree is 'ahead 33, behind 9' of origin/main. The script was scp'd in for the wave gate and removed again. 02-06/02-09 must push before relying on a pull.
 - 02-05: ACCEPTED CONSEQUENCE (D-27/T-02-21) — Route A's usage:media also surfaces the music library in Home Assistant's own Media browser to anyone with HA access. Measured: HA Core reads the same 13 artist directories. Accepted: usage:media is what makes Route A work, the mount is ro on both client and export, and the audience already has HA access. Belongs in PROJECT.md per D-47.
+- **BLOCKING FOR PHASE 7 (02-07): `missing_album_artist_action: folder_name` is CONDITIONAL, and a configured value is NOT a firing value.** Measured with a 4-cell variant matrix on a throwaway export: the fallback uses the artist folder name ONLY when the file's `album` TAG agrees with its album FOLDER name (year suffix ignored). On a mismatch MA silently uses `Various Artists` — while `config/providers/get` reads back `folder_name` throughout, so the API cannot tell you it did not fire. The track artist tag is irrelevant (a decoy artist still produced the folder name; an agreeing artist did not rescue a mismatched album tag). MA's own sync log (`tasks/log`) is the ONLY instrument that names which branch fired — `using foldername X as fallback` vs `using Various Artists as fallback`. Album identity is `albumartist + os.sep + album`, so a wrong album artist is a DURABLE entry and the only cheap repair is removing and re-adding the provider, which drops every favourite and play count attached to its items.
+- **OPEN, recorded not repaired (02-07): `/mnt/tank/media/Music/Def Leppard/Def Leppard (2015)/` derives an EMPTY album artist and hard-errors one file** (`CD 01-06 Def Leppard - Sea of Love.flac`), because the album folder name equals the artist folder name — MA's derivation appears to lock onto the top-level `Def Leppard` directory as the album folder, whose parent is the provider root. Two files hit it; one errored. **No remedy was attempted and none is available here:** D-05 makes tag repair the wrong remedy on principle and the `ro` export makes it unavailable in fact. `zpool status -v tank` is clean, so this is NOT 2026-07 scrub damage. Phase 7 meets this at scale.
+- **CORRECTION for anything querying MA albums (02-07): `search` on `music/albums/library_items` is NOT a substring match.** Searching an album's OWN EXACT NAME returned `[]` while a one-word prefix returned that same album, from the same provider, in the same second (`Mastermix Essential Hits - Pop 4 - 2005-2009` vs `Mastermix`). Short names happen to work, which is what makes it dangerous. Filter on `provider` ONLY and do the exact comparison locally — otherwise the gate reports `no exact match … candidates were: <none>`, indistinguishable from the album being genuinely absent. Fixed in `check-music-consumers.sh` (`ed1d367`).
+- **CORRECTION for any future Terraform teardown (02-07): destroying a `null_resource` removes NOTHING from the host.** `music_temp_export_enabled = false` was not a teardown — the drop-in file stayed on disk and the export stayed live while `terraform plan` reported clean. Fixed by an always-present reconciler resource (`d7430ee`). **A destroy-time provisioner is NOT an option here:** `terraform validate` refuses one whose connection block reads variables, and the only workaround carries the Proxmox root password in `triggers` — plaintext state plus every plan diff, in a public repo. `self.triggers.*` is also unsafe at destroy time: it reads from STATE, so a key added after creation reads null and `grep -q ""` matches every line.
 
 ## Deferred Items
 
@@ -352,26 +383,34 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-09-01T10:00:58.988Z
-Stopped at: Completed 02-06-PLAN.md
+Last session: 2026-09-01T10:35:22.952Z
+Stopped at: Completed 02-07-PLAN.md
 Resume file: None
 
-**02-05 is complete and CONS-01 is ticked.** The Supervisor mount is live, Route A won on
-measurement with Route B's failure symptom recorded (it exposes no client-side `ro` option at all),
-and criterion 2 is proven at the export layer rather than by configuration politeness. Nothing was
-written into `/mnt/tank/media/Music`: 2,674 entries, 33.9 G, zero files newer than the task start.
-Both wave gates pass — `check-music-consumers.sh --baseline` exit 0 with section 1 green 10/10, and
-`check-music-freeze.sh` exit 0 with FAILURES 0.
+**02-07 is complete. CONS-02 and CONS-03 are both ticked, and criterion 3 is proven.** Three albums,
+exact on album name AND `artists[0].name`, provider-attributed, inside a 177-second deliberate
+`music/sync`. `check-music-consumers.sh` exits **0** in steady state and `check-music-freeze.sh`
+exits 0 with FAILURES 0, byte-identical to 01-09's closure. Nothing was written into
+`/mnt/tank/media/Music` at any point: 2,674 entries, 33.9 G, zero files newer than the plan start,
+asserted three times.
+
+**The control FAILED before it passed, and that is the phase's most valuable output** — see the
+`folder_name` blocker under Blockers/Concerns before planning Phase 7. Two instrument defects were
+also found and fixed: MA's `search` argument produced a false FAILURE, and the temporary export's
+teardown produced a silent PASS.
 
 **The PARTIAL naming convention is still the rule for halted plans.** `phase-plan-index` treats any
 `*-SUMMARY.md` as plan-complete on file existence alone, regardless of its `status:` frontmatter — so
 a halted plan's record must be `-PARTIAL.md` and only becomes `-SUMMARY.md` when the plan genuinely
 finishes.
 
-Next in phase 2: **02-06** (the Music Assistant local filesystem provider). Read 02-05's blockers
-first — `MA_LOCAL_PROVIDER_INSTANCE` is still unpinned by design, the audit script must be **pushed**
-before LXC 100 can pull it, and MA is still BETA `2.11.0b0` with `auto_update: true`, so stamp the
-version on every assertion.
+Next in phase 2: **02-08**. Read 02-07's blockers first — the `folder_name` precondition is the one
+that changes what Phase 7 has to check, the `Def Leppard (2015)` empty-album-artist case is a live
+example of it, the audit script must still be `scp`'d to LXC 100 for every run, and MA is still BETA
+`2.11.0b0` with `auto_update: true`, so stamp the version on every assertion.
+
+**D-45's rollback assertions have now been executed once against real state** (02-07 Task 3), so
+02-09's runbook documents a tested procedure — including the part that did not work as authored.
 
 **Two hazards carried from 02-05 for anyone touching the export.** `ssh -n` points stdin at
 `/dev/null`, so `ssh -n host 'bash -s' <<EOF` silently discards the entire script and exits 0 — use
