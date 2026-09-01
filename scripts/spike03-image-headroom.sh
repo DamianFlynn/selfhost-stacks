@@ -150,8 +150,21 @@ esac
 
 # Available GiB on the filesystem holding /var/lib/docker. Digits only, so an empty or non-numeric
 # reading is visibly empty rather than silently coerced to a plausible number.
+#
+# ⚠ MEASURED IN BYTES AND TRUNCATED, NOT `df -BG`. GNU `df -BG` ROUNDS UP: on this very host,
+#   2.2 GiB actually free reports as `3G`. On an 8 GiB floor that is up to 1 GiB of optimism in
+#   exactly the direction that hurts - it would pass the OD-1 gate at 7.1 GiB actual and then hand
+#   ~2.0-2.3 GB of image pulls to a filesystem that cannot take them, on a host where filling `/`
+#   takes down 103 containers. Reading -B1 and doing the division here truncates instead, so the
+#   number printed is never larger than the truth.
+#
+#   03-01's acceptance criterion checks the floor externally with `df -BG ... -ge 8`. This measure
+#   is strictly more conservative, so anything that satisfies this one also satisfies that one.
 avail_gb() {
-  df -BG --output=avail / 2>/dev/null | tail -1 | tr -dc '0-9'
+  local b
+  b="$(df -B1 --output=avail / 2>/dev/null | tail -1 | tr -dc '0-9')"
+  [ -z "$b" ] && return 0
+  printf '%s' "$(( b / 1073741824 ))"
 }
 
 require_docker() {
@@ -395,7 +408,25 @@ do_prune() {
       already=$((already + 1))
       continue
     fi
-    if docker rmi "$id" >/dev/null 2>&1; then
+    # DELETE BY TAG WHEN THERE IS A TAG, BY ID ONLY WHEN THERE IS NOT.
+    #
+    # 03-01 task 1 says "docker rmi each approved line by image ID". Taken literally that is broken
+    # for multi-tagged images, and this estate has one in the candidate list: the live inventory on
+    # 2026-09-01 listed BOTH ghcr.io/advplyr/audiobookshelf:2.35.1 AND :latest, and they are the
+    # same image a7befa7704bd. `docker rmi a7befa7704bd` refuses with "image is referenced in
+    # multiple repositories" and would have to be forced. Removing by TAG untags cleanly, and the
+    # image itself is deleted when its last tag goes - so the two approved rows do exactly the
+    # right thing in sequence, with no -f anywhere.
+    #
+    # The safety property is unchanged: the target still comes from the approved file and nothing
+    # else, and the presence/idempotence check above is still done by ID.
+    local target="$id"
+    case "$name" in
+      ""|"<none>:<none>"|*"<none>"*) target="$id" ;;
+      *)                             target="$name" ;;
+    esac
+
+    if docker rmi "$target" >/dev/null 2>&1; then
       pass "removed $name ($id, $size)"
       removed=$((removed + 1))
     else
