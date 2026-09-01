@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-01T10:35:57.304Z"
-last_activity: 2026-09-01 -- Completed 02-07 (criterion 3 proven; folder_name fallback proven conditional)
+last_updated: "2026-09-01T14:05:00.000Z"
+last_activity: "2026-09-01 -- 02-08 complete: criterion 4a PASSED, 4b FIRED, M1 PROVEN, D-54a fixed"
 progress:
   total_phases: 9
   completed_phases: 1
   total_plans: 18
-  completed_plans: 16
-  percent: 89
+  completed_plans: 17
+  percent: 94
 ---
 
 # Project State
@@ -29,15 +29,59 @@ pipeline that someone owns.
 ## Current Position
 
 Phase: 02 (nfs-export-and-music-assistant-reachability) — EXECUTING
-Plan: 8 of 9
-Status: **02-08 HALTED at its first blocking human checkpoint (D-36)** — Task 1 complete, Tasks 2/3
-awaiting the operator's two NUC reboots. Record: `02-08-PARTIAL.md` (NOT `-SUMMARY.md`).
-Last activity: 2026-09-01 -- 02-08 Task 1 complete (M4 shipped and PROVEN; D-54 alerting built)
+Plan: 9 of 9
+Status: Ready to execute — **02-08 is COMPLETE**, record `02-08-SUMMARY.md` (the `-PARTIAL.md` has
+been folded in and removed, so there is one record, not two). Next is **02-09**, the last plan in
+the phase.
+Last activity: 2026-09-01 -- 02-08 complete: criterion 4a PASSED, 4b FIRED, M1 PROVEN, D-54a fixed
 Phase 1 complete: SAFE-01…05, WRIT-01…04, QUAL-01
 
-Progress: [█████████░] 89%
+Progress: [█████████░] 94%
 
-Plans 02-01 through 02-07 are complete. Next is **02-08**.
+Plans 02-01 through 02-08 are complete. Next is **02-09**.
+
+**CONS-03 IS COMPLETE (02-08) — the NUC was rebooted twice and both criteria are met.**
+
+**Criterion 4a (positive):** boot_id `b86dada0…`→`3a7906c0…`, **zero manual intervention**, mount
+`active`/`read_only`, sensor 13, 70 albums provider-filtered, both proof albums EXACT, audit exit 0,
+M4a re-synced unprompted at 12:43:25Z. Recorded as **necessary but not sufficient** — atlantis was
+healthy, so the race was never exercised.
+
+**Criterion 4b (negative control) FIRED.** `nfs-server` stopped, NUC rebooted
+(`3a7906c0…`→`a2869d72…`). Supervisor's `mounting read-only fallback` logged; `/media/music` empty
+and `dr--r--r--`; MA logged `Aborting sync … scan found no files but 1244 were previously indexed`.
+**The deletion guard held: 70 albums before, 70 during, 70 after. MA went stale, not empty.**
+
+**UNATTENDED RECOVERY SETTLED: 432 s (7 m 12 s)** from `nfs-server` returning to `state: active`,
+NUC untouched throughout — no `ha mounts reload`, no add-on restart, no manual mount. The measured
+interval is **~7 min, not the ~900 s the research assumed**. M4b then fired on its own at
+13:12:06Z and re-synced MA.
+
+**⚠ M1 IS PROVEN (02-08), superseding 02-03 and 02-05 — do NOT re-open it.** A discriminating
+client-mount pair from the NUC, same command minutes apart: dataset **mounted** → exit 0 / 14
+entries; dataset **unmounted** → exit 255 / `No such file or directory` / 0 entries. The `mountpoint`
+export option genuinely makes `rpc.mountd` refuse. **The earlier readings were an instrument error,
+not a defect** — `exportfs -v` keeps printing the line while the dataset is unmounted, so the export
+*table* is non-discriminating while the *served mount* is refused. 02-03's `threat_flag:
+control-not-enforced` on `infra/nfs-music-export.tf` is **retired** and the measurement is recorded
+in the file itself (`a4174e6`). M2 (`After=zfs-mount.service`) remains the boot-race guard; M1 is a
+proven second layer beneath it.
+
+**⚠ THE CONTROL FOUND A REAL ALERTING DEFECT, NOW FIXED.** D-54a's `numeric_state below: 1` trigger
+was **structurally unable to fire** on a boot into a failed mount: HA arms a numeric_state trigger
+only on a non-matching change, and after such a boot the sensor's first value is already `0` — there
+is nothing to cross. Confirmed by contrast: M4b's `numeric_state above: 0` is a genuine crossing and
+did fire. **And the obvious fix — a `state: to: "0"` trigger — would have missed it too:** the
+sensor lands on its boot value 6–15 s *before* the automation attaches, and an unchanged poll fires
+no event. The load-bearing fix is a `homeassistant` `event: start` trigger, which fires **at attach
+time** and therefore cannot be outrun. Both new trigger paths have now fired and are
+trace-confirmed; the original numeric trigger was kept, not swapped.
+
+**D-54b is diagnosed and left OPEN, deliberately.** Its trigger config is correct (proven with a
+synthetic event: fired in 542 ms). It is blind at boot because `hassio` mirrors Supervisor's issues
+into HA's repairs registry ~17 s *before* the `automation` domain sets up — an ordering, not a race,
+identical across four observed HA starts. Fixing it would duplicate D-54a for the only issue type in
+scope and would page for pre-existing unrelated issues.
 
 **The mount is LIVE and proven** (02-05). Route A won on measurement: a HAOS Supervisor NFS mount
 named `music`, `state: active`, `read_only: true`, `user_path: /media/music`, fstype `nfs4` at
@@ -71,7 +115,8 @@ rebuild must re-run the setup flow with it set explicitly, because the form's de
 **MA's `check_write_access()` created nothing** across provider load, reload and a full initial
 sync of 2,674 entries — T-02-19 closed on the real code path, not a synthetic probe.
 
-**CRITERION 3 IS PROVEN and CONS-02/CONS-03 are both COMPLETE (02-07).** All three proof albums
+**CRITERION 3 IS PROVEN and CONS-02 is COMPLETE (02-07)** — CONS-03 was correctly *not* ticked there,
+and was closed by 02-08's reboots. All three proof albums
 exact-matched on album name **and** `artists[0].name`, provider-attributed, inside one deliberately
 triggered `music/sync` — **177 s**, not the 12-hour default, which stays untouched per D-38.
 `check-music-consumers.sh` exits **0** in steady state. Provider-filtered album count went 20 → 70.
@@ -98,10 +143,12 @@ tested procedure. `exportfs -v` shows one `/mnt/tank` line, byte-identical to 02
 provider is absent; its `library_items` is `[]`; `terraform plan -detailed-exitcode` is 0. The
 scratch dataset was destroyed too (Terraform recreates it on the next enable).
 
-**Still not on LXC 100:** the script must be `scp`'d for every run — `git pull` there cannot land it
-(commits `16a9fb2`/`6d4f8de`/`e1c4f93`/`ed1d367`/`d7430ee` are local-only; this tree is ahead 36 /
-behind 9 of origin). **02-09 must resolve the push/pull.** Do not push unreviewed commits to this
-public repo casually.
+**RESOLVED — the `scp` workaround is RETIRED.** The 41 local commits were pushed to `origin/main`
+with explicit operator approval (`aa2b502..90cdddc`, clean `git pull --rebase`, no conflicts), and
+`git pull --ff-only` in `/mnt/fast/stacks` on LXC 100 now lands
+`scripts/check-music-consumers.sh` — verified 2026-09-01, script present at HEAD `90cdddc` and run
+from there for both of 02-08's audit gates. **02-09's fold-in into `quick-health-check.sh` therefore
+has a real pull path**, which closes the blocker 02-05, 02-07 and 02-08's first half all flagged.
 
 Before any Terraform work, read the CORRECTION entries under Blockers/Concerns — a bare
 `terraform apply` was measured to be one command away from destroying LXC 100, and port 111 was
@@ -148,6 +195,7 @@ already open so only 2049 is this phase's delta.
 | Phase 02 P05 | 13min | 3 tasks | 1 files |
 | Phase 02 P06 | 6min | 2 tasks | 1 files |
 | Phase 02 P07 | 27min | 3 tasks | 2 files |
+| Phase 02 P08 | 195m | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -266,6 +314,15 @@ Recent decisions affecting current work:
 - [Phase 2]: 02-07: a null_resource destroy removes NOTHING from the host — music_temp_export_enabled=false was not a teardown until 02-07 added an always-present reconciler resource. A destroy-time provisioner cannot be used: terraform validate refuses it, and the workaround puts the Proxmox root password in plaintext state and in every plan diff
 - [Phase 2]: 02-07: MA 2.11's search arg on music/albums/library_items is NOT a substring match — searching an album's OWN EXACT NAME returned [] while a one-word prefix returned it. Filter on provider only and do the exact match locally, or the gate reports a false FAILURE
 - [Phase 2]: 02-07: config/providers/remove is a COMPLETE purge of everything exclusive to that instance (84->79 albums, exactly -5; 55 tracks, 47 artists), no orphans — and it drops every favourite and play count attached to them
+- [Phase 2]: 02-08: CONS-03 COMPLETE — criterion 4a passed (boot_id changed, zero manual intervention, 70 albums, both proof albums EXACT) and criterion 4b FIRED (Supervisor read-only fallback, MA 'Aborting sync … 1244 previously indexed', 70 albums preserved through the degraded window — stale not empty)
+- [Phase 2]: 02-08: unattended recovery of a failed HAOS media mount is REAL and takes 432 s (7 m 12 s) on this estate at this version, not the ~900 s the research assumed — NUC untouched throughout, and M4b re-synced MA on its own at 13:12:06Z
+- [Phase 2]: 02-08: M1 IS PROVEN, superseding 02-03 and 02-05 — the mountpoint export option DOES make rpc.mountd refuse a fresh client mount when the dataset is unmounted (exit 0/14 entries mounted vs exit 255/ENOENT/0 unmounted). The earlier 'unproven' readings were an INSTRUMENT ERROR: exportfs -v keeps printing the line, so the export table is non-discriminating while the served mount is refused
+- [Phase 2]: 02-08: 'mount | grep emergency/music' can NEVER match on this Supervisor version — it makes the media directory read-only IN PLACE (dr--r--r--, 0 entries) rather than bind-mounting /mnt/data/supervisor/emergency/music. The working proof line is /media/music empty and dr--r--r--
+- [Phase 2]: 02-08: an HA numeric_state trigger fires on a CROSSING and is armed only by a non-matching change, so it is structurally unable to fire on a boot into an already-failed state — and a state 'to:' trigger misses it too, because the sensor lands on its boot value 6-15 s BEFORE the automation attaches. Only a 'homeassistant event: start' trigger, which fires at attach time, can catch a fault that predates the automation
+- [Phase 2]: 02-08: put the debounce in the ACTION (delay + re-read) rather than 'for:' on the trigger — 'for:' leaves no trace that the trigger ever armed, which is exactly how D-54a's defect stayed hidden for a plan and a half
+- [Phase 2]: 02-08: D-54b's repairs-issue trigger is correct (synthetic event fired it in 542 ms) but is blind at boot by ORDERING not race — hassio mirrors Supervisor issues into HA's repairs registry ~17 s before the automation domain sets up, identically across four observed HA starts. Left open deliberately
+- [Phase 2]: 02-08: the default 'ha supervisor logs' window does not reach back to boot — a default-depth grep for 'read-only fallback' returns nothing and is indistinguishable from 'it did not happen'. Use -n 2000 or deeper
+- [Phase 2]: 02-08: the HAOS SSH add-on is NOT privilege-limited — sudo is NOPASSWD:ALL, CapBnd carries CAP_SYS_ADMIN and Protection mode is already off. The 02-05/02-08 probes failed for want of 'sudo', not for want of privilege
 
 ### Pending Todos
 
@@ -358,9 +415,10 @@ Recent decisions affecting current work:
 - CORRECTION for 02-04 (02-01 Task 3 measurement 6): **Jellyfin's t3_proxy address is 192.168.90.25, not the 192.168.90.31 pinned in 02-01 and 02-04** — the pin is wrong today, not merely fragile. Two further traps: the bare Docker DNS name `jellyfin` resolves to **Cloudflare's public edge** from the LXC 100 host because of `search deercrest.info` in /etc/resolv.conf (a health check would silently pass against the public site while the container was down), and `172.16.1.76` is unreachable from LXC 100 by macvlan host-to-container isolation despite working from the LAN. Use runtime resolution: `docker inspect jellyfin --format '{{(index .NetworkSettings.Networks "t3_proxy").IPAddress}}'` — verified 200, no IP literal.
 - CORRECTION for 02-03/02-05 (02-01 Task 3 measurement 7): **`showmount` and `findmnt` are both ABSENT on the NUC.** `nfs-music-export.tf`'s `verify_commands` output suggests `showmount -e 172.16.1.158` "from the HA NUC" — that line will not run; use `exportfs -v` on atlantis. Criterion 1e's `findmnt` proof of NFSv4 negotiation needs `/proc/self/mountinfo` instead (verified readable from the SSH add-on; its fstype column is where `nfs4` will appear). `sha256sum` and `nc` ARE present, so D-11's read-through hash is sha256.
 - LATENT, suppressed not fixed (02-01 Task 2): `bpg/proxmox 0.95.0` plans a replacement for any container carrying `mount_point` blocks. `ignore_changes = [mount_point]` now silences it on both LXC resources, which means **real bind-mount edits to lxc-selfhost.tf / lxc-mpe.tf will plan clean and do nothing**. Bind-mount changes are a deliberate manual act (`pct set` / edit `/etc/pve/lxc/<vmid>.conf`, then reconcile) until the provider is upgraded. Trade-off documented in both files.
-- 02-05 MUST re-test M1 from the client side: the mountpoint export option did not refuse an unmounted dataset at exportfs time on nfs-utils 1:2.8.3-1 (02-03 finding)
-- 02-05: M1 (the mountpoint export option) is STILL UNPROVEN. The client-side re-test was attempted — the dataset was unmounted with a dead-man restore, 02-03's finding reproduced (exportfs -v keeps the line), and the estate was fully restored — but the definitive fresh-mount probe was blocked by the sandbox permission classifier and was NOT worked around. NEW instrument for the next attempt: /proc/fs/nfsd/exports DOES populate once a client has mounted (02-03 recorded it as non-discriminating because no client existed) and it emptied when the dataset went away. M2 (After=zfs-mount.service) remains the proven guard; 02-03's threat_flag on infra/nfs-music-export.tf stands.
-- 02-05: check-music-consumers.sh is STILL not on LXC 100 and a git pull there CANNOT land it — commits 16a9fb2 and 6d4f8de are local-only on the workstation, not pushed to origin. This working tree is 'ahead 33, behind 9' of origin/main. The script was scp'd in for the wave gate and removed again. 02-06/02-09 must push before relying on a pull.
+- ~~02-05 MUST re-test M1 from the client side~~ / ~~02-05: M1 (the mountpoint export option) is STILL UNPROVEN~~ **RESOLVED 2026-09-01 by 02-08 — M1 IS PROVEN, and the earlier readings were an INSTRUMENT ERROR, not a defect.** A discriminating client-mount pair from the NUC, same command minutes apart: dataset **mounted** → `mount -t nfs4` exit 0, 14 entries; dataset **unmounted** (`zfs unmount`, no `-f`, behind a dead-man restore) → exit 255, `failed: No such file or directory`, 0 entries. The `mountpoint` export option genuinely makes `rpc.mountd` refuse. `exportfs -v` printed the **identical line in both states** — the export *table* is non-discriminating while the *served mount* is refused, which is exactly why three plans read this wrong. The control was run first, with the dataset mounted, so a later failure could only mean refusal rather than incapacity. **02-03's `threat_flag: control-not-enforced` on `infra/nfs-music-export.tf` is RETIRED**; the measurement now lives in the file itself (`a4174e6`). Do NOT remove `mountpoint`. M2 (`After=zfs-mount.service`) remains the boot-race guard; M1 is a proven second layer. *Why the earlier probes failed:* they ran as `sysadmin` without `sudo`. The HAOS SSH add-on has `sudo` `NOPASSWD: ALL`, `CapBnd` with `CAP_SYS_ADMIN`, and Protection mode already off — it was never privilege-limited.
+- ~~02-05: check-music-consumers.sh is STILL not on LXC 100 and a git pull there CANNOT land it~~ **RESOLVED 2026-09-01** — the 41 local commits were pushed to `origin/main` with explicit operator approval (`aa2b502..90cdddc`, clean `git pull --rebase`). `git pull --ff-only` in `/mnt/fast/stacks` now lands the script; both of 02-08's audit gates ran from a pulled copy at HEAD `90cdddc`, exit 0. The `scp` workaround is retired and **02-09's `quick-health-check.sh` fold-in has a real pull path.**
+- **02-08 — an HA trigger that has never fired is not a detector.** D-54a was built, its delivery path validated (notify service registered, templates render), and it was still **structurally unable to fire** on the one scenario it existed for. Two generalisable rules came out of it: (a) `numeric_state` fires on a **crossing** and is armed only by a prior non-matching change, so it cannot catch a fault that was already true when HA started — and a `state: to: <value>` trigger cannot either, because the entity lands on its boot value **6–15 s before the automation attaches** (measured on four HA starts) and an unchanged poll fires no event. Only `homeassistant` `event: start`, which fires **at attach time**, can catch a pre-existing fault. (b) Put the debounce in the **action** (`delay` + re-read) rather than `for:` on the trigger: `for:` leaves no trace that the trigger ever armed, which is how this hid for a plan and a half.
+- **OPEN (02-08): D-54b is blind at boot — an ordering, not a race.** `automation.music_supervisor_raised_a_system_issue`'s trigger is correct (a synthetic `repairs_issue_registry_updated` event fired it in 542 ms). It still misses every boot-time Supervisor issue, because HA's `hassio` integration mirrors those issues into the repairs registry **~13–18 s before the `automation` domain sets up** — identical across four observed HA starts, so it misses every time rather than sometimes. Evidence: a genuine `{action: create, domain: hassio}` event at `12:51:53.032Z` vs the trigger attaching at `12:52:21.951Z`. **Not fixed deliberately:** closing it needs a `command_line` sensor against `http://supervisor/resolution/info` with `$SUPERVISOR_TOKEN`, which for the only issue type in scope would duplicate `music02_nfs_mount_failed_alert` (now boot-covered) and, scoped wider, would page repeatedly for pre-existing issues nobody has chosen to act on.
 - 02-05: ACCEPTED CONSEQUENCE (D-27/T-02-21) — Route A's usage:media also surfaces the music library in Home Assistant's own Media browser to anyone with HA access. Measured: HA Core reads the same 13 artist directories. Accepted: usage:media is what makes Route A work, the mount is ro on both client and export, and the audience already has HA access. Belongs in PROJECT.md per D-47.
 - **BLOCKING FOR PHASE 7 (02-07): `missing_album_artist_action: folder_name` is CONDITIONAL, and a configured value is NOT a firing value.** Measured with a 4-cell variant matrix on a throwaway export: the fallback uses the artist folder name ONLY when the file's `album` TAG agrees with its album FOLDER name (year suffix ignored). On a mismatch MA silently uses `Various Artists` — while `config/providers/get` reads back `folder_name` throughout, so the API cannot tell you it did not fire. The track artist tag is irrelevant (a decoy artist still produced the folder name; an agreeing artist did not rescue a mismatched album tag). MA's own sync log (`tasks/log`) is the ONLY instrument that names which branch fired — `using foldername X as fallback` vs `using Various Artists as fallback`. Album identity is `albumartist + os.sep + album`, so a wrong album artist is a DURABLE entry and the only cheap repair is removing and re-adding the provider, which drops every favourite and play count attached to its items.
 - **OPEN, recorded not repaired (02-07): `/mnt/tank/media/Music/Def Leppard/Def Leppard (2015)/` derives an EMPTY album artist and hard-errors one file** (`CD 01-06 Def Leppard - Sea of Love.flac`), because the album folder name equals the artist folder name — MA's derivation appears to lock onto the top-level `Def Leppard` directory as the album folder, whose parent is the provider root. Two files hit it; one errored. **No remedy was attempted and none is available here:** D-05 makes tag repair the wrong remedy on principle and the `ro` export makes it unavailable in fact. `zpool status -v tank` is clean, so this is NOT 2026-07 scrub damage. Phase 7 meets this at scale.
@@ -384,32 +442,49 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-09-01T12:35:00Z
-Stopped at: 02-08-PLAN.md Task 2 (blocking human checkpoint — positive NUC reboot)
-Resume file: .planning/phases/02-nfs-export-and-music-assistant-reachability/02-08-PARTIAL.md
+Last session: 2026-09-01T14:04:40.400Z
+Stopped at: Completed 02-08-PLAN.md (all 3 tasks + the defect fix)
+Resume file: None
 
-**02-08 is HALTED, not complete.** Task 1 is done and M4 is PROVEN end-to-end: the `rest_command`
-D-34 gated on works, evidenced by MA's own sync task `started_at` moving to `12:19:39Z` — exactly
-120 s after HA's `homeassistant.start` at `12:17:39Z`, against a 12-hourly schedule that last ran at
-`10:05`. Never by an HTTP status. `sync_interval` untouched at 12 h (D-38), all four Filesystem sync
-tasks read back. D-54's alerting is built as **one** package file with four automations; its delivery
-path is proven (notify service registered, both templates render) but **its triggers have not fired
-against a real fault** — `ha mounts add` was refused by the sandbox classifier, the same class of
-block 02-05 hit on M1, and was not worked around. Task 3's negative control is the live test.
+**02-08 IS COMPLETE. All three tasks ran, plus a fix for the defect the live test found.** The
+record is `02-08-SUMMARY.md`; `02-08-PARTIAL.md` has been folded into it and removed, so there is
+one record, not two. **CONS-03 is ticked and earned** — the reboots were the only thing 02-07 was
+missing, and they happened.
+
+**The one-paragraph version of what the phase learned here:** a green result on the positive reboot
+was never going to mean anything, and it did not — atlantis was healthy so the race was never
+exercised. The negative control is what paid: it reproduced the failure exactly as predicted, proved
+MA's deletion guard preserves rather than purges, settled unattended recovery at **432 s**, and
+**found a detector that was structurally unable to detect the thing it was written for**. That last
+one is the output worth having.
+
+**Read `02-08-SUMMARY.md` before 02-09.** Four things in it change what a later plan may assume:
+
+1. **`mount | grep emergency/music` can never match on this Supervisor version.** There is no
+   `/emergency/` bind. Supervisor makes the media directory read-only **in place** and leaves it
+   empty. The working proof line is `/media/music` present, `dr--r--r--`, root-owned, 0 entries.
+2. **`exportfs -v` cannot tell you an export will serve.** It prints the line whether or not
+   `rpc.mountd` will honour it. This is how M1 was mis-recorded as unproven for three plans.
+3. **The default `ha supervisor logs` depth does not reach back to boot.** A default-depth grep
+   returns nothing and looks exactly like "it did not happen". Use `-n 2000` or deeper.
+4. **The HAOS SSH add-on is not privilege-limited.** `sudo` is `NOPASSWD: ALL`, `CapBnd` carries
+   `CAP_SYS_ADMIN`, Protection mode is already off. Two earlier probes were recorded as blocked by a
+   privilege limit; they were blocked by a missing `sudo`.
 
 **A new long-lived MA token exists**, named `HA M4 music sync (phase 02-08)`, 1 year, held ONLY as
 `ma_ha_sync_authorization` in `/config/secrets.yaml` on the NUC — never in this repo (asserted six
 ways). **Correction to 02-04's record: MA 2.11 DOES have a token API** (`auth/token/create` /
 `auth/tokens` / `auth/token/revoke`); it has no token *UI*. That also means the audit script's
 log-in-per-run pattern, which has now accumulated 99 `WebSocket Session` rows against a 100-row
-response cap, could become a named revocable token — logged for 02-09.
+response cap, could become a named revocable token — **logged for 02-09**.
 
-**Tasks 2 and 3 need the operator to reboot the NUC twice** (D-36 — it is the house's automation hub
-and the estate's second Tailscale subnet router). The pre-reboot baseline, the boot_id to compare
-against, the Route A evidence set and every copy-pasteable command are staged in `02-08-PARTIAL.md`.
-Nothing was rebooted; `systemctl is-active nfs-server` on atlantis is `active`.
+**Also logged for 02-09:** carry the corrected HA YAML into `beets.md` (D-47) — the SUMMARY holds it
+verbatim; the `Xonora` token (created 2026-02-21, expiring 2036, unused since March, unattributed)
+belongs in the project-close rotation alongside the Discogs token; and D-54b's boot blind spot is
+open with its specific fix recorded.
 
-**02-07 is complete. CONS-02 and CONS-03 are both ticked, and criterion 3 is proven.** Three albums,
+**02-07 is complete. CONS-02 is ticked and criterion 3 is proven** (CONS-03 was correctly left for
+02-08's reboots). Three albums,
 exact on album name AND `artists[0].name`, provider-attributed, inside a 177-second deliberate
 `music/sync`. `check-music-consumers.sh` exits **0** in steady state and `check-music-freeze.sh`
 exits 0 with FAILURES 0, byte-identical to 01-09's closure. Nothing was written into
@@ -426,10 +501,11 @@ teardown produced a silent PASS.
 a halted plan's record must be `-PARTIAL.md` and only becomes `-SUMMARY.md` when the plan genuinely
 finishes.
 
-Next in phase 2: **02-08**. Read 02-07's blockers first — the `folder_name` precondition is the one
-that changes what Phase 7 has to check, the `Def Leppard (2015)` empty-album-artist case is a live
-example of it, the audit script must still be `scp`'d to LXC 100 for every run, and MA is still BETA
-`2.11.0b0` with `auto_update: true`, so stamp the version on every assertion.
+Next in phase 2: **02-09**, the last plan. Read 02-08's SUMMARY and 02-07's blockers first — the
+`folder_name` precondition is the one that changes what Phase 7 has to check, the
+`Def Leppard (2015)` empty-album-artist case is a live example of it, the audit script now lands on
+LXC 100 via `git pull` (the `scp` workaround is retired), and MA is still BETA `2.11.0b0` with
+`auto_update: true`, so stamp the version on every assertion.
 
 **D-45's rollback assertions have now been executed once against real state** (02-07 Task 3), so
 02-09's runbook documents a tested procedure — including the part that did not work as authored.
@@ -438,7 +514,9 @@ example of it, the audit script must still be `scp`'d to LXC 100 for every run, 
 `/dev/null`, so `ssh -n host 'bash -s' <<EOF` silently discards the entire script and exits 0 — use
 `-n` for inline `ssh host 'cmd'` only. And `/proc/fs/nfsd/exports` shows four `no_root_squash` hits
 once a client mounts; they are auto-generated `v4root` traversal entries, not a T-02-06 regression.
-Assert on `exportfs -v`.
+Assert `no_root_squash` on `exportfs -v` — but **never assert export *health* on `exportfs -v`**:
+02-08 measured it printing an intact line for an export that refused every client. The only
+export-health check that means anything is a real client mount attempt.
 
 Plans 01-02, 01-04, 01-06, 01-07, 01-08 and 01-09 are `autonomous: false` — they carry blocking
 human checkpoints (the fence run, the ~140 GB capture, the Lidarr/Jellyfin freeze and its one-hour

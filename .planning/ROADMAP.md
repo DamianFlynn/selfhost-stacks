@@ -191,7 +191,7 @@ with Phase 1. The export's `anonuid`/`anongid` take the ownership value decided 
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
-- [ ] 02-08-PLAN.md — M4 + `MOUNT_FAILED` alert, criterion 4a positive reboot, criterion 4b negative control (wave 7, blocking checkpoints)
+- [x] 02-08-PLAN.md — M4 + `MOUNT_FAILED` alert, criterion 4a positive reboot, criterion 4b negative control (wave 7, blocking checkpoints)
 
 **Wave 8** *(blocked on Wave 7 completion)*
 
@@ -490,7 +490,7 @@ Phase 7. Plans within a phase run sequentially.
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Safety Harness and Freeze the Writers | 9/9 | Complete | 2026-08-18 |
-| 2. NFS Export and Music Assistant Reachability | 7/9 | In Progress|  |
+| 2. NFS Export and Music Assistant Reachability | 8/9 | In Progress|  |
 | 3. Tagger Spike | 0/TBD | Not started | - |
 | 4. Collapse to One Tagger | 0/TBD | Not started | - |
 | 5. Inbox Structure and the Junk Gate | 0/TBD | Not started | - |
