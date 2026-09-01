@@ -39,14 +39,41 @@
 
 EXIT_CODE=0
 
+# WR-10: ONE REACHABILITY PROBE, GATING THE WHOLE FILE.
+#
+# Everything below reads container state over ssh from 172.16.1.159. The five legacy blocks
+# degrade badly when that host is down, and they do it in the two worst ways at once:
+#
+#   * UNHEALTHY=$(ssh ... | wc -l) comes back EMPTY, `[ "" -gt 0 ]` writes "integer expression
+#     expected" to stderr and returns 2, and the else branch prints "✅ No unhealthy containers".
+#   * the Traefik and Authelia blocks read ssh's exit 255 as "the container is not running" and
+#     print "❌ Not running" - a confident and WRONG diagnosis rather than UNKNOWN.
+#
+# That directly contradicts the doctrine stated 60 lines further down in this same file ("Absence
+# of a failure signal is NOT evidence of health"), which the two music blocks do honour. Before
+# this gate, an LXC 100 outage produced a transcript reading "❌ Not running / ❌ Not running /
+# Containers running: <blank> / ✅ No unhealthy containers" - the exit code saved it, the
+# transcript above it was misinformation.
+#
+# Probing once and refusing is better than hardening five call sites: it makes the unreachable
+# case a single, unmissable statement instead of five separately-wrong lines.
+SSH_OPTS="-o BatchMode=yes -o ConnectTimeout=10"
+
 echo "=== Quick Server Health Check ==="
+
+if ! ssh $SSH_OPTS root@172.16.1.159 true 2>/dev/null; then
+    echo "⚠️  UNKNOWN — 172.16.1.159 (LXC 100) is unreachable over ssh."
+    echo "  NO container state can be read, so nothing below would be a measurement."
+    echo "  This is UNKNOWN, not healthy. Check the host, then re-run."
+    exit 1
+fi
 
 # Check Traefik is running
 echo -n "Traefik: "
-if ssh root@172.16.1.159 "docker ps --format '{{.Names}}' | grep -q '^traefik$'"; then
+if ssh $SSH_OPTS root@172.16.1.159 "docker ps --format '{{.Names}}' | grep -q '^traefik$'"; then
     echo "✅ Running"
     # Check if it's healthy
-    STATUS=$(ssh root@172.16.1.159 "docker inspect traefik --format='{{.State.Health.Status}}' 2>/dev/null || echo 'no healthcheck'")
+    STATUS=$(ssh $SSH_OPTS root@172.16.1.159 "docker inspect traefik --format='{{.State.Health.Status}}' 2>/dev/null || echo 'no healthcheck'")
     echo "  Health: $STATUS"
 else
     echo "❌ Not running"
@@ -54,28 +81,34 @@ fi
 
 # Check Authelia
 echo -n "Authelia: "
-if ssh root@172.16.1.159 "docker ps --format '{{.Names}}' | grep -q '^authelia$'"; then
+if ssh $SSH_OPTS root@172.16.1.159 "docker ps --format '{{.Names}}' | grep -q '^authelia$'"; then
     echo "✅ Running"
 else
     echo "❌ Not running"
 fi
 
 # Count containers
-RUNNING=$(ssh root@172.16.1.159 "docker ps -q | wc -l" | tr -d ' ')
+RUNNING=$(ssh $SSH_OPTS root@172.16.1.159 "docker ps -q | wc -l" | tr -d ' ')
 echo "Containers running: $RUNNING"
 
-# Check for unhealthy
-UNHEALTHY=$(ssh root@172.16.1.159 "docker ps --format '{{.Names}}' --filter health=unhealthy | wc -l" | tr -d ' ')
-if [ "$UNHEALTHY" -gt 0 ]; then
+# Check for unhealthy. The gate above guarantees the host answered, but dockerd can still be
+# wedged behind the amdgpu mmap_lock while sshd is fine (that is exactly the Aug 31 signature),
+# so a non-numeric result here is still UNKNOWN rather than zero.
+UNHEALTHY=$(ssh $SSH_OPTS root@172.16.1.159 "docker ps --format '{{.Names}}' --filter health=unhealthy | wc -l" | tr -d ' ')
+if ! echo "$UNHEALTHY" | grep -qE '^[0-9]+$'; then
+    echo "⚠️  UNKNOWN — could not count unhealthy containers (docker returned '$UNHEALTHY')."
+    echo "  dockerd may be blocked. This is NOT 'no unhealthy containers'."
+    EXIT_CODE=1
+elif [ "$UNHEALTHY" -gt 0 ]; then
     echo "⚠️  Unhealthy containers: $UNHEALTHY"
-    ssh root@172.16.1.159 "docker ps --format '{{.Names}}' --filter health=unhealthy"
+    ssh $SSH_OPTS root@172.16.1.159 "docker ps --format '{{.Names}}' --filter health=unhealthy"
 else
     echo "✅ No unhealthy containers"
 fi
 
 # Try to curl Traefik dashboard
 echo -n "Traefik dashboard: "
-if ssh root@172.16.1.159 "curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/dashboard/" | grep -q "200"; then
+if ssh $SSH_OPTS root@172.16.1.159 "curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/dashboard/" | grep -q "200"; then
     echo "✅ Accessible (HTTP 200)"
 else
     echo "❌ Not accessible"
@@ -84,8 +117,15 @@ fi
 # Music freeze harness (D-29). The audit is host-resident by design — stat over the library, a
 # find across 2,674 entries and the docker mount enumeration are not one-liners — so it runs over
 # a single ssh here. See scripts/check-music-freeze.sh for what it asserts.
+#
+# IN-05: `-n` on the ssh. check-music-consumers.sh:188 established this as a convention with a
+# measured reason ("so a nested ssh cannot eat this script's stdin" - it does). Both remote
+# invocations here are inline `ssh host 'cmd'`, which is the shape the convention covers; the
+# shape it must be kept AWAY from is `bash -s` + heredoc, and neither of these is that. No current
+# consequence, but without it the first ssh can drain this script's stdin if it is ever run with
+# input attached, leaving the second with nothing.
 echo -n "Music freeze harness: "
-MUSIC_OUT=$(ssh -o BatchMode=yes -o ConnectTimeout=10 root@172.16.1.159 \
+MUSIC_OUT=$(ssh -n $SSH_OPTS root@172.16.1.159 \
     "bash /mnt/fast/stacks/scripts/check-music-freeze.sh 2>&1")
 MUSIC_RC=$?   # ssh propagates the remote exit status — do NOT pipe before capturing this
 # Strip ANSI colour separately. \x1b is a GNU sed extension and this script runs on macOS, so the
@@ -100,8 +140,22 @@ if [ -z "$MUSIC_OUT" ]; then
     echo "  ssh root@172.16.1.159 'cd /mnt/fast/stacks && bash scripts/check-music-freeze.sh'"
     EXIT_CODE=1
 elif [ "$MUSIC_RC" -eq 0 ]; then
-    echo "✅ Intact"
-    echo "$MUSIC_OUT" | sed -n '/^📊 7\. Summary/,$p' | grep -E 'tagger-class|unclassified|declared rw|ownership mismatches' | sed 's/^/  /'
+    # WR-09: the ✅ used to be printed unconditionally and the evidence lines were best-effort.
+    # If the anchor did not match, sed yielded nothing, grep exited 1, and this printed
+    # "✅ Intact" with no supporting detail at all. check-music-freeze.sh treats that heading as
+    # load-bearing and says so in capitals - a documented coupling with no detector is a coupling
+    # that will break, and it would break on the branch that still prints a tick.
+    SUMMARY=$(echo "$MUSIC_OUT" | sed -n '/^📊 7\. Summary/,$p' \
+              | grep -E 'tagger-class|unclassified|declared rw|ownership mismatches')
+    if [ -z "$SUMMARY" ]; then
+        echo "⚠️  UNKNOWN — the harness exited 0 but its '📊 7. Summary' block was not found."
+        echo "  The section heading this fold-in anchors on has changed, so nothing here was"
+        echo "  actually read. State is UNKNOWN, not green. See check-music-freeze.sh's summary."
+        EXIT_CODE=1
+    else
+        echo "✅ Intact"
+        echo "$SUMMARY" | sed 's/^/  /'
+    fi
 else
     echo "❌ BROKEN (check-music-freeze.sh exit $MUSIC_RC)"
     echo "  Failed assertions:"
@@ -117,7 +171,7 @@ fi
 # `# Where it runs:` header of scripts/check-music-consumers.sh. It lands on the host by
 # `git pull` into /mnt/fast/stacks — there is no copy step to remember.
 echo -n "Music consumers audit: "
-CONSUMERS_OUT=$(ssh -o BatchMode=yes -o ConnectTimeout=10 root@172.16.1.159 \
+CONSUMERS_OUT=$(ssh -n $SSH_OPTS root@172.16.1.159 \
     "bash /mnt/fast/stacks/scripts/check-music-consumers.sh 2>&1")
 CONSUMERS_RC=$?   # ssh propagates the remote exit status — do NOT pipe before capturing this
 # Strip ANSI colour separately. \x1b is a GNU sed extension and this script runs on macOS, so the
@@ -132,8 +186,21 @@ if [ -z "$CONSUMERS_OUT" ]; then
     echo "  ssh root@172.16.1.159 'cd /mnt/fast/stacks && git pull --ff-only && bash scripts/check-music-consumers.sh'"
     EXIT_CODE=1
 elif [ "$CONSUMERS_RC" -eq 0 ]; then
-    echo "✅ Both consumers see the library"
-    echo "$CONSUMERS_OUT" | sed -n '/^📊 6\. Summary/,$p' | grep -E 'MA version|albums matched in MA|albums matched in Jellyfin|FAILURES total' | sed 's/^/  /'
+    # WR-09, same defect as the freeze block above. check-music-consumers.sh:853-855 says
+    # "KEEP THIS HEADING LITERAL AND NEVER RENUMBER IT SILENTLY. Plan 02-09's fold-in anchors on
+    # it" - and until now nothing detected a break. Renumbering (a section 3b, splitting section
+    # 4) moves the `6.` and the anchor fails on the branch that prints a tick.
+    SUMMARY=$(echo "$CONSUMERS_OUT" | sed -n '/^📊 6\. Summary/,$p' \
+              | grep -E 'MA version|albums matched in MA|albums matched in Jellyfin|FAILURES total')
+    if [ -z "$SUMMARY" ]; then
+        echo "⚠️  UNKNOWN — the audit exited 0 but its '📊 6. Summary' block was not found."
+        echo "  The section heading this fold-in anchors on has changed, so nothing here was"
+        echo "  actually read. State is UNKNOWN, not green. See check-music-consumers.sh's summary."
+        EXIT_CODE=1
+    else
+        echo "✅ Both consumers see the library"
+        echo "$SUMMARY" | sed 's/^/  /'
+    fi
 else
     echo "❌ BROKEN (check-music-consumers.sh exit $CONSUMERS_RC)"
     echo "  Failed assertions:"
