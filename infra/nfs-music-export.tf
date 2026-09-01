@@ -238,6 +238,9 @@ resource "null_resource" "nfs_music_temp_export" {
 
   # Second drop-in file, same whole-file-write reasoning as the main export.
   # A separate file so that disabling this one cannot disturb the other.
+  # NOTE: this destination literal is repeated in the destroy-time provisioner
+  # at the bottom of this resource, because a destroy provisioner cannot
+  # interpolate anything. Change both together.
   provisioner "file" {
     content     = local.music_temp_export_file
     destination = "/etc/exports.d/music-temp.exports"
@@ -252,6 +255,95 @@ resource "null_resource" "nfs_music_temp_export" {
       "exportfs -v | grep -q '${var.music_temp_export_path}' || { echo 'FATAL: temporary control export not present after exportfs -ra'; exit 1; }",
       # Evidence in the apply log.
       "echo '--- temporary control export ready ---' && exportfs -v",
+    ]
+  }
+
+}
+
+# ── The teardown half of the temporary export ───────────────────────────────
+# WITHOUT THIS RESOURCE, `music_temp_export_enabled = false` IS NOT A TEARDOWN.
+#
+# Destroying a null_resource only drops it from state. It does not remove the
+# drop-in file that resource's `file` provisioner wrote, and it does not
+# re-converge the kernel export table. The scratch export would stay LIVE while
+# `terraform plan` reported clean and the state file said the resource was gone
+# — a silent pass of exactly the shape this phase exists to prevent, and a
+# direct falsification of D-15's "provably gone rather than forgotten".
+#
+# Measured in plan 02-07, which is what caught it, and asserted there on both
+# sides afterwards.
+#
+# ── Why this is a separate resource and not a destroy-time provisioner ──────
+# A `provisioner { when = destroy }` on nfs_music_temp_export was written first
+# and REJECTED on measurement, for two independent reasons:
+#
+#   1. `terraform validate` fails it outright: "Destroy-time provisioners and
+#      their connection configurations may only reference attributes of the
+#      related resource, via 'self', 'count.index', or 'each.key'." The
+#      resource-level `connection` block references var.proxmox_host /
+#      _ssh_user / _ssh_password, so it cannot be reused at destroy time.
+#   2. The only way to give a destroy provisioner those credentials is to carry
+#      them in `triggers` — which persists the Proxmox root password to state in
+#      plaintext AND renders it into every `terraform plan` diff. This repo is
+#      PUBLIC and has already had one six-month credential exposure. Not a
+#      trade worth making to save a resource block.
+#
+# `self.triggers.*` was also rejected on its own merits: at destroy time a
+# trigger is read back from STATE, so any key added to the config after the
+# resource was created reads null — `rm -f ""`, and far worse `grep -q ""`,
+# which matches every line. A teardown has to work against state written before
+# the teardown existed, or it is not a teardown.
+#
+# So the removal lives in a resource that ALWAYS EXISTS (no `count`), keyed on
+# the flag, running at apply time with the normal connection block. Flipping
+# the flag changes its trigger, which re-runs it. Teardown is still an apply,
+# still visible in a plan diff, and still provable — which is all D-15 asked for.
+#
+# The main nfs_music_export resource was deliberately NOT used for this: adding
+# a trigger there would plan a replacement of the LOAD-BEARING Music export
+# every time the scratch flag moved, and re-running `systemctl enable --now
+# nfs-server` against a live export to clean up a scratch one is the wrong
+# blast radius.
+resource "null_resource" "nfs_music_temp_export_teardown" {
+  depends_on = [null_resource.nfs_music_export]
+
+  triggers = {
+    # The flag itself IS the trigger. tostring() because triggers are strings.
+    temp_enabled = tostring(var.music_temp_export_enabled)
+  }
+
+  connection {
+    type     = "ssh"
+    host     = var.proxmox_host
+    user     = var.proxmox_ssh_user
+    password = var.proxmox_ssh_password
+    timeout  = "5m"
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      var.music_temp_export_enabled
+      ? "echo 'temporary control export is ENABLED — leaving /etc/exports.d/music-temp.exports in place'"
+      : "rm -f /etc/exports.d/music-temp.exports",
+
+      # Converge the kernel table onto whatever drop-ins remain on disk.
+      # exportfs -ra converges rather than appends, so this is safe every apply.
+      "exportfs -ra",
+
+      # Prove the end state rather than trusting the two commands above.
+      # NOTE: `exportfs -v` WRAPS — the client(options) field lands on its own
+      # continuation line for these paths — so count the PATH lines (^/mnt/tank)
+      # and never the client lines, or a client string gets credited to the
+      # wrong export.
+      var.music_temp_export_enabled
+      ? "n=$(exportfs -v | grep -cE '^/mnt/tank'); test \"$n\" -eq 2 || { echo \"FATAL: expected 2 /mnt/tank exports while the control is enabled, found $n\"; exit 1; }"
+      : "test ! -e /etc/exports.d/music-temp.exports || { echo 'FATAL: temporary drop-in still on disk after rm'; exit 1; }",
+
+      var.music_temp_export_enabled
+      ? "true"
+      : "n=$(exportfs -v | grep -cE '^/mnt/tank'); test \"$n\" -eq 1 || { echo \"FATAL: expected exactly 1 /mnt/tank export after teardown, found $n\"; exit 1; }",
+
+      "echo '--- export table after temp-export reconcile ---' && exportfs -v",
     ]
   }
 }
