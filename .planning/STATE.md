@@ -29,7 +29,7 @@ pipeline that someone owns.
 ## Current Position
 
 Phase: 02 (nfs-export-and-music-assistant-reachability) — **COMPLETE**
-Plan: 9 of 9 — all executed. **Next: `/gsd-transition`, then Phase 3 (Tagger Spike).**
+Plan: 9 of 9 — all executed. **Next: `/gsd-discuss-phase 3`, then `/gsd-plan-phase 3` (Tagger Spike).**
 Status: **PHASE CLOSED 2026-09-01.** All nine plans executed, all five criteria proven, CONS-01/02/03
 complete. The consumers audit is folded into `quick-health-check.sh`, criterion 5 is recorded in
 PROJECT.md with Route B's failure symptom and the old assertion rewritten, and the operational record
@@ -533,7 +533,7 @@ Recent decisions affecting current work:
 
 Last session: 2026-09-01T14:35:00.000Z
 Stopped at: **PHASE 02 COMPLETE** — 02-09-PLAN.md all 3 tasks, D-55 approved
-Resume file: None. Next action is `/gsd-transition`, then plan Phase 3 (Tagger Spike).
+Resume file: None. Next action is `/gsd-discuss-phase 3`, then `/gsd-plan-phase 3` (Tagger Spike).
 
 **02-09 IS COMPLETE AND THE PHASE IS CLOSED.**
 
