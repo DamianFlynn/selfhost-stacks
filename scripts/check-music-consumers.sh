@@ -143,7 +143,22 @@ MA_VERSION_PROVEN="2.11.0b0"             # D-21 as amended / D-56. See the heade
 # Pinned by plan 02-06 when the filesystem provider is created. While it is empty section 2 FAILS
 # LOUDLY - it must never pass by default, because an unpinned filter is exactly how a Spotify
 # match gets credited to an NFS export.
-MA_LOCAL_PROVIDER_INSTANCE=""
+#
+# PINNED 2026-09-01 by plan 02-06 (MA 2.11.0b0). Value taken verbatim from
+#   config/providers/get -> .instance_id   for the filesystem_local provider at /media/music.
+#
+# THIS IS AN INSTANCE ID, NOT A DISPLAY NAME, AND THAT IS DELIBERATE (D-30). MA's provider
+# display name is user-editable in the GUI - this instance's `name` is currently null and it
+# renders as its default_name "Filesystem (local disk)". A rename in the GUI would silently
+# change what this script measures while every assertion still reported green. The instance id
+# is generated once at setup and never changes for the life of the instance.
+#
+# IF MUSIC ASSISTANT IS REBUILT, RESTORED, OR THE PROVIDER IS REMOVED AND RE-ADDED, this value
+# MUST be RE-PINNED from `config/providers/get` on the live server. Do not guess it and do not
+# reuse the value below - the `--XXXXXXXX` suffix is generated per instance. The provider config
+# lives only in MA's settings store on the NUC, never in git; 02-06's SUMMARY carries the full
+# read-back so the provider can be recreated identically.
+MA_LOCAL_PROVIDER_INSTANCE="filesystem_local--XJaJWNUS"
 
 # Jellyfin's Music library ItemId, measured 2026-08-31 via /Library/VirtualFolders. Scoping the
 # album search to it stops a same-named item in Movies/Shows/Collections answering for Music.
@@ -529,11 +544,14 @@ else
     fi
 
     if [[ -z "$MA_LOCAL_PROVIDER_INSTANCE" ]]; then
-      # NEVER a pass-by-default. Until 02-06 pins the instance id, every provider-scoped assertion
-      # below is unanchored, and an unanchored album match is exactly the Spotify false pass.
-      ma_fail "CONS-02: MA_LOCAL_PROVIDER_INSTANCE is NOT YET PINNED. Plan 02-06 creates the local"
-      echo "         filesystem provider and must write its instance_id into this script. Until then"
-      echo "         no album assertion can be credited to the NFS export rather than to Spotify."
+      # NEVER a pass-by-default. With no instance id, every provider-scoped assertion below is
+      # unanchored, and an unanchored album match is exactly the Spotify false pass.
+      # 02-06 pinned this constant on 2026-09-01. Reaching this branch now means the value was
+      # LOST (edited out, or the file was restored from before 02-06) - not that it is pending.
+      ma_fail "CONS-02: MA_LOCAL_PROVIDER_INSTANCE is EMPTY. It was pinned by plan 02-06; re-pin it"
+      echo "         from 'config/providers/get' on the live MA server (see the constant's comment)."
+      echo "         Until then no album assertion can be credited to the NFS export rather than"
+      echo "         to Spotify."
     else
       PROV_ROW="$(printf '%s' "$PROVIDERS_JSON" \
         | jq -c --arg i "$MA_LOCAL_PROVIDER_INSTANCE" '.[] | select(.instance_id == $i)')"
@@ -767,7 +785,7 @@ echo "  export route:                $EXPORT_ROUTE"
 echo "  ma route:                    $MA_ROUTE"
 echo "  jellyfin route:              $JELLYFIN_ROUTE"
 echo "  ha route:                    $HA_ROUTE   (skipped is expected on LXC 100 — see header)"
-echo "  pinned provider instance:    ${MA_LOCAL_PROVIDER_INSTANCE:-<UNPINNED — set by plan 02-06>}"
+echo "  pinned provider instance:    ${MA_LOCAL_PROVIDER_INSTANCE:-<EMPTY — pinned by 02-06; re-pin from config/providers/get>}"
 echo "  proof albums pinned:         ${#PROOF_ALBUMS[@]}   (target 3: single-artist, multi-disc, various-artists)"
 echo "  albums matched in MA:        $MA_ALBUMS_FOUND   (target ${#PROOF_ALBUMS[@]}, exact name+albumartist, provider-attributed)"
 echo "  albums matched in Jellyfin:  $JELLYFIN_ALBUMS_FOUND   (target $(( ${#PROOF_ALBUMS[@]} - JELLYFIN_OUT_OF_SCOPE )), exact name+albumartist)"
