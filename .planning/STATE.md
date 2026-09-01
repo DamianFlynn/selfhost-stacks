@@ -30,8 +30,9 @@ pipeline that someone owns.
 
 Phase: 02 (nfs-export-and-music-assistant-reachability) — EXECUTING
 Plan: 8 of 9
-Status: Ready to execute
-Last activity: 2026-09-01 -- Completed 02-07 (criterion 3 proven; folder_name fallback proven conditional)
+Status: **02-08 HALTED at its first blocking human checkpoint (D-36)** — Task 1 complete, Tasks 2/3
+awaiting the operator's two NUC reboots. Record: `02-08-PARTIAL.md` (NOT `-SUMMARY.md`).
+Last activity: 2026-09-01 -- 02-08 Task 1 complete (M4 shipped and PROVEN; D-54 alerting built)
 Phase 1 complete: SAFE-01…05, WRIT-01…04, QUAL-01
 
 Progress: [█████████░] 89%
@@ -383,9 +384,30 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-09-01T10:35:22.952Z
-Stopped at: Completed 02-07-PLAN.md
-Resume file: None
+Last session: 2026-09-01T12:35:00Z
+Stopped at: 02-08-PLAN.md Task 2 (blocking human checkpoint — positive NUC reboot)
+Resume file: .planning/phases/02-nfs-export-and-music-assistant-reachability/02-08-PARTIAL.md
+
+**02-08 is HALTED, not complete.** Task 1 is done and M4 is PROVEN end-to-end: the `rest_command`
+D-34 gated on works, evidenced by MA's own sync task `started_at` moving to `12:19:39Z` — exactly
+120 s after HA's `homeassistant.start` at `12:17:39Z`, against a 12-hourly schedule that last ran at
+`10:05`. Never by an HTTP status. `sync_interval` untouched at 12 h (D-38), all four Filesystem sync
+tasks read back. D-54's alerting is built as **one** package file with four automations; its delivery
+path is proven (notify service registered, both templates render) but **its triggers have not fired
+against a real fault** — `ha mounts add` was refused by the sandbox classifier, the same class of
+block 02-05 hit on M1, and was not worked around. Task 3's negative control is the live test.
+
+**A new long-lived MA token exists**, named `HA M4 music sync (phase 02-08)`, 1 year, held ONLY as
+`ma_ha_sync_authorization` in `/config/secrets.yaml` on the NUC — never in this repo (asserted six
+ways). **Correction to 02-04's record: MA 2.11 DOES have a token API** (`auth/token/create` /
+`auth/tokens` / `auth/token/revoke`); it has no token *UI*. That also means the audit script's
+log-in-per-run pattern, which has now accumulated 99 `WebSocket Session` rows against a 100-row
+response cap, could become a named revocable token — logged for 02-09.
+
+**Tasks 2 and 3 need the operator to reboot the NUC twice** (D-36 — it is the house's automation hub
+and the estate's second Tailscale subnet router). The pre-reboot baseline, the boot_id to compare
+against, the Route A evidence set and every copy-pasteable command are staged in `02-08-PARTIAL.md`.
+Nothing was rebooted; `systemctl is-active nfs-server` on atlantis is `active`.
 
 **02-07 is complete. CONS-02 and CONS-03 are both ticked, and criterion 3 is proven.** Three albums,
 exact on album name AND `artists[0].name`, provider-attributed, inside a 177-second deliberate
