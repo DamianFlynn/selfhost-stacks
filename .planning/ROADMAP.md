@@ -263,11 +263,11 @@ that four independent lines of evidence already agree on.
 **Wave 1**
 
 - [ ] 03-01-PLAN.md — Disk-headroom gate on LXC 100: inventory, operator-approved prune, ≥ 8 GB floor, four pinned image pulls (wave 1, blocking checkpoint; OD-1 gates the whole phase)
+- [ ] 03-02-PLAN.md — Commit T1/T2/T3, the backlog-weighted estimator, the corrected 143-folder denominator, the OD-2 version split and the OD-3 widening, plus the empty ergonomics scoring sheet — all before any evidence exists, then **pushed to `origin`** so criterion 5's custody is a remote commit rather than local history (wave 1, no dependencies — writes only Markdown)
 
 **Wave 2** *(blocked on Wave 1)*
 
-- [ ] 03-02-PLAN.md — Commit T1/T2/T3, the corrected 143-folder denominator, the OD-2 version split and the OD-3 widening, plus the empty ergonomics scoring sheet — all before any evidence exists (wave 2)
-- [ ] 03-03-PLAN.md — Variant survey over the Phase 1 ffprobe fence, the widened de-duplicated 24-folder draw across `dj-mixes` ∪ `unsorted`, and the reflinked scratch tree behind `@spike-03-t0` (wave 2)
+- [ ] 03-03-PLAN.md — Variant survey over the Phase 1 ffprobe fence extended to the whole 143-folder backlog for per-stratum prevalence, the deterministic widened de-duplicated 24-folder draw across `dj-mixes` ∪ `unsorted`, and the reflinked scratch tree behind `@spike-03-t0` (wave 2 — depends on 03-02, so the sample can never be drawn before the thresholds that govern it)
 
 **Wave 3** *(blocked on Wave 2)*
 
