@@ -15,6 +15,27 @@
 #
 #     The harness's two library mode counts are REPORTED, not asserted, so this script does not
 #     inherit a permanent red — see MODE SCOPE in scripts/check-music-freeze.sh.
+#
+# ⚠️  A SECOND FATAL BLOCK WAS ADDED 2026-09-01 (plan 02-09, D-41).
+#     scripts/check-music-consumers.sh now also runs here, and it too exits this script 1 on a
+#     failed assertion or on an unreachable host. Stated in the file for the same reason as
+#     above: a silent addition to what can fail a shared health check is exactly the kind of
+#     thing that should be visible here and not only in a plan.
+#
+#     What it covers: CONS-01 (the ro NFS export of /mnt/tank/media/Music from atlantis to the
+#     HA NUC), CONS-02 (three pinned proof albums exact-matched in Music Assistant on album name
+#     AND album artist, attributed to the local filesystem provider) and CONS-03 (mount liveness).
+#     It also reports the same three albums in Jellyfin.
+#
+#     Why it is load-bearing rather than nice-to-have: the Music Assistant add-on is on
+#     auto_update (D-56), and MA is pinned to a BETA (2.11.0b0 at the time of writing). A release
+#     that changes provider behaviour — the album-artist fallback, the provider filter, the API
+#     shape — would otherwise land silently and the library would go wrong with nothing saying
+#     so. This block IS the drift detector: the audit records the MA version every assertion was
+#     proven at, so a behaviour change surfaces as a failed assertion rather than a silent pass.
+#
+#     Both its scope=temp-export rows and its Jellyfin out-of-scope rows are REPORTED, not
+#     asserted, so this script does not inherit a permanent red from a torn-down control either.
 
 EXIT_CODE=0
 
@@ -90,8 +111,40 @@ else
     EXIT_CODE=1
 fi
 
+# Music consumers audit (D-41). Host-resident on LXC 100 for CREDENTIALS AND REACHABILITY, not
+# for command length: Jellyfin publishes no host port and is reachable only from LXC 100, and
+# both the Music Assistant and Jellyfin credentials live at /mnt/fast/secrets/ there. See the
+# `# Where it runs:` header of scripts/check-music-consumers.sh. It lands on the host by
+# `git pull` into /mnt/fast/stacks — there is no copy step to remember.
+echo -n "Music consumers audit: "
+CONSUMERS_OUT=$(ssh -o BatchMode=yes -o ConnectTimeout=10 root@172.16.1.159 \
+    "bash /mnt/fast/stacks/scripts/check-music-consumers.sh 2>&1")
+CONSUMERS_RC=$?   # ssh propagates the remote exit status — do NOT pipe before capturing this
+# Strip ANSI colour separately. \x1b is a GNU sed extension and this script runs on macOS, so the
+# ESC is spelled with bash's $'...' quoting instead.
+CONSUMERS_OUT=$(printf '%s\n' "$CONSUMERS_OUT" | LC_ALL=C sed $'s/\033\\[[0-9;]*m//g')
+
+if [ -z "$CONSUMERS_OUT" ]; then
+    # Unreachable host, or the script is not on the host at all. Absence of a failure signal is
+    # NOT evidence of health — same precedent as the freeze block above.
+    echo "⚠️  UNKNOWN — 172.16.1.159 unreachable or the audit produced no output"
+    echo "  The consumers state is unknown, NOT green. Check the host, then re-run:"
+    echo "  ssh root@172.16.1.159 'cd /mnt/fast/stacks && git pull --ff-only && bash scripts/check-music-consumers.sh'"
+    EXIT_CODE=1
+elif [ "$CONSUMERS_RC" -eq 0 ]; then
+    echo "✅ Both consumers see the library"
+    echo "$CONSUMERS_OUT" | sed -n '/^📊 6\. Summary/,$p' | grep -E 'MA version|albums matched in MA|albums matched in Jellyfin|FAILURES total' | sed 's/^/  /'
+else
+    echo "❌ BROKEN (check-music-consumers.sh exit $CONSUMERS_RC)"
+    echo "  Failed assertions:"
+    echo "$CONSUMERS_OUT" | grep '❌' | sed 's/^ */    /'
+    echo "  Summary:"
+    echo "$CONSUMERS_OUT" | sed -n '/^📊 6\. Summary/,$p' | sed 's/^/  /'
+    EXIT_CODE=1
+fi
+
 if [ "$EXIT_CODE" -ne 0 ]; then
     echo ""
-    echo "❌ Health check FAILED — see the music freeze harness above."
+    echo "❌ Health check FAILED — see the music freeze harness and/or the consumers audit above."
     exit 1
 fi
