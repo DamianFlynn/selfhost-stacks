@@ -160,6 +160,27 @@ MA_VERSION_PROVEN="2.11.0b0"             # D-21 as amended / D-56. See the heade
 # read-back so the provider can be recreated identically.
 MA_LOCAL_PROVIDER_INSTANCE="filesystem_local--XJaJWNUS"
 
+# The SECOND, TEMPORARY provider — the one that serves the scratch export in tank/downloads
+# (D-04/D-15). It is DELIBERATELY EMPTY in steady state, and that is the whole point: the
+# temporary export and its provider are torn down by `terraform apply` with
+# music_temp_export_enabled = false, so in steady state there is nothing for a `scope=temp-export`
+# row to be asserted against.
+#
+# Empty therefore means REPORTED, not asserted, for those rows — never a silent pass, and never a
+# permanently-red assertion either. A check that can never be green is a check readers learn to
+# ignore, which is exactly the failure 01-09 recorded when it scoped the library-mode assertion
+# down to a report. `scope=library` rows are NEVER affected by this and are always asserted.
+#
+# Set it (to the instance id from `config/flows/submit` -> .result.instance_id) only while that
+# control is actually standing, and clear it again at teardown.
+MA_TEMP_PROVIDER_INSTANCE="${MA_TEMP_PROVIDER_INSTANCE:-}"
+
+# How many provider-filtered albums section 3 pulls before matching locally. It is NOT a tuning
+# knob for speed: the exact match is done here rather than by MA's `search`, because MA 2.11's
+# `search` returned [] for an album's own exact name (measured 02-07 — see section 3). Section 5
+# already used 2000 for the same reason of "enough to be a real count".
+MA_LIBRARY_SCAN_LIMIT=2000
+
 # Jellyfin's Music library ItemId, measured 2026-08-31 via /Library/VirtualFolders. Scoping the
 # album search to it stops a same-named item in Movies/Shows/Collections answering for Music.
 JELLYFIN_MUSIC_LIBRARY_ID="7e64e319657a9516ec78490da03edccb"
@@ -296,9 +317,14 @@ ma_api() {
 # accident. The JSON argument is named `provider` and takes a provider INSTANCE ID; the display
 # name is user-editable in the GUI and is never used here (D-30).
 provider_filter() {
-  local extra="${1:-}"
+  # $1 = extra args object (default {}), $2 = instance id to filter on (default: the pinned local
+  # provider). The second argument exists ONLY so a scope=temp-export row can be asserted against
+  # the temporary provider that serves it; it never widens the filter and it is never empty when
+  # used, because an empty `provider` would silently drop the filter and let Spotify answer.
+  local extra="${1:-}" inst="${2:-$MA_LOCAL_PROVIDER_INSTANCE}"
   [[ -z "$extra" ]] && extra='{}'
-  jq -nc --arg p "$MA_LOCAL_PROVIDER_INSTANCE" --argjson extra "$extra" \
+  [[ -z "$inst" ]] && { echo '{}'; return 1; }
+  jq -nc --arg p "$inst" --argjson extra "$extra" \
     '$extra + {provider: $p}'
 }
 
@@ -598,6 +624,7 @@ echo ""
 echo "💿 3. The three proof albums in Music Assistant (CONS-02, D-06/D-07/D-09/D-10)"
 rule
 MA_ALBUMS_FOUND=0
+MA_OUT_OF_SCOPE=0
 for row in "${PROOF_ALBUMS[@]}"; do
   IFS='|' read -r SHAPE APATH AALBUM AARTIST AMD5 ATRACKS ASCOPE <<< "$row"
   echo ""
@@ -621,13 +648,53 @@ for row in "${PROOF_ALBUMS[@]}"; do
     continue
   fi
 
+  # Which provider instance can answer for THIS row. scope=library rows are always answered by the
+  # pinned local provider and are always ASSERTED. A scope=temp-export row lives on the second,
+  # temporary export and can only be answered by the temporary provider that serves it — which is
+  # torn down by design (D-15), so in steady state there is nothing to assert against and the row
+  # is REPORTED with its reason stated inline. Same idiom as section 4's out-of-scope warning.
+  ROW_INSTANCE="$MA_LOCAL_PROVIDER_INSTANCE"
+  if [[ "$ASCOPE" == "temp-export" ]]; then
+    if [[ -z "$MA_TEMP_PROVIDER_INSTANCE" ]]; then
+      warn "[$SHAPE] scope=temp-export and MA_TEMP_PROVIDER_INSTANCE is unset — REPORTED, not"
+      echo "         asserted. This album is served by the SECOND, TEMPORARY export, which is"
+      echo "         torn down by 'terraform apply' with music_temp_export_enabled=false (D-15)."
+      echo "         It was asserted for real in plan 02-07 while that control was standing:"
+      echo "         exact match on album AND albumartist, filtered to the temporary provider."
+      echo "         Set MA_TEMP_PROVIDER_INSTANCE to re-assert it when the control is next up."
+      MA_OUT_OF_SCOPE=$((MA_OUT_OF_SCOPE + 1))
+      continue
+    fi
+    ROW_INSTANCE="$MA_TEMP_PROVIDER_INSTANCE"
+  fi
+
   # provider_filter() injects {"provider": <instance id>}. See API SHAPE NOTE 4.
-  ARGS="$(provider_filter "$(jq -nc --arg s "$AALBUM" '{search:$s, limit:25}')")"
+  #
+  # ⚠ DO NOT PUT THE EXPECTED ALBUM NAME IN `search`. MEASURED 2026-09-01 (plan 02-07): MA 2.11's
+  # `search` argument is NOT a substring match, and searching an album's OWN EXACT NAME can return
+  # an EMPTY array. `search: "Mastermix Essential Hits - Pop 4 - 2005-2009"` returned [] while
+  # `search: "Mastermix"` returned that very album, from the same provider, in the same second.
+  # Short names ("Lifelines", "The Ultimate Hits") happen to work, which is what makes this so
+  # dangerous — it looks fine until an album with punctuation and digits fails, and then it reports
+  # `no exact match ... candidates were: <none>`, which is INDISTINGUISHABLE from the album being
+  # genuinely absent. That is a false FAILURE on a gate whose whole job is to be trusted.
+  #
+  # So: filter on `provider` ONLY — the provenance filter is the load-bearing one and it stays —
+  # and do the exact comparison locally in jq, where the semantics are ours and are byte-exact.
+  ARGS="$(provider_filter "$(jq -nc --argjson l "$MA_LIBRARY_SCAN_LIMIT" '{limit:$l}')" "$ROW_INSTANCE")"
   RESULT="$(ma_api music/albums/library_items "$ARGS")"
 
   if ! printf '%s' "$RESULT" | jq -e 'type == "array"' >/dev/null 2>&1; then
     ma_fail "CONS-02: music/albums/library_items did not return an array for '$AALBUM'"
     continue
+  fi
+
+  # A list that came back exactly at the limit may be truncated, and a truncated list can hide the
+  # album we are looking for. Say so loudly rather than reporting a clean miss.
+  RETURNED="$(printf '%s' "$RESULT" | jq -r 'length')"
+  if [[ "$RETURNED" -ge "$MA_LIBRARY_SCAN_LIMIT" ]]; then
+    warn "provider-filtered album list came back at the limit ($MA_LIBRARY_SCAN_LIMIT) and may be"
+    echo "         truncated — raise MA_LIBRARY_SCAN_LIMIT before trusting a miss below."
   fi
 
   # D-10: EXACT match on both name and artists[0].name. "An album appeared" is the files-are-
@@ -642,18 +709,27 @@ for row in "${PROOF_ALBUMS[@]}"; do
     # actually include the pinned instance. Cheap, and it closes the gap if a future MA release
     # ever loosens what the `provider` argument means.
     MAPPED="$(printf '%s' "$MATCH" \
-      | jq -r --arg i "$MA_LOCAL_PROVIDER_INSTANCE" \
+      | jq -r --arg i "$ROW_INSTANCE" \
           'if [.provider_mappings[]?.provider_instance] | index($i) then "yes" else "no" end')"
     if [[ "$MAPPED" == "yes" ]]; then
-      pass "CONS-02: exact match in MA, provider-attributed to $MA_LOCAL_PROVIDER_INSTANCE"
+      pass "CONS-02: exact match in MA, provider-attributed to $ROW_INSTANCE"
       MA_ALBUMS_FOUND=$((MA_ALBUMS_FOUND + 1))
     else
-      ma_fail "CONS-02: '$AALBUM' matched but is NOT mapped to $MA_LOCAL_PROVIDER_INSTANCE — "
+      ma_fail "CONS-02: '$AALBUM' matched but is NOT mapped to $ROW_INSTANCE — "
       echo "         provider mappings were: $(printf '%s' "$MATCH" | jq -r '[.provider_mappings[]?.provider_instance] | join(",")')"
       echo "         This is the Spotify false pass caught in the act. Do not relax the filter."
     fi
   else
-    GOT="$(printf '%s' "$RESULT" | jq -r '[.[] | "\(.name) — \(.artists[0].name // "?")"] | join(" ; ")')"
+    # Near-miss candidates first (case-insensitive on the album name), because "same album, wrong
+    # album artist" is the diagnostic that names WHICH fallback fired, and it would be lost in a
+    # dump of every album the provider holds. Falls back to the first few if nothing is close.
+    GOT="$(printf '%s' "$RESULT" | jq -r --arg n "$AALBUM" \
+      '[.[] | select((.name|ascii_downcase) == ($n|ascii_downcase))
+            | "\(.name) — \(.artists[0].name // "?")"] | join(" ; ")')"
+    if [[ -z "$GOT" ]]; then
+      GOT="$(printf '%s' "$RESULT" | jq -r '[limit(10; .[] | "\(.name) — \(.artists[0].name // "?")")] | join(" ; ")')"
+      [[ -n "$GOT" ]] && GOT="$GOT   (first 10 of $RETURNED; no name matched even case-insensitively)"
+    fi
     ma_fail "CONS-02: no exact match for album='$AALBUM' albumartist='$AARTIST'"
     echo "         provider-filtered candidates were: ${GOT:-<none>}"
   fi
@@ -786,8 +862,10 @@ echo "  ma route:                    $MA_ROUTE"
 echo "  jellyfin route:              $JELLYFIN_ROUTE"
 echo "  ha route:                    $HA_ROUTE   (skipped is expected on LXC 100 — see header)"
 echo "  pinned provider instance:    ${MA_LOCAL_PROVIDER_INSTANCE:-<EMPTY — pinned by 02-06; re-pin from config/providers/get>}"
+echo "  temp provider instance:      ${MA_TEMP_PROVIDER_INSTANCE:-<unset — scope=temp-export rows reported, not asserted (D-15)>}"
 echo "  proof albums pinned:         ${#PROOF_ALBUMS[@]}   (target 3: single-artist, multi-disc, various-artists)"
-echo "  albums matched in MA:        $MA_ALBUMS_FOUND   (target ${#PROOF_ALBUMS[@]}, exact name+albumartist, provider-attributed)"
+echo "  albums matched in MA:        $MA_ALBUMS_FOUND   (target $(( ${#PROOF_ALBUMS[@]} - MA_OUT_OF_SCOPE )), exact name+albumartist, provider-attributed)"
+echo "  MA out-of-scope:             $MA_OUT_OF_SCOPE   (scope=temp-export with no temp provider pinned — reported, not asserted)"
 echo "  albums matched in Jellyfin:  $JELLYFIN_ALBUMS_FOUND   (target $(( ${#PROOF_ALBUMS[@]} - JELLYFIN_OUT_OF_SCOPE )), exact name+albumartist)"
 echo "  jellyfin out-of-scope:       $JELLYFIN_OUT_OF_SCOPE   (scope!=library — reported, not asserted)"
 echo "  MA albums, local provider:   $MA_PROVIDER_ALBUM_COUNT   (target >= 3)"
