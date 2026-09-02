@@ -256,3 +256,108 @@ has been RULED, and the cache is still flat at 32 minutes.
   02.1-04 onward (the copy, the recreate) DO touch `/` and must be re-ruled on
   their own numbers. The margin is 0.16 GiB and the cache has now been flat
   across four samples spanning roughly an hour.
+
+2026-09-02T21:49:07Z plan=02.1-04 root_avail_bytes=21643157504 root_size_bytes=134682742784 oldvol_transcodes_bytes=13473768858 oldvol_total_bytes=13884071113 oldvol_transcodes_files=1324
+
+--------------------------------------------------------------------------------
+READ THIS BEFORE THE NEXT SAMPLE -- the `/` ruling for 02.1-04 was GRANTED with a
+NUMERIC SELF-HALT BUDGET, and the copy turned out to be `/`-NEUTRAL by measurement.
+--------------------------------------------------------------------------------
+
+  Delta against plan=02.1-03, ~23 minutes earlier:
+
+    root_avail_bytes         21651746816 -> 21643157504   -8589312  (-8.2 MiB)
+    oldvol_transcodes_bytes  13473768858 -> 13473768858          0
+    oldvol_total_bytes       13884071113 -> 13884071113          0
+    oldvol_transcodes_files         1324 -> 1324                 0
+
+  MARGIN against the D-17 floor of 21474836480:
+    21643157504 - 21474836480 = 168321024 = 0.16 GiB = 160.5 MiB
+
+  FIFTH CONSECUTIVE BYTE-IDENTICAL CACHE READING, now spanning 70 minutes
+  (20:38:32Z -> 21:49:07Z) across five samples. The 8.2 MiB `/` lost in this
+  window is again ordinary churn from the other 78+ containers -- all three
+  oldvol fields are unchanged, so none of it is the retention problem. The
+  margin's slow erosion (185 -> 190 -> 168.7 -> 160.5 MiB) is that churn, not
+  transcoding.
+
+  THE `/` RULING FOR 02.1-04 IS GRANTED, WITH A BUDGET RATHER THAN A BLANKET.
+  02.1-03 recorded that its ruling covered itself only and that 02.1-04 onward
+  had to be re-ruled. It has now been re-ruled BY THE EXECUTE-PHASE ORCHESTRATOR
+  (NOT A HUMAN DECISION), and the ruling is narrower and more explicit than
+  02.1-03's:
+
+  ATTRIBUTION, STATED PRECISELY, BECAUSE LATER PHASES WILL ACT ON THIS RECORD.
+  An earlier draft of this block said the `/` budget had been "re-ruled by the
+  operator". That was WRONG and is corrected here. In this phase to date:
+
+    - THE OPERATOR (THE HUMAN) HAS RULED EXACTLY ONE THING: the Terraform drift
+      question in 02.1-03, selecting Option B -- clear the output-only drift in
+      its own guarded no-op apply first, then run the plan against a literally
+      clean exit-0 baseline. That was a human decision, taken at a decision
+      checkpoint, and it is recorded in the 02.1-03 CLOSURE note above.
+    - THE `/` SELF-HALT BUDGET BELOW WAS RULED BY THE ORCHESTRATOR AGENT. No
+      human was asked and no human answered. It carries an agent's authority,
+      not an operator's, and it should be weighed as such -- if a later plan
+      wants to lean on it for a materially riskier step than this one, escalate
+      to the operator rather than treating it as settled policy.
+
+    - The D-17 floor of 21474836480 is a deliberately conservative POLICY
+      tripwire, not a physical limit. Actually-free is 20.16 GiB. The failure in
+      this estate's incident record is ACTUAL exhaustion of `/` -- which killed
+      ssh on both atlantis and LXC 100 while ping still answered -- and there is
+      ~20 GiB of real headroom before anything of that shape.
+    - Proceed within a hard numeric self-halt budget, measured BEFORE each
+      `/`-touching step: STOP if any single step would consume more than 2 GiB of
+      `/`; STOP if `/` actually-free would drop below 10 GiB; STOP if the
+      transcode cache stops being flat and starts growing mid-run.
+    - This phase is the thing that RESTORES the margin, so proceeding is the
+      `/`-relieving path.
+
+  WHAT 02.1-04 ACTUALLY SPENT: ZERO bytes of `/`. Measured, not assumed:
+  `stat -c %d` reports / = 64519, /var/lib/docker/volumes = 64519 (the SOURCE is
+  on `/`), and /mnt/fast/appdata/media = 63 -- a genuinely distinct ZFS
+  filesystem with 1.31 TiB available. The copy therefore READS from `/` and
+  WRITES to another filesystem; no step staged through a temp directory on `/`;
+  and no image was pulled (the `image:` tag is unchanged at 10.11.11), which
+  would have been the one genuine multi-GB `/` consumer available to this wave.
+
+  A NUMBER THE PLAN SET DID NOT HAVE, AND THE ONE THAT CHANGED THE COPY: the
+  volume's `_data` is 13884071113 bytes today, of which `transcodes` alone is
+  13473768858 across 1,324 files. The plan was written against a `transcodes` of
+  472 K and one file. The 392 MiB the plan repeatedly names is `_data` MINUS
+  `transcodes` = 410302255 bytes across 2,664 files, and that is what was copied.
+  `transcodes/` was deliberately EXCLUDED -- it is scheduled for deletion in
+  02.1-06, it would be shadowed by the nested /cache/transcodes bind and become
+  unreachable dead weight, and copying it would have blown the plan's own
+  headroom precondition (21474836480 + 2 x 13884071113 = 49242978706 against
+  21643157504 available). See 02.1-04-SUMMARY.md, deviation 1.
+
+  WHAT WOULD OVERTURN THIS: the budget conditions above -- a step costing more
+  than 2 GiB of `/`, `/` actually-free under 10 GiB, or a resumed rise in
+  oldvol_transcodes_bytes. None fired. THE RULING COVERS 02.1-04 ONLY. 02.1-05 is
+  the recreate and is a genuinely different shape -- it stops and restarts the
+  container -- so it gets its own numbers, as this one did.
+
+  ADDENDUM, ~10 minutes later: THIS SAMPLE AND THE BLOCK ABOVE WERE WRITTEN BY AN
+  EXECUTOR INSTANCE THAT WAS THEN KILLED MID-PLAN by a transient API server
+  error -- a harness failure, not a plan defect and not quota. Recorded here
+  because the block above is written in the past tense about a copy that, at the
+  moment those words were composed, had only just finished and had NOT been
+  committed. A continuation agent picked the plan up and re-derived every
+  assertion from live state rather than trusting the narrative:
+
+    root_avail_bytes  21643157504 (21:49, above) -> 21657853952 (22:00)  +14.0 MiB
+
+  `/` went UP across the copy. That is the empirical confirmation of the
+  `/`-neutrality claim above, and it is worth more than the `stat -c %d`
+  reasoning that predicted it. All three oldvol_* fields are STILL byte-identical
+  at 22:00 -- a SIXTH consecutive identical reading, now spanning 82 minutes.
+
+  A TRAP THE FAILURE EXPOSED, WORTH CARRYING FORWARD: the orchestrator's
+  post-failure damage check read `/mnt/fast/transcode` (0 entries) and concluded
+  the copy had never started. It had in fact COMPLETED. `/mnt/fast/transcode`
+  being empty is this plan's SUCCESS condition, not evidence of inaction -- the
+  copy's destination is `/mnt/fast/appdata/media/jellyfin/cache`. When checking
+  for damage after an interrupted plan, read the path the plan WRITES to, not the
+  path it asserts stays empty.

@@ -1,0 +1,556 @@
+================================================================================
+02.1-04 TASK 1  --  JELLYFIN CACHE COPY: CENSUS, PROBE, COPY, PROOF
+================================================================================
+
+WHAT THIS IS
+  The evidence for moving Jellyfin's `/cache` contents off the anonymous Docker
+  volume on `/` and onto a declared bind target inside the `fast/appdata/media`
+  ZFS dataset. It records the pre-copy census, the copy-form probe (assumption
+  A5), the copy itself, and the proof -- structural completeness, a 99% count
+  floor, a 20-file sha256 content sample, and a missing-by-path list driven to
+  empty by a deterministic reconciliation pass.
+
+  NOTHING HERE DELETES ANYTHING. The anonymous volume is untouched and still
+  exists. Its removal is plan 02.1-06's task, two plans away, and the ordering
+  is not negotiable -- the volume is the rollback.
+
+PROVENANCE -- READ THIS FIRST, IT AFFECTS HOW TO WEIGH EVERY NUMBER BELOW
+  This task was executed in two passes by two different agent instances.
+
+    Pass 1  2026-09-02T21:54Z  Executor instance A ran the census, the probe and
+                              the copy via /mnt/fast/spike-021/cache-copy-021.sh.
+                              It was then KILLED by a transient API server error
+                              -- a harness failure, not a plan defect and not
+                              quota -- BEFORE its stdout became a committed
+                              artifact. Its stdout is unrecoverable. Its on-host
+                              evidence FILES survived intact.
+
+    Pass 2  2026-09-02T22:00Z  Continuation instance B re-derived every assertion
+                              in this file from LIVE STATE via
+                              /mnt/fast/spike-021/reverify-021-04.sh, and re-ran
+                              the A5 probe first-hand. Nothing in the ASSERTED
+                              section below is inherited from pass 1's narrative.
+
+  The one thing pass 2 could not retake is the PRE-COPY source census, which by
+  definition cannot be taken after the copy. Pass 1's two census files survive on
+  the host with their mtimes intact and are used as-is; they are labelled as such
+  and the drift between them is computed mechanically rather than asserted.
+
+  A TRAP THIS FAILURE EXPOSED, WORTH CARRYING FORWARD. The post-failure damage
+  check read `/mnt/fast/transcode` (0 entries) and concluded the copy had never
+  started. It had in fact COMPLETED. An empty `/mnt/fast/transcode` is this
+  plan's SUCCESS condition, not evidence of inaction -- the copy's destination is
+  `/mnt/fast/appdata/media/jellyfin/cache`. After an interrupted plan, read the
+  path the plan WRITES to, not the path it asserts stays empty.
+
+--------------------------------------------------------------------------------
+THE VOLUME UNDER COPY
+--------------------------------------------------------------------------------
+
+OLD_VOL=d98b2ff94482ce115d1869142ad6be8d8425a5d7f776188b2a1a3ad6adcccfa4
+
+  Mirrored here from /mnt/fast/spike-021/old-vol.txt, which plan 02.1-01 captured
+  from `docker inspect jellyfin` and asserted returned EXACTLY ONE non-empty line
+  (VOLMOUNT_COUNT=1). It is NOT re-derived in this plan: 02.1-01 owns that
+  capture, and re-deriving it here would risk a different answer without anyone
+  noticing. It is mirrored rather than referenced so the id lives in git next to
+  this plan's evidence, and so it survives 02.1-05's recreate destroying the
+  container object that carries it.
+
+  SRC = /var/lib/docker/volumes/$OLD_VOL/_data
+  DST = /mnt/fast/appdata/media/jellyfin/cache
+
+  volume_still_exists=1        (docker volume ls -q | grep -cx "$OLD_VOL")
+                               Asserted at 22:00Z. Nothing was deleted.
+
+--------------------------------------------------------------------------------
+0. HEADROOM PRECONDITION -- AND WHY THE PLAN'S LITERAL FORM WAS REPLACED
+--------------------------------------------------------------------------------
+
+  MEASURED, 2026-09-02T21:59:59Z, on LXC 100:
+
+    root_avail_bytes               21658583040    (20.17 GiB)
+    root_size_bytes               134682742784
+    fast_appdata_media_avail       1442358231040  (1.31 TiB)
+
+  FILESYSTEM TOPOLOGY -- MEASURED WITH stat -c %d, NOT ASSUMED:
+
+    /                          dev 64519   ext4
+    /var/lib/docker/volumes    dev 64519   ext4   <-- the SOURCE is on `/`
+    /mnt/fast/appdata/media    dev 63      zfs    <-- the DESTINATION is NOT
+    /mnt/fast/transcode        dev 47      zfs
+
+  THE PLAN'S LITERAL PRECONDITION DOES NOT HOLD, AND IT IS THE PRECONDITION THAT
+  IS WRONG RATHER THAN THE STATE. The plan requires:
+
+    df -B1 --output=avail /  >  21474836480 + (2 x source_size)
+
+  With the copy scope at 410302255 bytes that demands 22295440990 against
+  21658583040 available -- short by 636857950 bytes (607 MiB). Taken literally
+  the plan halts here.
+
+  It should not, and the reason is structural. The "2 x" term exists to cover a
+  TRANSIENT DOUBLE: both copies of the data existing at once on the SAME
+  filesystem. That is not the shape of this copy. The source is on `/` (dev
+  64519) and the destination is on a different filesystem (dev 63) with 1.31 TiB
+  free. The copy READS from `/` and WRITES elsewhere, so `/` consumption is
+  ZERO -- not "small", zero. The precondition was written against a same-
+  filesystem assumption that the measured topology falsifies.
+
+  It is also worth naming that the D-17 figure of 21474836480 (20.00 GiB) is a
+  deliberately conservative POLICY tripwire, not a physical limit. The failure in
+  this estate's incident record is ACTUAL exhaustion of `/`, which killed ssh on
+  both atlantis and LXC 100 while ping still answered. There is ~20 GiB of real
+  headroom before anything of that shape.
+
+  REPLACEMENT BUDGET, ruled by the EXECUTE-PHASE ORCHESTRATOR AGENT -- NOT by
+  the operator, and not by a human. (The only human ruling in this phase to date
+  is 02.1-03's Terraform Option B choice.) Measured BEFORE each `/`-touching
+  step; STOP if any of:
+
+    - a single step would consume more than 2 GiB of `/`;
+    - `/` actually-free would drop below 10 GiB at any point;
+    - the transcode cache stops being flat and starts growing mid-run.
+
+  NONE FIRED. And the budget was not merely reasoned about, it was MEASURED
+  against outcome:
+
+    root_avail_bytes  21643157504  (21:49Z, D-32 sample, immediately pre-copy)
+    root_avail_bytes  21657853952  (22:00Z, post-copy re-verification)
+    DELTA                +14696448  (+14.0 MiB -- `/` went UP across the copy)
+
+  `/` gained space over the copy window. That is the empirical confirmation of
+  the `/`-neutrality claim, and it is worth more than the `stat -c %d` reasoning
+  that predicted it. The +14 MiB itself is ordinary churn from the other 78+
+  containers, the same class of movement the D-32 watch has been recording all
+  evening; the point is only that it is not negative.
+
+  NO IMAGE WAS PULLED. `docker inspect jellyfin --format '{{.Config.Image}}'`
+  returns `jellyfin/jellyfin:10.11.11`, unchanged. An image pull writes to
+  /var/lib/docker on `/` and was the one genuine multi-GB `/` consumer available
+  to this wave; it did not happen and no step in this plan could have caused it.
+
+--------------------------------------------------------------------------------
+1. PRE-COPY SOURCE CENSUS  (pass 1, 2026-09-02T21:54:17Z)
+--------------------------------------------------------------------------------
+
+  Taken immediately before the copy. Preserved on the host as
+  /mnt/fast/spike-021/04/src-paths-pre.txt (mtime 2026-09-02T21:54:17Z).
+
+    src_paths_pre_lines=2664
+
+  Census form -- ONE form, run identically against source and destination:
+
+    find "$DIR" -path "$DIR/transcodes" -prune -o -type f -printf '%s\n'
+
+--------------------------------------------------------------------------------
+2. POST-COPY SOURCE CENSUS AND THE MEASURED DRIFT  (pass 1, 21:54:48Z)
+--------------------------------------------------------------------------------
+
+  Taken immediately after the copy, so the source's own drift over the copy
+  window is a MEASURED NUMBER rather than an unknown. This is the whole point of
+  taking two: Jellyfin is live and serving throughout, and writes to the image
+  cache on artwork fetch, xmltv sync and ordinary client browsing.
+
+    src_paths_post_lines=2664       (mtime 2026-09-02T21:54:48Z)
+
+  DRIFT, computed mechanically with comm(1):
+
+    added   between pre (21:54:17Z) and post (21:54:48Z)   = 0
+    removed between pre (21:54:17Z) and post (21:54:48Z)   = 0
+    added   between post (21:54:48Z) and now (22:00:00Z)   = 0
+    removed between post (21:54:48Z) and now (22:00:00Z)   = 0
+
+  THE MEASURED DRIFT IS ZERO OVER THE COPY WINDOW AND ZERO OVER THE FOLLOWING
+  SIX MINUTES. Read that correctly: it does NOT mean the tolerance was
+  unnecessary. It means nobody was browsing Jellyfin at 21:54 on a Tuesday
+  night. The same window during an evening of playback would not be zero, which
+  is precisely why the assertion is structural-plus-sampled rather than exact.
+  The tolerance is insurance whose premium happened to go unclaimed, and plan
+  02.1-05 re-uses it after the recreate under less quiet conditions.
+
+--------------------------------------------------------------------------------
+3. EXACT COUNTS AND BYTES  --  REPORTED, DELIBERATELY NOT ASSERTED
+--------------------------------------------------------------------------------
+
+  EXACT EQUALITY IS NOT THE PASS RULE, AND THAT IS A CORRECTION, NOT A
+  RELAXATION. Both cross-AI reviewers reached the same finding from opposite
+  sides: Jellyfin writes to the image cache while this task runs, so an exact
+  file-count-and-byte match between a pre-copy census and a post-copy census is
+  a FALSE-NEGATIVE GENERATOR -- it fails for reasons that have nothing to do
+  with the copy. The reviewed version of this plan also had its automated verify
+  comparing counts while its written criteria demanded bytes; that is closed,
+  and the verify and the criteria now assert the same thing.
+
+  So the figures below are REPORTED. They happen to match exactly, which is a
+  pleasant outcome of a quiet night, not the criterion.
+
+    Measured 2026-09-02T22:00:00Z, both sides, identical command form:
+
+                              SOURCE                DESTINATION
+    scope   files              2664                  2664
+    scope   bytes         410302255             410302255
+    images  files              2285                  2285
+    images  bytes         390008920             390008920
+    xmltv   files                 2                     2
+    xmltv   bytes          16033018              16033018
+
+    du -sb  scope         410302255             410302255      (second instrument)
+    du -sb  images        390008920             390008920
+
+    DELTA on every line above: 0
+
+  SECOND INSTRUMENT AGREES. `find -printf '%s'` summed and `du -sb` return the
+  same byte totals on both sides. Per the 01-09 standing rule, a number worth
+  writing down is worth measuring twice.
+
+  THE FULL VOLUME, INCLUDING WHAT WAS NOT COPIED -- reported for completeness:
+
+    _data ALL          files=3988   bytes=13884071113   (12.93 GiB)
+    _data transcodes   files=1324   bytes=13473768858   (12.55 GiB)  <-- EXCLUDED
+    _data scope        files=2664   bytes=  410302255   (391 MiB)    <-- COPIED
+
+  TOP-LEVEL ENTRIES, SOURCE (14 dirs + 4 files):
+
+    HomeScreenSections  audiodb-album  audiodb-artist  fanart-movies
+    fanart-music  fanart-tv  images  imagesbyname  mediainfo
+    mesa_shader_cache_db  omdb  radv_builtin_shaders  transcodes  xmltv
+    .jellyfin-cache  001c4d74499146a6ba84e1ed072b3ce3_channels
+    bf95653124e14f5fa4fca0ca6fa271db_channels  chapter-failures.txt
+
+  TOP-LEVEL ENTRIES, DESTINATION: identical list, entry for entry.
+
+--------------------------------------------------------------------------------
+4. THE COPY SCOPE  --  transcodes/ WAS DELIBERATELY EXCLUDED  (DEVIATION 1)
+--------------------------------------------------------------------------------
+
+  THE PLAN WAS WRITTEN AGAINST A NUMBER THAT NO LONGER HOLDS. It describes the
+  volume as "392 MiB today: images 370 M, xmltv 16 M, shader caches ~4 M, and
+  transcodes 472 K". `transcodes` is now 13473768858 bytes across 1,324 files --
+  12.55 GiB, four orders of magnitude above the planned figure. It refilled
+  since the container came up on 2026-08-31T18:27:41Z. This is the incident the
+  phase exists to fix, caught mid-refill.
+
+  The 392 MiB the plan repeatedly names is `_data` MINUS `transcodes`, and that
+  is exactly what was copied: 410302255 bytes across 2,664 files.
+
+  THREE INDEPENDENT REASONS transcodes/ IS OUT OF SCOPE, any one sufficient:
+
+    1. IT WOULD BE UNREACHABLE. The compose change in task 2 nests
+       /mnt/fast/transcode onto /cache/transcodes, ON TOP OF the /cache bind.
+       Anything copied to DST/transcodes is shadowed by that mount the instant
+       the container is recreated -- dead weight that no process can read and
+       that nothing would ever reclaim.
+
+    2. IT IS SCHEDULED FOR DELETION. 02.1-06 removes the whole anonymous volume,
+       transcodes/ included. Copying 12.55 GiB in order to orphan it two plans
+       later is work with a negative return.
+
+    3. IT WOULD BREACH THE PLAN'S OWN HEADROOM PRECONDITION EVEN AS WRITTEN:
+       21474836480 + (2 x 13884071113) = 49242978706 against 21658583040
+       available. The full-volume copy is the case the precondition was actually
+       protecting against.
+
+  SAFETY OF THE EXCLUSION -- what it costs if it is wrong: nothing. transcodes/
+  is HLS segment cache. It is regenerable by definition, it is what the phase is
+  bounding, and the source copy remains untouched until 02.1-06. There is no
+  scenario in which a lost transcode segment is a loss.
+
+  DST/transcodes EXISTS AND IS EMPTY. It was created deliberately as the
+  mountpoint for the nested bind:
+
+    dst_transcodes_dir_exists=YES
+    dst_transcodes_entries=0
+
+--------------------------------------------------------------------------------
+5. COPY-FORM PROBE  --  ASSUMPTION A5  (re-run first-hand by pass 2, 22:01Z)
+--------------------------------------------------------------------------------
+
+  WHY PROBE AT ALL. CLAUDE.md records `rsync -a` failing on `tank` with
+  `mkstemp ... Operation not permitted`, WHILE PRINTING STATS THAT LOOK LIKE
+  SUCCESS AND EXITING 23. The estate has been burned by exactly this shape. The
+  research predicted it would not recur here, because the failure is driven by
+  `aclmode=restricted` and the destination dataset is `passthrough`. "Probably
+  works" is not a basis for moving a library cache.
+
+  DATASET PROPERTIES, read from the Proxmox host atlantis (zfs is NOT available
+  inside LXC 100):
+
+    fast/appdata/media   acltype=nfsv4   aclmode=passthrough   aclinherit=passthrough
+    fast/transcode       acltype=posix   aclmode=discard       quota=50G
+    fast                 acltype=posix   aclmode=discard
+
+  The destination is `nfsv4` + `passthrough`. It is `restricted` that produces
+  the EPERM. The prediction is structurally sound; it was still probed.
+
+  A BLOCKING FINDING: `rsync` IS NOT INSTALLED ON LXC 100.
+
+    rsync_available=NO
+
+  The plan names `rsync -a` for the probe and `rsync -rlt --no-p --no-o --no-g`
+  for the reconciliation pass. Neither is available. INSTALLING IT WAS
+  DELIBERATELY NOT DONE: a package-manager install is explicitly excluded from
+  auto-fix, and pulling a package onto a production Docker host to copy 391 MiB
+  that `cp` already copies correctly is a bad trade -- it adds supply-chain
+  surface and `/` consumption to buy nothing. The documented `cp` equivalence
+  was used instead and is stated exactly below.
+
+  PROBE RESULTS -- one real file, 229818 bytes, from SRC/images:
+
+    probe 2: cp --preserve=all         exit=0   dst_bytes=229818   sha=MATCH
+                                       dst_mode_owner=644 0:0
+    probe 3: cp -d --preserve=timestamps exit=0 dst_bytes=229818   sha=MATCH
+
+  `--preserve=all` attempts MODE, OWNERSHIP, TIMESTAMPS AND XATTRS -- every
+  attribute class that produced the tank EPERM -- and it succeeded, preserving
+  644 and 0:0 intact. That is a STRONGER probe than `rsync -a` would have been,
+  not a weaker substitute for it.
+
+    ASSUMPTION A5: CONFIRMED.
+    The `tank` rsync failure mode does NOT apply to fast/appdata/media.
+
+  EXIT STATUS WAS CHECKED, NOT A SUMMARY. Both probes were evaluated on their
+  return code AND on the arrived file's size AND on a sha256 comparison. The
+  probe scratch directory was removed: probe_scratch_removed=YES.
+
+  THE FORM USED FOR THE REAL COPY:
+
+    cp -r -d --preserve=timestamps    ==    rsync -rlt --no-p --no-o --no-g
+
+      -r                     recursive                      (rsync -r)
+      -d                     never dereference symlinks     (rsync -l)
+      --preserve=timestamps  preserve mtime                 (rsync -t)
+      no -p / -o / -g        which is cp's DEFAULT           (--no-p --no-o --no-g)
+
+  The source contains ZERO symlinks, so -d is belt-and-braces rather than load-
+  bearing. Per-entry exit status was captured; no entry reported a non-zero
+  return.
+
+  OWNERSHIP WAS DELIBERATELY NOT "FIXED", per D-04. Jellyfin runs as uid=0(root)
+  -- the `user:` line in jellyfin.yaml is commented out and PUID/PGID are an LSIO
+  convention the official image ignores -- it holds CAP_DAC_OVERRIDE inside the
+  userns, and every file here is regenerable with a single reader. Phase 1's
+  568:568 reasoning is about a media library and does not apply to a scratch
+  cache. Destination entries are root-owned; that is correct and expected.
+
+--------------------------------------------------------------------------------
+6. ASSERTED  --  STRUCTURAL COMPLETENESS
+--------------------------------------------------------------------------------
+
+  Every top-level subdirectory present in the source census is present on the
+  destination. A missing images, xmltv or shader-cache directory is a hard
+  failure.
+
+    topdirs_missing_from_dst:   (none)
+    topdirs_missing_count=0                     PASS
+
+  Both sides carry the same 13 in-scope directories plus transcodes/.
+
+--------------------------------------------------------------------------------
+7. ASSERTED  --  NON-EMPTINESS OF THE TWO DIRECTORIES THAT MATTER
+--------------------------------------------------------------------------------
+
+    dst_images_files=2285   > 0                 PASS
+    dst_xmltv_files=2       > 0                 PASS
+
+  These are the two the objective names by outcome: images is the artwork cache
+  (losing it means a burst of re-fetching on a server the house watches), xmltv
+  is the TV guide (losing it means a blank guide on first load).
+
+--------------------------------------------------------------------------------
+8. ASSERTED  --  99% FLOOR ON images
+--------------------------------------------------------------------------------
+
+  The destination `images` file count must be at least 99% of the LOWER of the
+  source censuses. This tolerates in-flight writes in either direction while
+  still catching a truncated or partial copy, which is the failure mode that
+  actually matters.
+
+    src_images_files      2285
+    dst_images_files      2285
+    floor (99% of src)    2262
+    2285 >= 2262                                PASS
+
+--------------------------------------------------------------------------------
+9. ASSERTED  --  CONTENT, SAMPLED: 20 FILES, sha256, BOTH SIDES
+--------------------------------------------------------------------------------
+
+  This is what makes the tolerance SAFE. A 99% count floor alone would pass a
+  copy that moved the right number of corrupted bytes. Twenty files drawn at
+  random from the source census with shuf(1), hashed on both sides:
+
+    MATCH 3a0cbfbafa3fc3f6a42bbcc8d0abe1e79dc000e5b174c5de5155fcfe9a777ba9  images/resized-images/1/1358d2c7-0055-455d-39c4-72a31635851d.webp
+    MATCH d520b7b15cead747d8c2678194b4476b953d9f18cea152d815a783a5192055ce  images/resized-images/1/15958501-b556-0eb8-a126-ce5a07234ee2.webp
+    MATCH 0d8897b27a743c2297fb80196a354bf18b2a684feed702eb4461321f42954e76  images/resized-images/2/27d5389f-f532-faff-7830-249debb2729a.png
+    MATCH 5eb13e5bf3e75ce35211088420a11f1aafc5274c016b186894f829e8e13ccaa4  images/resized-images/2/2be70af4-f196-d376-f472-5fbcee5b377d.png
+    MATCH 63862dd5a755b73ee2f009927f5f7157d441ee7f2b78e4db11cceb72492b08f4  images/resized-images/2/2c289fa4-ae98-9f48-b907-bdb44a8b6d6d.png
+    MATCH 1e3dd99d2b8e326b7e61d4d21a801e2e31d0acec667af95d7eb87432d45f2638  images/resized-images/3/30100bd8-9ce7-124c-c245-9976b373c3be.webp
+    MATCH 133463732b4a0ab96e130b6f347c021507d75e5cb0db300c7a5a01e1dc480fbc  images/resized-images/3/3e8628df-8e1c-e7dd-6ff7-46dbece2f2d5.jpg
+    MATCH f1edbe254184ab49b15290db226f92f1822ac2e738d3c75efdb2a454d1b7661d  images/resized-images/5/5b748ff3-3f82-f6bb-74d4-1b2bd53d872c.jpg
+    MATCH 395ec80badeb619f4cc034611111febaefadff559b9c86f13c65dce42ca899e2  images/resized-images/6/616c551a-5534-04f8-e05f-d80ce8b9bd07.jpg
+    MATCH a3b2cef03235faf903f40631668e2bad3e3d9118055c458f505c930b96e2950b  images/resized-images/6/64626292-ffe9-39ac-861a-21d7369ab4c7.jpg
+    MATCH c611cd22ef08a1bcce486131e1bf039b0f23b59f54edd94769f97ec6ed967fe4  images/resized-images/7/7320658c-5b14-a283-c93a-e78517c23c92.jpg
+    MATCH 52e4c59c322fbfb290782480a4df14a6acd061e24cefb86c3a50ce7d947e57a1  images/resized-images/8/80d7d178-9e61-fbce-76b3-71c4afe24f18.png
+    MATCH bef0f00d1e2026b704cffc4d96cefb1cb91571fdfe5ed63294fb5c613d1ab068  images/resized-images/8/84a39fb8-2f93-8968-9599-0e719633cbc7.jpg
+    MATCH f58ab95be454f6483e818dc6f8d6ec9eaf271a25bb118247ebe10361443a5e79  images/resized-images/8/8a40a293-9ccf-7d7d-42c2-868a7222c18a.jpg
+    MATCH e2ac207efc88c98b19444feafd6869a8e53c62b7c31ee669329bebdbfb4dbe73  images/resized-images/9/9000c4a0-08e8-d4ed-506a-0408b3f36e8d.jpg
+    MATCH 9f71871ab07a814ee708752985fb0c8064cce20275bd053ecd0ddc393ff9518f  images/resized-images/a/a4fa384c-b319-eacf-7fd7-f4ca4ddcb736.png
+    MATCH a5282e77b990f7e06be61ed63fe9cfd5590ffeba46304a884399ef1d9e519593  images/resized-images/c/c140740b-f5bd-f1db-dfb4-e14b0b8df4af.jpg
+    MATCH ff24e98b2bb5f30da7f0da5aa3bcaad21f2ba6b725d352dda3ac2047e669b4da  images/resized-images/c/c1bcf06f-c8ee-ca05-e6e8-8ed176d8e544.jpg
+    MATCH 0e39f74e82510e514841724e756682d5f6c1b0f291ec08d8f019239faa582823  images/resized-images/d/d568a75a-6fac-0635-d919-aa9e2a641166.jpg
+    MATCH 70c4c7618bf72e678be11fc26d5009cee24c75419fab40411f8393b5302dff4f  images/resized-images/e/e26b85a2-2bfa-297c-f2b9-d99e2cc7a817.jpg
+
+    sha256_sample_match=20   mismatch=0   gone_at_source=0        PASS
+
+  A HONEST LIMITATION OF THIS SAMPLE, STATED RATHER THAN GLOSSED. All 20 drew
+  into images/resized-images/. That is not a bug in the sampling -- shuf(1) is
+  uniform over the 2,664-line census and images/ is 2,285 of those lines (86%),
+  so a 20-file uniform draw landing entirely in the largest subtree is the
+  expected outcome, not a suspicious one. It does mean the sample provides
+  weaker coverage of the small directories (xmltv is 2 files, mediainfo, omdb,
+  the shader caches). Those are covered instead by the structural, non-emptiness
+  and byte-total checks above, all of which match exactly on every subtree.
+
+--------------------------------------------------------------------------------
+10. ASSERTED  --  NOTHING MISSING BY PATH: RECONCILED, NOT NARRATED
+--------------------------------------------------------------------------------
+
+  WHY THE PASS RULE CHANGED. Round 1 asked for missing files to be "enumerated
+  and explained". Round 2 was right that this is not a reproducible pass rule --
+  a live source keeps producing new files, so the list is never reliably empty
+  and the criterion degrades into a judgement call. It is replaced with a
+  mechanical one: reconcile, then re-enumerate, and require the SECOND list to
+  be empty.
+
+  ENUMERATION 1 (pre-reconciliation), 22:00:00Z:
+
+    missing_rv_1_count=0
+
+  RECONCILIATION PASS, 22:00:00Z. Form (the rsync equivalence, since rsync is
+  absent -- see section 5):
+
+    cp -d -u --preserve=timestamps   ==   rsync -rlt --no-p --no-o --no-g
+      -u  copies only what is MISSING OR NEWER
+
+    reconcile_transferred_files=0
+    reconcile_failed_files=0
+    dst_files_before=2664  dst_files_after=2664  delta=0
+    reconcile_errors: (none)
+
+  EXIT STATUS WAS CHECKED PER FILE, NEVER A PRINTED SUMMARY. This is the
+  CLAUDE.md lesson stated as an operating rule: `rsync -a` prints stats that look
+  like success while exiting 23 on acltype=nfsv4 datasets, and 03-01 hit the same
+  class of failure. The loop branches on cp's return code and counts failures
+  separately from successes; a form that could only report a summary would not
+  have been acceptable.
+
+  ENUMERATION 2 (post-reconciliation) -- THE PASS RULE:
+
+    missing_rv_2_count=0                        PASS
+
+  The list is EMPTY outright. The single permitted exception -- a path that no
+  longer exists in the source at re-check time, because Jellyfin deleted its own
+  cache entry between the census and now, which would have to be shown absent on
+  BOTH sides -- was not needed and was not invoked.
+
+--------------------------------------------------------------------------------
+11. ASSERTED  --  NOTHING WAS TOUCHED THAT SHOULD NOT HAVE BEEN
+--------------------------------------------------------------------------------
+
+  THE TRANSCODE DATASET IS STILL EMPTY:
+
+    transcode_dataset_entries=0                 PASS   (find /mnt/fast/transcode -mindepth 1 | wc -l)
+
+  This matters more than it looks. `recordsize=1M` applies to NEWLY WRITTEN
+  blocks only, so pre-seeding the dataset would permanently mis-size the records
+  the retention bound depends on. And Jellyfin's CreateAndCheckMarker scans
+  `.jellyfin-*` RECURSIVELY under the transcode path and THROWS on any foreign
+  marker -- a stray marker there is a start-refusal hazard, not a cosmetic one.
+
+  MARKER INVENTORY under both the destination and the dataset:
+
+    /mnt/fast/appdata/media/jellyfin/cache/.jellyfin-cache
+
+  Exactly one, and it is CORRECT: it is the source volume's own `.jellyfin-cache`
+  marker, copied to the directory that will be mounted at /cache. A `-cache`
+  marker under the cache path is what Jellyfin expects to find. NO marker exists
+  anywhere under /mnt/fast/transcode.
+
+  THE CONTAINER IS UNTOUCHED. The recreate is plan 02.1-05's first act:
+
+    jellyfin_state=running
+    jellyfin_started_at=2026-08-31T18:27:41.791696775Z   (unchanged; same value
+                                                          02.1-01 recorded)
+    jellyfin_has_volume_mount=x    (still non-empty -- still on the anonymous
+                                    volume, exactly as intended at this stage)
+    jellyfin_image=jellyfin/jellyfin:10.11.11            (unchanged, no pull)
+
+  NOTHING WAS WRITTEN UNDER /tmp ON LXC 100:
+
+    find /tmp -mindepth 1 -newermt '2026-09-02 21:45' | wc -l    ->    0
+
+  /tmp there is tmpfs against ~4.7 GiB available RAM, and 1.1 GB written there
+  once took the whole box down. All scratch for this task lives under
+  /mnt/fast/spike-021/.
+
+  A SMALL CORRECTION TO PASS 1'S OWN CHECK, recorded so nobody re-derives the
+  scare: pass 1's script reported `1` here because it used
+  `find /tmp -maxdepth 1` WITHOUT `-mindepth 1`, so it counted `/tmp` ITSELF.
+  The directory's mtime does move (some unrelated process among the 78+
+  containers creates and removes a temp file), but zero ENTRIES exist. The
+  correct form carries `-mindepth 1`.
+
+  THE OLD VOLUME IS UNCHANGED AND STILL FLAT:
+
+    oldvol_total_bytes=13884071113
+    oldvol_transcodes_bytes=13473768858
+    oldvol_transcodes_files=1324
+    ffmpeg_running=0
+
+  Byte-identical to the reading 02.1-01 took at 20:38Z -- a sixth consecutive
+  identical sample spanning 82 minutes. The cache is flat because nobody is
+  watching television, not because the retention problem is solved.
+
+--------------------------------------------------------------------------------
+12. SUMMARY OF ASSERTIONS
+--------------------------------------------------------------------------------
+
+    volume still exists                                   PASS   (1)
+    structural completeness (no top-level dir missing)    PASS   (0 missing)
+    destination images non-empty                          PASS   (2285)
+    destination xmltv non-empty                           PASS   (2)
+    99% floor on images                                   PASS   (2285 >= 2262)
+    sha256 content sample, 20 files                       PASS   (20/20, 0 mismatch)
+    missing-by-path after reconciliation                  PASS   (0)
+    /mnt/fast/transcode still empty                       PASS   (0)
+    no foreign .jellyfin-* marker                         PASS
+    container not recreated                               PASS   (StartedAt unchanged)
+    no image pulled                                       PASS   (10.11.11)
+    nothing written under /tmp                            PASS   (0)
+    `/` not consumed by the copy                          PASS   (+14.0 MiB)
+    assumption A5                                         CONFIRMED
+
+  REPORTED, NOT ASSERTED: exact counts and byte totals (section 3), the two
+  timestamped source censuses and their zero drift (sections 1-2).
+
+--------------------------------------------------------------------------------
+13. WHAT IS STILL TRUE AND STILL OWED
+--------------------------------------------------------------------------------
+
+  THE ANONYMOUS VOLUME STILL EXISTS AND STILL HOLDS 12.93 GiB ON `/`. This plan
+  copied; it did not reclaim. The 12.55 GiB of transcode cache is released by
+  02.1-06's `docker volume rm`, and only AFTER 02.1-05 proves Jellyfin running on
+  the new path. That ordering is the rollback and it is not negotiable.
+
+  THE `/` MARGIN AGAINST THE D-17 POLICY FLOOR IS ~175 MiB and eroding at a few
+  MiB per half-hour from ordinary container churn. That erosion is not the
+  retention problem -- all three oldvol_* fields have been flat for 82 minutes --
+  but it is the reason not to let the phase idle.
+
+  THE ORCHESTRATOR'S `/` BUDGET COVERS 02.1-04 ONLY. 02.1-05 is the recreate: it
+  stops and starts the container, which is a genuinely different shape. It gets
+  its own numbers, as this one did.
+
+================================================================================
+END
+================================================================================
