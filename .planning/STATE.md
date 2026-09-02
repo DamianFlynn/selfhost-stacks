@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-02T21:45:09.468Z"
-last_activity: 2026-09-02 -- 02.1-03 complete; fast/transcode declared in Terraform, quota=50G live, A3 confirmed
+last_updated: "2026-09-02T22:12:57.352Z"
+last_activity: 2026-09-02 — 02.1-04 complete (the cache copy and the compose declaration; finished
 progress:
   total_phases: 10
   completed_phases: 2
   total_plans: 39
-  completed_plans: 22
+  completed_plans: 23
   percent: 20
 ---
 
@@ -29,8 +29,30 @@ pipeline that someone owns.
 ## Current Position
 
 Phase: 02.1 (jellyfin-transcode-retention-relocate-the-anonymous-transcod) — EXECUTING
-Plan: 4 of 10
-Status: EXECUTING — **02.1-03 COMPLETE.** `fast/transcode` is **declared** in `infra/` Terraform
+Plan: 5 of 10
+Status: EXECUTING — **02.1-04 COMPLETE.** The structural fix is landed but **not yet live**.
+Jellyfin's cache is copied off the anonymous volume to
+`/mnt/fast/appdata/media/jellyfin/cache` — 2,664 files / **410302255 bytes**, proven by structural
+completeness, a 99% count floor, a **20/20 sha256 sample** and a missing-by-path list driven to
+empty by a reconciliation pass. `stacks/selfhosted/media/jellyfin.yaml` now declares
+`/cache` and the nested `/cache/transcodes`, has the dead RAM-disk mount deleted with its comment
+(D-02), and carries the stopped-TV runbook plus the Live TV latent gap (A8) where a 9pm debugger
+looks. `/mnt/fast/stacks` is at `origin/main` (`32f62a7`).
+
+**THE CONTAINER WAS DELIBERATELY NOT RECREATED.** It still runs on the anonymous volume, so the
+standing check correctly still reports **`FAILURES total: 5`** — sections 2/3 read the *live
+container*, not the compose file. That is 02.1-05's job, and 02.1-06's `docker volume rm` comes
+after it. **The ordering is the rollback and is not negotiable.**
+
+**Two numbers 02.1-04 discovered that the plan set did not have.** (1) The old volume's
+`transcodes/` is **12.55 GiB across 1,324 files**, not the 472 K the plans assume — so it was
+EXCLUDED from the copy (shadowed by the nested bind, deleted in 02.1-06, and copying it would
+breach the headroom precondition outright). (2) **`rsync` is NOT INSTALLED on LXC 100** and was
+deliberately not installed; the documented `cp` equivalence was used. Assumption **A5 is
+CONFIRMED** — `cp --preserve=all` succeeds on `fast/appdata/media` (`nfsv4` + `passthrough`), so
+the `tank` EPERM failure mode does not apply there.
+
+Before that, 02.1-03 completed: `fast/transcode` is **declared** in `infra/` Terraform
 (`infra/jellyfin-transcode-dataset.tf`, `var.jellyfin_transcode_quota`) and carries
 **`quota=53687091200`** live, with `compression=off`, `sync=disabled`, `recordsize=1048576`,
 `atime=off`, `mounted=yes` and `2775 apps:apps` — all read back from atlantis, not from Terraform's
@@ -43,6 +65,14 @@ not assumed: every write in 02.1-03 lands on the `fast` pool (`stat -c %d` → `
 47, `/` and `/mnt/fast` both 64519) and none on `/`; the post-apply `/` reading of 20.16 GiB confirms
 it. **The ruling covered 02.1-03 ONLY** — 02.1-04 (copy) and 02.1-05 (recreate) *do* touch `/` and
 must be re-ruled on their own numbers against a **0.16 GiB** margin.
+**02.1-04 HAS SINCE BEEN RE-RULED — by the EXECUTE-PHASE ORCHESTRATOR, not by the operator.** Weigh
+it as an agent's ruling, not a human's: the D-17 floor is a conservative *policy* tripwire, not a
+physical limit, actually-free is ~20.16 GiB, and the budget granted was numeric — halt if a step
+would cost >2 GiB of `/`, if `/` actually-free would fall below 10 GiB, or if the transcode cache
+resumed growing. **None fired, and the copy measured `/`-NEUTRAL (+14.0 MiB)** because source
+(dev 64519, ext4) and destination (dev 63, zfs) are different filesystems. **That ruling covers
+02.1-04 ONLY. 02.1-05 (the recreate) still needs its own numbers** — it stops and starts the
+container, which is a different shape.
 (2) The **TERRAFORM** question, which 02.1-03 halted on separately: the baseline
 `terraform plan -detailed-exitcode` exited **2**, not 0, tripping VALIDATION row 28. The drift was
 output-only (`verify_commands`, a stale heredoc from `76b3783`; non-no-op `resource_changes` measured
@@ -117,7 +147,10 @@ it asked for: the operator browsed MA's Filesystem (local disk) provider, spot-c
 **played tracks to confirm the audio matches the metadata**. No assertion in this phase could do
 that — every automated check verifies MA's *database* says the right thing, never that the *bytes*
 are the right song, and the documented stale state is precisely "entries exist, playback fails".
-Last activity: 2026-09-02 — 02.1-03 complete (the dataset declaration and the quota; two guarded
+Last activity: 2026-09-02 — 02.1-04 complete (the cache copy and the compose declaration; finished
+by a continuation agent after the first executor was killed by a transient API error mid-plan, with
+every assertion re-derived from live state rather than inherited). Before that, 02.1-03 completed
+(the dataset declaration and the quota; two guarded
 applies, A3 confirmed byte-exact). Before that, 02.1-02 completed (the standing transcode check and
 its baseline), and before
 that, 02.1-01 completed, and before that 02.1 was replanned against
@@ -373,6 +406,7 @@ already open so only 2049 is this phase's delta.
 | Phase 02.1 P01 | 12 minutes | 3 tasks | 3 files |
 | Phase 02.1 P02 | ~29 minutes (two agents) | 2 tasks | 3 files |
 | Phase 02.1 P03 | ~13 minutes (continuation agent) | 2 tasks | 5 files |
+| Phase 02.1 P04 | 36 minutes | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -384,6 +418,25 @@ already open so only 2049 is this phase's delta.
 
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
+
+- [02.1-04]: `transcodes/` (12.55 GiB, 1,324 files) was EXCLUDED from the cache copy — it is
+  shadowed by the nested `/cache/transcodes` bind, it is deleted wholesale in 02.1-06, and copying
+  it would breach the plan's own headroom precondition. The 391 MiB actually copied is the "392 MiB"
+  every plan in this phase reasons about.
+
+- [02.1-04]: the plan's literal headroom precondition (`floor + 2x source`) was REPLACED, not
+  waived. Its `2x` term assumes a same-filesystem transient double; `stat -c %d` measures source on
+  dev 64519 (ext4, `/`) and destination on dev 63 (zfs), so `/` consumption is zero. Measured
+  outcome: `/` went UP 14.0 MiB across the copy.
+
+- [02.1-04]: `rsync` is NOT INSTALLED on LXC 100 and was deliberately not installed — a package
+  install to copy 391 MiB that `cp` copies correctly adds supply-chain surface for no gain. The
+  documented equivalence `cp -r -d --preserve=timestamps` == `rsync -rlt --no-p --no-o --no-g` was
+  used, with per-file exit status branched on rather than a printed summary.
+
+- [02.1-04]: assumption **A5 CONFIRMED** — `fast/appdata/media` is `acltype=nfsv4` with
+  `aclmode=passthrough` (not `restricted`), and `cp --preserve=all` succeeds there preserving mode
+  and ownership. The `tank` EPERM failure mode does not apply to this dataset.
 
 - [Roadmap]: Harness before spike — every harness item is tagger-independent and several protect
   assets that cannot be recreated.
@@ -684,8 +737,8 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-09-02T21:45:09.456Z
-Stopped at: Completed 02.1-03-PLAN.md
+Last session: 2026-09-02T22:12:57.339Z
+Stopped at: Completed 02.1-04-PLAN.md
 Resume file: None
 
 **02-09 IS COMPLETE AND THE PHASE IS CLOSED.**
