@@ -330,3 +330,14 @@ variable "ha_backup_refquota" {
   type        = string
   default     = "50G"
 }
+
+# ── Jellyfin transcode dataset — phase 02.1, TRAN-03 / TRAN-07 ──────────────
+# See jellyfin-transcode-dataset.tf. The dataset fast/transcode already exists
+# and is already bind-mounted into LXC 100 as mp18; this variable is the one
+# knob on the bound that phase 02.1 exists to install.
+
+variable "jellyfin_transcode_quota" {
+  description = "ZFS quota on fast/transcode — D-13, the load-bearing bound of phase 02.1. It is a BACKSTOP, NOT A WORKING LIMIT: with Jellyfin's EnableSegmentDeletion on, steady-state transcode cache should sit orders of magnitude below this, so playback never meets the ceiling and a user never sees it. It exists for the case where segment deletion, throttling and the 48-hour cleanup task have ALL failed — the state that produced a 19 GB orphan and took / to zero bytes on 2026-08-31. Sized at 50 G against the fast pool's ~1.31 T free, so a total runaway costs 4% of the pool instead of an outage. D-12 puts the bound in a dataset property deliberately: it cannot be flipped from a UI, it survives a container recreate and an image upgrade, and it caps the blast radius at one dataset. D-15/CONS-04 choose quota over refquota — see the file header for the ENOSPC-vs-EDQUOT reasoning. Set to 'none' to remove the bound (takes effect immediately, no restart, no container involvement)."
+  type        = string
+  default     = "50G"
+}
