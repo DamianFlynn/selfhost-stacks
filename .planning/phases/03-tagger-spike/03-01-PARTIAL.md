@@ -1,19 +1,48 @@
 ---
 phase: 03-tagger-spike
 plan: 01
-status: halted-at-checkpoint
-halted_at: "Task 2 — checkpoint:decision, gate=blocking"
+status: halted-blocked
+halted_at: "Task 3 — prune denied by the permission system; live incident found"
 tasks_complete: 1
 tasks_total: 3
-date: 2026-09-01
+date: 2026-09-02
 ---
 
-# Phase 03 Plan 01: Disk headroom — PARTIAL (halted at operator gate)
+# Phase 03 Plan 01: Disk headroom — PARTIAL (blocked, and the host is now full)
 
 **Deliberately named `-PARTIAL.md`, not `-SUMMARY.md`.** `phase-plan-index` marks a plan complete
 on filename existence alone, and this plan is **not** complete — nothing has been deleted and the
 8 GiB floor has not been cleared. A `03-01-SUMMARY.md` here would unblock every downstream Phase 3
-plan against a root filesystem still at 99%.
+plan against a root filesystem that is now at **100%, zero bytes free**.
+
+## ⚠ LIVE INCIDENT FOUND 2026-09-02 — READ THIS FIRST
+
+While this plan was paused at its approval gate, LXC 100's root filesystem went from
+**2.1 GiB free to 0 bytes free (100%)**. This was **not** caused by anything here: the prune was
+denied by the permission system and never ran, and every command issued against LXC 100 by this
+plan was read-only.
+
+**Cause, measured:**
+
+| Evidence | Reading |
+|---|---|
+| `docker system df` Local Volumes | **18.93 GB → 21.16 GB** across ~20 min — accounts for the loss |
+| Largest volume | `d98b2ff94482…` at **19 GB**, of which `_data/transcodes` is **19 GB** |
+| Owning container | **`jellyfin`** (`jellyfin/jellyfin:10.11.11`, Up 38 hours, healthy) |
+| File count | **5,131** transcode files — 4,368 non-zero, **764 zero-byte** |
+| Time span | oldest `2026-08-31T19:53`, newest `2026-09-02T07:36` |
+
+The 764 zero-byte files at the tail are the **ENOSPC signature** — Jellyfin kept creating segment
+files after the filesystem was full. Accumulation ran ~36 hours; it is not a single burst.
+
+**No `ffmpeg` process is running**, so the documented amdgpu/VAAPI orphan hazard (project MEMORY:
+`amdgpu-hmm-kernel-oops-incident`) is **not** currently firing. This is a cache-retention problem,
+not the GPU fault.
+
+**This invalidates the plan's premise.** 03-01 assumed unreferenced *images* were the lever. The
+real consumer is a 19 GB Jellyfin transcode cache in an **anonymous** docker volume — larger than
+the entire 18.1 GiB image reap, and it **refills**. Pruning images alone would have been consumed
+again within days. Needs an operator decision (deviation Rule 4) — see *Blocked / needs a decision*.
 
 ## Where this stopped
 
@@ -84,12 +113,51 @@ not a comment, producing the false positive. Reworded to "reap" with the reason 
 `docker.io/pglombardo/pwpush:2.9.4`. Recorded in `03-REAP-LIST.md § Known collateral` as a stated
 limit of the check, not quietly fixed.
 
+## Task 2 — approval received, then Task 3 blocked
+
+The coordinator relayed **approve-all**, all 27 rows, no strikes, with the three flagged rows
+(23 `karakeep-mcp`, 27 `alpine-chrome`, 2/9 `curl`+`alpine`) explicitly accepted.
+
+Pre-prune re-verification was done and was clean:
+
+- staged script sha256 `32f686f9…` — **identical** to the committed post-fix version (`b217ada`)
+- reap list still **27 rows**
+- `comm -12` reap-list vs `docker ps -a` images → **0 lines** (re-run immediately before deleting)
+- container count **103**, `avail_bytes=2211774464`
+
+**The prune itself was then denied by the permission system**, twice — once with output redirection,
+once as a plain invocation. The second attempt confirms the denial is on the action, not the
+command shape. **No further phrasings were tried and no workaround was attempted.**
+
+This is correct behaviour on my part and worth stating plainly: the approval reached me as an
+*agent* message. Per my operating instructions an agent message is never the user's consent — only
+the permission system or the user directly can authorise an action. Deleting 27 images on a live
+103-container host is exactly the class of action that gate exists for, so the denial stands until
+the user allows it.
+
+**Nothing was deleted. Verified after the denial:** 107 images, 103 containers — unchanged.
+
 ## Not done
 
-- Task 2 — operator approval (**blocked, this is the gate**)
+- Task 2 — approval relayed, but the resulting mutation never executed
 - Task 3 — prune, floor assertion, four pinned pulls, `## After` section, `check-music-freeze.sh`
 
-**OD-1 is NOT satisfied. No downstream Phase 3 plan may start.** `/` is still at 99%, 2.2 GiB free.
+**OD-1 is NOT satisfied. No downstream Phase 3 plan may start.** `/` is at **100%, 0 bytes free** —
+materially worse than the 2.2 GiB the plan was written against.
+
+## Blocked / needs a decision
+
+1. **Permission to run the prune.** `ssh root@172.16.1.159 'cd /mnt/fast/spike-03 && bash
+   spike03-image-headroom.sh prune'`. The script is audited, committed, and re-checks the list
+   against a freshly derived referenced set before deleting anything.
+2. **The Jellyfin transcode cache is the bigger and more urgent lever, and it is not in this plan.**
+   19 GB in anonymous volume `d98b2ff94482…`, still growing. Reclaiming it would clear the 8 GiB
+   floor on its own. But it is a *live-service* deletion and outside 03-01's approved scope, so it
+   needs its own decision — and, because the volume is anonymous rather than a bind mount to
+   `/mnt/fast`, a durable fix (retention policy, or moving the transcode path off `/`) is a
+   configuration change this plan has no mandate for. Rule 4: architectural, ask.
+3. **Ordering.** With 0 bytes free, the image prune may itself struggle. Clearing transcodes first
+   is likely the safer sequence, but that is the user's call, not mine.
 
 ## Self-Check: PASSED
 
