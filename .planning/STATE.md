@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-02T11:58:11.965Z"
-last_activity: 2026-09-02 -- Phase 02.1 context gathered (28 decisions); Phase 03 still halted after 03-01
+last_updated: "2026-09-02T14:22:28.017Z"
+last_activity: 2026-09-02 -- Phase 02.1 planning complete
 progress:
   total_phases: 10
   completed_phases: 2
-  total_plans: 29
+  total_plans: 38
   completed_plans: 19
   percent: 20
 ---
@@ -28,9 +28,15 @@ pipeline that someone owns.
 
 ## Current Position
 
-Phase: 02.1 (jellyfin-transcode-retention) — INSERTED, not planned; Phase 03 HALTED mid-execution behind it
-Plan: 1 of 11 (03-01 complete; 03-02…03-11 queued behind phase 2.1)
-Status: Phase 03 planned 2026-09-01 — 11 plans, 8 waves, plan-checker passed,
+Phase: 02.1 (jellyfin-transcode-retention) — PLANNED; Phase 03 HALTED mid-execution behind it
+Plan: 0 of 9 (02.1 planned 2026-09-02; 03-01 complete; 03-02…03-11 queued behind phase 2.1)
+Status: Ready to execute — Phase 02.1 planned 2026-09-02: 9 plans, 5 waves, research + pattern map +
+plan-checker passed with 0 blockers. 30 locked decisions (D-01…D-30, of which **D-29/D-30 were ruled
+by the operator during plan-phase** and postdate RESEARCH.md), 9 requirements TRAN-01…TRAN-09, and a
+35-row VALIDATION.md contract that separates **read-back** from **fires** — 14 rows must be discharged
+by a real observation, never by reading a setting back (CONS-04).
+
+**Phase 03 remains planned from 2026-09-01** — 11 plans, 8 waves, plan-checker passed,
 then **cross-AI reviewed (codex / gh copilot / gemini) and revised against 13 findings**, and passed
 the checker again clean. Research falsified parts of CONTEXT.md and six operator decisions (OD-1…OD-6)
 now override it where they conflict; they are recorded in the plan set and must be carried into
@@ -77,7 +83,17 @@ it asked for: the operator browsed MA's Filesystem (local disk) provider, spot-c
 **played tracks to confirm the audio matches the metadata**. No assertion in this phase could do
 that — every automated check verifies MA's *database* says the right thing, never that the *bytes*
 are the right song, and the documented stale state is precisely "entries exist, playback fails".
-Last activity: 2026-09-02 — Phase 03 execution started; 03-01 complete (disk-headroom gate cleared,
+Last activity: 2026-09-02 — Phase 02.1 planned: 9 plans in 5 waves, 0 blockers from the plan-checker.
+Research characterised the incident from Jellyfin's own source at the running tag (`v10.11.11`) and
+found the transcode was a **stream-copy remux** of an 18 GB / 17.93 Mbit/s source — one unbounded
+orphan accounts for the whole 19 GB. Two operator rulings were taken mid-planning: **D-29** hardens
+`scripts/disable-jellyfin-hwaccel.sh`, whose `do_enable` restores the whole `encoding.xml` from a
+`.bak` predating this phase and would otherwise be a one-command silent revert of everything 02.1
+installs; **D-30** preserves `HardwareAccelerationType: none` / `EnableHardwareEncoding: false` (the
+2026-08-31 amdgpu mitigation) verbatim and asserts them after the write, because the encoding REST
+endpoint is a **full-object replace**.
+
+Prior activity: 2026-09-02 — Phase 03 execution started; 03-01 complete (disk-headroom gate cleared,
 36 GiB free). Phase 03 **halted after 03-01** pending inserted phase 2.1 (Jellyfin transcode
 retention), on operator instruction.
 
