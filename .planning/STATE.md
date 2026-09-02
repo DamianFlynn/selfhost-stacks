@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-02T14:22:28.017Z"
+last_updated: "2026-09-02T19:49:24.168Z"
 last_activity: 2026-09-02 -- Phase 02.1 planning complete
 progress:
   total_phases: 10
   completed_phases: 2
-  total_plans: 38
+  total_plans: 39
   completed_plans: 19
   percent: 20
 ---
@@ -29,12 +29,14 @@ pipeline that someone owns.
 ## Current Position
 
 Phase: 02.1 (jellyfin-transcode-retention) — PLANNED; Phase 03 HALTED mid-execution behind it
-Plan: 0 of 9 (02.1 planned 2026-09-02; 03-01 complete; 03-02…03-11 queued behind phase 2.1)
-Status: Ready to execute — Phase 02.1 planned 2026-09-02: 9 plans, 5 waves, research + pattern map +
-plan-checker passed with 0 blockers. 30 locked decisions (D-01…D-30, of which **D-29/D-30 were ruled
-by the operator during plan-phase** and postdate RESEARCH.md), 9 requirements TRAN-01…TRAN-09, and a
-35-row VALIDATION.md contract that separates **read-back** from **fires** — 14 rows must be discharged
-by a real observation, never by reading a setting back (CONS-04).
+Plan: 0 of 10 (02.1 replanned 2026-09-02; 03-01 complete; 03-02…03-11 queued behind phase 2.1)
+Status: Ready to execute — Phase 02.1 **replanned against cross-AI review**: 10 plans in 8 waves,
+plan-checker passed with 0 blockers. 32 locked decisions (D-01…D-32, of which **D-29/D-30 were ruled
+by the operator during plan-phase** and **D-31/D-32 during the review replan**; all four postdate
+RESEARCH.md), 9 requirements TRAN-01…TRAN-09, and a 38-row VALIDATION.md contract that separates
+**read-back** from **fires** — rows must be discharged by a real observation, never by reading a
+setting back (CONS-04). **D-31 re-ordered the waves so the cutover is the critical path**: `/` is
+structurally protected at the end of wave 5 of 8, not wave 4 of 5 behind a blocking human gate.
 
 **Phase 03 remains planned from 2026-09-01** — 11 plans, 8 waves, plan-checker passed,
 then **cross-AI reviewed (codex / gh copilot / gemini) and revised against 13 findings**, and passed
@@ -83,7 +85,14 @@ it asked for: the operator browsed MA's Filesystem (local disk) provider, spot-c
 **played tracks to confirm the audio matches the metadata**. No assertion in this phase could do
 that — every automated check verifies MA's *database* says the right thing, never that the *bytes*
 are the right song, and the documented stale state is precisely "entries exist, playback fails".
-Last activity: 2026-09-02 — Phase 02.1 planned: 9 plans in 5 waves, 0 blockers from the plan-checker.
+Last activity: 2026-09-02 — Phase 02.1 replanned against cross-AI review (`/gsd-review` →
+`/gsd-plan-phase --reviews`): 9 plans in 5 waves became 10 in 8, plan-checker passed with 0 blockers
+after one revision round. Gemini + Claude reviewed; **Codex could not run** (missing
+`@openai/codex-darwin-arm64`), so Gemini was the sole cross-family reviewer. All 26 findings applied
+or reframed with a stated reason, none rebutted. The two proofs that **could not fail** are repaired:
+`disable-jellyfin-hwaccel.sh` gained a standalone `verify-retention` sub-action and a `TRAN09_FAULT=1`
+gate, and the segment-deletion proof now drives a real HLS client whose download head must advance.
+The 49.5 GB ballast became a temporary `quota=1G` shrink with `conv=fsync` and a bounded retry.
 Research characterised the incident from Jellyfin's own source at the running tag (`v10.11.11`) and
 found the transcode was a **stream-copy remux** of an 18 GB / 17.93 Mbit/s source — one unbounded
 orphan accounts for the whole 19 GB. Two operator rulings were taken mid-planning: **D-29** hardens
