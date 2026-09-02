@@ -75,6 +75,47 @@ Requirements for the milestone as PROJECT.md scopes it: pipeline fixed, bucket A
 - [ ] **CONS-04**: A file is only "imported" when verified with `ffprobe` *and* visible in both
       Jellyfin and Music Assistant
 
+### Transcode retention — the cache cannot fill the Docker host's root filesystem (phase insertion 02.1)
+
+Inserted 2026-09-02 for **Phase 02.1**, after a 19 GB Jellyfin transcode cache in an *anonymous*
+Docker volume took LXC 100's root filesystem to zero mid-Phase-3. These nine are a **phase
+insertion**, not a change to the v1 milestone scope — see the revision note under § Traceability
+for why the v1 denominator of 39 is deliberately preserved.
+
+- [ ] **TRAN-01**: Every Jellyfin cache write, transcodes included, lands on `/mnt/fast`, not on
+      LXC 100's root filesystem — by declared bind mount, not by an anonymous Docker volume
+      *(discharges D-01, D-02, D-03, D-08, D-09, D-10)*
+- [ ] **TRAN-02**: Jellyfin holds **zero** `Type: volume` mounts, and the anonymous volume
+      `d98b2ff9…` no longer exists. The invariant is asserted, not the id — a *new* anonymous volume
+      must fail this too *(discharges D-08, D-10, D-18)*
+- [ ] **TRAN-03**: Transcode growth is bounded by a ZFS property that survives a container recreate
+      and a UI edit, and the bound is proven to **fire** rather than proven to be set
+      *(discharges D-12, D-13, D-15)*
+- [ ] **TRAN-04**: Jellyfin's own retention levers are on, their values are chosen rather than
+      defaulted, and each is proven **firing** from Jellyfin's own logs — not read back from the API
+      *(discharges D-14, D-15, D-21)*
+- [ ] **TRAN-05**: A standing, fail-closed check covers `/` headroom, the absent anonymous volume,
+      the transcode quota and the three encoding values, runs standalone, and is folded into
+      `quick-health-check.sh` *(discharges D-16, D-17, D-18, D-19, D-20, D-22)*
+- [ ] **TRAN-06**: A `jellyfin/jellyfin` Renovate rule makes a minor release manual-review while
+      preserving patch automerge, and `scripts/check-renovate.sh` can actually validate the config it
+      is pointed at *(discharges D-23, D-24, D-25)*
+- [ ] **TRAN-07**: `fast/transcode` and its properties are declared in `infra/` Terraform, and the
+      apply that lands them is provably scoped to that one resource with **zero destroys**
+      *(discharges D-05, D-06, D-07)*
+- [ ] **TRAN-08**: The unreferenced Docker images are reclaimed through
+      `scripts/spike03-image-headroom.sh`'s existing two-process approval gate, with
+      `docker image prune -a` / `docker system prune` prohibited by name and the prohibition asserted
+      *(discharges D-28)*
+- [ ] **TRAN-09**: The estate's existing amdgpu recovery script cannot silently revert this phase's
+      retention controls — `scripts/disable-jellyfin-hwaccel.sh enable` restores the **whole**
+      `encoding.xml` from a `.bak` predating this phase, so it is a one-command silent revert of
+      everything 02.1 installs *(discharges D-29, D-30. **Origin note:** unlike TRAN-01…08 this one
+      did not come from a CONTEXT decision — it is a research finding, `02.1-RESEARCH.md` § Pitfall 1,
+      recorded there as Assumptions-Log entry A1 and explicitly needing operator confirmation before
+      becoming scope. The operator ruled it **in scope on 2026-09-02 as D-29**, and D-30 was ruled
+      alongside it.)*
+
 ### Tagger — decided on evidence, then singular
 
 - [ ] **TAGR-01**: The tagger decision is recorded with numbers — Discogs coverage measured on
@@ -207,6 +248,15 @@ Populated during roadmap creation (2026-08-17). Every v1 requirement maps to exa
 | CONS-01 | Phase 2 | **COMPLETE (02-05).** All five parts of criterion 1: 1a export correct, 1b re-apply exit 0, 1c served from the host not LXC 100 (02-03); **1d visible from the NUC — `nc` 2049 exit 0 and the mount succeeded (`showmount` is absent there), 1e NFSv4 negotiated — `/proc/self/mountinfo` fstype `nfs4`, `vers=4.2` (`findmnt` is absent there) (02-05)**. **Criterion 2 proven at the EXPORT layer**, not the client: `touch` refused `EROFS` despite an explicit `mount -o rw`, on NFSv3 and NFSv4.2 alike. **M1 IS NOW PROVEN (02-08), superseding 02-03 and 02-05.** A discriminating client-mount pair from the NUC, same command minutes apart: dataset mounted → exit 0 / 14 entries; dataset unmounted → exit 255 / `No such file or directory` / 0 entries. The `mountpoint` option genuinely makes `rpc.mountd` refuse. ⚠ The earlier "unproven" readings were an **instrument error, not a defect**: `exportfs -v` keeps printing the export line while the dataset is unmounted, so the export *table* is non-discriminating while the *served mount* is refused. Never assert export health from `exportfs -v` alone. M2 (`After=zfs-mount.service`) remains the boot-race guard; M1 is a proven second layer beneath it, and 02-03's `threat_flag: control-not-enforced` on `infra/nfs-music-export.tf` is retired |
 | CONS-02 | Phase 2 | **COMPLETE (02-06).** MA provider `filesystem_local--XJaJWNUS` at `/media/music`, created headlessly (`config/providers/setup` → `config/flows/submit`), `type=music`, `enabled`, `status: loaded`, `last_error: null`. `content_type` read back as `music` (`read_only: true`) and `missing_album_artist_action` read back as `folder_name` against a `various_artists` default — D-28 and D-01 both proven by read-back, not by submission. Instance id pinned into `check-music-consumers.sh` (`e1c4f93`), so both library proof albums match with provider attribution confirmed server-side **and** client-side against `provider_mappings[]`. 20 albums attributed to the local provider. Caveat: MA 2.11 does not expose the provider's `path` via the API — it is proven functionally via `music/browse` and recorded only in `02-06-SUMMARY.md`. **CRITERION 3 CLOSED BY 02-07**: all three proof albums exact-matched on album name **and** `artists[0].name` inside one deliberate 177 s `music/sync`, the third served through the temporary export. **⚠ But `missing_album_artist_action: folder_name` is CONDITIONAL** — measured in 02-07, it fires only when a file's `album` TAG agrees with its album FOLDER name, and otherwise silently yields `Various Artists` while the API still reads back `folder_name`. "Shows albums under the correct album artist" is therefore true for this library's proof set and NOT guaranteed for arbitrary content; Phase 7 must check the precondition |
 | CONS-03 | Phase 2 | **COMPLETE (02-08).** The reboot half — the only thing 02-07 was missing — was done twice on 2026-09-01. **Criterion 4a:** NUC rebooted with atlantis healthy, boot_id changed `b86dada0…`→`3a7906c0…`, **zero manual intervention**, mount `active`/`read_only`, 70 albums provider-filtered, both proof albums EXACT, `check-music-consumers.sh` exit 0, and M4a re-synced unprompted at 12:43:25Z. Recorded as **necessary but not sufficient** — atlantis was healthy so the race was never exercised. **Criterion 4b:** `nfs-server` stopped, NUC rebooted (boot_id `3a7906c0…`→`a2869d72…`), the failure reproduced in full — Supervisor's `mounting read-only fallback`, `/media/music` empty and `dr--r--r--`, MA's `Aborting sync … scan found no files but 1244 were previously indexed` — and **MA's view survived it: 70 albums before, 70 during, 70 after. No purge.** Then **unattended recovery in 432 s** with the NUC untouched, M4b re-syncing on its own at 13:12:06Z. **⚠ Two instrument corrections came out of it:** `mount \| grep emergency/music` can never match on this Supervisor version (it makes the media dir read-only in place, no `/emergency/` bind), and the default `ha supervisor logs` depth does not reach back to boot. **A real defect was found and fixed:** D-54a's alerting was structurally unable to fire on a boot into a failed mount; it now carries a `homeassistant start` trigger (the load-bearing one) and both new trigger paths are fired and trace-confirmed. D-54b remains blind at boot by integration-setup ordering — diagnosed, recorded open, not part of CONS-03's text |
+| TRAN-01 | Phase 02.1 | Pending |
+| TRAN-02 | Phase 02.1 | Pending |
+| TRAN-03 | Phase 02.1 | Pending |
+| TRAN-04 | Phase 02.1 | Pending |
+| TRAN-05 | Phase 02.1 | Pending |
+| TRAN-06 | Phase 02.1 | Pending |
+| TRAN-07 | Phase 02.1 | Pending |
+| TRAN-08 | Phase 02.1 | Pending |
+| TRAN-09 | Phase 02.1 | Pending |
 | CONS-04 | Phase 7 | Pending |
 | TAGR-01 | Phase 3 | Pending |
 | TAGR-02 | Phase 3 | Pending |
@@ -238,6 +288,8 @@ Populated during roadmap creation (2026-08-17). Every v1 requirement maps to exa
 - v1 requirements: 39 total
 - Mapped to phases: 39 ✓
 - Unmapped: 0
+- Phase insertions (not part of the v1 denominator): TRAN-01…09 = 9
+- Total tracked: 48
 
 **Arithmetic, both ways:**
 
@@ -245,8 +297,23 @@ By category: SAFE 5 + WRIT 4 + CONS 4 + TAGR 6 + CONF 6 + INBX 3 + QUAL 4 + IMPT
 
 By phase: 10 + 3 + 3 + 3 + 3 + 6 + 6 + 4 + 1 = **39**
 
+Phase insertion 02.1: TRAN 9 — tracked separately, so both v1 totals above are unchanged and still
+agree. Total tracked = 39 + 9 = **48**.
+
 Both totals agree, and every requirement appears in exactly one phase row above.
 
+> **Revision 2026-09-02 (phase insertion 02.1, NOT a milestone scope change):** TRAN-01…TRAN-09 were
+> added for the inserted Phase 02.1 (Jellyfin transcode retention), taking the tracked total from 39
+> to 48. **The v1 denominator is deliberately left at 39.** Phase 1-9 milestone progress is measured
+> against it, and incrementing it would silently move the goalposts of a milestone that is already
+> part-executed — every prior "N of 39" statement would become incomparable with the ones after it.
+> The insertion is therefore subtotalled separately in the Coverage block, given its own arithmetic
+> line, and marked *(inserted)* with a footnote in the By-phase table. Both v1 arithmetic lines above
+> are byte-identical to their pre-insertion form and are still true. TRAN-09 differs from its eight
+> siblings in origin: it was a **research finding** (`02.1-RESEARCH.md` § Pitfall 1, Assumptions Log
+> A1), not a CONTEXT decision, and was ruled in scope by the operator on 2026-09-02 as D-29. No
+> existing requirement was renumbered, reworded, re-mapped or changed phase.
+>
 > **Revision 2026-08-17:** v1 grew from 34 to 39. Five requirements were added on user feedback —
 > the QUAL category (QUAL-01…04, closing the "an import can succeed while making the library worse"
 > hole) and TAGR-06 (operator ergonomics as a weighted factor in the tagger decision). No existing
@@ -262,6 +329,7 @@ Both totals agree, and every requirement appears in exactly one phase row above.
 |-------|--------------|-------|
 | 1 — Safety Harness and Freeze the Writers | SAFE-01…05, WRIT-01…04, QUAL-01 | 10 |
 | 2 — NFS Export and Music Assistant Reachability | CONS-01, CONS-02, CONS-03 | 3 |
+| 02.1 — Jellyfin Transcode Retention *(inserted)* | TRAN-01…09 | 9 |
 | 3 — Tagger Spike | TAGR-01, TAGR-02, TAGR-06 | 3 |
 | 4 — Collapse to One Tagger | TAGR-03, TAGR-04, TAGR-05 | 3 |
 | 5 — Inbox Structure and the Junk Gate | INBX-01, INBX-02, INBX-03 | 3 |
@@ -269,6 +337,11 @@ Both totals agree, and every requirement appears in exactly one phase row above.
 | 7 — Pilot — 12 Albums End to End | IMPT-01, IMPT-02, CONS-04, QUAL-02, QUAL-03, QUAL-04 | 6 |
 | 8 — Close the Inflow | INGS-01…04 | 4 |
 | 9 — Bucket A in Batches | IMPT-03 | 1 |
+
+> **Footnote — the `02.1` row is an INSERTION and is EXCLUDED from the v1 total of 39.** The nine
+> integer-phase rows still sum to 39 on their own, which is what the `By phase:` arithmetic line
+> above states. Adding the 02.1 row's 9 gives the tracked total of 48. Do not read the table's rows
+> as summing to the v1 figure without first removing this one.
 
 v2 requirements (DUPE-*, NOWB-*, LIDR-01, DJCC-*) are deliberately unscheduled — see
 ROADMAP.md § Beyond This Milestone.
