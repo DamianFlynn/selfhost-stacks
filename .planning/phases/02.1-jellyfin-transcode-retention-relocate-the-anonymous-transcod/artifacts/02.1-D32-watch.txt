@@ -234,3 +234,25 @@ has been RULED, and the cache is still flat at 32 minutes.
   Zero infrastructure changes. But the plan says STOP on a 2, so this artifact's
   ruling above ("02.1-03 PROCEEDS") is now conditional on an operator answering
   the Terraform question. The `/` ruling itself is unaffected and stands.
+
+  CLOSURE, same plan, ~8 minutes later: THE OPERATOR RULED OPTION B -- clear the
+  drift first as its own separate, guarded apply, THEN execute 02.1-03 against a
+  genuinely clean exit-0 baseline. Chosen deliberately over the cheaper option of
+  proceeding with a documented exception, because row 28 is a VALIDATION row this
+  phase gets verified against and only B satisfies it LITERALLY rather than by
+  exception. Executed as two applies, each from its own saved, separately-
+  asserted plan file: the first measured count=0 / destroys=0 / addresses=[] and
+  consumed the stale output alone (Terraform's own words: "without changing any
+  real infrastructure"), after which `terraform plan -detailed-exitcode` exited
+  0; the second measured count=1 / destroys=0 /
+  addresses=["null_resource.jellyfin_transcode_dataset"]. Both plan files lived
+  on the WORKSTATION under $TMPDIR and were deleted after use; neither was
+  committed. 02.1-03 then completed, and the post-apply `/` reading of
+  21651214336 bytes (20.16 GiB) is within ordinary churn of the sample above --
+  confirming this plan's writes all landed on the fast pool and none on `/`,
+  which is the basis the `/` ruling was granted on.
+
+  STILL TRUE, AND STILL THE THING TO WATCH: the `/` ruling covered 02.1-03 ONLY.
+  02.1-04 onward (the copy, the recreate) DO touch `/` and must be re-ruled on
+  their own numbers. The margin is 0.16 GiB and the cache has now been flat
+  across four samples spanning roughly an hour.
