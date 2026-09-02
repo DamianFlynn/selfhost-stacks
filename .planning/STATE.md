@@ -3,13 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-02T22:12:57.352Z"
-last_activity: 2026-09-02 — 02.1-04 complete (the cache copy and the compose declaration; finished
+last_updated: "2026-09-02T22:35:00.000Z"
+last_activity: 2026-09-02 — 02.1-05 complete (THE CUTOVER — the container recreated onto the
+  declared binds, and Jellyfin's five retention settings applied by read-modify-write)
 progress:
   total_phases: 10
   completed_phases: 2
   total_plans: 39
-  completed_plans: 23
+  completed_plans: 24
   percent: 20
 ---
 
@@ -29,20 +30,40 @@ pipeline that someone owns.
 ## Current Position
 
 Phase: 02.1 (jellyfin-transcode-retention-relocate-the-anonymous-transcod) — EXECUTING
-Plan: 5 of 10
-Status: EXECUTING — **02.1-04 COMPLETE.** The structural fix is landed but **not yet live**.
-Jellyfin's cache is copied off the anonymous volume to
-`/mnt/fast/appdata/media/jellyfin/cache` — 2,664 files / **410302255 bytes**, proven by structural
-completeness, a 99% count floor, a **20/20 sha256 sample** and a missing-by-path list driven to
-empty by a reconciliation pass. `stacks/selfhosted/media/jellyfin.yaml` now declares
-`/cache` and the nested `/cache/transcodes`, has the dead RAM-disk mount deleted with its comment
-(D-02), and carries the stopped-TV runbook plus the Live TV latent gap (A8) where a 9pm debugger
-looks. `/mnt/fast/stacks` is at `origin/main` (`32f62a7`).
+Plan: 6 of 10
+Status: EXECUTING — **02.1-05 COMPLETE. THE CUTOVER IS DONE.** At **2026-09-02T22:19:52Z** Jellyfin
+stopped writing its cache to `/`. The container was recreated onto the binds 02.1-04 declared, and
+the mount shape is now proven on the **runtime** rather than in the file: **zero `Type: volume`
+mounts** (D-18's invariant, asserted before the container was even enumerated), `/cache/transcodes`
+→ `bind /mnt/fast/transcode`, `/cache` → `bind /mnt/fast/appdata/media/jellyfin/cache`, and
+`/data/transcode` in **no** destination. **Assumption A4 is CONFIRMED by probe, not by reading
+moby's sort**: a file written into `/cache/transcodes` from *inside* the container appeared at
+`/mnt/fast/transcode/` and **not** under the cache bind. Jellyfin then wrote its own
+`.jellyfin-transcode` marker into the dataset at 22:20Z — the *server* agreeing, not just the daemon.
 
-**THE CONTAINER WAS DELIBERATELY NOT RECREATED.** It still runs on the anonymous volume, so the
-standing check correctly still reports **`FAILURES total: 5`** — sections 2/3 read the *live
-container*, not the compose file. That is 02.1-05's job, and 02.1-06's `docker volume rm` comes
-after it. **The ordering is the rollback and is not negotiable.**
+**Jellyfin's five retention values are live**, applied by strict read-modify-write (POST returned
+204, no restart): `TranscodingTempPath=/cache/transcodes`, `EnableSegmentDeletion=true`,
+`SegmentKeepSeconds` 720→**300**, `EnableThrottling=true`, `ThrottleDelaySeconds=180`. **The amdgpu
+mitigation SURVIVED** — `HardwareAccelerationType=none` and `EnableHardwareEncoding=false`, asserted
+against both the captured pre-write values and the literals. That endpoint is a **full-object
+replace** and `EnableHardwareEncoding`'s constructor default is **true**, so a partial POST would
+have silently re-armed the hazard that cost ~6 hours on 2026-08-31.
+
+**The ZFS bound did not notice the container being destroyed and rebuilt** — `quota=53687091200`,
+`mounted=yes`, both re-read from atlantis *after* the recreate (VALIDATION rows 10 and 36). That is
+exactly why D-12 makes the ZFS property load-bearing rather than an application setting.
+
+**Standing check: `FAILURES total: 5` → `1`.** The one remaining red is section 3, *"the anonymous
+volume STILL EXISTS"*, and it is **supposed** to be red here. **The volume was deliberately NOT
+deleted** — it is the rollback, D-10 keeps it until the thing it protects is proven, and it is
+proven now. **02.1-06 may proceed**, and it is what releases the 12.55 GiB still sitting on `/`.
+
+**⚠ VALIDATION.md row 15 IS WRONG AS WRITTEN and needs correcting before 02.1-10 verifies against
+it.** It asserts the changed-key set equals five names *including* `ThrottleDelaySeconds` — but that
+value was already `180`, so setting it to `180` changed nothing, and the equality was unsatisfiable
+from the moment it was written. The plan's own prose, 02.1-RESEARCH.md and `jellyfin.yaml` all say
+`180 -> 180 UNCHANGED`. **This was NOT the full-object-replace hazard firing**: the hazard is the
+*superset* direction and it was measured directly — `changed_keys − intended_five` = `[]`.
 
 **Two numbers 02.1-04 discovered that the plan set did not have.** (1) The old volume's
 `transcodes/` is **12.55 GiB across 1,324 files**, not the 472 K the plans assume — so it was
@@ -70,9 +91,16 @@ it as an agent's ruling, not a human's: the D-17 floor is a conservative *policy
 physical limit, actually-free is ~20.16 GiB, and the budget granted was numeric — halt if a step
 would cost >2 GiB of `/`, if `/` actually-free would fall below 10 GiB, or if the transcode cache
 resumed growing. **None fired, and the copy measured `/`-NEUTRAL (+14.0 MiB)** because source
-(dev 64519, ext4) and destination (dev 63, zfs) are different filesystems. **That ruling covers
-02.1-04 ONLY. 02.1-05 (the recreate) still needs its own numbers** — it stops and starts the
-container, which is a different shape.
+(dev 64519, ext4) and destination (dev 63, zfs) are different filesystems.
+**02.1-05 WAS RE-RULED IN TURN — again by the ORCHESTRATOR, not the operator** — on the same numeric
+terms plus one addition specific to a recreate: **check image residency first**, because a pull is a
+1.45 GiB write into `/var/lib/docker` on `/` and is the one genuine multi-GB consumer a compose
+change has available. The image was already resident (digest `d57d4a0c…`, identical either side), so
+**no pull occurred**. **Nothing fired and the recreate was `/`-POSITIVE: +37 MiB**, the old
+container's writable layer released and not fully replaced. **The margin is now ~216 MiB, the widest
+it has been all phase.** That ruling covers **02.1-05 ONLY**; 02.1-06 is the `docker volume rm`, a
+different shape again — it *releases* 12.55 GiB rather than spending anything — and gets its own
+numbers.
 (2) The **TERRAFORM** question, which 02.1-03 halted on separately: the baseline
 `terraform plan -detailed-exitcode` exited **2**, not 0, tripping VALIDATION row 28. The drift was
 output-only (`verify_commands`, a stale heredoc from `76b3783`; non-no-op `resource_changes` measured
@@ -147,7 +175,11 @@ it asked for: the operator browsed MA's Filesystem (local disk) provider, spot-c
 **played tracks to confirm the audio matches the metadata**. No assertion in this phase could do
 that — every automated check verifies MA's *database* says the right thing, never that the *bytes*
 are the right song, and the documented stale state is precisely "entries exist, playback fails".
-Last activity: 2026-09-02 — 02.1-04 complete (the cache copy and the compose declaration; finished
+Last activity: 2026-09-02 — 02.1-05 complete (**THE CUTOVER** — the container recreated onto the
+declared binds at 22:19:52Z, assumption A4 confirmed by write-through probe, the quota and mount
+proven to survive the recreate, and the five encoding settings applied by read-modify-write with the
+amdgpu mitigation asserted intact). Before that, 02.1-04 completed (the cache copy and the compose
+declaration; finished
 by a continuation agent after the first executor was killed by a transient API error mid-plan, with
 every assertion re-derived from live state rather than inherited). Before that, 02.1-03 completed
 (the dataset declaration and the quota; two guarded
@@ -407,6 +439,7 @@ already open so only 2049 is this phase's delta.
 | Phase 02.1 P02 | ~29 minutes (two agents) | 2 tasks | 3 files |
 | Phase 02.1 P03 | ~13 minutes (continuation agent) | 2 tasks | 5 files |
 | Phase 02.1 P04 | 36 minutes | 3 tasks | 3 files |
+| Phase 02.1 P05 | ~25 minutes | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -418,6 +451,32 @@ already open so only 2049 is this phase's delta.
 
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
+
+- [02.1-05]: **VALIDATION row 15's key-set equality was CORRECTED, not waived.** It names
+  `ThrottleDelaySeconds` as a changed key, but that value was already `180`, so setting it to `180`
+  changed nothing and the equality was unsatisfiable as written — the plan's own prose, the research
+  and `jellyfin.yaml` all say `180 -> 180 UNCHANGED`. It conflates "keys SET in the POST body" with
+  "keys whose VALUE CHANGED". Replaced with the **subset** direction (`changed − intended == []`,
+  which *is* the full-object-replace hazard) **plus** the value assertion — together strictly
+  stronger, because a key-set comparison is silent on values and would pass a key changed to the
+  *wrong* value. **The row still needs fixing in VALIDATION.md before 02.1-10.**
+
+- [02.1-05]: a stopped **guard container** held the anonymous volume through the recreate, because
+  whether compose v5 passes `RemoveVolumes` on `--force-recreate` is undocumented and is not a
+  question worth answering by losing the rollback. The answer, for the record: **it does not.** The
+  guard was created from the already-resident image (no pull) and removed immediately after, without
+  `-v`.
+
+- [02.1-05]: **TRAN-01 marked COMPLETE**, as 02.1-04 said it should be — the declaration and the
+  writes finally agree. **TRAN-02, TRAN-03 and TRAN-04 stay Pending despite this plan's frontmatter
+  claiming them**: TRAN-02 needs the volume *gone* (02.1-06), and TRAN-03/TRAN-04 need the bounds
+  proven **firing** from Jellyfin's own logs rather than read back from the API (02.1-08) — which is
+  exactly what this plan did. CONS-04's rule; Phase 2 paid to learn it.
+
+- [02.1-05]: the pre-cutover reconciliation copied 10 live-cache files **deterministically** rather
+  than letting row 6's tolerance absorb them, so the 99% floor stays a guard against *collapse*
+  rather than a way of tolerating a stale copy. `rsync` is still absent and still deliberately not
+  installed; the documented `cp` equivalence was used with per-file exit status.
 
 - [02.1-04]: `transcodes/` (12.55 GiB, 1,324 files) was EXCLUDED from the cache copy — it is
   shadowed by the nested `/cache/transcodes` bind, it is deleted wholesale in 02.1-06, and copying
@@ -714,7 +773,7 @@ Recent decisions affecting current work:
 - **OPEN, recorded not repaired (02-07): `/mnt/tank/media/Music/Def Leppard/Def Leppard (2015)/` derives an EMPTY album artist and hard-errors one file** (`CD 01-06 Def Leppard - Sea of Love.flac`), because the album folder name equals the artist folder name — MA's derivation appears to lock onto the top-level `Def Leppard` directory as the album folder, whose parent is the provider root. Two files hit it; one errored. **No remedy was attempted and none is available here:** D-05 makes tag repair the wrong remedy on principle and the `ro` export makes it unavailable in fact. `zpool status -v tank` is clean, so this is NOT 2026-07 scrub damage. Phase 7 meets this at scale.
 - **CORRECTION for anything querying MA albums (02-07): `search` on `music/albums/library_items` is NOT a substring match.** Searching an album's OWN EXACT NAME returned `[]` while a one-word prefix returned that same album, from the same provider, in the same second (`Mastermix Essential Hits - Pop 4 - 2005-2009` vs `Mastermix`). Short names happen to work, which is what makes it dangerous. Filter on `provider` ONLY and do the exact comparison locally — otherwise the gate reports `no exact match … candidates were: <none>`, indistinguishable from the album being genuinely absent. Fixed in `check-music-consumers.sh` (`ed1d367`).
 - **CORRECTION for any future Terraform teardown (02-07): destroying a `null_resource` removes NOTHING from the host.** `music_temp_export_enabled = false` was not a teardown — the drop-in file stayed on disk and the export stayed live while `terraform plan` reported clean. Fixed by an always-present reconciler resource (`d7430ee`). **A destroy-time provisioner is NOT an option here:** `terraform validate` refuses one whose connection block reads variables, and the only workaround carries the Proxmox root password in `triggers` — plaintext state plus every plan diff, in a public repo. `self.triggers.*` is also unsafe at destroy time: it reads from STATE, so a key added after creation reads null and `grep -q ""` matches every line.
-- ⏱ TIME-SENSITIVE (02.1-01, 2026-09-02): / on LXC 100 has 185 MiB of margin over the D-17 floor (20.18 GiB avail vs 20.00 GiB), and Jellyfin's transcode cache has already refilled to 12.55 GiB / 1,324 files at roughly 6 GiB/day. The phase-start gate PASSED so 02.1 is proceeding, and the cutover chain (02.1-04..06) is what reclaims it — but the phase now has a budget of roughly a day before / crosses its own floor. DO NOT let 02.1 idle, especially at 02.1-09's blocking human gate. If a D-32 watch sample reads below 21474836480, that is the operator decision point in 02.1-01's rollback table: the reap may need to move earlier.
+- ~~⏱ TIME-SENSITIVE (02.1-01, 2026-09-02): / on LXC 100 has 185 MiB of margin over the D-17 floor (20.18 GiB avail vs 20.00 GiB), and Jellyfin's transcode cache has already refilled to 12.55 GiB / 1,324 files at roughly 6 GiB/day.~~ **MATERIALLY REDUCED 2026-09-02T22:19:52Z by 02.1-05's cutover, but NOT cleared.** New transcode writes now land on `fast/transcode` under a 50 G quota, so **`oldvol_transcodes_bytes` is a FROZEN stock rather than a growing one** — the ~6 GiB/day clock has stopped and the "budget measured in hours" framing no longer applies. Margin is now ~216 MiB, the widest all phase, because the recreate was `/`-positive. **Two reasons it is not cleared:** (1) the 12.55 GiB is still *on* `/` and is only released by **02.1-06's `docker volume rm`**, which should not be left sitting; (2) the margin still erodes a few MiB per half-hour from ordinary churn across the other 78+ containers. **If `oldvol_transcodes_bytes` ever moves again, that is not the old problem continuing — it is `jellyfin.yaml` having been reverted, and the standing check's section 2 is the alarm.** The operator decision point in 02.1-01's rollback table (moving 02.1-09's reap earlier) still stands if a D-32 sample reads below 21474836480.
 
 ## Deferred Items
 
@@ -737,8 +796,8 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-09-02T22:12:57.339Z
-Stopped at: Completed 02.1-04-PLAN.md
+Last session: 2026-09-02T22:35:00.000Z
+Stopped at: Completed 02.1-05-PLAN.md
 Resume file: None
 
 **02-09 IS COMPLETE AND THE PHASE IS CLOSED.**
