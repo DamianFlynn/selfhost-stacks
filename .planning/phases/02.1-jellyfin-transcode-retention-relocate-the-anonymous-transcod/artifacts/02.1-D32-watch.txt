@@ -1,0 +1,118 @@
+================================================================================
+02.1 D-32 PASSIVE `/` WATCH  --  OBSERVATION ONLY
+================================================================================
+
+WHAT THIS IS
+  D-32 (operator decision, 2026-09-02). The operator chose a PASSIVE guard over
+  actively clearing the anonymous volume's `transcodes/`. This file records a
+  cheap re-observation of LXC 100's root-filesystem headroom and the anonymous
+  volume's transcode footprint, taken at the head of each plan in phase 02.1, so
+  that if `/` starts filling mid-phase there is an EARLY SIGNAL rather than a
+  surprise.
+
+WHAT THIS IS NOT
+  This watch ASSERTS NOTHING. It is not a gate, not a check, and not a control.
+  It does not pass or fail. It is a record of observations, and it exists to be
+  read by a human comparing consecutive lines.
+
+  IT NEVER WRITES TO OR DELETES LIVE TRANSCODE DATA.
+  The watch is `du`, `df`, `find` and `docker inspect` and nothing else. No
+  `rm`, no `mv`, no `truncate`, no redirect into
+  /var/lib/docker/volumes/$OLD_VOL/_data/ is permitted by any plan appending
+  here.
+
+  The existing cache is NOT removed by this guard. It is removed by the normal
+  cutover path -- the copy (02.1-04), the recreate (02.1-05), and the
+  `docker volume rm` in 02.1-06.
+
+THE VOLUME UNDER OBSERVATION
+  OLD_VOL=d98b2ff94482ce115d1869142ad6be8d8425a5d7f776188b2a1a3ad6adcccfa4
+
+  Captured 2026-09-02 by plan 02.1-01 from
+    docker inspect jellyfin --format '{{range .Mounts}}{{if eq .Type "volume"}}{{.Name}}{{"\n"}}{{end}}{{end}}'
+  which returned EXACTLY ONE non-empty line (asserted; VOLMOUNT_COUNT=1).
+
+  Mirrored to a durable host path: /mnt/fast/spike-021/old-vol.txt
+  (on /mnt/fast, NEVER /tmp -- /tmp on LXC 100 is tmpfs against ~4.7 GiB
+  available RAM, and 1.1 GB written there once took the whole box down.)
+
+  Captured HERE, in the first plan, rather than in the copy plan, because
+  `docker inspect jellyfin` is the only reliable source for this id and the
+  recreate in 02.1-05 removes the container object that carries it. It also
+  means the standing check's old-volume section (built in 02.1-02) is live from
+  its first run instead of printing "not yet captured" for three plans.
+
+FORMAT
+  One line per sample, appended at the HEAD of each plan, oldest first.
+  Every size is a BYTE INTEGER. Measuring with `df` in GiB-rounding block mode
+  (the `-B` flag with a `G` argument) is PROHIBITED: it rounds UP, which is up
+  to 1 GiB of optimism against a 20 GiB floor (03-01's finding, commit b217ada).
+  The flag is spelled out in words rather than written literally so that a
+  mechanical grep for it over this artifact returns zero -- the check is "no
+  field was measured that way", and a prohibition notice must not trip it.
+
+  An unreadable `df` or `du` is recorded as the literal UNKNOWN, never as 0.
+  "Could not look" and "it is empty" are different answers, and 03-01 already
+  paid for conflating them.
+
+  Once 02.1-06 deletes the volume, the oldvol_* fields become the literal GONE
+  rather than UNKNOWN, so a later reader can tell the planned transition apart
+  from an instrument failure at a glance.
+
+  Fields:
+    <iso8601-utc> plan=<id>
+      root_avail_bytes=        `df -B1 --output=avail /`
+      root_size_bytes=         `df -B1 --output=size /`
+      oldvol_transcodes_bytes= `du -sb .../_data/transcodes`   <-- the growing part
+      oldvol_total_bytes=      `du -sb .../_data`
+      oldvol_transcodes_files= `find .../transcodes -type f | wc -l`
+
+================================================================================
+SAMPLES
+================================================================================
+
+2026-09-02T20:38:32Z plan=02.1-01 root_avail_bytes=21668859904 root_size_bytes=134682742784 oldvol_transcodes_bytes=13473768858 oldvol_total_bytes=13884071113 oldvol_transcodes_files=1324
+
+--------------------------------------------------------------------------------
+READ THIS BEFORE THE NEXT SAMPLE -- the phase-start reading is NOT what the
+plan set assumed, and the margin is 185 MiB.
+--------------------------------------------------------------------------------
+
+  root_avail_bytes = 21668859904 = 20.18 GiB
+  D-17 floor       = 21474836480 = 20.00 GiB
+  MARGIN           =   194023424 =  0.18 GiB = 185 MiB
+
+  The phase-start gate PASSES -- 20.18 GiB is above the floor, so 02.1-01 did
+  not stop -- but it passes by 185 MiB, not by the "~33-36 GiB free" the plan
+  set was written against. STATE.md records `/` at 36 GiB after 03-01's reap
+  (34 GiB after the four spike pulls). It is now 20.18 GiB.
+
+  Verified with a SECOND INDEPENDENT INSTRUMENT before being written down, per
+  the 01-09 standing rule. `stat -f -c %a /` returned bavail=5290180 blocks at
+  bsize=4096 = 21668577280 bytes, matching plain `df -B1 /` to the byte. The
+  276 KiB delta against the --output=avail reading is seconds of live drift on
+  a running filesystem, not disagreement.
+
+  Note also `stat -f` bfree=6971996 (28.56 GiB) vs bavail=5290180 (20.18 GiB):
+  8.38 GiB is root-reserved. The floor is checked against AVAIL, the
+  conservative figure, which is correct -- do not be tempted by bfree.
+
+  WHERE IT WENT: oldvol_transcodes_bytes = 12.55 GiB across 1,324 files. The
+  Jellyfin container has been up since 2026-08-31T18:27:41Z (the amdgpu
+  incident recovery), so this refilled in roughly two days -- about 6 GiB/day,
+  and it accounts for very nearly all of the ~14 GiB `/` has lost since 03-01.
+
+  THIS IS THE INCIDENT REPEATING, CAUGHT EARLY. It is exactly what D-32 was
+  ruled to detect, and it is already firing on the first sample. It is not a
+  reason to stop the phase -- it is the reason the phase exists, and D-31
+  already put the cutover on the critical path so that `/` is structurally
+  protected at the end of wave 6. The cutover chain is what reclaims this
+  12.55 GiB.
+
+  IT IS A REASON TO NOT LET THE PHASE IDLE. At ~6 GiB/day against 185 MiB of
+  margin, `/` crosses the D-17 floor within about a day and reaches zero within
+  roughly three. Any plan in this phase that stalls -- particularly at a
+  blocking human gate -- is spending a budget measured in hours. If a later
+  sample shows root_avail_bytes below 21474836480, that is the operator
+  decision point the 02.1-01 rollback table describes: the reap in 02.1-09 may
+  need to move earlier, and that is an operator call, not a planner one.
