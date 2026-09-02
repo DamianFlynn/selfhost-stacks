@@ -26,9 +26,8 @@ scripts/keeper-inject-token.py
 scripts/keeper-refresh-ms-token.py
 scripts/ms-device-code-auth.py
 
-# Keeper-sh business justification docs (archived)
-stacks/selfhosted/keeper-sh/business-justification-graph-permissions.md
-stacks/selfhosted/keeper-sh/email-draft-graph-permissions.md
+# (Keeper-sh Graph-permissions correspondence moved 2026-09-02 to neocortex
+#  clients/innofactor/workloads/concierge/docs/ — ignore rules no longer needed)
 
 # Cerebro LXC notes (AI workload moved to Data platform)
 stacks/cerebro/
