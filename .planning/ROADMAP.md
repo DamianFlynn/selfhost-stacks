@@ -215,46 +215,54 @@ route B pre-specified so a FAIL does not stall the phase, and the server given a
 Plans:
 
 *Wave order set by **D-31** (operator ruling, 2026-09-02, after cross-AI plan review). The cutover is
-the critical path: `/` is structurally protected at the end of **wave 5** rather than sitting behind a
+the critical path: `/` is structurally protected at the end of **wave 6** rather than sitting behind a
 blocking human gate for the whole phase. **D-28 (the image reclaim) and D-29 (the hwaccel hardening)
 are unchanged in scope — only their position moved.** Two ordering constraints are resolved
 explicitly: the TRAN-01…09 requirement IDs are landed by 02.1-01 before any plan cites them, and
 02.1-09 depends on 02.1-07 so the reap cannot delete the utility image that plan's sandboxed proof
 needs.*
 
-**Wave 1** *(no dependencies; `parallelization: false`, so sequentially)*
+*Renumbered 8 waves → 9 in **cross-AI review round 2** (Codex, 2026-09-02), when `02.1-02`'s real
+dependency on `02.1-01` was encoded as a `depends_on` edge and every later wave cascaded +1. D-31's
+substance is unchanged — the cutover is still the critical path; only the descriptive wave **number**
+moved, because the number is a consequence of that decision rather than the decision itself.*
+
+**Wave 1** *(no dependencies)*
 
 - [ ] 02.1-01-PLAN.md — Land TRAN-01…09 in REQUIREMENTS/ROADMAP, capture the anonymous volume id, open the D-32 passive `/` watch (wave 1)
-- [ ] 02.1-02-PLAN.md — Write `scripts/check-jellyfin-transcode.sh`, push to the host, record the `--baseline` before-state (wave 1)
 
-**Wave 2** *(blocked on 02.1-02)*
+**Wave 2** *(blocked on 02.1-01 — it appends to the D-32 watch artifact 02.1-01 creates)*
 
-- [ ] 02.1-03-PLAN.md — Declare `fast/transcode` in Terraform and set `quota=50G`, applied from a saved plan asserted to have zero destroys (wave 2)
+- [ ] 02.1-02-PLAN.md — Write `scripts/check-jellyfin-transcode.sh`, push to the host, record the `--baseline` before-state (wave 2)
 
-**Wave 3** *(blocked on 02.1-03)*
+**Wave 3** *(blocked on 02.1-02)*
 
-- [ ] 02.1-04-PLAN.md — Copy the 392 MB cache, edit `jellyfin.yaml`, deliver to the host (wave 3)
+- [ ] 02.1-03-PLAN.md — Declare `fast/transcode` in Terraform and set `quota=50G`, applied from a saved plan asserted to have zero destroys (wave 3)
 
-**Wave 4** *(blocked on 02.1-04)*
+**Wave 4** *(blocked on 02.1-03)*
 
-- [ ] 02.1-05-PLAN.md — Recreate the container, prove the mount shape, apply the five encoding settings by read-modify-write (wave 4)
+- [ ] 02.1-04-PLAN.md — Copy the 392 MB cache, edit `jellyfin.yaml`, deliver to the host (wave 4)
 
-**Wave 5** *(blocked on 02.1-05)* — **`/` is structurally protected from the end of this wave**
+**Wave 5** *(blocked on 02.1-04)*
 
-- [ ] 02.1-06-PLAN.md — Prove the bounds fire with a driven HLS client, delete the anonymous volume, prove ENOSPC via a temporary quota shrink (wave 5)
+- [ ] 02.1-05-PLAN.md — Recreate the container, prove the mount shape, apply the five encoding settings by read-modify-write (wave 5)
 
-**Wave 6** *(blocked on 02.1-06)*
+**Wave 6** *(blocked on 02.1-05)* — **`/` is structurally protected from the end of this wave**
 
-- [ ] 02.1-07-PLAN.md — Harden `disable-jellyfin-hwaccel.sh` so `enable` cannot silently revert the retention settings, with two real fault-injection paths (wave 6)
-- [ ] 02.1-08-PLAN.md — Add the `jellyfin/jellyfin` Renovate rule and repair `check-renovate.sh`, running its 148 never-executed lines for the first time (wave 6)
+- [ ] 02.1-06-PLAN.md — Prove the bounds fire with a driven HLS client, delete the anonymous volume, prove ENOSPC via a temporary quota shrink (wave 6)
 
-**Wave 7** *(blocked on 02.1-07, so the reap cannot delete the image 02.1-07's proof needs)*
+**Wave 7** *(blocked on 02.1-06)*
 
-- [ ] 02.1-09-PLAN.md — Reclaim unreferenced Docker images through the existing approval gate (wave 7, **blocking human gate**)
+- [ ] 02.1-07-PLAN.md — Harden `disable-jellyfin-hwaccel.sh` so `enable` cannot silently revert the retention settings, with two real fault-injection paths (wave 7)
+- [ ] 02.1-08-PLAN.md — Add the `jellyfin/jellyfin` Renovate rule and repair `check-renovate.sh`, running its 148 never-executed lines for the first time (wave 7)
 
-**Wave 8** *(blocked on 02.1-06 and 02.1-09)*
+**Wave 8** *(blocked on 02.1-07, so the reap cannot delete the image 02.1-07's proof needs)*
 
-- [ ] 02.1-10-PLAN.md — Execute the fail-closed negative controls, fold into `quick-health-check.sh`, record the known limits (wave 8)
+- [ ] 02.1-09-PLAN.md — Reclaim unreferenced Docker images through the existing approval gate (wave 8, **blocking human gate**)
+
+**Wave 9** *(blocked on 02.1-06 and 02.1-09)*
+
+- [ ] 02.1-10-PLAN.md — Execute the fail-closed negative controls, fold into `quick-health-check.sh`, record the known limits (wave 9)
 
 ### Phase 3: Tagger Spike
 

@@ -30,13 +30,20 @@ pipeline that someone owns.
 
 Phase: 02.1 (jellyfin-transcode-retention) — PLANNED; Phase 03 HALTED mid-execution behind it
 Plan: 0 of 10 (02.1 replanned 2026-09-02; 03-01 complete; 03-02…03-11 queued behind phase 2.1)
-Status: Ready to execute — Phase 02.1 **replanned against cross-AI review**: 10 plans in 8 waves,
+Status: Ready to execute — Phase 02.1 **replanned against cross-AI review**: 10 plans in 9 waves,
 plan-checker passed with 0 blockers. 32 locked decisions (D-01…D-32, of which **D-29/D-30 were ruled
 by the operator during plan-phase** and **D-31/D-32 during the review replan**; all four postdate
 RESEARCH.md), 9 requirements TRAN-01…TRAN-09, and a 38-row VALIDATION.md contract that separates
 **read-back** from **fires** — rows must be discharged by a real observation, never by reading a
 setting back (CONS-04). **D-31 re-ordered the waves so the cutover is the critical path**: `/` is
-structurally protected at the end of wave 5 of 8, not wave 4 of 5 behind a blocking human gate.
+structurally protected at the end of wave 6 of 9, not wave 4 of 5 behind a blocking human gate.
+(Wave count went 8 → 9 in **review round 2**, when Codex — the first genuinely non-Anthropic
+reviewer of this phase, its install having been repaired — raised four HIGH findings none of the
+round-1 reviewers surfaced. Three were verified real against the plan text: a verification that
+re-ran the destructive image prune, a playback transcript that would have committed the Jellyfin
+API key into this **public** repo, and a quota restore written as prose with no `trap`. The fourth
+reversed a round-1 decline and encoded `02.1-02`'s dependency on `02.1-01`, cascading every later
+wave +1.)
 
 **Phase 03 remains planned from 2026-09-01** — 11 plans, 8 waves, plan-checker passed,
 then **cross-AI reviewed (codex / gh copilot / gemini) and revised against 13 findings**, and passed
@@ -86,7 +93,8 @@ it asked for: the operator browsed MA's Filesystem (local disk) provider, spot-c
 that — every automated check verifies MA's *database* says the right thing, never that the *bytes*
 are the right song, and the documented stale state is precisely "entries exist, playback fails".
 Last activity: 2026-09-02 — Phase 02.1 replanned against cross-AI review (`/gsd-review` →
-`/gsd-plan-phase --reviews`): 9 plans in 5 waves became 10 in 8, plan-checker passed with 0 blockers
+`/gsd-plan-phase --reviews`): 9 plans in 5 waves became 10 in 8, then 10 in **9** after review
+round 2, plan-checker passed with 0 blockers
 after one revision round. Gemini + Claude reviewed; **Codex could not run** (missing
 `@openai/codex-darwin-arm64`), so Gemini was the sole cross-family reviewer. All 26 findings applied
 or reframed with a stated reason, none rebutted. The two proofs that **could not fail** are repaired:
