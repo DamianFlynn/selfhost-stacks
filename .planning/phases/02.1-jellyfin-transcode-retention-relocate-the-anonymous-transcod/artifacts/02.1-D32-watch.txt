@@ -454,3 +454,78 @@ the LAST reading taken while Jellyfin was still writing its cache onto `/`.
   resumed rise in oldvol_transcodes_bytes. THE RULING COVERS 02.1-05 ONLY. 02.1-06
   is the `docker volume rm`, a different shape again (it is the plan that RELEASES
   12.55 GiB rather than spending any), and it gets its own numbers.
+
+2026-09-02T22:38:35Z plan=02.1-06 root_avail_bytes=21694996480 root_size_bytes=134682742784 oldvol_transcodes_bytes=13473768858 oldvol_total_bytes=13885711901 oldvol_transcodes_files=1324
+
+--------------------------------------------------------------------------------
+READ THIS BEFORE THE NEXT SAMPLE -- a REAL viewing session happened between this
+sample and the next, it produced ZERO transcode bytes, and that is a NON-
+OBSERVATION rather than a pass.
+--------------------------------------------------------------------------------
+
+  Delta against plan=02.1-05, ~22 minutes earlier:
+
+    root_avail_bytes         21662257152 -> 21694996480  +32739328  (+31.2 MiB)
+    oldvol_transcodes_bytes  13473768858 -> 13473768858          0
+    oldvol_total_bytes       13885711901 -> 13885711901          0
+    oldvol_transcodes_files         1324 -> 1324                 0
+
+  MARGIN against the D-17 floor of 21474836480:
+    21694996480 - 21474836480 = 220160000 = 0.21 GiB = 209.9 MiB
+
+  VERIFIED WITH A SECOND INSTRUMENT before being written down, per the 01-09
+  standing rule: `stat -f -c '%a %S' /` returned bavail=5296630 at bsize=4096 =
+  21694996480 bytes, matching `df -B1 --output=avail /` TO THE BYTE.
+
+  EIGHTH CONSECUTIVE BYTE-IDENTICAL TRANSCODE READING, now spanning exactly two
+  hours (20:38:32Z -> 22:38:35Z). The margin is the WIDEST it has been in the
+  phase -- 209.9 MiB against 185 MiB at the phase head.
+
+  THE OPERATOR WATCHED A FULL EPISODE IN THE HOUR BEFORE THIS SAMPLE, AND IT
+  PRODUCED NOTHING. Measured by the orchestrator at 22:41:48Z, three minutes
+  after this line:
+
+    /mnt/fast/transcode         used=0 bytes, 1 file (the .jellyfin-transcode
+                                marker Jellyfin itself wrote at 22:20Z)
+    old volume transcodes/      13473768858 -- byte-identical
+    NEW files in the old volume since the 22:19:52Z cutover: 0
+    active ffmpeg processes:    0
+
+  THE EPISODE DIRECT-PLAYED. The client played the source codec natively, so
+  Jellyfin never invoked ffmpeg and no segments were produced ANYWHERE.
+
+  WHAT THAT IS, AND WHAT IT IS NOT -- and this is the whole reason it is written
+  down at this length. It is NOT evidence that the relocation works. An empty
+  /mnt/fast/transcode after a direct-play session is the ABSENCE OF A TEST, not a
+  passing one, and reading it as a pass would discharge a CONS-04 "fires" row on a
+  non-observation -- precisely the "transcript that only looks like evidence"
+  failure this plan's objective names. 02.1-04's ADDENDUM already recorded the
+  mirror-image version of this trap (an empty /mnt/fast/transcode read as "the
+  copy never started" when it had in fact completed). Same directory, opposite
+  wrong conclusion, twice in one phase.
+
+  WHAT IT GENUINELY IS, recorded as exactly that and no more: a full real playback
+  session ran end-to-end through the new bind shape, Jellyfin stayed healthy, and
+  ZERO bytes were written to `/`. That is real evidence the cutover did not break
+  playback and that direct-play traffic does not touch `/`. It is also why the
+  "cache is flat between sessions" claim carried from earlier waves is now BETTER
+  supported than before, not weaker.
+
+  CONSEQUENCE FOR THIS PLAN: 02.1-06 does not and never did rely on organic
+  transcode activity -- its proof client FORCES a transcode by sending a
+  PlaybackInfo device profile with an EMPTY DirectPlayProfiles list, which is what
+  makes the session above impossible to repeat accidentally. The operator has now
+  stopped for the night, so any growth in /mnt/fast/transcode from here is THIS
+  PLAN'S doing, which makes it clean, attributable evidence.
+
+  THE `/` RULING FOR 02.1-06 WAS GRANTED BY THE EXECUTE-PHASE ORCHESTRATOR (AN
+  AGENT -- NOT A HUMAN DECISION), on the same numeric self-halt terms as 02.1-04
+  and 02.1-05: STOP if any single step would consume more than 2 GiB of `/`; STOP
+  if `/` actually-free would drop below 10 GiB; STOP if the transcode cache
+  resumes growing outside this plan's own driven playback. The attribution note
+  from 02.1-04 still stands: the operator has ruled exactly ONE thing in this
+  phase, 02.1-03's Terraform Option B.
+
+  THIS PLAN IS `/`-POSITIVE BY CONSTRUCTION. It spends nothing and releases
+  12.55 GiB. If a step in it is about to consume `/` rather than free it,
+  something is wrong and it stops.

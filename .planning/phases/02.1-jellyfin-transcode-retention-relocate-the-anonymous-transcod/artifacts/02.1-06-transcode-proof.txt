@@ -1,0 +1,1036 @@
+================================================================================
+02.1-06 TASK 1 -- THE DRIVEN PLAYBACK PROOF
+VALIDATION.md rows 4, 5, 16, 17 and 18, taken by observation and not by read-back
+================================================================================
+
+WHAT THIS FILE IS
+  Two complete driven playback sessions against Jellyfin 10.11.11 on LXC 100,
+  each with a purpose-built HLS client that fetches segments sequentially at
+  roughly realtime so that the two controls which key off the client's DOWNLOAD
+  POSITION -- TranscodingSegmentCleaner and TranscodingThrottler -- have
+  something to act on. Nothing here is read back from the API. Every row below
+  is a file found on disk, a number counted, or a line quoted from Jellyfin's
+  own log.
+
+  SESSION A -- STREAM COPY (remux).      Rows 4, 5, 16, 17, 18.
+  SESSION B -- REAL RE-ENCODE (libx264). Rows 4, 5, 16, 17, 18 on the other
+                                         codec branch, which is what makes
+                                         row 17's result interpretable.
+
+THE HEADLINE, STATED BEFORE THE EVIDENCE SO IT CAN BE CHECKED AGAINST IT
+
+  Rows 4, 5, 17 and 18 FIRE. Row 16 fires on its primary limb (Jellyfin's own
+  log) and its secondary limb -- the numeric ceiling -- is UNSATISFIABLE AS
+  WRITTEN. That last point is a defect in the assertion, not in the estate, and
+  it is set out in full under "THE CEILING" below.
+
+  ROW  BRANCH        RESULT
+   4   both          FIRES -- 44 (A) and 55 (B) new .mp4 in /mnt/fast/transcode
+                     within a 2-minute window, during playback
+   5   both          FIRES -- 0 new files in the old anonymous volume during the
+                     same transcode, WHILE THAT VOLUME STILL EXISTED
+  16   both          FIRES on limb 1 -- 8 quoted "Deleting segment file(s) index"
+                     lines per session, index ranges advancing 4->7->10->14->17
+                     ->20 (A) and 7->13->20->27->33->40 (B).
+                     Limb 2 (numeric ceiling) NOT SATISFIED, and cannot be -- see
+                     THE CEILING.
+  17   A: remux      FIRES -- "-readrate 10" present, "-codec:v:0 copy"
+       B: re-encode  CORRECTLY ABSENT -- "-codec:v:0 libx264", no -readrate.
+                     EncodingHelper adds the flag on the stream-copy path only,
+                     so absence here is the right answer, recorded as such.
+  18   both          FIRES -- 89 "Throttling transcoder gap" + 6 "Not throttling"
+                     (A); 87 + 8 (B). ZERO "No throttle data" in either, so the
+                     throttler was not merely constructed, it had real download
+                     position data to act on.
+
+--------------------------------------------------------------------------------
+THE HARNESS DEFECT IN RUN 1, AND WHY IT IS RECORDED RATHER THAN QUIETLY FIXED
+--------------------------------------------------------------------------------
+
+  The first pair of runs produced a transcript in which rows 16 and 18 read as
+  hard configuration failures: ZERO deletion lines, ZERO throttling lines, ZERO
+  "No throttle data", on BOTH codec branches, with a strictly-increasing download
+  head and the pause key re-probed as supported. That is a coherent, confident,
+  completely wrong result, and it is exactly the failure mode this plan's
+  objective names -- a transcript that looks like evidence.
+
+  THE CAUSE WAS IN THE PROOF CLIENT, NOT IN JELLYFIN. Three lines, in order:
+
+    1. The client contains pipelines of the form `printf ... | head -10`. Under
+       `set -o pipefail`, `head` exiting early sends SIGPIPE upstream and the
+       pipeline returns 141.
+    2. `set -Eeuo pipefail` therefore fired the ERR trap in the middle of section
+       4 -- the manifest fetch -- long before any segment had been consumed. The
+       handler did its job perfectly: it removed the Debug overlay and restored
+       Jellyfin to Information.
+    3. `set +e` inside that handler is GLOBAL, not function-local. With errexit
+       switched off, the handler returned and the script CARRIED ON for another
+       200 lines, driving a full playback session and then grepping a log that
+       had been back at Information the whole time. Both Debug-level lines were
+       structurally unable to appear.
+
+  Recovered from run 1 verbatim:
+
+    TRAP restore_log_level FIRED ON : ERROR PATH (exit status 141)
+    post-restore re-read of effective MinimumLevel.Default : Information
+    ASSERT restored == captured original (Information) : PASS
+
+  -- appearing at LINE 112 of a 314-line transcript. The trap worked. The script
+  should have died there and did not.
+
+  WHAT WAS ALMOST CONCLUDED FROM IT, AND HOW CLOSE IT CAME. The null result was
+  investigated for some time as a genuine product finding, including extracting
+  the UTF-16 string tables from all 409 shipped assemblies to confirm the four
+  log messages exist in this build (they do, in MediaBrowser.Controller.dll), and
+  re-probing the ffmpeg pause key at d=10000 (supported). A plausible mechanism
+  had already been drafted -- that Jellyfin excludes the throttler on the
+  stream-copy path because "-readrate 10" substitutes for it. That mechanism is
+  FALSE: run 2 shows the throttler running on both branches. Had the run-1
+  transcript been committed, it would have recorded a fabricated limitation of
+  Jellyfin, with quoted assembly evidence sitting next to it making it look
+  thoroughly researched.
+
+  THE FIX IS THREE CHANGES, ALL IN THE CLIENT:
+    a. Every SIGPIPE-prone `| head -N` that was not already guarded by `|| true`
+       is now `| sed -n '1,Np'`, which reads its input to EOF.
+    b. The handler ends with `if [[ $rc -ne 0 ]]; then exit "$rc"; fi`, so an
+       error path can no longer restore state and then continue running.
+    c. NEW ASSERTION, and the one that actually closes the hole:
+
+         ASSERT the log level is STILL Debug at grep time : Debug
+         overlay file still present                       : yes
+         [DBG] lines across the whole session window      : 2255   (A) / 3063 (B)
+
+       An instrument that reads a log must prove the log was at the required
+       level for the whole window it is reading. Without it, "zero matches" and
+       "the control did not fire" are the same output -- which is the identical
+       shape as 02-08's `exportfs -v` printing a line for a refused mount, and as
+       01-06's path-set diff passing while 83 .nfo were rewritten. Both are named
+       in this phase's own VALIDATION.md as the reasons CONS-04 exists.
+
+  Run-1 counts, kept for the record and NOT to be read as evidence about
+  Jellyfin: session A 0/0/0, session B 0/0/0 for deletion / throttling / no-data.
+  The corresponding run-2 numbers on the identical title and identical settings
+  are 8/95/0 and 8/95/0.
+
+--------------------------------------------------------------------------------
+THE CEILING -- ROW 16's SECOND LIMB IS UNSATISFIABLE AS WRITTEN
+--------------------------------------------------------------------------------
+
+  The plan requires all three segment counts to sit at or below
+
+      ceil(SegmentKeepSeconds / segment_duration) + 10
+
+  Measured, with segment_duration taken from each session's own #EXTINF values:
+
+      SESSION A   segment_duration 6.037 s   ceiling  50 + 10 =  60
+                  counts 102, 92, 168        heads 59 -> 69 -> 78
+      SESSION B   segment_duration 3.000 s   ceiling 100 + 10 = 110
+                  counts 178, 186, 192       heads 119 -> 139 -> 159
+
+  All six counts are above the ceiling, on both branches, in sessions where the
+  cleaner is DEMONSTRABLY WORKING -- it says so itself, eight times per session,
+  with a monotonically advancing index range.
+
+  THE CEILING OMITS A BUFFER THE CONFIGURATION DELIBERATELY MAINTAINS. The
+  retention window is not the only thing on disk. At any instant the dataset
+  holds two regions:
+
+      (i)  segments BEHIND the download head that the cleaner has not yet
+           reclaimed  -- bounded by SegmentKeepSeconds = 300 s, and
+      (ii) segments AHEAD of the download head that the encoder has already
+           produced -- bounded by ThrottleDelaySeconds = 180 s, which is the
+           whole point of the throttler and is visible in its own log line as
+           "target gap 1800000000" ticks.
+
+  The ceiling counts only (i). A correct system holds (i) + (ii). Reading it off
+  session B, which has the cleaner and the throttler both in steady state:
+
+      head 159, cleaner had just deleted 0..40, so surviving indices are 41..232
+      behind the head : 159 - 40  = 119 segments = 357 s  (vs 300 s + a 20 s tick)
+      ahead of it     : 232 - 159 =  74 segments = 222 s  (vs 180 s + a  5 s poll)
+      total           :             192 segments -- which is the measured count
+
+  So the corrected form is
+
+      ceil((SegmentKeepSeconds + max(ThrottleDelaySeconds,120)) / segment_duration)
+        + slack for the cleaner's 20 s tick and the throttler's 5 s poll
+
+  = (300 + 180) / 3.000 = 160 + slack for session B (measured 178-192), and
+    (300 + 180) / 6.037 =  80 + slack for session A (measured 92-168).
+
+  SESSION A'S 168 IS THE OUTLIER AND IT HAS A NAMED CAUSE: "-readrate 10" lets a
+  stream copy produce fifty seconds of media between two five-second throttler
+  polls, so the forward region overshoots in bursts on the remux branch in a way
+  it cannot on the re-encode branch. Session B, which has no -readrate, sits in
+  a tight 178-192 band exactly as the corrected arithmetic predicts.
+
+  THIS IS THE SAME SHAPE AS 02.1-05's ROW 15 AND IS RECORDED THE SAME WAY: an
+  assertion that FAILS ON A CORRECT OUTCOME. It is not waived. What it was
+  protecting -- "the footprint does not grow without bound while the head
+  advances" -- is discharged by three things that are all present:
+    * the cleaner's own eight log lines per session, ranges advancing;
+    * the counts oscillating rather than climbing (A: 102 -> 92 -> 168, which
+      FELL by ten between the first two samples);
+    * and, structurally and independently of Jellyfin entirely, the 50 G ZFS
+      quota on fast/transcode, which is why D-12 made the bound a ZFS property
+      rather than an application setting. Task 3 of this plan proves that one
+      fires.
+  The plan's own stated FAILURE condition -- "a count that rises MONOTONICALLY
+  past the ceiling" -- did not occur in session A. It is arguably met in session
+  B (178 -> 186 -> 192), and that is why the corrected arithmetic above is
+  derived from session B's own numbers rather than asserted: the rise is 14
+  segments over 120 s while the head advanced 40, i.e. the footprint grew far
+  more slowly than consumption. That is convergence toward the bound, not
+  unbounded growth.
+
+--------------------------------------------------------------------------------
+CREDENTIAL SCREEN (T-021-86) -- THIS REPOSITORY IS PUBLIC
+--------------------------------------------------------------------------------
+
+  One `redact` function, `sed -E` with the I flag on both substitutions, applied
+  AT CAPTURE TIME to the TranscodingUrl, to the first ten lines of main.m3u8
+  (segment URIs carry the same parameters), to the per-segment fetch log and to
+  every quoted log line. It rewrites the query-string form and the header form.
+
+  Pattern screen over this artifact as committed:
+    occurrences of (api_key|apikey|token|x-emby-token|x-mediabrowser-token)
+    followed by = or : that do NOT read REDACTED  ....................  0
+
+  AND A STRONGER SCREEN, because a pattern can only catch what it anticipates.
+  The literal credential value was grepped for directly on the host with
+  `grep -F -f` reading the needle from a process substitution:
+
+    literal-key occurrences in the transcript ........................  0
+    the same grep against /mnt/fast/secrets/jellyfin-deercrest.env ...  1
+
+  The second line is the positive control. Without it, "0" is indistinguishable
+  from a grep that was never capable of matching -- the 02-08 lesson again.
+
+  The credential reached curl only through `-H @<(...)` process substitution and
+  through `curl -K <(...)` for URLs that embed it, so it never entered argv on a
+  host where /proc is readable. Where correlation was needed, a sha256 of the
+  original URL is recorded instead of the URL.
+
+--------------------------------------------------------------------------------
+STATE MUTATED BY THIS TASK, AND ITS RESTORATION
+--------------------------------------------------------------------------------
+
+  Exactly one thing: the Jellyfin log level, raised to Debug by writing the
+  optional overlay /mnt/fast/appdata/media/jellyfin/config/logging.json.
+  logging.default.json was left byte-untouched, so restoration is the removal of
+  a file we created. Jellyfin hot-reloads it; no restart was needed, so
+  State.StartedAt is unchanged from the 02.1-05 cutover and no image could be
+  pulled.
+
+  Restored by `trap restore_log_level EXIT ERR INT TERM` under `set -Eeuo
+  pipefail`, installed immediately after the raise. Idempotent (a _restored
+  guard, because EXIT fires after ERR), non-aborting (set +e internally, failures
+  collected), self-verifying (re-reads the effective level and asserts equality
+  with the captured original). Both run-2 sessions ended:
+
+    TRAP restore_log_level FIRED ON : normal exit
+    post-restore re-read of effective MinimumLevel.Default : Information
+    ASSERT restored == captured original (Information) : PASS
+
+  THE ERROR PATH WAS ALSO EXERCISED, unintentionally but usefully: run 1 fired
+  the same handler on "ERROR PATH (exit status 141)" and restored correctly. A
+  trap that has only ever been observed on the happy path is not known to work.
+
+--------------------------------------------------------------------------------
+WHAT THIS TASK DID NOT DO
+--------------------------------------------------------------------------------
+
+  It did not delete the anonymous volume. Row 5 measures "nothing lands in the
+  old volume", and that measurement becomes VACUOUS the instant the volume stops
+  existing -- an empty path proves nothing. Both sessions therefore assert, and
+  record, that `docker volume ls -q | grep -qx "$OLD_VOL"` exited 0 at the moment
+  row 5 was taken and again at the end. The deletion is task 2, ordered after
+  this one, and that ordering is D-10's.
+
+
+================================================================================
+================================================================================
+SESSION A -- STREAM COPY -- FULL TRANSCRIPT
+================================================================================
+================================================================================
+================================================================================
+02.1-06 TASK 1 -- ONE DRIVEN PLAYBACK SESSION
+rows 4, 5, 16, 17, 18 taken from a SINGLE transcode, with the anonymous volume
+still in existence throughout. Observation, not read-back (CONS-04 / D-15).
+================================================================================
+
+host        : selfhost (LXC 100, 172.16.1.159)
+started     : 2026-09-02T23:27:07Z
+script      : /mnt/fast/spike-021/proof-client.sh   (set -Eeuo pipefail)
+
+================================================================================
+0. PRECONDITIONS
+================================================================================
+  D-40 credential file mode/owner : 600 root  (asserted before sourcing)
+  OLD_VOL (from /mnt/fast/spike-021/old-vol.txt) : d98b2ff94482ce115d1869142ad6be8d8425a5d7f776188b2a1a3ad6adcccfa4
+  docker volume ls -q | grep -qx "$OLD_VOL"        : exit 0 -- THE VOLUME EXISTS
+  jellyfin State.Status / Health   : running healthy
+  jellyfin StartedAt               : 2026-09-02T22:19:52.386240602Z
+  address resolved via docker inspect on t3_proxy : 192.168.90.25:8096
+    (never the bare name -- it resolves to Cloudflare's edge from LXC 100 and
+     would answer 200 from the WEBSITE with the container down)
+  ffmpeg processes before we start : 0
+  /mnt/fast/transcode before       : 1 file(s)
+    0  /mnt/fast/transcode/.jellyfin-transcode
+  / avail before (df -B1)          : 21673914368
+
+  NOTE ON THE OPERATOR'S 21:40-22:40 VIEWING SESSION. A full episode was
+  watched through the new bind shape in the hour before this run and produced
+  ZERO transcode bytes -- it DIRECT-PLAYED, so ffmpeg was never invoked. That is
+  the ABSENCE OF A TEST, not a passing one, and nothing below rests on it. This
+  session FORCES a transcode with an empty DirectPlayProfiles list precisely so
+  the evidence cannot be an accident of what somebody happened to watch.
+
+================================================================================
+1. LOG LEVEL RAISED TO DEBUG -- AND RESTORED BY A MECHANISM, NOT A PROMISE
+================================================================================
+  captured ORIGINAL effective Serilog MinimumLevel.Default : Information
+  logging.json overlay existed before                      : no
+  (the overlay is Jellyfin's optional second logging file; logging.default.json
+   is left byte-untouched, so restoration is the removal of a file we created)
+
+  the handler, as installed:
+    _restored=0
+    restore_log_level() {
+      local rc=$?; [[ $_restored -eq 1 ]] && return 0; _restored=1
+      set +e                       # non-aborting -- every step attempted
+      FIRED_ON=... from $rc        # ERR fires before EXIT; the guard makes it idempotent
+      kill $FETCH_PID; rm -f /mnt/fast/appdata/media/jellyfin/config/logging.json
+      re-read eff_level and ASSERT it equals $ORIG_LEVEL, else a loud banner + exit 1
+    }
+    trap restore_log_level EXIT ERR INT TERM
+
+  host date (UTC)     : 2026-09-02   container log tz is +01:00
+  log file (by mtime) : /mnt/fast/appdata/media/jellyfin/log/log_20260903.log
+  line count at start : 10995   (every grep below is scoped to lines after this)
+  raised at 2026-09-02T23:27:07Z by writing /mnt/fast/appdata/media/jellyfin/config/logging.json with Default=Debug
+  new [DBG] lines 25s later, WITHOUT a restart : 16
+  Debug is LIVE (Jellyfin hot-reloads its logging config; no restart was needed,
+  so State.StartedAt is untouched and no image could be pulled)
+
+================================================================================
+2. THE TITLE
+================================================================================
+  item id       : 50d5a4bb05b69e52beb2a278b7fca4d1
+  title         : 10 Lives
+  RunTimeTicks  : 52286300000  = 87.1 minutes
+  source        : container=mkv videoCodec=h264
+
+  WHY THIS ONE. Both the throttler and the segment cleaner gate on
+  RunTimeTicks >= 5 minutes and on a File video input, so a music track or a
+  clip is STRUCTURALLY unable to prove either. 87 minutes is comfortably over
+  SegmentKeepSeconds(300) + ThrottleDelaySeconds(180) = 480s, so all three
+  60-second samples land inside one live job. h264 in mkv was chosen so the
+  container change alone forces the transcode and the VIDEO can be copied --
+  which is the branch on which row 17's -readrate 10 is expected at all.
+
+================================================================================
+3. PlaybackInfo -- FORCING AN ACTUAL TRANSCODE
+================================================================================
+  DeviceProfile: DirectPlayProfiles is the EMPTY LIST, so direct play is
+  impossible by construction rather than by luck. One TranscodingProfile:
+  hls / mp4 / h264 / aac,mp3,ac3.
+  PlaySessionId          : 068327b077374fe68799b4fdf9a540d9
+  SupportsDirectPlay     : false   (must be false)
+  TranscodingSubProtocol : hls
+  TranscodeReasons       : TranscodeReasons=DirectPlayError
+
+  TranscodingUrl, THROUGH THE REDACTOR (T-021-86 -- this repository is PUBLIC
+  and Jellyfin embeds the credential in this URL's query string):
+    /videos/50d5a4bb-05b6-9e52-beb2-a278b7fca4d1/master.m3u8?&DeviceId=gsd0216proofclient&MediaSourceId=50d5a4bb05b69e52beb2a278b7fca4d1&VideoCodec=h264&AudioCodec=aac,mp3,ac3&AudioStreamIndex=1&VideoBitrate=19616000&AudioBitrate=384000&MaxFramerate=24&SegmentContainer=mp4&MinSegments=1&BreakOnNonKeyFrames=False&PlaySessionId=068327b077374fe68799b4fdf9a540d9&ApiKey=REDACTED&TranscodingMaxAudioChannels=2&RequireAvc=false&EnableAudioVbrEncoding=true&Tag=53bd2ec0f1c36db31bc19be5ee63c64f&h264-level=41&h264-videobitdepth=8&h264-profile=high&TranscodeReasons=DirectPlayError
+  sha256 of the ORIGINAL, unredacted URL, for correlation without disclosure:
+    0349a4f5cbf852c7c364f51c34ed9b5f0f96187e6cc2e92e473c007dde2fc738
+
+================================================================================
+4. THE HLS MANIFEST
+================================================================================
+  master.m3u8 resolved to a single variant; main.m3u8 fetched from
+    /videos/50d5a4bb-05b6-9e52-beb2-a278b7fca4d1/main.m3u8?DeviceId=gsd0216proofclient&Me...
+
+  FIRST TEN LINES OF main.m3u8, THROUGH THE SAME REDACTOR (segment URIs in an
+  HLS playlist carry the same auth parameters -- a second disclosure path):
+    #EXTM3U
+    #EXT-X-PLAYLIST-TYPE:VOD
+    #EXT-X-VERSION:7
+    #EXT-X-TARGETDURATION:16
+    #EXT-X-MEDIA-SEQUENCE:0
+    #EXT-X-MAP:URI="hls1/main/-1.mp4?DeviceId=gsd0216proofclient&MediaSourceId=50d5a4bb05b69e52beb2a278b7fca4d1&VideoCodec=h264&AudioCodec=aac&AudioStreamIndex=1&VideoBitrate=19616000&AudioBitrate=384000&MaxFramerate=24&SegmentContainer=mp4&MinSegments=1&BreakOnNonKeyFrames=False&PlaySessionId=068327b077374fe68799b4fdf9a540d9&ApiKey=REDACTED&TranscodingMaxAudioChannels=2&RequireAvc=false&EnableAudioVbrEncoding=true&Tag=53bd2ec0f1c36db31bc19be5ee63c64f&h264-level=41&h264-videobitdepth=8&h264-profile=high&TranscodeReasons=DirectPlayError&runtimeTicks=0&actualSegmentLengthTicks=0"
+    #EXTINF:8.250000, nodesc
+    hls1/main/0.mp4?DeviceId=gsd0216proofclient&MediaSourceId=50d5a4bb05b69e52beb2a278b7fca4d1&VideoCodec=h264&AudioCodec=aac&AudioStreamIndex=1&VideoBitrate=19616000&AudioBitrate=384000&MaxFramerate=24&SegmentContainer=mp4&MinSegments=1&BreakOnNonKeyFrames=False&PlaySessionId=068327b077374fe68799b4fdf9a540d9&ApiKey=REDACTED&TranscodingMaxAudioChannels=2&RequireAvc=false&EnableAudioVbrEncoding=true&Tag=53bd2ec0f1c36db31bc19be5ee63c64f&h264-level=41&h264-videobitdepth=8&h264-profile=high&TranscodeReasons=DirectPlayError&runtimeTicks=0&actualSegmentLengthTicks=82500000
+    #EXTINF:10.333000, nodesc
+    hls1/main/1.mp4?DeviceId=gsd0216proofclient&MediaSourceId=50d5a4bb05b69e52beb2a278b7fca4d1&VideoCodec=h264&AudioCodec=aac&AudioStreamIndex=1&VideoBitrate=19616000&AudioBitrate=384000&MaxFramerate=24&SegmentContainer=mp4&MinSegments=1&BreakOnNonKeyFrames=False&PlaySessionId=068327b077374fe68799b4fdf9a540d9&ApiKey=REDACTED&TranscodingMaxAudioChannels=2&RequireAvc=false&EnableAudioVbrEncoding=true&Tag=53bd2ec0f1c36db31bc19be5ee63c64f&h264-level=41&h264-videobitdepth=8&h264-profile=high&TranscodeReasons=DirectPlayError&runtimeTicks=82500000&actualSegmentLengthTicks=103330000
+
+  segments listed in the VOD playlist : 859
+  #EXT-X-TARGETDURATION               : 16
+  mean #EXTINF over the first 60      : 6.037 s   (segment_duration)
+  first six #EXTINF values            : 8.250000 10.333000 10.417000 10.417000 10.416000 10.417000
+
+  The #EXTINF values VARY (they follow source keyframes rather than a fixed
+  grid). That is itself the signature of a stream copy; section 7 confirms it
+  from the ffmpeg command line rather than from this inference.
+
+================================================================================
+5. THE PROOF CLIENT -- SEQUENTIAL, PACED AT ROUGHLY REALTIME
+================================================================================
+  This is the load-bearing repair. TranscodingSegmentCleaner deletes indices
+  BEHIND the client's download position, and IsThrottleAllowed returns false
+  with "No throttle data" when that position is zero. A transcode nobody
+  consumes exercises NEITHER control. The segment URIs are used VERBATIM from
+  the manifest, including their runtimeTicks and actualSegmentLengthTicks
+  parameters -- those are how the server learns the download position.
+
+  fetch loop started at 2026-09-02T23:27:32Z, pid 1359250
+
+  waiting for 360 s of CONSUMED playback before the first sample
+  (SegmentKeepSeconds=300 + 60), then three samples at 60 s intervals
+
+================================================================================
+6. ROWS 4 AND 5 -- TAKEN DURING THIS TRANSCODE, VOLUME STILL PRESENT
+================================================================================
+  taken at 2026-09-02T23:28:02Z, with the client at segment index 3
+
+  ROW 4  find /mnt/fast/transcode -newermt '-2 minutes' -name '*.mp4' | wc -l
+         => 44      (must be > 0)
+           1130539  616bcbb54ee09de3c368650863b2740612.mp4
+           2549057  616bcbb54ee09de3c368650863b2740615.mp4
+           5514916  616bcbb54ee09de3c368650863b2740629.mp4
+           8503077  616bcbb54ee09de3c368650863b274068.mp4
+           9061291  616bcbb54ee09de3c368650863b2740620.mp4
+           5585415  616bcbb54ee09de3c368650863b274061.mp4
+
+  the anonymous volume AT THIS MOMENT:
+         docker volume ls -q | grep -qx "$OLD_VOL"  => exit 0 -- STILL EXISTS
+         This is what makes row 5 non-vacuous. An empty path proves nothing;
+         a path that exists and stays empty during a live transcode does.
+  ROW 5  find /var/lib/docker/volumes/$OLD_VOL/_data/transcodes -newermt '-2 minutes' | wc -l
+         => 0      (must be 0)
+         old volume transcodes bytes now : 13473768858
+         old volume transcodes files now : 1324
+
+================================================================================
+7. ROW 16 -- THREE SAMPLES: SEGMENT COUNT *AND* DOWNLOAD HEAD
+================================================================================
+  ceiling arithmetic, derived from the manifest's OWN #EXTINF rather than asserted:
+    segment_duration        = 6.037 s   (mean #EXTINF over the first 60 segments)
+    SegmentKeepSeconds      = 300
+    ceil(300 / 6.037)      = 50
+    ceiling = 50 + 10 = 60
+
+  sample 1  2026-09-02T23:33:33Z   segment_files=102   download_head_index=59   consumed=362.250s
+  sample 2  2026-09-02T23:34:33Z   segment_files=92   download_head_index=69   consumed=420.292s
+  sample 3  2026-09-02T23:35:33Z   segment_files=168   download_head_index=78   consumed=481.583s
+
+  the six readings, restated:
+    counts : 102 92 168
+    heads  : 59 69 78
+
+  DOWNLOAD HEAD IS STRICTLY INCREASING: 59 < 69 < 78  -- PASS
+  This is what separates 'the control did not fire' from 'the test never drove
+  the control'. With the head advancing, a null result below is a CONFIGURATION
+  finding, not a harness one.
+
+================================================================================
+8. JELLYFIN'S OWN LOG -- ROWS 16 (limb 1), 17 AND 18
+================================================================================
+  ASSERT the log level is STILL Debug at grep time : Debug
+  overlay file still present                       : yes
+  [DBG] lines across the whole session window      : 2255
+  scoped to 7283 lines written after this session started
+
+  --- the ffmpeg command line (row 17 depends on which branch this is) ---
+    [2026-09-03 00:27:32.882 +01:00] [INF] [28] MediaBrowser.MediaEncoding.Transcoding.TranscodeManager: 
+    "/usr/lib/jellyfin-ffmpeg/ffmpeg" "-analyzeduration 200M -probesize 1G -readrate 10 -fflags +genpts  -i 
+    file:\"/media/Movies/10 Lives (2024) [imdb-tt7959138]/10 Lives (2024) [imdb-tt7959138] [x264-Bluray-1080p 
+    DTS-HD MA-5.1].mkv\" -map_metadata -1 -map_chapters -1 -threads 0 -map 0:0 -map 0:1 -map -0:s -codec:v:0 copy 
+    -bsf:v h264_mp4toannexb -start_at_zero -codec:a:0 libfdk_aac -ac 2 -ab 256000 -af \"volume=2\" -copyts 
+    -avoid_negative_ts disabled -max_muxing_queue_size 2048 -f hls -max_delay 5000000 -hls_time 6 
+    -hls_segment_type fmp4 -hls_fmp4_init_filename \"616bcbb54ee09de3c368650863b27406-1.mp4\" -start_number 0 
+    -hls_segment_filename \"/cache/transcodes/616bcbb54ee09de3c368650863b27406%d.mp4\" -hls_playlist_type vod 
+    -hls_list_size 0 -hls_segment_options movflags=+frag_discont -y 
+    \"/cache/transcodes/616bcbb54ee09de3c368650863b27406.m3u8\""
+
+  video codec class : STREAM COPY (remux) -- '-codec:v:0 copy'
+
+  --- ROW 17: -readrate 10 ---
+  grep -o '\-readrate 10' log_20260903.log | head -1  =>  -readrate 10
+
+  --- ROW 16 limb 1: the cleaner reporting its own work ---
+  occurrences of 'Deleting segment file' in this session : 8
+    [2026-09-03 00:32:54.197 +01:00] [DBG] [7] MediaBrowser.Controller.MediaEncoding.TranscodingSegmentCleaner: Deleting segment file(s) index 0 to 4 from "/cache/transcodes/616bcbb54ee09de3c368650863b27406.m3u8"
+    [2026-09-03 00:33:14.198 +01:00] [DBG] [24] MediaBrowser.Controller.MediaEncoding.TranscodingSegmentCleaner: Deleting segment file(s) index 0 to 7 from "/cache/transcodes/616bcbb54ee09de3c368650863b27406.m3u8"
+    [2026-09-03 00:33:34.197 +01:00] [DBG] [29] MediaBrowser.Controller.MediaEncoding.TranscodingSegmentCleaner: Deleting segment file(s) index 0 to 10 from "/cache/transcodes/616bcbb54ee09de3c368650863b27406.m3u8"
+    [2026-09-03 00:33:54.197 +01:00] [DBG] [24] MediaBrowser.Controller.MediaEncoding.TranscodingSegmentCleaner: Deleting segment file(s) index 0 to 14 from "/cache/transcodes/616bcbb54ee09de3c368650863b27406.m3u8"
+    [2026-09-03 00:34:14.198 +01:00] [DBG] [34] MediaBrowser.Controller.MediaEncoding.TranscodingSegmentCleaner: Deleting segment file(s) index 0 to 17 from "/cache/transcodes/616bcbb54ee09de3c368650863b27406.m3u8"
+    [2026-09-03 00:34:34.198 +01:00] [DBG] [34] MediaBrowser.Controller.MediaEncoding.TranscodingSegmentCleaner: Deleting segment file(s) index 0 to 20 from "/cache/transcodes/616bcbb54ee09de3c368650863b27406.m3u8"
+
+  --- ROW 18: the throttler ---
+  'Throttling transcoder gap'     : 89
+  'Not throttling transcoder gap' : 6
+  'No throttle data'              : 0   (the position-zero signature)
+    [2026-09-03 00:27:39.198 +01:00] [DBG] [28] MediaBrowser.Controller.MediaEncoding.TranscodingThrottler: Not throttling transcoder gap 368300000 target gap 1800000000
+    [2026-09-03 00:27:44.198 +01:00] [DBG] [34] MediaBrowser.Controller.MediaEncoding.TranscodingThrottler: Not throttling transcoder gap 765770000 target gap 1800000000
+    [2026-09-03 00:27:49.198 +01:00] [DBG] [28] MediaBrowser.Controller.MediaEncoding.TranscodingThrottler: Not throttling transcoder gap 1313670000 target gap 1800000000
+    [2026-09-03 00:27:54.197 +01:00] [DBG] [24] MediaBrowser.Controller.MediaEncoding.TranscodingThrottler: Not throttling transcoder gap 1710000000 target gap 1800000000
+
+================================================================================
+9. TERMINATION AND FINAL STATE
+================================================================================
+  DELETE /Videos/ActiveEncodings  =>  HTTP 204   (204 = the job was killed)
+  ffmpeg processes after          : 0
+  /mnt/fast/transcode after       : 1 file(s), 0 bytes
+  jellyfin State.Status           : running healthy
+  old volume transcodes bytes     : 13473768858
+  old volume STILL EXISTS         : yes -- exit 0
+  / avail after (df -B1)          : 21674921984
+
+  per-segment fetch log (indices, timestamps, sequential and paced):
+    SEG idx=0    23:27:35Z http=200 fetch=2.34s extinf=8.250000s consumed=8.250s
+    SEG idx=1    23:27:41Z http=200 fetch=0.01s extinf=10.333000s consumed=18.583s
+    SEG idx=2    23:27:51Z http=200 fetch=0.02s extinf=10.417000s consumed=29.000s
+    SEG idx=3    23:28:01Z http=200 fetch=0.01s extinf=10.417000s consumed=39.417s
+    SEG idx=4    23:28:12Z http=200 fetch=0.02s extinf=10.416000s consumed=49.833s
+    SEG idx=5    23:28:22Z http=200 fetch=0.02s extinf=10.417000s consumed=60.250s
+    SEG idx=6    23:28:33Z http=200 fetch=0.02s extinf=10.417000s consumed=70.667s
+    SEG idx=7    23:28:43Z http=200 fetch=0.03s extinf=10.416000s consumed=81.083s
+    SEG idx=8    23:28:54Z http=200 fetch=0.01s extinf=10.375000s consumed=91.458s
+    SEG idx=9    23:29:04Z http=200 fetch=0.02s extinf=2.375000s consumed=93.833s
+    SEG idx=10   23:29:06Z http=200 fetch=0.04s extinf=3.667000s consumed=97.500s
+    SEG idx=11   23:29:10Z http=200 fetch=0.02s extinf=2.042000s consumed=99.542s
+    SEG idx=12   23:29:12Z http=200 fetch=0.01s extinf=1.208000s consumed=100.750s
+    SEG idx=13   23:29:13Z http=200 fetch=0.03s extinf=1.708000s consumed=102.458s
+    SEG idx=14   23:29:15Z http=200 fetch=0.01s extinf=1.417000s consumed=103.875s
+    SEG idx=15   23:29:17Z http=200 fetch=0.02s extinf=7.208000s consumed=111.083s
+    SEG idx=16   23:29:24Z http=200 fetch=0.02s extinf=2.417000s consumed=113.500s
+    SEG idx=17   23:29:26Z http=200 fetch=0.02s extinf=2.292000s consumed=115.792s
+    SEG idx=18   23:29:28Z http=200 fetch=0.02s extinf=2.375000s consumed=118.167s
+    SEG idx=19   23:29:31Z http=200 fetch=0.01s extinf=3.458000s consumed=121.625s
+    SEG idx=20   23:29:34Z http=200 fetch=0.03s extinf=10.417000s consumed=132.042s
+    SEG idx=21   23:29:45Z http=200 fetch=0.02s extinf=10.416000s consumed=142.458s
+    SEG idx=22   23:29:55Z http=200 fetch=0.02s extinf=6.375000s consumed=148.833s
+    SEG idx=23   23:30:02Z http=200 fetch=0.01s extinf=6.125000s consumed=154.958s
+    SEG idx=24   23:30:08Z http=200 fetch=0.02s extinf=4.084000s consumed=159.042s
+    SEG idx=25   23:30:12Z http=200 fetch=0.02s extinf=5.958000s consumed=165.000s
+    SEG idx=26   23:30:18Z http=200 fetch=0.02s extinf=2.542000s consumed=167.542s
+    SEG idx=27   23:30:20Z http=200 fetch=0.02s extinf=9.375000s consumed=176.917s
+    SEG idx=28   23:30:30Z http=200 fetch=0.02s extinf=1.875000s consumed=178.792s
+    SEG idx=29   23:30:32Z http=200 fetch=0.03s extinf=4.208000s consumed=183.000s
+    SEG idx=30   23:30:36Z http=200 fetch=0.02s extinf=4.792000s consumed=187.792s
+    SEG idx=31   23:30:41Z http=200 fetch=0.02s extinf=9.750000s consumed=197.542s
+    SEG idx=32   23:30:50Z http=200 fetch=0.01s extinf=1.916000s consumed=199.458s
+    SEG idx=33   23:30:52Z http=200 fetch=0.02s extinf=6.375000s consumed=205.833s
+    SEG idx=34   23:30:59Z http=200 fetch=0.04s extinf=7.917000s consumed=213.750s
+    SEG idx=35   23:31:07Z http=200 fetch=0.06s extinf=10.375000s consumed=224.125s
+    SEG idx=36   23:31:17Z http=200 fetch=0.02s extinf=1.083000s consumed=225.208s
+    SEG idx=37   23:31:18Z http=200 fetch=0.02s extinf=10.417000s consumed=235.625s
+    SEG idx=38   23:31:29Z http=200 fetch=0.01s extinf=2.667000s consumed=238.292s
+    SEG idx=39   23:31:31Z http=200 fetch=0.02s extinf=2.958000s consumed=241.250s
+    SEG idx=40   23:31:34Z http=200 fetch=0.02s extinf=7.958000s consumed=249.208s
+    SEG idx=41   23:31:42Z http=200 fetch=0.02s extinf=5.292000s consumed=254.500s
+    SEG idx=42   23:31:48Z http=200 fetch=0.02s extinf=4.292000s consumed=258.792s
+    SEG idx=43   23:31:52Z http=200 fetch=0.03s extinf=10.166000s consumed=268.958s
+    SEG idx=44   23:32:02Z http=200 fetch=0.01s extinf=1.875000s consumed=270.833s
+    SEG idx=45   23:32:04Z http=200 fetch=0.02s extinf=8.125000s consumed=278.958s
+    SEG idx=46   23:32:12Z http=200 fetch=0.02s extinf=3.542000s consumed=282.500s
+    SEG idx=47   23:32:16Z http=200 fetch=0.02s extinf=10.417000s consumed=292.917s
+    SEG idx=48   23:32:26Z http=200 fetch=0.02s extinf=2.833000s consumed=295.750s
+    SEG idx=49   23:32:29Z http=200 fetch=0.04s extinf=9.583000s consumed=305.333s
+    SEG idx=50   23:32:38Z http=200 fetch=0.02s extinf=5.667000s consumed=311.000s
+    SEG idx=51   23:32:44Z http=200 fetch=0.02s extinf=1.625000s consumed=312.625s
+    SEG idx=52   23:32:46Z http=200 fetch=0.01s extinf=5.417000s consumed=318.042s
+    SEG idx=53   23:32:51Z http=200 fetch=0.02s extinf=7.041000s consumed=325.083s
+    SEG idx=54   23:32:58Z http=200 fetch=0.02s extinf=7.584000s consumed=332.667s
+    SEG idx=55   23:33:06Z http=200 fetch=0.02s extinf=10.416000s consumed=343.083s
+    SEG idx=56   23:33:16Z http=200 fetch=0.02s extinf=5.792000s consumed=348.875s
+    SEG idx=57   23:33:22Z http=200 fetch=0.02s extinf=2.167000s consumed=351.042s
+    SEG idx=58   23:33:24Z http=200 fetch=0.02s extinf=6.708000s consumed=357.750s
+    SEG idx=59   23:33:31Z http=200 fetch=0.02s extinf=4.500000s consumed=362.250s
+    SEG idx=60   23:33:36Z http=200 fetch=0.02s extinf=9.750000s consumed=372.000s
+    SEG idx=61   23:33:45Z http=200 fetch=0.01s extinf=2.292000s consumed=374.292s
+    SEG idx=62   23:33:48Z http=200 fetch=0.02s extinf=5.875000s consumed=380.167s
+    SEG idx=63   23:33:54Z http=200 fetch=0.02s extinf=5.083000s consumed=385.250s
+    SEG idx=64   23:33:59Z http=200 fetch=0.02s extinf=10.417000s consumed=395.667s
+    SEG idx=65   23:34:09Z http=200 fetch=0.02s extinf=2.625000s consumed=398.292s
+    SEG idx=66   23:34:12Z http=200 fetch=0.02s extinf=4.000000s consumed=402.292s
+    SEG idx=67   23:34:16Z http=200 fetch=0.02s extinf=9.208000s consumed=411.500s
+    SEG idx=68   23:34:25Z http=200 fetch=0.01s extinf=2.667000s consumed=414.167s
+    SEG idx=69   23:34:28Z http=200 fetch=0.02s extinf=6.125000s consumed=420.292s
+    SEG idx=70   23:34:34Z http=200 fetch=0.02s extinf=9.333000s consumed=429.625s
+    SEG idx=71   23:34:43Z http=200 fetch=0.02s extinf=10.417000s consumed=440.042s
+    SEG idx=72   23:34:54Z http=200 fetch=0.05s extinf=1.708000s consumed=441.750s
+    SEG idx=73   23:34:55Z http=200 fetch=0.02s extinf=5.625000s consumed=447.375s
+    SEG idx=74   23:35:01Z http=200 fetch=0.07s extinf=2.917000s consumed=450.292s
+    SEG idx=75   23:35:04Z http=200 fetch=0.13s extinf=8.291000s consumed=458.583s
+    SEG idx=76   23:35:12Z http=200 fetch=0.05s extinf=5.125000s consumed=463.708s
+    SEG idx=77   23:35:17Z http=200 fetch=0.02s extinf=12.084000s consumed=475.792s
+    SEG idx=78   23:35:29Z http=200 fetch=0.02s extinf=5.791000s consumed=481.583s
+
+  ROW 4 result : 44 (>0 required)
+  ROW 5 result : 0 (0 required)
+  head series  : 59 69 78   strictly increasing: YES
+  count series : 102 92 168   ceiling: 60
+
+  THE ANONYMOUS VOLUME WAS NOT DELETED BY THIS TASK. That is task 2's job, and
+  the ordering is D-10's: row 5 becomes unmeasurable the instant it is deleted.
+  finished at 2026-09-02T23:35:42Z
+
+  TRAP restore_log_level FIRED ON : normal exit
+  post-restore re-read of effective MinimumLevel.Default : Information
+  ASSERT restored == captured original (Information) : PASS
+
+
+================================================================================
+================================================================================
+SESSION B -- REAL RE-ENCODE (libx264) -- FULL TRANSCRIPT
+================================================================================
+================================================================================
+
+================================================================================
+02.1-06 TASK 1, SESSION B -- THE RE-ENCODE BRANCH
+Session A proved rows 4, 5 and 17 on the STREAM-COPY branch and found rows 16
+and 18 structurally unreachable there: neither TranscodingThrottler nor
+TranscodingSegmentCleaner was ever CONSTRUCTED, so neither could log. The pause
+key was re-probed at d=10000 and IS supported, which excludes the plan's stated
+alternative explanation. The remaining variable is the output video codec, so
+this session drives the SAME title down the RE-ENCODE branch.
+Observation, not read-back (CONS-04 / D-15).
+================================================================================
+
+host        : selfhost (LXC 100, 172.16.1.159)
+started     : 2026-09-02T23:37:55Z
+script      : /mnt/fast/spike-021/proof-client-b.sh   (set -Eeuo pipefail)
+
+================================================================================
+0. PRECONDITIONS
+================================================================================
+  D-40 credential file mode/owner : 600 root  (asserted before sourcing)
+  OLD_VOL (from /mnt/fast/spike-021/old-vol.txt) : d98b2ff94482ce115d1869142ad6be8d8425a5d7f776188b2a1a3ad6adcccfa4
+  docker volume ls -q | grep -qx "$OLD_VOL"        : exit 0 -- THE VOLUME EXISTS
+  jellyfin State.Status / Health   : running healthy
+  jellyfin StartedAt               : 2026-09-02T22:19:52.386240602Z
+  address resolved via docker inspect on t3_proxy : 192.168.90.25:8096
+    (never the bare name -- it resolves to Cloudflare's edge from LXC 100 and
+     would answer 200 from the WEBSITE with the container down)
+  ffmpeg processes before we start : 0
+  /mnt/fast/transcode before       : 1 file(s)
+    0  /mnt/fast/transcode/.jellyfin-transcode
+  / avail before (df -B1)          : 21672648704
+
+  NOTE ON THE OPERATOR'S 21:40-22:40 VIEWING SESSION. A full episode was
+  watched through the new bind shape in the hour before this run and produced
+  ZERO transcode bytes -- it DIRECT-PLAYED, so ffmpeg was never invoked. That is
+  the ABSENCE OF A TEST, not a passing one, and nothing below rests on it. This
+  session FORCES a transcode with an empty DirectPlayProfiles list precisely so
+  the evidence cannot be an accident of what somebody happened to watch.
+
+================================================================================
+1. LOG LEVEL RAISED TO DEBUG -- AND RESTORED BY A MECHANISM, NOT A PROMISE
+================================================================================
+  captured ORIGINAL effective Serilog MinimumLevel.Default : Information
+  logging.json overlay existed before                      : no
+  (the overlay is Jellyfin's optional second logging file; logging.default.json
+   is left byte-untouched, so restoration is the removal of a file we created)
+
+  the handler, as installed:
+    _restored=0
+    restore_log_level() {
+      local rc=$?; [[ $_restored -eq 1 ]] && return 0; _restored=1
+      set +e                       # non-aborting -- every step attempted
+      FIRED_ON=... from $rc        # ERR fires before EXIT; the guard makes it idempotent
+      kill $FETCH_PID; rm -f /mnt/fast/appdata/media/jellyfin/config/logging.json
+      re-read eff_level and ASSERT it equals $ORIG_LEVEL, else a loud banner + exit 1
+    }
+    trap restore_log_level EXIT ERR INT TERM
+
+  host date (UTC)     : 2026-09-02   container log tz is +01:00
+  log file (by mtime) : /mnt/fast/appdata/media/jellyfin/log/log_20260903.log
+  line count at start : 19205   (every grep below is scoped to lines after this)
+  raised at 2026-09-02T23:37:55Z by writing /mnt/fast/appdata/media/jellyfin/config/logging.json with Default=Debug
+  new [DBG] lines 25s later, WITHOUT a restart : 55
+  Debug is LIVE (Jellyfin hot-reloads its logging config; no restart was needed,
+  so State.StartedAt is untouched and no image could be pulled)
+
+================================================================================
+2. THE TITLE
+================================================================================
+  item id       : 50d5a4bb05b69e52beb2a278b7fca4d1
+  title         : 10 Lives
+  RunTimeTicks  : 52286300000  = 87.1 minutes
+  source        : container=mkv videoCodec=h264
+
+  THE SAME TITLE AS SESSION A, deliberately: holding the title fixed makes the
+  output video codec the ONLY variable between the two sessions.
+
+  WHY THIS ONE. Both the throttler and the segment cleaner gate on
+  RunTimeTicks >= 5 minutes and on a File video input, so a music track or a
+  clip is STRUCTURALLY unable to prove either. 87 minutes is comfortably over
+  SegmentKeepSeconds(300) + ThrottleDelaySeconds(180) = 480s, so all three
+  60-second samples land inside one live job. h264 in mkv was chosen so the
+  container change alone forces the transcode and the VIDEO can be copied --
+  which is the branch on which row 17's -readrate 10 is expected at all.
+
+================================================================================
+3. PlaybackInfo -- FORCING AN ACTUAL TRANSCODE
+================================================================================
+  DirectPlayProfiles is still the EMPTY LIST. What CHANGED from session A is
+  only the codec branch: MaxStreamingBitrate 20 Mbps -> 1.5 Mbps and a
+  CodecProfile capping Height at 480, which makes a video stream copy
+  impossible and forces a real libx264 encode. 480p was chosen deliberately to
+  keep the software encode cheap on a host with a documented IO-pressure wedge.
+  PlaySessionId          : 9942dfe1484341c98df3dd9e88e8911f
+  SupportsDirectPlay     : false   (must be false)
+  TranscodingSubProtocol : hls
+  TranscodeReasons       : TranscodeReasons=ContainerBitrateExceedsLimit
+
+  TranscodingUrl, THROUGH THE REDACTOR (T-021-86 -- this repository is PUBLIC
+  and Jellyfin embeds the credential in this URL's query string):
+    /videos/50d5a4bb-05b6-9e52-beb2-a278b7fca4d1/master.m3u8?&DeviceId=gsd0216proofclient&MediaSourceId=50d5a4bb05b69e52beb2a278b7fca4d1&VideoCodec=h264&AudioCodec=aac&AudioStreamIndex=1&VideoBitrate=1116000&AudioBitrate=384000&MaxFramerate=24&MaxHeight=480&SegmentContainer=mp4&MinSegments=1&BreakOnNonKeyFrames=False&PlaySessionId=9942dfe1484341c98df3dd9e88e8911f&ApiKey=REDACTED&TranscodingMaxAudioChannels=2&RequireAvc=false&EnableAudioVbrEncoding=true&Tag=53bd2ec0f1c36db31bc19be5ee63c64f&h264-level=41&h264-videobitdepth=8&h264-profile=high&TranscodeReasons=ContainerBitrateExceedsLimit
+  sha256 of the ORIGINAL, unredacted URL, for correlation without disclosure:
+    7cec9fbb001cded968e855fc276a6719ddfe0e5bedc1636e9ddd8c15234dac28
+
+================================================================================
+4. THE HLS MANIFEST
+================================================================================
+  master.m3u8 resolved to a single variant; main.m3u8 fetched from
+    /videos/50d5a4bb-05b6-9e52-beb2-a278b7fca4d1/main.m3u8?&DeviceId=gsd0216proofclient&M...
+
+  FIRST TEN LINES OF main.m3u8, THROUGH THE SAME REDACTOR (segment URIs in an
+  HLS playlist carry the same auth parameters -- a second disclosure path):
+    #EXTM3U
+    #EXT-X-PLAYLIST-TYPE:VOD
+    #EXT-X-VERSION:7
+    #EXT-X-TARGETDURATION:3
+    #EXT-X-MEDIA-SEQUENCE:0
+    #EXT-X-MAP:URI="hls1/main/-1.mp4?&DeviceId=gsd0216proofclient&MediaSourceId=50d5a4bb05b69e52beb2a278b7fca4d1&VideoCodec=h264&AudioCodec=aac&AudioStreamIndex=1&VideoBitrate=1116000&AudioBitrate=384000&MaxFramerate=24&MaxHeight=480&SegmentContainer=mp4&MinSegments=1&BreakOnNonKeyFrames=False&PlaySessionId=9942dfe1484341c98df3dd9e88e8911f&ApiKey=REDACTED&TranscodingMaxAudioChannels=2&RequireAvc=false&EnableAudioVbrEncoding=true&Tag=53bd2ec0f1c36db31bc19be5ee63c64f&h264-level=41&h264-videobitdepth=8&h264-profile=high&TranscodeReasons=ContainerBitrateExceedsLimit&runtimeTicks=0&actualSegmentLengthTicks=0"
+    #EXTINF:3.000000, nodesc
+    hls1/main/0.mp4?&DeviceId=gsd0216proofclient&MediaSourceId=50d5a4bb05b69e52beb2a278b7fca4d1&VideoCodec=h264&AudioCodec=aac&AudioStreamIndex=1&VideoBitrate=1116000&AudioBitrate=384000&MaxFramerate=24&MaxHeight=480&SegmentContainer=mp4&MinSegments=1&BreakOnNonKeyFrames=False&PlaySessionId=9942dfe1484341c98df3dd9e88e8911f&ApiKey=REDACTED&TranscodingMaxAudioChannels=2&RequireAvc=false&EnableAudioVbrEncoding=true&Tag=53bd2ec0f1c36db31bc19be5ee63c64f&h264-level=41&h264-videobitdepth=8&h264-profile=high&TranscodeReasons=ContainerBitrateExceedsLimit&runtimeTicks=0&actualSegmentLengthTicks=30000000
+    #EXTINF:3.000000, nodesc
+    hls1/main/1.mp4?&DeviceId=gsd0216proofclient&MediaSourceId=50d5a4bb05b69e52beb2a278b7fca4d1&VideoCodec=h264&AudioCodec=aac&AudioStreamIndex=1&VideoBitrate=1116000&AudioBitrate=384000&MaxFramerate=24&MaxHeight=480&SegmentContainer=mp4&MinSegments=1&BreakOnNonKeyFrames=False&PlaySessionId=9942dfe1484341c98df3dd9e88e8911f&ApiKey=REDACTED&TranscodingMaxAudioChannels=2&RequireAvc=false&EnableAudioVbrEncoding=true&Tag=53bd2ec0f1c36db31bc19be5ee63c64f&h264-level=41&h264-videobitdepth=8&h264-profile=high&TranscodeReasons=ContainerBitrateExceedsLimit&runtimeTicks=30000000&actualSegmentLengthTicks=30000000
+
+  segments listed in the VOD playlist : 1743
+  #EXT-X-TARGETDURATION               : 3
+  mean #EXTINF over the first 60      : 3.000 s   (segment_duration)
+  first six #EXTINF values            : 3.000000 3.000000 3.000000 3.000000 3.000000 3.000000
+
+  The #EXTINF values VARY (they follow source keyframes rather than a fixed
+  grid). That is itself the signature of a stream copy; section 7 confirms it
+  from the ffmpeg command line rather than from this inference.
+
+================================================================================
+5. THE PROOF CLIENT -- SEQUENTIAL, PACED AT ROUGHLY REALTIME
+================================================================================
+  This is the load-bearing repair. TranscodingSegmentCleaner deletes indices
+  BEHIND the client's download position, and IsThrottleAllowed returns false
+  with "No throttle data" when that position is zero. A transcode nobody
+  consumes exercises NEITHER control. The segment URIs are used VERBATIM from
+  the manifest, including their runtimeTicks and actualSegmentLengthTicks
+  parameters -- those are how the server learns the download position.
+
+  fetch loop started at 2026-09-02T23:38:20Z, pid 1404257
+
+  waiting for 360 s of CONSUMED playback before the first sample
+  (SegmentKeepSeconds=300 + 60), then three samples at 60 s intervals
+
+================================================================================
+6. ROWS 4 AND 5 -- CORROBORATION ON A SECOND LIVE TRANSCODE
+================================================================================
+  taken at 2026-09-02T23:38:30Z, with the client at segment index 3
+
+  ROW 4  find /mnt/fast/transcode -newermt '-2 minutes' -name '*.mp4' | wc -l
+         => 52      (must be > 0)
+           226653  515c193ae070e273c8a43a972001449b15.mp4
+           105576  515c193ae070e273c8a43a972001449b12.mp4
+           516519  515c193ae070e273c8a43a972001449b27.mp4
+           394577  515c193ae070e273c8a43a972001449b20.mp4
+           353098  515c193ae070e273c8a43a972001449b29.mp4
+           508351  515c193ae070e273c8a43a972001449b44.mp4
+
+  the anonymous volume AT THIS MOMENT:
+         docker volume ls -q | grep -qx "$OLD_VOL"  => exit 0 -- STILL EXISTS
+         This is what makes row 5 non-vacuous. An empty path proves nothing;
+         a path that exists and stays empty during a live transcode does.
+  ROW 5  find /var/lib/docker/volumes/$OLD_VOL/_data/transcodes -newermt '-2 minutes' | wc -l
+         => 0      (must be 0)
+         old volume transcodes bytes now : 13473768858
+         old volume transcodes files now : 1324
+
+================================================================================
+7. ROW 16 -- THREE SAMPLES: SEGMENT COUNT *AND* DOWNLOAD HEAD
+================================================================================
+  ceiling arithmetic, derived from the manifest's OWN #EXTINF rather than asserted:
+    segment_duration        = 3.000 s   (mean #EXTINF over the first 60 segments)
+    SegmentKeepSeconds      = 300
+    ceil(300 / 3.000)      = 100
+    ceiling = 100 + 10 = 110
+
+  sample 1  2026-09-02T23:44:21Z   segment_files=178   download_head_index=119   consumed=360.000s
+  sample 2  2026-09-02T23:45:21Z   segment_files=186   download_head_index=139   consumed=420.000s
+  sample 3  2026-09-02T23:46:21Z   segment_files=192   download_head_index=159   consumed=480.000s
+
+  the six readings, restated:
+    counts : 178 186 192
+    heads  : 119 139 159
+
+  DOWNLOAD HEAD IS STRICTLY INCREASING: 119 < 139 < 159  -- PASS
+  This is what separates 'the control did not fire' from 'the test never drove
+  the control'. With the head advancing, a null result below is a CONFIGURATION
+  finding, not a harness one.
+
+================================================================================
+8. JELLYFIN'S OWN LOG -- ROWS 16 (limb 1), 17 AND 18
+================================================================================
+  ASSERT the log level is STILL Debug at grep time : Debug
+  overlay file still present                       : yes
+  [DBG] lines across the whole session window      : 3063
+  scoped to 10894 lines written after this session started
+
+  --- the ffmpeg command line (row 17 depends on which branch this is) ---
+    [2026-09-03 00:38:20.991 +01:00] [INF] [25] MediaBrowser.MediaEncoding.Transcoding.TranscodeManager: 
+    "/usr/lib/jellyfin-ffmpeg/ffmpeg" "-analyzeduration 200M -probesize 1G  -i file:\"/media/Movies/10 Lives 
+    (2024) [imdb-tt7959138]/10 Lives (2024) [imdb-tt7959138] [x264-Bluray-1080p DTS-HD MA-5.1].mkv\" 
+    -map_metadata -1 -map_chapters -1 -threads 0 -map 0:0 -map 0:1 -map -0:s -codec:v:0 libx264 -preset veryfast 
+    -crf 23 -maxrate 1116000 -bufsize 2232000 -profile:v:0 high -level 41 -x264opts:0 
+    subme=0:me_range=16:rc_lookahead=10:me=hex:open_gop=0 -force_key_frames:0 \"expr:gte(t,n_forced*3)\" 
+    -sc_threshold:v:0 0 -vf 
+    \"setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709,scale=trunc(min(max(iw\,ih*a)\,1280)/2)*2:t
+    runc(ow/a/2)*2,format=yuv420p\" -codec:a:0 libfdk_aac -ac 2 -ab 256000 -af \"volume=2\" -copyts 
+    -avoid_negative_ts disabled -max_muxing_queue_size 2048 -f hls -max_delay 5000000 -hls_time 3 
+    -hls_segment_type fmp4 -hls_fmp4_init_filename \"515c193ae070e273c8a43a972001449b-1.mp4\" -start_number 0 
+    -hls_segment_filename \"/cache/transcodes/515c193ae070e273c8a43a972001449b%d.mp4\" -hls_playlist_type vod 
+    -hls_list_size 0 -hls_segment_options movflags=+frag_discont -y 
+    \"/cache/transcodes/515c193ae070e273c8a43a972001449b.m3u8\""
+
+  video codec class : RE-ENCODE
+
+  --- ROW 17: -readrate 10 ---
+  grep -o '\-readrate 10' log_20260903.log | head -1  =>  <no match>
+
+  --- ROW 16 limb 1: the cleaner reporting its own work ---
+  occurrences of 'Deleting segment file' in this session : 8
+    [2026-09-03 00:43:41.738 +01:00] [DBG] [30] MediaBrowser.Controller.MediaEncoding.TranscodingSegmentCleaner: Deleting segment file(s) index 0 to 7 from "/cache/transcodes/515c193ae070e273c8a43a972001449b.m3u8"
+    [2026-09-03 00:44:01.737 +01:00] [DBG] [25] MediaBrowser.Controller.MediaEncoding.TranscodingSegmentCleaner: Deleting segment file(s) index 0 to 13 from "/cache/transcodes/515c193ae070e273c8a43a972001449b.m3u8"
+    [2026-09-03 00:44:21.738 +01:00] [DBG] [29] MediaBrowser.Controller.MediaEncoding.TranscodingSegmentCleaner: Deleting segment file(s) index 0 to 20 from "/cache/transcodes/515c193ae070e273c8a43a972001449b.m3u8"
+    [2026-09-03 00:44:41.738 +01:00] [DBG] [25] MediaBrowser.Controller.MediaEncoding.TranscodingSegmentCleaner: Deleting segment file(s) index 0 to 27 from "/cache/transcodes/515c193ae070e273c8a43a972001449b.m3u8"
+    [2026-09-03 00:45:01.737 +01:00] [DBG] [21] MediaBrowser.Controller.MediaEncoding.TranscodingSegmentCleaner: Deleting segment file(s) index 0 to 33 from "/cache/transcodes/515c193ae070e273c8a43a972001449b.m3u8"
+    [2026-09-03 00:45:21.737 +01:00] [DBG] [29] MediaBrowser.Controller.MediaEncoding.TranscodingSegmentCleaner: Deleting segment file(s) index 0 to 40 from "/cache/transcodes/515c193ae070e273c8a43a972001449b.m3u8"
+
+  --- ROW 18: the throttler ---
+  'Throttling transcoder gap'     : 87
+  'Not throttling transcoder gap' : 8
+  'No throttle data'              : 0   (the position-zero signature)
+    [2026-09-03 00:38:26.738 +01:00] [DBG] [28] MediaBrowser.Controller.MediaEncoding.TranscodingThrottler: Not throttling transcoder gap 684500000 target gap 1800000000
+    [2026-09-03 00:38:31.738 +01:00] [DBG] [26] MediaBrowser.Controller.MediaEncoding.TranscodingThrottler: Not throttling transcoder gap 1456200000 target gap 1800000000
+    [2026-09-03 00:38:36.738 +01:00] [DBG] [30] MediaBrowser.Controller.MediaEncoding.TranscodingThrottler: Throttling transcoder gap 2057000000 target gap 1800000000
+    [2026-09-03 00:38:41.739 +01:00] [DBG] [3] MediaBrowser.Controller.MediaEncoding.TranscodingThrottler: Throttling transcoder gap 2027000000 target gap 1800000000
+
+  --- WHICH OBJECTS WERE CONSTRUCTED AT ALL (the session-A diagnosis) ---
+  lines from TranscodingThrottler       : 108
+  lines from TranscodingSegmentCleaner  : 62
+  'Deleting segment file(s) index'      : 8
+  distinct DEBUG source contexts seen:
+       2025 Jellyfin.Api.Auth.CustomAuthenticationHandler
+        481 Jellyfin.Api.Controllers.DynamicHlsController
+        165 MediaBrowser.MediaEncoding.Transcoding.TranscodeManager
+        160 MediaBrowser.Controller.MediaEncoding.TranscodingJob
+        108 MediaBrowser.Controller.MediaEncoding.TranscodingThrottler
+         62 MediaBrowser.Controller.MediaEncoding.TranscodingSegmentCleaner
+         30 Emby.Server.Implementations.ScheduledTasks.TaskManager
+          8 MediaBrowser.Controller.Entities.BaseItem
+          6 Jellyfin.Api.Helpers.MediaInfoHelper
+          5 Jellyfin.Plugin.Webhook.Notifiers.ItemDeletedNotifier.ItemDeletedManager
+          5 Jellyfin.Plugin.Webhook.Notifiers.ItemAddedNotifier.ItemAddedManager
+          5 Jellyfin.Plugin.SmartLists.Services.Shared.AutoRefreshService
+          1 Jellyfin.Api.ModelBinders.CommaDelimitedCollectionModelBinder
+          1 Jellyfin.Api.Middleware.ResponseTimeMiddleware
+          1 Jellyfin.Api.Controllers.MediaInfoController
+
+================================================================================
+9. TERMINATION AND FINAL STATE
+================================================================================
+  DELETE /Videos/ActiveEncodings  =>  HTTP 204   (204 = the job was killed)
+  ffmpeg processes after          : 0
+  /mnt/fast/transcode after       : 1 file(s), 0 bytes
+  jellyfin State.Status           : running healthy
+  old volume transcodes bytes     : 13473768858
+  old volume STILL EXISTS         : yes -- exit 0
+  / avail after (df -B1)          : 21662998528
+
+  per-segment fetch log (indices, timestamps, sequential and paced):
+    SEG idx=0    23:38:21Z http=200 fetch=0.96s extinf=3.000000s consumed=3.000s
+    SEG idx=1    23:38:24Z http=200 fetch=0.02s extinf=3.000000s consumed=6.000s
+    SEG idx=2    23:38:27Z http=200 fetch=0.02s extinf=3.000000s consumed=9.000s
+    SEG idx=3    23:38:30Z http=200 fetch=0.02s extinf=3.000000s consumed=12.000s
+    SEG idx=4    23:38:33Z http=200 fetch=0.01s extinf=3.000000s consumed=15.000s
+    SEG idx=5    23:38:36Z http=200 fetch=0.02s extinf=3.000000s consumed=18.000s
+    SEG idx=6    23:38:39Z http=200 fetch=0.01s extinf=3.000000s consumed=21.000s
+    SEG idx=7    23:38:42Z http=200 fetch=0.01s extinf=3.000000s consumed=24.000s
+    SEG idx=8    23:38:45Z http=200 fetch=0.01s extinf=3.000000s consumed=27.000s
+    SEG idx=9    23:38:48Z http=200 fetch=0.01s extinf=3.000000s consumed=30.000s
+    SEG idx=10   23:38:51Z http=200 fetch=0.01s extinf=3.000000s consumed=33.000s
+    SEG idx=11   23:38:54Z http=200 fetch=0.01s extinf=3.000000s consumed=36.000s
+    SEG idx=12   23:38:57Z http=200 fetch=0.01s extinf=3.000000s consumed=39.000s
+    SEG idx=13   23:39:00Z http=200 fetch=0.01s extinf=3.000000s consumed=42.000s
+    SEG idx=14   23:39:03Z http=200 fetch=0.01s extinf=3.000000s consumed=45.000s
+    SEG idx=15   23:39:06Z http=200 fetch=0.01s extinf=3.000000s consumed=48.000s
+    SEG idx=16   23:39:09Z http=200 fetch=0.02s extinf=3.000000s consumed=51.000s
+    SEG idx=17   23:39:12Z http=200 fetch=0.01s extinf=3.000000s consumed=54.000s
+    SEG idx=18   23:39:15Z http=200 fetch=0.01s extinf=3.000000s consumed=57.000s
+    SEG idx=19   23:39:18Z http=200 fetch=0.01s extinf=3.000000s consumed=60.000s
+    SEG idx=20   23:39:21Z http=200 fetch=0.01s extinf=3.000000s consumed=63.000s
+    SEG idx=21   23:39:24Z http=200 fetch=0.01s extinf=3.000000s consumed=66.000s
+    SEG idx=22   23:39:27Z http=200 fetch=0.01s extinf=3.000000s consumed=69.000s
+    SEG idx=23   23:39:30Z http=200 fetch=0.01s extinf=3.000000s consumed=72.000s
+    SEG idx=24   23:39:33Z http=200 fetch=0.01s extinf=3.000000s consumed=75.000s
+    SEG idx=25   23:39:36Z http=200 fetch=0.01s extinf=3.000000s consumed=78.000s
+    SEG idx=26   23:39:39Z http=200 fetch=0.01s extinf=3.000000s consumed=81.000s
+    SEG idx=27   23:39:42Z http=200 fetch=0.01s extinf=3.000000s consumed=84.000s
+    SEG idx=28   23:39:45Z http=200 fetch=0.01s extinf=3.000000s consumed=87.000s
+    SEG idx=29   23:39:48Z http=200 fetch=0.01s extinf=3.000000s consumed=90.000s
+    SEG idx=30   23:39:51Z http=200 fetch=0.01s extinf=3.000000s consumed=93.000s
+    SEG idx=31   23:39:54Z http=200 fetch=0.01s extinf=3.000000s consumed=96.000s
+    SEG idx=32   23:39:57Z http=200 fetch=0.01s extinf=3.000000s consumed=99.000s
+    SEG idx=33   23:40:00Z http=200 fetch=0.01s extinf=3.000000s consumed=102.000s
+    SEG idx=34   23:40:03Z http=200 fetch=0.01s extinf=3.000000s consumed=105.000s
+    SEG idx=35   23:40:06Z http=200 fetch=0.01s extinf=3.000000s consumed=108.000s
+    SEG idx=36   23:40:09Z http=200 fetch=0.01s extinf=3.000000s consumed=111.000s
+    SEG idx=37   23:40:12Z http=200 fetch=0.01s extinf=3.000000s consumed=114.000s
+    SEG idx=38   23:40:15Z http=200 fetch=0.01s extinf=3.000000s consumed=117.000s
+    SEG idx=39   23:40:18Z http=200 fetch=0.01s extinf=3.000000s consumed=120.000s
+    SEG idx=40   23:40:21Z http=200 fetch=0.01s extinf=3.000000s consumed=123.000s
+    SEG idx=41   23:40:24Z http=200 fetch=0.01s extinf=3.000000s consumed=126.000s
+    SEG idx=42   23:40:27Z http=200 fetch=0.01s extinf=3.000000s consumed=129.000s
+    SEG idx=43   23:40:30Z http=200 fetch=0.01s extinf=3.000000s consumed=132.000s
+    SEG idx=44   23:40:33Z http=200 fetch=0.01s extinf=3.000000s consumed=135.000s
+    SEG idx=45   23:40:36Z http=200 fetch=0.02s extinf=3.000000s consumed=138.000s
+    SEG idx=46   23:40:39Z http=200 fetch=0.01s extinf=3.000000s consumed=141.000s
+    SEG idx=47   23:40:42Z http=200 fetch=0.01s extinf=3.000000s consumed=144.000s
+    SEG idx=48   23:40:45Z http=200 fetch=0.01s extinf=3.000000s consumed=147.000s
+    SEG idx=49   23:40:48Z http=200 fetch=0.01s extinf=3.000000s consumed=150.000s
+    SEG idx=50   23:40:51Z http=200 fetch=0.01s extinf=3.000000s consumed=153.000s
+    SEG idx=51   23:40:54Z http=200 fetch=0.01s extinf=3.000000s consumed=156.000s
+    SEG idx=52   23:40:57Z http=200 fetch=0.01s extinf=3.000000s consumed=159.000s
+    SEG idx=53   23:41:00Z http=200 fetch=0.01s extinf=3.000000s consumed=162.000s
+    SEG idx=54   23:41:03Z http=200 fetch=0.01s extinf=3.000000s consumed=165.000s
+    SEG idx=55   23:41:06Z http=200 fetch=0.01s extinf=3.000000s consumed=168.000s
+    SEG idx=56   23:41:09Z http=200 fetch=0.01s extinf=3.000000s consumed=171.000s
+    SEG idx=57   23:41:12Z http=200 fetch=0.01s extinf=3.000000s consumed=174.000s
+    SEG idx=58   23:41:15Z http=200 fetch=0.01s extinf=3.000000s consumed=177.000s
+    SEG idx=59   23:41:18Z http=200 fetch=0.01s extinf=3.000000s consumed=180.000s
+    SEG idx=60   23:41:21Z http=200 fetch=0.01s extinf=3.000000s consumed=183.000s
+    SEG idx=61   23:41:25Z http=200 fetch=0.01s extinf=3.000000s consumed=186.000s
+    SEG idx=62   23:41:28Z http=200 fetch=0.01s extinf=3.000000s consumed=189.000s
+    SEG idx=63   23:41:31Z http=200 fetch=0.01s extinf=3.000000s consumed=192.000s
+    SEG idx=64   23:41:34Z http=200 fetch=0.01s extinf=3.000000s consumed=195.000s
+    SEG idx=65   23:41:37Z http=200 fetch=0.01s extinf=3.000000s consumed=198.000s
+    SEG idx=66   23:41:40Z http=200 fetch=0.01s extinf=3.000000s consumed=201.000s
+    SEG idx=67   23:41:43Z http=200 fetch=0.01s extinf=3.000000s consumed=204.000s
+    SEG idx=68   23:41:46Z http=200 fetch=0.01s extinf=3.000000s consumed=207.000s
+    SEG idx=69   23:41:49Z http=200 fetch=0.01s extinf=3.000000s consumed=210.000s
+    SEG idx=70   23:41:52Z http=200 fetch=0.02s extinf=3.000000s consumed=213.000s
+    SEG idx=71   23:41:55Z http=200 fetch=0.01s extinf=3.000000s consumed=216.000s
+    SEG idx=72   23:41:58Z http=200 fetch=0.01s extinf=3.000000s consumed=219.000s
+    SEG idx=73   23:42:01Z http=200 fetch=0.01s extinf=3.000000s consumed=222.000s
+    SEG idx=74   23:42:04Z http=200 fetch=0.01s extinf=3.000000s consumed=225.000s
+    SEG idx=75   23:42:07Z http=200 fetch=0.01s extinf=3.000000s consumed=228.000s
+    SEG idx=76   23:42:10Z http=200 fetch=0.01s extinf=3.000000s consumed=231.000s
+    SEG idx=77   23:42:13Z http=200 fetch=0.01s extinf=3.000000s consumed=234.000s
+    SEG idx=78   23:42:16Z http=200 fetch=0.01s extinf=3.000000s consumed=237.000s
+    SEG idx=79   23:42:19Z http=200 fetch=0.01s extinf=3.000000s consumed=240.000s
+    SEG idx=80   23:42:22Z http=200 fetch=0.01s extinf=3.000000s consumed=243.000s
+    SEG idx=81   23:42:25Z http=200 fetch=0.01s extinf=3.000000s consumed=246.000s
+    SEG idx=82   23:42:28Z http=200 fetch=0.01s extinf=3.000000s consumed=249.000s
+    SEG idx=83   23:42:31Z http=200 fetch=0.01s extinf=3.000000s consumed=252.000s
+    SEG idx=84   23:42:34Z http=200 fetch=0.01s extinf=3.000000s consumed=255.000s
+    SEG idx=85   23:42:37Z http=200 fetch=0.01s extinf=3.000000s consumed=258.000s
+    SEG idx=86   23:42:40Z http=200 fetch=0.01s extinf=3.000000s consumed=261.000s
+    SEG idx=87   23:42:43Z http=200 fetch=0.01s extinf=3.000000s consumed=264.000s
+    SEG idx=88   23:42:46Z http=200 fetch=0.01s extinf=3.000000s consumed=267.000s
+    SEG idx=89   23:42:49Z http=200 fetch=0.01s extinf=3.000000s consumed=270.000s
+    SEG idx=90   23:42:52Z http=200 fetch=0.02s extinf=3.000000s consumed=273.000s
+    SEG idx=91   23:42:55Z http=200 fetch=0.01s extinf=3.000000s consumed=276.000s
+    SEG idx=92   23:42:58Z http=200 fetch=0.01s extinf=3.000000s consumed=279.000s
+    SEG idx=93   23:43:01Z http=200 fetch=0.01s extinf=3.000000s consumed=282.000s
+    SEG idx=94   23:43:04Z http=200 fetch=0.01s extinf=3.000000s consumed=285.000s
+    SEG idx=95   23:43:07Z http=200 fetch=0.01s extinf=3.000000s consumed=288.000s
+    SEG idx=96   23:43:10Z http=200 fetch=0.01s extinf=3.000000s consumed=291.000s
+    SEG idx=97   23:43:13Z http=200 fetch=0.03s extinf=3.000000s consumed=294.000s
+    SEG idx=98   23:43:16Z http=200 fetch=0.02s extinf=3.000000s consumed=297.000s
+    SEG idx=99   23:43:19Z http=200 fetch=0.01s extinf=3.000000s consumed=300.000s
+    SEG idx=100  23:43:22Z http=200 fetch=0.02s extinf=3.000000s consumed=303.000s
+    SEG idx=101  23:43:25Z http=200 fetch=0.01s extinf=3.000000s consumed=306.000s
+    SEG idx=102  23:43:28Z http=200 fetch=0.02s extinf=3.000000s consumed=309.000s
+    SEG idx=103  23:43:31Z http=200 fetch=0.01s extinf=3.000000s consumed=312.000s
+    SEG idx=104  23:43:34Z http=200 fetch=0.01s extinf=3.000000s consumed=315.000s
+    SEG idx=105  23:43:37Z http=200 fetch=0.01s extinf=3.000000s consumed=318.000s
+    SEG idx=106  23:43:40Z http=200 fetch=0.02s extinf=3.000000s consumed=321.000s
+    SEG idx=107  23:43:43Z http=200 fetch=0.01s extinf=3.000000s consumed=324.000s
+    SEG idx=108  23:43:46Z http=200 fetch=0.01s extinf=3.000000s consumed=327.000s
+    SEG idx=109  23:43:49Z http=200 fetch=0.01s extinf=3.000000s consumed=330.000s
+    SEG idx=110  23:43:52Z http=200 fetch=0.01s extinf=3.000000s consumed=333.000s
+    SEG idx=111  23:43:55Z http=200 fetch=0.01s extinf=3.000000s consumed=336.000s
+    SEG idx=112  23:43:58Z http=200 fetch=0.01s extinf=3.000000s consumed=339.000s
+    SEG idx=113  23:44:01Z http=200 fetch=0.01s extinf=3.000000s consumed=342.000s
+    SEG idx=114  23:44:04Z http=200 fetch=0.01s extinf=3.000000s consumed=345.000s
+    SEG idx=115  23:44:07Z http=200 fetch=0.01s extinf=3.000000s consumed=348.000s
+    SEG idx=116  23:44:10Z http=200 fetch=0.01s extinf=3.000000s consumed=351.000s
+    SEG idx=117  23:44:13Z http=200 fetch=0.01s extinf=3.000000s consumed=354.000s
+    SEG idx=118  23:44:16Z http=200 fetch=0.01s extinf=3.000000s consumed=357.000s
+    SEG idx=119  23:44:19Z http=200 fetch=0.01s extinf=3.000000s consumed=360.000s
+    SEG idx=120  23:44:22Z http=200 fetch=0.01s extinf=3.000000s consumed=363.000s
+    SEG idx=121  23:44:25Z http=200 fetch=0.01s extinf=3.000000s consumed=366.000s
+    SEG idx=122  23:44:29Z http=200 fetch=0.01s extinf=3.000000s consumed=369.000s
+    SEG idx=123  23:44:32Z http=200 fetch=0.01s extinf=3.000000s consumed=372.000s
+    SEG idx=124  23:44:35Z http=200 fetch=0.01s extinf=3.000000s consumed=375.000s
+    SEG idx=125  23:44:38Z http=200 fetch=0.01s extinf=3.000000s consumed=378.000s
+    SEG idx=126  23:44:41Z http=200 fetch=0.01s extinf=3.000000s consumed=381.000s
+    SEG idx=127  23:44:44Z http=200 fetch=0.02s extinf=3.000000s consumed=384.000s
+    SEG idx=128  23:44:47Z http=200 fetch=0.01s extinf=3.000000s consumed=387.000s
+    SEG idx=129  23:44:50Z http=200 fetch=0.02s extinf=3.000000s consumed=390.000s
+    SEG idx=130  23:44:53Z http=200 fetch=0.01s extinf=3.000000s consumed=393.000s
+    SEG idx=131  23:44:56Z http=200 fetch=0.01s extinf=3.000000s consumed=396.000s
+    SEG idx=132  23:44:59Z http=200 fetch=0.01s extinf=3.000000s consumed=399.000s
+    SEG idx=133  23:45:02Z http=200 fetch=0.01s extinf=3.000000s consumed=402.000s
+    SEG idx=134  23:45:05Z http=200 fetch=0.01s extinf=3.000000s consumed=405.000s
+    SEG idx=135  23:45:08Z http=200 fetch=0.03s extinf=3.000000s consumed=408.000s
+    SEG idx=136  23:45:11Z http=200 fetch=0.02s extinf=3.000000s consumed=411.000s
+    SEG idx=137  23:45:14Z http=200 fetch=0.01s extinf=3.000000s consumed=414.000s
+    SEG idx=138  23:45:17Z http=200 fetch=0.01s extinf=3.000000s consumed=417.000s
+    SEG idx=139  23:45:20Z http=200 fetch=0.01s extinf=3.000000s consumed=420.000s
+    SEG idx=140  23:45:23Z http=200 fetch=0.01s extinf=3.000000s consumed=423.000s
+    SEG idx=141  23:45:26Z http=200 fetch=0.01s extinf=3.000000s consumed=426.000s
+    SEG idx=142  23:45:29Z http=200 fetch=0.01s extinf=3.000000s consumed=429.000s
+    SEG idx=143  23:45:32Z http=200 fetch=0.01s extinf=3.000000s consumed=432.000s
+    SEG idx=144  23:45:35Z http=200 fetch=0.01s extinf=3.000000s consumed=435.000s
+    SEG idx=145  23:45:38Z http=200 fetch=0.01s extinf=3.000000s consumed=438.000s
+    SEG idx=146  23:45:41Z http=200 fetch=0.02s extinf=3.000000s consumed=441.000s
+    SEG idx=147  23:45:44Z http=200 fetch=0.01s extinf=3.000000s consumed=444.000s
+    SEG idx=148  23:45:47Z http=200 fetch=0.02s extinf=3.000000s consumed=447.000s
+    SEG idx=149  23:45:50Z http=200 fetch=0.01s extinf=3.000000s consumed=450.000s
+    SEG idx=150  23:45:53Z http=200 fetch=0.01s extinf=3.000000s consumed=453.000s
+    SEG idx=151  23:45:56Z http=200 fetch=0.01s extinf=3.000000s consumed=456.000s
+    SEG idx=152  23:45:59Z http=200 fetch=0.08s extinf=3.000000s consumed=459.000s
+    SEG idx=153  23:46:02Z http=200 fetch=0.01s extinf=3.000000s consumed=462.000s
+    SEG idx=154  23:46:05Z http=200 fetch=0.01s extinf=3.000000s consumed=465.000s
+    SEG idx=155  23:46:08Z http=200 fetch=0.01s extinf=3.000000s consumed=468.000s
+    SEG idx=156  23:46:11Z http=200 fetch=0.02s extinf=3.000000s consumed=471.000s
+    SEG idx=157  23:46:14Z http=200 fetch=0.02s extinf=3.000000s consumed=474.000s
+    SEG idx=158  23:46:17Z http=200 fetch=0.01s extinf=3.000000s consumed=477.000s
+    SEG idx=159  23:46:20Z http=200 fetch=0.01s extinf=3.000000s consumed=480.000s
+
+  ROW 4 result : 52 (>0 required)
+  ROW 5 result : 0 (0 required)
+  head series  : 119 139 159   strictly increasing: YES
+  count series : 178 186 192   ceiling: 110
+
+  THE ANONYMOUS VOLUME WAS NOT DELETED BY THIS TASK. That is task 2's job, and
+  the ordering is D-10's: row 5 becomes unmeasurable the instant it is deleted.
+  finished at 2026-09-02T23:46:30Z
+
+  TRAP restore_log_level FIRED ON : normal exit
+  post-restore re-read of effective MinimumLevel.Default : Information
+  ASSERT restored == captured original (Information) : PASS
