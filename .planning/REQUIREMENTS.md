@@ -100,7 +100,7 @@ for why the v1 denominator of 39 is deliberately preserved.
 - [ ] **TRAN-06**: A `jellyfin/jellyfin` Renovate rule makes a minor release manual-review while
       preserving patch automerge, and `scripts/check-renovate.sh` can actually validate the config it
       is pointed at *(discharges D-23, D-24, D-25)*
-- [ ] **TRAN-07**: `fast/transcode` and its properties are declared in `infra/` Terraform, and the
+- [x] **TRAN-07**: `fast/transcode` and its properties are declared in `infra/` Terraform, and the
       apply that lands them is provably scoped to that one resource with **zero destroys**
       *(discharges D-05, D-06, D-07)*
 - [ ] **TRAN-08**: The unreferenced Docker images are reclaimed through
@@ -254,7 +254,7 @@ Populated during roadmap creation (2026-08-17). Every v1 requirement maps to exa
 | TRAN-04 | Phase 02.1 | Pending |
 | TRAN-05 | Phase 02.1 | Pending |
 | TRAN-06 | Phase 02.1 | Pending |
-| TRAN-07 | Phase 02.1 | Pending |
+| TRAN-07 | Phase 02.1 | Complete |
 | TRAN-08 | Phase 02.1 | Pending |
 | TRAN-09 | Phase 02.1 | Pending |
 | CONS-04 | Phase 7 | Pending |

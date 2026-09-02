@@ -298,7 +298,7 @@ moved, because the number is a consequence of that decision rather than the deci
 
 **Wave 3** *(blocked on 02.1-02)*
 
-- [ ] 02.1-03-PLAN.md — Declare `fast/transcode` in Terraform and set `quota=50G`, applied from a saved plan asserted to have zero destroys (wave 3)
+- [x] 02.1-03-PLAN.md — Declare `fast/transcode` in Terraform and set `quota=50G`, applied from a saved plan asserted to have zero destroys (wave 3)
 
 **Wave 4** *(blocked on 02.1-03)*
 
@@ -658,7 +658,7 @@ Phase 7. Plans within a phase run sequentially.
 |-------|----------------|--------|-----------|
 | 1. Safety Harness and Freeze the Writers | 9/9 | Complete | 2026-08-18 |
 | 2. NFS Export and Music Assistant Reachability | 9/9 | Complete    | 2026-09-01 |
-| 02.1. Jellyfin Transcode Retention *(inserted)* | 2/10 | In Progress | - |
+| 02.1. Jellyfin Transcode Retention *(inserted)* | 3/10 | In Progress | - |
 | 3. Tagger Spike | 1/11 | In Progress | - |
 | 4. Collapse to One Tagger | 0/TBD | Not started | - |
 | 5. Inbox Structure and the Junk Gate | 0/TBD | Not started | - |

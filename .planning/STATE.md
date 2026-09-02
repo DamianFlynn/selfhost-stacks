@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-02T21:07:13.669Z"
-last_activity: 2026-09-02 -- 02.1-02 complete; standing transcode check on the host, / margin 182.6 MiB
+last_updated: "2026-09-02T21:45:09.468Z"
+last_activity: 2026-09-02 -- 02.1-03 complete; fast/transcode declared in Terraform, quota=50G live, A3 confirmed
 progress:
   total_phases: 10
   completed_phases: 2
   total_plans: 39
-  completed_plans: 21
+  completed_plans: 22
   percent: 20
 ---
 
@@ -29,15 +29,31 @@ pipeline that someone owns.
 ## Current Position
 
 Phase: 02.1 (jellyfin-transcode-retention-relocate-the-anonymous-transcod) — EXECUTING
-Plan: 3 of 10
-Status: EXECUTING — **02.1-02 COMPLETE** (`scripts/check-jellyfin-transcode.sh` built and on the
-host, `--baseline` recorded, `/mnt/fast/stacks` level with `origin/main` at `0138db1`). **⚠ AN
-OPERATOR DECISION IS OWED BEFORE 02.1-03:** the measured `/` margin is **182.6 MiB**, which trips
-02.1-02's own ~5 GiB stop condition. 02.1-02 was finished anyway because every action in it is
-read-only with respect to `/`, but 02.1-03 is the first mutation (Terraform, the dataset, the quota).
-The question is an ORDERING one — should 02.1-09's image reap move ahead of 02.1-03 to widen the
-margin first? D-31 put the reap at the end of the phase when the plan set assumed ~13 GiB of headroom.
-Nobody has re-ruled with 182 MiB in hand. Before that, 02.1-01 landed the TRAN ids, cleared the
+Plan: 4 of 10
+Status: EXECUTING — **02.1-03 COMPLETE.** `fast/transcode` is **declared** in `infra/` Terraform
+(`infra/jellyfin-transcode-dataset.tf`, `var.jellyfin_transcode_quota`) and carries
+**`quota=53687091200`** live, with `compression=off`, `sync=disabled`, `recordsize=1048576`,
+`atime=off`, `mounted=yes` and `2775 apps:apps` — all read back from atlantis, not from Terraform's
+own output. **TRAN-07 is COMPLETE**; TRAN-03 stays Pending because it requires the bound proven
+**firing** (02.1-08), not proven set.
+
+**⚠ BOTH OF 02.1-02's OPEN QUESTIONS ARE NOW RULED — do not re-litigate either.**
+(1) The `/` **ORDERING** question: the reap **stays in 02.1-09**, 02.1-03 proceeded. Basis, measured
+not assumed: every write in 02.1-03 lands on the `fast` pool (`stat -c %d` → `/mnt/fast/transcode` =
+47, `/` and `/mnt/fast` both 64519) and none on `/`; the post-apply `/` reading of 20.16 GiB confirms
+it. **The ruling covered 02.1-03 ONLY** — 02.1-04 (copy) and 02.1-05 (recreate) *do* touch `/` and
+must be re-ruled on their own numbers against a **0.16 GiB** margin.
+(2) The **TERRAFORM** question, which 02.1-03 halted on separately: the baseline
+`terraform plan -detailed-exitcode` exited **2**, not 0, tripping VALIDATION row 28. The drift was
+output-only (`verify_commands`, a stale heredoc from `76b3783`; non-no-op `resource_changes` measured
+`count 0 / destroys 0 / addresses []`). **The operator ruled OPTION B** — clear it as its own
+separate guarded apply first, then execute against a genuinely clean exit-0 baseline — because row 28
+is a row this phase gets verified against and only B satisfies it *literally*. Executed as **two
+applies**, each from its own saved workstation-local plan file, each mechanically asserted before it
+ran. **`infra/` now has a clean exit-0 baseline**, so the next saved-plan assertion there contains
+only its own change.
+
+Before that, 02.1-01 landed the TRAN ids, cleared the
 ROADMAP placeholders and opened the D-32 watch (still
 open). Phase 02.1 was **replanned against cross-AI review**: 10 plans in 9 waves,
 plan-checker passed with 0 blockers. 32 locked decisions (D-01…D-32, of which **D-29/D-30 were ruled
@@ -101,7 +117,9 @@ it asked for: the operator browsed MA's Filesystem (local disk) provider, spot-c
 **played tracks to confirm the audio matches the metadata**. No assertion in this phase could do
 that — every automated check verifies MA's *database* says the right thing, never that the *bytes*
 are the right song, and the documented stale state is precisely "entries exist, playback fails".
-Last activity: 2026-09-02 — 02.1-02 complete (the standing transcode check and its baseline). Before
+Last activity: 2026-09-02 — 02.1-03 complete (the dataset declaration and the quota; two guarded
+applies, A3 confirmed byte-exact). Before that, 02.1-02 completed (the standing transcode check and
+its baseline), and before
 that, 02.1-01 completed, and before that 02.1 was replanned against
 cross-AI review in **two rounds**
 (`/gsd-review` → `/gsd-plan-phase --reviews`): 9 plans in 5 waves became 10 in 8, then 10 in **9**
@@ -354,6 +372,7 @@ already open so only 2049 is this phase's delta.
 | Phase 02 P09 | 50 min | 3 tasks | 5 files |
 | Phase 02.1 P01 | 12 minutes | 3 tasks | 3 files |
 | Phase 02.1 P02 | ~29 minutes (two agents) | 2 tasks | 3 files |
+| Phase 02.1 P03 | ~13 minutes (continuation agent) | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -520,6 +539,9 @@ Recent decisions affecting current work:
 - [Phase ?]: [02.1-02]: jq's `//` is the ALTERNATIVE operator and treats `false` as empty as well as `null` — never use it to read a boolean back. The standing check's own first --baseline printed EnableSegmentDeletion, EnableThrottling and EnableHardwareEncoding as `<absent>` when all three were genuinely `false`, including the amdgpu mitigation flag where absent and false carry OPPOSITE implications for a ~6-hour outage hazard. An <absent> baseline would also have made 02.1-07's before/after read as 'the key appeared' rather than 'the value moved'
 - [Phase ?]: [02.1-02]: a green `zfs get quota` on an UNMOUNTED dataset is a false pass — the bind still works, the container still writes, and the quota does not apply, while the property still reads 53687091200. The standing check asserts `mounted` by two instruments with no shared failure mode: the ZFS property from atlantis over ssh, and a container-side `stat -c %d` device-id comparison that needs neither ssh nor zfs. Baseline confirms the split is real: mounted GREEN, quota RED
 - [Phase ?]: [02.1-02]: `/` margin is 182.6 MiB, tripping 02.1-02's own ~5 GiB stop condition. The plan was finished anyway because every action in it is read-only with respect to `/`. **The operator ordering decision is OWED BEFORE 02.1-03** (the first mutation): should 02.1-09's image reap move ahead of it? D-31 put the reap last when the plan set assumed ~13 GiB. Also measured: the cache was byte-identical across two watch samples 16 min apart — it grows during playback, not on a wall clock
+- [Phase 02.1]: [02.1-03]: OPERATOR RULED OPTION B on the pre-existing exit-2 Terraform drift — clear it as its own separate, mechanically-asserted no-op apply FIRST, then execute against a genuinely clean exit-0 baseline. Chosen over proceeding with a documented exception because VALIDATION row 28 is a row this phase gets verified against and only B satisfies it literally. Two applies, each from its own saved workstation-local plan file, each asserted before it ran: count=0/destroys=0/addresses=[] then count=1/destroys=0/addresses=[null_resource.jellyfin_transcode_dataset]. Neither plan file was committed
+- [Phase 02.1]: [02.1-03]: ASSUMPTION A3 IS CONFIRMED, BYTE-EXACT — df -B1 --output=size /mnt/fast/transcode inside LXC 100 went 1442767175680 to 53687091200, zero delta against the target, corroborated by stat -f (51200 blocks x 1048576 bsize). ZFS derives statvfs f_blocks from referenced+available with available capped by the quota, so the standing check gains a second instrument for the bound that needs neither ssh nor zfs. It proves the quota is SET, never that it FIRES — that is 02.1-08, and row 9 stays the primary
+- [Phase 02.1]: [02.1-03]: TRAN-07 COMPLETE, TRAN-03 deliberately NOT — TRAN-07's two clauses (declared in infra/ Terraform; the apply provably scoped to that one resource with zero destroys) are both discharged with committed evidence, while TRAN-03 requires the bound proven FIRING rather than set. Read back from atlantis: quota=53687091200, compression=off, sync=disabled, recordsize=1048576, atime=off, mounted=yes, and stat 2775 apps:apps — the setgid bit survived the guarded chown plus unconditional chmod
 
 ### Pending Todos
 
@@ -662,8 +684,8 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-09-02T21:07:13.658Z
-Stopped at: Completed 02.1-02-PLAN.md
+Last session: 2026-09-02T21:45:09.456Z
+Stopped at: Completed 02.1-03-PLAN.md
 Resume file: None
 
 **02-09 IS COMPLETE AND THE PHASE IS CLOSED.**
