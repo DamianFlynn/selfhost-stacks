@@ -207,12 +207,73 @@ route B pre-specified so a FAIL does not stall the phase, and the server given a
 
 ### Phase 02.1: Jellyfin transcode retention — relocate the anonymous transcode volume off / and set a retention policy (INSERTED)
 
-**Goal:** [Urgent work - to be planned]
-**Requirements**: TBD
-**Depends on:** Phase 2
-**Plans:** 10 plans
+**Goal**: LXC 100's root filesystem is structurally unable to be filled by Jellyfin again. Every
+cache byte Jellyfin writes lands on a *declared* bind mount to `/mnt/fast`, growth is capped by a ZFS
+property that no UI edit and no container recreate can raise, Jellyfin's own retention levers are on
+and proven to *fire* rather than proven to be set, and a standing fail-closed check would have caught
+the incident before `/` reached zero. The unreferenced Docker images are reclaimed through the
+existing approval gate in the same pass, and the estate's own amdgpu recovery script is hardened so
+it cannot silently undo any of it.
+**Depends on**: Phase 2 (nothing technical — this is an insertion ordered after the last completed
+phase). Phase 3 is halted behind it.
+**Requirements**: TRAN-01, TRAN-02, TRAN-03, TRAN-04, TRAN-05, TRAN-06, TRAN-07, TRAN-08, TRAN-09
+**Success Criteria** (what must be TRUE):
 
-Plans:
+  1. `docker inspect jellyfin` returns **zero** mounts of `Type: volume`, `/cache` is a bind to
+     `/mnt/fast/appdata/media/jellyfin/cache`, `/cache/transcodes` is a bind to
+     `/mnt/fast/transcode`, and the `/dev/shm:/data/transcode` mount is gone from both the file and
+     the running container. The invariant is asserted, not the id — a *new* anonymous volume must
+     fail this too (D-18).
+
+  2. The 392 MB of image and xmltv cache arrived intact — file count and byte total match the
+     pre-copy census — and the anonymous volume `d98b2ff9…` no longer exists, deleted **after**
+     Jellyfin was proven running on the new path, never before.
+
+  3. `fast/transcode` carries `quota=50G`, `compression=off`, `sync=disabled`, `recordsize=1M`,
+     declared in `infra/` Terraform, applied from a **saved plan** that was mechanically asserted to
+     contain exactly one change and **zero destroys**, with a clean `terraform plan
+     -detailed-exitcode` both before and after.
+
+  4. **The bound is proven to fire, not proven to be set.** A real transcode writes segments under
+     `/mnt/fast/transcode` while **nothing** appears in the old volume; the segment set is observed
+     to stop growing and then shrink rather than growing monotonically; and a deliberate write past
+     the quota is refused with `ENOSPC` while `/`'s free space does not move. Reading the settings
+     back from the API is explicitly **not** evidence for any of these (CONS-04).
+
+  5. `EnableSegmentDeletion`, `EnableThrottling` and `TranscodingTempPath` are set via the REST API
+     and explained in `jellyfin.yaml`'s comment block — and the same write is proven **not** to have
+     disturbed `HardwareAccelerationType: none` / `EnableHardwareEncoding: false`, the amdgpu
+     mitigation applied 2026-08-31. A full `jq -S` diff of the encoding object before and after shows
+     exactly the intended lines and nothing else.
+
+  6. A new standalone `scripts/check-jellyfin-transcode.sh` asserts `/` headroom against a 20 GiB
+     floor, zero `Type: volume` mounts, the transcode quota and the five encoding values; it **fails
+     closed** on an unreachable LXC 100, an unreachable atlantis or a stopped Jellyfin — proven by
+     executed negative controls, not asserted — and it is folded into `quick-health-check.sh` with a
+     third in-band "EXIT-CODE BEHAVIOUR CHANGED" notice. That the check stays **manual** is recorded
+     as a known limit, not an assumed capability.
+
+  7. `renovate.json5` carries a `jellyfin/jellyfin` rule making minor updates manual-review while
+     preserving patch automerge, placed after `packageRules[2]` so it wins; no `allowedVersions`
+     ceiling; and `scripts/check-renovate.sh` runs to completion against `renovate.json5` instead of
+     exiting 1 at line 22.
+
+  8. `/` free space is measured before and after, and the image reclaim ran through
+     `scripts/spike03-image-headroom.sh`'s two-process gate with `FLOOR_GB=20` — the list written,
+     read by the operator, and pruned by ID from the file. `docker image prune -a` and
+     `docker system prune` appear nowhere, asserted by a comment-stripped grep. Success is
+     **whatever the auditable diff yields**, not a headline GB figure: 03-01 removed 27 images for a
+     real 18 GiB while `docker system df` reclaimable *rose*, so a short approved list reads as the
+     method working, not as a shortfall.
+
+  9. `scripts/disable-jellyfin-hwaccel.sh enable` can no longer silently revert `TranscodingTempPath`,
+     `EnableSegmentDeletion` or `EnableThrottling` — its `do_enable` restores the **whole**
+     `encoding.xml` from a `.bak` predating this phase, which is a one-command undo of everything
+     this phase installs. Proven **both** positively — a `check` → `disable` → `enable` round trip
+     against a throwaway `encoding.xml` leaves all three retention values intact — **and**
+     negatively, by a fault-injected run that genuinely fails, so the guard is shown to be capable of
+     failing rather than merely observed passing (TRAN-09, ruled in scope as D-29/D-30).
+**Plans**: 10 plans in 9 waves
 
 *Wave order set by **D-31** (operator ruling, 2026-09-02, after cross-AI plan review). The cutover is
 the critical path: `/` is structurally protected at the end of **wave 6** rather than sitting behind a
@@ -263,6 +324,16 @@ moved, because the number is a consequence of that decision rather than the deci
 **Wave 9** *(blocked on 02.1-06 and 02.1-09)*
 
 - [ ] 02.1-10-PLAN.md — Execute the fail-closed negative controls, fold into `quick-health-check.sh`, record the known limits (wave 9)
+
+**Research**: `--research-phase` — done. `02.1-RESEARCH.md` carries the Jellyfin 10.11.11 retention
+internals read from source at the running tag (the segment cleaner's 20 s tick and `max(keep,20)`
+clamp, the throttler's `max(delay,60)` clamp and its `IsPkeyPauseSupported` gate, the `-readrate 10`
+side effect of segment deletion on stream-copy, and `DeleteTranscodeFileTask`'s ≤48 h orphan window),
+the verified full-object semantics of `POST /System/Configuration/encoding` and the two live values a
+partial POST would clobber, moby's destination-depth mount sort, the `quota`/`refquota` errno split
+(`ENOSPC` vs `EDQUOT`) read from OpenZFS source, and the measured 17.93 Mbit/s that sizes the two
+discretion values. Then **cross-AI reviewed in two rounds** (`02.1-REVIEWS.md`); round 2 was the
+first genuinely non-Anthropic review and raised four HIGH findings, three verified real.
 
 ### Phase 3: Tagger Spike
 
