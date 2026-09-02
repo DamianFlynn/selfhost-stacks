@@ -47,6 +47,7 @@ the same filesystem paths and the same beets state.
 
 - [x] **Phase 1: Safety Harness and Freeze the Writers** - One writer on the library, everything irreplaceable copied somewhere no tagger can reach, and a before-state tag snapshot taken while the library is still untouched
 - [x] **Phase 2: NFS Export and Music Assistant Reachability** - The second consumer proven on three albums, before any content flows (completed 2026-09-01; D-55 approved after the operator played tracks)
+- [ ] **Phase 02.1: Jellyfin transcode retention** *(INSERTED)* - Relocate the anonymous transcode volume off `/` and set a retention policy, so the 19 GB cache that emptied `/` mid-Phase-3 cannot refill there
 - [ ] **Phase 3: Tagger Spike** - One tagger *and* one front end chosen on numbers from this library's own content, against thresholds committed in advance
 - [ ] **Phase 4: Collapse to One Tagger** - One tagger, one database, no idle container holding a rw mount — independently shippable
 - [ ] **Phase 5: Inbox Structure and the Junk Gate** - A staging queue outside the library, with the junk already out of it
@@ -203,6 +204,39 @@ verbatim that a folder cannot be mounted from HA into `/media`), and the mount-t
 documented only in a community discussion. The plan needs the empirical protocol written in, with
 route B pre-specified so a FAIL does not stall the phase, and the server given as an IP
 (`172.16.1.158`) because HAOS has no guaranteed resolver.
+
+### Phase 02.1: Jellyfin transcode retention — relocate the anonymous transcode volume off / and set a retention policy (INSERTED)
+
+**Goal:** [Urgent work - to be planned]
+**Requirements**: TBD
+**Depends on:** Phase 2
+**Plans:** 9 plans
+
+Plans:
+
+**Wave 1** *(no dependencies; run in any order, `parallelization: false` so sequentially)*
+
+- [ ] 02.1-01-PLAN.md — Land TRAN-01…09 in ROADMAP/REQUIREMENTS, add the `jellyfin/jellyfin` Renovate rule, fix `check-renovate.sh` (wave 1)
+- [ ] 02.1-02-PLAN.md — Write `scripts/check-jellyfin-transcode.sh`, push to the host, record the `--baseline` before-state (wave 1)
+- [ ] 02.1-03-PLAN.md — Declare `fast/transcode` in Terraform and set `quota=50G`, applied from a saved plan asserted to have zero destroys (wave 1)
+- [ ] 02.1-04-PLAN.md — Harden `disable-jellyfin-hwaccel.sh` so `enable` cannot silently revert the retention settings (wave 1)
+- [ ] 02.1-05-PLAN.md — Reclaim the ~62 GB of unreferenced Docker images through the existing approval gate (wave 1, **blocking human gate**)
+
+**Wave 2** *(blocked on 02.1-03 and 02.1-05)*
+
+- [ ] 02.1-06-PLAN.md — Capture the anonymous volume id, copy the 392 MB cache, edit `jellyfin.yaml`, deliver to the host (wave 2)
+
+**Wave 3** *(blocked on 02.1-06)*
+
+- [ ] 02.1-07-PLAN.md — Recreate the container, prove the mount shape, apply the five encoding settings by read-modify-write (wave 3)
+
+**Wave 4** *(blocked on 02.1-07)*
+
+- [ ] 02.1-08-PLAN.md — Prove the bounds fire on a real transcode, then delete the anonymous volume, then ballast the quota to ENOSPC (wave 4)
+
+**Wave 5** *(blocked on 02.1-08)*
+
+- [ ] 02.1-09-PLAN.md — Execute the fail-closed negative controls, fold into `quick-health-check.sh`, record the known limits (wave 5)
 
 ### Phase 3: Tagger Spike
 
@@ -527,6 +561,7 @@ Phase 7. Plans within a phase run sequentially.
 |-------|----------------|--------|-----------|
 | 1. Safety Harness and Freeze the Writers | 9/9 | Complete | 2026-08-18 |
 | 2. NFS Export and Music Assistant Reachability | 9/9 | Complete    | 2026-09-01 |
+| 02.1. Jellyfin Transcode Retention *(inserted)* | 0/9 | Not started | - |
 | 3. Tagger Spike | 1/11 | In Progress | - |
 | 4. Collapse to One Tagger | 0/TBD | Not started | - |
 | 5. Inbox Structure and the Junk Gate | 0/TBD | Not started | - |
