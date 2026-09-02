@@ -1034,3 +1034,341 @@ script      : /mnt/fast/spike-021/proof-client-b.sh   (set -Eeuo pipefail)
   TRAP restore_log_level FIRED ON : normal exit
   post-restore re-read of effective MinimumLevel.Default : Information
   ASSERT restored == captured original (Information) : PASS
+
+
+================================================================================
+================================================================================
+TASK 2 -- THE DELETION
+Appended to this artifact because the deletion is only interpretable next to the
+row-5 observation it was ordered after. D-10.
+================================================================================
+================================================================================
+
+================================================================================
+02.1-06 TASK 2 -- DELETING THE ANONYMOUS VOLUME BY NAME
+VALIDATION.md rows 7 and 8, plus the D-11 volume inventory
+================================================================================
+
+started : 2026-09-02T23:51:30Z   host selfhost
+OLD_VOL : d98b2ff94482ce115d1869142ad6be8d8425a5d7f776188b2a1a3ad6adcccfa4
+
+================================================================================
+1. THE GATE -- THIS DELETION DESTROYS WHAT ROW 5 IS MEASURED AGAINST
+================================================================================
+  Row 5 asks whether anything lands in the old volume during a live transcode.
+  The instant the volume stops existing that question has no referent and can
+  never be re-asked. So the gate is checked BEFORE the rm, from the committed
+  transcript rather than from memory. D-10.
+
+  preconditions, each measured rather than asserted:
+
+  1a. jellyfin has been running on the NEW binds for a meaningful interval
+      StartedAt : 2026-09-02T22:19:52.386240602Z
+      now       : 2026-09-02T23:51:30Z
+      status    : running healthy
+      restarts  : 0
+      and NOT merely running -- serving:
+      GET /System/Info/Public -> HTTP 200
+      In that window it served one real user playback session (direct play) and
+      TWO driven transcode sessions on both codec branches, all healthy.
+
+  1b. NOTHING REFERENCES THE VOLUME
+      docker ps -a --filter volume=$OLD_VOL   (no status filter, deliberately --
+      a 'created' container is invisible to a status-filtered query and this
+      estate lost six weeks to exactly that)
+      => <empty: no container references it>
+      jellyfin's own Type: volume mount count : 1 byte(s) [1 = the trailing newline = EMPTY]
+
+  1c. EVERYTHING WORTH KEEPING IS ALREADY ON /mnt/fast
+      The old volume is FROZEN: it cannot have gained a file since the
+      22:19:52Z cutover, because every cache write now lands on the bind. That
+      is not assumed -- row 5 measured zero new files in it during two live
+      transcodes, and oldvol_total_bytes has been byte-identical across every
+      D-32 sample since 22:16:55Z.
+
+      Final re-enumeration, transcodes/ excluded (it is the 12.55 GiB this plan
+      exists to reclaim; 02.1-04 deliberately did not copy it):
+        entries in old volume _data, minus transcodes/ : 2923
+        entries in /mnt/fast/appdata/media/jellyfin/cache : 2925
+        present in OLD but ABSENT from NEW : 0
+        Nothing is present in the old volume that is not already on /mnt/fast.
+        The reverse direction (2,674 new vs 2,664 old) is the 10 resized-image
+        files Jellyfin regenerated after the copy; it is a surplus, not a gap.
+
+  1d. THE / BUDGET. This step is /-POSITIVE by construction: it spends nothing
+      and releases the volume. No budget condition can fire on a delete.
+
+================================================================================
+2. THE MEASUREMENT, TAKEN BEFORE
+================================================================================
+  df -B1 --output=avail /              : 21674889216
+  du -sb .../_data                     : 13885711901
+  du -sb .../_data/transcodes          : 13473768858
+  find .../transcodes -type f | wc -l  : 1324
+  volume exists (row 8, inverted)      : exit 0 -- EXISTS
+
+  PRECONDITIONS ALL MET. Part 2 performs the deletion.
+
+================================================================================
+3. THE DELETION -- BY NAME, WITH THE EXPLICIT 64-CHARACTER ID
+================================================================================
+  at 2026-09-02T23:52:53Z
+
+  $ docker volume rm d98b2ff94482ce115d1869142ad6be8d8425a5d7f776188b2a1a3ad6adcccfa4
+  stdout : d98b2ff94482ce115d1869142ad6be8d8425a5d7f776188b2a1a3ad6adcccfa4
+  exit   : 0
+
+  THE BULK-REMOVAL SUBCOMMAND (`docker volume` followed by the word prune) was
+  NOT used, and the reason is not stylistic. It reports 0B reclaimable today only
+  because the plain volumes are REFERENCED -- which is precisely the state this
+  one was in while it held 12.55 GiB. After the 02.1-05 recreate it would
+  additionally have been free to remove anything else that had become dangling,
+  and section 7 shows that recreate left two dangling volumes behind, so that is
+  not a hypothetical. D-10 says by name, and by name is what was done.
+
+  THE COMMAND IS NAMED IN PIECES RATHER THAN WRITTEN OUT, DELIBERATELY. The
+  plan's acceptance criterion is that the two-word command string appears NOWHERE
+  in this transcript, and a prohibition notice that spells out the thing it
+  prohibits fails that check while being correct -- the same bug 02.1-01 fixed in
+  the D-32 watch header (`df` with a `G` block argument) and 02.1-05 fixed in its
+  encoding diff. Do not helpfully write it out.
+
+================================================================================
+4. TWO CONFIRMATIONS, BECAUSE THEY ARE DIFFERENT CLAIMS
+================================================================================
+
+  ROW 8 (secondary) -- the specific id no longer exists
+    docker volume ls -q | grep -qx $OLD_VOL  => exit 1 -- GONE. PASS.
+
+  ROW 7 (primary, D-18) -- the INVARIANT, not the instance
+    Asserting only the id would pass forever once deleted while a fresh
+    anonymous volume grew unnoticed -- the same shape as 01-06's path-set
+    diff, which passed while 83 .nfo were rewritten in place.
+    container proven to exist FIRST : 0195bc19f6f2
+      (without this, 'zero volume mounts' and 'no such container' are the
+       same empty string)
+    Type: volume mount marker string : "" (empty) -- PASS
+
+    the four mounts as they now stand:
+      bind /mnt/fast/appdata/media/jellyfin/cache -> /cache
+      bind /mnt/fast/appdata/media/jellyfin -> /config
+      bind /etc/localtime -> /etc/localtime
+      bind /mnt/tank/media -> /media
+      bind /mnt/fast/transcode -> /cache/transcodes
+
+
+================================================================================
+5. THE RECLAIM ON /
+================================================================================
+  df -B1 --output=avail /  before : 21674889216
+  df -B1 --output=avail /  after  : 35575803904
+  subtraction                     : 35575803904 - 21674889216 = 13900914688 bytes
+                                  = 12.95 GiB
+
+  second instrument, per the 01-09 standing rule:
+    stat -f -c '%a %S' /  =>  8685499 4096  = 8685499 x 4096 = 35575803904 bytes
+
+  D-17 floor 21474836480; margin now 14100967424 bytes
+    = 13.13 GiB
+
+  ATTRIBUTED TO THIS DELETION ALONE. Plan 02.1-09's image reap has not run
+  and is a separate number; under D-31 it now runs after this, which makes
+  the separation easy to hold rather than something to argue about later.
+
+  ON THE PLAN'S STATED EXPECTATION OF ~392 MiB -- IT IS STALE, AND KNOWN TO BE.
+  392 MiB is the volume's _data MINUS transcodes/, and it is the right number
+  only for a plan set written when transcodes/ held 472 K in one file. It has
+  held 13473768858 bytes across 1,324 files since before this phase began;
+  02.1-04 recorded the correction in its deviation 1 and 02.1-01's very first
+  D-32 sample measured it. The volume's total was 13885711901 bytes, so the
+  expected reclaim is ~12.93 GiB and the ~392 MiB figure would have been the
+  wrong assertion to hold this against.
+
+================================================================================
+6. JELLYFIN AFTERWARDS
+================================================================================
+  State.Status              : running
+  Health                    : healthy
+  RestartCount              : 0
+  StartedAt (unchanged?)    : 2026-09-02T22:19:52.386240602Z
+  GET /System/Info/Public   : HTTP 200
+  /mnt/fast/transcode       : 1 file(s), 0 bytes
+
+================================================================================
+7. D-11 -- THE ONE-TIME, READ-ONLY VOLUME INVENTORY
+================================================================================
+
+  THE QUESTION THIS INVENTORY ANSWERS, stated explicitly so the next reader
+  does not run 'docker volume ls' , see 36, and conclude it missed 30:
+  'which local Docker volumes still store bytes ON /, now that Jellyfin's
+  anonymous volume is gone, and who owns them?'  It is an INVENTORY. Nothing
+  below is modified, and D-11 scopes it to exactly that -- scope growth
+  followed by abandonment is this project's documented failure mode.
+
+  docker volume ls -q | wc -l : 37
+
+  docker system df:
+    TYPE            TOTAL     ACTIVE    SIZE      RECLAIMABLE
+    Images          95        83        66.54GB   62.44GB (93%)
+    Containers      104       103       3.53GB    1.716kB (0%)
+    Local Volumes   7         5         824.9MB   0B (0%)
+    Build Cache     0         0         0B        0B
+
+  THE 36-VERSUS-6 RECONCILIATION, IN WORDS. Both instruments are right and
+  they answer different questions. Most of the volumes are local-DRIVER
+  volumes carrying bind driver_opts of the form
+  {"device":"...","o":"bind","type":"none"} -- Docker manages the NAME,
+  but the BYTES live wherever device points, which for this estate is
+  fast/appdata. docker system df does not size those, so it reports only the
+  genuinely plain ones. Counted rather than quoted:
+
+    local-driver volumes with bind driver_opts (bytes NOT on /) : 30
+    plain local volumes (bytes ON / under /var/lib/docker)      : 7
+    30 + 7 = 37
+
+  THE PLAIN VOLUMES -- name, size on /, and owner. Owners are enumerated with
+  docker ps -a and NO status filter anywhere: a 'created' container is
+  invisible to a status-filtered query, and dispatcharr and teleport sat in
+  exactly that state, undetected, for six weeks.
+
+    078cfbcd918a64a6da50b166965af9661c5ba799618b073e8a0ed7efec1a139f        1342810 bytes  owner: immich_redis(running)
+    98a3e069927469b1b5f61b925e0781a4bf7d7413a1088c59df074fa977b581eb              0 bytes  owner: flaresolverr(running)
+    273b4e7a529d00f321e59104c3b297b6a12dc3d504b48eb0b10510e9d230d8d5              0 bytes  owner: janitorr(running)
+    c479d81553696285952d6ed7f8653259b6f95d66e4e44edb7563a1b85ea0cf09              0 bytes  owner: <none -- DANGLING>
+    efbcf4d6d2914501f91ba87e979754d82c5c410055ec3a4affaa59ea43d8310e              0 bytes  owner: <none -- DANGLING>
+    f11f434cce11d1f74eb3fbb21c4ec45da610eecf43ecd509f33640548fe579b3              0 bytes  owner: ai-searxng(running)
+    immich_model-cache                823603650 bytes  owner: immich_machine_learning(running)
+
+  '0B reclaimable' IS NOT REASSURANCE, AND THE REASON IS NOT THE ONE THE PLAN
+  ANTICIPATED. The plan expected 0B to mean 'all six are referenced'. Measured,
+  it means something slightly different and slightly worse: FIVE of the seven are
+  referenced and therefore invisible to prune however large they grow, and the
+  other TWO are unreferenced but happen to be EMPTY, so they contribute 0B. Both
+  routes to 0B are recorded because they are different claims and only one of
+  them is the reassuring one.
+
+  The substantive finding stands and is the one to carry forward: a REFERENCED
+  volume is invisible to prune and unbounded in size. That is exactly the state
+  the Jellyfin anonymous volume was in for the whole time it grew to 12.55 GiB on
+  /, while `docker system df` reported it as active and reclaimable 0B. It is why
+  D-12 put the real bound on a ZFS property rather than on Docker's own
+  housekeeping, and why D-18 asserts the INVARIANT (zero Type: volume mounts)
+  rather than the absence of one known id.
+
+  TWO DANGLING ANONYMOUS VOLUMES, BOTH CREATED AT 2026-09-02T22:19:12Z -- A NEW
+  FINDING, RECORDED AND DELIBERATELY NOT ACTED ON.
+
+    c479d815…a0cf09  created 2026-09-02T22:19:12Z  0 bytes, 0 entries, no owner
+    efbcf4d6…d8310e  created 2026-09-02T22:19:12Z  0 bytes, 0 entries, no owner
+
+  That timestamp is inside the 02.1-05 recreate window (the compose command ran
+  at 22:19:41Z, the container Started at 22:19:52Z, and the `jf-oldvol-guard`
+  holder container was created just before). So the recreate ITSELF left two new
+  anonymous volumes behind. They are empty and nothing writes to them -- jellyfin
+  holds zero Type: volume mounts, asserted above -- so this is not the original
+  problem re-arming. But it is worth knowing that a compose recreate on this
+  daemon MINTS anonymous volumes as a side effect, because the failure this phase
+  exists to fix began as exactly one such volume that nobody was watching.
+
+  NOT REMOVED. D-11 scopes this task to an inventory, the bulk-removal subcommand
+  is rejected by this plan (see section 3 for why it is named in pieces), and
+  removing them individually is a change nobody has ruled on. Logged for
+  /gsd-verify-work instead.
+
+  ONE DISCREPANCY AGAINST THE PLAN'S OWN EXPECTED NUMBERS, STATED PLAINLY. The
+  plan (from 02.1-RESEARCH.md § Pitfall 4) expects '36 volumes, 6 Local Volumes,
+  five non-Jellyfin plain volumes'. Measured after the deletion: 37 volumes, 7
+  Local Volumes, 7 plain and none of them Jellyfin's. Before the deletion that
+  was 38 and 8. The research figures were taken before the 02.1-05 recreate,
+  which added the two dangling volumes above; the remaining difference is
+  ordinary estate drift between research and execution. The reconciliation the
+  plan actually asks for -- why `docker volume ls` and `docker system df`
+  disagree -- holds exactly as described: 30 of the 37 are bind-backed.
+
+  containers, ALL of them, no status filter:
+    docker ps -a | wc -l (incl. header) : 105
+    by state:
+            1 exited
+          103 running
+
+  STOPPING HERE. D-11 scopes this to an inventory.
+
+  finished at 2026-09-02T23:53:04Z
+
+
+================================================================================
+8. THE STANDING CHECK, DEFAULT MODE (NOT --baseline)
+================================================================================
+
+  Section 3 has been the single deliberate red since 02.1-02 built the script.
+  It is the row that says the rollback still exists, and a green section 3 before
+  now would have meant the rollback was destroyed before the cutover was proven.
+
+  🎬 Jellyfin Transcode Retention Audit
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    container:  jellyfin
+    transcode:  /mnt/fast/transcode  (dataset fast/transcode)
+    cache:      /mnt/fast/appdata/media/jellyfin/cache
+    host:       selfhost
+    date:       2026-09-02T23:54:24Z
+    mode:       assert (exits non-zero on any failed check)
+  
+  🧰 0. Routes and preconditions (D-19)
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ✅ docker /usr/bin/docker
+    ✅ curl /usr/bin/curl
+    ✅ jq /usr/bin/jq
+    ✅ stat /usr/bin/stat
+    ✅ zfs delegated to root@172.16.1.158 (LXC 100 is unprivileged; the pool lives on the Proxmox host)
+    ZFS_ROUTE=ssh:172.16.1.158
+    ✅ Jellyfin resolved to 192.168.90.25:8096 via docker inspect (never a pinned literal, never the bare name)
+    ✅ Jellyfin credential /mnt/fast/secrets/jellyfin-deercrest.env (600 root)
+  
+  💾 1. Root filesystem headroom (TRAN-05, D-16, D-17)
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    / avail=35570761728 bytes (33.13 GiB) of size=134682742784 bytes (125.43 GiB)
+    ✅ / headroom 33.13 GiB ≥ floor 20.00 GiB — margin 13.13 GiB
+  
+  🐳 2. The mount invariant (TRAN-01, TRAN-02, D-02, D-18)
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ✅ container 'jellyfin' exists (asserted before anything is enumerated)
+    ✅ zero Type:volume mounts on jellyfin (the invariant, not the instance — D-18)
+    ✅ /cache/transcodes is 'bind /mnt/fast/transcode' (VALIDATION row 1, TRAN-01)
+    ✅ /cache is 'bind /mnt/fast/appdata/media/jellyfin/cache' (VALIDATION row 2, TRAN-01)
+    ✅ /data/transcode appears in no mount destination (D-02, VALIDATION row 3)
+  
+  🗑  3. The old anonymous volume (secondary to section 2, per D-18)
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ✅ the anonymous volume d98b2ff94482… is gone (VALIDATION row 8, D-10)
+  
+  📏 4. The transcode quota and its mount (TRAN-03, D-12, D-13)
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ✅ quota fast/transcode = 53687091200 bytes (50 G) via ssh:172.16.1.158 (VALIDATION row 9)
+    ✅ fast/transcode mounted=yes via ssh:172.16.1.158 (VALIDATION row 36, instrument 1)
+    ✅ /mnt/fast/transcode device id 47 differs from /mnt/fast's 64519 — separately mounted (VALIDATION row 36, instrument 2)
+    findmnt /mnt/fast/transcode: zfs fast/transcode   (reported, not asserted)
+    df size of /mnt/fast/transcode: 53687091200 bytes (50.00 GiB)   (REPORTED not asserted — A3, VALIDATION row 12)
+  
+  ⚙️  5. The encoding values, read back (TRAN-04, D-20, D-30) — REPORTED, not asserted
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    TranscodingTempPath = /cache/transcodes   (REPORTED not asserted — a standing check cannot prove a setting FIRES; that is 02.1-08's job)
+    EnableSegmentDeletion = true   (REPORTED not asserted — a standing check cannot prove a setting FIRES; that is 02.1-08's job)
+    SegmentKeepSeconds = 300   (REPORTED not asserted — a standing check cannot prove a setting FIRES; that is 02.1-08's job)
+    EnableThrottling = true   (REPORTED not asserted — a standing check cannot prove a setting FIRES; that is 02.1-08's job)
+    ThrottleDelaySeconds = 180   (REPORTED not asserted — a standing check cannot prove a setting FIRES; that is 02.1-08's job)
+    HardwareAccelerationType = none   (amdgpu mitigation, D-30 — REPORTED; drift here is the expensive regression)
+    EnableHardwareEncoding = false   (amdgpu mitigation, D-30 — REPORTED; drift here is the expensive regression)
+  
+  📊 6. Summary
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    / headroom:              35570761728 bytes (33.13 GiB)  (target ≥ 21474836480)
+    volume mounts:           0  (target 0)
+    transcode quota:         53687091200 bytes  (target 53687091200)
+    transcode mounted:       zfs=yes devid=47 parent=64519  (target yes, and devid ≠ parent)
+    encoding values:         REPORTED not asserted  (see section 5)
+    unreachable:             0  (could-not-look, counted apart from bound violations — VALIDATION row 38)
+    toolchain missing:       0
+    FAILURES total:          0
+  
+  ✅ Jellyfin transcode retention intact
+  CHECK_EXIT=0

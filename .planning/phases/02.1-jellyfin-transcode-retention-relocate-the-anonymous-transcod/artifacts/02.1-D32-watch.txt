@@ -529,3 +529,74 @@ OBSERVATION rather than a pass.
   THIS PLAN IS `/`-POSITIVE BY CONSTRUCTION. It spends nothing and releases
   12.55 GiB. If a step in it is about to consume `/` rather than free it,
   something is wrong and it stops.
+
+2026-09-02T23:53:03Z plan=02.1-06 root_avail_bytes=35575803904 root_size_bytes=134682742784 oldvol_transcodes_bytes=GONE oldvol_total_bytes=GONE oldvol_transcodes_files=GONE
+
+--------------------------------------------------------------------------------
+READ THIS BEFORE THE NEXT SAMPLE -- THIS IS THE TRANSITION LINE. The volume this
+file has watched since 20:38:32Z NO LONGER EXISTS, and the `oldvol_*` fields are
+GONE from here on, never UNKNOWN.
+--------------------------------------------------------------------------------
+
+  WHY `GONE` AND NOT `UNKNOWN`. The FORMAT block above reserves UNKNOWN for an
+  instrument that could not look, because 03-01 already paid for conflating
+  "could not look" with "it is empty". `docker volume rm` succeeded at
+  2026-09-02T23:52:53Z and returned the id; the fields are unmeasurable because
+  the thing they measured was deliberately destroyed, not because `du` failed.
+  Every later sample carries GONE. A future UNKNOWN in these fields would mean
+  something quite different and should be investigated.
+
+  Delta against plan=02.1-05's post-recreate readings:
+
+    root_avail_bytes         21694996480 -> 35575803904  +13880807424  (+12.93 GiB)
+    oldvol_transcodes_bytes  13473768858 -> GONE
+    oldvol_total_bytes       13885711901 -> GONE
+    oldvol_transcodes_files         1324 -> GONE
+
+  MEASURED ACROSS THE DELETION ITSELF, which is the honest number because the
+  22:38 -> 23:52 window also contains two driven transcode sessions of this
+  plan's own making:
+
+    df -B1 --output=avail /  immediately before  : 21674889216
+    df -B1 --output=avail /  ten seconds after   : 35575803904
+    subtraction                                  : +13900914688 = 12.95 GiB
+
+  VERIFIED WITH A SECOND INSTRUMENT before being written down, per the 01-09
+  standing rule: `stat -f -c '%a %S' /` returned bavail=8685499 at bsize=4096 =
+  35575803904 bytes, matching `df -B1 --output=avail /` TO THE BYTE.
+
+  MARGIN against the D-17 floor of 21474836480:
+    35575803904 - 21474836480 = 14100967424 = 13.13 GiB
+
+  THE MARGIN WENT FROM 185 MiB AT THE PHASE HEAD TO 13.13 GiB. That is a factor
+  of about seventy-three, and it is the whole point of the phase. The reading is
+  now BETTER than the ~33-36 GiB the plan set was originally written against and
+  that STATE.md recorded after 03-01's reap -- so the number that made every plan
+  from 02.1-01 onward uncomfortable is no longer the constraint.
+
+  WHAT THE 12.95 GiB IS NOT: it is not 02.1-09's image reap, which has not run.
+  `docker system df` still reports 62.44 GB reclaimable across 95 images and that
+  is a separate, later, separately-attributed number. Under D-31 the reap now
+  runs after this deletion, which is what keeps the two figures from being
+  confused with one another.
+
+  ON THE PLAN'S OWN EXPECTED FIGURE OF ~392 MiB: it is stale and known to be.
+  392 MiB is `_data` MINUS `transcodes/`, correct only for a plan set written
+  when `transcodes/` held 472 K in one file. 02.1-01's very first D-32 sample
+  measured 13473768858 bytes across 1,324 files, and 02.1-04 recorded the
+  correction in its deviation 1. The acceptance number was wrong; the reclaim is
+  right.
+
+  ALSO TRUE, AND THE THING TO WATCH NEXT: the 02.1-05 recreate MINTED TWO NEW
+  ANONYMOUS VOLUMES, `c479d815…a0cf09` and `efbcf4d6…d8310e`, both created at
+  22:19:12Z, both dangling, both 0 bytes and 0 entries. Nothing writes to them --
+  jellyfin holds zero `Type: volume` mounts, asserted -- so this is not the old
+  problem re-arming. They were NOT removed: D-11 scopes 02.1-06 to an inventory
+  and nobody has ruled on deleting them. But the failure this phase exists to fix
+  began as exactly one anonymous volume that nobody was watching, so they are
+  named here rather than left in a listing.
+
+  THE STANDING CHECK IS GREEN FOR THE FIRST TIME: FAILURES 0, exit 0 in default
+  mode. Section 3 -- "the anonymous volume STILL EXISTS" -- has been the single
+  deliberate red since 02.1-02 built the script, and it was supposed to be. It
+  has now cleared for the right reason.
