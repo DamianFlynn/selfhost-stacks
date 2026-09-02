@@ -210,33 +210,51 @@ route B pre-specified so a FAIL does not stall the phase, and the server given a
 **Goal:** [Urgent work - to be planned]
 **Requirements**: TBD
 **Depends on:** Phase 2
-**Plans:** 9 plans
+**Plans:** 10 plans
 
 Plans:
 
-**Wave 1** *(no dependencies; run in any order, `parallelization: false` so sequentially)*
+*Wave order set by **D-31** (operator ruling, 2026-09-02, after cross-AI plan review). The cutover is
+the critical path: `/` is structurally protected at the end of **wave 5** rather than sitting behind a
+blocking human gate for the whole phase. **D-28 (the image reclaim) and D-29 (the hwaccel hardening)
+are unchanged in scope — only their position moved.** Two ordering constraints are resolved
+explicitly: the TRAN-01…09 requirement IDs are landed by 02.1-01 before any plan cites them, and
+02.1-09 depends on 02.1-07 so the reap cannot delete the utility image that plan's sandboxed proof
+needs.*
 
-- [ ] 02.1-01-PLAN.md — Land TRAN-01…09 in ROADMAP/REQUIREMENTS, add the `jellyfin/jellyfin` Renovate rule, fix `check-renovate.sh` (wave 1)
+**Wave 1** *(no dependencies; `parallelization: false`, so sequentially)*
+
+- [ ] 02.1-01-PLAN.md — Land TRAN-01…09 in REQUIREMENTS/ROADMAP, capture the anonymous volume id, open the D-32 passive `/` watch (wave 1)
 - [ ] 02.1-02-PLAN.md — Write `scripts/check-jellyfin-transcode.sh`, push to the host, record the `--baseline` before-state (wave 1)
-- [ ] 02.1-03-PLAN.md — Declare `fast/transcode` in Terraform and set `quota=50G`, applied from a saved plan asserted to have zero destroys (wave 1)
-- [ ] 02.1-04-PLAN.md — Harden `disable-jellyfin-hwaccel.sh` so `enable` cannot silently revert the retention settings (wave 1)
-- [ ] 02.1-05-PLAN.md — Reclaim the ~62 GB of unreferenced Docker images through the existing approval gate (wave 1, **blocking human gate**)
 
-**Wave 2** *(blocked on 02.1-03 and 02.1-05)*
+**Wave 2** *(blocked on 02.1-02)*
 
-- [ ] 02.1-06-PLAN.md — Capture the anonymous volume id, copy the 392 MB cache, edit `jellyfin.yaml`, deliver to the host (wave 2)
+- [ ] 02.1-03-PLAN.md — Declare `fast/transcode` in Terraform and set `quota=50G`, applied from a saved plan asserted to have zero destroys (wave 2)
 
-**Wave 3** *(blocked on 02.1-06)*
+**Wave 3** *(blocked on 02.1-03)*
 
-- [ ] 02.1-07-PLAN.md — Recreate the container, prove the mount shape, apply the five encoding settings by read-modify-write (wave 3)
+- [ ] 02.1-04-PLAN.md — Copy the 392 MB cache, edit `jellyfin.yaml`, deliver to the host (wave 3)
 
-**Wave 4** *(blocked on 02.1-07)*
+**Wave 4** *(blocked on 02.1-04)*
 
-- [ ] 02.1-08-PLAN.md — Prove the bounds fire on a real transcode, then delete the anonymous volume, then ballast the quota to ENOSPC (wave 4)
+- [ ] 02.1-05-PLAN.md — Recreate the container, prove the mount shape, apply the five encoding settings by read-modify-write (wave 4)
 
-**Wave 5** *(blocked on 02.1-08)*
+**Wave 5** *(blocked on 02.1-05)* — **`/` is structurally protected from the end of this wave**
 
-- [ ] 02.1-09-PLAN.md — Execute the fail-closed negative controls, fold into `quick-health-check.sh`, record the known limits (wave 5)
+- [ ] 02.1-06-PLAN.md — Prove the bounds fire with a driven HLS client, delete the anonymous volume, prove ENOSPC via a temporary quota shrink (wave 5)
+
+**Wave 6** *(blocked on 02.1-06)*
+
+- [ ] 02.1-07-PLAN.md — Harden `disable-jellyfin-hwaccel.sh` so `enable` cannot silently revert the retention settings, with two real fault-injection paths (wave 6)
+- [ ] 02.1-08-PLAN.md — Add the `jellyfin/jellyfin` Renovate rule and repair `check-renovate.sh`, running its 148 never-executed lines for the first time (wave 6)
+
+**Wave 7** *(blocked on 02.1-07, so the reap cannot delete the image 02.1-07's proof needs)*
+
+- [ ] 02.1-09-PLAN.md — Reclaim unreferenced Docker images through the existing approval gate (wave 7, **blocking human gate**)
+
+**Wave 8** *(blocked on 02.1-06 and 02.1-09)*
+
+- [ ] 02.1-10-PLAN.md — Execute the fail-closed negative controls, fold into `quick-health-check.sh`, record the known limits (wave 8)
 
 ### Phase 3: Tagger Spike
 
@@ -561,7 +579,7 @@ Phase 7. Plans within a phase run sequentially.
 |-------|----------------|--------|-----------|
 | 1. Safety Harness and Freeze the Writers | 9/9 | Complete | 2026-08-18 |
 | 2. NFS Export and Music Assistant Reachability | 9/9 | Complete    | 2026-09-01 |
-| 02.1. Jellyfin Transcode Retention *(inserted)* | 0/9 | Not started | - |
+| 02.1. Jellyfin Transcode Retention *(inserted)* | 0/10 | Not started | - |
 | 3. Tagger Spike | 1/11 | In Progress | - |
 | 4. Collapse to One Tagger | 0/TBD | Not started | - |
 | 5. Inbox Structure and the Junk Gate | 0/TBD | Not started | - |
