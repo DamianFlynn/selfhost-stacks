@@ -32,8 +32,13 @@ No ports and no Traefik labels — upstream proxies `/mcp` through `cal-web` the
 proxies `/api`. Validated with `docker compose config` against the host's `.env`; all vars
 resolve correctly.
 
-**Not deployed.** The definition is committed; `docker compose up -d` on the host is a
-separate user-gated action.
+**Deployed** (user-approved, after the doc work): pushed to origin, `git pull --ff-only` on
+the host (which was 38 commits behind), then `up -d`. `cal-mcp` is running and `/mcp` moved
+from `307 → /login` to a `401` carrying
+`WWW-Authenticate: Bearer resource_metadata="https://keeper.deercrest.info/.well-known/oauth-protected-resource"`.
+Auth-server metadata returns 200; sync unaffected (12 consecutive `in-sync` after the
+api/web restart). The only log lines matching "error" in `cal-mcp` are the 401s from my own
+unauthenticated probes.
 
 ### Task 2 — README rewritten against measured state (`2c54313`)
 Six substantive corrections, all verified live before writing:
@@ -84,8 +89,8 @@ figures (467/467, 934/1,676) and marked as point-in-time.
 
 ## Follow-ups left open
 
-1. **Deploy `cal-mcp`** — compose defines it; the host still runs six services. Requires
-   getting the commit onto `/mnt/fast/stacks` and `docker compose up -d`.
+1. **Connect an MCP client** — the endpoint is live and demanding OAuth, but no client has
+   completed the consent flow yet (`oauth_application` is still empty).
 2. **Mint an API token** — `api_tokens` is still empty. Needs an interactive web-UI login.
 3. **`PUSH_REDUCED_POLLING`** — the ~17% Graph failure rate is documented but unmitigated by
    explicit decision. Deserves its own change with before/after measurement.

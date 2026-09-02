@@ -424,8 +424,13 @@ unauthenticated request, which is the healthy answer here. A `404` or a connecti
 # Expect 401 — the app is alive and refusing an unauthenticated call
 curl -s -o /dev/null -w "%{http_code}\n" https://keeper-api.<your-domain>/api/v1/calendars
 
-# Expect 200 — MCP discovery document (only once cal-mcp is deployed)
+# Expect 200 — MCP discovery document
 curl -s https://keeper.<your-domain>/.well-known/oauth-protected-resource
+
+# Expect 401 with a WWW-Authenticate: Bearer challenge — cal-mcp is up and
+# demanding OAuth. A 307 here means VITE_MCP_URL is unset; a 404 means cal-mcp
+# is not running.
+curl -s -D- -o /dev/null https://keeper.<your-domain>/mcp | grep -i www-authenticate
 ```
 
 ### Reading Logs
@@ -718,7 +723,8 @@ Check Keeper upstream release notes for any changes to sync semantics, mapping t
 
 | Date | From | To | Notes |
 |---|---|---|---|
-| 2026-09-02 | 2.13 | 2.23 | Cleared ~3 months of Renovate deploy drift. No migration errors; sync resumed clean. Adds `/api/v1/sync` and makes `keeper-mcp` available. |
+| 2026-09-02 | 2.13 | 2.23 | Cleared ~3 months of Renovate deploy drift. No migration errors; sync resumed clean. Adds `/api/v1/sync` and makes `keeper-mcp` available. Sync parity moved 282/282 → 467/467 as 2.23 ingested a wider window. |
+| 2026-09-02 | — | — | `cal-mcp` deployed. `/mcp` moved from `307 → /login` to a `401` OAuth challenge. |
 
 ---
 
