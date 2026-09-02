@@ -58,7 +58,11 @@ There are **four** rules. All are one-directional. There is no merge operation, 
 | MVP | Personal (`damian.flynn@gmail.com`) | 2026-03-18 |
 | MVP | Family | 2026-03-18 |
 
-**Nothing writes back into Work.** This is not a policy choice that could be reversed by adding a rule — it is structural. An ICS subscription is a read-only HTTP fetch; Keeper has no credential and no protocol with which to create an event there. Any design that needs family or personal commitments to appear as busy time inside the work calendar requires replacing the ICS feed with a real M365 OAuth connection first.
+**Nothing writes back into Work.** This is not a policy choice that could be reversed by adding a rule — it is structural. An ICS subscription is a read-only HTTP fetch; Keeper has no credential and no protocol with which to create an event there.
+
+**But that does not mean the reverse direction is impossible.** Keeper cannot *push* into Work, yet the same outcome is reachable by pulling instead: Keeper publishes its own outbound iCal feed (`GET /api/v1/ical`, a token-authenticated URL honouring all privacy settings), and Outlook can *subscribe* to it. Family and personal commitments then appear inside the work calendar without Keeper ever writing there and without an Entra app registration — which matters, because the employer tenant refused one, and that refusal is why Work arrives as an ICS feed in the first place. All seven calendars currently carry `includeInIcalFeed=true`, so the feed is ready to use.
+
+So the honest framing is: **Work cannot be a Keeper *destination*; it can still be a subscriber.** Replacing the ICS feed with a real M365 OAuth connection is one route to two-way visibility, but it is not the only one and not the cheapest.
 
 Visualised as a directed graph, the topology looks like this:
 
