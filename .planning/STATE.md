@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-01T22:51:31.254Z"
-last_activity: 2026-09-01 -- Phase 03 execution started
+last_updated: "2026-09-02T09:35:07.665Z"
+last_activity: 2026-09-02 -- Phase 02.1 inserted (urgent); Phase 03 halted after 03-01
 progress:
-  total_phases: 9
+  total_phases: 10
   completed_phases: 2
   total_plans: 29
-  completed_plans: 18
-  percent: 22
+  completed_plans: 19
+  percent: 20
 ---
 
 # Project State
@@ -28,7 +28,7 @@ pipeline that someone owns.
 
 ## Current Position
 
-Phase: 03 (tagger-spike) — EXECUTING, then HALTED for phase 2.1
+Phase: 02.1 (jellyfin-transcode-retention) — INSERTED, not planned; Phase 03 HALTED mid-execution behind it
 Plan: 1 of 11 (03-01 complete; 03-02…03-11 queued behind phase 2.1)
 Status: Phase 03 planned 2026-09-01 — 11 plans, 8 waves, plan-checker passed,
 then **cross-AI reviewed (codex / gh copilot / gemini) and revised against 13 findings**, and passed
@@ -294,6 +294,10 @@ already open so only 2049 is this phase's delta.
 | Phase 02 P09 | 50 min | 3 tasks | 5 files |
 
 ## Accumulated Context
+
+### Roadmap Evolution
+
+- Phase 02.1 inserted after Phase 2: Jellyfin transcode retention — relocate the anonymous transcode volume off / and set a retention policy (URGENT)
 
 ### Decisions
 
@@ -584,6 +588,7 @@ Recent decisions affecting current work:
 |----|------|------|--------|
 | 260826-0u0 | Document Tailscale configuration and low-level design across all systems | 2026-08-26 | complete ✓ |
 | 260901-u96 | Read-write NFS export on atlantis for Home Assistant backups (external RES-04) | 2026-09-01 | complete ✓ |
+| 260902-fxf | Refresh keeper-sh docs against live state, add keeper-mcp service, relocate misfiled Innofactor docs | 2026-09-02 | complete ✓ |
 
 ## Session Continuity
 
