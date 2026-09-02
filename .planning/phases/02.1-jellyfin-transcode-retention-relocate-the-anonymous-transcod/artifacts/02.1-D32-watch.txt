@@ -172,3 +172,65 @@ is worth more than the margin figure.
   move ahead of 02.1-03 to widen the margin first? D-31 put the reap at the end
   of the phase. That was decided when the plan set assumed ~13 GiB of headroom.
   It is 190 MiB. Nobody has re-ruled on it with this number in hand.
+
+2026-09-02T21:26:06Z plan=02.1-03 root_avail_bytes=21651746816 root_size_bytes=134682742784 oldvol_transcodes_bytes=13473768858 oldvol_total_bytes=13884071113 oldvol_transcodes_files=1324
+
+--------------------------------------------------------------------------------
+READ THIS BEFORE THE NEXT SAMPLE -- the ordering decision 02.1-02 said was OWED
+has been RULED, and the cache is still flat at 32 minutes.
+--------------------------------------------------------------------------------
+
+  Delta against plan=02.1-02, ~32 minutes earlier:
+
+    root_avail_bytes         21674303488 -> 21651746816  -22556672  (-21.5 MiB)
+    oldvol_transcodes_bytes  13473768858 -> 13473768858          0
+    oldvol_total_bytes       13884071113 -> 13884071113          0
+    oldvol_transcodes_files         1324 -> 1324                 0
+
+  MARGIN against the D-17 floor of 21474836480:
+    21651746816 - 21474836480 = 176910336 = 0.16 GiB = 168.7 MiB
+
+  THE CACHE IS STILL BYTE-IDENTICAL, now across ~48 minutes and three samples.
+  The 21.5 MiB `/` lost in this window did NOT come from the transcode cache --
+  all three oldvol fields are unchanged. It is ordinary churn from the other 78+
+  containers writing to `/` (docker logs, container layers), which is the same
+  class of movement as the +5.2 MiB gain 02.1-02 recorded. Do not attribute it
+  to the retention problem; the retention problem is not currently running.
+
+  THE ORDERING DECISION IS RULED: 02.1-03 PROCEEDS, THE REAP STAYS IN 02.1-09.
+  02.1-02 recorded that the ~5 GiB stop condition was tripped and that the
+  question -- "should 02.1-09's image reap move ahead of 02.1-03?" -- was owed to
+  the operator before the first mutation. It has now been answered: NO, proceed
+  in the planned order.
+
+  The basis is narrow and is stated so it can be checked rather than trusted.
+  02.1-03's mutation is a `zfs create`-guarded declaration plus five `zfs set`
+  property writes on `fast/transcode`, and a `chown`/`chmod` on its mountpoint.
+  Every one of those lands on the `fast` POOL, which has 1442767437824 bytes
+  (1.31 TiB) available, and NONE of them writes a byte to `/`. Measured, not
+  assumed: `stat -c %d` reports / = 64519, /mnt/fast = 64519, and
+  /mnt/fast/transcode = 47 -- the dataset is a genuinely distinct filesystem, so
+  the phase's central premise holds and this plan's writes cannot touch `/`.
+
+  A NOTE ON /mnt/fast, because it is counter-intuitive and will mislead someone:
+  /mnt/fast is NOT itself a mount point. It is a plain directory on the ext4
+  root, and only its CHILDREN are ZFS datasets. `df /mnt/fast` therefore reports
+  `/` and looks alarming. Always measure the actual target path
+  (/mnt/fast/transcode), never its parent.
+
+  WHAT WOULD OVERTURN THIS RULING: a sample whose root_avail_bytes is below
+  21474836480, or an oldvol_transcodes_bytes that has resumed growing. Neither
+  is true here. The ruling covers 02.1-03 ONLY -- it is not a general licence
+  for the rest of the phase, and 02.1-04 onward (the copy, the recreate) DO
+  touch `/` and must be re-ruled on their own numbers.
+
+  ADDENDUM, same plan, ~10 minutes later: A SECOND AND UNRELATED STOP CONDITION
+  FIRED, and 02.1-03 halted on it rather than on the margin. The Terraform
+  baseline `terraform plan -detailed-exitcode -input=false` in infra/ exited 2,
+  not 0, so the plan's own precondition (VALIDATION.md row 28) is not met. The
+  drift is output-only -- the `verify_commands` heredoc, committed in 76b3783 by
+  a phase-02 docs plan and never applied -- and a saved-plan probe measured
+  `.resource_changes` filtered to non-no-op as count=0, destroys=0, addresses=[].
+  Zero infrastructure changes. But the plan says STOP on a 2, so this artifact's
+  ruling above ("02.1-03 PROCEEDS") is now conditional on an operator answering
+  the Terraform question. The `/` ruling itself is unaffected and stands.
