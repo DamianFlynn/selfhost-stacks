@@ -1,5 +1,6 @@
 # Keeper.sh Stack - Calendar and scheduling service
-# Self-hosted Cal.com alternative for appointment booking
+# Cross-provider calendar SYNC engine (Google / M365 / CalDAV / ICS) + calendar MCP server.
+# Not a booking platform - the repo's actual Cal.com lives in stacks/selfhosted/saas/.
 
 name: keeper-sh
 
