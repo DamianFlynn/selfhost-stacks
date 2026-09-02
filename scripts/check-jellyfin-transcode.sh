@@ -109,19 +109,26 @@ JELLYFIN_SECRETS="${JELLYFIN_SECRETS:-/mnt/fast/secrets/jellyfin-deercrest.env}"
 # (03-01's finding, commit b217ada - 2.2 GiB actually free reported as `3G`). The flag is named
 # in words rather than written literally so a mechanical grep for it over this file returns zero.
 # MEASURED MARGIN AT AUTHORING TIME, and it is NOT what the plan set assumed.
-#   2026-09-02T20:56:25Z, on the --baseline run recorded in
-#   .planning/phases/02.1-…/artifacts/02.1-02-baseline.txt:
-#     / avail   = 21669597184 bytes = 20.18 GiB
+#   2026-09-02T21:00:32Z, on the --baseline run committed verbatim at
+#   .planning/phases/02.1-jellyfin-transcode-retention-relocate-the-anonymous-transcod/
+#     artifacts/02.1-02-baseline.txt:
+#     / avail   = 21666320384 bytes = 20.18 GiB
 #     floor     = 21474836480 bytes = 20.00 GiB
-#     MARGIN    =   194760704 bytes =  0.18 GiB = 186 MiB
+#     MARGIN    =   191483904 bytes =  0.18 GiB = 182.6 MiB
 #
-#   The floor was chosen to be green rather than aspirational, and it IS green - but by 186 MiB,
+#   These figures are quoted from the COMMITTED transcript, deliberately. An earlier run of this
+#   script at 20:56:25Z read 21669597184 (186 MiB) and was DISCARDED, because it predates the
+#   enc_val() fix below and printed three genuinely-`false` keys as "<absent>". The ~3 MiB
+#   difference between the two readings is four minutes of live drift on a filesystem serving 78+
+#   containers, not disagreement - but a comment must cite the evidence that actually exists.
+#
+#   The floor was chosen to be green rather than aspirational, and it IS green - but by 182 MiB,
 #   not by the ~13 GiB the plan set was written against (which assumed `/` still held the ~33-36
 #   GiB it had after 03-01's image reap). The difference is a Jellyfin transcode cache that
 #   refilled to 12.55 GiB in the two days since the container came up on 2026-08-31, which is
 #   the condition this whole phase exists to fix.
 #
-#   So this check starts GREEN and starts FRAGILE. Read a red here as real: at 186 MiB there is
+#   So this check starts GREEN and starts FRAGILE. Read a red here as real: at 182 MiB there is
 #   no room for it to be noise. See artifacts/02.1-D32-watch.txt for the sample series - note
 #   that the cache is FLAT between playback sessions, so the budget is spent when the TV is on,
 #   not on a wall clock.

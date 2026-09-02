@@ -1,0 +1,193 @@
+DATE:     2026-09-02T21:00:32Z
+HOST_SHA: 89ad3f28a59acaf348bbbf5d649f67523a8e92e4  (/mnt/fast/stacks on LXC 100, == origin/main)
+COMMAND:  ssh -n root@172.16.1.159 'bash /mnt/fast/stacks/scripts/check-jellyfin-transcode.sh --baseline'
+
+================================================================================
+02.1-02 BASELINE  --  the PRE-PHASE state of all six assertions
+================================================================================
+
+WHAT THIS IS
+  The before-state, recorded on disk while the bind, the quota and the encoding
+  settings do not yet exist. `--baseline` prints every finding and always exits
+  0, which is exactly why it can be run today: in default (assert) mode this
+  same run would exit 1 on six findings, and it SHOULD.
+
+  Every later plan in phase 02.1 compares against this file. Do not regenerate
+  it after a mutation lands -- it stops being a baseline the moment it does.
+
+WHICH SCRIPT PRODUCED IT
+  scripts/check-jellyfin-transcode.sh at commit 89ad3f2, i.e. AFTER the
+  enc_val() fix. This matters and is not bookkeeping. An earlier --baseline run
+  of this script at 20:56:25Z used `jq '.[$k] // "<absent>"'`, and jq's `//` is
+  the ALTERNATIVE operator: it treats both `null` AND `false` as empty. That run
+  printed EnableSegmentDeletion, EnableThrottling and EnableHardwareEncoding as
+  "<absent>" when all three were genuinely `false`. That transcript was DISCARDED
+  rather than committed. Had it been kept, the before/after comparison after
+  02.1-07 sets those keys `true` would have read as "the key appeared" instead of
+  "the value moved" -- and on EnableHardwareEncoding, absent and false carry
+  opposite implications for whether the amdgpu hazard is still contained.
+
+READ THESE FIVE THINGS, DO NOT JUST FILE IT
+--------------------------------------------------------------------------------
+
+1. HEADROOM IS GREEN, AND IT IS GREEN BY 182 MiB.
+
+     / avail = 21666320384 bytes = 20.18 GiB
+     D-17 floor = 21474836480 bytes = 20.00 GiB
+     MARGIN     =   191483904 bytes = 0.18 GiB = 182.6 MiB
+
+   VALIDATION row 19 is discharged: avail >= 21474836480, asserted, passing.
+   Row 20 is discharged: the margin is written into the script header next to
+   FLOOR_BYTES so the next reader knows the floor was chosen to be green rather
+   than aspirational.
+
+   But 182 MiB is not what the plan set was written against, which assumed the
+   ~33-36 GiB `/` held after 03-01's image reap. See 02.1-D32-watch.txt for the
+   full reading. Drift across the three samples taken this evening:
+
+     20:38:32Z  plan=02.1-01  21668859904   (margin 185 MiB)
+     20:54:23Z  plan=02.1-02  21674303488   (margin 190 MiB)
+     21:00:32Z  this baseline 21666320384   (margin 182.6 MiB)
+
+   That is +5.2 MiB then -7.6 MiB over 22 minutes -- noise on a live filesystem
+   with 78+ containers, not a trend. The transcode cache itself was byte-identical
+   across the first two samples. It grows during playback, not on a wall clock.
+
+2. THE MOUNTED/QUOTA SPLIT IS THE POINT OF SECTION 4, AND IT IS VISIBLE HERE.
+
+     transcode mounted:  zfs=yes  devid=47  parent=64519      <-- GREEN
+     transcode quota:    0 bytes  (target 53687091200)        <-- RED
+
+   This split is EXPECTED at baseline and it is the evidence that the two
+   readings are genuinely independent (VALIDATION row 36). fast/transcode is
+   mounted today -- confirmed twice, by the ZFS `mounted` property fetched from
+   atlantis over ssh, and by a container-side device-id comparison that reaches
+   atlantis not at all. The quota is red because 02.1-03 has not run yet.
+
+   The reason row 36 was added by the cross-AI review is the inverse case: were
+   the dataset UNMOUNTED, `/mnt/fast/transcode` would be a plain directory on the
+   parent, the bind would still work, the container would still write -- and
+   `zfs get quota fast/transcode` would STILL return 53687091200 and read green.
+   A green quota on an unmounted dataset is a false pass. Two instruments, one of
+   which survives the ssh route being down, is what stops it.
+
+3. B, C AND THE QUOTA HALF OF D ARE RED, AND THAT IS THE PROOF THE SCRIPT ASSERTS
+   WHAT IT CLAIMS. A green B/D here would mean the check is not looking.
+
+     B  jellyfin holds 1 Type:volume mount        (target 0)
+     B  /cache/transcodes is NOT MOUNTED AT ALL
+     B  /cache is the anonymous VOLUME, not the appdata bind
+     B  /data/transcode is still a mount destination   (D-02)
+     C  the anonymous volume d98b2ff94482... STILL EXISTS
+     D  quota = 0
+
+   Assertion C being red is deliberate and was designed for: 02.1-01 captured the
+   volume id precisely so this section is live from the script's first run rather
+   than printing "not yet captured" for three plans.
+
+4. SECTION 5 REACHED JELLYFIN ON THE FIRST ATTEMPT. unreachable=0.
+
+   The bounded retry (VALIDATION row 38) did not need to fire. The values read
+   back, and they are the honest pre-phase state:
+
+     TranscodingTempPath      = <absent>   <-- genuinely not in the object
+     EnableSegmentDeletion    = false      <-- genuinely false; TRAN-04's target
+     SegmentKeepSeconds       = 720
+     EnableThrottling         = false      <-- genuinely false
+     ThrottleDelaySeconds     = 180
+     HardwareAccelerationType = none       } the amdgpu mitigation, applied
+     EnableHardwareEncoding   = false      } 2026-08-31 18:27, still in place
+
+   "<absent>" appears exactly once and it is real. Distinguishing it from `false`
+   is what the enc_val() fix bought, and this is the transcript that proves the
+   distinction is live rather than theoretical.
+
+   The last two lines are the ones to re-read after 02.1-07. The encoding endpoint
+   is a FULL-OBJECT REPLACE, so a partial POST silently reverts them (D-30), and
+   the incident they mitigate took the estate down for ~6 hours.
+
+5. NOTHING HERE IS A MUTATION. The run is read-only by contract, it wrote nothing
+   on LXC 100, and it wrote nothing to /tmp there -- /tmp on LXC 100 is tmpfs and
+   1.1 GB written to it once took the whole box down. This transcript is the only
+   artifact and it lives under .planning/ on the workstation.
+
+   Screened before committing (the T-01-38 gate):
+     grep -cEi '(token|api_key|password|secret)[[:space:]]*[=:]'  ->  0
+   The one 64-character hex string below is the anonymous DOCKER VOLUME id, which
+   is already recorded in 02.1-D32-watch.txt and is not a credential.
+
+================================================================================
+TRANSCRIPT  --  verbatim, ANSI colour codes stripped, otherwise unedited
+================================================================================
+🎬 Jellyfin Transcode Retention Audit
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  container:  jellyfin
+  transcode:  /mnt/fast/transcode  (dataset fast/transcode)
+  cache:      /mnt/fast/appdata/media/jellyfin/cache
+  host:       selfhost
+  date:       2026-09-02T21:00:32Z
+  mode:       --baseline (report only, always exits 0)
+
+🧰 0. Routes and preconditions (D-19)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✅ docker /usr/bin/docker
+  ✅ curl /usr/bin/curl
+  ✅ jq /usr/bin/jq
+  ✅ stat /usr/bin/stat
+  ✅ zfs delegated to root@172.16.1.158 (LXC 100 is unprivileged; the pool lives on the Proxmox host)
+  ZFS_ROUTE=ssh:172.16.1.158
+  ✅ Jellyfin resolved to 192.168.90.25:8096 via docker inspect (never a pinned literal, never the bare name)
+  ✅ Jellyfin credential /mnt/fast/secrets/jellyfin-deercrest.env (600 root)
+
+💾 1. Root filesystem headroom (TRAN-05, D-16, D-17)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  / avail=21666320384 bytes (20.18 GiB) of size=134682742784 bytes (125.43 GiB)
+  ✅ / headroom 20.18 GiB ≥ floor 20.00 GiB — margin 0.18 GiB
+
+🐳 2. The mount invariant (TRAN-01, TRAN-02, D-02, D-18)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✅ container 'jellyfin' exists (asserted before anything is enumerated)
+  ❌ jellyfin holds 1 Type:volume mount(s) — TRAN-02 requires zero:
+         d98b2ff94482ce115d1869142ad6be8d8425a5d7f776188b2a1a3ad6adcccfa4 -> /cache
+  ❌ /cache/transcodes is NOT MOUNTED AT ALL — want 'bind /mnt/fast/transcode' (VALIDATION row 1, TRAN-01)
+  ❌ /cache is 'volume /var/lib/docker/volumes/d98b2ff94482ce115d1869142ad6be8d8425a5d7f776188b2a1a3ad6adcccfa4/_data', want 'bind /mnt/fast/appdata/media/jellyfin/cache' (VALIDATION row 2, TRAN-01)
+  ❌ /data/transcode is still a mount destination — D-02 requires it gone (VALIDATION row 3)
+
+🗑  3. The old anonymous volume (secondary to section 2, per D-18)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ❌ the anonymous volume d98b2ff94482… STILL EXISTS (VALIDATION row 8, D-10)
+
+📏 4. The transcode quota and its mount (TRAN-03, D-12, D-13)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ❌ quota fast/transcode = 0 bytes, want 53687091200 (50 G) via ssh:172.16.1.158 (VALIDATION row 9)
+  ✅ fast/transcode mounted=yes via ssh:172.16.1.158 (VALIDATION row 36, instrument 1)
+  ✅ /mnt/fast/transcode device id 47 differs from /mnt/fast's 64519 — separately mounted (VALIDATION row 36, instrument 2)
+  findmnt /mnt/fast/transcode: zfs fast/transcode   (reported, not asserted)
+  df size of /mnt/fast/transcode: 1442768617472 bytes (1343.68 GiB)   (REPORTED not asserted — A3, VALIDATION row 12)
+
+⚙️  5. The encoding values, read back (TRAN-04, D-20, D-30) — REPORTED, not asserted
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  TranscodingTempPath = <absent>   (REPORTED not asserted — a standing check cannot prove a setting FIRES; that is 02.1-08's job)
+  EnableSegmentDeletion = false   (REPORTED not asserted — a standing check cannot prove a setting FIRES; that is 02.1-08's job)
+  SegmentKeepSeconds = 720   (REPORTED not asserted — a standing check cannot prove a setting FIRES; that is 02.1-08's job)
+  EnableThrottling = false   (REPORTED not asserted — a standing check cannot prove a setting FIRES; that is 02.1-08's job)
+  ThrottleDelaySeconds = 180   (REPORTED not asserted — a standing check cannot prove a setting FIRES; that is 02.1-08's job)
+  HardwareAccelerationType = none   (amdgpu mitigation, D-30 — REPORTED; drift here is the expensive regression)
+  EnableHardwareEncoding = false   (amdgpu mitigation, D-30 — REPORTED; drift here is the expensive regression)
+
+📊 6. Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  / headroom:              21666320384 bytes (20.18 GiB)  (target ≥ 21474836480)
+  volume mounts:           1  (target 0)
+  transcode quota:         0 bytes  (target 53687091200)
+  transcode mounted:       zfs=yes devid=47 parent=64519  (target yes, and devid ≠ parent)
+  encoding values:         REPORTED not asserted  (see section 5)
+  unreachable:             0  (could-not-look, counted apart from bound violations — VALIDATION row 38)
+  toolchain missing:       0
+  FAILURES total:          6
+
+--baseline: 6 findings recorded, exiting 0. This is the before-state.
+
+================================================================================
+END OF TRANSCRIPT  --  exit status 0, as --baseline always is.
+================================================================================
