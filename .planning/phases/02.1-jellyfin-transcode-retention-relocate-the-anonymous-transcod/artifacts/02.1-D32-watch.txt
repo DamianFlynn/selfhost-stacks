@@ -26,7 +26,15 @@ WHAT THIS IS NOT
   `docker volume rm` in 02.1-06.
 
 THE VOLUME UNDER OBSERVATION
-  OLD_VOL=d98b2ff94482ce115d1869142ad6be8d8425a5d7f776188b2a1a3ad6adcccfa4
+
+  The next line is deliberately at COLUMN 0, breaking this block's indentation.
+  Every plan from 02.1-02 onward guards on it with `grep -E '^OLD_VOL=[0-9a-f]{64}$'`
+  before appending a sample, and that anchored pattern cannot match an indented
+  line. De-indented by 02.1-02 for exactly that reason -- the same class of bug
+  02.1-01 fixed in the FORMAT block below, where a correctly-written artifact
+  tripped its own mechanical check. Do not re-indent it.
+
+OLD_VOL=d98b2ff94482ce115d1869142ad6be8d8425a5d7f776188b2a1a3ad6adcccfa4
 
   Captured 2026-09-02 by plan 02.1-01 from
     docker inspect jellyfin --format '{{range .Mounts}}{{if eq .Type "volume"}}{{.Name}}{{"\n"}}{{end}}{{end}}'
@@ -116,3 +124,51 @@ plan set assumed, and the margin is 185 MiB.
   sample shows root_avail_bytes below 21474836480, that is the operator
   decision point the 02.1-01 rollback table describes: the reap in 02.1-09 may
   need to move earlier, and that is an operator call, not a planner one.
+
+2026-09-02T20:54:23Z plan=02.1-02 root_avail_bytes=21674303488 root_size_bytes=134682742784 oldvol_transcodes_bytes=13473768858 oldvol_total_bytes=13884071113 oldvol_transcodes_files=1324
+
+--------------------------------------------------------------------------------
+READ THIS BEFORE THE NEXT SAMPLE -- the volume is FLAT over 16 minutes, and that
+is worth more than the margin figure.
+--------------------------------------------------------------------------------
+
+  Delta against plan=02.1-01, 16 minutes earlier:
+
+    root_avail_bytes         21668859904 -> 21674303488   +5443584  (+5.2 MiB)
+    oldvol_transcodes_bytes  13473768858 -> 13473768858          0
+    oldvol_total_bytes       13884071113 -> 13884071113          0
+    oldvol_transcodes_files         1324 -> 1324                 0
+
+  MARGIN against the D-17 floor of 21474836480:
+    21674303488 - 21474836480 = 199467008 = 0.19 GiB = 190 MiB
+
+  THE CACHE DID NOT GROW AT ALL in this window -- byte-identical on all three
+  fields. The ~6 GiB/day rate 02.1-01 computed is an AVERAGE over the ~2 days
+  since the container came up on 2026-08-31T18:27:41Z; it is NOT a steady drip.
+  Transcode cache grows only while something is transcoding, so the real shape
+  is bursts during playback and flat between them. `/` even recovered 5.2 MiB
+  here, from something unrelated.
+
+  DO NOT READ THIS AS REASSURANCE. A flat 16 minutes says nobody was watching
+  television, not that the retention problem is gone. The next evening of
+  playback is the same burst that produced 12.55 GiB in two days, and 190 MiB
+  does not survive one of them. What the flatness DOES buy is that the budget is
+  not being spent while the phase is merely running -- it is spent when the TV
+  is on, which is a different and less predictable clock than "hours from now".
+
+  02.1-02's OWN STOP CONDITION IS TRIPPED. That plan says to stop and report if
+  the measured margin is under ~5 GiB. It is 190 MiB. 02.1-02 was completed
+  anyway, deliberately and on a narrow basis: every action in it is READ-ONLY
+  with respect to the estate -- an ssh'd `git pull --ff-only` into
+  /mnt/fast/stacks (which is on /mnt/fast, NOT on /), a `--baseline` run that
+  asserts nothing, and artifacts written under .planning/ on the workstation.
+  Finishing it cannot consume `/`, and NOT finishing it would have left the
+  phase with no standing check on the host while the budget ran down -- the
+  precise failure 02.1-01's closing note warns about.
+
+  THE OPERATOR DECISION IS STILL OWED, AND IT IS OWED BEFORE 02.1-03. That plan
+  is the first mutation (Terraform, the dataset and its quota). The question the
+  stop condition exists to ask is an ORDERING one: should 02.1-09's image reap
+  move ahead of 02.1-03 to widen the margin first? D-31 put the reap at the end
+  of the phase. That was decided when the plan set assumed ~13 GiB of headroom.
+  It is 190 MiB. Nobody has re-ruled on it with this number in hand.
