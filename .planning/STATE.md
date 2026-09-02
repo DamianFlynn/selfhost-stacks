@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-02T19:49:24.168Z"
-last_activity: 2026-09-02 -- Phase 02.1 planning complete
+last_updated: "2026-09-02T20:44:09.155Z"
+last_activity: 2026-09-02 -- 02.1-01 complete; / at 20.18 GiB, 185 MiB above the D-17 floor
 progress:
   total_phases: 10
   completed_phases: 2
   total_plans: 39
-  completed_plans: 19
+  completed_plans: 20
   percent: 20
 ---
 
@@ -21,16 +21,17 @@ See: .planning/PROJECT.md (updated 2026-08-17)
 
 **Core value:** New music downloads land in the library correctly tagged, through exactly one
 pipeline that someone owns.
-**Current focus:** Phase 03 — tagger-spike
+**Current focus:** Phase 02.1 — jellyfin-transcode-retention-relocate-the-anonymous-transcod
 
 **Definition of done (CONS-04):** a file is imported only when verified with `ffprobe` on the file
 *and* visible in both Jellyfin and Music Assistant. Never "tool configured".
 
 ## Current Position
 
-Phase: 02.1 (jellyfin-transcode-retention) — PLANNED; Phase 03 HALTED mid-execution behind it
-Plan: 0 of 10 (02.1 replanned 2026-09-02; 03-01 complete; 03-02…03-11 queued behind phase 2.1)
-Status: Ready to execute — Phase 02.1 **replanned against cross-AI review**: 10 plans in 9 waves,
+Phase: 02.1 (jellyfin-transcode-retention-relocate-the-anonymous-transcod) — EXECUTING
+Plan: 2 of 10
+Status: EXECUTING — **02.1-01 COMPLETE** (TRAN ids landed, ROADMAP placeholders cleared, D-32 watch
+open). Phase 02.1 was **replanned against cross-AI review**: 10 plans in 9 waves,
 plan-checker passed with 0 blockers. 32 locked decisions (D-01…D-32, of which **D-29/D-30 were ruled
 by the operator during plan-phase** and **D-31/D-32 during the review replan**; all four postdate
 RESEARCH.md), 9 requirements TRAN-01…TRAN-09, and a 38-row VALIDATION.md contract that separates
@@ -92,7 +93,8 @@ it asked for: the operator browsed MA's Filesystem (local disk) provider, spot-c
 **played tracks to confirm the audio matches the metadata**. No assertion in this phase could do
 that — every automated check verifies MA's *database* says the right thing, never that the *bytes*
 are the right song, and the documented stale state is precisely "entries exist, playback fails".
-Last activity: 2026-09-02 — Phase 02.1 replanned against cross-AI review in **two rounds**
+Last activity: 2026-09-02 — 02.1-01 complete. Before that, 02.1 was replanned against
+cross-AI review in **two rounds**
 (`/gsd-review` → `/gsd-plan-phase --reviews`): 9 plans in 5 waves became 10 in 8, then 10 in **9**
 after round 2. **Round-2 plan-checker pass completed 2026-09-02 against commit `2755734`: 0
 blockers, 3 warnings, all three fixed.**
@@ -140,7 +142,7 @@ back onto anything under `/mnt/tank/media`.
 Phase 1 complete: SAFE-01…05, WRIT-01…04, QUAL-01
 Phase 2 complete: CONS-01, CONS-02, CONS-03
 
-Progress: [██░░░░░░░░] 22%  *(MILESTONE progress: **2 of 9 phases** complete. All 18 plans written so far are executed 18/18 — but phases 3-9 are not planned yet, so plan-count is not milestone progress.)*
+Progress: [██░░░░░░░░] 22%  *(MILESTONE progress: **2 of 9 phases** complete. All 19 plans written so far are executed 19/19 — but phases 3-9 are not planned yet, so plan-count is not milestone progress. ⚠ `gsd-sdk query state.update-progress` recomputed this as **51%** on 2026-09-02 by counting SUMMARY files against a 39-plan denominator that only covers planned phases; that figure is WRONG and was reverted. Do not let the SDK rewrite this line — phase 02.1 is an INSERTION and is not one of the 9 milestone phases.)*
 
 Plans 02-01 through 02-09 are executed. **CONS-01, CONS-02 and CONS-03 are all complete.**
 
@@ -341,6 +343,7 @@ already open so only 2049 is this phase's delta.
 | Phase 02 P07 | 27min | 3 tasks | 2 files |
 | Phase 02 P08 | 195m | 3 tasks | 3 files |
 | Phase 02 P09 | 50 min | 3 tasks | 5 files |
+| Phase 02.1 P01 | 12 minutes | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -502,6 +505,8 @@ Recent decisions affecting current work:
 - [Phase 2]: 02-08: D-54b's repairs-issue trigger is correct (synthetic event fired it in 542 ms) but is blind at boot by ORDERING not race — hassio mirrors Supervisor issues into HA's repairs registry ~17 s before the automation domain sets up, identically across four observed HA starts. Left open deliberately
 - [Phase 2]: 02-08: the default 'ha supervisor logs' window does not reach back to boot — a default-depth grep for 'read-only fallback' returns nothing and is indistinguishable from 'it did not happen'. Use -n 2000 or deeper
 - [Phase 2]: 02-08: the HAOS SSH add-on is NOT privilege-limited — sudo is NOPASSWD:ALL, CapBnd carries CAP_SYS_ADMIN and Protection mode is already off. The 02-05/02-08 probes failed for want of 'sudo', not for want of privilege
+- [Phase ?]: 02.1-01: TRAN-01..09 are a PHASE INSERTION, not a milestone scope change — the v1 denominator stays at 39 and the nine are subtotalled separately (39 + 9 = 48). Incrementing it would make every prior 'N of 39' statement incomparable with every later one, in a milestone that is already part-executed
+- [Phase ?]: 02.1-01: PHASE-START READING IS NOT WHAT THE PLAN SET ASSUMED — / is at 20.18 GiB avail, only 185 MiB above the D-17 20 GiB floor, not the ~33-36 GiB the plans were written against. The transcode cache has ALREADY refilled to 12.55 GiB across 1,324 files since the container came up 2026-08-31 (~6 GiB/day). The D-32 gate passes so the phase proceeds, but at that rate / crosses the floor in ~1 day and hits zero in ~3. Any stall — especially 02.1-09's blocking human gate — spends a budget measured in hours. Verified with stat -f as a second instrument
 
 ### Pending Todos
 
@@ -621,6 +626,7 @@ Recent decisions affecting current work:
 - **OPEN, recorded not repaired (02-07): `/mnt/tank/media/Music/Def Leppard/Def Leppard (2015)/` derives an EMPTY album artist and hard-errors one file** (`CD 01-06 Def Leppard - Sea of Love.flac`), because the album folder name equals the artist folder name — MA's derivation appears to lock onto the top-level `Def Leppard` directory as the album folder, whose parent is the provider root. Two files hit it; one errored. **No remedy was attempted and none is available here:** D-05 makes tag repair the wrong remedy on principle and the `ro` export makes it unavailable in fact. `zpool status -v tank` is clean, so this is NOT 2026-07 scrub damage. Phase 7 meets this at scale.
 - **CORRECTION for anything querying MA albums (02-07): `search` on `music/albums/library_items` is NOT a substring match.** Searching an album's OWN EXACT NAME returned `[]` while a one-word prefix returned that same album, from the same provider, in the same second (`Mastermix Essential Hits - Pop 4 - 2005-2009` vs `Mastermix`). Short names happen to work, which is what makes it dangerous. Filter on `provider` ONLY and do the exact comparison locally — otherwise the gate reports `no exact match … candidates were: <none>`, indistinguishable from the album being genuinely absent. Fixed in `check-music-consumers.sh` (`ed1d367`).
 - **CORRECTION for any future Terraform teardown (02-07): destroying a `null_resource` removes NOTHING from the host.** `music_temp_export_enabled = false` was not a teardown — the drop-in file stayed on disk and the export stayed live while `terraform plan` reported clean. Fixed by an always-present reconciler resource (`d7430ee`). **A destroy-time provisioner is NOT an option here:** `terraform validate` refuses one whose connection block reads variables, and the only workaround carries the Proxmox root password in `triggers` — plaintext state plus every plan diff, in a public repo. `self.triggers.*` is also unsafe at destroy time: it reads from STATE, so a key added after creation reads null and `grep -q ""` matches every line.
+- ⏱ TIME-SENSITIVE (02.1-01, 2026-09-02): / on LXC 100 has 185 MiB of margin over the D-17 floor (20.18 GiB avail vs 20.00 GiB), and Jellyfin's transcode cache has already refilled to 12.55 GiB / 1,324 files at roughly 6 GiB/day. The phase-start gate PASSED so 02.1 is proceeding, and the cutover chain (02.1-04..06) is what reclaims it — but the phase now has a budget of roughly a day before / crosses its own floor. DO NOT let 02.1 idle, especially at 02.1-09's blocking human gate. If a D-32 watch sample reads below 21474836480, that is the operator decision point in 02.1-01's rollback table: the reap may need to move earlier.
 
 ## Deferred Items
 
@@ -643,9 +649,9 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-09-02T11:58:11.921Z
-Stopped at: Phase 02.1 context gathered
-Resume file: .planning/phases/02.1-jellyfin-transcode-retention-relocate-the-anonymous-transcod/02.1-CONTEXT.md
+Last session: 2026-09-02T20:44:01.675Z
+Stopped at: Completed 02.1-01-PLAN.md
+Resume file: None
 
 **02-09 IS COMPLETE AND THE PHASE IS CLOSED.**
 
