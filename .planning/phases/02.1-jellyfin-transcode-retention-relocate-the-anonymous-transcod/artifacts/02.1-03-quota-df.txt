@@ -1,0 +1,197 @@
+================================================================================
+02.1-03  --  fast/transcode QUOTA EVIDENCE
+            assumption A3 (df inside LXC 100 reflects the quota), plus the
+            post-apply ownership, mode and property read-back
+================================================================================
+
+WHAT THIS IS
+  VALIDATION.md rows 9, 12, 31 and 36. Every reading below was taken from a
+  live host, never from Terraform's own provisioner output -- the point of
+  reading back from the authoritative source is that it is INDEPENDENT of the
+  thing that wrote it.
+
+  Two hosts appear here and they answer different questions:
+    atlantis   (172.16.1.158, the Proxmox host)  -- authoritative for ZFS.
+                `zfs` and `zpool` are NOT available inside LXC 100, which is
+                unprivileged; every ZFS reading is delegated over ssh.
+    LXC 100    (172.16.1.159, the Docker host)   -- the CONSUMER's view. This
+                is where the quota either does or does not surface through
+                statvfs, which is the whole A3 question.
+
+ASSUMPTION A3, STATED BEFORE IT WAS TESTED
+  "`df` inside LXC 100 reports the dataset's size as the quota, because ZFS
+  derives statvfs f_blocks from referenced + available and caps available by
+  the enclosing quota."
+
+  If TRUE, the standing check (scripts/check-jellyfin-transcode.sh) gains a
+  second instrument for the bound that needs neither ssh nor zfs -- it can ask
+  the container directly. If FALSE, the quota assertion must reach atlantis
+  every time, forever, and that line in the standing check stays REPORTED-only.
+
+  The before reading is what makes this a measurement rather than a guess, and
+  it is UNOBTAINABLE once the quota is set. It was taken first, deliberately.
+
+
+================================================================================
+1. BEFORE THE APPLY  --  LXC 100 (172.16.1.159), 2026-09-02T21:37:30Z
+================================================================================
+
+  $ df -B1 --output=size /mnt/fast/transcode
+      1B-blocks
+  1442767175680
+
+  $ df -B1 /mnt/fast/transcode
+  Filesystem         1B-blocks   Used     Available Use% Mounted on
+  fast/transcode 1442767175680 131072 1442767044608   1% /mnt/fast/transcode
+
+  = 1442767175680 bytes = 1.312 TiB. This is approximately the fast pool's free
+  space, NOT 50 G. Exactly what the plan predicted for the pre-quota state.
+
+  Device-id check taken in the same command, because it is the premise of the
+  entire phase and it is cheap:
+
+    /mnt/fast/transcode  devid 47      <-- zfs, a genuinely distinct filesystem
+    /mnt/fast            devid 64519   <-- ext4 root
+    /                    devid 64519   <-- ext4 root
+
+  NOTE, because it is counter-intuitive and has already misled a reader once:
+  /mnt/fast is NOT itself a mount point. It is a plain directory ON THE EXT4
+  ROOT, and only its CHILDREN are ZFS datasets. `df /mnt/fast` therefore reports
+  `/` and looks alarming. Always measure the actual target path.
+
+
+================================================================================
+2. AFTER THE APPLY  --  atlantis (172.16.1.158), the authoritative ZFS readings
+================================================================================
+
+  Taken 2026-09-02T21:38:54Z, after `terraform apply <saved plan file>`.
+
+  $ zfs get -Hp -o property,value quota,compression,sync,recordsize,atime,mounted fast/transcode
+  quota           53687091200      <-- VALIDATION row 9   PASS (exactly 50 G)
+  compression     off              <-- VALIDATION row 31  PASS
+  sync            disabled         <-- VALIDATION row 31  PASS
+  recordsize      1048576          <-- VALIDATION row 31  PASS
+  atime           off              <-- VALIDATION row 31  PASS
+  mounted         yes              <-- VALIDATION row 36  PASS
+
+  THE -p IS NOT OPTIONAL. Without it this same command returns `recordsize 1M`,
+  and an acceptance criterion asserting 1048576 fails for a reason that has
+  nothing whatever to do with the change. That defect was caught in review
+  before it was executed; this line exists so it is not reintroduced.
+
+  $ zfs get -Hp -o value quota fast/transcode
+  53687091200
+
+  $ stat -c "%a %U:%G" /mnt/fast/transcode
+  2775 apps:apps
+
+  THE SETGID BIT SURVIVED THE PROVISIONER. This is the point of the guarded
+  chown plus the unconditional `chmod 2775`: the setgid bit is what gives newly
+  created transcode files the apps group, and running an unconditional chown on
+  every trigger change is at best pointless churn and at worst a way to lose it.
+  Proving 2775 AFTER the apply is what turns that from an intention into a fact,
+  rather than into a reasoning exercise about whether Linux's chown strips SGID
+  from a directory.
+
+  $ zfs list -r -t all fast/transcode
+  NAME             USED  AVAIL  REFER  MOUNTPOINT
+  fast/transcode    96K  50.0G    96K  /mnt/fast/transcode
+
+  THE DATASET IS STILL ALONE -- no children, no snapshots. That is the premise
+  of the quota-vs-refquota equivalence argument: today the two would bound the
+  same bytes, so choosing quota costs nothing NOW and is what keeps a future
+  child or snapshot from escaping the bound LATER. Note AVAIL has already
+  dropped from 1.31 T to 50.0 G: the quota is live and visible in ZFS's own
+  accounting, not merely stored as a property.
+
+
+================================================================================
+3. AFTER THE APPLY  --  LXC 100, and the A3 verdict
+================================================================================
+
+  Taken 2026-09-02T21:39:02Z from 172.16.1.159, ~90 seconds after the before
+  reading in section 1.
+
+  $ df -B1 --output=size /mnt/fast/transcode
+      1B-blocks
+  53687091200
+
+  $ df -B1 /mnt/fast/transcode
+  Filesystem       1B-blocks    Used   Available Use% Mounted on
+  fast/transcode 53687091200 1048576 53686042624   1% /mnt/fast/transcode
+
+  BEFORE -> AFTER
+    1442767175680  ->  53687091200
+    (1.312 TiB)        (exactly 50.000 GiB)
+
+  Compared against the target, not merely eyeballed:
+    observed 53687091200
+    target   53687091200
+    delta    0 bytes -- BYTE-EXACT, not "approximately"
+
+  *** ASSUMPTION A3 IS CONFIRMED (VALIDATION.md row 12). ***
+
+  ZFS derives statvfs f_blocks from referenced + available with `available`
+  capped by the enclosing quota, so `df` inside the unprivileged container
+  reports the QUOTA as the filesystem size. The standing check therefore has a
+  genuine second instrument for the bound -- one that needs neither ssh nor
+  `zfs`, and so still answers when the delegation route to atlantis is down.
+
+  Confirmed with a SECOND INDEPENDENT INSTRUMENT before being written down, per
+  the 01-09 standing rule (`df` and `stat -f` are different syscall paths to the
+  same statvfs data, but `stat -f` does no arithmetic and no unit formatting):
+
+    $ stat -f -c "blocks=%b bsize=%s avail=%a" /mnt/fast/transcode
+    blocks=51200 bsize=1048576 avail=51199
+
+    51200 * 1048576 = 53687091200. Agrees to the byte.
+
+  NOTE IN PASSING, because it is a nice independent confirmation of a DIFFERENT
+  property: bsize is now 1048576. Before the apply the same dataset would have
+  reported the ZFS default. `recordsize=1M` is visible from inside the container
+  without asking atlantis at all.
+
+  WHAT THIS DOES *NOT* LICENCE. A green `df` size is evidence the quota is SET
+  and that the path the container writes to is the quota'd dataset. It is NOT
+  evidence the quota FIRES -- that TRAN-03 assertion needs a write that actually
+  meets the ceiling and gets ENOSPC, which is 02.1-08's job. Row 12's instrument
+  is a cheap corroborator, never a replacement for row 9.
+
+
+================================================================================
+4. THE STANDING CHECK, RE-RUN AFTER THE APPLY  --  --baseline mode
+================================================================================
+
+  $ ssh root@172.16.1.159 'cd /mnt/fast/stacks && bash scripts/check-jellyfin-transcode.sh --baseline'
+  host SHA 6ff9f69b6ef7d02c71300984ae91b9246606274f, exit 0
+
+  Section 4 -- the quota and its mount -- is now GREEN on all three lines:
+
+    ✅ quota fast/transcode = 53687091200 bytes (50 G) via ssh:172.16.1.158   (row 9)
+    ✅ fast/transcode mounted=yes via ssh:172.16.1.158                        (row 36, instrument 1)
+    ✅ /mnt/fast/transcode device id 47 differs from /mnt/fast's 64519         (row 36, instrument 2)
+       findmnt /mnt/fast/transcode: zfs fast/transcode        (reported)
+       df size of /mnt/fast/transcode: 53687091200 bytes      (reported -- A3, row 12)
+
+  Sections 2 and 3 are still RED, and that is the correct result -- the compose
+  edit (02.1-04) and the container recreate (02.1-05) have not happened yet:
+
+    ❌ jellyfin holds 1 Type:volume mount   (d98b2ff9… -> /cache)
+    ❌ /cache/transcodes is NOT MOUNTED AT ALL
+    ❌ /cache is the anonymous volume, want a bind to /mnt/fast/appdata/media/jellyfin/cache
+    ❌ /data/transcode is still a mount destination
+    ❌ the anonymous volume d98b2ff94482… STILL EXISTS
+
+  FAILURES total: 6 (02.1-02 baseline)  ->  5 (here).
+  The single flip is the quota, which is exactly the change this plan made.
+  Nothing else moved, which is itself worth having measured.
+
+  Section 1: / avail 21651214336 bytes (20.16 GiB), margin 0.16 GiB over the
+  D-17 floor -- unchanged in substance from the D-32 watch line taken at the
+  head of this plan, and confirming what that line predicted: NONE of this
+  plan's writes touched `/`. They all landed on the fast pool.
+
+  Section 5 (encoding values) is unchanged from the 02.1-02 baseline, including
+  HardwareAccelerationType = none and EnableHardwareEncoding = false -- the
+  2026-08-31 amdgpu mitigation, still in place, read back as literal `false`
+  rather than as `<absent>`.
