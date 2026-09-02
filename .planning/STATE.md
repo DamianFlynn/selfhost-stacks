@@ -3,15 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-01T21:26:50.599Z"
-last_activity: 2026-09-01 -- Phase 03 planning complete
+last_updated: "2026-09-01T22:51:31.254Z"
+last_activity: 2026-09-01 -- Phase 03 execution started
 progress:
   total_phases: 9
   completed_phases: 2
   total_plans: 29
   completed_plans: 18
   percent: 22
-stopped_at: Phase 03 planned (11 plans, 8 waves) — ready to execute
 ---
 
 # Project State
@@ -22,24 +21,35 @@ See: .planning/PROJECT.md (updated 2026-08-17)
 
 **Core value:** New music downloads land in the library correctly tagged, through exactly one
 pipeline that someone owns.
-**Current focus:** Phase 03 — tagger spike
+**Current focus:** Phase 03 — tagger-spike
 
 **Definition of done (CONS-04):** a file is imported only when verified with `ffprobe` on the file
 *and* visible in both Jellyfin and Music Assistant. Never "tool configured".
 
 ## Current Position
 
-Phase: 03 (tagger-spike) — PLANNED, not started
-Plan: 11 plans in 8 waves, not started
-Status: **Ready to execute.** Phase 03 planned 2026-09-01 — 11 plans, 8 waves, plan-checker passed,
+Phase: 03 (tagger-spike) — EXECUTING, then HALTED for phase 2.1
+Plan: 1 of 11 (03-01 complete; 03-02…03-11 queued behind phase 2.1)
+Status: Phase 03 planned 2026-09-01 — 11 plans, 8 waves, plan-checker passed,
 then **cross-AI reviewed (codex / gh copilot / gemini) and revised against 13 findings**, and passed
 the checker again clean. Research falsified parts of CONTEXT.md and six operator decisions (OD-1…OD-6)
 now override it where they conflict; they are recorded in the plan set and must be carried into
-execution. **Wave 1 gates everything:** 03-01 is LXC 100's disk gate — `/` at 99% with 2.2 GB free,
-holding `/var/lib/docker` for 103 containers, against ~2.0–2.3 GB of new images; nothing else may
-start until an operator-approved inventoried prune clears a ≥ 8 GB floor.
+execution.
+
+**Wave 1's disk gate is CLEARED, but its premise was wrong — carry this into phase 2.1.** 03-01
+completed 2026-09-02: the operator-approved 27-image reap ran with 0 `rmi` failures and reclaimed its
+full 18 GiB estimate. But images were never the real lever. While 03-01 sat at its approval gate `/`
+went from 2.2 GB free to **zero**, and measurement found the consumer was a **19 GB Jellyfin
+transcode cache** in an *anonymous* Docker volume (`d98b2ff9…/_data/transcodes`) — larger than the
+entire image reap, and unlike images it **refills**. No `ffmpeg` was running, so this is cache
+retention, not the documented amdgpu/VAAPI orphan hazard. Clearing it plus the reap took `/` to
+**36 GiB free** against the 8 GiB floor (34 GiB after the four spike pulls, so OD-1's A2 estimate of
+2.0–2.3 GB holds). `docker system df` still reports ~62 GB reclaimable across images, so the audited
+27 were always the conservative subset. **Phase 2.1 is inserted to fix the retention durably** — the
+volume being anonymous rather than a declared bind mount to `/mnt/fast` is the root cause.
 
 **⚠ Two review findings changed how the headline number is computed — carry these into execution:**
+
 - **The 24-folder sample is a COVERAGE sample, not a population estimate.** It is stratified and
   deliberately never random. T1's headline strict rate and T2's extrapolation are therefore a
   **per-stratum roll-up weighted by each stratum's prevalence across the 143-folder backlog**
@@ -49,6 +59,7 @@ start until an operator-approved inventoried prune clears a ≥ 8 GB floor.
   existed, which is why criterion 5 survives. A stratum with backlog weight but no sampled folder is
   a **named hole**, enters the roll-up with a 0%/100% band, and if that band straddles 40% **T1 is
   recorded `indeterminate`** rather than resolved by picking an end.
+
 - **Criterion 5's custody is a pushed commit, not local history.** 03-02 must reach `origin` before
   any evidence plan starts, and 03-07 re-asserts the SHA is reachable from `origin/main` before it
   measures anything. `git log -p` on a mutable local branch is evidence, not proof.
@@ -66,8 +77,9 @@ it asked for: the operator browsed MA's Filesystem (local disk) provider, spot-c
 **played tracks to confirm the audio matches the metadata**. No assertion in this phase could do
 that — every automated check verifies MA's *database* says the right thing, never that the *bytes*
 are the right song, and the documented stale state is precisely "entries exist, playback fails".
-Last activity: 2026-09-01 — Phase 03 cross-AI reviewed (codex/copilot/gemini) and revised against
-13 findings; checker re-passed clean. Ready to execute.
+Last activity: 2026-09-02 — Phase 03 execution started; 03-01 complete (disk-headroom gate cleared,
+36 GiB free). Phase 03 **halted after 03-01** pending inserted phase 2.1 (Jellyfin transcode
+retention), on operator instruction.
 
 Prior activity: 2026-09-01 — quick task 260901-u96: read-write NFS export on atlantis for Home
 Assistant backups. **Correction worth carrying into any future export work:** `nfs-music-export.tf`'s

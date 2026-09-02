@@ -262,7 +262,7 @@ that four independent lines of evidence already agree on.
 
 **Wave 1**
 
-- [ ] 03-01-PLAN.md — Disk-headroom gate on LXC 100: inventory, operator-approved prune, ≥ 8 GB floor, four pinned image pulls (wave 1, blocking checkpoint; OD-1 gates the whole phase)
+- [x] 03-01-PLAN.md — Disk-headroom gate on LXC 100: inventory, operator-approved prune, ≥ 8 GB floor, four pinned image pulls (wave 1, blocking checkpoint; OD-1 gates the whole phase)
 - [ ] 03-02-PLAN.md — Commit T1/T2/T3, the backlog-weighted estimator, the corrected 143-folder denominator, the OD-2 version split and the OD-3 widening, plus the empty ergonomics scoring sheet — all before any evidence exists, then **pushed to `origin`** so criterion 5's custody is a remote commit rather than local history (wave 1, no dependencies — writes only Markdown)
 
 **Wave 2** *(blocked on Wave 1)*
@@ -527,7 +527,7 @@ Phase 7. Plans within a phase run sequentially.
 |-------|----------------|--------|-----------|
 | 1. Safety Harness and Freeze the Writers | 9/9 | Complete | 2026-08-18 |
 | 2. NFS Export and Music Assistant Reachability | 9/9 | Complete    | 2026-09-01 |
-| 3. Tagger Spike | 0/11 | Planned | - |
+| 3. Tagger Spike | 1/11 | In Progress | - |
 | 4. Collapse to One Tagger | 0/TBD | Not started | - |
 | 5. Inbox Structure and the Junk Gate | 0/TBD | Not started | - |
 | 6. Tagger Configuration and Dry Run | 0/TBD | Not started | - |
