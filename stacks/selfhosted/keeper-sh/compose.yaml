@@ -74,6 +74,10 @@ services:
       MICROSOFT_CLIENT_ID: ${MICROSOFT_CLIENT_ID}
       MICROSOFT_CLIENT_SECRET: ${MICROSOFT_CLIENT_SECRET}
       TRUSTED_ORIGINS: ${TRUSTED_ORIGINS:-https://keeper.${DOMAINNAME}}
+      # Setting MCP_PUBLIC_URL is what enables the OAuth authorisation server on the API.
+      # Without it the MCP consent flow cannot complete even if cal-mcp is running.
+      MCP_PUBLIC_URL: ${MCP_PUBLIC_URL:-https://keeper.${DOMAINNAME}/mcp}
+      MCP_API_URL: ${MCP_API_URL:-http://cal-api:3001}
     ports:
       - "127.0.0.1:3001:3001"
     depends_on:
@@ -146,6 +150,31 @@ services:
     networks:
       - keeper-network
 
+  mcp:
+    container_name: cal-mcp
+    hostname: keeper-mcp
+    image: ghcr.io/ridafkih/keeper-mcp:2.23
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://keeper:${POSTGRES_PASSWORD}@cal-postgres:5432/keeper
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-https://keeper.${DOMAINNAME}}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
+      MCP_PORT: 3002
+      # Public identity of the MCP resource, advertised to clients via
+      # /.well-known/oauth-protected-resource. Must match the URL clients connect to.
+      MCP_PUBLIC_URL: ${MCP_PUBLIC_URL:-https://keeper.${DOMAINNAME}/mcp}
+      # Internal API URL — used for tool calls and to fetch the signing keys
+      # that validate MCP tokens.
+      MCP_API_URL: ${MCP_API_URL:-http://cal-api:3001}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # No ports and no Traefik labels by design: /mcp is proxied through cal-web,
+    # the same way /api is. cal-mcp is never reached directly from outside.
+    networks:
+      - keeper-network
+
   web:
     container_name: cal-web
     hostname: keeper-web
@@ -154,6 +183,9 @@ services:
     env_file: .env
     environment:
       VITE_API_URL: http://cal-api:3001
+      # Proxy target for /mcp. Unset means /mcp falls through to the SPA router
+      # and 307s to /login.
+      VITE_MCP_URL: ${VITE_MCP_URL:-http://cal-mcp:3002}
       PORT: "3000"
       HOSTNAME: 0.0.0.0
     extra_hosts:
@@ -164,6 +196,7 @@ services:
       - "127.0.0.1:3000:3000"
     depends_on:
       - api
+      - mcp
     networks:
       - keeper-network
       - t3_proxy
