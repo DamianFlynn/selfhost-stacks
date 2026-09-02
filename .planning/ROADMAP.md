@@ -294,7 +294,7 @@ moved, because the number is a consequence of that decision rather than the deci
 
 **Wave 2** *(blocked on 02.1-01 — it appends to the D-32 watch artifact 02.1-01 creates)*
 
-- [ ] 02.1-02-PLAN.md — Write `scripts/check-jellyfin-transcode.sh`, push to the host, record the `--baseline` before-state (wave 2)
+- [x] 02.1-02-PLAN.md — Write `scripts/check-jellyfin-transcode.sh`, push to the host, record the `--baseline` before-state (wave 2)
 
 **Wave 3** *(blocked on 02.1-02)*
 
@@ -658,7 +658,7 @@ Phase 7. Plans within a phase run sequentially.
 |-------|----------------|--------|-----------|
 | 1. Safety Harness and Freeze the Writers | 9/9 | Complete | 2026-08-18 |
 | 2. NFS Export and Music Assistant Reachability | 9/9 | Complete    | 2026-09-01 |
-| 02.1. Jellyfin Transcode Retention *(inserted)* | 1/10 | In Progress | - |
+| 02.1. Jellyfin Transcode Retention *(inserted)* | 2/10 | In Progress | - |
 | 3. Tagger Spike | 1/11 | In Progress | - |
 | 4. Collapse to One Tagger | 0/TBD | Not started | - |
 | 5. Inbox Structure and the Junk Gate | 0/TBD | Not started | - |

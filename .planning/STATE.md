@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-02T20:44:09.155Z"
-last_activity: 2026-09-02 -- 02.1-01 complete; / at 20.18 GiB, 185 MiB above the D-17 floor
+last_updated: "2026-09-02T21:07:13.669Z"
+last_activity: 2026-09-02 -- 02.1-02 complete; standing transcode check on the host, / margin 182.6 MiB
 progress:
   total_phases: 10
   completed_phases: 2
   total_plans: 39
-  completed_plans: 20
+  completed_plans: 21
   percent: 20
 ---
 
@@ -29,8 +29,16 @@ pipeline that someone owns.
 ## Current Position
 
 Phase: 02.1 (jellyfin-transcode-retention-relocate-the-anonymous-transcod) — EXECUTING
-Plan: 2 of 10
-Status: EXECUTING — **02.1-01 COMPLETE** (TRAN ids landed, ROADMAP placeholders cleared, D-32 watch
+Plan: 3 of 10
+Status: EXECUTING — **02.1-02 COMPLETE** (`scripts/check-jellyfin-transcode.sh` built and on the
+host, `--baseline` recorded, `/mnt/fast/stacks` level with `origin/main` at `0138db1`). **⚠ AN
+OPERATOR DECISION IS OWED BEFORE 02.1-03:** the measured `/` margin is **182.6 MiB**, which trips
+02.1-02's own ~5 GiB stop condition. 02.1-02 was finished anyway because every action in it is
+read-only with respect to `/`, but 02.1-03 is the first mutation (Terraform, the dataset, the quota).
+The question is an ORDERING one — should 02.1-09's image reap move ahead of 02.1-03 to widen the
+margin first? D-31 put the reap at the end of the phase when the plan set assumed ~13 GiB of headroom.
+Nobody has re-ruled with 182 MiB in hand. Before that, 02.1-01 landed the TRAN ids, cleared the
+ROADMAP placeholders and opened the D-32 watch (still
 open). Phase 02.1 was **replanned against cross-AI review**: 10 plans in 9 waves,
 plan-checker passed with 0 blockers. 32 locked decisions (D-01…D-32, of which **D-29/D-30 were ruled
 by the operator during plan-phase** and **D-31/D-32 during the review replan**; all four postdate
@@ -93,7 +101,8 @@ it asked for: the operator browsed MA's Filesystem (local disk) provider, spot-c
 **played tracks to confirm the audio matches the metadata**. No assertion in this phase could do
 that — every automated check verifies MA's *database* says the right thing, never that the *bytes*
 are the right song, and the documented stale state is precisely "entries exist, playback fails".
-Last activity: 2026-09-02 — 02.1-01 complete. Before that, 02.1 was replanned against
+Last activity: 2026-09-02 — 02.1-02 complete (the standing transcode check and its baseline). Before
+that, 02.1-01 completed, and before that 02.1 was replanned against
 cross-AI review in **two rounds**
 (`/gsd-review` → `/gsd-plan-phase --reviews`): 9 plans in 5 waves became 10 in 8, then 10 in **9**
 after round 2. **Round-2 plan-checker pass completed 2026-09-02 against commit `2755734`: 0
@@ -344,6 +353,7 @@ already open so only 2049 is this phase's delta.
 | Phase 02 P08 | 195m | 3 tasks | 3 files |
 | Phase 02 P09 | 50 min | 3 tasks | 5 files |
 | Phase 02.1 P01 | 12 minutes | 3 tasks | 3 files |
+| Phase 02.1 P02 | ~29 minutes (two agents) | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -507,6 +517,9 @@ Recent decisions affecting current work:
 - [Phase 2]: 02-08: the HAOS SSH add-on is NOT privilege-limited — sudo is NOPASSWD:ALL, CapBnd carries CAP_SYS_ADMIN and Protection mode is already off. The 02-05/02-08 probes failed for want of 'sudo', not for want of privilege
 - [Phase ?]: 02.1-01: TRAN-01..09 are a PHASE INSERTION, not a milestone scope change — the v1 denominator stays at 39 and the nine are subtotalled separately (39 + 9 = 48). Incrementing it would make every prior 'N of 39' statement incomparable with every later one, in a milestone that is already part-executed
 - [Phase ?]: 02.1-01: PHASE-START READING IS NOT WHAT THE PLAN SET ASSUMED — / is at 20.18 GiB avail, only 185 MiB above the D-17 20 GiB floor, not the ~33-36 GiB the plans were written against. The transcode cache has ALREADY refilled to 12.55 GiB across 1,324 files since the container came up 2026-08-31 (~6 GiB/day). The D-32 gate passes so the phase proceeds, but at that rate / crosses the floor in ~1 day and hits zero in ~3. Any stall — especially 02.1-09's blocking human gate — spends a budget measured in hours. Verified with stat -f as a second instrument
+- [Phase ?]: [02.1-02]: jq's `//` is the ALTERNATIVE operator and treats `false` as empty as well as `null` — never use it to read a boolean back. The standing check's own first --baseline printed EnableSegmentDeletion, EnableThrottling and EnableHardwareEncoding as `<absent>` when all three were genuinely `false`, including the amdgpu mitigation flag where absent and false carry OPPOSITE implications for a ~6-hour outage hazard. An <absent> baseline would also have made 02.1-07's before/after read as 'the key appeared' rather than 'the value moved'
+- [Phase ?]: [02.1-02]: a green `zfs get quota` on an UNMOUNTED dataset is a false pass — the bind still works, the container still writes, and the quota does not apply, while the property still reads 53687091200. The standing check asserts `mounted` by two instruments with no shared failure mode: the ZFS property from atlantis over ssh, and a container-side `stat -c %d` device-id comparison that needs neither ssh nor zfs. Baseline confirms the split is real: mounted GREEN, quota RED
+- [Phase ?]: [02.1-02]: `/` margin is 182.6 MiB, tripping 02.1-02's own ~5 GiB stop condition. The plan was finished anyway because every action in it is read-only with respect to `/`. **The operator ordering decision is OWED BEFORE 02.1-03** (the first mutation): should 02.1-09's image reap move ahead of it? D-31 put the reap last when the plan set assumed ~13 GiB. Also measured: the cache was byte-identical across two watch samples 16 min apart — it grows during playback, not on a wall clock
 
 ### Pending Todos
 
@@ -649,8 +662,8 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-09-02T20:44:01.675Z
-Stopped at: Completed 02.1-01-PLAN.md
+Last session: 2026-09-02T21:07:13.658Z
+Stopped at: Completed 02.1-02-PLAN.md
 Resume file: None
 
 **02-09 IS COMPLETE AND THE PHASE IS CLOSED.**
