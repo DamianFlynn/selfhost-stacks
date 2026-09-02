@@ -5,7 +5,7 @@
 #   Alternative to Plex and Emby with no premium features or tracking
 #
 # Key Features:
-#   - Hardware-accelerated transcoding (VA-API on AMD Radeon 890M)
+#   - Hardware-accelerated transcoding (VA-API capable; DISABLED here since 2026-08-31)
 #   - Multi-user support with individual libraries and watch history
 #   - Apps for all platforms (Android, iOS, Roku, Fire TV, etc.)
 #   - Live TV and DVR with HDHomeRun/M3U support
@@ -13,10 +13,15 @@
 #   - Rich metadata from TMDb, TVDb, MusicBrainz
 #   - Plugin system (intro skipper, playback reporting, etc.)
 #
-# Hardware Acceleration:
+# Hardware Acceleration:  *** CURRENTLY DISABLED -- see the block above the
+#                         *** jellyfin: service for why. Read that before you
+#                         *** re-enable anything here.
 #   AMD Ryzen AI 9 HX PRO 370 with AMD Radeon 890M GPU
-#   VA-API transcoding for H.264, HEVC 10-bit, VP9 10-bit
-#   Reduces CPU load and power consumption
+#   The hardware is CAPABLE of VA-API transcoding for H.264, HEVC 10-bit and
+#   VP9 10-bit. Jellyfin is NOT configured to use it: HardwareAccelerationType
+#   is "none" as of 2026-08-31. The /dev/dri passthrough and the video/render
+#   group_add below are retained deliberately so re-enabling is a settings
+#   change rather than a compose change.
 #
 # Access:
 #   URL: https://jellyfin.deercrest.info
@@ -31,28 +36,40 @@ services:
 
   # Jellyfin - Media Server
   # Hardware: AMD Ryzen AI 9 HX PRO 370 with AMD Radeon 890M GPU
-  # Jellyfin Transcoding Settings:
-  #   - Hardware acceleration: VAAPI
-  #   - Enable decoding for:
-  #     - H264 format: yes
-  #     - HEVC format: no
-  #     - MPEG2 format: no
-  #     - VC1 format: no
-  #     - VP8 format: no
-  #     - VP9 format: no
-  #     - AV1 format: no
-  #     - HEVC 10bit format: yes
-  #     - VP9 10bit format: yes
-  #   - Enable ecoding: yes
-  #      - HEVC format: no
-  #      - AV1 format: no
-  #   - Tone mapping: no
-  #      - Tone mapping algorithm: BT.2390
-  #      - Tone mapping mode: Auto
-  #      - Tone mapping range: Auto
-  #      - Tone mapping desat: 0
-  #      - Tone mapping peak: 100
-  #   - Transcoding thread count: Auto
+  #
+  # NOTE (2026-09-02): the block that used to sit here listed a VAAPI transcoding
+  # configuration that HAS NOT BEEN LIVE SINCE 2026-08-31. It is corrected rather
+  # than deleted, because a stale comment asserting the opposite of reality is
+  # worse than no comment — someone debugging a slow transcode would have spent an
+  # evening looking for a VAAPI fault that could not exist.
+  #
+  # Jellyfin Transcoding Settings — CURRENT, verified against the live API:
+  #   - HardwareAccelerationType: none        <-- NOT "VAAPI"
+  #   - EnableHardwareEncoding: false
+  #   - Everything transcodes on CPU.
+  #
+  # Why: the amdgpu HMM mitigation. Set 2026-08-31 18:27 by
+  # scripts/disable-jellyfin-hwaccel.sh during recovery from the amdgpu kernel
+  # oops. This is a DELIBERATE MITIGATION, NOT DRIFT — do not "restore" it because
+  # the comment used to say VAAPI. Orphaned VAAPI ffmpeg processes holding DRM
+  # handles and VRAM are a confirmed contributor to that oops (they were found
+  # stuck on anon_pipe_write, holding userptr mappings), which is why the setting
+  # is off and why it stays off here.
+  #
+  # RE-ENABLING VAAPI IS DELIBERATELY OUT OF SCOPE for this phase (D-30). It is
+  # its own investigation — the failure mode is a whole-host hang recovered only
+  # by sysrq, and it must not be reintroduced as a side effect of a retention fix.
+  #
+  # The /dev/dri device passthrough and the video(44)/render(110) group_add below
+  # are RETAINED on purpose. Removing them would make re-enabling a compose change
+  # and a container recreate; keeping them makes it a settings change. They are
+  # inert while HardwareAccelerationType is none.
+  #
+  # A trap in the API, recorded because this phase writes these values back: the
+  # encoding endpoint is a FULL-OBJECT REPLACE, and EnableHardwareEncoding's
+  # constructor default is TRUE. Any partial POST silently re-enables hardware
+  # encoding. Both fields are therefore written back deliberately and asserted
+  # after the write (D-30).
   jellyfin:
     hostname: jellyfin
     container_name: jellyfin
@@ -139,8 +156,149 @@ services:
       # library silently gains a second writer. There are already 1,123 such sidecars
       # inventoried under the Phase 1 fence as the baseline for that test.
       - /mnt/tank/media:/media:rw  # Media library (movies, TV, music, photos) — documented rw exception, see above
-      # Transcode to RAM for better performance and reduced disk wear
-      - /dev/shm:/data/transcode  # RAM disk for temporary transcoding files
+      #
+      # ─────────────────────────────────────────────────────────────────────────
+      # NOTE (2026-09-02): EVERY BYTE JELLYFIN CACHES LANDS ON A DECLARED BIND TO
+      # /mnt/fast. NEVER ON AN ANONYMOUS DOCKER VOLUME ON /. That is the invariant
+      # these two mounts exist to hold, and it is the whole point of phase 02.1.
+      #
+      # What it looked like before, and why it mattered: the jellyfin/jellyfin
+      # image declares `VOLUME /cache`. Nothing here bound it, so Docker created an
+      # ANONYMOUS VOLUME for it — d98b2ff9… — under /var/lib/docker/volumes, which
+      # is on /. On 2026-09-01 that volume held 19 GB. It came from ONE unbounded
+      # stream-copy HLS remux of an 18 GB / 17.93 Mbit/s Bluray: 5,131 files, 764
+      # of them ZERO BYTES, which is the ENOSPC signature. / went from 2.2 GiB free
+      # to zero. When / actually hits zero on this estate, ssh dies on both the
+      # Proxmox host and this container while ping still answers.
+      #
+      # Classification: the invariant asserted by scripts/check-jellyfin-transcode.sh
+      # is ZERO `Type: volume` MOUNTS on the container (D-18) — NOT the absence of
+      # one particular volume id. Stated in the same words the script uses so the
+      # compose file and the check cannot drift apart. A new anonymous volume with a
+      # different id is the same failure and the check must catch it.
+      #
+      # Why (where the control actually lives):
+      #   HARD BOUND — a ZFS property, not a setting. `quota=50G` on fast/transcode,
+      #   declared in infra/jellyfin-transcode-dataset.tf and APPLIED 2026-09-02 by
+      #   plan 02.1-03. PERMANENT. It cannot be flipped from a UI, cannot be undone
+      #   by a Jellyfin upgrade, and survives a container recreate.
+      #   CAVEAT, AND THE STANDING CHECK NOW ASSERTS IT: the quota bounds this path
+      #   ONLY WHILE fast/transcode IS MOUNTED. If the dataset is ever unmounted,
+      #   /mnt/fast/transcode reverts to a PLAIN DIRECTORY on the fast pool that this
+      #   bind still happily reaches — and the quota does not cover it. An unmounted
+      #   dataset is therefore an unbounded transcode path that looks completely
+      #   normal. `zfs get mounted fast/transcode` must read yes.
+      #   GRACEFUL LAYER — Jellyfin's own retention settings, applied by REST.
+      #
+      # The settings, old -> new:
+      #   1. TranscodingTempPath    absent -> /cache/transcodes   (D-03)
+      #   2. EnableSegmentDeletion  false  -> true                (D-14)
+      #   3. SegmentKeepSeconds     720    -> 300                 (discretion, sized
+      #      against the measured 17.93 Mbit/s stream-copy bitrate)
+      #   4. EnableThrottling       false  -> true                (D-14)
+      #   5. ThrottleDelaySeconds   180    -> 180                 (UNCHANGED, and
+      #      deliberately so: 3x the silent clamp floor of 60)
+      #
+      # THE ONE THAT MATTERS MORE THAN IT LOOKS: EnableSegmentDeletion does more
+      # than delete. On a stream-copy HLS job — exactly this estate's case — it also
+      # adds `-readrate 10` to ffmpeg's input, capping the remux at 10x realtime.
+      # That is a STRONGER bound on "an abandoned stream writes an entire film in
+      # minutes" than throttling is, and it arrives via the DELETION switch. If
+      # someone turns segment deletion off to "keep the cache warm", they also
+      # remove the rate cap without knowing it.
+      #
+      # Deliberately UNCHANGED: HardwareAccelerationType: none and
+      # EnableHardwareEncoding: false. These are the amdgpu HMM mitigation applied
+      # 2026-08-31 18:27 by scripts/disable-jellyfin-hwaccel.sh — NOT drift. See the
+      # block above the `jellyfin:` key. The encoding endpoint is a full-object
+      # replace and EnableHardwareEncoding's constructor default is true, so this
+      # phase writes both back deliberately and asserts them after the write (D-30).
+      #
+      # Deliberately LEFT ALONE rather than changed blind: PUID / PGID / UMASK_SET
+      # above are present but INERT on the official jellyfin/jellyfin image — they
+      # are a LinuxServer.io convention that this image ignores. Jellyfin here runs
+      # as uid=0(root), so transcode files land 0:568 (host uid 100000, an unmapped
+      # id in this unprivileged container's idmap). That is EXPECTED, not the
+      # ownership drift Phase 1 spent 2,674 entries correcting (D-04). Setting
+      # `user: 568:568` was considered and REJECTED: it would change /config and
+      # /media access and the video/render group membership VAAPI needs — an
+      # enormous blast radius to buy tidier ownership on a scratch directory whose
+      # every file is regenerable.
+      #
+      # Why not the shared-memory RAM disk (the mount that used to sit right here,
+      # and the transcode path inside the container that it fed): BOTH PATHS ARE
+      # DESCRIBED IN WORDS BELOW RATHER THAN WRITTEN LITERALLY, deliberately. The
+      # standing check asserts that a mechanical grep for either string over this
+      # file returns ZERO, and a note explaining their removal must not be the thing
+      # that trips it. (The D-32 watch artifact carries the same device for the same
+      # reason — a correctly-written prohibition should never fail its own check.)
+      #   The RAM disk is sized 15 G against 24 GiB total RAM with only ~4.7 GiB
+      #   actually available, so a 19 GB cache there is an OOM rather than a full
+      #   disk — and this estate has a documented incident where 1.1 GB written to
+      #   tmpfs took the whole box down, killing ssh while ping still answered.
+      #   The bind that was here pointed at a transcode directory under the
+      #   container's /data tree, and it had held ZERO BYTES since the day it was
+      #   added, because TranscodingTempPath was never set to that path.
+      #   It was worse than useless: it READ as "already solved", which is plausibly
+      #   part of why 19 GB accumulated with nobody looking. Deleted with its comment
+      #   (D-02) — deleting the mount and leaving the comment would have preserved
+      #   the decoy, which was the actual hazard.
+      #
+      # WHAT BREAKS IF SOMEONE REVERTS THIS: Docker immediately re-creates an
+      # anonymous volume for /cache on /, and a single abandoned stream-copy remux
+      # of a Bluray-class title refills it at 2.24 MB/s — 19 GB in about 36 hours,
+      # with no ffmpeg process still running at the end to blame. That is not a
+      # hypothetical; it is what happened.
+      #
+      # ── IF THE TV STOPPED ────────────────────────────────────────────────────
+      # Do these in order:
+      #   1. Check whether the transcode dataset filled:
+      #        ssh root@172.16.1.158 'zfs list -o name,used,quota,avail fast/transcode'
+      #   2. If USED is at QUOTA, the immediate relief is:
+      #        ssh root@172.16.1.158 'zfs set quota=none fast/transcode'
+      #      Takes effect INSTANTLY. No restart, no container involvement, no
+      #      downtime.
+      #   3. Then FIND WHAT FILLED IT. Do not leave the bound off — the bound is the
+      #      entire point of this phase, and step 2 is a tourniquet, not a fix.
+      #      Put the quota back when you know.
+      # BUT FIRST, CHECK WHETHER THIS IS EVEN YOUR PROBLEM: hitting the quota fails
+      # THAT ONE STREAM, not the server. ffmpeg's muxer errors, the job dies, the
+      # client's next segment request ERRORS rather than hanging, and
+      # KillTranscodingJob cleans up after the 60 s HLS kill timer — so the dataset
+      # SELF-HEALS. A quota hit looks like "one title won't play", not "Jellyfin is
+      # down". If everything is down, look elsewhere (start with Traefik and the
+      # amdgpu oops runbook).
+      #
+      # ── LIVE TV: A LATENT GAP, NOT A CURRENT ONE (A8) ────────────────────────
+      # /LiveTv/TunerHosts returns [] today, so no tuner is configured and
+      # LiveStream.TempFilePath — which writes live-TV buffers into the transcode
+      # path — is LATENT rather than live. It is written down because of the
+      # mechanism: those writes are bounded by NEITHER segment deletion NOR
+      # throttling. Both levers gate on RunTimeTicks, and a live stream does not
+      # have a runtime. IF A TUNER HOST IS EVER ADDED HERE, the ZFS quota above is
+      # the ONLY bound left standing, with the ~48 h DeleteTranscodeFileTask window
+      # beneath it. Re-read this block before adding one.
+      #
+      # Two further known properties, recorded rather than left to be discovered:
+      #   ALIASING (D-09): /mnt/fast/appdata/media/jellyfin/cache is visible inside
+      #   the container at BOTH /config/cache (via the /config bind above) and
+      #   /cache. Harmless in 10.11 because CreateAndCheckMarker(ProgramDataPath,
+      #   "data") on /config is NON-RECURSIVE — but if a future Jellyfin change ever
+      #   widens a backup or scan scope over /config, it would sweep in a live
+      #   transcode directory. Worth knowing before an upgrade, not worth fixing now.
+      #   VOLUME INVENTORY (D-11): the other five local Docker volumes on this host
+      #   are inventoried READ-ONLY in 02.1-06-SUMMARY.md and deliberately left
+      #   alone. Only Jellyfin's /cache was the problem.
+      #
+      # Declaration order below is COSMETIC — it is written the way a reader expects
+      # rather than the way it is applied. moby's sortMounts orders container mounts
+      # by the NUMBER OF PATH SEPARATORS in the destination, so /cache (1) always
+      # mounts before /cache/transcodes (2) regardless of the order here. The
+      # correction a reader is most likely to get wrong: it sorts on SEPARATOR
+      # COUNT, not on string length and not on declaration order. Do not "fix" it.
+      # ─────────────────────────────────────────────────────────────────────────
+      - /mnt/fast/appdata/media/jellyfin/cache:/cache:rw       # image + xmltv cache, off / (D-08/D-09)
+      - /mnt/fast/transcode:/cache/transcodes:rw               # transcode cache, ZFS quota=50G (D-01/D-03)
     labels:
       - traefik.enable=true
 
