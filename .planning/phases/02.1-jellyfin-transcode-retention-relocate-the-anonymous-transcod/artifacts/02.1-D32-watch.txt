@@ -361,3 +361,96 @@ NUMERIC SELF-HALT BUDGET, and the copy turned out to be `/`-NEUTRAL by measureme
   copy's destination is `/mnt/fast/appdata/media/jellyfin/cache`. When checking
   for damage after an interrupted plan, read the path the plan WRITES to, not the
   path it asserts stays empty.
+
+2026-09-02T22:16:55Z plan=02.1-05 root_avail_bytes=21662257152 root_size_bytes=134682742784 oldvol_transcodes_bytes=13473768858 oldvol_total_bytes=13885711901 oldvol_transcodes_files=1324
+
+--------------------------------------------------------------------------------
+READ THIS BEFORE THE NEXT SAMPLE -- THIS IS THE CUTOVER SAMPLE. The line above is
+the LAST reading taken while Jellyfin was still writing its cache onto `/`.
+--------------------------------------------------------------------------------
+
+  Delta against plan=02.1-04, ~28 minutes earlier:
+
+    root_avail_bytes         21643157504 -> 21662257152  +19099648  (+18.2 MiB)
+    oldvol_transcodes_bytes  13473768858 -> 13473768858          0
+    oldvol_total_bytes       13884071113 -> 13885711901   +1640788  (+1.56 MiB)
+    oldvol_transcodes_files         1324 -> 1324                 0
+
+  MARGIN against the D-17 floor of 21474836480:
+    21662257152 - 21474836480 = 187420672 = 0.17 GiB = 178.7 MiB
+
+  VERIFIED WITH A SECOND INSTRUMENT before being written down, per the 01-09
+  standing rule: `stat -f -c '%a %S' /` returned bavail=5288637 at bsize=4096 =
+  21662257152 bytes, matching `df -B1 --output=avail /` TO THE BYTE.
+
+  SEVENTH CONSECUTIVE BYTE-IDENTICAL TRANSCODE READING, now spanning 98 minutes
+  (20:38:32Z -> 22:16:55Z). Nobody has watched television all evening, which is
+  the only reason a phase with 178 MiB of margin has been comfortable.
+
+  THE +1.56 MiB ON oldvol_total IS NOT THE RETENTION PROBLEM AND IS FULLY
+  ACCOUNTED FOR. It is 10 files under images/resized-images/, written by Jellyfin
+  between 02.1-04's 21:54Z copy and now -- ordinary live-cache churn. They were
+  copied across DETERMINISTICALLY by this plan's pre-cutover reconciliation pass
+  rather than absorbed by the row-6 tolerance, and the +1640788 figure reappears
+  identically on the destination's scope and images totals afterwards. See
+  02.1-05-mounts.txt sections 2 and 5.
+
+  THE `/` RULING FOR 02.1-05 WAS GRANTED BY THE EXECUTE-PHASE ORCHESTRATOR (AN
+  AGENT -- NOT A HUMAN DECISION), on the same numeric self-halt terms 02.1-04 got
+  and with one addition specific to this plan's shape:
+
+    - STOP if any single step would consume more than 2 GiB of `/`.
+    - STOP if `/` actually-free would drop below 10 GiB.
+    - STOP if the transcode cache starts growing mid-run (someone began playback).
+    - NEW, AND SPECIFIC TO A RECREATE: a container recreate can PULL AN IMAGE into
+      /var/lib/docker on `/`, which is the one genuine multi-GB `/` consumer
+      available to this wave. Check residency BEFORE recreating and prefer the
+      image already on disk.
+
+  THE ATTRIBUTION NOTE FROM 02.1-04 STILL STANDS AND IS NOT WEAKENED BY REPETITION:
+  the operator has ruled exactly ONE thing in this phase -- 02.1-03's Terraform
+  Option B. Everything about the `/` budget is an agent's ruling and carries an
+  agent's authority.
+
+  NOTHING FIRED, AND THE RECREATE WAS `/`-POSITIVE:
+
+    image residency asserted BEFORE the recreate: already present, digest
+    d57d4a0c…, 1561075198 bytes. NO PULL OCCURRED -- the digest was identical
+    after, and compose's default pull policy is `missing`.
+
+    root_avail_bytes  21662257152 (22:16:55Z, this sample)
+                   -> 21699317760 (22:21:24Z, post-recreate)   +35.3 MiB
+                   -> 21708996608 (22:21:52Z, standing check)  +44.6 MiB
+
+  `/` WENT UP ACROSS THE CUTOVER -- the old container's writable layer released
+  and not fully replaced. Margin against the D-17 floor is now 223.1 MiB, the
+  widest it has been since the phase began.
+
+  WHAT CHANGED AT 2026-09-02T22:19:52Z, AND WHY THIS FILE'S FIELDS ARE ABOUT TO
+  MEAN SOMETHING DIFFERENT. The container was recreated onto declared binds. From
+  that instant every new cache write lands on fast/appdata/media and every new
+  transcode write lands on the 50 G quota-bounded fast/transcode. Proven, not
+  assumed: zero `Type: volume` mounts, both binds matched exactly under grep -qx,
+  and a file written into /cache/transcodes from INSIDE the container appeared on
+  /mnt/fast/transcode and NOT under the cache bind (assumption A4 CONFIRMED).
+  Jellyfin then wrote its own `.jellyfin-transcode` marker into the dataset at
+  22:20Z, which is the server itself agreeing.
+
+  SO oldvol_transcodes_bytes IS NOW A FROZEN STOCK, NOT A GROWING ONE. If it ever
+  moves again from here, that is not the old problem continuing -- it is
+  jellyfin.yaml having been reverted, and the standing check's section 2 is the
+  alarm. The 12.55 GiB itself is still on `/` and is reclaimed by 02.1-06's
+  `docker volume rm`, which is deliberately still ahead of us: the volume is the
+  rollback, and D-10 keeps it until the thing it protects is proven. It is proven
+  now, so 02.1-06 may proceed.
+
+  THE STANDING CHECK WENT 5 FAILURES -> 1. The one remaining red is section 3,
+  "the anonymous volume STILL EXISTS", and it is SUPPOSED to be red at this point
+  in the phase. A green section 3 here would mean the rollback had been destroyed
+  before the cutover was proven.
+
+  WHAT WOULD OVERTURN THE RULING FOR THE NEXT PLAN: unchanged from 02.1-04 --
+  a step costing more than 2 GiB of `/`, `/` actually-free under 10 GiB, or a
+  resumed rise in oldvol_transcodes_bytes. THE RULING COVERS 02.1-05 ONLY. 02.1-06
+  is the `docker volume rm`, a different shape again (it is the plan that RELEASES
+  12.55 GiB rather than spending any), and it gets its own numbers.

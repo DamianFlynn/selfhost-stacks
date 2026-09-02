@@ -1,0 +1,572 @@
+================================================================================
+02.1-05 TASK 1  --  THE CUTOVER: RECREATE, MOUNT SHAPE, WRITE-THROUGH, CACHE,
+                    AND THE QUOTA THAT HAD TO SURVIVE IT
+================================================================================
+
+WHAT THIS IS
+  The evidence that the compose file plan 02.1-04 delivered is now the RUNNING
+  container. Deleting a mount line from a yaml file does not remove the mount
+  from a running container; only the recreate does, and this is the record of
+  that recreate and of everything asserted either side of it.
+
+  THE ONE-LINE OUTCOME: Jellyfin now holds ZERO `Type: volume` mounts, its
+  `/cache` and `/cache/transcodes` both resolve to declared binds on `/mnt/fast`,
+  and a file written into `/cache/transcodes` from inside the container lands on
+  the quota-bounded `fast/transcode` dataset. Every new cache byte Jellyfin
+  writes from 2026-09-02T22:19:52Z onward is off `/`.
+
+WHAT THIS IS NOT
+  This does NOT delete the anonymous volume. It is still present, still holding
+  13885711901 bytes (12.93 GiB) on `/`, and that is DELIBERATE -- D-10 orders its
+  removal AFTER Jellyfin is proven running on the new path, which is plan
+  02.1-06. The volume IS the rollback, and it stays until the rollback is no
+  longer needed. The standing check's one remaining red is exactly this, and it
+  is supposed to be red here.
+
+--------------------------------------------------------------------------------
+0. THE RECREATE ITSELF -- THE TIMESTAMPS, IN ORDER
+--------------------------------------------------------------------------------
+
+  Every reading below is labelled BEFORE or AFTER against these three moments.
+  Rows 10 and 36 in particular are worthless taken before the recreate, since
+  what they assert is SURVIVAL of one.
+
+    2026-09-02T22:19:11Z   part A began (reconciliation, rollback capture, guard)
+    2026-09-02T22:19:41Z   RECREATE ISSUED
+    2026-09-02T22:19:52Z   RECREATE RETURNED, container Started
+    2026-09-02T22:21:23Z   part C began (the post-recreate assertions)
+    2026-09-02T22:21:42Z   rows 10 and 36 read from atlantis
+    2026-09-02T22:21:52Z   standing check, default mode
+
+  Command, run from /mnt/fast/stacks per the estate's stack-ops convention:
+
+    cd /mnt/fast/stacks && docker compose \
+      -f stacks/selfhosted/media/compose.yaml up -d --force-recreate jellyfin
+
+    exit status                0
+    compose version            v5.0.2
+    project                    media   (name: media, from compose.yaml)
+    output                     Container jellyfin Recreate / Recreated /
+                               Starting / Started
+
+  CONTAINER STATE, AFTER:
+
+    state                      running
+    started_at                 2026-09-02T22:19:52.386240602Z
+    restart_count              0
+    container_id               0195bc19f6f21fda073809b4674bf0d02e4525766f639fd9851fc477477fbf8f
+    previous_container_id      98a1055987f717ef1c8f849c49659b55c26816041f8a5e6b96c2edc0afe5c446
+    previous_started_at        2026-08-31T18:27:41.791696775Z   (the amdgpu recovery)
+
+  StartedAt is LATER than the recreate command's timestamp (22:19:52Z >
+  22:19:41Z), which is what distinguishes a genuine recreate from a no-op that
+  left the old container in place. The container ID changed too, which is the
+  same claim by a second instrument.
+
+  NO IMAGE WAS PULLED, AND THAT WAS CHECKED FIRST RATHER THAN OBSERVED AFTER.
+  An image pull into /var/lib/docker is the single most likely genuine multi-GB
+  `/` consumer in this phase, so residency was asserted BEFORE the recreate:
+
+    image_present_locally      sha256:d57d4a0c18b3e51b913bd2f8f0f122eb7c7150ea37bb0e352df9cb329de11d24
+    image_size_bytes           1561075198  (1.45 GiB -- what a pull would have cost)
+    image after the recreate   jellyfin/jellyfin:10.11.11, same digest
+
+  Compose's default pull policy is `missing`, so a resident image is never
+  re-fetched. The 2 GiB self-halt budget was therefore never at risk from the
+  one step that could plausibly have breached it.
+
+--------------------------------------------------------------------------------
+1. ROLLBACK READINESS -- CAPTURED BEFORE ANYTHING CHANGED
+--------------------------------------------------------------------------------
+
+  The full pre-recreate container config was captured OUTSIDE the repo before
+  the compose command ran, so the previous mount shape is recoverable
+  independently of git:
+
+    /mnt/fast/spike-021/05/jellyfin-inspect-pre.json   17242 bytes
+
+  It is on /mnt/fast, NEVER /tmp -- /tmp on LXC 100 is tmpfs against ~4.7 GiB
+  available RAM, and this estate has an incident where 1.1 GB written there took
+  the whole box down. It is deliberately NOT committed: a full `docker inspect`
+  carries the container's whole environment block, and this repo is public.
+
+  THE MOUNT SHAPE BEFORE (the thing being replaced):
+
+    volume|/var/lib/docker/volumes/d98b2ff9…/_data|/cache|z|true     <-- the problem
+    bind|/mnt/fast/appdata/media/jellyfin|/config|rw|true
+    bind|/dev/shm|/data/transcode|rw|true                            <-- the decoy
+    bind|/etc/localtime|/etc/localtime|ro|false
+    bind|/mnt/tank/media|/media|rw|true
+
+--------------------------------------------------------------------------------
+2. THE PRE-CUTOVER RECONCILIATION  --  A DETERMINISTIC COPY, NOT A TOLERANCE
+--------------------------------------------------------------------------------
+
+  WHY THIS EXISTS. Plan 02.1-04 drove its missing-by-path list to empty at
+  21:54Z. Jellyfin then kept running and kept writing into the source for a whole
+  wave, so by the time this plan started the destination had drifted BEHIND
+  again. The round-2 review's finding is that late writes must be copied
+  DETERMINISTICALLY rather than absorbed by a tolerance -- otherwise the row-6
+  comparison in section 5 below is a check against a snapshot that has been
+  rotting for an hour, and its 99% floor quietly becomes a way of tolerating a
+  stale copy instead of a guard against a collapsed one.
+
+  ENUMERATION 1, 22:19:11Z, immediately before the cutover:
+
+    src_paths_lines            2674
+    dst_paths_lines            2664
+    SRC scope                  files=2674  bytes=411943043
+    DST scope                  files=2664  bytes=410302255
+    missing_1_count            10
+
+  ALL TEN ARE images/resized-images/*, written AFTER 02.1-04's 21:54Z copy:
+
+    images/resized-images/0/0953fa35-ef21-eb5a-1c49-067e303e91d4.png
+    images/resized-images/1/1cd28348-613d-18ef-6906-fab54f49d193.png
+    images/resized-images/2/2e063f51-e67d-8907-e955-86c9060470a3.png
+    images/resized-images/7/795d327f-aa5a-f70b-e4c8-bc823ad233d3.png
+    images/resized-images/7/7c7e4d88-0eee-d304-88bc-3698b7b0b68a.jpg
+    images/resized-images/8/8db685ad-86fc-543e-0e81-7703471993f6.jpg
+    images/resized-images/8/8e34bb6c-1e9f-2657-d091-0081788f72c9.jpg
+    images/resized-images/9/9282fa07-0552-bdee-4c03-e53e67988e97.png
+    images/resized-images/9/98757cc4-1b21-6440-d60f-a4f6607139f7.jpg
+    images/resized-images/a/ae9319db-8829-5b29-0732-7f591e1d23fd.jpg
+
+  This is ordinary live-cache churn -- Jellyfin regenerates resized images on
+  demand, so none of it was at risk. It was copied anyway, because "would have
+  regenerated" is an argument and "the list is empty" is a measurement.
+
+  THE COPY FORM, AND WHY IT IS NOT rsync:
+
+    cp -d -u --preserve=timestamps   ==   rsync -rlt --no-p --no-o --no-g
+
+    rsync is NOT INSTALLED on LXC 100 (02.1-04's finding) and installing a
+    package to move 1.6 MiB is out of scope -- it adds supply-chain surface and
+    `/` consumption to buy nothing. The equivalence is stated flag for flag:
+      -d                      == rsync -l   (never dereference symlinks)
+      -u                      == copy only what is MISSING OR NEWER
+      --preserve=timestamps   == rsync -t
+      no -p / -o / -g, which is cp's default
+    NEVER `rsync -a`: CLAUDE.md records it failing `mkstemp … Operation not
+    permitted` on acltype=nfsv4 while PRINTING STATS THAT LOOK LIKE SUCCESS and
+    exiting 23.
+
+  THE EXIT STATUS WAS THE INSTRUMENT, CHECKED PER FILE, NEVER A PRINTED SUMMARY.
+  The loop branches on cp's return code and counts failures separately from
+  successes; a form that could only report a summary would not have been
+  acceptable, for exactly the reason in the paragraph above.
+
+    reconcile_transferred_files   10
+    reconcile_failed_files         0
+    reconcile_errors               (none)
+    dst_files_before            2664
+    dst_files_after             2674     delta=+10
+
+  ENUMERATION 2 (post-reconciliation) -- THE PASS RULE:
+
+    missing_2_count                0     PASS -- empty outright
+
+  The single permitted exception (a path Jellyfin has since deleted, shown absent
+  on BOTH sides) was not needed and was not invoked.
+
+  SOURCE AND DESTINATION ARE NOW IDENTICAL TO THE BYTE:
+
+    SRC scope after   files=2674  bytes=411943043
+    DST scope after   files=2674  bytes=411943043
+
+--------------------------------------------------------------------------------
+3. THE MOUNT TABLE, AFTER  (Type|Source|Destination|Mode|RW)
+--------------------------------------------------------------------------------
+
+  Field separator is `|`, not `:`. Bind-mount sources are absolute paths that
+  contain no `:`, while `:` is compose's own mapping separator and would parse
+  back out ambiguously. Enumeration form from check-music-freeze.sh:188-199,
+  with {{.Type}} added.
+
+    bind|/etc/localtime|/etc/localtime|ro|false
+    bind|/mnt/tank/media|/media|rw|true
+    bind|/mnt/fast/transcode|/cache/transcodes|rw|true
+    bind|/mnt/fast/appdata/media/jellyfin/cache|/cache|rw|true
+    bind|/mnt/fast/appdata/media/jellyfin|/config|rw|true
+
+  FIVE BINDS, ZERO VOLUMES. The `/dev/shm` decoy is gone and the anonymous
+  volume is no longer attached to anything.
+
+  THE CONTAINER WAS PROVEN TO EXIST BEFORE ANY MOUNT WAS ENUMERATED:
+
+    container_exists=YES
+    container_id=0195bc19f6f21fda073809b4674bf0d02e4525766f639fd9851fc477477fbf8f
+
+  This is not ceremony. Every assertion in section 3a and 3d is an EMPTINESS
+  assertion, and a missing container returns empty for all of them. Without the
+  existence check first, "Jellyfin has zero volume mounts" and "Jellyfin does not
+  exist" are the same output.
+
+3a. VALIDATION ROW 7 (D-18, THE INVARIANT) -- ZERO Type: volume MOUNTS
+
+    docker inspect jellyfin --format \
+      '{{range .Mounts}}{{if eq .Type "volume"}}x{{end}}{{end}}'
+
+    result                     ''  (the empty string)
+    ROW7                       PASS
+
+  ASSERTED AS THE INVARIANT, NOT AS THE ABSENCE OF ONE ID. Asserting that
+  `d98b2ff9…` is absent would pass forever once 02.1-06 deletes it, while a FRESH
+  anonymous volume with a different id grew unnoticed underneath -- which is the
+  same failure by another name. This is the form the standing check uses, stated
+  in the same words in jellyfin.yaml so the file and the check cannot drift.
+
+3b. VALIDATION ROW 1 -- /cache/transcodes
+
+    result                     'bind /mnt/fast/transcode'
+    grep -qx                   matched exactly
+    ROW1                       PASS
+
+3c. VALIDATION ROW 2 -- /cache
+
+    result                     'bind /mnt/fast/appdata/media/jellyfin/cache'
+    grep -qx                   matched exactly
+    ROW2                       PASS
+
+3d. VALIDATION ROW 3 (D-02) -- THE RAM-DISK MOUNT IS GONE FROM THE RUNTIME
+
+    docker inspect jellyfin --format '{{range .Mounts}}{{.Destination}}{{"\n"}}{{end}}' \
+      | grep -qx /data/transcode
+
+    exit status                1  (no match)
+    ROW3                       PASS
+
+  This row is the whole reason this plan exists as a separate plan. 02.1-04
+  deleted the mount from the FILE; the destination remained mounted in the
+  RUNNING container until 22:19:52Z. A file change is not a runtime change.
+
+--------------------------------------------------------------------------------
+4. ASSUMPTION A4  --  CONFIRMED BY WRITE-THROUGH PROBE, NOT BY READING THE SORT
+--------------------------------------------------------------------------------
+
+  THE ASSUMPTION. moby's `mountSort.Less` compares
+  `strings.Count(filepath.Clean(destination), "/")`, so `/cache` (1 separator)
+  mounts before `/cache/transcodes` (2) regardless of declaration order. That was
+  read at moby v28.3.2 while this estate runs a newer daemon -- hence A4, and
+  hence a probe. The correction a reader is most likely to get wrong: the sort is
+  on SEPARATOR COUNT, not on string length and not on declaration order.
+
+  THE PROBE. A uniquely named file written from INSIDE the container:
+
+    probe_name                              .a4-probe-20260902T222123Z-1084920.txt
+    write command                           docker exec jellyfin sh -c '… > /cache/transcodes/<name>'
+    probe_write_exit                        0
+    seen inside the container               YES
+    on the host at /mnt/fast/transcode/     YES   <-- MUST be YES
+    on the host under …/cache/transcodes/   NO    <-- MUST be NO
+    content read back on the host           a4-write-through-probe 2026-09-02T22:21:24Z
+
+    A4 = CONFIRMED
+
+  Both halves matter. Present at /mnt/fast/transcode proves the nested bind is
+  live; ABSENT under …/cache/transcodes proves it is the nested bind and not the
+  parent one absorbing the write. One reading without the other would not
+  distinguish the two.
+
+    probe removed afterwards                YES
+
+  THE SHADOWED DIRECTORY, RECORDED SO NOBODY TIDIES IT AWAY. runc creates a
+  missing bind destination inside the rootfs, so an empty, permanently shadowed
+  /mnt/fast/appdata/media/jellyfin/cache/transcodes now exists on the host.
+
+    shadowed_dir_exists                     YES
+    shadowed_dir_entries                    0
+
+  IT IS INERT AND IT MUST NOT BE DELETED WHILE THE CONTAINER RUNS. Nothing can
+  reach it from inside the container -- the nested bind covers it -- and removing
+  it under a running container is how you get a mount referring to a deleted
+  inode.
+
+  AN UNPLANNED BUT STRONGER PIECE OF EVIDENCE, FOUND IN THE SAME SECTION. The
+  dataset was empty before the recreate and holds exactly one entry after it:
+
+    /mnt/fast/transcode/.jellyfin-transcode   0 bytes, root:apps, 22:20Z
+
+  That is JELLYFIN'S OWN MARKER, written by `CreateAndCheckMarker(path,
+  "transcode", recursive: true)` during startup. It is independent confirmation
+  that the SERVER -- not just the daemon -- resolves its transcode path onto
+  `fast/transcode`, and it appeared BEFORE task 2 set TranscodingTempPath,
+  because Jellyfin's default transcode path is already <cache>/transcodes. It
+  also proves the marker guard did not fire: had a foreign `.jellyfin-*` marker
+  been present beneath the transcode path, this would have been a start refusal
+  rather than a start.
+
+--------------------------------------------------------------------------------
+5. VALIDATION ROW 6  --  THE IMAGE CACHE, WITH 02.1-04's TOLERANCE
+--------------------------------------------------------------------------------
+
+  WHY NOT EXACT EQUALITY, RESTATED BECAUSE IT MATTERS MORE HERE THAN IT DID IN
+  02.1-04. Jellyfin has JUST STARTED. On start it fetches artwork, syncs the TV
+  guide and serves whatever clients reconnect, so it is writing into
+  …/cache/images from the moment it comes up. An exact file-count or byte-total
+  equality against 02.1-04's pre-copy census would fail for reasons that have
+  nothing to do with the recreate.
+
+  A COUNT THAT HAS GROWN IS THE HEALTHY OUTCOME -- Jellyfin repopulating a cache
+  it can reach. A COUNT THAT HAS COLLAPSED is the failure this row exists to
+  catch, and it would mean the bind is pointing somewhere unexpected.
+
+  ASSERTED:
+
+    …/cache/images exists and is non-empty        PASS   (2295 files)
+    …/cache/xmltv  exists and is non-empty        PASS   (2 files)
+    images count >= 99% of the lower source census PASS   (2295 >= 2262)
+    the same 20 files 02.1-04 hashed still match   PASS   (20/20, 0 mismatch, 0 absent)
+
+  THE SAMPLE IS THE SAME 20 FILES, NOT A FRESH DRAW, and the expected hashes were
+  read out of the COMMITTED 02.1-04-cache-census.txt rather than re-derived from
+  the live tree. A fresh draw would have proved a different and weaker claim
+  ("the tree is self-consistent" rather than "the tree still contains what we
+  copied"). All 20 listed in full below.
+
+  REPORTED (not asserted) -- the exact figures beside 02.1-04's, deltas computed:
+
+                        02.1-04          NOW (22:21:24Z)      DELTA
+    scope  files          2664              2674              +10
+    scope  bytes     410302255         411943043        +1640788
+    images files          2285              2295              +10
+    images bytes     390008920         391649708        +1640788
+    xmltv  files             2                 2                0
+    xmltv  bytes      16033018          16033018                0
+
+  THE DELTA IS EXPECTED AND IT IS ACCOUNTED FOR TO THE BYTE. It is not
+  post-recreate growth at all: it is exactly the 10 files section 2 reconciled
+  IN, all `images/resized-images/*` written between 21:54Z and 22:19Z. +1640788
+  bytes appears identically on the scope line and the images line, which is what
+  you would expect if every one of them landed in images/ and nowhere else. The
+  drift rate this implies -- 10 files / 1.6 MiB over ~25 minutes of a quiet
+  Tuesday -- is the same order as the flat-to-trivial churn 02.1-04 measured, and
+  is an order of magnitude below the 23-file slack the 99% floor allows.
+
+  Notable in its own right: in the ~90 seconds between the container starting and
+  this census, Jellyfin added NOTHING. The tolerance is again insurance whose
+  premium went unclaimed, and again that is a fact about the evening rather than
+  a reason to tighten the rule.
+
+  THE 20-FILE sha256 SAMPLE, VERBATIM (expected hash from 02.1-04, re-hashed on
+  the destination after the recreate):
+
+    MATCH 3a0cbfbafa3fc3f6a42bbcc8d0abe1e79dc000e5b174c5de5155fcfe9a777ba9  images/resized-images/1/1358d2c7-0055-455d-39c4-72a31635851d.webp
+    MATCH d520b7b15cead747d8c2678194b4476b953d9f18cea152d815a783a5192055ce  images/resized-images/1/15958501-b556-0eb8-a126-ce5a07234ee2.webp
+    MATCH 0d8897b27a743c2297fb80196a354bf18b2a684feed702eb4461321f42954e76  images/resized-images/2/27d5389f-f532-faff-7830-249debb2729a.png
+    MATCH 5eb13e5bf3e75ce35211088420a11f1aafc5274c016b186894f829e8e13ccaa4  images/resized-images/2/2be70af4-f196-d376-f472-5fbcee5b377d.png
+    MATCH 63862dd5a755b73ee2f009927f5f7157d441ee7f2b78e4db11cceb72492b08f4  images/resized-images/2/2c289fa4-ae98-9f48-b907-bdb44a8b6d6d.png
+    MATCH 1e3dd99d2b8e326b7e61d4d21a801e2e31d0acec667af95d7eb87432d45f2638  images/resized-images/3/30100bd8-9ce7-124c-c245-9976b373c3be.webp
+    MATCH 133463732b4a0ab96e130b6f347c021507d75e5cb0db300c7a5a01e1dc480fbc  images/resized-images/3/3e8628df-8e1c-e7dd-6ff7-46dbece2f2d5.jpg
+    MATCH f1edbe254184ab49b15290db226f92f1822ac2e738d3c75efdb2a454d1b7661d  images/resized-images/5/5b748ff3-3f82-f6bb-74d4-1b2bd53d872c.jpg
+    MATCH 395ec80badeb619f4cc034611111febaefadff559b9c86f13c65dce42ca899e2  images/resized-images/6/616c551a-5534-04f8-e05f-d80ce8b9bd07.jpg
+    MATCH a3b2cef03235faf903f40631668e2bad3e3d9118055c458f505c930b96e2950b  images/resized-images/6/64626292-ffe9-39ac-861a-21d7369ab4c7.jpg
+    MATCH c611cd22ef08a1bcce486131e1bf039b0f23b59f54edd94769f97ec6ed967fe4  images/resized-images/7/7320658c-5b14-a283-c93a-e78517c23c92.jpg
+    MATCH 52e4c59c322fbfb290782480a4df14a6acd061e24cefb86c3a50ce7d947e57a1  images/resized-images/8/80d7d178-9e61-fbce-76b3-71c4afe24f18.png
+    MATCH bef0f00d1e2026b704cffc4d96cefb1cb91571fdfe5ed63294fb5c613d1ab068  images/resized-images/8/84a39fb8-2f93-8968-9599-0e719633cbc7.jpg
+    MATCH f58ab95be454f6483e818dc6f8d6ec9eaf271a25bb118247ebe10361443a5e79  images/resized-images/8/8a40a293-9ccf-7d7d-42c2-868a7222c18a.jpg
+    MATCH e2ac207efc88c98b19444feafd6869a8e53c62b7c31ee669329bebdbfb4dbe73  images/resized-images/9/9000c4a0-08e8-d4ed-506a-0408b3f36e8d.jpg
+    MATCH 9f71871ab07a814ee708752985fb0c8064cce20275bd053ecd0ddc393ff9518f  images/resized-images/a/a4fa384c-b319-eacf-7fd7-f4ca4ddcb736.png
+    MATCH a5282e77b990f7e06be61ed63fe9cfd5590ffeba46304a884399ef1d9e519593  images/resized-images/c/c140740b-f5bd-f1db-dfb4-e14b0b8df4af.jpg
+    MATCH ff24e98b2bb5f30da7f0da5aa3bcaad21f2ba6b725d352dda3ac2047e669b4da  images/resized-images/c/c1bcf06f-c8ee-ca05-e6e8-8ed176d8e544.jpg
+    MATCH 0e39f74e82510e514841724e756682d5f6c1b0f291ec08d8f019239faa582823  images/resized-images/d/d568a75a-6fac-0635-d919-aa9e2a641166.jpg
+    MATCH 70c4c7618bf72e678be11fc26d5009cee24c75419fab40411f8393b5302dff4f  images/resized-images/e/e26b85a2-2bfa-297c-f2b9-d99e2cc7a817.jpg
+
+    sha256_sample_match=20   mismatch=0   absent=0
+
+--------------------------------------------------------------------------------
+6. VALIDATION ROWS 10 AND 36  --  THE QUOTA AND THE MOUNT SURVIVED THE RECREATE
+--------------------------------------------------------------------------------
+
+  ROW 10 IS A **fires** ROW, AND THE ORDERING IS THE WHOLE POINT. A reading taken
+  before the recreate discharges nothing. Both readings below were taken at
+  2026-09-02T22:21:42Z, one minute and fifty seconds AFTER the container Started
+  at 22:19:52Z.
+
+  Taken from atlantis (172.16.1.158). `zfs`/`zpool` do not exist inside LXC 100 --
+  it is unprivileged and the pool lives on the Proxmox host.
+
+    zfs get -Hp -o value quota   fast/transcode   ->  53687091200    ROW 10 PASS
+    zfs get -Hp -o value mounted fast/transcode   ->  yes            ROW 36 PASS
+
+    zfs list fast/transcode:
+      NAME             USED  QUOTA  AVAIL  MOUNTPOINT
+      fast/transcode   104K    50G  50.0G  /mnt/fast/transcode
+
+    recordsize   1048576     (1M -- applies to NEWLY WRITTEN blocks only)
+    compression  off
+    atime        off
+    mountpoint   /mnt/fast/transcode
+
+  THIS IS WHY D-12 MAKES THE ZFS PROPERTY THE LOAD-BEARING BOUND RATHER THAN AN
+  APPLICATION SETTING. The container was destroyed and rebuilt between 02.1-03's
+  apply and this reading, and the bound did not notice. A Jellyfin setting would
+  have had to be re-asserted; a ZFS property did not.
+
+  ROW 36's SECOND, INDEPENDENT INSTRUMENT -- container-side, no atlantis involved:
+
+    stat -c %d /mnt/fast/transcode   ->  47
+    stat -c %d /mnt/fast             ->  64519
+    47 != 64519, so the dataset is genuinely separately mounted   PASS
+
+  This is the instrument that catches the boot-race G-15 identified: if the
+  dataset were ever unmounted, /mnt/fast/transcode would revert to a PLAIN
+  DIRECTORY on the fast pool that the bind still happily reaches, the quota would
+  not apply, and `zfs get quota` from atlantis would STILL return 53687091200 and
+  read green. Two instruments, both asserted.
+
+  REPORTED alongside:
+    findmnt -no FSTYPE,SOURCE /mnt/fast/transcode   ->  zfs fast/transcode
+    df -B1 --output=size /mnt/fast/transcode        ->  53687091200   (row 12)
+
+--------------------------------------------------------------------------------
+7. JELLYFIN IS SERVING, NOT MERELY 'running'
+--------------------------------------------------------------------------------
+
+  `State.Status == running` is a daemon fact, not an application fact. The
+  container could be running and the server refusing requests -- the marker-file
+  guard, for instance, is a start refusal that would show as a crash loop, but a
+  half-initialised server would not.
+
+  Address resolved the only correct way:
+
+    docker inspect jellyfin --format \
+      '{{(index .NetworkSettings.Networks "t3_proxy").IPAddress}}'  ->  192.168.90.25:8096
+
+  NEVER an IP literal (the address has moved once already and docker IPAM can
+  move it again), NEVER the bare name `jellyfin` (LXC 100's resolv.conf carries
+  `search deercrest.info`, so it resolves to Cloudflare's public edge and would
+  return 200 from the public website with the container DOWN), and never
+  172.16.1.76 (unreachable under macvlan host isolation).
+
+    GET /System/Info/Public   ->  HTTP 200
+    {"LocalAddress":"jellyfin.deercrest.info","ServerName":"jellyfin",
+     "Version":"10.11.11","ProductName":"Jellyfin Server","OperatingSystem":"",
+     "Id":"cb29670ea55f417bade6850818fafb59","StartupWizardCompleted":true}
+
+    docker logs | grep -iE 'error|exception|fatal'   ->  (no matches)
+    restart_count                                    ->  0
+    ffmpeg processes running                         ->  0
+
+--------------------------------------------------------------------------------
+8. D-10's ORDERING IS INTACT  --  THE VOLUME IS STILL THERE, ON PURPOSE
+--------------------------------------------------------------------------------
+
+    docker volume ls -q | grep -cx d98b2ff9…   ->  1        PASS
+    oldvol_total_bytes                         ->  13885711901  (12.93 GiB)
+    oldvol_transcodes_bytes                    ->  13473768858  (12.55 GiB)
+
+  THE 12.55 GiB IS NOT RECLAIMED BY THIS PLAN AND WAS NEVER GOING TO BE. It is
+  released by 02.1-06's `docker volume rm`, and only after this plan proved
+  Jellyfin running on the new path -- which is what section 3 and section 7 are.
+  That ordering IS the rollback and it is not negotiable.
+
+  A GUARD WAS ADDED HERE THAT THE PLAN DID NOT ASK FOR. See deviation 1 in the
+  summary. Whether `docker compose up --force-recreate` passes RemoveVolumes when
+  it removes the old container is not documented for compose v5, and it is not a
+  question worth answering by losing the rollback. Docker refuses to remove a
+  volume any container references, so a single STOPPED holder container --
+  created from the already-resident jellyfin image, never started, removed
+  immediately afterwards WITHOUT -v -- made the question moot.
+
+    guard created (stopped)                    before the recreate
+    volume after the recreate                  1
+    guard removed                              YES
+    volume after the guard was removed         1
+
+  THE ANSWER, FOR THE RECORD: compose v5.0.2 did NOT take the volume. The guard
+  turned out to be unnecessary, which is the outcome you want from insurance and
+  is not a reason to skip it next time.
+
+--------------------------------------------------------------------------------
+9. THE STANDING CHECK, DEFAULT MODE  --  5 FAILURES -> 1
+--------------------------------------------------------------------------------
+
+  ssh root@172.16.1.159 'cd /mnt/fast/stacks && bash scripts/check-jellyfin-transcode.sh'
+  run at 22:21:52Z, DEFAULT mode (not --baseline), exit status 1.
+
+    section 0  routes and preconditions            all green
+    section 1  / headroom     20.22 GiB >= 20.00   green, margin 0.22 GiB
+    section 2  the mount invariant                 ALL FIVE GREEN
+                 container exists
+                 zero Type:volume mounts           (row 7)
+                 /cache/transcodes bind            (row 1)
+                 /cache bind                       (row 2)
+                 /data/transcode in no destination (row 3)
+    section 3  the old anonymous volume            RED -- STILL EXISTS (row 8)
+    section 4  quota and mount                     ALL GREEN (rows 9, 36, 12)
+    section 5  encoding values                     REPORTED, still pre-phase at
+                                                   this point in the plan
+    FAILURES total: 1
+
+  THE TRAJECTORY IS THE POINT:  6 (02.1-01 baseline)
+                             -> 5 (after 02.1-03's quota)
+                             -> 5 (after 02.1-04's copy: unchanged, and correctly
+                                   so -- the check reads the LIVE CONTAINER, and
+                                   02.1-04 deliberately did not recreate it)
+                             -> 1 (here)
+
+  THE ONE REMAINING RED IS THE DELIBERATE ONE and it is supposed to be red here.
+  Section 3 asserts the anonymous volume is GONE; D-10 says it must not be until
+  02.1-06. A green section 3 at this point would mean the rollback had been
+  destroyed before the thing it protects was proven.
+
+  Section 5's values were still pre-phase when this ran (TranscodingTempPath
+  absent, EnableSegmentDeletion false, SegmentKeepSeconds 720, EnableThrottling
+  false). Task 2 changes them, and the check is REPORT-only there by design -- a
+  standing check cannot start a transcode, so it cannot prove a setting FIRES.
+  That is 02.1-08's job and this read-back must not stand in for it.
+
+--------------------------------------------------------------------------------
+10. THE `/` SELF-HALT BUDGET  --  WHAT THE RECREATE ACTUALLY SPENT
+--------------------------------------------------------------------------------
+
+  The budget, ruled by the execute-phase ORCHESTRATOR (an agent, not the
+  operator -- the only human ruling in this phase remains 02.1-03's Terraform
+  Option B): STOP if any single step would consume more than 2 GiB of `/`; STOP
+  if `/` actually-free would drop below 10 GiB; STOP if the transcode cache
+  starts growing mid-run.
+
+    Point                                  `/` avail (bytes)      Note
+    ------------------------------------   -----------------      ----------------
+    D-32 sample, plan head       22:16:55Z       21662257152      178.7 MiB over floor
+    part A begins                22:19:11Z       21663264768
+    part A ends (reconciliation) 22:19:12Z       21662445568      -0.8 MiB for 1.6 MiB
+                                                                  written to ZFS, i.e.
+                                                                  ordinary churn
+    part C, post-recreate        22:21:24Z       21699317760      +34.4 MiB
+    standing check               22:21:52Z       21708996608      +43.7 MiB vs plan head
+
+  `/` WENT UP ACROSS THE CUTOVER, by 43.7 MiB against the plan-head sample. That
+  is the old container's writable layer being released and not fully replaced.
+  NO BUDGET CONDITION FIRED and none came close: the largest single movement was
+  43.7 MiB against a 2 GiB ceiling, and `/` never went below 20.16 GiB against a
+  10 GiB floor.
+
+  THE ONE STEP THAT COULD HAVE BREACHED IT DID NOT HAPPEN. An image pull is a
+  1.45 GiB write into /var/lib/docker on `/`; residency was asserted before the
+  recreate and the digest was identical after it.
+
+  THE TRANSCODE CACHE STAYED FLAT THROUGHOUT -- oldvol_transcodes_bytes is
+  13473768858 at the plan head and 13473768858 after the recreate, the SEVENTH
+  consecutive byte-identical reading, now spanning 103 minutes.
+
+  WHAT THIS PLAN DID **NOT** DO: reclaim anything. The 12.55 GiB is still on `/`.
+  What changed is the DIRECTION -- from 22:19:52Z, new cache writes land on
+  fast/appdata/media and new transcode writes land on the 50 G-bounded
+  fast/transcode. The stock stops growing here; it is removed in 02.1-06.
+
+--------------------------------------------------------------------------------
+11. WHAT A LATER READER SHOULD CHECK FIRST IF SOMETHING LOOKS WRONG
+--------------------------------------------------------------------------------
+
+  - `/mnt/fast/transcode` should contain `.jellyfin-transcode` and, during
+    playback, HLS segments. If it is EMPTY during playback, the bind is not being
+    used and TranscodingTempPath has drifted -- check section 5 of the standing
+    check before anything else.
+  - `/mnt/fast/appdata/media/jellyfin/cache/transcodes` should stay EMPTY
+    forever. Anything appearing there means the nested bind is not mounted, which
+    is A4 falsified after the fact. Do not delete the directory; fix the mount.
+  - The anonymous volume is expected to be GONE from 02.1-06 onward. If it comes
+    BACK -- any `Type: volume` mount on jellyfin, any id -- something reverted
+    jellyfin.yaml, and the standing check's section 2 is the alarm.
