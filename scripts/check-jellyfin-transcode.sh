@@ -108,6 +108,23 @@ JELLYFIN_SECRETS="${JELLYFIN_SECRETS:-/mnt/fast/secrets/jellyfin-deercrest.env}"
 # argument rounds UP, which is up to 1 GiB of optimism in exactly the direction that hurts
 # (03-01's finding, commit b217ada - 2.2 GiB actually free reported as `3G`). The flag is named
 # in words rather than written literally so a mechanical grep for it over this file returns zero.
+# MEASURED MARGIN AT AUTHORING TIME, and it is NOT what the plan set assumed.
+#   2026-09-02T20:56:25Z, on the --baseline run recorded in
+#   .planning/phases/02.1-…/artifacts/02.1-02-baseline.txt:
+#     / avail   = 21669597184 bytes = 20.18 GiB
+#     floor     = 21474836480 bytes = 20.00 GiB
+#     MARGIN    =   194760704 bytes =  0.18 GiB = 186 MiB
+#
+#   The floor was chosen to be green rather than aspirational, and it IS green - but by 186 MiB,
+#   not by the ~13 GiB the plan set was written against (which assumed `/` still held the ~33-36
+#   GiB it had after 03-01's image reap). The difference is a Jellyfin transcode cache that
+#   refilled to 12.55 GiB in the two days since the container came up on 2026-08-31, which is
+#   the condition this whole phase exists to fix.
+#
+#   So this check starts GREEN and starts FRAGILE. Read a red here as real: at 186 MiB there is
+#   no room for it to be noise. See artifacts/02.1-D32-watch.txt for the sample series - note
+#   that the cache is FLAT between playback sessions, so the budget is spent when the TV is on,
+#   not on a wall clock.
 FLOOR_BYTES=21474836480          # 20 GiB
 QUOTA_BYTES=53687091200          # 50 G, D-12/D-13
 TRANSCODE_DIR="/mnt/fast/transcode"
@@ -512,8 +529,31 @@ else
     echo "         from bound violations so the reader can tell the two apart (VALIDATION row 38)."
     UNREACHABLE=$((UNREACHABLE + 1))
   else
+    # enc_val - read one key back, distinguishing THREE outcomes that must never share a rendering:
+    #   <absent>  the key is not in the object at all
+    #   null      the key is present and explicitly null (Jellyfin's "use the default")
+    #   the value itself, INCLUDING the literal `false`
+    #
+    # Do NOT reduce this to `.[$k] // "<absent>"`. jq's `//` is the ALTERNATIVE operator and
+    # treats BOTH `null` AND `false` as empty, so every boolean that is genuinely `false` renders
+    # as "<absent>". That was this script's first-run defect, caught on its own baseline
+    # (2026-09-02): EnableSegmentDeletion, EnableThrottling and EnableHardwareEncoding were all
+    # `false` in the API response and all three printed as "<absent>".
+    #
+    # It is the exact conflation the rest of this file is built to prevent - CR-02's "NOTHING
+    # HELD and COULD NOT LOOK are different answers" - and it landed on the most expensive value
+    # in the set: EnableHardwareEncoding is the amdgpu mitigation, where "absent" and "false"
+    # carry opposite implications for whether a six-hour outage hazard is still contained.
+    # It would also have corrupted the before/after comparison: after 02.1-07 sets these to
+    # `true`, a reader diffing transcripts would conclude the KEY had appeared rather than that
+    # the VALUE had moved.
+    enc_val() {
+      printf '%s' "$ENC" \
+        | jq -r --arg k "$1" 'if has($k) then (if .[$k] == null then "null" else (.[$k]|tostring) end) else "<absent>" end' \
+          2>/dev/null || echo '<unparsed>'
+    }
     for k in TranscodingTempPath EnableSegmentDeletion SegmentKeepSeconds EnableThrottling ThrottleDelaySeconds; do
-      v="$(printf '%s' "$ENC" | jq -r --arg k "$k" '.[$k] // "<absent>"' 2>/dev/null || echo '<unparsed>')"
+      v="$(enc_val "$k")"
       info "$k = $v   (REPORTED not asserted — a standing check cannot prove a setting FIRES; that is 02.1-08's job)"
     done
     # The amdgpu mitigation, printed because REVERTING THESE IS THE HIGHER-COST REGRESSION. They
@@ -521,7 +561,7 @@ else
     # took the estate down for ~6 hours. The encoding endpoint is a FULL-OBJECT REPLACE, so a
     # partial POST silently re-arms that hazard (D-30).
     for k in HardwareAccelerationType EnableHardwareEncoding; do
-      v="$(printf '%s' "$ENC" | jq -r --arg k "$k" '.[$k] // "<absent>"' 2>/dev/null || echo '<unparsed>')"
+      v="$(enc_val "$k")"
       info "$k = $v   (amdgpu mitigation, D-30 — REPORTED; drift here is the expensive regression)"
     done
   fi
