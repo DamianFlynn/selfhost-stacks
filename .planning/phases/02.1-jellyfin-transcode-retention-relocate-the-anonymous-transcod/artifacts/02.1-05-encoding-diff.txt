@@ -1,0 +1,397 @@
+================================================================================
+02.1-05 TASK 2  --  THE ENCODING ROUND-TRIP: FIVE SETTINGS, TWO MITIGATION VALUES
+                    THAT HAD TO SURVIVE, AND A CHANGED-KEY-SET PROOF
+================================================================================
+
+WHAT THIS IS
+  The before/after evidence for `POST /System/Configuration/encoding`, the write
+  that turns on Jellyfin's own transcode retention. It records the whole object
+  either side of the write, the two amdgpu mitigation values that a careless POST
+  would have silently reverted, and the proof -- as a KEY SET, not as a
+  diff-line count -- that nothing outside the intended five moved.
+
+THE HAZARD, STATED FIRST BECAUSE IT IS THE POINT OF THE WHOLE TASK
+  `UpdateNamedConfiguration` deserialises the ENTIRE body into `EncodingOptions`
+  and saves it wholesale. Every property ABSENT from the body reverts to its C#
+  constructor default. `EnableHardwareEncoding`'s constructor default is **true**;
+  its live value is **false**, written 2026-08-31 18:27 by
+  scripts/disable-jellyfin-hwaccel.sh as the mitigation for the amdgpu HMM kernel
+  oops that took the whole estate down for roughly six hours.
+
+  A PARTIAL POST WOULD HAVE SILENTLY RE-ARMED THAT. Read-modify-write is not a
+  nicety here, and "assert the values you changed" is not sufficient -- the
+  assertion has to cover the NON-changes too, which is the 01-06 path-set-diff
+  lesson applied.
+
+THE HEADLINE
+  All seven value conditions PASS. The two mitigation values are provably
+  untouched. NOTHING outside the intended five keys moved. And the row-15
+  assertion as literally written in the plan FAILED -- on a correct outcome, for
+  a reason that is a defect in the assertion rather than in the estate. Section 6
+  is the important part of this file.
+
+--------------------------------------------------------------------------------
+1. HOW THIS WAS RUN
+--------------------------------------------------------------------------------
+
+  ON LXC 100 (root@172.16.1.159). Jellyfin publishes no host port and is
+  reachable only from a host that can route to its t3_proxy address.
+
+  Address resolution, the only correct form:
+
+    docker inspect jellyfin --format \
+      '{{(index .NetworkSettings.Networks "t3_proxy").IPAddress}}'  ->  192.168.90.25:8096
+
+  NEVER an IP literal (the address moved once already and docker IPAM can move it
+  again). NEVER the bare name `jellyfin` -- LXC 100's resolv.conf carries
+  `search deercrest.info`, so it resolves to Cloudflare's public edge and would
+  return 200 from the public WEBSITE with the container down. NEVER 172.16.1.76,
+  unreachable under macvlan host isolation.
+
+  CREDENTIAL HANDLING (T-021-34):
+
+    /mnt/fast/secrets/jellyfin-deercrest.env  stat -c '%a %U' == '600 root'
+    asserted BEFORE the file was sourced; the script refuses otherwise.
+    key_length = 32  -- the LENGTH was recorded, never the value.
+
+    Passed via `-H @<(printf …)` PROCESS SUBSTITUTION -- curl reads the
+    Authorization header out of a file descriptor rather than off the command
+    line, so the key never enters argv and never appears in /proc/*/cmdline. No
+    echo of it, no `set -x`, at any point. (The header's exact text is the
+    MediaBrowser scheme from check-music-consumers.sh:418-427 and is deliberately
+    NOT reproduced literally here -- see section 9.)
+
+  Work under /mnt/fast/spike-021/05, NEVER /tmp -- /tmp on LXC 100 is tmpfs
+  against ~4.7 GiB available RAM.
+
+  A NOTE ON WHAT THAT KEY IS (T-021-35, disposition ACCEPT, recorded not fixed):
+  `CustomAuthenticationHandler` maps ANY Jellyfin API key to
+  `UserRoles.Administrator`. Jellyfin 10.11 has no scoped-key mechanism. The key
+  already existed and was already used READ-ONLY by check-music-consumers.sh;
+  this plan widens it to WRITE, which is a real change in what a leak of that
+  file would cost. Accepted as a CHOICE, in the same style as 02-09's `sec=sys`.
+
+--------------------------------------------------------------------------------
+2. STEP 1 -- THE GET, TAKEN IMMEDIATELY BEFORE THE POST
+--------------------------------------------------------------------------------
+
+    encoding.before.json   1315 bytes   43 keys
+
+  Taken immediately before the POST rather than reused from anywhere, because
+  encoding.xml was last written 2026-08-31 18:27 by disable-jellyfin-hwaccel.sh
+  and a cached copy is not safe.
+
+  43 KEYS RETURNED OF 47 DECLARED. The GET omits NULL-valued properties
+  (`WhenWritingNull`), and on this server exactly the four the research predicted
+  were absent -- confirmed, not assumed:
+
+    EncoderAppPath        TranscodingTempPath
+    FallbackFontPath      EncoderPreset
+
+  Feeding the GET body straight back deserialises those to null, which is what
+  they already are. That is why read-modify-write is SAFE despite the omission.
+
+--------------------------------------------------------------------------------
+3. STEP 2 -- THE TWO VALUES A PARTIAL POST WOULD CLOBBER
+--------------------------------------------------------------------------------
+
+    BEFORE_HardwareAccelerationType = none
+    BEFORE_EnableHardwareEncoding   = false        <-- ctor default is TRUE
+
+  THESE ARE THE ASSERTION. They are carried through the merge from the GET
+  response and re-asserted after the write, both against these captured values
+  and against the literals `"none"` / `false`.
+
+  The five keys being set, as they stood before:
+
+    EnableSegmentDeletion = false
+    SegmentKeepSeconds    = 720
+    EnableThrottling      = false
+    ThrottleDelaySeconds  = 180          <-- ALREADY at the target. Remember this.
+    TranscodingTempPath   = <absent (null)>
+
+--------------------------------------------------------------------------------
+4. STEP 3 -- THE MERGE, AND STEP 4 -- THE POST
+--------------------------------------------------------------------------------
+
+  Merged with `jq` AGAINST THE GET RESPONSE, never constructed by hand:
+
+    .EnableSegmentDeletion = true
+    .SegmentKeepSeconds    = 300
+    .EnableThrottling      = true
+    .ThrottleDelaySeconds  = 180
+    .TranscodingTempPath   = "/cache/transcodes"
+
+    encoding.after.json   1549 bytes   44 keys   (43 + TranscodingTempPath)
+
+  ENCODER_APP_PATH WAS ASSERTED ABSENT FROM THE BODY BEFORE THE POST WAS SENT:
+
+    jq -e 'has("EncoderAppPath") | not' encoding.after.json   ->  exit 0   PASS
+
+  This is T-021-37. `EncoderAppPath` is absent from the GET because it is null,
+  and a body that helpfully copies `EncoderAppPathDisplay`
+  (`/usr/lib/jellyfin-ffmpeg/ffmpeg`) into it makes
+  `EncodingConfigurationStore.Validate` throw
+  `InvalidOperationException("Unable to update encoder app path.")` and the POST
+  return 500. Building the body from the GET response is what prevents it; the
+  assertion is what proves the prevention worked.
+
+  THE POST:
+
+    POST /System/Configuration/encoding
+    Content-Type: application/json
+    --data-binary @encoding.after.json
+
+    HTTP status: 204 No Content        <-- as expected
+
+  NO RESTART WAS PERFORMED AND NONE IS REQUIRED. `TranscodingSegmentCleaner` and
+  `TranscodingThrottler` both call `_config.GetEncodingOptions()` INSIDE their
+  timer callbacks, so they pick the change up on the next tick.
+
+    started_at before the POST   2026-09-02T22:19:52.386240602Z
+    started_at after  the POST   2026-09-02T22:19:52.386240602Z    IDENTICAL
+    restart_count                0
+    state                        running
+
+  TRANSCODING_TEMP_PATH ORDERING, WHY TASK 2 COMES AFTER TASK 1. Changing
+  `TranscodingTempPath` to a new non-empty value requires `Directory.Exists(newPath)`
+  AS THE JELLYFIN PROCESS SEES IT. `/cache/transcodes` only exists inside the
+  container because task 1's nested bind put it there. Run in the other order,
+  this POST would have failed.
+
+--------------------------------------------------------------------------------
+5. STEP 5 -- THE READBACK, ASSERTED IN BOTH DIRECTIONS (rows 13 and 14)
+--------------------------------------------------------------------------------
+
+    encoding.readback.json   1355 bytes   44 keys
+
+    EnableSegmentDeletion    = true                  intended change
+    SegmentKeepSeconds       = 300                   intended change
+    EnableThrottling         = true                  intended change
+    ThrottleDelaySeconds     = 180                   intended NON-change
+    TranscodingTempPath      = /cache/transcodes     intended change
+    HardwareAccelerationType = none                  MUST NOT HAVE MOVED
+    EnableHardwareEncoding   = false                 MUST NOT HAVE MOVED
+
+    SEVEN-CONDITION jq -e ASSERTION            PASS   (rows 13 and 14)
+    asserted against the step-2 captured values AND against the literals
+
+  `EnableHardwareEncoding` came back **false**, not true. Its constructor default
+  is true, so a `true` here would have meant a partial POST had re-armed the
+  amdgpu hazard -- a stop, not a note. It did not.
+
+  ALSO CONFIRMED, and it is the negative half of T-021-37: `EncoderAppPath` is
+  STILL absent from the readback. The server did not populate it, Validate did
+  not throw, and the null-valued properties round-tripped as nulls exactly as the
+  research predicted.
+
+    keys added between before and readback:   TranscodingTempPath
+    keys removed:                             (none)
+    EncoderAppPath absent in readback:        true
+
+--------------------------------------------------------------------------------
+6. STEP 6 -- VALIDATION ROW 15, AND WHY IT FAILED ON A CORRECT OUTCOME
+--------------------------------------------------------------------------------
+
+  READ THIS SECTION BEFORE BELIEVING ANY SUMMARY OF THIS TASK.
+
+  THE DERIVED CHANGED-KEY SET, computed with "absent on one side counts as a
+  difference" so the null-valued TranscodingTempPath is not silently missed:
+
+    derived  = EnableSegmentDeletion, EnableThrottling, SegmentKeepSeconds,
+               TranscodingTempPath                              (FOUR keys)
+
+    expected = EnableSegmentDeletion, EnableThrottling, SegmentKeepSeconds,
+               ThrottleDelaySeconds, TranscodingTempPath        (FIVE keys)
+
+    THE PLAN'S LITERAL EQUALITY ASSERTION THEREFORE FAILED.
+
+  IT IS NOT THE HAZARD FIRING. The hazard row 15 exists to catch is a key moving
+  that nobody intended -- the full-object-replace reverting something to a
+  constructor default. That is the SUPERSET direction, and it was measured
+  directly:
+
+    changed_keys MINUS intended_five   ->   []      NOTHING OUTSIDE MOVED
+    intended_five MINUS changed_keys   ->   ["ThrottleDelaySeconds"]
+
+  THE CAUSE IS ONE CHARACTER OF SEMANTICS: the assertion conflates "keys SET in
+  the POST body" with "keys whose VALUE CHANGED". The jq merge sets five keys.
+  Only four values changed, because ThrottleDelaySeconds WAS ALREADY 180.
+
+  AND THE PLAN ITSELF SAYS SO, IN THREE PLACES. This is not a discovery about the
+  estate; it is the plan disagreeing with itself:
+
+    - 02.1-05-PLAN.md task 2 action: "`ThrottleDelaySeconds` **180**, unchanged,
+      because it sits 3x above the hard floor of 60"
+    - 02.1-RESEARCH.md § The Two Discretion Values: the same
+    - jellyfin.yaml's comment block, delivered by 02.1-04:
+        "5. ThrottleDelaySeconds  180 -> 180  (UNCHANGED, and deliberately so)"
+
+  So the equality was UNSATISFIABLE from the moment it was written. It could only
+  have passed if ThrottleDelaySeconds had been something other than 180 before --
+  which the plan's own research says it was not.
+
+  THE CORRECTED ASSERTION, AND WHY IT IS STRICTLY STRONGER WHERE IT MATTERS.
+  Row 15's protective content is split across two checks that are each
+  satisfiable and that together cover more than the equality did:
+
+    (a) NOTHING OUTSIDE THE INTENDED FIVE MOVED  -- the subset direction, which
+        is the entire full-object-replace hazard:
+
+          changed_keys - intended_five == []          PASS
+
+    (b) EVERY ONE OF THE INTENDED FIVE HOLDS ITS INTENDED VALUE in the readback
+        -- which is section 5's assertion, already run:
+
+          jq -e '.EnableSegmentDeletion==true and .SegmentKeepSeconds==300
+             and .EnableThrottling==true and .ThrottleDelaySeconds==180
+             and .TranscodingTempPath=="/cache/transcodes"'   PASS
+
+  (b) IS DOING WORK THE KEY-SET EQUALITY NEVER DID. A key-set comparison is
+  SILENT ON VALUES: a POST that set SegmentKeepSeconds to 999 would have
+  satisfied the plan's equality perfectly, because the KEY changed. Only the
+  value assertion catches that. So the equality's unique contribution was always
+  (a), and (a) is what has been kept.
+
+  THE REVIEW'S ORIGINAL FINDING STILL STANDS AND IS NOT WEAKENED BY THIS. Round 2
+  replaced a `grep -cE '^[<>]' … -le 12` diff-line count because it would also
+  pass a diff containing SIX changed keys. That criticism was correct and the
+  fix's DIRECTION was correct -- a set, not a count. The set was simply populated
+  with the wrong five names. A count of 4 would have passed `-le 12` here, which
+  is precisely the accident the round-2 fix was meant to remove: the old check
+  would have gone green for the wrong reason on the very first run.
+
+  WHAT WOULD HAVE MADE THIS A STOP: any name in `changed_keys - intended_five`.
+  There were none. Had there been, the recovery is to POST encoding.before.json
+  back unmodified.
+
+--------------------------------------------------------------------------------
+7. THE HUMAN-READABLE DIFF, VERBATIM
+--------------------------------------------------------------------------------
+
+  diff <(jq -S . encoding.before.json) <(jq -S . encoding.readback.json)
+
+    21c21
+    <   "EnableSegmentDeletion": false,
+    ---
+    >   "EnableSegmentDeletion": true,
+    23c23
+    <   "EnableThrottling": false,
+    ---
+    >   "EnableThrottling": true,
+    38c38
+    <   "SegmentKeepSeconds": 720,
+    ---
+    >   "SegmentKeepSeconds": 300,
+    45a46
+    >   "TranscodingTempPath": "/cache/transcodes",
+
+    (diff exit 1 -- "differences found", which is expected)
+
+  Four hunks, three modifications and one ADDITION. The addition is
+  TranscodingTempPath, and it appears as an addition rather than a modification
+  precisely because it was null and therefore omitted from the before-GET. That
+  is why the key-set derivation must count "absent on one side" as a difference
+  -- a naive comparison would under-report it.
+
+  THE DIFF IS THE HUMAN-READABLE HALF, CAPTURED SO A READER CAN CHECK THE
+  MACHINE'S ANSWER. It is deliberately NOT the assertion.
+
+--------------------------------------------------------------------------------
+8. THE TWO DISCRETION NUMBERS, RECORDED SO THEY ARE NOT RE-LITIGATED
+--------------------------------------------------------------------------------
+
+  SegmentKeepSeconds 300, down from 720.
+    The cleaner deletes the whole prefix behind the client's download head, so
+    the real cost of a high value is ORPHAN RESIDUE: the cleaner stops the
+    instant the job exits, and a restart leaves `keep + lead` of segments behind
+    for up to 48 h. At this estate's measured 2.24 MB/s stream-copy rate that is
+    ~2.0 GB per orphan at 720 s versus ~1.1 GB at 300 s. 300 is 15x the silent
+    clamp floor of 20, and 50 segments is a larger seek-back window than any
+    client UI offers -- seeking back further costs a transcode RESTART, not a
+    failure.
+
+  ThrottleDelaySeconds 180, unchanged.
+    It sits 3x above the hard floor of 60 and ~10x above typical client prefetch,
+    so the throttle engages only on genuine run-ahead. Values below 60 are
+    SILENTLY CLAMPED, so configuring 30 would be a lie in the config file.
+
+  AND THE ONE THAT MATTERS MORE THAN IT LOOKS: EnableSegmentDeletion does more
+  than delete. On a stream-copy HLS job -- exactly this estate's case -- it also
+  adds `-readrate 10` to ffmpeg's input, capping the remux at 10x realtime. That
+  is a STRONGER bound on "an abandoned stream writes an entire film in minutes"
+  than throttling is, and it arrives via the DELETION switch. Anyone who turns
+  segment deletion off to "keep the cache warm" also removes the rate cap without
+  knowing it.
+
+--------------------------------------------------------------------------------
+9. CREDENTIAL SCREEN OVER EVERY COMMITTED ARTIFACT (T-021-34)
+--------------------------------------------------------------------------------
+
+  Run on the host copies AND again on the workstation copies after transfer:
+
+    grep -cEi '(token|api_key|apikey|password|secret)[[:space:]]*[=:]'
+
+      encoding.before.json      0
+      encoding.after.json       0
+      encoding.readback.json    0
+
+    grep -cF "$JELLYFIN_API_KEY"   (the live value, on the host only)
+
+      encoding.before.json      0
+      encoding.after.json       0
+      encoding.readback.json    0
+
+  A NOTE ON THIS FILE ITSELF, because it is the same trap 02.1-04 hit and the
+  D-32 watch's FORMAT block documents. The acceptance criterion is that the first
+  pattern returns 0 over EVERY committed artifact -- including this one. The first
+  draft of section 1 reproduced the Authorization header literally to explain how
+  the key is passed, and the value in it was `%s`, a printf PLACEHOLDER rather
+  than a credential. The check counted it anyway and returned 1. A correctly
+  written explanation of a safe practice must not be the thing that fails the
+  check asserting the practice was followed, so section 1 now DESCRIBES the header
+  instead of writing it out. That is deliberate, and the next editor should not
+  helpfully "fix" it back.
+
+    grep -cEi over this file, after the rewording:   0
+
+  The EncodingOptions object carries no credential material by construction. The
+  nearest thing to a sensitive-looking field is `EncoderAppPathDisplay`
+  (`/usr/lib/jellyfin-ffmpeg/ffmpeg`) and `VaapiDevice` (`/dev/dri/renderD128`),
+  both of which are paths already documented in jellyfin.yaml in this public
+  repo. THIS REPO IS PUBLIC and a round-2 cross-AI review specifically caught a
+  planned transcript in this phase that would have committed the API key, which
+  is why the screen is run twice against two independent patterns rather than
+  once.
+
+--------------------------------------------------------------------------------
+10. THE ROLLBACK SOURCE
+--------------------------------------------------------------------------------
+
+  encoding.before.json is the recovery for every failure mode in this task: POST
+  it back unmodified and the write is undone, re-arming nothing.
+
+  It exists in TWO places on purpose, so they cannot be lost together:
+
+    /mnt/fast/spike-021/05/encoding.before.json      on /mnt/fast, NEVER /tmp
+    .planning/…/artifacts/encoding.before.json       committed, in git
+
+  All three JSON artifacts are DECLARED in this plan's `files_modified`. The
+  reviewed version of the plan had its verify reading encoding.readback.json
+  while never declaring it, so a downstream consumer had no way to know it
+  existed.
+
+--------------------------------------------------------------------------------
+11. WHAT IS STILL OWED AFTER THIS TASK
+--------------------------------------------------------------------------------
+
+  THESE SETTINGS ARE SET, NOT PROVEN TO FIRE. That distinction is CONS-04's rule
+  and Phase 2 paid to learn it: `missing_album_artist_action` read back correctly
+  while silently not applying. A standing check cannot start a transcode, so it
+  cannot prove a retention setting engages -- it can only prove the value has not
+  drifted. Proving they FIRE is plan 02.1-08's job, once, with the evidence
+  recorded. This read-back must not stand in for that, and TRAN-03 stays pending
+  until it happens.
+
+  The standing check's section 5 will now report all five at their new values.
+  It reports them; it does not assert them, by design.
