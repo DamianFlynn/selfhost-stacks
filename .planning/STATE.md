@@ -92,15 +92,31 @@ it asked for: the operator browsed MA's Filesystem (local disk) provider, spot-c
 **played tracks to confirm the audio matches the metadata**. No assertion in this phase could do
 that — every automated check verifies MA's *database* says the right thing, never that the *bytes*
 are the right song, and the documented stale state is precisely "entries exist, playback fails".
-Last activity: 2026-09-02 — Phase 02.1 replanned against cross-AI review (`/gsd-review` →
-`/gsd-plan-phase --reviews`): 9 plans in 5 waves became 10 in 8, then 10 in **9** after review
-round 2, plan-checker passed with 0 blockers
-after one revision round. Gemini + Claude reviewed; **Codex could not run** (missing
-`@openai/codex-darwin-arm64`), so Gemini was the sole cross-family reviewer. All 26 findings applied
-or reframed with a stated reason, none rebutted. The two proofs that **could not fail** are repaired:
+Last activity: 2026-09-02 — Phase 02.1 replanned against cross-AI review in **two rounds**
+(`/gsd-review` → `/gsd-plan-phase --reviews`): 9 plans in 5 waves became 10 in 8, then 10 in **9**
+after round 2. **Round-2 plan-checker pass completed 2026-09-02 against commit `2755734`: 0
+blockers, 3 warnings, all three fixed.**
+**Round 1** — Gemini + Claude; **Codex could not run** (missing `@openai/codex-darwin-arm64`), so
+Gemini was the sole cross-family reviewer. All 26 findings applied or reframed with a stated reason,
+none rebutted. The two proofs that **could not fail** are repaired:
 `disable-jellyfin-hwaccel.sh` gained a standalone `verify-retention` sub-action and a `TRAN09_FAULT=1`
 gate, and the segment-deletion proof now drives a real HLS client whose download head must advance.
 The 49.5 GB ballast became a temporary `quota=1G` shrink with `conv=fsync` and a bounded retry.
+**Round 2** — the operator repaired the Codex install, and Codex reviewed the *revised* ten-plan set
+(the first genuinely non-Anthropic review of this phase). It raised **four HIGH findings neither
+round-1 reviewer surfaced**, three verified real against the plan text: `02.1-09`'s verification
+**re-ran the destructive prune** it was meant to verify; `02.1-06` would have committed the Jellyfin
+**API key** into this **public** repo, because Jellyfin embeds `api_key=` in `TranscodingUrl`; and the
+`quota=50G` restore was **prose, not a `trap`**, so an aborted run left the dataset at `quota=1G` —
+which takes the TV down on the next play. The fourth **reversed a round-1 decline**: `02.1-02`'s
+dependency on `02.1-01` was unencoded, and `parallelization: false` is mutable executor config, not
+dependency semantics. Encoding it cascaded 8 waves → 9 and D-31's descriptive wave number was
+corrected (its substance — cutover first — is unchanged). Codex was also **wrong once**: it argued a
+lost-append race on the D-32 watch because `02.1-07`/`08` share a wave, but neither writes to it —
+the eight writers are each alone in their wave. **Standing lesson: three of the four HIGH findings
+were plainly present in the plan text and no Anthropic-family reviewer saw them. Single-family
+review understates its own blind spot; verify every finding against the text rather than counting
+reviewers.**
 Research characterised the incident from Jellyfin's own source at the running tag (`v10.11.11`) and
 found the transcode was a **stream-copy remux** of an 18 GB / 17.93 Mbit/s source — one unbounded
 orphan accounts for the whole 19 GB. Two operator rulings were taken mid-planning: **D-29** hardens
