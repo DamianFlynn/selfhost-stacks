@@ -589,6 +589,7 @@ Recent decisions affecting current work:
 | 260826-0u0 | Document Tailscale configuration and low-level design across all systems | 2026-08-26 | complete ✓ |
 | 260901-u96 | Read-write NFS export on atlantis for Home Assistant backups (external RES-04) | 2026-09-01 | complete ✓ |
 | 260902-fxf | Refresh keeper-sh docs against live state, add keeper-mcp service, relocate misfiled Innofactor docs | 2026-09-02 | complete ✓ |
+| 260902-gln | Document who gets reminders for Keeper-created events; plan the Work-calendar split | 2026-09-02 | complete ✓ |
 
 ## Session Continuity
 

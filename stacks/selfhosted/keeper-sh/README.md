@@ -96,6 +96,52 @@ A few policy decisions are worth making explicit now because they come up again 
 
 If MVP titles should be hidden too, that is a per-calendar setting change in the UI, not a code or compose change.
 
+**Reminders belong to the viewer, not to Keeper — and this surprises people.** Keeper sets
+no reminders at all. Verified by string count across every service image:
+
+```bash
+for c in cal-worker cal-cron cal-api; do
+  printf "%-12s reminders=" "$c"; docker exec $c sh -c 'grep -roh reminders /app 2>/dev/null | wc -l'
+done
+# cal-worker   reminders=0
+# cal-cron     reminders=0
+# cal-api      reminders=0
+```
+
+Because Keeper inserts events with no `reminders` block, the Google API applies
+`reminders.useDefault = true`, which means **each viewer's own per-calendar notification
+settings decide what they receive.** Google's settings are personal — they "apply only to your
+account" and "don't affect the notifications of others".
+
+The consequence is easy to miss: **anyone you share a destination calendar with starts getting
+notified about your work meetings**, on their own defaults, for events they did not create.
+Daily agenda emails are the usual complaint.
+
+**The calendar owner cannot fix this for them.** Notification settings are per-user *and*
+per-calendar, so it must be changed while signed in as the affected person, at
+`calendar.google.com` (the mobile apps keep separate notification state):
+
+1. Settings (gear, top right) → **Settings**
+2. In the left sidebar, find the calendar under **"Settings for other calendars"** — *not*
+   "Settings for my calendars". A calendar shared *with* you lives in the other list. **This is
+   the single most common reason people report that the Daily agenda option is missing.**
+3. **Other notifications** → set **Daily agenda → None** and **New events → None**
+4. Clear **Event notifications** and **All-day event notifications** if per-event mail is also arriving
+
+Note also that a **re-ingest burst sends one "New events" email per created event** to anyone
+with that notification on. The 2.13 → 2.23 upgrade on 2026-09-02 added 185 events to Family and
+185 to Personal in a single cycle. Warn people who share these calendars before any upgrade or
+window change.
+
+> **Planned: split Work onto its own calendar.** Because Google's notification settings are
+> per-*calendar*, silencing work meetings today also silences genuine family events — they share
+> the Family calendar. The fix is to create a separate Google calendar for work, share it
+> read-only, and repoint the rule from `Work → Family` to `Work → <new calendar>`. Two risks
+> before attempting it: (1) it is **not known** whether deleting a Keeper sync rule cleans up the
+> destination events it created or orphans them — test on a throwaway calendar first; (2) the
+> migration deletes ~185 events from Family and creates them elsewhere, which is another
+> notification burst, so silence notifications *before* migrating.
+
 **Source authority.** The source calendar wins, unconditionally. If a synced busy block is edited or deleted in the destination, Keeper overwrites the change on the next cycle.
 
 **Deletion propagation.** Deleting a source event removes the corresponding destination busy block on the following cycle. The mapping row is cleaned up.
