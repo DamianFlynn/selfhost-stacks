@@ -22,6 +22,38 @@
 # Naming the service is load-bearing — see the `beets-spike-rw` comment below.
 #
 # ---------------------------------------------------------------------------------------------
+# MEASURED 2026-09-03 (plan 03-04) — `docker compose config` PRINTS THE DISCOGS TOKEN
+# ---------------------------------------------------------------------------------------------
+# Compose v5.0.2 RESOLVES `env_file` into the rendered `environment` map. So a plain
+# `docker compose -f … config` on this file emits DISCOGS_USER_TOKEN in cleartext and drops the
+# `env_file` key entirely (it renders as null), which also makes any "no TOKEN key in the
+# rendered environment" assertion fail for the wrong reason.
+#
+# ALWAYS pass `--no-env-resolution` when rendering this file for inspection or assertion:
+#
+#     docker compose -f 03-spike-beets.yaml --profile manual config --no-env-resolution
+#
+# With that flag `env_file` renders as a path reference, no secret appears in the output, and the
+# render is safe to redirect to a file. Never redirect an unflagged `config` render anywhere —
+# least of all to /tmp, which on LXC 100 is tmpfs.
+#
+# `--profile manual` is also required on `config`: both services carry `profiles: ["manual"]`, and
+# compose omits inactive-profile services from the render, so an unflagged `config` reports zero
+# services rather than two.
+#
+# ---------------------------------------------------------------------------------------------
+# TEARDOWN (plan 03-11) — USE `down -v`, NOT `down`
+# ---------------------------------------------------------------------------------------------
+# The LSIO image declares `/config` as a VOLUME. `/config` is deliberately NOT bound here (the
+# throwaway config lives at /spike-config instead), so docker creates an ANONYMOUS VOLUME for it
+# under /var/lib/docker/volumes/ — which is on LXC 100's ext4 ROOT filesystem. It stays empty in
+# this phase because BEETSDIR is repointed at /spike-config, but an anonymous docker volume
+# quietly consuming `/` is a failure this estate has already had once (19 GB of Jellyfin
+# transcode cache; see CLAUDE.md § Storage and Permissions). Reap it explicitly:
+#
+#     docker compose -f 03-spike-beets.yaml --profile manual down -v
+#
+# ---------------------------------------------------------------------------------------------
 # The .env trap (03-PATTERNS.md § Throwaway compose files)
 # ---------------------------------------------------------------------------------------------
 # Compose resolves `.env` from THE COMPOSE FILE'S OWN DIRECTORY. The stack files under

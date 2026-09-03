@@ -77,6 +77,43 @@ import:
 # through `env_file: /mnt/fast/secrets/discogs.env`; plan 03-06's probe injects it in Python from
 # os.environ, and plan 03-07's `beet import -t` cross-check generates a runtime config under
 # /mnt/fast/spike-03/beets-config/ with `umask 077` that is never committed.
+#
+# ---------------------------------------------------------------------------------------------
+# MEASURED 2026-09-03 (plan 03-04) — THIS FILE ALONE DOES NOT LOAD THE DISCOGS PLUGIN
+# ---------------------------------------------------------------------------------------------
+# With `user_token` unset, `beetsplug/discogs/__init__.py:145` falls through to the OAuth branch,
+# tries to open `$BEETSDIR/discogs_token.json`, fails, calls `authenticate()`, blocks on stdin and
+# raises. The plugin then DOES NOT LOAD. Observed exactly that:
+#
+#     ** error loading plugin discogs
+#     beets.exceptions.UserError: stdin stream ended while input required
+#     plugins: fromfilename, importsource, musicbrainz        <- discogs ABSENT
+#
+# AND `beet config -d` STILL PRINTED A FULL `discogs:` BLOCK while the plugin was not loaded,
+# because `DiscogsPlugin.__init__` registers its defaults via `self.config.add(...)` BEFORE it
+# calls `self.setup()` on line 105. So 03-RESEARCH.md's rule — "`beet config -d` prints a plugin's
+# defaults only when that plugin is loaded" — is HALF TRUE: absence of the block is still a
+# loading failure, but PRESENCE OF THE BLOCK IS NOT PROOF OF LOADING.
+#
+# The authoritative instrument is the loaded-plugin list:
+#     beet -c /spike-config/spike.yaml -l /spike-config/spike-probe.blb version
+#     -> plugins: discogs, fromfilename, importsource, musicbrainz
+# Every later plan should assert on THAT line, not on the presence of a `config -d` block.
+#
+# To reproduce this spike, generate the runtime token file FIRST — never committed, outside the
+# repo, mode 0600, written from the container's own environment so the token never reaches an
+# argv or the process table:
+#
+#     docker exec beets-spike python3 -c 'import os
+#     tok = os.environ["DISCOGS_USER_TOKEN"]
+#     os.umask(0o077)
+#     fd = os.open("/spike-config/config.yaml", os.O_WRONLY|os.O_CREAT|os.O_TRUNC, 0o600)
+#     os.fdopen(fd, "w").write("discogs:\n    user_token: " + tok + "\n")'
+#
+# BEETSDIR=/spike-config, so beets reads that file as a LOWER-priority source and confuse merges
+# it deeply under the `-c` file passed on every command line — verified: `search_limit: 5` and
+# `index_tracks: no` from THIS file and `user_token` from that one all take effect together, and
+# `beet config -d` renders the token as `REDACTED`.
 discogs:
   index_tracks: no
   search_limit: 5
