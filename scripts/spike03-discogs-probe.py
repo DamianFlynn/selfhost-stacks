@@ -175,17 +175,44 @@ EXIT-CODE CONVENTION (stated here deliberately, not inherited)
   silent partial success this phase exists to avoid.
 
 SECURITY
-  * The Discogs token travels in the `Authorization` header. `urllib3` DEBUG does NOT log headers;
-    `http.client.HTTPConnection.debuglevel = 1` DOES. This file sets `urllib3.connectionpool` to
-    DEBUG and NOTHING ELSE - in particular it never touches http.client debuglevel, and it does
-    not call logging.basicConfig(level=DEBUG) on the ROOT logger, because that would enable DEBUG
-    for every library in the process including any that logs headers (03-RESEARCH.md V7, ASVS V7).
+  * MEASURED 2026-09-03, AND IT OVERTURNS THE PLAN'S OWN MITIGATION. T-03-31 reasons that the
+    Discogs token is safe in `urllib3` DEBUG because "the token travels in the `Authorization`
+    header and urllib3 does not log headers". BOTH HALVES ARE TRUE AND THE CONCLUSION IS FALSE.
+    `python3-discogs-client` does not use an Authorization header at all for a user token: it
+    appends `?token=<value>` to the QUERY STRING, and urllib3.connectionpool logs the full
+    request line at DEBUG. The first smoke run therefore wrote the live token, in cleartext, to
+    a 0644 file on a host running 100+ containers:
+
+        DEBUG urllib3.connectionpool https://api.discogs.com:443
+              "GET /releases/NNNNNNN?token=<REDACTED> HTTP/1.1" 200 None
+
+    So the request-counting instrument criterion 2 depends on is ALSO a credential sink, and no
+    amount of header discipline fixes it. It is fixed at the LOGGING RECORD, not by remembering
+    to screen the file afterwards:
+      - SecretRedactingFilter is attached to BOTH the urllib3.connectionpool logger and the stderr
+        handler. A logger-level filter alone is not enough - a record that PROPAGATES to an
+        ancestor's handler does not re-run the ancestor logger's filters - so the choke point that
+        actually guarantees coverage is the handler.
+      - RedactingFormatter re-redacts the fully formatted line, which is what covers a rendered
+        traceback (`exc_text`) that never passes through `record.getMessage()`.
+      - Two independent nets: a pattern net over `token=`/`key=`/`secret=`/`signature=`/
+        `password=`/`access_token=` query parameters, and an EXACT-VALUE net over the live secret,
+        registered by require_env(). The pattern net catches a parameter we have not seen; the
+        exact-value net catches a serialisation we have not seen.
+      - The same redact() is applied to every exception detail written to PREFIX.failed, because
+        `discogs_client` raises exceptions carrying the request URL.
+  * `http.client.HTTPConnection.debuglevel = 1` DOES log request headers. This file never sets it,
+    and never calls logging.basicConfig(level=DEBUG) on the ROOT logger, because that would enable
+    DEBUG for every library in the process (03-RESEARCH.md V7, ASVS V7). Both still hold; they
+    were simply never the binding constraint.
   * The token is read from os.environ and assigned to `config["discogs"]["user_token"]`. It is
-    never an argv element, never written to a file by this script, never logged, and never a value
+    never an argv element, never deliberately written to a file by this script, and never a value
     in an emitted record. Do not add a "config dump" debug flag to this file.
-  * Before quoting ANY of the stderr in a committed artefact, screen it for `Authorization` and
-    for the token value. Plan 03-04 briefly leaked the token to a 0644 file from an ad-hoc
-    verification command; the discipline lapses at the verification step, not at the design step.
+  * STILL screen the stderr before quoting ANY of it in a committed artefact - for the literal
+    string `token=`, for `Authorization`, and for the token value itself. The redaction is a
+    control, not a reason to stop looking. Plan 03-04 briefly leaked the token to a 0644 file from
+    an ad-hoc verification command, and this plan leaked it again from a designed one; the
+    discipline lapses at the verification step, not at the design step.
 
 HAZARD NOTES
   * A BIND MOUNT PINS THE DIRECTORY INODE, NOT THE PATH (plan 03-05 finding 3). If a mounted tree
@@ -256,6 +283,52 @@ YELLOW = "\033[1;33m"
 NC = "\033[0m"
 
 log = logging.getLogger("spike03-probe")
+
+# --------------------------------------------------------------------------------------------
+# Secret redaction. See SECURITY in the module docstring - this exists because the plan's own
+# T-03-31 mitigation was measured FALSE: python3-discogs-client puts the user token in the QUERY
+# STRING, and urllib3.connectionpool logs the request line at DEBUG.
+# --------------------------------------------------------------------------------------------
+
+# Net 1 - by parameter NAME. Catches a credential parameter we have not seen yet.
+SECRET_QS_RE = re.compile(
+    r"(?i)\b(access_token|token|key|secret|signature|password|passwd|api_key)=[^&\s\"'<>]+"
+)
+
+# Net 2 - by exact VALUE. Populated by require_env() with the live secret, so a serialisation we
+# have not seen (a JSON body, a header dump from some other library) is still caught. Never
+# printed, never written; only ever used as the LHS of a str.replace.
+SECRETS: list[str] = []
+
+
+def redact(text: str) -> str:
+    out = SECRET_QS_RE.sub(lambda m: m.group(1) + "=REDACTED", text)
+    for secret in SECRETS:
+        if secret:
+            out = out.replace(secret, "REDACTED")
+    return out
+
+
+class SecretRedactingFilter(logging.Filter):
+    """Rewrites the record itself, so every downstream handler sees a redacted message."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        try:
+            msg = record.getMessage()
+        except Exception:  # noqa: BLE001 - a filter must never break the run
+            return True
+        clean = redact(msg)
+        if clean != msg:
+            record.msg = clean
+            record.args = ()
+        return True
+
+
+class RedactingFormatter(logging.Formatter):
+    """Re-redacts the FULLY FORMATTED line, which is what covers a rendered traceback."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        return redact(super().format(record))
 
 
 def colour(text: str, code: str) -> str:
@@ -337,14 +410,21 @@ class DiscogsTrafficCounter(logging.Handler):
 
 
 def configure_logging(verbose: bool) -> None:
-    """Explicitly NOT logging.basicConfig(level=DEBUG).
+    """Explicitly NOT logging.basicConfig(level=DEBUG), and redacting at two layers.
 
     A root-level DEBUG would enable DEBUG for every library in the process. This turns DEBUG on
-    for exactly one logger, and never touches http.client debuglevel, which WOULD log the
-    Authorization header the Discogs token travels in.
+    for exactly one logger, and never touches http.client debuglevel, which WOULD log request
+    headers.
+
+    The redaction is not belt-and-braces politeness: the request line urllib3 logs at DEBUG
+    CONTAINS the Discogs user token, because python3-discogs-client passes it as a `?token=`
+    query parameter rather than in a header. Measured, not assumed - see SECURITY.
     """
     handler = logging.StreamHandler(stream=sys.stderr)
-    handler.setFormatter(logging.Formatter("%(levelname)s %(name)s %(message)s"))
+    handler.setFormatter(RedactingFormatter("%(levelname)s %(name)s %(message)s"))
+    # THE choke point. A logger-level filter does NOT run for a record that propagated here from
+    # a descendant logger, so the handler is the only place coverage is guaranteed.
+    handler.addFilter(SecretRedactingFilter())
 
     root = logging.getLogger()
     root.setLevel(logging.DEBUG if verbose else logging.INFO)
@@ -352,6 +432,9 @@ def configure_logging(verbose: bool) -> None:
 
     pool = logging.getLogger("urllib3.connectionpool")
     pool.setLevel(logging.DEBUG)
+    # Second net, at the source: the record is clean before ANY handler - including the counter
+    # below and anything a future plan attaches - ever sees it.
+    pool.addFilter(SecretRedactingFilter())
     pool.addHandler(DiscogsTrafficCounter())
 
 
@@ -377,7 +460,12 @@ def require_env() -> dict[str, str]:
             )
         )
         sys.exit(2)
-    return {k: os.environ[k] for k in REQUIRED_ENV}
+    env = {k: os.environ[k] for k in REQUIRED_ENV}
+    # Net 2 of the redaction: register the live secret by VALUE, so a serialisation the
+    # parameter-name net does not recognise is still scrubbed before it reaches stderr. This runs
+    # before the first Discogs request by construction - both refusals below come after it.
+    SECRETS.append(env["DISCOGS_USER_TOKEN"])
+    return env
 
 
 def bootstrap_beets(env: dict[str, str]):
@@ -469,7 +557,9 @@ def discogs_identity_probe(token: str, user_agent: str) -> dict:
             colour(
                 "REFUSING TO RUN: the Discogs identity probe could not complete.\n"
                 f"  {IDENTITY_URL}\n"
-                f"  {type(exc).__name__}: {str(exc)[:300]}\n"
+                # Redact BEFORE truncating: truncating first can leave a token fragment that the
+                # exact-value net no longer matches.
+                f"  {type(exc).__name__}: {redact(str(exc))[:300]}\n"
                 "  A failed HTTP call and a genuine no-match produce the SAME empty result, so\n"
                 "  this run stops rather than emitting folders of silently-wrong zeros.\n",
                 RED,
@@ -854,7 +944,9 @@ def main(argv=None) -> int:
                             "folder_path": folder,
                             "stage": "tag_album",
                             "exception": type(exc).__name__,
-                            "detail": str(exc)[:400],
+                            # discogs_client raises exceptions carrying the request URL, and the
+                            # URL carries the token. Redact BEFORE truncating.
+                            "detail": redact(str(exc))[:400],
                         }
                     )
                     + "\n"
