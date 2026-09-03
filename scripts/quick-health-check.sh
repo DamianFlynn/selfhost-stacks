@@ -16,7 +16,12 @@
 #     The harness's two library mode counts are REPORTED, not asserted, so this script does not
 #     inherit a permanent red — see MODE SCOPE in scripts/check-music-freeze.sh.
 #
-# ⚠️  A SECOND FATAL BLOCK WAS ADDED 2026-09-01 (plan 02-09, D-41).
+# ⚠️  EXIT-CODE BEHAVIOUR CHANGED AGAIN — A SECOND FATAL BLOCK WAS ADDED 2026-09-01 (plan 02-09,
+#     D-41).
+#     (Retitled 2026-09-03 by plan 02.1-10. Only the first six words are new: this notice was
+#     written as "A SECOND FATAL BLOCK WAS ADDED" and did not carry the shared phrase, so
+#     `grep -c 'EXIT-CODE BEHAVIOUR CHANGED'` returned 1 while the file held two such notices.
+#     The convention is now greppable, which is the only reason to name a thing consistently.)
 #     scripts/check-music-consumers.sh now also runs here, and it too exits this script 1 on a
 #     failed assertion or on an unreachable host. Stated in the file for the same reason as
 #     above: a silent addition to what can fail a shared health check is exactly the kind of
@@ -36,6 +41,60 @@
 #
 #     Both its scope=temp-export rows and its Jellyfin out-of-scope rows are REPORTED, not
 #     asserted, so this script does not inherit a permanent red from a torn-down control either.
+#
+# ⚠️  EXIT-CODE BEHAVIOUR CHANGED AGAIN — A THIRD FATAL BLOCK WAS ADDED 2026-09-03 (phase 02.1,
+#     plan 02.1-10, D-20).
+#     scripts/check-jellyfin-transcode.sh now also runs here, and it too exits this script 1.
+#     Stated in the file for the same reason as the two notices above: a silent addition to what
+#     can fail a shared health check is exactly the kind of thing that should be visible here and
+#     not only in a plan.
+#
+#     (The plan set was written 2026-09-02 and its acceptance criterion names that date. Execution
+#     crossed midnight UTC, so the true addition date is the 3rd and that is what is recorded —
+#     the same UTC/local rollover that cost plan 02.1-06 a run when its proof client computed a
+#     log filename by date arithmetic. A notice that states when it was added should state when it
+#     was actually added.)
+#
+#     WHAT MAKES IT EXIT 1 — six conditions, and five of them are "could not look":
+#       - a failed assertion in the check itself
+#       - LXC 100 (172.16.1.159) unreachable            [caught by the probe at lines 60-69]
+#       - atlantis (172.16.1.158) unreachable, so the authoritative zfs quota and mounted
+#         readings cannot be taken
+#       - the Jellyfin container absent or docker unavailable
+#       - the credential file at /mnt/fast/secrets/jellyfin-deercrest.env absent, or not 600 root
+#       - fast/transcode UNMOUNTED. This one is the least obvious and the most dangerous: if the
+#         dataset is not mounted, /mnt/fast/transcode is a PLAIN DIRECTORY on the parent, the bind
+#         still works, the container still writes — and the 50 G quota applies to none of it,
+#         while `zfs get quota` from atlantis still returns 53687091200 and reads perfectly green.
+#         An unmounted dataset is an unbounded transcode path that looks completely normal.
+#
+#     WHAT IT COVERS, by requirement id:
+#       TRAN-01  the mount shape — /cache and /cache/transcodes are declared binds to /mnt/fast
+#       TRAN-02  ZERO `Type: volume` mounts on the container. The INVARIANT, not one volume id:
+#                a fresh anonymous volume with a different id is the same failure
+#       TRAN-03  the 50 G ZFS quota on fast/transcode AND the dataset being mounted
+#       TRAN-04  the five encoding values, plus the two amdgpu values (D-30)
+#       TRAN-05  `/` headroom against a 20 GiB floor
+#
+#     WHICH OF ITS ROWS ARE REPORTED, NOT ASSERTED — so the reader knows it will not go
+#     permanently red, which is the 01-09 trap and the reason the mode-bit assertions were
+#     removed from check-music-freeze.sh:
+#       - The seven encoding values are REPORTED. A standing check cannot start a transcode, so
+#         it cannot prove a setting FIRES; it can only prove the value has not drifted. They are
+#         a REGRESSION DETECTOR. The firing proofs were executed once, by plan 02.1-06, from
+#         Jellyfin's own Debug log — do not let this read-back stand in for that (CONS-04).
+#       - The `/` headroom floor is GREEN TODAY WITH MEASURED MARGIN, chosen that way
+#         deliberately. At the phase head the margin was 185 MiB; after 02.1-06 deleted the
+#         12.55 GiB anonymous volume and 02.1-09 reaped four images it is 14.48 GiB. A
+#         permanently-red check trains the reader to ignore it, so a red here should be read as
+#         real.
+#       - Section 4's `df` reading of the transcode directory is REPORTED (corroboration only).
+#
+#     A JELLYFIN API BLIP IS NOT A BOUND VIOLATION. The encoding GET retries 3× at 2 s and, if
+#     all three fail, is reported as `UNREACHABLE` in a counter kept SEPARATE from the failure
+#     count. The script still exits non-zero — fail-closed is not negotiable (D-19) — but the
+#     reader can tell "could not look" from "the value moved". A check that goes red for
+#     transient reasons trains the reader to ignore it exactly as a permanently-red one does.
 
 EXIT_CODE=0
 
@@ -210,8 +269,64 @@ else
     EXIT_CODE=1
 fi
 
+# Jellyfin transcode retention audit (D-20). Host-resident on LXC 100 for REACHABILITY AND
+# CREDENTIALS, and additionally because it CANNOT run here: it measures free space with
+# `df -B1 --output=avail`, which is GNU coreutils only. BSD df on macOS silently ignores --output
+# and prints its own layout, which would parse into a WRONG NUMBER rather than into an error — so
+# the script guards on `uname -s` and exits 2 on Darwin. Jellyfin also publishes no reachable host
+# port from here and its API key lives at /mnt/fast/secrets/ on that host. It lands on the host by
+# `git pull` into /mnt/fast/stacks — there is no copy step to remember.
+#
+# This is the block that would have caught the incident phase 02.1 exists to fix: 19 GB of
+# transcode cache accumulated in an ANONYMOUS docker volume on / over ~36 hours, taking / to zero,
+# with nothing anywhere saying so.
+echo -n "Jellyfin transcode retention: "
+TRANSCODE_OUT=$(ssh -n $SSH_OPTS root@172.16.1.159 \
+    "bash /mnt/fast/stacks/scripts/check-jellyfin-transcode.sh 2>&1")
+TRANSCODE_RC=$?   # ssh propagates the remote exit status — do NOT pipe before capturing this
+# Strip ANSI colour separately. \x1b is a GNU sed extension and this script runs on macOS, so the
+# ESC is spelled with bash's $'...' quoting instead.
+TRANSCODE_OUT=$(printf '%s\n' "$TRANSCODE_OUT" | LC_ALL=C sed $'s/\033\\[[0-9;]*m//g')
+
+if [ -z "$TRANSCODE_OUT" ]; then
+    # Unreachable host, or the script is not on the host at all. Absence of a failure signal is
+    # NOT evidence of health — same precedent as the two blocks above. PROVEN REACHABLE, not
+    # assumed: plan 02.1-10 drove this branch by moving the host-side script aside (VALIDATION
+    # row 23) and confirmed it exits this script 1, then restored it and re-verified by sha256.
+    echo "⚠️  UNKNOWN — 172.16.1.159 unreachable or the audit produced no output"
+    echo "  The transcode retention state is unknown, NOT green. Check the host, then re-run:"
+    echo "  ssh root@172.16.1.159 'cd /mnt/fast/stacks && git pull --ff-only && bash scripts/check-jellyfin-transcode.sh'"
+    EXIT_CODE=1
+elif [ "$TRANSCODE_RC" -eq 0 ]; then
+    # WR-09, the same defect as both blocks above, and this is the THIRD fold-in to carry the
+    # guard. check-jellyfin-transcode.sh:588 says "KEEP THIS HEADING LITERAL AND NEVER RENUMBER
+    # IT SILENTLY" — a documented coupling with no detector is a coupling that will break, and it
+    # breaks on the branch that still prints a tick. PROVEN REACHABLE, not assumed: plan 02.1-10
+    # renumbered that heading on purpose (VALIDATION row 24), confirmed this branch printed and
+    # the exit was 1, then restored it and re-verified by sha256.
+    SUMMARY=$(echo "$TRANSCODE_OUT" | sed -n '/^📊 6\. Summary/,$p' \
+              | grep -E '/ headroom|volume mounts|transcode quota|transcode mounted|unreachable|FAILURES total')
+    if [ -z "$SUMMARY" ]; then
+        echo "⚠️  UNKNOWN — the audit exited 0 but its '📊 6. Summary' block was not found."
+        echo "  The section heading this fold-in anchors on has changed, so nothing here was"
+        echo "  actually read. State is UNKNOWN, not green. See check-jellyfin-transcode.sh's summary."
+        EXIT_CODE=1
+    else
+        echo "✅ Transcode retention intact"
+        echo "$SUMMARY" | sed 's/^/  /'
+    fi
+else
+    echo "❌ BROKEN (check-jellyfin-transcode.sh exit $TRANSCODE_RC)"
+    echo "  Failed assertions:"
+    echo "$TRANSCODE_OUT" | grep '❌' | sed 's/^ */    /'
+    echo "  Summary:"
+    echo "$TRANSCODE_OUT" | sed -n '/^📊 6\. Summary/,$p' | sed 's/^/  /'
+    EXIT_CODE=1
+fi
+
 if [ "$EXIT_CODE" -ne 0 ]; then
     echo ""
-    echo "❌ Health check FAILED — see the music freeze harness and/or the consumers audit above."
+    echo "❌ Health check FAILED — see the music freeze harness, the consumers audit and/or the"
+    echo "   Jellyfin transcode retention audit above."
     exit 1
 fi
