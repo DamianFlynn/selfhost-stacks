@@ -1,0 +1,149 @@
+# THROWAWAY — DO NOT DEPLOY
+#
+# The spike beets config for axis one. Copied to /mnt/fast/spike-03/beets-config/spike.yaml at run
+# time and named explicitly on every invocation:
+#
+#   beet -c /spike-config/spike.yaml -l /spike-config/spike-probe.blb <command>
+#
+# It is NOT `config.yaml`, it does NOT live under /mnt/fast/appdata/arrs/beets/config, and it is
+# never merged into the real beets configuration. D-03 keeps the frozen stacks untouched; this
+# file is what the spike is measured with instead.
+#
+# IT CONTAINS NO CREDENTIAL. `discogs.user_token` is deliberately absent — see the discogs block.
+
+# ---------------------------------------------------------------------------------------------
+# plugins — THE SINGLE MOST IMPORTANT LINE IN THIS FILE
+# ---------------------------------------------------------------------------------------------
+# Since beets 2.4.0 MusicBrainz is a PLUGIN, and beets' own config_default.yaml ships
+# `plugins: [musicbrainz]`. A customised `plugins:` list that omits it does not error — it
+# SILENTLY DISABLES ALL MUSICBRAINZ AUTOTAGGING, and the symptom presents as "no match found"
+# rather than as a config problem. That is the exact defect TAGR-05 exists to close, and it is
+# still true at 2.13.1 and at 2.12.0 (the version beets-flask rc6 hard-pins). `musicbrainz` is
+# therefore listed EXPLICITLY and first.
+#
+#   musicbrainz   — primary source for strata V1/V2/V6 (bucket A/B)
+#   discogs       — the only route to Mastermix / DMC / Music Factory metadata (bucket C).
+#                   `python3-discogs-client` is already baked into
+#                   lscr.io/linuxserver/beets:2.13.1-ls349, so this is CONFIG ONLY: no pip
+#                   install, no build dependency, no LSIO mod (T-03-SC).
+#   importsource  — records `source_path` on every item, which is what makes an interrupted
+#                   import resumable. Enabled from day one; it directly mitigates the
+#                   "abandoned halfway" failure mode this project exists to prevent.
+#   fromfilename  — infers track/title when `title` is MISSING. It fires on the minority of
+#                   bucket C files with no usable tags; it cannot help the 7-of-8 dj-mixes files
+#                   that are tagged, wrongly.
+plugins: musicbrainz discogs importsource fromfilename
+
+# ---------------------------------------------------------------------------------------------
+# Paths — never the image default
+# ---------------------------------------------------------------------------------------------
+# The LSIO image ships BEETSDIR=/config, which is the REAL library's directory on this host. Both
+# keys below name the throwaway directory in full, at the path that is identical inside and
+# outside the container (see 03-spike-beets.yaml, `x-vol-beets-config-long`). Nothing in this
+# phase should ever cause `directory:` to be written to — it is set so that if something did, it
+# lands in the throwaway tree and not on `tank`.
+directory: /mnt/fast/spike-03/beets-config/library
+library: /mnt/fast/spike-03/beets-config/spike-probe.blb
+
+# ---------------------------------------------------------------------------------------------
+# import — Pitfall 5
+# ---------------------------------------------------------------------------------------------
+# The estate's real beets configs set `import.move: yes`, which MOVES files out of the source
+# tree. A spike config that inherited that and met a real path would destroy the source. `move`
+# is therefore stated as `no` EXPLICITLY rather than left to a default, and `copy` as `yes`.
+# `tank` has ~9 T free, so the duplication is affordable and reversible.
+import:
+  copy: yes            # duplicate, never relocate
+  move: no             # EXPLICIT. Never rely on the default here.
+  write: no            # do not write tags back to source files during a spike measurement
+  incremental: no      # no hidden state that claims work is done after a rollback
+  resume: no           # never silently resume a half-finished session
+  # Note: `import.timid` is NOT set here. Plan 03-07's cross-check passes `-t` on the command
+  # line for the folders it applies to, so the setting stays visible in the transcript.
+
+# ---------------------------------------------------------------------------------------------
+# discogs — both keys stated explicitly, and no token
+# ---------------------------------------------------------------------------------------------
+# `search_limit` and `index_tracks` are BOTH written out rather than left to their defaults, for
+# two independent reasons:
+#   * request count scales linearly with `search_limit`, and criterion 2's whole extrapolation is
+#     a request count — an unstated limit makes the number uninterpretable;
+#   * the D-05 strict rule ("track count agrees with the folder") is meaningless without stating
+#     HOW tracks were counted, and `index_tracks` is exactly that switch. Plan 03-07 runs the
+#     strict scoring at `index_tracks` both `no` and `yes` and states which produced the headline.
+#
+# `user_token` IS DELIBERATELY ABSENT (T-03-17). This repository is public and already carries one
+# credential exposure still recoverable via `git log -S`. The token reaches the container only
+# through `env_file: /mnt/fast/secrets/discogs.env`; plan 03-06's probe injects it in Python from
+# os.environ, and plan 03-07's `beet import -t` cross-check generates a runtime config under
+# /mnt/fast/spike-03/beets-config/ with `umask 077` that is never committed.
+#
+# ---------------------------------------------------------------------------------------------
+# MEASURED 2026-09-03 (plan 03-04) — THIS FILE ALONE DOES NOT LOAD THE DISCOGS PLUGIN
+# ---------------------------------------------------------------------------------------------
+# With `user_token` unset, `beetsplug/discogs/__init__.py:145` falls through to the OAuth branch,
+# tries to open `$BEETSDIR/discogs_token.json`, fails, calls `authenticate()`, blocks on stdin and
+# raises. The plugin then DOES NOT LOAD. Observed exactly that:
+#
+#     ** error loading plugin discogs
+#     beets.exceptions.UserError: stdin stream ended while input required
+#     plugins: fromfilename, importsource, musicbrainz        <- discogs ABSENT
+#
+# AND `beet config -d` STILL PRINTED A FULL `discogs:` BLOCK while the plugin was not loaded,
+# because `DiscogsPlugin.__init__` registers its defaults via `self.config.add(...)` BEFORE it
+# calls `self.setup()` on line 105. So 03-RESEARCH.md's rule — "`beet config -d` prints a plugin's
+# defaults only when that plugin is loaded" — is HALF TRUE: absence of the block is still a
+# loading failure, but PRESENCE OF THE BLOCK IS NOT PROOF OF LOADING.
+#
+# The authoritative instrument is the loaded-plugin list:
+#     beet -c /spike-config/spike.yaml -l /spike-config/spike-probe.blb version
+#     -> plugins: discogs, fromfilename, importsource, musicbrainz
+# Every later plan should assert on THAT line, not on the presence of a `config -d` block.
+#
+# To reproduce this spike, generate the runtime token file FIRST — never committed, outside the
+# repo, mode 0600, written from the container's own environment so the token never reaches an
+# argv or the process table:
+#
+#     docker exec beets-spike python3 -c 'import os
+#     tok = os.environ["DISCOGS_USER_TOKEN"]
+#     os.umask(0o077)
+#     fd = os.open("/spike-config/config.yaml", os.O_WRONLY|os.O_CREAT|os.O_TRUNC, 0o600)
+#     os.fdopen(fd, "w").write("discogs:\n    user_token: " + tok + "\n")'
+#
+# BEETSDIR=/spike-config, so beets reads that file as a LOWER-priority source and confuse merges
+# it deeply under the `-c` file passed on every command line — verified: `search_limit: 5` and
+# `index_tracks: no` from THIS file and `user_token` from that one all take effect together, and
+# `beet config -d` renders the token as `REDACTED`.
+discogs:
+  index_tracks: no
+  search_limit: 5
+
+# ---------------------------------------------------------------------------------------------
+# musicbrainz / match
+# ---------------------------------------------------------------------------------------------
+musicbrainz:
+  searchlimit: 5
+
+match:
+  preferred:
+    # This is a UK/IE collection: Mastermix, DMC and Music Factory are UK DJ services, and the
+    # `Now That's What I Call Music` sets have divergent UK and US track listings.
+    countries: ['GB', 'US']
+
+# ---------------------------------------------------------------------------------------------
+# Auto keys — AN ABSENT KEY IS AN ARMED KEY
+# ---------------------------------------------------------------------------------------------
+# beets' `auto` keys default to ON. Phase 1 found five configs in this estate with exactly that
+# problem. None of these five plugins is in the `plugins:` list above, so none of them can fire
+# today — these settings are disarmed IN ADVANCE, so that adding a plugin later cannot silently
+# arm a side effect that mutates the sample this phase is measuring on.
+scrub:
+  auto: no
+lastgenre:
+  auto: no
+embedart:
+  auto: no
+fetchart:
+  auto: no
+replaygain:
+  auto: no

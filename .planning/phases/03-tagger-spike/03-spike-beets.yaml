@@ -1,0 +1,289 @@
+# THROWAWAY — DO NOT DEPLOY
+#
+# This file exists only to reproduce a Phase 3 measurement. It is not a stack. It is referenced by
+# no `include:` list, no `compose.yaml`, and nothing under `stacks/`. It lives in the phase
+# directory on purpose: a directory under `stacks/selfhosted/` looks permanent, and a reviewer six
+# weeks from now reading it as a fourth tagging path is precisely the failure mode this project
+# exists to prevent (PROJECT.md § Core Value — "a fourth half-built path is the one outcome that
+# must not happen").
+#
+# D-03: `stacks/selfhosted/arrs/beets/beets.yaml` and `stacks/selfhosted/music/wrtag.yaml` are
+# READ and QUOTED by this phase and NOT edited. Both were deliberately frozen in Phase 1 behind
+# `restart: "no"` + `profiles: ["manual"]`. The spike measures; Phase 4 deletes the loser; Phase 6
+# configures the winner. Do not half-deploy a decision nobody has made.
+#
+# Plan 03-11 ARCHIVES this file in place under `.planning/` with this banner intact rather than
+# deleting it. Deleting the exact executable config would cost the spike its reproducibility;
+# the banner plus the `.planning/` location is what keeps it from being read as a deployable path.
+#
+# How it is invoked (never a bare `docker compose up`):
+#   docker compose -f .planning/phases/03-tagger-spike/03-spike-beets.yaml \
+#     --profile manual up -d beets-spike
+# Naming the service is load-bearing — see the `beets-spike-rw` comment below.
+#
+# ---------------------------------------------------------------------------------------------
+# MEASURED 2026-09-03 (plan 03-04) — `docker compose config` PRINTS THE DISCOGS TOKEN
+# ---------------------------------------------------------------------------------------------
+# Compose v5.0.2 RESOLVES `env_file` into the rendered `environment` map. So a plain
+# `docker compose -f … config` on this file emits DISCOGS_USER_TOKEN in cleartext and drops the
+# `env_file` key entirely (it renders as null), which also makes any "no TOKEN key in the
+# rendered environment" assertion fail for the wrong reason.
+#
+# ALWAYS pass `--no-env-resolution` when rendering this file for inspection or assertion:
+#
+#     docker compose -f 03-spike-beets.yaml --profile manual config --no-env-resolution
+#
+# With that flag `env_file` renders as a path reference, no secret appears in the output, and the
+# render is safe to redirect to a file. Never redirect an unflagged `config` render anywhere —
+# least of all to /tmp, which on LXC 100 is tmpfs.
+#
+# `--profile manual` is also required on `config`: both services carry `profiles: ["manual"]`, and
+# compose omits inactive-profile services from the render, so an unflagged `config` reports zero
+# services rather than two.
+#
+# ---------------------------------------------------------------------------------------------
+# TEARDOWN (plan 03-11) — USE `down -v`, NOT `down`
+# ---------------------------------------------------------------------------------------------
+# The LSIO image declares `/config` as a VOLUME. `/config` is deliberately NOT bound here (the
+# throwaway config lives at /spike-config instead), so docker creates an ANONYMOUS VOLUME for it
+# under /var/lib/docker/volumes/ — which is on LXC 100's ext4 ROOT filesystem. It stays empty in
+# this phase because BEETSDIR is repointed at /spike-config, but an anonymous docker volume
+# quietly consuming `/` is a failure this estate has already had once (19 GB of Jellyfin
+# transcode cache; see CLAUDE.md § Storage and Permissions). Reap it explicitly:
+#
+#     docker compose -f 03-spike-beets.yaml --profile manual down -v
+#
+# ---------------------------------------------------------------------------------------------
+# The .env trap (03-PATTERNS.md § Throwaway compose files)
+# ---------------------------------------------------------------------------------------------
+# Compose resolves `.env` from THE COMPOSE FILE'S OWN DIRECTORY. The stack files under
+# `stacks/selfhosted/<stack>/` write `$TZ` / `$PUID` / `$PGID` and are fed by a sibling `.env`
+# that is gitignored (`.gitignore:1  **/.env`). This file has no `.env` sibling, so copying
+# `$TZ`/`$PUID`/`$PGID` verbatim from `beets.yaml` would expand them to the EMPTY STRING with only
+# a warning on stderr — a container that starts, runs as uid 0, and reports a blank timezone.
+# Every value below is therefore written as a LITERAL. `568:568` is `apps:apps` per CLAUDE.md
+# § Storage and Permissions.
+
+# ---------------------------------------------------------------------------------------------
+# Shared service body. Both services are identical except for ONE mount (see below), and that
+# claim is kept structurally true by a YAML anchor rather than by two copies that can drift.
+# ---------------------------------------------------------------------------------------------
+x-spike-common: &spike-common
+  # D-02: beets is measured at 2.13.1, not the installed 2.5.1-ls295, for symmetry with D-01 —
+  # both engines measured at what would actually be deployed. The `-ls349` suffix is not optional:
+  # the unsuffixed `2.13.1` FLOATS across LSIO revisions (it moved ls344 -> ls349 in five weeks),
+  # and this repo has a documented Renovate deploy-drift problem. `:latest` and `:nightly` are
+  # prohibited outright — LSIO's `nightly` stream tracks beets master, rebuilt daily.
+  # `2.13.1-ls349` was verified published 2026-08-29; `2.13.1-ls350` returns 404.
+  image: lscr.io/linuxserver/beets:2.13.1-ls349
+  security_opt:
+    - no-new-privileges:true
+  # Copied from beets.yaml:10-11. A throwaway spike must never come up on a daemon restart, and
+  # must never be swept in by a bare `docker compose up` at the repo root.
+  restart: "no"
+  profiles: ["manual"]
+  environment:
+    # LITERALS, not $TZ/$PUID/$PGID — see "The .env trap" above.
+    TZ: Europe/Dublin
+    PUID: 568
+    PGID: 568
+    # Pitfall 1 defence in depth. The LSIO image ships BEETSDIR=/config, which is where the REAL
+    # beets library.db lives on this host. Repointing it at the throwaway directory means that
+    # even an invocation that forgets `-c`/`-l` cannot reach `/mnt/fast/appdata/arrs/beets`.
+    # This is a backstop, NOT the control: every invocation in this phase still passes an
+    # explicit `-c` AND an explicit `-l`.
+    BEETSDIR: /spike-config
+  # T-03-16 / T-03-17. The Discogs token crosses into the container HERE and only here.
+  # Absolute path, outside the repo, mode 600 root, never committed. Never `-e
+  # DISCOGS_USER_TOKEN=...` and never on a `docker exec` argv: this host runs 103 containers with
+  # a readable process table, which is why D-04 wrote the file via stdin in the first place. The
+  # variable is referenced by NAME only — `DISCOGS_USER_TOKEN` — and its value appears nowhere in
+  # this repository, which is public and already carries one credential exposure recoverable via
+  # `git log -S`.
+  env_file:
+    - /mnt/fast/secrets/discogs.env
+  # Deliberately absent, both services:
+  #   * no `ports:` — a throwaway spike gets no published port.
+  #   * no `labels:` / traefik block — no public hostname, no Authelia chain (cf. beets.yaml:28-42).
+  #   * no `networks:` — nothing here needs t3_proxy.
+  #   * no `privileged`, no `cap_add`, no `devices` (T-03-21).
+
+# ---------------------------------------------------------------------------------------------
+# Mounts, defined once and referenced by both services.
+#
+# The governing principle, applied at the mount layer rather than in an after-the-fact check:
+# A PLAN THAT ONLY READS GETS NO WRITE HANDLE ON WHAT IT READS. The sample is this phase's whole
+# substrate. The safety argument must not reduce to "a `find -newer` would have noticed".
+# Absence of the capability beats detection of its use — the same argument the phase already
+# makes for the library itself (D-20).
+#
+# Every `tank` path is bound at an IDENTICAL PATH INSIDE AND OUTSIDE the container, so a path
+# recorded by beets in an NDJSON row means the same thing on both sides of the boundary.
+# ---------------------------------------------------------------------------------------------
+
+# The un-normalised paired arm for criterion 1. NOTHING IN THIS PHASE WRITES raw/ — not in any
+# plan, not on any service. Read-only without exception.
+x-vol-raw: &vol-raw
+  type: bind
+  source: /mnt/tank/downloads/spike-03/raw
+  target: /mnt/tank/downloads/spike-03/raw
+  read_only: true
+
+# The normalised arm, READ-ONLY. This is the measurement service's binding. Plan 03-05's DRY RUN
+# runs here, which makes "a dry run that is not dry" impossible at the mount layer rather than
+# merely detectable afterwards.
+x-vol-normalised-ro: &vol-normalised-ro
+  type: bind
+  source: /mnt/tank/downloads/spike-03/normalised
+  target: /mnt/tank/downloads/spike-03/normalised
+  read_only: true
+
+# The normalised arm, READ-WRITE. The ONLY writable `tank` mount in this file, and it exists on
+# exactly one service (`beets-spike-rw`) for exactly one step (plan 03-05's `--apply`).
+x-vol-normalised-rw: &vol-normalised-rw
+  type: bind
+  source: /mnt/tank/downloads/spike-03/normalised
+  target: /mnt/tank/downloads/spike-03/normalised
+  read_only: false
+
+# Plan 03-06's known-good album. The probe reads it; it never writes it.
+x-vol-smoke: &vol-smoke
+  type: bind
+  source: /mnt/tank/downloads/spike-03/smoke
+  target: /mnt/tank/downloads/spike-03/smoke
+  read_only: true
+
+# Plan 03-10's terminal ergonomics arm imports FROM here with `import.copy: yes`. Read-only is
+# therefore sufficient, and it makes "the run copied rather than moved" STRUCTURALLY TRUE instead
+# of merely asserted. Pitfall 5: the estate's real beets configs carry `import.move: yes`.
+x-vol-bf-inbox: &vol-bf-inbox
+  type: bind
+  source: /mnt/tank/downloads/spike-03/bf-inbox
+  target: /mnt/tank/downloads/spike-03/bf-inbox
+  read_only: true
+
+# Throwaway beets config and the throwaway library.db, at the SHORT in-container path used on
+# every command line: `-c /spike-config/spike.yaml -l /spike-config/spike-probe.blb`.
+# Explicitly NOT /mnt/fast/appdata/arrs/beets/config, which holds a real 2.5.1-era library this
+# phase must not migrate (Pitfall 1: a bare `beet` migrated a Phase 1 database 36,864 -> 57,344
+# bytes and left 11 root-owned `.bak` files in an apps:apps tree).
+x-vol-beets-config-short: &vol-beets-config-short
+  type: bind
+  source: /mnt/fast/spike-03/beets-config
+  target: /spike-config
+  read_only: false
+
+# THE SAME DIRECTORY, bound a second time at its IDENTICAL HOST PATH. This is not a duplicate and
+# pruning it breaks the phase. Both forms are load-bearing:
+#   * command lines pass the short form  (`-c /spike-config/spike.yaml`),
+#   * while the spike beets config's own `directory:` and `library:` keys, plan 03-06's probe
+#     `SPIKE_DB`, and plan 03-07's generated runtime `beet import -t` config all name the full
+#     `/mnt/fast/spike-03/beets-config/...` path.
+# A reviewer who removes this entry leaves every one of those paths pointing at a directory that
+# does not exist inside the container — beets would create it silently in the container's
+# writable layer and the artefacts would vanish with the container.
+x-vol-beets-config-long: &vol-beets-config-long
+  type: bind
+  source: /mnt/fast/spike-03/beets-config
+  target: /mnt/fast/spike-03/beets-config
+  read_only: false
+
+# Probe output: NDJSON, captured stderr (the urllib3 DEBUG lines criterion 2's request count is
+# taken from) and the subtree manifests. Writable, and SCOPED TO THE OUTPUT DIRECTORY ONLY.
+#
+# Note what is deliberately NOT here: `/mnt/fast/spike-03` is not mounted wholesale, so
+# `bf-config/` (plan 03-10's beets-flask config) and `wrtag-lib/` (plan 03-08's) are unreachable
+# from this container. Those plans bring their own containers.
+#
+# Finding 4 of plan 03-03: `/mnt/fast/spike-03` is on LXC 100's ext4 ROOT filesystem, not the
+# `fast` ZFS pool — only the `mp` entries in /etc/pve/lxc/100.conf are real bind mounts and
+# neither `spike-03` nor `safety` is among them. Anything large written here consumes `/`, which
+# has a documented history of being filled to zero (Pitfall 2). Watch headroom.
+x-vol-out: &vol-out
+  type: bind
+  source: /mnt/fast/spike-03/out
+  target: /mnt/fast/spike-03/out
+  read_only: false
+
+# OD-6's delivery mechanism for the two Python artefacts. LXC 100 has python3 3.13.5 with no
+# `pip3`, no `python3-venv`, a missing `ensurepip` (so `python3 -m venv` fails outright) and
+# EXTERNALLY-MANAGED present (so PEP 668 blocks system pip) — a host-resident script importing
+# `mutagen` is impossible, so both artefacts run INSIDE this container. Read-only: the container
+# gets to execute the repo checkout, not alter it.
+x-vol-scripts: &vol-scripts
+  type: bind
+  source: /mnt/fast/stacks/scripts
+  target: /spike-scripts
+  read_only: true
+
+# ---------------------------------------------------------------------------------------------
+# Mounts that are DELETED here rather than commented out — the wrtag.yaml:39-58 pattern, where
+# the reason is recorded in place so nobody re-adds them.
+# ---------------------------------------------------------------------------------------------
+#
+# /mnt/tank/media AND /mnt/tank/media/Music ARE NOT MOUNTED AT ANY MODE, ON EITHER SERVICE.
+#
+# D-20: nobody holds read-write on /mnt/tank/media/Music during Phases 1-3. `beets.yaml:25`
+# satisfies that with `:ro`; this file goes further and does not mount it at all, because ABSENCE
+# IS STRONGER THAN `:ro` — there is no flag to flip "just to run one import", and the assertion
+# is `docker inspect .Mounts` returning an empty set rather than a mode string somebody has to
+# read correctly. The spike needs no library context: it measures candidate generation, not
+# duplicate reconciliation.
+#
+# Do not add a Music mount here in any mode. Phase 6 grants the WINNER rw on the library, and
+# that is the first time anything holds it again. If you find yourself adding it, you have
+# re-created the exact failure this project exists to prevent.
+#
+# /mnt/tank/downloads/spike-03/normalised-metadata and /mnt/tank/downloads/spike-03/wrtag-src are
+# also not mounted, deliberately: they are plan 03-09's and plan 03-08's working arms and those
+# plans use their own containers. Mounting them here would give the beets spike a handle on trees
+# it has no business touching.
+#
+# /mnt/tank/downloads/spike-03 IS NOT MOUNTED AS ONE TREE. That would hand every read-only
+# measurement plan a write handle on the sample it is measuring. The subdirectories are bound
+# individually above, each with its own mode.
+
+services:
+
+  # -------------------------------------------------------------------------------------------
+  # THE MEASUREMENT ARM. Everything in this phase runs here: plan 03-06's probe and smoke test,
+  # plan 03-07's four-cell run and `beet import -t` cross-check, plan 03-05's DRY RUN, and plan
+  # 03-10's terminal ergonomics arm. `normalised/` is READ-ONLY on this service.
+  # -------------------------------------------------------------------------------------------
+  beets-spike:
+    <<: *spike-common
+    container_name: beets-spike
+    hostname: beets-spike
+    volumes:
+      - *vol-raw                    # :ro  — never written by any plan
+      - *vol-normalised-ro          # :ro  — the writer arm is a separate service
+      - *vol-smoke                  # :ro  — plan 03-06 reads only
+      - *vol-bf-inbox               # :ro  — import.copy, so :ro is sufficient
+      - *vol-beets-config-short     # :rw  — /spike-config, the command-line form
+      - *vol-beets-config-long      # :rw  — same dir, host path; DO NOT PRUNE (see above)
+      - *vol-out                    # :rw  — probe output only
+      - *vol-scripts                # :ro  — OD-6 artefact delivery
+
+  # -------------------------------------------------------------------------------------------
+  # THE SINGLE WRITER ARM. Identical to `beets-spike` in image, security_opt, restart, profiles,
+  # environment and env_file — and differing in EXACTLY ONE respect: `normalised/` is `:rw`.
+  #
+  # Used by plan 03-05's `--apply` step and by NOTHING ELSE. Brought up for that step, taken down
+  # immediately after. It is deliberately NOT started by plan 03-04, which is why every `up`
+  # command in this phase names its service explicitly: a bare `docker compose --profile manual
+  # up -d` would start both and leave a writable handle on `normalised/` open for the whole
+  # phase, which is the exact thing this two-service split exists to prevent.
+  # -------------------------------------------------------------------------------------------
+  beets-spike-rw:
+    <<: *spike-common
+    container_name: beets-spike-rw
+    hostname: beets-spike-rw
+    volumes:
+      - *vol-raw                    # :ro  — unchanged
+      - *vol-normalised-rw          # :rw  — THE ONE DIFFERENCE from beets-spike
+      - *vol-smoke                  # :ro  — unchanged
+      - *vol-bf-inbox               # :ro  — unchanged
+      - *vol-beets-config-short     # :rw  — unchanged
+      - *vol-beets-config-long      # :rw  — unchanged
+      - *vol-out                    # :rw  — unchanged
+      - *vol-scripts                # :ro  — unchanged
