@@ -247,11 +247,29 @@ phase). Phase 3 is halted behind it.
      exactly the intended lines and nothing else.
 
   6. A new standalone `scripts/check-jellyfin-transcode.sh` asserts `/` headroom against a 20 GiB
-     floor, zero `Type: volume` mounts, the transcode quota and the five encoding values; it **fails
+     floor, zero `Type: volume` mounts, the transcode quota, and that **the five encoding values
+     have not DRIFTED** from the expectations recorded in the script — each compared against a
+     named `EXPECT_*` constant, each incrementing `FAILURES` on mismatch, and each **proven able to
+     fail per-field** by an executed control that drove it red while the other four stayed green.
+     Not-drifted is explicitly **not** a claim that a setting FIRES: a standing check cannot start
+     a transcode, and **criterion 4 above is the sole firing proof** (CONS-04). The check **fails
      closed** on an unreachable LXC 100, an unreachable atlantis or a stopped Jellyfin — proven by
      executed negative controls, not asserted — and it is folded into `quick-health-check.sh` with a
-     third in-band "EXIT-CODE BEHAVIOUR CHANGED" notice. That the check stays **manual** is recorded
+     third in-band "EXIT-CODE BEHAVIOUR CHANGED" notice, with the transcode target and the
+     assertion tally legible on the **green** path. That the check stays **manual** is recorded
      as a known limit, not an assumed capability.
+
+     > **Amended 2026-09-03 by plan 02.1-11 (gap closure, CR-01).** This criterion previously read
+     > "…the transcode quota and the five encoding values", which was false as implemented: the five
+     > values were printed through `info()`, so `FAILURES` never incremented on drift and the check
+     > printed its green tick regardless, while `quick-health-check.sh`'s selector omitted them
+     > entirely. The **substance is kept, not reduced** — all five are now genuinely asserted rather
+     > than two, and the verification report's alternative (assert two, reword "five" down to "two")
+     > was **rejected**: comparing `SegmentKeepSeconds` to `300` is the same class of operation as
+     > comparing `TranscodingTempPath` to `/cache/transcodes`, and `SegmentKeepSeconds` drifting to
+     > `86400` is a plausible UI edit that silently deletes this phase's retention policy. What
+     > changed in the wording is the ambiguity the verifier flagged: **drift detection is now stated
+     > as drift detection**, and criterion 4 is named as the firing proof it always was.
 
   7. `renovate.json5` carries a `jellyfin/jellyfin` rule making minor updates manual-review while
      preserving patch automerge, placed after `packageRules[2]` so it wins; no `allowedVersions`

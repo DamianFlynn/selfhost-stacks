@@ -73,22 +73,40 @@
 #       TRAN-02  ZERO `Type: volume` mounts on the container. The INVARIANT, not one volume id:
 #                a fresh anonymous volume with a different id is the same failure
 #       TRAN-03  the 50 G ZFS quota on fast/transcode AND the dataset being mounted
-#       TRAN-04  the five encoding values, plus the two amdgpu values (D-30)
+#       TRAN-04  the five encoding values, ASSERTED against named expectations, plus the two
+#                amdgpu values, REPORTED (D-30)
 #       TRAN-05  `/` headroom against a 20 GiB floor
 #
 #     WHICH OF ITS ROWS ARE REPORTED, NOT ASSERTED — so the reader knows it will not go
 #     permanently red, which is the 01-09 trap and the reason the mode-bit assertions were
 #     removed from check-music-freeze.sh:
-#       - The seven encoding values are REPORTED. A standing check cannot start a transcode, so
-#         it cannot prove a setting FIRES; it can only prove the value has not drifted. They are
-#         a REGRESSION DETECTOR. The firing proofs were executed once, by plan 02.1-06, from
-#         Jellyfin's own Debug log — do not let this read-back stand in for that (CONS-04).
+#       - The FIVE RETENTION VALUES ARE ASSERTED (TranscodingTempPath, EnableSegmentDeletion,
+#         SegmentKeepSeconds, EnableThrottling, ThrottleDelaySeconds). Each is compared against a
+#         named EXPECT_* expectation in check-jellyfin-transcode.sh and each increments FAILURES
+#         on mismatch. This is DRIFT DETECTION and is explicitly NOT a claim that a setting
+#         FIRES: a standing check cannot start a transcode. The firing proofs were executed once,
+#         by plan 02.1-06, from Jellyfin's own Debug log — do not let this read-back stand in for
+#         that (CONS-04). Corrected 2026-09-03 by plan 02.1-11: this block used to say all seven
+#         values were reported and called them a regression detector, which is what they were
+#         MEANT to be and not what the code did — FAILURES never incremented on drift, and this
+#         file's own selector did not display them on the green path either (CR-01).
+#       - The TWO AMDGPU VALUES (HardwareAccelerationType, EnableHardwareEncoding) remain
+#         REPORTED, deliberately. D-30's contract is that 02.1-05's write PRESERVED them, which
+#         02.1-05 asserted at write time and disable-jellyfin-hwaccel.sh's verify-retention
+#         re-asserts on the recovery path; promoting them to a third assertion class is a
+#         separate decision with its own controls. Not an oversight.
 #       - The `/` headroom floor is GREEN TODAY WITH MEASURED MARGIN, chosen that way
 #         deliberately. At the phase head the margin was 185 MiB; after 02.1-06 deleted the
 #         12.55 GiB anonymous volume and 02.1-09 reaped four images it is 14.48 GiB. A
 #         permanently-red check trains the reader to ignore it, so a red here should be read as
 #         real.
 #       - Section 4's `df` reading of the transcode directory is REPORTED (corroboration only).
+#       - AND THE PERMANENTLY-RED TRAP NOW HAS A CONCRETE ANSWER, which is why promoting five
+#         rows to assertions does not re-open it. Every expectation is a named ${VAR:-default}
+#         constant in ONE block at the top of check-jellyfin-transcode.sh. A deliberate policy
+#         change is a one-line edit there, made in the same commit as the change, and a red names
+#         the exact line to edit. The 01-09 failure was an assertion with nowhere to go once the
+#         estate legitimately moved; this one always has somewhere to go.
 #
 #     A JELLYFIN API BLIP IS NOT A BOUND VIOLATION. The encoding GET retries 3× at 2 s and, if
 #     all three fail, is reported as `UNREACHABLE` in a counter kept SEPARATE from the failure
@@ -328,8 +346,19 @@ elif [ "$TRANSCODE_RC" -eq 0 ]; then
     # breaks on the branch that still prints a tick. PROVEN REACHABLE, not assumed: plan 02.1-10
     # renumbered that heading on purpose (VALIDATION row 24), confirmed this branch printed and
     # the exit was 1, then restored it and re-verified by sha256.
+    # WHY `transcode target` IS IN THIS SELECTOR — it is the CR-01 fix, and it is the whole point.
+    # The five encoding values were not only unasserted until 2026-09-03; this selector did not
+    # match them either, so on the branch that PRINTS A TICK they were neither asserted nor
+    # displayed. TranscodingTempPath is the one that makes that matter: drift it to Jellyfin's own
+    # default /config/transcodes and the transcode cache moves off the quota'd dataset while the
+    # binds, both mount instruments and the `/` floor all stay green. A drifted value has to be
+    # legible HERE, on the green path, not only in the body of a script nobody opens on a good day.
+    # `encoding values` and `toolchain missing` were both already named in the check's own
+    # cross-file contract comment and had NEVER been selected — appended for the same reason.
+    # The alternation below must equal the token set that check-jellyfin-transcode.sh's section 6
+    # actually emits; a token that selects nothing looks exactly like a check with nothing to say.
     SUMMARY=$(echo "$TRANSCODE_OUT" | sed -n '/^📊 6\. Summary/,$p' \
-              | grep -E '/ headroom|volume mounts|transcode quota|transcode mounted|unreachable|FAILURES total')
+              | grep -E '/ headroom|volume mounts|transcode quota|transcode mounted|unreachable|FAILURES total|transcode target|encoding values|toolchain missing')
     if [ -z "$SUMMARY" ]; then
         echo "⚠️  UNKNOWN — the audit exited 0 but its '📊 6. Summary' block was not found."
         echo "  The section heading this fold-in anchors on has changed, so nothing here was"
