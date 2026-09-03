@@ -30,7 +30,7 @@
 #   2. The mount invariant                 TRAN-01, TRAN-02, D-02, D-18
 #   3. The old anonymous volume            TRAN-02 secondary, D-10, D-18
 #   4. The transcode quota AND its mount   TRAN-03, D-12, D-13
-#   5. The encoding values, read back      TRAN-04, D-20, D-30 - REPORTED, not asserted
+#   5. The encoding values, read back      TRAN-04, D-20, D-21, D-30 - five ASSERTED, two REPORTED
 #   6. Summary
 #
 # EXIT-CODE CONVENTION (inherited verbatim from scripts/check-music-freeze.sh:31-42, which is
@@ -50,12 +50,23 @@
 #   --baseline exits 0 AFTER printing the summary, not before. The counts are still emitted.
 #
 # MODE SCOPE - what is REPORTED rather than ASSERTED, and why:
-#   Section 5 (the encoding values) is REPORTED. A standing check cannot start a transcode, so it
-#   cannot prove a setting FIRES; it can only prove the value has not drifted. Proving they fire
-#   is plan 02.1-08's job, once, with the evidence recorded. Do not let this read-back stand in
-#   for that proof - CONS-04's rule is that a configured setting is not a firing setting, and
-#   Phase 2 paid for learning it (missing_album_artist_action read back correctly while silently
-#   not applying).
+#   Section 5's FIVE RETENTION VALUES ARE ASSERTED (TranscodingTempPath, EnableSegmentDeletion,
+#   SegmentKeepSeconds, EnableThrottling, ThrottleDelaySeconds). Each is compared against a named
+#   EXPECT_* constant near the top of this file and each increments FAILURES on mismatch. This is
+#   DRIFT DETECTION and nothing more: a standing check cannot start a transcode, so it CANNOT
+#   prove a setting FIRES; it can only prove the value has not moved since something else proved
+#   it. That firing proof was plan 02.1-06's job - EXECUTED, once, from Jellyfin's own Debug log,
+#   with the transcript committed. Do not let this read-back stand in for it. CONS-04's rule is
+#   that a configured setting is not a firing setting, and Phase 2 paid for learning it
+#   (missing_album_artist_action read back correctly while silently not applying).
+#
+#   Until 2026-09-03 these five were REPORTED through info(), so FAILURES never incremented on
+#   drift and this script printed its tick regardless - the CR-01 defect, closed by plan 02.1-11
+#   with five per-field negative controls, each driven red while the other four stayed green.
+#
+#   The TWO AMDGPU VALUES (HardwareAccelerationType, EnableHardwareEncoding) REMAIN REPORTED,
+#   deliberately - see the comment above their loop in section 5 for the reasoning. They are not
+#   an oversight and promoting them is a separate decision.
 #
 #   Section 4's `df` reading of the transcode directory is REPORTED. Whether ZFS's statvfs
 #   reflects a dataset quota is assumption A3 and is proven empirically by plan 02.1-03; until
@@ -140,6 +151,42 @@ TRANSCODE_DATASET="fast/transcode"
 CACHE_DIR="/mnt/fast/appdata/media/jellyfin/cache"
 OLD_VOL_FILE="/mnt/fast/spike-021/old-vol.txt"
 
+# --- the five encoding expectations (TRAN-04, D-20, D-21; asserted in section 5) ---------------
+#
+# These five default values are the ones plan 02.1-05 APPLIED by read-modify-write and plan
+# 02.1-06 PROVED FIRING from Jellyfin's own Debug log. They are not aspirational and they are not
+# guesses: each one is a value this phase deliberately chose and recorded.
+#
+# Three things a future reader needs, in the order they will need them:
+#
+#   (i)  THIS BLOCK IS THE ONLY SET OF KNOBS. Changing the retention policy is a ONE-LINE EDIT
+#        here, and a red names the exact line to change. That is deliberate, and it is how the
+#        01-09 permanently-red trap is avoided: the mode-bit assertions were stripped out of
+#        check-music-freeze.sh because they went red for a condition nobody intended to fix, and a
+#        check the reader has learned to ignore is worse than no check. Here, a red is either real
+#        drift or a policy change somebody made on purpose — and in the second case the fix is to
+#        edit the line the red names, in the same commit as the policy change.
+#
+#   (ii) THEY ARE ${VAR:-default} SO A NEGATIVE CONTROL NEED NOT MUTATE ANYTHING. Plan 02.1-11's
+#        five per-field controls drive each assertion to red by perturbing the EXPECTATION, never
+#        the value. That matters specifically here: the /System/Configuration/encoding endpoint is
+#        a FULL-OBJECT REPLACE, so staging a control by POSTing a wrong value would risk silently
+#        re-arming the amdgpu hazard that cost ~6 hours on 2026-08-31 (D-30). Same device as
+#        $TRAN09_EXPECT in scripts/disable-jellyfin-hwaccel.sh's verify-retention sub-action, and
+#        for the same reason: a verification that takes its expectations from the CALLER is one
+#        that can actually fail.
+#
+#   (iii) OVERRIDING AN EXPECTATION CAN ONLY MAKE THIS CHECK RED, NEVER GREEN. There is no value
+#        of these five variables that suppresses an assertion, skips a key, or turns a mismatch
+#        into a pass — assert_enc() has no skip branch. An override can move WHICH value is
+#        considered correct; it cannot stop the comparison from happening. Do not add a sentinel
+#        that disables one, however convenient it looks while debugging.
+EXPECT_TRANSCODING_TEMP_PATH="${EXPECT_TRANSCODING_TEMP_PATH:-/cache/transcodes}"
+EXPECT_ENABLE_SEGMENT_DELETION="${EXPECT_ENABLE_SEGMENT_DELETION:-true}"
+EXPECT_SEGMENT_KEEP_SECONDS="${EXPECT_SEGMENT_KEEP_SECONDS:-300}"
+EXPECT_ENABLE_THROTTLING="${EXPECT_ENABLE_THROTTLING:-true}"
+EXPECT_THROTTLE_DELAY_SECONDS="${EXPECT_THROTTLE_DELAY_SECONDS:-180}"
+
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -175,6 +222,13 @@ fi
 FAILURES=0
 UNREACHABLE=0
 TOOLS_MISSING=0
+# Section 5's own tallies, initialised HERE rather than inside section 5, so they exist even when
+# section 5 never runs. The summary distinguishes "0 drifted" from "did not look" on the strength
+# of ENC_ASSERTED being 0, and that test is only meaningful if the variable is always defined.
+# TTP_VALUE likewise: the empty string means "did not look", never "the path is empty".
+ENC_ASSERTED=0
+ENC_DRIFTED=0
+TTP_VALUE=""
 fail() { echo -e "  ${RED}❌ $*${NC}"; FAILURES=$((FAILURES + 1)); }
 pass() { echo -e "  ${GREEN}✅ $*${NC}"; }
 warn() { echo -e "  ${YELLOW}⚠️  $*${NC}"; }
@@ -495,7 +549,7 @@ echo ""
 # =============================================================================================
 # 5. Assertion E - the encoding values, read back (TRAN-04, D-20, D-30)
 # =============================================================================================
-echo "⚙️  5. The encoding values, read back (TRAN-04, D-20, D-30) — REPORTED, not asserted"
+echo "⚙️  5. The encoding values (TRAN-04, D-20, D-21, D-30) — five ASSERTED, two REPORTED"
 rule
 # The key reaches curl through a PROCESS SUBSTITUTION, never through argv, so it cannot appear in
 # `ps`. Same treatment as check-music-consumers.sh:418-427. Nothing in this section prints the
@@ -505,6 +559,44 @@ jf_api() {
   curl -s --max-time 20 -G \
     -H @<(printf 'Authorization: MediaBrowser Token="%s"\n' "$JELLYFIN_API_KEY") \
     "http://${JELLYFIN_ADDR}${path}" "$@"
+}
+
+# assert_enc KEY EXPECTED - compare one encoding value against its declared expectation.
+#
+# Defined at TOP LEVEL, while enc_val() below is defined inside the reachable branch. bash resolves
+# a function name at CALL time, not at definition time, and every call to this one happens inside
+# that branch, after enc_val exists. It lives out here so it is greppable at column 0 and so the
+# reader meets the assertion mechanism before the loop that drives it.
+#
+# WHY THIS IS AN ASSERTION AND NOT AN info() (CR-01, the defect this closes). Until 2026-09-03 all
+# five of these were printed through info(), so FAILURES never incremented on drift and the script
+# printed its green tick regardless. TranscodingTempPath is the one that makes that fatal rather
+# than untidy: set it back to Jellyfin's own default /config/transcodes and the transcode cache
+# moves onto fast/appdata, off the quota'd dataset — while section 2's binds, both of section 4's
+# mount instruments and section 1's headroom floor all stay green and this script says "intact".
+# That is the cheapest route straight back to the incident this whole phase exists to prevent.
+#
+# CONS-04 IS RESPECTED, NOT SIDESTEPPED. This compares a value; it does not prove a setting FIRES.
+# The firing proof was executed ONCE, by plan 02.1-06, from Jellyfin's own Debug log, and the
+# transcript is committed. This read-back does not stand in for it and must never be quoted as if
+# it did. What it does prove is that the value 02.1-06 proved firing has not since DRIFTED.
+assert_enc() {
+  local key="$1" want="$2" got
+  got="$(enc_val "$key")"
+  ENC_ASSERTED=$((ENC_ASSERTED + 1))
+  [[ "$key" == "TranscodingTempPath" ]] && TTP_VALUE="$got"
+  if [[ "$got" == "$want" ]]; then
+    pass "$key expected='$want' found='$got' — NOT DRIFTED (this is not a claim it FIRES; 02.1-06 proved that once, from the Debug log — CONS-04)"
+  else
+    ENC_DRIFTED=$((ENC_DRIFTED + 1))
+    fail "$key DRIFTED — expected='$want' found='$got' (TRAN-04, D-20)"
+    if [[ "$key" == "TranscodingTempPath" ]]; then
+      echo "         THIS ONE IS NOT LIKE THE OTHER FOUR. While this value is wrong the 50 G quota"
+      echo "         on fast/transcode BOUNDS NOTHING: Jellyfin writes its segments somewhere else"
+      echo "         entirely, and section 2's binds and section 4's quota can both be green and"
+      echo "         completely irrelevant. Fix this before reading anything else as reassuring."
+    fi
+  fi
 }
 
 if [[ -z "$JELLYFIN_ADDR" ]]; then
@@ -559,14 +651,29 @@ else
         | jq -r --arg k "$1" 'if has($k) then (if .[$k] == null then "null" else (.[$k]|tostring) end) else "<absent>" end' \
           2>/dev/null || echo '<unparsed>'
     }
-    for k in TranscodingTempPath EnableSegmentDeletion SegmentKeepSeconds EnableThrottling ThrottleDelaySeconds; do
-      v="$(enc_val "$k")"
-      info "$k = $v   (REPORTED not asserted — a standing check cannot prove a setting FIRES; that is 02.1-08's job)"
-    done
+    # The five retention values, ASSERTED (not reported) since 2026-09-03, plan 02.1-11 — see
+    # assert_enc() above for why, and the EXPECT_* block near the top for the expectations. Driven
+    # as five separate calls rather than a loop so that each key's expectation is visible on the
+    # same line as the key, which is what makes a per-field red readable.
+    assert_enc TranscodingTempPath    "$EXPECT_TRANSCODING_TEMP_PATH"
+    assert_enc EnableSegmentDeletion  "$EXPECT_ENABLE_SEGMENT_DELETION"
+    assert_enc SegmentKeepSeconds     "$EXPECT_SEGMENT_KEEP_SECONDS"
+    assert_enc EnableThrottling       "$EXPECT_ENABLE_THROTTLING"
+    assert_enc ThrottleDelaySeconds   "$EXPECT_THROTTLE_DELAY_SECONDS"
+
     # The amdgpu mitigation, printed because REVERTING THESE IS THE HIGHER-COST REGRESSION. They
     # were applied 2026-08-31 18:27 after the amdgpu HMM oops, and the incident they mitigate
     # took the estate down for ~6 hours. The encoding endpoint is a FULL-OBJECT REPLACE, so a
     # partial POST silently re-arms that hazard (D-30).
+    #
+    # LEAVING THESE TWO REPORTED WAS CONSIDERED AND CHOSEN, NOT OVERLOOKED — plan 02.1-11 promoted
+    # the five above to assertions and deliberately stopped there. D-30's contract is that
+    # 02.1-05's write PRESERVED these two, which 02.1-05 asserted at write time and which
+    # disable-jellyfin-hwaccel.sh's verify-retention re-asserts on the recovery path; they are
+    # already covered by two instruments at the moments they can actually move. Promoting them to
+    # a third assertion class is a separate decision — it needs its own expectations, its own
+    # negative controls, and a policy on what a legitimate hwaccel re-enable should do to this
+    # check — and that was out of 02.1-11's scope. Do not read the silence as an oversight.
     for k in HardwareAccelerationType EnableHardwareEncoding; do
       v="$(enc_val "$k")"
       info "$k = $v   (amdgpu mitigation, D-30 — REPORTED; drift here is the expensive regression)"
@@ -580,10 +687,17 @@ echo ""
 #
 # Plan 02.1-10 folds this script into scripts/quick-health-check.sh and selects on the label
 # tokens below with `grep -E`. The tokens chosen deliberately as its selectors are:
-# `/ headroom`, `volume mounts`, `transcode quota`, `transcode mounted`, `encoding values`,
-# `unreachable`, `toolchain missing`, `FAILURES total`. Renaming a heading or a label breaks a
-# consumer that lives in a different file, and it breaks it SILENTLY — a grep that selects
-# nothing looks exactly like a check with nothing to report.
+# `/ headroom`, `volume mounts`, `transcode quota`, `transcode mounted`, `transcode target`,
+# `encoding values`, `unreachable`, `toolchain missing`, `FAILURES total`. Renaming a heading or a
+# label breaks a consumer that lives in a different file, and it breaks it SILENTLY — a grep that
+# selects nothing looks exactly like a check with nothing to report.
+#
+# `transcode target` was added 2026-09-03 by plan 02.1-11 and IS SELECTED — the CR-01 defect was
+# not only that the five values were unasserted, but that the fold-in's selector omitted them
+# entirely, so on the branch that prints a tick they were neither asserted NOR displayed. This
+# comment is a CROSS-FILE CONTRACT and must stay a true list of what quick-health-check.sh greps
+# for: a stale contract comment is how the WR-09 coupling broke silently in the first place, and
+# two of the tokens listed here went years without a consumer while this comment claimed otherwise.
 #
 # KEEP THIS HEADING LITERAL AND NEVER RENUMBER IT SILENTLY.
 echo "📊 6. Summary"
@@ -596,7 +710,15 @@ else
 fi
 echo "  transcode quota:         ${Q:-UNKNOWN} bytes  (target $QUOTA_BYTES)"
 echo "  transcode mounted:       zfs=${M:-UNKNOWN} devid=${DEV_TRANSCODE:-UNKNOWN} parent=${DEV_PARENT:-UNKNOWN}  (target yes, and devid ≠ parent)"
-echo "  encoding values:         REPORTED not asserted  (see section 5)"
+echo "  transcode target:        ${TTP_VALUE:-UNKNOWN}  (target $EXPECT_TRANSCODING_TEMP_PATH)"
+# "0 drifted" on a section that could not look is precisely the false green this whole file exists
+# to refuse — so an unrun section 5 reads UNKNOWN, never a tally. ENC_ASSERTED is the discriminator
+# because it counts comparisons MADE, not comparisons passed.
+if [[ $ENC_ASSERTED -eq 0 ]]; then
+  echo "  encoding values:         UNKNOWN — section 5 could not look (see 'unreachable' below)"
+else
+  echo "  encoding values:         $ENC_ASSERTED asserted, $ENC_DRIFTED drifted; 2 amdgpu values REPORTED (see section 5)"
+fi
 echo "  unreachable:             $UNREACHABLE  (could-not-look, counted apart from bound violations — VALIDATION row 38)"
 echo "  toolchain missing:       $TOOLS_MISSING"
 echo "  FAILURES total:          $FAILURES"
