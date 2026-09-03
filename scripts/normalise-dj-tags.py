@@ -80,6 +80,11 @@ CONTRACT
   * ID3 major version is PRESERVED, not upgraded. All 335 files in the spike sample are ID3v2.3;
     saving as v2.4 would rewrite TYER/TDAT into TDRC and show up in `diff-music-tags.sh` as a
     change to `date`, which is a field this script has no business touching.
+  * THE TRAILING ID3v1 BLOCK IS RESTORED BYTE-FOR-BYTE after every write. mutagen regenerates the
+    whole 128-byte block from the ID3v2 frames, which both writes fields this script never asked
+    for and MOVES `audio_md5` — the key `snapshot-music-tags.sh` and `diff-music-tags.sh` join on.
+    See preserve_id3v1_trailer() for the measurement. This is why "touch nothing else" is true at
+    the byte level here and not merely at the frame level.
   * The script contains no `rm`, no `mv`, no `chown`, no `chmod` and no directory creation.
 
 THE KEY
@@ -363,6 +368,50 @@ def read_tags(path: str):
     return handle, values
 
 
+def read_id3v1_trailer(path: str) -> bytes | None:
+    """The last 128 bytes, if and only if they are an ID3v1 tag. See preserve_id3v1_trailer()."""
+    if os.path.getsize(path) < 128:
+        return None
+    with open(path, "rb") as fh:
+        fh.seek(-128, os.SEEK_END)
+        tail = fh.read(128)
+    return tail if tail[:3] == b"TAG" else None
+
+
+def preserve_id3v1_trailer(path: str, original: bytes | None) -> None:
+    """Restore the pre-write ID3v1 block byte-for-byte. MEASURED, not precautionary.
+
+    `mutagen.id3.ID3.save(v1=UPDATE)` REGENERATES the whole 128-byte ID3v1 block from the ID3v2
+    frames whenever one is present. Two consequences were measured on this sample, and both are
+    outside what rule 4 permits:
+
+      1. It rewrites ID3v1 fields this script never asked it to touch. 109 of 335 files gained an
+         `id3v1 comment` in `ffprobe` output, sourced from their own `COMM` frame.
+      2. It moves `audio_md5`. `snapshot-music-tags.sh`'s key is
+         `ffmpeg -map 0:a -c copy -f md5 -`, and for some files ffmpeg's mp3 demuxer emits the
+         trailing ID3v1 bytes as part of the copied stream. 37 of 335 files changed key on the
+         first apply — every one of them carrying an ID3v1 trailer, none without — which made
+         `diff-music-tags.sh` report 37 MISSING_AFTER and exit 1 while nothing at all had been
+         lost. The audio payload was byte-identical throughout: with the ID3v2 tag and the last
+         128 bytes excluded, `cmp` against the untouched `raw/` twin returns zero differing bytes.
+
+    Restoring the block makes "touch nothing else" true AT THE BYTE LEVEL rather than only at the
+    ID3v2 frame level, and keeps the phase's own join key tag-invariant. The cost is that ID3v1
+    then carries a stale album/artist — which nothing in this project reads: mutagen ignores ID3v1
+    on read, so beets never sees it, and ffmpeg lets ID3v2 win for both fields.
+    """
+    if original is None:
+        return
+    with open(path, "r+b") as fh:
+        fh.seek(-128, os.SEEK_END)
+        current = fh.read(128)
+        if current[:3] != b"TAG":
+            raise RuntimeError("ID3v1 trailer disappeared during save; refusing to guess")
+        if current != original:
+            fh.seek(-128, os.SEEK_END)
+            fh.write(original)
+
+
 def write_tags(handle, path: str, changes: dict[str, str]) -> None:
     """Write ONLY the fields in WRITABLE_FIELDS. Asserted, not assumed."""
     for field in changes:
@@ -372,6 +421,7 @@ def write_tags(handle, path: str, changes: dict[str, str]) -> None:
     if path.lower().endswith(".mp3"):
         import mutagen.id3 as id3
 
+        id3v1_before = read_id3v1_trailer(path)
         for field, new in changes.items():
             frame_id = FIELD_FRAME[field]
             existing = handle.tags.getall(frame_id)
@@ -388,6 +438,7 @@ def write_tags(handle, path: str, changes: dict[str, str]) -> None:
         # diff-music-tags.sh as a change to `date`.
         major = handle.tags.version[1] if getattr(handle.tags, "version", None) else 3
         handle.tags.save(path, v2_version=3 if major <= 3 else 4)
+        preserve_id3v1_trailer(path, id3v1_before)
         return
 
     for field, new in changes.items():
