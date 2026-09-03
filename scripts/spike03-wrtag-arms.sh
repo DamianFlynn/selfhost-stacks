@@ -11,14 +11,33 @@
 #
 # Usage:
 #   bash scripts/spike03-wrtag-arms.sh --album <name> [--image <ref>] [--class <label>]
+#                                      [--mbid <uuid>] [--yes]
 #
 #   --album  REQUIRED. A directory name directly under $SRC. Not a path - just the folder name.
 #   --image  Container image reference. Default $WRTAG_IMAGE. THE THREE ARMS DIFFER ONLY HERE.
 #   --class  A label for the output filenames, e.g. single-disc / multi-disc. Default "unclassed".
+#   --mbid   Pin the MusicBrainz release. Held CONSTANT across the three tags of one disc class.
+#   --yes    Pass wrtag's -yes, accepting a low-score match.
 #
 #   The three tags are three invocations of ONE script, not three scripts. That is the point:
 #   if the arms differed in any other way the comparison would be measuring the difference
 #   rather than the version.
+#
+# WHY --mbid EXISTS, AND WHY IT IS NOT A THUMB ON THE SCALE
+#   Measured here, 2026-09-03, on the FIRST unpinned arm: a 21-track, no-disc-tag,
+#   track="N/21" album folder - about as unambiguously single-disc as source material gets -
+#   was resolved by MusicBrainz to a TWO-MEDIUM 12" vinyl release (11 + 10). wrtag issues
+#   `...&limit=1&query=...tracks:(21)^10` and takes what comes back.
+#
+#   So the disc class of an arm IS NOT A PROPERTY OF THE FOLDER. It is a property of whichever
+#   release MusicBrainz happened to return, which varies with the MB database and with the day.
+#   An unpinned experiment cannot hold the disc class constant across three tags, and an
+#   acceptance criterion of the form "the single-disc arm renders X" is then unfalsifiable.
+#
+#   --mbid pins the release, so the ONLY difference between the three tags of a class is the
+#   image, and the ONLY difference between the two classes is len(.Release.Media). That is the
+#   variable criterion 3 is about. It does not flatter any version: the same MBID is given to
+#   all three tags.
 #
 # WHAT THIS MEASURES (Phase 3, criterion 3)
 #   The repo pins sentriz/wrtag to v0.20.0 behind a Renovate rule (renovate.json5:91) whose
@@ -111,6 +130,8 @@ LIB_ALLOW_PREFIX="${LIB_ALLOW_PREFIX:-/mnt/fast/spike-03/}"
 
 ALBUM=""
 CLASS="unclassed"
+MBID=""
+YES=""
 
 say()  { printf '%s\n' "$*"; }
 ok()   { printf '  \342\234\223 %s\n' "$*"; }
@@ -120,10 +141,13 @@ rule() { printf '  %s\n' "------------------------------------------------------
 
 usage() {
   say "Usage: bash scripts/spike03-wrtag-arms.sh --album <name> [--image <ref>] [--class <label>]"
+  say "                                          [--mbid <uuid>] [--yes]"
   say ""
   say "  --album  REQUIRED. A directory name directly under \$SRC (not a path)."
   say "  --image  Container image reference. Default: $WRTAG_IMAGE"
   say "  --class  Label used in the output filenames. Default: $CLASS"
+  say "  --mbid   Pin the MusicBrainz release; held constant across the three tags of a class."
+  say "  --yes    Pass wrtag's -yes (accept a low-score match)."
   say ""
   say "  env: WRTAG_IMAGE, WRTAG_YAML, SRC, LIB, OUT, MANIFESTS,"
   say "       SRC_ALLOW_PREFIX, LIB_ALLOW_PREFIX"
@@ -139,6 +163,8 @@ while [ $# -gt 0 ]; do
     --album) ALBUM="${2:-}"; shift 2 || usage ;;
     --image) WRTAG_IMAGE="${2:-}"; shift 2 || usage ;;
     --class) CLASS="${2:-}"; shift 2 || usage ;;
+    --mbid)  MBID="${2:-}"; shift 2 || usage ;;
+    --yes)   YES="1"; shift ;;
     -h|--help) usage ;;
     *) say "unknown argument: $1"; usage ;;
   esac
@@ -212,6 +238,8 @@ say "  path-format file : $WRTAG_YAML"
 say "  path-format sha  : $PF_SHA  (${PF_LEN} bytes, read from the file, never re-typed)"
 say "  path format      :"
 printf '      %s\n' "$PF"
+say "  pinned mbid      : ${MBID:-<none - MusicBrainz chooses, and the disc class is NOT controlled>}"
+say "  low-score -yes   : ${YES:+passed}${YES:-not passed}"
 say "  network          : docker default bridge (wrtag MUST reach musicbrainz.org)"
 say "  stdout           : $STDOUT_FILE"
 say "  stderr           : $STDERR_FILE"
@@ -255,8 +283,13 @@ rm -f "$STAMP"
 touch "$STAMP"
 sleep 1   # 1s so a same-second write cannot slip under -newer's granularity
 
+WRTAG_ARGS=(move -dry-run)
+[ -n "$MBID" ] && WRTAG_ARGS+=(-mbid "$MBID")
+[ -n "$YES" ] && WRTAG_ARGS+=(-yes)
+WRTAG_ARGS+=("/music/source/$ALBUM")
+
 say ""
-say "  running: wrtag move -dry-run /music/source/$ALBUM"
+say "  running: wrtag ${WRTAG_ARGS[*]}"
 RC=0
 docker run --rm \
   --security-opt no-new-privileges:true \
@@ -265,7 +298,7 @@ docker run --rm \
   -e WRTAG_PATH_FORMAT="$PF" \
   -e WRTAG_LOG_LEVEL=debug \
   "$WRTAG_IMAGE" \
-  wrtag move -dry-run "/music/source/$ALBUM" \
+  wrtag "${WRTAG_ARGS[@]}" \
   >"$STDOUT_FILE" 2>"$STDERR_FILE" || RC=$?
 
 say "  container exit code: $RC"
@@ -282,8 +315,8 @@ say ""
 
 # Record the container exit code beside the captures so the evidence file does not have to
 # depend on this transcript.
-printf 'arm=%s image=%s album=%s class=%s container_exit=%s path_format_sha256=%s\n' \
-  "$ARM" "$WRTAG_IMAGE" "$ALBUM" "$CLASS" "$RC" "$PF_SHA" \
+printf 'arm=%s image=%s album=%s class=%s mbid=%s yes=%s container_exit=%s path_format_file=%s path_format_sha256=%s\n' \
+  "$ARM" "$WRTAG_IMAGE" "$ALBUM" "$CLASS" "${MBID:-none}" "${YES:-0}" "$RC" "$WRTAG_YAML" "$PF_SHA" \
   > "$OUT/wrtag-${ARM}.meta"
 
 # --- Instrument 1: find -newer, on BOTH mounts ---------------------------------------------
