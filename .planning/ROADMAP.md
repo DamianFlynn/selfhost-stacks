@@ -310,7 +310,7 @@ moved, because the number is a consequence of that decision rather than the deci
 
 **Wave 6** *(blocked on 02.1-05)* — **`/` is structurally protected from the end of this wave**
 
-- [ ] 02.1-06-PLAN.md — Prove the bounds fire with a driven HLS client, delete the anonymous volume, prove ENOSPC via a temporary quota shrink (wave 6)
+- [x] 02.1-06-PLAN.md — Prove the bounds fire with a driven HLS client, delete the anonymous volume, prove ENOSPC via a temporary quota shrink (wave 6)
 
 **Wave 7** *(blocked on 02.1-06)*
 
@@ -658,7 +658,7 @@ Phase 7. Plans within a phase run sequentially.
 |-------|----------------|--------|-----------|
 | 1. Safety Harness and Freeze the Writers | 9/9 | Complete | 2026-08-18 |
 | 2. NFS Export and Music Assistant Reachability | 9/9 | Complete    | 2026-09-01 |
-| 02.1. Jellyfin Transcode Retention *(inserted)* | 5/10 | In Progress | - |
+| 02.1. Jellyfin Transcode Retention *(inserted)* | 6/10 | In Progress | - |
 | 3. Tagger Spike | 1/11 | In Progress | - |
 | 4. Collapse to One Tagger | 0/TBD | Not started | - |
 | 5. Inbox Structure and the Junk Gate | 0/TBD | Not started | - |

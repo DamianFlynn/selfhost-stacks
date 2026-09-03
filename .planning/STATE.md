@@ -3,14 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-02T22:35:00.000Z"
-last_activity: 2026-09-02 — 02.1-05 complete (THE CUTOVER — the container recreated onto the
-  declared binds, and Jellyfin's five retention settings applied by read-modify-write)
+last_updated: "2026-09-03T00:10:00.000Z"
+last_activity: 2026-09-03 — 02.1-06 complete (THE BOUNDS FIRE and the volume is GONE — segment
+  deletion and throttling proven from Jellyfin's own Debug log, the ZFS quota proven to refuse a
+  write, and 12.95 GiB reclaimed on /)
 progress:
   total_phases: 10
   completed_phases: 2
   total_plans: 39
-  completed_plans: 24
+  completed_plans: 25
   percent: 20
 ---
 
@@ -30,8 +31,71 @@ pipeline that someone owns.
 ## Current Position
 
 Phase: 02.1 (jellyfin-transcode-retention-relocate-the-anonymous-transcod) — EXECUTING
-Plan: 6 of 10
-Status: EXECUTING — **02.1-05 COMPLETE. THE CUTOVER IS DONE.** At **2026-09-02T22:19:52Z** Jellyfin
+Plan: 7 of 10
+Status: EXECUTING — **02.1-06 COMPLETE. THE BOUNDS FIRE, AND THE 12.55 GiB IS OFF `/`.** The
+anonymous volume `d98b2ff9…` was deleted by name at **2026-09-02T23:52:53Z**, after — not before —
+the observation it would have made vacuous. **`/` went 21674889216 → 35575803904 = +12.95 GiB**,
+matched to the byte by `stat -f`. **The margin against the D-17 floor is now 13.13 GiB, from 185 MiB
+at the phase head** — a factor of about seventy-three, and better than the ~33-36 GiB the plan set
+was originally written against. **`check-jellyfin-transcode.sh` exits 0 in default mode for the first
+time in the phase: FAILURES 1 → 0.**
+
+**Every control is now proven FIRING from a real observation, not read back (CONS-04, D-15).** Two
+driven playback sessions — one stream-copy, one real libx264 re-encode — with a purpose-built HLS
+client that fetches segments sequentially at roughly realtime, because both controls key off the
+client's *download position*: rows 4 (44 / 55 new `.mp4` in `/mnt/fast/transcode`), 5 (**0** new
+files in the old volume during the same transcode, with the volume proven still to exist at that
+moment), 16 (**8** `Deleting segment file(s) index` lines per session, ranges advancing), 17
+(`-readrate 10` present on `copy`, correctly absent on `libx264`), 18 (**89+6** and **87+8**
+throttler lines, **zero** `No throttle data`). Better than the row asked for: the throttler logs
+`target gap 1800000000` ticks — **Jellyfin echoing `ThrottleDelaySeconds=180` back in its own
+words.** And the quota **refused a write on attempt 1 of 10 while `/` moved by exactly 0 bytes**
+across a 1 GB ballast.
+
+**⚠ THREE ASSERTIONS IN THIS PHASE'S OWN CONTRACT FAIL ON CORRECT OUTCOMES — fix before 02.1-10.**
+(1) **VALIDATION row 11's errno pair is INVERTED.** An OpenZFS dataset `quota` refusal surfaces as
+**EDQUOT** (`Disk quota exceeded`), not ENOSPC; ENOSPC is a genuinely full *pool*. The plan's stated
+inference — *"EDQUOT means refquota is in force and 02.1-03's property is wrong"* — was **tested and
+is FALSE**: `refquota` is `0`/default, `quota` is `53687091200`/local, no ancestor carries either.
+**02.1-03 chose correctly; the RESEARCH's errno mapping is what is wrong.** (2) **Row 16's numeric
+ceiling** counts only the `SegmentKeepSeconds` retention window and omits the `ThrottleDelaySeconds`
+forward buffer the configuration deliberately maintains, so a working cleaner cannot satisfy it.
+(3) **02.1-06's own task-3 `<verify>` block cannot pass** and was deliberately not made to pass —
+inserting the ENOSPC string to satisfy it would fabricate a firing that did not happen.
+
+**⚠ A REAL ESTATE FOLLOW-UP, WORSE THAN THE PLAN DESCRIBED.** The reasoning behind choosing `quota`
+was "so refusals match the estate's ENOSPC-keyed log greps". **Both** properties return EDQUOT, so
+**no** choice of property produces a match: any monitoring keyed on the ENOSPC phrase is **blind to a
+transcode-quota refusal**. Switching to `refquota` would not fix it; adding the EDQUOT string to
+those greps would. Not fixed here — out of scope.
+
+**⚠ THE PROOF CLIENT PRODUCED A CONFIDENT, COHERENT, COMPLETELY FALSE RESULT BEFORE IT WAS CAUGHT,
+and the lesson generalises well beyond this phase.** Run 1 reported **zero** deletion lines, **zero**
+throttling lines and zero `No throttle data` on *both* codec branches, with an advancing download
+head and the ffmpeg pause key re-probed at `d=10000` as supported — every discriminator the plan
+provided pointed at "the controls do not start on this estate". The cause was mine: `printf … | head`
+under `pipefail` returns 141 on SIGPIPE, which fired the `ERR` trap during the *manifest fetch*; the
+handler correctly restored Jellyfin to Information, but **`set +e` inside a trap handler is GLOBAL,
+not function-local**, so with errexit off the script ran on for 200 more lines and grepped a log that
+had been back at Information throughout. Both target lines are Debug-level and could not appear.
+A false mechanism had already been drafted (that Jellyfin excludes the throttler on the copy path)
+and was refuted by run 2. **The fix that closes it is a `Debug-liveness assertion at grep time`** —
+an instrument that reads a log must prove the log was at the required level *for the window it
+reads*, or "zero matches" and "the control did not fire" are the same output. That is 02-08's
+`exportfs -v` in a new costume, and it is the third time this estate has paid for the same shape.
+
+**⚠ THE 02.1-05 RECREATE MINTED TWO DANGLING ANONYMOUS VOLUMES** (`c479d815…`, `efbcf4d6…`, both
+created `22:19:12Z`, both 0 bytes, unreferenced). Nothing writes to them — jellyfin holds zero
+`Type: volume` mounts, asserted. **Deliberately NOT removed**: D-11 scopes 02.1-06 to an inventory
+and nobody has ruled on deleting them. Recorded because this whole phase began as one anonymous
+volume nobody was watching.
+
+**TRAN-02, TRAN-03 and TRAN-04 are COMPLETE** — the first requirements in this phase ticked on
+*firing* evidence rather than configuration. One caveat stated plainly: TRAN-03's "survives a UI
+edit" clause is discharged **by construction, not by an executed edit** — Jellyfin cannot set ZFS
+properties, which is the entirety of D-12.
+
+Before that, **02.1-05 COMPLETED — THE CUTOVER.** At **2026-09-02T22:19:52Z** Jellyfin
 stopped writing its cache to `/`. The container was recreated onto the binds 02.1-04 declared, and
 the mount shape is now proven on the **runtime** rather than in the file: **zero `Type: volume`
 mounts** (D-18's invariant, asserted before the container was even enumerated), `/cache/transcodes`
@@ -53,10 +117,9 @@ have silently re-armed the hazard that cost ~6 hours on 2026-08-31.
 `mounted=yes`, both re-read from atlantis *after* the recreate (VALIDATION rows 10 and 36). That is
 exactly why D-12 makes the ZFS property load-bearing rather than an application setting.
 
-**Standing check: `FAILURES total: 5` → `1`.** The one remaining red is section 3, *"the anonymous
-volume STILL EXISTS"*, and it is **supposed** to be red here. **The volume was deliberately NOT
-deleted** — it is the rollback, D-10 keeps it until the thing it protects is proven, and it is
-proven now. **02.1-06 may proceed**, and it is what releases the 12.55 GiB still sitting on `/`.
+**Standing check at 02.1-05: `FAILURES total: 5` → `1`.** The one remaining red was section 3, *"the
+anonymous volume STILL EXISTS"*, and it was **supposed** to be red there — it is the row that says
+the rollback survives. **02.1-06 has since cleared it for the right reason: FAILURES `1` → `0`.**
 
 **⚠ VALIDATION.md row 15 IS WRONG AS WRITTEN and needs correcting before 02.1-10 verifies against
 it.** It asserts the changed-key set equals five names *including* `ThrottleDelaySeconds` — but that
@@ -77,8 +140,8 @@ Before that, 02.1-03 completed: `fast/transcode` is **declared** in `infra/` Ter
 (`infra/jellyfin-transcode-dataset.tf`, `var.jellyfin_transcode_quota`) and carries
 **`quota=53687091200`** live, with `compression=off`, `sync=disabled`, `recordsize=1048576`,
 `atime=off`, `mounted=yes` and `2775 apps:apps` — all read back from atlantis, not from Terraform's
-own output. **TRAN-07 is COMPLETE**; TRAN-03 stays Pending because it requires the bound proven
-**firing** (02.1-08), not proven set.
+own output. **TRAN-07 is COMPLETE**; TRAN-03 was left Pending there because it requires the bound proven
+**firing**, not proven set — **and 02.1-06 has now provided exactly that, so TRAN-03 is COMPLETE.**
 
 **⚠ BOTH OF 02.1-02's OPEN QUESTIONS ARE NOW RULED — do not re-litigate either.**
 (1) The `/` **ORDERING** question: the reap **stays in 02.1-09**, 02.1-03 proceeded. Basis, measured
@@ -175,7 +238,12 @@ it asked for: the operator browsed MA's Filesystem (local disk) provider, spot-c
 **played tracks to confirm the audio matches the metadata**. No assertion in this phase could do
 that — every automated check verifies MA's *database* says the right thing, never that the *bytes*
 are the right song, and the documented stale state is precisely "entries exist, playback fails".
-Last activity: 2026-09-02 — 02.1-05 complete (**THE CUTOVER** — the container recreated onto the
+Last activity: 2026-09-03 — 02.1-06 complete (**THE BOUNDS FIRE AND THE VOLUME IS GONE** — segment
+deletion and throttling proven from Jellyfin's own Debug log across two driven playback sessions, the
+ZFS quota proven to refuse a write while `/` moved by 0 bytes, the anonymous volume deleted by name
+after the observation it would have made vacuous, **12.95 GiB reclaimed**, and the standing check
+green at FAILURES 0. Three of the phase's own assertions were found to fail on correct outcomes and
+are flagged for correction, not edited). Before that, 02.1-05 complete (**THE CUTOVER** — the container recreated onto the
 declared binds at 22:19:52Z, assumption A4 confirmed by write-through probe, the quota and mount
 proven to survive the recreate, and the five encoding settings applied by read-modify-write with the
 amdgpu mitigation asserted intact). Before that, 02.1-04 completed (the cache copy and the compose
@@ -440,6 +508,7 @@ already open so only 2049 is this phase's delta.
 | Phase 02.1 P03 | ~13 minutes (continuation agent) | 2 tasks | 5 files |
 | Phase 02.1 P04 | 36 minutes | 3 tasks | 3 files |
 | Phase 02.1 P05 | ~25 minutes | 2 tasks | 6 files |
+| Phase 02.1 P06 | ~85 minutes | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -451,6 +520,48 @@ already open so only 2049 is this phase's delta.
 
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
+
+- [02.1-06]: **VALIDATION row 11's errno pair is INVERTED, and the plan's inference from that was
+  TESTED and found FALSE.** An OpenZFS dataset `quota` refusal surfaces as **EDQUOT**
+  (`Disk quota exceeded`), not ENOSPC — ENOSPC is a genuinely full *pool*, and this one is 22%
+  allocated. The plan says EDQUOT means `refquota` is in force and 02.1-03 picked the wrong property;
+  measured, `refquota` is `0`/default and `quota` is `53687091200`/local with no ancestor quota.
+  **02.1-03 chose correctly; the RESEARCH's errno mapping is what is wrong.** The consequence is
+  worse than the plan described: *both* properties return EDQUOT, so **no** property choice matches
+  an ENOSPC-keyed grep, and the estate's greps are blind to a transcode-quota refusal. Row 11 is
+  **not marked passed**, no string was inserted to make the check pass, and the ENOSPC phrase is
+  named rather than spelled out in the artifact so the grep returns the honest zero.
+
+- [02.1-06]: **VALIDATION row 16's numeric ceiling is unsatisfiable by a working system.** It counts
+  only the segments *behind* the download head awaiting the cleaner, and omits the segments *ahead*
+  of it that `ThrottleDelaySeconds=180` deliberately buffers. Measured against session B in steady
+  state: 119 segments behind + 74 ahead = 192, the exact observed count. Corrected form is
+  `ceil((SegmentKeepSeconds + max(ThrottleDelaySeconds,120)) / segment_duration)` plus slack for the
+  cleaner's 20 s tick and the throttler's 5 s poll. **Not waived** — what it protected is discharged
+  by the cleaner's own log lines, by counts that oscillate rather than climb, and by the ZFS quota.
+
+- [02.1-06]: **an instrument that reads a log MUST assert the log level at grep time.** Run 1 of the
+  proof client produced a fully coherent false negative — zero deletion and zero throttling lines on
+  both codec branches — because a SIGPIPE `ERR` trap restored the Debug level mid-run and `set +e`
+  inside the handler leaked globally, letting the script continue and grep a log at Information.
+  Fixes: `sed -n '1,Np'` instead of `| head -N`, an explicit `exit` on any non-zero path inside the
+  handler, and a **Debug-liveness assertion** recorded beside every log grep. Third time this estate
+  has paid for "silence read as a pass" (01-06's path-set diff, 02-08's `exportfs -v`).
+
+- [02.1-06]: **a transcript must not contain the literal string its own verify greps for, in EITHER
+  direction.** 02.1-01 and 02.1-05 both hit the version where correct prose *fails* a check; here,
+  prose explaining an *unobserved* string would have *satisfied* a check it must fail. Both the
+  ENOSPC phrase and the bulk volume-removal subcommand are therefore named in pieces, with in-band
+  notes saying why.
+
+- [02.1-06]: **a credential screen needs a positive control.** The artifacts were screened by pattern
+  *and* by grepping the literal key value, with the same grep run against the secrets file to prove
+  it could match at all. "0 occurrences" from a grep never shown capable of finding anything is the
+  02-08 failure shape.
+
+- [02.1-06]: the two dangling anonymous volumes the 02.1-05 recreate minted were **inventoried and
+  NOT removed** — D-11 scopes 02.1-06 to an inventory, the bulk-removal subcommand is rejected by
+  the plan, and removing them individually is a change nobody has ruled on.
 
 - [02.1-05]: **VALIDATION row 15's key-set equality was CORRECTED, not waived.** It names
   `ThrottleDelaySeconds` as a changed key, but that value was already `180`, so setting it to `180`

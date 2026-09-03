@@ -85,13 +85,13 @@ for why the v1 denominator of 39 is deliberately preserved.
 - [x] **TRAN-01**: Every Jellyfin cache write, transcodes included, lands on `/mnt/fast`, not on
       LXC 100's root filesystem — by declared bind mount, not by an anonymous Docker volume
       *(discharges D-01, D-02, D-03, D-08, D-09, D-10)*
-- [ ] **TRAN-02**: Jellyfin holds **zero** `Type: volume` mounts, and the anonymous volume
+- [x] **TRAN-02**: Jellyfin holds **zero** `Type: volume` mounts, and the anonymous volume
       `d98b2ff9…` no longer exists. The invariant is asserted, not the id — a *new* anonymous volume
       must fail this too *(discharges D-08, D-10, D-18)*
-- [ ] **TRAN-03**: Transcode growth is bounded by a ZFS property that survives a container recreate
+- [x] **TRAN-03**: Transcode growth is bounded by a ZFS property that survives a container recreate
       and a UI edit, and the bound is proven to **fire** rather than proven to be set
       *(discharges D-12, D-13, D-15)*
-- [ ] **TRAN-04**: Jellyfin's own retention levers are on, their values are chosen rather than
+- [x] **TRAN-04**: Jellyfin's own retention levers are on, their values are chosen rather than
       defaulted, and each is proven **firing** from Jellyfin's own logs — not read back from the API
       *(discharges D-14, D-15, D-21)*
 - [ ] **TRAN-05**: A standing, fail-closed check covers `/` headroom, the absent anonymous volume,
@@ -249,9 +249,9 @@ Populated during roadmap creation (2026-08-17). Every v1 requirement maps to exa
 | CONS-02 | Phase 2 | **COMPLETE (02-06).** MA provider `filesystem_local--XJaJWNUS` at `/media/music`, created headlessly (`config/providers/setup` → `config/flows/submit`), `type=music`, `enabled`, `status: loaded`, `last_error: null`. `content_type` read back as `music` (`read_only: true`) and `missing_album_artist_action` read back as `folder_name` against a `various_artists` default — D-28 and D-01 both proven by read-back, not by submission. Instance id pinned into `check-music-consumers.sh` (`e1c4f93`), so both library proof albums match with provider attribution confirmed server-side **and** client-side against `provider_mappings[]`. 20 albums attributed to the local provider. Caveat: MA 2.11 does not expose the provider's `path` via the API — it is proven functionally via `music/browse` and recorded only in `02-06-SUMMARY.md`. **CRITERION 3 CLOSED BY 02-07**: all three proof albums exact-matched on album name **and** `artists[0].name` inside one deliberate 177 s `music/sync`, the third served through the temporary export. **⚠ But `missing_album_artist_action: folder_name` is CONDITIONAL** — measured in 02-07, it fires only when a file's `album` TAG agrees with its album FOLDER name, and otherwise silently yields `Various Artists` while the API still reads back `folder_name`. "Shows albums under the correct album artist" is therefore true for this library's proof set and NOT guaranteed for arbitrary content; Phase 7 must check the precondition |
 | CONS-03 | Phase 2 | **COMPLETE (02-08).** The reboot half — the only thing 02-07 was missing — was done twice on 2026-09-01. **Criterion 4a:** NUC rebooted with atlantis healthy, boot_id changed `b86dada0…`→`3a7906c0…`, **zero manual intervention**, mount `active`/`read_only`, 70 albums provider-filtered, both proof albums EXACT, `check-music-consumers.sh` exit 0, and M4a re-synced unprompted at 12:43:25Z. Recorded as **necessary but not sufficient** — atlantis was healthy so the race was never exercised. **Criterion 4b:** `nfs-server` stopped, NUC rebooted (boot_id `3a7906c0…`→`a2869d72…`), the failure reproduced in full — Supervisor's `mounting read-only fallback`, `/media/music` empty and `dr--r--r--`, MA's `Aborting sync … scan found no files but 1244 were previously indexed` — and **MA's view survived it: 70 albums before, 70 during, 70 after. No purge.** Then **unattended recovery in 432 s** with the NUC untouched, M4b re-syncing on its own at 13:12:06Z. **⚠ Two instrument corrections came out of it:** `mount \| grep emergency/music` can never match on this Supervisor version (it makes the media dir read-only in place, no `/emergency/` bind), and the default `ha supervisor logs` depth does not reach back to boot. **A real defect was found and fixed:** D-54a's alerting was structurally unable to fire on a boot into a failed mount; it now carries a `homeassistant start` trigger (the load-bearing one) and both new trigger paths are fired and trace-confirmed. D-54b remains blind at boot by integration-setup ordering — diagnosed, recorded open, not part of CONS-03's text |
 | TRAN-01 | Phase 02.1 | Complete |
-| TRAN-02 | Phase 02.1 | Pending |
-| TRAN-03 | Phase 02.1 | Pending |
-| TRAN-04 | Phase 02.1 | Pending |
+| TRAN-02 | Phase 02.1 | Complete |
+| TRAN-03 | Phase 02.1 | Complete |
+| TRAN-04 | Phase 02.1 | Complete |
 | TRAN-05 | Phase 02.1 | Pending |
 | TRAN-06 | Phase 02.1 | Pending |
 | TRAN-07 | Phase 02.1 | Complete |
