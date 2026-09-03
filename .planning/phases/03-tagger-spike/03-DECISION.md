@@ -391,6 +391,44 @@ v0.20.0's `Data` struct** (a template execute error, but only when `len .Release
 
 ---
 
+## Threshold commit provenance
+
+`git log -p` on a local branch is **evidence, not proof**: a local history can be amended or rebased
+before it is published, so custody that rests only on local commit ordering rests on the author's
+restraint. **A pushed commit is a fact about a remote.** This section records that fact.
+
+| Property | Value |
+|---|---|
+| **Threshold commit SHA** | `137b6d9e92cb44d9c6a48b3963bb33fe0194622f` |
+| Committer timestamp (UTC) | `2026-09-03 19:27:13 +0000` |
+| Remote | `origin` — `git@github.com:DamianFlynn/selfhost-stacks.git` |
+| Ref pushed to | `refs/heads/worktree-agent-a810735978952a3c4` |
+| Contents | `03-DECISION.md` and `03-ERGONOMICS-SHEET.md`, 513 insertions, 0 deletions |
+| Reachable from | `origin/worktree-agent-a810735978952a3c4` (verified with `git branch -r --contains`) |
+
+That commit is the one that introduced **T1, T2, T3, the backlog-weighted estimator and the
+corrected 143-folder denominator**. **Every measurement in this phase is committed after it**, and
+the threshold text and the estimator definition are asserted **unchanged** against it in plans 03-07
+and 03-11 by `git log -p 137b6d9e92cb44d9c6a48b3963bb33fe0194622f -- .planning/phases/03-tagger-spike/03-DECISION.md`.
+
+**Recorded honestly — the ref this was pushed to, and why it is not `main`.** Plan 03-02 executed as
+an isolated worktree agent, and at the moment of the push **`origin/main` stood at `c88c268`, which
+is *behind* this plan's own base commit `41de755`** ("docs(phase-03): begin phase 03 execution") —
+the phase-start commit had not itself been published. Publishing this branch's history onto `main`
+would therefore have pushed unmerged parallel work ahead of the orchestrator that owns the merge.
+The commit was pushed to its own remote branch instead. **This satisfies what the push is for:** the
+SHA is now immutable and independently verifiable on a remote, so criterion 5's custody no longer
+rests on a mutable local branch. **`origin/main` reachability completes when the orchestrator merges
+the wave**, and because this repository merges rather than squashes or rebases (see `0ee20c7`,
+`merge(02.1-15)`), **the SHA above survives that merge unchanged**.
+
+**Required of plan 03-07:** reproduce this SHA verbatim in `03-DISCOGS-EVIDENCE.md`, and **assert it
+is an ancestor of `origin/main` before recording any number** —
+`git merge-base --is-ancestor 137b6d9e92cb44d9c6a48b3963bb33fe0194622f origin/main`. If that
+assertion fails, the merge has not happened yet and no evidence may be recorded against it.
+
+---
+
 ## Files this phase reads and quotes but does NOT edit (D-03)
 
 - `stacks/selfhosted/music/wrtag.yaml` — lines 71 and 73, quoted verbatim above.
