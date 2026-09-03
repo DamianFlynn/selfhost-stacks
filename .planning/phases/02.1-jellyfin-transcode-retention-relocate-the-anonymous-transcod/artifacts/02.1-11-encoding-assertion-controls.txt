@@ -1,0 +1,319 @@
+================================================================================
+02.1-11 — ENCODING-ASSERTION NEGATIVE CONTROLS
+Five per-field controls proving each of the five new encoding assertions in
+scripts/check-jellyfin-transcode.sh is able to FAIL individually, plus the
+green side driven back afterwards.
+
+Executed 2026-09-03, from the workstation over ssh to LXC 100 (172.16.1.159).
+Plan: .planning/phases/02.1-.../02.1-11-PLAN.md  (GAP 1 / CR-01)
+================================================================================
+
+WHAT IS BEING PROVEN, AND WHY IT NEEDED FIVE RUNS RATHER THAN ONE
+--------------------------------------------------------------------------------
+Until this plan, section 5 of check-jellyfin-transcode.sh printed all five
+retention values through info(). FAILURES never incremented on drift, so the
+script printed "✅ Jellyfin transcode retention intact" no matter what those
+values said. Plan 02.1-11 converted them to assertions via assert_enc().
+
+An assertion that has never been observed to fail is not evidence. Worse, a
+single run with all five expectations perturbed would prove only that the
+BLOCK can go red — it would not distinguish "five independent assertions" from
+"one switch that flips them all". So each field is driven separately, and the
+informative measurement in each run is not the red line: it is the FOUR GREEN
+LINES BESIDE IT. That is the same shape as 02.1-07's TRAN09_FAULT control,
+whose most useful output was the fifth field passing inside a failing run.
+
+THE CONTROLS MUTATE NOTHING. Each expectation is a ${VAR:-default} constant, so
+a control perturbs the EXPECTATION and never the value. This is deliberate and
+load-bearing: /System/Configuration/encoding is a FULL-OBJECT REPLACE, and
+POSTing a wrong value to stage a control would risk silently re-arming the
+amdgpu hazard that cost ~6 hours on 2026-08-31 (D-30). No POST was made by any
+run below; section 5 is a GET only. Same device as $TRAN09_EXPECT in
+scripts/disable-jellyfin-hwaccel.sh.
+
+
+⚠️  DELIVERY: THE PLAN'S MECHANISM COULD NOT BE USED, AND THIS IS THE SUBSTITUTE
+--------------------------------------------------------------------------------
+READ THIS BEFORE READING THE ASSERTIONS BELOW — it changes what one of them
+means.
+
+The plan text specifies: commit, push, `git pull --ff-only` on LXC 100, then
+assert (i) host-side `git rev-parse HEAD` == `origin/main` and (ii) the
+host-side copy greps non-zero for the payload.
+
+Half (i) WAS NOT EXECUTED AND COULD NOT BE. This plan ran as a parallel
+worktree agent on branch `worktree-agent-a5a14f3f7b75e2c18`; the orchestrator
+merges to main after the wave completes. Pushing to main from inside the
+worktree would bypass that merge, so it was not done. At the time of these runs
+LXC 100 was on `main` at 780ada83, which does NOT contain the 02.1-11 edit.
+
+SUBSTITUTE, AND WHY IT IS STRONGER ON THE POINT THAT MATTERS: the edited script
+was staged to a path OUTSIDE the repo —
+  /mnt/fast/spike-021/02.1-11/scripts/check-jellyfin-transcode.sh
+— and the assertion made was sha256 EQUALITY between the committed worktree
+file and the host-side copy. A matching HEAD proves the right commit is checked
+out; a matching sha256 proves the exact BYTES under test are the bytes
+committed, which is the claim these controls actually depend on.
+
+  workstation, committed file (400d59b):
+    7ea3c84b2909ec8ed6b0378033f39fd54ecc6310e47c53f10c3f56129ee15db4
+  LXC 100, staged copy (pre-control):
+    7ea3c84b2909ec8ed6b0378033f39fd54ecc6310e47c53f10c3f56129ee15db4
+  MATCH.
+
+CONSEQUENCE, STATED SO NOBODY OVERREADS THIS FILE: these runs prove the
+ASSERTIONS discriminate. They do NOT prove the standing check on LXC 100 is
+the amended one — it is not, until the orchestrator merges and the host pulls.
+The `/mnt/fast/stacks` copy still hashes d33356c5… (the pre-02.1-11 version,
+the same hash 02.1-10 recorded). Re-running the standing check post-merge is a
+one-line confirmation and is noted in the SUMMARY as an open follow-up.
+
+Payload asserted present in the host-side copy (delivery half (ii), executed):
+  grep -c EXPECT_TRANSCODING_TEMP_PATH  ->  3    (non-zero)
+  grep -c assert_enc                    ->  9    (non-zero)
+
+
+================================================================================
+RUN 0 — BASELINE, NO OVERRIDES  (the green side, before anything is perturbed)
+================================================================================
+$ ssh root@172.16.1.159 'bash /mnt/fast/spike-021/02.1-11/scripts/check-jellyfin-transcode.sh'
+  date: 2026-09-03T10:48:19Z    host: selfhost
+  EXIT: 0
+
+⚙️  5. The encoding values (TRAN-04, D-20, D-21, D-30) — five ASSERTED, two REPORTED
+  ✅ TranscodingTempPath expected='/cache/transcodes' found='/cache/transcodes' — NOT DRIFTED (this is not a claim it FIRES; 02.1-06 proved that once, from the Debug log — CONS-04)
+  ✅ EnableSegmentDeletion expected='true' found='true' — NOT DRIFTED (…CONS-04)
+  ✅ SegmentKeepSeconds expected='300' found='300' — NOT DRIFTED (…CONS-04)
+  ✅ EnableThrottling expected='true' found='true' — NOT DRIFTED (…CONS-04)
+  ✅ ThrottleDelaySeconds expected='180' found='180' — NOT DRIFTED (…CONS-04)
+  HardwareAccelerationType = none   (amdgpu mitigation, D-30 — REPORTED)
+  EnableHardwareEncoding = false    (amdgpu mitigation, D-30 — REPORTED)
+
+📊 6. Summary
+  / headroom:              36847423488 bytes (34.32 GiB)  (target ≥ 21474836480)
+  volume mounts:           0  (target 0)
+  transcode quota:         53687091200 bytes  (target 53687091200)
+  transcode mounted:       zfs=yes devid=47 parent=64519  (target yes, and devid ≠ parent)
+  transcode target:        /cache/transcodes  (target /cache/transcodes)
+  encoding values:         5 asserted, 0 drifted; 2 amdgpu values REPORTED (see section 5)
+  unreachable:             0
+  toolchain missing:       0
+  FAILURES total:          0
+  ✅ Jellyfin transcode retention intact
+
+The two new summary tokens are present and both carry a target, matching the
+existing `(target $QUOTA_BYTES)` style. `transcode target` prints the LIVE value
+and the EXPECTED value side by side, which is what lets a reader see which side
+moved — see run 1.
+
+
+================================================================================
+RUN 1 — EXPECT_TRANSCODING_TEMP_PATH=/config/transcodes
+        (deliberately Jellyfin's OWN DEFAULT — the exact drift CR-01 describes)
+================================================================================
+EXIT: 1     FAILURES total: 1     reds among the five: 1     greens: 4
+
+  ❌ TranscodingTempPath DRIFTED — expected='/config/transcodes' found='/cache/transcodes' (TRAN-04, D-20)
+         THIS ONE IS NOT LIKE THE OTHER FOUR. While this value is wrong the 50 G quota
+         on fast/transcode BOUNDS NOTHING: Jellyfin writes its segments somewhere else
+         entirely, and section 2's binds and section 4's quota can both be green and
+         completely irrelevant. Fix this before reading anything else as reassuring.
+  ✅ EnableSegmentDeletion   ✅ SegmentKeepSeconds   ✅ EnableThrottling   ✅ ThrottleDelaySeconds
+
+  transcode target:        /cache/transcodes  (target /config/transcodes)
+  encoding values:         5 asserted, 1 drifted; 2 amdgpu values REPORTED (see section 5)
+  FAILURES total:          1
+
+THIS IS THE RUN THAT CLOSES CR-01. Before this plan, this exact condition —
+TranscodingTempPath pointing at /config/transcodes, i.e. the transcode cache
+sitting on fast/appdata OUTSIDE the 50 G quota — produced EXIT 0 and the message
+"✅ Jellyfin transcode retention intact", because every other instrument
+(the two binds, both mount instruments, the quota, the `/` floor) was and would
+remain green. It now exits 1.
+
+WHAT AN OPERATOR READING ONLY quick-health-check.sh WOULD SEE: with task 3's
+selector change, the fold-in surfaces both
+    transcode target:  /cache/transcodes  (target /config/transcodes)
+    encoding values:   5 asserted, 1 drifted; …
+on the summary it prints. Before task 3 the selector matched neither token, so
+even a red would have shown the operator a FAILURES count with nothing naming
+the field. Note the ordering: in a REAL drift the two sides swap — the live
+value moves and the target stays /cache/transcodes. Both are printed precisely
+so the reader can tell a genuine drift from a perturbed expectation.
+
+
+================================================================================
+RUN 2 — EXPECT_ENABLE_SEGMENT_DELETION=false
+================================================================================
+EXIT: 1     FAILURES total: 1     reds among the five: 1     greens: 4
+
+  ❌ EnableSegmentDeletion DRIFTED — expected='false' found='true' (TRAN-04, D-20)
+  ✅ TranscodingTempPath   ✅ SegmentKeepSeconds   ✅ EnableThrottling   ✅ ThrottleDelaySeconds
+
+  transcode target:        /cache/transcodes  (target /cache/transcodes)
+  encoding values:         5 asserted, 1 drifted; 2 amdgpu values REPORTED (see section 5)
+
+Note `transcode target` stays fully green here. A control that reddened the
+summary line for a field it did not perturb would mean the summary was reading
+the block rather than the field.
+
+
+================================================================================
+RUN 3 — EXPECT_SEGMENT_KEEP_SECONDS=86400
+================================================================================
+EXIT: 1     FAILURES total: 1     reds among the five: 1     greens: 4
+
+  ❌ SegmentKeepSeconds DRIFTED — expected='86400' found='300' (TRAN-04, D-20)
+  ✅ TranscodingTempPath   ✅ EnableSegmentDeletion   ✅ EnableThrottling   ✅ ThrottleDelaySeconds
+
+This is the field named in the plan's reason 2 for asserting all five rather
+than two: 86400 is a plausible UI edit that silently deletes the retention
+policy this phase installed, and under a two-value scheme the check would have
+stayed green. Same shape as CR-01, one field over.
+
+
+================================================================================
+RUN 4 — EXPECT_ENABLE_THROTTLING=false
+================================================================================
+EXIT: 1     FAILURES total: 1     reds among the five: 1     greens: 4
+
+  ❌ EnableThrottling DRIFTED — expected='false' found='true' (TRAN-04, D-20)
+  ✅ TranscodingTempPath   ✅ EnableSegmentDeletion   ✅ SegmentKeepSeconds   ✅ ThrottleDelaySeconds
+
+
+================================================================================
+RUN 5 — EXPECT_THROTTLE_DELAY_SECONDS=0
+================================================================================
+EXIT: 1     FAILURES total: 1     reds among the five: 1     greens: 4
+
+  ❌ ThrottleDelaySeconds DRIFTED — expected='0' found='180' (TRAN-04, D-20)
+  ✅ TranscodingTempPath   ✅ EnableSegmentDeletion   ✅ SegmentKeepSeconds   ✅ EnableThrottling
+
+
+================================================================================
+DISCRIMINATION MATRIX — the actual result
+================================================================================
+Measured mechanically, not by eye:
+  $ grep -c 'DRIFTED — expected' c1..c5   ->  1  1  1  1  1
+  $ grep -c 'NOT DRIFTED'        c1..c5   ->  4  4  4  4  4
+
+ run | perturbed field          | exit | FAILURES | reds | greens
+-----+--------------------------+------+----------+------+--------
+  0  | (none — baseline)        |   0  |    0     |  0   |   5
+  1  | TranscodingTempPath      |   1  |    1     |  1   |   4
+  2  | EnableSegmentDeletion    |   1  |    1     |  1   |   4
+  3  | SegmentKeepSeconds       |   1  |    1     |  1   |   4
+  4  | EnableThrottling         |   1  |    1     |  1   |   4
+  5  | ThrottleDelaySeconds     |   1  |    1     |  1   |   4
+  6  | (none — restored)        |   0  |    0     |  0   |   5
+
+Every field is individually able to fail. No run produced 5 reds (which would
+mean one switch, not five assertions) or 0 reds (which would mean a control
+that cannot fail). No run was retried.
+
+
+================================================================================
+NO FILE WAS MUTATED — ASSERTED, NOT ASSUMED
+================================================================================
+The controls are environment overrides, so nothing should have been written.
+"Should have" is not a measurement, so both halves were checked.
+
+  staged script sha256, BEFORE the five controls:
+    7ea3c84b2909ec8ed6b0378033f39fd54ecc6310e47c53f10c3f56129ee15db4
+  staged script sha256, AFTER the five controls:
+    7ea3c84b2909ec8ed6b0378033f39fd54ecc6310e47c53f10c3f56129ee15db4
+  IDENTICAL.
+
+  $ ssh root@172.16.1.159 'cd /mnt/fast/stacks && git status --porcelain scripts/'
+  (empty — the real repo's scripts/ is clean)
+
+  $ ssh root@172.16.1.159 'cd /mnt/fast/stacks && sha256sum scripts/check-jellyfin-transcode.sh'
+  d33356c551113fd972c515fc288ef8f00a1180bb8f17119165c81c21971444b5
+  — the PRE-02.1-11 version, unchanged, and the same hash 02.1-10 recorded twice.
+  The staging path was chosen precisely so the live standing check was never in
+  the blast radius of a control.
+
+No Jellyfin configuration was written. No container was recreated, restarted or
+stopped. No zfs property was set. No compose file, Terraform resource or image
+was touched. No package was installed.
+
+
+================================================================================
+RUN 6 — RESTORED, NO OVERRIDES  (the green side DRIVEN, not quoted from run 0)
+================================================================================
+$ ssh root@172.16.1.159 'bash /mnt/fast/spike-021/02.1-11/scripts/check-jellyfin-transcode.sh'
+  EXIT: 0
+
+  transcode target:        /cache/transcodes  (target /cache/transcodes)
+  encoding values:         5 asserted, 0 drifted; 2 amdgpu values REPORTED (see section 5)
+  FAILURES total:          0
+  ✅ Jellyfin transcode retention intact
+
+Both directions observed after the perturbation, per 02.1-07's rule: a control
+that only ever fails is as uninformative as one that only ever passes.
+
+
+================================================================================
+WHAT THE PLAN TEXT GOT WRONG — recorded, not massaged
+================================================================================
+This phase's two most useful results were both places a plan was wrong. Keeping
+the habit.
+
+1. THE DELIVERY ASSERTION IS UNEXECUTABLE UNDER WORKTREE ISOLATION. The plan
+   specifies commit → push → `git pull --ff-only` on LXC 100 → assert host HEAD
+   == origin/main. A parallel worktree agent must not push to main; the
+   orchestrator merges. Half (i) of the delivery assertion was therefore
+   replaced by sha256 equality (see the DELIVERY block above). This is not a
+   defect in the assertion's intent — it is a plan written for sequential
+   execution and then run in a worktree. Any future plan whose proof requires
+   host-side delivery should either state the sha256 form directly or be marked
+   as not-worktree-safe.
+
+2. TASK 3's ROADMAP EDIT WAS PARTLY ALREADY DONE. The plan instructs
+   "append entries for 02.1-11-PLAN.md … 02.1-14-PLAN.md under new wave headings
+   after Wave 9 … and update the `**Plans**: 10 plans in 9 waves` line". Both
+   were already applied by the gap-closure planning commit (7a8b579 / 260fd93):
+   the ROADMAP already carries Waves 10-12 with all four plans listed, and the
+   line already reads "14 plans in 12 waves". `grep -c "10 plans in 9 waves"`
+   returns 0. Nothing was done for this instruction and nothing needed to be.
+
+3. THE `encoding values:.*REPORTED not asserted` STRIP-GREP DOES NOT
+   DISCRIMINATE AT THIS COMMIT. The plan's acceptance criterion expects the
+   comment-stripped count to be 0 while allowing the raw count to be non-zero,
+   and asks for both to be reported. BOTH ARE 0 — no surviving comment mentions
+   the old wording in that exact form, so the strip is doing no work here. What
+   DOES discriminate is the same grep across the change:
+     $ git show HEAD~1:scripts/check-jellyfin-transcode.sh | grep -c '…'  -> 1
+     $ grep -c '…' scripts/check-jellyfin-transcode.sh                    -> 0
+   Reported rather than quietly presented as a passing strip test, per the
+   02.1-09/02.1-10 precedent that a non-discriminating check is worth naming.
+
+4. shellcheck IS NOT INSTALLED ON THE WORKSTATION. Task 1's <verify> block
+   handles this (`|| echo "shellcheck unavailable — syntax check only"`), and
+   that is the branch that ran. `bash -n` passed. Recorded so a later reader
+   does not assume the script has been shellcheck-clean-verified: it has not.
+
+Nothing else in the plan text was found to be wrong. The five expectations, the
+five control values, the predicted exit codes and the predicted per-field
+discrimination all matched exactly.
+
+
+================================================================================
+CREDENTIAL SCREEN
+================================================================================
+The repo is PUBLIC and has one prior credential exposure still recoverable via
+`git log -S`. This file was screened before commit, with a POSITIVE CONTROL
+first so the sweep is known to discriminate:
+
+  $ grep -cE '[A-Za-z0-9]{32,}' <<< 'apikeyexample0000000000000000000000'
+  1                                    <- the pattern matches secret-shaped text
+
+  $ grep -nE '[A-Za-z0-9]{32,}' <this file>
+  matches are sha256 hashes ONLY (7ea3c84b…, d33356c5…) — see the screen result
+  recorded in 02.1-11-SUMMARY.md. No token, key or password appears here.
+
+The Jellyfin API key is referenced by variable name only ($JELLYFIN_API_KEY /
+$JELLYFIN_SECRETS). Section 5 was never run under `set -x`, and the key reaches
+curl by process substitution so it never entered argv and could not appear in
+`ps` during any run above.
+================================================================================
