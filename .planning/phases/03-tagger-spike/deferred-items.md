@@ -142,3 +142,93 @@ with the last 128 bytes removed when they begin `TAG`, or to switch to
 `ffmpeg -map 0:a -f md5` over the *decoded* stream, which is tag-invariant by construction at the
 cost of decode time. Whichever is chosen, add a regression test: edit only `album` on an
 ID3v1-bearing MP3 and assert the key does **not** move.
+
+---
+
+## DEF-03-04 — the Discogs token is in the QUERY STRING, not the `Authorization` header
+
+**Found by:** plan 03-06, task 2, 2026-09-03.
+**Severity:** the phase's threat model names the wrong channel, so a mitigation reasoned about
+correctly still leaked a live credential to a `644` file.
+
+`03-06-PLAN.md` T-03-31 and `03-07-PLAN.md` T-03-38 both rest on this sentence: *"the Discogs
+token travels in the `Authorization` header; `urllib3` DEBUG does **not** log headers"*. **Both
+halves are true and the conclusion is false.** `python3-discogs-client` does not use an
+Authorization header for a user token — it appends `?token=<value>` to the request URL, and
+`urllib3.connectionpool` logs the full request line at DEBUG:
+
+```
+DEBUG urllib3.connectionpool https://api.discogs.com:443 "GET /releases/3542996?token=REDACTED HTTP/1.1" 200 None
+```
+
+So **criterion 2's independent request-counting instrument is also a credential sink.** On the
+first smoke run it wrote the live 40-character token, in cleartext, to `smoke.stderr` at
+`644 root:root` on a host running 100+ containers. Contained the same day: redacted copy retained
+at `600`, original `shred -u -n 3`ed, re-sweep returns zero files, and no committed artefact ever
+carried the value. **The token should be rotated** — it was also rendered into the executing
+agent's transcript, which cannot be shredded.
+
+**Fixed inside plan 03-06, at the logging record rather than at the reviewer's memory.**
+`scripts/spike03-discogs-probe.py` carries a `SecretRedactingFilter` on **both** the stderr handler
+and the `urllib3.connectionpool` logger, a `RedactingFormatter` covering rendered tracebacks, and
+two independent nets (by parameter **name**, and by the live secret's exact **value**). The handler
+is the load-bearing placement: a record that *propagates* from a descendant logger does **not**
+re-run the ancestor logger's filters, so a logger-level filter alone leaves the hole open.
+
+**Inherited by plans 03-07, 03-10 and 03-11**, which run this same probe and therefore get the fix
+for free — but whose own text still needs correcting:
+
+- `03-07-PLAN.md:443` describes the trust boundary as *"the token is in the `Authorization`
+  header"*. It is not. The screening instruction in T-03-38 (screen for `Authorization` **and** for
+  the token value) is still right, and it is the token-value half that does the work.
+- Any later plan that captures `urllib3` DEBUG from a Discogs-authenticated process must either run
+  it through this probe's redaction or screen the output for `token=` before quoting **or
+  committing** it. Screen by **value**, from inside the container, printing only counts — a
+  verification command that echoes the token to compare it is the exact lapse plan 03-04 recorded.
+
+**Why not fixed in those plans here.** Editing another wave's plan file mid-wave changes what that
+plan is measured against and makes its result unattributable — the same reason DEF-03-01 and
+DEF-03-03 were left alone. The defect is closed where it can do harm (the code); the text
+correction belongs to whoever executes those plans.
+
+---
+
+## DEF-03-05 — `grep -c '429'` is not an instrument for HTTP 429
+
+**Found by:** plan 03-06, task 2, 2026-09-03.
+**Severity:** low individually, but it is a **pre-committed T2 threshold limb**, so a false
+positive would fire a disqualifier on a healthy run.
+
+`03-06-PLAN.md` requires `grep -c '429' smoke.stderr` to return **0**, and `03-07-PLAN.md` repeats
+it at lines 275, 333 and 414 — where *"any observed 429 during the 20-folder run"* is one of the
+two limbs of the **pre-committed T2 threshold**. On a run with **zero** rate limiting the bare
+substring grep returned **3**:
+
+| Match | Why |
+|---|---|
+| `GET /releases/3542996?...` | the Discogs **release ID** `3542996` contains `429` at offset 3 |
+| `... 0 x429)` | the probe's own per-folder progress line |
+| `discogs 429 responses:        0` | the probe's own summary label |
+
+The failure direction matters: it fires **false positive**, and the thing it would falsely fire is
+a threshold committed before the run. Under `03-07-PLAN.md:275` the affected cell would be re-run
+— burning 150-260 requests against a 60/min ceiling — on evidence that a release ID contained three
+particular digits.
+
+**The correct instruments, both already available:**
+
+```bash
+# 1. the HTTP status column, not a substring anywhere on the line
+grep -oE 'HTTP/1\.1" [0-9]{3}' <stderr> | sort | uniq -c      # smoke run -> 13 x 200, nothing else
+
+# 2. the probe's own in-process counter, printed in the summary block
+#    discogs 429 responses:        0
+```
+
+The probe's counter parses the status code out of each `urllib3` response line and counts `429`
+specifically, scoped to `api.discogs.com` — so it also does not confuse a `musicbrainz.org` line
+for a Discogs one, which the plan's `grep -c 'api\.discogs\.com'` request counter correctly does
+not either, but a `grep -c 'connectionpool'` would.
+
+**Why not fixed here.** Same reason as DEF-03-04: 03-07's acceptance criteria are what 03-07 is
+measured against.
