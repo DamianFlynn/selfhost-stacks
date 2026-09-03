@@ -122,6 +122,27 @@
 #     reader can tell "could not look" from "the value moved". A check that goes red for
 #     transient reasons trains the reader to ignore it exactly as a permanently-red one does.
 #
+# ⚠️  EXIT-CODE BEHAVIOUR CHANGED AGAIN — NO NEW BLOCK, A NEW FATAL CONDITION AT AN EXISTING SITE,
+#     2026-09-03 (plan 02.1-15, CR-03).
+#     The shared opening phrase is kept literal on purpose — it is the greppable convention plan
+#     02.1-10 established, and it must keep counting every such notice. (The grep over-counts by
+#     one: the notice at the top of this file quotes the phrase inside its own body. Left alone
+#     rather than "fixed", because rewording a notice to flatter a grep is the wrong direction.)
+#     Nothing was folded in here — no fourth script runs.
+#
+#     WHAT CHANGED: the CONTAINER COUNT (`docker ps -q`) was reported-only. A wedged dockerd made
+#     it print `Containers running: 0` and the script could still exit 0. It now exits 1 when that
+#     count cannot be taken. The UNHEALTHY count was already fatal on UNKNOWN in principle, but
+#     its guard could not fire for the case its own comment named — so in practice a wedged
+#     dockerd printed `✅ No unhealthy containers` and exited 0 there too. Both now exit 1.
+#
+#     WHY IT IS WORTH A NOTICE RATHER THAN A QUIET FIX: the change makes this script red on a
+#     failure mode that used to read green, so anything that treats a non-zero exit as an alarm
+#     will see something it has never seen. That is the intent — the seventh condition listed
+#     above ("a remote command exceeding REMOTE_TIMEOUT") was declared by plan 02.1-13 and, at
+#     these two sites, was NOT ACTUALLY DELIVERED. This notice records that the declaration and
+#     the code have been reconciled, not that a new class of failure was invented.
+#
 # ⚠️  KNOWN LIMIT, AND IT APPLIES TO THIS WHOLE FILE: THIS SCRIPT IS MANUAL. IT ONLY EVER FIRES
 #     WHEN SOMEBODY TYPES IT (D-22, phase 02.1).
 #     There is no cron entry, no systemd timer and no notification path. Nothing here will tell
@@ -193,6 +214,17 @@ SSH_OPTS="-o BatchMode=yes -o ConnectTimeout=10"
 #      fails on the one machine this file is meant to be typed on. LXC 100 is Linux and has it,
 #      so the bound executes there. Probed once, below — never provided, never assumed.
 #
+#   4. AND THE BOUND DOES NOT BIND THROUGH A PIPE ON ITS OWN. Added 2026-09-03 by plan 02.1-15
+#      (CR-03), because points 1-3 were written on 2026-09-03 by plan 02.1-13 and left this
+#      unsaid, and two call sites were silently defeated by it. `timeout T cmd | wc -l` signals
+#      only `cmd`; `wc` then reports success over the empty stream and the pipeline exits 0. Any
+#      remote command string in this file that contains a `|` therefore needs BOTH `set -o
+#      pipefail` at the front of that string AND the ssh status captured and branched on — see
+#      the long note at the container-count site for why neither half suffices alone. This is
+#      the greppable rule: `grep -n 'timeout \$REMOTE_TIMEOUT.*|' ` over this file should return
+#      only lines whose command string also contains `pipefail`, or lines whose final stage is a
+#      `grep -q` that already exits non-zero on an empty stream (documented at those sites).
+#
 # WHY 120 s: this script's slowest fold-in retries a Jellyfin GET 3x at 2 s apart with
 # --max-time 20, so a HEALTHY worst case is comfortably under a minute. 120 s is generous enough
 # that a slow-but-working estate is never cut off (the 01-09 trap: a check that goes red for
@@ -236,9 +268,28 @@ fi
 # THE BOUND GOES INSIDE THE REMOTE COMMAND STRING, NOT BEFORE `ssh`. On a piped remote such as
 # "docker ps ... | grep -q ..." the prefix binds to the FIRST command only — which is exactly the
 # one that hangs, because `docker` is the client that talks to the wedged daemon while `grep` and
-# `wc` are local to the remote shell and cannot block. That is the intended reading, not an
-# oversight in the quoting: bounding the whole pipeline would need a subshell and would buy
-# nothing.
+# `wc` are local to the remote shell and cannot block.
+#
+# ⚠️  THE SENTENCE THAT USED TO END THAT PARAGRAPH WAS WRONG AND IS WITHDRAWN (plan 02.1-15,
+# CR-03). It said that binding the whole pipeline "would need a subshell and would buy nothing".
+# It buys the difference between a bound that binds and a bound that does not: `wc -l` reports
+# success over the stream left behind by the killed first stage, so the two container-count sites
+# below returned 0 and printed a green tick on a wedged dockerd. It also does not need a subshell
+# — `set -o pipefail` costs one statement. The claim is paraphrased rather than quoted so a
+# mechanical grep for it over this repo keeps returning zero; a false claim left in-band verbatim
+# is one that gets re-copied, which is precisely how it survived long enough to defeat CR-03.
+#
+# THE THREE SITES BELOW ARE DELIBERATELY LEFT AS THEY ARE, and the reason is specific to their
+# last stage, not a blanket exemption. Traefik (`grep -q '^traefik$'`), Authelia (`grep -q
+# '^authelia$'`) and the dashboard (a LOCAL `| grep -q "200"`) all end in a `grep -q`, which
+# exits 1 on an empty stream. A killed first stage therefore lands in the `else` branch: they
+# print "❌ Not running" / "❌ Not accessible". That is a CONFIDENT WRONG DIAGNOSIS and it is a
+# real defect — it is filed as WR-02 and is NOT closed here — but it is not the CR-03 defect,
+# because it is not a false green: the reader is shown a red, and no branch here reports health
+# it did not measure. None of the three touches EXIT_CODE, which is why WR-02 is rated below
+# CR-03 rather than alongside it. Fixing them means a `case` over the captured status at each
+# site and changing what a genuinely-stopped container prints; that is its own change with its
+# own control, and doing it half-way inside this one would be worse than leaving it legible.
 echo -n "Traefik: "
 if ssh $SSH_OPTS root@172.16.1.159 "timeout $REMOTE_TIMEOUT docker ps --format '{{.Names}}' | grep -q '^traefik$'"; then
     echo "✅ Running"
@@ -258,20 +309,81 @@ else
 fi
 
 # Count containers
-RUNNING=$(ssh $SSH_OPTS root@172.16.1.159 "timeout $REMOTE_TIMEOUT docker ps -q | wc -l" | tr -d ' ')
-echo "Containers running: $RUNNING"
+#
+# CR-03 — THE BOUND DID NOT BIND HERE, AND `wc -l` LAUNDERED THE KILL INTO A ZERO.
+# Corrected 2026-09-03 by plan 02.1-15. Both count sites below carry the same two-part fix, and
+# BOTH PARTS ARE NECESSARY — this is the one comment in this file worth reading before editing
+# either of them, because each part alone leaves the defect standing:
+#
+#   1. `set -o pipefail` IN THE REMOTE COMMAND STRING. `timeout T docker ps -q | wc -l` signals
+#      only the FIRST stage. `wc -l` then reads the empty stream, prints `0` and exits 0, and
+#      without pipefail the remote pipeline's status IS `wc`'s — so ssh returned 0 and a killed
+#      command was indistinguishable from a healthy answer. Driven on LXC 100:
+#        timeout 2 sleep 20 | wc -l                    -> stdout 0, rc 0    (the bug)
+#        set -o pipefail; timeout 2 sleep 20 | wc -l   -> stdout 0, rc 124  (the fix)
+#      Safe to rely on: root's shell on LXC 100 is bash 5.2, and if it ever became a shell without
+#      pipefail the `set` itself fails, ssh returns non-zero, and the UNKNOWN branch fires. It
+#      fails closed either way.
+#
+#   2. CAPTURE ssh's STATUS, AND BRANCH ON 124. pipefail alone is NOT enough, because `wc -l`
+#      still PRINTS `0` on the killed path — see the driven line above, where stdout is `0` in
+#      both the broken and the fixed case. The value is unusable; only the status carries the
+#      truth. Hence the report moved inside an explicit branch.
+#
+# THE STATUS MUST BE READ WITH NO LOCAL PIPE IN FRONT OF IT. `VAR=$(ssh ... | tr -d ' ')` makes
+# `$?` the TR's status, and `${PIPESTATUS[0]}` DOES NOT RESCUE IT — an assignment is a SIMPLE
+# COMMAND, not a pipeline, so bash sets PIPESTATUS to a single element holding the assignment's
+# own status. Measured, not assumed: that shape reports `PIPESTATUS[0]=0, PIPESTATUS[1]=unset`
+# while the remote really did exit 124. So the whitespace strip happens on its own line, AFTER
+# the status has been taken. Do not fold it back into the assignment.
+#
+# WHY THIS NOW SETS EXIT_CODE. A kill here used to print `Containers running: 0` and carry on:
+# reported-only, so a wedged dockerd left the script free to exit 0. "Could not look", "there are
+# none" and "BROKEN" are three different answers and this file's whole doctrine is that they must
+# not share a verdict. They are now three branches.
+RUNNING=$(ssh -n $SSH_OPTS root@172.16.1.159 "set -o pipefail; timeout $REMOTE_TIMEOUT docker ps -q | wc -l")
+RUNNING_RC=$?   # ssh propagates the remote status — NO local pipe above, see the note above
+RUNNING=$(printf '%s' "$RUNNING" | tr -d '[:space:]')
+if [ "$RUNNING_RC" -eq 124 ]; then
+    echo "⚠️  UNKNOWN — 'docker ps' exceeded its ${REMOTE_TIMEOUT}s bound and was killed."
+    echo "  Nothing was counted. This is NOT 'zero containers running'."
+    EXIT_CODE=1
+elif [ "$RUNNING_RC" -ne 0 ] || ! echo "$RUNNING" | grep -qE '^[0-9]+$'; then
+    echo "⚠️  UNKNOWN — could not count running containers (ssh exit $RUNNING_RC, output '$RUNNING')."
+    echo "  dockerd may be blocked. This is NOT 'zero containers running'."
+    EXIT_CODE=1
+else
+    echo "Containers running: $RUNNING"
+fi
 
 # Check for unhealthy. The gate above guarantees the host answered, but dockerd can still be
 # wedged behind the amdgpu mmap_lock while sshd is fine (that is exactly the Aug 31 signature),
 # so a non-numeric result here is still UNKNOWN rather than zero.
-UNHEALTHY=$(ssh $SSH_OPTS root@172.16.1.159 "timeout $REMOTE_TIMEOUT docker ps --format '{{.Names}}' --filter health=unhealthy | wc -l" | tr -d ' ')
-if ! echo "$UNHEALTHY" | grep -qE '^[0-9]+$'; then
-    echo "⚠️  UNKNOWN — could not count unhealthy containers (docker returned '$UNHEALTHY')."
-    echo "  dockerd may be blocked. This is NOT 'no unhealthy containers'."
+#
+# CR-03 AGAIN, AND THIS IS THE SITE THAT MATTERED. The `! grep -qE '^[0-9]+$'` guard below carried
+# the sentence above it and could never fire for the case that sentence names: `wc -l` ALWAYS
+# emits a number, so the pattern always matched, and the only way to reach the guard was ssh
+# transport failure — which the probe further up already exits on. A wedged dockerd printed
+# `✅ No unhealthy containers` and left EXIT_CODE at 0: a green tick, on a host nobody had looked
+# at, produced by the single failure mode this phase exists to eliminate. The guard is kept (it
+# is still the right catch for a malformed answer) but it is no longer the only one, and it is no
+# longer the FIRST one — 124 is now split out ahead of it. See the two-part note above.
+UNHEALTHY=$(ssh -n $SSH_OPTS root@172.16.1.159 "set -o pipefail; timeout $REMOTE_TIMEOUT docker ps --format '{{.Names}}' --filter health=unhealthy | wc -l")
+UNHEALTHY_RC=$?   # ssh propagates the remote status — NO local pipe above, see the note above
+UNHEALTHY=$(printf '%s' "$UNHEALTHY" | tr -d '[:space:]')
+if [ "$UNHEALTHY_RC" -eq 124 ]; then
+    echo "⚠️  UNKNOWN — the unhealthy-container query exceeded its ${REMOTE_TIMEOUT}s bound and"
+    echo "  was killed. Nothing was counted. This is NOT 'no unhealthy containers'."
+    echo "  Most likely cause: dockerd wedged. Distinguish it on atlantis (172.16.1.158) with"
+    echo "  /proc/pressure/io 'full' near 100% WITH AN IDLE CPU; a busy CPU is not the wedge."
+    EXIT_CODE=1
+elif [ "$UNHEALTHY_RC" -ne 0 ] || ! echo "$UNHEALTHY" | grep -qE '^[0-9]+$'; then
+    echo "⚠️  UNKNOWN — could not count unhealthy containers (ssh exit $UNHEALTHY_RC, docker"
+    echo "  returned '$UNHEALTHY'). dockerd may be blocked. This is NOT 'no unhealthy containers'."
     EXIT_CODE=1
 elif [ "$UNHEALTHY" -gt 0 ]; then
     echo "⚠️  Unhealthy containers: $UNHEALTHY"
-    ssh $SSH_OPTS root@172.16.1.159 "timeout $REMOTE_TIMEOUT docker ps --format '{{.Names}}' --filter health=unhealthy"
+    ssh -n $SSH_OPTS root@172.16.1.159 "timeout $REMOTE_TIMEOUT docker ps --format '{{.Names}}' --filter health=unhealthy"
 else
     echo "✅ No unhealthy containers"
 fi
@@ -532,7 +644,14 @@ fi
 
 if [ "$EXIT_CODE" -ne 0 ]; then
     echo ""
-    echo "❌ Health check FAILED — see the music freeze harness, the consumers audit and/or the"
-    echo "   Jellyfin transcode retention audit above."
+    # This line used to name only the three fold-in blocks. Plan 02.1-15 made the two container
+    # counts able to set EXIT_CODE, and the driven control caught this immediately: the run failed
+    # on the counts while all three fold-ins printed ✅, and the tail still sent the reader to the
+    # three green ones. A pointer to the wrong place is the same class of defect as the stale
+    # file:line references corrected in the same plan — it costs the reader the time the message
+    # was written to save.
+    echo "❌ Health check FAILED. The failing block is whichever one above carries a ❌ or a ⚠️ —"
+    echo "   that is any of: the container counts, the music freeze harness, the consumers audit,"
+    echo "   or the Jellyfin transcode retention audit."
     exit 1
 fi
