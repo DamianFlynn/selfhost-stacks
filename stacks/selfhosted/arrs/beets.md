@@ -173,9 +173,10 @@ cleanly before touching the hard ones.
   > corrected because **545 is an orphan gid**: `getent group 545` returns nothing on
   > atlantis, and 545 is unmapped in LXC 100's idmap — which is exactly why the container ever
   > reported `nogroup`/`65534`, and why `chown` fails `EPERM` from inside it. `568` is `apps`
-  > (`getent group 568` → `apps:x:568:`), stated independently in `STANDARDS.md:141`,
-  > `DEPLOYMENT.md:31`, `README.md:29` and `CLAUDE.md`. If you ran the old line, you set a gid
-  > that resolves to no group; re-run the new one from atlantis.
+  > (`getent group 568` → `apps:x:568:`), stated independently in `STANDARDS.md`
+  > (§ Volume Mounting), `DEPLOYMENT.md` (§ Storage conventions), `README.md` (§ Storage) and
+  > `CLAUDE.md`. If you ran the old line, you set a gid that resolves to no group; re-run the new
+  > one from atlantis.
 - **ZFS frees space asynchronously.** After a large delete, `zfs list` can take ~20 s to reflect it.
 - Jellyfin used to write `.nfo`/`.jpg`/`.lrc` into any folder placed under `/media/Music` within
   minutes, because the Music library had `SaveLocalMetadata: true`. **That is off as of 2026-08-18
@@ -197,7 +198,7 @@ now and why**; the narrative lives in
 
 | | Value | Why |
 |---|---|---|
-| owner | **`568:568`** (`apps:apps`) | The estate service account, stated independently in `STANDARDS.md:141`, `DEPLOYMENT.md:31`, `README.md:29` and `CLAUDE.md`. `getent group 568` → `apps:x:568:` on atlantis |
+| owner | **`568:568`** (`apps:apps`) | The estate service account, stated independently in `STANDARDS.md` (§ Volume Mounting), `DEPLOYMENT.md` (§ Storage conventions), `README.md` (§ Storage) and `CLAUDE.md`. `getent group 568` → `apps:x:568:` on atlantis |
 | directories | **`0755`** *(target — not achieved, see below)* | CLAUDE.md's "Option A" export model: world-readable, owner-writable. Correct here specifically because WRIT-01 leaves exactly one writer, so nothing needs group write |
 | files | **`0644`** *(target — not achieved, see below)* | as above |
 

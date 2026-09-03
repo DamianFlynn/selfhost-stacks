@@ -5,6 +5,11 @@ Repository guidance for code agents and maintainers.
 ## Documentation
 
 - **[NETWORK.md](NETWORK.md)**: Complete network infrastructure map, all hosts, IPs, access methods, and cleanup tasks
+- **[MEDIA.md](MEDIA.md)**: Media stack low-level design — Jellyfin and friends, the macvlan
+  exposure, which filesystem every byte lands on, transcoding and the D-30 amdgpu constraint, the
+  Live TV chain, and the known gaps
+- **[DEPLOYMENT.md](DEPLOYMENT.md)**: How change reaches the estate — Terraform for infra, git for
+  stacks, secrets handling, and the post-deploy health check
 - **[TAILSCALE.md](TAILSCALE.md)**: Tailscale low-level design — tailnet topology, the four
   deployment patterns (UCG-Max `tailscale-udm`, HAOS add-on, `tsbridge`, stock clients), dual
   subnet routers and failover, failure modes, and the recovery runbook
@@ -113,7 +118,7 @@ outcome that must not happen.
 - **Ownership is DECIDED and normalised** *(resolved 2026-08-18 by Phase 1 plan 01-08; supersedes
   the 2026-08-17 "undecided" reading)*: the library is **`568:568` (`apps:apps`)** across all 2,674
   entries, library root included, verified from the Proxmox host and by `zfs diff`. Chosen because
-  `568` is `apps` — stated independently in `STANDARDS.md:141`, `DEPLOYMENT.md:31`, `README.md:29`
+  `568` is `apps` — stated independently in `STANDARDS.md` (§ Volume Mounting), `DEPLOYMENT.md` (§ Storage conventions) and `README.md` (§ Storage)
   and this file — while the gid it replaced, **545, is an orphan**: `getent group 545` returns
   nothing on atlantis. **Modes are the unresolved half: everything is `0777` and stays that way.**
   `chmod` fails `EPERM` on `tank` even as real root, because `aclmode=restricted` +
