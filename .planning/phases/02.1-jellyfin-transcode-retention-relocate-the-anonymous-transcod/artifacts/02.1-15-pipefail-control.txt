@@ -327,11 +327,13 @@ claims to detect, so a clean result below is evidence and not merely an absence 
 
   POSITIVE CONTROL PASSED — the planted key was detected.
 
-Result on the real file: 16 matching lines, every one accounted for, and none of them a secret.
+Result on the real file: 18 matching lines, every one accounted for, and none of them a secret.
 Enumerated by category rather than by line number — deliberately, since section 8 matches itself
-and a self-citing line number is the exact fragility WR-09 in this same plan exists to remove:
+and a self-citing line number is the exact fragility WR-09 in this same plan exists to remove.
+(The count was re-taken after section 10 was appended; the screen is the last thing run before
+this file is committed, precisely so the number is not a stale claim about an earlier draft.)
 
-  SIX DIGEST LINES (sections 0 and 3). The 32-hex pattern matches them, which is expected and
+  EIGHT DIGEST LINES (sections 0, 3 and 10). The 32-hex pattern matches them, which is expected and
       correct: a screen that did not match a 64-hex blob would not be worth running. Each is a
       `shasum -a 256` of scripts/quick-health-check.sh, a file in this public repo, reproducible
       by anyone who checks it out.
@@ -361,3 +363,96 @@ control, including anything else that ran in that window. Substituting the paylo
 site under a trap proves the identical property — the first stage of the same remote pipeline is
 killed by the same `timeout`, and the same capture and branch see the result — with a blast
 radius of one file on the workstation.
+
+
+================================================================================================
+10. WR-01 — BOUNDING THE TWO EXEMPTED PROBES (same plan, task 2)
+================================================================================================
+
+RESOLUTION CHOSEN: BOUND THEM. The plan offered "bound them" or "keep them unbounded and replace
+the false justification with a true one". Bounding was chosen because these two probes GATE
+EVERYTHING BELOW — a hang here is a hang of the whole check with no transcript at all, which
+plan 02.1-13 itself named as worse than a wrong answer — and because the uncovered case is
+literally this phase's incident: a host with a full `/` can complete a TCP handshake and still
+fail to fork a shell. The justification was corrected as well; the two were not alternatives.
+
+MECHANISM CHOSEN: A PURE-BASH WATCHDOG, NOT ServerAliveInterval/ServerAliveCountMax.
+The plan lists ServerAlive as the primary suggestion. It was rejected, for a reason that is worth
+stating precisely rather than borrowing: sshd answers keepalives from its own process, so whether
+they fire when a SESSION FORK is stuck depends on where inside sshd the block lands — and that
+could not be driven safely on a live 103-container host. A bound whose behaviour under the exact
+failure it targets is untestable is not a bound. The file's own point 2 already rejects keepalives
+for the wedged-dockerd case; this is the same argument one layer earlier. The watchdog bounds
+wall clock unconditionally, wherever the hang is, and its behaviour WAS driven.
+
+THE FINDING THAT SHAPED THE IMPLEMENTATION — ssh EXITS 255 WHEN THE WATCHDOG KILLS IT, WHICH IS
+THE SAME 255 AN UNREACHABLE HOST GIVES. A first version returned only the exit status, which
+would have collapsed "the bound expired" and "the transport is dead" into one verdict — the exact
+conflation this file exists to prevent, reintroduced by the fix for it. A sentinel file, written
+by the watchdog immediately before it kills, separates them. Driven under /bin/bash 3.2.57 (the
+macOS system bash, which is what `#!/bin/bash` gets — the first control run used bash 5.3 and was
+re-run, because a bash-4-only construct would fail on the one machine this file is typed on):
+
+  1 fast success   ssh true          : rc=0   timed_out=0 elapsed=0s
+  2 fast success   ssh command -v    : rc=0   timed_out=0 elapsed=0s
+  3 real failure   ssh 'exit 3'      : rc=3   timed_out=0 elapsed=0s   <- a real answer is never masked
+  4 THE HANG       ssh 'sleep 300'   : rc=255 timed_out=1 elapsed=6s   <- bound 6
+  5 unreachable    ssh 172.16.1.199  : rc=255 timed_out=0 elapsed=10s  <- ConnectTimeout, inside the bound
+  6 hang, tight    ssh 'sleep 300'   : rc=255 timed_out=1 elapsed=3s   <- bound 3
+
+Rows 4, 5 and 6 all return 255. Only `timed_out` tells them apart.
+
+THE REAL SCRIPT, ALL FIVE BRANCHES DRIVEN, under a trap with a hash-verified restore:
+
+  A. HEALTHY — both probes return, script runs to green
+     exit=0 elapsed=5s
+
+  B. PROBE 1 HANGS — its payload replaced by 'sleep 300', PROBE_TIMEOUT=5
+     306:if ! bounded_ssh "$PROBE_TIMEOUT" ssh $SSH_OPTS root@172.16.1.159 'sleep 300' 2>/dev/null; then
+     ⚠️  UNKNOWN — the reachability probe to 172.16.1.159 (LXC 100) did not return within
+       5s and was killed. THIS IS NOT THE SAME AS UNREACHABLE: the host may
+       be answering TCP and authenticating fine while unable to fork a shell — PID
+       exhaustion, memory pressure, or a FULL / , which is this phase's own incident.
+       Check from atlantis (172.16.1.158), which does not depend on this path:
+         ssh root@172.16.1.158 'pct exec 100 -- df -h /; pct exec 100 -- uptime'
+     exit=1 elapsed=5s        <-- WITHOUT THE FIX THIS RUN NEVER RETURNS AT ALL
+
+  C. PROBE 1 UNREACHABLE — a real dead host (172.16.1.199), same code path, bound 30
+     ⚠️  UNKNOWN — 172.16.1.159 (LXC 100) is unreachable over ssh.
+       NO container state can be read, so nothing below would be a measurement.
+       This is UNKNOWN, not healthy. Check the host, then re-run.
+     exit=1 elapsed=10s       <-- DIFFERENT WORDING FROM B. That is the whole point of the
+                                  sentinel: ConnectTimeout ended this one well inside the bound,
+                                  and the transcript says so instead of blaming the bound.
+
+  D. PROBE 2 HANGS — the `timeout`-presence probe, PROBE_TIMEOUT=5
+     ⚠️  UNKNOWN — the `timeout` probe on 172.16.1.159 did not return within
+       5s and was killed. Note what this is NOT: it is not a finding that
+       coreutils is missing. It is a finding that the host would not answer, which is a
+       strictly worse state and is reported as its own thing. See the note above for how
+       to check it from atlantis rather than through this same path.
+     exit=1 elapsed=5s
+
+  E. PROBE 2's ORIGINAL BRANCH STILL WORKS — probe rewritten to look for a binary that does not
+     exist, so the answer is a genuine "absent" rather than a hang
+     ⚠️  UNKNOWN — coreutils `timeout` is absent on 172.16.1.159 (LXC 100).
+       [...] Restore coreutils on the host, then re-run.
+     exit=1 elapsed=1s        <-- the pre-existing behaviour is preserved, not replaced
+
+  sha256 BEFORE the temporary edits: 6e58dcdb34397c47ad4b2a1a7d7967c50418b7c0137a15f9f00d6fabad3392fd
+  sha256 AFTER  the restore       : 6e58dcdb34397c47ad4b2a1a7d7967c50418b7c0137a15f9f00d6fabad3392fd
+  RESTORE VERIFIED — hashes match.
+
+KNOWN LIMIT, RECORDED IN THE FILE TOO: the watchdog kills the ssh CLIENT, not the remote command.
+Confirmed by driving it — the `sleep 300` processes from rows 4 and 6 and from runs B and D
+outlived their ssh clients on LXC 100 and expired on their own schedule. That is harmless for
+these two probes (`true` and `command -v` have either already finished or never started) and it
+is why the file says not to reach for this function to bound a remote command with side effects;
+REMOTE_TIMEOUT, which runs on the far side, is the right instrument for those. The two bounds
+solve different problems and neither substitutes for the other.
+
+RESIDUAL WINDOW, STATED HONESTLY: the ten REMOTE_TIMEOUT sites still have an unbounded pre-fork
+window of their own — `timeout` cannot start until the remote shell has been forked. What the two
+bounded probes now guarantee is that this script DETECTS a host that cannot fork, and refuses,
+before it reaches any of them. That is a gate, not a bound on every site, and the file does not
+claim otherwise.

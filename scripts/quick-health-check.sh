@@ -233,17 +233,89 @@ SSH_OPTS="-o BatchMode=yes -o ConnectTimeout=10"
 # how plan 02.1-13 drove it against a real sleeping remote script.
 REMOTE_TIMEOUT="${REMOTE_TIMEOUT:-120}"
 
+# WR-01: THE TWO PROBES BELOW USED TO BE UNBOUNDED, ON A JUSTIFICATION THAT WAS FALSE.
+# Corrected 2026-09-03 by plan 02.1-15. The withdrawn claim was that the only way these two can
+# fail to return is a dead transport, and that the ConnectTimeout set above therefore already
+# covered it. IT DID NOT. (Paraphrased rather than quoted, same convention as the two other
+# withdrawn claims in this file: a false statement left in-band verbatim is one that gets
+# re-copied, and it is also one a mechanical grep can no longer prove absent.)
+# ConnectTimeout bounds the TCP connect, and in some OpenSSH versions the banner exchange. It does
+# NOT bound authentication, PAM, session setup, or the fork of the remote shell. A host that
+# completes the handshake and then cannot fork — PID exhaustion, memory pressure, A FULL `/`,
+# WHICH IS THE EXACT INCIDENT THIS PHASE EXISTS TO FIX — leaves both probes hanging forever.
+#
+# That mattered more than anywhere else in this file, because these two GATE EVERYTHING: a hang
+# here is a hang of the whole check, with no transcript at all, which is the one failure mode
+# plan 02.1-13 named as worse than a wrong answer. The bound it added stopped one line short of
+# the two calls that could swallow it.
+#
+# WHY THE BOUND IS ON THIS SIDE HERE, WHEN POINT 3 ABOVE INSISTS IT GOES ON THE REMOTE SIDE.
+# Not a contradiction — the two are bounding different things. The REMOTE_TIMEOUT sites are
+# bounding a remote command that has already started; the bound can therefore live with it. These
+# two are bounding the possibility that NO REMOTE COMMAND EVER STARTS. A remote-side `timeout`
+# cannot bound its own failure to be forked, and the second probe exists precisely to find out
+# whether that instrument is present, so using it here would be circular. The bound has to be
+# local, and the workstation is macOS with no coreutils `timeout`, so it is written in bash.
+#
+# WHY NOT ServerAliveInterval/ServerAliveCountMax, which is the obvious reach. Point 2 above
+# already rejects keepalives for the wedged-dockerd case, and the argument is at least as strong
+# here: sshd answers keepalives from its own process, so whether they fire at all when a session
+# fork is stuck depends on where inside sshd the block lands — which is precisely the thing that
+# could not be driven safely on a live 103-container host. A bound whose behaviour depends on an
+# untested internal is not a bound. The watchdog below bounds wall clock unconditionally, wherever
+# the hang is, and its behaviour WAS driven — see below.
+#
+# WHAT IT DOES: backgrounds the ssh, backgrounds a killer, waits for whichever finishes first.
+# Written for bash 3.2, because /bin/bash on macOS is 3.2.57 and that is what `#!/bin/bash` gets.
+#
+# THE SENTINEL IS NOT DECORATION. Driven measurement: when the watchdog TERMs it, ssh exits 255 —
+# THE SAME 255 AN UNREACHABLE HOST GIVES. So the exit status alone CANNOT tell "the bound expired"
+# from "the transport is dead", and this file's whole doctrine is that those two answers must not
+# share a verdict. The sentinel file is written by the watchdog immediately before it kills, so
+# its existence afterwards is proof the bound is what ended the call. Driven under bash 3.2.57:
+#   ssh true                    -> rc=0   timed_out=0  0s
+#   ssh 'exit 3'                -> rc=3   timed_out=0  0s   (a real answer is never masked)
+#   ssh 'sleep 300', bound 6    -> rc=255 timed_out=1  6s
+#   ssh 'sleep 300', bound 3    -> rc=255 timed_out=1  3s
+#   ssh to a dead host          -> rc=255 timed_out=0  10s  (ConnectTimeout, well inside)
+#
+# KNOWN LIMIT, stated because it is real: this kills the ssh CLIENT, not the remote command. A
+# remote `sleep` outlives it — confirmed by driving it. That is irrelevant for these two probes
+# (`true` and `command -v` have either already finished or never started) but do not reach for
+# this function to bound a remote command that has side effects; use REMOTE_TIMEOUT for those.
+PROBE_TIMEOUT="${PROBE_TIMEOUT:-20}"   # generous: connect + auth + fork on a healthy host is <1 s
+BOUNDED_SSH_TIMED_OUT=0
+bounded_ssh() {
+    local secs="$1"; shift
+    local cmd_pid watch_pid rc sentinel
+    BOUNDED_SSH_TIMED_OUT=0
+    sentinel=$(mktemp -t qhc-bound 2>/dev/null) || sentinel="${TMPDIR:-/tmp}/qhc-bound.$$.$RANDOM"
+    rm -f "$sentinel"
+    "$@" </dev/null & cmd_pid=$!
+    { sleep "$secs"; : > "$sentinel"; kill -TERM "$cmd_pid" 2>/dev/null; } & watch_pid=$!
+    wait "$cmd_pid" 2>/dev/null; rc=$?
+    kill -TERM "$watch_pid" 2>/dev/null
+    wait "$watch_pid" 2>/dev/null
+    [ -e "$sentinel" ] && BOUNDED_SSH_TIMED_OUT=1
+    rm -f "$sentinel"
+    return "$rc"
+}
+
 echo "=== Quick Server Health Check ==="
 
-# NEITHER OF THE TWO PROBES BELOW IS BOUNDED, AND THAT IS DELIBERATE: neither touches docker, so
-# neither cannot hang the way a `docker` call can. `true` and `command -v` are shell builtins that
-# return immediately or not at all, and the not-at-all case is a dead transport, which
-# ConnectTimeout above does cover. Bounding them would also be circular — the second probe exists
-# precisely to establish that the bounding instrument is there to use.
-if ! ssh $SSH_OPTS root@172.16.1.159 true 2>/dev/null; then
-    echo "⚠️  UNKNOWN — 172.16.1.159 (LXC 100) is unreachable over ssh."
-    echo "  NO container state can be read, so nothing below would be a measurement."
-    echo "  This is UNKNOWN, not healthy. Check the host, then re-run."
+if ! bounded_ssh "$PROBE_TIMEOUT" ssh $SSH_OPTS root@172.16.1.159 true 2>/dev/null; then
+    if [ "$BOUNDED_SSH_TIMED_OUT" -eq 1 ]; then
+        echo "⚠️  UNKNOWN — the reachability probe to 172.16.1.159 (LXC 100) did not return within"
+        echo "  ${PROBE_TIMEOUT}s and was killed. THIS IS NOT THE SAME AS UNREACHABLE: the host may"
+        echo "  be answering TCP and authenticating fine while unable to fork a shell — PID"
+        echo "  exhaustion, memory pressure, or a FULL / , which is this phase's own incident."
+        echo "  Check from atlantis (172.16.1.158), which does not depend on this path:"
+        echo "    ssh root@172.16.1.158 'pct exec 100 -- df -h /; pct exec 100 -- uptime'"
+    else
+        echo "⚠️  UNKNOWN — 172.16.1.159 (LXC 100) is unreachable over ssh."
+        echo "  NO container state can be read, so nothing below would be a measurement."
+        echo "  This is UNKNOWN, not healthy. Check the host, then re-run."
+    fi
     exit 1
 fi
 
@@ -253,12 +325,20 @@ fi
 # indistinguishable from a slow answer — so this refuses instead. It does NOT try to provide the
 # binary: fetching software onto a host from inside a read-only health check is not this file's
 # business, and a health check that mutates the thing it measures is not a health check.
-if ! ssh $SSH_OPTS root@172.16.1.159 'command -v timeout >/dev/null 2>&1' 2>/dev/null; then
-    echo "⚠️  UNKNOWN — coreutils \`timeout\` is absent on 172.16.1.159 (LXC 100)."
-    echo "  Every remote command below depends on it for its wall-clock bound, so with it missing"
-    echo "  NO remote command can be bounded and a wedged dockerd would hang this script forever"
-    echo "  instead of failing it. That is UNKNOWN, not healthy — and it is the one failure mode"
-    echo "  that produces no transcript at all. Restore coreutils on the host, then re-run."
+if ! bounded_ssh "$PROBE_TIMEOUT" ssh $SSH_OPTS root@172.16.1.159 'command -v timeout >/dev/null 2>&1' 2>/dev/null; then
+    if [ "$BOUNDED_SSH_TIMED_OUT" -eq 1 ]; then
+        echo "⚠️  UNKNOWN — the \`timeout\` probe on 172.16.1.159 did not return within"
+        echo "  ${PROBE_TIMEOUT}s and was killed. Note what this is NOT: it is not a finding that"
+        echo "  coreutils is missing. It is a finding that the host would not answer, which is a"
+        echo "  strictly worse state and is reported as its own thing. See the note above for how"
+        echo "  to check it from atlantis rather than through this same path."
+    else
+        echo "⚠️  UNKNOWN — coreutils \`timeout\` is absent on 172.16.1.159 (LXC 100)."
+        echo "  Every remote command below depends on it for its wall-clock bound, so with it missing"
+        echo "  NO remote command can be bounded and a wedged dockerd would hang this script forever"
+        echo "  instead of failing it. That is UNKNOWN, not healthy — and it is the one failure mode"
+        echo "  that produces no transcript at all. Restore coreutils on the host, then re-run."
+    fi
     EXIT_CODE=1
     exit 1
 fi
