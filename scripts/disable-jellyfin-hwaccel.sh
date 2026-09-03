@@ -12,10 +12,16 @@
 # Usage:
 #   bash scripts/disable-jellyfin-hwaccel.sh check     # read-only: report current state
 #   bash scripts/disable-jellyfin-hwaccel.sh disable   # turn VAAPI off, restart, verify
-#   bash scripts/disable-jellyfin-hwaccel.sh enable    # restore the most recent backup
+#   bash scripts/disable-jellyfin-hwaccel.sh enable    # restore the most recent backup EXCEPT the
+#                                                      # five transcode-retention values, which are
+#                                                      # preserved from the live config and verified
+#   bash scripts/disable-jellyfin-hwaccel.sh verify-retention
+#                                                      # read-only: compare $JELLYFIN_CONFIG's five
+#                                                      # transcode-retention values against
+#                                                      # $TRAN09_EXPECT; non-zero on any mismatch
 #
 # ⚠️  `disable` and `enable` MUTATE live state: they rewrite encoding.xml and restart a
-#     container that is serving the house. `check` never writes anything.
+#     container that is serving the house. `check` and `verify-retention` never write anything.
 #
 # WHY THIS EXISTS (2026-08-31)
 #   atlantis wedged for ~6 hours and took every *.deercrest.info service down with it. The
@@ -73,15 +79,40 @@
 #   Plan 01-06 configured Jellyfin over the REST API and that is the better pattern, but it
 #   needs an API key and none exists yet - minting the first purpose-named key is plan 02-04's
 #   job. Editing the file needs no auth, and this had to be runnable the moment the host
-#   returned. Once 02-04 lands, prefer the API.
+#   returned.
+#
+#   02-04 HAS SINCE LANDED - the key exists at /mnt/fast/secrets/jellyfin-deercrest.env - and
+#   converting this script to the API is nonetheless DELIBERATELY DEFERRED (plan 02.1-07,
+#   2026-09-03). Reason: this script's entire value is that it works when Jellyfin is DOWN,
+#   which is precisely the condition an amdgpu incident creates. The REST route requires a
+#   RUNNING server, so it cannot serve the case this runbook exists for. The file-based route
+#   stays primary; an API route, if ever added, would be a fallback for the healthy case only.
+#   Do not re-open this as "02-04 landed, so switch" - the conversion is deferred, not overlooked,
+#   and the reason is that the REST route needs a running server this script cannot assume.
 #
 # Idempotent:
 #   `disable` re-run reports "already disabled" and changes nothing - no backup is taken and
 #            the container is NOT restarted, because a needless restart of a service the house
 #            is watching is a real cost.
-#   `enable`  restores the most recent .bak; with no backup present it refuses rather than
-#            guessing a previous value.
+#   `enable`  restores the most recent .bak EXCEPT the five transcode-retention values
+#            (TranscodingTempPath, EnableSegmentDeletion, SegmentKeepSeconds, EnableThrottling,
+#            ThrottleDelaySeconds), which are captured from the LIVE config before the restore,
+#            re-asserted into the restored file, and verified afterwards - a mismatch names the
+#            field with its before and after values and exits non-zero (TRAN-09 / D-29). With no
+#            backup present it refuses rather than guessing a previous value.
 #   `check`   never writes.
+#   `verify-retention`  never writes. Read-only comparison of $JELLYFIN_CONFIG's five
+#            transcode-retention values against $TRAN09_EXPECT.
+#
+# TEST-ONLY HOOK - TRAN09_FAULT
+#   TRAN09_FAULT=1 makes `enable` SKIP the post-restore re-assert while still capturing the
+#   pre-restore values and still verifying them - so the comparison genuinely finds the restored
+#   pre-phase values, names the fields, and exits non-zero. It exists ONLY so that plan 02.1-07
+#   can discharge VALIDATION.md row 35's negative half by EXECUTING a failure rather than
+#   asserting one. Default is unset.
+#   ⚠️  SETTING THIS IN PRODUCTION CONVERTS `enable` BACK INTO THE SILENT REVERT THAT THE
+#       HARDENING ABOVE REMOVES. It is never correct outside a test. Whenever it is active the
+#       script prints a loud warning, so it cannot be on without appearing in the transcript.
 #
 # EXIT-CODE CONVENTION (inherited from scripts/check-music-freeze.sh):
 #   0  the requested action succeeded, or `check` completed (check never fails on findings)
@@ -100,7 +131,17 @@ bad()  { printf '  ✗ %s\n' "$*"; }
 warn() { printf '  ⚠ %s\n' "$*"; }
 
 usage() {
-  say "Usage: bash scripts/disable-jellyfin-hwaccel.sh {check|disable|enable}"
+  say "Usage: bash scripts/disable-jellyfin-hwaccel.sh {check|disable|enable|verify-retention}"
+  say ""
+  say "  check             read-only: report current hwaccel state and the DRM client table"
+  say "  disable           turn VAAPI off, restart, verify"
+  say "  enable            restore the most recent .bak EXCEPT the five transcode-retention"
+  say "                    values, which are preserved from the live config and re-verified"
+  say "  verify-retention  read-only: compare \$JELLYFIN_CONFIG's five transcode-retention"
+  say "                    values against \$TRAN09_EXPECT; exits non-zero on any mismatch"
+  say ""
+  say "  env: JELLYFIN_CONFIG, JELLYFIN_CONTAINER, PROXMOX_HOST, TRAN09_EXPECT"
+  say "       TRAN09_FAULT=1 is a TEST-ONLY hook - see the header. Never set it in production."
   exit 2
 }
 
@@ -247,6 +288,150 @@ tree.write(path, encoding="utf-8", xml_declaration=True)
 PY
 }
 
+# --- TRAN-09: the five transcode-retention values -----------------------------------------
+#
+# TRAN-09 (2026-09-03, phase 02.1, D-29). These five are what phase 02.1 installed into
+# encoding.xml, and they are what do_enable's whole-file restore silently reverted. The order of
+# this list is the wire order of the `|`-separated form that current_retention emits, set_retention
+# consumes and $TRAN09_EXPECT is written in. Do not reorder it without changing all four.
+RETENTION_FIELDS="TranscodingTempPath EnableSegmentDeletion SegmentKeepSeconds EnableThrottling ThrottleDelaySeconds"
+
+# Read-back helper, deliberately shaped like current_hwaccel: it returns an explicit
+# `UNREADABLE (...)` sentinel rather than an empty string, because IN-04 (lines below, do_check)
+# records what an empty state cost - an unmeasured value that reads as a determinate answer. A
+# missing element returns the literal `absent`, matching current_hwaccel's convention, so
+# "the element is not there" and "the element is there and empty" stay distinguishable.
+#
+# $1 = config path (optional; defaults to $JELLYFIN_CONFIG) - verify-retention needs to point this
+#      at an arbitrary file, which is the whole reason it takes an argument.
+current_retention() {
+  local cfg="${1:-$JELLYFIN_CONFIG}" out
+  out=$(python3 - "$cfg" <<'PY' 2>/dev/null
+import sys, xml.etree.ElementTree as ET
+NAMES = ["TranscodingTempPath", "EnableSegmentDeletion", "SegmentKeepSeconds",
+         "EnableThrottling", "ThrottleDelaySeconds"]
+try:
+    r = ET.parse(sys.argv[1]).getroot()
+except Exception as e:
+    print(f"UNREADABLE ({e})"); sys.exit(0)
+out = []
+for n in NAMES:
+    el = r.find(n)
+    out.append("absent" if el is None else (el.text or "").strip())
+print("|".join(out))
+PY
+  )
+  # A missing python3, or any path where the heredoc produced nothing at all, must NOT collapse to
+  # an empty string that a caller could read as "all five are empty". Same lesson as IN-04.
+  if [ -z "$out" ]; then
+    printf 'UNREADABLE (no output - python3 missing, or %s could not be opened)\n' "$cfg"
+    return 0
+  fi
+  printf '%s\n' "$out"
+}
+
+# Pick field $2 (1-based) out of the `|`-separated line $1. awk -v passes the index as DATA, never
+# interpolated into the awk program - the same rule the io-pressure probe above had to learn.
+retention_field() {
+  printf '%s' "$1" | awk -F'|' -v i="$2" '{print $i}'
+}
+
+# Re-assert a captured `|`-separated retention line into $JELLYFIN_CONFIG. Reuses set_hwaccel's
+# setel() shape, which already creates a missing element, so this is purely additive. A field
+# captured as the literal `absent` is SKIPPED: a value that was genuinely not there before the
+# restore stays not there afterwards.
+set_retention() {
+  python3 - "$JELLYFIN_CONFIG" "$1" <<'PY'
+import sys, xml.etree.ElementTree as ET
+NAMES = ["TranscodingTempPath", "EnableSegmentDeletion", "SegmentKeepSeconds",
+         "EnableThrottling", "ThrottleDelaySeconds"]
+path, packed = sys.argv[1], sys.argv[2]
+vals = packed.split("|")
+if len(vals) != len(NAMES):
+    sys.stderr.write(f"set_retention: expected {len(NAMES)} fields, got {len(vals)}\n")
+    sys.exit(1)
+tree = ET.parse(path); root = tree.getroot()
+def setel(name, text):
+    el = root.find(name)
+    if el is None:
+        el = ET.SubElement(root, name)
+    el.text = text
+for n, v in zip(NAMES, vals):
+    if v == "absent":
+        continue
+    setel(n, v)
+tree.write(path, encoding="utf-8", xml_declaration=True)
+PY
+}
+
+# Compare two `|`-separated retention lines field by field, printing one line per field.
+#   $1 expected   $2 found   $3 label   $4 word for $1   $5 word for $2
+# An UNREADABLE or empty value on EITHER side is a failure, never a pass - "could not look" and
+# "they match" are different answers (CR-02's rule, applied to a different instrument).
+compare_retention() {
+  local expect="$1" found="$2" label="$3" ew="${4:-before}" fw="${5:-after}"
+  local i=1 name e f rc=0
+  case "$expect" in
+    ""|UNREADABLE*)
+      bad "${label}: the ${ew} values are ${expect:-<empty>} - UNKNOWN, not a pass."; return 1 ;;
+  esac
+  case "$found" in
+    ""|UNREADABLE*)
+      bad "${label}: the ${fw} values are ${found:-<empty>} - UNKNOWN, not a pass."; return 1 ;;
+  esac
+  for name in $RETENTION_FIELDS; do
+    e=$(retention_field "$expect" "$i")
+    f=$(retention_field "$found" "$i")
+    if [ "$e" = "$f" ]; then
+      ok "${label} ${name}: PASS (${f})"
+    else
+      bad "${label} ${name}: FAIL - MISMATCH ${ew}='${e}' ${fw}='${f}'"
+      rc=1
+    fi
+    i=$((i + 1))
+  done
+  return $rc
+}
+
+# --- verify-retention: fault-injection path (a) -------------------------------------------
+#
+# WHY THIS SUB-ACTION EXISTS AT ALL.
+#   The cross-AI review of plan 02.1-04 raised it as a HIGH finding: the retention verification
+#   lives INSIDE do_enable, and do_enable RE-CAPTURES the live values before restoring. So the
+#   obvious negative control - perturb a value, re-run `enable`, expect non-zero - cannot fail. It
+#   would capture the perturbed values, carry them faithfully across the restore, and PASS. There
+#   was no separately-invocable verification entry point and therefore no way to prove the
+#   verification could fail at all. A proof that cannot fail produces a transcript that LOOKS like
+#   evidence, which is the exact failure class this phase exists to close.
+#
+#   verify-retention is that entry point. It takes its expectations from the CALLER
+#   ($TRAN09_EXPECT) rather than re-deriving them from the file it is checking, which is precisely
+#   what makes it able to fail.
+#
+# STRICTLY READ-ONLY: it writes nothing, restarts nothing, touches no .bak, and does not call
+# preconditions() - it must work against an arbitrary throwaway config with no container in sight.
+do_verify_retention() {
+  say "== verify-retention (read-only) =="
+  say "  encoding.xml      : $JELLYFIN_CONFIG"
+  if [ -z "${TRAN09_EXPECT:-}" ]; then
+    bad "TRAN09_EXPECT is not set - there is nothing to compare against."
+    say "  Set it to a '|'-separated line in this field order:"
+    say "    $RETENTION_FIELDS"
+    say "  e.g. TRAN09_EXPECT='/cache/transcodes|true|300|true|180'"
+    return 2
+  fi
+  local found; found=$(current_retention "$JELLYFIN_CONFIG")
+  say "  expected          : $TRAN09_EXPECT"
+  say "  found             : $found"
+  say ""
+  if compare_retention "$TRAN09_EXPECT" "$found" "verify-retention" "expected" "found"; then
+    ok "all five transcode-retention values match TRAN09_EXPECT"
+    return 0
+  fi
+  bad "verify-retention FAILED - see the per-field lines above"
+  return 1
+}
+
 do_check() {
   say "== Jellyfin hardware-acceleration state =="
   local state; state=$(current_hwaccel)
@@ -324,6 +509,26 @@ do_disable() {
 }
 
 do_enable() {
+  # TRAN-09 (2026-09-03, phase 02.1, D-29). THE WHOLE-FILE RESTORE BELOW WAS A ONE-COMMAND SILENT
+  # REVERT OF PHASE 02.1.
+  #
+  # do_enable restores the ENTIRE encoding.xml from the newest .bak, and the only .bak on disk -
+  # encoding.xml.bak.20260831T182741Z - was taken BEFORE phase 02.1's settings existed. Running
+  # `enable` after that phase landed therefore turned all five of
+  #   TranscodingTempPath, EnableSegmentDeletion, SegmentKeepSeconds,
+  #   EnableThrottling, ThrottleDelaySeconds
+  # back to their pre-phase values AND REPORTED SUCCESS, because the IN-06 verification below
+  # checked HardwareAccelerationType and nothing else.
+  #
+  # This is now handled by: capture the five from the LIVE config before the cp, re-assert them
+  # into the restored file, and verify them twice - once before the container restart (so a lost
+  # value never gets restarted onto) and once after it (so a Jellyfin that rewrites the file on
+  # startup is caught too). Any mismatch names the field with its BEFORE and AFTER values and
+  # returns non-zero.
+  #
+  # Proof transcript, including both executed negative controls:
+  #   .planning/phases/02.1-jellyfin-transcode-retention-relocate-the-anonymous-transcod/
+  #     artifacts/02.1-07-tran09-proof.txt
   preconditions || { bad "preconditions failed - refusing to mutate"; return 1; }
 
   # WR-07: SORT BY THE TIMESTAMP IN THE NAME, NOT BY mtime.
@@ -365,8 +570,59 @@ PY
   local others; others=$(ls -1 "${JELLYFIN_CONFIG}".bak.* 2>/dev/null | wc -l | tr -d ' ')
   [ "${others:-0}" -gt 1 ] && say "  ($others backups present; this is the newest by filename timestamp)"
 
+  # TRAN-09 STEP 1 OF 3: CAPTURE, BEFORE THE cp.
+  # This must happen before the restore, not after it - after the cp the live values are gone and
+  # there is nothing left to carry across.
+  local pre_ret; pre_ret=$(current_retention "$JELLYFIN_CONFIG")
+  case "$pre_ret" in
+    ""|UNREADABLE*)
+      bad "could not read the transcode-retention values out of $JELLYFIN_CONFIG (${pre_ret:-<empty>})."
+      bad "Restoring a whole file OVER a config you could not read IS the silent-revert shape this"
+      bad "hardening exists to remove - there would be nothing to carry across and no way to tell."
+      bad "Refusing to restore. Read $JELLYFIN_CONFIG by hand, then re-run."
+      return 1 ;;
+  esac
+  say "  preserving across the restore (TRAN-09):"
+  local _rf_i=1 _rf_n
+  for _rf_n in $RETENTION_FIELDS; do
+    say "      ${_rf_n} = $(retention_field "$pre_ret" "$_rf_i")"
+    _rf_i=$((_rf_i + 1))
+  done
+
   cp -p "$backup" "$JELLYFIN_CONFIG" || { bad "restore failed"; return 1; }
   ok "restored from $backup"
+
+  # TRAN-09 STEP 2 OF 3: RE-ASSERT, after the cp and before the restart.
+  if [ "${TRAN09_FAULT:-}" = "1" ]; then
+    warn "TRAN09_FAULT=1 IS ACTIVE - THE RETENTION RE-ASSERT IS BEING SKIPPED ON PURPOSE."
+    warn "This is a TEST-ONLY hook (plan 02.1-07, VALIDATION.md row 35, negative control 2)."
+    warn "In production it turns 'enable' back into the silent revert this hardening removes."
+    warn "The verification below is NOT skipped, so this run will fail loudly and non-zero."
+  else
+    if ! set_retention "$pre_ret"; then
+      bad "re-asserting the transcode-retention values into the restored config FAILED."
+      bad "the restored file is now the PRE-PHASE config; the values that were live are printed"
+      bad "above. Restore them by hand, or re-run 'enable' once the cause is understood."
+      return 1
+    fi
+    ok "re-asserted the five transcode-retention values into the restored config"
+  fi
+
+  # TRAN-09 STEP 3 OF 3a: VERIFY BEFORE THE RESTART.
+  # Deliberately before `docker restart`: restarting a service the house is watching onto a config
+  # that has silently lost this phase's settings is strictly worse than not restarting at all.
+  say ""
+  say "== pre-restart retention verification =="
+  local mid_ret; mid_ret=$(current_retention "$JELLYFIN_CONFIG")
+  if ! compare_retention "$pre_ret" "$mid_ret" "pre-restart" "before" "after"; then
+    bad "the whole-file restore MOVED transcode-retention values - this is exactly the silent"
+    bad "revert TRAN-09 closes, and it is being REPORTED rather than hidden."
+    bad "NOT restarting $JELLYFIN_CONTAINER. The restored backup was $backup."
+    bad "The pre-restore values are printed above; re-apply them before restarting."
+    return 1
+  fi
+  ok "all five transcode-retention values survived the restore"
+
   timeout 120 docker restart "$JELLYFIN_CONTAINER" >/dev/null 2>&1 && ok "restarted" || { bad "restart failed"; return 1; }
 
   # IN-06: mirror do_disable's post-change verification. do_enable used to restore, restart and
@@ -389,13 +645,29 @@ PY
     *)
       ok "verified: HardwareAccelerationType=${after%%|*}, EnableHardwareEncoding=${after##*|}" ;;
   esac
+
+  # TRAN-09 STEP 3 OF 3b: VERIFY AGAIN AFTER THE RESTART.
+  # Not redundant with the pre-restart check: Jellyfin can rewrite encoding.xml on startup, so the
+  # only way to know the five values are live is to read them back from a config the server has
+  # already seen. Same rule as do_disable at the CR-02 block above - a HALF-verified success
+  # returns non-zero, because "VAAPI is back on" is only half of what this action now claims.
+  local post_ret; post_ret=$(current_retention "$JELLYFIN_CONFIG")
+  if ! compare_retention "$pre_ret" "$post_ret" "post-restart" "before" "after"; then
+    bad "the transcode-retention values did NOT survive the restore and restart."
+    bad "Exiting non-zero deliberately: 'enable' must never report success while having reverted"
+    bad "phase 02.1's transcode retention. The restored backup was $backup."
+    return 1
+  fi
+  ok "verified: the five transcode-retention values survived the whole-file restore"
+
   warn "VAAPI is back ON - the orphaned-transcode trigger is re-armed"
   return 0
 }
 
 case "$ACTION" in
-  check)   do_check ;;
-  disable) do_disable ;;
-  enable)  do_enable ;;
-  *)       usage ;;
+  check)            do_check ;;
+  disable)          do_disable ;;
+  enable)           do_enable ;;
+  verify-retention) do_verify_retention ;;
+  *)                usage ;;
 esac
