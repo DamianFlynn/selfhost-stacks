@@ -376,7 +376,7 @@ independent and can run alongside 11.*
 
 **Wave 11** *(blocked on 02.1-11 — same two scripts)*
 
-- [ ] 02.1-12-PLAN.md — **Gap 2:** measure the true reachability from three vantage points, correct the false claim in both scripts with the right mechanism (macvlan, not docker-proxy), and re-derive `PROJECT.md`'s residual-risk acceptance (wave 11, TRAN-05)
+- [x] 02.1-12-PLAN.md — **Gap 2:** measure the true reachability from three vantage points, correct the false claim in both scripts with the right mechanism (macvlan, not docker-proxy), and re-derive `PROJECT.md`'s residual-risk acceptance (wave 11, TRAN-05)
 
 **Wave 12** *(blocked on 02.1-12 — same script)*
 
@@ -725,7 +725,7 @@ Phase 7. Plans within a phase run sequentially.
 |-------|----------------|--------|-----------|
 | 1. Safety Harness and Freeze the Writers | 9/9 | Complete | 2026-08-18 |
 | 2. NFS Export and Music Assistant Reachability | 9/9 | Complete    | 2026-09-01 |
-| 02.1. Jellyfin Transcode Retention *(inserted)* | 11/14 | In Progress|  |
+| 02.1. Jellyfin Transcode Retention *(inserted)* | 12/14 | In Progress|  |
 | 3. Tagger Spike | 1/11 | In Progress | - |
 | 4. Collapse to One Tagger | 0/TBD | Not started | - |
 | 5. Inbox Structure and the Junk Gate | 0/TBD | Not started | - |
