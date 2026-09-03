@@ -650,3 +650,60 @@ LONGER EXISTS, and that CHANGES THE RISK CALCULUS OF THE APPROVAL GATE.
 
   NOTHING IN THIS PLAN HAS BEEN DELETED AT THE TIME THIS LINE WAS WRITTEN. The
   inventory is read-only and the prune has not run.
+
+2026-09-03T07:08:41Z plan=02.1-10 root_avail_bytes=37022195712 root_size_bytes=134682742784 oldvol_transcodes_bytes=GONE oldvol_total_bytes=GONE oldvol_transcodes_files=GONE
+
+--------------------------------------------------------------------------------
+THIS IS THE LAST LINE. THE WATCH IS CLOSED -- 02.1-10 is the final plan of the
+phase and the last writer in the totally-ordered append chain.
+--------------------------------------------------------------------------------
+
+  Delta against plan=02.1-09's PRE-REAP sample, ~6h24m earlier:
+
+    root_avail_bytes         35555835904 -> 37022195712  +1466359808  (+1.37 GiB)
+    oldvol_transcodes_bytes  GONE -> GONE
+    oldvol_total_bytes       GONE -> GONE
+    oldvol_transcodes_files  GONE -> GONE
+
+  The +1.37 GiB is 02.1-09's reap (+1.45 GiB, measured in its own six-second
+  window at 37039017984) MINUS 16822272 bytes (16.0 MiB) of ordinary churn from
+  the other 100+ containers in the six hours since. Both figures are recorded
+  rather than one being chosen, for the same reason 02.1-09 recorded both of its
+  own: they are different windows, not disagreeing instruments.
+
+  MARGIN against the D-17 floor of 21474836480:
+    37022195712 - 21474836480 = 15547359232 = 14.48 GiB
+
+  VERIFIED WITH A SECOND INSTRUMENT before being written down, per the 01-09
+  standing rule: `stat -f -c '%a %S' /` returned bavail=9038622 at bsize=4096 =
+  37022195712 bytes, matching `df -B1 --output=avail /` TO THE BYTE.
+
+  THE PHASE-HEAD-TO-CLOSE ARITHMETIC, which is the only number this file was
+  opened to produce:
+
+    2026-09-02T20:38:32Z  plan=02.1-01  root_avail_bytes=21668859904  margin  185 MiB
+    2026-09-03T07:08:41Z  plan=02.1-10  root_avail_bytes=37022195712  margin 14.48 GiB
+
+  A factor of about eighty. 12.95 GiB of it is 02.1-06's `docker volume rm` --
+  the phase's actual subject -- and 1.45 GiB is 02.1-09's image reap, which is a
+  different and separately-attributed number. Do not merge them; 02.1-06 and
+  02.1-09 each went to some trouble to keep them apart.
+
+  WHAT THE WATCH ACTUALLY BOUGHT, recorded plainly because a passive observation
+  series is easy to dismiss afterwards as having done nothing. It fired on its
+  FIRST sample: 02.1-01 measured a margin of 185 MiB against a plan set written
+  for ~33-36 GiB, and every subsequent plan was ruled on that number rather than
+  on the assumption. Two orderings (the 02.1-03 Terraform question, the 02.1-09
+  reap position) and three consecutive `/`-budget grants were decided against
+  these lines. It also caught the thing it was built for -- 12.55 GiB of transcode
+  cache accumulating in ~2 days -- on the first reading, before `/` reached zero.
+
+  AND WHAT IT DID NOT BUY, which belongs here too: it ASSERTED NOTHING all phase.
+  Every line is an observation a human had to read. The standing coverage that
+  replaces it -- `check-jellyfin-transcode.sh` section 1, folded into
+  `scripts/quick-health-check.sh` by THIS plan -- is what turns the `/` headroom
+  reading into something that fails closed. That fold-in is the watch's successor
+  and the reason this file stops here rather than continuing into later phases.
+  It is still MANUAL (D-22): it fires when someone runs it. See the third
+  EXIT-CODE BEHAVIOUR CHANGED notice in quick-health-check.sh for that limit,
+  stated where the person about to trust a green tick will be standing.

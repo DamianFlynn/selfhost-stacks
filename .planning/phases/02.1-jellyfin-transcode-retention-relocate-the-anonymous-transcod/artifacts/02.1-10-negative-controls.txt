@@ -1,0 +1,570 @@
+================================================================================
+02.1-10  NEGATIVE CONTROLS, PROPAGATION AND ANCHOR PROOFS, AND THE KNOWN LIMITS
+================================================================================
+
+WHAT THIS IS
+  The executed evidence for VALIDATION.md rows 21, 22, 23 and 24 -- all four of
+  which are `fires` rows -- plus a fourth control (the usage-error exit code)
+  and the restore-and-reverify step for every test that touched anything.
+
+  Rows 21-24 are `fires` rows for one reason: reading the fail-closed branches
+  in check-jellyfin-transcode.sh and agreeing they look right discharges
+  NOTHING. This estate's worst outage was six weeks of two containers being down
+  while the health check reported clean, and the shape of that failure was a
+  check that could not see them rather than a check that saw them and lied. A
+  branch that has never been executed is a branch that is not known to work.
+
+WHAT WAS *NOT* MUTATED, STATED UP FRONT BECAUSE IT IS THE DESIGN
+  Controls 1, 2 and 3 are PURE ENVIRONMENT OVERRIDES. They set ZFS_HOST,
+  JELLYFIN_CONTAINER and JELLYFIN_SECRETS for the duration of one process and
+  change nothing else. Control 4 passes a bad flag. Across all four:
+
+    - no file was created, edited, moved or deleted
+    - no mode or owner was changed, temporarily or otherwise
+    - no container was created, stopped, started or removed
+    - no ZFS property was read-modified or written
+    - no package was installed and no image was pulled
+
+  Asserted rather than claimed, after the four controls ran:
+
+    jellyfin:                                  running healthy
+    git -C /mnt/fast/stacks status --porcelain scripts/   -> EMPTY
+    sha256 check-jellyfin-transcode.sh (host)  d33356c551113fd972c515fc288ef8f00a1180bb8f17119165c81c21971444b5
+    sha256 check-jellyfin-transcode.sh (wkstn) d33356c551113fd972c515fc288ef8f00a1180bb8f17119165c81c21971444b5
+    docker ps -a | grep -c '^no-such-container-021$'      -> 0
+    stat -c '%a %U' /mnt/fast/secrets/jellyfin-deercrest.env -> 600 root
+    test -e /mnt/fast/spike-021/no-such-credential.env    -> ABSENT (as required)
+
+  THE THREE ENV OVERRIDES ARE WHY THIS PAGE EXISTS AT ALL. Plan 02.1-02 added
+  ZFS_HOST, JELLYFIN_CONTAINER and JELLYFIN_SECRETS in the ${VAR:-default} form
+  specifically so these controls could be run without mutating a real file. The
+  cross-AI review's Plan-02 finding is the reason the third one is there: the
+  reviewed version hardcoded the credential path, so control 3 either could not
+  run or required chmod'ing the real file -- and `600 root` on that file is
+  itself an invariant that check-music-consumers.sh asserts. Staging a failure
+  in one check by breaking a different check's invariant is not a control, it is
+  a second defect.
+
+  Overriding a path does NOT weaken the gate. The 600-root assertion runs
+  against whatever path is in use, so control 3 is refused for the RIGHT reason.
+
+WORDING THE REFUSAL ACCURATELY (control 3)
+  The credential gate fires on the file being ABSENT, or on its mode/owner not
+  being exactly `600 root`. It does NOT fire on the file being "unreadable":
+  this script runs as root and root can read anything, so "unreadable" describes
+  a condition that cannot occur here. The distinction is kept because a later
+  reader who believes the gate catches unreadability will trust it to catch
+  something it structurally cannot.
+
+--------------------------------------------------------------------------------
+SUMMARY OF THE SIX PROOFS
+--------------------------------------------------------------------------------
+
+  #  What                                    Row   Command shape                 Exit
+  -  --------------------------------------  ----  ----------------------------  ----
+  1  unroutable ZFS host                     21    ZFS_HOST=192.0.2.1               1
+  2  non-existent container                  22    JELLYFIN_CONTAINER=no-such-...   1
+  3  absent credential path                  --    JELLYFIN_SECRETS=/…/no-such…     1
+  4  usage error                             --    --nonsense                       2
+  5  the fold-in propagates the exit code    23    host script mv'd aside           1
+  6  the fold-in's summary anchor            24    anchor renumbered on the host    1
+
+  Plus, as the last entry of each half: the unmodified run exits 0.
+
+  Controls 5 and 6 live in the second half of this file, after task 2's fold-in
+  exists to be tested. They are the two that DO break something, and each one
+  records a pre-test sha256, restores, asserts the hash matches, and re-runs
+  green -- because a proof that leaves the thing it broke broken is a defect it
+  installed rather than a control it discharged.
+
+================================================================================
+CONTROL 1 -- UNROUTABLE ZFS HOST  (VALIDATION.md row 21, a `fires` row)
+================================================================================
+
+COMMAND
+  ssh -n -o BatchMode=yes root@172.16.1.159 \
+    'ZFS_HOST=192.0.2.1 bash /mnt/fast/stacks/scripts/check-jellyfin-transcode.sh'
+
+WHY 192.0.2.1 AND NOT A RANDOM ADDRESS
+  RFC 5737 TEST-NET-1. It is reserved for documentation and is guaranteed not to
+  be allocated, so the ssh fails at connect rather than hanging against a live
+  host that happens not to answer, and it cannot accidentally reach a real
+  machine on this or any other estate.
+
+EXPECTED
+  exit non-zero; the output names the route as unreachable or says UNKNOWN; and
+  NO green line is printed for the quota assertion or for the `mounted`
+  assertion. A quota reading that could not be taken must be its own distinct
+  red -- never a `!= 53687091200` mismatch, which a reader parses as DRIFT and
+  goes looking for a configuration change that never happened.
+
+OBSERVED -- exit 1, and all three limbs hold:
+  - section 0: "zfs unreachable both locally and at root@192.0.2.1 ... UNKNOWN,
+    not green", ZFS_ROUTE=unavailable
+  - section 4: TWO separate reds, "quota unverifiable -- no zfs route ...
+    UNKNOWN, not 50 G" and "mounted state unverifiable from atlantis". Neither
+    is phrased as a mismatch.
+  - summary: `transcode quota: UNKNOWN bytes` and `transcode mounted: zfs=UNKNOWN`
+  - FAILURES total: 3
+
+THE CONTAINER-SIDE INSTRUMENT STILL ANSWERED, AND THAT IS THE WHOLE REASON
+THERE ARE TWO. Recorded explicitly because the plan asks either way:
+
+  ✅ /mnt/fast/transcode device id 47 differs from /mnt/fast's 64519 --
+     separately mounted (VALIDATION row 36, instrument 2)
+
+  Instrument 2 is a container-side `stat -c %d` comparison that never reaches
+  atlantis, so it kept working while instrument 1's route was severed. That is
+  the designed behaviour: the mounted state degrades from "asserted twice" to
+  "asserted once, and the reader is told which half is missing", rather than
+  from "asserted" to "unknown". The summary line carries both halves for exactly
+  this reason -- `zfs=UNKNOWN devid=47 parent=64519` is legible at a glance as
+  one instrument down and one still reporting.
+
+FULL TRANSCRIPT (ANSI stripped; exit code appended by the invocation)
+--------------------------------------------------------------------------------
+  🎬 Jellyfin Transcode Retention Audit
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    container:  jellyfin
+    transcode:  /mnt/fast/transcode  (dataset fast/transcode)
+    cache:      /mnt/fast/appdata/media/jellyfin/cache
+    host:       selfhost
+    date:       2026-09-03T07:09:24Z
+    mode:       assert (exits non-zero on any failed check)
+  
+  🧰 0. Routes and preconditions (D-19)
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ✅ docker /usr/bin/docker
+    ✅ curl /usr/bin/curl
+    ✅ jq /usr/bin/jq
+    ✅ stat /usr/bin/stat
+    ❌ zfs unreachable both locally and at root@192.0.2.1 — section 4's authoritative quota and
+           mounted readings cannot be made. UNKNOWN, not green.
+    ZFS_ROUTE=unavailable
+    ✅ Jellyfin resolved to 192.168.90.25:8096 via docker inspect (never a pinned literal, never the bare name)
+    ✅ Jellyfin credential /mnt/fast/secrets/jellyfin-deercrest.env (600 root)
+  
+  💾 1. Root filesystem headroom (TRAN-05, D-16, D-17)
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    / avail=37021646848 bytes (34.48 GiB) of size=134682742784 bytes (125.43 GiB)
+    ✅ / headroom 34.48 GiB ≥ floor 20.00 GiB — margin 14.48 GiB
+  
+  🐳 2. The mount invariant (TRAN-01, TRAN-02, D-02, D-18)
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ✅ container 'jellyfin' exists (asserted before anything is enumerated)
+    ✅ zero Type:volume mounts on jellyfin (the invariant, not the instance — D-18)
+    ✅ /cache/transcodes is 'bind /mnt/fast/transcode' (VALIDATION row 1, TRAN-01)
+    ✅ /cache is 'bind /mnt/fast/appdata/media/jellyfin/cache' (VALIDATION row 2, TRAN-01)
+    ✅ /data/transcode appears in no mount destination (D-02, VALIDATION row 3)
+  
+  🗑  3. The old anonymous volume (secondary to section 2, per D-18)
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ✅ the anonymous volume d98b2ff94482… is gone (VALIDATION row 8, D-10)
+  
+  📏 4. The transcode quota and its mount (TRAN-03, D-12, D-13)
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ❌ quota unverifiable — no zfs route (see section 0). UNKNOWN, not 50 G
+    ❌ mounted state unverifiable from atlantis — no zfs route (see section 0)
+    ✅ /mnt/fast/transcode device id 47 differs from /mnt/fast's 64519 — separately mounted (VALIDATION row 36, instrument 2)
+    findmnt /mnt/fast/transcode: zfs fast/transcode   (reported, not asserted)
+    df size of /mnt/fast/transcode: 53687091200 bytes (50.00 GiB)   (REPORTED not asserted — A3, VALIDATION row 12)
+  
+  ⚙️  5. The encoding values, read back (TRAN-04, D-20, D-30) — REPORTED, not asserted
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    TranscodingTempPath = /cache/transcodes   (REPORTED not asserted — a standing check cannot prove a setting FIRES; that is 02.1-08's job)
+    EnableSegmentDeletion = true   (REPORTED not asserted — a standing check cannot prove a setting FIRES; that is 02.1-08's job)
+    SegmentKeepSeconds = 300   (REPORTED not asserted — a standing check cannot prove a setting FIRES; that is 02.1-08's job)
+    EnableThrottling = true   (REPORTED not asserted — a standing check cannot prove a setting FIRES; that is 02.1-08's job)
+    ThrottleDelaySeconds = 180   (REPORTED not asserted — a standing check cannot prove a setting FIRES; that is 02.1-08's job)
+    HardwareAccelerationType = none   (amdgpu mitigation, D-30 — REPORTED; drift here is the expensive regression)
+    EnableHardwareEncoding = false   (amdgpu mitigation, D-30 — REPORTED; drift here is the expensive regression)
+  
+  📊 6. Summary
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    / headroom:              37021646848 bytes (34.48 GiB)  (target ≥ 21474836480)
+    volume mounts:           0  (target 0)
+    transcode quota:         UNKNOWN bytes  (target 53687091200)
+    transcode mounted:       zfs=UNKNOWN devid=47 parent=64519  (target yes, and devid ≠ parent)
+    encoding values:         REPORTED not asserted  (see section 5)
+    unreachable:             0  (could-not-look, counted apart from bound violations — VALIDATION row 38)
+    toolchain missing:       1
+    FAILURES total:          3
+  
+  ❌ 3 failed checks
+  EXIT=1
+--------------------------------------------------------------------------------
+
+================================================================================
+CONTROL 2 -- NON-EXISTENT CONTAINER  (VALIDATION.md row 22, a `fires` row)
+================================================================================
+
+COMMAND
+  ssh -n -o BatchMode=yes root@172.16.1.159 \
+    'JELLYFIN_CONTAINER=no-such-container-021 bash /mnt/fast/stacks/scripts/check-jellyfin-transcode.sh'
+
+WHY THIS CONTROL MATTERS MORE THAN IT LOOKS -- THE SUBTLE PART
+  `docker inspect` on a missing container produces EMPTY OUTPUT. The
+  zero-volume-mounts assertion in section 2 is literally `result == ""`. So an
+  ABSENT CONTAINER WOULD SATISFY THE VERY TEST THAT IS SUPPOSED TO PROVE THE
+  CONTAINER IS CLEAN. "Nothing is mounted" and "there is nothing to ask about"
+  would render identically, and the phase's central invariant would report green
+  on a stopped Jellyfin.
+
+  That is the CR-02 distinction from disable-jellyfin-hwaccel.sh -- "NOTHING HELD"
+  AND "COULD NOT LOOK" ARE DIFFERENT ANSWERS AND MUST NOT SHARE A VERDICT -- and
+  it is why check-jellyfin-transcode.sh:338-349 proves the container EXISTS
+  before it enumerates anything, with its own distinct message. This control is
+  the proof that that guard is load-bearing rather than decorative.
+
+EXPECTED
+  exit non-zero, AND the output explicitly reports the container as ABSENT
+  rather than passing section 2 on an empty enumeration. The plan's rollback
+  table says that if it passes, that is a real defect in
+  check-jellyfin-transcode.sh to fix here before the fold-in lands.
+
+OBSERVED -- exit 1, and the guard held. NO defect to fix:
+  - section 2 prints
+      "container 'no-such-container-021' DOES NOT EXIST -- the mount assertions
+       below are UNKNOWN.  This is NOT 'zero anonymous volumes'. An absent
+       container yields an empty mount enumeration, which would otherwise pass
+       the very test it makes meaningless."
+    and the three bind assertions below it are NOT printed at all, green or red.
+  - the summary line reads `volume mounts: UNKNOWN -- container absent or docker
+    unavailable  (target 0)`. It does NOT read `0`. That branch
+    (check-jellyfin-transcode.sh:592-596) is the one that keeps the summary
+    honest for the fold-in, which reads that line and nothing else.
+  - section 0 also reds separately: the t3_proxy address could not be resolved,
+    so section 5 is UNREACHABLE and `unreachable: 1` is counted APART from the
+    two bound violations (VALIDATION row 38).
+  - FAILURES total: 3
+
+  Note what stayed green and correctly so: `/` headroom, the quota and the
+  mounted state. None of those depends on the container existing, and a control
+  that turned the whole transcript red would have told us less, not more.
+
+FULL TRANSCRIPT (ANSI stripped; exit code appended by the invocation)
+--------------------------------------------------------------------------------
+  🎬 Jellyfin Transcode Retention Audit
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    container:  no-such-container-021
+    transcode:  /mnt/fast/transcode  (dataset fast/transcode)
+    cache:      /mnt/fast/appdata/media/jellyfin/cache
+    host:       selfhost
+    date:       2026-09-03T07:09:39Z
+    mode:       assert (exits non-zero on any failed check)
+  
+  🧰 0. Routes and preconditions (D-19)
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ✅ docker /usr/bin/docker
+    ✅ curl /usr/bin/curl
+    ✅ jq /usr/bin/jq
+    ✅ stat /usr/bin/stat
+    ✅ zfs delegated to root@172.16.1.158 (LXC 100 is unprivileged; the pool lives on the Proxmox host)
+    ZFS_ROUTE=ssh:172.16.1.158
+    ❌ could not resolve no-such-container-021's t3_proxy address from docker — section 5 cannot run
+    ✅ Jellyfin credential /mnt/fast/secrets/jellyfin-deercrest.env (600 root)
+  
+  💾 1. Root filesystem headroom (TRAN-05, D-16, D-17)
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    / avail=37021511680 bytes (34.48 GiB) of size=134682742784 bytes (125.43 GiB)
+    ✅ / headroom 34.48 GiB ≥ floor 20.00 GiB — margin 14.48 GiB
+  
+  🐳 2. The mount invariant (TRAN-01, TRAN-02, D-02, D-18)
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ❌ container 'no-such-container-021' DOES NOT EXIST — the mount assertions below are UNKNOWN.
+           This is NOT 'zero anonymous volumes'. An absent container yields an empty mount
+           enumeration, which would otherwise pass the very test it makes meaningless.
+  
+  🗑  3. The old anonymous volume (secondary to section 2, per D-18)
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ✅ the anonymous volume d98b2ff94482… is gone (VALIDATION row 8, D-10)
+  
+  📏 4. The transcode quota and its mount (TRAN-03, D-12, D-13)
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ✅ quota fast/transcode = 53687091200 bytes (50 G) via ssh:172.16.1.158 (VALIDATION row 9)
+    ✅ fast/transcode mounted=yes via ssh:172.16.1.158 (VALIDATION row 36, instrument 1)
+    ✅ /mnt/fast/transcode device id 47 differs from /mnt/fast's 64519 — separately mounted (VALIDATION row 36, instrument 2)
+    findmnt /mnt/fast/transcode: zfs fast/transcode   (reported, not asserted)
+    df size of /mnt/fast/transcode: 53687091200 bytes (50.00 GiB)   (REPORTED not asserted — A3, VALIDATION row 12)
+  
+  ⚙️  5. The encoding values, read back (TRAN-04, D-20, D-30) — REPORTED, not asserted
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ❌ encoding values: UNREACHABLE — no Jellyfin route (see section 0). UNKNOWN, not green
+  
+  📊 6. Summary
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    / headroom:              37021511680 bytes (34.48 GiB)  (target ≥ 21474836480)
+    volume mounts:           UNKNOWN — container absent or docker unavailable  (target 0)
+    transcode quota:         53687091200 bytes  (target 53687091200)
+    transcode mounted:       zfs=yes devid=47 parent=64519  (target yes, and devid ≠ parent)
+    encoding values:         REPORTED not asserted  (see section 5)
+    unreachable:             1  (could-not-look, counted apart from bound violations — VALIDATION row 38)
+    toolchain missing:       1
+    FAILURES total:          3
+  
+  ❌ 3 failed checks
+  EXIT=1
+--------------------------------------------------------------------------------
+
+================================================================================
+CONTROL 3 -- ABSENT CREDENTIAL PATH
+================================================================================
+
+COMMAND
+  ssh -n -o BatchMode=yes root@172.16.1.159 \
+    'JELLYFIN_SECRETS=/mnt/fast/spike-021/no-such-credential.env bash /mnt/fast/stacks/scripts/check-jellyfin-transcode.sh'
+
+  The path was asserted ABSENT before and after:
+    test -e /mnt/fast/spike-021/no-such-credential.env  ->  does not exist
+
+THIS CONTROL IS EXECUTABLE AT ALL ONLY BECAUSE THE PATH IS ENV-OVERRIDABLE.
+  Plan 02.1-02 made JELLYFIN_SECRETS an override in response to the cross-AI
+  review's Plan-02 finding. The reviewed version hardcoded it. Without the
+  override this control had exactly two forms, and both are wrong:
+
+    (a) do not run it -- leaving a fail-closed branch on the credential route
+        unexecuted, which is the thing rows 21-24 exist to refuse; or
+    (b) chmod or chown the REAL /mnt/fast/secrets/jellyfin-deercrest.env to
+        stage the condition -- which breaks an invariant a DIFFERENT check
+        (check-music-consumers.sh) asserts, in order to test this one.
+
+  Pointing the variable at a path that does not exist is the clean third option
+  and it is why 02.1-02's change was worth making.
+
+EXPECTED
+  exit non-zero, and section 5 reports UNKNOWN rather than an empty settings
+  report. An encoding section that printed no values and said nothing would be
+  indistinguishable from an encoding section that read seven values and found
+  them all correct -- the CONS-04 substitution in its purest form.
+
+OBSERVED -- exit 1:
+  - section 0: "Jellyfin credential /mnt/fast/spike-021/no-such-credential.env
+    is ABSENT -- section 5 cannot run (D-40)"
+  - section 5: "encoding values: UNREACHABLE -- no API key (see
+    /mnt/fast/spike-021/no-such-credential.env, D-40). UNKNOWN, not green"
+    -- and NO key/value lines are printed. The seven REPORTED lines that appear
+    in every healthy run are absent, so there is no possibility of reading a
+    stale or empty report as a clean one.
+  - `unreachable: 1`, counted apart from bound violations
+  - FAILURES total: 2
+
+  Sections 1-4 stayed green, correctly: none of them needs the API key. Again,
+  a control that reddened everything would be less informative.
+
+THE REAL CREDENTIAL FILE WAS NOT TOUCHED, AND THIS IS ASSERTED TWICE OVER
+  BEFORE (from control 1's own transcript, which ran first and read the real
+  path because it overrode only ZFS_HOST):
+    ✅ Jellyfin credential /mnt/fast/secrets/jellyfin-deercrest.env (600 root)
+  AFTER (an independent stat, run once all four controls had completed):
+    600 root root /mnt/fast/secrets/jellyfin-deercrest.env
+
+  The "before" reading is the instrument's own output rather than a separate
+  command, which is stronger than a bracketing pair of stats: it is the same
+  assertion the estate relies on, executed in situ.
+
+THE REFUSAL IS WORDED ACCURATELY, AND THE WORDING IS THE POINT
+  The gate fires on ABSENT, or on a `600 root` MISMATCH. It does not fire on
+  "unreadable". This script runs as root; root can read anything; "unreadable"
+  is a condition that cannot occur here. check-jellyfin-transcode.sh:285-289
+  carries the same correction in-band, made in response to the same review
+  finding. Recorded here because a reader who believes the gate catches
+  unreadability will trust it to catch something it structurally cannot.
+
+FULL TRANSCRIPT (ANSI stripped; exit code appended by the invocation)
+--------------------------------------------------------------------------------
+  🎬 Jellyfin Transcode Retention Audit
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    container:  jellyfin
+    transcode:  /mnt/fast/transcode  (dataset fast/transcode)
+    cache:      /mnt/fast/appdata/media/jellyfin/cache
+    host:       selfhost
+    date:       2026-09-03T07:09:50Z
+    mode:       assert (exits non-zero on any failed check)
+  
+  🧰 0. Routes and preconditions (D-19)
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ✅ docker /usr/bin/docker
+    ✅ curl /usr/bin/curl
+    ✅ jq /usr/bin/jq
+    ✅ stat /usr/bin/stat
+    ✅ zfs delegated to root@172.16.1.158 (LXC 100 is unprivileged; the pool lives on the Proxmox host)
+    ZFS_ROUTE=ssh:172.16.1.158
+    ✅ Jellyfin resolved to 192.168.90.25:8096 via docker inspect (never a pinned literal, never the bare name)
+    ❌ Jellyfin credential /mnt/fast/spike-021/no-such-credential.env is ABSENT — section 5 cannot run (D-40)
+  
+  💾 1. Root filesystem headroom (TRAN-05, D-16, D-17)
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    / avail=37021261824 bytes (34.48 GiB) of size=134682742784 bytes (125.43 GiB)
+    ✅ / headroom 34.48 GiB ≥ floor 20.00 GiB — margin 14.48 GiB
+  
+  🐳 2. The mount invariant (TRAN-01, TRAN-02, D-02, D-18)
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ✅ container 'jellyfin' exists (asserted before anything is enumerated)
+    ✅ zero Type:volume mounts on jellyfin (the invariant, not the instance — D-18)
+    ✅ /cache/transcodes is 'bind /mnt/fast/transcode' (VALIDATION row 1, TRAN-01)
+    ✅ /cache is 'bind /mnt/fast/appdata/media/jellyfin/cache' (VALIDATION row 2, TRAN-01)
+    ✅ /data/transcode appears in no mount destination (D-02, VALIDATION row 3)
+  
+  🗑  3. The old anonymous volume (secondary to section 2, per D-18)
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ✅ the anonymous volume d98b2ff94482… is gone (VALIDATION row 8, D-10)
+  
+  📏 4. The transcode quota and its mount (TRAN-03, D-12, D-13)
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ✅ quota fast/transcode = 53687091200 bytes (50 G) via ssh:172.16.1.158 (VALIDATION row 9)
+    ✅ fast/transcode mounted=yes via ssh:172.16.1.158 (VALIDATION row 36, instrument 1)
+    ✅ /mnt/fast/transcode device id 47 differs from /mnt/fast's 64519 — separately mounted (VALIDATION row 36, instrument 2)
+    findmnt /mnt/fast/transcode: zfs fast/transcode   (reported, not asserted)
+    df size of /mnt/fast/transcode: 53687091200 bytes (50.00 GiB)   (REPORTED not asserted — A3, VALIDATION row 12)
+  
+  ⚙️  5. The encoding values, read back (TRAN-04, D-20, D-30) — REPORTED, not asserted
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ❌ encoding values: UNREACHABLE — no API key (see /mnt/fast/spike-021/no-such-credential.env, D-40). UNKNOWN, not green
+  
+  📊 6. Summary
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    / headroom:              37021261824 bytes (34.48 GiB)  (target ≥ 21474836480)
+    volume mounts:           0  (target 0)
+    transcode quota:         53687091200 bytes  (target 53687091200)
+    transcode mounted:       zfs=yes devid=47 parent=64519  (target yes, and devid ≠ parent)
+    encoding values:         REPORTED not asserted  (see section 5)
+    unreachable:             1  (could-not-look, counted apart from bound violations — VALIDATION row 38)
+    toolchain missing:       1
+    FAILURES total:          2
+  
+  ❌ 2 failed checks
+  EXIT=1
+--------------------------------------------------------------------------------
+
+================================================================================
+CONTROL 4 -- USAGE ERROR IS EXIT 2, NOT EXIT 1
+================================================================================
+
+COMMAND
+  ssh -n -o BatchMode=yes root@172.16.1.159 \
+    'bash /mnt/fast/stacks/scripts/check-jellyfin-transcode.sh --nonsense'
+
+WHY THIS IS A CONTROL AND NOT A FORMALITY
+  This is the estate's exit-code convention, established at
+  check-music-freeze.sh:31-42: a failed ASSERTION is exit 1, a usage or
+  ENVIRONMENT error is exit 2. It is what lets the fold-in in
+  quick-health-check.sh distinguish "the check found problems with the estate"
+  from "the check was invoked wrongly / cannot run here". Conflating the two
+  produces the worst possible reading of a red: an operator investigating a
+  Jellyfin fault that is really a typo, or -- far worse -- dismissing a genuine
+  red as a harness problem.
+
+  The same exit 2 also covers the Darwin platform guard: this script measures
+  free space with `df -B1 --output=avail`, BSD df silently ignores --output, and
+  the result would parse into a WRONG NUMBER rather than into an error. "This
+  instrument cannot be used here" is not "the estate is broken".
+
+OBSERVED -- exit exactly 2:
+  unknown option: --nonsense
+  usage: bash scripts/check-jellyfin-transcode.sh [--baseline]
+  EXIT=2
+
+FULL TRANSCRIPT (ANSI stripped; exit code appended by the invocation)
+--------------------------------------------------------------------------------
+  unknown option: --nonsense
+  usage: bash scripts/check-jellyfin-transcode.sh [--baseline]
+  EXIT=2
+--------------------------------------------------------------------------------
+
+================================================================================
+THE UNMODIFIED RUN -- THE TRANSCRIPT ENDS ON A GREEN BASELINE
+================================================================================
+
+COMMAND
+  ssh -n -o BatchMode=yes root@172.16.1.159 \
+    'bash /mnt/fast/stacks/scripts/check-jellyfin-transcode.sh'
+
+WHY THIS IS RECORDED RATHER THAN ASSUMED
+  Four consecutive induced failures is a transcript that ends on a red, and a
+  reader who stops there cannot tell an induced red from a residual one. Ending
+  on the unmodified run with no overrides proves the four controls left the
+  estate exactly as they found it -- and it proves it with the same instrument
+  that produced the reds, rather than with a separate inspection that could
+  disagree for its own reasons.
+
+OBSERVED -- exit 0, FAILURES total 0, unreachable 0, toolchain missing 0:
+  / headroom:              37021057024 bytes (34.48 GiB)  (target >= 21474836480)
+  volume mounts:           0  (target 0)
+  transcode quota:         53687091200 bytes  (target 53687091200)
+  transcode mounted:       zfs=yes devid=47 parent=64519  (target yes, and devid != parent)
+  encoding values:         REPORTED not asserted  (see section 5)
+
+  The D-30 amdgpu mitigation is intact in the same run:
+  HardwareAccelerationType = none, EnableHardwareEncoding = false.
+
+FULL TRANSCRIPT (ANSI stripped; exit code appended by the invocation)
+--------------------------------------------------------------------------------
+  🎬 Jellyfin Transcode Retention Audit
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    container:  jellyfin
+    transcode:  /mnt/fast/transcode  (dataset fast/transcode)
+    cache:      /mnt/fast/appdata/media/jellyfin/cache
+    host:       selfhost
+    date:       2026-09-03T07:10:01Z
+    mode:       assert (exits non-zero on any failed check)
+  
+  🧰 0. Routes and preconditions (D-19)
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ✅ docker /usr/bin/docker
+    ✅ curl /usr/bin/curl
+    ✅ jq /usr/bin/jq
+    ✅ stat /usr/bin/stat
+    ✅ zfs delegated to root@172.16.1.158 (LXC 100 is unprivileged; the pool lives on the Proxmox host)
+    ZFS_ROUTE=ssh:172.16.1.158
+    ✅ Jellyfin resolved to 192.168.90.25:8096 via docker inspect (never a pinned literal, never the bare name)
+    ✅ Jellyfin credential /mnt/fast/secrets/jellyfin-deercrest.env (600 root)
+  
+  💾 1. Root filesystem headroom (TRAN-05, D-16, D-17)
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    / avail=37021057024 bytes (34.48 GiB) of size=134682742784 bytes (125.43 GiB)
+    ✅ / headroom 34.48 GiB ≥ floor 20.00 GiB — margin 14.48 GiB
+  
+  🐳 2. The mount invariant (TRAN-01, TRAN-02, D-02, D-18)
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ✅ container 'jellyfin' exists (asserted before anything is enumerated)
+    ✅ zero Type:volume mounts on jellyfin (the invariant, not the instance — D-18)
+    ✅ /cache/transcodes is 'bind /mnt/fast/transcode' (VALIDATION row 1, TRAN-01)
+    ✅ /cache is 'bind /mnt/fast/appdata/media/jellyfin/cache' (VALIDATION row 2, TRAN-01)
+    ✅ /data/transcode appears in no mount destination (D-02, VALIDATION row 3)
+  
+  🗑  3. The old anonymous volume (secondary to section 2, per D-18)
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ✅ the anonymous volume d98b2ff94482… is gone (VALIDATION row 8, D-10)
+  
+  📏 4. The transcode quota and its mount (TRAN-03, D-12, D-13)
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ✅ quota fast/transcode = 53687091200 bytes (50 G) via ssh:172.16.1.158 (VALIDATION row 9)
+    ✅ fast/transcode mounted=yes via ssh:172.16.1.158 (VALIDATION row 36, instrument 1)
+    ✅ /mnt/fast/transcode device id 47 differs from /mnt/fast's 64519 — separately mounted (VALIDATION row 36, instrument 2)
+    findmnt /mnt/fast/transcode: zfs fast/transcode   (reported, not asserted)
+    df size of /mnt/fast/transcode: 53687091200 bytes (50.00 GiB)   (REPORTED not asserted — A3, VALIDATION row 12)
+  
+  ⚙️  5. The encoding values, read back (TRAN-04, D-20, D-30) — REPORTED, not asserted
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    TranscodingTempPath = /cache/transcodes   (REPORTED not asserted — a standing check cannot prove a setting FIRES; that is 02.1-08's job)
+    EnableSegmentDeletion = true   (REPORTED not asserted — a standing check cannot prove a setting FIRES; that is 02.1-08's job)
+    SegmentKeepSeconds = 300   (REPORTED not asserted — a standing check cannot prove a setting FIRES; that is 02.1-08's job)
+    EnableThrottling = true   (REPORTED not asserted — a standing check cannot prove a setting FIRES; that is 02.1-08's job)
+    ThrottleDelaySeconds = 180   (REPORTED not asserted — a standing check cannot prove a setting FIRES; that is 02.1-08's job)
+    HardwareAccelerationType = none   (amdgpu mitigation, D-30 — REPORTED; drift here is the expensive regression)
+    EnableHardwareEncoding = false   (amdgpu mitigation, D-30 — REPORTED; drift here is the expensive regression)
+  
+  📊 6. Summary
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    / headroom:              37021057024 bytes (34.48 GiB)  (target ≥ 21474836480)
+    volume mounts:           0  (target 0)
+    transcode quota:         53687091200 bytes  (target 53687091200)
+    transcode mounted:       zfs=yes devid=47 parent=64519  (target yes, and devid ≠ parent)
+    encoding values:         REPORTED not asserted  (see section 5)
+    unreachable:             0  (could-not-look, counted apart from bound violations — VALIDATION row 38)
+    toolchain missing:       0
+    FAILURES total:          0
+  
+  ✅ Jellyfin transcode retention intact
+  EXIT=0
+--------------------------------------------------------------------------------
