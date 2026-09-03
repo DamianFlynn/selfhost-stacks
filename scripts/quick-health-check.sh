@@ -55,7 +55,7 @@
 #     log filename by date arithmetic. A notice that states when it was added should state when it
 #     was actually added.)
 #
-#     WHAT MAKES IT EXIT 1 — six conditions, and five of them are "could not look":
+#     WHAT MAKES IT EXIT 1 — seven conditions, and six of them are "could not look":
 #       - a failed assertion in the check itself
 #       - LXC 100 (172.16.1.159) unreachable            [caught by the probe at lines 60-69]
 #       - atlantis (172.16.1.158) unreachable, so the authoritative zfs quota and mounted
@@ -67,6 +67,14 @@
 #         still works, the container still writes — and the 50 G quota applies to none of it,
 #         while `zfs get quota` from atlantis still returns 53687091200 and reads perfectly green.
 #         An unmounted dataset is an unbounded transcode path that looks completely normal.
+#       - SEVENTH CONDITION, added 2026-09-03 by plan 02.1-13: a remote command exceeding
+#         REMOTE_TIMEOUT. This is not a fourth fatal block — nothing new was folded in. It bounds
+#         an existing coupling: until now NO remote command here had a wall-clock bound at all, so
+#         a wedged dockerd made this script hang forever rather than fail. A check that never
+#         RETURNS is worse than one that returns wrong, because there is not even a transcript to
+#         disbelieve — and the assertions plan 02.1-11 added above are worth exactly what this
+#         script's ability to return is worth. See the REMOTE_TIMEOUT block below for why the
+#         bound is applied on the far side of the ssh rather than around it.
 #
 #     WHAT IT COVERS, by requirement id:
 #       TRAN-01  the mount shape — /cache and /cache/transcodes are declared binds to /mnt/fast
@@ -160,8 +168,46 @@ EXIT_CODE=0
 # case a single, unmissable statement instead of five separately-wrong lines.
 SSH_OPTS="-o BatchMode=yes -o ConnectTimeout=10"
 
+# WR-08: A WALL-CLOCK BOUND ON EVERY REMOTE COMMAND, ENFORCED ON THE FAR SIDE OF THE ssh.
+#
+# Three things a reader would otherwise get wrong, in the order they get them wrong:
+#
+#   1. ConnectTimeout BOUNDS THE CONNECT AND NOTHING AFTER IT. SSH_OPTS above carries
+#      ConnectTimeout=10, which is easy to mistake for a bound on the whole call. It is not. A
+#      wedged dockerd ACCEPTS THE CONNECTION INSTANTLY and then never returns — the estate's own
+#      2026-08-31 amdgpu signature, where dockerd blocked reading /proc/*/smaps behind a dead
+#      mmap_lock and every `docker` call stopped returning. Before this bound, this script would
+#      have sat there indefinitely: no tick, no red, no exit.
+#
+#   2. ServerAliveInterval / ServerAliveCountMax DO NOT HELP EITHER, and reaching for them is the
+#      obvious wrong fix. sshd is alive and answers keepalives perfectly happily while the command
+#      it spawned is blocked. THE TRANSPORT IS HEALTHY; THE COMMAND IS NOT. Keepalives measure the
+#      wrong thing, and would have kept this script alive rather than ended it.
+#
+#   3. SO THE BOUND GOES ON THE REMOTE SIDE, INSIDE THE COMMAND STRING — and that asymmetry with
+#      the rest of the repo is deliberate, not an oversight to be "tidied" later.
+#      scripts/disable-jellyfin-hwaccel.sh:172 wraps its own ssh calls as `timeout 15 ssh ...`
+#      because THAT SCRIPT RUNS ON LINUX and can bound locally. THIS script runs on the macOS
+#      workstation, which does not ship coreutils `timeout` at all (Homebrew's coreutils provides
+#      it as `gtimeout`), so a workstation-side wrapper would be an undeclared dependency that
+#      fails on the one machine this file is meant to be typed on. LXC 100 is Linux and has it,
+#      so the bound executes there. Probed once, below — never provided, never assumed.
+#
+# WHY 120 s: this script's slowest fold-in retries a Jellyfin GET 3x at 2 s apart with
+# --max-time 20, so a HEALTHY worst case is comfortably under a minute. 120 s is generous enough
+# that a slow-but-working estate is never cut off (the 01-09 trap: a check that goes red for
+# non-reasons trains the reader to ignore it), and short enough that a wedged dockerd is caught in
+# the same sitting. Overridable so the bound can be exercised without editing this file, which is
+# how plan 02.1-13 drove it against a real sleeping remote script.
+REMOTE_TIMEOUT="${REMOTE_TIMEOUT:-120}"
+
 echo "=== Quick Server Health Check ==="
 
+# NEITHER OF THE TWO PROBES BELOW IS BOUNDED, AND THAT IS DELIBERATE: neither touches docker, so
+# neither cannot hang the way a `docker` call can. `true` and `command -v` are shell builtins that
+# return immediately or not at all, and the not-at-all case is a dead transport, which
+# ConnectTimeout above does cover. Bounding them would also be circular — the second probe exists
+# precisely to establish that the bounding instrument is there to use.
 if ! ssh $SSH_OPTS root@172.16.1.159 true 2>/dev/null; then
     echo "⚠️  UNKNOWN — 172.16.1.159 (LXC 100) is unreachable over ssh."
     echo "  NO container state can be read, so nothing below would be a measurement."
@@ -169,12 +215,35 @@ if ! ssh $SSH_OPTS root@172.16.1.159 true 2>/dev/null; then
     exit 1
 fi
 
+# Second one-shot probe, same argument as the WR-10 gate above: probe once and refuse, rather than
+# harden ten call sites. Every remote command below is bounded by coreutils `timeout` ON LXC 100.
+# If that binary is not there, the bounds are silently absent and a hang would once again be
+# indistinguishable from a slow answer — so this refuses instead. It does NOT try to provide the
+# binary: fetching software onto a host from inside a read-only health check is not this file's
+# business, and a health check that mutates the thing it measures is not a health check.
+if ! ssh $SSH_OPTS root@172.16.1.159 'command -v timeout >/dev/null 2>&1' 2>/dev/null; then
+    echo "⚠️  UNKNOWN — coreutils \`timeout\` is absent on 172.16.1.159 (LXC 100)."
+    echo "  Every remote command below depends on it for its wall-clock bound, so with it missing"
+    echo "  NO remote command can be bounded and a wedged dockerd would hang this script forever"
+    echo "  instead of failing it. That is UNKNOWN, not healthy — and it is the one failure mode"
+    echo "  that produces no transcript at all. Restore coreutils on the host, then re-run."
+    EXIT_CODE=1
+    exit 1
+fi
+
 # Check Traefik is running
+#
+# THE BOUND GOES INSIDE THE REMOTE COMMAND STRING, NOT BEFORE `ssh`. On a piped remote such as
+# "docker ps ... | grep -q ..." the prefix binds to the FIRST command only — which is exactly the
+# one that hangs, because `docker` is the client that talks to the wedged daemon while `grep` and
+# `wc` are local to the remote shell and cannot block. That is the intended reading, not an
+# oversight in the quoting: bounding the whole pipeline would need a subshell and would buy
+# nothing.
 echo -n "Traefik: "
-if ssh $SSH_OPTS root@172.16.1.159 "docker ps --format '{{.Names}}' | grep -q '^traefik$'"; then
+if ssh $SSH_OPTS root@172.16.1.159 "timeout $REMOTE_TIMEOUT docker ps --format '{{.Names}}' | grep -q '^traefik$'"; then
     echo "✅ Running"
     # Check if it's healthy
-    STATUS=$(ssh $SSH_OPTS root@172.16.1.159 "docker inspect traefik --format='{{.State.Health.Status}}' 2>/dev/null || echo 'no healthcheck'")
+    STATUS=$(ssh $SSH_OPTS root@172.16.1.159 "timeout $REMOTE_TIMEOUT docker inspect traefik --format='{{.State.Health.Status}}' 2>/dev/null || echo 'no healthcheck'")
     echo "  Health: $STATUS"
 else
     echo "❌ Not running"
@@ -182,34 +251,34 @@ fi
 
 # Check Authelia
 echo -n "Authelia: "
-if ssh $SSH_OPTS root@172.16.1.159 "docker ps --format '{{.Names}}' | grep -q '^authelia$'"; then
+if ssh $SSH_OPTS root@172.16.1.159 "timeout $REMOTE_TIMEOUT docker ps --format '{{.Names}}' | grep -q '^authelia$'"; then
     echo "✅ Running"
 else
     echo "❌ Not running"
 fi
 
 # Count containers
-RUNNING=$(ssh $SSH_OPTS root@172.16.1.159 "docker ps -q | wc -l" | tr -d ' ')
+RUNNING=$(ssh $SSH_OPTS root@172.16.1.159 "timeout $REMOTE_TIMEOUT docker ps -q | wc -l" | tr -d ' ')
 echo "Containers running: $RUNNING"
 
 # Check for unhealthy. The gate above guarantees the host answered, but dockerd can still be
 # wedged behind the amdgpu mmap_lock while sshd is fine (that is exactly the Aug 31 signature),
 # so a non-numeric result here is still UNKNOWN rather than zero.
-UNHEALTHY=$(ssh $SSH_OPTS root@172.16.1.159 "docker ps --format '{{.Names}}' --filter health=unhealthy | wc -l" | tr -d ' ')
+UNHEALTHY=$(ssh $SSH_OPTS root@172.16.1.159 "timeout $REMOTE_TIMEOUT docker ps --format '{{.Names}}' --filter health=unhealthy | wc -l" | tr -d ' ')
 if ! echo "$UNHEALTHY" | grep -qE '^[0-9]+$'; then
     echo "⚠️  UNKNOWN — could not count unhealthy containers (docker returned '$UNHEALTHY')."
     echo "  dockerd may be blocked. This is NOT 'no unhealthy containers'."
     EXIT_CODE=1
 elif [ "$UNHEALTHY" -gt 0 ]; then
     echo "⚠️  Unhealthy containers: $UNHEALTHY"
-    ssh $SSH_OPTS root@172.16.1.159 "docker ps --format '{{.Names}}' --filter health=unhealthy"
+    ssh $SSH_OPTS root@172.16.1.159 "timeout $REMOTE_TIMEOUT docker ps --format '{{.Names}}' --filter health=unhealthy"
 else
     echo "✅ No unhealthy containers"
 fi
 
 # Try to curl Traefik dashboard
 echo -n "Traefik dashboard: "
-if ssh $SSH_OPTS root@172.16.1.159 "curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/dashboard/" | grep -q "200"; then
+if ssh $SSH_OPTS root@172.16.1.159 "timeout $REMOTE_TIMEOUT curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/dashboard/" | grep -q "200"; then
     echo "✅ Accessible (HTTP 200)"
 else
     echo "❌ Not accessible"
@@ -227,18 +296,46 @@ fi
 # input attached, leaving the second with nothing.
 echo -n "Music freeze harness: "
 MUSIC_OUT=$(ssh -n $SSH_OPTS root@172.16.1.159 \
-    "bash /mnt/fast/stacks/scripts/check-music-freeze.sh 2>&1")
+    "timeout $REMOTE_TIMEOUT bash /mnt/fast/stacks/scripts/check-music-freeze.sh 2>&1")
 MUSIC_RC=$?   # ssh propagates the remote exit status — do NOT pipe before capturing this
 # Strip ANSI colour separately. \x1b is a GNU sed extension and this script runs on macOS, so the
 # ESC is spelled with bash's $'...' quoting instead.
 MUSIC_OUT=$(printf '%s\n' "$MUSIC_OUT" | LC_ALL=C sed $'s/\033\\[[0-9;]*m//g')
 
-if [ -z "$MUSIC_OUT" ]; then
+# THE EMPTY-OUTPUT TEST STAYS FIRST IN ALL THREE BLOCKS. Plan 02.1-10 proved by driving it
+# (VALIDATION row 23) that a zero-byte remote script exits 0 with no output, so ONLY the
+# empty-output test catches that case — an exit-status test never will. Adding the timeout branch
+# below must not, and does not, move it.
+#
+# THE ONE QUALIFICATION, and it is the whole reason the timeout branch is reachable at all: a
+# command killed by the bound usually produces NO OUTPUT EITHER, so on a real hang both this test
+# and the timeout test are true at once. Unqualified, the empty test would win and print
+# "unreachable" for a host that answered ssh perfectly — the exact "could not look" / "the value
+# moved" conflation this file exists to avoid, just relocated. So the empty branch defers when the
+# remote exit status was 124, and only then. A zero-byte script still exits 0 and still lands here.
+if [ -z "$MUSIC_OUT" ] && [ "$MUSIC_RC" -ne 124 ]; then
     # Unreachable host, or the script is not on the host at all. Absence of a failure signal is
     # NOT evidence of health — same precedent as scripts/check-server-health.sh:8-11.
     echo "⚠️  UNKNOWN — 172.16.1.159 unreachable or the audit produced no output"
     echo "  The harness state is unknown, NOT green. Check the host, then re-run:"
     echo "  ssh root@172.16.1.159 'cd /mnt/fast/stacks && bash scripts/check-music-freeze.sh'"
+    EXIT_CODE=1
+elif [ "$MUSIC_RC" -eq 124 ]; then
+    # coreutils `timeout` exits 124 on expiry. Without this branch that status would fall into the
+    # generic "❌ BROKEN (... exit 124)" branch below — fail-closed, but SAYING THE WRONG THING. It
+    # would read as "the check failed an assertion" when the truth is "the check never finished",
+    # and those are different answers that must not share a verdict (the same doctrine as the
+    # UNREACHABLE counter in check-jellyfin-transcode.sh, and as CR-02 in
+    # disable-jellyfin-hwaccel.sh). Nothing was measured here; do not read it as a value moving.
+    echo "⚠️  UNKNOWN — the remote audit exceeded its ${REMOTE_TIMEOUT}s bound and was killed."
+    echo "  This is NOT a failed assertion. Nothing was measured — the command never returned."
+    echo "  Most likely cause: dockerd wedged. The estate's 2026-08-31 amdgpu signature blocks"
+    echo "  dockerd on /proc/*/smaps behind a dead mmap_lock while sshd answers normally, so the"
+    echo "  connection succeeds and the command hangs. Distinguish it on atlantis (172.16.1.158):"
+    echo "    /proc/pressure/io 'full' near 100% WITH AN IDLE CPU is the wedge; a busy CPU is not."
+    echo "    cat /proc/pressure/io; uptime"
+    echo "  A slow-but-healthy estate is the other possibility — re-run with a larger budget:"
+    echo "    REMOTE_TIMEOUT=300 bash scripts/quick-health-check.sh"
     EXIT_CODE=1
 elif [ "$MUSIC_RC" -eq 0 ]; then
     # WR-09: the ✅ used to be printed unconditionally and the evidence lines were best-effort.
@@ -275,18 +372,32 @@ fi
 # canonical statement in scripts/check-jellyfin-transcode.sh.
 echo -n "Music consumers audit: "
 CONSUMERS_OUT=$(ssh -n $SSH_OPTS root@172.16.1.159 \
-    "bash /mnt/fast/stacks/scripts/check-music-consumers.sh 2>&1")
+    "timeout $REMOTE_TIMEOUT bash /mnt/fast/stacks/scripts/check-music-consumers.sh 2>&1")
 CONSUMERS_RC=$?   # ssh propagates the remote exit status — do NOT pipe before capturing this
 # Strip ANSI colour separately. \x1b is a GNU sed extension and this script runs on macOS, so the
 # ESC is spelled with bash's $'...' quoting instead.
 CONSUMERS_OUT=$(printf '%s\n' "$CONSUMERS_OUT" | LC_ALL=C sed $'s/\033\\[[0-9;]*m//g')
 
-if [ -z "$CONSUMERS_OUT" ]; then
+# Empty-output test first, deferring only to the bound — see the full argument on the freeze block
+# above. The ordering and the one qualification are identical in all three blocks on purpose.
+if [ -z "$CONSUMERS_OUT" ] && [ "$CONSUMERS_RC" -ne 124 ]; then
     # Unreachable host, or the script is not on the host at all. Absence of a failure signal is
     # NOT evidence of health — same precedent as the freeze block above.
     echo "⚠️  UNKNOWN — 172.16.1.159 unreachable or the audit produced no output"
     echo "  The consumers state is unknown, NOT green. Check the host, then re-run:"
     echo "  ssh root@172.16.1.159 'cd /mnt/fast/stacks && git pull --ff-only && bash scripts/check-music-consumers.sh'"
+    EXIT_CODE=1
+elif [ "$CONSUMERS_RC" -eq 124 ]; then
+    # `timeout` expiry, not a failed assertion. See the freeze block above for why these two are
+    # kept apart. This block is the one most likely to bound out on a HEALTHY estate: it queries
+    # Music Assistant and Jellyfin over HTTP, so a slow or restarting MA is a real possibility
+    # here in a way it is not for a `docker ps`.
+    echo "⚠️  UNKNOWN — the remote audit exceeded its ${REMOTE_TIMEOUT}s bound and was killed."
+    echo "  This is NOT a failed assertion. Nothing was measured — the command never returned."
+    echo "  Either dockerd is wedged (2026-08-31 amdgpu signature: /proc/pressure/io 'full' near"
+    echo "  100% with an IDLE CPU, read on atlantis 172.16.1.158), or Music Assistant is slow to"
+    echo "  answer. Re-run with a larger budget before concluding anything:"
+    echo "    REMOTE_TIMEOUT=300 bash scripts/quick-health-check.sh"
     EXIT_CODE=1
 elif [ "$CONSUMERS_RC" -eq 0 ]; then
     # WR-09, same defect as the freeze block above. check-music-consumers.sh:853-855 says
@@ -342,13 +453,15 @@ fi
 # with nothing anywhere saying so.
 echo -n "Jellyfin transcode retention: "
 TRANSCODE_OUT=$(ssh -n $SSH_OPTS root@172.16.1.159 \
-    "bash /mnt/fast/stacks/scripts/check-jellyfin-transcode.sh 2>&1")
+    "timeout $REMOTE_TIMEOUT bash /mnt/fast/stacks/scripts/check-jellyfin-transcode.sh 2>&1")
 TRANSCODE_RC=$?   # ssh propagates the remote exit status — do NOT pipe before capturing this
 # Strip ANSI colour separately. \x1b is a GNU sed extension and this script runs on macOS, so the
 # ESC is spelled with bash's $'...' quoting instead.
 TRANSCODE_OUT=$(printf '%s\n' "$TRANSCODE_OUT" | LC_ALL=C sed $'s/\033\\[[0-9;]*m//g')
 
-if [ -z "$TRANSCODE_OUT" ]; then
+# Empty-output test first, deferring only to the bound — see the full argument on the freeze block
+# above. The ordering and the one qualification are identical in all three blocks on purpose.
+if [ -z "$TRANSCODE_OUT" ] && [ "$TRANSCODE_RC" -ne 124 ]; then
     # Unreachable host, or the script is not on the host at all. Absence of a failure signal is
     # NOT evidence of health — same precedent as the two blocks above. PROVEN REACHABLE, not
     # assumed: plan 02.1-10 drove this branch by moving the host-side script aside (VALIDATION
@@ -356,6 +469,28 @@ if [ -z "$TRANSCODE_OUT" ]; then
     echo "⚠️  UNKNOWN — 172.16.1.159 unreachable or the audit produced no output"
     echo "  The transcode retention state is unknown, NOT green. Check the host, then re-run:"
     echo "  ssh root@172.16.1.159 'cd /mnt/fast/stacks && git pull --ff-only && bash scripts/check-jellyfin-transcode.sh'"
+    EXIT_CODE=1
+elif [ "$TRANSCODE_RC" -eq 124 ]; then
+    # `timeout` expiry, not a failed assertion. PROVEN REACHABLE, not assumed: plan 02.1-13 drove
+    # this exact branch by replacing the host-side check with a `sleep 30` stub and running at
+    # REMOTE_TIMEOUT=5, then restored the real script under a trap and re-verified by sha256 —
+    # the same device 02.1-10 used for the empty-output branch above. Transcript at
+    # .planning/phases/02.1-.../artifacts/02.1-13-timeout-control.txt.
+    #
+    # This branch matters more here than in the two blocks above, because THIS is the block that
+    # would have caught the incident phase 02.1 exists to fix. A hang here means the transcode
+    # retention state was never read at all — which is the same standing as an unbounded transcode
+    # path, not a lesser one.
+    echo "⚠️  UNKNOWN — the remote audit exceeded its ${REMOTE_TIMEOUT}s bound and was killed."
+    echo "  This is NOT a failed assertion, and it is NOT a bound violation. Nothing was measured:"
+    echo "  the command never returned, so the transcode retention state is unread, not green."
+    echo "  Most likely cause: dockerd wedged. The estate's 2026-08-31 amdgpu signature blocks"
+    echo "  dockerd on /proc/*/smaps behind a dead mmap_lock while sshd answers normally, so the"
+    echo "  connection succeeds and the command hangs. Distinguish it on atlantis (172.16.1.158):"
+    echo "    /proc/pressure/io 'full' near 100% WITH AN IDLE CPU is the wedge; a busy CPU is not."
+    echo "    cat /proc/pressure/io; uptime"
+    echo "  A slow-but-healthy estate is the other possibility — re-run with a larger budget:"
+    echo "    REMOTE_TIMEOUT=300 bash scripts/quick-health-check.sh"
     EXIT_CODE=1
 elif [ "$TRANSCODE_RC" -eq 0 ]; then
     # WR-09, the same defect as both blocks above, and this is the THIRD fold-in to carry the
