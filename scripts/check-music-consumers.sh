@@ -776,8 +776,12 @@ else
     info "music providers configured in MA:"
     printf '%s\n' "$MUSIC_PROVIDERS" | sed 's/^/      /'
 
-    # Absence-is-not-health (quick-health-check.sh:74-80): an empty provider list and a healthy
-    # one must never look the same.
+    # Absence-is-not-health (quick-health-check.sh — grep it for "Absence of a failure signal is",
+    # three hits, all stating the same doctrine at its three fold-in blocks): an empty provider
+    # list and a healthy one must never look the same.
+    # [Cited lines 74-80 until 2026-09-03. That range now holds unrelated text: this phase added
+    #  roughly 180 lines above it across plans 02.1-13 and 02.1-15. Re-pointed by anchor rather
+    #  than by a new number — plan 02.1-15, WR-09.]
     if [[ -z "$MUSIC_PROVIDERS" ]]; then
       ma_fail "CONS-02: MA reported ZERO music providers — that is UNKNOWN, not green"
     fi
@@ -1117,8 +1121,13 @@ echo ""
 # ---------------------------------------------------------------------------------------------
 # 6. Summary
 #    KEEP THIS HEADING LITERAL AND NEVER RENUMBER IT SILENTLY. Plan 02-09's fold-in anchors on it
-#    with `sed -n '/^📊 6\. Summary/,$p'`, exactly as quick-health-check.sh:83 anchors on
-#    check-music-freeze.sh's section 7.
+#    with `sed -n '/^📊 6\. Summary/,$p'`, exactly as quick-health-check.sh anchors on
+#    check-music-freeze.sh's section 7 (grep -F that file for `📊 7` — three hits: the green-path
+#    selector, the BROKEN-branch dump, and the message printed when the anchor fails to match).
+#    [Cited line 83 until 2026-09-03; that line is now unrelated header text. Re-pointed by
+#     anchor — plan 02.1-15, WR-09. A pointer INTO a file that three plans in this phase have
+#     been inserting into is the one that will go stale first, which is the argument for anchors
+#     in general and not just for the four references the review happened to catch.]
 # ---------------------------------------------------------------------------------------------
 echo "📊 6. Summary"
 rule

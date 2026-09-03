@@ -480,7 +480,8 @@ fi
 # find across 2,674 entries and the docker mount enumeration are not one-liners — so it runs over
 # a single ssh here. See scripts/check-music-freeze.sh for what it asserts.
 #
-# IN-05: `-n` on the ssh. check-music-consumers.sh:188 established this as a convention with a
+# IN-05: `-n` on the ssh. check-music-consumers.sh (grep for "so a nested ssh cannot eat" — one
+# hit, on the SSH_OPTS line) established this as a convention with a
 # measured reason ("so a nested ssh cannot eat this script's stdin" - it does). Both remote
 # invocations here are inline `ssh host 'cmd'`, which is the shape the convention covers; the
 # shape it must be kept AWAY from is `bash -s` + heredoc, and neither of these is that. No current
@@ -592,9 +593,12 @@ elif [ "$CONSUMERS_RC" -eq 124 ]; then
     echo "    REMOTE_TIMEOUT=300 bash scripts/quick-health-check.sh"
     EXIT_CODE=1
 elif [ "$CONSUMERS_RC" -eq 0 ]; then
-    # WR-09, same defect as the freeze block above. check-music-consumers.sh:853-855 says
+    # WR-09, same defect as the freeze block above. check-music-consumers.sh says
     # "KEEP THIS HEADING LITERAL AND NEVER RENUMBER IT SILENTLY. Plan 02-09's fold-in anchors on
-    # it" - and until now nothing detected a break. Renumbering (a section 3b, splitting section
+    # it" — grep that file for KEEP THIS HEADING LITERAL, one hit. (This pointer cited lines
+    # 853-855; the text is at 1119. It was stale BEFORE this phase, not broken by it, and is
+    # re-pointed here by plan 02.1-15 in the same pass as the four this phase did break.)
+    # Until that guard existed nothing detected a break. Renumbering (a section 3b, splitting section
     # 4) moves the `6.` and the anchor fails on the branch that prints a tick.
     SUMMARY=$(echo "$CONSUMERS_OUT" | sed -n '/^📊 6\. Summary/,$p' \
               | grep -E 'MA version|albums matched in MA|albums matched in Jellyfin|FAILURES total')
@@ -686,8 +690,13 @@ elif [ "$TRANSCODE_RC" -eq 124 ]; then
     EXIT_CODE=1
 elif [ "$TRANSCODE_RC" -eq 0 ]; then
     # WR-09, the same defect as both blocks above, and this is the THIRD fold-in to carry the
-    # guard. check-jellyfin-transcode.sh:588 says "KEEP THIS HEADING LITERAL AND NEVER RENUMBER
-    # IT SILENTLY" — a documented coupling with no detector is a coupling that will break, and it
+    # guard. check-jellyfin-transcode.sh says "KEEP THIS HEADING LITERAL AND NEVER RENUMBER
+    # IT SILENTLY" — grep that file for KEEP THIS HEADING LITERAL, one hit. (This pointer cited
+    # line 588 and was correct at 780ada8; plan 02.1-11 added ~157 lines above that heading and
+    # moved it to 745, and nothing updated the pointer. Cited by anchor now — plan 02.1-15,
+    # WR-09. The irony of a stale line number inside the comment that argues stale couplings
+    # break silently is the reason every pointer in these three files is now an anchor.)
+    # A documented coupling with no detector is a coupling that will break, and it
     # breaks on the branch that still prints a tick. PROVEN REACHABLE, not assumed: plan 02.1-10
     # renumbered that heading on purpose (VALIDATION row 24), confirmed this branch printed and
     # the exit was 1, then restored it and re-verified by sha256.

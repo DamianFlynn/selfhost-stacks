@@ -352,8 +352,14 @@ fi
 info "ZFS_ROUTE=$ZFS_ROUTE"
 
 # JELLYFIN ADDRESSING - three wrong ways and one right way, all measured 2026-08-31 and recorded
-# in check-music-consumers.sh:140-149. Repeated here because the next reader will be reading THIS
+# in check-music-consumers.sh (see its own "JELLYFIN ADDRESSING" block; grep for that string,
+# it appears exactly once there). Repeated here because the next reader will be reading THIS
 # file, and the wrong answers are each plausible:
+#   [This pointer used to cite lines 140-149. The block had moved to 149-158 — plan 02.1-12 added
+#    nine lines to that file's header and nothing updated the pointer. Cited by anchor now:
+#    anchors survive insertions, line numbers do not, and this is the second time in one phase
+#    that a line number here has gone stale. Same treatment applied to every cross-file pointer
+#    in this file and in quick-health-check.sh by plan 02.1-15, WR-09.]
 #   WRONG - the literal 192.168.90.31 that earlier plans pinned. Jellyfin is 192.168.90.25 today
 #           and docker IPAM can move it again. Never pin the literal.
 #   WRONG - the bare name `jellyfin` from LXC 100. resolv.conf carries `search deercrest.info`,
@@ -379,7 +385,9 @@ if [[ $DOCKER_OK -eq 1 ]]; then
   fi
 fi
 
-# The credential route. Copied from check-music-consumers.sh:500-513, with the wording corrected
+# The credential route. Copied from check-music-consumers.sh (grep for
+# "WR-13: THE PERMISSION ASSERTION IS A GATE, NOT A REMARK" — one hit, and the two credential
+# blocks it governs follow it), with the wording corrected
 # per the plan-02 review finding: this script runs as ROOT and root can read anything, so
 # "unreadable" describes a condition that cannot occur here. The refusal fires on the file being
 # ABSENT, or on its mode/owner not being exactly `600 root`. Making the path env-overridable does
@@ -595,7 +603,9 @@ echo ""
 echo "⚙️  5. The encoding values (TRAN-04, D-20, D-21, D-30) — five ASSERTED, two REPORTED"
 rule
 # The key reaches curl through a PROCESS SUBSTITUTION, never through argv, so it cannot appear in
-# `ps`. Same treatment as check-music-consumers.sh:418-427. Nothing in this section prints the
+# `ps`. Same treatment as ma_api in check-music-consumers.sh (grep for
+# "the bearer JWT is NOT passed as" — one hit; that comment is the canonical explanation of the
+# mechanism and its own jf_api defers to it). Nothing in this section prints the
 # key, and shell tracing is never enabled here.
 jf_api() {
   local path="$1"; shift
