@@ -469,7 +469,7 @@ that four independent lines of evidence already agree on.
 
 **Wave 3** *(blocked on Wave 2)*
 
-- [ ] 03-04-PLAN.md — Throwaway beets 2.13.1 spike container, spike config with `musicbrainz` explicit, both plugins proven loaded, Music unreachable (wave 3)
+- [x] 03-04-PLAN.md — Throwaway beets 2.13.1 spike container, spike config with `musicbrainz` explicit, both plugins proven loaded, Music unreachable (wave 3)
 - [ ] 03-08-PLAN.md — Criterion 3: wrtag at v0.20.0 / v0.33.0 / v0.34.0 on single-disc and multi-disc, with the corrected pin-inversion proof (wave 3)
 
 **Wave 4** *(blocked on Wave 3)*
@@ -726,7 +726,7 @@ Phase 7. Plans within a phase run sequentially.
 | 1. Safety Harness and Freeze the Writers | 9/9 | Complete | 2026-08-18 |
 | 2. NFS Export and Music Assistant Reachability | 9/9 | Complete    | 2026-09-01 |
 | 02.1. Jellyfin Transcode Retention *(inserted)* | 15/15 | Complete   | 2026-09-03 |
-| 3. Tagger Spike | 3/11 | In Progress|  |
+| 3. Tagger Spike | 4/11 | In Progress|  |
 | 4. Collapse to One Tagger | 0/TBD | Not started | - |
 | 5. Inbox Structure and the Junk Gate | 0/TBD | Not started | - |
 | 6. Tagger Configuration and Dry Run | 0/TBD | Not started | - |
