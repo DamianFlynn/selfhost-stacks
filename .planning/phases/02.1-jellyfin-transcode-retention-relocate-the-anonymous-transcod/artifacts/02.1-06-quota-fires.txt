@@ -1,0 +1,381 @@
+================================================================================
+02.1-06 TASK 3 -- THE QUOTA REFUSES A WRITE
+VALIDATION.md row 11 (a **fires** row) as revised 2026-09-02
+================================================================================
+
+--------------------------------------------------------------------------------
+VERDICT, UP FRONT
+--------------------------------------------------------------------------------
+
+  THE BOUND FIRES.  A write past the quota was REFUSED, on the FIRST of ten
+  attempts, and `/` moved by EXACTLY ZERO BYTES while 1 GB of ballast was written.
+  That is TRAN-03's substance and it is proven.
+
+  THE ERRNO IS NOT THE ONE THE PLAN EXPECTED, AND THE PLAN'S EXPECTATION IS THE
+  THING THAT IS WRONG.  Row 11 requires the ENOSPC phrase (errno 28, the one
+  glibc renders for a full filesystem) to be PRESENT and "Disk quota exceeded"
+  (EDQUOT, errno 122) to be ABSENT.  Measured: 0 and 2 respectively -- exactly
+  inverted, on every attempt.
+
+  A NOTE ON HOW THE ENOSPC PHRASE IS WRITTEN THROUGHOUT THIS FILE, BECAUSE IT
+  MATTERS MORE HERE THAN ANYWHERE ELSE IN THE PHASE.  It is referred to by NAME
+  ("the ENOSPC phrase", "errno 28") and is deliberately NEVER SPELLED OUT, so that
+  `grep -q` for the literal over this artifact returns ZERO -- which is the honest
+  answer, because it was never observed.  Writing it out in an explanatory sentence
+  would SATISFY this plan's own verify clause and record a firing that did not
+  happen.  That is the 02.1-01 `df` / 02.1-05 credential-screen bug pointed the
+  other way: there, correct prose FAILED a check it should have passed; here,
+  correct prose would PASS a check it must fail.  Do not helpfully write it out.
+
+  THE PLAN TELLS ME TO STOP AND REPORT ON THAT, ON THE STATED GROUND THAT "refquota
+  is in force rather than quota and plan 02.1-03's property is wrong".  THAT GROUND
+  WAS TESTED AND IS FALSE:  refquota reads 0/default, quota reads 53687091200/local,
+  and no ancestor dataset carries either.  02.1-03 set the correct property.  What
+  is wrong is the RESEARCH'S ERRNO MAPPING, and therefore row 11's assertion and the
+  plan's own `<verify>` command, both of which now fail on a correct outcome.
+
+  CONSEQUENCES, STATED SO THEY ARE ACTED ON RATHER THAN NOTICED:
+
+  1. **This plan's task-3 `<verify>` block CANNOT PASS and was not made to pass.**
+     It opens with a `grep -q` for the ENOSPC phrase AND a `! grep -q` for
+     'Disk quota exceeded'.  Both clauses fail: the first because the phrase
+     genuinely never appeared, the second because EDQUOT genuinely did.  Inserting the ENOSPC string into this artifact to satisfy it
+     would be fabricating evidence in the one phase whose entire premise is that
+     a proof which cannot fail is worse than no proof.  It is left failing, and
+     flagged here, for 02.1-10 and /gsd-verify-work.
+
+  2. **VALIDATION.md row 11 needs its errno pair swapped** before 02.1-10 verifies
+     against it.  This is the same class of defect as row 15, which 02.1-05 found
+     and recorded rather than edited: correcting a VALIDATION row is a planning
+     change, not an execution one.
+
+  3. **THE REAL RISK THE PLAN WAS TRYING TO NAME EXISTS, AND IS WORSE THAN
+     DESCRIBED.**  The plan's reasoning was "pick `quota` so refusals match the
+     estate's ENOSPC-keyed log greps".  Both properties return EDQUOT, so no
+     choice of property produces a match.  Any monitoring or grep in this estate
+     keyed on the ENOSPC phrase is BLIND to a transcode-quota refusal.
+     Switching to refquota would not fix it; adding the EDQUOT string to those
+     greps would.  That is a follow-up item, not something this plan may do.
+
+  4. The 764 zero-byte files from the original incident are still consistent with
+     ENOSPC -- that was a genuinely FULL FILESYSTEM (`/`), which is a different
+     code path from a dataset quota.  Both strings are needed, for different
+     failures.
+
+
+started : 2026-09-03T00:02:10Z
+script  : run on the WORKSTATION under 'set -Eeuo pipefail', so that a failed
+          ssh to either host is caught HERE and cannot leave fast/transcode at quota=1G.
+dataset : fast/transcode   (zfs delegated to atlantis; LXC 100 is unprivileged)
+
+  WHAT IS BEING BOUGHT, STATED FIRST BECAUSE IT IS COUNTER-INTUITIVE. The
+  property this phase is buying is NOT that playback survives a full transcode
+  dataset -- it will not, and that is by design. It is that `/` DOES NOT MOVE.
+  The failure is scoped to one stream: ffmpeg's muxer errors, the job dies, the
+  client's next segment request errors rather than hanging, and KillTranscodingJob
+  removes the dead job's files once the 60 s HLS kill timer expires. The estate
+  stays up. That is the whole trade.
+
+================================================================================
+1. PRECONDITIONS -- BOTH ASSERTED BEFORE ANYTHING IS WRITTEN
+================================================================================
+
+  1a. NO PLAYBACK SESSION IS ACTIVE.
+      GET /Sessions, count with NowPlayingItem != null : 0
+      ffmpeg processes on LXC 100                      : 0
+      pgrep -af listing                                : <none>
+
+      A NOTE ON THAT PATTERN, because the first form of this check was wrong.
+      `pgrep -c -f 'jellyfin-ffmpeg/ffmpeg'` returned 1 on a demonstrably idle
+      host. `pgrep -af` showed the single match was the `bash -c` wrapper
+      running the check itself -- the pattern travels over ssh inside the remote
+      shell's own command line, so the check matched its own invocation. The
+      bracketed form '[j]ellyfin-...' matches a real ffmpeg and cannot match the
+      literal text of the command that looks for it. A precondition that reports
+      itself as a hit would have stopped this task on an empty host -- the same
+      family of bug as 02.1-01's prohibition notice tripping its own grep and
+      02.1-05's credential screen tripping on its own explanation.
+      Clear. The operator stopped viewing for the night at ~22:40Z, and this
+      plan's own two driven sessions were terminated via DELETE /Videos/
+      ActiveEncodings with 0 ffmpeg processes confirmed after each.
+
+  1b. IO PRESSURE IS LOW, READ FROM ATLANTIS.
+      cat /proc/pressure/io on atlantis:
+        some avg10=0.10 avg60=0.52 avg300=1.04 total=3572365414
+        full avg10=0.10 avg60=0.49 avg300=0.96 total=2662662213
+      full avg10 = 0.10   threshold = 50
+      Below threshold, so this proceeds.
+
+      WHY THIS PRECONDITION EXISTS AND WHY IT IS BORROWED RATHER THAN INVENTED:
+      scripts/disable-jellyfin-hwaccel.sh already reads /proc/pressure/io on the
+      Proxmox host before doing anything expensive, for the same reason. This
+      estate wedged WHOLE-ESTATE on 2026-08-31 with a ~6 h outage, diagnosed by
+      /proc/pressure/io full at ~96% against an IDLE CPU. The reviewed version of
+      this plan did not reuse the idiom despite it sitting in the same repo.
+
+================================================================================
+2. STARTING STATE, AND THE RESTORE TARGET VERIFIED RATHER THAN REMEMBERED
+================================================================================
+  zfs get -Hp -o value quota,used,available fast/transcode  =>  53687091200 122880 53686968320 
+  df -B1 --output=avail /  on LXC 100            =>  35560214528
+
+  ASSERT quota == 53687091200 before anything is touched : PASS
+  The restore target is now verified rather than remembered, which is the
+  difference between a cleanup handler and a hope.
+
+================================================================================
+3. THE CLEANUP MECHANISM -- INSTALLED AFTER THE PRECONDITIONS, BEFORE THE
+   FIRST MUTATION
+================================================================================
+  The handler, verbatim from this script:
+
+    set -Eeuo pipefail
+    _cleaned=0
+    cleanup() {
+      local rc=$?
+      if [[ $_cleaned -eq 1 ]]; then return 0; fi   # IDEMPOTENT: EXIT fires after ERR
+      _cleaned=1; trap - ERR
+      set +e                                        # NON-ABORTING: attempt every step
+      local fails=0
+      lxc 'rm -f .../.quota-ballast .../.quota-probe' || fails=$((fails+1))   # (2) files FIRST
+      atl 'zfs set quota=50G fast/transcode'                    || fails=$((fails+1))   # (1) then quota
+      sleep 5
+      q=$(atl 'zfs get -Hp -o value quota fast/transcode')      # SELF-VERIFYING: re-read INSIDE
+      [[ "$q" == 53687091200 ]] || { loud banner naming the dataset and the exact
+                                        command to run by hand; fails++ }
+      [[ $fails -gt 0 ]] && exit 1
+    }
+    trap cleanup EXIT ERR INT TERM
+
+  Three properties, each of which is a way this pattern usually fails:
+    IDEMPOTENT     -- a _cleaned guard, because EXIT fires after ERR and the
+                      handler is therefore entered TWICE on any failure path.
+    NON-ABORTING   -- set +e inside, failures collected rather than short-
+                      circuited. A cleanup handler that stops at its own first
+                      error is the failure mode it exists to prevent.
+    SELF-VERIFYING -- the quota is re-read INSIDE the handler and required to
+                      equal the literal 53687091200, with a loud banner and a
+                      non-zero exit otherwise. A silently failed restore is far
+                      worse than a noisy one.
+
+  ORDERING MATTERS: the ballast and probe are removed BEFORE the quota is
+  re-set. The reverse order would briefly leave 1 GB of junk inside a 50 G
+  bound, which is harmless, but removing them first means a partial failure
+  leaves the dataset small-and-clean rather than large-and-dirty.
+
+  THE JELLYFIN DEBUG LOG LEVEL RAISED IN TASK 1 HAS ITS OWN TRAP, IN ITS OWN
+  SCRIPT, HELD TO THESE SAME THREE PROPERTIES. Its error path was exercised for
+  real -- see the run-1 section of 02.1-06-transcode-proof.txt.
+
+================================================================================
+4. THE METHOD -- A TEMPORARY QUOTA SHRINK, NOT A 49.5 GB BALLAST
+================================================================================
+
+  D-13 fixes the 50 G VALUE, not the proof METHOD, so this substitution is
+  planner discretion and is recorded as such under D-31. It exercises the
+  IDENTICAL dsl_dir.c enforcement path and returns the IDENTICAL errno at
+  roughly 1/50th of the IO, in seconds rather than minutes. The reviewed
+  version's 49.5 GB ballast really does allocate 49.5 GB, because this dataset
+  carries compression=off -- on a host with a documented whole-estate IO wedge.
+
+  $ ssh root@172.16.1.158 'zfs set quota=1G fast/transcode'
+  zfs get -Hp -o value quota,used,available fast/transcode => 1073741824 122880 1073618944 
+
+  BALLAST, WITH A SYNCED WRITE:
+  $ dd if=/dev/zero of=/mnt/fast/transcode/.quota-ballast bs=1M count=1024 conv=fsync
+      1024+0 records in
+      1024+0 records out
+      1073741824 bytes (1.1 GB, 1.0 GiB) copied, 2.64486 s, 406 MB/s
+      EXIT=0
+
+  conv=fsync is not decoration. This dataset carries sync=disabled, so without
+  it the writes sit in the page cache and the quota -- which is enforced when
+  blocks are actually accounted -- may never be reached at all. It is expected
+  that this dd either completes or itself fails partway with ENOSPC; whichever
+  happened is recorded above with its exit status and stderr.
+
+================================================================================
+5. THE BOUNDED RETRY LOOP -- BECAUSE ZFS QUOTA ENFORCEMENT IS ASYNCHRONOUS
+================================================================================
+
+  Enforcement 'may be delayed by several seconds', so a single small write
+  immediately after the ballast is the write MOST likely to slip through the
+  window and produce a false negative. Up to 10 attempts, 2 s apart. EVERY
+  attempt is recorded, not only the one that succeeded in failing -- the number
+  of attempts it takes IS the measurement of how asynchronous enforcement is on
+  this pool.
+
+  --- attempt 1 of 10 at 2026-09-03T00:02:16Z ---
+  $ dd if=/dev/zero of=/mnt/fast/transcode/.quota-probe bs=1M count=8 conv=fsync
+      dd: failed to open '/mnt/fast/transcode/.quota-probe': Disk quota exceeded
+      EXIT=1
+      ^^^ THE WRITE WAS REFUSED on attempt 1. errno form: EDQUOT (Disk quota exceeded)
+
+  ATTEMPTS REQUIRED : 1  -- this is the measured asynchrony of quota
+  enforcement on this pool, and it is the reason the loop exists.
+
+================================================================================
+6. THE ASSERTIONS
+================================================================================
+
+  6a. THE ERRNO -- AND THE PLAN'S STOP CONDITION FIRED HERE.
+      ENOSPC phrase (errno 28) occurrences in this transcript          : 0
+      'Disk quota exceeded'     (EDQUOT) occurrences in this transcript : 2
+      errno form observed at the refusal : EDQUOT (Disk quota exceeded)
+
+      ################################################################################
+      # FINDING -- THE ERRNO IS EDQUOT, NOT ENOSPC, AND THE PLAN HAS IT INVERTED.
+      ################################################################################
+
+      VALIDATION.md row 11 requires ENOSPC PRESENT and EDQUOT ABSENT. The measured
+      result is the exact opposite, on every one of the attempts above.
+
+      THE PLAN'S STATED INFERENCE FROM THIS IS FALSE, AND IT WAS TESTED RATHER
+      THAN ACCEPTED. The plan says: 'If the EDQUOT form appears, refquota is in
+      force rather than quota and plan 02.1-03's property is wrong.' Measured on
+      atlantis, at the moment of the refusal:
+
+          quota	1073741824	local
+          refquota	0	default
+          reservation	0	default
+          refreservation	0	default
+
+          ...and no ancestor carries one either:
+          fast	quota	0	default
+          fast	refquota	0	default
+          fast/appdata	quota	0	default
+          fast/appdata	refquota	0	default
+
+      refquota is 0 / default -- IT IS NOT SET. quota is 53687091200 / local. The
+      property in force is the one 02.1-03 chose, and it is the RIGHT one.
+      02.1-03'S PROPERTY IS NOT WRONG. What is wrong is the ERRNO MAPPING the
+      research recorded, and therefore the rationale for the choice.
+
+      ON THIS BUILD -- zfs-2.4.3-pve1 -- a dataset `quota`
+      refusal surfaces as EDQUOT. OpenZFS returns EDQUOT from the dataset-quota
+      path; ENOSPC is what a genuinely FULL POOL returns. The pool here is 22%
+      allocated, so ENOSPC was never going to appear.
+
+      WHY THIS MATTERS, AND IT IS THE SAME RISK THE PLAN WAS TRYING TO NAME:
+      the estate's incident signature and its log greps key on 'No space left on
+      device'. A transcode-quota refusal WILL NOT MATCH THEM. The blindness the
+      plan feared is REAL -- it just does not come from having picked the wrong
+      property, it comes from both properties returning the same errno and the
+      research believing they differ. Switching to refquota would not fix it.
+
+      ROW 11 IS THEREFORE **NOT MARKED PASSED AS WRITTEN**. What IS proven, and
+      is the substance of TRAN-03, is recorded in 6b: the bound REFUSED the write,
+      deterministically and on the first attempt, and `/` did not move.
+
+  6b. THE BOUND FIRED, AND **`/` DID NOT MOVE.** This is the property the
+      phase is actually buying, and it is unaffected by the errno finding.
+      df -B1 --output=avail /  before the ballast : 35560214528
+      df -B1 --output=avail /  at the refusal     : 35560214528
+      difference                                  : 0 bytes
+                                                  = 0.00 MiB
+      1 GB of ballast was written and / moved by the figure above. Small
+      movement from unrelated container activity is expected on a host running
+      103 containers; the assertion is that it did not fall by anything
+      resembling the ballast size. It did not.
+
+  6c. `used` AT THE MOMENT OF REFUSAL, AS AN OBSERVATION WITH ITS TOLERANCE.
+      zfs get -Hp -o value used fast/transcode => 1073889280   (quota was 1073741824)
+      NO EXACT 'used <= quota' ASSERTION IS MADE. Enforcement is not synchronous
+      and a small overshoot is expected behaviour, not a defect. Recorded as an
+      observation precisely so nobody later turns it into a failing assertion.
+
+  finished the measurement phase at 2026-09-03T00:02:17Z -- the trap now runs.
+
+  cleanup fired on : normal exit
+  re-read INSIDE the handler: zfs get -Hp -o value quota fast/transcode => 53687091200
+  ASSERT quota == 53687091200 (inside the trap) : PASS
+  ballast/probe files remaining after cleanup : 0  (target 0)
+  cleanup restore failures : 0
+
+================================================================================
+7. THE SECOND ASSERTION, ON THE NORMAL PATH, AFTER cleanup HAS RUN
+================================================================================
+
+  The trap asserted the quota INSIDE itself. This asserts it AGAIN from
+  outside, so the transcript carries the restoration as a POSITIVE STATEMENT
+  rather than as the mere absence of a complaint. Those are different claims.
+
+  zfs get -Hp -o value quota,used,available fast/transcode  =>  53687091200 131072 53686960128 
+  ASSERT quota == 53687091200 (outside the trap, normal path) : PASS
+
+  ZFS FREES SPACE ASYNCHRONOUSLY and `zfs list` can lag a large delete by
+  ~20 s, so `used` is re-read rather than concluded from the first sample:
+  zfs get -Hp -o value used fast/transcode after a 20 s settle  =>  131072
+
+  test ! -e .quota-ballast && test ! -e .quota-probe :
+    files matching either name remaining : 0   (target 0)
+  /mnt/fast/transcode now holds : 1 file(s), 0 bytes
+    0  /mnt/fast/transcode/.jellyfin-transcode
+
+  `/` after the whole test : 35559886848
+
+================================================================================
+8. THE STANDING CHECK -- THE INDEPENDENT CONFIRMATION THE RESTORE LANDED
+================================================================================
+
+  Section 4 of the check asserts the quota independently of anything this
+  script measured, so the test must leave no residue it would report.
+
+    📏 4. The transcode quota and its mount (TRAN-03, D-12, D-13)
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      ✅ quota fast/transcode = 53687091200 bytes (50 G) via ssh:172.16.1.158 (VALIDATION row 9)
+      ✅ fast/transcode mounted=yes via ssh:172.16.1.158 (VALIDATION row 36, instrument 1)
+      ✅ /mnt/fast/transcode device id 47 differs from /mnt/fast's 64519 — separately mounted (VALIDATION row 36, instrument 2)
+      findmnt /mnt/fast/transcode: zfs fast/transcode   (reported, not asserted)
+      df size of /mnt/fast/transcode: 53687091200 bytes (50.00 GiB)   (REPORTED not asserted — A3, VALIDATION row 12)
+    
+    ⚙️  5. The encoding values, read back (TRAN-04, D-20, D-30) — REPORTED, not asserted
+    📊 6. Summary
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      / headroom:              35559886848 bytes (33.12 GiB)  (target ≥ 21474836480)
+      volume mounts:           0  (target 0)
+      transcode quota:         53687091200 bytes  (target 53687091200)
+      transcode mounted:       zfs=yes devid=47 parent=64519  (target yes, and devid ≠ parent)
+      encoding values:         REPORTED not asserted  (see section 5)
+      unreachable:             0  (could-not-look, counted apart from bound violations — VALIDATION row 38)
+      toolchain missing:       0
+      FAILURES total:          0
+    
+    ✅ Jellyfin transcode retention intact
+
+  check-jellyfin-transcode.sh exit status, DEFAULT mode (not --baseline) : 0
+
+================================================================================
+9. ONE SHORT DRIVEN PLAYBACK -- THE TRANSCRIPT ENDS ON A WORKING SYSTEM
+================================================================================
+
+  Not on the last failed write. The same forced-transcode client as task 1,
+  three segments and out.
+    before: /mnt/fast/transcode holds 1 file(s)
+    PlaySessionId : 300765a52f9347bfbf79598b4ff9f693
+    TranscodingUrl (redacted): /videos/50d5a4bb-05b6-9e52-beb2-a278b7fca4d1/master.m3u8?&DeviceId=gsd0216shortcheck&Media...
+      segment 0 -> HTTP 200
+      segment 1 -> HTTP 200
+      segment 2 -> HTTP 200
+    during: new .mp4 in /mnt/fast/transcode within 2 minutes : 5
+    DELETE /Videos/ActiveEncodings -> HTTP 204
+    after : /mnt/fast/transcode holds 1 file(s), 0 bytes
+    jellyfin: running healthy
+    VERDICT: normal transcoding resumed after the quota test
+
+  finished at 2026-09-03T00:02:59Z
+
+================================================================================
+SUMMARY
+================================================================================
+  quota shrunk to 1G, 1 GB ballast written with conv=fsync
+  write refused on retry attempt           : 1 of 10 (enforcement was SYNCHRONOUS)
+  errno form at the refusal                : EDQUOT (Disk quota exceeded)
+  row 11 as written (ENOSPC present, EDQUOT absent) : **FAILS -- INVERTED**
+  refquota on the dataset                  : 0 / default (NOT in force)
+  quota on the dataset                     : 53687091200 / local (in force)
+  / moved by                               : 0 bytes across a 1 GB ballast
+  cleanup fired on                         : normal exit
+  quota restored and asserted twice         : 53687091200
+  ballast/probe files remaining            : 0
+  standing check, default mode, exit       : 0
