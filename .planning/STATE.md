@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-03T00:30:00.000Z"
-last_activity: 2026-09-03 — 02.1-07 complete (THE SILENT REVERT IS DISARMED — `enable` now
-  preserves and re-verifies the five retention values across the whole-file .bak restore, and the
-  verification was proven able to FAIL twice by two real fault-injection paths)
+last_updated: "2026-09-03T01:15:00.000Z"
+last_activity: 2026-09-03 — 02.1-08 complete (THE POLICY HOLES ARE CLOSED — a jellyfin/jellyfin
+  rule blocks unattended minor automerge while preserving patch, and check-renovate.sh's 148
+  never-executed lines ran for the first time, exit 0, clean)
 progress:
   total_phases: 10
   completed_phases: 2
   total_plans: 39
-  completed_plans: 26
+  completed_plans: 27
   percent: 20
 ---
 
@@ -31,8 +31,106 @@ pipeline that someone owns.
 ## Current Position
 
 Phase: 02.1 (jellyfin-transcode-retention-relocate-the-anonymous-transcod) — EXECUTING
-Plan: 8 of 10
-Status: EXECUTING — **02.1-07 COMPLETE. THE ONE-COMMAND SILENT REVERT OF THIS PHASE IS DISARMED,
+Plan: 9 of 10
+Status: EXECUTING — **02.1-08 COMPLETE. THE TWO POLICY HOLES ARE CLOSED, AND THE SCRIPT THAT WAS
+SUPPOSED TO BE WATCHING RENOVATE HAS EXECUTED FOR THE FIRST TIME IN ITS LIFE.** `renovate.json5` had
+**no** `jellyfin/jellyfin` rule of any kind: Jellyfin fell through `packageRules[2]` (auto-merge
+minor, `platformAutomerge`, at any time), and since Jellyfin has been on 10.x since 2019 its *de
+facto* majors — 10.9 segment deletion, 10.10 lyric saving, 10.11 encoding — all presented as **minor**
+and merged unattended, while `[5]` catches only major, which for Jellyfin means never. One rule now
+sits at **index 38**, after `[2]` at index 2 so it wins on `automerge`: `automerge: false` on minor
+**and** major, **patch deliberately NOT matched** so patch automerge survives (D-23), no
+`allowedVersions` (D-24), no `platformAutomerge`. **The diff is purely additive — 19 insertions, 0
+deletions — and all 38 pre-existing rules plus the top-level keys are asserted identical BY PARSE,
+not by eye**; `packageRules[1]` still reads `automerge: true` / `["patch","digest"]`.
+
+**The rule's `description` states the threat ACCURATELY, which is a correction the review demanded.**
+The reviewed version implied an upgrade could revert the settings. **It cannot** — they live in
+`encoding.xml` under `/mnt/fast/appdata` and swapping the image does not touch appdata. The two real
+mechanisms are named instead: **semantic change across releases** (10.9 introduced
+`EnableSegmentDeletion` in the first place, so a value that still reads back correctly can stop
+meaning what it meant) and the estate's **documented Renovate deploy drift**, where a merged PR never
+reaches the host and `docker ps` disagrees with git.
+
+**`scripts/check-renovate.sh` line 22 tested a hard-coded `renovate.json` this repo does not have, so
+lines 26-173 had NEVER EXECUTED. They ran for the first time here: EXIT 0, CLEAN**, 151 lines,
+transcript committed. The review called this the phase's most likely stall; it was not. "Ran clean on
+first execution" is stated explicitly rather than left as an absence of failure notes. All **four**
+stale literals are gone — the plan named two (22 and 81); asserting rather than assuming found four
+(22, 23, 27, 81), two of them inside the very block being replaced. A guarded `VALIDATOR_ROUTE` was
+added because `grep -c renovate-config-validator` was **0**: the script called `check-renovate.sh`
+**had never validated the Renovate config at all.**
+
+**⚠ TWO THINGS THIS PLAN DID NOT PROVE, AND THEY ARE THE INTERESTING PART.** (1) **`renovate.json5`
+is UNVALIDATED.** `renovate-config-validator` is not installed, installing it is out of scope
+(T-021-SC), and `npx --yes` is prohibited by name. `node` parsed the file and asserted the rule's
+shape — which proves **syntax and shape, not semantic validity**. An unknown key, a misspelled option
+or a deprecated field would parse cleanly and **still silently stop the whole repo run**, because
+Renovate does not fail loudly. This is a real open gap. (2) **The rule has never been observed
+refusing to automerge anything.** There is **no `renovate/jellyfin-*` branch** among the 27 open ones,
+so this half is discharged **by construction, not by a firing observation** — and under CONS-04 that
+distinction is the whole point. The observation only becomes available when upstream next ships a
+Jellyfin minor and **cannot be manufactured**. TRAN-06 is ticked with both caveats attached in the
+traceability entry rather than hidden.
+
+**⚠ THE PLAN'S OWN CANDIDATE LIST MADE THE PLAN'S OWN ASSERTION UNSATISFIABLE — a shape worth
+remembering.** The acceptance criterion requires zero bare `renovate.json` in executable lines, but
+the detection loop the plan and RESEARCH.md specified verbatim (`for f in renovate.json5
+renovate.json …`) contains that literal as a legitimate candidate. It returned 2, not 0, and brace
+expansion does not help (`{` is a non-word char, so `\b` still matches). **Resolved by COMPOSING the
+names from basename × extension**, which is not a dodge of the assertion but what makes it honest: a
+hard-coded filename is the exact defect being repaired, and writing four more of them into the
+replacement reintroduces it in a new shape. Zero hard-coded config filenames now remain in executable
+code, and the reasoning is recorded in the file so nobody simplifies it back.
+
+**⚠ THREE LATENT `set -e` ABORTS ARE RECORDED AND DELIBERATELY NOT FIXED — and one of them is
+inverted.** Lines **115**, **138** and **157** each do `echo "$VAR" | grep -v '^$' | wc -l` inside a
+command substitution. When the variable is empty, `grep -v '^$'` matches nothing and exits 1 — a
+*successful* grep reporting "none" — and `pipefail` + `set -e` turn that into an abort. **Line 157
+therefore aborts when there are ZERO pending Renovate PRs, i.e. precisely when the estate is
+HEALTHY**, which also makes its `✅ No pending Renovate PRs` branch unreachable. Proven real, not
+theoretical, by running the construct in isolation both ways. They did not fire only because today's
+counts are 5 / 5 / 27. Remedy is `|| true` on each — three tokens — deferred under the plan's scope
+stop because none blocks completion. **If a future run of that script exits non-zero with a truncated
+transcript, look at 115/138/157 first and do NOT read it as a regression from 02.1-08.**
+
+**⚠ A NEW BRANCH ADDED WHILE REPAIRING NEVER-EXECUTED CODE WOULD HAVE BEEN THE SAME DEFECT ONE LEVEL
+UP.** The `VALIDATOR_ROUTE=local` branch is brand-new and this workstation takes the `unavailable`
+route, so the plan's criteria would have let it be committed unexecuted. Both sub-branches were driven
+with a four-line PATH stub — **nothing installed, no network call**, `command -v` cannot tell the
+difference: passing stub → exit 0 + green; **FAILING stub → exit 1 + red, aborting before the
+inventory** (`grep -c 'compose.yaml files'` over its output is 0); absent → exit 0 + yellow
+`UNVALIDATED`, no green tick anywhere. The failing route is the one that matters — a control that can
+only ever pass is uninformative. The stub also echoed back `called with: renovate.json5`, proving
+detection and validation share one variable rather than a second hard-coded name.
+
+**⚠ THE TOLERANCE PROBE WAS ITSELF PROVEN TO DISCRIMINATE.** Round 2's finding was that a trailing
+comma after the file's final `}` is invalid JSON5 and would fail a *working* parser, so both mutations
+went **inside** the new rule object: a `/* tolerance probe */` block comment as its first body line,
+and a trailing comma after its last key/value pair. The tolerant parse (`new Function("return
+("+src+")")()`) exited **0** against the mutated copy. But "exit 0" is unfalsifiable on its own, so the
+reviewed-fragile `JSON.parse` over a line-comment strip was run against the **same file** and **exit
+1**, throwing at the block comment — the tolerant parse passes because it tolerates the mutations, not
+because they are inert. The copy was deleted and `git status --porcelain` confirms it was never
+committed.
+
+**⚠ `origin/main` MOVED `2021d0f` → `5c13899` and `/mnt/fast/stacks` on LXC 100 is at `5c13899`.**
+D-26 asserted in both halves, because a matching SHA and a landed payload are different claims: the
+**host-side** copies were re-grepped after the pull (`jellyfin/jellyfin` → 1, `VALIDATOR_ROUTE` → 4,
+bare `renovate.json` in executable lines → 0). The credential screen ran with a **positive control**
+first (2 matches against known secret-shaped text), then over the full range: 1 match, and it is prose
+in `02.1-07-SUMMARY.md` describing that same control, not a credential. A key-shape sweep returned 0.
+
+**Regression checks after the pull: `check-jellyfin-transcode.sh` still `FAILURES total: 0`, exit 0**
+(`/` headroom 33.10 GiB, volume mounts 0, quota 53687091200, transcode `devid=47 parent=64519`), the
+**D-30 amdgpu mitigation unchanged** (`none` / `false`), and **`git diff 6242ad5..HEAD --name-only --
+stacks/ infra/` is EMPTY** — the Jellyfin image pin (`jellyfin/jellyfin:10.11.11`), the compose
+declaration and the clean `terraform plan` baseline are all untouched. **`packageRules[3]`, the wrtag
+`<0.30.0` pin, is unchanged**: the new rule's description *cites* it as the D-24 cautionary tale and
+explicitly calls it a misdiagnosis enforcing a broken state, neither modifying nor entrenching it.
+Removing it stays with Phase 4.
+
+Before that, **02.1-07 COMPLETE. THE ONE-COMMAND SILENT REVERT OF THIS PHASE IS DISARMED,
 AND THE DISARMING WAS PROVEN ABLE TO FAIL.** `scripts/disable-jellyfin-hwaccel.sh` is the estate's
 amdgpu recovery runbook for a fault that recurred 2026-08-31 and cost ~6 hours. Its `do_enable`
 restored the **whole** `encoding.xml` from the newest `.bak` — and the only `.bak` next to the live
