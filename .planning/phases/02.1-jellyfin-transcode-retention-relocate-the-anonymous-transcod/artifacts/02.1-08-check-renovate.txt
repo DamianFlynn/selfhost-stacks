@@ -1,0 +1,384 @@
+================================================================================
+02.1-08 — scripts/check-renovate.sh: FIRST REAL EXECUTION of 148 previously-dead
+          lines (D-25)
+================================================================================
+
+Captured   : 2026-09-03, workstation (darwin), repo root
+Script     : scripts/check-renovate.sh, running under `set -euo pipefail`
+Command    : bash scripts/check-renovate.sh
+EXIT CODE  : 0
+Output     : 151 lines
+
+WHY THIS FILE EXISTS
+--------------------
+Before this plan, line 22 tested for a hard-coded `renovate.json`. This repo has
+only `renovate.json5`. The script therefore `exit 1`d at line 22 on EVERY run and
+lines 26-173 had NEVER EXECUTED. This is the first time they have run.
+
+The plan budgeted for them breaking. 148 lines that have never run under
+`set -euo pipefail` were the phase's most likely stall, per the cross-AI review.
+
+RESULT: IT RAN CLEAN ON FIRST EXECUTION — exit 0, nothing aborted.
+
+That is stated here explicitly rather than left as an absence of failure notes,
+because the plan requires it to be: "ran clean on first execution" is a
+legitimate and interesting result, but only if someone says so. Zero failures
+were encountered, zero fixes were required to make it complete, and the whole
+transcript is reproduced verbatim below.
+
+FAILURES ENCOUNTERED AND FIXED
+------------------------------
+None. No construct aborted. No `|| true`, no `${x:-}` default and no `gh` auth
+was required to reach the end.
+
+                                *** BUT ***
+
+DEFERRED — THREE LATENT `set -e` ABORTS THAT DID NOT FIRE ONLY BECAUSE TODAY'S
+DATA HAPPENS TO BE NON-EMPTY
+------------------------------------------------------------------------------
+"It exited 0" and "it is correct" are different claims. Three constructs on the
+newly-live path are one empty result set away from aborting the script. They are
+recorded here by line number, with the remedy, rather than fixed — the plan's
+scope stop confines this task to what BLOCKS COMPLETION, and today none of them
+does. Scope growth is this project's documented failure mode; a deferred defect
+that is WRITTEN DOWN is a different thing from one discovered later.
+
+  Line 115  POSTGRES_COUNT=$(echo "$POSTGRES_INSTANCES" | grep -v '^$' | wc -l | tr -d ' ')
+  Line 138  REDIS_COUNT=$(echo "$REDIS_INSTANCES"       | grep -v '^$' | wc -l | tr -d ' ')
+  Line 157  RENOVATE_COUNT=$(echo "$RENOVATE_BRANCHES"  | grep -v '^$' | wc -l | tr -d ' ')
+
+  Construct : `grep -v '^$'` inside a `pipefail` pipeline in a command
+              substitution.
+  Mechanism : when the upstream variable is EMPTY, `echo ""` emits one blank
+              line, `grep -v '^$'` matches nothing and exits 1 — a SUCCESSFUL
+              grep reporting "none", not an error — and under `pipefail` the
+              whole substitution returns 1, which `set -e` turns into an abort.
+  Remedy    : append `|| true` to each of the three pipelines. Three tokens, no
+              behaviour change on the current path (`wc -l` still yields 0).
+
+  Proven real, not theoretical — the construct was run in isolation both ways:
+    $ bash -c 'set -euo pipefail; X="";  C=$(echo "$X" | grep -v "^$" | wc -l | tr -d " "); echo "reached: $C"'
+      -> exit 1, "reached:" never printed   (EMPTY  == aborts)
+    $ bash -c 'set -euo pipefail; X="a"; C=$(echo "$X" | grep -v "^$" | wc -l | tr -d " "); echo "reached: $C"'
+      -> exit 0, "reached: 1"               (NON-EMPTY == survives)
+
+  Today's values are why nothing fired: PostgreSQL 5, Redis/Valkey 5, pending
+  Renovate branches 27.
+
+  >> THE INVERSION WORTH NOTING ON LINE 157: it aborts when there are ZERO
+  >> pending Renovate PRs — i.e. the script fails precisely when the estate is
+  >> HEALTHY, and the `else` branch at line 182 that prints "✅ No pending
+  >> Renovate PRs" is unreachable for that reason. If a future run of this
+  >> script exits non-zero with a truncated transcript, look here FIRST and do
+  >> not read it as a regression from 02.1-08.
+
+  Lines 115 and 138 have the same inversion in milder form: they abort on an
+  estate with no PostgreSQL and no Redis.
+
+CHANGES MADE BY 02.1-08 (all above the previously-dead region)
+--------------------------------------------------------------
+  1. Config detection (was lines 21-27). The hard-coded `renovate.json` test is
+     replaced by a candidate search over basename x extension:
+       renovate.json5, renovate.json, .renovaterc.json5, .renovaterc.json
+     first match wins, and the message names the file ACTUALLY FOUND.
+
+     The candidates are COMPOSED (`for base in renovate .renovaterc; do for ext
+     in json5 json`) rather than written as four literals. That is deliberate and
+     is documented in the file: a hard-coded filename is the exact defect being
+     repaired, and writing four more of them into the list that replaces it would
+     reintroduce it in a new shape. It also makes the mechanical assertion
+     honest — `grep -v '^[[:space:]]*#' scripts/check-renovate.sh |
+     grep -cE '\brenovate\.json\b'` now returns 0 because there genuinely is no
+     hard-coded config filename left in executable code, not because one was
+     hidden. The composed loop was run in isolation and enumerates exactly the
+     four candidates, selecting `renovate.json5`.
+
+  2. The SECOND occurrence of the wrong filename, at old line 81, in
+     "PostgreSQL major version updates are DISABLED in renovate.json". It was
+     unreachable while line 22 was broken and became reachable the instant line
+     22 was fixed — fixing only line 22 would have MOVED the defect rather than
+     removed it. Now `$CONFIG_FILE`, and the transcript below shows it printing
+     "DISABLED in renovate.json5".
+
+     COUNT ASSERTED, NOT ASSUMED — and the plan's assumption was low. The plan
+     named "the two known occurrences, lines 22 and 81". There were FOUR
+     occurrences in executable lines: 22 (the test), 23 (the failure message),
+     27 (the success message) and 81. All four are gone; the count is now 0.
+
+  3. VALIDATOR_ROUTE. `grep -c renovate-config-validator scripts/check-renovate.sh`
+     was 0 — the script called "check-renovate.sh" had NEVER VALIDATED THE
+     RENOVATE CONFIG AT ALL. It counted compose files, listed images, grepped for
+     postgres/redis and listed branches. A guarded call now follows the estate's
+     optional-external-tool convention (ZFS_ROUTE in check-music-freeze.sh,
+     HA_ROUTE in check-music-consumers.sh).
+
+     `npx --yes renovate-config-validator` is deliberately NOT used and is
+     prohibited by name in the file's comments: it downloads and executes an
+     unverified registry package on every run of a health check.
+
+VALIDATOR ROUTE TAKEN ON THIS RUN: unavailable
+----------------------------------------------
+`command -v renovate-config-validator` -> not installed on this workstation.
+Nothing was installed; this plan installs no packages.
+
+The script printed the YELLOW line and EXITED 0:
+
+    ⚠️  renovate-config-validator not installed — renovate.json5 is UNVALIDATED, not valid.
+       Install with: npm install -g renovate   (then re-run)
+    Validator route: unavailable
+
+It did NOT print a green tick. "Could not look" and "it is valid" are different
+answers and do not share a verdict. So, stated plainly and without hedging:
+
+  >> renovate.json5 IS UNVALIDATED. The 02.1-08 change to it has NOT been passed
+  >> through renovate-config-validator, because the validator is not present and
+  >> installing it was out of scope. A config ERROR SILENTLY STOPS THE WHOLE REPO
+  >> RUN — Renovate does not fail loudly — so this is a real, open gap, not a
+  >> formality.
+  >>
+  >> What WAS done instead, and what it does and does not prove: renovate.json5
+  >> was parsed successfully as a JavaScript object literal by node v26.7.0, and
+  >> the new jellyfin/jellyfin rule was asserted structurally (exactly one rule,
+  >> automerge false, matches minor+major, does not match patch, no
+  >> allowedVersions, no platformAutomerge, index 38 > packageRules[2] at index
+  >> 2). That proves the file is SYNTACTICALLY well-formed JSON5 and that the
+  >> rule has the intended shape. It does NOT prove the config is SEMANTICALLY
+  >> valid to Renovate — an unknown key, a misspelled option or a deprecated
+  >> field would parse cleanly and still jam the pipeline. Only
+  >> renovate-config-validator can answer that, and it was not run.
+
+================================================================================
+VERBATIM TRANSCRIPT — bash scripts/check-renovate.sh — exit 0
+(ANSI colour escapes stripped for readability; no other alteration)
+================================================================================
+🔍 Renovate Configuration Validator
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ renovate.json5 found
+⚠️  renovate-config-validator not installed — renovate.json5 is UNVALIDATED, not valid.
+   Install with: npm install -g renovate   (then re-run)
+Validator route: unavailable
+
+📋 Checking compose.yaml coverage...
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Found 29 compose.yaml files:
+  stacks/selfhosted/agentic-os/compose.yaml
+  stacks/selfhosted/arrs/compose.yaml
+  stacks/selfhosted/automation/compose.yaml
+  stacks/selfhosted/books/compose.yaml
+  stacks/selfhosted/buzz/compose.yaml
+  stacks/selfhosted/code-server/compose.yaml
+  stacks/selfhosted/dawarich/compose.yaml
+  stacks/selfhosted/documents/compose.yaml
+  stacks/selfhosted/freshrss/compose.yaml
+  stacks/selfhosted/homarr/compose.yaml
+  stacks/selfhosted/immich/compose.yaml
+  stacks/selfhosted/karakeep/compose.yaml
+  stacks/selfhosted/keeper-sh/compose.yaml
+  stacks/selfhosted/mattermost/compose.yaml
+  stacks/selfhosted/mcp/compose.yaml
+  stacks/selfhosted/media/compose.yaml
+  stacks/selfhosted/minecraft/compose.yaml
+  stacks/selfhosted/monitoring/compose.yaml
+  stacks/selfhosted/music/compose.yaml
+  stacks/selfhosted/open-archiver/compose.yaml
+  stacks/selfhosted/openwebui/compose.yaml
+  stacks/selfhosted/podsync/compose.yaml
+  stacks/selfhosted/postiz/compose.yaml
+  stacks/selfhosted/rustdesk/compose.yaml
+  stacks/selfhosted/saas/compose.yaml
+  stacks/selfhosted/social/compose.yaml
+  stacks/selfhosted/teleport/compose.yaml
+  stacks/selfhosted/termix/compose.yaml
+  stacks/selfhosted/traefik/compose.yaml
+
+🐳 Checking Docker image declarations...
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Found 66 YAML files with Docker images
+
+🏷️  Extracting unique Docker images...
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Found 95 unique Docker images
+
+🐘 PostgreSQL instances...
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️  Found 5 PostgreSQL images:
+  image: docker.io/postgres:18 (used in 1 files)
+  image: ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0@sha256:41eacbe83eca995561fe43814fd4891e16e39632806253848efaf04d3c8a8b84 (used in 1 files)
+  image: postgres:17-alpine (used in 1 files)
+  image: postgres:18 (used in 12 files)
+  image: postgres:18-alpine (used in 11 files)
+
+⚠️  PostgreSQL major version updates are DISABLED in renovate.json5
+   Manual migration required: pg_dump → restore → test
+
+🔴 Redis/Valkey instances...
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Found 5 Redis/Valkey images:
+  image: docker.io/valkey/valkey:8-bookworm@sha256:fea8b3e67b15729d4bb70589eb03367bab9ad1ee89c876f54327fc7c6e618571 (used in 1 files)
+  image: redis/redis-stack:7.4.0-v8 (used in 1 files)
+  image: redis:7-alpine (used in 2 files)
+  image: redis:7.4-alpine (used in 4 files)
+  image: valkey/valkey:9-alpine (used in 1 files)
+
+🔄 Pending Renovate PRs...
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Found 27 pending Renovate PRs:
+
+  ✓  renovate/docker.io-pglombardo-pwpush-2.x
+      a657fa2 chore(deps): update docker.io/pglombardo/pwpush docker tag to v2.11.5
+  ✓  renovate/falconchristmas-fpp-10.x
+      470b32f chore(deps): update falconchristmas/fpp docker tag to v10
+  ✓  renovate/freikin-dawarich-1.x
+      f64d19b chore(deps): update freikin/dawarich docker tag to v1.14.2
+  ✓  renovate/ghcr.io-autobrr-autobrr-1.x
+      aa271c7 chore(deps): update ghcr.io/autobrr/autobrr docker tag to v1.85.0
+  ✓  renovate/ghcr.io-dispatcharr-dispatcharr-0.x
+      1824a60 chore(deps): update ghcr.io/dispatcharr/dispatcharr docker tag to v0.30.0
+  ✓  renovate/ghcr.io-gitroomhq-postiz-app-2.x
+      d58cd3f chore(deps): update ghcr.io/gitroomhq/postiz-app docker tag to v2.23.0
+  ✓  renovate/ghcr.io-homarr-labs-homarr-1.x
+      c6c9a04 chore(deps): update ghcr.io/homarr-labs/homarr docker tag to v1.76.2
+  ✓  renovate/ghcr.io-iongpt-boxarr-2.x
+      e696be6 chore(deps): update ghcr.io/iongpt/boxarr docker tag to v2.1.0
+  ✓  renovate/ghcr.io-jtdowney-tsbridge-0.x
+      e9d40f6 chore(deps): update ghcr.io/jtdowney/tsbridge docker tag to v0.15.1
+  ✓  renovate/ghcr.io-linuxserver-sabnzbd-5.x
+      ea9339e chore(deps): update ghcr.io/linuxserver/sabnzbd docker tag to v5.1.2
+  ✓  renovate/ghcr.io-mahcks-blockbusterr-1.x
+      658fce4 chore(deps): update ghcr.io/mahcks/blockbusterr docker tag to v1.5.2
+  ✓  renovate/ghcr.io-paperless-ngx-paperless-ngx-3.x
+      3217aa9 chore(deps): update ghcr.io/paperless-ngx/paperless-ngx docker tag to v3.1.2
+  ✓  renovate/ghcr.io-ridafkih-keeper-cron-2.x
+      dbe2902 chore(deps): update ghcr.io/ridafkih/keeper-cron docker tag to v2.23
+  ✓  renovate/ghcr.io-ridafkih-keeper-web-2.x
+      ddcc69d chore(deps): update ghcr.io/ridafkih/keeper-web docker tag to v2.23
+  ✓  renovate/ghcr.io-ridafkih-keeper-worker-2.x
+      f2323e9 chore(deps): update ghcr.io/ridafkih/keeper-worker docker tag to v2.23
+  ✓  renovate/gotenberg-gotenberg-8.x
+      a84efc6 chore(deps): update gotenberg/gotenberg docker tag to v8.36
+  ✓  renovate/grafana-monorepo
+      85db57f chore(deps): update grafana/grafana docker tag to v13.2.1
+  ✓  renovate/itzg-minecraft-bedrock-server-2026.x
+      05477de chore(deps): update itzg/minecraft-bedrock-server docker tag to v2026.8.2
+  ✓  renovate/logiclabshq-open-archiver-0.x
+      1f8e01a chore(deps): update logiclabshq/open-archiver docker tag to v0.6.0
+  ✓  renovate/lscr.io-linuxserver-code-server-4.x
+      4f110bc chore(deps): update lscr.io/linuxserver/code-server docker tag to v4.134.0
+  ✓  renovate/major-immich-monorepo
+      1a7f0a5 chore(deps): update immich monorepo to v3
+  ✓  renovate/nginx-1.x
+      45b3f07 chore(deps): update nginx docker tag to v1.31.4
+  ✓  renovate/ollama-ollama-0.x
+      626077c chore(deps): update ollama/ollama docker tag to v0.33.2
+  ✓  renovate/prom-prometheus-3.x
+      c975e86 chore(deps): update prom/prometheus docker tag to v3.14.0
+  ✓  renovate/public.ecr.aws-gravitational-teleport-distroless-18.x
+      94ae207 chore(deps): update public.ecr.aws/gravitational/teleport-distroless docker tag to v18.11.0
+  ✓  renovate/rommapp-romm-5.x
+      0a48384 chore(deps): update rommapp/romm docker tag to v5
+  ✓  renovate/traefik-3.x
+      f9d19b2 chore(deps): update traefik docker tag to v3.7.12
+
+📊 Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Compose files:      29
+  Files with images:  66
+  Unique images:      95
+  PostgreSQL:         5 instances
+  Redis/Valkey:       5 instances
+  Pending PRs:        27
+
+💡 Recommendations
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️  PostgreSQL Detected
+   - Major version updates are BLOCKED (requires manual migration)
+   - Before upgrading: Run pg_dump backups
+   - Test on non-critical stack first
+
+⚠️  Many Pending PRs
+   - Consider reviewing and merging safe updates
+   - Check RENOVATE-REVIEW.md for categorization
+
+✅ Validation Complete
+
+================================================================================
+END OF TRANSCRIPT — 151 lines, exit code 0
+================================================================================
+
+READING THE OUTPUT — three observations worth carrying
+-----------------------------------------------------
+* 27 PENDING RENOVATE BRANCHES. This is the estate's documented backlog problem
+  visible from the branch side. Note the script reads `origin/renovate/*`
+  BRANCHES, not the PR list and not Dependency Dashboard issue #3 — the real
+  backlog lives on the dashboard under "Pending Status Checks", so 27 is a floor,
+  not a total. Renovate looking idle is not evidence it is healthy.
+
+* NO `renovate/jellyfin-*` BRANCH EXISTS in that list of 27. There is no pending
+  Jellyfin update for the new rule to have acted on, in either direction. The
+  rule is therefore proven STRUCTURALLY (task 1's assertion) and by CONFIGURATION
+  — NOT by an observed PR that failed to automerge. Under CONS-04 that
+  distinction is the whole point: this is "the rule is present and correctly
+  shaped", not "the rule was seen to fire". The firing observation is only
+  available when upstream next ships a Jellyfin minor, and it cannot be
+  manufactured here.
+
+* `renovate/major-immich-monorepo` -> immich v3 is open and unmerged, which is
+  packageRules[9] doing its job. Unrelated to this plan; noted because it is the
+  closest thing in the transcript to the new rule's intended behaviour.
+
+MECHANICAL ASSERTIONS, RE-RUN AFTER THE EDIT
+--------------------------------------------
+  bash -n scripts/check-renovate.sh                                        -> exit 0
+  bash scripts/check-renovate.sh                                           -> exit 0
+  output contains literal "renovate.json5 found"                           -> yes
+  output reaches previously-dead code (compose-file count / image listing)  -> yes: "Found 29 compose.yaml files", "Found 95 unique Docker images"
+  grep -v '^[[:space:]]*#' ... | grep -cE '\brenovate\.json\b'             -> 0  (was 4)
+  grep -v '^[[:space:]]*#' ... | grep -c 'npx'                             -> 0
+  grep -c 'renovate-config-validator' scripts/check-renovate.sh            -> 5  (was 0)
+
+================================================================================
+ADDENDUM — THE VALIDATOR BRANCH IS NOT DEAD CODE, PROVEN ON ALL THREE ROUTES
+================================================================================
+
+The `unavailable` route above is the one this workstation takes, and it is the
+only route the plan's acceptance criteria require to be recorded. But that would
+have left the `local` route — brand-new code, added by this very task — COMMITTED
+AND NEVER EXECUTED. That is precisely the defect this task exists to repair, one
+level up: the whole reason lines 26-173 needed a transcript is that nobody had
+ever run them. Adding a fresh never-run branch while fixing a never-run region
+would be the same mistake in a new costume.
+
+So both `local` sub-branches were driven with a stub `renovate-config-validator`
+placed ahead of PATH. NOTHING WAS INSTALLED and no network call was made — the
+stub is a four-line shell script in a scratch directory, created, used and
+deleted. `command -v` cannot tell the difference, which is the point.
+
+  ROUTE                                   STUB EXIT   SCRIPT EXIT   VERDICT LINE
+  --------------------------------------  ---------   -----------   --------------------------------
+  A  validator present, config passes         0            0        green: "✅ renovate.json5 validates (renovate-config-validator)"
+  B  validator present, config FAILS          1            1        red:   "❌ renovate.json5 FAILED validation — a config error silently stops the WHOLE repo run"
+  C  validator absent (this workstation)      —            0        yellow:"⚠️  renovate-config-validator not installed — renovate.json5 is UNVALIDATED, not valid."
+
+Confirmed in the same runs:
+
+  * The validator is invoked with the DETECTED filename, not a hard-coded one —
+    the stub echoed back `called with: renovate.json5`. Detection and validation
+    are wired to the same variable.
+  * Route A prints `Validator route: local`; route C prints
+    `Validator route: unavailable`. The route is reported, not inferred.
+  * Route B ABORTS BEFORE the previously-dead region: `grep -c 'compose.yaml
+    files'` over its output is 0. A config error stops the check rather than
+    letting it print 140 lines of reassuring inventory underneath a failure.
+  * Route C prints NO green tick anywhere in the validation block, and route B
+    prints no green tick at all.
+
+A control that can only ever pass is uninformative. B is the one that matters:
+it is the only evidence that the failure path — the path that exists to catch a
+config error that would silently stop the entire repo run — actually fires and
+actually exits non-zero.
+
+STILL TRUE, AND NOT WEAKENED BY THE ABOVE: routes A and B were driven by a STUB.
+They prove the SCRIPT'S plumbing is correct. They prove nothing whatsoever about
+renovate.json5's semantic validity, which remains UNVALIDATED for the reason
+given earlier in this file.

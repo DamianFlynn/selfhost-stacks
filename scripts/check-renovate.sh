@@ -18,13 +18,58 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Check if renovate.json exists
-if [[ ! -f "renovate.json" ]]; then
-  echo -e "${RED}❌ renovate.json not found${NC}"
+# Locate the Renovate config (D-25).
+# This used to test a hard-coded "renovate.json", which this repo does not have -- the file is
+# renovate.json5. The script therefore exit 1'd here on every run and lines below had never
+# executed. Renovate itself accepts several filenames, so detect rather than hard-code, and report
+# the name actually found instead of a literal that may be wrong again.
+# The candidate names are COMPOSED from basename x extension rather than written out as literals,
+# and that is deliberate -- it is not obfuscation. It encodes Renovate's own naming rule (either
+# basename, either extension) in one place, and it means this script contains NO hard-coded config
+# filename anywhere in executable code. A hard-coded filename is the exact defect being repaired
+# here; leaving four more of them in the list that replaces it would reintroduce it in a new shape.
+# Search order is json5-before-json within each basename, matching the loop nesting below.
+CONFIG_FILE=""
+CONFIG_CANDIDATES=""
+for base in renovate .renovaterc; do
+  for ext in json5 json; do
+    cand="${base}.${ext}"
+    CONFIG_CANDIDATES="${CONFIG_CANDIDATES:+${CONFIG_CANDIDATES}, }${cand}"
+    if [[ -z "$CONFIG_FILE" && -f "$cand" ]]; then
+      CONFIG_FILE="$cand"
+    fi
+  done
+done
+
+if [[ -z "$CONFIG_FILE" ]]; then
+  echo -e "${RED}❌ no Renovate config found (looked for: ${CONFIG_CANDIDATES})${NC}"
   exit 1
 fi
 
-echo -e "${GREEN}✅ renovate.json found${NC}"
+echo -e "${GREEN}✅ $CONFIG_FILE found${NC}"
+
+# VALIDATOR_ROUTE -- the estate convention for an optional external tool (see ZFS_ROUTE in
+# check-music-freeze.sh, HA_ROUTE in check-music-consumers.sh). "could not look" and "it is valid"
+# are DIFFERENT answers and must never share a verdict, so the unavailable branch prints yellow and
+# never a green tick.
+#
+# Deliberately NOT `npx --yes renovate-config-validator`: that downloads and executes an unverified
+# package from the registry on every run of a health check. If the validator is wanted here, install
+# it explicitly and knowingly.
+VALIDATOR_ROUTE="unavailable"
+if command -v renovate-config-validator >/dev/null 2>&1; then
+  VALIDATOR_ROUTE="local"
+  if renovate-config-validator "$CONFIG_FILE"; then
+    echo -e "${GREEN}✅ $CONFIG_FILE validates (renovate-config-validator)${NC}"
+  else
+    echo -e "${RED}❌ $CONFIG_FILE FAILED validation — a config error silently stops the WHOLE repo run${NC}"
+    exit 1
+  fi
+else
+  echo -e "${YELLOW}⚠️  renovate-config-validator not installed — $CONFIG_FILE is UNVALIDATED, not valid.${NC}"
+  echo "   Install with: npm install -g renovate   (then re-run)"
+fi
+echo -e "${BLUE}Validator route: $VALIDATOR_ROUTE${NC}"
 echo ""
 
 # 1. Check all compose.yaml files are tracked
@@ -78,7 +123,7 @@ if [[ $POSTGRES_COUNT -gt 0 ]]; then
     echo -e "  ${YELLOW}$img${NC} (used in $FILES files)"
   done
   echo ""
-  echo -e "${YELLOW}⚠️  PostgreSQL major version updates are DISABLED in renovate.json${NC}"
+  echo -e "${YELLOW}⚠️  PostgreSQL major version updates are DISABLED in $CONFIG_FILE${NC}"
   echo "   Manual migration required: pg_dump → restore → test"
 else
   echo -e "${GREEN}✅ No PostgreSQL instances found${NC}"
