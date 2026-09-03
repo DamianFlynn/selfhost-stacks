@@ -1,0 +1,532 @@
+================================================================================
+02.1-07  TRAN-09 PROOF  --  `disable-jellyfin-hwaccel.sh enable` CANNOT SILENTLY
+                            REVERT PHASE 02.1's TRANSCODE RETENTION
+================================================================================
+
+Plan      : 02.1-07 (wave 7), phase 02.1
+Requirement: TRAN-09.  Contract row: VALIDATION.md row 35, a **fires** row.
+Decision  : D-29 (operator, plan-phase) puts this in scope.  D-26 governs delivery.
+Executed  : 2026-09-03, 00:18Z - 00:22Z, on LXC 100 (root@172.16.1.159) from
+            /mnt/fast/stacks, which is where this script's own header says it runs.
+
+WHAT WAS ARMED
+  `do_enable` restores the ENTIRE encoding.xml from the newest `.bak`, and the only
+  `.bak` next to the live config is `encoding.xml.bak.20260831T182741Z` - taken
+  BEFORE phase 02.1's settings existed (asserted in the BASELINE block below: count
+  1, that filename).  Running `enable` after this phase landed therefore reverted
+  TranscodingTempPath, EnableSegmentDeletion, SegmentKeepSeconds, EnableThrottling
+  and ThrottleDelaySeconds to their pre-phase values AND REPORTED SUCCESS, because
+  the IN-06 verification checked HardwareAccelerationType and nothing else.
+
+  This is the estate's amdgpu recovery runbook for a fault that recurred on
+  2026-08-31 and cost ~6 hours.  It is run mid-incident, under time pressure.
+  Whatever it does silently is what happens.
+
+WHY THIS IS A TRANSCRIPT AND NOT A CODE REVIEW
+  CONS-04: never "tool configured", always a real observation.  Reading the hardened
+  `do_enable` and agreeing it looks right does not discharge row 35.  Every claim
+  below is the recorded stdout/stderr and exit code of a command that was executed.
+
+THE FINDING THIS PROOF EXISTS TO ANSWER (cross-AI review, plan 04, HIGH)
+  The reviewed design's negative control - "perturb one retention value after a
+  restore, re-run the verification path, confirm non-zero" - is STRUCTURALLY UNABLE
+  TO FAIL.  The verification lives INSIDE do_enable, and do_enable RE-CAPTURES the
+  live values BEFORE restoring.  It would have captured the perturbed values,
+  carried them across faithfully, compared them against themselves, and PASSED -
+  producing a transcript that reads exactly like a discharged negative control.
+  Two real fault-injection paths replace it, and BOTH are exercised below.
+
+--------------------------------------------------------------------------------
+RESULTS AT A GLANCE  (every line below is asserted in the transcript that follows)
+--------------------------------------------------------------------------------
+
+  D-26 delivery, BEFORE any invocation on the host
+    workstation `git rev-parse origin/main` = 2021d0fb0c5644d607a401e5a780c19361bbaad5
+    LXC 100     `git rev-parse HEAD`        = 2021d0fb0c5644d607a401e5a780c19361bbaad5
+    SHA equality ................................................ ASSERTED, PASS
+    host grep -q 'verify-retention' ............................. PASS (12 hits)
+    host grep -q 'TRAN09_FAULT' ................................. PASS (5 hits)
+    (a matching SHA and a landed payload are DIFFERENT claims; both are asserted,
+     because a proof run against a stale copy emits a transcript that reads like
+     evidence -- T-021-84)
+
+  Disposable container
+    image nginx:1.31.3-alpine ................................... ALREADY RESIDENT
+    docker pull ................................................. NEVER RUN
+    capability probe `--rm --entrypoint sleep <image> 1` ......... exit 0
+    `docker inspect ... {{.State.Status}}` before first invocation  running @ 00:19:26Z
+    removed at end, enumerated with `docker ps -a`, no status filter  PASS
+
+  Positive proof, against /mnt/fast/spike-021/tran09/encoding.xml
+    step 1  check   ............................................. exit 0
+    step 2  disable ............................................. exit 0, .bak asserted directly
+    step 3  simulated phase write ............................... recorded verbatim
+    step 4  enable  ............................................. exit 0
+    TranscodingTempPath   after step 4 .......................... /cache/transcodes
+    EnableSegmentDeletion after step 4 .......................... true
+    SegmentKeepSeconds    after step 4 .......................... 300
+    EnableThrottling      after step 4 .......................... true
+    ThrottleDelaySeconds  after step 4 .......................... 180
+    HardwareAccelerationType after step 4 ....................... vaapi   <- the restore's
+    EnableHardwareEncoding   after step 4 ....................... true       actual job still works
+
+  Negative control 1 - standalone `verify-retention` (fault-injection path a)
+    perturbed (EnableSegmentDeletion true->false) ............... exit 1, field named,
+                                                                  expected='true' found='false'
+    restored .................................................... exit 0
+    read-only contract: .bak count unchanged (1), container untouched (running)
+
+  Negative control 2 - `TRAN09_FAULT=1 ... enable` (fault-injection path b)
+    exit code ................................................... 1
+    fields named with before AND after .......................... 4 of 5 MISMATCH
+                                                                  ThrottleDelaySeconds PASS
+                                                                  (180 either side - the
+                                                                  comparison is genuinely
+                                                                  per-field, not blanket)
+    loud test-hook warning printed .............................. yes, 4 lines
+    container NOT restarted onto the reverted config ............ asserted
+
+  The live config was never touched
+    sha256 BEFORE 8b6971ced02198e6fdfce124a7b6ef4fe4856511d9b08f7dbba3fff88ca4a759
+    sha256 AFTER  8b6971ced02198e6fdfce124a7b6ef4fe4856511d9b08f7dbba3fff88ca4a759  IDENTICAL
+    mtime  BEFORE/AFTER 2026-09-02 22:27:37.905303664 +0000 ...... IDENTICAL
+    .bak inventory BEFORE/AFTER: one entry, encoding.xml.bak.20260831T182741Z  IDENTICAL
+    `check-jellyfin-transcode.sh` default mode .................. FAILURES total: 0, exit 0
+    amdgpu mitigation (D-30) unchanged .......................... none / false
+
+  / budget
+    / avail BEFORE 35556917248   AFTER 35554336768   delta -2580480 bytes (-2.46 MiB)
+    ordinary churn.  Nothing in this plan writes to / beyond a container's writable
+    layer that was then removed.  No budget condition came close to firing.
+
+--------------------------------------------------------------------------------
+WHAT THIS PROOF DOES *NOT* CLAIM
+--------------------------------------------------------------------------------
+  - It does not claim the REST-API conversion was evaluated.  It is DEFERRED, with
+    the reason recorded in the script header: this runbook's value is that it works
+    when Jellyfin is DOWN, which is the condition an amdgpu incident creates, and
+    the REST route needs a running server.
+  - It does not claim anything about whether VAAPI should be on.  D-30 and T-021-56
+    put that out of scope; this plan changed HOW `enable` restores, never WHETHER.
+  - The disposable container is an nginx:1.31.3-alpine holding a `sleep`.  It proves
+    `docker restart` succeeds against a real container object.  It is NOT Jellyfin
+    and nothing here is a claim about Jellyfin's startup behaviour.
+
+================================================================================
+EXECUTED TRANSCRIPT
+(ANSI colour codes stripped for readability; content otherwise verbatim)
+================================================================================
+POSITIVE CONTROL FOR THE CREDENTIAL SCREEN
+  pattern: (api_?key|token|password|secret)[[:space:]]*[=:][[:space:]]*["']?[A-Za-z0-9]{16,}
+  against a file KNOWN to contain such a string -> matches: 1
+  against the push range git diff origin/main..HEAD  -> matches: 0
+
+D-26 DELIVERY
+-- 1. push (done above)
+-- 2. inline ssh git pull --ff-only at /mnt/fast/stacks on LXC 100
+From github.com:DamianFlynn/selfhost-stacks
+   8710116..2021d0f  main       -> origin/main
+ + 45acd4a...a657fa2 renovate/docker.io-pglombardo-pwpush-2.x -> origin/renovate/docker.io-pglombardo-pwpush-2.x  (forced update)
+ + 23a1684...f64d19b renovate/freikin-dawarich-1.x -> origin/renovate/freikin-dawarich-1.x  (forced update)
+ + 325a0bc...aa271c7 renovate/ghcr.io-autobrr-autobrr-1.x -> origin/renovate/ghcr.io-autobrr-autobrr-1.x  (forced update)
+ + 201515d...1824a60 renovate/ghcr.io-dispatcharr-dispatcharr-0.x -> origin/renovate/ghcr.io-dispatcharr-dispatcharr-0.x  (forced update)
+ + 7df2a90...d58cd3f renovate/ghcr.io-gitroomhq-postiz-app-2.x -> origin/renovate/ghcr.io-gitroomhq-postiz-app-2.x  (forced update)
+ + 547c1bd...c6c9a04 renovate/ghcr.io-homarr-labs-homarr-1.x -> origin/renovate/ghcr.io-homarr-labs-homarr-1.x  (forced update)
+ + b3f100b...e696be6 renovate/ghcr.io-iongpt-boxarr-2.x -> origin/renovate/ghcr.io-iongpt-boxarr-2.x  (forced update)
+ + 7e69fd6...658fce4 renovate/ghcr.io-mahcks-blockbusterr-1.x -> origin/renovate/ghcr.io-mahcks-blockbusterr-1.x  (forced update)
+ + 3ad5080...3217aa9 renovate/ghcr.io-paperless-ngx-paperless-ngx-3.x -> origin/renovate/ghcr.io-paperless-ngx-paperless-ngx-3.x  (forced update)
+ + 3f27626...a84efc6 renovate/gotenberg-gotenberg-8.x -> origin/renovate/gotenberg-gotenberg-8.x  (forced update)
+ + 0fc30c4...85db57f renovate/grafana-monorepo -> origin/renovate/grafana-monorepo  (forced update)
+ + 03eda3f...05477de renovate/itzg-minecraft-bedrock-server-2026.x -> origin/renovate/itzg-minecraft-bedrock-server-2026.x  (forced update)
+ + d61448b...c975e86 renovate/prom-prometheus-3.x -> origin/renovate/prom-prometheus-3.x  (forced update)
+ + 42bb35d...94ae207 renovate/public.ecr.aws-gravitational-teleport-distroless-18.x -> origin/renovate/public.ecr.aws-gravitational-teleport-distroless-18.x  (forced update)
+Updating 8710116..2021d0f
+Fast-forward
+ .planning/REQUIREMENTS.md                          |   16 +-
+ .planning/ROADMAP.md                               |    6 +-
+ .planning/STATE.md                                 |  222 +++-
+ .../02.1-05-SUMMARY.md                             |  304 +++++
+ .../02.1-06-SUMMARY.md                             |  347 +++++
+ .../artifacts/02.1-05-encoding-diff.txt            |  397 ++++++
+ .../artifacts/02.1-05-mounts.txt                   |  572 ++++++++
+ .../artifacts/02.1-06-quota-fires.txt              |  381 ++++++
+ .../artifacts/02.1-06-transcode-proof.txt          | 1374 ++++++++++++++++++++
+ .../artifacts/02.1-D32-watch.txt                   |  239 ++++
+ .../artifacts/encoding.after.json                  |   50 +
+ .../artifacts/encoding.before.json                 |    1 +
+ .../artifacts/encoding.readback.json               |    1 +
+ scripts/disable-jellyfin-hwaccel.sh                |  292 ++++-
+ 14 files changed, 4155 insertions(+), 47 deletions(-)
+ create mode 100644 .planning/phases/02.1-jellyfin-transcode-retention-relocate-the-anonymous-transcod/02.1-05-SUMMARY.md
+ create mode 100644 .planning/phases/02.1-jellyfin-transcode-retention-relocate-the-anonymous-transcod/02.1-06-SUMMARY.md
+ create mode 100644 .planning/phases/02.1-jellyfin-transcode-retention-relocate-the-anonymous-transcod/artifacts/02.1-05-encoding-diff.txt
+ create mode 100644 .planning/phases/02.1-jellyfin-transcode-retention-relocate-the-anonymous-transcod/artifacts/02.1-05-mounts.txt
+ create mode 100644 .planning/phases/02.1-jellyfin-transcode-retention-relocate-the-anonymous-transcod/artifacts/02.1-06-quota-fires.txt
+ create mode 100644 .planning/phases/02.1-jellyfin-transcode-retention-relocate-the-anonymous-transcod/artifacts/02.1-06-transcode-proof.txt
+ create mode 100644 .planning/phases/02.1-jellyfin-transcode-retention-relocate-the-anonymous-transcod/artifacts/encoding.after.json
+ create mode 100644 .planning/phases/02.1-jellyfin-transcode-retention-relocate-the-anonymous-transcod/artifacts/encoding.before.json
+ create mode 100644 .planning/phases/02.1-jellyfin-transcode-retention-relocate-the-anonymous-transcod/artifacts/encoding.readback.json
+   pull rc=0
+-- 3. SHA EQUALITY, ASSERTED (not inferred from the pull output)
+   workstation git rev-parse origin/main = 2021d0fb0c5644d607a401e5a780c19361bbaad5
+   LXC 100     git rev-parse HEAD        = 2021d0fb0c5644d607a401e5a780c19361bbaad5
+   ASSERT SHAs equal : PASS
+-- 4. PAYLOAD LANDED, ASSERTED (a matching SHA is not the same claim)
+   host grep -c verify-retention = 12
+   host grep -c TRAN09_FAULT     = 5
+   ASSERT verify-retention present on host : PASS
+   ASSERT TRAN09_FAULT present on host     : PASS
+
+BASELINE - TAKEN BEFORE ANYTHING IN THIS TASK RUNS
+  date (LXC 100, UTC) : 2026-09-03T00:18:46Z
+  live config         : /mnt/fast/appdata/media/jellyfin/config/encoding.xml
+  live sha256 BEFORE  : 8b6971ced02198e6fdfce124a7b6ef4fe4856511d9b08f7dbba3fff88ca4a759
+  live mtime BEFORE   : 2026-09-02 22:27:37.905303664 +0000
+  .bak inventory BEFORE:
+      /mnt/fast/appdata/media/jellyfin/config/encoding.xml.bak.20260831T182741Z
+  .bak count BEFORE   : 1
+  / avail bytes BEFORE: 35556917248
+  live five values    : /cache/transcodes|true|300|true|180
+
+DISPOSABLE CONTAINER - IMAGE CHOICE, RESIDENCY, AND CAPABILITY
+  D-31 constraint 2: this plan is deliberately ordered BEFORE the image reap in 02.1-09,
+  and 02.1-09 depends_on it, because the reap's candidate list is exactly where a generic
+  utility image would sit - alpine:3 and curlimages/curl:latest were rows 9 and 2 of
+  03-01's approved list. NOTHING IS PULLED HERE: / is the resource this whole phase is
+  protecting and a pull to run a sleep is not a defensible use of it.
+  chosen image        : nginx:1.31.3-alpine
+  docker image ls line: nginx:1.31.3-alpine  f0ba77f796e5  7 weeks ago  62.4MB
+  ASSERT image already resident (no pull) : PASS
+
+  CAPABILITY PROBE - the image must be proven able to hold a container open, not assumed.
+  (Round-2 finding: an ENTRYPOINT that ignores appended args, or a distroless image with
+   no shell and no sleep, exits immediately - and the proof then runs against nothing.)
+  probe form 1: docker run --rm --entrypoint sleep nginx:1.31.3-alpine 1        -> exit 0
+  ASSERT image can hold a container open : PASS (form 1, exit 0)
+
+CREATE THE DISPOSABLE CONTAINER AND THE THROWAWAY FIXTURE
+  docker run: -d --name jf-tran09-probe --restart=no --entrypoint sleep nginx:1.31.3-alpine 3600
+  (explicit --entrypoint; the image own ENTRYPOINT is never relied on)
+  inspect at 2026-09-03T00:19:26Z : State.Status = running
+  restart policy       : no
+  ASSERT container running BEFORE the first script invocation : PASS
+
+  fixture: /mnt/fast/spike-021/tran09/encoding.xml  (on /mnt/fast, NEVER /tmp - tmpfs on LXC 100)
+  built in the PRE-PHASE shape - vaapi/true, retention at Jellyfin defaults, and
+  NO TranscodingTempPath element at all. That shape IS the hazard: it is what the only
+  .bak next to the LIVE config (encoding.xml.bak.20260831T182741Z) contains.
+  element names were taken from the live config; the VALUES deliberately were not,
+  because 02.1-05 already wrote this phase five values into the live file.
+  ---- fixture contents ----
+  <?xml version="1.0" encoding="utf-8"?>
+  <EncodingOptions>
+    <EncodingThreadCount>-1</EncodingThreadCount>
+    <HardwareAccelerationType>vaapi</HardwareAccelerationType>
+    <EnableHardwareEncoding>true</EnableHardwareEncoding>
+    <EnableSegmentDeletion>false</EnableSegmentDeletion>
+    <SegmentKeepSeconds>720</SegmentKeepSeconds>
+    <EnableThrottling>false</EnableThrottling>
+    <ThrottleDelaySeconds>180</ThrottleDelaySeconds>
+  </EncodingOptions>
+  --------------------------
+
+==============================================================================
+THE POSITIVE PROOF - VALIDATION.md row 35, a FIRES row. EXECUTED, not read back.
+Every invocation carries BOTH overrides so the live config can never be reached.
+==============================================================================
+
+---- STEP 1: check  (read-only, records the pre-state) ----
+$ JELLYFIN_CONFIG=/mnt/fast/spike-021/tran09/encoding.xml JELLYFIN_CONTAINER=jf-tran09-probe bash scripts/disable-jellyfin-hwaccel.sh check
+  == Jellyfin hardware-acceleration state ==
+    encoding.xml      : /mnt/fast/spike-021/tran09/encoding.xml
+    HardwareAccelType : vaapi
+    HardwareEncoding  : true
+    container state   : running
+  
+  == amdgpu DRM clients (via 172.16.1.158) ==
+    ✓ no processes hold amdgpu DRM handles (table read successfully and was empty)
+  
+    ⚠ VAAPI is ON (vaapi) - run 'disable' to remove the trigger
+  STEP 1 EXIT CODE: 0
+
+---- STEP 2: disable  (writes none/false AND creates the stale .bak - the hazard) ----
+$ JELLYFIN_CONFIG=/mnt/fast/spike-021/tran09/encoding.xml JELLYFIN_CONTAINER=jf-tran09-probe bash scripts/disable-jellyfin-hwaccel.sh disable
+    ✓ host io pressure full=0.64
+    ✓ backed up to /mnt/fast/spike-021/tran09/encoding.xml.bak.20260903T001946Z (was: vaapi)
+    ✓ HardwareAccelerationType -> none, EnableHardwareEncoding -> false
+    restarting jf-tran09-probe ...
+    ✓ restarted
+  
+  == post-change verification ==
+    ✓ no processes hold amdgpu DRM handles (table read successfully and was empty)
+    ✓ verified: VAAPI off
+  STEP 2 EXIT CODE: 0
+  .bak inventory next to the FIXTURE:
+      /mnt/fast/spike-021/tran09/encoding.xml.bak.20260903T001946Z
+  ASSERT the .bak exists (direct, not inferred) : PASS (count=1)
+  the .bak captured the PRE-PHASE retention state:
+      HardwareAccelerationType   = vaapi
+      TranscodingTempPath        = absent
+      EnableSegmentDeletion      = false
+      SegmentKeepSeconds         = 720
+      EnableThrottling           = false
+      ThrottleDelaySeconds       = 180
+
+---- STEP 3: simulate phase 02.1 write into the FIXTURE (never the .bak) ----
+  ---- fixture contents AFTER the simulated phase write ----
+  <?xml version='1.0' encoding='utf-8'?>
+  <EncodingOptions>
+    <EncodingThreadCount>-1</EncodingThreadCount>
+    <HardwareAccelerationType>none</HardwareAccelerationType>
+    <EnableHardwareEncoding>false</EnableHardwareEncoding>
+    <EnableSegmentDeletion>true</EnableSegmentDeletion>
+    <SegmentKeepSeconds>300</SegmentKeepSeconds>
+    <EnableThrottling>true</EnableThrottling>
+    <ThrottleDelaySeconds>180</ThrottleDelaySeconds>
+  <TranscodingTempPath>/cache/transcodes</TranscodingTempPath></EncodingOptions>  ----------------------------------------------------------
+  step-3 snapshot kept at /mnt/fast/spike-021/tran09/step3-snapshot.xml
+
+---- STEP 4: enable  <- THE STEP THAT USED TO SILENTLY REVERT EVERYTHING ----
+$ JELLYFIN_CONFIG=/mnt/fast/spike-021/tran09/encoding.xml JELLYFIN_CONTAINER=jf-tran09-probe bash scripts/disable-jellyfin-hwaccel.sh enable
+    ✓ host io pressure full=0.17
+    restoring from    : /mnt/fast/spike-021/tran09/encoding.xml.bak.20260903T001946Z
+    backup taken at   : 20260903T001946Z (from the FILENAME; mtime is unreliable, see WR-07)
+    HardwareAccelType : vaapi (the ENTIRE encoding.xml is restored, not just this)
+    preserving across the restore (TRAN-09):
+        TranscodingTempPath = /cache/transcodes
+        EnableSegmentDeletion = true
+        SegmentKeepSeconds = 300
+        EnableThrottling = true
+        ThrottleDelaySeconds = 180
+    ✓ restored from /mnt/fast/spike-021/tran09/encoding.xml.bak.20260903T001946Z
+    ✓ re-asserted the five transcode-retention values into the restored config
+  
+  == pre-restart retention verification ==
+    ✓ pre-restart TranscodingTempPath: PASS (/cache/transcodes)
+    ✓ pre-restart EnableSegmentDeletion: PASS (true)
+    ✓ pre-restart SegmentKeepSeconds: PASS (300)
+    ✓ pre-restart EnableThrottling: PASS (true)
+    ✓ pre-restart ThrottleDelaySeconds: PASS (180)
+    ✓ all five transcode-retention values survived the restore
+    ✓ restarted
+  
+  == post-restore verification ==
+    ✓ verified: HardwareAccelerationType=vaapi, EnableHardwareEncoding=true
+    ✓ post-restart TranscodingTempPath: PASS (/cache/transcodes)
+    ✓ post-restart EnableSegmentDeletion: PASS (true)
+    ✓ post-restart SegmentKeepSeconds: PASS (300)
+    ✓ post-restart EnableThrottling: PASS (true)
+    ✓ post-restart ThrottleDelaySeconds: PASS (180)
+    ✓ verified: the five transcode-retention values survived the whole-file restore
+    ⚠ VAAPI is back ON - the orphaned-transcode trigger is re-armed
+  STEP 4 EXIT CODE: 0
+
+---- ASSERTIONS AGAINST THE FIXTURE AFTER STEP 4 ----
+      TranscodingTempPath        = /cache/transcodes    expected /cache/transcodes    PASS
+      EnableSegmentDeletion      = true                 expected true                 PASS
+      SegmentKeepSeconds         = 300                  expected 300                  PASS
+      EnableThrottling           = true                 expected true                 PASS
+      ThrottleDelaySeconds       = 180                  expected 180                  PASS
+      HardwareAccelerationType   = vaapi                expected vaapi                PASS
+      EnableHardwareEncoding     = true                 expected true                 PASS
+  ASSERTION BLOCK EXIT: 0
+
+==============================================================================
+NEGATIVE CONTROL 1 - the standalone verify-retention sub-action
+==============================================================================
+WHY THE REVIEWED VERSION'S CONTROL COULD NOT HAVE WORKED, stated before the evidence
+so it is not read as a post-hoc excuse:
+  The reviewed design said 'perturb one retention value after a restore, re-run the
+  verification path, confirm non-zero'. That control is STRUCTURALLY UNABLE TO FAIL.
+  The verification lives INSIDE do_enable, and do_enable RE-CAPTURES the live values
+  BEFORE restoring. Re-running enable after perturbing would have captured the PERTURBED
+  values, carried them across the restore faithfully, verified them against themselves,
+  and PASSED - emitting a transcript that reads exactly like a discharged negative control.
+  The two controls below avoid that in two different ways: control 1 tests the comparison
+  from OUTSIDE do_enable, with the expectations supplied by the caller rather than
+  re-derived; control 2 disables the carry-across so the comparison has a real difference
+  to find.
+
+---- 1a. PERTURBED: EnableSegmentDeletion true -> false (one field only) ----
+  fixture now reads EnableSegmentDeletion = false
+$ TRAN09_EXPECT='/cache/transcodes|true|300|true|180' JELLYFIN_CONFIG=/mnt/fast/spike-021/tran09/encoding.xml bash scripts/disable-jellyfin-hwaccel.sh verify-retention
+  == verify-retention (read-only) ==
+    encoding.xml      : /mnt/fast/spike-021/tran09/encoding.xml
+    expected          : /cache/transcodes|true|300|true|180
+    found             : /cache/transcodes|false|300|true|180
+  
+    ✓ verify-retention TranscodingTempPath: PASS (/cache/transcodes)
+    ✗ verify-retention EnableSegmentDeletion: FAIL - MISMATCH expected='true' found='false'
+    ✓ verify-retention SegmentKeepSeconds: PASS (300)
+    ✓ verify-retention EnableThrottling: PASS (true)
+    ✓ verify-retention ThrottleDelaySeconds: PASS (180)
+    ✗ verify-retention FAILED - see the per-field lines above
+  1a EXIT CODE: 1
+  ASSERT non-zero on a perturbed config : PASS
+
+---- 1b. RESTORED to the step-3 value: EnableSegmentDeletion false -> true ----
+  (a control that only ever FAILS is as uninformative as one that only ever passes)
+$ TRAN09_EXPECT='/cache/transcodes|true|300|true|180' JELLYFIN_CONFIG=/mnt/fast/spike-021/tran09/encoding.xml bash scripts/disable-jellyfin-hwaccel.sh verify-retention
+  == verify-retention (read-only) ==
+    encoding.xml      : /mnt/fast/spike-021/tran09/encoding.xml
+    expected          : /cache/transcodes|true|300|true|180
+    found             : /cache/transcodes|true|300|true|180
+  
+    ✓ verify-retention TranscodingTempPath: PASS (/cache/transcodes)
+    ✓ verify-retention EnableSegmentDeletion: PASS (true)
+    ✓ verify-retention SegmentKeepSeconds: PASS (300)
+    ✓ verify-retention EnableThrottling: PASS (true)
+    ✓ verify-retention ThrottleDelaySeconds: PASS (180)
+    ✓ all five transcode-retention values match TRAN09_EXPECT
+  1b EXIT CODE: 0
+  ASSERT zero once restored : PASS
+
+  READ-ONLY CONTRACT, asserted rather than claimed:
+    .bak count next to the fixture, unchanged by both invocations: 1
+    container state, untouched by both invocations               : running
+
+==============================================================================
+NEGATIVE CONTROL 2 - the TRAN09_FAULT=1 hook
+==============================================================================
+The re-assert is skipped while the CAPTURE and the VERIFICATION both still run, so the
+comparison genuinely finds the restored PRE-PHASE values instead of the carried-across
+ones. This is a real failure being produced, not an expectation being adjusted.
+
+  fixture is at the step-3 state before this run:
+    /cache/transcodes|true|300|true|180
+
+$ TRAN09_FAULT=1 JELLYFIN_CONFIG=/mnt/fast/spike-021/tran09/encoding.xml JELLYFIN_CONTAINER=jf-tran09-probe bash scripts/disable-jellyfin-hwaccel.sh enable
+    ✓ host io pressure full=0.17
+    restoring from    : /mnt/fast/spike-021/tran09/encoding.xml.bak.20260903T001946Z
+    backup taken at   : 20260903T001946Z (from the FILENAME; mtime is unreliable, see WR-07)
+    HardwareAccelType : vaapi (the ENTIRE encoding.xml is restored, not just this)
+    preserving across the restore (TRAN-09):
+        TranscodingTempPath = /cache/transcodes
+        EnableSegmentDeletion = true
+        SegmentKeepSeconds = 300
+        EnableThrottling = true
+        ThrottleDelaySeconds = 180
+    ✓ restored from /mnt/fast/spike-021/tran09/encoding.xml.bak.20260903T001946Z
+    ⚠ TRAN09_FAULT=1 IS ACTIVE - THE RETENTION RE-ASSERT IS BEING SKIPPED ON PURPOSE.
+    ⚠ This is a TEST-ONLY hook (plan 02.1-07, VALIDATION.md row 35, negative control 2).
+    ⚠ In production it turns 'enable' back into the silent revert this hardening removes.
+    ⚠ The verification below is NOT skipped, so this run will fail loudly and non-zero.
+  
+  == pre-restart retention verification ==
+    ✗ pre-restart TranscodingTempPath: FAIL - MISMATCH before='/cache/transcodes' after='absent'
+    ✗ pre-restart EnableSegmentDeletion: FAIL - MISMATCH before='true' after='false'
+    ✗ pre-restart SegmentKeepSeconds: FAIL - MISMATCH before='300' after='720'
+    ✗ pre-restart EnableThrottling: FAIL - MISMATCH before='true' after='false'
+    ✓ pre-restart ThrottleDelaySeconds: PASS (180)
+    ✗ the whole-file restore MOVED transcode-retention values - this is exactly the silent
+    ✗ revert TRAN-09 closes, and it is being REPORTED rather than hidden.
+    ✗ NOT restarting jf-tran09-probe. The restored backup was /mnt/fast/spike-021/tran09/encoding.xml.bak.20260903T001946Z.
+    ✗ The pre-restore values are printed above; re-apply them before restarting.
+  CONTROL 2 EXIT CODE: 1
+  ASSERT non-zero with the carry-across disabled : PASS
+  ASSERT the run named fields with BOTH values, and printed the loud test-hook warning:
+    (see the MISMATCH lines and the TRAN09_FAULT=1 IS ACTIVE block above)
+  ASSERT the container was NOT restarted onto the reverted config:
+    container state: running
+
+==============================================================================
+CLEANUP AND THE LIVE-CONFIG UNTOUCHED ASSERTIONS
+==============================================================================
+  the fixture is deliberately LEFT at /mnt/fast/spike-021/tran09/ as evidence, in the
+  reverted pre-phase shape that negative control 2 produced:
+    absent|false|720|false|180
+
+  docker rm -f jf-tran09-probe
+  enumerating with docker ps -a and NO STATUS FILTER - a created-state container is
+  invisible to a status-filtered query, and this estate had two sit there for six weeks:
+  ASSERT disposable container removed : PASS (grep -qx exit 1)
+
+  date (LXC 100, UTC) : 2026-09-03T00:21:40Z
+  live sha256 AFTER   : 8b6971ced02198e6fdfce124a7b6ef4fe4856511d9b08f7dbba3fff88ca4a759
+  live mtime AFTER    : 2026-09-02 22:27:37.905303664 +0000
+  .bak inventory AFTER:
+      /mnt/fast/appdata/media/jellyfin/config/encoding.xml.bak.20260831T182741Z
+  .bak count AFTER    : 1
+  / avail bytes AFTER : 35554336768
+  live five values    : /cache/transcodes|true|300|true|180
+
+INDEPENDENT CONFIRMATION - the standing check, default mode
+$ ssh root@172.16.1.159 'bash /mnt/fast/stacks/scripts/check-jellyfin-transcode.sh'
+  🎬 Jellyfin Transcode Retention Audit
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    container:  jellyfin
+    transcode:  /mnt/fast/transcode  (dataset fast/transcode)
+    cache:      /mnt/fast/appdata/media/jellyfin/cache
+    host:       selfhost
+    date:       2026-09-03T00:21:51Z
+    mode:       assert (exits non-zero on any failed check)
+  
+  🧰 0. Routes and preconditions (D-19)
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ✅ docker /usr/bin/docker
+    ✅ curl /usr/bin/curl
+    ✅ jq /usr/bin/jq
+    ✅ stat /usr/bin/stat
+    ✅ zfs delegated to root@172.16.1.158 (LXC 100 is unprivileged; the pool lives on the Proxmox host)
+    ZFS_ROUTE=ssh:172.16.1.158
+    ✅ Jellyfin resolved to 192.168.90.25:8096 via docker inspect (never a pinned literal, never the bare name)
+    ✅ Jellyfin credential /mnt/fast/secrets/jellyfin-deercrest.env (600 root)
+  
+  💾 1. Root filesystem headroom (TRAN-05, D-16, D-17)
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    / avail=35554140160 bytes (33.11 GiB) of size=134682742784 bytes (125.43 GiB)
+    ✅ / headroom 33.11 GiB ≥ floor 20.00 GiB — margin 13.11 GiB
+  
+  🐳 2. The mount invariant (TRAN-01, TRAN-02, D-02, D-18)
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ✅ container 'jellyfin' exists (asserted before anything is enumerated)
+    ✅ zero Type:volume mounts on jellyfin (the invariant, not the instance — D-18)
+    ✅ /cache/transcodes is 'bind /mnt/fast/transcode' (VALIDATION row 1, TRAN-01)
+    ✅ /cache is 'bind /mnt/fast/appdata/media/jellyfin/cache' (VALIDATION row 2, TRAN-01)
+    ✅ /data/transcode appears in no mount destination (D-02, VALIDATION row 3)
+  
+  🗑  3. The old anonymous volume (secondary to section 2, per D-18)
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ✅ the anonymous volume d98b2ff94482… is gone (VALIDATION row 8, D-10)
+  
+  📏 4. The transcode quota and its mount (TRAN-03, D-12, D-13)
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ✅ quota fast/transcode = 53687091200 bytes (50 G) via ssh:172.16.1.158 (VALIDATION row 9)
+    ✅ fast/transcode mounted=yes via ssh:172.16.1.158 (VALIDATION row 36, instrument 1)
+    ✅ /mnt/fast/transcode device id 47 differs from /mnt/fast's 64519 — separately mounted (VALIDATION row 36, instrument 2)
+    findmnt /mnt/fast/transcode: zfs fast/transcode   (reported, not asserted)
+    df size of /mnt/fast/transcode: 53687091200 bytes (50.00 GiB)   (REPORTED not asserted — A3, VALIDATION row 12)
+  
+  ⚙️  5. The encoding values, read back (TRAN-04, D-20, D-30) — REPORTED, not asserted
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    TranscodingTempPath = /cache/transcodes   (REPORTED not asserted — a standing check cannot prove a setting FIRES; that is 02.1-08's job)
+    EnableSegmentDeletion = true   (REPORTED not asserted — a standing check cannot prove a setting FIRES; that is 02.1-08's job)
+    SegmentKeepSeconds = 300   (REPORTED not asserted — a standing check cannot prove a setting FIRES; that is 02.1-08's job)
+    EnableThrottling = true   (REPORTED not asserted — a standing check cannot prove a setting FIRES; that is 02.1-08's job)
+    ThrottleDelaySeconds = 180   (REPORTED not asserted — a standing check cannot prove a setting FIRES; that is 02.1-08's job)
+    HardwareAccelerationType = none   (amdgpu mitigation, D-30 — REPORTED; drift here is the expensive regression)
+    EnableHardwareEncoding = false   (amdgpu mitigation, D-30 — REPORTED; drift here is the expensive regression)
+  
+  📊 6. Summary
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    / headroom:              35554140160 bytes (33.11 GiB)  (target ≥ 21474836480)
+    volume mounts:           0  (target 0)
+    transcode quota:         53687091200 bytes  (target 53687091200)
+    transcode mounted:       zfs=yes devid=47 parent=64519  (target yes, and devid ≠ parent)
+    encoding values:         REPORTED not asserted  (see section 5)
+    unreachable:             0  (could-not-look, counted apart from bound violations — VALIDATION row 38)
+    toolchain missing:       0
+    FAILURES total:          0
+  
+  ✅ Jellyfin transcode retention intact
+  STANDING CHECK EXIT CODE: 
+  STANDING CHECK EXIT CODE: 0   (captured directly; the inline $PIPESTATUS above came back empty)
+  ASSERT standing check still exits 0 : PASS
+
+  amdgpu mitigation, read out of section 5 above and unchanged by this plan:
+    HardwareAccelerationType = none    EnableHardwareEncoding = false   (D-30)
+    This plan changed HOW 'enable' restores. It never changed WHETHER VAAPI should be on.
+
+================================================================================
+END OF TRANSCRIPT
+================================================================================
