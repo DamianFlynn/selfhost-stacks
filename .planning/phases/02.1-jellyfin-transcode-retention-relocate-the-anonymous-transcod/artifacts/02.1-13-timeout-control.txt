@@ -1,0 +1,487 @@
+02.1-13 — REMOTE COMMAND TIMEOUT: THE BOUND, AND THE CONTROL THAT DROVE IT
+=========================================================================
+Date:        2026-09-03
+Plan:        02.1-13 (wave 3, gap closure, TRAN-05)
+Executed by: parallel worktree agent on branch worktree-agent-ac91560e4fc8f1a76
+Workstation: macOS (no coreutils `timeout`, no `gtimeout`)
+Host:        LXC 100 "selfhost" 172.16.1.159, repo at /mnt/fast/stacks
+Task 1 commit: 10be13a
+
+WHAT THIS FILE IS FOR
+---------------------
+`scripts/quick-health-check.sh` had NO wall-clock bound on any of its remote commands. This
+records (a) the bound that was added and the raw counts proving it covers every call site, and
+(b) the control that drove the new timeout branch against a REAL sleeping remote script rather
+than reasoning about it. A branch that has never fired is a branch that will not fire.
+
+
+================================================================================
+PART 1 — TASK 1: THE COUNTS
+================================================================================
+
+All greps run in the worktree against scripts/quick-health-check.sh at commit 10be13a.
+
+  bash -n scripts/quick-health-check.sh                                  -> SYNTAX_OK (exit 0)
+
+  grep -cE '^REMOTE_TIMEOUT="\$\{REMOTE_TIMEOUT:-[0-9]+\}"'              -> 1
+  grep -c 'timeout $REMOTE_TIMEOUT'          (bounded remote commands)   -> 10
+  grep -c 'ssh .*root@172\.16\.1\.159'       (RAW, pre-edit)             -> 14
+  grep -c 'ssh .*root@172\.16\.1\.159'       (RAW, post-edit)            -> 15
+  grep -n 'ssh .*root@172\.16\.1\.159' | grep -vc 'echo "'  (call sites) -> 12
+  grep -c '\-eq 124'                                                     -> 3
+  grep -c '\-ne 124'                                                     -> 3
+  grep -c 'cannot hang'                                                  -> 1
+  grep -c 'command -v timeout'                                           -> 1
+  grep -c 'EXIT-CODE BEHAVIOUR CHANGED'      (pre-edit / post-edit)      -> 4 / 4
+
+THE COUNT COMPARISON, STATED AS RAW NUMBERS AND NOT ONLY AS A VERDICT:
+
+    12 real ssh call sites
+   - 2 deliberately unbounded probes (the WR-10 `true` reachability probe, and the new
+       `command -v timeout` probe — neither touches docker, so neither can hang)
+   = 10 bounded remote commands
+   = 10 occurrences of the bound prefix                                   MATCH
+
+THE PLAN'S VERSION OF THIS CRITERION IS ARITHMETICALLY WRONG AND IS RECORDED AS SUCH. It says to
+take `grep -c 'ssh .*root@172\.16\.1\.159'` (raw) minus 2. Raw post-edit is 15, and 15 - 2 = 13,
+not 10. The three-line gap is not a missed bound: it is three `echo` lines inside the UNKNOWN
+branches that PRINT a suggested `ssh root@172.16.1.159 'cd /mnt/fast/stacks && ...'` re-run hint
+for the reader. They are remediation text, not call sites, and bounding them would be meaningless.
+The 12 above excludes exactly those three. Both numbers are given so the reader can check the
+subtraction rather than take the verdict.
+
+THE 10 BOUNDED SITES, by what they run:
+   1. docker ps        (traefik present)
+   2. docker inspect   (traefik health)
+   3. docker ps        (authelia present)
+   4. docker ps -q     (container count)
+   5. docker ps        (unhealthy count)
+   6. docker ps        (unhealthy list)
+   7. curl             (traefik dashboard)
+   8. bash check-music-freeze.sh          (fold-in 1)
+   9. bash check-music-consumers.sh       (fold-in 2)
+  10. bash check-jellyfin-transcode.sh    (fold-in 3)
+
+BRANCH ORDERING — the `[ -z "$..._OUT" ]` test still comes FIRST in all three blocks:
+
+  316:if [ -z "$MUSIC_OUT" ] && [ "$MUSIC_RC" -ne 124 ]; then
+  323:elif [ "$MUSIC_RC" -eq 124 ]; then
+  340:elif [ "$MUSIC_RC" -eq 0 ]; then
+
+  383:if [ -z "$CONSUMERS_OUT" ] && [ "$CONSUMERS_RC" -ne 124 ]; then
+  390:elif [ "$CONSUMERS_RC" -eq 124 ]; then
+  402:elif [ "$CONSUMERS_RC" -eq 0 ]; then
+
+  464:if [ -z "$TRANSCODE_OUT" ] && [ "$TRANSCODE_RC" -ne 124 ]; then
+  473:elif [ "$TRANSCODE_RC" -eq 124 ]; then
+  495:elif [ "$TRANSCODE_RC" -eq 0 ]; then
+
+NOTHING IS FETCHED OR PROVIDED. The plan's criterion is `grep -c 'apt\|apt-get\|install'` -> 0.
+That grep returns 3, and it returned 3 BEFORE this plan touched the file. All three matches are
+the substring "apt" inside the word "capturing", in the pre-existing comment
+`# ssh propagates the remote exit status — do NOT pipe before capturing this` at three call
+sites. The criterion is a substring match with no word boundary, so it cannot pass on this file
+and never could. The claim it was reaching for, tested properly:
+
+  grep -cE '(^|[^[:alnum:]])(apt|apt-get|pip|npm|install)([^[:alnum:]]|$)'   -> 0
+
+The `timeout` binary is probed with `command -v` and its absence is a REFUSAL, never a fetch.
+Confirmed present on the host before any of this: `command -v timeout` -> /usr/bin/timeout.
+
+
+================================================================================
+PART 2 — THE HEALTHY RUN IS UNCHANGED (the bound must be invisible when nothing hangs)
+================================================================================
+
+The pre-edit script (from base commit 8235b14) and the post-edit script were each run once from
+the workstation, back to back, and their transcripts diffed:
+
+  PRE_EDIT_EXIT=0
+  POST_EDIT_EXIT=0
+
+  $ diff pre-edit-run.txt post-edit-run.txt
+  20c20
+  <     / headroom:              36838895616 bytes (34.31 GiB)  (target ≥ 21474836480)
+  ---
+  >     / headroom:              36838752256 bytes (34.31 GiB)  (target ≥ 21474836480)
+
+ONE LINE DIFFERS, and it is the live `/` free-space reading, which moves between any two runs
+(143,360 bytes apart here — a fraction of a second of estate noise). Every other line is
+byte-identical: same three green blocks, same summary lines, same exit code. The bound adds
+nothing to a healthy transcript, which is the point.
+
+
+================================================================================
+PART 3 — TASK 2: DRIVING THE HANG
+================================================================================
+
+PRE-CONTROL HOST STATE
+----------------------
+  HOST_HEAD=780ada834d4fafc2c6cc823d9f392ee636bd5db7
+  HOST_ORIGIN_MAIN=780ada834d4fafc2c6cc823d9f392ee636bd5db7
+  PORCELAIN_SCRIPTS=[]                                       (clean)
+  sha256 scripts/check-jellyfin-transcode.sh
+    = d33356c551113fd972c515fc288ef8f00a1180bb8f17119165c81c21971444b5
+
+  That hash is a cross-check, not just a record: it is the SAME value 02.1-11's summary recorded
+  for the host-side file (`d33356c5…`). The host tree has not moved since.
+
+THE TRAP, QUOTED, AND IT IS ESTABLISHED BEFORE THE MUTATION
+-----------------------------------------------------------
+From the driver script, in source order — the trap line precedes the first `cp`/`printf` that
+touches the host:
+
+  restore() {
+    echo "--- TRAP FIRED: restoring $REAL from $SAVED ---"
+    $SSH $HOST "test -f $SAVED && cp -p $SAVED $REAL && echo 'restored' || echo 'RESTORE FAILED - $SAVED missing'"
+    $SSH $HOST "sha256sum $REAL"
+  }
+
+  # THE TRAP GOES IN BEFORE ANYTHING IS TOUCHED.
+  trap restore EXIT INT TERM
+
+A restore written as prose AFTER the mutation is the round-2 review finding this phase already
+paid for. The whole stage-run-restore cycle is one workstation-side process precisely so that a
+single trap covers it; split across separate shells, a trap would not survive to fire.
+
+THE STUB IS CONFIRMED IN PLACE BEFORE THE RUN
+---------------------------------------------
+  $ cp -p /mnt/fast/stacks/scripts/check-jellyfin-transcode.sh \
+          /mnt/fast/spike-021/02.1-13/check-jellyfin-transcode.sh.orig
+  d33356c551113fd972c515fc288ef8f00a1180bb8f17119165c81c21971444b5  .../check-jellyfin-transcode.sh.orig
+
+  $ printf '#!/bin/bash\nsleep 30\n' > /mnt/fast/stacks/scripts/check-jellyfin-transcode.sh
+  $ head -2 /mnt/fast/stacks/scripts/check-jellyfin-transcode.sh
+  #!/bin/bash
+  sleep 30
+  $ sha256sum /mnt/fast/stacks/scripts/check-jellyfin-transcode.sh
+  775c9a7188b9fdf5fd4242e97c161593c45c6e289ef4b8fdf3de259873d3a708
+
+  Staging is under /mnt/fast/spike-021/ — the scratch path this phase already uses — and NOT
+  /tmp, which is tmpfs on LXC 100 and backed by host RAM (1.1 GB there once took the whole 28 GB
+  box down).
+
+THE DRIVEN RUN
+--------------
+  $ REMOTE_TIMEOUT=5 bash scripts/quick-health-check.sh
+
+  DRIVEN_WALL_CLOCK_SECONDS=8          (against a 30 s stub; criterion was < 20 s)
+  DRIVEN_EXIT_CODE=1
+
+  8 s rather than 5 s because the two healthy fold-ins and the seven ad-hoc docker calls that run
+  BEFORE the transcode block take ~3 s between them; the transcode call itself was cut at 5 s.
+  The script RETURNED. Without the bound it would still have been sitting there at 30 s, and on a
+  really wedged dockerd it would never have returned at all.
+
+  Transcript (transcode block; the two blocks above it were green and are omitted here for
+  length — the full capture is reproduced in PART 4):
+
+    Jellyfin transcode retention: ⚠️  UNKNOWN — the remote audit exceeded its 5s bound and was killed.
+      This is NOT a failed assertion, and it is NOT a bound violation. Nothing was measured:
+      the command never returned, so the transcode retention state is unread, not green.
+      Most likely cause: dockerd wedged. The estate's 2026-08-31 amdgpu signature blocks
+      dockerd on /proc/*/smaps behind a dead mmap_lock while sshd answers normally, so the
+      connection succeeds and the command hangs. Distinguish it on atlantis (172.16.1.158):
+        /proc/pressure/io 'full' near 100% WITH AN IDLE CPU is the wedge; a busy CPU is not.
+        cat /proc/pressure/io; uptime
+      A slow-but-healthy estate is the other possibility — re-run with a larger budget:
+        REMOTE_TIMEOUT=300 bash scripts/quick-health-check.sh
+
+    ❌ Health check FAILED — see the music freeze harness, the consumers audit and/or the
+       Jellyfin transcode retention audit above.
+
+ASSERTED IN BOTH DIRECTIONS, because "the right text appeared" and "the wrong text did not" are
+two different claims:
+
+  grep -c 'exceeded its 5s bound'                              -> 1   (timeout text, names budget)
+  grep -c 'Transcode retention intact'                         -> 0   (no tick)
+  grep -c 'BROKEN (check-jellyfin-transcode.sh exit 124)'      -> 0   (generic branch did NOT fire)
+  grep -c 'BROKEN'                                             -> 0   (no BROKEN line at all)
+  grep -c 'unreachable or the audit produced no output'        -> 0   (empty-output branch did NOT
+                                                                       misreport a reachable host)
+
+That last one is the non-obvious result and it is why the code deviates from the plan text — see
+"WHAT THE PLAN GOT WRONG" below.
+
+THE RESTORE, HASH-VERIFIED
+--------------------------
+  --- TRAP FIRED: restoring /mnt/fast/stacks/scripts/check-jellyfin-transcode.sh
+      from /mnt/fast/spike-021/02.1-13/check-jellyfin-transcode.sh.orig ---
+  restored
+  d33356c551113fd972c515fc288ef8f00a1180bb8f17119165c81c21971444b5  .../check-jellyfin-transcode.sh
+
+  pre-control : d33356c551113fd972c515fc288ef8f00a1180bb8f17119165c81c21971444b5
+  post-restore: d33356c551113fd972c515fc288ef8f00a1180bb8f17119165c81c21971444b5   IDENTICAL
+
+  $ cd /mnt/fast/stacks && git status --porcelain scripts/
+  PORCELAIN_SCRIPTS_AFTER=[]                                   (empty)
+  HEAD_AFTER=780ada834d4fafc2c6cc823d9f392ee636bd5db7          (unmoved)
+
+THE GREEN SIDE OF THE SAME CONTROL
+----------------------------------
+A control that only fails is as uninformative as one that only passes (02.1-07). With the real
+script restored and NOTHING else changed:
+
+  $ REMOTE_TIMEOUT=5 bash scripts/quick-health-check.sh
+  GREEN_SHORT_BUDGET_EXIT=0
+  GREEN_SHORT_BUDGET_SECONDS=4
+
+  $ bash scripts/quick-health-check.sh          (default budget, 120 s)
+  GREEN_DEFAULT_BUDGET_EXIT=0
+  GREEN_DEFAULT_BUDGET_SECONDS=4
+
+So the timeout branch fires on a GENUINE HANG and not merely because the budget is small. The
+real check completes comfortably inside a 5 s per-call budget.
+
+THE HEADROOM FIGURE, WHICH NOTHING IN THIS REPO PREVIOUSLY RECORDED
+-------------------------------------------------------------------
+  Whole-run wall clock, healthy estate, all 10 bounded calls: 4 s  (4.362 s measured by `time`)
+
+  The slowest SINGLE remote call is therefore under 4 s, and passes at a 5 s budget. Against the
+  default of 120 s that is a margin of roughly 30x. The 120 s default is not a guess dressed as a
+  measurement: it is ~30x the observed worst case, chosen so a slow-but-working estate is never
+  cut off (the 01-09 permanently-red trap) while a wedged dockerd is still caught in the same
+  sitting rather than at 3am — which, per the D-22 notice in the file, is a time nothing here
+  fires anyway.
+
+
+================================================================================
+PART 4 — FULL DRIVEN TRANSCRIPT (verbatim)
+================================================================================
+
+=== Quick Server Health Check ===
+Traefik: ✅ Running
+  Health:
+no healthcheck
+Authelia: ✅ Running
+Containers running: 103
+✅ No unhealthy containers
+Traefik dashboard: ❌ Not accessible
+Music freeze harness: ✅ Intact
+    tagger-class writers:        0   (target 0)
+    unclassified writers:        0   (target 0)
+    declared rw reaching Music:  0   (target 0, jellyfin.yaml excluded)
+    ownership mismatches:        0   (target 0, want 568:568)
+Music consumers audit: ✅ Both consumers see the library
+    MA version (live):           2.11.0b0   (assertions proven at 2.11.0b0)
+    albums matched in MA:        2   (target 2, exact name+albumartist, provider-attributed)
+    albums matched in Jellyfin:  2   (target 2, exact name+albumartist)
+    FAILURES total:              0
+Jellyfin transcode retention: ⚠️  UNKNOWN — the remote audit exceeded its 5s bound and was killed.
+  This is NOT a failed assertion, and it is NOT a bound violation. Nothing was measured:
+  the command never returned, so the transcode retention state is unread, not green.
+  Most likely cause: dockerd wedged. The estate's 2026-08-31 amdgpu signature blocks
+  dockerd on /proc/*/smaps behind a dead mmap_lock while sshd answers normally, so the
+  connection succeeds and the command hangs. Distinguish it on atlantis (172.16.1.158):
+    /proc/pressure/io 'full' near 100% WITH AN IDLE CPU is the wedge; a busy CPU is not.
+    cat /proc/pressure/io; uptime
+  A slow-but-healthy estate is the other possibility — re-run with a larger budget:
+    REMOTE_TIMEOUT=300 bash scripts/quick-health-check.sh
+
+❌ Health check FAILED — see the music freeze harness, the consumers audit and/or the
+   Jellyfin transcode retention audit above.
+
+NOTE ON `Traefik dashboard: ❌ Not accessible`: this line is PRE-EXISTING and is not a consequence
+of anything in this plan. It appears identically in the pre-edit baseline run recorded in PART 2.
+It is one of the legacy non-fatal blocks and does not affect the exit code. Not investigated here
+— it is outside this plan's scope and folding it in is how a closure pass becomes a second phase.
+
+
+================================================================================
+PART 5 — DELIVERY, AND THE 02.1-11 SUMMARY LINES
+================================================================================
+
+THE PLAN'S "DELIVER FIRST" STEP IS NOT EXECUTABLE HERE, FOR THE SAME REASON IT WAS NOT IN 02.1-11
+--------------------------------------------------------------------------------------------------
+The plan asks for: commit -> push -> `git pull --ff-only` on LXC 100 -> assert host-side
+`git rev-parse HEAD` == `origin/main` AND host-side `grep -c REMOTE_TIMEOUT` non-zero.
+
+This plan runs as a PARALLEL WORKTREE AGENT on branch worktree-agent-ac91560e4fc8f1a76. The
+orchestrator merges to main after the wave. Pushing to main from the worktree would bypass that
+merge, so it was NOT done — the identical call 02.1-11 made and recorded.
+
+There is also a second, sharper reason the step is moot for THIS plan specifically, and it is a
+difference between 02.1-13 and 02.1-11 rather than a workaround:
+
+  02.1-11 amended a HOST-RESIDENT script (check-jellyfin-transcode.sh), so delivery to the host
+  was load-bearing for its controls. 02.1-13 amends only quick-health-check.sh, which is
+  WORKSTATION-RESIDENT AND EXECUTES ON THE WORKSTATION. The copy under test IS the copy in the
+  worktree. There is nothing about this plan's payload that has to reach /mnt/fast/stacks for the
+  control to be valid — and the control above ran the worktree copy directly.
+
+  The host state was recorded anyway, because a divergent host tree has bitten this phase before:
+  HEAD 780ada8 == origin/main 780ada8, `git status --porcelain scripts/` empty, before and after.
+  `grep -c REMOTE_TIMEOUT` on the host copy is 0, correctly — this commit has not merged yet.
+
+THE `transcode target:` LINE — 02.1-11'S OPEN FOLLOW-UP, PARTIALLY DISCHARGED
+-----------------------------------------------------------------------------
+The plan's final criterion asks that the unqualified run show BOTH 02.1-11 summary lines. On the
+live standing check it shows one:
+
+  final unqualified run:  exit 0, 3 green blocks
+    encoding values:  present    -> "encoding values: REPORTED not asserted  (see section 5)"
+    transcode target: ABSENT
+
+This is NOT a regression and NOT a defect in this plan's edit. The host tree is at 780ada8, which
+PREDATES 02.1-11 — the host-side check-jellyfin-transcode.sh (d33356c5…) does not emit a
+`transcode target:` row at all, and its `encoding values:` row still reads the old "REPORTED not
+asserted" wording. 02.1-11 recorded exactly this as an open follow-up: "after merge,
+`git pull --ff-only` on LXC 100 and re-run quick-health-check.sh once".
+
+DELIBERATELY NOT DONE HERE. Pulling wave-1/wave-2 work onto the live host is the orchestrator's
+merge to make, not a side effect of a wave-3 control, and it would change what the standing check
+ASSERTS on a live estate mid-execution. The follow-up stays open.
+
+What WAS proven, using 02.1-11's own device so the coupling is not left untested: the amended
+check was staged OUTSIDE the repo, delivery asserted by sha256, and a scratchpad copy of the
+BOUNDED quick-health-check.sh — identical except for the one remote path — was pointed at it.
+
+  workstation sha256 (worktree scripts/check-jellyfin-transcode.sh):
+    a1af761d73515911849fee5ad3c87527b2ee7ef5b63906dfd4894d92cbac1a5c
+  host-staged sha256 (/mnt/fast/spike-021/02.1-13/check-jellyfin-transcode.NEW.sh):
+    a1af761d73515911849fee5ad3c87527b2ee7ef5b63906dfd4894d92cbac1a5c        IDENTICAL
+  host /mnt/fast/stacks copy, UNTOUCHED throughout:
+    d33356c551113fd972c515fc288ef8f00a1180bb8f17119165c81c21971444b5
+
+  path substitutions in the scratchpad copy: 1   (only the remote script path)
+  bound still present in that copy:          10  (the edit under test is intact)
+
+  STAGED_RUN_EXIT=0
+  STAGED_RUN_SECONDS=4
+
+  Jellyfin transcode retention: ✅ Transcode retention intact
+      / headroom:              36836257792 bytes (34.31 GiB)  (target ≥ 21474836480)
+      volume mounts:           0  (target 0)
+      transcode quota:         53687091200 bytes  (target 53687091200)
+      transcode mounted:       zfs=yes devid=47 parent=64519  (target yes, and devid ≠ parent)
+      transcode target:        /cache/transcodes  (target /cache/transcodes)
+      encoding values:         5 asserted, 0 drifted; 2 amdgpu values REPORTED (see section 5)
+      unreachable:             0  (could-not-look, counted apart from bound violations)
+      toolchain missing:       0
+      FAILURES total:          0
+
+  transcode_target_line  -> 1
+  encoding_values_line   -> 1
+
+Both 02.1-11 lines select through the BOUNDED fold-in, and the live estate reads "5 asserted,
+0 drifted". The bound did not weaken 02.1-11's assertions, and 02.1-12's corrected reachability
+text was not touched.
+
+CLEANUP
+-------
+  $ rm -rf /mnt/fast/spike-021/02.1-13
+  top-level  : ls /mnt/fast/spike-021/ | grep -c check-jellyfin-transcode   -> 0
+  recursive  : find /mnt/fast/spike-021 -name '*check-jellyfin-transcode*' | wc -l -> 0
+
+  Both the `.orig` save and the staged `.NEW.sh` are gone. The recursive check is given because
+  the plan's criterion greps only the TOP-LEVEL listing, which would have returned 0 even with the
+  files still sitting one directory down.
+
+FINAL UNQUALIFIED RUN
+---------------------
+  $ bash scripts/quick-health-check.sh
+  FINAL_UNQUALIFIED_EXIT=0
+  FINAL_UNQUALIFIED_SECONDS=4
+  green_blocks=3          (✅ Intact / ✅ Both consumers see the library / ✅ Transcode retention intact)
+
+  Host after everything:
+  FINAL_PORCELAIN_SCRIPTS=[]
+  sha256 scripts/check-jellyfin-transcode.sh = d33356c5511…1444b5   (pre-control value)
+  FINAL_HEAD=780ada834d4fafc2c6cc823d9f392ee636bd5db7
+
+
+================================================================================
+PART 6 — WHAT THE PLAN TEXT GOT WRONG
+================================================================================
+
+Recorded, not massaged. Four items.
+
+1. THE PLAN'S 124 BRANCH PLACEMENT WOULD HAVE MADE THE BRANCH UNREACHABLE ON EXACTLY THE CASE IT
+   EXISTS FOR — the most important item here.
+
+   The plan says: "Before the existing `elif [ "$RC" -eq 0 ]`, insert a branch for
+   `[ "$RC" -eq 124 ]`", while the `[ -z "$OUT" ]` empty-output test "must stay first".
+
+   Both instructions are individually right and together they are broken. A command killed by
+   `timeout` USUALLY PRODUCES NO OUTPUT — the `sleep 30` stub the plan itself specifies produces
+   exactly none. So on a real hang both conditions are true at once, and an unmodified
+   empty-output test wins. Had the branch been inserted exactly as written, the driven control
+   would have printed:
+
+       ⚠️  UNKNOWN — 172.16.1.159 unreachable or the audit produced no output
+
+   for a host that answered ssh perfectly and was demonstrably reachable — failing the plan's OWN
+   task-2 criterion ("the transcode block's output contains the timeout-specific text"), and
+   reintroducing the very conflation this plan exists to remove, just relocated: "the host is
+   unreachable" and "the command did not finish" are different answers.
+
+   RESOLUTION, which satisfies both of the plan's intents rather than trading one off:
+   the empty-output test stays textually and logically FIRST, and gains a single qualification —
+   it defers when, and only when, the remote exit status was 124:
+
+       if [ -z "$TRANSCODE_OUT" ] && [ "$TRANSCODE_RC" -ne 124 ]; then
+
+   02.1-10's finding is fully preserved: a zero-byte remote script exits 0, not 124, so it still
+   lands in the empty-output branch and is still caught there. Verified live in PART 3: the
+   `unreachable or the audit produced no output` string appears 0 times in the driven transcript.
+
+2. THE BOUNDED-CALL COUNT CRITERION DOES NOT BALANCE. `raw ssh count - 2 == bound count` gives
+   15 - 2 = 13 against 10 bounds. The three-line gap is three `echo` lines printing re-run hints
+   to the reader, not call sites. Both raw numbers and the corrected call-site count (12) are in
+   PART 1 so the subtraction is checkable rather than asserted.
+
+3. `grep -c 'apt\|apt-get\|install'` CANNOT RETURN 0 ON THIS FILE AND NEVER COULD. It returns 3
+   both before and after this plan, matching "apt" inside "capturing" in a pre-existing comment
+   repeated at three call sites. A word-boundary form of the same check returns 0. Full detail in
+   PART 1. Nothing is fetched, and the `timeout` probe refuses rather than providing.
+
+4. THE "DELIVER FIRST" STEP IS NOT EXECUTABLE UNDER WORKTREE ISOLATION, and for this plan it is
+   also unnecessary, because the payload is workstation-resident. Full reasoning in PART 5.
+   Consequence stated plainly so nobody overreads this file: these runs prove the bound works in
+   the copy that was committed. They do NOT prove anything about a bounded quick-health-check.sh
+   on LXC 100 — that copy is not the one anybody executes, and it is not this plan's payload.
+
+Two further honest notes that are not plan errors:
+
+  - The `Traefik dashboard: ❌ Not accessible` line is pre-existing (present in the PART 2 pre-edit
+    baseline), non-fatal, and out of scope. Not investigated.
+  - `git stash list` on this repo shows a pre-existing entry `stash@{0}: On main: media`. It was
+    NOT touched. The stash stack is shared across worktrees and popping it here would apply a
+    sibling checkout's WIP into this one.
+
+
+================================================================================
+PART 7 — CREDENTIAL SCREEN
+================================================================================
+The repo is PUBLIC. Screened with a positive control, because a sweep that returns 0 without a
+control proving the sweep works is not evidence.
+
+PATTERN (single regex, case-insensitive where relevant):
+  api.?key | token | password | secret | BEGIN <...> PRIVATE KEY | authorization: | bearer
+  | x-emby-token | user_token | [0-9a-f]{32}
+
+POSITIVE CONTROL — a decoy file containing an X-Emby-Token header, a `password=` assignment and a
+Discogs `user_token`, screened with the identical pattern:
+
+  POSITIVE_CONTROL_MATCHES=3          (>= 1 required; the sweep demonstrably works)
+
+REAL SWEEP OVER THIS ARTIFACT:
+
+  keyword_sweep (everything except the hex rule)          -> 0
+  hex32_sweep   ([0-9a-f]{32} alone)                      -> 13
+  hex32 strings that are NOT one of the four known hashes -> 0
+
+The 13 hex hits are entirely accounted for and every one is deliberately published, non-secret
+content — four distinct values across 13 lines:
+
+  780ada834d4fafc2c6cc823d9f392ee636bd5db7  git commit, already public in this repo's history
+  d33356c5…1444b5  sha256 of scripts/check-jellyfin-transcode.sh (host, pre-02.1-11)
+  a1af761d…c1a5c   sha256 of scripts/check-jellyfin-transcode.sh (worktree, post-02.1-11)
+  775c9a71…d3a708  sha256 of the two-line `sleep 30` stub
+
+  Content hashes of files that are themselves in a public repo carry no secret. Enumerated rather
+  than waved through, because "they're just hashes" is how a real key gets shipped one day.
+
+VERDICT: CLEAN. No credential, key, token or password appears in this artifact. No host password,
+no Jellyfin API key, no Discogs token. The only host identifiers present are LAN IPs
+(172.16.1.158/159) already documented throughout this public repo.
