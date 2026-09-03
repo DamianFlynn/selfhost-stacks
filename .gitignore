@@ -34,3 +34,9 @@ stacks/cerebro/
 
 # MPE ERPNext upstream clone (not committed)
 stacks/mpe/erpnext/frappe_docker/
+
+# Python bytecode. scripts/normalise-dj-tags.py (plan 03-05) is this repo's first committed
+# Python file, and its own verification command is `python3 -m py_compile`, which drops a
+# __pycache__/ directory beside it. Ignored so a verification run cannot dirty the tree.
+__pycache__/
+*.pyc
