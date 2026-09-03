@@ -220,7 +220,7 @@ Scored independently of axis two. **Criterion 6 is not met by a record that answ
 |---|---|---|
 | Discogs backend exists | PENDING | PENDING |
 | Strict match rate on the widened sample (backlog-weighted) | PENDING | PENDING |
-| Path format renders at all | n/a | PENDING |
+| Path format renders at all | n/a | **NO, at all three tags** (plan 03-08). v0.20.0: renders, but `-1 - ` on 21 of 21 single-disc tracks, and a template execute error on multi-disc. v0.33.0 and v0.34.0: **refused at startup**, exit 2, `ambiguous format: multiple directories created for the same release`. One-line ablation (disc out of the directory) makes both current tags render correctly and byte-identically — see [`03-WRTAG-EVIDENCE.md`](03-WRTAG-EVIDENCE.md) |
 | Behaviour on unmatched DJ content | PENDING | PENDING |
 
 **Axis one verdict:** PENDING — filled by plan 03-11.
@@ -302,8 +302,8 @@ lives outside the tool" has failed the requirement that matters most here.
 |---|---|---|
 | beets (terminal) | `beet import -A` (as-is) after normalisation; `--set albumtype=dj` + a `paths:` rule routes it out of `Compilations/` | PENDING |
 | beets-flask | An inbox with `autotag: "bootleg"` — *"Import as-is using the meta data of files, and group albums using the metadata… Effectively `beet import ... --group-albums -A`"* | PENDING |
-| wrtag | **`WRTAG_RESEARCH_LINK` — a hyperlink to a Discogs search, for the human to resolve manually** | PENDING |
-| wrtag (side effect) | A real `move`/`copy` calls `tags.WriteTags(dest, destTags, tags.Clear)` — **all tags not in wrtag's computed set are wiped** unless a `keep` rule is configured | PENDING |
+| wrtag | **`WRTAG_RESEARCH_LINK` — a hyperlink to a Discogs search, for the human to resolve manually** | **CONFIRMED** (plan 03-08). Quoted verbatim from `wrtag.yaml:73` in [`03-WRTAG-EVIDENCE.md`](03-WRTAG-EVIDENCE.md) § *wrtag's answer for unmatched content*. wrtag has no non-MusicBrainz backend at v0.20.0 or v0.34.0 and none of v0.30.0–v0.34.0's release notes add one, so the link is a hyperlink, not an integration |
+| wrtag (side effect) | A real `move`/`copy` calls `tags.WriteTags(dest, destTags, tags.Clear)` — **all tags not in wrtag's computed set are wiped** unless a `keep` rule is configured | **CONFIRMED IN SOURCE ONLY — NOT OBSERVED AT RUNTIME** (plan 03-08). `wrtag.go:267` read at v0.34.0 with its `if !op.CanModifyDest() { continue }` guard at 259; `tags.Clear` is `taglib.Clear`, documented at its definition as *"all existing tags not present in the new map should be removed"*. **The dry runs could not exhibit it**: `-dry-run` makes `CanModifyDest()` false so line 267 is never reached — and separately, `logTagChanges` iterates `for k := range after`, so a tag present in the source and absent from wrtag's set **is never logged even at DEBUG**. Empirical confirmation needs a real `move` onto scratch with a `TKEY`-bearing folder, which D-20 forbids in Phases 1–3 |
 
 The verbatim quote from `stacks/selfhosted/music/wrtag.yaml:73`:
 
@@ -324,7 +324,10 @@ WRTAG_PATH_FORMAT=/music/library/Compilations/{{ .Release.Title | safepath }} ({
 **The decisive TAGR-02 fact, recorded now as a prediction to be confirmed:** a real `wrtag
 move`/`copy` calls `tags.WriteTags(destPath, destTags, tags.Clear)` at **`wrtag.go:267`**, which
 **wipes every tag not in wrtag's computed set**. **148 `TKEY` and 45 `EnergyLevel` files in
-`dj-mixes` are at stake.** Confirmation status: PENDING — filled by plan 03-08.
+`dj-mixes` are at stake.** Confirmation status: ~~PENDING — filled by plan 03-08~~ →
+**CONFIRMED IN SOURCE ONLY, 2026-09-03, plan 03-08.** Read at v0.34.0 with its guard, and
+`tags.Clear`'s own definition quoted. **Not observed at runtime and not observable by the dry
+runs** — see the criterion 4 table row above and § *AMENDMENT — 2026-09-03, plan 03-08* below.
 
 ---
 
@@ -354,6 +357,54 @@ would be a genuine, unanticipated reason to prefer it for one stratum.
 
 **Prediction:** the mutagen script wins on reviewability; `metadata` may win on WAV. **Verdict:**
 PENDING — filled by plan 03-09.
+
+---
+
+## AMENDMENT — 2026-09-03, plan 03-08: criterion 3 measured
+
+**Nothing in this section changes T1, T2, T3, the 40% threshold value, the estimator definition
+or any denominator.** Criterion 3 is not one of the pre-committed thresholds; it is a
+disqualifier whose outcome this document was always going to receive. The original wording of
+every paragraph below is left standing above and below this section so a `git log -p` diff shows
+what was corrected and when. Full evidence:
+[`03-WRTAG-EVIDENCE.md`](03-WRTAG-EVIDENCE.md).
+
+**Three statements elsewhere in this document, and in `PROJECT.md`, `CLAUDE.md` and
+`03-RESEARCH.md`, are superseded by measurement:**
+
+| Superseded statement | Where it appears | What was measured, 2026-09-03 |
+|---|---|---|
+| *"`v0.33.0` — the existing path format is already correct for it"* | `CLAUDE.md` § *What NOT to Use* | **FALSIFIED.** v0.33.0 and v0.34.0 **refuse this repo's format at startup** — `validate: ambiguous format: multiple directories created for the same release`, exit **2**, before any file is read. Four arms, byte-identical refusal text |
+| *"wrtag v0.30.0+ … Breaking. **Not used by this repo's format**"* | `PROJECT.md` § *Version Compatibility*; echoed in `03-RESEARCH.md` State of the Art as *"no path-format change"* | **HALF TRUE, AND THE WRONG HALF.** The v0.30.0 **migration table** (`.TrackNum`, `len .Tracks`, `.Tracks`) genuinely does not apply — this repo's format uses none of them. What was missed is the **new multi-disc validation shipped in the same release**, which rejects the format outright |
+| § *Handoff to Phase 4* below: *"The real defects are that v0.20.0 **forces `d.Track.Position = -1`** … and that **`.Media.Position` is absent from v0.20.0's `Data` struct**"* | this document, § *Handoff to Phase 4* | **CORRECT AND CONFIRMED, BUT INCOMPLETE.** Both defects were demonstrated at runtime — 21 of 21 single-disc paths render `-1 - `, and the multi-disc arm errors with `can't evaluate field Media in type pathformat.Data`. What the paragraph does not say is that the **newer versions do not run at all**. Phase 4 must not read it as "unpin and it works" |
+
+**The corrected one-sentence statement for TAGR-03 to cite:** *this repository's
+`WRTAG_PATH_FORMAT` works on none of v0.20.0, v0.33.0 or v0.34.0 — it renders `-1 - ` on every
+single-disc track and hard-errors on multi-disc at v0.20.0, and is refused at startup by both
+current tags — and the sole cause of the startup refusal is the `Disc N/` **subdirectory**, proven
+by an ablation that changes nothing else and validates at both current tags.*
+
+**Also corrected:** `renovate.json5:91` names `.Release.Date.Year`, `.Release.Media`,
+`.Track.Position` and `artistsString`. § *Handoff to Phase 4* below already retracts two of the
+four as innocent. **All four are innocent** — all four exist at v0.20.0, three of them
+demonstrably so in the rendered output of arm 1. The one field genuinely absent from v0.20.0 is
+**`.Media`**, which the rule does not name.
+
+**Confirmations, not corrections** — recorded so the claim audit's verdicts are not re-litigated:
+
+| Claim | Outcome |
+|---|---|
+| D-12 row 8: v0.20.0's `Validate` builds single-medium synthetic releases only, *"which is precisely why the repo's broken format passed startup for eight months"* | **CONFIRMED** from source: v0.20.0 `pathformat.go:143-159` does exactly one `release.Media = append(...)` |
+| D-12 row 3c: a real `move`/`copy` wipes unlisted tags via `tags.Clear` | **CONFIRMED IN SOURCE ONLY.** See the criterion 4 table above; the dry runs structurally could not exhibit it, and `logTagChanges` structurally could not log it |
+| D-12 row 11: `WRTAG_RESEARCH_LINK` is wrtag's answer for unmatched content | **CONFIRMED**, quoted verbatim |
+| D-12 row 5 / OD-5: v0.34.0 exists and is a path-format no-op against v0.33.0 | **CONFIRMED** on three instruments — byte-identical refusals, byte-identical rendered path sets under the ablation, and a changelog whose only breaking change is `deps: bump to go1.27` |
+
+**One methodological finding worth more than any of the above, carried to every later plan in
+this phase:** the disc class of a wrtag arm **is not a property of the source folder**. A
+21-file, no-`disc`-tag, `track=N/21` album was resolved by MusicBrainz to a **two-medium vinyl
+release** and hard-errored on `.Media.Position` on the very first, unpinned run. wrtag queries
+with `limit=1` and takes what comes back. Any experiment that means to hold the disc class
+constant must pin the release MBID; one that does not is measuring MusicBrainz's mood.
 
 ---
 

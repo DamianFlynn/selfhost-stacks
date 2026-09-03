@@ -1,0 +1,50 @@
+# THROWAWAY — DO NOT DEPLOY. NOT A COMPOSE FILE. NOT A STACK DEFINITION.
+#
+# Phase 3 plan 03-08, criterion 3: the ABLATION path format.
+#
+# WHY THIS FILE EXISTS
+#   Measured 2026-09-03: this repo's real WRTAG_PATH_FORMAT (stacks/selfhosted/music/wrtag.yaml
+#   line 71) is REJECTED AT STARTUP by wrtag v0.33.0 and v0.34.0 —
+#
+#     validate: ambiguous format: multiple directories created for the same release
+#
+#   — and the process exits 2 before reading a single file. So the v0.33.0 and v0.34.0 arms of
+#   plan 03-08 render NO path at all with the real format, and the questions "does the newer
+#   version render a real per-disc track position?" and "do v0.33.0 and v0.34.0 render
+#   identically?" cannot be answered from those arms.
+#
+#   This file is the minimum change that lets them be answered: the SAME format with the disc
+#   component moved out of the directory and into the filename. Nothing else differs — same
+#   root, same `Compilations/`, same `{{ .Release.Title }} ({{ .Release.Date.Year }})` folder,
+#   same `pad0 2 .Track.Position`, same `.IsCompilation` artist clause, same `{{ .Ext }}`.
+#
+#   It therefore does double duty as the ABLATION that proves the CAUSE of the validation
+#   refusal. v0.34.0's pathformat.go builds a synthetic two-medium release and requires every
+#   track of it to land in ONE directory (pathformat.go:186-206, the block added in v0.30.0 and
+#   listed in its release notes as "pathformat: add validations for multi disc releases"). The
+#   real format puts disc 1 in `Disc 1/` and disc 2 in `Disc 2/` — two directories, one release.
+#   If this file validates where the real one does not, the disc SUBDIRECTORY is the cause and
+#   nothing else in the format is implicated.
+#
+# WHAT THIS FILE IS NOT
+#   It is NOT a proposed replacement and NOT a migration this phase is authorised to make.
+#   D-03 freezes stacks/selfhosted/music/wrtag.yaml, stacks/selfhosted/arrs/beets/beets.yaml
+#   and renovate.json5 for the whole of Phase 3. Releasing the Renovate pin and migrating the
+#   path format is Phase 4's TAGR-03. This spike produces the evidence; it does not act on it.
+#
+#   Nor is it a recommendation of THIS shape. `Disc N-` as a filename prefix is one of several
+#   migrations that satisfy the validator; TAGR-03 should choose deliberately, not inherit an
+#   ablation.
+#
+# HOW IT IS USED
+#   scripts/spike03-wrtag-arms.sh reads WRTAG_PATH_FORMAT out of $WRTAG_YAML at run time. The
+#   ablation arms are the same script with WRTAG_YAML pointed here, so the extraction code path,
+#   the mounts, the wrote-nothing instruments and the sha256 recording are all identical. The
+#   sha256 of the value extracted from THIS file is recorded in 03-WRTAG-EVIDENCE.md beside the
+#   sha256 of the value extracted from the real one, so no reader has to take on trust which
+#   string produced which rendered path.
+
+services:
+  wrtag-ablation:
+    environment:
+      - WRTAG_PATH_FORMAT=/music/library/Compilations/{{ .Release.Title | safepath }} ({{ .Release.Date.Year }})/{{ if gt (len .Release.Media) 1 }}Disc {{ .Media.Position }}-{{ end }}{{ pad0 2 .Track.Position }} - {{ if .IsCompilation }}{{ artistsString .Track.Artists | safepath }} - {{ end }}{{ .Track.Title | safepath }}{{ .Ext }}
