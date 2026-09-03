@@ -9,8 +9,17 @@
 #   forcing constraint - every check here IS a single remote call. It is host-resident because
 #   of CREDENTIALS AND REACHABILITY, and that split is worth stating rather than leaving implicit:
 #
-#     - Jellyfin is on the `t3_proxy` docker network and publishes NO host port. `localhost:8096`
-#       is refused. It is reachable ONLY from LXC 100, which is close to decisive on its own.
+#     - Jellyfin is on the `t3_proxy` docker network and `localhost:8096` is refused HERE, so the
+#       API call has to originate on this host. CORRECTED 2026-09-03 (plan 02.1-12, CR-02): this
+#       line used to add that Jellyfin exposed no port on any host interface and could be reached
+#       from LXC 100 alone. THAT WAS FALSE — Jellyfin answers 200 at 172.16.1.76:8096, its
+#       `iot_macvlan` LAN address, from the workstation AND from atlantis, so the surface is
+#       reachable across 172.16.1.0/24 and from the tailnet. What is true is the narrower converse:
+#       172.16.1.76 is unreachable FROM LXC 100 under macvlan host isolation (as the JELLYFIN
+#       ADDRESSING block below already said correctly), which is why the route is t3_proxy.
+#       Stated in full ONCE, in the `# Where it runs:` header of scripts/check-jellyfin-transcode.sh,
+#       against artifacts/02.1-12-reachability-measurement.txt. Do not re-introduce the old claim:
+#       it was the last compensating control in PROJECT.md's admin-equivalent-API-key acceptance.
 #     - D-39 puts the Music Assistant credential at /mnt/fast/secrets/ on LXC 100.
 #     - D-40 puts the purpose-named Jellyfin API key at /mnt/fast/secrets/ on LXC 100.
 #     - atlantis (the Proxmox host, 172.16.1.158) is reachable from LXC 100 for `exportfs -v`,
@@ -143,7 +152,11 @@
 #   ✗ the bare name `jellyfin` from LXC 100 - resolv.conf carries `search deercrest.info`, so it
 #                            resolves to CLOUDFLARE'S PUBLIC EDGE (2606:4700:...). A health check
 #                            would return 200 from the public website with the container down.
-#   ✗ 172.16.1.76          - unreachable from LXC 100 under macvlan host isolation.
+#   ✗ 172.16.1.76          - unreachable FROM LXC 100 under macvlan host isolation. "From LXC 100"
+#                            is the whole qualifier: every OTHER host on 172.16.1.0/24 reaches it
+#                            and gets 200 (measured 2026-09-03, 02.1-12). Generalising this line
+#                            into "unreachable from anywhere" is what produced the false claim
+#                            corrected in the `# Where it runs:` block above.
 #   ✓ docker inspect jellyfin --format '{{(index .NetworkSettings.Networks "t3_proxy").IPAddress}}'
 #     resolved fresh on every run. That is what JELLYFIN_ROUTE below reports.
 #

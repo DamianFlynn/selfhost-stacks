@@ -4,14 +4,54 @@
 #
 # Where it runs:
 #   ON LXC 100 (root@172.16.1.159), from /mnt/fast/stacks, after a `git pull`.
-#   It is host-resident rather than workstation-resident for two independent reasons:
-#     - the docker mount enumeration and the Jellyfin API call cannot each be expressed as one
-#       ssh'd command, and
-#     - Jellyfin publishes NO host port. It is reachable only from a host that can route to its
-#       t3_proxy address, which is this one.
+#   It is host-resident rather than workstation-resident for three independent reasons:
+#     - the docker mount enumeration and the Jellyfin API call cannot be expressed as one
+#       ssh'd command,
+#     - it measures free space with `df -B1 --output=avail`, which is GNU coreutils only (see
+#       the PLATFORM CONSTRAINT block immediately below - the reason is stated once, there), and
+#     - the credential it needs lives at /mnt/fast/secrets/ on this host and nowhere else.
 #   Plan 02.1-10 folds it into the workstation-resident scripts/quick-health-check.sh with a
 #     ssh root@172.16.1.159 'bash /mnt/fast/stacks/scripts/check-jellyfin-transcode.sh'
 #   exactly as 01-09 and 02-09 did for check-music-freeze.sh and check-music-consumers.sh.
+#
+#   REACHABILITY - CORRECTED 2026-09-03 (plan 02.1-12, CR-02). THIS IS THE CANONICAL STATEMENT
+#   FOR THIS ESTATE; scripts/quick-health-check.sh points here rather than restating it.
+#   Until 2026-09-03 this header carried a fourth reason for host-residency: that Jellyfin exposed
+#   no port on any host interface and could therefore be reached only from a host with a route to
+#   its t3_proxy address, this one being the only such host. THAT WAS FALSE. It is PARAPHRASED
+#   rather than quoted here on purpose, so that a mechanical grep for the old sentence over this
+#   repo keeps returning zero - a withdrawn claim left in-band verbatim is a claim that gets
+#   re-copied. The correction, measured not assumed -
+#   full transcript with raw output from three vantage points at
+#     .planning/phases/02.1-jellyfin-transcode-retention-relocate-the-anonymous-transcod/
+#       artifacts/02.1-12-reachability-measurement.txt   (2026-09-03):
+#
+#     - Jellyfin IS reachable from the whole 172.16.1.0/24 at 172.16.1.76:8096, the container's
+#       iot_macvlan LAN address. `curl http://172.16.1.76:8096/health` returns 200 from the macOS
+#       workstation AND from the Proxmox host atlantis. Because the estate advertises
+#       172.16.1.0/24 through two Tailscale subnet routers, it is reachable from the tailnet too.
+#       Jellyfin 10.11 has no scoped API keys - every key is administrator-equivalent - so what is
+#       LAN-reachable here is an ADMIN API SURFACE.
+#
+#     - THE EXPOSURE IS SOLELY THAT MACVLAN ADDRESS. The `ports:` list in
+#       stacks/selfhosted/media/jellyfin.yaml is INERT under this container's macvlan attachment:
+#       `ss -tlnp` on LXC 100 shows ZERO listeners on 8096 and 8920, `docker inspect` reports
+#       every entry of .NetworkSettings.Ports bound to null, `docker ps` prints no host-port
+#       arrow, and curl to 172.16.1.159:8096 fails to connect from the workstation, from atlantis
+#       AND from LXC 100's own loopback. Do not write "it publishes 8096 on the host interface"
+#       here: that mechanism was proposed by the code review and does NOT reproduce, and encoding
+#       it would replace one false claim with another that the next reader would act on.
+#
+#     - 172.16.1.76 is unreachable FROM LXC 100 ITSELF under macvlan host isolation, and THAT -
+#       not an absent host port - is why this script resolves Jellyfin's address via
+#       `docker inspect` on every run and talks to it over t3_proxy. The JELLYFIN ADDRESSING
+#       block further down had this right all along; the claim above generalised a local fact
+#       into a global one, in the same file, eight lines earlier.
+#
+#   DO NOT RE-INTRODUCE THE OLD CLAIM. Its cost was not cosmetic: it was the last compensating
+#   control in .planning/PROJECT.md's residual-risk acceptance of the administrator-equivalent
+#   API key that this phase widened from read-only to WRITE. That acceptance has been re-derived
+#   against the measurement above.
 #
 #   PLATFORM CONSTRAINT - this script must NEVER run in default mode on the macOS workstation.
 #   It measures free space with `df -B1 --output=avail`, and `--output` is GNU coreutils only.
@@ -319,7 +359,10 @@ info "ZFS_ROUTE=$ZFS_ROUTE"
 #   WRONG - the bare name `jellyfin` from LXC 100. resolv.conf carries `search deercrest.info`,
 #           so it resolves to CLOUDFLARE'S PUBLIC EDGE and a health check would return 200 from
 #           the public website with the container stopped.
-#   WRONG - 172.16.1.76, the LAN address. Unreachable from LXC 100 under macvlan host isolation.
+#   WRONG - 172.16.1.76, the LAN address. Unreachable FROM LXC 100 under macvlan host isolation.
+#           "From LXC 100" is the whole qualifier: every OTHER host on 172.16.1.0/24 reaches it
+#           and gets 200. See the REACHABILITY note in this file's header - generalising this one
+#           line into "unreachable from anywhere" is exactly the error 02.1-12 corrected.
 #   RIGHT - docker inspect, resolved fresh on every run. That is what JELLYFIN_ROUTE reports.
 JELLYFIN_ROUTE="unavailable"
 JELLYFIN_ADDR=""
