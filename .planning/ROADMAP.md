@@ -725,7 +725,7 @@ Phase 7. Plans within a phase run sequentially.
 |-------|----------------|--------|-----------|
 | 1. Safety Harness and Freeze the Writers | 9/9 | Complete | 2026-08-18 |
 | 2. NFS Export and Music Assistant Reachability | 9/9 | Complete    | 2026-09-01 |
-| 02.1. Jellyfin Transcode Retention *(inserted)* | 14/14 | Complete   | 2026-09-03 |
+| 02.1. Jellyfin Transcode Retention *(inserted)* | 14/14 | Complete    | 2026-09-03 |
 | 3. Tagger Spike | 1/11 | In Progress | - |
 | 4. Collapse to One Tagger | 0/TBD | Not started | - |
 | 5. Inbox Structure and the Junk Gate | 0/TBD | Not started | - |

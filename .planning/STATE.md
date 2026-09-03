@@ -2,15 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-last_updated: "2026-09-03T10:40:47.729Z"
+status: ready_to_plan
+last_updated: 2026-09-03T11:49:17.984Z
 last_activity: 2026-09-03 -- Phase 02.1 execution started
 progress:
   total_phases: 10
   completed_phases: 2
   total_plans: 43
-  completed_plans: 29
+  completed_plans: 33
   percent: 20
+stopped_at: Phase 02.1 complete (14/14) — ready to discuss Phase 03
 ---
 
 # Project State
@@ -21,16 +22,16 @@ See: .planning/PROJECT.md (updated 2026-08-17)
 
 **Core value:** New music downloads land in the library correctly tagged, through exactly one
 pipeline that someone owns.
-**Current focus:** Phase 02.1 — jellyfin-transcode-retention-relocate-the-anonymous-transcod
+**Current focus:** Phase 03 — tagger spike
 
 **Definition of done (CONS-04):** a file is imported only when verified with `ffprobe` on the file
 *and* visible in both Jellyfin and Music Assistant. Never "tool configured".
 
 ## Current Position
 
-Phase: 02.1 (jellyfin-transcode-retention-relocate-the-anonymous-transcod) — EXECUTING
-Plan: 1 of 14
-Status: Executing Phase 02.1
+Phase: 03
+Plan: Not started
+Status: Ready to plan
 
 **02.1-10 COMPLETE. THE ESTATE'S ROUTINE HEALTH CHECK NOW COVERS THE THING THAT EMPTIED `/`, AND
 EVERY ONE OF ITS FAIL-CLOSED BRANCHES HAS BEEN DRIVEN RATHER THAN READ.**
@@ -788,7 +789,7 @@ already open so only 2049 is this phase's delta.
 
 **Velocity:**
 
-- Total plans completed: 18
+- Total plans completed: 32
 - Average duration: ~42m (excluding 01-06's 374-minute observation window)
 - Total execution time: ~375m of work
 
@@ -798,6 +799,7 @@ already open so only 2049 is this phase's delta.
 |-------|-------|-------|----------|
 | 01 | 9 | ~375m | ~42m |
 | 02 | 9 | - | - |
+| 02.1 | 14 | - | - |
 
 **Per Plan:**
 
