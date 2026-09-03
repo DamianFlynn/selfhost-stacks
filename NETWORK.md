@@ -357,6 +357,28 @@ Standing check: `bash scripts/check-music-consumers.sh` on LXC 100, which also r
 | 8084 | sabnzbd (Docker) | |
 | 18080 | podsync (Docker) | |
 
+> **Jellyfin publishes NO host port on `172.16.1.159` — and that does not mean it is unexposed.**
+> Jellyfin sits on `iot_macvlan` with its own first-class LAN address, **`172.16.1.76:8096`**, which
+> is reachable from all of `172.16.1.0/24` and, via the two subnet routers, from the tailnet. The
+> `ports:` mapping in its compose file is **inert under macvlan**.
+>
+> Measured 2026-09-03 from three vantage points: `curl http://172.16.1.76:8096/health` returns
+> **200** from the macOS workstation **and** from atlantis, and **fails (exit 7) from LXC 100
+> itself** — macvlan host isolation means the Docker host cannot reach its own macvlan container.
+> That last point is why `scripts/check-jellyfin-transcode.sh` resolves the address via
+> `docker inspect` rather than hard-coding one.
+>
+> Separately measured and **not** true: `ss -tlnp` on LXC 100 shows nothing listening on
+> `8096`/`8920`, and `curl 172.16.1.159:8096` fails even from the LXC's own loopback. There is no
+> `docker-proxy` host-interface bind.
+>
+> ⚠️ **Security relevance.** An earlier version of this estate's scripts and of `PROJECT.md` claimed
+> Jellyfin "publishes NO host port … reachable only from a host that can route to its `t3_proxy`
+> address", and used that as the last compensating control for an **administrator-equivalent
+> Jellyfin API key**. The claim was false, so the control was worth nothing. Corrected 2026-09-03
+> across `check-jellyfin-transcode.sh`, `quick-health-check.sh`, `check-music-consumers.sh` and
+> `.planning/PROJECT.md`. If you see that sentence anywhere again, it is a regression.
+
 ### TV / tuner chain
 HDHomeRun (**172.16.1.161**) + IPTV streams → **dispatcharr** → two independent consumers:
 

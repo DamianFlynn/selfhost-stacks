@@ -141,6 +141,32 @@ These stacks already had proper headers following the dispatcharr.yaml pattern:
 - **User/Group**: 568:568 (apps:apps on TrueNAS SCALE)
 - **Permissions**: 755 for directories, 644 for files
 
+#### ⛔ No anonymous volumes — every mount must be declared
+
+A container path that the image declares as a `VOLUME` but the compose file does not bind gets an
+**anonymous Docker volume** under `/var/lib/docker/volumes` — i.e. **on LXC 100's root filesystem**,
+where nothing names it, nothing bounds it, and no compose file reveals it.
+
+This is not hypothetical. Jellyfin's transcode cache did exactly that, grew to **19 GB**, and drove
+`/` to zero mid-Phase-3. It was invisible in `compose.yaml` the entire time.
+
+**Rules:**
+1. **Bind every path the image declares.** Check with
+   `docker image inspect <img> --format '{{json .Config.Volumes}}'` before deploying.
+2. **Anything that grows without bound gets its own dataset with a `quota`** — caches, transcode
+   scratch, thumbnail stores. Declare it in `infra/`, not by hand.
+3. **Prefer `quota` over `refquota`.** `quota` counts descendants and returns `ENOSPC`; `refquota`
+   returns `EDQUOT`, which this estate's log greps do not match.
+4. **Audit periodically:**
+   ```bash
+   docker volume ls -qf dangling=true          # unreferenced anonymous volumes
+   docker system df -v | head -40              # what is actually consuming /
+   ```
+
+`scripts/check-jellyfin-transcode.sh` asserts `volume mounts: 0` for Jellyfin on every
+`quick-health-check.sh` run, so a reintroduced anonymous volume fails the estate check rather than
+waiting to be discovered by a full disk.
+
 ### Environment Files
 All stacks use `.env` files with this structure:
 ```bash

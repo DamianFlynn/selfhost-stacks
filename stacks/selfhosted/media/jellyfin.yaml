@@ -101,8 +101,20 @@ services:
       JELLYFIN_PublishedServerUrl: jellyfin.deercrest.info
       
     devices:
-      # AMD Radeon 890M GPU for hardware transcoding (AMD AMF)
-      # Supports H.264, HEVC (H.265), VP9, AV1 decode/encode
+      # AMD Radeon 890M GPU. The device IS mapped in, and the hardware is capable of
+      # H.264 / HEVC / VP9 / AV1 decode+encode — but JELLYFIN DOES NOT USE IT.
+      #
+      # HardwareAccelerationType: none and EnableHardwareEncoding: false. Everything
+      # transcodes on CPU (libx264). This is the amdgpu HMM mitigation applied
+      # 2026-08-31 by scripts/disable-jellyfin-hwaccel.sh, NOT drift. Re-enabling VAAPI
+      # is deliberately out of scope (D-30).
+      #
+      # The mapping is left in place so the mitigation is a one-setting revert rather
+      # than a compose change. See the header block at the top of this file (~L21, L43-72)
+      # for the full reasoning and the recovery path.
+      #
+      # ⚠️ Do not "restore" this comment to claim hardware transcoding is active — it
+      # said exactly that until 2026-09-03, three days after the setting was turned off.
       - /dev/dri:/dev/dri
     volumes:
       - /etc/localtime:/etc/localtime:ro  # System timezone for scheduling

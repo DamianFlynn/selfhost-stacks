@@ -28,6 +28,29 @@ This repository is split into two clean domains:
 - **Mount into LXC/VM:** `/mnt/fast/stacks` (repo), `/mnt/fast/appdata` (persistent data)
 - **Service Account:** `apps:apps` (UID/GID `568:568`) for container ownership
 
+#### Quota'd datasets
+
+| Dataset | Mountpoint | Quota | Why |
+|---------|------------|-------|-----|
+| `fast/transcode` | `/mnt/fast/transcode` | **50 G** | Jellyfin's transcode cache. Bound into the container at `/cache/transcodes` |
+
+`fast/transcode` exists because an **anonymous Docker volume** holding Jellyfin's transcode cache
+grew to 19 GB on LXC 100's root filesystem and drove `/` to zero mid-Phase-3. Anonymous volumes live
+under `/var/lib/docker/volumes` — i.e. on `/` — and nothing in the compose file named them, so
+nothing bounded them.
+
+The dataset is declared in `infra/jellyfin-transcode-dataset.tf` and tuned for disposable sequential
+data: `recordsize=1M`, `compression=off` (segments are already-compressed H.264/HEVC),
+`sync=disabled`, `atime=off`.
+
+It uses **`quota`, not `refquota`**, deliberately: `quota` counts descendants and returns `ENOSPC`,
+which is the errno every log grep in this estate is built on. `refquota` returns `EDQUOT` and would
+be invisible to them.
+
+**Standing check:** `scripts/check-jellyfin-transcode.sh` asserts the quota, the mount shape, and
+five Jellyfin retention settings, and exits non-zero on drift. It is folded into
+`scripts/quick-health-check.sh`.
+
 ## 📁 Repository Structure
 
 ```
@@ -232,17 +255,72 @@ Sensitive data stored in `.env` files (gitignored):
 
 ## 🎮 GPU Hardware Acceleration
 
-AMD Radeon 890M GPU is passed through to LXC `100` for hardware transcoding:
-
-**Supported Services:**
-- **Jellyfin:** VA-API transcoding for H.264, HEVC, VP9
-- **Immich:** Hardware-accelerated photo/video processing
+AMD Radeon 890M GPU is passed through to LXC `100`:
 
 **Device Mapping:**
 - `/dev/dri/renderD128` (group `render:110`)
 - `/dev/dri/card1` (group `video:44`)
 
 **Configuration:** See `infra/lxc-selfhost.tf` for LXC device mapping
+
+**Services:**
+- **Immich:** hardware-accelerated photo/video processing — active
+- **Jellyfin:** ⚠️ **hardware transcoding is DISABLED, deliberately.** Jellyfin transcodes in
+  **software (`libx264`)**. `/dev/dri` is still mapped into the container, but Jellyfin does not
+  use it.
+
+> ### ⚠️ Do not "re-enable" Jellyfin hardware acceleration
+>
+> Jellyfin's live config is `HardwareAccelerationType: none` and `EnableHardwareEncoding: false`.
+> This is the **D-30 amdgpu mitigation**, applied after the 2026-08-31 outage that cost ~6 hours.
+>
+> The failure mode is a kernel oops in the `amdgpu` HMM path triggered by GPU userptr mappings.
+> Its blast radius is counter-intuitive: `dockerd` reads `/proc/*/smaps`, so **Traefik and every
+> `*.deercrest.info` service die** while direct-macvlan containers keep serving. It presents as
+> `/proc/pressure/io` `full` ≈ 96% with an **idle CPU** and kernel `tainted` bit 7 — not as load
+> average, which lags and false-greens after reboot. Proxmox kernel 7.0.14-8 does **not** carry a
+> fix.
+>
+> High CPU during a Jellyfin transcode is therefore **correct behaviour**, not a fault to
+> investigate. `scripts/check-jellyfin-transcode.sh` reports both values on every run so drift is
+> visible; `scripts/disable-jellyfin-hwaccel.sh` is the recovery lever.
+
+## 🩺 Health Checks
+
+`scripts/quick-health-check.sh` is the estate's single entry point. Run it **from the workstation**;
+it ssh's to LXC 100 and folds in three subordinate checks:
+
+```bash
+bash scripts/quick-health-check.sh            # exits 0 healthy, 1 on any violation
+REMOTE_TIMEOUT=300 bash scripts/quick-health-check.sh   # slower link / busy host
+```
+
+| Check | Asserts |
+|-------|---------|
+| `check-music-freeze.sh` | Jellyfin's Music library cannot write `.nfo`/`.jpg`/`.lrc` into the library |
+| `check-music-consumers.sh` | the NFS export and its consumers; Jellyfin addressing facts |
+| `check-jellyfin-transcode.sh` | the 50 G transcode quota, the mount shape, and five Jellyfin retention values |
+
+### Design rules these checks follow
+
+They exist because a *previous* generation of checks printed a green tick while blind. Three rules
+came out of that, and new checks should honour them:
+
+1. **Fail closed, and keep "could not look" distinct from "nothing is wrong."** A check that cannot
+   reach the host reports `UNKNOWN` and exits non-zero — never `0 problems found`.
+2. **Bound every remote command Linux-side.** The workstation is macOS and has no GNU `timeout`, so
+   bounds go *inside* the remote command string (`REMOTE_TIMEOUT`, default 120s). A killed command
+   surfaces as its own condition via exit `124`.
+   ⚠️ `timeout N cmd | wc -l` **does not work** — `timeout` signals only the first stage, `wc`
+   counts the empty stream and the pipeline exits `0`. The remote string needs `set -o pipefail`
+   *and* the ssh return code must be read. `${PIPESTATUS[0]}` does **not** rescue it: an assignment
+   is a simple command, not a pipeline.
+3. **Assert, don't report.** A value that is merely printed cannot fail the run. Anything that must
+   not drift gets an explicit expectation and increments `FAILURES` when it moves.
+
+Anything asserted must also be **proven able to fail** — drive it red once, deliberately, rather
+than trusting that it would. Every `EXPECT_*` in `check-jellyfin-transcode.sh` is env-overridable
+precisely so a negative control needs no file edit.
 
 ## 📊 Current Stacks
 

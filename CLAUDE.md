@@ -18,7 +18,19 @@ Repository guidance for code agents and maintainers.
 
 - Hardware: Minisforum NS5Pro
 - Proxmox host "atlantis": `172.16.1.158` (Proxmox VE 9.1)
-- LXC `100` (`selfhost`): `172.16.1.159` (main Docker host - 78+ containers)
+- LXC `100` (`selfhost`): `172.16.1.159` (main Docker host - 103 containers as of 2026-09-03)
+
+## Infrastructure Warnings
+
+- **`terraform apply` in `infra/` can destroy LXC 100.** A bare apply has planned `1 to destroy` on
+  the Docker host and its ~100 containers. Guarded by `prevent_destroy` + `ignore_changes` — which
+  also means genuine bind-mount edits plan clean and do nothing. Always read the plan.
+- **Jellyfin hardware transcoding is OFF deliberately** (`HardwareAccelerationType: none`). This is
+  the D-30 amdgpu mitigation after the 2026-08-31 outage (~6 h). Do not re-enable it. High CPU
+  during a Jellyfin transcode is correct. See README § GPU Hardware Acceleration.
+- **Jellyfin is exposed LAN-wide at `172.16.1.76:8096`** via `iot_macvlan`, and is *not* reachable
+  from LXC 100 itself. It publishes no host port, but that is not a security control — see
+  NETWORK.md § Notable host ports.
 
 ## Infrastructure Rules
 
@@ -52,8 +64,24 @@ docker compose -f stacks/selfhosted/arrs/compose.yaml up -d
 
 - Repo path on host/LXC: `/mnt/fast/stacks`
 - Appdata path: `/mnt/fast/appdata`
+- Transcode cache: `/mnt/fast/transcode` — its own ZFS dataset `fast/transcode`, **50 G `quota`**
+  (not `refquota` — `quota` counts descendants and returns `ENOSPC`, the errno this estate's log
+  greps key on). Declared in `infra/jellyfin-transcode-dataset.tf`; bound into Jellyfin at
+  `/cache/transcodes`. Exists because an anonymous Docker volume put 19 GB of transcode cache on
+  `/` and emptied it.
 - Service account: `apps:apps` (`568:568`)
 - GPU groups: `video:44`, `render:110`
+
+## Health Checks
+
+`scripts/quick-health-check.sh` from the workstation is the single entry point; it folds in
+`check-music-freeze.sh`, `check-music-consumers.sh` and `check-jellyfin-transcode.sh`. Exits 0
+healthy, 1 on any violation. `REMOTE_TIMEOUT` (default 120s) bounds every remote command.
+
+When adding a check, follow the three rules in README § Health Checks: fail closed with "could not
+look" kept distinct from "nothing is wrong"; bound remote commands **Linux-side** (macOS has no GNU
+`timeout`); and assert rather than report. Note `timeout N cmd | wc -l` silently exits 0 — the
+remote string needs `set -o pipefail` and the ssh RC must be read.
 
 <!-- GSD:project-start source:PROJECT.md -->
 ## Project
