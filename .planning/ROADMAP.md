@@ -465,7 +465,7 @@ that four independent lines of evidence already agree on.
 
 **Wave 2** *(blocked on Wave 1)*
 
-- [ ] 03-03-PLAN.md — Variant survey over the Phase 1 ffprobe fence extended to the whole 143-folder backlog for per-stratum prevalence, the deterministic widened de-duplicated 24-folder draw across `dj-mixes` ∪ `unsorted`, and the reflinked scratch tree behind `@spike-03-t0` (wave 2 — depends on 03-02, so the sample can never be drawn before the thresholds that govern it)
+- [x] 03-03-PLAN.md — Variant survey over the Phase 1 ffprobe fence extended to the whole 143-folder backlog for per-stratum prevalence, the deterministic widened de-duplicated 24-folder draw across `dj-mixes` ∪ `unsorted`, and the reflinked scratch tree behind `@spike-03-t0` (wave 2 — depends on 03-02, so the sample can never be drawn before the thresholds that govern it)
 
 **Wave 3** *(blocked on Wave 2)*
 
@@ -726,7 +726,7 @@ Phase 7. Plans within a phase run sequentially.
 | 1. Safety Harness and Freeze the Writers | 9/9 | Complete | 2026-08-18 |
 | 2. NFS Export and Music Assistant Reachability | 9/9 | Complete    | 2026-09-01 |
 | 02.1. Jellyfin Transcode Retention *(inserted)* | 15/15 | Complete   | 2026-09-03 |
-| 3. Tagger Spike | 2/11 | In Progress|  |
+| 3. Tagger Spike | 3/11 | In Progress|  |
 | 4. Collapse to One Tagger | 0/TBD | Not started | - |
 | 5. Inbox Structure and the Junk Gate | 0/TBD | Not started | - |
 | 6. Tagger Configuration and Dry Run | 0/TBD | Not started | - |
