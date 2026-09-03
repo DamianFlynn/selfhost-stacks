@@ -600,3 +600,53 @@ GONE from here on, never UNKNOWN.
   mode. Section 3 -- "the anonymous volume STILL EXISTS" -- has been the single
   deliberate red since 02.1-02 built the script, and it was supposed to be. It
   has now cleared for the right reason.
+
+2026-09-03T00:44:07Z plan=02.1-09 root_avail_bytes=35555835904 root_size_bytes=134682742784 oldvol_transcodes_bytes=GONE oldvol_total_bytes=GONE oldvol_transcodes_files=GONE
+
+--------------------------------------------------------------------------------
+READ THIS BEFORE THE NEXT SAMPLE -- the URGENCY THIS PLAN WAS WRITTEN UNDER NO
+LONGER EXISTS, and that CHANGES THE RISK CALCULUS OF THE APPROVAL GATE.
+--------------------------------------------------------------------------------
+
+  Delta against plan=02.1-06's post-deletion sample, ~51 minutes earlier:
+
+    root_avail_bytes         35575803904 -> 35555835904   -19968000  (-19.0 MiB)
+    oldvol_transcodes_bytes  GONE -> GONE
+    oldvol_total_bytes       GONE -> GONE
+    oldvol_transcodes_files  GONE -> GONE
+
+  MARGIN against the D-17 floor of 21474836480:
+    35555835904 - 21474836480 = 14080999424 = 13.11 GiB
+
+  VERIFIED WITH A SECOND INSTRUMENT before being written down, per the 01-09
+  standing rule: `stat -f -c '%a %S' /` returned bavail=8680624 at bsize=4096 =
+  35555835904 bytes, matching `df -B1 --output=avail /` TO THE BYTE.
+
+  THE 19.0 MiB LOST IN THIS WINDOW IS ORDINARY CHURN from the other 100+
+  containers writing to `/` -- the same class of movement as the +5.2 MiB and
+  -21.5 MiB readings recorded between 02.1-02 and 02.1-04. It is NOT the
+  retention problem: the old volume is GONE, jellyfin holds zero `Type: volume`
+  mounts, and every transcode write now lands on the quota-bounded
+  fast/transcode dataset (devid=47, parent=64519 -- re-read this sample).
+
+  THE MOST IMPORTANT THING ON THIS LINE IS WHAT IT MEANS FOR 02.1-09's GATE.
+  This plan carries the phase's ONLY BLOCKING HUMAN APPROVAL, and when the plan
+  set was written that gate sat against a margin of 185 MiB and a stated budget
+  "measured in hours" (see the 02.1-01 block at the head of this file). D-31
+  moved the reap to wave 8 precisely so the gate would stop costing anything.
+  It has worked: the margin is 13.11 GiB, a factor of about seventy-three on the
+  phase-head reading, and 02.1-06 -- not this plan -- is what bought it.
+
+  CONSEQUENCE, STATED SO A LATER READER DOES NOT HAVE TO INFER IT: there is NO
+  SPACE PRESSURE justifying a marginal deletion here. The correct posture at
+  this gate is CONSERVATIVE -- exclude anything doubtful and say why -- and the
+  gate may take as long as the operator wants. If a future reading of this file
+  is used to argue that a reap was urgent, check the margin on the line, not the
+  prose in the plan.
+
+  THE STANDING CHECK IS GREEN AT THIS SAMPLE: `check-jellyfin-transcode.sh`
+  FAILURES total 0, exit 0, `/` headroom 33.11 GiB, volume mounts 0, quota
+  53687091200, transcode zfs=yes devid=47 parent=64519.
+
+  NOTHING IN THIS PLAN HAS BEEN DELETED AT THE TIME THIS LINE WAS WRITTEN. The
+  inventory is read-only and the prune has not run.

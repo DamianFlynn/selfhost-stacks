@@ -1,0 +1,687 @@
+================================================================================
+02.1-09 REAP TRANSCRIPT
+================================================================================
+
+Plan:   02.1-09 (wave 8) — reclaim unreferenced Docker images on LXC 100's `/`
+Host:   selfhost (LXC 100, root@172.16.1.159)
+Repo:   /mnt/fast/stacks @ 216c5481d3210e800b348098b0bc1ecd6f9ad8f5
+        (D-26 asserted: identical to the workstation HEAD, byte for byte)
+Date:   2026-09-03
+
+STATUS AT TIME OF WRITING: TASK 1 COMPLETE. NOTHING HAS BEEN DELETED.
+The plan halts at task 2, a blocking human approval gate (OD-1, D-28). The
+`prune` in task 3 has NOT run and MUST NOT run until the operator has read and
+edited /mnt/fast/spike-03/out/reap-list.txt.
+
+
+================================================================================
+SECTION 0 — THE URGENCY THIS PLAN WAS WRITTEN UNDER NO LONGER EXISTS
+================================================================================
+
+Recorded first because it changes how every number below should be read.
+
+When this plan set was written, `/` had 185 MiB of margin over the D-17 floor and
+the D-32 watch computed a budget "measured in hours". D-31 moved the reap from
+wave 1 to wave 8 so that the blocking gate would stop standing between the
+incident and its fix. That has worked: 02.1-06 deleted the anonymous transcode
+volume and reclaimed 12.95 GiB, and the margin is now 13.11 GiB — a factor of
+about seventy-three.
+
+CONSEQUENCE: there is NO SPACE PRESSURE justifying a marginal deletion here. The
+correct posture at the gate is conservative. Exclude anything doubtful and say
+why. The gate has no deadline.
+
+STATE.md may still carry prose framing this reap as time-sensitive. It is not.
+
+
+================================================================================
+SECTION 1 — BEFORE STATE, MEASURED IN BYTES
+================================================================================
+
+Taken at 2026-09-03T00:44:07Z, on LXC 100, BEFORE anything was deleted.
+
+  $ df -B1 --output=avail /
+  35555835904
+
+  $ df -B1 --output=size /
+  134682742784
+
+  AVAIL_BEFORE_BYTES: 35555835904
+  SIZE_BYTES:         134682742784
+
+WHY -B1 AND NEVER THE GiB-ROUNDING BLOCK MODE. GNU `df` in GiB block mode ROUNDS
+UP — on this very host 2.2 GiB actually free reported as `3G` during 03-01. On a
+20 GiB floor that is up to 1 GiB of optimism in exactly the direction that hurts.
+The script was changed to `df -B1` in commit b217ada for this reason. Every
+free-space figure in this transcript is a byte integer read with `df -B1`.
+The prohibited spelling is deliberately not written literally anywhere in this
+file, so that a mechanical grep for it over this artifact returns zero.
+
+VERIFIED WITH A SECOND INDEPENDENT INSTRUMENT before being written down, per the
+01-09 standing rule:
+
+  $ stat -f -c '%a %S' /
+  8680624 4096
+  8680624 * 4096 = 35555835904   — matches `df -B1 --output=avail /` TO THE BYTE.
+
+MARGIN against the D-17 floor of 21474836480:
+  35555835904 - 21474836480 = 14080999424 = 13.11 GiB
+
+
+--------------------------------------------------------------------------------
+1.1  `docker system df` (verbatim) — RECORDED AS CONTEXT, NOT AS A TARGET
+--------------------------------------------------------------------------------
+
+  TYPE            TOTAL     ACTIVE    SIZE      RECLAIMABLE
+  Images          95        83        66.54GB   62.44GB (93%)
+  Containers      104       103       3.53GB    1.716kB (0%)
+  Local Volumes   7         5         824.9MB   0B (0%)
+  Build Cache     0         0         0B        0B
+
+RE-DERIVED ON THE DAY rather than reused from CONTEXT.md (61.87 GB) or
+RESEARCH.md (62.44 GB). It happens to match RESEARCH.md's figure exactly.
+
+THIS FIGURE IS NOT WHAT THIS PLAN IS MEASURED AGAINST, AND THE PROJECT'S OWN
+MEASUREMENT IS WHY. In 03-01, twenty-seven images were removed and `/` went
+18 GiB -> 36 GiB — 18 GiB of real, measured space. Over that same reap the
+`docker system df` RECLAIMABLE figure went 61.87 GB -> 62.44 GB. IT ROSE. A
+number that increases when you delete 18 GiB of the thing it claims to be
+measuring is not measuring that thing.
+
+Two mechanisms account for it, both visible in this estate's own numbers:
+
+  (a) SHARED-LAYER DOUBLE COUNTING. RECLAIMABLE is derived from per-image SIZE,
+      and a layer shared by N images is counted N times. Section 4.3 below
+      measures this directly on the four candidates: their naive size sum is
+      1724683251 bytes, but 211.7 MB of that is a base they share with each
+      other and is counted four times over.
+
+  (b) IT COUNTS IMAGES REFERENCED ONLY BY NON-RUNNING CONTAINERS. `ACTIVE 83`
+      against `TOTAL 95` means twelve images are "inactive" by Docker's
+      reckoning. Docker's notion of active is attachment to a RUNNING container.
+      This estate has a documented `created`-state blind spot — dispatcharr and
+      teleport sat in `created`, existing and never having run, for six weeks
+      behind a status-filtered check. An image referenced only by a `created`,
+      `exited` or `dead` container is load-bearing and Docker's RECLAIMABLE
+      sweeps it in. `spike03-image-headroom.sh` deliberately protects exactly
+      that set.
+
+The numbers this plan IS measured against are the recorded `df -B1` byte delta
+and the per-tag removal diff.
+
+
+--------------------------------------------------------------------------------
+1.2  `docker system df -v` (head) — the per-image shared/unique breakdown
+--------------------------------------------------------------------------------
+
+Images space usage:
+
+REPOSITORY                             TAG              IMAGE ID       CREATED       SIZE     SHARED    UNIQUE    CONTAINERS
+ghcr.io/ridafkih/keeper-web            2.23             6d4d9dcf335b   2 days ago    559MB    205.4MB   354.1MB   1
+ghcr.io/ridafkih/keeper-api            2.23             391ef0051e5d   2 days ago    562MB    205.4MB   356.7MB   1
+ghcr.io/ridafkih/keeper-mcp            2.23             d210595fe475   2 days ago    545MB    205.4MB   339.5MB   1
+ghcr.io/ridafkih/keeper-worker         2.23             404a762cc066   2 days ago    277MB    205.4MB   71.8MB    1
+ghcr.io/ridafkih/keeper-cron           2.23             4f6b82068f6b   2 days ago    299MB    205.4MB   93.95MB   1
+metasauce/beets-flask                  v2.0.0-rc6       2d817f8db5d7   3 days ago    1.12GB   78.64MB   1.041GB   0
+lscr.io/linuxserver/beets              2.13.1-ls349     159e62e4d611   4 days ago    638MB    0B        638.4MB   0
+sentriz/wrtag                          v0.34.0          80f8f1ee5f52   7 days ago    189MB    8.416MB   180.5MB   0
+postgres                               18               a6638641707c   9 days ago    456MB    78.64MB   377.8MB   1
+redis                                  7-alpine         5509c0097c60   2 weeks ago   39.1MB   7.834MB   31.26MB   1
+ghcr.io/linuxserver/sabnzbd            5.1.0            64c505440b78   2 weeks ago   181MB    0B        180.7MB   1
+cloudflare/cloudflared                 2026.8.2         96d2b4cae75e   2 weeks ago   63.9MB   2.212MB   61.67MB   1
+ghcr.io/block/buzz                     sha-df9e773      b84e11d3468f   2 weeks ago   239MB    0B        239.1MB   2
+postgres                               17-alpine        1bea307dfb3e   2 weeks ago   297MB    8.416MB   288.8MB   1
+zenika/alpine-chrome                   124              bada659891d3   2 weeks ago   670MB    0B        670.3MB   1
+ghcr.io/dispatcharr/dispatcharr        0.29.0           3621ebe3112b   3 weeks ago   3.02GB   0B        3.019GB   1
+<none>                                 <none>           4b87d5343a0e   4 weeks ago   456MB    0B        456.3MB   0
+
+Note rows 1-5: the four reap candidates' LIVE counterparts, all at 2.23, all with
+CONTAINERS=1. That is the shape of a clean supersession.
+
+Note also that the beets/wrtag/beets-flask rows show CONTAINERS=0 and are NOT
+candidates. They are held by the script's KEEP_PATTERNS allow-list, which exists
+so a re-run of `inventory` cannot list the images Phase 3 just pulled.
+
+
+================================================================================
+SECTION 2 — THE IMAGE INVENTORY, RECORDED THREE WAYS
+================================================================================
+
+The plan requires the before-inventory recorded per unique ID, per tag, and as a
+full verbatim listing, because those answer different questions and a check built
+on one count alone under-reports.
+
+  IDS_BEFORE_RAW:      89     docker image ls -q | wc -l
+  IDS_BEFORE_UNIQ:     86     docker image ls -q | sort -u | wc -l
+  IDS_A_BEFORE_RAW:    98     docker image ls -aq | wc -l
+  IDS_A_BEFORE_UNIQ:   95     docker image ls -aq | sort -u | wc -l
+  TAGS_BEFORE:         89     docker image ls --format '{{.Repository}}:{{.Tag}}' | wc -l
+  TAGS_A_BEFORE:       98     docker image ls -a --format '{{.Repository}}:{{.Tag}}' | wc -l
+  CONTAINERS_BEFORE:  104     docker ps -a --format '{{.Names}}' | wc -l   (NO status filter)
+  DANGLING_BEFORE:      9     docker image ls -qf dangling=true | wc -l
+
+
+--------------------------------------------------------------------------------
+2.1  ⚠ A CORRECTION TO THE PLAN'S OWN STATED PREMISE, MEASURED NOT ASSUMED
+--------------------------------------------------------------------------------
+
+THE PLAN SAYS: "`docker image ls -q` DEDUPES BY ID, so a multi-tagged image
+contributes one line no matter how many tags point at it. 03-01 hit exactly this
+case with `audiobookshelf:2.35.1` and `audiobookshelf:latest`."
+
+MEASURED ON THIS HOST, TODAY: IT DOES NOT DEDUPE.
+
+  docker image ls -q | wc -l           = 89
+  docker image ls --format tag | wc -l = 89     <-- IDENTICAL
+  docker image ls -q | sort -u | wc -l = 86     <-- the dedupe only happens if you ask
+
+`-q` emits ONE LINE PER REPOSITORY:TAG ROW, repeating the short ID for each tag.
+Three images on this host carry two tags each, and each contributes two `-q`
+lines:
+
+  34ad5ee005b6   getmeili/meilisearch:v1.51   and  :v1.51.0
+  af8d9cd069a7   pgvector/pgvector:0.8.3-pg18 and  :pg18
+  d57d4a0c18b3   jellyfin/jellyfin:10.11.11   and  :latest
+
+89 - 3 = 86. The arithmetic closes exactly.
+
+WHY THIS MATTERS RATHER THAN BEING PEDANTRY. The plan's stated hazard — "an
+accounting built on the ID count alone silently UNDER-reports a multi-tagged
+removal" — is real but its MECHANISM IS INVERTED. Because `-q` tracks tags,
+untagging one of two tags on an image moves the `-q` count by 1 while NO IMAGE
+LEAVES THE STORE at all. The raw count therefore OVER-reports, not under-reports.
+03-01's audiobookshelf pair produced TWO `-q` lines, not one; removing the first
+tag would have moved the count without freeing a byte.
+
+THE PLAN'S REMEDY IS CORRECT REGARDLESS, WHICH IS WHY THIS IS RECORDED AND NOT
+ESCALATED: diff the FULL LISTING, not either count. Both the raw and the `sort -u`
+figures are recorded above so a later reader can reconcile whichever way they
+read it. `docker system df` TOTAL 95 reconciles against IDS_A_BEFORE_UNIQ = 95,
+which is the true count of distinct images in the store.
+
+
+--------------------------------------------------------------------------------
+2.2  Full before-listing, verbatim
+--------------------------------------------------------------------------------
+
+$ docker image ls -a --format '{{.ID}} {{.Repository}}:{{.Tag}} {{.Size}}'
+
+6d4d9dcf335b ghcr.io/ridafkih/keeper-web:2.23 559MB
+391ef0051e5d ghcr.io/ridafkih/keeper-api:2.23 562MB
+d210595fe475 ghcr.io/ridafkih/keeper-mcp:2.23 545MB
+4f6b82068f6b ghcr.io/ridafkih/keeper-cron:2.23 299MB
+404a762cc066 ghcr.io/ridafkih/keeper-worker:2.23 277MB
+2d817f8db5d7 metasauce/beets-flask:v2.0.0-rc6 1.12GB
+159e62e4d611 lscr.io/linuxserver/beets:2.13.1-ls349 638MB
+80f8f1ee5f52 sentriz/wrtag:v0.34.0 189MB
+a6638641707c postgres:18 456MB
+5509c0097c60 redis:7-alpine 39.1MB
+64c505440b78 ghcr.io/linuxserver/sabnzbd:5.1.0 181MB
+96d2b4cae75e cloudflare/cloudflared:2026.8.2 63.9MB
+b84e11d3468f ghcr.io/block/buzz:sha-df9e773 239MB
+1bea307dfb3e postgres:17-alpine 297MB
+bada659891d3 zenika/alpine-chrome:124 670MB
+3621ebe3112b ghcr.io/dispatcharr/dispatcharr:0.29.0 3.02GB
+4b87d5343a0e postgres:<none> 456MB
+8da6d95a8747 prom/prometheus:v3.13.2 250MB
+8921315d8f12 ghcr.io/seerr-team/seerr:v3.4.1 882MB
+a44ed2ef4beb pgvector/pgvector:0.8.6-pg18 445MB
+bc89fe8d101b freikin/dawarich:1.10.3 1.82GB
+2ebbd4ed4902 ghcr.io/paperless-ngx/paperless-ngx:3.0.4 2.46GB
+66b24f73e543 ghcr.io/advplyr/audiobookshelf:2.36.0 320MB
+b33572d9f0be ghcr.io/autobrr/autobrr:v1.83.0 72.8MB
+dacbdaa86a43 ollama/ollama:0.32.5 4.76GB
+46d0f05d40ad itzg/minecraft-bedrock-server:2026.7.6 191MB
+34ad5ee005b6 getmeili/meilisearch:v1.51 150MB
+34ad5ee005b6 getmeili/meilisearch:v1.51.0 150MB
+2a51817f7925 redis:<none> 39.1MB
+1fad5bb8fc18 logiclabshq/open-archiver:v0.5.2 215MB
+0b9520b5460c traefik:<none> 192MB
+464510df49a8 grafana/grafana:13.1.1 1.16GB
+12de180edfcd icereed/paperless-gpt:v0.27.0 80MB
+28998310e837 pglombardo/pwpush:2.9.4 392MB
+1d173af31194 ghcr.io/ridafkih/keeper-web:2.13 573MB
+8daf9e5ac037 ghcr.io/ridafkih/keeper-api:2.13 559MB
+7fe4c505bf8f ghcr.io/ridafkih/keeper-worker:2.13 282MB
+c2a930a3c335 ghcr.io/ridafkih/keeper-cron:2.13 311MB
+f0ba77f796e5 nginx:1.31.3-alpine 62.4MB
+51de16a8a36a sentriz/wrtag:v0.33.0 186MB
+e2b53e033907 ghcr.io/wizarrrr/wizarr:v2026.7.1 322MB
+d3c58da373c5 ghcr.io/lukegus/termix:release-2.4.1 465MB
+36e92b0342c5 postgres:<none> 456MB
+2ac2bf6cf4e2 searxng/searxng:2026.6.23-e3713717f 259MB
+23c908aa24b3 cyfershepard/jellystat:1.1.11 580MB
+2863dabaa216 traefik:<none> 187MB
+e777aadcaa26 quay.io/docling-project/docling-serve:v1.25.0 8.86GB
+da121d03eaf6 postgis/postgis:17-3.5-alpine 521MB
+af8d9cd069a7 pgvector/pgvector:0.8.3-pg18 445MB
+af8d9cd069a7 pgvector/pgvector:pg18 445MB
+99d320a6265d postgres:18-alpine 304MB
+4bd4489d15b7 gotenberg/gotenberg:8.34 1.68GB
+6795b9e10c21 postgres:<none> 456MB
+4aac6d4b5787 ghcr.io/damongolding/immich-kiosk:0.39.3 21.7MB
+d57d4a0c18b3 jellyfin/jellyfin:10.11.11 1.56GB
+d57d4a0c18b3 jellyfin/jellyfin:latest 1.56GB
+d2bb29e44a4c ghcr.io/open-webui/open-webui:v0.9.6 4.78GB
+18fd8e556e5f apache/tika:3.3.1.0-full 843MB
+894893ed4d45 ghcr.io/flaresolverr/flaresolverr:v3.5.0 717MB
+4a87c7d1276f authelia/authelia:<none> 77.6MB
+e3f223f57eb2 oxidized/oxidized:0.37.0 318MB
+126c6fa1a23f valkey/valkey:9-alpine 45MB
+487efc061638 redis:7.4-alpine 39.1MB
+293e6c721617 public.ecr.aws/gravitational/teleport-distroless:18.7.2 718MB
+47509d7f7c15 prom/node-exporter:v1.11.1 25.8MB
+d6587efc7da3 mattermost/mattermost-team-edition:release-11 593MB
+30dc9e8c3cd4 ghcr.io/homarr-labs/homarr:v1.55.0 451MB
+c6b52d6ac536 ghcr.io/gitroomhq/postiz-app:v2.20.1 5.43GB
+bf3e16de0499 ghcr.io/damianflynn/custom-n8n:2.11.1 1.77GB
+057051bac500 ghcr.io/linuxserver/prowlarr:2.3.0.5236-ls138 193MB
+bd31a35e4c4a ghcr.io/linuxserver/lidarr:3.1.0.4875-ls21 307MB
+1156fdc4c6cb ghcr.io/linuxserver/bazarr:v1.5.6-ls340 432MB
+d76689d5a94a lscr.io/linuxserver/code-server:4.109.5 688MB
+c6e558907241 ghcr.io/linuxserver/radarr:6.0.4.10291-ls294 219MB
+426340c02ca6 ghcr.io/open-webui/mcpo:main 538MB
+ac85968a7613 ghcr.io/karakeep-app/karakeep-workers:0.31.0 1.23GB
+9ec834b513cb ghcr.io/karakeep-app/karakeep-web:0.31.0 1.23GB
+997f65aca5f2 travisvn/openai-edge-tts:latest 175MB
+dc6e173d8aaf ghcr.io/mahcks/blockbusterr:v1.4.0 25.6MB
+91ac2d2feb9e ghcr.io/linuxserver/freshrss:1.28.1 101MB
+8a7ac3e8cd08 lscr.io/linuxserver/sonarr:4.0.16.2944-ls303 206MB
+18e64bb91753 ghcr.io/immich-app/immich-server:v2.5.6 2.15GB
+0af374679ceb ghcr.io/immich-app/immich-machine-learning:v2.5.6 1.33GB
+9801f8c9f0e8 ghcr.io/pennydreadful/bookshelf:softcover 318MB
+c435c4870104 sentriz/wrtag:v0.20.0 172MB
+f89aca4caf82 rustdesk/rustdesk-server:1.1.15 13.1MB
+f12e8fd0013b ghcr.io/jtdowney/tsbridge:v0.13.1 40.9MB
+a31688ab1366 gcr.io/cadvisor/cadvisor:v0.55.1 75.1MB
+16bbd1209742 tecnativa/docker-socket-proxy:v0.4.2 32.3MB
+9eafe528d67a redis/redis-stack:7.4.0-v8 895MB
+81c6b7fd738e ghcr.io/linuxserver/qbittorrent:5.1.2-r3-ls421 198MB
+2bb282b81e3d ghcr.io/immich-app/postgres:<none> 754MB
+69b2ec208575 minio/minio:RELEASE.2025-09-07T16-13-09Z 175MB
+c2ad77420d33 minio/mc:RELEASE.2025-08-13T08-35-41Z 84.9MB
+8c04e462c120 valkey/valkey:<none> 113MB
+176981d2355d ghcr.io/onedr0p/exportarr:v2.3.0 16.8MB
+8f32a92c2330 ghcr.io/mxpv/podsync:v2.8.0 231MB
+ac8d83c4a0c4 ghcr.io/schaka/janitorr:stable 348MB
+
+(98 rows; a copy is retained for the after-diff.)
+
+
+--------------------------------------------------------------------------------
+2.3  Container states, enumerated with NO STATUS FILTER
+--------------------------------------------------------------------------------
+
+$ docker ps -a --format '{{.State}}' | sort | uniq -c
+      1 exited
+    103 running
+
+The one non-running container:
+
+  buzz-minio-init   minio/mc:RELEASE.2025-08-13T08-35-41Z   Exited (0) 2 weeks ago
+
+Its image IS protected — it appears in the referenced set and is not a candidate.
+That is the whole point of the unfiltered enumeration: a one-shot init container
+that exited cleanly two weeks ago still owns its image, and a
+`status=running`-filtered query would have offered it up for deletion. Zero
+containers are in `created` state today, but the enumeration was done unfiltered
+anyway, because the six-week dispatcharr/teleport blind spot is what the
+convention exists for and a lucky day is not a method.
+
+
+================================================================================
+SECTION 3 — THE INVENTORY RUN
+================================================================================
+
+INVENTORY_INVOCATION: FLOOR_GB=20 bash scripts/spike03-image-headroom.sh inventory
+INVENTORY_EXIT: 0
+
+`FLOOR_GB=20` IS AN ENVIRONMENT OVERRIDE, NOT AN EDIT. The script's default of 8
+is OD-1's Phase 3 gate and belongs to that phase; 20 is D-17's floor for this one.
+Asserted rather than claimed:
+
+  workstation:  git diff --stat scripts/spike03-image-headroom.sh   -> EMPTY
+  workstation:  sha256  32f686f904c1cbfcb74e4a4a239d11275698a4060993ffb7b6167937297df7a8
+  LXC 100:      sha256  32f686f904c1cbfcb74e4a4a239d11275698a4060993ffb7b6167937297df7a8
+  LXC 100:      git status --short scripts/spike03-image-headroom.sh -> EMPTY
+
+That sha256 is the same value 03-REAP-LIST.md recorded for commit b217ada, so the
+script is byte-identical to the version that executed 03-01's reap.
+
+Full transcript (ANSI colour stripped):
+
+  🧮 Spike 03 - docker image headroom inventory
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    host:      selfhost
+    date:      2026-09-03T00:45:01Z
+    floor:     20 GiB free on / (OD-1)
+    out dir:   /mnt/fast/spike-03/out
+    reap list: /mnt/fast/spike-03/out/reap-list.txt
+    mode:      inventory (read-only)
+
+  💾 1. Root filesystem (holds /var/lib/docker)
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    Filesystem                        Size  Used Avail Use% Mounted on
+    /dev/mapper/pve-vm--100--disk--0  126G   86G   34G  73% /
+
+    ✅ 33 GiB free is at or above the 20 GiB floor
+
+  🐳 2. docker system df (verbatim)
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    TYPE            TOTAL     ACTIVE    SIZE      RECLAIMABLE
+    Images          95        83        66.54GB   62.44GB (93%)
+    Containers      104       103       3.53GB    1.716kB (0%)
+    Local Volumes   7         5         824.9MB   0B (0%)
+    Build Cache     0         0         0B        0B
+
+  🔒 3. Referenced-image set (docker ps -a, UNFILTERED - see T-03-01)
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    containers seen (any state, including 'created'): 104
+    distinct protected tokens (tags + resolved ids + parents): 248
+
+  📦 4. Present images vs referenced set
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    REPOSITORY:TAG                                        ID             SIZE
+    ghcr.io/ridafkih/keeper-web:2.13                     1d173af31194   573MB
+    ghcr.io/ridafkih/keeper-api:2.13                     8daf9e5ac037   559MB
+    ghcr.io/ridafkih/keeper-worker:2.13                  7fe4c505bf8f   282MB
+    ghcr.io/ridafkih/keeper-cron:2.13                    c2a930a3c335   311MB
+
+  📊 5. Summary
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    root filesystem avail:                 33 GiB   (floor 20 GiB)
+    containers seen (docker ps -a, unfiltered): 104
+    images present:                        89
+    images protected (referenced or allow-listed): 85
+    reap candidates:                       4
+    reclaimable:                           1.6 GiB   (UPPER BOUND - shared layers counted per image)
+    reap list written to:                  /mnt/fast/spike-03/out/reap-list.txt
+
+    ⚠️  NOTHING HAS BEEN DELETED. An operator must approve /mnt/fast/spike-03/out/reap-list.txt before 'prune' will act.
+    ⚠️  Images for a stack currently 'compose down'd are NOT protected by docker ps -a and WILL be
+    ⚠️  listed above - see KNOWN COLLATERAL in --help. Cross-check against stacks/selfhosted/**.
+
+  INVENTORY_EXIT=0
+
+
+--------------------------------------------------------------------------------
+3.1  The generated list on disk, and its pre-approval fingerprint
+--------------------------------------------------------------------------------
+
+$ cat /mnt/fast/spike-03/out/reap-list.txt     (TAB-separated: TAG<TAB>ID<TAB>SIZE)
+
+  ghcr.io/ridafkih/keeper-web:2.13	1d173af31194	573MB
+  ghcr.io/ridafkih/keeper-api:2.13	8daf9e5ac037	559MB
+  ghcr.io/ridafkih/keeper-worker:2.13	7fe4c505bf8f	282MB
+  ghcr.io/ridafkih/keeper-cron:2.13	c2a930a3c335	311MB
+
+  REAP_LIST_LINES_PRE_APPROVAL:  4
+  REAP_LIST_SHA256_PRE_APPROVAL: 1eaa2049bb05cd96d28c4c605194339585d894ae873631b21f0cd7ad4d89abbe
+
+Recorded BEFORE handing over so the operator's edit is evidenced rather than
+assumed. The post-approval line count and sha256 go in section 6 when the gate
+resolves.
+
+WHAT THIS FILE HELD BEFORE THE INVENTORY OVERWROTE IT, for the record: 03-01's
+already-executed 27-row list, dated Sep 2 09:05, sha256
+eb03cf8af4db9317df13207187a1e635d06ddd2775dd530a931049a4438a6db1. Every image on
+it was reaped on 2026-09-02, so a `prune` run against the stale file would have
+found all 27 "already reclaimed" and deleted nothing. Overwritten, not deleted,
+by the read-only `inventory` — that is the file's normal lifecycle.
+
+
+================================================================================
+SECTION 4 — CROSS-CHECKS
+================================================================================
+
+--------------------------------------------------------------------------------
+4.1  The list against `docker ps -a` — 03-01's `comm -12`, re-run
+--------------------------------------------------------------------------------
+
+$ comm -12 <(cut -f1 /mnt/fast/spike-03/out/reap-list.txt | sort -u) \
+           <(docker ps -a --format '{{.Image}}' | sort -u)
+  (zero lines)
+
+Zero lines, as required. No candidate is named by any container in any state.
+
+
+--------------------------------------------------------------------------------
+4.2  The list against `stacks/selfhosted/**`
+--------------------------------------------------------------------------------
+
+$ grep -rn "ridafkih/keeper" stacks/
+  stacks/selfhosted/keeper-sh/compose.yaml:61:    image: ghcr.io/ridafkih/keeper-api:2.23
+  stacks/selfhosted/keeper-sh/compose.yaml:112:   image: ghcr.io/ridafkih/keeper-cron:2.23
+  stacks/selfhosted/keeper-sh/compose.yaml:135:   image: ghcr.io/ridafkih/keeper-worker:2.23
+  stacks/selfhosted/keeper-sh/compose.yaml:157:   image: ghcr.io/ridafkih/keeper-mcp:2.23
+  stacks/selfhosted/keeper-sh/compose.yaml:182:   image: ghcr.io/ridafkih/keeper-web:2.23
+
+$ grep -rn "keeper-.*:2\.13" stacks/
+  (zero lines — exit 1)
+
+NO COMPOSE FILE IN THE REPO NAMES `2.13` ANYWHERE. All five keeper services
+declare `2.23`, and all five are running as `cal-web`, `cal-api`, `cal-mcp`,
+`cal-worker`, `cal-cron`.
+
+03-01 recorded that a REGISTRY-PREFIX DIFFERENCE can defeat this cross-reference
+— `pglombardo/pwpush:2.7.3` first scored "not declared" because the stack writes
+`docker.io/pglombardo/pwpush:2.9.4`. That trap does not apply here: the grep was
+run on the bare substring `ridafkih/keeper`, which matches with or without a
+registry prefix, and it returned the five live declarations.
+
+
+--------------------------------------------------------------------------------
+4.3  ⚠ WHAT WILL ACTUALLY BE FREED — measured, not summed
+--------------------------------------------------------------------------------
+
+The script's headline "reclaimable: 1.6 GiB" is a SUM OF PER-IMAGE SIZES and the
+script says so ("UPPER BOUND - shared layers counted per image"). Exact bytes:
+
+  1d173af31194  keeper-web:2.13      573256323
+  8daf9e5ac037  keeper-api:2.13      558504780
+  7fe4c505bf8f  keeper-worker:2.13   281601585
+  c2a930a3c335  keeper-cron:2.13     311320563
+  ---------------------------------------------
+  NAIVE_SUM_BYTES: 1724683251   = 1.61 GiB
+
+`docker system df -v` reports each of the four with SHARED SIZE 211.7 MB, so the
+naive sum counts a ~211.7 MB base FOUR TIMES. Their UNIQUE sizes are 361.6 +
+346.8 + 69.92 + 99.64 = 877.96 MB.
+
+THE SHARED BASE IS SHARED WITH EACH OTHER, NOT WITH ANYTHING THAT STAYS.
+Measured directly against the layer sets rather than inferred from the
+shared/unique columns:
+
+  union of the four candidates' RootFS layers               : 43
+  union of RootFS layers over EVERY OTHER image on the host : 881
+  candidate layers found ONLY in the candidates             : 42
+  candidate layers ALSO held by an image that stays         : 1
+
+Forty-two of forty-three layers are unique to the set being removed. So the
+realistic figure is the unique sizes plus the shared base counted once:
+
+  REALISTIC_ESTIMATE ≈ 877.96 MB + 211.7 MB ≈ 1.09 GB ≈ 1.02 GiB
+
+STATED IN ADVANCE, DELIBERATELY. 03-01's 18.1 GiB estimate turned out to be
+exactly right, which is precisely why an estimate here should be given honestly
+rather than optimistically — the estate now has a precedent of trusting these
+numbers. Expect the measured `df` delta to land nearer 1.0 GiB than 1.6 GiB, and
+lower still if unrelated container churn runs the other way (the D-32 watch has
+recorded ordinary churn of ±5 to ±32 MiB between consecutive samples all phase).
+
+`/` after the reap, projected: 35555835904 + ~1.09e9 ≈ 36.6 GB avail ≈ 34.1 GiB.
+Margin over the D-17 floor would go 13.11 GiB -> ~14.1 GiB.
+
+
+--------------------------------------------------------------------------------
+4.4  ⚠ AN UNDER-REPORT THE INVENTORY CANNOT SEE — 3 UNTAGGED IMAGES, ~1.02 GB
+--------------------------------------------------------------------------------
+
+FOUND WHILE CROSS-CHECKING, NOT OFFERED FOR DELETION. Recorded because it is a
+real limit of the method and the operator should know the list is not exhaustive.
+
+`do_inventory` enumerates candidates from `docker images` — WITHOUT `-a`. On this
+host that hides NINE untagged images (`docker image ls -qf dangling=true` = 9).
+They are structurally invisible to the reap list and CANNOT be produced by it.
+
+Tested individually, both by `docker ps -a --filter ancestor=` and independently
+by re-deriving the script's own `referenced_set()` and testing membership:
+
+  ID            REPO@DIGEST                 BYTES       ancestor  referenced_set
+  0b9520b5460c  traefik@sha256:652929a1…    192245996   1         PROTECTED
+  2a51817f7925  redis@sha256:e7723ff7…       39086411   1         PROTECTED
+  2bb282b81e3d  immich-app/postgres@…       753917732   1         PROTECTED
+  36e92b0342c5  postgres@sha256:4aabea78…   456263135   1         PROTECTED
+  4a87c7d1276f  authelia/authelia@…          77569269   1         PROTECTED
+  8c04e462c120  valkey/valkey@…             112534682   1         PROTECTED
+  2863dabaa216  traefik@sha256:e4d98158…    187018211   0         NOT REFERENCED
+  4b87d5343a0e  postgres@sha256:a02db8ca…   456260690   0         NOT REFERENCED
+  6795b9e10c21  postgres@sha256:29ee7bb3…   456263139   0         NOT REFERENCED
+
+  UNREFERENCED_UNTAGGED_BYTES: 187018211 + 456260690 + 456263139
+                             = 1099542040 = 1.02 GiB
+
+Two instruments agree on all nine, which matters: `--filter ancestor=` and the
+script's `referenced_set()` are independent derivations and neither is trusted
+alone.
+
+THE DIRECTION OF THIS ERROR IS SAFE. Six of the nine ARE load-bearing — they are
+the previous digests of traefik, redis, postgres, authelia, valkey and immich's
+postgres, still referenced by running containers whose tags have since moved.
+Missing them is correct. The three unreferenced ones are simply not offered, so
+the method UNDER-reports what could be reclaimed rather than over-reporting what
+is safe to delete.
+
+THEY ARE DELIBERATELY NOT ADDED TO THE APPROVED LIST. Task 2 forbids editing
+/mnt/fast/spike-03/out/reap-list.txt on the operator's behalf, and hand-writing
+rows the derivation did not produce would bypass the very derivation the gate
+exists to review. They are surfaced here so the operator can rule, and the
+recommendation is DO NOT ADD THEM in this plan — see 02.1-REAP-LIST.md
+§ Known collateral for why an untagged postgres digest is a worse deletion
+candidate than its byte count suggests.
+
+
+--------------------------------------------------------------------------------
+4.5  Round-2 H1 — the verification does NOT re-run the destructive command
+--------------------------------------------------------------------------------
+
+Checked mechanically before task 3 was reached, per the plan's own
+§ verification bullet:
+
+$ awk 'NR>=373 && NR<=379' 02.1-09-PLAN.md | grep -c 'headroom.sh prune'
+  0
+
+The task-3 `<verify>` block contains the token `prune` three times and ALL THREE
+are inside the guard comment forbidding its reintroduction ("This block MUST NOT
+contain the word `prune` as a command"; "If a future edit wants to just re-run it
+to be sure, that is the exact defect this replaced"). There is no invocation.
+`FLOOR_GB=20 … prune` appears in the plan at lines 30 (a key_link), 306 (the task-3
+action) and 381 (an acceptance criterion) — never inside a verify block.
+
+THE H1 DEFECT IS FIXED IN THE PLAN TEXT AS IT STANDS. No deviation was needed.
+
+
+================================================================================
+SECTION 5 — ESTATE HEALTH AT THE GATE
+================================================================================
+
+$ bash /mnt/fast/stacks/scripts/check-jellyfin-transcode.sh
+  / headroom:              35553898496 bytes (33.11 GiB)  (target ≥ 21474836480)
+  volume mounts:           0  (target 0)
+  transcode quota:         53687091200 bytes  (target 53687091200)
+  transcode mounted:       zfs=yes devid=47 parent=64519  (target yes, and devid ≠ parent)
+  encoding values:         REPORTED not asserted  (see section 5)
+  unreachable:             0
+  toolchain missing:       0
+  FAILURES total:          0
+  ✅ Jellyfin transcode retention intact
+  CHECK_EXIT=0
+
+The D-30 amdgpu mitigation is intact at the gate: HardwareAccelerationType=none,
+EnableHardwareEncoding=false. The five retention values read back unchanged.
+
+
+--------------------------------------------------------------------------------
+5.1  Credential screen before committing to a PUBLIC repo (T-021-73)
+--------------------------------------------------------------------------------
+
+This repo is public. Every artifact this plan writes was screened before commit,
+and the screen was run with a POSITIVE CONTROL FIRST so that "0 matches" means
+the instrument looked and found nothing rather than that the instrument is dead:
+
+  positive control: printf 'api_key=abc123\npassword: hunter2\n' | grep -cEi …
+                    -> 2        (the grep discriminates)
+
+  02.1-REAP-LIST.md                -> 0
+  artifacts/02.1-09-reap-transcript.txt -> 0
+  artifacts/02.1-D32-watch.txt     -> 0
+
+  key-shape sweep (JWT / sk- / gh?_ / api_key=) over the same three files -> 0
+
+The artifacts contain image names, tags, short IDs and repo digests only. Round 2
+of the Codex review caught 02.1-06 about to commit the Jellyfin API key into this
+repo because Jellyfin embeds `api_key=` in `TranscodingUrl`; nothing in this plan
+touches a Jellyfin URL, but the screen was run anyway.
+
+
+--------------------------------------------------------------------------------
+5.2  NOTHING WAS DELETED — re-measured after all task-1 work was complete
+--------------------------------------------------------------------------------
+
+  IDS_RAW      89 -> 89     unchanged
+  IDS_UNIQ     86 -> 86     unchanged
+  TAGS         89 -> 89     unchanged
+  TAGS_A       98 -> 98     unchanged
+  CONTAINERS  104 -> 104    unchanged (103 running, 1 exited, 0 created)
+
+  reap-list.txt sha256 still 1eaa2049bb05cd96d28c4c605194339585d894ae873631b21f0cd7ad4d89abbe
+
+Both the ID count and the tag count are unchanged from the before-readings in
+section 2, which is the plan's own acceptance criterion for task 1.
+
+
+================================================================================
+SECTION 6 — APPROVAL GATE (TASK 2) — OPEN
+================================================================================
+
+⛔ EXECUTION HALTED HERE. NOTHING HAS BEEN DELETED.
+
+  REAP_LIST_LINES_PRE_APPROVAL:  4
+  REAP_LIST_SHA256_PRE_APPROVAL: 1eaa2049bb05cd96d28c4c605194339585d894ae873631b21f0cd7ad4d89abbe
+
+  REAP_LIST_LINES_POST_APPROVAL:  (pending)
+  REAP_LIST_SHA256_POST_APPROVAL: (pending)
+  OPERATOR_APPROVAL:              (pending)
+
+Task 3 (`FLOOR_GB=20 bash scripts/spike03-image-headroom.sh prune`) has NOT been
+invoked. The labelled evidence lines that task 3 must emit — PRUNE_INVOCATION:,
+PRUNE_EXIT:, AVAIL_BEFORE_BYTES:, AVAIL_AFTER_BYTES:, AVAIL_DELTA_BYTES:,
+IDS_BEFORE:, IDS_AFTER:, TAGS_BEFORE:, TAGS_AFTER:, and the
+REMOVED_TAGS_BEGIN/REMOVED_TAGS_END pair — are DELIBERATELY ABSENT from this
+file, because emitting them before the run would fabricate evidence for an action
+that has not happened. They are appended by task 3 after the gate resolves.
+
+Nothing was deleted that the operator has not read and approved by name in a file
+on disk. `docker image prune -a` and `docker system prune` were not used, and
+have not been used, and the prohibition is asserted rather than assumed:
+
+$ grep -v '^[[:space:]]*#' scripts/spike03-image-headroom.sh \
+    | grep -cE 'docker (image prune|system prune)'
+  0
+
+THE COMMENT STRIP IS MANDATORY, AND THE CONTROL IS DISCRIMINATING RATHER THAN
+VACUOUS — measured both ways rather than asserted one way:
+
+$ grep -cE 'docker (image prune|system prune)' scripts/spike03-image-headroom.sh
+  4        <-- the raw count, i.e. the known false positive
+
+Four occurrences, all in the header's own prohibition notices (lines 32-33's
+CONTRACT block and line 48's "PROHIBITED here, not merely unused"). A check that
+returned 0 on both readings would prove nothing about the strip; this one returns
+4 raw and 0 stripped, so the strip is demonstrably doing work. 03-01 already
+recorded paying for the raw version.
+
+Note also that the `prune` banner in `do_prune` deliberately says "reap" rather
+than the prohibited word (script lines 359-364), because an echoed banner string
+would satisfy a naive grep exactly as well as a real call would. VALIDATION.md
+row 34 holds.
