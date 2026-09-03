@@ -474,6 +474,25 @@
       "addLabels": [
         "type:stack"
       ]
+    },
+    {
+      "description": "Jellyfin: minor releases are de-facto majors -- require manual review. Jellyfin has been on 10.x since 2019, so its biggest releases present to Renovate as MINOR and fall straight through packageRules[2] (auto-merge minor, platformAutomerge, at any time) unattended: 10.9 introduced segment deletion, 10.10 changed lyric saving, 10.11 reworked encoding. packageRules[5] only catches MAJOR, which for Jellyfin means never. THE THREAT, STATED ACCURATELY: an image upgrade does NOT overwrite the settings -- they live in encoding.xml under /mnt/fast/appdata and swapping the image does not touch appdata. The two real mechanisms are (i) a release CHANGING THE SEMANTICS of the settings, since 10.9 introduced EnableSegmentDeletion in the first place and 10.11 reworked encoding, so a value that still reads back correctly can stop meaning what it meant; and (ii) this estate's documented RENOVATE DEPLOY DRIFT, where a merged PR never reaches /mnt/fast/stacks on the host and docker ps disagrees with git, so an unattended merge leaves the repo and the running container describing different software. The surface at risk is the five phase-02.1 settings: EnableSegmentDeletion, EnableThrottling, SegmentKeepSeconds, ThrottleDelaySeconds, TranscodingTempPath. PATCH automerge is deliberately PRESERVED -- a stream of pre-11.0 builds is shipping now and this estate's documented failure mode is a Renovate backlog nobody works through. NO allowedVersions ceiling: see packageRules[3], the wrtag <0.30.0 pin added on a misdiagnosis on 2026-06-24, which has been enforcing a broken state ever since. KNOWN COSMETIC WART, documented rather than fixed: addLabels is additive and Renovate has no removeLabels, so a Jellyfin minor PR inherits 'automerge' and 'safe' from packageRules[2] while NOT automerging -- the automerge:false here is what governs and those labels are decoration. Filter on 'manual-review-required'. Excluding Jellyfin from packageRules[2] was considered and deferred (CONTEXT.md, Deferred Ideas): it is a behaviour change to EVERY Docker image rule to fix a label that misleads nobody who reads this rule.",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "jellyfin/jellyfin"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "major"
+      ],
+      "automerge": false,
+      "addLabels": [
+        "stack:media",
+        "major-update",
+        "manual-review-required"
+      ]
     }
   ],
   // prConcurrentLimit:
