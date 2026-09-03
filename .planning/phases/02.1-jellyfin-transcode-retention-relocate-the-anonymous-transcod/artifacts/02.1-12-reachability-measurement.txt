@@ -1,0 +1,254 @@
+================================================================================
+02.1-12 — REACHABILITY MEASUREMENT: where is Jellyfin's admin API surface
+          actually answering from?
+================================================================================
+Taken:      2026-09-03T11:09Z .. 2026-09-03T11:12Z
+Taken by:   plan 02.1-12, task 1
+Purpose:    The claim "Jellyfin publishes NO host port; it is reachable only from
+            a host that can route to its t3_proxy address" appears at
+            scripts/check-jellyfin-transcode.sh:10-11 and
+            scripts/quick-health-check.sh:270 and :318. It is the last
+            compensating control in .planning/PROJECT.md's residual-risk
+            acceptance of an administrator-equivalent Jellyfin API key that this
+            phase widened from read-only to write. The code review (CR-02) says
+            it is false. This plan does not take the review's word for it, and
+            does not take the verifier's or the orchestrator's word for it
+            either — it measures. Restating an unverified claim is how this
+            estate launders text into looking twice-confirmed (the keeper.sh
+            README lesson: 3 of 5 documented sync rules were architecturally
+            impossible).
+
+READ-ONLY.  Every probe below is a read: curl against the UNAUTHENTICATED
+            /health endpoint, docker inspect, ss, docker ps. No container was
+            restarted, no API POST was made, no compose file was touched, no
+            terraform was run. A human operator was actively streaming from
+            Jellyfin throughout, which is itself corroborating evidence that the
+            LAN path works and was not disturbed.
+
+NO CREDENTIAL IS USED ANYWHERE IN THIS TRANSCRIPT.  The reachability question is
+            "does an unauthenticated caller get an answer from this address",
+            so /health is the correct probe and no Authorization header exists
+            in any command recorded here. That is deliberate: it is precisely
+            what makes the exposure the point.
+
+--------------------------------------------------------------------------------
+VANTAGE POINT 1 — the macOS workstation (BYO-MBP-LY62L726TL, Darwin), on the LAN
+--------------------------------------------------------------------------------
+
+$ hostname
+BYO-MBP-LY62L726TL
+
+$ uname -s
+Darwin
+
+$ date -u +%Y-%m-%dT%H:%M:%SZ
+2026-09-03T11:11:56Z
+
+$ curl -s -o /dev/null -w '%{http_code}\n' --max-time 10 http://172.16.1.76:8096/health
+200
+
+$ curl -s -o /dev/null -w '%{http_code}\n' --max-time 10 http://172.16.1.159:8096/health
+000
+curl-exit=7
+
+    curl exit 7 is "failed to connect to host". Not a timeout, not a refusal
+    after a handshake — nothing is listening. This is the review's SECOND,
+    docker-proxy-on-the-host-interface mechanism, and here it does not answer.
+
+--------------------------------------------------------------------------------
+VANTAGE POINT 2 — LXC 100 (selfhost, root@172.16.1.159), the host the two check
+                  scripts actually run on
+--------------------------------------------------------------------------------
+
+$ hostname
+selfhost
+
+$ docker inspect jellyfin --format '{{json .NetworkSettings.Networks}}' \
+    | jq -r 'to_entries[] | "\(.key) -> \(.value.IPAddress)"'
+iot_macvlan -> 172.16.1.76
+t3_proxy -> 192.168.90.25
+
+    Two attachments. iot_macvlan carries a first-class LAN address on
+    172.16.1.0/24. t3_proxy carries the internal docker address that
+    check-jellyfin-transcode.sh resolves on every run and uses for section 5.
+
+$ docker inspect jellyfin --format '{{json .NetworkSettings.Ports}}'
+{"1900/udp":null,"7359/udp":null,"8096/tcp":null,"8920/tcp":null}
+
+$ docker ps --filter name=jellyfin --format '{{.Ports}}'
+1900/udp, 8096/tcp, 7359/udp, 8920/tcp
+
+    DOCKER ITSELF REPORTS THE PORTS AS UNPUBLISHED. Every entry in .Ports maps
+    to null — a published port would carry a HostIp/HostPort binding — and
+    `docker ps` prints bare container ports with no `0.0.0.0:8096->8096/tcp`
+    arrow. stacks/selfhosted/media/jellyfin.yaml:89-93 declares
+    `ports: ["8096:8096", "8920:8920", ...]` and that declaration is INERT under
+    this container's macvlan attachment. The compose file's own inline comment,
+    "# HTTP (accessible via macvlan and host)", is half right: macvlan yes,
+    host no.
+
+$ ss -tlnp | grep -c ':8096' || true
+0
+
+$ ss -tlnp | grep ':8096' || true
+(no output)
+
+$ ss -tlnp | grep -c ':8920' || true
+0
+
+    The `|| true` is load-bearing: a grep that matches nothing exits 1, and
+    under `set -o pipefail` that is an abort, not a reading of zero. Zero
+    listeners is a successful measurement, not a failed command.
+
+$ curl -s -o /dev/null -w '%{http_code}\n' --max-time 5 http://127.0.0.1:8096/health || echo curl-exit=$?
+000
+curl-exit=7
+
+$ curl -s -o /dev/null -w '%{http_code}\n' --max-time 5 http://172.16.1.159:8096/health || echo curl-exit=$?
+000
+curl-exit=7
+
+$ curl -s -o /dev/null -w '%{http_code}\n' --max-time 5 http://172.16.1.76:8096/health || echo curl-exit=$?
+000
+curl-exit=7
+
+    THIS IS THE CONTRAST THAT THE CORRECTED WORDING RESTS ON. The workstation
+    and atlantis both get 200 from 172.16.1.76:8096. LXC 100 — the container
+    host itself — cannot reach it at all. That is macvlan host isolation: a
+    macvlan sub-interface is deliberately not reachable from its own parent
+    host. It is NOT evidence that the address is unreachable generally, and
+    reading it that way is exactly the mistake that produced the false claim.
+
+$ curl -s -o /dev/null -w '%{http_code}\n' --max-time 5 http://192.168.90.25:8096/health || echo curl-exit=$?
+200
+
+    The t3_proxy route works from LXC 100, which is why the check script
+    resolves that address via docker inspect and uses it. The reason is
+    "172.16.1.76 is unreachable FROM HERE", not "there is no other route from
+    anywhere".
+
+--------------------------------------------------------------------------------
+VANTAGE POINT 3 — Proxmox host atlantis (root@172.16.1.158), same LAN
+--------------------------------------------------------------------------------
+
+$ hostname
+atlantis
+
+$ curl -s -o /dev/null -w '%{http_code}\n' --max-time 5 http://172.16.1.76:8096/health || echo curl-exit=$?
+200
+
+$ curl -s -o /dev/null -w '%{http_code}\n' --max-time 5 http://172.16.1.159:8096/health || echo curl-exit=$?
+000
+curl-exit=7
+
+    A third, independent host on 172.16.1.0/24 reaches the API surface and
+    likewise finds nothing on LXC 100's own interface. Two independent LAN
+    hosts agreeing rules out a workstation-local artefact (a stale route, a
+    proxy, a VPN path).
+
+================================================================================
+FINDINGS
+================================================================================
+
+(i)  WHICH ROUTES REACH THE ADMIN API SURFACE
+
+     - 172.16.1.76:8096 — the container's iot_macvlan LAN address — answers 200
+       to any host on 172.16.1.0/24. Confirmed from two independent LAN hosts
+       (the macOS workstation and atlantis). Because the estate runs two
+       Tailscale subnet routers advertising 172.16.1.0/24 (the UCG-Max gateway
+       and the HA/NUC), it is also reachable from the tailnet.
+     - 192.168.90.25:8096 — the t3_proxy docker network address — answers 200
+       from LXC 100. This is the route check-jellyfin-transcode.sh uses.
+
+     Jellyfin 10.11 has no scoped API keys: every key maps to
+     UserRoles.Administrator. So "the API surface is LAN-reachable" means an
+     administrator-equivalent surface is LAN-reachable.
+
+(ii) WHICH ROUTES DO NOT, AND WHY
+
+     - 172.16.1.159:8096 (LXC 100's own interface) — nothing listens. Zero
+       sockets in `ss -tlnp`, docker reports every port unpublished, and curl
+       fails to connect from the workstation, from atlantis and from LXC 100's
+       own loopback. The `ports:` mapping in jellyfin.yaml is inert.
+     - 172.16.1.76:8096 FROM LXC 100 — fails, by design. macvlan host
+       isolation: the parent host cannot reach an address on a macvlan
+       sub-interface it hosts. Every other host on the LAN can.
+
+(iii) DID THE REVIEW'S docker-proxy / HOST-INTERFACE MECHANISM REPRODUCE?
+
+     NO. It did not reproduce, on any of four separate instruments: `ss -tlnp`
+     shows zero listeners on 8096 and 8920; `docker inspect .NetworkSettings.Ports`
+     reports every port bound to null; `docker ps` shows no host-port arrow; and
+     curl to 172.16.1.159:8096 fails with exit 7 from three different vantage
+     points including LXC 100's own loopback. The code review was RIGHT ABOUT
+     THE CONCLUSION (the admin API surface is reachable far beyond one
+     container) and WRONG ABOUT ONE OF ITS TWO STATED MECHANISMS. The exposure
+     is SOLELY the macvlan address. Writing "it publishes 8096 on the host
+     interface" into the scripts would replace one false claim with another.
+
+     This measurement agrees with all three prior independent readings (code
+     review's primary claim, verifier, orchestrator) on the conclusion, and
+     with the verifier and orchestrator on the mechanism.
+
+(iv) CORROBORATION FROM LIVE USE
+
+     A human operator was streaming from Jellyfin in a LAN browser at
+     172.16.1.76:8096 during this measurement. That is direct live evidence
+     that the endpoint serves LAN clients and is not confined to t3_proxy —
+     and it is why detaching iot_macvlan is a behaviour change, not a cleanup.
+
+(v)  WHAT THIS DOES AND DOES NOT CHANGE
+
+     CHANGED: the blast radius of an API-key leak is estate-wide (the whole
+     LAN, plus the tailnet via the two subnet routers), not confined to a host
+     an attacker must already own. The "you must already be on LXC 100 to use
+     it" mitigation does not exist and never did.
+
+     NOT CHANGED: endpoint reachability is not key disclosure. Obtaining the
+     key still requires root on LXC 100 — /mnt/fast/secrets/jellyfin-deercrest.env
+     is mode 600 owned by root, and that mode/owner pair is asserted on every
+     sourcing by both check-music-consumers.sh and check-jellyfin-transcode.sh,
+     which refuse to source on anything else.
+
+     ALSO NOT CHANGED BY THIS PHASE: 172.16.1.76:8096 being LAN-reachable is a
+     PRE-EXISTING estate condition that long predates phase 02.1. What this
+     phase changed is that the key is now used for WRITE
+     (POST /System/Configuration/encoding), not that the port opened.
+
+================================================================================
+CREDENTIAL SCREEN (the repo is PUBLIC)
+================================================================================
+Screened before commit with a POSITIVE CONTROL — a sweep that returns 0 matches
+proves nothing unless the same pattern is shown to match something. Transcript
+of the screen is at the end of this file.
+
+Addresses in this file (172.16.1.x, 192.168.90.x) are already throughout this
+repo and NETWORK.md and are not secrets. No Jellyfin API key, no Authorization
+header, no MediaBrowser Token, and no value from jellyfin-deercrest.env appears
+above — no probe recorded here used one.
+
+Pattern used (one alternation, applied identically to the control and to the
+artifact — a screen that uses a different pattern for each is not a control):
+
+    MediaBrowser Token="[A-Za-z0-9]
+  | api_?key[[:space:]]*=[[:space:]]*[A-Za-z0-9]{16,}
+  | JELLYFIN_API_KEY=[A-Za-z0-9]
+  | Authorization:[[:space:]]*MediaBrowser Token="[A-Za-z0-9]{8,}
+  | \b[0-9a-f]{32}\b
+
+POSITIVE CONTROL — two synthetic secret-shaped lines, piped to grep, never
+written to any file:
+
+  $ printf 'Authorization: MediaBrowser Token="<32 synthetic hex>"\nJELLYFIN_API_KEY=<32 synthetic hex>\n' \
+      | grep -Ec "$PAT"
+  2
+
+  The control MATCHES. The pattern is live.
+
+REAL SWEEP over this artifact:
+
+  $ grep -Ec "$PAT" 02.1-12-reachability-measurement.txt
+  0
+
+  Zero matches from a pattern just proven to match. CLEAN.
+
