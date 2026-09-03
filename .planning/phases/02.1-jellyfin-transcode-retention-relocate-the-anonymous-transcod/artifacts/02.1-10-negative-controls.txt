@@ -568,3 +568,257 @@ FULL TRANSCRIPT (ANSI stripped; exit code appended by the invocation)
   ✅ Jellyfin transcode retention intact
   EXIT=0
 --------------------------------------------------------------------------------
+
+================================================================================
+CONTROL 5 -- THE FOLD-IN PROPAGATES THE EXIT CODE  (row 23, a `fires` row)
+================================================================================
+
+WHY THIS TEST HAS THE SHAPE IT HAS
+  The cross-AI review's Plan-09 finding: the reviewed version of row 23 forced
+  the failure by TEMPORARILY EDITING quick-health-check.sh -- because the
+  fold-in's ssh command is hardcoded -- and, unlike the anchor-break test, it
+  had NO STATED RESTORE-AND-REVERIFY STEP. A proof that leaves the thing it
+  broke broken is a defect it installed, not a control it discharged. The
+  revised row forces the failure from the HOST side instead, which needs no edit
+  at all. `git diff scripts/quick-health-check.sh` shows no test-related change,
+  and the file was never touched during either half of this control.
+
+  The `.bak` was written to /mnt/fast/spike-021/, OUTSIDE the git working tree,
+  rather than beside the script. A `.bak` inside scripts/ would make
+  `git status --porcelain scripts/` non-empty for the duration -- one deleted
+  tracked file plus one untracked file -- and the closing repo-clean assertion is
+  the catch-all for a half-finished restore. Do not weaken the catch-all to run
+  the test.
+
+PRE-TEST HASH (recorded before anything moved)
+  d33356c551113fd972c515fc288ef8f00a1180bb8f17119165c81c21971444b5
+
+--------------------------------------------------------------------------------
+5a -- THE SCRIPT MOVED ASIDE.  Exit propagates: 1.  BRANCH: not the one the plan
+      predicted, and the reason is worth recording.
+--------------------------------------------------------------------------------
+
+  mv /mnt/fast/stacks/scripts/check-jellyfin-transcode.sh \
+     /mnt/fast/spike-021/check-jellyfin-transcode.sh.bak
+  test -e <original path>  ->  GONE
+
+  bash scripts/quick-health-check.sh  ->  EXIT=1
+
+  Jellyfin transcode retention: ❌ BROKEN (check-jellyfin-transcode.sh exit 127)
+    Failed assertions:
+    Summary:
+
+  ❌ Health check FAILED — see the music freeze harness, the consumers audit and/or the
+     Jellyfin transcode retention audit above.
+
+  ROW 23'S ACTUAL CLAIM HOLDS: the remote failure propagates and the shared
+  health check exits 1.
+
+  BUT THE PLAN'S STATED MECHANISM IS FACTUALLY WRONG, and it is recorded rather
+  than quietly worked around. The plan says: *"The ssh returns non-zero with
+  EMPTY OUTPUT, which drives the empty-output UNKNOWN branch."* It does not. The
+  fold-in's redirection is `ssh host "bash /path/script 2>&1"` -- the `2>&1` is
+  INSIDE the remote command string, so it captures the remote bash's own error:
+
+    $ ssh -n root@172.16.1.159 "bash /mnt/fast/stacks/scripts/check-jellyfin-transcode.sh 2>&1"
+    bash: /mnt/fast/stacks/scripts/check-jellyfin-transcode.sh: No such file or directory
+    rc=127
+
+  Output is therefore NON-empty and RC is 127, so the `else` (BROKEN) branch
+  fires, not the `-z` branch. The empty-output branch's real triggers are an ssh
+  that never runs the command -- whose stderr is the LOCAL ssh's, not captured
+  by that redirection -- or a script that genuinely prints nothing.
+
+  This is the same class of error as VALIDATION rows 11, 15 and 16, and it is
+  handled the same way: the plan text is NOT edited and the outcome is NOT
+  massaged to match it. What is done instead is 5b, below, which drives the
+  branch the plan wanted driven, by a mechanism that actually drives it.
+
+  Worth keeping: the BROKEN branch was itself exercised here for the first time,
+  including its two empty sub-sections (no `❌` lines and no summary block to
+  print, because the script never ran). It degrades correctly -- an unhelpful
+  transcript, but an exit code that is right and a header that names the script
+  and its exit status.
+
+--------------------------------------------------------------------------------
+5b -- A ZERO-BYTE SCRIPT.  This is what actually drives the empty-output UNKNOWN
+      branch, and it exposes the branch's most important property.
+--------------------------------------------------------------------------------
+
+  : > /mnt/fast/stacks/scripts/check-jellyfin-transcode.sh   (0 bytes)
+
+  bash scripts/quick-health-check.sh  ->  EXIT=1
+
+  Jellyfin transcode retention: ⚠️  UNKNOWN — 172.16.1.159 unreachable or the audit produced no output
+    The transcode retention state is unknown, NOT green. Check the host, then re-run:
+    ssh root@172.16.1.159 'cd /mnt/fast/stacks && git pull --ff-only && bash scripts/check-jellyfin-transcode.sh'
+
+  THE PROPERTY THIS PROVES, AND IT IS THE WHOLE POINT OF THE BRANCH: a zero-byte
+  script EXITS 0. So TRANSCODE_RC was **0** -- a clean success -- and the block
+  still refused to print a tick, because `[ -z "$TRANSCODE_OUT" ]` is tested
+  FIRST, before the return code is consulted. Absence of a failure signal is not
+  evidence of health. Had the order been reversed, a silently-truncated or
+  emptied check would have reported green on a successful exit, which is
+  precisely the six-weeks-of-silence failure this estate has already paid for.
+
+  A zero-byte file is also the cheapest honest simulation of the condition the
+  branch names: "the audit produced no output".
+
+--------------------------------------------------------------------------------
+5 -- RESTORE, HASH-VERIFIED
+--------------------------------------------------------------------------------
+
+  rm the stub; mv the .bak back into place.
+
+  POST-RESTORE sha256: d33356c551113fd972c515fc288ef8f00a1180bb8f17119165c81c21971444b5
+  PRE-TEST   sha256:   d33356c551113fd972c515fc288ef8f00a1180bb8f17119165c81c21971444b5
+  match: YES
+  git -C /mnt/fast/stacks status --porcelain scripts/  ->  EMPTY
+  .bak left behind:  NO
+
+  RE-RUN GREEN:
+    bash scripts/quick-health-check.sh  ->  EXIT=0
+    Jellyfin transcode retention: ✅ Transcode retention intact
+      / headroom:              37015347200 bytes (34.47 GiB)  (target ≥ 21474836480)
+      volume mounts:           0  (target 0)
+      transcode quota:         53687091200 bytes  (target 53687091200)
+      transcode mounted:       zfs=yes devid=47 parent=64519  (target yes, and devid ≠ parent)
+      unreachable:             0
+      FAILURES total:          0
+
+  Four states recorded, as required: pre-test hash, the failing runs with their
+  exit codes and their branch output, the restored hash, and the green re-run.
+
+================================================================================
+CONTROL 6 -- THE FOLD-IN'S SUMMARY ANCHOR  (row 24, a `fires` row)
+================================================================================
+
+THE DEFECT BEING TESTED (WR-09), AND WHY IT HAS BEEN FOUND THREE TIMES NOW
+  The fold-in reads its evidence by anchoring on a LITERAL STRING in a different
+  file: `sed -n '/^📊 6\. Summary/,$p'`. If that heading is renumbered -- by
+  inserting a section 3b, by splitting section 4, by any ordinary edit -- the sed
+  yields nothing, the grep selects nothing, and the BRANCH THAT STILL PRINTS A
+  TICK RUNS ANYWAY. A green tick with no supporting detail is what the reader
+  sees, and there is nothing in the transcript to distinguish it from a healthy
+  estate.
+
+  It was found and fixed in the freeze fold-in (WR-09), then again in the
+  consumers fold-in (02-09). This is the third, and it is the first one where
+  the branch has been driven on purpose rather than reasoned about.
+
+PRE-TEST HASH
+  d33356c551113fd972c515fc288ef8f00a1180bb8f17119165c81c21971444b5
+
+FIRST LIMB -- with the check passing, the summary lines print (not the UNKNOWN
+branch). Already recorded above, at control 5's green re-run and again at the
+close of this file.
+
+SECOND LIMB -- the anchor renumbered on the host-side copy:
+
+  line 589 before:  echo "📊 6. Summary"
+  line 589 after:   echo "📊 7. Summary"
+  sha256 while broken: 253561cfb75aed875459fb6c011e04ff830a11e238d40a3e701a671af94eedc0
+
+  THE UNDERLYING CHECK IS STILL COMPLETELY HEALTHY -- asserted, because it is
+  what makes this control meaningful:
+
+    ssh ... 'bash /mnt/fast/stacks/scripts/check-jellyfin-transcode.sh'
+    standalone EXIT=0
+
+  So the fold-in is looking at a passing check, on the branch that prints a tick,
+  with one string changed. That is the exact condition of the defect.
+
+  bash scripts/quick-health-check.sh  ->  EXIT=1
+
+  Jellyfin transcode retention: ⚠️  UNKNOWN — the audit exited 0 but its '📊 6. Summary' block was not found.
+    The section heading this fold-in anchors on has changed, so nothing here was
+    actually read. State is UNKNOWN, not green. See check-jellyfin-transcode.sh's summary.
+
+  ❌ Health check FAILED — see the music freeze harness, the consumers audit and/or the
+     Jellyfin transcode retention audit above.
+
+  UNKNOWN, not a tick. Exit 1, not 0. The branch is reachable and it fires.
+
+RESTORE, HASH-VERIFIED
+  POST-RESTORE sha256: d33356c551113fd972c515fc288ef8f00a1180bb8f17119165c81c21971444b5
+  PRE-TEST   sha256:   d33356c551113fd972c515fc288ef8f00a1180bb8f17119165c81c21971444b5
+  match: YES
+  git -C /mnt/fast/stacks status --porcelain scripts/  ->  EMPTY
+
+  RE-RUN GREEN:
+    bash scripts/quick-health-check.sh  ->  EXIT=0
+    Jellyfin transcode retention: ✅ Transcode retention intact
+      / headroom:              37014966272 bytes (34.47 GiB)  (target ≥ 21474836480)
+      volume mounts:           0  (target 0)
+      transcode quota:         53687091200 bytes  (target 53687091200)
+      transcode mounted:       zfs=yes devid=47 parent=64519  (target yes, and devid ≠ parent)
+      unreachable:             0
+      FAILURES total:          0
+
+  Three states plus both hashes, as required.
+
+================================================================================
+CLOSING REPO-LEVEL ASSERTION -- NEITHER TEST LEFT ANYTHING BEHIND
+================================================================================
+
+  workstation:  git status --porcelain scripts/                      ->  EMPTY
+  LXC 100:      git -C /mnt/fast/stacks status --porcelain scripts/  ->  EMPTY
+  the two pre-test .sha files under /mnt/fast/spike-021/ were removed after use
+  and were never committed.
+
+================================================================================
+THREE OF THIS PLAN'S OWN ACCEPTANCE GREPS ARE NON-DISCRIMINATING -- RECORDED AS
+PLANNING DEFECTS, NOT MADE TO PASS
+================================================================================
+
+  This phase has a standing rule, established by 02.1-06 and re-applied by
+  02.1-09: an assertion that fails on a correct outcome is a planning defect, and
+  the correct response is to record it, not to edit the estate until the
+  assertion passes. Three of task 2's greps are in that class. All three were
+  ALREADY failing against the file BEFORE this plan touched it -- measured
+  against `git show HEAD:scripts/quick-health-check.sh` at the parent commit:
+
+    grep -c 'bash -s'                        raw 1   (wanted 0)
+    grep -c 'x1b'                            raw 2   (wanted 0)
+    grep -c 'EXIT-CODE BEHAVIOUR CHANGED'    raw 1   (wanted 2, "the two existing notices")
+
+  WHY THE FIRST TWO FAIL. The prohibitions are themselves written down in the
+  file. `quick-health-check.sh:177` explains that the shape to be kept away from
+  is `bash -s` plus a heredoc; the ANSI-strip comments explain that `\x1b` is a
+  GNU sed extension and macOS needs `$'\033'` instead. A literal grep matches the
+  NOTICE EXPLAINING THE PROHIBITION, so a correctly-written file fails its own
+  check. This is the identical shape as 02.1-06's ENOSPC-prose defect, the D-32
+  watch's block-mode flag spelled in words, and check-jellyfin-transcode.sh's own
+  FLOOR comment -- three separate places in this phase already carry the
+  workaround of naming a string rather than writing it.
+
+  THE DISCRIMINATING SUBSTITUTE, which proves strictly more than the raw grep
+  and is the same device VALIDATION row 34 uses for the prune prohibition
+  ("comment-stripped grep over the script -- note 03-01's false positive from
+  echoed prose"):
+
+    sed 's/#.*//' scripts/quick-health-check.sh | grep -c 'bash -s'   ->  0
+    sed 's/#.*//' scripts/quick-health-check.sh | grep -c 'x1b'       ->  0
+
+  Zero occurrences in EXECUTABLE lines; the raw counts are 1 and 3, every one of
+  them prose. The control is discriminating rather than vacuous: the raw and
+  stripped counts differ, so the strip is doing work.
+
+  THE THIRD ONE WAS FIXED RATHER THAN RECORDED, and the distinction matters. The
+  first two fail because the FILE IS CORRECT. The third failed because the
+  file's own naming was INCONSISTENT: notice 2, written by plan 02-09, opened
+  with "A SECOND FATAL BLOCK WAS ADDED" and never carried the shared phrase, so
+  the file held two such notices and a grep for the convention found one. Making
+  the wording consistent is a real improvement to the file, not a fabrication to
+  satisfy a check -- six words were added to notice 2 and nothing was removed,
+  with an in-band note saying what changed and why. The count is now 4: three
+  notice headers plus one occurrence inside that explanatory note. Recorded
+  explicitly, because "prose that mentions the string satisfies a grep for the
+  string" is the exact trap 02.1-06 documented in the other direction.
+
+  FOURTH, AND SEPARATE: the plan's acceptance criterion names the date
+  `2026-09-02` in the third notice. Execution crossed midnight UTC, so the notice
+  records `2026-09-03`, which is when the block was actually added, with the
+  discrepancy explained in-band. Both dates appear in the file. A notice whose
+  entire purpose is to say when something changed should not say the wrong day --
+  and plan 02.1-06 already lost a run to this exact UTC rollover.
