@@ -822,3 +822,289 @@ PLANNING DEFECTS, NOT MADE TO PASS
   discrepancy explained in-band. Both dates appear in the file. A notice whose
   entire purpose is to say when something changed should not say the wrong day --
   and plan 02.1-06 already lost a run to this exact UTC rollover.
+
+================================================================================
+THE THREE KNOWN LIMITS -- WHERE EACH ONE LANDED, AND WHY IT LANDED THERE
+================================================================================
+
+  Both cross-AI reviewers independently made the same point: an operational
+  limit recorded where nobody will read it has not been recorded. The three
+  limits therefore went to THREE DIFFERENT DESTINATIONS, chosen by WHO NEEDS
+  EACH ONE rather than by where it was convenient to write them.
+
+--------------------------------------------------------------------------------
+LIMIT 1 -- THE CHECK IS MANUAL (D-22)
+DESTINATION: in-band in scripts/quick-health-check.sh's third notice.  ADDED.
+--------------------------------------------------------------------------------
+
+  What is recorded: the script only fires when somebody types it -- no cron, no
+  timer, no notification path, nothing that will speak at 3am. Scheduling and
+  alerting are DELIBERATELY DEFERRED, and the reason is named rather than left
+  as a shrug: PHASE 2 CLOSED WITH A MOUNT-FAILURE NOTIFICATION THAT WAS NEVER
+  PROVEN TO DELIVER. An unproven notification path is worse than a known-manual
+  check because it FEELS covered.
+
+  It also states the thing a reader is most likely to get wrong about this
+  phase: the fold-in closes the "we had no way to see it" half of the incident.
+  It does NOT close the "nobody looked for 36 hours" half.
+
+  WHY HERE: the person about to trust a green tick from this script is exactly
+  the person who needs to know it only ran because they typed it. A limit on an
+  instrument belongs on the instrument.
+
+--------------------------------------------------------------------------------
+LIMIT 2 -- THE LIVE TV LATENT GAP (A8)
+DESTINATION: stacks/selfhosted/media/jellyfin.yaml.  VERIFIED, NOT DUPLICATED.
+--------------------------------------------------------------------------------
+
+  Plan 02.1-04 already landed it. This task VERIFIED it rather than writing it
+  again, and it is complete and precise as it stands. Checked clause by clause,
+  in the comment block above the two cache binds:
+
+    - names LiveStream.TempFilePath as the writer                      PRESENT
+    - states /LiveTv/TunerHosts returns [] today, so it is LATENT      PRESENT
+    - gives the MECHANISM: those writes are bounded by NEITHER segment
+      deletion NOR throttling, because both levers gate on RunTimeTicks
+      and a live stream does not have a runtime                        PRESENT
+    - states the consequence: if a tuner host is ever added, the ZFS
+      quota is the ONLY bound left standing                            PRESENT
+    - names the ~48 h DeleteTranscodeFileTask window beneath it        PRESENT
+    - tells the reader to re-read the block before adding a tuner      PRESENT
+
+  Nothing was added and nothing was moved. `grep -c 'LiveStream.TempFilePath'`
+  is 1 in jellyfin.yaml and 0 in PROJECT.md -- the mechanism detail is NOT
+  duplicated into a document where nobody will be standing when they need it.
+
+  WHY THERE: the person who enables Live TV will be editing the stack file. They
+  will not be reading a Music Library Consolidation planning document, which is
+  what PROJECT.md is.
+
+  ONE THING WAS CORRECTED IN THE SAME BLOCK, and it is a different limit: the
+  VOLUME INVENTORY POINTER (D-11) two paragraphs below. It read "the other five
+  local Docker volumes ... are inventoried READ-ONLY in 02.1-06-SUMMARY.md".
+  Both halves were wrong. Measured after the deletion there are SEVEN plain
+  local volumes -- five referenced, two dangling -- and the table with names,
+  sizes and owning containers, plus the 36-versus-6 reconciliation, is in
+  artifacts/02.1-06-transcode-proof.txt § 7, not in the SUMMARY. A pointer that
+  points at the wrong file is worse than no pointer, so it now names both
+  documents and the section. The two findings a reader should not have to open
+  a file to learn were promoted inline: `docker system df`'s `0B reclaimable` is
+  not reassurance (five of seven are REFERENCED and therefore invisible to prune
+  however large they grow -- the exact state Jellyfin's volume was in at
+  12.55 GiB), and a compose recreate on this daemon MINTS anonymous volumes as a
+  side effect, which is how the 02.1-05 recreate left two behind.
+
+--------------------------------------------------------------------------------
+LIMIT 3 -- THE WIDENED API-KEY BLAST RADIUS
+DESTINATION: PROJECT.md's Key Decisions table.  ADDED.
+--------------------------------------------------------------------------------
+
+  What is recorded: the D-40 key at /mnt/fast/secrets/jellyfin-deercrest.env is
+  ADMINISTRATOR-EQUIVALENT BY JELLYFIN'S DESIGN, not by misconfiguration --
+  Jellyfin.Api/Auth/CustomAuthenticationHandler.cs:53-57 maps any API key to
+  UserRoles.Administrator unconditionally, and Jellyfin 10.11 offers no
+  scoped-key mechanism. The key already existed and was already read by
+  check-music-consumers.sh; THIS PHASE WIDENED ITS USE TO WRITE, against
+  /System/Configuration/encoding (plan 02.1-05). A leak of that file now costs
+  write access to server configuration rather than read access to metadata.
+
+  Recorded as an accepted residual risk stated as a CHOICE, in the same style as
+  02-09's `sec=sys` acceptance -- not as an oversight and not silently. There is
+  NOTHING TO IMPLEMENT: a scoped key does not exist in this Jellyfin. What
+  changes is the documented cost of a leak, and the compensating controls are
+  named and are real (600 root asserted on every sourcing with a refusal to
+  source otherwise; the key passed to curl by process substitution so it never
+  enters argv; screened out of this PUBLIC repo with a positive control on every
+  plan that touches it; no port reachable from outside LXC 100).
+
+  WHY THERE: this one is genuinely ESTATE-WIDE. It is not about the transcode
+  path or about this script -- it is about a credential two different checks
+  already use and a future security review will ask about. That is what
+  PROJECT.md's Key Decisions table is for.
+
+  AND WHY ONLY THIS ONE. PROJECT.md is a Music Library Consolidation document
+  already around 240 lines, and both reviewers flagged the reviewed plan for
+  pushing all three limits into it. It gained exactly three short entries: this
+  risk, a one-line pointer to jellyfin.yaml for the retention controls and the
+  Live TV gap, and a one-line pointer to quick-health-check.sh's third notice
+  for the manual-only limit. `git diff --stat .planning/PROJECT.md` shows
+  3 insertions, 0 deletions -- an addition, not a transplanted section.
+
+--------------------------------------------------------------------------------
+WHAT WAS DELIBERATELY NOT IMPLEMENTED
+--------------------------------------------------------------------------------
+
+  No cron entry. No systemd unit. No notification code. No new or scoped API
+  key. No container recreate -- these are comment and documentation edits with
+  no runtime effect (the binds and the settings landed in plans 02.1-04 and
+  02.1-05), and recreating a container the house watches television on, for a
+  comment edit, would interrupt playback to buy nothing.
+
+  The first two are deferred by D-22. The third does not exist in Jellyfin 10.11.
+
+================================================================================
+WHAT THIS PHASE DOES *NOT* COVER -- THE HONEST LIST
+================================================================================
+
+  The plan's objective is three things: turn a one-time proof into standing
+  coverage, prove the coverage fails closed, AND RECORD WHAT IS NOT COVERED.
+  The first two are above. This is the third, and it is deliberately longer than
+  the three "known limits" section, because the limits are the ones somebody
+  chose and these are the ones that were found.
+
+  Nothing below is fixed here. Each is named with enough detail to act on.
+
+--- A. DEFECTIVE ASSERTIONS IN THIS PHASE'S OWN CONTRACT ------------------------
+
+  These FAIL ON CORRECT OUTCOMES. They were left failing rather than edited,
+  because 02.1-10 verifies against the plan text and editing it would have
+  destroyed the evidence. They are planning defects, NOT execution failures.
+
+  A1. VALIDATION row 15 -- UNSATISFIABLE AS WRITTEN. It asserts the changed-key
+      set EQUALS five names including ThrottleDelaySeconds, but that value was
+      already 180, so setting it to 180 changed nothing. 02.1-05 substituted a
+      subset check plus a value assertion, which proves strictly MORE: a key-set
+      comparison is silent on values and would pass SegmentKeepSeconds changed
+      to 999.
+
+  A2. VALIDATION row 11 -- ERRNO PAIR INVERTED. It requires the ENOSPC phrase
+      present and the quota-exceeded phrase absent. Measured: 0 and 2, on all
+      ten attempts. An OpenZFS dataset `quota` refusal surfaces as EDQUOT;
+      ENOSPC is a genuinely full POOL. Left failing by 02.1-06.
+
+  A3. VALIDATION row 16 -- CEILING OMITS THE FORWARD BUFFER. It counts only the
+      SegmentKeepSeconds retention window and ignores the ThrottleDelaySeconds
+      region ahead of the download head that the configuration deliberately
+      maintains, so a working cleaner cannot satisfy it. Left failing by
+      02.1-06.
+
+  A4. 02.1-06's own task-3 <verify> block -- cannot pass, for A2's reason.
+      Deliberately not made to pass; inserting the string would have fabricated
+      a firing that did not happen.
+
+  A5. VALIDATION row 33 -- NEAR-VACUOUS, and 02.1-09 recorded it as such: `/`
+      already cleared the 20 GiB floor by 13.11 GiB before the reap, so the
+      assertion would have passed had the prune deleted nothing. Row 34 was
+      re-asserted with a discriminating control instead (comment-stripped 0,
+      raw 4).
+
+  A6. THREE OF THIS PLAN'S OWN TASK-2 GREPS -- see the section above. Two are
+      non-discriminating (they match the prohibition notices that explain why
+      not to use the thing) and now carry a comment-stripped substitute; the
+      third named a date that execution crossed midnight past.
+
+  THE PATTERN, WHICH IS THE USEFUL PART: five of these six are the SAME SHAPE --
+  a mechanical check whose text is satisfied or defeated by PROSE ABOUT the
+  thing rather than by the thing. This phase now carries the workaround in four
+  separate places (the D-32 watch's block-mode flag, check-jellyfin-transcode's
+  FLOOR comment, 02.1-06's ENOSPC artifact, and the comment-stripped greps
+  here). If a future phase writes a mechanical assertion over a file that also
+  DOCUMENTS the thing being asserted, strip comments first or name the string
+  rather than writing it.
+
+--- B. FACTUAL ERRORS IN THE PLAN TEXT, FOUND AND NOT EDITED -------------------
+
+  B1. The research's errno mapping is wrong (A2 above), AND THE PLAN'S INFERENCE
+      FROM IT IS ALSO WRONG. The plan said an EDQUOT form would mean `refquota`
+      is in force and 02.1-03 picked the wrong property. Measured at the moment
+      of refusal: refquota = 0/default, quota = 53687091200/local, no ancestor
+      carries either. **02.1-03 chose the RIGHT property.**
+
+  B2. The claim that `docker image ls -q` dedupes by ID is INVERTED. Measured:
+      `-q` tracks TAGS (89 raw == 89 tags; `sort -u` gives 86), so it
+      OVER-reports when a tag is removed.
+
+  B3. 02.1-08: the `image:` literal is at jellyfin.yaml:76, not :59, and
+      renovate.json5 had 38 packageRules, not 40. Every INDEX the plan relies on
+      is nonetheless correct.
+
+  B4. 02.1-07: the plan's two named disposable images (alpine:3,
+      curlimages/curl:latest) were not resident at all -- 03-01's reap had
+      already taken them.
+
+  B5. This plan (02.1-10): the row-23 mechanism. Documented in full in the
+      control 5 section above.
+
+--- C. REAL, OPEN, AND WORTH DOING -------------------------------------------
+
+  C1. THE ESTATE'S ENOSPC-KEYED LOG GREPS ARE BLIND TO A TRANSCODE-QUOTA
+      REFUSAL. Worse than the plan described: BOTH `quota` and `refquota` return
+      EDQUOT, so no choice of ZFS property produces a match. Switching property
+      would not fix it. Adding the quota-exceeded string to those greps would.
+
+  C2. renovate.json5 IS UNVALIDATED. `renovate-config-validator` is not
+      installed and installing it was out of scope. 02.1-08 proved the file
+      PARSES and the new rule's SHAPE is right -- syntax and shape, not semantic
+      validity. In THIS repo a single bad key has silently jammed the entire
+      Renovate run while everything looked idle.
+
+  C3. check-renovate.sh HAS THREE LATENT `set -e` ABORTS at lines 115, 138 and
+      157, and LINE 157 IS INVERTED -- it aborts when there are ZERO pending
+      Renovate PRs, i.e. exactly when the estate is healthy, which also makes
+      its own "No pending Renovate PRs" branch unreachable. Hidden today only
+      because 27 branches are open. Remedy is `|| true` on each -- three tokens.
+
+  C4. THE JELLYFIN RULE ADDED BY 02.1-08 HAS NEVER BEEN OBSERVED REFUSING TO
+      AUTOMERGE ANYTHING. There is no renovate/jellyfin-* branch among the 27
+      open ones, so that half is discharged BY CONSTRUCTION rather than by a
+      firing observation. Under CONS-04 that distinction is the whole point. The
+      observation becomes available when upstream next ships a Jellyfin minor,
+      and it cannot be manufactured.
+
+  C5. `do_inventory` in the image-headroom script ENUMERATES WITHOUT `-a`,
+      hiding nine untagged images. Three are unreferenced (~1.02 GiB) and six
+      are load-bearing. Fix is to enumerate with `-a` and re-run the gate.
+
+  C6. TWO DANGLING 0-BYTE ANONYMOUS VOLUMES remain from the 02.1-05 recreate
+      (c479d815…, efbcf4d6…). Inventory-only under D-11; nobody has ruled on
+      deleting them. Now named in jellyfin.yaml as well as in the artifacts.
+
+  C7. NINE DANGLING IMAGES remain after 02.1-09's reap. In scope by design --
+      the operator ruled on four rows and scope was not expanded past them.
+
+--- D. INSTRUMENT TRAPS THIS PHASE PAID FOR, CARRY THEM FORWARD ---------------
+
+  D1. `docker system df` RECLAIMABLE HAS NOW MISLED IN BOTH DIRECTIONS. It ROSE
+      0.57 GB during 03-01's real 18 GiB reclaim and FELL only 0.21 GB during
+      02.1-09's 1.45 GiB one. It is context, never a measure and never a target.
+
+  D2. `docker run --rm <img>` IS A PULL WHEN THE IMAGE IS ABSENT. 02.1-09
+      tripped this on a freshly reaped host and had to revert. The generic
+      utility images are exactly the ones most likely to be gone.
+
+  D3. A LOG-READING INSTRUMENT MUST ASSERT LOG-LEVEL LIVENESS AT GREP TIME.
+      02.1-06 nearly committed a confident false negative -- with a plausible
+      mechanism already drafted -- because `set +e` inside an ERR trap handler is
+      GLOBAL, not function-local, so the script ran on and grepped a log that had
+      been silently reset to a lower level. "Zero matches" and "the control did
+      not fire" were the same output.
+
+      DOES THE STANDING COVERAGE ADDED BY THIS PLAN INHERIT THAT HAZARD?
+      Asserted, not assumed: NO. Neither check-jellyfin-transcode.sh nor the
+      fold-in reads a log file. The check's evidence is `df`, `docker inspect`,
+      `stat -c %d`, `zfs get` over ssh and one HTTP GET -- every one of them a
+      direct query whose failure is distinguishable from an empty result, which
+      is why sections 0-5 all have explicit UNKNOWN paths. The fold-in reads the
+      check's own stdout and treats BOTH "nothing came back" and "the anchor is
+      missing" as UNKNOWN rather than green, and both branches were driven on
+      purpose above. The hazard is recorded here anyway, because the NEXT thing
+      folded in may well read a log, and this is the third time this estate has
+      paid for the same shape.
+
+--- E. WHAT REAL PLAYBACK DID AND DID NOT PROVE -------------------------------
+
+  The operator watched a full episode at roughly 22:20-22:40Z on 2026-09-02,
+  AFTER the 22:19:52Z cutover. It DIRECT-PLAYED: zero transcode segments, zero
+  ffmpeg, zero bytes written to `/`.
+
+  WHAT THAT IS: real evidence that the cutover does not break real playback.
+  WHAT IT IS NOT: any transcode evidence at all. An empty /mnt/fast/transcode
+  after a direct-play session is the ABSENCE OF A TEST, not a passing one. The
+  firing proofs come from 02.1-06's two DRIVEN sessions, which force a transcode
+  by sending a PlaybackInfo device profile with an empty DirectPlayProfiles list
+  precisely so the session above cannot be repeated by accident.
+
+  Recorded because the same directory produced the mirror-image wrong conclusion
+  in 02.1-04 (an empty /mnt/fast/transcode read as "the copy never started" when
+  it had in fact completed). Same path, opposite wrong reading, twice in one
+  phase.

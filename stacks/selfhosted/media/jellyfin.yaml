@@ -286,9 +286,37 @@ services:
       #   "data") on /config is NON-RECURSIVE — but if a future Jellyfin change ever
       #   widens a backup or scan scope over /config, it would sweep in a live
       #   transcode directory. Worth knowing before an upgrade, not worth fixing now.
-      #   VOLUME INVENTORY (D-11): the other five local Docker volumes on this host
-      #   are inventoried READ-ONLY in 02.1-06-SUMMARY.md and deliberately left
-      #   alone. Only Jellyfin's /cache was the problem.
+      #   VOLUME INVENTORY (D-11): the other plain local Docker volumes on this
+      #   host are inventoried READ-ONLY and deliberately left alone. Only
+      #   Jellyfin's /cache was ever the problem. The narrative is in
+      #   .planning/…/02.1-06-SUMMARY.md; the actual table — every volume by
+      #   name, size on / and owning container, plus the 36-versus-6
+      #   reconciliation — is in
+      #   .planning/…/artifacts/02.1-06-transcode-proof.txt § 7.
+      #   (Corrected 2026-09-03 by plan 02.1-10: this line said "the other five"
+      #   and pointed at the SUMMARY alone. Measured after the deletion there are
+      #   SEVEN plain local volumes, five referenced and two dangling, and the
+      #   detail was never in the SUMMARY. A pointer that points at the wrong
+      #   file is worse than no pointer.)
+      #
+      #   THE ONE FINDING FROM THAT INVENTORY WORTH KNOWING WITHOUT OPENING IT:
+      #   `docker volume ls` reports 37 while `docker system df` reports 7 Local
+      #   Volumes, and BOTH ARE RIGHT. 30 of the 37 are local-DRIVER volumes with
+      #   bind driver_opts, so Docker manages the name while the bytes live at
+      #   whatever `device` points to — fast/appdata, not /. `docker system df`
+      #   does not size those. And its `0B reclaimable` is NOT reassurance: five
+      #   of the seven plain volumes are REFERENCED, therefore invisible to
+      #   prune however large they grow. That is precisely the state this
+      #   container's anonymous volume was in for the whole time it grew to
+      #   12.55 GiB.
+      #
+      #   Two of the seven are DANGLING and both were minted at 2026-09-02
+      #   22:19:12Z — by the 02.1-05 recreate itself. Both 0 bytes, 0 entries,
+      #   unreferenced; nothing writes to them, because this container holds zero
+      #   `Type: volume` mounts. Not removed: nobody has ruled on deleting them.
+      #   Recorded because a compose recreate on this daemon MINTS anonymous
+      #   volumes as a side effect, and this whole phase began as exactly one
+      #   anonymous volume that nobody was watching.
       #
       # Declaration order below is COSMETIC — it is written the way a reader expects
       # rather than the way it is applied. moby's sortMounts orders container mounts

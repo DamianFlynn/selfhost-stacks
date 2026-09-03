@@ -95,6 +95,30 @@
 #     count. The script still exits non-zero — fail-closed is not negotiable (D-19) — but the
 #     reader can tell "could not look" from "the value moved". A check that goes red for
 #     transient reasons trains the reader to ignore it exactly as a permanently-red one does.
+#
+# ⚠️  KNOWN LIMIT, AND IT APPLIES TO THIS WHOLE FILE: THIS SCRIPT IS MANUAL. IT ONLY EVER FIRES
+#     WHEN SOMEBODY TYPES IT (D-22, phase 02.1).
+#     There is no cron entry, no systemd timer and no notification path. Nothing here will tell
+#     you anything at 3am. If you are reading a green tick from this script, it is green because
+#     you asked — not because anything has been watching.
+#
+#     That matters more than it sounds, because of what this file now covers. The incident phase
+#     02.1 exists to fix was 19 GB accumulating in an anonymous Docker volume on / over roughly
+#     36 hours, taking / to zero, with NOBODY LOOKING. The block above closes the "we had no way
+#     to see it" half of that. It does not close the "nobody looked" half, and this notice exists
+#     so a reader does not mistake the first for the second.
+#
+#     Scheduling and alerting are DELIBERATELY DEFERRED, not overlooked. Delivery, deduplication
+#     and notification-channel choice are their own decisions with their own failure modes — and
+#     the specific reason for the deferral is that PHASE 2 CLOSED WITH A MOUNT-FAILURE
+#     NOTIFICATION THAT WAS NEVER PROVEN TO DELIVER. An unproven notification path is WORSE than
+#     a known-manual check, because it feels covered. A known limit you can read is safer than an
+#     assumed capability you cannot test.
+#
+#     So: run this after any change to Jellyfin, the fast/* datasets, the NFS export or the
+#     Music library, and on any morning the estate feels odd. Recorded here rather than only in
+#     a planning document because the person about to trust a green tick is the person who needs
+#     to know it only ran because they typed it.
 
 EXIT_CODE=0
 
