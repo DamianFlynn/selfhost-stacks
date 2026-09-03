@@ -1,0 +1,458 @@
+CR-03 CONTROL — `timeout` DOES NOT BIND THROUGH A PIPELINE
+Plan 02.1-15, executed 2026-09-03. Target: LXC 100 (selfhost) 172.16.1.159, run from the macOS
+workstation. Read-only against the estate: no container was restarted, no compose file touched,
+no API POSTed, no zfs or terraform command run.
+
+WHAT THIS FILE PROVES, in one line: before the fix, a remote command killed by its wall-clock
+bound made scripts/quick-health-check.sh print `Containers running: 0` and `✅ No unhealthy
+containers` and exit 0. After the fix, the same hang makes it print two UNKNOWN blocks and exit 1.
+Both halves were DRIVEN against a real sleeping remote command, not reasoned about.
+
+
+================================================================================================
+0. FILE HASHES
+================================================================================================
+
+scripts/quick-health-check.sh at the plan base (9ec390c), before any edit:
+  52128064daa7862678d8bc87b4ff814db747a9a9f85649253340196e3d37a720
+
+scripts/quick-health-check.sh at the moment the driven run in section 3 was taken:
+  360f46e1264c731653f426c862bddcc885de4db25c3170326c0442e9aeade828
+
+scripts/quick-health-check.sh after the section-3 restore (MUST equal the line above):
+  360f46e1264c731653f426c862bddcc885de4db25c3170326c0442e9aeade828       RESTORE VERIFIED
+
+scripts/quick-health-check.sh at the end of task 1, after the tail-message fix that the driven
+run itself exposed (section 5):
+  4d7778b11bafe05476af9a312ee4b5171d8d542232f495ed63a282e32d172283
+
+Tasks 2 and 3 of this plan change the file again by design, so the last hash is a task-1
+checkpoint, not the file's final state. The hash that matters for the control is the pair in the
+middle: the temporary edit made for the drive was reverted from a pristine copy under a bash EXIT
+trap and the restore was asserted by sha256, not assumed.
+
+
+================================================================================================
+1. MECHANISM — the micro-controls, run against the real LXC 100
+================================================================================================
+
+Remote shell identity (pipefail is a bash/ksh option, NOT POSIX sh — so this matters):
+  /usr/bin/bash
+  GNU bash, version 5.2.37(1)-release (x86_64-pc-linux-gnu)
+
+  A. no pipe, no pipefail — baseline sanity, the bound is real:
+       ssh ... "timeout 2 sleep 20"
+       ssh rc=124
+
+  B. THE BUG — pipe, no pipefail. `wc -l` counts the empty stream, prints 0, exits 0:
+       ssh ... "timeout 2 sleep 20 | wc -l"
+       ssh rc=0   captured stdout='0'
+
+  C. THE FIX — pipe WITH pipefail. The 124 propagates:
+       ssh ... "set -o pipefail; timeout 2 sleep 20 | wc -l"
+       ssh rc=124 captured stdout='0'
+
+     NOTE WHAT DID NOT CHANGE BETWEEN B AND C: stdout is `0` in BOTH cases. pipefail alone is
+     therefore NOT a fix, because the script consumed the VALUE. Only the STATUS carries the
+     truth, which is why the fix has two halves and not one.
+
+  D. THE LOCAL-PIPE TRAP the plan warns about:
+       OUT=$(ssh ... "set -o pipefail; timeout 2 sleep 20 | wc -l" | tr -d ' ')
+       $? = 0        <-- tr's status. The 124 is gone.
+
+  E. THE PLAN'S SUGGESTED RESCUE DOES NOT WORK — and this is the one thing in the plan text that
+     is wrong. 02.1-15-PLAN.md task 1 suggests `RUNNING_RC=${PIPESTATUS[0]}` for that same shape.
+     Measured:
+       OUT=$(ssh ... "set -o pipefail; timeout 2 sleep 20 | wc -l" | tr -d ' ')
+       PIPESTATUS[0]=0   PIPESTATUS[1]=<unset>   stdout='0'
+
+     while the remote really had exited 124. Reason, confirmed independently:
+       V=$(sh -c "exit 7" | cat)   -> PIPESTATUS[0]=0 PIPESTATUS[1]=  count=1
+       sh -c "exit 7" | cat        -> PIPESTATUS[0]=7 PIPESTATUS[1]=0 count=2
+
+     An ASSIGNMENT is a SIMPLE COMMAND, not a pipeline. The pipe lives inside the command
+     substitution, in a subshell, so bash sets PIPESTATUS in the parent to a single element
+     holding the assignment's own status. Reading `${PIPESTATUS[0]}` there returns 0 — silently,
+     with no error — on exactly the failure it was added to catch. Had this been adopted as
+     suggested, CR-03 would have been "fixed" into a shape that still reads green on a hang.
+
+  F. THE SHAPE ACTUALLY ADOPTED — no local pipe, `$?` read on the very next line:
+       OUT=$(ssh ... "set -o pipefail; timeout 2 sleep 20 | wc -l")
+       RC=$?
+       OUT=$(printf '%s' "$OUT" | tr -d '[:space:]')
+       RC=124   stdout after local strip='0'
+
+     The whitespace strip is a separate statement, AFTER the status has been taken. The code
+     carries a comment saying so, because folding it back into the assignment silently
+     reintroduces D.
+
+
+================================================================================================
+2. A/B — the two count sites, BEFORE and AFTER, same hang, same host, same second
+================================================================================================
+
+Method. Two copies of the REAL file, one from the plan base (9ec390c) and one from the working
+tree, each cut immediately before the next section so that the exit code is attributable to the
+two count sites alone, and each with the count sites' PAYLOAD replaced by a sleeper:
+
+    docker ps -q                                             ->  sleep 60
+    docker ps --format '{{.Names}}' --filter health=unhealthy ->  sleep 60
+
+Nothing in the counting logic, the capture, the branching or the EXIT_CODE handling is altered.
+`timeout` kills the FIRST STAGE of the very same remote pipeline — which is the defect exactly.
+This is the device plan 02.1-13 used (replace the payload, keep the site), applied one level down
+because here the payload is a command rather than a script. Both runs at REMOTE_TIMEOUT=10.
+
+The substituted lines, BEFORE copy:
+  261:RUNNING=$(ssh $SSH_OPTS root@172.16.1.159 "timeout $REMOTE_TIMEOUT sleep 60 | wc -l" | tr -d ' ')
+  267:UNHEALTHY=$(ssh $SSH_OPTS root@172.16.1.159 "timeout $REMOTE_TIMEOUT sleep 60 | wc -l" | tr -d ' ')
+
+The substituted lines, AFTER copy:
+  344:RUNNING=$(ssh -n $SSH_OPTS root@172.16.1.159 "set -o pipefail; timeout $REMOTE_TIMEOUT sleep 60 | wc -l")
+  371:UNHEALTHY=$(ssh -n $SSH_OPTS root@172.16.1.159 "set -o pipefail; timeout $REMOTE_TIMEOUT sleep 60 | wc -l")
+
+------------------------------------------------------------------------------------------------
+RUN: before   (REMOTE_TIMEOUT=10, remote payload sleeps 60)
+------------------------------------------------------------------------------------------------
+  === Quick Server Health Check ===
+  Traefik: ✅ Running
+    Health:
+  no healthcheck
+  Authelia: ✅ Running
+  Containers running: 0                <-- THE MISINFORMATION. 103 were running.
+  ✅ No unhealthy containers            <-- THE GREEN TICK. Nothing was looked at.
+  SITE_EXIT_CODE=0                     <-- AND IT IS NOT EVEN RED.
+  ---- before: script exit=0, elapsed=21s ----
+
+------------------------------------------------------------------------------------------------
+RUN: after    (identical hang, identical bound)
+------------------------------------------------------------------------------------------------
+  === Quick Server Health Check ===
+  Traefik: ✅ Running
+    Health:
+  no healthcheck
+  Authelia: ✅ Running
+  ⚠️  UNKNOWN — 'docker ps' exceeded its 10s bound and was killed.
+    Nothing was counted. This is NOT 'zero containers running'.
+  ⚠️  UNKNOWN — the unhealthy-container query exceeded its 10s bound and
+    was killed. Nothing was counted. This is NOT 'no unhealthy containers'.
+    Most likely cause: dockerd wedged. Distinguish it on atlantis (172.16.1.158) with
+    /proc/pressure/io 'full' near 100% WITH AN IDLE CPU; a busy CPU is not the wedge.
+  SITE_EXIT_CODE=1
+  ---- after: script exit=1, elapsed=21s ----
+
+Elapsed is 21 s in BOTH runs against a 60 s sleeper: the bound was doing its job in the broken
+version too. That is the point. The bound fired correctly and the script threw the answer away.
+
+
+================================================================================================
+3. THE DRIVEN RUN — the REAL file, edited in place under a trap, end to end
+================================================================================================
+
+The A/B above runs truncated copies. This section runs the actual
+scripts/quick-health-check.sh, in place, with only the two count-site payloads substituted (a
+targeted sed anchored on `^RUNNING=$(ssh ` and `^UNHEALTHY=$(ssh `, so no comment and not the
+names-listing ssh inside the >0 branch is touched), at REMOTE_TIMEOUT=10.
+
+  === DRIVEN RUN: real script, REMOTE_TIMEOUT=10, remote count payload sleeps 60 ===
+  === Quick Server Health Check ===
+  Traefik: ✅ Running
+    Health:
+  no healthcheck
+  Authelia: ✅ Running
+  ⚠️  UNKNOWN — 'docker ps' exceeded its 10s bound and was killed.
+    Nothing was counted. This is NOT 'zero containers running'.
+  ⚠️  UNKNOWN — the unhealthy-container query exceeded its 10s bound and
+    was killed. Nothing was counted. This is NOT 'no unhealthy containers'.
+    Most likely cause: dockerd wedged. Distinguish it on atlantis (172.16.1.158) with
+    /proc/pressure/io 'full' near 100% WITH AN IDLE CPU; a busy CPU is not the wedge.
+  Traefik dashboard: ❌ Not accessible
+  Music freeze harness: ✅ Intact
+      tagger-class writers:        0   (target 0)
+      unclassified writers:        0   (target 0)
+      declared rw reaching Music:  0   (target 0, jellyfin.yaml excluded)
+      ownership mismatches:        0   (target 0, want 568:568)
+  Music consumers audit: ✅ Both consumers see the library
+      MA version (live):           2.11.0b0   (assertions proven at 2.11.0b0)
+      albums matched in MA:        2   (target 2, exact name+albumartist, provider-attributed)
+      albums matched in Jellyfin:  2   (target 2, exact name+albumartist)
+      FAILURES total:              0
+  Jellyfin transcode retention: ✅ Transcode retention intact
+      / headroom:              36825337856 bytes (34.30 GiB)  (target ≥ 21474836480)
+      volume mounts:           0  (target 0)
+      transcode quota:         53687091200 bytes  (target 53687091200)
+      transcode mounted:       zfs=yes devid=47 parent=64519  (target yes, and devid ≠ parent)
+      transcode target:        /cache/transcodes  (target /cache/transcodes)
+      encoding values:         5 asserted, 0 drifted; 2 amdgpu values REPORTED (see section 5)
+      unreachable:             0  (could-not-look, counted apart from bound violations)
+      toolchain missing:       0
+      FAILURES total:          0
+  ---- REAL SCRIPT EXIT=1, elapsed=25s ----
+
+All three fold-in blocks had the SAME 10 s budget and all three completed inside it and printed
+✅. So the exit 1 is attributable to the two count sites and to nothing else — which is the
+strongest form of this control: the only red in the run is the one the fix introduced.
+
+Restore, from the pristine copy taken before the sed, under a bash EXIT trap so it runs on any
+path out including a failed run:
+  sha256 BEFORE the temporary edit: 360f46e1264c731653f426c862bddcc885de4db25c3170326c0442e9aeade828
+  sha256 AFTER  the restore      : 360f46e1264c731653f426c862bddcc885de4db25c3170326c0442e9aeade828
+  RESTORE VERIFIED — hashes match.
+
+`git status --porcelain` after the restore showed exactly one entry, ` M scripts/quick-health-check.sh`
+— the intended edit, and no residue of the temporary one.
+
+
+================================================================================================
+4. THE GREEN RUN — before and after, exit 0
+================================================================================================
+
+  bash scripts/quick-health-check.sh   (default REMOTE_TIMEOUT=120)
+  exit=0  elapsed=6s     (taken before the driven run)
+  exit=0  elapsed=5s     (taken after the restore and the section-5 fix)
+
+Full green transcript, post-restore run: identical to the driven run above except that the two
+UNKNOWN blocks are replaced by
+
+  Containers running: 103
+  ✅ No unhealthy containers
+
+103 is the real count. The BEFORE run in section 2 reported 0 for the same estate in the same
+minute — that is the size of the lie the old code was capable of telling.
+
+WHY THE WHOLE RUN IS ONLY ~6 SECONDS AND THE BOUND IS 120: the margin is deliberate (the 01-09
+trap — a check that goes red for non-reasons trains the reader to ignore it). It also means the
+driven run above could use a 10 s bound without starving any fold-in, which is why the fold-ins
+stayed green and the attribution is clean.
+
+
+================================================================================================
+5. A DEFECT THE DRIVEN RUN ITSELF EXPOSED, AND THE FIX FOR IT
+================================================================================================
+
+The first driven run ended with the script's own tail message:
+
+  ❌ Health check FAILED — see the music freeze harness, the consumers audit and/or the
+     Jellyfin transcode retention audit above.
+
+All three of those printed ✅. The failure was the container counts, which that message did not
+name — because until this plan the counts could not fail, so the message had never needed to.
+Making them fatal made a previously-correct message wrong, and the drive caught it in the same
+run that proved the fix. Reading the code would not have.
+
+Corrected to name every block that can now set EXIT_CODE, including the counts. Recorded here
+rather than only in the commit because it is the second-order cost of the fix, and a reader
+auditing this control should see that the control earned its keep beyond confirming the expected
+result.
+
+
+================================================================================================
+6. AUDIT OF THE OTHER PIPED REMOTE SITES — :243, :254, :281 (line numbers at the plan base)
+================================================================================================
+
+The plan required a verdict on these three whether or not they were changed.
+
+  :243  Traefik    ssh "timeout T docker ps --format '{{.Names}}' | grep -q '^traefik$'"
+  :254  Authelia   ssh "timeout T docker ps --format '{{.Names}}' | grep -q '^authelia$'"
+  :281  dashboard  ssh "timeout T curl -s -o /dev/null -w '%{http_code}' ..." | grep -q "200"
+                   — note this pipe is LOCAL: the grep is outside the double quotes, so the
+                     remote command is not a pipeline at all and pipefail would be a no-op there.
+
+VERDICT: NOT the CR-03 defect, and DELIBERATELY LEFT UNCHANGED in this plan.
+
+  Why they are not CR-03. All three end in `grep -q`, which exits 1 on an empty stream. A killed
+  first stage therefore lands in the `else` branch and prints `❌ Not running` /
+  `❌ Not accessible`. No branch reports health it did not measure — the reader is shown a red,
+  not a tick. That is the whole difference: CR-03 was a FALSE GREEN, these are a WRONG RED.
+
+  Why they are still a defect. `❌ Not running` on a hang is a CONFIDENT WRONG DIAGNOSIS. It sends
+  the reader to look at a container that is in fact running fine. This is filed as WR-01 in the
+  02.1 code review's warning list (the review's WR-02) and is NOT closed here.
+
+  Why not fix them anyway. Three reasons, in order of weight:
+    1. None of them touches EXIT_CODE, so no exit-code claim in this file depends on them. The
+       fix is a legibility fix, not a fail-closed fix.
+    2. The correct fix changes what a GENUINELY STOPPED container prints — it has to, since
+       "stopped" and "could not look" currently share the `else`. That is a behaviour change to a
+       line an operator reads every time, and it deserves its own control run against a
+       deliberately stopped container, which this plan does not have.
+    3. It needs a `case` over a captured status at each of three sites, and :281's local pipe
+       needs a different treatment from the other two. Doing that half-way inside a plan whose
+       control is about something else is how the 02.1-13 comment came to claim a case it did not
+       handle — which is the mistake this plan exists to undo.
+
+  Instead the reasoning is now written at those sites in the file, naming them as WR-01/open, so
+  the next reader is not left to re-derive it. A known limit you can read is safer than an assumed
+  capability you cannot test.
+
+CONSEQUENCE FOR THE FILE'S GREPPABLE RULE. The new point 4 in the REMOTE_TIMEOUT block states it:
+every remote command string containing a `|` must carry `set -o pipefail` AND have its status
+captured, UNLESS its last stage is a `grep -q` (documented at the site). At this commit the piped
+remote command strings are exactly the two count sites (both now pipefail'd and status-checked),
+:243 and :254 (grep -q, documented), and :281 (local pipe, not a remote pipeline, documented).
+
+
+================================================================================================
+7. WHAT WAS WITHDRAWN FROM THE FILE, AND WHY IT IS PARAPHRASED
+================================================================================================
+
+The comment above the Traefik block used to end by asserting that bounding the whole pipeline
+"would need a subshell and would buy nothing". That sentence is the proximate cause of CR-03: it
+told the next reader the case was considered and dismissed. It is wrong twice — it buys the
+difference between a bound that binds and one that does not, and `set -o pipefail` is one
+statement, not a subshell.
+
+It is withdrawn and PARAPHRASED, never quoted verbatim, so a mechanical grep for the false claim
+over this repo keeps returning zero. That convention was set by plan 02.1-12 when it withdrew the
+"publishes no host port" reachability claim, for the measured reason that a false claim left
+in-band verbatim is one that gets re-copied.
+
+
+================================================================================================
+8. CREDENTIAL SCREEN
+================================================================================================
+
+This repository is PUBLIC. This artifact was screened before commit for anything credential-
+shaped, with a POSITIVE CONTROL so that a screen returning "clean" is evidence rather than an
+absence of evidence.
+
+Patterns screened (case-insensitive):
+  api[_-]?key | token | secret | password | passwd | bearer | authorization
+  MediaBrowser | [A-Fa-f0-9]{32,}   (hex blobs of API-key length)
+  BEGIN [A-Z ]*PRIVATE KEY | ssh-rsa | ssh-ed25519 | AKIA[0-9A-Z]{16}
+
+Positive control: the string `JELLYFIN_API_KEY=` followed by a 32-hex dummy was appended to a
+COPY of this file and the screen was re-run. It matched. The screen can therefore detect what it
+claims to detect, so a clean result below is evidence and not merely an absence of one.
+
+  POSITIVE CONTROL PASSED — the planted key was detected.
+
+Result on the real file: 18 matching lines, every one accounted for, and none of them a secret.
+Enumerated by category rather than by line number — deliberately, since section 8 matches itself
+and a self-citing line number is the exact fragility WR-09 in this same plan exists to remove.
+(The count was re-taken after section 10 was appended; the screen is the last thing run before
+this file is committed, precisely so the number is not a stale claim about an earlier draft.)
+
+  EIGHT DIGEST LINES (sections 0, 3 and 10). The 32-hex pattern matches them, which is expected and
+      correct: a screen that did not match a 64-hex blob would not be worth running. Each is a
+      `shasum -a 256` of scripts/quick-health-check.sh, a file in this public repo, reproducible
+      by anyone who checks it out.
+  TEN LINES INSIDE THIS SECTION ITSELF — the three pattern-list lines, and the prose describing
+      the control and its result, which necessarily contains the words `api_key`, `token`,
+      `password`, `bearer`, `secret` and `private key` as ENGLISH with no value attached.
+
+The 32-hex dummy used for the positive control is appended to a COPY in the scratchpad and is
+never written into this file, so the committed artifact contains no credential-shaped literal of
+any kind — not even a fake one that a future grep would have to adjudicate.
+
+No API key, token, password, passphrase, bearer credential or private key material is present.
+No secrets file was read, printed or referenced by value at any point in this control: the driven
+runs invoke check-jellyfin-transcode.sh, which reads /mnt/fast/secrets/ on LXC 100 in-process and
+never emits the value, and every transcript above is reproduced verbatim from what that run
+printed.
+
+
+================================================================================================
+9. ESTATE-SAFETY NOTE ON THE METHOD CHOSEN
+================================================================================================
+
+The obvious way to make the real `docker ps` hang is to stage a sleeping stub at
+/usr/local/bin/docker on LXC 100. That was CONSIDERED AND REJECTED: it would put a sleeping
+shim in front of every `docker` invocation on a 103-container host for the duration of the
+control, including anything else that ran in that window. Substituting the payload inside the
+site under a trap proves the identical property — the first stage of the same remote pipeline is
+killed by the same `timeout`, and the same capture and branch see the result — with a blast
+radius of one file on the workstation.
+
+
+================================================================================================
+10. WR-01 — BOUNDING THE TWO EXEMPTED PROBES (same plan, task 2)
+================================================================================================
+
+RESOLUTION CHOSEN: BOUND THEM. The plan offered "bound them" or "keep them unbounded and replace
+the false justification with a true one". Bounding was chosen because these two probes GATE
+EVERYTHING BELOW — a hang here is a hang of the whole check with no transcript at all, which
+plan 02.1-13 itself named as worse than a wrong answer — and because the uncovered case is
+literally this phase's incident: a host with a full `/` can complete a TCP handshake and still
+fail to fork a shell. The justification was corrected as well; the two were not alternatives.
+
+MECHANISM CHOSEN: A PURE-BASH WATCHDOG, NOT ServerAliveInterval/ServerAliveCountMax.
+The plan lists ServerAlive as the primary suggestion. It was rejected, for a reason that is worth
+stating precisely rather than borrowing: sshd answers keepalives from its own process, so whether
+they fire when a SESSION FORK is stuck depends on where inside sshd the block lands — and that
+could not be driven safely on a live 103-container host. A bound whose behaviour under the exact
+failure it targets is untestable is not a bound. The file's own point 2 already rejects keepalives
+for the wedged-dockerd case; this is the same argument one layer earlier. The watchdog bounds
+wall clock unconditionally, wherever the hang is, and its behaviour WAS driven.
+
+THE FINDING THAT SHAPED THE IMPLEMENTATION — ssh EXITS 255 WHEN THE WATCHDOG KILLS IT, WHICH IS
+THE SAME 255 AN UNREACHABLE HOST GIVES. A first version returned only the exit status, which
+would have collapsed "the bound expired" and "the transport is dead" into one verdict — the exact
+conflation this file exists to prevent, reintroduced by the fix for it. A sentinel file, written
+by the watchdog immediately before it kills, separates them. Driven under /bin/bash 3.2.57 (the
+macOS system bash, which is what `#!/bin/bash` gets — the first control run used bash 5.3 and was
+re-run, because a bash-4-only construct would fail on the one machine this file is typed on):
+
+  1 fast success   ssh true          : rc=0   timed_out=0 elapsed=0s
+  2 fast success   ssh command -v    : rc=0   timed_out=0 elapsed=0s
+  3 real failure   ssh 'exit 3'      : rc=3   timed_out=0 elapsed=0s   <- a real answer is never masked
+  4 THE HANG       ssh 'sleep 300'   : rc=255 timed_out=1 elapsed=6s   <- bound 6
+  5 unreachable    ssh 172.16.1.199  : rc=255 timed_out=0 elapsed=10s  <- ConnectTimeout, inside the bound
+  6 hang, tight    ssh 'sleep 300'   : rc=255 timed_out=1 elapsed=3s   <- bound 3
+
+Rows 4, 5 and 6 all return 255. Only `timed_out` tells them apart.
+
+THE REAL SCRIPT, ALL FIVE BRANCHES DRIVEN, under a trap with a hash-verified restore:
+
+  A. HEALTHY — both probes return, script runs to green
+     exit=0 elapsed=5s
+
+  B. PROBE 1 HANGS — its payload replaced by 'sleep 300', PROBE_TIMEOUT=5
+     306:if ! bounded_ssh "$PROBE_TIMEOUT" ssh $SSH_OPTS root@172.16.1.159 'sleep 300' 2>/dev/null; then
+     ⚠️  UNKNOWN — the reachability probe to 172.16.1.159 (LXC 100) did not return within
+       5s and was killed. THIS IS NOT THE SAME AS UNREACHABLE: the host may
+       be answering TCP and authenticating fine while unable to fork a shell — PID
+       exhaustion, memory pressure, or a FULL / , which is this phase's own incident.
+       Check from atlantis (172.16.1.158), which does not depend on this path:
+         ssh root@172.16.1.158 'pct exec 100 -- df -h /; pct exec 100 -- uptime'
+     exit=1 elapsed=5s        <-- WITHOUT THE FIX THIS RUN NEVER RETURNS AT ALL
+
+  C. PROBE 1 UNREACHABLE — a real dead host (172.16.1.199), same code path, bound 30
+     ⚠️  UNKNOWN — 172.16.1.159 (LXC 100) is unreachable over ssh.
+       NO container state can be read, so nothing below would be a measurement.
+       This is UNKNOWN, not healthy. Check the host, then re-run.
+     exit=1 elapsed=10s       <-- DIFFERENT WORDING FROM B. That is the whole point of the
+                                  sentinel: ConnectTimeout ended this one well inside the bound,
+                                  and the transcript says so instead of blaming the bound.
+
+  D. PROBE 2 HANGS — the `timeout`-presence probe, PROBE_TIMEOUT=5
+     ⚠️  UNKNOWN — the `timeout` probe on 172.16.1.159 did not return within
+       5s and was killed. Note what this is NOT: it is not a finding that
+       coreutils is missing. It is a finding that the host would not answer, which is a
+       strictly worse state and is reported as its own thing. See the note above for how
+       to check it from atlantis rather than through this same path.
+     exit=1 elapsed=5s
+
+  E. PROBE 2's ORIGINAL BRANCH STILL WORKS — probe rewritten to look for a binary that does not
+     exist, so the answer is a genuine "absent" rather than a hang
+     ⚠️  UNKNOWN — coreutils `timeout` is absent on 172.16.1.159 (LXC 100).
+       [...] Restore coreutils on the host, then re-run.
+     exit=1 elapsed=1s        <-- the pre-existing behaviour is preserved, not replaced
+
+  sha256 BEFORE the temporary edits: 6e58dcdb34397c47ad4b2a1a7d7967c50418b7c0137a15f9f00d6fabad3392fd
+  sha256 AFTER  the restore       : 6e58dcdb34397c47ad4b2a1a7d7967c50418b7c0137a15f9f00d6fabad3392fd
+  RESTORE VERIFIED — hashes match.
+
+KNOWN LIMIT, RECORDED IN THE FILE TOO: the watchdog kills the ssh CLIENT, not the remote command.
+Confirmed by driving it — the `sleep 300` processes from rows 4 and 6 and from runs B and D
+outlived their ssh clients on LXC 100 and expired on their own schedule. That is harmless for
+these two probes (`true` and `command -v` have either already finished or never started) and it
+is why the file says not to reach for this function to bound a remote command with side effects;
+REMOTE_TIMEOUT, which runs on the far side, is the right instrument for those. The two bounds
+solve different problems and neither substitutes for the other.
+
+RESIDUAL WINDOW, STATED HONESTLY: the ten REMOTE_TIMEOUT sites still have an unbounded pre-fork
+window of their own — `timeout` cannot start until the remote shell has been forked. What the two
+bounded probes now guarantee is that this script DETECTS a host that cannot fork, and refuses,
+before it reaches any of them. That is a gate, not a bound on every site, and the file does not
+claim otherwise.
