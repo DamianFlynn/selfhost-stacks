@@ -1,0 +1,642 @@
+================================================================================
+02.1-14 — PLAYBACK VERIFICATION (human gate, TRAN-01 / TRAN-04)
+Closes 02.1-VALIDATION.md's manual-only row: "Playback sanity after the cutover"
+================================================================================
+
+WHY THIS ROW IS STILL OPEN
+--------------------------
+The operator's one recorded playback session (2026-09-02, ~22:20-22:40Z, after the
+cutover) DIRECT-PLAYED: zero segments, zero ffmpeg, zero bytes on /. 02.1-10-SUMMARY.md
+records it honestly as "not transcode evidence — an empty /mnt/fast/transcode after a
+direct-play session is the absence of a test."
+
+That is a real result about the cutover not breaking playback. It is not the result this
+row asks for. This plan re-drives it with each session PINNED to its codec path by
+ffmpeg's own command line, so the same mistake cannot be banked twice.
+
+02.1-06 already proved the MECHANISM firing (segments landing, deletion with advancing
+ranges, the throttler echoing "target gap 1800000000") with a purpose-built HLS client.
+That question is answered. This row asks a DIFFERENT question: perceptual watchability
+through a real client. No HLS fetcher can answer it, and none is used here.
+
+
+================================================================================
+TASK 1 — BEFORE-STATE (read-only, captured 2026-09-03T10:46:37Z)
+================================================================================
+
+$ ssh root@172.16.1.159 "df -B1 --output=avail / | tail -1"
+36849016832
+    -> 36,849,016,832 bytes = 34.32 GiB free on /
+       (D-17 floor is 20 GiB / 21474836480 bytes; 14.32 GiB of margin)
+
+$ ssh root@172.16.1.159 "ls -1 /mnt/fast/transcode | wc -l"
+0
+    -> transcode dataset empty at rest, as expected
+
+$ ssh root@172.16.1.159 "docker top jellyfin | grep -c ffmpeg || true"
+0
+    -> no transcode running at rest, as expected.
+       The `|| true` is load-bearing: `grep -c` matching nothing exits 1, and under
+       pipefail that would turn "none running" into "the command failed".
+
+$ ssh root@172.16.1.159 "docker inspect jellyfin --format '{{.State.Status}} {{.State.StartedAt}}'"
+running 2026-09-02T22:19:52.386240602Z
+    -> running, and StartedAt is STILL the 02.1-05 cutover timestamp.
+       No unexplained restart since the cutover.
+
+$ ssh root@172.16.1.159 "sha256sum /mnt/fast/stacks/scripts/check-jellyfin-transcode.sh"
+d33356c551113fd972c515fc288ef8f00a1180bb8f17119165c81c21971444b5
+    -> recorded because plan 02.1-11 is concurrently redeploying this script (it converts
+       the five encoding values from REPORTED to ASSERTED, closing CR-01). The after-run
+       in task 3 may therefore execute a DIFFERENT script version. Both shas are recorded
+       so the before/after comparison stays attributable rather than silently comparing
+       two different programs.
+
+$ ssh root@172.16.1.159 "bash /mnt/fast/stacks/scripts/check-jellyfin-transcode.sh"
+  / headroom:              36848844800 bytes (34.32 GiB)  (target >= 21474836480)
+  volume mounts:           0  (target 0)
+  transcode quota:         53687091200 bytes  (target 53687091200)
+  transcode mounted:       zfs=yes devid=47 parent=64519  (target yes, and devid != parent)
+  encoding values:         REPORTED not asserted  (see section 5)
+  unreachable:             0
+  toolchain missing:       0
+  FAILURES total:          0
+  ✅ Jellyfin transcode retention intact
+EXIT=0
+
+  Section 5 read back, all REPORTED not asserted (this is CR-01, being fixed by 02.1-11):
+    TranscodingTempPath   = /cache/transcodes
+    EnableSegmentDeletion = true
+    SegmentKeepSeconds    = 300
+    EnableThrottling      = true
+    ThrottleDelaySeconds  = 180
+    HardwareAccelerationType = none    (amdgpu mitigation, D-30)
+    EnableHardwareEncoding   = false   (amdgpu mitigation, D-30)
+
+  -> GREEN REFERENCE POINT ESTABLISHED before any playback, so a red afterwards is
+     attributable to the playback exercise.
+
+
+================================================================================
+TASK 2 — THE OPERATOR CARD (written before the operator looked)
+================================================================================
+
+CLIENT: the Jellyfin WEB client in a browser. It is the only client where the quality
+selector reliably forces the codec path, and the Dashboard is one tab away.
+
+TITLE SELECTED FOR BOTH SESSIONS (verified by ffprobe on 2026-09-03, not by filename):
+
+  The Kid Who Would Be King (2019) [imdb-tt6811018]
+  /mnt/tank/media/Movies/.../[h264-Remux-1080p DTS-HD MA-7.1].mkv
+
+    video   : h264, High profile, 1920x1080
+    audio 0 : dts, profile DTS-HD MA, 8 channels
+    audio 1 : ac3, 6 channels
+    subs    : 6 x hdmv_pgs_subtitle  (IMAGE-BASED — see the trap below)
+    duration: 7208.288 s  (2h00m08s)
+    bit_rate: 29,854,500  (~29.9 Mbps)
+    size    : 26,899,979,464 bytes
+
+  Why this title forces a REMUX for session A:
+    - h264 video  -> the browser CAN decode it, so Jellyfin has no reason to re-encode
+    - MKV container -> the browser CANNOT play it, so Jellyfin MUST repackage to fMP4/HLS
+    - DTS-HD MA audio -> the browser CANNOT decode it either; a reliable nudge off direct play
+    Expected ffmpeg: video stream `copy`, audio transcoded to aac.
+
+  Why the same title forces a RE-ENCODE for session B:
+    - source is ~29.9 Mbps; a 720p 3 Mbps cap is a ~10x reduction. Nothing about that can
+      direct-play or remux. Expected ffmpeg: libx264.
+
+  *** TRAP — SUBTITLES MUST BE OFF FOR SESSION A ***
+  The six subtitle tracks are PGS, which is image-based. Jellyfin BURNS IN image subtitles,
+  and burn-in forces a full video re-encode. Enabling a subtitle track would turn session A
+  into a libx264 re-encode wearing a remux's clothes — exactly the intent-vs-evidence
+  mismatch task 3 exists to catch.
+      subtitles OFF -> video `copy`      subtitles ON -> video `libx264`
+
+SEEK METHOD (operator's choice, recorded 2026-09-03): WATCH CONTINUOUSLY to ~10:00.
+  Rationale stated to the operator before they chose: seeking FORWARD restarts the
+  transcode by itself, so a later seek-back would show a restart regardless of whether
+  SegmentKeepSeconds deleted anything — the restart could not be attributed to the 300 s
+  window. Watching continuously lets segments accumulate and the cleaner delete the early
+  ones, so the seek-back genuinely exercises the retention window.
+
+SESSION A — REMUXED title (stream copy)
+  1. Open the title above. Quality on Auto/maximum. SUBTITLES OFF.
+  2. Press play. Confirm picture and sound, and no stall in the first 30 seconds.
+  3. Say "session A playing" so the agent captures the live ffmpeg command line.
+     - If the agent reports NO FFMPEG, the browser direct-played it. STOP. The session does
+       not count and must be re-driven. That is exactly why this row is still open.
+  4. WATCH CONTINUOUSLY to roughly 10:00 of runtime.
+  5. SEEK BACK to about 01:00 — nine minutes back, past the 300-second retention window,
+     so those segments have been deleted and Jellyfin must restart the transcode.
+  6. Report the outcome using the words below.
+  7. Say whether the whole session was WATCHABLE — your judgement, your own words.
+
+SESSION B — RE-ENCODED title
+  1. Same title. Open the player's gear/settings and set Quality to 720p 3 Mbps
+     (well below the ~29.9 Mbps source). This forces a genuine video re-encode.
+  2. EXPECT HIGH CPU. Hardware acceleration is deliberately OFF
+     (HardwareAccelerationType: none, EnableHardwareEncoding: false) — the D-30 amdgpu
+     mitigation applied after the 2026-08-31 outage that cost ~6 hours. Software libx264
+     encoding is the CORRECT behaviour here, not a fault.
+  3. Press play, confirm it starts, then say "session B playing". The capture should show
+     libx264. No ffmpeg at all means the quality cap did not take — lower it and restart.
+  4. Same steps 4-7 as session A.
+
+HOW TO TELL A RESTART FROM A FAILURE — stated BEFORE the operator looks:
+
+  RESTART (expected, correct):
+    - a brief buffering spinner, typically a few seconds
+    - playback resumes AT THE POSITION SOUGHT
+    - the Dashboard session still shows a transcode, progress reset to the new position
+    - nothing surfaces to the user beyond the pause
+
+  FAILURE:
+    - an error dialog or toast ("Playback failed", "No compatible streams",
+      "This client isn't compatible")
+    - the player drops back to the item detail page
+    - the spinner never clears — give it 60 SECONDS, past which it is a failure and not a
+      slow restart
+    - video without audio, or audio without video
+
+READ-ONLY COMMANDS THE AGENT RUNS DURING EACH SESSION (nothing is changed):
+  ssh root@172.16.1.159 "docker top jellyfin | grep ffmpeg || true"
+      -> THE DECISIVE DISCRIMINATOR. A `copy` video codec argument means REMUX;
+         `libx264` means RE-ENCODE; NO OUTPUT AT ALL MEANS DIRECT PLAY AND THE SESSION
+         DOES NOT COUNT.
+         Second free discriminator: `-readrate 10` appears on the stream-copy path and is
+         correctly ABSENT on libx264 (VALIDATION row 17).
+  ssh root@172.16.1.159 "ls -1 /mnt/fast/transcode | wc -l"     -> must be non-zero while playing
+  ssh root@172.16.1.159 "df -B1 --output=avail / | tail -1"     -> must not fall meaningfully
+
+IF ANYTHING GOES WRONG, DESCRIBE IT RATHER THAN DECIDING WHAT IT MEANS. A failure here is
+a real finding about a phase that changed where every cache byte lands. It is worth more
+than a pass and must not be smoothed into one.
+
+
+================================================================================
+SESSION A — CAPTURES (appended live)
+================================================================================
+[awaiting "session A playing"]
+
+--- PRE-SEEK CAPTURE, taken 2026-09-03T10:48:49Z, ~2 min into live playback ---
+Operator said: "its playing now, seems to be fine"
+
+$ ssh root@172.16.1.159 "docker top jellyfin | grep ffmpeg || true"
+root 4087663 1078688 15 10:47 ? 00:00:11 /usr/lib/jellyfin-ffmpeg/ffmpeg \
+  -analyzeduration 200M -probesize 1G -readrate 10 -fflags +genpts \
+  -i file:/media/Movies/The Kid Who Would Be King (2019) [imdb-tt6811018]/The Kid Who Would Be King (2019) [imdb-tt6811018] [h264-Remux-1080p DTS-HD MA-7.1].mkv \
+  -map_metadata -1 -map_chapters -1 -threads 0 -map 0:0 -map 0:1 -map -0:s \
+  -codec:v:0 copy -bsf:v h264_mp4toannexb -start_at_zero \
+  -codec:a:0 libfdk_aac -ac 2 -ab 256000 -af volume=2 \
+  -copyts -avoid_negative_ts disabled -max_muxing_queue_size 2048 \
+  -f hls -max_delay 5000000 -hls_time 6 -hls_segment_type fmp4 \
+  -hls_fmp4_init_filename 53a84c5895e502795a6faa3eee21ccf5-1.mp4 -start_number 0 \
+  -hls_segment_filename /cache/transcodes/53a84c5895e502795a6faa3eee21ccf5%d.mp4 \
+  -hls_playlist_type vod -hls_list_size 0 -hls_segment_options movflags=+frag_discont \
+  -y /cache/transcodes/53a84c5895e502795a6faa3eee21ccf5.m3u8
+
+  VERDICT ON PATH: REMUX, confirmed by machine, matching intent.
+    -codec:v:0 copy        -> video stream COPIED, not re-encoded. This is the remux.
+    NO libx264 anywhere    -> not a re-encode.
+    -readrate 10 PRESENT   -> the second discriminator; VALIDATION row 17 records it on
+                              the stream-copy path and correctly absent on libx264.
+    -codec:a:0 libfdk_aac  -> audio transcoded DTS-HD MA -> AAC 2ch, exactly as predicted
+                              from ffprobe. This is what nudged it off direct play.
+    -map -0:s              -> subtitle streams EXCLUDED. The PGS burn-in trap was avoided;
+                              had a PGS track been enabled, video would read libx264 here
+                              and the session would have been a re-encode mislabelled as
+                              a remux.
+    -hls_segment_filename /cache/transcodes/...  -> output landing on the bind, which is
+                              /mnt/fast/transcode on the host: the quota'd dataset.
+    PID 4087663, started 10:47, 00:00:11 CPU -> light CPU, correct for a stream copy.
+
+$ ssh root@172.16.1.159 "ls -1 /mnt/fast/transcode | wc -l"
+51
+  -> NON-ZERO. Segments are landing. This is a real transcode session, not a direct play.
+     The 2026-09-02 failure mode (zero segments, zero ffmpeg) does not repeat.
+
+$ ssh root@172.16.1.159 "df -B1 --output=avail / | tail -1"
+36847087616
+  -> vs task-1 before-reading 36849016832
+     delta = -1,929,216 bytes = -1.84 MiB across the whole estate.
+     / DID NOT MOVE. Ordinary churn on a box running 78+ containers, three orders of
+     magnitude below transcode output. Every segment byte went to the quota'd dataset.
+
+
+
+================================================================================
+
+--- POST-SEEK CAPTURE, taken 2026-09-03T11:01:05Z ---
+Operator said, verbatim: "i rolled back - to 1 min in - delay was a 2 or 3 seconds"
+Continuous watch: playback ran 10:47 -> 11:00 (~13 min) before the seek-back, so the
+continuous-watch method the operator chose was actually followed.
+
+$ ssh root@172.16.1.159 "docker top jellyfin | grep ffmpeg || true"
+root 4142192 1078688 27 11:00 ? 00:00:09 /usr/lib/jellyfin-ffmpeg/ffmpeg \
+  -analyzeduration 200M -probesize 1G -ss 00:01:01.088 -noaccurate_seek -readrate 10 \
+  -fflags +genpts -i file:/media/Movies/The Kid Who Would Be King (2019) [imdb-tt6811018]/... \
+  -map_metadata -1 -map_chapters -1 -threads 0 -map 0:0 -map 0:1 -map -0:s \
+  -codec:v:0 copy -bsf:v h264_mp4toannexb -start_at_zero \
+  -codec:a:0 libfdk_aac -ac 2 -ab 256000 -af volume=2 \
+  -copyts -avoid_negative_ts disabled -max_muxing_queue_size 2048 \
+  -f hls -max_delay 5000000 -hls_time 6 -hls_segment_type fmp4 \
+  -hls_fmp4_init_filename 53a84c5895e502795a6faa3eee21ccf5-1.mp4 -start_number 10 \
+  -hls_segment_filename /cache/transcodes/53a84c5895e502795a6faa3eee21ccf5%d.mp4 \
+  -hls_playlist_type vod -hls_list_size 0 -hls_segment_options movflags=+frag_discont \
+  -y /cache/transcodes/53a84c5895e502795a6faa3eee21ccf5.m3u8
+
+  RESTART CORROBORATED BY MACHINE. This capture DIFFERS from the pre-seek one in three
+  independent ways, which is what turns the operator's "2 or 3 seconds" from a perception
+  into an observation:
+    1. PID 4142192 != 4087663          -> a genuinely NEW ffmpeg process. The old one was
+                                          killed and a new transcode started.
+    2. -ss 00:01:01.088 -noaccurate_seek -> NEW ARGUMENTS, absent from the pre-seek capture.
+                                          ffmpeg was told to start at 1m01s, matching the
+                                          operator's "rolled back to 1 min in" to within a
+                                          second. Jellyfin could not serve the seek from
+                                          retained segments and had to re-transcode.
+    3. -start_number 10 (was 0)        -> segment numbering resumed rather than restarted
+                                          from zero.
+  Start time 11:00 vs 10:47 confirms the new process began at the seek, not at play.
+  -codec:v:0 copy still present, no libx264 -> STILL A REMUX after the restart.
+
+  AGAINST THE CRITERIA STATED BEFORE THE OPERATOR LOOKED:
+    RESTART signals required: brief spinner of a few seconds; playback resumes AT THE
+    POSITION SOUGHT; nothing surfaces to the user beyond the pause.
+    Observed: 2-3 second spinner (operator), resumed at 00:01:01.088 (ffmpeg), no error
+    reported. Well inside the 60-second cutoff past which it would have been a FAILURE.
+    VERDICT: RESTART. Not a failure.
+
+$ ssh root@172.16.1.159 "ls -1 /mnt/fast/transcode | wc -l"
+191
+  -> non-zero throughout (51 at the 2-min mark, 191 post-seek).
+     HONEST OBSERVATION, recorded rather than smoothed: 191 segments at 6 s each is ~19 min
+     of content, MORE than a strict 300-second retention window would retain. This is
+     consistent with -readrate 10 racing the transcode ahead of the playback head while
+     deletion trails the PLAYBACK position, not the encode position — but this reading does
+     NOT on its own prove EnableSegmentDeletion fired, and it is not claimed to.
+     02.1-06 proved deletion firing from Jellyfin's own Debug log with advancing ranges;
+     that remains the evidence for the deletion mechanism. THIS session's contribution is
+     the RESTART, which is proven outright by the -ss argument above.
+
+$ ssh root@172.16.1.159 "df -B1 --output=avail / | tail -1"
+36850933760
+  -> vs task-1 before-reading 36849016832
+     delta = +1,916,928 bytes = +1.83 MiB. / did not fall AT ALL; it rose slightly.
+     Across a ~13-minute real transcode session the root filesystem lost nothing.
+     Every segment byte landed on the quota'd dataset. This is the phase's central claim,
+     now measured against a real playback session rather than a synthetic HLS client.
+
+
+================================================================================
+SESSION B — CAPTURES (appended live)
+================================================================================
+[awaiting "session B playing"]
+
+--- PRE-SEEK CAPTURE, taken 2026-09-03T11:07:49Z ---
+Operator said, verbatim: "session b playing at 3MBps"
+
+$ ssh root@172.16.1.159 "docker top jellyfin | grep ffmpeg || true"
+root 4169992 1078688 99 11:07 ? 00:02:00 /usr/lib/jellyfin-ffmpeg/ffmpeg \
+  -analyzeduration 200M -probesize 1G -canvas_size 1920x1080 \
+  -i file:/media/Movies/The Kid Who Would Be King (2019) [imdb-tt6811018]/... \
+  -map_metadata -1 -map_chapters -1 -threads 0 -map 0:0 -map 0:1 -map -0:0 \
+  -codec:v:0 libx264 -preset veryfast -crf 23 -maxrate 2616000 -bufsize 5232000 \
+  -profile:v:0 high -level 41 \
+  -x264opts:0 subme=0:me_range=16:rc_lookahead=10:me=hex:open_gop=0 \
+  -force_key_frames:0 expr:gte(t,n_forced*3) -sc_threshold:v:0 0 \
+  -filter_complex [0:3]scale,scale=1920:1080:fast_bilinear[sub];[0:0]setparams=... \
+     ,scale=...,format=yuv420p[main];[main][sub]overlay=eof_action=pass:repeatlast=0 \
+  -start_at_zero -codec:a:0 libfdk_aac -ac 2 -ab 256000 -af volume=2 \
+  -copyts -avoid_negative_ts disabled -max_muxing_queue_size 2048 \
+  -f hls -max_delay 5000000 -hls_time 3 -hls_segment_type fmp4 \
+  -hls_fmp4_init_filename 30454694f91ac710e64e7f1cb6da4da9-1.mp4 -start_number 0 \
+  -hls_segment_filename /cache/transcodes/30454694f91ac710e64e7f1cb6da4da9%d.mp4 \
+  -hls_playlist_type vod -hls_list_size 0 -hls_segment_options movflags=+frag_discont \
+  -y /cache/transcodes/30454694f91ac710e64e7f1cb6da4da9.m3u8
+
+  VERDICT ON PATH: RE-ENCODE, confirmed by machine, matching intent.
+    -codec:v:0 libx264     -> the required literal. This is a genuine video re-encode.
+    -readrate 10 ABSENT    -> the second discriminator agrees. VALIDATION row 17 records
+                              -readrate 10 on the stream-copy path and correctly absent on
+                              libx264. Session A had it; session B does not. The pair is
+                              the mirror image of session A, as designed.
+    -maxrate 2616000 -bufsize 5232000 -> the operator's 3 Mbps cap in ffmpeg's own words,
+                              against a ~29.9 Mbps source.
+    -preset veryfast -crf 23, no VAAPI, no /dev/dri anywhere in the command line
+                           -> PURE SOFTWARE ENCODING. D-30 working as intended: the amdgpu
+                              path that cost ~6 hours on 2026-08-31 is NOT exercised.
+    CPU 99%, 00:02:00 CPU time in ~40 s wall; load average 6.96 (was 2.37 at 15 min)
+                           -> high CPU, EXPECTED AND CORRECT for software libx264, and
+                              stated to the operator in advance so it would not be misread
+                              as a fault.
+
+  *** FINDING — SUBTITLES ARE ON AND ARE BEING BURNED IN ***
+  -filter_complex [0:3]scale,...[sub];[0:0]...[main];[main][sub]overlay=...
+  Stream 0:3 is the first hdmv_pgs_subtitle track (confirmed by the task-1 ffprobe). It is
+  being scaled and OVERLAID onto the video — the image-subtitle burn-in the operator card
+  warned about before session A.
+
+  Effect on this session's validity: NONE. Session B is REQUIRED to be a re-encode and it
+  is one. But the re-encode is now OVER-DETERMINED: the 3 Mbps cap alone forces libx264,
+  and the PGS burn-in independently forces it too. The path therefore CANNOT be attributed
+  solely to the quality cap, and is not claimed to be. Recorded rather than smoothed.
+
+  Effect on session A: NONE, and session A is clean. Session A's capture carries -map -0:s
+  (subtitle streams excluded) and -codec:v:0 copy. Had subtitles been enabled during
+  session A, that session would have returned libx264 and been filed as a "remux" — the
+  precise intent-vs-evidence mismatch task 3 exists to catch. The warning was material,
+  not theoretical.
+
+$ ssh root@172.16.1.159 "ls -1 /mnt/fast/transcode | wc -l"
+52
+  -> NON-ZERO. Real transcode session. New session hash 30454694f91ac710e64e7f1cb6da4da9,
+     distinct from session A's 53a84c5895e502795a6faa3eee21ccf5.
+     hls_time 3 on this path vs 6 on the remux path.
+
+$ ssh root@172.16.1.159 "df -B1 --output=avail / | tail -1"
+36844838912
+  -> vs task-1 before-reading 36849016832
+     delta = -4,177,920 bytes = -3.98 MiB. / essentially unmoved during an active software
+     re-encode. Every segment byte on the quota'd dataset.
+
+
+
+
+--- SESSION B RECAPTURE WITH SUBTITLES OFF, 2026-09-03T11:08:54Z ---
+Operator said, verbatim: "i just turned off subtitles"
+This was NOT planned. It turned out to be the most valuable control of the exercise.
+
+$ ssh root@172.16.1.159 "docker top jellyfin | grep ffmpeg || true"
+root 4173499 1078688 99 11:08 ? 00:03:10 /usr/lib/jellyfin-ffmpeg/ffmpeg \
+  -analyzeduration 200M -probesize 1G -ss 00:01:00.060 -noaccurate_seek \
+  -i file:/media/Movies/The Kid Who Would Be King (2019) [imdb-tt6811018]/... \
+  -map_metadata -1 -map_chapters -1 -threads 0 -map 0:0 -map 0:1 -map -0:s \
+  -codec:v:0 libx264 -preset veryfast -crf 23 -maxrate 2616000 -bufsize 5232000 \
+  -profile:v:0 high -level 41 \
+  -x264opts:0 subme=0:me_range=16:rc_lookahead=10:me=hex:open_gop=0 \
+  -force_key_frames:0 expr:gte(t,n_forced*3) -sc_threshold:v:0 0 \
+  -vf setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709,scale=...,format=yuv420p \
+  -codec:a:0 libfdk_aac -ac 2 -ab 256000 -af volume=2 \
+  -copyts -avoid_negative_ts disabled -max_muxing_queue_size 2048 \
+  -f hls -max_delay 5000000 -hls_time 3 -hls_segment_type fmp4 \
+  -hls_fmp4_init_filename 41ae45b1b3ffdaa525674abdcbfd5067-1.mp4 -start_number 20 \
+  -hls_segment_filename /cache/transcodes/41ae45b1b3ffdaa525674abdcbfd5067%d.mp4 \
+  -hls_playlist_type vod -hls_list_size 0 -hls_segment_options movflags=+frag_discont \
+  -y /cache/transcodes/41ae45b1b3ffdaa525674abdcbfd5067.m3u8
+
+  *** THIS RESOLVES THE OVER-DETERMINATION RECORDED IN THE PREVIOUS CAPTURE ***
+  An unplanned but genuine A/B control, same title, same session, same 3 Mbps cap:
+
+    variable            | subtitles ON (11:07:49)   | subtitles OFF (11:08:54)
+    --------------------+---------------------------+--------------------------
+    burn-in overlay     | -filter_complex [0:3]...  | ABSENT (-vf only, -map -0:s)
+                        |   ...overlay=eof_action   |
+    video codec         | libx264                   | libx264   <-- UNCHANGED
+    -maxrate            | 2616000                   | 2616000
+    -readrate 10        | absent                    | absent
+
+  With the PGS burn-in removed as a variable, libx264 PERSISTS. The 3 Mbps cap against a
+  ~29.9 Mbps source is therefore SUFFICIENT ON ITS OWN to force the re-encode, and session
+  B's path is attributable purely to the quality cap — which is what the plan asked for and
+  what the previous capture explicitly could NOT support. The operator's incidental action
+  produced a better-controlled result than the plan designed.
+
+  Also incidentally demonstrated: a THIRD transcode restart. Toggling a stream selection
+  forces a new ffmpeg (new PID 4173499, new session hash 41ae45b1..., -ss 00:01:00.060,
+  -start_number 20) and it recovered cleanly with no error surfaced to the client.
+
+$ ssh root@172.16.1.159 "ls -1 /mnt/fast/transcode | wc -l"
+91
+  -> non-zero throughout.
+
+$ ssh root@172.16.1.159 "df -B1 --output=avail / | tail -1"
+36843991040
+  -> vs task-1 before-reading 36849016832; delta = -5,025,792 bytes = -4.79 MiB.
+     / still essentially unmoved during an active software re-encode.
+
+$ ssh root@172.16.1.159 "uptime"
+ 11:08:54 up 2 days, 17:19, 1 user, load average: 10.62, 4.85, 3.00
+  -> load climbing under software libx264 (2.37 -> 6.96 -> 10.62 fifteen-min/one-min).
+     Expected: no VAAPI and no /dev/dri in the command line, so this is CPU only and the
+     amdgpu HMM path implicated in the 2026-08-31 outage is NOT exercised (D-30).
+
+
+
+--- SESSION A OPERATOR VERDICT (verbatim, given 2026-09-03 after the session) ---
+
+  "Session A was perfect, no issues at all great picture quality"
+
+  Recorded in the operator's own words, not paraphrased into a pass.
+  Earlier in-session remarks, also verbatim:
+    at start:     "its playing now, seems to be fine"
+    at seek-back: "i rolled back - to 1 min in - delay was a 2 or 3 seconds"
+
+  SESSION A SUMMARY
+    intended path : REMUX (stream copy)
+    evidenced path: REMUX  -- -codec:v:0 copy, no libx264, -readrate 10 present
+    intent vs evidence: AGREE
+    started       : yes, picture and sound, no stall
+    seek-back     : RESTART (2-3 s spinner; corroborated by a new ffmpeg PID carrying
+                    -ss 00:01:01.088, matching the sought position to within a second).
+                    Well inside the 60 s cutoff that would have made it a FAILURE.
+    watchability  : WATCHABLE -- "perfect, no issues at all great picture quality"
+    segments      : 51 -> 191, non-zero throughout
+    / movement    : +1.83 MiB (rose slightly; lost nothing)
+
+
+
+--- SESSION B OPERATOR WATCHABILITY VERDICT (verbatim, 2026-09-03) ---
+
+  "this one is also perfect, no problem with the picture or sound quality"
+
+  Recorded in the operator's own words. NOTE: this verdict covers picture/sound quality of
+  the re-encoded stream. At the time it was given the SEEK-BACK HAD NOT YET BEEN PERFORMED
+  (see the capture below), so it is recorded as a watchability verdict only and the
+  seek-back outcome is tracked separately rather than being inferred from it.
+
+--- SESSION B STATE CHECK, 2026-09-03T11:10:46Z (no seek-back yet) ---
+
+$ ssh root@172.16.1.159 "docker top jellyfin | grep ffmpeg || true"
+root 4173499 ... 00:04:39 ... -ss 00:01:00.060 ... -codec:v:0 libx264 ...
+  -start_number 20 ... 41ae45b1b3ffdaa525674abdcbfd5067 ...
+
+  SAME PID 4173499, SAME -ss 00:01:00.060, SAME -start_number 20 and session hash as the
+  11:08:54 subtitles-off capture. No new ffmpeg process => NO SEEK-BACK HAS OCCURRED YET.
+  This is still the transcode that started when subtitles were switched off at ~01:00.
+  Playback position ~03:00.
+
+  Recorded because it is the distinction this whole plan exists to protect: a watchability
+  verdict is NOT a seek-back result, and banking one as the other is the same class of
+  error as banking the 2026-09-02 direct-play as transcode evidence.
+
+  OPERATIONAL NOTE stated to the operator at this point: seeking back to 01:00 from ~03:00
+  is only ~2 minutes, INSIDE the 300 s SegmentKeepSeconds window, so those segments would
+  still be on disk and Jellyfin would serve them WITHOUT a restart — no spinner, and no
+  test. The operator was asked to continue to ~10:00 first so the rollback lands outside
+  the retention window.
+
+$ ssh root@172.16.1.159 "ls -1 /mnt/fast/transcode | wc -l"
+135
+$ ssh root@172.16.1.159 "df -B1 --output=avail / | tail -1"
+36842463232
+  -> vs task-1 before-reading 36849016832; delta = -6,553,600 bytes = -6.25 MiB total
+     across BOTH sessions so far. / still essentially unmoved.
+$ ssh root@172.16.1.159 "uptime"
+ 11:10:47 up 2 days, 17:21, 1 user, load average: 6.12, 4.82, 3.19
+  -> settled back from the 10.62 initial-burst peak, normal for x264 -preset veryfast.
+
+
+
+--- SESSION B POST-SEEK CAPTURE, taken 2026-09-03T11:18:50Z ---
+Operator said, verbatim: "ok rolled back to 1 minute, that was super fast also"
+Continuous watch: playback ran 11:08 -> 11:18 (~10 min unbroken) before the seek-back, so
+the continuous-watch method was followed and the rollback landed ~9 minutes back, well
+OUTSIDE the 300 s SegmentKeepSeconds window.
+
+$ ssh root@172.16.1.159 "docker top jellyfin | grep ffmpeg || true"
+root 25069 1078688 99 11:18 ? 00:02:53 /usr/lib/jellyfin-ffmpeg/ffmpeg \
+  -analyzeduration 200M -probesize 1G -ss 00:01:18.078 -noaccurate_seek \
+  -i file:/media/Movies/The Kid Who Would Be King (2019) [imdb-tt6811018]/... \
+  -map_metadata -1 -map_chapters -1 -threads 0 -map 0:0 -map 0:1 -map -0:s \
+  -codec:v:0 libx264 -preset veryfast -crf 23 -maxrate 2616000 -bufsize 5232000 \
+  -profile:v:0 high -level 41 -vf setparams=...,format=yuv420p \
+  -codec:a:0 libfdk_aac -ac 2 -ab 256000 -af volume=2 \
+  -f hls -hls_time 3 -hls_segment_type fmp4 -start_number 26 \
+  -hls_segment_filename /cache/transcodes/41ae45b1b3ffdaa525674abdcbfd5067%d.mp4 ...
+
+  RESTART CORROBORATED BY MACHINE. Differs from the pre-seek capture in three ways:
+    1. PID 25069 != 4173499        -> a genuinely NEW ffmpeg process.
+    2. -ss 00:01:18.078            -> CHANGED from -ss 00:01:00.060. ffmpeg was told to
+                                      start at 1m18s, matching "rolled back to 1 minute".
+    3. -start_number 26 (was 20)   -> segment numbering advanced.
+  Start time 11:18 vs 11:08 confirms the new process began at the seek.
+  -codec:v:0 libx264 still present -> STILL A RE-ENCODE after the restart.
+
+  AGAINST THE CRITERIA STATED BEFORE THE OPERATOR LOOKED:
+    Observed: "super fast" spinner (operator), resumed at 00:01:18.078 (ffmpeg), no error
+    dialog, no drop to the item page, nothing surfaced to the client. Far inside the 60 s
+    cutoff past which it would have been a FAILURE.
+    VERDICT: RESTART. Not a failure. Faster than session A's 2-3 s.
+
+$ ssh root@172.16.1.159 "ls -1 /mnt/fast/transcode | wc -l"
+263
+  -> non-zero throughout session B (52 -> 91 -> 135 -> 263).
+
+$ ssh root@172.16.1.159 "df -B1 --output=avail / | tail -1"
+36846243840
+  -> vs task-1 before-reading 36849016832; delta = -2,772,992 bytes = -2.64 MiB.
+     / did not move during an active software re-encode with a live seek-back.
+
+
+--- AT-REST READINGS AFTER BOTH SESSIONS, 2026-09-03T11:20:10Z ---
+
+$ ssh root@172.16.1.159 "docker top jellyfin | grep -c ffmpeg || true"
+0            -> playback stopped, no transcode running.
+$ ssh root@172.16.1.159 "ls -1 /mnt/fast/transcode | wc -l"
+0            -> the transcode dataset EMPTIED ITSELF COMPLETELY, 263 -> 0, once playback
+                stopped. Session cleanup on stop, distinct from SegmentKeepSeconds
+                mid-session deletion; recorded as an observation, not claimed as proof of
+                the retention lever.
+$ ssh root@172.16.1.159 "df -B1 --output=avail / | tail -1"
+36844666880
+$ ssh root@172.16.1.159 "sha256sum /mnt/fast/stacks/scripts/check-jellyfin-transcode.sh"
+d33356c551113fd972c515fc288ef8f00a1180bb8f17119165c81c21971444b5
+             -> IDENTICAL to the task-1 reading. The before-check and the after-check ran
+                the SAME PROGRAM, so comparing their results is meaningful. 02.1-11's
+                redeploy was deliberately withheld until after this exercise for exactly
+                this reason; had it been pushed mid-exercise the two runs would have been
+                different programs and the comparison would have been theatre.
+$ ssh root@172.16.1.159 "uptime"
+ 11:20:11 up 2 days, 17:30, 1 user, load average: 3.64, 3.99, 3.36
+
+$ ssh root@172.16.1.159 "bash /mnt/fast/stacks/scripts/check-jellyfin-transcode.sh"
+  / headroom:              36844527616 bytes (34.31 GiB)  (target >= 21474836480)
+  volume mounts:           0  (target 0)
+  transcode quota:         53687091200 bytes  (target 53687091200)
+  transcode mounted:       zfs=yes devid=47 parent=64519
+  encoding values:         REPORTED not asserted  (pre-02.1-11 host script; see note above)
+  unreachable:             0
+  toolchain missing:       0
+  FAILURES total:          0
+  ✅ Jellyfin transcode retention intact
+EXIT=0
+  -> MATCHES the task-1 reference point exactly. Nothing this exercise did moved any bound.
+
+
+================================================================================
+TASK 3 — VERDICT
+================================================================================
+
+SESSION A — REMUX
+  intended path        : REMUX (stream copy)
+  evidenced path       : REMUX
+  evidence             : -codec:v:0 copy ; no libx264 anywhere ; -readrate 10 PRESENT
+                         (VALIDATION row 17's stream-copy marker) ; -map -0:s so no PGS
+                         burn-in ; output to /cache/transcodes = /mnt/fast/transcode
+  INTENT vs EVIDENCE   : AGREE
+  proven a transcode   : YES — live ffmpeg PID 4087663, 51 segments rising to 191
+  started              : YES, picture and sound, no stall
+  seek-back            : RESTART. Operator: "delay was a 2 or 3 seconds".
+                         Corroborated by NEW PID 4142192 carrying -ss 00:01:01.088 and
+                         -start_number 10 — a different process at the sought position.
+                         Inside the 60 s cutoff. NOT a failure.
+  watchability verdict : "Session A was perfect, no issues at all great picture quality"
+  / movement           : +1.83 MiB (rose)
+
+SESSION B — RE-ENCODE
+  intended path        : RE-ENCODE
+  evidenced path       : RE-ENCODE
+  evidence             : -codec:v:0 libx264 -preset veryfast -crf 23 -maxrate 2616000 ;
+                         -readrate 10 ABSENT (the mirror of session A, exactly as
+                         VALIDATION row 17 predicts) ; no VAAPI, no /dev/dri => pure
+                         software encode, D-30 amdgpu mitigation honoured
+  INTENT vs EVIDENCE   : AGREE
+  proven a transcode   : YES — live ffmpeg, 52 -> 91 -> 135 -> 263 segments
+  started              : YES
+  seek-back            : RESTART. Operator: "that was super fast also".
+                         Corroborated by NEW PID 25069 carrying -ss 00:01:18.078 and
+                         -start_number 26. Preceded by ~10 min of unbroken watching
+                         (11:08 -> 11:18), so the rollback landed ~9 min back, well
+                         outside the 300 s window. NOT a failure.
+  watchability verdict : "this one is also perfect, no problem with the picture or sound
+                         quality"
+  / movement           : -2.64 MiB
+  CAVEAT, RECORDED     : the FIRST session-B capture (11:07:49) had PGS subtitles enabled
+                         and burning in, making the re-encode OVER-DETERMINED (cap OR
+                         burn-in would each force libx264). The operator then turned
+                         subtitles off unprompted, producing an unplanned but genuine A/B
+                         control: same title, same session, same 2616000 cap, burn-in
+                         removed — and libx264 PERSISTED. The 3 Mbps cap is therefore
+                         sufficient on its own and session B's path IS attributable to the
+                         quality cap. The over-determination is resolved, not hand-waved.
+
+/ FREE SPACE ACROSS THE WHOLE EXERCISE
+  before (10:46:37) : 36,849,016,832
+  after  (11:20:10) : 36,844,666,880
+  delta             : -4,349,952 bytes = -4.15 MiB
+  Two transcode sessions, three restarts, ~25 minutes of encoding, and / moved 4.15 MiB —
+  ordinary churn on a box running 78+ containers, three orders of magnitude below what
+  transcode output would cost. WELL within the "few hundred MiB" tolerance the plan set.
+  Every segment byte landed on the quota'd dataset. This is the phase's central claim, and
+  it now rests on real playback rather than a synthetic HLS client.
+
+STANDING CHECK: exits 0 with FAILURES total: 0 both before and after, against a
+byte-identical script (sha d33356c5...). The comparison is valid.
+
+WHAT IS **NOT** CLAIMED
+  The segment counts do NOT independently prove EnableSegmentDeletion fired. 51->191 and
+  52->263 exceed what a strict 300 s window would retain, consistent with -readrate 10
+  racing the encode ahead of the playback head while deletion trails the PLAYBACK position
+  — but that is an explanation, not a measurement. 02.1-06 proved deletion firing from
+  Jellyfin's own Debug log with advancing ranges; that remains the evidence for the
+  mechanism. THIS exercise's contribution is (a) the perceptual watchability verdict no
+  assertion covers, and (b) the seek-back RESTARTS, which are proven outright by the -ss
+  arguments on three distinct new ffmpeg processes.
+
+  Neither session direct-played. The 2026-09-02 trap did NOT recur, and no session had to
+  be re-driven for that reason.
+
+OVERALL: BOTH SESSIONS PASS. Row discharged.
