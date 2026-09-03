@@ -9,10 +9,7 @@ Nothing here is applied by `docker compose`. This is the reviewed dry-run diff D
 recorded artist-policy choice plan 03-07 interprets its four-cell comparison against, and the
 field-loss verdict from the tooling Phase 1 already built.
 
-State as of 2026-09-03 — **reviewed; nothing written yet.** The *Applied*, *Field-loss verdict*,
-*Second instrument* and *`raw/` is untouched* sections are appended by task 3 of this plan, after
-the write actually happens. They are deliberately absent rather than pre-filled: this phase has a
-standing rule against recording a number before the instrument has produced it.
+State as of 2026-09-03 — **normalised arm written; `raw/` intact; no Discogs request issued.**
 
 > **OD-4 — D-08's constraint stands; its worked example is replaced.**
 >
@@ -352,8 +349,8 @@ would have failed `EROFS`.
 
 The 148 `TKEY` and 45 `EnergyLevel` figures D-08 quotes are across the whole 764-file `dj-mixes`
 fence; **40 `TKEY` and 110 `TXXX`** is this 335-file sample's own share, measured directly on the
-BEFORE side. Whether they survive the write is asserted **after** the apply, by
-`diff-music-tags.sh`, and recorded under *Field-loss verdict* below — not claimed here in advance.
+BEFORE side. They survived: `FIELDS_DROPPED = 0`, and the whole-tree frame-ID comparison below
+shows every `TKEY` and `TXXX` frame still present.
 
 The enforcement is structural rather than by discipline. `WRITABLE_FIELDS = ("album", "artist")` is
 a frozen constant, `FIELD_FRAME` maps only those two to `TALB` and `TPE1`, and `write_tags()` raises
@@ -362,3 +359,250 @@ any of the fields in the table above — the module docstring is the only place 
 only to say so.
 
 ---
+
+## Three corrections found by applying, and why the tree was re-materialised
+
+The first `--apply` was **not** clean, and the way it was not clean is the most transferable thing
+in this document. `diff-music-tags.sh` exited **1** with `MISSING_AFTER: 37` — 37 files apparently
+lost — while `FIELDS_DROPPED` was **0**. Nothing had been lost at all. Chasing that discrepancy
+turned up **three** separate ways `mutagen` writes more than it is asked to, none of which the
+plan's own gate could see.
+
+**mutagen does not write back what it read.** It re-serialises its own normalised in-memory model
+of the tag, and three of its defaults quietly broaden the write:
+
+| # | Default | What it did | How it was found | How it is now prevented |
+|---|---|---|---|---|
+| 1 | `ID3.save(v1=UPDATE)` regenerates the whole 128-byte ID3v1 block from the ID3v2 frames | moved `audio_md5` on **37 of 335** files | `diff-music-tags.sh` exit 1, then a byte comparison against the `raw/` twin | the pre-write ID3v1 block is restored **byte-for-byte** after every save |
+| 2 | `ID3.load(load_v1=True)` merges the ID3v1 tag into the ID3v2 frame set as a synthetic `COMM:ID3v1 Comment:eng` frame | **107 of 335** files gained an `ID3v1 Comment` key, and the frame was written to disk | frame-header dump: `raw/` has **one** COMM frame and padding at offset 183, the written file has **two** and padding at 225 | `load_v1=False` |
+| 3 | `v2_version` is a **load-time** option; the default `4` translates `TYER`/`TDAT`/`TIME` to `TDRC` in memory, and `save(v2_version=3)` does **not** undo it | a `TYER` frame of 5 bytes came back as a `TDRC` frame of 6 — a v2.4-only frame ID inside a v2.3 tag | the same frame-header dump | `v2_version` is set at **load**, from the major version read out of the file's own 10-byte header |
+
+Defect 3 is the one worth carrying furthest: **`ffprobe` maps both `TYER` and `TDRC` to `date`, so
+`diff-music-tags.sh` reported nothing at all.** The phase's own field-loss gate is blind to it. It
+was found only because defect 1 forced a byte-level look at the file.
+
+Defect 1 is a finding about the *instrument*, not about the write, and it is logged as
+**DEF-03-03** in [`deferred-items.md`](deferred-items.md) rather than fixed:
+`snapshot-music-tags.sh:35` claims its key *"hashes the ENCODED AUDIO BITSTREAM ONLY"*, and it does
+not — ffmpeg's mp3 demuxer emits the trailing ID3v1 bytes as part of the `-c copy` stream on some
+files. All 37 movers carry an ID3v1 trailer; **0** of them do not; and with the last 128 bytes
+removed, every mover's md5 matches its untouched `raw/` twin exactly. The audio was never touched:
+with the ID3v2 tag and the last 128 bytes excluded, `cmp` against the `raw/` twin returns **zero**
+differing bytes on every file examined.
+
+**Because a fourth such default is exactly the shape that had now recurred three times, the script
+gained a backstop rather than only a fix.** `assert_frame_set_unchanged()` re-parses the ID3v2 tag
+off disk **without mutagen** after every write and requires the frame-ID multiset to equal what it
+was plus the frames this script wrote. Frame encodings and sizes may move — mutagen NUL-terminates
+latin-1 text, which is legal and harmless; frame *identity* may not. A violation is a hard failure
+into the `.failed` ledger, not a silently larger diff. It fired **0** times on the final run.
+
+**The tree was re-materialised from `raw/` between attempts**, on atlantis, by the same
+`cp -r --reflink=always --preserve=timestamps` + `chown 568:568` route plan 03-03 documented
+(`FICLONE` is `EPERM` inside the unprivileged container). `raw/` is `:ro` on both services and was
+verified byte-identical to `normalised/` immediately after each re-materialisation, so every
+attempt started from a provably un-normalised tree and **every number below comes from one clean
+invocation**, not from a patched-up state.
+
+> **A bind mount pins the directory INODE, not the path.** Re-materialising `normalised/` left
+> `beets-spike` bound to the deleted inode, and its next dry run reported *"folders seen: 0, files
+> seen: 0"* and exited **0**. A vacuous pass, on the phase's primary measurement container. It was
+> caught here because 0 is an obviously wrong answer — but plans 03-06, 03-07 and 03-10 all measure
+> *rates*, where "0 candidates" is a plausible-looking result that would falsify T1 on an artefact.
+> `beets-spike` was force-recreated and re-verified: **335** mp3 visible, `normalised RW=false`, and
+> all four plugins loading (`discogs, fromfilename, importsource, musicbrainz`) on
+> `beet … version` — the 03-04 instrument, not a `config -d` block.
+
+---
+
+## Applied
+
+```
+ssh -o BatchMode=yes -o ConnectTimeout=5 root@172.16.1.158 \
+    'zfs list -t snapshot -H -o name tank/downloads@spike-03-t0'  >> snapshot-proof.txt
+docker compose -f 03-spike-beets.yaml --profile manual up -d beets-spike-rw
+docker exec beets-spike-rw python3 …/normalise-dj-tags.py …/normalised --apply \
+    --snapshot-proof …/snapshot-proof.txt --out …/normalise-apply.ndjson
+docker compose -f 03-spike-beets.yaml --profile manual rm -sf beets-spike-rw
+```
+
+| Property | Value |
+|---|---|
+| Snapshot proof | `tank/downloads@spike-03-t0` — present |
+| **Route** | **`ssh:172.16.1.158`** (atlantis), captured `2026-09-03T21:55:47Z` |
+| Apply exit code | **0** |
+| Folders / files seen | **24** / **335** |
+| **Files changed** | **205** |
+| Files unchanged | **130** |
+| Rule 1 / 2 / 3 hits | **30** / **155** / **107** — identical to the dry run |
+| Records with `written: false` | **0** |
+| Files skipped | **0** |
+| **Failure ledger** | **0 lines** — dry run, apply and idempotence run, all three |
+| Frame-set assertion failures | **0** |
+| Elapsed | 13.99 s |
+| Writer arm up → removed | `22:26:47Z` → `22:27:03Z`, **16 seconds** |
+| `beets-spike-rw` in `docker ps -a` afterwards | **absent** |
+
+**The dry run was an exact prediction of the apply.** Sorting both NDJSON outputs on
+`(path, field, rule, old, new)` and hashing gives
+`9b7e1799a2b14fe0969f82ea6e43579a74d92d7b8dc8fd8bae4aea11b2ab7271` for **both**. Not "the same
+counts" — the same 292 rows, byte for byte. That is what makes the reviewed dry run a review of
+what actually happened rather than of something adjacent to it.
+
+**Idempotence, as a genuine second `--apply` rather than an inference.** Immediately after the
+write, through the same writer arm, over the same tree: exit **0**, **0** files changed, **0**
+NDJSON records, **0** stdout lines, **0** failures. Every rule is a fixed point on its own output.
+
+---
+
+## Field-loss verdict
+
+`bash scripts/diff-music-tags.sh /mnt/fast/spike-03/out/spike03-before.ndjson.gz
+/mnt/fast/spike-03/out/spike03-after.ndjson.gz`
+
+The AFTER side was captured with `bash scripts/snapshot-music-tags.sh spike03-after --roots
+/mnt/tank/downloads/spike-03/normalised` — 335 files seen, 335 records written, 0 failed.
+
+| Category | Count | Gate |
+|---|---|---|
+| MATCHED | **306** | — |
+| **MISSING_AFTER** | **0** | **gate: must be 0** |
+| NEW_AFTER | **0** | — |
+| **FIELDS_DROPPED** | **0** | **gate: must be 0** |
+| FIELDS_GAINED | **35** | `album` 25, `artist` 10 |
+| FIELDS_CHANGED | **237** | `album` 145, `artist` 92 |
+| Matched files whose BEFORE tag set was empty | **0** | the vacuous-pass guard did not fire |
+| **`diff-music-tags.sh` exit code** | **0** | its own contract: 0 = no net metadata loss |
+
+**The set of changed field names is exactly `{album, artist}`, and so is the set of gained names**
+— asserted on the tool's own `--json` parsed category output, not by grepping its prose. Nothing
+was dropped.
+
+`MATCHED` is 306 rather than 335 because the tool keys on `audio_md5` and the draw deliberately
+contains **two near-duplicate pairs** (`Mastermix_Issue_410` / `_410.1` and
+`VA-Mastermix.Issue.426-2021` / `.1`), collapsing 29 records. `duplicate_keys_before` and
+`duplicate_keys_after` are both **29** — `diff-music-tags.sh:22-24, 267-276` classifies those as
+informational and they do not affect the exit code. **Expected, not a bug.**
+
+**The vacuous-pass guard did not fire**, and it had real work to do. `diff-music-tags.sh:288-292`
+warns when every matched file had zero tag fields on the BEFORE side, in which case "no fields
+dropped" is vacuously true and the result must be read as **untested, not passed**; it exists
+because 134 of `dj-mixes`' 764 files are WAV and carry no format tags. It is silent here because
+**the draw contains zero WAV** — all 335 files are MP3, all ID3v2.3, carrying between them 295
+`GEOB`, 285 `TCON`, 245 `COMM`, 230 `APIC`, 130 `TPOS`, 110 `TXXX`, 110 `TBPM` and **40 `TKEY`**
+frames on the BEFORE side. There was a great deal there to drop. None of it was dropped.
+
+### The same verdict, PATH-keyed, over all 335 files
+
+Because `audio_md5` collapses the 29 duplicates — and because DEF-03-03 shows it is not
+tag-invariant in general — the verdict was recomputed keyed on `source_path`, using
+`diff-music-tags.sh`'s own `FLATTEN_JQ` so the flattening is identical. Path is a valid key here
+and `audio_md5` is the questionable one, because **this plan renames nothing and moves nothing.**
+
+| Quantity | Value |
+|---|---|
+| Matched | **335 of 335** |
+| MISSING_AFTER / NEW_AFTER | **0** / **0** |
+| **FIELDS_DROPPED** | **0** |
+| Dropped field names | **none** |
+| Gained field names | `album` **30**, `artist` **10** — and nothing else |
+| Changed field names | `album` **155**, `artist` **97** — and nothing else |
+
+Those numbers reconcile exactly with the rules: rule 1 creates 30 `album` frames where none
+existed; rule 2 changes 155; rule 3 accounts for 107, of which 10 create an `artist` frame that was
+absent and 97 change one that was present.
+
+### Third instrument: the on-disk ID3v2 frame-ID multiset, parsed without mutagen
+
+The strongest available statement of "touch nothing else", made against the untouched `raw/` twin
+of every single file rather than against a capture:
+
+| Assertion | Result |
+|---|---|
+| Files compared | **335** |
+| ID3v2 major version, `raw/` → `normalised/` | **(3, 3) on all 335** — no file was promoted to v2.4 |
+| Files whose frame-ID multiset differs from their `raw/` twin | **40** |
+| The complete list of those differences | `TALB` 0 → 1 on **30** files · `TPE1` 0 → 1 on **10** files |
+
+**Forty files differ, and the difference is the forty frames the rules were asked to create.** No
+frame was removed anywhere, no frame ID changed anywhere, and no frame was added anywhere else —
+including the `COMM:ID3v1 Comment` frame that the first attempt added to 107 files.
+
+---
+
+## Second instrument
+
+`diff-music-tags.sh` reads a captured NDJSON. A live `ffprobe` reads the file on disk. If A and B
+disagree, **neither number is recorded** until the disagreement is explained.
+
+Five files, one for each stratum on which a rule fired, plus a **V1 control** on which no rule
+should fire — captured live before the write and again after it:
+
+| # | File | Stratum / rules | `album` before → after | `artist` before → after | Dropped | Gained | Changed | Tag keys |
+|---|---|---|---|---|---|---|---|---|
+| 1 | `VA-Mastermix.Crate.071…/&Me, Rampa, … - Thandaza 123.mp3` | V3, rule 1 | *(absent)* → `Mastermix Crate 071` | unchanged | none | `album` | none | 4 → 5 |
+| 2 | `Mastermix_Issue_410/Mastermix - Cool Cuts August 2020.mp3` | V5, rule 2 | `Mastermix - Issue 410` → `Mastermix Issue 410` | `Mastermix` unchanged | none | none | `album` | 14 → 14 |
+| 3 | `Mastermix_Issue_413/Various Artists - 10's Dance Retro Mix.mp3` | V2, rules 2+3 | `Mastermix - Issue 413` → `Mastermix Issue 413` | `Various Artists` → `Mastermix` | none | none | `album, artist` | 7 → 7 |
+| 4 | `Mastermix_Issue_418_April_2021/Mastermix Big Room Anthems  Contains Expletives .mp3` | V5/V4-shaped, rules 2+3 | `Mastermix - Issue 418` → `Mastermix Issue 418` | *(absent)* → `Mastermix` | none | `artist` | `album` | 6 → 7 |
+| 5 | `VA-DMC-Essential.Hits.233…/01_anitta_-_fria_…mp3` | V5, rule 2 | `DMC - Essential Hits 233 WEB` → `DMC Essential Hits 233` | `Anitta` unchanged | none | none | `album` | 9 → 9 |
+| **C** | `Mastermix.Issue.420.2021/4200101 - Mastermix - Club Cuts.mp3` | **V1, control** | `Issue 420` unchanged | `Mastermix` unchanged | none | none | **none** | 16 → 16 |
+
+Aggregated over all six, the only fields that moved at all are **`album` (5)** and **`artist`
+(2)**. **6 of 6 agree with the diff**, and the control confirms the rules leave V1 alone.
+
+File 1 is the one to look at twice: it **gained** an album derived from its folder name, and its
+`tkey` and `tbpm` are both still present afterwards. That is rule 1 and rule 4 working on the same
+file — the fence-protected DJ metadata survived the frame created beside it.
+
+---
+
+## `raw/` is untouched — the paired arm is intact
+
+Criterion 1 is a **paired** comparison: the same 24 folders, normalised and un-normalised. If
+`raw/` moves, the pair is gone and the comparison is not regenerable.
+
+| Instrument | Result |
+|---|---|
+| `find /mnt/tank/downloads/spike-03/raw -newer …/snapshot-proof.txt -type f` | **0 lines** |
+| `diff` of `raw.t3before.meta` / `raw.t3after.meta` (364 files) | **empty** |
+| `diff` of `raw.t3before.sha` / `raw.t3after.sha` (364 files) | **empty** |
+| The same two instruments across the dry run | **0 lines** / **empty** |
+| `docker inspect beets-spike` — `raw` mount | **`RW=false`** |
+| `docker inspect beets-spike-rw` — `raw` mount | **`RW=false`** |
+
+The last two rows are the load-bearing ones: `raw/` is read-only on **both** services, so its
+survival is a property of the mount table, not of the script's good behaviour. The script never had
+to be trusted with it — which is also why re-materialising `normalised/` from it was safe.
+
+---
+
+## Health of the estate around the run
+
+| Assertion | Result |
+|---|---|
+| `bash scripts/check-music-freeze.sh` | **exit 0** — `tagger-class writers: 0`, `unclassified writers: 0`, `declared rw reaching Music: 0`, `FAILURES total: 0` |
+| Beets databases under `/mnt/fast/appdata` (`*.blb` **and** `library.db`, per DEF-03-02) modified after `beets-spike` was created | **0 of 4** |
+| `.bak` files under `/mnt/fast/appdata/arrs` created in the same window | **0** |
+| `/tmp` entries matching `spike` on LXC 100 | **0** |
+| `df -h /` | **35 G free**, unchanged across the plan |
+| `/mnt/fast/spike-03/out` footprint | **6.1 M**, 132 manifest files |
+| Library entries newer than this plan started (`2026-09-03 21:40`), read from atlantis | **0** |
+| Newest `ctime` anywhere in `/mnt/tank/media/Music` | **2026-08-18 22:43:54** — sixteen days before this plan ran |
+| `zfs diff tank/media/Music@pre-project` from atlantis (route `ssh:172.16.1.158`) | **2,674 lines, every one `M`** — pre-existing, see below |
+
+The four beets databases are dated 2025-10-27, 2025-11-18, 2026-08-18 and **2026-09-03 21:17:20**.
+The last is sabnzbd's `library.blb`, and 21:17 is **before** this plan's first write and before
+`beets-spike` was recreated at 22:24:53 — the same live post-processing path plans 03-04 and 03-08
+both attributed. The decisive argument is again the mount table, not the clock: neither spike
+container mounts `/mnt/fast/appdata` at any mode. `tagger-class writers: 0` carries the standing
+**DEF-03-01** caveat — `check-music-freeze.sh`'s `TAGGER_PATTERN` cannot match `sabnzbd`, so for
+that one tagger the counter is silence rather than a clean reading.
+
+**`zfs diff` on the library does not return clean, and did not before this plan started.** Plan
+03-03 established this in full: 2,674 is the exact entry count of the library, every line is `M`
+with zero additions, removals or renames, and the modification is Phase 1 plan 01-08's `chown` to
+`568:568`, which ran *after* `@pre-project` was taken. The verification line as written in the plan
+is unsatisfiable and always was. Recorded as **pre-existing and not caused here**, not as a pass —
+Phase 1 produced six unearned passes and this is not a seventh. The two independent readings that
+make that a measurement rather than an assertion are in the table above: zero library entries newer
+than the plan's start, and a newest `ctime` sixteen days old.

@@ -77,3 +77,68 @@ as written would have passed while a real beets database was being migrated thre
 `find /mnt/fast/appdata \( -name '*.blb' -o -name 'library.db' \)`, and compare against the spike
 container's `.Created` timestamp rather than against a wall-clock window — a window cannot
 distinguish "this plan did it" from "something else did it while this plan ran".
+
+---
+
+## DEF-03-03 — `audio_md5` is not tag-invariant, and the whole tag-diff harness joins on it
+
+**Found by:** plan 03-05, task 3, 2026-09-03.
+**Severity:** the QUAL-02 gate Phase 7 depends on can report file-level loss where none occurred.
+
+`scripts/snapshot-music-tags.sh:292` computes the join key as:
+
+```bash
+ffmpeg -nostdin -v error -i "$f" -map 0:a -c copy -f md5 -
+```
+
+`snapshot-music-tags.sh:35` states the claim outright — *"THE KEY (D-01):
+`ffmpeg -map 0:a -c copy -f md5 -` hashes the **ENCODED AUDIO BITSTREAM ONLY**"* — and
+`diff-music-tags.sh:8-13` builds on it: *"Only a key computed over the encoded audio bitstream
+matches across that move and rename."* **The key is not computed over the encoded audio bitstream
+only.** For some MP3 files, ffmpeg's mp3 demuxer emits the trailing 128-byte **ID3v1** block as part
+of the `-c copy` stream, so an ID3v1 edit moves the key.
+
+Measured on this plan's 335-file sample, on a write that touched **only** `album` and `artist` in
+ID3v2:
+
+| Evidence | Value |
+|---|---|
+| Files whose `audio_md5` moved | **37 of 335** |
+| Of those 37, how many carry a trailing ID3v1 tag | **37** |
+| Of those 37, how many do not | **0** |
+| Files in the sample carrying an ID3v1 trailer at all | **235 of 335** |
+| Differing bytes in the AUDIO region (`cmp` vs the untouched `raw/` twin) | **0**, every file examined |
+| Audio payload byte-identical with ID3v2 tag and last 128 bytes excluded | **True**, every file examined |
+| Decisive test — same md5 with the last 128 bytes removed? | **YES** on every moved file |
+| What `diff-music-tags.sh` reported | `MISSING_AFTER: 37`, `NEW_AFTER: 37`, `FIELDS_DROPPED: 0`, **exit 1** |
+
+So the tool reported **37 files lost** on a run that lost nothing at all. Note the asymmetry that
+makes this dangerous rather than merely noisy: it fails **loud and wrong** here, but the same
+property means a real tag-only corruption on an ID3v1-bearing file lands in `MISSING_AFTER`/
+`NEW_AFTER` rather than in `FIELDS_DROPPED`, where the gate actually looks. Only **235 of 335**
+files in this one sample carry an ID3v1 trailer, so the behaviour is per-file, not global — the
+harness passes and fails on the same tree depending on which files were edited.
+
+It is also not confined to this plan. `03-SAMPLE.md` § *De-duplication proof* keys the entire
+`dj-mixes` ↔ `unsorted` disjointness argument on `audio_md5`, and plan 03-07 carries a
+per-`audio_md5` cross-check beside its folder-weighted estimator. Both are sound **as long as
+nothing writes a tag between the two readings** — which is exactly the condition Phase 7 will not
+enjoy.
+
+**Worked around inside plan 03-05, not fixed.** `normalise-dj-tags.py` now restores the ID3v1 block
+byte-for-byte after every write (`preserve_id3v1_trailer()`), which makes the key stable for this
+plan's write and makes "touch nothing else" true at the byte level. The verdict was additionally
+recomputed **path-keyed** — valid here because this plan moves and renames nothing — and agreed:
+335 matched, 0 missing, `FIELDS_DROPPED = 0`.
+
+**Why not fixed here.** `snapshot-music-tags.sh` and `diff-music-tags.sh` are the shared Phase 1
+harness, D-03 freezes them for this phase, and every other plan in this wave asserts against their
+current behaviour. Changing the key definition mid-wave would make every result in the wave
+unattributable — the same reason DEF-03-01 was left alone.
+
+**Suggested fix (Phase 7, alongside the QUAL-02 gate):** compute the key over the audio with any
+trailing ID3v1/APE/Lyrics3 block excluded — the simplest correct form is to feed ffmpeg the file
+with the last 128 bytes removed when they begin `TAG`, or to switch to
+`ffmpeg -map 0:a -f md5` over the *decoded* stream, which is tag-invariant by construction at the
+cost of decode time. Whichever is chosen, add a regression test: edit only `album` on an
+ID3v1-bearing MP3 and assert the key does **not** move.
