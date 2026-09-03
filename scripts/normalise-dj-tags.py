@@ -77,14 +77,23 @@ CONTRACT
     EnergyLevel lives), and they are part of Phase 1's irreplaceable ffprobe fence (SAFE-03).
   * Writes go through mutagen, which preserves every other frame - including the 295 GEOB and
     230 APIC frames in this sample.
-  * ID3 major version is PRESERVED, not upgraded. All 335 files in the spike sample are ID3v2.3;
-    saving as v2.4 would rewrite TYER/TDAT into TDRC and show up in `diff-music-tags.sh` as a
-    change to `date`, which is a field this script has no business touching.
-  * THE TRAILING ID3v1 BLOCK IS RESTORED BYTE-FOR-BYTE after every write. mutagen regenerates the
-    whole 128-byte block from the ID3v2 frames, which both writes fields this script never asked
-    for and MOVES `audio_md5` — the key `snapshot-music-tags.sh` and `diff-music-tags.sh` join on.
-    See preserve_id3v1_trailer() for the measurement. This is why "touch nothing else" is true at
-    the byte level here and not merely at the frame level.
+  * MUTAGEN DOES NOT WRITE BACK WHAT IT READ. It re-serialises its own normalised in-memory
+    model, and THREE of its defaults quietly broaden the write past `album` and `artist`. All
+    three were found by measurement on this sample, not by reading the docs, and each is set
+    explicitly at the line it matters:
+      - `ID3(path, v2_version=3)` at LOAD time, or `TYER`/`TDAT`/`TIME` are translated to `TDRC`
+        in memory and written back as `TDRC` inside a v2.3 tag. `save(v2_version=3)` does NOT
+        undo it. See id3v2_major().
+      - `ID3(path, load_v1=False)`, or mutagen synthesises a `COMM:ID3v1 Comment:eng` frame from
+        the trailing ID3v1 block and `save()` writes it to disk. See read_tags().
+      - the trailing ID3v1 block is restored BYTE-FOR-BYTE after every save, because
+        `save(v1=UPDATE)` regenerates all 128 bytes from the ID3v2 frames — which also MOVES
+        `audio_md5`, the key `snapshot-music-tags.sh` and `diff-music-tags.sh` join on. See
+        preserve_id3v1_trailer().
+    And because a fourth such default is exactly the shape of defect that keeps recurring, every
+    write is followed by assert_frame_set_unchanged(): the on-disk ID3v2 frame-ID multiset, parsed
+    WITHOUT mutagen, must equal what it was plus the two frames this script wrote. Anything else
+    is a hard failure into the .failed ledger, not a silently larger diff.
   * The script contains no `rm`, no `mv`, no `chown`, no `chmod` and no directory creation.
 
 THE KEY
@@ -334,26 +343,85 @@ def label_of(album: str) -> str | None:
 # --------------------------------------------------------------------------------------------
 
 
+def id3v2_major(path: str) -> int | None:
+    """The ID3v2 major version as it is ON DISK, read from the 10-byte header.
+
+    Needed BEFORE the tag is loaded, because mutagen's `v2_version` is a LOAD-time option, not
+    only a save-time one: `ID3(path)` defaults to `v2_version=4` and silently translates
+    `TYER`/`TDAT`/`TIME` into `TDRC` in memory. Saving that back with `save(v2_version=3)` does
+    NOT undo the translation - mutagen requires an explicit `update_to_v23()` - so the file ends
+    up with a v2.3 header carrying a `TDRC` frame, which is a v2.4-only frame ID. Measured: a
+    `TYER` frame of 5 bytes came back as a `TDRC` frame of 6. `ffprobe` maps both to `date`, so
+    `diff-music-tags.sh` reports nothing and the change is invisible to the phase's own gate.
+    """
+    try:
+        with open(path, "rb") as fh:
+            head = fh.read(10)
+    except OSError:
+        return None
+    return head[3] if head[:3] == b"ID3" else None
+
+
+def id3v2_frame_ids(path: str) -> "collections.Counter[bytes] | None":
+    """Multiset of ID3v2 frame IDs as they are ON DISK, parsed without mutagen.
+
+    Deliberately independent of the library doing the writing: a post-write assertion that used
+    mutagen's own view of the file could not catch mutagen normalising something on load. Returns
+    None for ID3v2.2 (3-byte frame IDs) and for files with no ID3v2 tag, in which case the caller
+    skips the assertion rather than guessing.
+    """
+    try:
+        with open(path, "rb") as fh:
+            head = fh.read(10)
+            if head[:3] != b"ID3" or head[3] < 3:
+                return None
+            size = (head[6] << 21) | (head[7] << 14) | (head[8] << 7) | head[9]
+            body = fh.read(size)
+    except OSError:
+        return None
+    ids: "collections.Counter[bytes]" = collections.Counter()
+    i = 0
+    while i + 10 <= len(body):
+        frame_id = body[i:i + 4]
+        if frame_id == b"\x00\x00\x00\x00":
+            break  # padding
+        if head[3] == 4:
+            fsz = ((body[i + 4] << 21) | (body[i + 5] << 14)
+                   | (body[i + 6] << 7) | body[i + 7])
+        else:
+            fsz = int.from_bytes(body[i + 4:i + 8], "big")
+        if fsz <= 0:
+            break
+        ids[frame_id] += 1
+        i += 10 + fsz
+    return ids
+
+
 def read_tags(path: str):
     """Return (handle, {'album': str|None, 'artist': str|None}). Raises on unreadable files."""
     import mutagen
-    from mutagen.id3 import ID3NoHeaderError
-    from mutagen.mp3 import MP3
+    from mutagen.id3 import ID3, ID3NoHeaderError
 
     if path.lower().endswith(".mp3"):
+        major = id3v2_major(path) or 4
+        # BOTH keyword arguments are load-bearing and BOTH default the wrong way for this job:
+        #   v2_version=3   keeps TYER/TDAT/TIME as they are on disk (see id3v2_major).
+        #   load_v1=False  stops mutagen MERGING THE ID3v1 TAG INTO THE ID3v2 FRAME SET. With the
+        #                  default `load_v1=True` it synthesises a `COMM:ID3v1 Comment:eng` frame
+        #                  from the trailing ID3v1 block - and `save()` then WRITES that frame to
+        #                  disk. Measured: 107 of 335 files gained an `ID3v1 Comment` key in
+        #                  ffprobe output on the first apply, and a frame-header dump confirmed a
+        #                  second COMM frame present on disk afterwards and absent before.
         try:
-            handle = MP3(path)
+            tags = ID3(path, v2_version=3 if major <= 3 else 4, load_v1=False)
         except ID3NoHeaderError:
-            handle = MP3(path)
-            handle.add_tags()
-        if handle.tags is None:
-            handle.add_tags()
+            tags = ID3()
         values = {}
         for field in WRITABLE_FIELDS:
-            frames = handle.tags.getall(FIELD_FRAME[field])
+            frames = tags.getall(FIELD_FRAME[field])
             text = frames[0].text[0] if frames and frames[0].text else None
             values[field] = text if (text is None or str(text).strip()) else None
-        return handle, values
+        return tags, values
 
     handle = mutagen.File(path, easy=True)
     if handle is None:
@@ -412,6 +480,42 @@ def preserve_id3v1_trailer(path: str, original: bytes | None) -> None:
             fh.write(original)
 
 
+def assert_frame_set_unchanged(path, before, changes: dict[str, str]) -> None:
+    """After the write, the on-disk ID3v2 frame-ID multiset must be what it was, plus the two.
+
+    This is the backstop for the class of defect that produced three corrections in this plan:
+    mutagen does not write back what it read - it re-serialises its own normalised model, and two
+    of its defaults quietly broaden the write (`load_v1`, `v2_version`). Both are now set
+    correctly, and this assertion exists so that a THIRD such default, or a change in a future
+    mutagen release, fails LOUDLY into the .failed ledger instead of silently enlarging the diff.
+
+    "Assert rather than report" - README § Health Checks. Frame ENCODINGS and SIZES are allowed to
+    move (mutagen terminates latin-1 text frames with a NUL, which is legal and harmless); frame
+    IDENTITY is not.
+    """
+    if before is None:
+        return
+    after = id3v2_frame_ids(path)
+    if after is None:
+        raise RuntimeError("ID3v2 tag became unreadable during save")
+    written = {FIELD_FRAME[f].encode("ascii") for f in changes}
+    b = {k: v for k, v in before.items() if k not in written}
+    a = {k: v for k, v in after.items() if k not in written}
+    if a != b:
+        added = {k: a[k] for k in a if b.get(k) != a[k]}
+        removed = {k: b[k] for k in b if a.get(k) != b[k]}
+        raise RuntimeError(
+            f"ID3v2 frame set changed beyond {sorted(x.decode() for x in written)}: "
+            f"added/changed={added} removed/changed={removed}"
+        )
+    for frame_id in written:
+        if after.get(frame_id, 0) != 1:
+            raise RuntimeError(
+                f"expected exactly one {frame_id.decode()} frame after the write, "
+                f"found {after.get(frame_id, 0)}"
+            )
+
+
 def write_tags(handle, path: str, changes: dict[str, str]) -> None:
     """Write ONLY the fields in WRITABLE_FIELDS. Asserted, not assumed."""
     for field in changes:
@@ -422,9 +526,11 @@ def write_tags(handle, path: str, changes: dict[str, str]) -> None:
         import mutagen.id3 as id3
 
         id3v1_before = read_id3v1_trailer(path)
+        frames_before = id3v2_frame_ids(path)
+        major = id3v2_major(path) or 3
         for field, new in changes.items():
             frame_id = FIELD_FRAME[field]
-            existing = handle.tags.getall(frame_id)
+            existing = handle.getall(frame_id)
             # Reuse the frame's existing text encoding when the new value fits it; otherwise
             # UTF-16 with BOM (3 is UTF-8, which ID3v2.3 does not define).
             encoding = existing[0].encoding if existing else 1
@@ -432,13 +538,10 @@ def write_tags(handle, path: str, changes: dict[str, str]) -> None:
                 new.encode({0: "latin-1", 1: "utf-16", 2: "utf-16-be", 3: "utf-8"}[encoding])
             except (UnicodeEncodeError, KeyError):
                 encoding = 1
-            handle.tags.setall(frame_id, [getattr(id3, frame_id)(encoding=encoding, text=[new])])
-        # v2_version is pinned to what is already on disk. Every file in the Phase 3 sample is
-        # ID3v2.3; silently promoting to v2.4 rewrites TYER/TDAT as TDRC and would surface in
-        # diff-music-tags.sh as a change to `date`.
-        major = handle.tags.version[1] if getattr(handle.tags, "version", None) else 3
-        handle.tags.save(path, v2_version=3 if major <= 3 else 4)
+            handle.setall(frame_id, [getattr(id3, frame_id)(encoding=encoding, text=[new])])
+        handle.save(path, v2_version=3 if major <= 3 else 4)
         preserve_id3v1_trailer(path, id3v1_before)
+        assert_frame_set_unchanged(path, frames_before, changes)
         return
 
     for field, new in changes.items():
