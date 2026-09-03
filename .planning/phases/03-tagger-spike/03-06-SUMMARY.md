@@ -55,7 +55,7 @@ the Discogs token is in the request **query string**, not the `Authorization` he
 
 ## What was built
 
-**`scripts/spike03-discogs-probe.py`** (~980 lines) — container-resident, delivered by the
+**`scripts/spike03-discogs-probe.py`** (1,072 lines) — container-resident, delivered by the
 read-only `scripts/` mount (OD-6). It calls `beets.autotag.match.tag_album()` directly, once per
 folder, and emits one NDJSON record per candidate on stdout. That is the only mechanism that
 yields **both** the loose and the strict D-05 figure mechanically: `AlbumMatch` carries the
@@ -348,7 +348,7 @@ One threat-adjacent note that is not a flag: `/mnt/fast/spike-03/out` now also c
 
 ## Self-Check: PASSED
 
-- `scripts/spike03-discogs-probe.py` — FOUND (980 lines, well above the 220 minimum)
+- `scripts/spike03-discogs-probe.py` — FOUND (1,072 lines, well above the 220 minimum)
 - `.planning/phases/03-tagger-spike/03-PROBE-SMOKE.md` — FOUND (507 lines, contains `Discogs`)
 - `.planning/phases/03-tagger-spike/deferred-items.md` — FOUND (modified; DEF-03-04 and DEF-03-05 added)
 - `tag_album` in the probe, called as a direct library call and never through the importer — VERIFIED
