@@ -354,4 +354,153 @@ tag reads `The Ultimate Hits (Disc 2 of 2)` while both discs sit in the one fold
 
 ## Scratch tree
 
-*(Filled by task 3 of this plan.)*
+Two roots, deliberately on different filesystems (D-07):
+
+| Root | Path | Filesystem | Contents |
+|---|---|---|---|
+| `SCRATCH_TANK` | `/mnt/tank/downloads/spike-03` | `tank/downloads` (ZFS) - a **sibling of `complete/`**, therefore the same dataset, which is what makes `cp --reflink` work at all | `raw/`, `normalised/`, `normalised-metadata/`, `wrtag-src/`, `bf-inbox/`, `bf-clean/` |
+| `SCRATCH_FAST` | `/mnt/fast/spike-03` | **LXC 100's 128 G ext4 root** - see the finding below | `out/`, `beets-config/`, `bf-config/`, `wrtag-lib/` |
+
+**`/mnt/fast/spike-03` is not on the `fast` pool, and the plan's stated reason for choosing it does
+not hold.** The plan puts outputs there "so they do not consume `/` on LXC 100". Measured with
+`findmnt --target`, `/mnt/fast/spike-03` resolves to `/dev/mapper/pve-vm--100--disk--0`, `ext4`,
+mounted at `/`. Only the *children* of `/mnt/fast` that appear as `mp` entries in
+`/etc/pve/lxc/100.conf` are real bind mounts - `stacks`, `appdata/*`, `home/*`, `transcode`,
+`tools`. `spike-03` is not among them, and **neither is `safety`**: Phase 1's entire recovery
+fence, 698 MB, also sits on the container root. This is the same defect class project MEMORY
+records for `/mnt/fast/appdata`. It is **not a blocker here** - `/` has 34 GiB free against
+03-01's 8 GiB OD-1 floor and this plan wrote 321 KB there - but the constraint is real and every
+later Phase 3 plan that writes a beets `library.db`, a wrtag library or a container log under
+`/mnt/fast/spike-03` is writing to `/`, not to ZFS. Watch the OD-1 floor, not the pool.
+
+### The reflink command, verbatim, and why it does not run where the plan says
+
+`cp -a --reflink=always` **fails from LXC 100**, and not for the reason the plan anticipates:
+
+```
+cp: failed to clone '/mnt/tank/downloads/spike-03/raw/.../4200101 - Mastermix - Club Cuts.mp3'
+    from '/mnt/tank/downloads/complete/nzb/dj-mixes/.../4200101 - Mastermix - Club Cuts.mp3':
+    Operation not permitted
+cp: preserving permissions for '/mnt/tank/downloads/spike-03/raw/Mastermix.Issue.420.2021':
+    Operation not permitted
+```
+
+Two separate failures in one command. The first is **EPERM, not EXDEV** - the dataset is right
+(`spike-03` is a sibling of `complete/` exactly as designed), but the `FICLONE` ioctl is refused
+to an unprivileged container. Failing loud rather than degrading to a full copy is precisely what
+`--reflink=always` is for, and it worked: the run stopped on folder 1 of 24 instead of silently
+writing 17 GB. The second is the documented `aclmode=restricted` EPERM on `tank`, which is why
+`-a` cannot be used and which fails **even as real root on atlantis**.
+
+The copy is therefore **delegated to atlantis**, the same route and the same reasoning as the
+`zfs` calls, with `-a` replaced by `-r --preserve=timestamps`:
+
+```bash
+# ON ATLANTIS (172.16.1.158). Data and mtimes are preserved; mode and ownership are not
+# attempted, because chmod is EPERM on tank even as real root and everything there is 0777
+# by ACL inheritance already.
+cp -r --reflink=always --preserve=timestamps "$src" /mnt/tank/downloads/spike-03/raw/
+cp -r --reflink=always --preserve=timestamps "$raw" /mnt/tank/downloads/spike-03/normalised/
+chown -R 568:568 /mnt/tank/downloads/spike-03
+```
+
+The `chown` is the one thing this plan does that its own text says not to do. The prohibition is
+stated because `chown` fails from LXC 100 (sparse idmap); from atlantis it succeeds, and it is the
+same route Phase 1 plan 01-08 used to normalise the library to `apps:apps`. Without it the scratch
+tree is `root:root` while every later plan runs beets and beets-flask as `568:568`. Mode is left
+strictly alone.
+
+### Space
+
+| Measurement | Before | After |
+|---|---|---|
+| `df -h /mnt/tank/downloads` avail | 9.0T | 9.0T |
+| `zfs list tank/downloads` USED / AVAIL | 2.00T / 8.99T | 2.01T / 8.99T (`AVAIL` 9,886,085,972,096 B) |
+| `du -sh /mnt/tank/downloads/spike-03` | n/a | **17 G apparent**, both copies |
+| `du -sh` of the sources | 8.9 GB (8.0 GB `dj-mixes` twenty + 0.9 GB DMC four) | |
+
+`du` reports the full 17 G because it cannot see block cloning. The pool can:
+`bcloneused 36.7G`, `bclonesaved 45.0G`, `bcloneratio 2.22x`, `feature@block_cloning active`.
+`AVAIL` did not move. **ZFS frees space asynchronously and `zfs list` can lag a large delete by
+~20 s**, so the deletion in plan 03-11 must be re-measured after a pause rather than immediately.
+
+### Inode proof - reflinks, not hard links
+
+A reflink is a separate inode sharing blocks. A hard link would share the inode, and a
+normalisation write would then reach back into `complete/`.
+
+```
+source folder   inode=243329 links=2 owner=apps:apps mode=777  complete/nzb/dj-mixes/Mastermix.Issue.420.2021
+raw/ copy       inode=230657 links=2 owner=apps:apps mode=777  spike-03/raw/Mastermix.Issue.420.2021
+normalised copy inode=231389 links=2 owner=apps:apps mode=777  spike-03/normalised/Mastermix.Issue.420.2021
+
+source file     inode=243457 links=1 size=36235155  .../4200101 - Mastermix - Club Cuts.mp3
+raw/ file       inode=230662 links=1 size=36235155  .../4200101 - Mastermix - Club Cuts.mp3
+normalised file inode=231394 links=1 size=36235155  .../4200101 - Mastermix - Club Cuts.mp3
+```
+
+Three distinct inodes, link count 1 on every file, identical sizes.
+
+### The snapshot
+
+Taken **after `raw/` was populated and before the first write into `normalised/`**, which is what
+makes it `normalise-dj-tags.py`'s rollback: rolling back to it removes `normalised/` and leaves
+`raw/` to re-reflink from.
+
+| Property | Value |
+|---|---|
+| Snapshot | `tank/downloads@spike-03-t0` |
+| Created | `Thu Sep 3 21:40 2026` (atlantis local) |
+| `USED` / `REFER` at creation | `0B` / `2.01T` |
+| **Route** | **`ssh:172.16.1.158`** |
+| `normalised/` entries at snapshot time | **0** (asserted before taking it) |
+
+The route is recorded because it is not an implementation detail. `zfs` **does not and cannot
+exist on LXC 100** - the container is unprivileged and the pool lives on atlantis - so the query
+went over `ssh -o BatchMode=yes -o ConnectTimeout=5 root@172.16.1.158`, the `zfs_query()` shape
+from `check-music-freeze.sh:123-131`. Had atlantis been unreachable the snapshot state would be
+**UNKNOWN**, and this task would have failed rather than skipped: that snapshot is the only
+rollback behind the normalisation step, and two further fallbacks (`unsorted` itself, and
+`tank/downloads@pre-project`) exist behind it.
+
+### The before-state
+
+`bash scripts/snapshot-music-tags.sh spike03-before --roots /mnt/tank/downloads/spike-03/normalised`
+
+| Property | Value |
+|---|---|
+| Path | `/mnt/fast/spike-03/out/spike03-before.ndjson.gz` (321,820 B) |
+| Records | **335** - exactly the sum of `n_files` across the 24 drawn folders |
+| Distinct `audio_md5` | **306** (the 29-record gap is the two near-duplicate pairs in the draw) |
+| `.failed` ledger | **0 lines** |
+| Read | 8,884,347,244 B in 70 s, 121 MB/s, 0.209 s/file |
+
+This is the BEFORE side of plan 03-05's field-loss gate. `snapshot-music-tags.sh` has no `--out`
+flag - it writes `<BASENAME>` into the fence's `tags/` directory by construction - so the run
+wrote `/mnt/fast/safety/music-pre-project/tags/spike03-before.*` and all three artefacts were then
+copied to `$SCRATCH_FAST/out/`. Both locations are on the same filesystem and both are the
+plan's own; nothing was written to the system temp directory.
+
+### Verification
+
+| Assertion | Result |
+|---|---|
+| `raw/` entries | **24** |
+| `normalised/` entries | **24** |
+| Per-folder audio file counts vs the draw table's `n_files`, both sides | **0 mismatches** across all 48 checks |
+| `find complete/nzb/dj-mixes -newer <scratch> -type f` | **0 lines** |
+| `find complete/nzb/unsorted -newer <scratch> -type f` | **0 lines** |
+| `ls -1 /tmp \| grep -c spike-03` | **0** |
+| `zcat spike03-before.ndjson.gz \| wc -l` | **335** |
+| `.failed` entries | **0** |
+| `bash scripts/check-music-freeze.sh` | **exit 0**, `tagger-class writers: 0`, `declared rw reaching Music: 0`, `FAILURES total: 0` |
+| De-duplication re-asserted from the live before-snapshot, **both sides read live** | dj-mixes 241 / DMC 65 distinct `audio_md5`, **0 shared** - identical to the QUAL-01 join |
+
+**`zfs diff tank/media/Music@pre-project` does not return clean, and it did not return clean
+before this plan started.** It reports **2,674 lines, every one `M`** - zero additions, zero
+removals, zero renames. 2,674 is the exact entry count of the library, and the modification is
+Phase 1 plan 01-08's `chown` to `568:568`, which ran *after* `@pre-project` was taken. CLAUDE.md
+records that chown and cites the same 2,674. The verification line as written is therefore
+unsatisfiable and always was. Proven not to be this plan's doing by two further readings:
+`find /mnt/tank/media/Music -newermt "2026-09-03 20:00"` returns **0**, and the newest `ctime`
+anywhere in the library is **2026-08-18 22:43:54**, sixteen days before this plan ran.
