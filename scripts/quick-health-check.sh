@@ -266,11 +266,13 @@ else
     EXIT_CODE=1
 fi
 
-# Music consumers audit (D-41). Host-resident on LXC 100 for CREDENTIALS AND REACHABILITY, not
-# for command length: Jellyfin publishes no host port and is reachable only from LXC 100, and
+# Music consumers audit (D-41). Host-resident on LXC 100 for CREDENTIALS, not for command length:
 # both the Music Assistant and Jellyfin credentials live at /mnt/fast/secrets/ there. See the
 # `# Where it runs:` header of scripts/check-music-consumers.sh. It lands on the host by
 # `git pull` into /mnt/fast/stacks — there is no copy step to remember.
+# This block used to give reachability as a second reason, citing a claim measured false on
+# 2026-09-03; see the REACHABILITY note on the transcode block below, which points at the single
+# canonical statement in scripts/check-jellyfin-transcode.sh.
 echo -n "Music consumers audit: "
 CONSUMERS_OUT=$(ssh -n $SSH_OPTS root@172.16.1.159 \
     "bash /mnt/fast/stacks/scripts/check-music-consumers.sh 2>&1")
@@ -311,13 +313,29 @@ else
     EXIT_CODE=1
 fi
 
-# Jellyfin transcode retention audit (D-20). Host-resident on LXC 100 for REACHABILITY AND
-# CREDENTIALS, and additionally because it CANNOT run here: it measures free space with
-# `df -B1 --output=avail`, which is GNU coreutils only. BSD df on macOS silently ignores --output
-# and prints its own layout, which would parse into a WRONG NUMBER rather than into an error — so
-# the script guards on `uname -s` and exits 2 on Darwin. Jellyfin also publishes no reachable host
-# port from here and its API key lives at /mnt/fast/secrets/ on that host. It lands on the host by
-# `git pull` into /mnt/fast/stacks — there is no copy step to remember.
+# Jellyfin transcode retention audit (D-20). Host-resident on LXC 100 because it CANNOT run here:
+# it measures free space with `df -B1 --output=avail`, which is GNU coreutils only. BSD df on macOS
+# silently ignores --output and prints its own layout, which would parse into a WRONG NUMBER rather
+# than into an error — so the script guards on `uname -s` and exits 2 on Darwin. Its API key also
+# lives at /mnt/fast/secrets/ on that host and nowhere else. It lands on the host by `git pull`
+# into /mnt/fast/stacks — there is no copy step to remember.
+#
+# REACHABILITY — CORRECTED 2026-09-03 (plan 02.1-12, CR-02), AND IT IS NOT A REASON THIS RUNS
+# THERE. Both this block and the consumers block above used to give reachability as a reason,
+# asserting that Jellyfin exposed no port on any host interface and could be reached from LXC 100
+# alone. (Paraphrased, not quoted, so a mechanical grep for the withdrawn sentence over this repo
+# keeps returning zero — a false claim left in-band verbatim is one that gets re-copied.)
+# Measured false from three vantage points: Jellyfin
+# answers 200 at 172.16.1.76:8096 — its iot_macvlan LAN address — from this very workstation and
+# from atlantis, so an administrator-equivalent API surface is reachable across 172.16.1.0/24 and,
+# via the estate's two subnet routers, from the tailnet. The exposure is SOLELY that macvlan
+# address: the `ports:` list in jellyfin.yaml is inert (zero listeners on LXC 100, docker reports
+# every port null, 172.16.1.159:8096 refuses from everywhere). What IS true is the converse and
+# narrower fact: 172.16.1.76 is unreachable FROM LXC 100 under macvlan host isolation, which is
+# why the host-side script resolves Jellyfin via `docker inspect` and uses t3_proxy.
+# Stated in full ONCE, in the `# Where it runs:` header of scripts/check-jellyfin-transcode.sh,
+# against the measurement at artifacts/02.1-12-reachability-measurement.txt. A fact stated twice
+# is a fact that gets corrected once — which is how the old claim survived in three places.
 #
 # This is the block that would have caught the incident phase 02.1 exists to fix: 19 GB of
 # transcode cache accumulated in an ANONYMOUS docker volume on / over ~36 hours, taking / to zero,
