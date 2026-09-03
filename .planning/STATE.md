@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-03T00:10:00.000Z"
-last_activity: 2026-09-03 — 02.1-06 complete (THE BOUNDS FIRE and the volume is GONE — segment
-  deletion and throttling proven from Jellyfin's own Debug log, the ZFS quota proven to refuse a
-  write, and 12.95 GiB reclaimed on /)
+last_updated: "2026-09-03T00:30:00.000Z"
+last_activity: 2026-09-03 — 02.1-07 complete (THE SILENT REVERT IS DISARMED — `enable` now
+  preserves and re-verifies the five retention values across the whole-file .bak restore, and the
+  verification was proven able to FAIL twice by two real fault-injection paths)
 progress:
   total_phases: 10
   completed_phases: 2
   total_plans: 39
-  completed_plans: 25
+  completed_plans: 26
   percent: 20
 ---
 
@@ -31,8 +31,60 @@ pipeline that someone owns.
 ## Current Position
 
 Phase: 02.1 (jellyfin-transcode-retention-relocate-the-anonymous-transcod) — EXECUTING
-Plan: 7 of 10
-Status: EXECUTING — **02.1-06 COMPLETE. THE BOUNDS FIRE, AND THE 12.55 GiB IS OFF `/`.** The
+Plan: 8 of 10
+Status: EXECUTING — **02.1-07 COMPLETE. THE ONE-COMMAND SILENT REVERT OF THIS PHASE IS DISARMED,
+AND THE DISARMING WAS PROVEN ABLE TO FAIL.** `scripts/disable-jellyfin-hwaccel.sh` is the estate's
+amdgpu recovery runbook for a fault that recurred 2026-08-31 and cost ~6 hours. Its `do_enable`
+restored the **whole** `encoding.xml` from the newest `.bak` — and the only `.bak` next to the live
+config is `encoding.xml.bak.20260831T182741Z`, taken **before** this phase's settings existed
+(asserted: count 1, that filename). Running `enable` therefore reverted all five retention values
+**and reported success**, because the IN-06 verification checked `HardwareAccelerationType` and
+nothing else. `do_enable` now **captures the five from the LIVE config before the `cp`, re-asserts
+them into the restored file, and verifies them on BOTH sides of the container restart** — naming any
+moved field with its **before and after** values and exiting non-zero. The pre-restart gate exists so
+a service the house is watching is never restarted onto a config that lost the settings.
+
+**⚠ THE REVIEWED NEGATIVE CONTROL WAS STRUCTURALLY UNABLE TO FAIL, AND THAT IS THE POINT OF THIS
+PLAN.** *"Perturb a value, re-run `enable`, expect non-zero"* cannot work: the verification lives
+**inside** `do_enable`, which **re-captures the live values before restoring**, so it would have
+captured the perturbed values, carried them across faithfully, compared them against themselves and
+**passed** — emitting a transcript that reads exactly like a discharged control. Same failure class
+as 02.1-06's log-level bug and 02-08's `exportfs -v`. **Two real fault-injection paths replaced it
+and BOTH were executed:** (a) a standalone read-only `verify-retention` sub-action taking its
+expectations from `$TRAN09_EXPECT` — **exit 1** on a perturbed config naming `EnableSegmentDeletion`
+with `expected='true' found='false'`, **exit 0** once restored (a control that only ever fails is as
+uninformative as one that only ever passes); (b) `TRAN09_FAULT=1 … enable` — **exit 1**, four of five
+fields named with both values. **The most informative line in the whole transcript is the fifth:
+`ThrottleDelaySeconds` was `180` either side and correctly PASSED inside a failing run**, which is
+what proves the comparison is genuinely per-field rather than a switch that flips the whole block.
+
+**The positive round trip ran too, exit 0:** `check` → `disable` (which created the stale `.bak`, the
+hazard reproduced) → simulated phase write → `enable`, against a throwaway `encoding.xml` at
+`/mnt/fast/spike-021/tran09/` and a disposable container, both overrides on every invocation. All
+five values preserved **and** `HardwareAccelerationType` back to `vaapi` — the restore's actual job
+still works. **The live config is provably untouched**: sha256 and mtime identical either side, the
+`.bak` inventory unchanged, and `check-jellyfin-transcode.sh` still `FAILURES total: 0`. **The D-30
+amdgpu mitigation is unchanged** (`none` / `false`) — this plan changed *how* `enable` restores,
+never *whether* VAAPI should be on. **TRAN-09 is COMPLETE.**
+
+**⚠ THE PLAN'S TWO NAMED DISPOSABLE IMAGES ARE NOT RESIDENT ON LXC 100 AT ALL.** D-31 constraint 2
+orders this plan before the reap precisely to protect `alpine:3` and `curlimages/curl:latest` — but
+03-01's reap had already taken them. `nginx:1.31.3-alpine` was used instead, asserted resident from
+`docker image ls` and **probed** with `docker run --rm --entrypoint sleep <image> 1` → exit 0 before
+the real container was created. **No pull occurred.** The residency assertion is only meaningful
+because it *could* have failed — and against the plan's own candidates it would have.
+
+**⚠ THE REST-API CONVERSION IS DEFERRED, RECORDED IN THE FILE, AND SHOULD NOT BE RE-OPENED.** The
+script's comment said *"Once 02-04 lands, prefer the API"* and 02-04 has landed. It is nonetheless
+deferred, because this runbook's entire value is that it works when Jellyfin is **down**, which is
+the condition an amdgpu incident creates, and the REST route needs a **running** server.
+
+**⚠ `origin/main` MOVED `8710116` → `2021d0f` (ten commits) and `/mnt/fast/stacks` on LXC 100 is now
+at `2021d0f`**, carrying the 02.1-05 and 02.1-06 artifacts for the first time. D-26 was asserted in
+both halves before the first invocation, because **a matching SHA and a landed payload are different
+claims**: SHA equality, *and* `verify-retention` / `TRAN09_FAULT` greppable in the **host-side** copy.
+
+Before that, **02.1-06 COMPLETE. THE BOUNDS FIRE, AND THE 12.55 GiB IS OFF `/`.** The
 anonymous volume `d98b2ff9…` was deleted by name at **2026-09-02T23:52:53Z**, after — not before —
 the observation it would have made vacuous. **`/` went 21674889216 → 35575803904 = +12.95 GiB**,
 matched to the byte by `stat -f`. **The margin against the D-17 floor is now 13.13 GiB, from 185 MiB
@@ -509,6 +561,7 @@ already open so only 2049 is this phase's delta.
 | Phase 02.1 P04 | 36 minutes | 3 tasks | 3 files |
 | Phase 02.1 P05 | ~25 minutes | 2 tasks | 6 files |
 | Phase 02.1 P06 | ~85 minutes | 3 tasks | 3 files |
+| Phase 02.1 P07 | ~25 minutes | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -520,6 +573,32 @@ already open so only 2049 is this phase's delta.
 
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
+
+- [02.1-07]: **A verification embedded in the mutating function it verifies CANNOT be fault-injected
+  from outside.** `do_enable` re-captures live state before mutating, so perturb-then-rerun captures
+  the perturbation and passes. The fix that generalises: give it a **separately-invocable entry point
+  that takes its expectations from the CALLER** (`verify-retention` + `$TRAN09_EXPECT`), and a second
+  hook that skips the **carry-across** while never skipping the **verification** (`TRAN09_FAULT=1`),
+  so the comparison has a real difference to find and the run is loud and non-zero rather than
+  silently permissive. Both were exercised; the sub-action was additionally proven to **pass** when
+  it should, because a control that only ever fails is as uninformative as one that only ever passes.
+
+- [02.1-07]: **A per-field comparison is proven per-field only when one field legitimately PASSES
+  inside a failing run.** `ThrottleDelaySeconds` was `180` on both sides of the fault-injected
+  restore and passed while four others failed. A blanket failure would have failed it too.
+
+- [02.1-07]: **The retention check runs TWICE — before the container restart and again after it.**
+  The plan's `key_links` said "verify before the container restart" while its action text said
+  "widen the post-restore verification"; both were satisfied rather than one chosen. The pre-restart
+  gate returns 1 **without restarting**, because restarting a service the house is watching onto a
+  config that silently lost this phase's settings is strictly worse than not restarting at all. The
+  post-restart check catches what the pre-restart gate structurally cannot — a Jellyfin that rewrites
+  `encoding.xml` on startup.
+
+- [02.1-07]: **The REST-API conversion of `disable-jellyfin-hwaccel.sh` is DEFERRED, not overlooked**,
+  and the reason is now recorded in the file: the runbook's value is that it works when Jellyfin is
+  **down**, which is exactly the condition an amdgpu incident creates, and the REST route needs a
+  running server. 02-04 having landed does not change that.
 
 - [02.1-06]: **VALIDATION row 11's errno pair is INVERTED, and the plan's inference from that was
   TESTED and found FALSE.** An OpenZFS dataset `quota` refusal surfaces as **EDQUOT**

@@ -314,7 +314,7 @@ moved, because the number is a consequence of that decision rather than the deci
 
 **Wave 7** *(blocked on 02.1-06)*
 
-- [ ] 02.1-07-PLAN.md — Harden `disable-jellyfin-hwaccel.sh` so `enable` cannot silently revert the retention settings, with two real fault-injection paths (wave 7)
+- [x] 02.1-07-PLAN.md — Harden `disable-jellyfin-hwaccel.sh` so `enable` cannot silently revert the retention settings, with two real fault-injection paths (wave 7)
 - [ ] 02.1-08-PLAN.md — Add the `jellyfin/jellyfin` Renovate rule and repair `check-renovate.sh`, running its 148 never-executed lines for the first time (wave 7)
 
 **Wave 8** *(blocked on 02.1-07, so the reap cannot delete the image 02.1-07's proof needs)*
@@ -658,7 +658,7 @@ Phase 7. Plans within a phase run sequentially.
 |-------|----------------|--------|-----------|
 | 1. Safety Harness and Freeze the Writers | 9/9 | Complete | 2026-08-18 |
 | 2. NFS Export and Music Assistant Reachability | 9/9 | Complete    | 2026-09-01 |
-| 02.1. Jellyfin Transcode Retention *(inserted)* | 6/10 | In Progress | - |
+| 02.1. Jellyfin Transcode Retention *(inserted)* | 7/10 | In Progress | - |
 | 3. Tagger Spike | 1/11 | In Progress | - |
 | 4. Collapse to One Tagger | 0/TBD | Not started | - |
 | 5. Inbox Structure and the Junk Gate | 0/TBD | Not started | - |

@@ -107,7 +107,7 @@ for why the v1 denominator of 39 is deliberately preserved.
       `scripts/spike03-image-headroom.sh`'s existing two-process approval gate, with
       `docker image prune -a` / `docker system prune` prohibited by name and the prohibition asserted
       *(discharges D-28)*
-- [ ] **TRAN-09**: The estate's existing amdgpu recovery script cannot silently revert this phase's
+- [x] **TRAN-09**: The estate's existing amdgpu recovery script cannot silently revert this phase's
       retention controls — `scripts/disable-jellyfin-hwaccel.sh enable` restores the **whole**
       `encoding.xml` from a `.bak` predating this phase, so it is a one-command silent revert of
       everything 02.1 installs *(discharges D-29, D-30. **Origin note:** unlike TRAN-01…08 this one
@@ -256,7 +256,7 @@ Populated during roadmap creation (2026-08-17). Every v1 requirement maps to exa
 | TRAN-06 | Phase 02.1 | Pending |
 | TRAN-07 | Phase 02.1 | Complete |
 | TRAN-08 | Phase 02.1 | Pending |
-| TRAN-09 | Phase 02.1 | Pending |
+| TRAN-09 | Phase 02.1 | **COMPLETE (02.1-07).** `do_enable` captures the five transcode-retention values from the live config BEFORE the whole-file `.bak` restore, re-asserts them into the restored file, and verifies them on BOTH sides of the container restart — naming any moved field with its before and after values and exiting non-zero. Discharged on a **firing** observation, not a read-back: `check` → `disable` → simulated phase write → `enable` was EXECUTED against a throwaway `encoding.xml` and a disposable container (exit 0, all five preserved, `HardwareAccelerationType` restored to `vaapi`). **The verification was then proven able to FAIL, twice** — the review's HIGH finding was that the reviewed control could not fail, because the verification lives inside `do_enable` which re-captures live values before restoring. (a) the standalone read-only `verify-retention` sub-action, taking its expectations from `$TRAN09_EXPECT`, exited 1 on a perturbed config naming the field with expected-vs-found, and 0 once restored; (b) `TRAN09_FAULT=1 … enable` exited 1 naming four of five fields with both values, while `ThrottleDelaySeconds` correctly PASSED at 180 either side — proving the comparison is genuinely per-field. The live `encoding.xml` sha256 and `.bak` inventory are identical either side and `check-jellyfin-transcode.sh` still exits 0. The D-30 amdgpu mitigation (`none` / `false`) is unchanged |
 | CONS-04 | Phase 7 | Pending |
 | TAGR-01 | Phase 3 | Pending |
 | TAGR-02 | Phase 3 | Pending |
