@@ -3,15 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-03T07:25:00.000Z"
-last_activity: 2026-09-03 — 02.1-10 complete, and PHASE 02.1's TEN PLANS ARE ALL EXECUTED (the
-  transcode audit is folded into quick-health-check.sh and BOTH its UNKNOWN branches were DRIVEN,
-  not read; six proofs executed with hash-verified restores; the two most useful results are both
-  places the plan text was wrong)
+last_updated: "2026-09-03T10:40:47.729Z"
+last_activity: 2026-09-03 -- Phase 02.1 execution started
 progress:
   total_phases: 10
   completed_phases: 2
-  total_plans: 39
+  total_plans: 43
   completed_plans: 29
   percent: 20
 ---
@@ -31,9 +28,9 @@ pipeline that someone owns.
 
 ## Current Position
 
-Phase: 02.1 (jellyfin-transcode-retention-relocate-the-anonymous-transcod) — ALL TEN PLANS EXECUTED
-Plan: 10 of 10 — complete
-Status: **ALL TEN PLANS OF PHASE 02.1 ARE EXECUTED. AWAITING `/gsd-verify-work`.**
+Phase: 02.1 (jellyfin-transcode-retention-relocate-the-anonymous-transcod) — EXECUTING
+Plan: 1 of 14
+Status: Executing Phase 02.1
 
 **02.1-10 COMPLETE. THE ESTATE'S ROUTINE HEALTH CHECK NOW COVERS THE THING THAT EMPTIED `/`, AND
 EVERY ONE OF ITS FAIL-CLOSED BRANCHES HAS BEEN DRIVEN RATHER THAN READ.**
@@ -1276,6 +1273,7 @@ Resume file: None
 
 1. **VALIDATION rows 11, 15, 16 and 02.1-06's task-3 `<verify>` FAIL ON CORRECT OUTCOMES.** Waves 5–8
    left them failing deliberately. 02.1-10 verifies against the text; do not "fix" them.
+
 2. **This phase's reap is DONE and is not time-sensitive in any form.** `/` has 14.49 GiB of margin
    over the D-17 floor. Any prose still framing image reclaim as urgent is stale.
 
