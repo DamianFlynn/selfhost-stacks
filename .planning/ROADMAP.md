@@ -371,7 +371,7 @@ independent and can run alongside 11.*
 
 **Wave 10** *(no dependencies — 02.1-11 and 02.1-14 touch disjoint files)*
 
-- [ ] 02.1-11-PLAN.md — **Gap 1:** assert all five encoding values fail-closed with env-overridable expectations, drive five per-field negative controls, surface the drift on `quick-health-check.sh`'s green path, and align ROADMAP SC6 / REQUIREMENTS TRAN-05 with the code (wave 10, TRAN-05)
+- [x] 02.1-11-PLAN.md — **Gap 1:** assert all five encoding values fail-closed with env-overridable expectations, drive five per-field negative controls, surface the drift on `quick-health-check.sh`'s green path, and align ROADMAP SC6 / REQUIREMENTS TRAN-05 with the code (wave 10, TRAN-05)
 - [ ] 02.1-14-PLAN.md — Close the outstanding manual playback row: one remuxed and one re-encoded title watched through the new binds, each pinned to its codec path by a live ffmpeg capture, with a seek-back past 300 s (wave 10, **blocking human gate**, TRAN-01/TRAN-04)
 
 **Wave 11** *(blocked on 02.1-11 — same two scripts)*
@@ -725,7 +725,7 @@ Phase 7. Plans within a phase run sequentially.
 |-------|----------------|--------|-----------|
 | 1. Safety Harness and Freeze the Writers | 9/9 | Complete | 2026-08-18 |
 | 2. NFS Export and Music Assistant Reachability | 9/9 | Complete    | 2026-09-01 |
-| 02.1. Jellyfin Transcode Retention *(inserted)* | 10/10 | Plans executed | 2026-09-03 |
+| 02.1. Jellyfin Transcode Retention *(inserted)* | 11/14 | In Progress|  |
 | 3. Tagger Spike | 1/11 | In Progress | - |
 | 4. Collapse to One Tagger | 0/TBD | Not started | - |
 | 5. Inbox Structure and the Junk Gate | 0/TBD | Not started | - |
