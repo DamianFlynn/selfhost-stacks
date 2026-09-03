@@ -475,7 +475,7 @@ that four independent lines of evidence already agree on.
 **Wave 4** *(blocked on Wave 3)*
 
 - [x] 03-05-PLAN.md — `scripts/normalise-dj-tags.py`, dry-run by default, the three measured rules (OD-4), applied on copies with a field-loss gate (wave 4)
-- [ ] 03-06-PLAN.md — `scripts/spike03-discogs-probe.py`, the `tag_album()` NDJSON emitter, and its A1 smoke gate on a known-good album (wave 4)
+- [x] 03-06-PLAN.md — `scripts/spike03-discogs-probe.py`, the `tag_album()` NDJSON emitter, and its A1 smoke gate on a known-good album (wave 4)
 
 **Wave 5** *(blocked on Wave 4)*
 
@@ -726,7 +726,7 @@ Phase 7. Plans within a phase run sequentially.
 | 1. Safety Harness and Freeze the Writers | 9/9 | Complete | 2026-08-18 |
 | 2. NFS Export and Music Assistant Reachability | 9/9 | Complete    | 2026-09-01 |
 | 02.1. Jellyfin Transcode Retention *(inserted)* | 15/15 | Complete   | 2026-09-03 |
-| 3. Tagger Spike | 6/11 | In Progress|  |
+| 3. Tagger Spike | 7/11 | In Progress|  |
 | 4. Collapse to One Tagger | 0/TBD | Not started | - |
 | 5. Inbox Structure and the Junk Gate | 0/TBD | Not started | - |
 | 6. Tagger Configuration and Dry Run | 0/TBD | Not started | - |
