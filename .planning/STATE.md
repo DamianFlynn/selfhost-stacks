@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-03T01:15:00.000Z"
-last_activity: 2026-09-03 — 02.1-08 complete (THE POLICY HOLES ARE CLOSED — a jellyfin/jellyfin
-  rule blocks unattended minor automerge while preserving patch, and check-renovate.sh's 148
-  never-executed lines ran for the first time, exit 0, clean)
+last_updated: "2026-09-03T07:05:00.000Z"
+last_activity: 2026-09-03 — 02.1-09 complete (THE REAP IS DONE — operator approved all 4 rows
+  unchanged, the prune ran exactly once, 1.45 GiB reclaimed and the ~1.09 GB forecast was right
+  once apparent bytes and allocated blocks are told apart)
 progress:
   total_phases: 10
   completed_phases: 2
   total_plans: 39
-  completed_plans: 27
+  completed_plans: 28
   percent: 20
 ---
 
@@ -31,8 +31,76 @@ pipeline that someone owns.
 ## Current Position
 
 Phase: 02.1 (jellyfin-transcode-retention-relocate-the-anonymous-transcod) — EXECUTING
-Plan: 9 of 10
-Status: EXECUTING — **02.1-08 COMPLETE. THE TWO POLICY HOLES ARE CLOSED, AND THE SCRIPT THAT WAS
+Plan: 10 of 10
+Status: EXECUTING — **02.1-09 COMPLETE. THE ONE IRREVERSIBLE ACT OF THIS PHASE IS DONE, IT WENT
+THROUGH THE HUMAN GATE, AND IT RAN EXACTLY ONCE.** The operator ruled **"approved unchanged"** on
+all four rows — the explicit phrase 02.1-REAP-LIST.md asked for, so the record distinguishes a
+deliberate no-edit from an untouched file. `reap-list.txt` was **re-validated by sha256 immediately
+before the prune** (`1eaa2049…`, 4 lines, mtime still the inventory's own write); a mismatch would
+have stopped the run, because it would mean the file changed under the approval.
+
+`FLOOR_GB=20 … prune` exited 0: **removed 4, already reclaimed 0, rmi failures 0**. The script
+re-derived the referenced set from `docker ps -a` (no status filter) six hours after the list was
+built and found **0 conflicts**. `already reclaimed: 0` is the positive evidence this was the first
+and only run — a second invocation inverts it.
+
+**`/` went 35555835904 → 37039017984 bytes. Attributable delta 1558175744 B = 1.45 GiB**, measured
+in a six-second window spanning only the prune. The plan's six-hour window reads 1483182080 B, and
+**the two reconcile to the byte** once −72044544 of ordinary churn and −2949120 of post-run settling
+are subtracted, which is why both are recorded rather than one being chosen. **Margin over the D-17
+floor 13.11 → 14.49 GiB**, confirmed by the standing check as a second instrument.
+
+**The per-tag diff is the evidence: four lines gone, zero added.** All five image measures move by
+**exactly 4**, and the tag count moves by the same amount as the ID count — positive proof that none
+of the four carried a second tag, so the multi-tagged-removal hazard did not arise. **Dangling stayed
+9 → 9**: the three unreferenced untagged digests surfaced in task 1 were NOT touched. The operator did
+not rule on them and scope was not expanded to them.
+
+**⚠ THE ~1.09 GB FORECAST WAS RIGHT, AND FINDING THAT OUT REQUIRED NOTICING THE TWO NUMBERS ARE NOT
+COMMENSURABLE.** The measured `df` delta was 1.45 GiB — 42% above forecast — which was investigated
+rather than banked as a win. **`docker system df` Images SIZE moved 66.54 → 65.45 GB, a delta of
+exactly 1.09 GB**, and that figure is deduplicated, so it is the right instrument for how much image
+data left the store. The forecast's *mechanism* was right too: the 211.7 MB base was shared among the
+four candidates, confirmed because the surviving `2.23` siblings still report `SHARED SIZE 205.4MB`
+unchanged. **The gap is units.** `docker system df` reports *apparent* bytes; `df` reports *allocated
+blocks*, and ext4 rounds every file to 4 KiB. These are Node images: `keeper-web:2.23` holds
+**107,030 files** and allocates **1.342×** its apparent size — 191.2 MB of rounding overhead in one
+image. This reap's implied ratio is 1.430. **Carry-forward: forecast in `docker system df`
+Images-SIZE terms and expect `df` to move MORE, by ~1.2–1.4× for many-small-file images.**
+
+**RECLAIMABLE misled again, in the opposite direction this time.** It fell only 0.21 GB (62.44 →
+62.23) while 1.45 GiB of real disk was freed — where in 03-01 it *rose* 0.57 GB during an 18 GiB
+reclaim. Two observations, opposite signs, same conclusion: it does not track reality and is context,
+never a target. **A four-row list that freed ~1 GiB is the method working**, exactly as
+§ *How this plan is measured* pre-committed.
+
+**The estate is unharmed, and the blast radius was checked rather than assumed.** No container
+changed state (`docker ps -a` diffed unfiltered, no differences; 0 `created`). The `cal-*` stack —
+`keeper-sh`, internet-facing via Cloudflare with a live MCP endpoint, and the owner of all four
+reaped images — is healthy: seven containers on `2.23` with **uptimes of 20–21 hours unchanged across
+the prune**, which is the evidence none restarted. **cal-web genuinely serves** rather than merely
+running: probed over HTTP it returns `307 → /login → 200 OK`. `check-jellyfin-transcode.sh` exits 0,
+`FAILURES total: 0`, D-30 amdgpu mitigation intact.
+
+**⚠ ONE SELF-INFLICTED DEVIATION, REVERTED AND RECORDED IN FULL.** The executor's *first* cal-web
+probe used `curlimages/curl:latest` via `docker run --rm`. That image was not resident — 03-01 had
+reaped it — so Docker **pulled** it, contradicting this plan's own T-021-SC ("no image is pulled").
+It happened *after* every recorded measurement, so no figure was contaminated; it was caught on the
+next check, removed with `docker rmi`, and the live store re-diffed **identical to the recorded
+after-listing**. The probe was re-run with a resident image and it is that run quoted as evidence.
+**Carry-forward: `docker run --rm <image>` is a PULL when the image is absent, and on a freshly
+reaped host the generic utility images are exactly the ones most likely to be gone.**
+
+VALIDATION row 33 is recorded **honestly**: exit 0 is *near-vacuous* on its own, because `/` already
+cleared the 20 GiB floor by 13.11 GiB before the reap and the assertion would have passed had the
+prune deleted nothing. Row 34 re-asserted after the run — comment-stripped grep **0**, raw **4**, so
+the control is discriminating rather than vacuous. Round-2 **H1** re-checked after the run:
+`grep -c 'headroom.sh prune'` over the task-3 verify block is **0**; its three `prune` tokens are the
+guard comment plus the two alternatives of the read-only prohibition grep's own pattern. The script
+is byte-identical to `b217ada` (`32f686f9…`, `git status` empty) — `FLOOR_GB=20` was an environment
+override throughout.
+
+Before that, **02.1-08 COMPLETE. THE TWO POLICY HOLES ARE CLOSED, AND THE SCRIPT THAT WAS
 SUPPOSED TO BE WATCHING RENOVATE HAS EXECUTED FOR THE FIRST TIME IN ITS LIFE.** `renovate.json5` had
 **no** `jellyfin/jellyfin` rule of any kind: Jellyfin fell through `packageRules[2]` (auto-merge
 minor, `platformAutomerge`, at any time), and since Jellyfin has been on 10.x since 2019 its *de
@@ -935,13 +1003,18 @@ Recent decisions affecting current work:
 - [Phase 2]: 02-08: the default 'ha supervisor logs' window does not reach back to boot — a default-depth grep for 'read-only fallback' returns nothing and is indistinguishable from 'it did not happen'. Use -n 2000 or deeper
 - [Phase 2]: 02-08: the HAOS SSH add-on is NOT privilege-limited — sudo is NOPASSWD:ALL, CapBnd carries CAP_SYS_ADMIN and Protection mode is already off. The 02-05/02-08 probes failed for want of 'sudo', not for want of privilege
 - [Phase ?]: 02.1-01: TRAN-01..09 are a PHASE INSERTION, not a milestone scope change — the v1 denominator stays at 39 and the nine are subtotalled separately (39 + 9 = 48). Incrementing it would make every prior 'N of 39' statement incomparable with every later one, in a milestone that is already part-executed
-- [Phase ?]: 02.1-01: PHASE-START READING IS NOT WHAT THE PLAN SET ASSUMED — / is at 20.18 GiB avail, only 185 MiB above the D-17 20 GiB floor, not the ~33-36 GiB the plans were written against. The transcode cache has ALREADY refilled to 12.55 GiB across 1,324 files since the container came up 2026-08-31 (~6 GiB/day). The D-32 gate passes so the phase proceeds, but at that rate / crosses the floor in ~1 day and hits zero in ~3. Any stall — especially 02.1-09's blocking human gate — spends a budget measured in hours. Verified with stat -f as a second instrument
+- [Phase ?]: 02.1-01: PHASE-START READING IS NOT WHAT THE PLAN SET ASSUMED — / is at 20.18 GiB avail, only 185 MiB above the D-17 20 GiB floor, not the ~33-36 GiB the plans were written against. The transcode cache has ALREADY refilled to 12.55 GiB across 1,324 files since the container came up 2026-08-31 (~6 GiB/day). The D-32 gate passes so the phase proceeds, but at that rate / crosses the floor in ~1 day and hits zero in ~3. Any stall — especially 02.1-09's blocking human gate — spends a budget measured in hours. Verified with stat -f as a second instrument. **[SUPERSEDED 2026-09-03 — kept as the record of what was true at phase start, but do NOT restate it as current.** 02.1-05's cutover stopped the ~6 GiB/day clock, 02.1-06 released the 12.55 GiB stock, and 02.1-09's reap freed a further 1.45 GiB. `/` margin is now **14.49 GiB**, not 185 MiB. The blocking human gate ran at wave 8 exactly as D-31 intended and cost the phase nothing.**]**
 - [Phase ?]: [02.1-02]: jq's `//` is the ALTERNATIVE operator and treats `false` as empty as well as `null` — never use it to read a boolean back. The standing check's own first --baseline printed EnableSegmentDeletion, EnableThrottling and EnableHardwareEncoding as `<absent>` when all three were genuinely `false`, including the amdgpu mitigation flag where absent and false carry OPPOSITE implications for a ~6-hour outage hazard. An <absent> baseline would also have made 02.1-07's before/after read as 'the key appeared' rather than 'the value moved'
 - [Phase ?]: [02.1-02]: a green `zfs get quota` on an UNMOUNTED dataset is a false pass — the bind still works, the container still writes, and the quota does not apply, while the property still reads 53687091200. The standing check asserts `mounted` by two instruments with no shared failure mode: the ZFS property from atlantis over ssh, and a container-side `stat -c %d` device-id comparison that needs neither ssh nor zfs. Baseline confirms the split is real: mounted GREEN, quota RED
 - [Phase ?]: [02.1-02]: `/` margin is 182.6 MiB, tripping 02.1-02's own ~5 GiB stop condition. The plan was finished anyway because every action in it is read-only with respect to `/`. **The operator ordering decision is OWED BEFORE 02.1-03** (the first mutation): should 02.1-09's image reap move ahead of it? D-31 put the reap last when the plan set assumed ~13 GiB. Also measured: the cache was byte-identical across two watch samples 16 min apart — it grows during playback, not on a wall clock
 - [Phase 02.1]: [02.1-03]: OPERATOR RULED OPTION B on the pre-existing exit-2 Terraform drift — clear it as its own separate, mechanically-asserted no-op apply FIRST, then execute against a genuinely clean exit-0 baseline. Chosen over proceeding with a documented exception because VALIDATION row 28 is a row this phase gets verified against and only B satisfies it literally. Two applies, each from its own saved workstation-local plan file, each asserted before it ran: count=0/destroys=0/addresses=[] then count=1/destroys=0/addresses=[null_resource.jellyfin_transcode_dataset]. Neither plan file was committed
 - [Phase 02.1]: [02.1-03]: ASSUMPTION A3 IS CONFIRMED, BYTE-EXACT — df -B1 --output=size /mnt/fast/transcode inside LXC 100 went 1442767175680 to 53687091200, zero delta against the target, corroborated by stat -f (51200 blocks x 1048576 bsize). ZFS derives statvfs f_blocks from referenced+available with available capped by the quota, so the standing check gains a second instrument for the bound that needs neither ssh nor zfs. It proves the quota is SET, never that it FIRES — that is 02.1-08, and row 9 stays the primary
 - [Phase 02.1]: [02.1-03]: TRAN-07 COMPLETE, TRAN-03 deliberately NOT — TRAN-07's two clauses (declared in infra/ Terraform; the apply provably scoped to that one resource with zero destroys) are both discharged with committed evidence, while TRAN-03 requires the bound proven FIRING rather than set. Read back from atlantis: quota=53687091200, compression=off, sync=disabled, recordsize=1048576, atime=off, mounted=yes, and stat 2775 apps:apps — the setgid bit survived the guarded chown plus unconditional chmod
+- [Phase 02.1]: [02.1-09]: A DOCKER SIZE FORECAST AND A `df` DELTA ARE NOT THE SAME UNIT, and the difference is large enough to look like a beaten estimate. The reap forecast ≈1.09 GB and `df` moved 1.45 GiB — 42% more. `docker system df` Images SIZE (deduplicated) moved exactly 1.09 GB, so the forecast was right; `docker system df` reports APPARENT bytes while `df` reports ALLOCATED BLOCKS, and ext4 rounds every file to 4 KiB. Measured on the surviving keeper-web:2.23 sibling: 107,030 files, allocated/apparent = 1.342, i.e. 191.2 MB of rounding overhead in one image. Forecast in Images-SIZE terms and expect `df` to move MORE, by ~1.2-1.4x for many-small-file images
+- [Phase 02.1]: [02.1-09]: `docker system df` RECLAIMABLE HAS NOW MISLED IN BOTH DIRECTIONS — it ROSE 0.57 GB during 03-01's 18 GiB reclaim and FELL only 0.21 GB during this 1.45 GiB one. Two observations, opposite signs, same conclusion: it does not track real disk and is context, never a target. The auditable per-tag diff and the measured byte delta are the evidence
+- [Phase 02.1]: [02.1-09]: `docker run --rm <image>` IS A PULL when the image is absent, and it is indistinguishable from a local run once it succeeds. The executor broke this plan's own no-pull constraint reaching for `curlimages/curl:latest` to probe an HTTP endpoint — an image 03-01 had already reaped. On a freshly reaped host the generic utility images are precisely the ones most likely to be gone. Probe with an image confirmed present in the before-listing, or `docker exec` into a running container. Reverted, and the store re-diffed identical to the recorded after-listing
+- [Phase 02.1]: [02.1-09]: WHEN AN IMAGE COUNT AND A TAG COUNT MOVE BY THE SAME AMOUNT, that equality is itself the finding — it proves no removed image carried a second tag, so no multi-tagged removal is hiding in the accounting. Five separate measures were recorded on both sides and all five moved by exactly 4. Dangling staying 9 -> 9 is the matching scope assertion: the three unreferenced untagged digests were surfaced and deliberately NOT deleted
+- [Phase 02.1]: [02.1-09]: A PRUNE EXIT CODE THAT ASSERTS A FLOOR THE HOST ALREADY CLEARED IS NEAR-VACUOUS EVIDENCE. `FLOOR_GB=20 ... prune` exiting 0 would have passed identically had it deleted nothing, because `/` was 13.11 GiB clear of the floor beforehand. Recorded as such rather than banked as a pass. Also: `already reclaimed: 0` alongside `removed: 4` is the positive evidence a destructive run happened exactly ONCE — a second invocation inverts the pair
 
 ### Pending Todos
 
@@ -1061,7 +1134,7 @@ Recent decisions affecting current work:
 - **OPEN, recorded not repaired (02-07): `/mnt/tank/media/Music/Def Leppard/Def Leppard (2015)/` derives an EMPTY album artist and hard-errors one file** (`CD 01-06 Def Leppard - Sea of Love.flac`), because the album folder name equals the artist folder name — MA's derivation appears to lock onto the top-level `Def Leppard` directory as the album folder, whose parent is the provider root. Two files hit it; one errored. **No remedy was attempted and none is available here:** D-05 makes tag repair the wrong remedy on principle and the `ro` export makes it unavailable in fact. `zpool status -v tank` is clean, so this is NOT 2026-07 scrub damage. Phase 7 meets this at scale.
 - **CORRECTION for anything querying MA albums (02-07): `search` on `music/albums/library_items` is NOT a substring match.** Searching an album's OWN EXACT NAME returned `[]` while a one-word prefix returned that same album, from the same provider, in the same second (`Mastermix Essential Hits - Pop 4 - 2005-2009` vs `Mastermix`). Short names happen to work, which is what makes it dangerous. Filter on `provider` ONLY and do the exact comparison locally — otherwise the gate reports `no exact match … candidates were: <none>`, indistinguishable from the album being genuinely absent. Fixed in `check-music-consumers.sh` (`ed1d367`).
 - **CORRECTION for any future Terraform teardown (02-07): destroying a `null_resource` removes NOTHING from the host.** `music_temp_export_enabled = false` was not a teardown — the drop-in file stayed on disk and the export stayed live while `terraform plan` reported clean. Fixed by an always-present reconciler resource (`d7430ee`). **A destroy-time provisioner is NOT an option here:** `terraform validate` refuses one whose connection block reads variables, and the only workaround carries the Proxmox root password in `triggers` — plaintext state plus every plan diff, in a public repo. `self.triggers.*` is also unsafe at destroy time: it reads from STATE, so a key added after creation reads null and `grep -q ""` matches every line.
-- ~~⏱ TIME-SENSITIVE (02.1-01, 2026-09-02): / on LXC 100 has 185 MiB of margin over the D-17 floor (20.18 GiB avail vs 20.00 GiB), and Jellyfin's transcode cache has already refilled to 12.55 GiB / 1,324 files at roughly 6 GiB/day.~~ **MATERIALLY REDUCED 2026-09-02T22:19:52Z by 02.1-05's cutover, but NOT cleared.** New transcode writes now land on `fast/transcode` under a 50 G quota, so **`oldvol_transcodes_bytes` is a FROZEN stock rather than a growing one** — the ~6 GiB/day clock has stopped and the "budget measured in hours" framing no longer applies. Margin is now ~216 MiB, the widest all phase, because the recreate was `/`-positive. **Two reasons it is not cleared:** (1) the 12.55 GiB is still *on* `/` and is only released by **02.1-06's `docker volume rm`**, which should not be left sitting; (2) the margin still erodes a few MiB per half-hour from ordinary churn across the other 78+ containers. **If `oldvol_transcodes_bytes` ever moves again, that is not the old problem continuing — it is `jellyfin.yaml` having been reverted, and the standing check's section 2 is the alarm.** The operator decision point in 02.1-01's rollback table (moving 02.1-09's reap earlier) still stands if a D-32 sample reads below 21474836480.
+- ~~⏱ TIME-SENSITIVE (02.1-01, 2026-09-02): / on LXC 100 has 185 MiB of margin over the D-17 floor (20.18 GiB avail vs 20.00 GiB), and Jellyfin's transcode cache has already refilled to 12.55 GiB / 1,324 files at roughly 6 GiB/day.~~ **MATERIALLY REDUCED 2026-09-02T22:19:52Z by 02.1-05's cutover, but NOT cleared.** New transcode writes now land on `fast/transcode` under a 50 G quota, so **`oldvol_transcodes_bytes` is a FROZEN stock rather than a growing one** — the ~6 GiB/day clock has stopped and the "budget measured in hours" framing no longer applies. Margin is now ~216 MiB, the widest all phase, because the recreate was `/`-positive. **Two reasons it is not cleared:** (1) the 12.55 GiB is still *on* `/` and is only released by **02.1-06's `docker volume rm`**, which should not be left sitting; (2) the margin still erodes a few MiB per half-hour from ordinary churn across the other 78+ containers. **If `oldvol_transcodes_bytes` ever moves again, that is not the old problem continuing — it is `jellyfin.yaml` having been reverted, and the standing check's section 2 is the alarm.** ~~The operator decision point in 02.1-01's rollback table (moving 02.1-09's reap earlier) still stands if a D-32 sample reads below 21474836480.~~ **CLEARED 2026-09-03. This item is closed and no part of it is time-sensitive any more.** 02.1-06 deleted the anonymous volume and released the 12.55 GiB stock; 02.1-09's reap then freed a further 1.45 GiB. **`/` margin over the D-17 floor is 14.49 GiB — 185 MiB at phase start, a factor of about eighty.** The operator decision point is moot in both directions: the reap has now RUN, at wave 8 where D-31 put it, and it was never overtaken. **The "budget measured in hours" framing is retired — do not restate it.** The D-32 watch continues as a passive instrument, but it is watching a protected filesystem now, not a countdown.
 
 ## Deferred Items
 
@@ -1084,9 +1157,17 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-09-02T22:35:00.000Z
-Stopped at: Completed 02.1-05-PLAN.md
+Last session: 2026-09-03T07:05:00.000Z
+Stopped at: Completed 02.1-09-PLAN.md
 Resume file: None
+
+**NEXT: 02.1-10, the last plan of the phase (wave 9).** It is unblocked — it depends on 02.1-06 and
+02.1-09 and both are now complete. Two things it should carry in:
+
+1. **VALIDATION rows 11, 15, 16 and 02.1-06's task-3 `<verify>` FAIL ON CORRECT OUTCOMES.** Waves 5–8
+   left them failing deliberately. 02.1-10 verifies against the text; do not "fix" them.
+2. **This phase's reap is DONE and is not time-sensitive in any form.** `/` has 14.49 GiB of margin
+   over the D-17 floor. Any prose still framing image reclaim as urgent is stale.
 
 **02-09 IS COMPLETE AND THE PHASE IS CLOSED.**
 
