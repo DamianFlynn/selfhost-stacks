@@ -3,15 +3,16 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-03T07:05:00.000Z"
-last_activity: 2026-09-03 — 02.1-09 complete (THE REAP IS DONE — operator approved all 4 rows
-  unchanged, the prune ran exactly once, 1.45 GiB reclaimed and the ~1.09 GB forecast was right
-  once apparent bytes and allocated blocks are told apart)
+last_updated: "2026-09-03T07:25:00.000Z"
+last_activity: 2026-09-03 — 02.1-10 complete, and PHASE 02.1's TEN PLANS ARE ALL EXECUTED (the
+  transcode audit is folded into quick-health-check.sh and BOTH its UNKNOWN branches were DRIVEN,
+  not read; six proofs executed with hash-verified restores; the two most useful results are both
+  places the plan text was wrong)
 progress:
   total_phases: 10
   completed_phases: 2
   total_plans: 39
-  completed_plans: 28
+  completed_plans: 29
   percent: 20
 ---
 
@@ -30,9 +31,118 @@ pipeline that someone owns.
 
 ## Current Position
 
-Phase: 02.1 (jellyfin-transcode-retention-relocate-the-anonymous-transcod) — EXECUTING
-Plan: 10 of 10
-Status: EXECUTING — **02.1-09 COMPLETE. THE ONE IRREVERSIBLE ACT OF THIS PHASE IS DONE, IT WENT
+Phase: 02.1 (jellyfin-transcode-retention-relocate-the-anonymous-transcod) — ALL TEN PLANS EXECUTED
+Plan: 10 of 10 — complete
+Status: **ALL TEN PLANS OF PHASE 02.1 ARE EXECUTED. AWAITING `/gsd-verify-work`.**
+
+**02.1-10 COMPLETE. THE ESTATE'S ROUTINE HEALTH CHECK NOW COVERS THE THING THAT EMPTIED `/`, AND
+EVERY ONE OF ITS FAIL-CLOSED BRANCHES HAS BEEN DRIVEN RATHER THAN READ.**
+`scripts/quick-health-check.sh` gained a **third** fatal block — inline `ssh -n`, `RC=$?` on the very
+next line, `$'\033'` ANSI stripping, anchored on the literal `📊 6. Summary`, with **both** UNKNOWN
+branches present and each setting `EXIT_CODE=1`, and no second reachability probe (it inherits the
+WR-10 gate). The third `EXIT-CODE BEHAVIOUR CHANGED` notice states the six conditions that can exit
+the script 1 — five of which are "could not look", including an **unmounted `fast/transcode`**, which
+is the least obvious and the most dangerous, since the bind still works and `zfs get quota` still
+reads green while the quota covers nothing.
+
+**Six proofs EXECUTED, not asserted.** Row 21 (`ZFS_HOST=192.0.2.1`, RFC 5737): exit 1, quota and
+mounted each their own distinct red, summary `UNKNOWN` for both, never a `!= 53687091200` mismatch a
+reader would parse as drift — **and the container-side device-id instrument kept answering**, which
+is exactly why row 36 specifies two. Row 22 (non-existent container): exit 1, absence **reported**,
+summary `volume mounts: UNKNOWN` not `0` — an empty `docker inspect` did **not** satisfy the
+`result == ""` test it would have made meaningless, so no defect to fix. A third control pointed
+`JELLYFIN_SECRETS` at a non-existent path (executable only because 02.1-02 made it overridable — the
+alternative was chmod'ing a file whose `600 root` is an invariant another check asserts): exit 1,
+section 5 UNREACHABLE with no values printed, real file `600 root` before **and** after. `--nonsense`
+exits exactly **2**. Row 23 proven **without editing `quick-health-check.sh`**. Row 24: the anchor
+renumbered `6.`→`7.` **while the underlying check still exited 0**, asserted separately — the UNKNOWN
+branch printed and exit was 1, not the tick the WR-09 defect produces. **Every test that broke
+something recorded a pre-test sha256, restored, asserted the hash (`d33356c5…` both times) and re-ran
+green; both repos' `scripts/` are empty at the end.**
+
+**⚠ THE TWO MOST USEFUL RESULTS ARE BOTH PLACES THE PLAN TEXT WAS WRONG, AND NEITHER WAS MASSAGED.**
+(1) **Row 23's stated MECHANISM is false.** The plan says the ssh returns non-zero with *empty
+output*, driving the empty-output branch. It does not: `ssh host "cmd 2>&1"` puts the redirection
+**inside the remote command string**, so bash's own `No such file or directory` **is** captured —
+output non-empty, RC 127, and the BROKEN branch fires. Row 23's actual claim (the exit code
+propagates) holds regardless. The empty-output branch was then driven properly, with a **zero-byte
+script**, which exposed the branch's key property: **a zero-byte script exits 0**, so `RC` was `0` —
+a clean success — and the block still refused a tick, because `[ -z "$OUT" ]` is tested **before** the
+return code. Reverse that order and a silently-truncated check reports green.
+(2) **Two of the task's acceptance greps are non-discriminating and were ALREADY failing at the
+parent commit** (raw 1 and 2): they match the notices that *explain* the `bash -s` and `\x1b`
+prohibitions. The explanatory comments were **not** deleted to make them pass — that removes real
+documentation to satisfy a string test. Comment-stripped substitutes return **0** against raw 1 and
+3, the same device VALIDATION row 34 uses.
+
+**One grep WAS satisfied by an edit, and the distinction is stated rather than glossed:** those two
+fail because the *file is correct*; the third failed because the file's own **naming was
+inconsistent** — the 02-09 notice opened "A SECOND FATAL BLOCK WAS ADDED" and never carried the shared
+phrase, so a grep for the convention found one notice in a file holding two. Six words added, nothing
+removed, with an in-band note. The count is now 4 (three headers plus one mention inside that note),
+recorded explicitly because "prose mentioning the string satisfies a grep for the string" is
+02.1-06's trap pointed the other way. Likewise the notice records **2026-09-03**, not the 2026-09-02
+the criterion names: execution crossed midnight UTC, and 02.1-06 already lost a run to that exact
+rollover.
+
+**THE THREE KNOWN LIMITS WENT TO THREE DIFFERENT DESTINATIONS, chosen by who needs each one** — both
+reviewers said a limit recorded where nobody reads it has not been recorded. **Manual-only (D-22)** is
+in-band in `quick-health-check.sh`'s third notice, stating the thing a reader is most likely to get
+wrong: *the fold-in closes the "we had no way to see it" half of the incident; it does not close the
+"nobody looked for 36 hours" half.* Scheduling is deferred with its reason named — Phase 2 closed with
+a notification never proven to deliver, and an unproven path is worse than a known-manual check
+because it *feels* covered. **The Live TV gap (A8)** was already in `jellyfin.yaml` from 02.1-04 and
+was **verified clause by clause, not duplicated** (`grep` is 1 there, **0** in PROJECT.md). **The
+widened API-key blast radius** is the only one estate-wide enough for PROJECT.md, recorded as an
+accepted residual risk stated as a CHOICE in the style of 02-09's `sec=sys` row: the key is
+administrator-equivalent **by Jellyfin's design**, 10.11 has no scoped-key mechanism, and this phase
+widened its use from read to **write**. PROJECT.md gained 3 insertions, 0 deletions.
+
+**⚠ ONE POINTER WAS FOUND WRONG IN BOTH HALVES AND CORRECTED.** `jellyfin.yaml`'s D-11 note read "the
+other **five** local Docker volumes … inventoried in **02.1-06-SUMMARY.md**". Measured: **seven**
+plain local volumes (five referenced, two dangling), and the table plus the 36-versus-6 reconciliation
+is in `artifacts/02.1-06-transcode-proof.txt` § 7. A pointer that points at the wrong file is worse
+than no pointer, because it is checked once and then trusted.
+
+**Nothing was implemented for any limit** — no cron, no unit, no notification code, no new or scoped
+key, and **no container recreate**: `docker inspect jellyfin` still reports `StartedAt
+2026-09-02T22:19:52Z`, the 02.1-05 cutover.
+
+**THE D-32 WATCH IS CLOSED.** `/` went **21668859904 → 37022195712 bytes**; margin over the D-17 floor
+**185 MiB → 14.48 GiB**, a factor of about eighty, verified with `stat -f` to the byte. 12.95 GiB of
+it is 02.1-06's `docker volume rm` and 1.45 GiB is 02.1-09's reap — recorded separately, not merged.
+The closing block records both what the watch bought (it fired on its first sample; three `/`-budget
+grants and two ordering decisions were ruled on its lines) and what it did not: **it asserted nothing
+all phase.**
+
+**THE HONEST NOT-COVERED LIST IS RECORDED IN FULL** in `artifacts/02.1-10-negative-controls.txt`:
+**six defective assertions** in this phase's own contract (VALIDATION rows 11, 15, 16, 33, 02.1-06's
+task-3 verify, and two of this plan's own greps), all left failing rather than edited; **five factual
+errors in plan text**; **seven open items**; and **three instrument traps**. **Five of the six
+defective assertions are the same shape** — a mechanical check satisfied or defeated by *prose about*
+the thing rather than by the thing — and this phase now carries the workaround in four separate
+places. The load-bearing open items: the estate's **ENOSPC-keyed greps are still blind to a
+transcode-quota refusal** (both `quota` and `refquota` return EDQUOT, so no property choice helps —
+adding the quota-exceeded string to those greps would); **`renovate.json5` is UNVALIDATED**; and
+**`check-renovate.sh` line 157 is INVERTED — it aborts when there are ZERO pending Renovate PRs, i.e.
+exactly when the estate is healthy**, making its own "no pending PRs" branch unreachable, hidden today
+only because 27 branches are open (remedy: `|| true` ×3, with 115 and 138).
+
+**Explicitly checked rather than assumed: the new coverage does NOT inherit 02.1-06's
+log-level-liveness hazard.** Neither the check nor the fold-in reads a log — the evidence is `df`,
+`docker inspect`, `stat -c %d`, `zfs get` over ssh and one HTTP GET, every one a direct query whose
+failure is distinguishable from an empty result. Recorded anyway, because the next thing folded in
+may well read a log.
+
+**And what real playback did and did not prove:** the operator watched a full episode ~22:20–22:40Z on
+2026-09-02, after the cutover. It **direct-played** — zero segments, zero ffmpeg, zero bytes on `/`.
+Real evidence the cutover does not break playback; **not** transcode evidence. An empty
+`/mnt/fast/transcode` after a direct-play session is the *absence of a test*. The firing proofs are
+02.1-06's two driven sessions.
+
+**TRAN-05 is COMPLETE**, and with it every TRAN requirement: TRAN-01…TRAN-09 all closed.
+
+Before that, **02.1-09 COMPLETE. THE ONE IRREVERSIBLE ACT OF THIS PHASE IS DONE, IT WENT
 THROUGH THE HUMAN GATE, AND IT RAN EXACTLY ONCE.** The operator ruled **"approved unchanged"** on
 all four rows — the explicit phrase 02.1-REAP-LIST.md asked for, so the record distinguishes a
 deliberate no-edit from an untouched file. `reap-list.txt` was **re-validated by sha256 immediately

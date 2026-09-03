@@ -47,7 +47,7 @@ the same filesystem paths and the same beets state.
 
 - [x] **Phase 1: Safety Harness and Freeze the Writers** - One writer on the library, everything irreplaceable copied somewhere no tagger can reach, and a before-state tag snapshot taken while the library is still untouched
 - [x] **Phase 2: NFS Export and Music Assistant Reachability** - The second consumer proven on three albums, before any content flows (completed 2026-09-01; D-55 approved after the operator played tracks)
-- [ ] **Phase 02.1: Jellyfin transcode retention** *(INSERTED)* - Relocate the anonymous transcode volume off `/` and set a retention policy, so the 19 GB cache that emptied `/` mid-Phase-3 cannot refill there
+- [x] **Phase 02.1: Jellyfin transcode retention** *(INSERTED)* - Relocate the anonymous transcode volume off `/` and set a retention policy, so the 19 GB cache that emptied `/` mid-Phase-3 cannot refill there (all 10 plans executed 2026-09-03; `/` free 20.18 GiB -> 34.48 GiB, margin over the D-17 floor 185 MiB -> 14.48 GiB, `check-jellyfin-transcode.sh` FAILURES 0 and folded into `quick-health-check.sh`. Awaiting `/gsd-verify-work`)
 - [ ] **Phase 3: Tagger Spike** - One tagger *and* one front end chosen on numbers from this library's own content, against thresholds committed in advance
 - [ ] **Phase 4: Collapse to One Tagger** - One tagger, one database, no idle container holding a rw mount — independently shippable
 - [ ] **Phase 5: Inbox Structure and the Junk Gate** - A staging queue outside the library, with the junk already out of it
@@ -323,7 +323,7 @@ moved, because the number is a consequence of that decision rather than the deci
 
 **Wave 9** *(blocked on 02.1-06 and 02.1-09)*
 
-- [ ] 02.1-10-PLAN.md — Execute the fail-closed negative controls, fold into `quick-health-check.sh`, record the known limits (wave 9)
+- [x] 02.1-10-PLAN.md — Execute the fail-closed negative controls, fold into `quick-health-check.sh`, record the known limits (wave 9, **TRAN-05; six proofs executed, every restore hash-verified, both UNKNOWN branches DRIVEN**)
 
 **Research**: `--research-phase` — done. `02.1-RESEARCH.md` carries the Jellyfin 10.11.11 retention
 internals read from source at the running tag (the segment cleaner's 20 s tick and `max(keep,20)`
@@ -658,7 +658,7 @@ Phase 7. Plans within a phase run sequentially.
 |-------|----------------|--------|-----------|
 | 1. Safety Harness and Freeze the Writers | 9/9 | Complete | 2026-08-18 |
 | 2. NFS Export and Music Assistant Reachability | 9/9 | Complete    | 2026-09-01 |
-| 02.1. Jellyfin Transcode Retention *(inserted)* | 9/10 | In Progress | - |
+| 02.1. Jellyfin Transcode Retention *(inserted)* | 10/10 | Plans executed | 2026-09-03 |
 | 3. Tagger Spike | 1/11 | In Progress | - |
 | 4. Collapse to One Tagger | 0/TBD | Not started | - |
 | 5. Inbox Structure and the Junk Gate | 0/TBD | Not started | - |
