@@ -273,7 +273,7 @@ phase). Phase 3 is halted behind it.
      against a throwaway `encoding.xml` leaves all three retention values intact — **and**
      negatively, by a fault-injected run that genuinely fails, so the guard is shown to be capable of
      failing rather than merely observed passing (TRAN-09, ruled in scope as D-29/D-30).
-**Plans**: 10 plans in 9 waves
+**Plans**: 14 plans in 12 waves (10 original, plus 4 gap-closure plans added 2026-09-03 after `/gsd-verify-work` returned `gaps_found`)
 
 *Wave order set by **D-31** (operator ruling, 2026-09-02, after cross-AI plan review). The cutover is
 the critical path: `/` is structurally protected at the end of **wave 6** rather than sitting behind a
@@ -324,6 +324,55 @@ moved, because the number is a consequence of that decision rather than the deci
 **Wave 9** *(blocked on 02.1-06 and 02.1-09)*
 
 - [x] 02.1-10-PLAN.md — Execute the fail-closed negative controls, fold into `quick-health-check.sh`, record the known limits (wave 9, **TRAN-05; six proofs executed, every restore hash-verified, both UNKNOWN branches DRIVEN**)
+
+---
+
+**GAP CLOSURE — plans 02.1-11 … 02.1-14, added 2026-09-03.**
+
+`.planning/phases/02.1-.../02.1-VERIFICATION.md` returned **`gaps_found`, 8/10 must-haves**. Two gaps,
+both raised by the phase's own code review (`02.1-REVIEW.md`) and then independently re-confirmed live
+by the verifier — both in the **observability layer**, neither touching the mount/quota mechanism,
+which was re-verified sound in every particular:
+
+- **Gap 1 (CR-01)** — Success Criterion 6 below is false as implemented. The standing check *reports*
+  the five encoding values through `info()`; `FAILURES` never increments on drift, and
+  `quick-health-check.sh`'s selector does not display them on the green path. `TranscodingTempPath`
+  could drift to Jellyfin's own default `/config/transcodes`, moving the cache off the quota'd
+  dataset, while every instrument stayed green.
+- **Gap 2 (CR-02)** — the claim *"Jellyfin publishes NO host port … reachable only from a host that
+  can route to its t3_proxy address"*, carried by both check scripts and used as the last
+  compensating control in `PROJECT.md`'s residual-risk acceptance for the administrator-equivalent
+  API key this phase widened to **write**, is false: the container holds the LAN macvlan address
+  `172.16.1.76` and answers on `:8096` from the whole `172.16.1.0/24`.
+
+One human-verification item is also carried forward: `02.1-VALIDATION.md`'s manual playback row was
+**not** closed — the single recorded session direct-played (zero segments, zero ffmpeg).
+
+*Plans 11 → 12 → 13 are strictly sequential because they modify the same two scripts; 14 is
+independent and can run alongside 11.*
+
+**Wave 10** *(no dependencies — 02.1-11 and 02.1-14 touch disjoint files)*
+
+- [ ] 02.1-11-PLAN.md — **Gap 1:** assert all five encoding values fail-closed with env-overridable expectations, drive five per-field negative controls, surface the drift on `quick-health-check.sh`'s green path, and align ROADMAP SC6 / REQUIREMENTS TRAN-05 with the code (wave 10, TRAN-05)
+- [ ] 02.1-14-PLAN.md — Close the outstanding manual playback row: one remuxed and one re-encoded title watched through the new binds, each pinned to its codec path by a live ffmpeg capture, with a seek-back past 300 s (wave 10, **blocking human gate**, TRAN-01/TRAN-04)
+
+**Wave 11** *(blocked on 02.1-11 — same two scripts)*
+
+- [ ] 02.1-12-PLAN.md — **Gap 2:** measure the true reachability from three vantage points, correct the false claim in both scripts with the right mechanism (macvlan, not docker-proxy), and re-derive `PROJECT.md`'s residual-risk acceptance (wave 11, TRAN-05)
+
+**Wave 12** *(blocked on 02.1-12 — same script)*
+
+- [ ] 02.1-13-PLAN.md — Bound every remote command in `quick-health-check.sh` with a Linux-side `timeout` and drive the bound against a real hang, so the gap-1 assertion cannot be defeated by a check that never returns (wave 12, TRAN-05)
+
+*Excluded from this closure set, with the reason on the record:* `scripts/check-renovate.sh`'s five
+`grep -v '^$'` `pipefail` aborts (lines 90, 100, 115, 138, 157 — **157 is inverted: it aborts when
+ZERO Renovate PRs are pending, i.e. exactly when the estate is healthy**). It is not one of the two
+verified gaps, TRAN-06 was verified SATISFIED on a live exit-0 run, and folding an unrelated repair
+into a `--gaps-only` execution is how a closure pass becomes a second phase. Recorded in `STATE.md`
+and `artifacts/02.1-10-negative-controls.txt`; close it with `/gsd-quick`, or carry it into Phase 4
+alongside the wrtag Renovate pin.
+
+---
 
 **Research**: `--research-phase` — done. `02.1-RESEARCH.md` carries the Jellyfin 10.11.11 retention
 internals read from source at the running tag (the segment cleaner's 20 s tick and `max(keep,20)`
