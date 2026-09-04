@@ -137,6 +137,17 @@ HAZARD NOTES
     os.path.realpath and must be the scratch root or a descendant of it. Anything else - most
     importantly /mnt/tank/media/Music - exits 2 naming BOTH the given path and the required root.
     This is the single most important behaviour in the file.
+
+    THE FENCE IS RE-ASSERTED ON EVERY FILE, NOT ONLY ON TARGET (CR-04). Fencing the target alone
+    was not enough: collect_folders() returns symlinked FILES (os.walk declines to descend
+    symlinked directories, which is a different thing), and both `handle.save(path, ...)` and
+    preserve_id3v1_trailer()'s `r+b` open follow a symlink and write to its target. One symlink
+    under the scratch tree pointing at the library defeated the fence silently - a normal
+    `changed` count, and an NDJSON recording the scratch path rather than the path written. A
+    hardlink did the same with no symlink involved. assert_inside_scratch() therefore re-checks
+    the RESOLVED path, refuses a symlink, a non-regular file and st_nlink > 1, and runs BOTH in
+    the per-file loop (so the dry run reports it) and as the first statement of write_tags() (so
+    no caller can reach a write without it). A refusal is a .failed record, never a skip.
   * NOTHING IS WRITTEN TO THE SYSTEM TEMP DIRECTORY. On LXC 100 the system temp directory is
     tmpfs backed by host RAM and a large spill there has previously taken the whole 28 GB box
     down (T-01-15). This script needs no scratch file at all: mutagen saves in place and the
@@ -163,6 +174,7 @@ import json
 import logging
 import os
 import re
+import stat
 import sys
 import time
 import unicodedata
@@ -339,6 +351,69 @@ def label_of(album: str) -> str | None:
 
 
 # --------------------------------------------------------------------------------------------
+# The D-07 fence, re-asserted PER FILE. resolve_target_or_die() fences the TARGET; this fences
+# every path that is about to be written.
+# --------------------------------------------------------------------------------------------
+
+
+def assert_inside_scratch(path: str) -> None:
+    """Refuse to touch a file whose RESOLVED path is outside the scratch root (CR-04).
+
+    resolve_target_or_die() realpaths the TARGET and refuses anything outside SCRATCH_ROOT, and
+    the module docstring calls that the single most important behaviour in the file. It was then
+    never applied again, and the write path does not go back through it:
+
+      * collect_folders() walks with os.walk, which correctly does not DESCEND symlinked
+        directories - but it still returns every matching FILE name, symlinks included.
+      * write_tags() calls handle.save(path, ...) and preserve_id3v1_trailer() opens `path`
+        r+b and seeks. Both FOLLOW a symlink and write to its target.
+
+    So one symlink under the scratch tree pointing at the real library defeated the fence
+    silently: the run reported a normal `changed` count and the NDJSON recorded the scratch
+    path, not the path that was actually written. A HARDLINK defeated it identically with no
+    symlink involved and nothing for os.walk to notice.
+
+    Reachability was reduced but not eliminated by how the tree happens to be built today (GNU
+    `cp -r` dereferences, so the reflinked copy contains regular files). Not eliminated,
+    because the source is unattended usenet content on a live tree with an inflow (DEF-03-01,
+    DEF-03-18) and because D-13 names this script as THE normalisation tool for later phases
+    that will point it at other trees. A fence whose correctness depends on how a caller
+    happened to create the tree is not a fence.
+
+    Called from two places, deliberately:
+      1. in the per-file loop, in BOTH modes, so the DRY RUN surfaces the refusal - the dry run
+         is the D-08 review artefact and a preview that silently omits a refusal is not one;
+      2. as the first statement of write_tags(), unconditionally, so no future caller can reach
+         a write without passing it.
+
+    Raises rather than exits, which routes the refusal into the .failed ledger - the behaviour
+    the rest of this file already establishes for a file it will not process. A refused file is
+    NEVER counted as unchanged.
+    """
+    root = os.path.realpath(SCRATCH_ROOT)
+    real = os.path.realpath(path)
+    if real != root and not real.startswith(root + os.sep):
+        raise RuntimeError(
+            f"refusing to touch a path that resolves outside {root}: "
+            f"{path} -> {real} (D-07)"
+        )
+    st = os.lstat(path)
+    if stat.S_ISLNK(st.st_mode):
+        raise RuntimeError(
+            f"refusing to write through a symlink: {path} -> {real}. A write here would land "
+            "on the target while the NDJSON recorded this path (D-07)"
+        )
+    if not stat.S_ISREG(st.st_mode):
+        raise RuntimeError(f"refusing to write a non-regular file: {path} (D-07)")
+    if st.st_nlink != 1:
+        raise RuntimeError(
+            f"refusing to write {path}: it has {st.st_nlink} hard links, so writing here also "
+            f"writes every other name for the same inode - and those names need not be under "
+            f"{root} (D-07)"
+        )
+
+
+# --------------------------------------------------------------------------------------------
 # Tag I/O. mutagen only, ID3 major version preserved, every other frame untouched.
 # --------------------------------------------------------------------------------------------
 
@@ -470,7 +545,11 @@ def preserve_id3v1_trailer(path: str, original: bytes | None) -> None:
     """
     if original is None:
         return
-    with open(path, "r+b") as fh:
+    # O_NOFOLLOW so this open cannot land on a symlink's target even if `path` became one
+    # between assert_inside_scratch() and here (CR-04). It is a backstop for a TOCTOU window,
+    # not the fence itself. Absent on some platforms, hence the getattr.
+    fd = os.open(path, os.O_RDWR | getattr(os, "O_NOFOLLOW", 0))
+    with os.fdopen(fd, "r+b") as fh:
         fh.seek(-128, os.SEEK_END)
         current = fh.read(128)
         if current[:3] != b"TAG":
@@ -517,7 +596,14 @@ def assert_frame_set_unchanged(path, before, changes: dict[str, str]) -> None:
 
 
 def write_tags(handle, path: str, changes: dict[str, str]) -> None:
-    """Write ONLY the fields in WRITABLE_FIELDS. Asserted, not assumed."""
+    """Write ONLY the fields in WRITABLE_FIELDS, and ONLY inside the scratch root.
+
+    Both are asserted, not assumed, and the fence is FIRST - before any byte can move. It is
+    also checked in the per-file loop so the dry run reports it, but this call is the one that
+    cannot be bypassed by a future caller (CR-04).
+    """
+    assert_inside_scratch(path)
+
     for field in changes:
         if field not in WRITABLE_FIELDS:
             raise AssertionError(f"refusing to write non-writable field {field!r}")
@@ -744,6 +830,30 @@ def main(argv=None) -> int:
         loaded = []
         for path in paths:
             counts["files_seen"] += 1
+            # CR-04: the D-07 fence, on the RESOLVED path, in BOTH modes. Runs here as well as
+            # inside write_tags() so the DRY RUN reports the refusal - the dry run is the D-08
+            # review artefact, and a preview that silently omits a file the apply would refuse
+            # is not a preview. A refusal is a .failed record, never a skip and never an
+            # "unchanged".
+            try:
+                assert_inside_scratch(path)
+            except Exception as exc:  # noqa: BLE001 - routed to the ledger, never swallowed
+                counts["failed"] += 1
+                log.error("fence refused %s: %s", path, exc)
+                if failed_fh:
+                    failed_fh.write(
+                        json.dumps(
+                            {
+                                "path": path,
+                                "stage": "fence",
+                                "exception": type(exc).__name__,
+                                "detail": str(exc)[:400],
+                            }
+                        )
+                        + "\n"
+                    )
+                    failed_fh.flush()
+                continue
             try:
                 handle, values = read_tags(path)
             except Exception as exc:  # noqa: BLE001 - routed to the ledger, never swallowed
