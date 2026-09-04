@@ -19,8 +19,10 @@
 #   --class  A label for the output filenames, e.g. single-disc / multi-disc. Default "unclassed".
 #   --mbid   Pin the MusicBrainz release. Held CONSTANT across the three tags of one disc class.
 #   --yes    Pass wrtag's -yes, accepting a low-score match.
-#   --self-test  Run the $SRC/$LIB fence against a table of known-good and known-bad paths and
-#            exit. Touches nothing, needs no docker, and is the regression check for CR-01.
+#   --self-test  Run the $SRC/$LIB fence against a table of known-good and known-bad paths, and
+#            run instrument 2's manifest comparison against identical / differing / missing /
+#            unreadable inputs, then exit. Needs no docker and writes only under $TMPDIR. It is
+#            the regression check for CR-01 and WR-13.
 #
 #   The three tags are three invocations of ONE script, not three scripts. That is the point:
 #   if the arms differed in any other way the comparison would be measuring the difference
@@ -93,6 +95,14 @@
 #        outcome and never as "0 files newer than the stamp" - CLAUDE.md § Health Checks.
 #     4. A WHOLE-SUBTREE MANIFEST DIFF over all of $SRC and $LIB must be empty, on both a
 #        `%p %s %T@` listing and a sha256sum of every file.
+#
+#        IT MUST ALSO HAVE BEEN ABLE TO COMPARE (WR-13). `diff` exits 0 identical, 1 differing
+#        and >=2 ON TROUBLE - a missing or unreadable manifest - and on trouble it writes to
+#        stderr and leaves STDOUT EMPTY. Read as `d="$(diff ... || true)"; [ -z "$d" ]`, that
+#        empty stdout was reported as "identical before and after". Both manifests are now
+#        asserted present, regular and readable first, diff's exit status is read rather than
+#        swallowed, and >=2 is a COULD NOT LOOK outcome - non-green, non-zero - exactly as
+#        control 3 does. CLAUDE.md § Health Checks.
 #
 #   Instrument 4 exists because instrument 3 alone is the weakest evidence in this phase: it
 #   passes a tool that preserves mtimes, and it passes any write that lands outside whatever
@@ -168,7 +178,8 @@ usage() {
   say "  --class  Label used in the output filenames. Default: $CLASS"
   say "  --mbid   Pin the MusicBrainz release; held constant across the three tags of a class."
   say "  --yes    Pass wrtag's -yes (accept a low-score match)."
-  say "  --self-test  Exercise the \$SRC/\$LIB fence and exit. No docker, writes nothing."
+  say "  --self-test  Exercise the \$SRC/\$LIB fence and instrument 2's manifest comparison, then"
+  say "               exit. No docker; writes only under \$TMPDIR."
   say ""
   say "  env: WRTAG_IMAGE, WRTAG_YAML, SRC, LIB, OUT, MANIFESTS,"
   say "       SRC_ALLOW_PREFIX, LIB_ALLOW_PREFIX"
@@ -274,7 +285,107 @@ fence_eval() { # $1 = given path  $2 = allow prefix  $3 = required path componen
   return 0
 }
 
-# --- Regression check for CR-01 --------------------------------------------------------------
+# --- Instrument 2's comparison primitive (WR-13) ----------------------------------------------
+# WR-13. "COULD NOT COMPARE" IS NOT "IDENTICAL", AND IT IS NOT A PASS.
+#
+# This used to be `d="$(diff "$b" "$a" || true)"` followed by `[ -z "$d" ] && ok "identical"`.
+# `diff` exits 0 when the files match, 1 when they differ, and >=2 ON TROUBLE - a manifest that
+# was never written, one removed under it, an EACCES, a directory where a file was expected. On
+# trouble it writes the reason to STDERR and leaves STDOUT EMPTY, so `|| true` swallowed the
+# status and the emptiness test read the failure as "identical before and after" - a green tick
+# on the instrument this script's header calls the strong one. With CR-02 unfixed, both
+# wrote-nothing instruments could pass vacuously in the same run.
+#
+# Factored out of the reporting wrapper so `--self-test` can drive all three outcomes over real
+# files without docker and without running an arm.
+#
+# Returns 0 = identical, 1 = differs (DIFF_OUT holds the diff), 2 = COULD NOT COMPARE
+# (DIFF_WHY holds the reason). 2 is deliberately a distinct return value rather than folded into
+# 1: the caller reports the two differently because they are different findings, and only one of
+# them is about wrtag.
+DIFF_OUT=""
+DIFF_WHY=""
+manifest_compare() { # $1 = before file  $2 = after file
+  local b="$1" a="$2" f="" rc=0 errf="" err=""
+  DIFF_OUT=""
+  DIFF_WHY=""
+
+  # Assert the inputs BEFORE looking, the same order CR-02 uses for instrument 1. These do not
+  # replace reading diff's exit status - they name the failure precisely instead of leaving the
+  # reader with a bare "rc=2". Note that a `-r` test passes for root on a mode-000 file, so the
+  # status read below is the load-bearing half on LXC 100, where this script actually runs.
+  for f in "$b" "$a"; do
+    if [ ! -e "$f" ]; then
+      DIFF_WHY="manifest '$f' does not exist - it was never captured, or something removed it"
+      return 2
+    fi
+    if [ ! -f "$f" ]; then
+      DIFF_WHY="manifest '$f' is not a regular file"
+      return 2
+    fi
+    if [ ! -r "$f" ]; then
+      DIFF_WHY="manifest '$f' is not readable"
+      return 2
+    fi
+  done
+
+  # diff's stderr is captured rather than discarded: on rc>=2 it carries the only description of
+  # what went wrong, and it is quoted back to the operator.
+  errf="$(mktemp "${TMPDIR:-/tmp}/spike03-diff-XXXXXX")" || {
+    DIFF_WHY="could not create a temp file to capture diff's stderr"
+    return 2
+  }
+  DIFF_OUT="$(diff -- "$b" "$a" 2>"$errf")" || rc=$?
+  err="$(cat "$errf" 2>/dev/null || true)"
+  rm -f "$errf"
+
+  if [ "$rc" -ge 2 ]; then
+    DIFF_WHY="diff could not compare '$b' and '$a' (rc=$rc)"
+    [ -z "$err" ] || DIFF_WHY="$DIFF_WHY: $err"
+    return 2
+  fi
+  # rc 0 or 1, but diff still complained. Anything on stderr from a diff that claims to have
+  # succeeded is unexplained, and an unexplained instrument is not evidence.
+  if [ -n "$err" ]; then
+    DIFF_WHY="diff exited $rc but wrote to stderr, which is unexplained: $err"
+    return 2
+  fi
+  if [ "$rc" -eq 1 ]; then
+    return 1
+  fi
+  # Belt and braces: rc 0 with output on stdout should be impossible. If it ever happens the
+  # files are not known to match, so do not claim they do.
+  if [ -n "$DIFF_OUT" ]; then
+    DIFF_WHY="diff exited 0 but printed a difference, which is unexplained"
+    return 2
+  fi
+  return 0
+}
+
+# Self-test helper for the above. Kept beside manifest_compare so the two are read together and
+# a future edit to one is not made without seeing the other. Always returns 0 and accumulates
+# into MC_FAIL, so a failing case reports rather than aborting the remaining cases.
+MC_FAIL=0
+mc_check() { # $1 = expected: identical|differs|couldnotlook   $2 = before  $3 = after  $4 = desc
+  local want="$1" b="$2" a="$3" desc="$4" rc=0 got=""
+  manifest_compare "$b" "$a" || rc=$?
+  case "$rc" in
+    0) got="identical" ;;
+    1) got="differs" ;;
+    *) got="couldnotlook" ;;
+  esac
+  if [ "$got" = "$want" ]; then
+    ok "$got (expected): $desc"
+    [ "$got" != "couldnotlook" ] || say "        reason: $DIFF_WHY"
+    return 0
+  fi
+  bad "INSTRUMENT 2 REGRESSION: expected $want, got $got: $desc"
+  [ "$got" != "couldnotlook" ] || bad "        reason: $DIFF_WHY"
+  MC_FAIL=$((MC_FAIL + 1))
+  return 0
+}
+
+# --- Regression check for CR-01 and WR-13 -----------------------------------------------------
 self_test() {
   local fails=0 rc=0 expect given prefix need desc got td
   say ""
@@ -325,12 +436,59 @@ CASES
   rm -f "$td/root/spike-03/escape"
   rmdir "$td/root/spike-03" "$td/root" "$td/outside" "$td" 2>/dev/null || true
 
+  # --- Instrument 2's manifest comparison (WR-13) --------------------------------------------
+  # Driven over REAL files rather than a table of strings, because the defect is in what `diff`
+  # does with inputs it cannot read - which cannot be simulated with a string.
+  local mt=""
+  say ""
+  say "== spike03-wrtag-arms.sh --self-test: instrument 2's manifest comparison (WR-13) =="
+  rule
+  MC_FAIL=0
+  mt="$(mktemp -d "${TMPDIR:-/tmp}/spike03-manifest-XXXXXX")"
+
+  printf 'a/one.mp3\t1\t1.0\na/two.mp3\t2\t2.0\n' > "$mt/before.meta"
+  cp "$mt/before.meta" "$mt/after.meta"
+  mc_check identical "$mt/before.meta" "$mt/after.meta" \
+    "IDENTICAL manifests - the green case, which must still be green."
+
+  printf 'a/one.mp3\t1\t1.0\na/two.mp3\t2\t2.0\na/three.mp3\t3\t3.0\n' > "$mt/after.meta"
+  mc_check differs "$mt/before.meta" "$mt/after.meta" \
+    "DIFFERING manifests - a file appeared, so the dry run was not dry."
+
+  mc_check couldnotlook "$mt/absent.meta" "$mt/after.meta" \
+    "MISSING BEFORE - the exact WR-13 defect. diff exits 2, writes to stderr and leaves stdout
+        empty, and the old \`\$(diff ... || true)\` read that empty stdout as 'identical'."
+  mc_check couldnotlook "$mt/before.meta" "$mt/absent.meta" \
+    "MISSING AFTER - the same defect from the other side."
+
+  mkdir -p "$mt/adirectory.meta"
+  mc_check couldnotlook "$mt/before.meta" "$mt/adirectory.meta" \
+    "A DIRECTORY where a manifest should be. Unlike mode 000 below, this case is constructible
+        as root, so it still runs on LXC 100 where this script is actually used."
+
+  if [ "$(id -u)" = "0" ]; then
+    warn "SKIPPED as root: an UNREADABLE manifest (mode 000)."
+    say  "        root bypasses the read permission bit, so the case cannot be constructed here -"
+    say  "        reported rather than silently counted as a pass (CLAUDE.md § Health Checks). It"
+    say  "        runs as a non-root user; and the rc>=2 branch catches an EACCES on any host,"
+    say  "        which is what makes the instrument sound where the \`-r\` test cannot be."
+  else
+    cp "$mt/before.meta" "$mt/noread.meta"
+    chmod 000 "$mt/noread.meta"
+    mc_check couldnotlook "$mt/noread.meta" "$mt/after.meta" \
+      "An UNREADABLE manifest (mode 000)."
+    chmod 644 "$mt/noread.meta"
+  fi
+
+  if [ -d "$mt" ]; then rm -rf "$mt"; fi
+  fails=$((fails + MC_FAIL))
+
   say ""
   if [ "$fails" -ne 0 ]; then
-    bad "self-test: $fails fence case(s) FAILED"
+    bad "self-test: $fails case(s) FAILED"
     return 1
   fi
-  ok "self-test: every fence case behaved as expected"
+  ok "self-test: every fence and instrument-2 case behaved as expected"
   return 0
 }
 
@@ -563,16 +721,31 @@ fi
 manifest "$SRC" src after
 manifest "$LIB" lib after
 
+# WR-13. The comparison itself is manifest_compare(), defined beside the fence near the top of
+# this file so `--self-test` can drive all three of its outcomes without docker. This is only
+# the reporting half: 0 identical, 1 differs, >=2 COULD NOT COMPARE. The last is reported in the
+# same vocabulary CR-02 gave instrument 1, so the two instruments read consistently and neither
+# can be mistaken for the other.
 diff_manifest() { # $1 = label  $2 = kind (meta|sha)
-  local b="$MANIFESTS/${ARM}.$1.before.$2" a="$MANIFESTS/${ARM}.$1.after.$2" d
-  d="$(diff "$b" "$a" || true)"
-  if [ -z "$d" ]; then
-    ok "instrument 2 (${1}.${2} manifest): identical before and after"
-    return 0
-  fi
-  bad "instrument 2 (${1}.${2} manifest): CHANGED - the dry run was not dry:"
-  printf '%s\n' "$d" | head -n 40 | sed 's/^/         /'
-  return 1
+  local b="$MANIFESTS/${ARM}.$1.before.$2" a="$MANIFESTS/${ARM}.$1.after.$2" rc=0
+  manifest_compare "$b" "$a" || rc=$?
+  case "$rc" in
+    0)
+      ok "instrument 2 (${1}.${2} manifest): identical before and after"
+      return 0
+      ;;
+    1)
+      bad "instrument 2 (${1}.${2} manifest): CHANGED - the dry run was not dry:"
+      printf '%s\n' "$DIFF_OUT" | head -n 40 | sed 's/^/         /'
+      return 1
+      ;;
+    *)
+      bad "instrument 2 (${1}.${2} manifest) COULD NOT LOOK: $DIFF_WHY"
+      bad "  This is NOT a pass. 'could not look' is a distinct outcome from 'nothing changed'"
+      bad "  (CLAUDE.md § Health Checks), and the wrote-nothing claim is UNPROVEN for this arm."
+      return 1
+      ;;
+  esac
 }
 
 diff_manifest src meta || FAILED=1
