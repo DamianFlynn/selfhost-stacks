@@ -252,8 +252,23 @@ import urllib.request
 # --------------------------------------------------------------------------------------------
 
 # The two plugins whose absence would silently zero the measurement. TAGR-05 plus plan 03-04's
-# second instance of the same symptom.
+# second instance of the same symptom. This is the DEFAULT and it is unchanged: every Discogs
+# cell still refuses to run unless BOTH plugins actually built.
 REQUIRED_PLUGINS = ("discogs", "musicbrainz")
+
+# Plan 03-07 runs a four-cell matrix, and two of those cells are MB-ONLY BY CONSTRUCTION - they
+# exist to answer whether normalisation helps independently of source, which the Discogs number
+# alone cannot. For those cells `discogs` is deliberately absent from the config's `plugins:`
+# line, so the default gate above would refuse a run that is behaving exactly as designed.
+#
+# The gate is therefore PARAMETERISED, not weakened. `--require-plugin` is repeatable and
+# defaults to REQUIRED_PLUGINS, so:
+#   * every existing invocation keeps the full two-plugin gate with no change in behaviour;
+#   * an MB-only cell must STATE its narrower expectation explicitly on the command line
+#     (`--require-plugin musicbrainz`), so the weaker gate is visible in the run transcript
+#     rather than silently inferred from the config.
+# The failure this gate exists to catch - a plugin that raised while building, presenting as
+# "no match found" - is still caught for whichever plugins the caller names.
 
 REQUIRED_ENV = ("SPIKE_CONFIG", "SPIKE_DB", "DISCOGS_USER_TOKEN")
 
@@ -468,8 +483,12 @@ def require_env() -> dict[str, str]:
     return env
 
 
-def bootstrap_beets(env: dict[str, str]):
+def bootstrap_beets(env: dict[str, str], required_plugins=REQUIRED_PLUGINS):
     """Configure beets EXPLICITLY, never by default, then load and verify the plugins.
+
+    `required_plugins` defaults to REQUIRED_PLUGINS, so every caller that does not pass it keeps
+    the full two-plugin gate unchanged. Plan 03-07's MB-only cells pass a narrower set because
+    `discogs` is absent from their config BY DESIGN.
 
     Pitfall 1: a bare `beet` invocation opens and migrates the DEFAULT library - it did exactly
     that in Phase 1, writing 11 `.bak` files beside the real database. Both paths are therefore
@@ -499,7 +518,7 @@ def bootstrap_beets(env: dict[str, str]):
     # `plugins:` line, and it is authoritative for the same reason: `_get_plugin` returns None for
     # a plugin that raised during construction, so `find_plugins()` lists only the ones that
     # actually built. NOT the presence of a `config -d` block, which proves nothing (03-04).
-    missing = [p for p in REQUIRED_PLUGINS if p not in loaded]
+    missing = [p for p in required_plugins if p not in loaded]
     if missing:
         sys.stderr.write(
             colour(
@@ -828,6 +847,16 @@ def parse_args(argv):
             "fires INSIDE a blocking 429 backoff sleep; a loop-top check cannot"
         ),
     )
+    p.add_argument(
+        "--require-plugin",
+        action="append",
+        dest="require_plugin",
+        metavar="NAME",
+        help="beets plugin that MUST appear in plugins.find_plugins() or the run is refused. "
+        "Repeatable. Defaults to " + " + ".join(REQUIRED_PLUGINS) + ". Narrow it only for a "
+        "cell that omits a plugin BY DESIGN (03-07's MB-only cells), never to work around a "
+        "plugin that failed to build",
+    )
     p.add_argument("--user-agent", default=DEFAULT_USER_AGENT, help="UA for the identity probe only")
     p.add_argument("--verbose", action="store_true", help="DEBUG on the root logger too")
     return p.parse_args(argv)
@@ -861,7 +890,8 @@ def main(argv=None) -> int:
         sys.stderr.write(colour(f"REFUSING TO RUN: --folder-meta unusable: {exc}\n", RED))
         return 2
 
-    config, loaded = bootstrap_beets(env)  # refusal 1
+    required_plugins = tuple(args.require_plugin) if args.require_plugin else REQUIRED_PLUGINS
+    config, loaded = bootstrap_beets(env, required_plugins)  # refusal 1
     identity = discogs_identity_probe(env["DISCOGS_USER_TOKEN"], args.user_agent)  # refusal 2
 
     index_tracks = bool(config["discogs"]["index_tracks"].get())
@@ -902,6 +932,8 @@ def main(argv=None) -> int:
         f"  spike config:      {env['SPIKE_CONFIG']}\n"
         f"  spike library:     {env['SPIKE_DB']} (exists={db_before['exists']}, never opened)\n"
         f"  plugins loaded:    {', '.join(loaded)}\n"
+        f"  plugins REQUIRED:  {', '.join(required_plugins)}"
+        f"{'' if tuple(required_plugins) == REQUIRED_PLUGINS else colour('  <-- NARROWED from ' + ' + '.join(REQUIRED_PLUGINS), YELLOW)}\n"
         f"  discogs.index_tracks / search_limit: {index_tracks} / {search_limit}\n"
         f"  discogs identity:  HTTP {identity['status']} as {identity['username']}\n"
         f"  x-discogs-ratelimit: {identity['ratelimit']} "
