@@ -84,16 +84,16 @@ selected rather than measured.
 
 | album_slot | album | front_end | went_first | wall_clock_s | interventions | context_switches | outcome | stuck_points |
 |---|---|---|---|---|---|---|---|---|
-| clean-1 | Taylor Swift — *1989 (Taylor's Version)* | beets-terminal | yes | 30 | 1 | 1 | tagged | |
-| clean-1 | Taylor Swift — *1989 (Taylor's Version)* | beets-flask | no | | | | | |
-| clean-2 | Garth Brooks — *Ropin' The Wind* | beets-terminal | no | | | | | |
-| clean-2 | Garth Brooks — *Ropin' The Wind* | beets-flask | yes | | | | | |
-| hard-va-compilation | *Now That's What I Call Music 116* | beets-terminal | yes | | | | | |
-| hard-va-compilation | *Now That's What I Call Music 116* | beets-flask | no | | | | | |
-| hard-flat-multidisc | Lady Gaga — *Born This Way: The Collection* | beets-terminal | no | | | | | |
-| hard-flat-multidisc | Lady Gaga — *Born This Way: The Collection* | beets-flask | yes | | | | | |
-| dj-no-match | *Mastermix Crate 068–070* (2025) | beets-terminal | yes | | | | | |
-| dj-no-match | *Mastermix Crate 068–070* (2025) | beets-flask | no | | | | | |
+| clean-1 | Taylor Swift — *1989 (Taylor's Version)* | beets-terminal | yes | 30 | 1 | 1 | imported | *(operator wrote outcome `tagged`; reconciled in AMENDMENT B-2. 21/21 files verified on disk)* |
+| clean-1 | Taylor Swift — *1989 (Taylor's Version)* | beets-flask | no | not measured | not measured | not measured | imported | 88% preview was already waiting before the operator looked; 21 → 21, nothing dropped |
+| clean-2 | Garth Brooks — *Ropin' The Wind* | beets-terminal | no | not run | not run | not run | not run | not run — operator decision (AMENDMENT B-3) |
+| clean-2 | Garth Brooks — *Ropin' The Wind* | beets-flask | yes | not measured | not measured | not measured | imported | **full-page `TypeError` crash reproduced on this album**, 2 browsers. Operator, verbatim: *"this is what i see if i move fast"*. 10 → 10 |
+| hard-va-compilation | *Now That's What I Call Music 116* | beets-terminal | yes | not run | not run | not run | not run | not run — operator decision (AMENDMENT B-3) |
+| hard-va-compilation | *Now That's What I Call Music 116* | beets-flask | no | not measured | not measured | not measured | imported | 86%; 47 → 47, 3 non-audio correctly ignored. The 46-distinct-artist case cost nothing |
+| hard-flat-multidisc | Lady Gaga — *Born This Way: The Collection* | beets-terminal | no | not run | not run | not run | not run | not run — operator decision (AMENDMENT B-3) |
+| hard-flat-multidisc | Lady Gaga — *Born This Way: The Collection* | beets-flask | yes | not measured | not measured | not measured | imported | **75% accepted → 9 of 31 audio files silently dropped and 4 tracks mis-tagged onto different songs**, while the UI asserted *"All tracks on disk found online"*. Crash also reproduced here. `UNDO IMPORT` verified working |
+| dj-no-match | *Mastermix Crate 068–070* (2025) | beets-terminal | yes | not run | not run | not run | not run | not run — operator decision (AMENDMENT B-3) |
+| dj-no-match | *Mastermix Crate 068–070* (2025) | beets-flask | no | not measured | not measured | not measured | imported | Picker's best offer was a **44% wrong** match. `bootleg` instead: one `mv`, zero candidate decisions, 3 correct albums, 60/60 covers and 60/60 `TBPM` — but **no `track` tag at all** |
 
 **The five slots, per D-10:** 2 clean mainstream (`clean-1`, `clean-2`), 2 hard shapes — one
 various-artist compilation (`hard-va-compilation`) and one flat multi-disc set
@@ -222,7 +222,230 @@ single-track albums — and judge whether the UI gave you any warning that that 
 
 ---
 
+## AMENDMENT B — 2026-09-04, after the trial: what was measured and what was not
+
+Added by plan 03-10 Task 3 **close**. **Nothing above this line was altered except the ten rows'
+measurement cells.** The definitions, the wall-clock rule, the permitted `outcome` values, the
+ordering control, the pre-assigned `went_first` alternation and AMENDMENT A are unchanged and
+remain byte-identical to threshold commit `137b6d9e92cb44d9c6a48b3963bb33fe0194622f` for every
+line above § *The sheet*. The `TBD` provenance paragraph is again left verbatim.
+
+The operator ran the trial personally on 2026-09-04 and declared it complete. **This section is
+written by the executor as scribe, not as instrument.** Where a number was not taken, the cell
+reads `not measured` and the reason is below. No timing was synthesised, averaged or proxied.
+
+### B-1. The two counters the trial did not produce, and why that is recorded rather than filled
+
+**`wall_clock_s` and `interventions` were not systematically recorded by the operator**, on any
+row except `clean-1`/terminal. The trial became decisive on a *defect* rather than on a stopwatch
+— see B-4 — and the operator stopped counting once it did.
+
+Those cells therefore read **`not measured`**, not `0` and not an estimate. This sheet exists
+because the phase's whole premise is that this pipeline was built three times on unverified
+assumptions; **a fabricated ergonomics figure would be worse than an absent one**, and it would be
+undetectable afterwards. The qualitative observations in `stuck_points` stand in their place and
+are the raw material the criterion 8 verdict is actually built from.
+
+One timing does exist and is deliberately **not** entered in `wall_clock_s`: the `bootleg` run
+self-reported *"Imported 39 seconds ago"* on completion. That is a **tool-reported import
+duration**, which is a different quantity from this sheet's wall-clock rule (*"start the clock when
+the operator first looks at the album"*). Recording it in that column would have redefined the
+measurement to fit the number available. It is recorded here instead.
+
+### B-2. The operator's `clean-1` row is preserved, and its `outcome` value reconciled visibly
+
+The operator's own numbers — **`30` / `1` / `1`** — are preserved exactly and are the only
+operator-authored measurements in this sheet.
+
+The operator entered outcome **`tagged`**. That is **not one of the four permitted values** fixed
+before the run (`imported` / `as-is` / `skipped` / `abandoned`). The cell now reads **`imported`**,
+which is what was verified on disk: 21 of 21 files landed at
+`/mnt/fast/spike-03/beets-config/library/Taylor Swift/1989 (Taylor's version)`, the diff being
+punctuation and case only (`Taylor's Version` → `Taylor's version`, `To` → `to`).
+
+**The original word is kept rather than silently corrected, because it is itself data.** On an arm
+whose entire interaction was pressing `A` on an 87.7% match, an operator describing the result as
+*"tagged"* rather than *"imported"* is an ergonomics observation: the terminal arm did not leave
+them confident that an import had happened. That reading is offered, not asserted.
+
+### B-3. Four terminal rows read `not run`, and that is an operator decision, not a gap
+
+`clean-2`, `hard-va-compilation`, `hard-flat-multidisc` and `dj-no-match` were **never run through
+the terminal arm.** The operator stopped after the flask arm's behaviour made the comparison
+decisive.
+
+`not run` is **deliberately outside** the permitted `outcome` set. That is the point: those rows
+are not measurements with a missing value, they are rows that never happened, and collapsing them
+into `skipped` or `abandoned` would misreport a decision not to measure as a measured outcome.
+
+**What this costs, stated plainly.** The sheet is **1 of 5 albums** on the terminal arm and 5 of 5
+on the flask arm. **No paired cross-arm comparison exists on four of the five albums**, so this
+sheet does not support any quantitative claim that one front end is faster than the other. It
+never will now.
+
+**And what it does to the ordering control.** The alternation was not altered — but it was only
+*exercised* on `clean-1`, where terminal ran first and flask second. On the other four albums the
+flask arm ran with no prior pass over that album, so it took **no** second-pass familiarity
+advantage there. On `clean-1` it did. Read in the flask arm's favour on four rows and against it
+on one; either way the control cannot do the job it was designed for with one paired row.
+
+### B-4. What actually decided it — recorded here because it is not a number
+
+Three findings, all verified against LXC 100 on disk rather than read off the UI, and all
+re-verified independently at close:
+
+1. **The interactive picker cannot be relied on to import.** An intermittent full-page
+   `TypeError` / *"Load failed"* crash, root-caused to a CORS-blocked third-party cover-art fetch
+   with **no error boundary** around a cosmetic thumbnail. Reproduced on 2 albums across 2
+   browsers. **The backend logged zero errors.** Intermittent is the worse finding: the operator
+   cannot tell in advance whether a run is safe.
+2. **`hard-flat-multidisc` imported silently and catastrophically wrong.** Accepted at 75%:
+   **31 source files → 22 imported, 9 audio files dropped with no warning**, and 4 tracks written
+   onto entirely different songs. **Re-verified at close:** `bf-clean/Lady Gaga/Born This Way`
+   holds 22 files; the four titles beets wrote — `Born This Way (The Country Road version)`,
+   `Judas (DJ White Shadow remix)`, `Marry the Night (Zedd remix)`,
+   `Fashion of His Love (Fernando Garibay remix)` — **exist nowhere in the 31-file source folder**,
+   and their durations (245 / 238 / 244 / 231 s) match four *different* source tracks
+   (`Born This Way (Twin Shadow Remix)`, `Judas (Hurts Remix)`,
+   `Marry The Night (The Weekend & Illangelo Remix)`, `You And I (Wild Beasts Remix)`). The last is
+   a different song entirely. On that same screen the UI asserted *"All tracks on disk found
+   online"* **and** *"All tracks online present on disk"*. Both false.
+   **Bounded, not endemic** — re-verified at close: Taylor Swift 21→21, Garth Brooks 10→10,
+   Now 116 47→47, **zero dropped**. The failure is specific to the flattened-two-releases shape.
+3. **`bootleg` on a well-tagged DJ folder is the best result either arm produced.** Re-verified at
+   close: 3 albums × 20 files, **`APIC` 60/60**, **`TBPM` 60/60**, `TALB` 60/60, `TCON` 60/60 —
+   on a folder 03-07 measured at **zero** strict Discogs candidates. **`TRCK` 0/60**: no track tag
+   at all, so playback order is undefined. And the same button shredded `Crate.071` into twenty
+   single-track albums in Task 2 purely because that folder's `album` tag was empty, **with no UI
+   signal distinguishing the two cases before the operator commits**.
+
+### B-5. Friction 5 remains NOT EXERCISED — and a good flask showing is not evidence against it
+
+Restated at close because this is exactly the point at which it would be tempting to forget.
+**Five albums against a 144-folder backlog cannot test "laggy past some hundred folders."** This
+was recorded in Task 1 and in `03-BEETS-FLASK.md` friction 5 **before any score existed**, and it
+is preserved unchanged. Nothing in this sheet is evidence either way about the real backlog.
+
+### B-6. Two asymmetries recorded in advance, now scored against
+
+Both were fixed in AMENDMENT A before any number existed, and both bit:
+
+1. **The watchdog pre-tags before the operator's clock starts.** All five albums showed scores
+   (88 / 75 / 88 / 44 / 86%) before the operator looked. So any wall-clock advantage the flask arm
+   *appears* to have is partly *"it started earlier"*, not *"it is quicker to drive"* — and since
+   `wall_clock_s` was not measured, **no wall-clock advantage is claimed here at all.**
+2. **The arms ran different beets versions** (2.13.1 terminal / 2.12.0 flask, pinned by rc6,
+   OD-2) with an asserted-identical plugin set. Axis two scores interaction, not match quality.
+   Note this cuts against reading finding B-4.2 as an indictment of *the front end*: a 22-track
+   mis-match is an **engine/candidate** behaviour that the front end then *misdescribed*. The
+   front-end failure is the false safety assertion, not the bad match.
+
+### B-7. Estate safety at close — re-verified, and one acceptance criterion that cannot be met
+
+| Assertion | Instrument | Result |
+|---|---|---|
+| All five trial sources intact | `find` per folder on LXC 100 | **169 audio files / 5 folders** — 60 + 31 + 47 + 21 + 10, matching the pre-trial stamp exactly |
+| `copy` not `move` | the above | every source folder still at its original count; `dj-no-match` moved *between inboxes* by design, not consumed |
+| Music freeze | `check-music-freeze.sh` **on LXC 100** | exit **0**, `tagger-class writers: 0`, `declared rw reaching Music: 0`, `FAILURES total: 0`, and `consumer-class writers: 1` (Jellyfin, D-21) — the last confirms it was a *sighted* run, per DEF-03-11 |
+| Music tree untouched by the trial | `find /mnt/tank/media/Music -newermt/-newerct '2026-09-04 09:00'` from atlantis | **0 / 0** |
+| Real backlog untouched | `find /mnt/tank/downloads/complete/nzb -newermt '2026-09-04 09:00'` | **0 files** |
+| `/` headroom (OD-1 floor 8 GiB) | `df -h /` | **34 G free of 126 G (72%)** |
+
+**The plan's `zfs diff tank/media/Music@pre-project` returns clean` criterion is unsatisfiable as
+written, and was already unsatisfiable before this trial began.** Run from atlantis it returns
+**2,674 lines, all of them `M`** — and `find /mnt/tank/media/Music | wc -l` is **2,674**, i.e. the
+diff covers the entire tree. That is the signature of Phase 1 plan 01-08's ownership normalisation
+(`CLAUDE.md`: *"`568:568` across all 2,674 entries … verified from the Proxmox host and by
+`zfs diff`"*) against a snapshot created **2026-08-18 13:08**, and it has been non-clean ever
+since. **Zero `+`, `-` or `R` entries** — nothing created, deleted or renamed. The assertion the
+criterion was reaching for holds on a better instrument: 0 files under Music have an mtime or
+ctime inside the trial window. Logged as **DEF-03-19**.
+
+---
+
 ## Criterion 8 — the week-six verdict
 
-*To be written by the operator, in their own words, after the trial. Record the `stuck_points` that
-produced it beside it.* **"It works" is not the finding — "it works and I will still open it" is.**
+**Provenance of this section, stated first so it is not read as more than it is.** The operator ran
+the trial and declared it complete, but recorded exactly **one** contemporaneous verbatim
+`stuck_point`. The verdict below is therefore **assembled by the executor from verified
+observations**, quoting the operator where the record quotes them. It is written this way rather
+than left blank because the observations are strong and were verified on disk; it is labelled this
+way because **a verdict in the operator's voice that the operator did not author would be the one
+outcome this sheet exists to prevent.** The operator should replace or countersign the closing
+paragraph in their own words before plan 03-11 closes axis two. T3 is recorded in
+`03-DECISION.md` on exactly that basis.
+
+The operator's one verbatim, on being asked to read the flask arm's diff modal before the page
+crashed:
+
+> **"this is what i see if i move fast"**
+
+### The question, and the answer the trial supports
+
+The question is not *"does it work"* — it is *"is this the combination I will still open in week
+six"*.
+
+**On the evidence collected, the beets-flask rc6 interactive picker is not that combination, and
+the reason is not ergonomics.** It is that the arm produced, on a five-album trial, a **silent
+9-file loss with 4 tracks mis-written onto different songs, underneath a UI that explicitly
+asserted nothing was missing.** A front end whose job is to let a human review a match, and which
+makes a false falsifiable safety claim on the one album where the match was wrong, has failed at
+the thing it exists for. Add an intermittent full-page crash on a cosmetic thumbnail fetch that
+the backend never logs, and the honest reading is that **rc6 is not yet a tool to point at 144
+folders of irreplaceable content.** "Still in RC after eight months" stops being a version number
+and becomes the finding.
+
+**What is genuinely better in the flask arm, and should not be lost when rc6 is set aside:**
+
+- **`UNDO IMPORT` works — verified reversal.** This contradicts a standing project constraint
+  (`CLAUDE.md`: *"beets has no `undo` command — verified against the live CLI"*) and Phase 1 had to
+  pair `library.db` backups with ZFS snapshots to get reversibility at all. **Plan 03-11 must pick
+  this up**; it is the single most useful thing the trial found.
+- **Per-folder persistent `Tagged`/`Imported` badges** — exactly the resume signal a 144-folder
+  bulk run needs, which is the abandoned-halfway failure mode this project exists to prevent.
+  The terminal arm needs `importsource` plus a query to answer the same question. **But** the
+  Lady Gaga folder was badged `Imported` while 9 files short and 4 tracks wrong, so the badge
+  cannot be trusted as a completion signal — and `DELETE IMPORTED FOLDERS` is keyed on it.
+- **`copy` only, never `move`** — rc6 *cannot* do the dangerous thing the estate's real beets
+  config (`import.move: yes`) currently does.
+- **The track-diff modal and the `asis` expanded view** are materially better than the terminal
+  arm dumping 21 tracks inline; the expanded view is what revealed `hard-flat-multidisc` as two
+  flattened releases at a glance.
+- **The UI editorialises match quality** — *"Really? This is what you're going with?"* on the 44%
+  DJ match. On a collection where 03-07 measured **1 in 6** strict matches as wrong, that is a real
+  safety affordance the terminal arm has no equivalent of.
+
+**And the best single result either arm produced was not the picker at all.** `bootleg` on a
+well-tagged DJ folder: one `mv`, zero candidate decisions, three correct albums, 60/60 covers,
+60/60 `TBPM`, on content Discogs cannot match. That is the shape of the answer for ~76% of this
+backlog. It is also unguarded — the same button destroys a folder whose `album` tag is empty, and
+**~40% of sampled Mastermix folders carry the bare, useless `album=Mastermix`**, so the Crate
+068–070 success is **not representative**. `bootleg` is a fast path for already-correctly-grouped
+content, which is precisely PROJECT.md's *normalise first, then import* sequencing.
+
+### T3 — will the operator sit at the interactive prompt?
+
+**Not answered by this trial, and the sheet says so rather than inferring it.** The terminal arm
+ran on **one** album, where the operator pressed `A` on an 87.7% match: 30 s, 1 intervention, 1
+context switch, and they described the result as *"tagged"*. **One happy-path album is not a test
+of whether someone will sit at a prompt for 144 folders** — D-09 asks for a self-assessment after
+a hands-on trial, and the hands-on trial that happened was mostly of the other arm.
+
+What the trial *does* establish is narrower and still useful: **the operator's tolerance was
+exhausted by defects, not by the prompt.** They stopped running the terminal arm because the flask
+arm had already decided the comparison, not because the prompt was unbearable.
+
+### The one-line verdict, with its confidence stated
+
+**Scribe-assembled, pending the operator's own words:** *axis two does not select beets-flask rc6's
+interactive picker — it fails the review job it exists for, silently. It does surface four
+affordances worth carrying forward (working undo, per-folder resume state, `copy`-only,
+`bootleg`), and it leaves T3 open, because a one-album terminal arm did not test the prompt.*
+
+**Confidence boundaries, so this is not over-read:**
+
+- **Not** a wall-clock or intervention-count finding — neither was measured on 9 of 10 rows.
+- **Not** evidence about the 144-folder case (friction 5, `NOT EXERCISED`).
+- **Not** a finding about the beets *engine*: the 22-track mis-match is candidate behaviour, and
+  the arms ran different beets versions (OD-2). The front-end failure is the false safety claim.
+- **Not** a paired comparison: 1 terminal row against 5 flask rows.

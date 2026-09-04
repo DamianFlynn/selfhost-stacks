@@ -3,7 +3,7 @@ phase: 03-tagger-spike
 plan: 10
 subsystem: axis-two-ergonomics
 tags: [beets-flask, rc6, checkpoint, criterion-7, criterion-8, TAGR-06, D-09, D-10, D-11, OD-2, T3, A4]
-status: HALTED — blocking checkpoint:human-action, Task 3 of 3 (operator must run the trial)
+status: COMPLETE — 3 of 3 tasks; the operator ran the trial and criteria 7/8 are recorded, T3 left open by design
 requires:
   - "03-02 — the empty ergonomics sheet with its counting definitions and alternation fixed before the trial"
   - "03-07 — T1 FIRED at 27.08%, T2 did not fire, and the loose-fail set the fifth album is drawn from"
@@ -14,11 +14,17 @@ provides:
   - ".planning/phases/03-tagger-spike/03-BEETS-FLASK.md — criterion 7 complete: RC acknowledgement, all eight frictions checked against observation plus a ninth found here, the bootleg finding, the axis-two scope statement, and the trial staging record"
   - "the axis-two scope statement: it compares a policy architecture (preview/auto/bootleg) as well as a front end"
   - "a staged, asserted, one-command-to-start ergonomics trial with the five albums named and reflinked"
-  - "DEF-03-11 and DEF-03-12"
+  - ".planning/phases/03-tagger-spike/03-ERGONOMICS-SHEET.md — ten rows recorded from the operator's trial, the criterion 8 verdict, and AMENDMENT B stating exactly which cells were never measured"
+  - "03-DECISION.md criteria 7/8 result cells filled; criterion 4's beets-flask row CONFIRMED AND BOUNDED; T3 recorded PARTIAL / NOT ANSWERED"
+  - "DEF-03-11 through DEF-03-19"
 affects:
-  - "03-11 — axis two and T3 stay PENDING until the operator runs the trial; teardown must never pass --remove-orphans"
-  - "Phase 9 — the laggy-past-some-hundred-folders limit against the 144-folder backlog, recorded as a handoff the 5-album trial cannot test"
-  - "criterion 4 — the bootleg row must now say what bootleg actually does to untagged content"
+  - "03-11 — axis two can now be closed against measured evidence, but T3 must first be obtained from the operator in their own words; teardown must never pass --remove-orphans"
+  - "03-11 — must settle the 151-vs-144 denominator (DEF-03-18) and stop asserting `zfs diff` returns clean (DEF-03-19)"
+  - "CLAUDE.md / PROJECT.md — the standing constraint 'beets has no undo command' is narrower than it reads: beets-flask rc6 has a working, verified UNDO IMPORT. 03-11 should pick this up"
+  - "Phase 6/7 — an import gate must assert source audio count == imported item count (DEF-03-14); no loss-detecting gate can see a correct-shaped wrong value"
+  - "Phase 9 — the laggy-past-some-hundred-folders limit against the 144-folder backlog, still NOT EXERCISED after the trial"
+  - "criterion 4 — the bootleg row now says what bootleg does to untagged content, measured twice with opposite outcomes"
+  - "Phase 4 research — mastermixdj.com is canonical for ~76% of the backlog in plain HTML (DEF-03-17), which may displace both the Discogs path and the planned VLM cover-scan extraction for Mastermix content"
 tech-stack:
   added:
     - "metasauce/beets-flask:v2.0.0-rc6 (throwaway spike container, loopback-bound, reaped by 03-11)"
@@ -41,10 +47,16 @@ decisions:
   - "The bootleg inbox was exercised on VA-Mastermix.Crate.071 rather than on the trial's dj-no-match album, so the operator's Task 3 run is not a second pass"
   - "All five trial albums staged into the `preview` inbox, so both arms put the same decision in front of the operator; auto/bootleg reachable by moving a folder"
   - "The trial was NOT run by the agent. D-09 is explicit that the measurement is the operator's own"
+  - "wall_clock_s and interventions recorded as `not measured` on 9 of 10 rows rather than estimated. A fabricated ergonomics figure is undetectable afterwards and would defeat the sheet's purpose"
+  - "The bootleg run's tool-reported 39 s was deliberately NOT entered in wall_clock_s — it is an import duration, a different quantity from the sheet's operator-wall-clock rule"
+  - "The four unrun terminal rows read `not run`, deliberately outside the permitted outcome set, because they are rows that never happened rather than measurements with a missing value"
+  - "The operator's out-of-set outcome value `tagged` was reconciled to `imported` VISIBLY, keeping the original word because it is itself an ergonomics observation"
+  - "The criterion 8 verdict is labelled scribe-assembled and carries four confidence boundaries; T3 is recorded NOT ANSWERED rather than written in the operator's voice"
+  - "Nothing was torn down and no source folder was deleted; DELETE IMPORTED FOLDERS was never pressed or scripted"
 metrics:
-  tasks_completed: 2
+  tasks_completed: 3
   tasks_total: 3
-  commits: 5
+  commits: 9
 ---
 
 # Phase 3 Plan 10: Axis Two — The Front End Summary
@@ -53,18 +65,134 @@ metrics:
 here, the `bootleg` inbox exercised and bounded — and the timed trial staged to a one-command start
 and handed to the operator, because D-09 says the measurement is theirs.**
 
-## Status: 2 of 3 tasks complete, halted at a blocking human-action gate
+## Status: 3 of 3 tasks complete
 
 | Task | Type | Status |
 |---|---|---|
 | 1 — Operator acknowledges the release-candidate risk | `checkpoint:decision`, blocking | **COMPLETE** — answered `deploy-rc6`, recorded verbatim and dated, provably pre-deployment |
 | 2 — Deploy the throwaway instance, check the 8 frictions | `auto` | **COMPLETE** |
-| 3 — The operator runs the timed trial personally | `checkpoint:human-action`, blocking | **PREPARED AND HANDED OVER — awaiting the operator** |
+| 3 — The operator runs the timed trial personally | `checkpoint:human-action`, blocking | **COMPLETE** — the operator ran it and declared it complete; the executor recorded it as scribe |
 
-Task 3 is not agent-executable and was not simulated. The measurement *is* the operator's
+Task 3 was not agent-executable and was **not simulated**. The measurement *is* the operator's
 wall-clock, intervention count and annoyance; an agent driving the front ends would produce numbers
 that answer a different question, in a phase whose entire purpose is that this pipeline was built
-three times on unverified assumptions.
+three times on unverified assumptions. **The executor's role on close was scribe, not instrument**
+— and where the operator did not take a number, the cell says so.
+
+## Task 3: what the trial returned
+
+**The trial was decided by a defect, not by a stopwatch.** That shapes everything below.
+
+### The counters the sheet was built for were largely not collected
+
+| Cell | Rows filled | Recorded as |
+|---|---|---|
+| `wall_clock_s` | **1 of 10** (`clean-1`/terminal, **30 s**) | `not measured` elsewhere, with the reason |
+| `interventions` | **1 of 10** (`clean-1`/terminal, **1**) | `not measured` elsewhere |
+| `context_switches` | **1 of 10** (`clean-1`/terminal, **1**) | `not measured` elsewhere |
+| `outcome` | **10 of 10** | 6 × `imported`, 4 × `not run` |
+| `stuck_points` | **10 of 10** | 1 operator verbatim; 9 verified observations, labelled as such |
+
+**Four of the five terminal rows read `not run`** — an operator decision taken once the flask arm's
+behaviour made the comparison decisive. `not run` is deliberately **outside** the permitted
+`outcome` set: those rows are not measurements with a missing value, they are rows that never
+happened, and collapsing them into `skipped` or `abandoned` would misreport a decision not to
+measure as a measured outcome.
+
+**What that costs, stated plainly:** the sheet is 1 of 5 albums on the terminal arm and 5 of 5 on
+the flask arm, so **no paired cross-arm comparison exists on four of five albums** and **no
+wall-clock or intervention-count claim is available at all.** The ordering control was only
+*exercised* on `clean-1`; on the other four the flask arm ran with no prior pass, so it took no
+second-pass advantage there.
+
+The one timing that does exist — the `bootleg` run's self-reported *"Imported 39 seconds ago"* —
+was deliberately **not** entered in `wall_clock_s`. It is a tool-reported import duration, a
+different quantity from the sheet's rule (*"start the clock when the operator first looks at the
+album"*), and entering it would have redefined the measurement to fit the number available.
+
+### Three findings decided axis two, each re-verified on disk at close
+
+**1. The interactive picker cannot be relied on to import — DEF-03-13.**
+Intermittent full-page `TypeError` / *"Load failed"*, reproduced on **2 albums across 2 browsers**.
+**The backend logged zero errors** across the container's whole lifetime. Root-caused, not inferred:
+rc6 does not proxy cover-art bytes — it redirects the browser out to `coverartarchive.org`, which
+the page at `127.0.0.1:5002` then `fetch()`es and is **CORS-blocked**. Confirmed by asymmetry: the
+same endpoint called *inside* the container returns HTTP 200 / 3516 bytes. **There is no error
+boundary around a cosmetic thumbnail**, so it takes down the entire import page. Intermittent is
+the worse finding — the operator cannot tell in advance whether a run is safe. Their one verbatim:
+
+> **"this is what i see if i move fast"**
+
+**2. A 75% match imported silently and catastrophically wrong — DEF-03-14.**
+`hard-flat-multidisc`: **31 source files → 22 imported, 9 audio files silently dropped**, and
+**4 tracks written onto entirely different songs.** Re-verified independently at close: the four
+titles beets wrote exist **nowhere** in the source folder, and their durations (245 / 238 / 244 /
+231 s) identify four *different* source tracks — the last, `Fashion of His Love (Fernando Garibay
+remix)`, is really `You And I (Wild Beasts Remix)`, a different song. The wrong names are in the
+files' `title` tags, not just the paths.
+
+**On that same screen the UI asserted *"All tracks on disk found online"* AND *"All tracks online
+present on disk"*. Both false.** An interface that makes a falsifiable safety claim and gets it
+wrong is worse than one that says nothing.
+
+**Bounded, not endemic** — re-verified: Taylor Swift 21→21, Garth Brooks 10→10, Now 116 47→47,
+**zero dropped**. The cause is the folder shape (two releases flattened into one directory), which
+is exactly why `hard-flat-multidisc` was in the D-10 draw. **This is DEF-03-08's confident wrong
+match one level down, and worse: 17 of 22 tracks are perfect, so nothing looks amiss.**
+
+**3. `bootleg` on a well-tagged DJ folder is the best result either arm produced — DEF-03-16.**
+On `Crate.068-070`, which 03-07 measured at **zero** strict Discogs candidates: one `mv`, zero
+candidate decisions, **3 correct albums × 20 files**. Re-verified at close via mutagen in-container:
+`APIC` **60/60**, `TBPM` **60/60**, `TALB` **60/60**, `TCON` **60/60** correct per crate, source
+intact at 60 (`COPY`). **But `TRCK` 0/60** — no track tag at all, so playback order is undefined.
+
+**And the same button shredded `Crate.071` into twenty single-track albums** in Task 2, purely
+because that folder's `album` tag was empty — **with no UI signal distinguishing the cases before
+the operator commits.** Since **~40% of sampled Mastermix folders carry the bare, useless
+`album=Mastermix`**, the Crate 068–070 success is **not representative** of the backlog.
+
+### Two capabilities worth carrying forward
+
+- **`UNDO IMPORT` works** — verified reversal (destination gone, flask library 0 entries, source
+  intact at 31 files). This **contradicts a standing project constraint**: `CLAUDE.md` and
+  `PROJECT.md` both record *"beets has no `undo` command — verified against the live CLI"*, which is
+  why Phase 1 had to pair `library.db` backups with ZFS snapshots. The constraint stays true of the
+  **beets CLI** it was measured against, so it is **narrower than it reads**, not falsified. Left
+  for 03-11 rather than edited into shared docs (D-03). **The most useful thing the trial found.**
+- **Per-folder persistent `Tagged`/`Imported` badges** — exactly the resume signal a 144-folder bulk
+  run needs, the abandoned-halfway mode this project exists to prevent. **But** Lady Gaga was badged
+  `Imported` while 9 files short and 4 tracks wrong, and **`DELETE IMPORTED FOLDERS` is keyed on
+  that badge** (DEF-03-15). It was never pressed.
+
+### A reframing of T1 — and explicitly not a change to it
+
+The operator identified that **`mastermixdj.com` is canonical for the publisher-branded majority of
+the backlog**: a plain HTML table with per-track number, artist, title, version, **BPM** and
+duration, where every BPM matches the embedded `TBPM` and every duration matches disk within ~1 s,
+and the stated running time (1:09:43) sits **one second** from what beets-flask computed off the
+files. **115 of 151 backlog folders (~76%) are DJ-service branded.**
+
+**T1 fired at 27.08% measuring the *Discogs* strict match rate against that population.** T1's
+threshold value, definition, estimator and 144-folder denominator are **unaltered**; what changes
+is only the reading — **Discogs was substantially the wrong instrument for the majority of the
+backlog.** Recorded as a dated amendment and as DEF-03-17. Not over-claimed: **one** page was
+checked, coverage is unproven, it is a commercial site, and the likely join key is the folder name,
+which none of the three taggers parses.
+
+### Criterion 8, and why T3 is left open
+
+The criterion 8 verdict is written and **explicitly labelled scribe-assembled from verified
+observations**, quoting the operator's one contemporaneous verbatim. It carries four stated
+confidence boundaries: not a wall-clock finding; **not evidence about the 144-folder case** —
+friction 5 stays `NOT EXERCISED`, as recorded before any score existed; not a finding about the
+beets *engine* (different versions per OD-2, and the mis-match is candidate behaviour the front end
+then *misdescribed*); and not a paired comparison.
+
+**T3 is recorded `PARTIAL` / `NOT ANSWERED`, not inferred.** T3's named instrument is *an explicit
+written self-assessment in the operator's own words*. The terminal arm ran on **one** happy-path
+album and no such sentence exists. Writing one in the operator's voice would fabricate the exact
+instrument the threshold specifies. What the trial does establish is narrower: **the operator's
+tolerance was exhausted by defects, not by the prompt.** **03-11 must obtain the sentence.**
 
 ## What was deployed, and what was asserted about it
 
@@ -171,18 +299,27 @@ tunnel was tested end-to-end (HTTP 200). Both arms were confirmed to see the sam
 
 ## The sheet: what was and was not touched
 
-**Only the ten `TBD` `album` cells were filled**, which Task 3's action directs to happen before the
-trial starts. `git diff` shows ten deletions and every one is a `TBD` placeholder.
+**Staging (before the trial): only the ten `TBD` `album` cells were filled**, which Task 3's action
+directs to happen before the trial starts.
 
-Unchanged since the 03-02 commit: the intervention and context-switch definitions, the wall-clock
-rule, the permitted `outcome` values, the ordering control and the pre-assigned `went_first`
-alternation. Every measurement cell is still empty. The paragraph describing the cells as reading
-`TBD` was **left verbatim rather than rewritten**, because it is the provenance record of what the
-sheet looked like before the albums were chosen. Everything new went into a clearly-marked
-`## AMENDMENT 2026-09-04` below the table.
+**Close (after the trial): only the ten rows' measurement cells and the criterion 8 placeholder.**
+`git diff` on the close commit shows **12 deletions** and every one is accounted for: the 10 table
+rows (each replaced in place) and the 2-line verdict placeholder. **The rubric was not reshaped.**
 
-`03-DECISION.md` was **not modified**. T3 stays `PENDING` until the operator's own self-assessment
-exists to quote.
+Asserted rather than claimed:
+
+| Assertion | Result |
+|---|---|
+| Everything above § *The sheet* vs threshold commit `137b6d9e` | **BYTE-IDENTICAL, 74 lines** |
+| `went_first` alternation and slot/arm ordering vs `137b6d9e` | **identical, all ten rows** |
+| Permitted-`outcome` line, wall-clock rule, ordering-control line | present **verbatim** |
+| AMENDMENT A and the `TBD` provenance paragraph | left **verbatim**, not rewritten |
+| `03-DECISION.md` T1/T2/T3 threshold, falsifiable-form and instrument cells vs `137b6d9e` | **BYTE-IDENTICAL** |
+| `03-DECISION.md` deletions this session | **8 lines, all `PENDING` result cells or the T3 row replaced in place** |
+| `deferred-items.md` deletions | **zero** — pure 293-line append |
+
+Everything new went into clearly-marked, dated sections: `## AMENDMENT B — 2026-09-04` in the sheet
+and `## AMENDMENT — 2026-09-04, plan 03-10` in the decision record.
 
 ## Deviations from Plan
 
@@ -226,32 +363,85 @@ against the live token value — **absent**.
 **6. `check-music-freeze.sh` was re-run on LXC 100** after the workstation run reported green
 counters while blind. See **DEF-03-11**.
 
+## Estate safety at close — re-verified, not assumed
+
+| Assertion | Instrument | Result |
+|---|---|---|
+| All five trial sources intact | `find` per folder on LXC 100 | **169 audio files / 5 folders** — 60 + 31 + 47 + 21 + 10, matching the pre-trial stamp exactly |
+| The runs copied, did not move | the above | every source at its original count; `dj-no-match` moved *between inboxes* by design, not consumed |
+| Music freeze | `check-music-freeze.sh` **on LXC 100** | exit **0**, `tagger-class writers: 0`, `declared rw reaching Music: 0`, `FAILURES total: 0` — and `consumer-class writers: 1` (Jellyfin, D-21), which is what confirms it was a **sighted** run rather than DEF-03-11's blind green |
+| Music tree untouched by the trial | `find … -newermt/-newerct '2026-09-04 09:00'` from atlantis | **0 / 0** |
+| Real backlog untouched | `find /mnt/tank/downloads/complete/nzb -newermt …` | **0 files** |
+| `/` headroom (OD-1 floor 8 GiB) | `df -h /` | **34 G free of 126 G (72%)** |
+| Nothing torn down | — | `beets-spike`, `beets-flask-spike`, `bf-clean`, `bf-inbox`, spike trees and snapshots all left in place for 03-11 |
+
+**One acceptance criterion could not be met, and the reason is not this trial.** The plan requires
+*"`zfs diff tank/media/Music@pre-project` returns clean"*. It returns **2,674 lines, all `M`, zero
+`+`/`-`/`R`** — against a tree of exactly **2,674** entries, i.e. the whole tree. That is Phase 1
+plan 01-08's chown signature against a 2026-08-18 snapshot, and **it has been non-clean since
+then**. The assertion it was reaching for holds on a better instrument (the mtime/ctime rows above).
+Logged as **DEF-03-19** with a suggested rewording, rather than quietly reported as a pass.
+
 ## Deferred
 
+Pre-existing from tasks 1–2:
+
 - **DEF-03-11** — `check-music-freeze.sh` prints a green § 7 summary when run somewhere it cannot
-  see the estate. It fails closed on the fence, but the summary block a future plan would copy
-  carries no "could not look" signal.
+  see the estate. **Used at close:** the LXC 100 run's `consumer-class writers: 1` is what proves
+  the run was sighted.
 - **DEF-03-12** — the two spike compose files shared a project; fixed for the flask file, and
   plan 03-11 must never pass `--remove-orphans` to either.
 
+New from task 3:
+
+- **DEF-03-13** — rc6's import page has **no error boundary** around a CORS-blocked third-party
+  cover-art fetch. Intermittent full-page crash; backend logs nothing. **Blocks reliance on the
+  picker.**
+- **DEF-03-14** — a 75% match **dropped 9 of 31 files and mis-tagged 4 tracks onto different
+  songs** while the UI asserted nothing was missing. Needs a `source count == imported count` gate
+  in Phase 6/7.
+- **DEF-03-15** — `DELETE IMPORTED FOLDERS` is keyed on a badge that read `Imported` on that same
+  folder; `IMPORT BEST` is the same shape against a 1-in-6 wrong-match rate.
+- **DEF-03-16** — `bootleg`'s outcome turns entirely on whether `album` is populated, with **no UI
+  signal**; ~40% of sampled Mastermix folders carry the bare `album=Mastermix`.
+- **DEF-03-17** — `mastermixdj.com` is canonical for **~76%** of the backlog, in plain HTML, with
+  BPM and durations matching disk to ~1 s. Reframes what T1's number means without changing it.
+- **DEF-03-18** — two denominators now circulate, **151** and **144**. 03-11 should settle it.
+- **DEF-03-19** — `zfs diff` on the Music snapshot **cannot** return clean; three plans assert it
+  does.
+
 ## Known Stubs
 
-`03-ERGONOMICS-SHEET.md`'s ten measurement rows and its criterion 8 verdict are **intentionally
-empty** and are Task 3's output. They are not stubs to be wired — they are the operator's
-measurement, and filling them with anything an agent produced would be the single worst outcome
-available to this plan.
+**None.** `03-ERGONOMICS-SHEET.md`'s measurement cells were Task 3's output and are now recorded —
+either with the operator's number or with an explicit `not measured` / `not run` and its reason.
+`not measured` is **not a stub to be wired**: it is the honest record of a measurement that was not
+taken, and filling those cells with anything an agent produced would have been the single worst
+outcome available to this plan.
 
-## Resuming
+Two values are deliberately left open and are **not** stubs either:
 
-The operator runs the trial (instructions are in the sheet's amendment; both arms are live and one
-command each). On return, the remaining executor work is small and mechanical: verify the sheet has
-no blanks and every `stuck_points` is non-empty, confirm `went_first` still matches the 03-02
-commit, copy the T3 self-assessment into `03-DECISION.md`'s T3 row, and run the closing assertions
-(`check-music-freeze.sh` exit 0, the five source folders still present against
-`.trial-stamp-t0.txt`, `zfs diff` on Music from atlantis).
+- **T3** — `NOT ANSWERED`, because its named instrument is the operator's own written sentence.
+  **03-11 must obtain it.**
+- **The criterion 8 closing paragraph** — written, but labelled scribe-assembled and awaiting the
+  operator's countersignature or replacement.
 
-Nothing needs undoing. The container is throwaway and reaped by 03-11; the trial sources are
-reflinked copies; `complete/nzb` had **0 files modified** across the entire session.
+## Handoff to plan 03-11
+
+1. **Obtain T3 from the operator in their own words** before closing axis two. Everything else in
+   axis two is now measured; this is the one gap.
+2. **Countersign or replace** the criterion 8 closing paragraph.
+3. **Settle the denominator** — 151 or 144, with the path set and dedup rule stated (DEF-03-18).
+4. **Stop asserting `zfs diff` returns clean** (DEF-03-19); use zero `+`/`-`/`R`, or the
+   mtime/ctime window.
+5. **Pick up the `UNDO IMPORT` finding** — `CLAUDE.md`'s *"beets has no `undo` command"* is
+   narrower than it reads.
+6. **Teardown:** never pass `--remove-orphans` to either spike compose file (DEF-03-12). Nothing
+   was torn down here; `beets-spike`, `beets-flask-spike`, `bf-clean`, `bf-inbox`, the spike trees
+   and the snapshots are all still in place. **One album's only intact copy of 9 dropped tracks
+   lives in the trial sources** — do not delete them without reading DEF-03-14 first.
+7. **Standing action, carried not closed:** the Discogs token rotation is deferred to project close
+   by explicit operator decision. This phase leaked it to disk twice; it did not happen a third
+   time here.
 
 ## Commits
 
@@ -262,7 +452,12 @@ reflinked copies; `complete/nzb` had **0 files modified** across the entire sess
 | `28a33c0` | `feat(03-10): adopt the throwaway beets-flask rc6 compose, loopback-bound and Music-free` |
 | `503041c` | `feat(03-10): deploy beets-flask rc6 and check all eight frictions against observation` |
 | `aa95a32` | `feat(03-10): stage the axis-two trial to a one-command operator start` |
-| *(this)* | `docs(03-10): record the halt at the operator's timed ergonomics trial` |
+| `8053275` | `docs(03-10): record the halt at the operator's timed ergonomics trial` |
+| `6d960f5` | `test(03-10): record the operator's clean-1 terminal-arm measurement` |
+| `bea925e` | `test(03-10): record the operator's ergonomics trial and the criterion 8 verdict` |
+| `8aa7032` | `docs(03-10): log DEF-03-13..19 from the operator's ergonomics trial` |
+| `27ae548` | `docs(03-10): fill criteria 7/8 result cells and leave T3 honestly open` |
+| *(this)* | `docs(03-10): close the axis-two plan with the operator's trial recorded` |
 
 ## Self-Check: PASSED
 
@@ -270,16 +465,32 @@ Files:
 - `03-spike-beets-flask.yaml` — FOUND, line 1 is `# THROWAWAY — DO NOT DEPLOY`
 - `03-BEETS-FLASK.md` — FOUND; `## What axis two compares` present, `## The bootleg inbox`
   present, frictions table carries **9** rows with **9** verdicts (7 observed, 2 not exercised)
-- `03-ERGONOMICS-SHEET.md` — FOUND; ten rows present, all measurement cells still empty
-- `deferred-items.md` — FOUND, DEF-03-11 and DEF-03-12 appended
+- `03-ERGONOMICS-SHEET.md` — FOUND; ten rows, **zero blank cells**, every `stuck_points`
+  non-empty, `## Criterion 8 — the week-six verdict` filled, `## AMENDMENT B` present
+- `03-DECISION.md` — FOUND; criteria 7/8 result cells filled, T3 `PARTIAL` / `NOT ANSWERED`,
+  `## AMENDMENT — 2026-09-04, plan 03-10` present
+- `deferred-items.md` — FOUND, DEF-03-01 … DEF-03-19 all present
 - `03-10-SUMMARY.md` — FOUND
 
-Commits: `497361c`, `49f530e`, `28a33c0`, `503041c`, `aa95a32` — all FOUND.
+Commits: `497361c`, `49f530e`, `28a33c0`, `503041c`, `aa95a32`, `8053275`, `6d960f5`, `bea925e`,
+`8aa7032`, `27ae548` — all FOUND.
+
+Provenance assertions:
+- Sheet above § *The sheet* vs `137b6d9e` — **byte-identical, 74 lines**
+- `went_first` alternation vs `137b6d9e` — **identical, all ten rows**
+- T1/T2/T3 threshold, falsifiable-form and instrument cells vs `137b6d9e` — **byte-identical**
+- Sheet deletions at close — **12**, all accounted for (10 rows replaced in place + the 2-line
+  verdict placeholder)
+- `03-DECISION.md` deletions — **8**, all `PENDING` result cells or the T3 row replaced in place
+- `deferred-items.md` deletions — **zero**
 
 Constraints:
-- `STATE.md` and `ROADMAP.md` — **not modified** by this plan (orchestrator owns them)
-- `03-DECISION.md` — **not modified**; T3 stays `PENDING`
+- `STATE.md` and `ROADMAP.md` — **not modified** (orchestrator owns them)
 - Frozen stack files and `renovate.json5` — **not modified**
-- Discogs token — screened against the live value across all five commits and the working tree:
-  **absent**, and not even its 8-character prefix appears
+- No teardown performed; **no source folder deleted**; `DELETE IMPORTED FOLDERS` never pressed or
+  scripted; `--remove-orphans` never passed
+- Discogs token — screened by value across every commit and the working tree: **absent**, not even
+  its 8-character prefix. Rotation remains deferred to project close by operator decision
 - `complete/nzb` — **0 files modified** across the entire session
+- **No measurement simulated, estimated, averaged or proxied.** The only operator-authored numbers
+  in the sheet are `30` / `1` / `1` on `clean-1`, preserved exactly

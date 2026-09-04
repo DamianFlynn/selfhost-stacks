@@ -30,7 +30,7 @@ evidence fails criterion 5 outright; this table is what a later `git log -p` is 
 |---|---|---|---|---|---|
 | T1 | Discogs matching under **40%** of the backlog after normalisation | The **backlog-weighted strict** rate per D-05, where **strict** means a Discogs candidate appears AND its track count agrees with the folder AND `extra_items == 0` AND `extra_tracks == 0`. Computed **per stratum** over the plan-03-03 sample, then weighted by each stratum's prevalence across the committed 143-folder backlog, and summed. The `discogs.index_tracks` setting that produced the headline number is stated beside it. The **unweighted** per-folder sample rate is reported alongside and is explicitly **not** the figure T1 is tested against — see § *The estimator T1 is tested against*. The **40% threshold value is unchanged** | The criterion-1 `tag_album()` probe (plan 03-06/03-07), cross-checked by a hand-transcribed `beet import -t` on **4–5 folders** that between them cover at least one **DMC** folder, one **missing-`album` (V3)** folder, one **index-track-sensitive** folder, and one **zero-candidate** folder. Three folders cannot cover the four cases most likely to diverge, and paired-instrument confidence must not be claimed more broadly than the cross-check supports | **YES** — plan 03-07, 2026-09-04 | **FIRED.** Backlog-weighted strict rate **27.08%**, below the 40% threshold, at `discogs.index_tracks: no` / `search_limit: 5` on the normalised arm. Unweighted sample rate **25.00%** (6/24) reported beside it and **not** the tested figure. Un-normalised arm: weighted strict **27.08%**, weighted loose **40.16%**. Normalised weighted loose **51.39%** (unweighted 54.17%, 13/24); strict/loose gap **7 folders / 29.2%**. Robust: V6's 0%/100% bound gives 27.08–**36.80%**, still below 40%; the "strict **and** the release is correct" reading is **22.80%** weighted (1 of the 6 strict hits is a confident wrong release). Cross-checked by hand-read `beet import -t` on **5** folders covering DMC, missing-`album` V3, zero-candidate and a strict hit — Discogs candidate set agrees **5 of 5**. The index-track-sensitive case is recorded **NOT COVERED because it does not exist**: 0 of 70 Discogs candidate pairs change between `index_tracks` `no` and `yes`. Evidence: [`03-DISCOGS-EVIDENCE.md`](03-DISCOGS-EVIDENCE.md) |
 | T2 | Rate limiting makes bulk import impractical | **More than 4 hours of projected wall-clock for the 143-folder backlog**, OR **any observed HTTP 429 during the timed run**. Either condition alone fires the threshold | `time` around the probe run, cross-checked against `grep -c 'api\.discogs\.com'` on the probe stderr (`urllib3` DEBUG), plus a **separate 429 counter** — `python3-discogs-client` retries a 429 up to 100 times with jittered backoff, so a rate-limited run stalls silently rather than erroring | **YES** — plan 03-07, 2026-09-04 | **NOT FIRED — neither limb.** Projected wall-clock for the backlog = **21.8 minutes** (1,308.1 s), computed per stratum and summed against the corrected **144**-folder denominator; naive unweighted baseline 22.0 min. Pure-API floor **7.43 min** at the observed ceiling (`x-discogs-ratelimit` = **60**, re-confirmed). **Observed HTTP 429 = 0**, on both correct instruments (the HTTP status column and the probe's in-process counter) across **all six** cells. Measured **M = 3.125** Discogs requests per folder (75 responses / 24 folders, both instruments agreeing exactly), plus 1 identity probe per run; total spend this plan ≈ **291** requests, and `ratelimit-remaining` never fell below 31. Recorded beside it: **44 × HTTP 503 from `musicbrainz.org`** on the headline cell — MusicBrainz throttles with 503, not 429, and it is why wall-clock is ~3× the API floor. See § *AMENDMENT — 2026-09-04, plan 03-07* for the instrument substitution and the denominator correction. Evidence: [`03-DISCOGS-EVIDENCE.md`](03-DISCOGS-EVIDENCE.md) |
-| T3 | The operator will not sit at the interactive prompt | An explicit **written self-assessment** after the timed hands-on trial, in the operator's own words. **T3 is deliberately not a number** — the roadmap defines it as a self-assessment and quantifying it would be false rigour | Plan 03-10's timed hands-on trial, scored on [`03-ERGONOMICS-SHEET.md`](03-ERGONOMICS-SHEET.md) | PENDING | PENDING |
+| T3 | The operator will not sit at the interactive prompt | An explicit **written self-assessment** after the timed hands-on trial, in the operator's own words. **T3 is deliberately not a number** — the roadmap defines it as a self-assessment and quantifying it would be false rigour | Plan 03-10's timed hands-on trial, scored on [`03-ERGONOMICS-SHEET.md`](03-ERGONOMICS-SHEET.md) | **PARTIAL** — plan 03-10, 2026-09-04. The trial ran; **the instrument T3 names did not return.** | **NOT ANSWERED — and deliberately not inferred.** The operator ran the trial personally and declared it complete, but **the terminal arm ran on 1 of 5 albums** (`clean-1`, a happy-path 87.7% match: 30 s, 1 intervention, 1 context switch, outcome `imported`) and recorded **one** contemporaneous verbatim across the whole trial: *"this is what i see if i move fast"* — which is about the **flask** arm's crash, not the prompt. **One happy-path album is not a test of whether someone will sit at a prompt for 144 folders.** T3 asks for an explicit written self-assessment; no such sentence exists, and writing one in the operator's voice would fabricate the exact instrument this threshold specifies. What the trial *does* establish, and it is narrower: **the operator's tolerance was exhausted by defects, not by the prompt** — they stopped running the terminal arm because the flask arm had already decided the comparison. **Plan 03-11 must obtain the sentence from the operator before closing axis two.** Evidence: [`03-ERGONOMICS-SHEET.md`](03-ERGONOMICS-SHEET.md) § *Criterion 8* and § *AMENDMENT B* |
 
 ---
 
@@ -245,12 +245,19 @@ just under that stated pain threshold.** The 5-album trial cannot exercise it; i
 
 | Question | beets-terminal (2.13.1) | beets-flask (2.12.0) |
 |---|---|---|
-| Wall-clock across the 5-album set | PENDING | PENDING |
-| Interventions | PENDING | PENDING |
-| Context switches | PENDING | PENDING |
-| Answer for content no source will match | PENDING | PENDING |
+| Wall-clock across the 5-album set | **NOT MEASURED** across the set — the arm ran on **1 of 5** albums (operator decision). The one row: **30 s** on `clean-1` | **NOT MEASURED.** The operator did not record wall-clock on any row. The only timing available is the tool's own *"Imported 39 seconds ago"* on the `bootleg` run, which is an import duration, **not** the sheet's operator wall-clock, and is deliberately not entered as one |
+| Interventions | **1** on `clean-1` (pressed `A` on an 87.7% match); not measured on the four unrun albums | **NOT MEASURED** on any row. Qualitatively: `bootleg` took one `mv` and **zero candidate decisions**; the picker rows are unquantified |
+| Context switches | **1** on `clean-1`; not measured on the four unrun albums | **NOT MEASURED.** Qualitatively, the crash (DEF-03-13) forced repeated browser reloads and a container-side log check that found nothing |
+| Answer for content no source will match | **NOT EXERCISED** — `dj-no-match` was never run through this arm | **`bootleg` — measured, and it is the best result either arm produced.** On `VA-Mastermix.Crate.068-070-2025` (zero strict Discogs candidates per 03-07): one `mv`, zero decisions, **3 correct albums × 20 files**, `APIC` **60/60**, `TBPM` **60/60**, genre correct per crate, `COPY` with the source intact. **But `TRCK` 0/60** — no track tag at all, so playback order is undefined — and the same button shredded `Crate.071` into 20 single-track albums because that folder's `album` was empty, **with no UI signal distinguishing the cases** (DEF-03-16) |
 
-**Axis two verdict:** PENDING — filled by plan 03-11.
+**Axis two verdict:** PENDING — filled by plan 03-11, **now against measured evidence rather than
+against nothing**, and with two constraints on what it may claim: (a) **no wall-clock or
+intervention-count claim is available** — 9 of 10 rows are `not measured` and only 1 of 5 albums is
+a paired cross-arm comparison; (b) **T3 is unanswered** (see the threshold table) and must be
+obtained from the operator first. The decision-relevant findings are the flask arm's blocking
+defect (DEF-03-13), its silent 9-file loss with 4 mis-tagged tracks under a false safety assertion
+(DEF-03-14), its working `UNDO IMPORT`, and `bootleg`'s result above. Evidence:
+[`03-ERGONOMICS-SHEET.md`](03-ERGONOMICS-SHEET.md).
 
 ---
 
@@ -301,7 +308,7 @@ lives outside the tool" has failed the requirement that matters most here.
 | Under | The unmatched-content answer | Answer confirmed? |
 |---|---|---|
 | beets (terminal) | `beet import -A` (as-is) after normalisation; `--set albumtype=dj` + a `paths:` rule routes it out of `Compilations/` | PENDING |
-| beets-flask | An inbox with `autotag: "bootleg"` — *"Import as-is using the meta data of files, and group albums using the metadata… Effectively `beet import ... --group-albums -A`"* | PENDING |
+| beets-flask | An inbox with `autotag: "bootleg"` — *"Import as-is using the meta data of files, and group albums using the metadata… Effectively `beet import ... --group-albums -A`"* | **CONFIRMED, AND BOUNDED** (plans 03-10 tasks 2 and 3). Present in rc6 from primary source (`schema.py:110`); the shipped example config never mentions it. **Measured twice with opposite outcomes on the same button.** On `Crate.068-070` (`album` populated): 3 correct albums × 20, `APIC` 60/60, `TBPM` 60/60, one `mv`, zero decisions — but `TRCK` **0/60**. On `Crate.071` (`album` empty): **one 20-track release became twenty single-track albums**, `album` empty, `track` `00`, no album directory level, **no error and no prompt**. `--group-albums` groups on the metadata that is *there*, so **bootleg is a fast path for already-correctly-grouped content, not an answer for untagged content** — and ~40% of sampled Mastermix folders carry the bare `album=Mastermix` (DEF-03-16). It is still a first-class affordance the terminal arm has no equivalent of. Vindicates PROJECT.md's *normalise first, then import* |
 | wrtag | **`WRTAG_RESEARCH_LINK` — a hyperlink to a Discogs search, for the human to resolve manually** | **CONFIRMED** (plan 03-08). Quoted verbatim from `wrtag.yaml:73` in [`03-WRTAG-EVIDENCE.md`](03-WRTAG-EVIDENCE.md) § *wrtag's answer for unmatched content*. wrtag has no non-MusicBrainz backend at v0.20.0 or v0.34.0 and none of v0.30.0–v0.34.0's release notes add one, so the link is a hyperlink, not an integration |
 | wrtag (side effect) | A real `move`/`copy` calls `tags.WriteTags(dest, destTags, tags.Clear)` — **all tags not in wrtag's computed set are wiped** unless a `keep` rule is configured | **CONFIRMED IN SOURCE ONLY — NOT OBSERVED AT RUNTIME** (plan 03-08). `wrtag.go:267` read at v0.34.0 with its `if !op.CanModifyDest() { continue }` guard at 259; `tags.Clear` is `taglib.Clear`, documented at its definition as *"all existing tags not present in the new map should be removed"*. **The dry runs could not exhibit it**: `-dry-run` makes `CanModifyDest()` false so line 267 is never reached — and separately, `logTagChanges` iterates `for k := range after`, so a tag present in the source and absent from wrtag's set **is never logged even at DEBUG**. Empirical confirmation needs a real `move` onto scratch with a `TKEY`-bearing folder, which D-20 forbids in Phases 1–3 |
 
@@ -569,6 +576,106 @@ succeeded. The correlation is with **ID3 text-frame content**: `no tags` 47 → 
 ID3 text` 83 → 0 failures, **`non-ASCII ID3 text` 4 → 4 failures**. Nothing in this phase depends on
 it, since the verdict does not adopt `metadata`; it is logged so a later phase does not reach for
 `metadata` on a European-artist library and discover it there.
+
+---
+
+## AMENDMENT — 2026-09-04, plan 03-10: criteria 7 and 8 measured, T3 left open
+
+**Nothing in this section changes T1, T2 or T3's threshold VALUE, the estimator definition, the
+40% threshold, or any denominator.** Criteria 7 and 8 are not pre-committed thresholds; they are
+axis-two questions this document was always going to receive. The threshold table's T1/T2 prose,
+the estimator section and the denominator section are **byte-identical to threshold commit
+`137b6d9e92cb44d9c6a48b3963bb33fe0194622f`**. Only `PENDING` result cells were replaced, plus
+T3's two result cells, which now record **why the threshold did not return** rather than a
+manufactured answer. Full evidence: [`03-ERGONOMICS-SHEET.md`](03-ERGONOMICS-SHEET.md) and
+[`03-BEETS-FLASK.md`](03-BEETS-FLASK.md).
+
+### 1. The trial ran, and it was decided by a defect rather than by a stopwatch
+
+The operator ran the trial personally on 2026-09-04. **The counters the sheet was built to collect
+were largely not collected** — `wall_clock_s` and `interventions` are `not measured` on 9 of 10
+rows, and 4 of the 5 terminal rows read `not run` by operator decision. They are recorded as
+absent, with reasons, rather than filled: **a fabricated ergonomics figure would be undetectable
+afterwards**, in a phase whose premise is that this pipeline was built three times on unverified
+assumptions.
+
+Three verified findings decided axis two instead, each re-confirmed on disk at plan close:
+
+| Finding | Status |
+|---|---|
+| rc6's interactive picker crashes intermittently — full-page `TypeError` from a **CORS-blocked third-party cover-art fetch with no error boundary**; backend logged **zero** errors; reproduced on 2 albums across 2 browsers | **DEF-03-13** |
+| A **75%** match on the flattened-two-releases album **dropped 9 of 31 audio files and mis-tagged 4 tracks onto entirely different songs**, while the UI asserted *"All tracks on disk found online"*. Bounded to that folder shape — the other three albums lost **zero** | **DEF-03-14** |
+| **`UNDO IMPORT` works** — verified reversal (destination gone, library 0 entries, source intact at 31 files) | see § 3 below |
+
+### 2. This is D-05's confident-wrong-match, one level down
+
+DEF-03-08 recorded that D-05's strict rule admits a confident wrong *release*
+(`Mastermix_Issue_412` → a 2006 Specialten DVD, on a ten-track coincidence). Plan 03-10 found the
+same failure mode **at track level, and it is worse**: there the whole album was obviously wrong,
+whereas here **17 of 22 tracks are perfect, so nothing looks amiss** — and the four wrong titles
+are written into the files' `title` tags, not merely into the paths.
+
+**The instrument that would have caught it does not exist in this phase:** an assertion that
+**source audio count == imported item count**. `CLAUDE.md` already says *"never accept a match
+without a track-count check"*; DEF-03-14 carries it to file granularity for Phase 6/7. Note the
+family resemblance to DEF-03-10: a correct-shaped wrong value defeats a loss-detecting gate.
+
+### 3. A standing project constraint is contradicted by measurement
+
+`CLAUDE.md` § *Constraints* and `PROJECT.md` both state, as a hard constraint, that **"beets has no
+`undo` command — verified against the live CLI"**, which is why Phase 1 had to pair `library.db`
+backups with ZFS snapshots to obtain reversibility at all.
+
+**beets-flask rc6 has a working `UNDO IMPORT`**, verified by use rather than read from docs. The
+constraint remains true of the **beets CLI**, which is what it was measured against — so it is not
+falsified, it is **narrower than it reads**. Recorded here rather than edited into `CLAUDE.md`,
+because D-03 and the mid-wave rule keep this phase out of shared documents; **plan 03-11 should
+pick it up**, and it is the single most useful capability the trial found.
+
+### 4. A reframing of what T1's number means — and explicitly NOT a change to it
+
+The operator identified that **`mastermixdj.com` is canonical for the publisher-branded majority of
+the backlog**, in a plain HTML table carrying per-track number, artist, title, version, **BPM** and
+duration — with every BPM matching the embedded `TBPM` and every duration matching disk within
+~1 s, on the one page checked. **115 of 151 backlog folders (~76%) are DJ-service branded** (99
+Mastermix, 13 DMC, 3 Toolkit, 2 Crate).
+
+**T1 fired at 27.08% measuring the *Discogs* strict match rate against that population.** That
+number was measured correctly against its stated definition and is **unchanged, as is its 40%
+threshold, its estimator and its 144-folder denominator.** What changes is only the *reading*:
+**Discogs was substantially the wrong instrument for the majority of the backlog.** T1's outcome —
+FIRED — is unaffected and, if anything, better explained.
+
+**Not over-claimed:** exactly **one** product page was checked; coverage across the 99 Mastermix
+folders is **unproven**; it is a commercial site, so any lookup must be gentle, cached and
+terms-checked. And Mastermix's own tagging is inconsistent — ~40% of sampled folders carry a bare
+`album=Mastermix` — so the join key is likely the **folder name**, which none of the three taggers
+parses. Recorded as **DEF-03-17**.
+
+### 5. Recorded, not corrected: two denominators and one unsatisfiable assertion
+
+- **151 vs 144.** This session counted 151 backlog folders on a different path set and dedup rule
+  than 03-03's deduplicated 144. Neither threshold outcome moves (T1's weights are explicit
+  fractions over 144; T2's 21.8 min is nowhere near its 4-hour limb), but **plan 03-11 should state
+  which is authoritative.** **DEF-03-18.**
+- **`zfs diff` on the Music snapshot cannot return clean.** 03-10's own closing criterion requires
+  it; measured from atlantis it returns **2,674 lines, all `M`, zero `+`/`-`/`R`** — against a tree
+  of exactly **2,674** entries. That is Phase 1 plan 01-08's chown signature against a snapshot from
+  2026-08-18, and it has been non-clean ever since. The assertion it was reaching for holds on a
+  better instrument: **0** files under Music have an mtime or ctime inside the trial window.
+  **DEF-03-19.**
+
+### 6. What criterion 8 does and does not deliver
+
+The criterion 8 verdict is written in `03-ERGONOMICS-SHEET.md` and is **explicitly labelled
+scribe-assembled from verified observations**, quoting the operator's one contemporaneous verbatim
+(*"this is what i see if i move fast"*). It carries four stated confidence boundaries: it is not a
+wall-clock finding, not evidence about the 144-folder case (**friction 5 stays `NOT EXERCISED` — a
+five-album trial structurally cannot test "laggy past some hundred folders", as recorded before any
+score existed**), not a finding about the beets *engine* (the arms ran different versions per OD-2,
+and the mis-match is candidate behaviour that the front end then *misdescribed*), and not a paired
+comparison. **The operator should countersign or replace it in their own words before 03-11 closes
+axis two.**
 
 ---
 
