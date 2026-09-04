@@ -768,6 +768,32 @@ against weights computed on 144.
 **Suggested action (plan 03-11):** state which denominator is authoritative and why — including the
 exact path set and dedup rule — rather than letting both stand.
 
+**CLOSED by plan 03-11, 2026-09-04 — and the re-measurement found a third figure, which is the
+actual finding.** Re-run from LXC 100 on the same path set, all three readings reconcile exactly:
+
+| Reading | Rule | Value |
+|---|---|---|
+| DEF-03-18's 151 | `-maxdepth 1 -type d`, **no audio test** | `unsorted` 121 + `music` 30 = **151** |
+| Audio-bearing, 2026-09-04 | directory holds ≥ 1 audio file | `unsorted` 120 + `music` 25 = **145** |
+| 03-03's census, 2026-09-03 20:36 UTC | audio-bearing, deduplicated | **144** |
+
+**151 − 145 = six directories holding no audio at all**, enumerated: one misfiled movie rip in
+`unsorted` (`Harry.Potter.And.The.Deathly.Hallows.Part.1…`), two `_UNPACK_` stubs and three
+audio-free folders in `music`. That is `beets.md`'s **bucket D** — triage work, not tagging work.
+
+**145 − 144 = one folder that arrived while the phase was running.**
+`music/Taylor Swift - The Life Of A Showgirl-WEB-2025-ALTAiR INT-xpost`, 12 audio files, mtime
+**2026-09-03 21:17:19 UTC** — **41 minutes after** 03-03's census commit
+(`4a0b5f3239ba844dd4b312ec93df9274a8202dbe`, 2026-09-03 20:36:42 UTC). **The backlog is a live tree
+with an unattended inflow** — DEF-03-01 recorded sabnzbd post-processing on that same tree at
+20:30 UTC — so **every denominator is a timestamped snapshot of a moving population.**
+
+**The ruling: 144 is authoritative for this phase and must always be quoted with its date**, not
+because it is most recent (it is not) but because it is **the frozen basis of T1's estimator**,
+whose weights are explicit fractions over it. A rate computed against one denominator may not be
+quoted against another. **T1's and T2's outcomes do not move on any of the three figures.** Any
+later re-count must record its path set, its audio test **and its timestamp**.
+
 ---
 
 ## DEF-03-19 — `zfs diff` on the Music snapshot cannot return clean, and three plans assert that it does
@@ -811,3 +837,143 @@ instrument recorded beside it.
 returns clean"* with either **"`zfs diff` reports zero `+`/`-`/`R` entries"** (which is the real
 tamper signal and does pass) or the mtime/ctime window check above. A blanket "returns clean" on
 this dataset is unsatisfiable and will be waved through on sight.
+
+**ADOPTED by plan 03-11, 2026-09-04.** 03-11's own closing criteria carry the same unsatisfiable
+*"`zfs diff` … returns clean"* wording. It was **not** answered by waving it through and **not** by
+editing the criterion mid-execution. Both substitute instruments were run instead and are recorded
+in `03-DECISION.md` § *Teardown*: the `+`/`-`/`R` count on the Music snapshot, and the mtime/ctime
+window check over the plan's own execution window. **The defect remains open for Phase 4 and
+beyond**, because the unsatisfiable wording is still inherited by any plan that copies it.
+
+---
+
+## DEF-03-20 — `grep -c PENDING` on `03-DECISION.md` cannot return 0 without destroying provenance
+
+**Found by:** plan 03-11, task 1, 2026-09-04.
+**Severity:** low, and the same shape as DEF-03-19 — a closing assertion that is unsatisfiable as
+written, on a document whose whole value is that it was not rewritten after the fact.
+
+`03-11-PLAN.md`'s Task 1 `<verify>` block and its first acceptance criterion both require
+`grep -c PENDING .planning/phases/03-tagger-spike/03-DECISION.md` to return **0**. Seven
+occurrences of the literal string survive after every result cell is filled, and **none of them is
+an unfilled result cell**:
+
+| Occurrences | Where | Why it must stay |
+|---|---|---|
+| 2 | § header (*"Every result cell in this document reads `PENDING` by design"*) and § *Pre-committed thresholds* (*"stay `PENDING` until the measuring plans run"*) | **Pre-committed prose from threshold commit `137b6d9e`.** It is the record of what the document looked like before any evidence existed — the exact thing criterion 5 rests on |
+| 2 | § *Criterion 4* and § *D-13*, as `~~PENDING — filled by plan 03-0N~~ →` | **Strikethrough provenance markers added by plans 03-08 and 03-09**, deliberately showing each cell's prior state beside its filled value |
+| 3 | Three amendment sections, *"Only `PENDING` result cells were replaced"* | Prior plans' own audit statements about what they did and did not change |
+
+**Satisfying the criterion literally would require deleting pre-committed prose from the threshold
+commit** — which is precisely the goalpost move criterion 5 exists to detect, done in the name of
+passing a grep.
+
+**Answered on a better instrument instead**, one that measures what the criterion was reaching for
+— a `PENDING` occupying a table cell or a verdict slot rather than appearing anywhere in prose:
+
+```bash
+grep -cE '\| *PENDING *(\||$)|verdict:\*\* PENDING|status: PENDING' \
+  .planning/phases/03-tagger-spike/03-DECISION.md
+```
+
+It returned **6** before plan 03-11 (axis one's three question rows plus its verdict, axis two's
+verdict, and criterion 4's beets-terminal row) and **0** after. Recorded in `03-DECISION.md`
+§ *AMENDMENT — 2026-09-04, plan 03-11* § 7.
+
+**Why not fixed here.** Editing a plan's own acceptance criteria while executing it is the lapse
+DEF-03-04, DEF-03-05 and DEF-03-19 all record. The criterion is answered honestly, with the better
+instrument recorded beside it.
+
+**Suggested fix (any later plan writing a completeness gate over a Markdown record):** gate on the
+*shape* of an unfilled cell, not on the token appearing anywhere in the file. A record that
+documents its own prior state will always contain the token, and a gate that forbids the token
+punishes exactly the documents that keep the best provenance.
+
+---
+
+## DEF-03-21 — a secret passed as a command-line argument is world-readable, and `pgrep -af` prints it
+
+**Found by:** plan 03-11, task 2, 2026-09-04. **Caused by this plan, not inherited.**
+**Severity:** HIGH. It is the **third** exposure of the same live credential in this phase, and the
+first one caused by the very command written to *verify* the credential was gone.
+
+### What happened
+
+Plan 03-11's teardown must prove the Discogs token has zero hits across both pools. The first
+sweeps passed the token as a **command-line argument**:
+
+```bash
+grep -rlF -- "$TOK" /mnt/fast/                     # token in argv
+find ... -print0 | xargs -0 -r grep -lF -- "$TOK"  # token in argv, on every xargs batch
+```
+
+**A process's argv is world-readable through `/proc/<pid>/cmdline` on Linux.** For the ~45 minutes
+those scans ran across a 2 TB dataset, **any local user on LXC 100 could read the live 40-character
+token out of `ps`.** LXC 100 runs 100+ containers.
+
+Then, while confirming the scans had been stopped, `pgrep -af grep` was run — and **`-a` prints the
+full argv**. The token was rendered:
+
+1. into the executing agent's **transcript**, and
+2. into a **persisted tool-output file on the workstation** at
+   `~/.claude/projects/-Users-damian-Development-damianflynn-selfhost-stacks/<session>/tool-results/bla6jts0m.txt`.
+
+**The delete of that file was refused by policy from inside the session, so it is still on disk.**
+
+### Why the existing mitigation did not cover it
+
+DEF-03-04's closing instruction was followed to the letter and **still leaked**:
+
+> *"Screen by **value**, from inside the container, printing only counts — a verification command
+> that echoes the token to compare it is the exact lapse plan 03-04 recorded."*
+
+Every sweep printed **only counts**. The value was never echoed by the sweep. **The leak channel
+was the argv of the counting command**, which that instruction does not name — and then a
+*second*, unrelated command (`pgrep -af`) rendered it. **A rule about what a command prints does
+not cover what a command's argv exposes.**
+
+### Contained, and what cannot be contained
+
+| | Status |
+|---|---|
+| Token-bearing processes | **Terminated.** `pgrep -c -x grep` → **0**, so the value is in no argv on the host |
+| Remaining sweeps | Re-run with `grep -f <(printf '%s' "$TOK")`. **`printf` is a bash builtin**, so no process is created and the value never enters any argv |
+| Committed artefacts | **None affected.** Nothing token-bearing was committed to this repository |
+| On-disk copies on LXC 100 | **Zero** besides `/mnt/fast/secrets/discogs.env` at `600 root` |
+| **Agent transcript** | **NOT recoverable** |
+| **Persisted workstation tool-output file** | **NOT recoverable from this session** — delete refused by policy. **Still on disk** |
+
+### The correct technique, for any later plan
+
+```bash
+# RIGHT — printf is a bash builtin, so the secret is in no process's argv:
+grep -rlIF -f <(printf '%s' "$TOK") /path/
+
+# WRONG — argv is world-readable via /proc for the whole life of the process:
+grep -rlF -- "$TOK" /path/
+
+# ALSO WRONG — never render an argv you may not have written:
+pgrep -af <pattern>     # use `pgrep -c -x <name>` when you only need a count
+```
+
+**And never run `ps`/`pgrep -a`/`top -c` while a secret-bearing process might exist.** If you must
+confirm such a process has stopped, count by **program name** (`pgrep -c -x grep`), never by
+pattern-with-argv.
+
+### Consequence for the rotation action
+
+**It is the fourth independent cause behind the standing action to rotate the Discogs token, and
+two of the four are permanently unrecoverable.** The operator has decided rotation happens at
+**project close**, and this plan did not rotate and did not block. **But cause 4 is new information
+the operator did not have when they set that timing**, so it is surfaced at the closing checkpoint
+for them to re-weigh. Recorded in full in `03-DECISION.md` § *Teardown* §§ 8–9.
+
+**Why not fixed here.** There is nothing left to fix on the host — the technique was corrected
+mid-teardown and the exposure window is closed. What remains is a **rotation decision that belongs
+to the operator** and one workstation file this session cannot delete.
+
+**Suggested fix (every later phase, and worth promoting to `CLAUDE.md` § Storage and Permissions):**
+add *"never pass a secret as a command-line argument, on any host, even to a command that prints
+only a count"* beside the existing *"credentials go in `~/.claude/secrets/` by variable name only"*
+rule. The existing rule governs **files**; this one governs **process arguments**, and this phase
+has now demonstrated they are separate channels.
