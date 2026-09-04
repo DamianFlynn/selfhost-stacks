@@ -479,7 +479,7 @@ that four independent lines of evidence already agree on.
 
 **Wave 5** *(blocked on Wave 4)*
 
-- [ ] 03-07-PLAN.md — Criteria 1 and 2: the four-cell probe matrix at both `index_tracks` settings, timing and requests, T1 and T2 resolved (wave 5)
+- [x] 03-07-PLAN.md — Criteria 1 and 2: the four-cell probe matrix at both `index_tracks` settings, timing and requests, T1 and T2 resolved (wave 5)
 
 **Wave 6** *(blocked on Wave 5)*
 
@@ -726,7 +726,7 @@ Phase 7. Plans within a phase run sequentially.
 | 1. Safety Harness and Freeze the Writers | 9/9 | Complete | 2026-08-18 |
 | 2. NFS Export and Music Assistant Reachability | 9/9 | Complete    | 2026-09-01 |
 | 02.1. Jellyfin Transcode Retention *(inserted)* | 15/15 | Complete   | 2026-09-03 |
-| 3. Tagger Spike | 7/11 | In Progress|  |
+| 3. Tagger Spike | 8/11 | In Progress|  |
 | 4. Collapse to One Tagger | 0/TBD | Not started | - |
 | 5. Inbox Structure and the Junk Gate | 0/TBD | Not started | - |
 | 6. Tagger Configuration and Dry Run | 0/TBD | Not started | - |
