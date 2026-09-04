@@ -1103,6 +1103,207 @@ axis two.**
 
 ---
 
+## AMENDMENT — 2026-09-04, plan 03-11: T3 answered, the phase closed, and four claims corrected
+
+**Nothing in this section changes T1's, T2's or T3's threshold VALUE, the falsifiable form, the
+named instrument, the estimator definition, the 40% threshold or any denominator's committed
+value.** T1/T2/T3's `Threshold`, `Falsifiable form` and `Instrument` columns are asserted
+**byte-identical** to `137b6d9e92cb44d9c6a48b3963bb33fe0194622f` in § *Criterion 5*, mechanically
+rather than by claim. What changed in this plan is: T3's two **result** cells, the axis one and
+axis two verdict cells, criterion 4's beets-terminal **result** cell, and new sections appended
+below. Prior plans' wording is preserved and amended, never overwritten.
+
+### 1. T3 is answered, and the instrument was the one the threshold named
+
+Plan 03-10 recorded T3 `NOT ANSWERED` and was **right to**: T3's named instrument is an explicit
+written self-assessment in the operator's own words, no such sentence existed, and writing one in
+their voice would have fabricated the exact instrument the threshold specifies. **The orchestrator
+subsequently asked the operator directly, after they had driven both arms, and the instrument
+returned.** T3 **FIRES**. The answer is quoted verbatim in the threshold table and again in
+§ *Criterion 8*; the 03-10 reading is preserved in full inside the same cell and marked superseded
+**by the arrival of the missing instrument, not by re-interpreting the same evidence.**
+
+### 2. The consequence 03-02 predicted for a firing T3 is VOID — and it is recorded, not dropped
+
+The pre-committed record anticipated, in `PROJECT.md` § *Evidence that would overturn this*:
+
+> *"If the answer is no, the plan needs wrtag for A/B and manual/scan work for C — two tools, which
+> contradicts the core value."*
+
+**That predicted consequence is void, and the reason is a finding from this same phase.** Plan
+03-08 established that **wrtag cannot render this repository's path format at any tag**: v0.20.0
+emits `-1 - ` on 21 of 21 single-disc paths and hard-errors on multi-disc; v0.33.0 and v0.34.0
+refuse the format at startup with exit 2. **wrtag is not available as the A/B arm the prediction
+depends on, so the two-tool split it warned about cannot form — because the second tool does not
+function here.**
+
+**The prediction is recorded rather than quietly deleted**, because a pre-committed expectation
+that was overtaken by evidence is exactly the kind of thing this phase exists to keep visible. It
+was a sound prediction on what was known when it was written; it was falsified by measurement
+taken afterwards, by a plan whose whole purpose was to take that measurement.
+
+So the decision space after T3 fires is **narrower and different** from what was anticipated:
+beets-terminal ruled out by T3 in the operator's own words; wrtag ruled out by 03-08 on
+measurement; and beets-flask rc6 both the operator's stated preference **and** the arm with the
+worst measured safety record in the phase. **That tension is resolved explicitly in § *Axis two*
+§ *The tension this verdict does not smooth over*, by distinguishing the policy architecture from
+the candidate picker — not by discounting either the operator's answer or the defects.**
+
+### 3. The denominator question is settled: **144 is authoritative**, and the tree is live
+
+DEF-03-18 recorded two figures in circulation, **151** and **144**. Re-measured from LXC 100 on
+2026-09-04, all three readings reconcile exactly:
+
+| Reading | Path set | Rule | Value |
+|---|---|---|---|
+| DEF-03-18's 151 | `complete/nzb/{unsorted,music}` | `-maxdepth 1 -type d`, **no audio test** | `unsorted` 121 + `music` 30 = **151** |
+| Audio-bearing, today | same | directory contains ≥ 1 audio file | `unsorted` 120 + `music` 25 = **145** |
+| 03-03's census, 2026-09-03 20:36 UTC | same | audio-bearing, deduplicated | `unsorted` 120 + `music` 24 = **144** |
+
+**151 − 145 = the six directories that hold no audio at all**, enumerated so the gap is a fact
+rather than an inference:
+
+```
+unsorted :: Harry.Potter.And.The.Deathly.Hallows.Part.1.2010.PROPER.1080p.BluRay.x264-MOOVEE
+music    :: Ed Sheeran - ÷ (2017) FLAC
+music    :: Garth.Brooks-Man.Against.Machine-CD-FLAC-2014-NBFLAC
+music    :: Pink-Missundaztood-2LP-24BIT-FLAC-2001-REETKEVER
+music    :: _UNPACK_Ed Sheeran - Ed Sheeran [self titled] (EP) (2006) MP3
+music    :: _UNPACK_Katy Perry - Prism (2013) FLAC
+```
+
+That is one misfiled movie rip, two `_UNPACK_` stubs and three folders with no audio — **exactly
+`beets.md`'s bucket D**, which is triage-and-delete work, not tagging work. A bare
+`-maxdepth 1 -type d` counts them; a rate denominator must not.
+
+**145 − 144 = one folder that arrived while the phase was running**, and this is the more
+important half:
+
+```
+/mnt/tank/downloads/complete/nzb/music/Taylor Swift - The Life Of A Showgirl-WEB-2025-ALTAiR INT-xpost
+  mtime = 2026-09-03 21:17:19 UTC     12 audio files
+03-03's census commit 4a0b5f3239ba844dd4b312ec93df9274a8202dbe = 2026-09-03 20:36:42 UTC
+```
+
+**It landed 41 minutes after the census was committed.** The backlog is not a fixed set: sabnzbd is
+still writing into `complete/nzb/music` unattended — DEF-03-01 recorded a post-processing beets run
+on that very tree at 2026-09-03 20:30 UTC — so **every backlog denominator is a timestamped
+snapshot of a moving population, and any two taken at different moments will disagree.**
+
+**The ruling:**
+
+- **144 is authoritative for this phase and must be quoted with its date.** Not because it is the
+  most recent — it is not — but because **it is the frozen basis of T1's estimator.** The weights
+  are explicit fractions over it (37/144, 39/144, 11/144, 0/144, 43/144, 14/144), and a rate
+  computed against one denominator may not be quoted against another. **T1's outcome does not move
+  on any of the three figures**, and neither does T2's (21.8 min against a 4-hour limb).
+- **151 is not wrong — it is a different measurement**, and any later plan quoting it must say so
+  and must not pair it with 144-based weights.
+- **Whoever re-counts must record the path set, the audio test and the timestamp**, because the
+  tree changes underneath the count. **DEF-03-18 is closed by this ruling.**
+
+### 4. Four claims this phase falsified, corrected here rather than in the documents that carry them
+
+`CLAUDE.md`, `PROJECT.md` and this document each carry a statement this phase measured to be wrong.
+They are corrected **in this record** and left standing in their originals, because D-03 keeps this
+phase out of shared documents and because overwriting them would erase the evidence that they were
+ever believed. **Phase 4 owns editing the originals.**
+
+| # | Claim, and where it lives | Measured correction |
+|---|---|---|
+| 1 | *"`v0.33.0` — the existing path format is already correct for it"* — `CLAUDE.md` § *What NOT to Use* | **FALSIFIED** (03-08). v0.33.0 and v0.34.0 **refuse this repo's format at startup**, exit 2, before a file is read. Four arms, byte-identical refusal text |
+| 2 | *"wrtag v0.30.0+ … Breaking. **Not used by this repo's format**"* — `PROJECT.md` § *Version Compatibility* | **HALF TRUE, AND THE WRONG HALF** (03-08). The v0.30.0 *migration table* genuinely does not apply. What was missed is the **new multi-disc validation shipped in the same release**, which rejects the format outright |
+| 3 | *"The backlog denominator is **143** folders"* — this document, § *Denominators, committed before the run* | **CORRECTED TO 144** by a better instrument, before any rate existed (03-07 amendment § 1); and now re-confirmed against a live tree that has since grown to 145 — see § 3 above |
+| 4 | *"the 45 GB `1-115` set … **does not exist on disk**"* and *"Retire that instruction"* — this document, § *Denominators* | **RETRACTED.** The set **does exist** — 4,746 audio files, **61% of the backlog's files**. So **`PROJECT.md`'s and `CLAUDE.md`'s split-per-volume instruction STANDS** and must not be retired. The 03-03 claim was made against an `unsorted`-tree reading that did not reach it |
+
+**Correction 4 is the one that would have done real damage if left standing**, because a later
+phase acting on *"retire that instruction"* would have pointed a single import at 115 albums in one
+folder — the exact failure `beets.md` § *Two config gaps* warns about.
+
+### 5. A standing project constraint is narrower than it reads, and this is the trial's most useful find
+
+`CLAUDE.md` § *Constraints* and `PROJECT.md` both state as a **hard constraint**:
+
+> *"beets has no `undo` command — verified against the live CLI."*
+
+**beets-flask rc6 has a working `UNDO IMPORT`**, verified **by use** rather than read from docs:
+destination gone, library 0 entries, source intact at 31 files.
+
+**This does not falsify the constraint — it bounds it.** The constraint is true of the **beets
+CLI**, which is what it was measured against. It is **not** true of the front end this phase just
+selected on axis two. That matters because the constraint is load-bearing: it is why Phase 1 had to
+pair `library.db` backups with ZFS snapshots to obtain reversibility at all, and why *"roll back
+the tree and the database together or neither"* is written into `beets.md`.
+
+**Flagged explicitly because it changes the reversibility story the project has been planning
+around**, and because plan 03-10 recorded it as *"the single most useful capability the trial
+found"* and asked 03-11 to pick it up. **Phase 4 should amend the constraint in `CLAUDE.md` and
+`PROJECT.md` to read "the beets CLI has no `undo`"**, and Phase 7 — whose success criterion is
+*"undo exercised"* — should note it now has two candidate mechanisms, not one. **Not amended here:
+D-03 keeps this phase out of those documents.**
+
+**Do not over-read it either.** It was exercised on **one** import, in a release candidate, and on
+the very album whose import was catastrophically wrong — so what is verified is that the reversal
+worked, not that it is reliable across shapes. And it does not reverse the *tag writes* made into
+the files, only the import.
+
+### 6. DEF-03-17 reframes what T1's number means — and changes nothing about the number
+
+The operator identified that **`mastermixdj.com` is canonical for the publisher-branded majority of
+the backlog**, publishing per-track number, artist, title, version, **BPM** and duration as a plain
+HTML table. On the one page checked (catalogue **MDJ2159**, 20 tracks, stated running time
+**1:09:43** against **1 h 9 m 44 s** computed from the files), **every BPM matches the embedded
+`TBPM`** and **every duration matches disk within ~1 s**. **115 of 151 backlog folders (~76%) are
+DJ-service branded** (99 Mastermix, 13 DMC, 3 Toolkit, 2 Crate).
+
+**T1 fired at 27.08% measuring the *Discogs* strict match rate against that population. That number
+is unchanged, and so are its threshold, its definition, its estimator and its 144-folder
+denominator.** What changes is only the *reading*: **Discogs was substantially the wrong instrument
+for the majority of the backlog.** T1's outcome — FIRED — is unaffected and, if anything, better
+explained.
+
+**Explicitly not over-claimed, because this is the finding most likely to be over-read:**
+
+- **Exactly one product page was verified.** Coverage across the 99 Mastermix folders is
+  **UNPROVEN**. It is a hypothesis with one confirming instance, and Phase 4 research must measure
+  coverage before anything is designed around it.
+- Mastermix's own tagging is inconsistent — **~40% of sampled folders carry a bare
+  `album=Mastermix`** — so the join key is likely the **folder name**, which none of the three
+  taggers parses.
+- It is a **commercial site**. Any lookup must be gentle, cached, rate-limited and terms-checked,
+  and this project should not build a scraper without checking the site's terms.
+- **If** coverage holds, it likely displaces both the Discogs path **and** the planned VLM
+  cover-scan extraction (54 images / 27 folders) for Mastermix content. **That is a conditional,
+  not a plan.** The cover-scan work is not cancelled by this record; it is flagged as possibly
+  unnecessary, pending the coverage measurement.
+
+### 7. Recorded, not corrected: `grep -c PENDING` cannot return 0 on this document
+
+This plan's own acceptance criterion requires `grep -c PENDING .planning/phases/03-tagger-spike/03-DECISION.md`
+to return **0**. **It cannot, without destroying provenance this phase's rules protect.** Seven
+occurrences of the literal string survive, and **none of them is an unfilled result cell**:
+
+| Where | Why it must stay |
+|---|---|
+| § header, *"Every result cell in this document reads `PENDING` by design"* | **Pre-committed prose from `137b6d9e`.** It is the record of what the document looked like before any evidence existed |
+| § *Pre-committed thresholds*, *"stay `PENDING` until the measuring plans run"* | Same — pre-committed prose from `137b6d9e` |
+| § *Criterion 4* and § *D-13*, `~~PENDING — filled by plan 03-0N~~ →` | **Strikethrough provenance markers added by plans 03-08 and 03-09**, showing the cell's prior state beside its filled value |
+| Three amendment paragraphs, *"Only `PENDING` result cells were replaced"* | Prior plans' own audit statements about what they changed |
+
+**Answered on a better instrument instead**, which measures the thing the criterion was reaching
+for — a `PENDING` occupying a table cell or a verdict slot:
+
+```bash
+grep -cE '\| *PENDING *(\||$)|verdict:\*\* PENDING|status: PENDING' 03-DECISION.md   # -> 0
+```
+
+It returned **6** before this plan (axis one ×3 + its verdict, axis two's verdict, criterion 4's
+beets-terminal row) and returns **0** after. **Logged as DEF-03-20.** This is the same shape as
+DEF-03-19: a closing assertion that is unsatisfiable as written, answered honestly with an
+instrument that measures the intent, rather than waved through or satisfied by deleting evidence.
+
+---
+
 ## Handoff to Phase 4
 
 **ROADMAP Phase 4 success criterion 4 is unsatisfiable as written.** It requires *"a `--pretend` run
@@ -1134,6 +1335,98 @@ single-disc file renders `-1 - Artist - Title.ext`) and that **`.Media.Position`
 v0.20.0's `Data` struct** (a template execute error, but only when `len .Release.Media > 1`, because
 `{{ if }}` bodies are lazily evaluated). **Cause and effect are reversed in that rule.** See plan
 03-08 for the measured proof. TAGR-03 owns releasing the pin; **this phase does not touch it.**
+
+**Third item, finalised by plan 03-11: the version this spike would deploy, and the trap in the
+obvious reading.** Phase 4 retires the loser, so it needs to know what "unpin wrtag" would actually
+buy — and the answer is **nothing**, which is not what `CLAUDE.md` currently says.
+
+| Question | Answer, measured (OD-5, three tags, plan 03-08) |
+|---|---|
+| Would this spike deploy wrtag at any version? | **No.** wrtag is the loser on axis one; Phase 4 deletes it. There is no version to deploy |
+| Does unpinning to v0.33.0 fix the path format? | **No.** v0.33.0 **refuses the format at startup**, exit 2, `ambiguous format: multiple directories created for the same release`, before a file is read |
+| Does v0.34.0 differ from v0.33.0 on this? | **No — it is a path-format no-op**, confirmed on three instruments: byte-identical refusal text, byte-identical rendered path sets under the ablation, and a changelog whose only breaking change is `deps: bump to go1.27` |
+| So what is the sole cause of the refusal? | **The `Disc N/` subdirectory.** A one-line ablation lifting the disc out of the directory level makes **both** current tags render correctly and byte-identically. That is an ablation, not a fix — nobody is asked to adopt it |
+| What would a real `wrtag move` have done to this content? | Called `tags.WriteTags(destPath, destTags, tags.Clear)` at `wrtag.go:267` — **wiping every tag not in wrtag's computed set**, with **148 `TKEY` and 45 `EnergyLevel` files at stake**. **Source read, not runtime observation**: `-dry-run` makes `CanModifyDest()` false so line 267 is never reached, and `logTagChanges` iterates `for k := range after`, so a dropped tag is never logged even at DEBUG |
+
+**The one-sentence statement TAGR-03 should cite, verbatim:** *this repository's
+`WRTAG_PATH_FORMAT` works on none of v0.20.0, v0.33.0 or v0.34.0 — it renders `-1 - ` on every
+single-disc track and hard-errors on multi-disc at v0.20.0, and is refused at startup by both
+current tags — and the sole cause of the startup refusal is the `Disc N/` **subdirectory**, proven
+by an ablation that changes nothing else and validates at both current tags.*
+
+**And the methodological finding Phase 4 must not lose**, because it invalidates the obvious
+experiment: **the disc class of a wrtag arm is not a property of the source folder.** A 21-file,
+no-`disc`-tag, `track=N/21` album was resolved by MusicBrainz to a **two-medium vinyl release** and
+hard-errored on `.Media.Position` on the first unpinned run. wrtag queries with `limit=1` and takes
+what comes back. **Any experiment that means to hold the disc class constant must pin the release
+MBID; one that does not is measuring MusicBrainz's mood.**
+
+---
+
+## Handoff to Phases 5, 6, 7 and 9
+
+Four things later phases must not rediscover. Each is a measured finding from this phase with the
+artefact that carries it.
+
+**1. The normalisation tool is decided, and the decision is independent of the engine.**
+`scripts/normalise-dj-tags.py` — the committed mutagen script — **wins D-13 and binds regardless of
+which engine or front end is adopted.** It is dry-run **by default**, emits a per-file NDJSON diff
+before writing, does 335 files in one process with 205 distinct value pairs, and needs **zero**
+lines of bespoke driver. wrtag's `metadata` needs **540** invocations for the same job, has **no
+flags at all** on `write`, prints nothing on success — and the shell loop written to drive it wrote
+the artist value into the album field on **20 of 205** files while the field-loss gate scored that
+run clean. [`03-NORMALISER-BAKEOFF.md`](03-NORMALISER-BAKEOFF.md).
+
+**The unpaid cost is carried, not dissolved: the script's WAV write path is broken today.** It
+writes **0 of 134** WAV files and fails all **134**, loudly, into its `.failed` ledger
+(`TypeError: … not a Frame instance` — `mutagen.File(easy=True)` on a WAVE returns a raw frame-id-keyed `ID3`, not an EasyID3
+map). The stratum is **268 of 8,492 audio files (3.2%)**, all Now-compilation content, **none of it
+content the three committed rules fire on** — a dry run over all 134 reports *files that would
+change: 0*. **Phase 4 fixes it alongside TAGR-04**, with the `LIST`/`INFO`-chunk decision DEF-03-09
+records and a regression test over untagged, ASCII-tagged and non-ASCII-tagged WAV. **DEF-03-09.**
+
+**2. Phase 5's structure is confirmed, not assumed: one shared `library.db` across N
+policy-carrying inbox folders.** Verified from primary source **and** exercised at runtime — rc6's
+watchdog registered three inboxes at startup, each with its own `autotag` policy. That is exactly
+the shape the roadmap needs, and the terminal arm has no equivalent of any of it. **Phase 5 should
+also carry friction 9 forward:** rc6 validates the beets config against its own stricter JSON
+schema, and a rejected `plugins:` string kills the watchdog **while the server still serves a
+page** — the inboxes go inert behind a UI that looks alive. [`03-BEETS-FLASK.md`](03-BEETS-FLASK.md).
+
+**3. Phase 6/7 need two gates this phase proved are missing, and one it proved is unreliable.**
+
+- **Assert `source audio count == imported item count` and fail closed on a mismatch.** This is the
+  only instrument that would have caught DEF-03-14 — 31 source files in, 22 out, 9 silently
+  dropped, 4 tracks written onto entirely different songs — while the UI asserted *"All tracks on
+  disk found online"*. `CLAUDE.md` already says *"never accept a match without a track-count
+  check"*; this is that rule **at file granularity**. Add a per-track duration cross-check, which
+  is what identified the mis-mapping.
+- **Never route a folder to `bootleg` without first asserting `album` is populated and distinct
+  across the intended groups.** The same button produced the phase's best and worst results purely
+  on that condition, with **no UI signal** distinguishing them (DEF-03-16).
+- **`diff-music-tags.sh` is a field-**loss** detector and is repeatedly read as a wrongness
+  detector.** It scored `FIELDS_DROPPED = 0` on three different writes nobody asked for, including
+  a correct-shaped wrong value. Pair it with an assertion that the set of changed
+  (file, field, value) triples **equals the set the tool proposed** — which
+  `normalise-dj-tags.py`'s dry-run NDJSON already provides and a blind tool structurally cannot.
+  **DEF-03-10.**
+- **Phase 7's "undo exercised" criterion now has two candidate mechanisms, not one** — see
+  § *AMENDMENT — 2026-09-04, plan 03-11* § 5.
+
+**4. Phase 9 inherits an untested risk and a duplication decision.**
+
+- **The 144-folder lag risk is UNTESTED and this phase's good five-album showing is not evidence
+  against it.** beets-flask's own `docs/limitations.md` says the UI *"will get laggy"* past *"some
+  hundred folder or so"* (#164, #175), and the backlog sits just under that. **Recorded before any
+  score existed**, precisely so a good score could not be read as reassurance. Friction 5 stays
+  `NOT EXERCISED`.
+- **DUPE-01 needs a roadmap decision before Phase 7.** Phase 1 measured **828 duplicate groups /
+  1,892 records / 19.4% duplication**, and this phase re-confirmed that **`dj-mixes` is a
+  byte-for-byte duplicate subset of `unsorted`** — separate inodes (242325 vs 206407), link count
+  1, identical sizes, all 85 entries present in `unsorted` by name. **That makes Phase 7's diff
+  join last-wins**, which is a silent behaviour, not a chosen one. Decide which side wins **before**
+  importing, or the library gets both — `beets.md` § *Before any bulk run* already says so and the
+  measurement now backs it.
 
 ---
 
@@ -1172,6 +1465,28 @@ the wave**, and because this repository merges rather than squashes or rebases (
 is an ancestor of `origin/main` before recording any number** —
 `git merge-base --is-ancestor 137b6d9e92cb44d9c6a48b3963bb33fe0194622f origin/main`. If that
 assertion fails, the merge has not happened yet and no evidence may be recorded against it.
+
+**CLOSED — 2026-09-04, plan 03-11.** The open item above is resolved and the resolution is recorded
+here rather than replacing the paragraph, so the sequence stays visible. The orchestrator has since
+merged the waves, and all three assertions were re-run **from plan 03-11's own worktree** rather
+than taken on any earlier plan's word:
+
+```
+$ git cat-file -t 137b6d9e92cb44d9c6a48b3963bb33fe0194622f
+commit
+
+$ git branch -r --contains 137b6d9e92cb44d9c6a48b3963bb33fe0194622f
+  origin/HEAD -> origin/main
+  origin/main
+
+$ git merge-base --is-ancestor 137b6d9e92cb44d9c6a48b3963bb33fe0194622f origin/main ; echo $?
+0
+```
+
+**The SHA survived the merge unchanged**, which is what this section predicted on the grounds that
+this repository merges rather than squashes or rebases — now verified rather than assumed. Custody
+of criterion 5 therefore rests on `origin/main`, not on a local branch and not on the author's
+restraint.
 
 ---
 

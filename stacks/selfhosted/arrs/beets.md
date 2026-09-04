@@ -7,11 +7,20 @@ Companion to [`beets/beets.yaml`](beets/beets.yaml) (manual container) and
 Nothing here is applied by `docker compose`. This is the record of what the music library
 currently looks like, why the tagging pipeline stalled, and how to work the backlog.
 
-State as of 2026-08-18, after the Phase 1 safety harness (last section).
+State as of 2026-09-04, after the Phase 1 safety harness and the Phase 3 tagger spike (last two
+sections).
 
 > **Both beets definitions now mount the library `:ro`, and wrtag's library mount is deleted.**
 > Nothing in this document's "how to work the backlog" advice will write to `/mnt/tank/media/Music`
 > until Phase 6 grants the surviving tagger `rw` again. That is intentional — see the last section.
+
+> **The tagger is decided.** Phase 3 chose **beets** as the engine and **beets-flask's
+> policy-carrying inboxes — not its interactive picker** — as the front end, on measurements taken
+> from this library's own content against thresholds committed before the evidence existed. The
+> full record, including what happens to Mastermix / DMC / Music Factory content and the three
+> threshold outcomes, is
+> [`.planning/phases/03-tagger-spike/03-DECISION.md`](../../../.planning/phases/03-tagger-spike/03-DECISION.md).
+> See § *Phase 3 — the tagger decision* below for what it changes about the advice on this page.
 
 ---
 
@@ -930,3 +939,75 @@ being trusted.
 - **Spotify is enabled and `auth_required`** on this MA instance and still returns library items.
   Every assertion in this section is provider-filtered on `filesystem_local--XJaJWNUS`; that filter
   is load-bearing and was never relaxed.
+
+---
+
+## Phase 3 — the tagger decision (2026-09-04)
+
+The estate had four tagging entry points and no measured basis for choosing between them. Phase 3
+chose, on numbers from this library's own content, against three overturning thresholds committed
+to a pushed commit **before any evidence existed**. The full record — every threshold, its
+instrument, what it returned, and the evidence artefact behind each verdict — is
+[`.planning/phases/03-tagger-spike/03-DECISION.md`](../../../.planning/phases/03-tagger-spike/03-DECISION.md).
+
+**The one-line outcome: the engine is beets 2.13.1, and the front end is beets-flask's
+policy-carrying inbox architecture — explicitly NOT its interactive candidate picker.**
+
+| | Chosen | Because |
+|---|---|---|
+| Engine | **beets 2.13.1** | wrtag has **no non-MusicBrainz metadata source** and this backlog is not in MusicBrainz. Separately, wrtag was **disqualified on measurement**: this repo's `WRTAG_PATH_FORMAT` renders on **none** of v0.20.0, v0.33.0 or v0.34.0 |
+| Front end | **beets-flask policy inboxes** (`preview` / `auto` / `bootleg`) | The operator's own T3 answer rules out sitting at the terminal prompt; the inbox path needs **no interactive prompt at all** and produced the best measured result of either arm |
+| **Not** chosen | beets-flask's **interactive picker** | It accepted a 75% match that **silently dropped 9 of 31 files and wrote 4 tracks onto different songs**, while asserting *"All tracks on disk found online"*. Plus an intermittent full-page crash the backend never logs |
+| Normalisation | **`scripts/normalise-dj-tags.py`** | Binding regardless of engine. Dry-run by default with a reviewable per-file diff; the alternative wrote a wrong value on 20 of 205 files with no dry run to catch it |
+
+### What this changes about the advice above
+
+- **§ *Two config gaps* is confirmed, not superseded.** Bucket C really does need `-A` after
+  normalisation, and the **`1-115` split-per-volume instruction STANDS** — the set exists, 45 G and
+  **4,746 audio files**, 61% of the backlog's files. A mid-phase claim that it did not exist was
+  retracted on measurement.
+- **Discogs is a much weaker answer for bucket C than this page implies.** Measured strict match
+  rate over the normalised sample: **27.08%** backlog-weighted, against a 40% threshold — it
+  **fired**. The **DMC stratum scored strict 0 of 4**: the catalogue does not reach issues 498,
+  499, 233 or 234. And 1 of the 6 strict hits was a **confident wrong release**.
+- **Rate limiting is not the obstacle.** Whole-backlog projection **21.8 minutes**, **zero** HTTP
+  429. Note that **MusicBrainz throttles with HTTP 503, not 429** — a guard watching only for 429
+  will report a clean run while being throttled.
+- **A likely better source than either was found and is unproven.** `mastermixdj.com` publishes
+  per-track number, artist, title, BPM and duration as plain HTML for the DJ-service content, which
+  is **~76% of the backlog**. **One page was verified.** Coverage is unmeasured — Phase 4 research
+  owns it, and nothing should be designed around it before then.
+
+### One correction to this page's own § *The recovery fence*
+
+That section states, as a hard constraint, *"beets has **no `undo` command** — that was checked
+against the live CLI, not assumed"*. **That remains true of the beets CLI and is narrower than it
+reads: beets-flask rc6 has a working `UNDO IMPORT`**, verified by use (destination gone, library
+0 entries, source intact at 31 files). The original wording is left standing above because it was
+correct against what it measured. **Do not over-read the correction either** — it was exercised on
+one import, in a release candidate, and it reverses the import, not the tag writes made into the
+files. Phase 4 owns amending the constraint in `CLAUDE.md` and `PROJECT.md`; **Phase 7's "undo
+exercised" criterion now has two candidate mechanisms rather than one.**
+
+### Two buttons never to press on this collection
+
+Both are one-click bulk actions in beets-flask, and **neither was pressed or scripted at any point
+in Phase 3, deliberately**:
+
+- **`DELETE IMPORTED FOLDERS`** — keyed solely on an `Imported` badge that was set on a folder that
+  was 9 audio files short and 4 tracks mis-titled. Pressing it would have destroyed the only intact
+  copy of the dropped tracks. Treat the badge as *"an import ran"*, never as *"the import was
+  complete and correct"*.
+- **`IMPORT BEST`** — a bulk accept of "best" candidates with **no per-album review**, on a
+  collection measured at a **1-in-6** wrong-strict-match rate.
+
+### Standing action, carried forward
+
+**Rotate the Discogs personal access token at project close.** It is not a Phase 3 task — the
+operator decided the timing — but the reasons have accumulated: it was written to a `644` file by a
+logging path nobody expected (`python3-discogs-client` puts the token in the **query string**, not
+an `Authorization` header), written to disk a second time by an ad-hoc verification command, and
+rendered into an agent transcript that cannot be shredded. Every on-disk copy was removed and
+verified gone at Phase 3 close; `/mnt/fast/secrets/discogs.env` remains the single source at
+`600 root`. **This repository is public** — credentials go in `/mnt/fast/secrets/` and
+`~/.claude/secrets/`, referenced by variable name only.
