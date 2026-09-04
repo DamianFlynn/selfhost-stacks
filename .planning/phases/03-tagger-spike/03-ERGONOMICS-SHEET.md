@@ -386,6 +386,26 @@ outcome this sheet exists to prevent.** The operator should replace or countersi
 paragraph in their own words before plan 03-11 closes axis two. T3 is recorded in
 `03-DECISION.md` on exactly that basis.
 
+> **AMENDMENT — 2026-09-04, plan 03-11 task 3: the outstanding instruction is DISCHARGED, and the
+> label above STANDS.**
+>
+> The instruction was *"the operator should replace or countersign the closing paragraph in their
+> own words."* **The operator's own words on the same question now exist** — obtained 2026-09-04
+> after they had driven both arms, quoted verbatim in `03-DECISION.md` § *Criterion 8* and in T3's
+> result cell. **T3 fires on them.** Axis two is closed and the phase is closed.
+>
+> **What they did NOT do is countersign the analytical paragraphs below, and this section is not
+> rewritten to imply otherwise.** The operator answered the criterion 8 question in their own
+> voice, separately; **the analysis in this section remains the executor's**, assembled as scribe
+> from verified observations. **Both halves stay visible and stay distinguishable.** A later reader
+> must not treat this whole section as the operator's voice — the only operator words on this sheet
+> are the single contemporaneous `stuck_point` quoted immediately below, and the only operator
+> words on criterion 8 are the ones in `03-DECISION.md`.
+>
+> The `not measured` / `not run` cells are **not** retroactively filled by any of this. **The trial
+> was decided by a defect, not by a stopwatch**, and no quantitative ergonomics claim is made in
+> either direction.
+
 The operator's one verbatim, on being asked to read the flask arm's diff modal before the page
 crashed:
 
