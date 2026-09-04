@@ -352,3 +352,103 @@ reported *beside* the D-05 reading instead.
 being exempted as already-clean. A confidence floor near 50% would also have separated all six
 cleanly in this sample — every correct match scored ≥ 59.5% and the wrong one 31.2% — but that is a
 one-sample observation, not a calibrated threshold.
+
+---
+
+## DEF-03-09 — `normalise-dj-tags.py`'s non-MP3 write path cannot write WAV, on any file
+
+**Found by:** plan 03-09, task 1, 2026-09-04.
+**Severity:** the tool D-13 has just named as *the* normalisation tool cannot write 3.2% of the
+estate's audio. It fails **loudly**, which is why this is a gap rather than an incident.
+
+`scripts/normalise-dj-tags.py:426` and `:547-549` are the non-MP3 path:
+
+```python
+handle = mutagen.File(path, easy=True)      # read_tags()
+...
+handle.tags[field] = [new]                  # write_tags()
+handle.save()
+```
+
+**For a WAVE, `easy=True` does not yield an EasyID3-style mapping.** `handle.tags` comes back as a
+raw `mutagen.id3.ID3` object keyed by **frame id** (`TALB`, `TPE1`, …), so `handle.tags["album"] =
+["…"]` assigns a list where a `Frame` is required. Measured over all **134** WAV files in
+`dj-mixes`:
+
+| Evidence | Value |
+|---|---|
+| Files attempted | **134** |
+| Files written | **0** |
+| Failures | **134**, every one `TypeError: [...] not a Frame instance` |
+| Files changed on disk | **0** — empty whole-subtree `.sha` manifest diff |
+| What `diff-music-tags.sh` reported | `FIELDS_DROPPED 0`, `MISSING_AFTER 0`, **exit 0** — a **vacuous pass** |
+| Also read-broken | `read_tags()` returns `album=None` for the 87 WAV that *do* carry an album, for the same reason |
+
+**It is a defect in this script, not a limitation of mutagen.** Writing the same value through
+mutagen's correct WAVE API succeeded on the first attempt on three probe copies — one untagged, one
+ASCII-tagged, one with a non-ASCII `TPE1` — preserving `APIC`, `TDRC`, `TIT2`, `TPE1` and `TRCK`
+each time:
+
+```python
+w = mutagen.wave.WAVE(path)
+if w.tags is None:
+    w.add_tags()
+w.tags.setall("TALB", [mutagen.id3.TALB(encoding=3, text=[new])])
+w.save()
+```
+
+**One further question the fix must answer, found in the same probe:** mutagen's WAVE write leaves
+the RIFF `LIST`/`INFO` chunk **byte-identical**, so its `IPRD` (product/album) keeps the *old* album
+while the ID3 tag carries the new one — two containers in one file disagreeing. wrtag's `metadata`
+updates both. Decide deliberately which behaviour is wanted rather than inheriting one.
+
+**Why not fixed here.** 03-09's scope is the D-13 bake-off, and the WAV result **is** one of its two
+headline measurements. Editing the tool mid-comparison would have made that measurement
+unattributable — the same reason DEF-03-01, DEF-03-03 and DEF-03-05 were left alone. The failure is
+also loud (134 records in the `.failed` ledger, exit 1) rather than silent, so nothing depends on
+fixing it before the phase closes.
+
+**Scope, so the fix is not over-sized.** 268 of the estate's 8,492 audio files are WAV (**3.2%**),
+in six folders across two trees, all of it `Now That's What I Call Music` 118/119/120. **None of it
+is content the three committed rules fire on** — a dry run over all 134 reports `files that would
+change: 0`, because rules 1 and 3 need a Mastermix/DMC label token in the folder name. So the fix is
+needed for a *future* job, not for the DJ backlog this phase exists to work.
+
+**Suggested fix (Phase 4, alongside TAGR-04):** branch `read_tags()`/`write_tags()` on WAVE
+explicitly rather than relying on `easy=True`, add the `LIST`/`INFO` decision above, and add a
+regression test that writes `album` to an untagged WAV, an ASCII-tagged WAV and a non-ASCII-tagged
+WAV and asserts the value reads back with every other frame intact.
+
+---
+
+## DEF-03-10 — the field-loss gate answers a narrower question than "did the tool do what was asked"
+
+**Found by:** plan 03-09, tasks 1 and 2, 2026-09-04. **Third occurrence in this phase.**
+**Severity:** medium for Phase 7's QUAL-02 gate, which is `diff-music-tags.sh`'s exit code.
+
+`diff-music-tags.sh` detects **field loss**, and it does that correctly. It is repeatedly being read
+as if it detected *wrongness*. Three writes in this phase scored `FIELDS_DROPPED = 0` while doing
+something nobody asked for:
+
+| Write | What it did | What the gate said |
+|---|---|---|
+| 03-05, first `--apply` | mutagen's load-time `v2_version=4` translated `TYER` → `TDRC` on real files | **nothing** — `ffprobe` maps both to `date` |
+| 03-09, `metadata` arm | promoted **205** files ID3v2.3 → v2.4, `TYER` → `TDRC` on **155**, rewrote **175** ID3v1 blocks, **created 30**, re-serialised **14** APEv2 tags | `FIELDS_DROPPED 0` on both joins |
+| 03-09, driver run 1 | wrote the **artist value into the album field** on **20 of 205** files | `FIELDS_DROPPED 0` — a clean pass on a wrong result |
+
+The third is the sharpest: a **correct-shaped wrong value drops no field**, so no field-loss gate can
+ever see it. It was caught only by diffing the two arms' after-states against each other.
+
+`ffprobe` is also blind to two whole containers on MP3 — the **ID3v1** trailer (which surfaces
+instead as a moved join key, DEF-03-03) and any **APEv2** tag (invisible entirely; this sample has
+14 APE-bearing files).
+
+**Why not fixed here.** `diff-music-tags.sh` and `snapshot-music-tags.sh` are the shared Phase 1
+harness, frozen by D-03, and every plan in this wave asserts against their current behaviour.
+
+**Suggested fix (Phase 7, alongside QUAL-02):** keep the gate as the loss detector it is, and pair
+it with a second assertion that the set of changed (file, field, value) triples **equals the set the
+tool proposed** — which is exactly what `normalise-dj-tags.py`'s own dry-run NDJSON already provides
+and what a blind tool structurally cannot. Add the on-disk ID3v2 frame-ID multiset comparison
+against an untouched twin (03-05, re-used here) as the third instrument; it is the only one of the
+three that saw the ID3v2.4 promotion.
