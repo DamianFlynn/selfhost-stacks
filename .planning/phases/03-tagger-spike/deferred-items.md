@@ -888,3 +888,92 @@ instrument recorded beside it.
 *shape* of an unfilled cell, not on the token appearing anywhere in the file. A record that
 documents its own prior state will always contain the token, and a gate that forbids the token
 punishes exactly the documents that keep the best provenance.
+
+---
+
+## DEF-03-21 — a secret passed as a command-line argument is world-readable, and `pgrep -af` prints it
+
+**Found by:** plan 03-11, task 2, 2026-09-04. **Caused by this plan, not inherited.**
+**Severity:** HIGH. It is the **third** exposure of the same live credential in this phase, and the
+first one caused by the very command written to *verify* the credential was gone.
+
+### What happened
+
+Plan 03-11's teardown must prove the Discogs token has zero hits across both pools. The first
+sweeps passed the token as a **command-line argument**:
+
+```bash
+grep -rlF -- "$TOK" /mnt/fast/                     # token in argv
+find ... -print0 | xargs -0 -r grep -lF -- "$TOK"  # token in argv, on every xargs batch
+```
+
+**A process's argv is world-readable through `/proc/<pid>/cmdline` on Linux.** For the ~45 minutes
+those scans ran across a 2 TB dataset, **any local user on LXC 100 could read the live 40-character
+token out of `ps`.** LXC 100 runs 100+ containers.
+
+Then, while confirming the scans had been stopped, `pgrep -af grep` was run — and **`-a` prints the
+full argv**. The token was rendered:
+
+1. into the executing agent's **transcript**, and
+2. into a **persisted tool-output file on the workstation** at
+   `~/.claude/projects/-Users-damian-Development-damianflynn-selfhost-stacks/<session>/tool-results/bla6jts0m.txt`.
+
+**The delete of that file was refused by policy from inside the session, so it is still on disk.**
+
+### Why the existing mitigation did not cover it
+
+DEF-03-04's closing instruction was followed to the letter and **still leaked**:
+
+> *"Screen by **value**, from inside the container, printing only counts — a verification command
+> that echoes the token to compare it is the exact lapse plan 03-04 recorded."*
+
+Every sweep printed **only counts**. The value was never echoed by the sweep. **The leak channel
+was the argv of the counting command**, which that instruction does not name — and then a
+*second*, unrelated command (`pgrep -af`) rendered it. **A rule about what a command prints does
+not cover what a command's argv exposes.**
+
+### Contained, and what cannot be contained
+
+| | Status |
+|---|---|
+| Token-bearing processes | **Terminated.** `pgrep -c -x grep` → **0**, so the value is in no argv on the host |
+| Remaining sweeps | Re-run with `grep -f <(printf '%s' "$TOK")`. **`printf` is a bash builtin**, so no process is created and the value never enters any argv |
+| Committed artefacts | **None affected.** Nothing token-bearing was committed to this repository |
+| On-disk copies on LXC 100 | **Zero** besides `/mnt/fast/secrets/discogs.env` at `600 root` |
+| **Agent transcript** | **NOT recoverable** |
+| **Persisted workstation tool-output file** | **NOT recoverable from this session** — delete refused by policy. **Still on disk** |
+
+### The correct technique, for any later plan
+
+```bash
+# RIGHT — printf is a bash builtin, so the secret is in no process's argv:
+grep -rlIF -f <(printf '%s' "$TOK") /path/
+
+# WRONG — argv is world-readable via /proc for the whole life of the process:
+grep -rlF -- "$TOK" /path/
+
+# ALSO WRONG — never render an argv you may not have written:
+pgrep -af <pattern>     # use `pgrep -c -x <name>` when you only need a count
+```
+
+**And never run `ps`/`pgrep -a`/`top -c` while a secret-bearing process might exist.** If you must
+confirm such a process has stopped, count by **program name** (`pgrep -c -x grep`), never by
+pattern-with-argv.
+
+### Consequence for the rotation action
+
+**It is the fourth independent cause behind the standing action to rotate the Discogs token, and
+two of the four are permanently unrecoverable.** The operator has decided rotation happens at
+**project close**, and this plan did not rotate and did not block. **But cause 4 is new information
+the operator did not have when they set that timing**, so it is surfaced at the closing checkpoint
+for them to re-weigh. Recorded in full in `03-DECISION.md` § *Teardown* §§ 8–9.
+
+**Why not fixed here.** There is nothing left to fix on the host — the technique was corrected
+mid-teardown and the exposure window is closed. What remains is a **rotation decision that belongs
+to the operator** and one workstation file this session cannot delete.
+
+**Suggested fix (every later phase, and worth promoting to `CLAUDE.md` § Storage and Permissions):**
+add *"never pass a secret as a command-line argument, on any host, even to a command that prints
+only a count"* beside the existing *"credentials go in `~/.claude/secrets/` by variable name only"*
+rule. The existing rule governs **files**; this one governs **process arguments**, and this phase
+has now demonstrated they are separate channels.
