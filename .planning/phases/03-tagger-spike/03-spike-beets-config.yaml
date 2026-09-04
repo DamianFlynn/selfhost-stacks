@@ -10,6 +10,17 @@
 # file is what the spike is measured with instead.
 #
 # IT CONTAINS NO CREDENTIAL. `discogs.user_token` is deliberately absent — see the discogs block.
+#
+# STATE AS OF 2026-09-04 (plan 03-11 close): THIS FILE IS INERT and is ARCHIVED, not deleted --
+# it is the exact configuration behind every axis-one number in Phase 3, kept so the measurement
+# can be re-run if the decision is ever challenged. It defines no container. The runtime copy it
+# was rendered into (`/mnt/fast/spike-03/beets-config/spike-runtime.yaml`), which DID carry the
+# Discogs token in plaintext, was deleted at Phase 3 close and the token value swept for across
+# both pools and every shell history file on LXC 100. `/mnt/fast/secrets/discogs.env` survives at
+# `600 root` as the single source of truth: the phase cleaned up its copies, not the source.
+#
+# ANY future use requires a DELIBERATE decision recorded in a plan. Nothing under `stacks/`
+# references it: `grep -rl '03-spike-' stacks/` returns nothing.
 
 # ---------------------------------------------------------------------------------------------
 # plugins — THE SINGLE MOST IMPORTANT LINE IN THIS FILE

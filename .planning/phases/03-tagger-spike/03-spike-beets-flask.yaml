@@ -17,6 +17,22 @@
 # whole point of a measurement is that it can be re-run when the decision is challenged — while the
 # banner plus the `.planning/` location is what keeps it from being read as a deployable path.
 #
+# STATE AS OF 2026-09-04 (plan 03-11 close): THIS FILE IS INERT. The container it defines --
+# `beets-flask-spike` -- was REMOVED at Phase 3 close and its absence confirmed with `docker ps -a`
+# run with NO status filter (the estate has a documented `created`-state blind spot that a
+# status-filtered query would miss). The scratch tree it mounts (`/mnt/tank/downloads/spike-03`)
+# and its config directory (`/mnt/fast/spike-03/bf-config`, which held a rendered credential) were
+# both deleted in the same plan, so a `docker compose up` against this path today would fail on
+# missing binds rather than quietly reviving a fourth tagging path.
+#
+# ANY future use requires a DELIBERATE decision recorded in a plan. Never `docker compose up`
+# against this path on the strength of it merely existing. Nothing under `stacks/` references it:
+# `grep -rl '03-spike-' stacks/` returns nothing, and that is the basis on which it is kept.
+#
+# Note when tearing down: the service carries `profiles: ["manual"]`, so `docker compose down`
+# WITHOUT `--profile manual` exits 0, prints nothing, and leaves the container running. Observed
+# in plan 03-11. Always pass `--profile manual`, and NEVER `--remove-orphans` (DEF-03-12).
+#
 # How it is invoked (never a bare `docker compose up`), from /mnt/fast/spike-03/ on LXC 100:
 #   docker compose -f 03-spike-beets-flask.yaml --profile manual up -d beets-flask-spike
 #

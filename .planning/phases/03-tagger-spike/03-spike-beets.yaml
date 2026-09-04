@@ -16,6 +16,22 @@
 # deleting it. Deleting the exact executable config would cost the spike its reproducibility;
 # the banner plus the `.planning/` location is what keeps it from being read as a deployable path.
 #
+# STATE AS OF 2026-09-04 (plan 03-11 close): THIS FILE IS INERT. The containers it defines --
+# `beets-spike` and the short-lived writer arm `beets-spike-rw` -- were REMOVED at Phase 3 close
+# and their absence confirmed with `docker ps -a` run with NO status filter (the estate has a
+# documented `created`-state blind spot that a status-filtered query would miss). The scratch tree
+# it mounts (`/mnt/tank/downloads/spike-03`) and its runtime config directory
+# (`/mnt/fast/spike-03`) were both deleted in the same plan, so a `docker compose up` against this
+# path today would fail on missing binds rather than quietly reviving a fourth tagging path.
+#
+# ANY future use requires a DELIBERATE decision recorded in a plan. Never `docker compose up`
+# against this path on the strength of it merely existing. Nothing under `stacks/` references it:
+# `grep -rl '03-spike-' stacks/` returns nothing, and that is the basis on which it is kept.
+#
+# DEF-03-12: NEVER pass `--remove-orphans` to this file. It shared the implicit compose project
+# `spike-03` with the flask arm, and compose offered to delete the other half of the experiment in
+# a message that read like routine tidying. Always pass an explicit `-p spike-03`.
+#
 # How it is invoked (never a bare `docker compose up`):
 #   docker compose -f .planning/phases/03-tagger-spike/03-spike-beets.yaml \
 #     --profile manual up -d beets-spike
