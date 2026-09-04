@@ -10,6 +10,16 @@
 # written and moved into place atomically, so no failure - including a pre-existing 0644
 # destination or an ENOSPC mid-write - can leave a world-readable file carrying the token.
 #
+# "lives outside the repository" IS ENFORCED TOO (WR-04). It used to be a property this header
+# asserted and nothing checked: $DEST is $2, it was unvalidated, and the checkout itself
+# (/mnt/fast/stacks) is on the same host as every legitimate destination. .gitignore carried no
+# pattern that would catch a generated beets config, so a mistyped second argument produced a
+# TOKEN-BEARING, COMMITTABLE, UNTRACKED file inside a PUBLIC repository - one that already has
+# a credential exposure recoverable via `git log -S`. CR-03 fixed the mode; it did not fix the
+# location, and 0600 does not help once a file is committed. The check is now a REFUSAL, runs
+# BEFORE the credential file is read, and is backed by a narrow .gitignore pattern as defence in
+# depth. See the WR-04 block below.
+#
 # THE POINT OF THIS SCRIPT IS THE CHANNEL THE TOKEN TRAVELS ON.
 # The value is never interpolated into an `echo`, a `printf` argument, a heredoc typed at a
 # prompt, a `docker exec -e`, or any other argv. LXC 100 runs 100+ containers with a readable
@@ -32,6 +42,83 @@ BASE="${1:?usage: $0 <base-config> <output-config>}"
 DEST="${2:?usage: $0 <base-config> <output-config>}"
 ENV_FILE="${DISCOGS_ENV_FILE:-/mnt/fast/secrets/discogs.env}"
 
+# --- WR-04: refuse a $DEST inside any git working tree -------------------------------------
+# Deliberately the FIRST check in the script. It runs before the credential file is gated, read
+# or exported, so a bad destination is refused while the token is still only on disk in one
+# 600-root file. A guard placed after the read would already have the value in this process's
+# environment when it fired.
+#
+# The repo root is DETECTED, never hard-coded: `git rev-parse --show-toplevel` finds the real
+# checkout wherever it is - /mnt/fast/stacks on LXC 100, a clone anywhere else, or a linked
+# worktree - and a hard-coded path would be one more thing to keep in sync with reality. It also
+# means the guard covers repositories this script has never heard of.
+#
+# Resolution is CR-01's approach, verbatim, so both scripts resolve paths the same way: GNU
+# `realpath -m` first (it resolves components that do not exist yet, which $DEST usually does
+# not), python3's os.path.realpath as the fallback, and a REFUSAL if neither is available.
+# Checking an unresolved string here would be the CR-01 defect a second time: `..` and symlinks
+# both walk a string guard straight into the checkout.
+#
+# It sets a GLOBAL rather than echoing its result, exactly as the sibling script does. That is
+# not a style choice: `exit` inside a `$( )` leaves only the subshell, so a refusal returned
+# that way would depend on `set -e` to stop the script - and a guard whose refusal is
+# conditional on an option staying set is not a guard.
+RESOLVED=""
+resolve_or_die() { # $1 = label  $2 = path -> sets RESOLVED
+  local label="$1" path="$2" r=""
+  if [ -z "$path" ]; then
+    echo "REFUSING: $label is empty" >&2
+    exit 2
+  fi
+  if r="$(realpath -m -- "$path" 2>/dev/null)" && [ -n "$r" ]; then
+    :
+  elif r="$(python3 -c 'import os,sys; sys.stdout.write(os.path.realpath(sys.argv[1]))' \
+              "$path" 2>/dev/null)" && [ -n "$r" ]; then
+    :
+  else
+    echo "REFUSING: $label '$path' could not be resolved: no working 'realpath -m' and no" >&2
+    echo "  python3. Refusing rather than checking the unresolved string - that is CR-01." >&2
+    exit 2
+  fi
+  RESOLVED="$r"
+}
+
+resolve_or_die "the output path" "$DEST"
+DEST_REAL="$RESOLVED"
+
+# `git -C` needs a directory that EXISTS, and $DEST's parent may not. Walk up to the nearest
+# existing ancestor rather than letting a non-existent parent make the check silently pass:
+# "could not look" must not read as "not in a repository" (CLAUDE.md § Health Checks).
+GIT_PROBE_DIR="$(dirname -- "$DEST_REAL")"
+while [ ! -d "$GIT_PROBE_DIR" ] && [ "$GIT_PROBE_DIR" != "/" ]; do
+  GIT_PROBE_DIR="$(dirname -- "$GIT_PROBE_DIR")"
+done
+
+if ! command -v git >/dev/null 2>&1; then
+  echo "REFUSING: git is not available, so it cannot be checked whether" >&2
+  echo "  '$DEST_REAL' is inside a repository. This file carries a live Discogs token and the" >&2
+  echo "  checkout is PUBLIC; an unperformed check is not a passed check." >&2
+  exit 2
+fi
+
+# GIT_DIR/GIT_WORK_TREE are unset for the probe so an ambient value inherited from a caller
+# cannot point the check at a different repository than the one containing $DEST. Their most
+# dangerous form is a bare repo, where --show-toplevel errors and the check would FAIL OPEN.
+if DEST_REPO="$(unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR
+                git -C "$GIT_PROBE_DIR" rev-parse --show-toplevel 2>/dev/null)" \
+   && [ -n "$DEST_REPO" ]; then
+  echo "REFUSING: '$DEST_REAL' is inside the git working tree at '$DEST_REPO'." >&2
+  echo "  This file carries a LIVE Discogs token in plaintext. This repository is PUBLIC, and a" >&2
+  echo "  committed credential stays recoverable via 'git log -S' long after it is deleted." >&2
+  echo "  Mode 0600 does not help a file once it is committed. Write it outside the checkout -" >&2
+  echo "  /mnt/fast/spike-03/ is where this phase's generated configs belong." >&2
+  exit 2
+fi
+
+# NOTE ON SCOPE: the review also suggested an allow-list of output roots. Not taken here - it
+# would hard-code paths this script is deliberately free of, and the committable-credential
+# hazard WR-04 is about is fully addressed by the refusal above plus the .gitignore pattern.
+
 # --- gate the credential file before reading it ------------------------------------------
 mode_owner="$(stat -c '%a %U' "$ENV_FILE")"
 if [ "$mode_owner" != "600 root" ]; then
@@ -49,7 +136,11 @@ umask 077
 
 # The Python child reads the value from its OWN environment. The value is not an argument to
 # this call, and it is not present anywhere in this file.
-BASE="$BASE" DEST="$DEST" python3 - <<'PY'
+#
+# It is handed $DEST_REAL, not $DEST, so the path that was CHECKED is the path that is WRITTEN
+# (WR-04). They differ when the final component is a symlink: `os.replace()` would replace the
+# symlink itself, landing the file at $DEST while the guard had cleared its target elsewhere.
+BASE="$BASE" DEST="$DEST_REAL" python3 - <<'PY'
 import os
 
 base, dest = os.environ["BASE"], os.environ["DEST"]
