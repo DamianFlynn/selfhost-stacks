@@ -12,12 +12,15 @@
 # Usage:
 #   bash scripts/spike03-wrtag-arms.sh --album <name> [--image <ref>] [--class <label>]
 #                                      [--mbid <uuid>] [--yes]
+#   bash scripts/spike03-wrtag-arms.sh --self-test
 #
 #   --album  REQUIRED. A directory name directly under $SRC. Not a path - just the folder name.
 #   --image  Container image reference. Default $WRTAG_IMAGE. THE THREE ARMS DIFFER ONLY HERE.
 #   --class  A label for the output filenames, e.g. single-disc / multi-disc. Default "unclassed".
 #   --mbid   Pin the MusicBrainz release. Held CONSTANT across the three tags of one disc class.
 #   --yes    Pass wrtag's -yes, accepting a low-score match.
+#   --self-test  Run the $SRC/$LIB fence against a table of known-good and known-bad paths and
+#            exit. Touches nothing, needs no docker, and is the regression check for CR-01.
 #
 #   The three tags are three invocations of ONE script, not three scripts. That is the point:
 #   if the arms differed in any other way the comparison would be measuring the difference
@@ -71,7 +74,23 @@
 #        be the real library, and this repo's path format is rooted at /music/library - so
 #        whatever /music/library is bound to IS the target. It is never the real library, and
 #        this script refuses to start unless $LIB is inside the phase's own scratch root.
+#
+#        THE FENCE IS EVALUATED ON THE RESOLVED PATH, NOT ON THE STRING (CR-01). It used to be
+#        a pair of `case` patterns over the unresolved $LIB, and `find` resolves `..` through
+#        the real filesystem before it acts - so
+#            LIB=/mnt/fast/spike-03/wrtag-lib/../../../../etc
+#        passed the allow-prefix guard AND the literal `spike-03` component guard, and
+#        `find "$LIB" -mindepth 1 -delete` then emptied /etc. A trailing `/..` in a copy-pasted
+#        LIB= was sufficient, and this header advertises LIB as a supported override. The
+#        string guards are kept as defence in depth; what fence_eval() adds is that the path
+#        is resolved FIRST and the fence is applied to what find will actually act on. A path
+#        that cannot be resolved is a refusal, never a proceed. `--self-test` runs that fence
+#        against the exact bypass string above and against the legitimate defaults.
 #     3. `find "$SRC" "$LIB" -newer <stamp> -type f` must return ZERO lines. Cheap, and first.
+#        It must also have BEEN ABLE TO LOOK (CR-02): the inputs are asserted present and
+#        readable first, find's exit status is read rather than swallowed, and anything it
+#        wrote to stderr is a refusal. "could not look" is reported as its own non-green
+#        outcome and never as "0 files newer than the stamp" - CLAUDE.md § Health Checks.
 #     4. A WHOLE-SUBTREE MANIFEST DIFF over all of $SRC and $LIB must be empty, on both a
 #        `%p %s %T@` listing and a sha256sum of every file.
 #
@@ -132,6 +151,7 @@ ALBUM=""
 CLASS="unclassed"
 MBID=""
 YES=""
+SELFTEST=""
 
 say()  { printf '%s\n' "$*"; }
 ok()   { printf '  \342\234\223 %s\n' "$*"; }
@@ -148,6 +168,7 @@ usage() {
   say "  --class  Label used in the output filenames. Default: $CLASS"
   say "  --mbid   Pin the MusicBrainz release; held constant across the three tags of a class."
   say "  --yes    Pass wrtag's -yes (accept a low-score match)."
+  say "  --self-test  Exercise the \$SRC/\$LIB fence and exit. No docker, writes nothing."
   say ""
   say "  env: WRTAG_IMAGE, WRTAG_YAML, SRC, LIB, OUT, MANIFESTS,"
   say "       SRC_ALLOW_PREFIX, LIB_ALLOW_PREFIX"
@@ -165,31 +186,175 @@ while [ $# -gt 0 ]; do
     --class) CLASS="${2:-}"; shift 2 || usage ;;
     --mbid)  MBID="${2:-}"; shift 2 || usage ;;
     --yes)   YES="1"; shift ;;
+    --self-test) SELFTEST="1"; shift ;;
     -h|--help) usage ;;
     *) say "unknown argument: $1"; usage ;;
   esac
 done
-
-[ -n "$ALBUM" ] || usage
 
 # --- Preconditions -------------------------------------------------------------------------
 # Every one of these is exit 2: they mean the measurement was never set up, which is a
 # different answer from "the measurement was made and wrtag failed".
 precheck_fail() { bad "$1"; exit 2; }
 
+# --- Path resolution ------------------------------------------------------------------------
+# CR-01. Resolve BEFORE checking. `find` resolves `..` and symlinks through the real
+# filesystem, so a fence evaluated on the unresolved string is not a fence on what find acts
+# on. Resolution that cannot be performed is a refusal, never a proceed.
+#
+# GNU `realpath -m` is the intended implementation - LXC 100, where this script runs, has it,
+# and `-m` resolves components that do not exist yet. python3's os.path.realpath is a fallback
+# with the same property, so `--self-test` also runs on a workstation without GNU coreutils
+# (the same class of portability trap CLAUDE.md records for GNU `timeout` on macOS).
+RESOLVED=""
+resolve_or_die() { # $1 = label for the message  $2 = path -> sets RESOLVED
+  local label="$1" path="$2" r=""
+  [ -n "$path" ] || precheck_fail "$label is empty - refusing"
+  if r="$(realpath -m -- "$path" 2>/dev/null)" && [ -n "$r" ]; then
+    :
+  elif r="$(python3 -c 'import os,sys; sys.stdout.write(os.path.realpath(sys.argv[1]))' \
+              "$path" 2>/dev/null)" && [ -n "$r" ]; then
+    :
+  else
+    precheck_fail "$label '$path' could not be resolved: no working 'realpath -m' and no
+     python3. REFUSING rather than falling back to checking the unresolved string, which is
+     exactly the defect CR-01 was."
+  fi
+  RESOLVED="$r"
+}
+
+# The fence itself, factored into a function so `--self-test` can exercise it without docker,
+# without a filesystem and without running an arm. Returns 0 = inside the fence, 1 = refused.
+# Sets FENCE_REAL (the resolved path) and FENCE_WHY (the refusal reason).
+FENCE_REAL=""
+FENCE_WHY=""
+fence_eval() { # $1 = given path  $2 = allow prefix  $3 = required path component (may be empty)
+  local given="$1" prefix="$2" need="$3" real="" preal=""
+  FENCE_REAL=""
+  FENCE_WHY=""
+
+  # 1. THE AUTHORITATIVE CHECK (CR-01): the resolved path against the resolved allow prefix.
+  #    The prefix is resolved too, so a symlinked mount root does not spuriously refuse a
+  #    legitimate path.
+  resolve_or_die "allow prefix" "$prefix"
+  preal="$RESOLVED"
+  resolve_or_die "path" "$given"
+  real="$RESOLVED"
+  FENCE_REAL="$real"
+  case "$real/" in
+    "$preal/"*) : ;;
+    *) FENCE_WHY="resolves to '$real', which is outside '$preal/'"; return 1 ;;
+  esac
+
+  # 2. The required literal component, also on the RESOLVED path.
+  if [ -n "$need" ]; then
+    case "$real" in
+      *"/$need/"*) : ;;
+      *) FENCE_WHY="resolves to '$real', which has no '$need' path component"; return 1 ;;
+    esac
+  fi
+
+  # 3. The ORIGINAL unresolved-string guard, kept as defence in depth rather than replaced.
+  case "$given/" in
+    "$prefix"*) : ;;
+    *) FENCE_WHY="the given string is outside the allowed prefix '$prefix'"; return 1 ;;
+  esac
+
+  # 4. A literal `..` component has no legitimate place in either of these paths, and it is the
+  #    exact shape that walked through both original guards. Refused by name so the message
+  #    says what was wrong and not only where it landed. Deliberately LAST: check 1 already
+  #    refuses every `..` that escapes, and this catches the ones that do not.
+  case "$given" in
+    *"/../"*|*"/.."|"../"*|"..")
+      FENCE_WHY="contains a '..' path component - pass the resolved path instead"
+      return 1
+      ;;
+  esac
+
+  return 0
+}
+
+# --- Regression check for CR-01 --------------------------------------------------------------
+self_test() {
+  local fails=0 rc=0 expect given prefix need desc got td
+  say ""
+  say "== spike03-wrtag-arms.sh --self-test: the \$SRC / \$LIB fence (CR-01) =="
+  rule
+  while IFS='|' read -r expect given prefix need desc; do
+    case "${expect:-}" in ""|"#"*) continue ;; esac
+    rc=0
+    fence_eval "$given" "$prefix" "$need" || rc=1
+    got="accept"
+    [ "$rc" -eq 0 ] || got="refuse"
+    if [ "$got" = "$expect" ]; then
+      ok "$got (expected): $given"
+      [ "$got" = "accept" ] || say "        reason: $FENCE_WHY"
+      say "        $desc"
+    else
+      bad "FENCE REGRESSION: expected $expect, got $got: $given"
+      bad "        $desc"
+      fails=$((fails + 1))
+    fi
+  done <<'CASES'
+refuse|/mnt/fast/spike-03/wrtag-lib/../../../../etc|/mnt/fast/spike-03/|spike-03|CR-01: the exact bypass string from the code review. It passed BOTH original string guards and `find -delete` would have emptied /etc.
+refuse|/mnt/fast/spike-03/wrtag-lib/..|/mnt/fast/spike-03/|spike-03|A trailing `/..` in a copy-pasted LIB= - the cheapest form of the same bypass.
+refuse|/mnt/fast/spike-03/wrtag-lib/../other|/mnt/fast/spike-03/|spike-03|Resolves back INSIDE the fence, so checks 1-3 pass; refused by the `..` component guard.
+refuse|/etc|/mnt/fast/spike-03/|spike-03|Plainly outside the fence, no `..` involved.
+refuse|/mnt/fast/wrtag-lib|/mnt/fast/spike-03/|spike-03|Inside /mnt/fast but outside the phase scratch root.
+refuse|/mnt/tank/downloads/spike-03/wrtag-src/../../../../var/tmp|/mnt/tank/downloads/||SRC: `..` escaping the downloads allow-prefix.
+accept|/mnt/fast/spike-03/wrtag-lib|/mnt/fast/spike-03/|spike-03|The legitimate $LIB default must still be accepted.
+accept|/mnt/tank/downloads/spike-03/wrtag-src|/mnt/tank/downloads/||The legitimate $SRC default must still be accepted.
+CASES
+
+  # A symlink case, built at run time. Neither the unresolved-string guard nor the `..` guard
+  # can see through a symlink; only check 1 can. This is what makes "resolve first" load
+  # bearing rather than cosmetic.
+  td="$(mktemp -d "${TMPDIR:-/tmp}/spike03-fence-XXXXXX")"
+  mkdir -p "$td/root/spike-03" "$td/outside"
+  ln -s "$td/outside" "$td/root/spike-03/escape"
+  rc=0
+  fence_eval "$td/root/spike-03/escape" "$td/root/spike-03/" "spike-03" || rc=1
+  if [ "$rc" -eq 1 ]; then
+    ok "refuse (expected): <tmp>/root/spike-03/escape -> <tmp>/outside"
+    say "        reason: $FENCE_WHY"
+    say "        A symlink out of the fence. Invisible to a string guard; caught by resolution."
+  else
+    bad "FENCE REGRESSION: a symlink out of the scratch root was ACCEPTED"
+    fails=$((fails + 1))
+  fi
+  rm -f "$td/root/spike-03/escape"
+  rmdir "$td/root/spike-03" "$td/root" "$td/outside" "$td" 2>/dev/null || true
+
+  say ""
+  if [ "$fails" -ne 0 ]; then
+    bad "self-test: $fails fence case(s) FAILED"
+    return 1
+  fi
+  ok "self-test: every fence case behaved as expected"
+  return 0
+}
+
+if [ -n "$SELFTEST" ]; then
+  if self_test; then exit 0; else exit 1; fi
+fi
+
+[ -n "$ALBUM" ] || usage
+
 command -v docker >/dev/null 2>&1 \
   || precheck_fail "docker not found - this script runs ON LXC 100, not the workstation"
 
-case "$SRC/" in
-  "$SRC_ALLOW_PREFIX"*) : ;;
-  *) precheck_fail "SRC '$SRC' is outside the allowed prefix '$SRC_ALLOW_PREFIX' - refusing" ;;
-esac
-case "$LIB/" in
-  "$LIB_ALLOW_PREFIX"*) : ;;
-  *) precheck_fail "LIB '$LIB' is outside the allowed prefix '$LIB_ALLOW_PREFIX' - refusing.
+if ! fence_eval "$SRC" "$SRC_ALLOW_PREFIX" ""; then
+  precheck_fail "SRC '$SRC' $FENCE_WHY - refusing"
+fi
+SRC="$FENCE_REAL"
+
+if ! fence_eval "$LIB" "$LIB_ALLOW_PREFIX" "spike-03"; then
+  precheck_fail "LIB '$LIB' $FENCE_WHY - refusing.
      The path format is rooted at /music/library, so whatever is bound there IS the write
-     target. It must be scratch (D-22)." ;;
-esac
+     target. It must be scratch (D-22). \$LIB is also emptied with \`find -delete\` before
+     every arm, so this fence is evaluated on the RESOLVED path (CR-01)."
+fi
+LIB="$FENCE_REAL"
 
 [ -d "$SRC" ] || precheck_fail "SRC does not exist: $SRC"
 [ -d "$LIB" ] || precheck_fail "LIB does not exist: $LIB"
@@ -246,13 +411,28 @@ say "  stderr           : $STDERR_FILE"
 say ""
 
 # --- Empty $LIB and prove it is empty ------------------------------------------------------
-# Guarded twice: LIB_ALLOW_PREFIX above, and the literal 'spike-03' component here. -delete
-# rather than `rm -rf` so a bug cannot turn into a recursive removal of an unexpected root.
+# $LIB is the RESOLVED path by now: fence_eval() checked it against the resolved
+# LIB_ALLOW_PREFIX and against the literal 'spike-03' component, and assigned the resolved
+# value back over $LIB. The component check is repeated here, immediately beside the delete,
+# because that is where a future edit will look for it - and because after CR-01 a guard that
+# is not adjacent to the dangerous call is a guard that gets left behind by a refactor.
+# -delete rather than `rm -rf` so a bug cannot turn into a recursive removal of an unexpected
+# root.
 case "$LIB" in
   */spike-03/*) : ;;
   *) precheck_fail "refusing to empty '$LIB' - it does not contain a spike-03 path component" ;;
 esac
-find "$LIB" -mindepth 1 -delete 2>/dev/null || true
+# The delete's own failures are NOT hidden. `2>/dev/null || true` here used to mean that an
+# EACCES subtree, a read-only remount or a vanished $LIB all looked like a clean empty - and
+# the emptiness assertion three lines down would then pass vacuously on a stale tree.
+DEL_ERR="$OUT/wrtag-${ARM}.lib-empty.err"
+DEL_RC=0
+find "$LIB" -mindepth 1 -delete 2>"$DEL_ERR" || DEL_RC=$?
+if [ "$DEL_RC" -ne 0 ] || [ -s "$DEL_ERR" ]; then
+  bad "could not empty \$LIB (find -delete rc=$DEL_RC) - refusing to run this arm:"
+  sed 's/^/         /' "$DEL_ERR" >&2 || true
+  exit 1
+fi
 LIB_ENTRIES="$(find "$LIB" -mindepth 1 | wc -l | tr -d ' ')"
 if [ "$LIB_ENTRIES" -ne 0 ]; then
   bad "\$LIB is not empty at the start of this arm ($LIB_ENTRIES entries) - refusing to run,"
@@ -323,14 +503,60 @@ printf 'arm=%s image=%s album=%s class=%s mbid=%s yes=%s container_exit=%s path_
 say "== wrote-nothing assertion =="
 rule
 FAILED=0
-NEWER="$(find "$SRC" "$LIB" -newer "$STAMP" -type f 2>/dev/null || true)"
-NEWER_COUNT="$(printf '%s' "$NEWER" | grep -c . || true)"
-if [ "${NEWER_COUNT:-0}" -eq 0 ]; then
-  ok "instrument 1 (find -newer, \$SRC and \$LIB): 0 files newer than the stamp"
-else
-  bad "instrument 1: $NEWER_COUNT files are newer than the stamp - THE DRY RUN WROTE:"
-  printf '%s\n' "$NEWER" | sed 's/^/         /'
+
+# CR-02. "COULD NOT LOOK" IS NOT "NOTHING CHANGED", AND IT IS NOT A PASS.
+#
+# This used to be `find ... 2>/dev/null || true` feeding a count. `2>/dev/null` discarded the
+# error and `|| true` discarded the exit code, so EVERY failure mode of find - $SRC gone, $LIB
+# gone, a re-materialised bind mount pointing at a vanished inode (03-05 finding 3, and the
+# realistic trigger on this estate), EACCES on a subtree, the stamp deleted - produced an empty
+# result, a zero count and a green tick claiming the dry run wrote nothing. That is the exact
+# failure CLAUDE.md § Health Checks forbids, inside the assertion this script exists to make,
+# and it is the first of the four controls the header claims.
+#
+# So: assert the inputs are there and readable BEFORE looking, then read find's exit status
+# instead of swallowing it, and route "could not look" to its own non-green outcome. Note the
+# house rule that `cmd | wc -l` silently exits 0 - `set -euo pipefail` is set at the top of
+# this file, and the count below is taken from an already-captured string, not from a pipeline
+# whose head could have failed unnoticed.
+INSTR1_BLIND=""
+for probe_dir in "$SRC" "$LIB"; do
+  if [ ! -d "$probe_dir" ]; then
+    INSTR1_BLIND="'$probe_dir' is not a directory (vanished, or a stale bind mount)"
+    break
+  fi
+  if [ ! -r "$probe_dir" ] || [ ! -x "$probe_dir" ]; then
+    INSTR1_BLIND="'$probe_dir' is not readable and searchable"
+    break
+  fi
+done
+if [ -z "$INSTR1_BLIND" ] && [ ! -f "$STAMP" ]; then
+  INSTR1_BLIND="the stamp '$STAMP' is gone, so -newer has no reference"
+fi
+
+NEWER_ERR="$OUT/wrtag-${ARM}.find-newer.err"
+: > "$NEWER_ERR"
+if [ -n "$INSTR1_BLIND" ]; then
+  bad "instrument 1 COULD NOT LOOK: $INSTR1_BLIND"
+  bad "  This is NOT a pass. 'could not look' is a distinct outcome from 'nothing changed'"
+  bad "  (CLAUDE.md § Health Checks), and the wrote-nothing claim is UNPROVEN for this arm."
   FAILED=1
+else
+  NEWER_RC=0
+  NEWER="$(find "$SRC" "$LIB" -newer "$STAMP" -type f 2>"$NEWER_ERR")" || NEWER_RC=$?
+  if [ "$NEWER_RC" -ne 0 ] || [ -s "$NEWER_ERR" ]; then
+    bad "instrument 1 COULD NOT LOOK (find rc=$NEWER_RC) - this is NOT a pass:"
+    sed 's/^/         /' "$NEWER_ERR" >&2 || true
+    bad "  The wrote-nothing claim is UNPROVEN for this arm, which is not the same as false."
+    FAILED=1
+  elif [ -z "$NEWER" ]; then
+    ok "instrument 1 (find -newer, \$SRC and \$LIB): 0 files newer than the stamp"
+  else
+    NEWER_COUNT="$(printf '%s\n' "$NEWER" | grep -c . || true)"
+    bad "instrument 1: $NEWER_COUNT files are newer than the stamp - THE DRY RUN WROTE:"
+    printf '%s\n' "$NEWER" | sed 's/^/         /'
+    FAILED=1
+  fi
 fi
 
 # --- Instrument 2: whole-subtree manifest diff ---------------------------------------------
@@ -365,7 +591,9 @@ rm -f "$STAMP"
 
 say ""
 if [ "$FAILED" -ne 0 ]; then
-  bad "ARM ${ARM}: WROTE SOMETHING. Exiting 1."
+  bad "ARM ${ARM}: WROTE SOMETHING, or the wrote-nothing assertion COULD NOT BE MADE."
+  bad "Read the instrument lines above - the two are different findings and only one of them"
+  bad "is about wrtag. Exiting 1."
   exit 1
 fi
 ok "ARM ${ARM}: ran and wrote nothing, on both mounts, by both instruments."

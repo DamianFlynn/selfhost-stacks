@@ -5,6 +5,11 @@
 # This is the ONLY file in Phase 3 that contains the Discogs token in plaintext. It lives
 # outside the repository, is mode 600, and is deleted in plan 03-11.
 #
+# "is mode 600" is an invariant on EVERY path through this script, not only the happy one -
+# see the CR-03 block at the bottom. It is created 0600 before the first token byte is
+# written and moved into place atomically, so no failure - including a pre-existing 0644
+# destination or an ENOSPC mid-write - can leave a world-readable file carrying the token.
+#
 # THE POINT OF THIS SCRIPT IS THE CHANNEL THE TOKEN TRAVELS ON.
 # The value is never interpolated into an `echo`, a `printf` argument, a heredoc typed at a
 # prompt, a `docker exec -e`, or any other argv. LXC 100 runs 100+ containers with a readable
@@ -64,9 +69,58 @@ if not injected:
     out.append("discogs:\n")
     out.append(f"  user_token: {token}\n")
 
-with open(dest, "w", encoding="utf-8") as fh:
-    fh.write("".join(out))
-os.chmod(dest, 0o600)
-print(f"wrote {dest} mode {oct(os.stat(dest).st_mode & 0o777)} "
-      f"({len(out)} lines, token injected={injected})")
+# --- the destination side of the token channel (CR-03) -------------------------------------
+# This used to be `open(dest, "w")` followed by `os.chmod(dest, 0o600)`, and BOTH halves of
+# that were wrong:
+#
+#   * `umask 077` governs the mode of a NEWLY CREATED file only; it has no effect on one that
+#     already exists. A $DEST left at 0644 by a prior run, a `cp`, or an editor backup was
+#     TRUNCATED AND KEPT ITS MODE, so the live 40-character token landed world-readable on a
+#     host running 100+ containers, and stayed that way until the chmod returned.
+#   * If the write raised - ENOSPC on the ext4 root that plan 03-03 finding 4 warns about -
+#     `os.chmod` never ran at all, and a partial, world-readable, token-bearing file was left
+#     on disk permanently. There was no try/finally and no trap.
+#
+# So the mode is correct BEFORE the first token byte is written, on every path:
+#   1. O_CREAT|O_EXCL creates a NEW file with mode 0600. O_EXCL means it can never inherit an
+#      existing file's mode, and never truncates something already there.
+#   2. os.fchmod pins 0600 explicitly rather than trusting the umask to have been 077.
+#   3. The token is written into that already-0600 file, fsync'd, then os.replace()d over the
+#      destination. os.replace is atomic within a filesystem and carries the mode with it, so
+#      there is no instant at which $DEST is both token-bearing and world-readable.
+#   4. Every failure path unlinks the partial file - which was 0600 for its whole lifetime.
+#
+# The staging file is created in the SAME DIRECTORY as $DEST, never in the system temp
+# directory: on LXC 100 that is tmpfs backed by host RAM (T-01-15), and a credential does not
+# belong in a world-shared directory either.
+dest_dir = os.path.dirname(os.path.abspath(dest)) or "."
+tmp = os.path.join(dest_dir, f".{os.path.basename(dest)}.{os.getpid()}.partial")
+
+fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+try:
+    os.fchmod(fd, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as fh:
+        fd = None  # fdopen owns the descriptor now
+        fh.write("".join(out))
+        fh.flush()
+        os.fsync(fh.fileno())
+    os.replace(tmp, dest)
+except BaseException:
+    if fd is not None:
+        os.close(fd)
+    try:
+        os.unlink(tmp)
+    except OSError:
+        pass
+    raise
+
+# Assert rather than report - README / CLAUDE.md § Health Checks. A printed mode that nothing
+# checks is how the original defect read as correct.
+mode = os.stat(dest).st_mode & 0o777
+if mode != 0o600:
+    raise SystemExit(
+        f"REFUSING: {dest} is mode {oct(mode)} after the write, expected 0o600. "
+        "It carries a live Discogs token - remove it."
+    )
+print(f"wrote {dest} mode {oct(mode)} ({len(out)} lines, token injected={injected})")
 PY
