@@ -1,0 +1,219 @@
+# THROWAWAY — DO NOT DEPLOY
+#
+# This file exists only to reproduce a Phase 3 measurement — the axis-two ergonomics trial. It is
+# not a stack. It is referenced by no `include:` list, no `compose.yaml`, and nothing under
+# `stacks/`. It lives in the phase directory on purpose: a directory under `stacks/selfhosted/`
+# looks permanent, and a reviewer six weeks from now reading it as a fourth tagging path is
+# precisely the failure mode this project exists to prevent (PROJECT.md § Core Value — "a fourth
+# half-built path is the one outcome that must not happen").
+#
+# D-03: `stacks/selfhosted/arrs/beets/beets.yaml` and `stacks/selfhosted/music/wrtag.yaml` are READ
+# and QUOTED by this phase and NOT edited. This file is the content analog of `wrtag.yaml` for
+# `security_opt`, `restart: "no"`, `profiles: ["manual"]` and the comment-above-the-mount style, and
+# shares NONE of its location.
+#
+# Plan 03-11 ARCHIVES this file in place under `.planning/` with this banner intact rather than
+# deleting it. Deleting the exact executable config would cost the spike its reproducibility — the
+# whole point of a measurement is that it can be re-run when the decision is challenged — while the
+# banner plus the `.planning/` location is what keeps it from being read as a deployable path.
+#
+# How it is invoked (never a bare `docker compose up`), from /mnt/fast/spike-03/ on LXC 100:
+#   docker compose -f 03-spike-beets-flask.yaml --profile manual up -d beets-flask-spike
+#
+# ---------------------------------------------------------------------------------------------
+# `docker compose config` PRINTS THE DISCOGS TOKEN — inherited from plan 03-04
+# ---------------------------------------------------------------------------------------------
+# Compose RESOLVES `env_file` into the rendered `environment` map. A plain
+# `docker compose -f … config` on this file emits DISCOGS_USER_TOKEN in cleartext and drops the
+# `env_file` key entirely. ALWAYS pass `--no-env-resolution` when rendering this file for
+# inspection or assertion:
+#
+#     docker compose -f 03-spike-beets-flask.yaml --profile manual config --no-env-resolution
+#
+# `--profile manual` is also required on `config`: the service carries `profiles: ["manual"]`, and
+# compose omits inactive-profile services from the render, so an unflagged `config` reports zero
+# services rather than one. Never redirect an unflagged `config` render anywhere — least of all to
+# /tmp, which on LXC 100 is tmpfs (project MEMORY: 1.1 GB there killed SSH on host and LXC).
+#
+# ---------------------------------------------------------------------------------------------
+# TEARDOWN (plan 03-11)
+# ---------------------------------------------------------------------------------------------
+#     docker compose -f 03-spike-beets-flask.yaml --profile manual down -v
+#
+# `-v` on principle, matching 03-spike-beets.yaml: this image declares no VOLUME, but `/logs` is
+# written INSIDE the container writable layer, which on LXC 100 is /var/lib/docker on the ext4
+# ROOT filesystem. `LOG_LEVEL_BEETSFLASK: DEBUG` below makes that non-trivial. `/logs` is
+# deliberately not bound — the logs are throwaway and binding them would put the same bytes on the
+# same filesystem with an extra path to reap.
+#
+# ---------------------------------------------------------------------------------------------
+# The .env trap (03-PATTERNS.md § Throwaway compose files)
+# ---------------------------------------------------------------------------------------------
+# Compose resolves `.env` from THE COMPOSE FILE'S OWN DIRECTORY. The stack files under
+# `stacks/selfhosted/<stack>/` write `$TZ` / `$PUID` / `$PGID` and are fed by a sibling `.env` that
+# is gitignored (`.gitignore:1  **/.env`). This file has no `.env` sibling in either location it is
+# run from, so copying `$TZ`/`$USER_ID`/`$GROUP_ID` verbatim from 03-RESEARCH.md's compose sketch —
+# which does write `TZ: ${TZ}` — would expand it to the EMPTY STRING with only a warning on stderr.
+# Every value below is therefore written as a LITERAL. `568:568` is `apps:apps` per CLAUDE.md
+# § Storage and Permissions.
+
+services:
+
+  beets-flask-spike:
+    # Operator-acknowledged 2026-09-04 ("approved — deploy rc6") at plan 03-10 Task 1's blocking
+    # checkpoint, BEFORE this container existed — see 03-BEETS-FLASK.md § Operator decision, which
+    # records `docker ps -a` returning zero `beets-flask-spike` at the moment of answering, and
+    # which was RE-ASSERTED at 2026-09-04T09:08:37Z by the continuation agent immediately before
+    # this file was adopted (0 containers, digest unchanged, 35 G free on `/`).
+    #
+    # It is a RELEASE CANDIDATE. 2.0 has been in RC since 2025-12-29 and the last stable, v1.2.1
+    # (28 Dec 2025), is eight months stale. rc6 is trialled anyway because rc6 is what a real
+    # deployment would use and is where the frictions live — and because 1.0 REMOVED the
+    # interactive terminal import, so v1.2.1 would not exhibit the UI candidate-selection workflow
+    # criterion 7 exists to evaluate. "Still in RC after eight months" is recorded as an axis-two
+    # durability risk in its own right.
+    #
+    # Digest verified on the host, 2026-09-04:
+    #   sha256:9548e78f8bcda864bf557b7bb7490f7dcfb852ce3abf2f4c1501d5bb812ec2cd
+    image: metasauce/beets-flask:v2.0.0-rc6
+    container_name: beets-flask-spike
+    hostname: beets-flask-spike
+    security_opt:
+      - no-new-privileges:true
+    # A throwaway spike must never come up on a daemon restart, and must never be swept in by a
+    # bare `docker compose up` at the repo root. Same discipline as the frozen stacks.
+    restart: "no"
+    profiles: ["manual"]
+
+    # -----------------------------------------------------------------------------------------
+    # LOOPBACK ONLY. This is a security control, not a convenience.
+    # -----------------------------------------------------------------------------------------
+    # beets-flask has NO BUILT-IN AUTHENTICATION of any kind, and it ships a tmux-backed WEB
+    # TERMINAL with shell access to the container (`libtmux` in pyproject.toml,
+    # `gui.terminal.start_path` in its config). On a host running 103 containers, publishing that
+    # would be an elevation of privilege — anyone reaching the page gets a root-capable shell
+    # inside a container that mounts `tank`.
+    #
+    # So: bound to 127.0.0.1 and NOTHING ELSE. The operator reaches it over an SSH tunnel
+    #   ssh -L 5002:127.0.0.1:5002 root@172.16.1.159
+    # or over Tailscale. 5002 deliberately avoids colliding with anything already on 5001.
+    #
+    # The CONTAINER port is 5001, read from primary source rather than from the docs: the image
+    # declares NO `ExposedPorts` at all (`docker image inspect .Config.ExposedPorts` is null), so
+    # the only authority is `/repo/backend/launch_server.py:12`, which passes `port=5001` to
+    # uvicorn. A published port asserted from an image's EXPOSE would have been asserted from
+    # something this image does not have.
+    #
+    # NO TRAEFIK LABELS AT ALL — see the `labels` note under "Deliberately absent" below.
+    ports:
+      - "127.0.0.1:5002:5001"
+
+    environment:
+      # LITERALS, not $TZ/$USER_ID/$GROUP_ID — see "The .env trap" above.
+      TZ: Europe/Dublin
+      # 568:568 is apps:apps, the estate service account (CLAUDE.md § Storage and Permissions).
+      # The scratch tree under /mnt/tank/downloads/spike-03 was chowned to 568:568 from atlantis by
+      # plan 03-03; a container running as anything else would write files the rest of the phase
+      # cannot read. The image's ENTRYPOINT runs `/repo/entrypoint_fix_permissions.sh` and then
+      # `su beetle -c /repo/entrypoint.sh`, so these two variables are what `beetle` resolves to.
+      USER_ID: 568
+      GROUP_ID: 568
+      # Criterion 7 is an OBSERVATION exercise. DEBUG is what makes the eight frictions checkable
+      # against a log rather than against documentation. Note this writes to /logs INSIDE the
+      # container layer — see TEARDOWN above.
+      LOG_LEVEL_BEETSFLASK: DEBUG
+      # REDIS_URL is deliberately UNSET. rc-series bundles redis internally and
+      # /repo/entrypoint.sh starts it with `redis-server --daemonize yes` only `if [ -z
+      # "$REDIS_URL" ]`. Setting it here would silently point the queue at nothing. This is
+      # research assumption A4; it is asserted at runtime, not assumed — see 03-BEETS-FLASK.md.
+
+    # T-03-60. The Discogs token crosses into this third-party RELEASE CANDIDATE image HERE and
+    # only here. Absolute path, outside the repo, mode 600 root, never committed. Never
+    # `-e DISCOGS_USER_TOKEN=...` and never on a `docker exec` argv: this host runs 103 containers
+    # with a readable process table. The variable is referenced by NAME only, and its value appears
+    # nowhere in this repository, which is PUBLIC and already carries one credential exposure still
+    # recoverable via `git log -S`.
+    env_file:
+      - /mnt/fast/secrets/discogs.env
+
+    volumes:
+      # Throwaway config: /config/beets/config.yaml (a normal beets config, so ONE shared
+      # library.db), /config/beets-flask/config.yaml (the three policy-carrying inboxes), and
+      # /config/requirements.txt (the PINNED startup install). The image sets
+      # BEETSDIR=/config/beets and BEETSFLASKDIR=/config/beets-flask — verified from
+      # `docker image inspect .Config.Env`, not assumed from the docs.
+      #
+      # `/config/requirements.txt` is installed by `/repo/entrypoint_user_scripts.sh` with
+      # `uv pip install -r`, NOT with plain `pip` — read from the script, not from the docs. It
+      # honours an `==` pin identically, which is what makes the OD-2 control hold; the
+      # distinction is recorded because a reader debugging the install will otherwise look for
+      # the wrong command in the log.
+      - type: bind
+        source: /mnt/fast/spike-03/bf-config
+        target: /config
+        read_only: false
+
+      # IDENTICAL PATHS INSIDE AND OUTSIDE THE CONTAINER. beets-flask's own documentation requires
+      # it: "needs to be consistent inside and outside of the container. Otherwise beets will not
+      # be able to manage files correctly." This is not a style choice — a mismatch corrupts the
+      # library's path bookkeeping rather than failing loudly.
+      #
+      # The inbox holds THREE policy-carrying subdirectories (preview / auto / bootleg) so
+      # criterion 7's architecture claim is EXERCISED rather than read. rw because beets-flask
+      # manages inbox state; the trial's own safety comes from `import.copy: yes` /
+      # `import.move: no` and from beets-flask supporting only `copy` in the first place.
+      - type: bind
+        source: /mnt/tank/downloads/spike-03/bf-inbox
+        target: /mnt/tank/downloads/spike-03/bf-inbox
+        read_only: false
+
+      # The import destination — `directory:` in the beets config points here. Nothing else in the
+      # estate reads this path.
+      - type: bind
+        source: /mnt/tank/downloads/spike-03/bf-clean
+        target: /mnt/tank/downloads/spike-03/bf-clean
+        read_only: false
+
+    # -----------------------------------------------------------------------------------------
+    # DELETED rather than commented out — the wrtag.yaml:39-58 pattern, where the reason is
+    # recorded in place so nobody re-adds them.
+    # -----------------------------------------------------------------------------------------
+    #
+    # /mnt/tank/media AND /mnt/tank/media/Music ARE NOT MOUNTED AT ANY MODE.
+    #
+    # D-20: nobody holds read-write on /mnt/tank/media/Music during Phases 1-3. `beets.yaml:25`
+    # satisfies that with `:ro`; this file goes further and does not mount it at all, because
+    # ABSENCE IS STRONGER THAN `:ro` — there is no flag to flip "just to run one import", and the
+    # assertion is `docker inspect .Mounts` returning an empty set rather than a mode string
+    # somebody has to read correctly. Pitfall 6 names this trial specifically as the plan most
+    # likely to reach for a library mount "just for duplicate context". It does not need one: it
+    # measures INTERACTION, not duplicate reconciliation.
+    #
+    # Do not add a Music mount here in any mode. Phase 6 grants the WINNER rw on the library, and
+    # that is the first time anything holds it again.
+    #
+    # NO `labels:` AND NO TRAEFIK BLOCK. The frozen `beets.yaml` and `wrtag.yaml` carry
+    # `chain-authelia@file` because they publish something. This file carries no auth chain because
+    # IT PUBLISHES NOTHING — that is the correct reading, not an omission. Adding a traefik label
+    # here would expose an unauthenticated web shell on a public hostname.
+    #
+    # NO `networks:` — nothing here needs t3_proxy, and joining it would make the container
+    # reachable from every other container on that network.
+    #
+    # NO `privileged`, no `cap_add`, no `devices`.
+    #
+    # NO `/music` MOUNT. The image's shipped example config defaults
+    # `gui.terminal.start_path` to `/music/inbox`, which does not exist here. Rather than mount a
+    # path to satisfy a default, the spike's own beets-flask config overrides `start_path` to the
+    # bf-inbox path. A web terminal that opens on a non-existent directory would have been read as
+    # a beets-flask friction when it was really a config defaulting artefact.
+    #
+    # NO redis SERVICE. rc-series bundles redis internally. Confirmed from PRIMARY SOURCE, not
+    # from the published compose: `/repo/entrypoint.sh` contains
+    #     if [ -z "$REDIS_URL" ]; then
+    #       redis-server --daemonize yes >/dev/null 2>&1
+    #     fi
+    # followed by `launch_redis_workers.py` and `redis-cli FLUSHALL`. That is research assumption
+    # A4. If the container fails to start for want of redis, A4 is FALSIFIED — `redis:7-alpine` is
+    # already on this host, so add it as a service and RECORD the falsification rather than
+    # silently working around it.
