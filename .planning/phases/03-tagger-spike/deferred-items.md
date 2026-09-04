@@ -1016,3 +1016,52 @@ add *"never pass a secret as a command-line argument, on any host, even to a com
 only a count"* beside the existing *"credentials go in `~/.claude/secrets/` by variable name only"*
 rule. The existing rule governs **files**; this one governs **process arguments**, and this phase
 has now demonstrated they are separate channels.
+
+---
+
+## Code review disposition — 2026-09-04
+
+`03-REVIEW.md` (standard depth, 7 files) returned **32 findings: 4 critical, 19 warnings, 9 info**.
+A targeted fix pass closed **five** of them. This section records what was fixed and, more
+importantly, **what was deliberately left**, so the remainder is not mistaken for an oversight.
+
+### Fixed — one atomic commit each
+
+| Finding | File | What was actually wrong |
+|---|---|---|
+| **CR-01** | `scripts/spike03-wrtag-arms.sh` | The `find "$LIB" -mindepth 1 -delete` guards were `case` patterns over the **unresolved** string. `LIB=/mnt/fast/spike-03/wrtag-lib/../../../../etc` passed **both** and the delete resolved to `/etc`. Now resolved first and fenced on the resolved path; the string guards kept as defence in depth; a `..`-component guard added; the delete no longer hides its own failures. `--self-test` added as a regression check — nine cases including the review's exact bypass string and a run-time symlink case, all passing. |
+| **CR-02** | `scripts/spike03-wrtag-arms.sh` | The wrote-nothing gate **failed open**: `2>/dev/null \|\| true` made a vanished `$SRC`, a stale bind mount, `EACCES` and a deleted stamp all report `0 files newer than the stamp` and a green tick. "Could not look" is now its own non-green outcome, per `CLAUDE.md` § Health Checks. Verified against six synthetic conditions. |
+| **CR-03** | `scripts/spike03-gen-import-config.sh` | The token was written to `$DEST` **before** `chmod 600`. `umask 077` governs new files only, so a pre-existing `0644` destination received the live token world-readable, and a mid-write exception left a permanently world-readable partial file. Now `O_CREAT\|O_EXCL` at `0600` + `fchmod` + `fsync` + `os.replace()`, with every failure path unlinking the partial. Verified with a **synthetic** token only. |
+| **CR-04** | `scripts/normalise-dj-tags.py` | The D-07 fence was applied to **TARGET only**; `collect_folders()` returns symlinked files and the write path follows them. A symlink — or a hardlink, needing no symlink at all — into the library defeated "the single most important behaviour in the file" silently. `assert_inside_scratch()` now re-checks the **resolved** path per file, in both modes, and again as the first statement of `write_tags()`. Refusals raise into the `.failed` ledger. Dry run still cannot write (verified: 0 bytes changed). |
+| **WR-19** | `stacks/selfhosted/arrs/beets.md` | Stated a **falsehood** in a public document: *"Every on-disk copy was removed and verified gone at Phase 3 close."* True of the estate, false of the workstation — **DEF-03-21 above** records four surviving plaintext copies — and it omitted the fourth exposure cause (world-readable argv). Corrected and cross-referenced to DEF-03-21. |
+
+### Deliberately NOT fixed in this pass
+
+**18 warnings and all 9 info findings remain open.** They were scoped out, not missed. The ones
+worth naming because a later phase will meet them:
+
+- **WR-01** — a post-write assertion failure leaves the tag on disk but records no change, so the
+  `.failed` ledger's implicit claim that a failed file is an unmodified file is wrong. Interacts
+  with **DEF-03-03** and **DEF-03-10**.
+- **WR-02 / WR-03** — `spike03-discogs-probe.py`'s redaction covers `logging` only, so an unhandled
+  traceback bypasses it, and `--verbose` sets the **root** logger to DEBUG — which the file's own
+  SECURITY block says it never does. Both are credential-adjacent and directly extend **DEF-03-04**.
+- **WR-04** — nothing stops `$DEST` being inside the **public** git checkout. CR-03 fixed the
+  *mode*; it did not fix the *location*. Worth doing before this script is reused.
+- **WR-05 / WR-06** — the token is injected into YAML unquoted, and the `discogs:` insertion is an
+  exact string match whose fallback creates the duplicate key its own comment forbids. Both fail in
+  the "0% by construction" direction the probe's three refusals exist to prevent.
+- **WR-08 / WR-09** — rule 1 collapses a multi-issue folder to its first issue number
+  (`Crate.068-070` → `Mastermix Crate 068` over 60 files), and `canonicalise_album()` does not
+  always reach the canonical form its docstring names as the invariant. Both write a *confidently
+  wrong* album, which `CLAUDE.md` § Autotagging ceiling names as worse than none.
+- **WR-13 / WR-14** — the same fail-open class as CR-02, in `diff_manifest` (`diff` exits 2 on
+  trouble, read as "identical") and in two `find … 2>/dev/null` calls in the survey. **WR-13 matters
+  most**: with CR-02 unfixed, both wrote-nothing instruments could pass vacuously in one run. CR-02
+  is now fixed, so instrument 1 is sound and instrument 2 is the remaining half.
+- **WR-12** — cross-reference only; **DEF-03-09** already owns it.
+
+The full text of every finding, with file and line references, is in `03-REVIEW.md`.
+
+**One thing this pass deliberately did not do: the Discogs token was NOT rotated.** The operator's
+project-close timing, reaffirmed at the closing gate above, stands.
