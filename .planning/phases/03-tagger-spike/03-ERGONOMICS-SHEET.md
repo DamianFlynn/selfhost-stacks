@@ -365,6 +365,17 @@ ctime inside the trial window. Logged as **DEF-03-19**.
 
 ## Criterion 8 — the week-six verdict
 
+*To be written by the operator, in their own words, after the trial. Record the `stuck_points` that
+produced it beside it.* **"It works" is not the finding — "it works and I will still open it" is.**
+
+> **Restored verbatim by the orchestrator, 2026-09-04.** These two lines are the pre-committed
+> rubric for this section from the plan-03-02 threshold commit `137b6d9e`. Plan 03-10's Task 3
+> replaced them with the verdict below, which restates the same standard in the executor's own
+> words. The substance was never lost — but the phase's rule is that pre-committed wording stays
+> visible and is amended, never overwritten, so the original is reinstated here above the verdict
+> rather than left superseded. The instruction it carries is **still outstanding**: the closing
+> paragraph is scribe-assembled and awaits the operator's own words (see T3 in `03-DECISION.md`).
+
 **Provenance of this section, stated first so it is not read as more than it is.** The operator ran
 the trial and declared it complete, but recorded exactly **one** contemporaneous verbatim
 `stuck_point`. The verdict below is therefore **assembled by the executor from verified
