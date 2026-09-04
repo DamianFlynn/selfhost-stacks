@@ -409,3 +409,78 @@ respectively), so the substitute is drawn from the same evidence class.
 **The library and `bf-clean` were reset to empty after this observation and before Task 3 staged
 the trial** — see § *Trial staging* — so the operator begins against an empty library. One folder
 was imported for this section and then unwound; the observation above is what it produced.
+
+---
+
+## Trial staging
+
+Task 3's environment, prepared and asserted so the operator's trial is one command to start. The
+full operator-facing instructions live in
+[`03-ERGONOMICS-SHEET.md`](03-ERGONOMICS-SHEET.md) § *AMENDMENT 2026-09-04*; this section records
+the assertions behind them.
+
+### The reset, and what it proves
+
+| Assertion after unwinding the bootleg observation | Result |
+|---|---|
+| `bf-clean` files | **0** |
+| `bf-inbox` files | **0** (before staging) |
+| `spike-flask.blb` | **absent** |
+| `raw/VA-Mastermix.Crate.071.Afro.House-2025` mp3 count | **20** — the bootleg source survived its own import |
+| `find /mnt/tank/downloads/complete/nzb -newermt '2026-09-04 09:00' -type f` | **0 files** — the real backlog was never touched at any point in this plan |
+
+The removals were **targeted paths only**. No `git clean`, no blanket `rm -rf` of a tree, no
+`--remove-orphans`.
+
+### The five albums
+
+Staged into `bf-inbox/preview/`, each in its own directory, reflinked from atlantis. Counts
+re-verified on disk and matching `03-SAMPLE.md` exactly: 21 + 10 + 47 + 31 + 60 = **169 audio files
+across 5 folders**, **2.6 G**. The `dj-no-match` fifth album is
+`VA-Mastermix.Crate.068-070-2025`, `03-DISCOGS-EVIDENCE.md` **case C** — zero Discogs candidates on
+both the probe and an independent hand-transcribed `beet import -t`, agreeing on all ten
+properties.
+
+**Mount freshness cross-checked before handing over**, because the bind pins the directory inode
+and a re-materialised host directory leaves the container reading an empty tree while every command
+exits 0 reporting 0 files:
+
+| Reading | Folders | Audio files |
+|---|---|---|
+| Host | 5 | 169 |
+| Inside `beets-flask-spike` | 5 | 169 |
+| Inside `beets-spike` | 5 | — |
+
+### Why all five went into the `preview` inbox
+
+`preview` tags but never imports, which is the closest analog to the terminal arm's
+`beet import -t` — so both arms put the **same decision** in front of the operator, and the trial
+compares how each presents it rather than comparing "one asked me and one didn't". Staging into
+`auto` would have removed the operator's decision entirely, which is the thing being timed.
+
+`bootleg` and `auto` are reachable from there by moving a folder between inboxes, and that move is
+itself a one-command affordance the terminal arm has no equivalent of. The exact command is in the
+sheet.
+
+### Both arms verified live
+
+| Arm | Version | Plugins loaded (`beet version`) | Reachable |
+|---|---|---|---|
+| `beets-spike` (terminal) | **2.13.1** | `discogs, fromfilename, importsource, musicbrainz` | `docker exec -it`, and it can `ls` all five albums |
+| `beets-flask-spike` (flask) | **2.12.0** | `discogs, fromfilename, importsource, musicbrainz` | SSH tunnel **tested end-to-end, HTTP 200**; LAN IP refused |
+
+Identical plugin sets on both arms, asserted from the loaded-plugin line rather than a config dump.
+The terminal arm's Discogs token is the pre-existing `/spike-config/config.yaml` from plans 03-04 /
+03-07 (mode 0600, outside the repo); the flask arm's is rendered into `/config/beets/config.yaml`
+at mode 0600 from `env_file`. Neither is in this repository.
+
+### One constraint worth stating before the operator starts
+
+The terminal arm has **no writable path on `tank`** — its only rw mounts are
+`/mnt/fast/spike-03/out` and `/mnt/fast/spike-03/beets-config`, both of which are on **LXC 100's
+ext4 root, not the `fast` pool** (`03-SAMPLE.md` § *Scratch tree*). So its import destination
+consumes `/`. At 2.6 G staged against **35 G free** and an OD-1 floor of 8 GiB there is ample
+headroom, but the thing to watch is `df -h /`, never `zfs list`.
+
+It also mounts `bf-inbox` **read-only**, which is a stronger guarantee than the config's
+`import.move: no`: the terminal arm *could not* move the trial sources even if misconfigured.
