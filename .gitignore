@@ -35,6 +35,20 @@ stacks/cerebro/
 # MPE ERPNext upstream clone (not committed)
 stacks/mpe/erpnext/frappe_docker/
 
+# Generated beets runtime configs carrying a live Discogs token (WR-04, defence in depth).
+# scripts/spike03-gen-import-config.sh REFUSES to write inside any git working tree, and that
+# refusal is the real control. This is the second net, for a bypass of it or a hand-rolled copy:
+# the token is in the file as `discogs: user_token:`, the repo is PUBLIC, and `git log -S` keeps
+# a committed credential recoverable long after it is deleted.
+#
+# Deliberately NARROW - it names the generated file, not `*config*.yaml`, so it cannot mask a
+# legitimate tracked config such as stacks/selfhosted/music/wrtag.yaml or a stack's config.yaml.
+# The real artefact is /mnt/fast/spike-03/beets-config/import-xcheck.yaml (03-DISCOGS-EVIDENCE.md
+# § Screening); both its bare name and its beets-config/ parent are covered, because a bypass
+# would most likely be a copy of the whole directory into the checkout.
+import-xcheck.yaml
+**/beets-config/*.yaml
+
 # Python bytecode. scripts/normalise-dj-tags.py (plan 03-05) is this repo's first committed
 # Python file, and its own verification command is `python3 -m py_compile`, which drops a
 # __pycache__/ directory beside it. Ignored so a verification run cannot dirty the tree.

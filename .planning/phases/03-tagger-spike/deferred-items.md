@@ -1065,3 +1065,62 @@ The full text of every finding, with file and line references, is in `03-REVIEW.
 
 **One thing this pass deliberately did not do: the Discogs token was NOT rotated.** The operator's
 project-close timing, reaffirmed at the closing gate above, stands.
+
+### Second fix pass — 2026-09-04: the completing halves of CR-02 and CR-03
+
+The pass above closed four Criticals. **Two of them were only half closed**, because each had a
+twin elsewhere with the identical defect. Those twins are **WR-13** and **WR-04**, and both are now
+**CLOSED**, one atomic commit each. Nothing else from `03-REVIEW.md` was touched.
+
+| Finding | File | What was actually wrong |
+|---|---|---|
+| **WR-13** | `scripts/spike03-wrtag-arms.sh` | **CR-02's defect in the other wrote-nothing instrument.** `diff_manifest` read `d="$(diff "$b" "$a" \|\| true)"; [ -z "$d" ]` as *"identical before and after"*. `diff` exits **>=2 on trouble** — a manifest never captured, one removed under it, an `EACCES`, a directory where a file was expected — and on trouble it writes to stderr and leaves **stdout empty**, so `\|\| true` turned every one of those into a green tick on the instrument the header calls *the strong one*. Now `manifest_compare()`: both manifests asserted present, regular and readable first; diff's exit status read rather than swallowed; stderr captured rather than dropped; `>=2` reported as **COULD NOT LOOK**, non-green and non-zero, in the same vocabulary CR-02 gave instrument 1. `rc` 0/1 with unexplained stderr, and `rc` 0 with stdout output, are also refusals. |
+| **WR-04** | `scripts/spike03-gen-import-config.sh`, `.gitignore` | **CR-03 fixed the *mode* of the token-bearing config; this is the *location*.** The header asserted as a property that the file *"lives outside the repository"* and nothing checked it — `$DEST` was `$2`, unvalidated, with the checkout on the same host. A mistyped second argument produced a **token-bearing, committable file inside a PUBLIC repo**, and `0600` does not help a file once it is committed. The script now **refuses** a `$DEST` inside any git working tree, detecting the repo root via `git rev-parse --show-toplevel` rather than hard-coding one, using CR-01's resolution approach verbatim. Backed by a narrow, commented `.gitignore` pattern. |
+
+**Why these two and not the other seventeen warnings.** Both are *fail-open* defects in controls
+another finding had just been fixed to make fail-closed. Leaving them would have meant the phase
+recorded four Criticals as closed while, in the `wrtag` case, **either instrument of the
+wrote-nothing gate could still pass vacuously** — and in the `gen-import-config` case, while the
+credential could still be committed by the route the mode fix does not cover.
+
+**Fail-open holes found and closed while implementing WR-04**, none of them in the review text —
+each is the same "could not look read as nothing wrong" shape the two headline findings are:
+
+- A non-existent `$DEST` **parent** made `git -C` fail, which would have read as *"not in a
+  repository"*. Now walks up to the nearest existing ancestor.
+- A **missing `git` binary** would have read as a pass. Now a refusal: an unperformed check is not
+  a passed check.
+- `GIT_DIR`/`GIT_WORK_TREE` inherited from a caller could point the probe at a different
+  repository; in their **bare-repo** form `--show-toplevel` errors and the guard would have failed
+  **open**. Both are unset for the probe.
+- The guard resolved `$DEST_REAL` but the Python child was still handed `$DEST`. These differ when
+  the **final component is a symlink** — `os.replace()` replaces the symlink itself, landing the
+  file at `$DEST` while the guard had cleared its target elsewhere. The child is now handed the
+  path that was actually checked.
+
+**Verification, and its limits.**
+
+- WR-13's `--self-test` gained six cases — identical, differing, missing-before, missing-after, a
+  directory in place of a manifest, and mode `000`. **All 15 cases pass.** It was also
+  **falsified**: with `diff` shimmed to exit 2, the identical and differing cases both report
+  COULD NOT LOOK and the self-test exits 1, where the old code returned a green *"identical"* for
+  that same shim.
+- The mode-`000` case is **SKIPPED WITH A STATED REASON when running as root** rather than counted
+  as a pass, because root bypasses the read bit — so the case would silently succeed for the wrong
+  reason on LXC 100, which is exactly this phase's recurring defect. The directory case covers
+  root, and the `rc>=2` branch is what catches an `EACCES` on either host.
+- WR-04 was proven on **synthetic paths only**: refused a plain path in the checkout, a
+  non-existent deep subdir, a `..` walking back in, and a **symlink outside pointing in** (which a
+  string guard would have accepted); did **not** refuse a destination outside any repo.
+  `git ls-files -i -c` confirms the new `.gitignore` patterns mask no tracked file.
+- **No credential was read or written by any verification command** — the WR-04 guard fires before
+  the env file is gated or sourced, so the refusal path never touches the token. This phase leaked
+  the token to disk four times, twice from ad-hoc verification commands (DEF-03-21); that is why
+  the guard was placed first rather than beside the write.
+
+**Still not rotated.** The operator's project-close timing stands, reaffirmed at the closing gate
+above after being shown a new exposure. Not this pass's call.
+
+**Still open: 17 warnings and all 9 info findings**, unchanged from the list above minus WR-13 and
+WR-04. **WR-14** is the nearest remaining relative — the same fail-open class in two
+`find … 2>/dev/null` calls in `spike03-variant-survey.sh` — and is the obvious next one to take.
