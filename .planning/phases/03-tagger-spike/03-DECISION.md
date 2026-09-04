@@ -28,8 +28,8 @@ evidence fails criterion 5 outright; this table is what a later `git log -p` is 
 
 | # | Threshold | Falsifiable form | Instrument | Tested? | Returned |
 |---|---|---|---|---|---|
-| T1 | Discogs matching under **40%** of the backlog after normalisation | The **backlog-weighted strict** rate per D-05, where **strict** means a Discogs candidate appears AND its track count agrees with the folder AND `extra_items == 0` AND `extra_tracks == 0`. Computed **per stratum** over the plan-03-03 sample, then weighted by each stratum's prevalence across the committed 143-folder backlog, and summed. The `discogs.index_tracks` setting that produced the headline number is stated beside it. The **unweighted** per-folder sample rate is reported alongside and is explicitly **not** the figure T1 is tested against — see § *The estimator T1 is tested against*. The **40% threshold value is unchanged** | The criterion-1 `tag_album()` probe (plan 03-06/03-07), cross-checked by a hand-transcribed `beet import -t` on **4–5 folders** that between them cover at least one **DMC** folder, one **missing-`album` (V3)** folder, one **index-track-sensitive** folder, and one **zero-candidate** folder. Three folders cannot cover the four cases most likely to diverge, and paired-instrument confidence must not be claimed more broadly than the cross-check supports | PENDING | PENDING |
-| T2 | Rate limiting makes bulk import impractical | **More than 4 hours of projected wall-clock for the 143-folder backlog**, OR **any observed HTTP 429 during the timed run**. Either condition alone fires the threshold | `time` around the probe run, cross-checked against `grep -c 'api\.discogs\.com'` on the probe stderr (`urllib3` DEBUG), plus a **separate 429 counter** — `python3-discogs-client` retries a 429 up to 100 times with jittered backoff, so a rate-limited run stalls silently rather than erroring | PENDING | PENDING |
+| T1 | Discogs matching under **40%** of the backlog after normalisation | The **backlog-weighted strict** rate per D-05, where **strict** means a Discogs candidate appears AND its track count agrees with the folder AND `extra_items == 0` AND `extra_tracks == 0`. Computed **per stratum** over the plan-03-03 sample, then weighted by each stratum's prevalence across the committed 143-folder backlog, and summed. The `discogs.index_tracks` setting that produced the headline number is stated beside it. The **unweighted** per-folder sample rate is reported alongside and is explicitly **not** the figure T1 is tested against — see § *The estimator T1 is tested against*. The **40% threshold value is unchanged** | The criterion-1 `tag_album()` probe (plan 03-06/03-07), cross-checked by a hand-transcribed `beet import -t` on **4–5 folders** that between them cover at least one **DMC** folder, one **missing-`album` (V3)** folder, one **index-track-sensitive** folder, and one **zero-candidate** folder. Three folders cannot cover the four cases most likely to diverge, and paired-instrument confidence must not be claimed more broadly than the cross-check supports | **YES** — plan 03-07, 2026-09-04 | **FIRED.** Backlog-weighted strict rate **27.08%**, below the 40% threshold, at `discogs.index_tracks: no` / `search_limit: 5` on the normalised arm. Unweighted sample rate **25.00%** (6/24) reported beside it and **not** the tested figure. Un-normalised arm: weighted strict **27.08%**, weighted loose **40.16%**. Normalised weighted loose **51.39%** (unweighted 54.17%, 13/24); strict/loose gap **7 folders / 29.2%**. Robust: V6's 0%/100% bound gives 27.08–**36.80%**, still below 40%; the "strict **and** the release is correct" reading is **22.80%** weighted (1 of the 6 strict hits is a confident wrong release). Cross-checked by hand-read `beet import -t` on **5** folders covering DMC, missing-`album` V3, zero-candidate and a strict hit — Discogs candidate set agrees **5 of 5**. The index-track-sensitive case is recorded **NOT COVERED because it does not exist**: 0 of 70 Discogs candidate pairs change between `index_tracks` `no` and `yes`. Evidence: [`03-DISCOGS-EVIDENCE.md`](03-DISCOGS-EVIDENCE.md) |
+| T2 | Rate limiting makes bulk import impractical | **More than 4 hours of projected wall-clock for the 143-folder backlog**, OR **any observed HTTP 429 during the timed run**. Either condition alone fires the threshold | `time` around the probe run, cross-checked against `grep -c 'api\.discogs\.com'` on the probe stderr (`urllib3` DEBUG), plus a **separate 429 counter** — `python3-discogs-client` retries a 429 up to 100 times with jittered backoff, so a rate-limited run stalls silently rather than erroring | **YES** — plan 03-07, 2026-09-04 | **NOT FIRED — neither limb.** Projected wall-clock for the backlog = **21.8 minutes** (1,308.1 s), computed per stratum and summed against the corrected **144**-folder denominator; naive unweighted baseline 22.0 min. Pure-API floor **7.43 min** at the observed ceiling (`x-discogs-ratelimit` = **60**, re-confirmed). **Observed HTTP 429 = 0**, on both correct instruments (the HTTP status column and the probe's in-process counter) across **all six** cells. Measured **M = 3.125** Discogs requests per folder (75 responses / 24 folders, both instruments agreeing exactly), plus 1 identity probe per run; total spend this plan ≈ **291** requests, and `ratelimit-remaining` never fell below 31. Recorded beside it: **44 × HTTP 503 from `musicbrainz.org`** on the headline cell — MusicBrainz throttles with 503, not 429, and it is why wall-clock is ~3× the API floor. See § *AMENDMENT — 2026-09-04, plan 03-07* for the instrument substitution and the denominator correction. Evidence: [`03-DISCOGS-EVIDENCE.md`](03-DISCOGS-EVIDENCE.md) |
 | T3 | The operator will not sit at the interactive prompt | An explicit **written self-assessment** after the timed hands-on trial, in the operator's own words. **T3 is deliberately not a number** — the roadmap defines it as a self-assessment and quantifying it would be false rigour | Plan 03-10's timed hands-on trial, scored on [`03-ERGONOMICS-SHEET.md`](03-ERGONOMICS-SHEET.md) | PENDING | PENDING |
 
 ---
@@ -105,14 +105,14 @@ That ordering is the point.**
 
 | Stratum | Definition (from the 764-file ffprobe survey) | Backlog weight | Sampled folders | Strict rate | Weighted contribution |
 |---|---|---|---|---|---|
-| V1 | `artist="Mastermix"`, `album="Mastermix Issue NNN"` — `va_likely=false`, query = album alone | PENDING — filled by plan 03-03 | PENDING | PENDING | PENDING |
-| V2 | `artist` is `VA` / `Various Artists` / `Various`, `album` present — query becomes `"VA <album>"` | PENDING — filled by plan 03-03 | PENDING | PENDING | PENDING |
-| V3 | `album` absent — **no Discogs query is issued at all** | PENDING — filled by plan 03-03 | PENDING | PENDING | PENDING |
-| V4 | `artist` absent — `va_likely=true` via `not consensus["artist"]` | PENDING — filled by plan 03-03 | PENDING | PENDING | PENDING |
-| V5 | `album` present but noisy (`- Disc 1`, ` WEB`, `Vol.`, `Mastermix - ` prefix, trailing space) | PENDING — filled by plan 03-03 | PENDING | PENDING | PENDING |
-| V6 | Real per-track artists (newer issues) — `va_likely=false`, query = album alone | PENDING — filled by plan 03-03 | PENDING | PENDING | PENDING |
-| **Weighted total** | Sum of contributions — **this is the figure T1 is tested against** | PENDING — filled by plan 03-03 | PENDING | PENDING | PENDING |
-| *(memo)* Unweighted | Plain per-folder rate across the whole sample — **reported, not tested** | n/a | PENDING | PENDING | n/a |
+| V1 | `artist="Mastermix"`, `album="Mastermix Issue NNN"` — `va_likely=false`, query = album alone | 0.2569 (37/144) | 6 | 0.6667 (4/6) | **0.1713** |
+| V2 | `artist` is `VA` / `Various Artists` / `Various`, `album` present — query becomes `"VA <album>"` | 0.2708 (39/144) | 9 | 0.0000 (0/9) | **0.0000** |
+| V3 | `album` absent — **no Discogs query is issued at all** | 0.0764 (11/144) | 2 | 0.0000 (0/2) | **0.0000** |
+| V4 | `artist` absent — `va_likely=true` via `not consensus["artist"]` | **0.0000** (0/144) | 0 | n/a — unsampled, zero weight | **0.0000** |
+| V5 | `album` present but noisy (`- Disc 1`, ` WEB`, `Vol.`, `Mastermix - ` prefix, trailing space) | 0.2986 (43/144) | 6 | 0.3333 (2/6) | **0.0995** |
+| V6 | Real per-track artists (newer issues) — `va_likely=false`, query = album alone | 0.0972 (14/144) | 1 | 0.0000 (0/1) — thin; bounded 0%/100% | **0.0000** (bound 0.0000–0.0972) |
+| **Weighted total** | Sum of contributions — **this is the figure T1 is tested against** | 0.9999 (rounding) | 24 | — | **0.2708 = 27.08%** (bound 27.08–36.80%) |
+| *(memo)* Unweighted | Plain per-folder rate across the whole sample — **reported, not tested** | n/a | 24 | 0.2500 (6/24) | n/a |
 
 **Report the unweighted per-folder figure beside the weighted one in every table.** Both are honest
 numbers about different things; only the weighted one is tested against T1.
@@ -405,6 +405,91 @@ this phase:** the disc class of a wrtag arm **is not a property of the source fo
 release** and hard-errored on `.Media.Position` on the very first, unpinned run. wrtag queries
 with `limit=1` and takes what comes back. Any experiment that means to hold the disc class
 constant must pin the release MBID; one that does not is measuring MusicBrainz's mood.
+
+---
+
+## AMENDMENT — 2026-09-04, plan 03-07: criteria 1 and 2 measured
+
+**Nothing in this section changes T1's or T2's threshold VALUE, the estimator definition, or which
+folders are in the population.** The original wording of every paragraph above is left standing so
+a `git log -p` diff shows exactly what moved: the `Tested?`/`Returned` cells, the weight table's
+`PENDING` cells, and this section. Full evidence:
+[`03-DISCOGS-EVIDENCE.md`](03-DISCOGS-EVIDENCE.md).
+
+### 1. The denominator is **144**, not 143 — a measured fact corrected by a better instrument
+
+§ *Denominators, committed before the run* above commits **143 folders (≈7,726 files)**, on
+`nzb/music` = 23 folders / 275 files. **Plan 03-03's variant survey measured 24 and 277** with two
+independent instruments — a live audio-extension `find` on LXC 100, and Phase 1's QUAL-01 capture
+grouped by scan root. The corrected split is `unsorted` 120 / 7,451 + `music` 24 / 277 =
+**144 folders / 7,728 audio files**.
+
+**T1's 40% threshold value is unaffected, and so is T2's 4-hour limb.** The correction was made
+*before any rate or timing existed*, by a better instrument, and it moves the extrapolation base by
+0.7%. The `backlog_weight` column in § *The estimator T1 is tested against* and every figure in
+§ *Extrapolation* of the evidence file use **144**. The exact fractions are 37/144, 39/144, 11/144,
+0/144, 43/144, 14/144.
+
+### 2. The 429 instrument is substituted — the threshold VALUE is unchanged
+
+T2's second limb is *"any observed HTTP 429"*. The **instrument** named for it in
+`03-07-PLAN.md` (lines 275, 333 and 414) is `grep -c '429'` on the probe stderr, required to
+return 0. **That instrument cannot return 0 and is not measuring HTTP 429** (DEF-03-05).
+
+Measured on this plan's six cells: the bare substring form returns **25 on every single cell**,
+*including the two MB-only cells that issued zero Discogs requests*. It matches the probe's own 24
+per-folder progress labels (`0 x429`) plus its summary label (`discogs 429 responses: 0`), and in
+03-06 it also matched the Discogs release ID `3542996`.
+
+Had it been used as written it would have **falsely fired a pre-committed threshold limb on all six
+cells** and triggered a re-run of each — 150–260 requests apiece against a 60/min ceiling — on the
+evidence that the probe printed the digits "429" while reporting it had seen none.
+
+**The substituted instruments, both already available and both used:**
+
+```bash
+grep -oE 'HTTP/1\.1" [0-9]{3}' <stderr> | sort | uniq -c   # the HTTP STATUS COLUMN
+#   plus the probe's in-process counter, scoped to api.discogs.com:
+#   discogs 429 responses:        0
+```
+
+**This is an instrument correction, not a threshold move.** The limb still reads *"any observed
+HTTP 429"*; only the way 429 is counted changed, and it changed to something that actually counts
+429s. Both instruments returned **0** on every cell.
+
+### 3. A related instrument correction: the request counter over-counts 2×
+
+T2's named cross-check is `grep -c 'api\.discogs\.com'` on the stderr. `urllib3` emits **two** lines
+per request — `Starting new HTTPS connection` and the response line — so the bare form returns
+**150** where the true count is **75**. Counting only lines carrying the HTTP status
+(`grep -cE 'api\.discogs\.com.*HTTP/1\.1"'`) reproduces the probe's in-process counter exactly.
+**M = 3.125 requests per folder**, not the 6–11 that 03-RESEARCH.md predicted.
+
+### 4. Recorded, not corrected: MusicBrainz throttles with 503
+
+Neither limb of T2 names it and neither is affected, but it is the dominant term in the wall-clock
+and any later plan watching only for 429 will see a clean run while MusicBrainz throttles it: the
+headline cell logged **44 × HTTP 503, every one from `musicbrainz.org`, zero from
+`api.discogs.com`**. It is why projected wall-clock (21.8 min) is ~3× the pure-API floor
+(7.43 min).
+
+### 5. Recorded, not corrected: D-05 strict admits confident wrong matches
+
+D-05 requires a track-count agreement; it does not require the release to be right. **One of the
+six strict hits is a wrong release** — `Mastermix_Issue_412` matched Discogs `1534659`
+*"Specialten Issue 14"*, a 2006 DVD, at 31.2%, because both have ten tracks. **T1 is scored on
+D-05 as written (27.08%)**; the "strict and correct" reading (**22.80%** weighted) is recorded
+beside it and fires the threshold just as clearly. The proximate cause is that
+`Mastermix_Issue_412`'s album tag reads bare `Issue 412` — the same defect class 03-SAMPLE.md found
+when it reclassified `album == artist` out of V1.
+
+### 6. Criterion 4 gains a measured fact
+
+**Not one of the four DMC folders produced a Discogs candidate that survived a track-count check**
+(loose 2/4, strict **0/4**). The two loose candidates are *Commercial Collection 326* and *318*
+against a folder that is *Commercial Collection 498*. `CLAUDE.md` records Discogs carrying *DMC
+Commercial Collection 350*; this backlog's issues are 498, 499, 233 and 234, and the catalogue does
+not reach them.
 
 ---
 

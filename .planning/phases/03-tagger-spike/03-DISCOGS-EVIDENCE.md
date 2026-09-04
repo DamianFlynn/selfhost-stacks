@@ -763,6 +763,55 @@ holds no mount under `/mnt/fast/appdata` at any mode, and both sample arms are `
 
 ---
 
+## Corrections to this plan's acceptance criteria
+
+Recorded as retractions rather than quiet replacements, in the `beets.md:55-58` house style. The
+underlying facts hold; three of the *instruments* named in `03-07-PLAN.md` do not.
+
+**1. `grep -c '429'` returning 0 is unsatisfiable and measures the wrong thing** (lines 275, 333,
+414). It returns **25 on every cell**, including cells that issued no Discogs request at all. The
+substitution was mandated before this plan ran, is logged as **DEF-03-05**, and is recorded as a
+dated amendment in `03-DECISION.md`. **The threshold value is unchanged; only the instrument
+moved.** The fact the criterion reaches for holds and is proven by the better instruments: **0 HTTP
+429**.
+
+**2. `grep -c 'api\.discogs\.com'` over-counts requests exactly 2×** (line 330, and T2's own
+`Instrument` column). `urllib3` logs a `Starting new HTTPS connection` line *and* a response line
+per request, so the headline cell returns 150 where the true count is 75. Restricting to lines
+carrying the HTTP status reproduces the probe's in-process counter exactly. The criterion's intent
+— an instrument independent of beets' own bookkeeping — is met by the restricted form.
+
+**3. The commit-ordering assertion is unsatisfiable as written, and the property it reaches for
+holds.** Line 418 requires `git log -1 --format=%ct -- 03-DECISION.md` to *predate*
+`git log -1 --format=%ct -- 03-DISCOGS-EVIDENCE.md`. But this plan is *required* to write the T1
+and T2 verdicts back into `03-DECISION.md`, which necessarily makes that file's **last** commit
+later than the evidence. The two instructions cannot both be satisfied.
+
+What criterion 5 actually needs is that the **threshold-introducing** commit predates the evidence,
+and it does:
+
+| Commit | `%ct` | Meaning |
+|---|---|---|
+| `137b6d9e92cb44d9c6a48b3963bb33fe0194622f` | **1788463633** | T1/T2/T3 and the estimator committed |
+| `03-DISCOGS-EVIDENCE.md` first commit | **1788506102** | the evidence |
+| Difference | **+42,469 s ≈ 11.8 hours** | the thresholds predate the evidence |
+
+The amendment commit that follows is *later* than the evidence **by design** — that is what
+"filling in a result cell" looks like — and § *AMENDMENT — 2026-09-04* plus the byte-level
+assertion that the threshold columns are unchanged is what makes it auditable.
+
+**4. The denominator is 144, and the section is titled accordingly.** The plan asks for
+`## Extrapolation to 143 folders`; 03-03 corrected the backlog to **144** with two instruments
+before any rate existed. The section here is § *Extrapolation to the backlog* and every figure in
+it uses 144. `03-DECISION.md` retains its original "143" wording with a dated amendment beside it,
+rather than being overwritten.
+
+**5. The index-track-sensitive cross-check case does not exist in this sample**, so the
+cross-check subset covers four cases across five folders rather than the four the plan enumerates.
+Evidence and reasoning in § *The case that could not be covered*.
+
+---
+
 ## What this evidence hands to axis one
 
 Stated compactly, because plan 03-11 reads it:
