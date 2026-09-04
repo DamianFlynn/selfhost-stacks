@@ -119,16 +119,16 @@ for why the v1 denominator of 39 is deliberately preserved.
 
 ### Tagger — decided on evidence, then singular
 
-- [ ] **TAGR-01**: The tagger decision is recorded with numbers — Discogs coverage measured on
+- [x] **TAGR-01**: The tagger decision is recorded with numbers — Discogs coverage measured on
       normalised DJ folders, import timing extrapolated against the API rate ceiling
-- [ ] **TAGR-02**: The surviving tagger can own the whole tree, including content that will never
+- [x] **TAGR-02**: The surviving tagger can own the whole tree, including content that will never
       match MusicBrainz
 - [ ] **TAGR-03**: The losing tagger definitions are deleted and their Renovate rules released,
       including the wrtag `<0.30.0` pin that enforces the broken state
 - [ ] **TAGR-04**: soulbeet is removed (issue #306) and the beets block stripped from `audio.bash`
 - [ ] **TAGR-05**: Every remaining beets config declares the `musicbrainz` plugin — the defect that
       silently disabled autotagging since beets 2.4.0
-- [ ] **TAGR-06**: Operator ergonomics is a weighted, recorded factor in the tagger decision, not
+- [x] **TAGR-06**: Operator ergonomics is a weighted, recorded factor in the tagger decision, not
       an afterthought — including a reviewable-queue front end (e.g. beets-flask) rather than a
       raw terminal prompt. A tool that is painful to use is a tool that stops being used, and that
       is the documented cause of three prior abandonments
@@ -259,9 +259,9 @@ Populated during roadmap creation (2026-08-17). Every v1 requirement maps to exa
 | TRAN-08 | Phase 02.1 | **COMPLETE (02.1-09).** Four unreferenced images reclaimed through the two-process gate, on a **firing** observation rather than a configured one. The gate held in both halves: `inventory` (read-only) wrote `/mnt/fast/spike-03/out/reap-list.txt`, the operator read `02.1-REAP-LIST.md` and ruled **"approved unchanged"** — the explicit phrase the document asked for, so the record distinguishes a deliberate no-edit from an untouched file — and only then did `prune` run. The list was **re-validated by sha256 immediately before the prune** (`1eaa2049…`, 4 lines); a mismatch would have stopped the run. The script's own re-derivation of the referenced set from `docker ps -a` (**no status filter**, covering the estate's documented `created`-state blind spot) ran six hours after the list was built and found **0 conflicts**. `FLOOR_GB=20 … prune` exited 0 — **removed 4, already reclaimed 0, rmi failures 0**, `FLOOR_GB` an environment override throughout and the script byte-identical to `b217ada` (`32f686f9…`). **The prohibition is asserted, not assumed, and the control discriminates:** comment-stripped `grep -cE 'docker (image prune\|system prune)'` returns **0** while the raw count returns **4**, so the strip is demonstrably doing work — a check returning 0 both ways would prove nothing. Evidence: `/` 35555835904 → 37039017984 bytes, attributable delta **1558175744 B (1.45 GiB)**, margin over the D-17 floor 13.11 → 14.49 GiB; per-tag diff of 4 lines gone and **0 added**, with all five image measures moving by exactly 4 and dangling unchanged at 9 → 9 (the three untagged digests deliberately excluded). **⚠ The `df` delta exceeded the ≈1.09 GB forecast by 42%, and that was investigated rather than banked** — `docker system df` Images SIZE moved exactly 1.09 GB, so the forecast was right; the gap is that Docker reports *apparent* bytes and `df` reports *allocated blocks*, measured at 1.342× on the 107,030-file `keeper-web:2.23` sibling. **⚠ Exit 0 is recorded as near-vacuous** on its own, since `/` already cleared the floor by 13.11 GiB. Estate unharmed: no container changed state, the internet-facing `cal-*` stack up 20–21 h unrestarted with cal-web serving `307 → /login → 200`, `check-jellyfin-transcode.sh` exit 0. D-28 discharged |
 | TRAN-09 | Phase 02.1 | **COMPLETE (02.1-07).** `do_enable` captures the five transcode-retention values from the live config BEFORE the whole-file `.bak` restore, re-asserts them into the restored file, and verifies them on BOTH sides of the container restart — naming any moved field with its before and after values and exiting non-zero. Discharged on a **firing** observation, not a read-back: `check` → `disable` → simulated phase write → `enable` was EXECUTED against a throwaway `encoding.xml` and a disposable container (exit 0, all five preserved, `HardwareAccelerationType` restored to `vaapi`). **The verification was then proven able to FAIL, twice** — the review's HIGH finding was that the reviewed control could not fail, because the verification lives inside `do_enable` which re-captures live values before restoring. (a) the standalone read-only `verify-retention` sub-action, taking its expectations from `$TRAN09_EXPECT`, exited 1 on a perturbed config naming the field with expected-vs-found, and 0 once restored; (b) `TRAN09_FAULT=1 … enable` exited 1 naming four of five fields with both values, while `ThrottleDelaySeconds` correctly PASSED at 180 either side — proving the comparison is genuinely per-field. The live `encoding.xml` sha256 and `.bak` inventory are identical either side and `check-jellyfin-transcode.sh` still exits 0. The D-30 amdgpu mitigation (`none` / `false`) is unchanged |
 | CONS-04 | Phase 7 | Pending |
-| TAGR-01 | Phase 3 | Pending |
-| TAGR-02 | Phase 3 | Pending |
-| TAGR-06 | Phase 3 | Pending |
+| TAGR-01 | Phase 3 | Complete |
+| TAGR-02 | Phase 3 | Complete |
+| TAGR-06 | Phase 3 | Complete |
 | TAGR-03 | Phase 4 | Pending |
 | TAGR-04 | Phase 4 | Pending |
 | TAGR-05 | Phase 4 | Pending |

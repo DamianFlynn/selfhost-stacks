@@ -2,15 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-last_updated: "2026-09-03T19:19:36.340Z"
+status: ready_to_plan
+last_updated: 2026-09-04T18:44:07.376Z
 last_activity: 2026-09-03 -- Phase 03 execution started
 progress:
   total_phases: 10
   completed_phases: 3
   total_plans: 44
-  completed_plans: 34
+  completed_plans: 44
   percent: 30
+stopped_at: Phase 03 complete (11/11) — ready to discuss Phase 4
 ---
 
 # Project State
@@ -21,16 +22,16 @@ See: .planning/PROJECT.md (updated 2026-08-17)
 
 **Core value:** New music downloads land in the library correctly tagged, through exactly one
 pipeline that someone owns.
-**Current focus:** Phase 03 — tagger-spike
+**Current focus:** Phase 4 — collapse to one tagger
 
 **Definition of done (CONS-04):** a file is imported only when verified with `ffprobe` on the file
 *and* visible in both Jellyfin and Music Assistant. Never "tool configured".
 
 ## Current Position
 
-Phase: 03 (tagger-spike) — EXECUTING
-Plan: 1 of 11
-Status: Executing Phase 03
+Phase: 4
+Plan: Not started
+Status: Ready to plan
 
 **02.1-10 COMPLETE. THE ESTATE'S ROUTINE HEALTH CHECK NOW COVERS THE THING THAT EMPTIED `/`, AND
 EVERY ONE OF ITS FAIL-CLOSED BRANCHES HAS BEEN DRIVEN RATHER THAN READ.**
@@ -788,7 +789,7 @@ already open so only 2049 is this phase's delta.
 
 **Velocity:**
 
-- Total plans completed: 32
+- Total plans completed: 43
 - Average duration: ~42m (excluding 01-06's 374-minute observation window)
 - Total execution time: ~375m of work
 
@@ -799,6 +800,7 @@ already open so only 2049 is this phase's delta.
 | 01 | 9 | ~375m | ~42m |
 | 02 | 9 | - | - |
 | 02.1 | 14 | - | - |
+| 03 | 11 | - | - |
 
 **Per Plan:**
 
