@@ -483,7 +483,7 @@ that four independent lines of evidence already agree on.
 
 **Wave 6** *(blocked on Wave 5)*
 
-- [ ] 03-09-PLAN.md — D-13: wrtag `metadata` versus the mutagen script, same folders, same before-state, same scoring instrument (wave 6)
+- [x] 03-09-PLAN.md — D-13: wrtag `metadata` versus the mutagen script, same folders, same before-state, same scoring instrument (wave 6)
 
 **Wave 7** *(blocked on Wave 6)*
 
@@ -726,7 +726,7 @@ Phase 7. Plans within a phase run sequentially.
 | 1. Safety Harness and Freeze the Writers | 9/9 | Complete | 2026-08-18 |
 | 2. NFS Export and Music Assistant Reachability | 9/9 | Complete    | 2026-09-01 |
 | 02.1. Jellyfin Transcode Retention *(inserted)* | 15/15 | Complete   | 2026-09-03 |
-| 3. Tagger Spike | 8/11 | In Progress|  |
+| 3. Tagger Spike | 9/11 | In Progress|  |
 | 4. Collapse to One Tagger | 0/TBD | Not started | - |
 | 5. Inbox Structure and the Junk Gate | 0/TBD | Not started | - |
 | 6. Tagger Configuration and Dry Run | 0/TBD | Not started | - |
