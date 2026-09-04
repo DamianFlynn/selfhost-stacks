@@ -84,7 +84,7 @@ selected rather than measured.
 
 | album_slot | album | front_end | went_first | wall_clock_s | interventions | context_switches | outcome | stuck_points |
 |---|---|---|---|---|---|---|---|---|
-| clean-1 | Taylor Swift — *1989 (Taylor's Version)* | beets-terminal | yes | | | | | |
+| clean-1 | Taylor Swift — *1989 (Taylor's Version)* | beets-terminal | yes | 30 | 1 | 1 | tagged | |
 | clean-1 | Taylor Swift — *1989 (Taylor's Version)* | beets-flask | no | | | | | |
 | clean-2 | Garth Brooks — *Ropin' The Wind* | beets-terminal | no | | | | | |
 | clean-2 | Garth Brooks — *Ropin' The Wind* | beets-flask | yes | | | | | |
