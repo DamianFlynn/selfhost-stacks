@@ -3,7 +3,7 @@ phase: 03-tagger-spike
 plan: 11
 subsystem: music-tagging
 tags: [decision-record, teardown, thresholds, ergonomics, credential-hygiene]
-status: HALTED AT CHECKPOINT — Task 3 is a blocking operator gate
+status: COMPLETE — all three tasks done; the operator gate returned "decision stands" and Phase 3 is closed
 requires:
   - 03-07-SUMMARY.md (T1, T2, criteria 1 and 2)
   - 03-08-SUMMARY.md (criterion 3, wrtag disqualified)
@@ -13,6 +13,8 @@ provides:
   - The completed two-axis decision record with T1/T2/T3 all resolved
   - Criterion 4 answered with a five-step named mechanism for DJ-service content
   - A torn-down estate — no spike container, no scratch tree, no credential copy
+  - The operator's verbatim confirmation, closing Phase 3
+  - A four-cause standing rotation action with a reaffirmed project-close timing
   - Handoffs to Phases 4, 5, 6, 7 and 9
 affects:
   - Phase 4 (deletes the loser; owns the four falsified claims and the WAV defect)
@@ -43,19 +45,22 @@ decisions:
   - "144 is the authoritative backlog denominator, quoted with its date, because it is T1's frozen estimator basis"
   - "Images: retain both winners' images, prune the two wrtag tags this phase pulled, leave v0.20.0 for Phase 4"
   - "Snapshots @spike-03-t0 and @spike-03-t2-wav destroyed; Phase 1's fence untouched"
+  - "Operator confirmed the decision verbatim at the blocking gate; Phase 3 is CLOSED"
+  - "Discogs rotation stays at project close — re-raised with four causes and four verified workstation copies, and REAFFIRMED"
 metrics:
-  duration: ~4h
+  duration: ~4h30m
   completed: 2026-09-04
+  tasks: 3
 ---
 
 # Phase 3 Plan 11: Close the Spike — Two-Axis Decision, Teardown and Closure Summary
 
-**The spike is decided and the estate is torn down: beets as the engine and beets-flask's
-policy-carrying inboxes — not its picker — as the front end, with all three pre-committed
-thresholds resolved and none moved.** Tasks 1 and 2 are complete and committed. **Task 3 is a
-blocking `checkpoint:human-action` gate and has NOT been executed** — the operator has not yet
-confirmed the decision, so **Phase 3 is not closed**, and `STATE.md` and `ROADMAP.md` are
-deliberately untouched.
+**The spike is decided, the estate is torn down, and the operator has confirmed it: beets as the
+engine and beets-flask's policy-carrying inboxes — not its picker — as the front end, with all
+three pre-committed thresholds resolved and none moved.** All three tasks are complete and
+committed. **Task 3's blocking gate returned "Decision stands — close phase 03" and Phase 3 is
+CLOSED.** `STATE.md` and `ROADMAP.md` remain deliberately untouched — the orchestrator owns those
+writes and closes the phase.
 
 ---
 
@@ -102,6 +107,30 @@ All three spike containers removed and confirmed absent with **no status filter*
 trees deleted by exact path; both spike snapshots destroyed from atlantis; per-image retain/prune
 decisions with a reason each; the three spike YAMLs archived with their `THROWAWAY` banner and a
 new block recording that they are inert.
+
+### Task 3 — the operator gate (commit `aabdcfb`)
+
+**The gate returned, and the decision stands.** Task 3 is a `checkpoint:human-action` marked
+`gate="blocking"`, and it is deliberately not satisfiable by an agent agreeing with the record —
+this project's documented failure mode is a tool abandoned because nobody believed in it, and an
+agent-ratified decision would reproduce exactly that.
+
+The operator was shown the decision **and the case against it**: both axis verdicts, T1 **FIRED**
+at 27.08% against 40%, T2 **NOT FIRED**, T3 **FIRED** on their own words, wrtag's disqualification
+on measurement, the teardown evidence, and the unsmoothed tension that beets-flask rc6 is both
+their stated preference and the arm with the worst measured safety record in the phase. They were
+**explicitly invited to reject it** on the three grounds the record is most vulnerable on —
+criterion 4's concreteness, whether axis two stands on its own evidence, and whether their
+week-six verdict still reads true now the trial is over. A "no" was a real and available outcome.
+
+> **"Decision stands — close phase 03"** — the operator, 2026-09-04
+
+**The record was neither amended nor softened to obtain that answer.** It responds to the document
+exactly as it stood. Recorded verbatim and dated in `03-DECISION.md` § *OPERATOR CONFIRMATION —
+2026-09-04*.
+
+**The rotation timing was re-raised at the same gate and REAFFIRMED.** See the section below — it
+is an informed decision, not an oversight.
 
 ---
 
@@ -236,6 +265,42 @@ this plan did NOT rotate and did NOT block on it.** But cause 4 is **new informa
 did not have when they set that timing**, and it is surfaced at the checkpoint for them to
 re-weigh. The decision is theirs.
 
+### RESOLVED at the gate — re-raised with worse facts, and the timing REAFFIRMED
+
+**The paragraph above was written before the checkpoint. It is now closed, and it closed against
+the plan's own reporting.** Two things were put to the operator that this plan had not established:
+
+- **The count of workstation copies is four, not one.** The orchestrator checked rather than
+  trusting this plan's report and found **four** plaintext copies — including
+  `0b75bb5a-…jsonl`, **a different session's transcript entirely**, outside this phase's own
+  session tree. I confirmed all four **present on disk** at close by an existence-and-size check
+  that did **not** read their contents; `bla6jts0m.txt` measured **131,433 bytes**, matching the
+  reported 131 KB.
+- **The unrecoverable count was put to them as three, not the two this summary states above.**
+  Both are right about different things, and the reconciliation is recorded rather than one figure
+  silently replacing the other: *two* counts causes unrecoverable **in whole** (1 and 4); *three*
+  counts every cause that left an unrecoverable **agent-transcript** residue (1, 2 and 4 — adding
+  cause 2, whose `644` file was shredded but whose transcript half was not). Cause 3 left no
+  persisting artefact, but its window cannot be un-opened.
+
+> **"Keep project close"** — the operator, 2026-09-04, given all of the above
+
+**This is an informed, reaffirmed decision — not an oversight, and not an open risk for a later
+plan to re-litigate.** What is and is not exposed:
+
+| | Status |
+|---|---|
+| The four workstation copies | **LOCAL and UNPUBLISHED** — session artefacts on the operator's own machine. None is in any repository; none was pushed |
+| **This repository** | **PROVABLY CLEAN** — every commit screened by the token's **value** *and* its **8-character prefix**, **0 hits**, verified **independently by the orchestrator** rather than self-reported |
+| The estate | `/mnt/fast/secrets/discogs.env` remains the **single** estate copy, `600 root` |
+| Scrubbability | **Three of the four are append-only session transcripts** that cannot be reliably scrubbed; the fourth's deletion was refused by policy from inside the session |
+
+**Why the operator's position is the stronger one:** because the residue cannot be reliably
+deleted, **rotation — not deletion — is the effective remedy.** Rotating makes every copy inert
+however many exist; deleting three of four would lower the count while leaving the credential live.
+**The action goes to project close carrying all four causes**, updated in `03-DECISION.md` § 9 and
+DEF-03-21 so whoever executes it does not act on the one-cause problem DEF-03-04 opened.
+
 ---
 
 ## Teardown evidence
@@ -298,8 +363,9 @@ prints `Traefik dashboard: ❌ Not accessible` while exiting 0. Recorded rather 
 | 7 | beets-flask evaluated **by name** with its frictions | `03-BEETS-FLASK.md` + `03-DECISION.md` § *Criterion 7* — 8 researched frictions + a 9th found |
 | 8 | Honest ergonomics verdict in the operator's own terms | `03-DECISION.md` § *Criterion 8* — the operator's verbatim answer |
 
-**Criterion 8's confirmation, and therefore the phase's closure, is the operator's to give.** That
-is Task 3.
+**Criterion 8's confirmation, and therefore the phase's closure, was the operator's to give — and
+they gave it** at Task 3, verbatim, on 2026-09-04: *"Decision stands — close phase 03"*. All eight
+criteria are satisfied.
 
 ---
 
@@ -321,14 +387,43 @@ entries rather than new surface.
 
 ---
 
-## What is NOT done
+## What is NOT done, and what stays open after close
 
-- **Task 3 — the blocking operator checkpoint.** Not executed. The operator has not read the record
-  or confirmed the decision.
-- **`.planning/STATE.md` and `.planning/ROADMAP.md` — deliberately untouched.** The plan gates both
-  on the operator confirming, and the orchestrator owns those writes.
-- **Phase 3 is NOT closed.**
-- The Discogs token is **not rotated** — the operator's decided timing, honoured.
+**Phase 3 IS closed.** These are the things closing it does **not** settle, kept visible here rather
+than buried, because a closing record that reads cleaner than the evidence is the failure this
+phase spent eleven plans avoiding.
+
+- **`.planning/STATE.md` and `.planning/ROADMAP.md` — deliberately untouched by this executor.**
+  The orchestrator owns those writes and closes the phase.
+- **The Discogs token is not rotated** — the operator's reaffirmed timing, honoured.
+- **DEF-03-17 rests on ONE verified product page.** `mastermixdj.com` being canonical for ~76% of
+  the backlog is a hypothesis with a single confirming instance; **coverage across the 99 Mastermix
+  folders is UNPROVEN.** It reframes what T1's 27.08% *means* and changes **nothing** about T1's
+  value, threshold, definition, estimator or denominator. Phase 4 must measure coverage before
+  anything is designed around it. Its **~76% / 115-of-151** figure is quoted against **151**, not
+  the authoritative **144**, and must never be paired with 144-based weights.
+- **Criterion 8's verdict in `03-ERGONOMICS-SHEET.md` is scribe-assembled and stays labelled so.**
+  The operator's T3 verbatim is their own words on the same question; **the analytical paragraphs
+  remain the executor's.** The sheet's outstanding "replace or countersign" instruction is
+  discharged — their words now exist — but they did **not** countersign the analysis, and the
+  section is not rewritten to imply they did.
+- **The measurements that were not taken.** `wall_clock_s` and `interventions` read `not measured`
+  on **9 of 10** sheet rows; **4 of 5** terminal rows read `not run`. **The trial was decided by a
+  defect, not by a stopwatch**, and no quantitative ergonomics claim is made in either direction.
+- **DEF-03-19 carried forward unfixed.** `zfs diff tank/media/Music@pre-project` has been non-clean
+  since **2026-08-18** — 2,674 `M` lines from Phase 1 plan 01-08's chown — and **three plans assert
+  otherwise**. The substitute instruments are used instead.
+- **The 144 / 151 denominator is SETTLED, not left circulating.** 144 is authoritative *for this
+  phase* because it is T1's frozen estimator basis and must be quoted with its date; 151 is a
+  different measurement, not a wrong one. Anyone re-counting must record the **path set, the audio
+  test and the timestamp** — sabnzbd is still writing into the tree, and a folder landed 41 minutes
+  after the census was committed.
+- **Friction 5 / the 144-folder case is NOT EXERCISED.** beets-flask's *"laggy past some hundred
+  folders"* limitation was never tested against this backlog. Phase 9 inherits it.
+
+**The teardown was not re-run at this gate and is not re-asserted here.** Its evidence stands from
+Task 2 as recorded above; re-running it would have been a fresh mutation of a torn-down estate for
+no new information.
 
 ---
 
@@ -355,4 +450,28 @@ FOUND: 6d79a6a  docs(03-11): close DEF-03-18, adopt DEF-03-19's instrument, log 
 FOUND: a47241c  chore(03-11): mark the three archived spike YAMLs inert at Phase 3 close
 FOUND: 537bf06  chore(03-11): tear down the spike and record every step with its instrument
 FOUND: 8e36762  docs(03-11): log DEF-03-21 — a secret in argv is world-readable
+FOUND: aabdcfb  docs(03-11): record the operator gate — the decision stands and Phase 3 closes
+```
+
+Provenance discipline on the closing commit, asserted mechanically rather than claimed:
+
+```
+git diff --stat   ->  3 files changed, 219 insertions(+), 0 deletions
+git diff -U0 | grep '^-' | grep -v '^---'   ->  (empty)
+git diff --diff-filter=D --name-only HEAD~1 HEAD   ->  (empty)
+```
+
+**Zero deletions across all three amended files.** No threshold, estimator, denominator or rubric
+text was altered; T1/T2/T3's `Threshold`, `Falsifiable form` and `Instrument` columns are untouched,
+which the zero-deletion result establishes directly. `.planning/STATE.md` and `.planning/ROADMAP.md`
+are absent from the diff.
+
+The four workstation credential copies were confirmed present by existence-and-size only — their
+**contents were not read**, and the token was not handled by this executor at any point:
+
+```
+PRESENT    2583363  0b75bb5a-63a3-4199-866d-ba8e3aad77d9.jsonl   (a different session's transcript)
+PRESENT    1939674  agent-a7f083d3ca24630c9.jsonl   (plan 03-11)
+PRESENT    1592052  agent-a2f9378b36744194d.jsonl   (plan 03-06)
+PRESENT     131433  bla6jts0m.txt                   (deletion refused by policy)
 ```
