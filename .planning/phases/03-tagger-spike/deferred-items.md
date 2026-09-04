@@ -968,6 +968,45 @@ two of the four are permanently unrecoverable.** The operator has decided rotati
 the operator did not have when they set that timing**, so it is surfaced at the closing checkpoint
 for them to re-weigh. Recorded in full in `03-DECISION.md` § *Teardown* §§ 8–9.
 
+### RESOLVED at the closing gate, 2026-09-04 — the timing was re-raised and REAFFIRMED
+
+**This item is no longer an open decision.** The paragraph above was written before the checkpoint
+and correctly left the timing to the operator. It was put to them there, with facts this entry did
+not have:
+
+- The orchestrator, checking rather than trusting this plan's own report, found **four** plaintext
+  copies on the workstation, **not the single `bla6jts0m.txt` this entry names**. The fourth is a
+  **different session's transcript** (`0b75bb5a-…jsonl`), outside this phase's own session tree.
+  All four confirmed present at Phase 3 close by an existence-and-size check that did **not** read
+  their contents; `bla6jts0m.txt` measured **131,433 bytes**.
+- The count of causes whose residue is unrecoverable was put to them as **three**, not the **two**
+  stated above. **Both figures are right about different things**: *two* counts causes
+  unrecoverable **in whole** (1 and 4); *three* counts every cause that left an unrecoverable
+  **agent-transcript** residue (1, 2 and 4 — adding cause 2, whose `644` file was shredded but
+  whose transcript half was not). Cause 3 left no persisting artefact, but its window cannot be
+  un-opened. **The wording above is left standing and reconciled here rather than overwritten**;
+  the full reconciliation is in `03-DECISION.md` § *OPERATOR CONFIRMATION — 2026-09-04* § 3.
+
+**The operator's answer, verbatim:**
+
+> **"Keep project close"**
+
+**Record this as an informed, reaffirmed decision — not an oversight, and not an open risk for a
+later plan to re-litigate.** What is and is not exposed:
+
+| | Status |
+|---|---|
+| The four workstation copies | **LOCAL and UNPUBLISHED** — agent session artefacts on the operator's own machine. None is in any repository and none was pushed |
+| **This repository** | **PROVABLY CLEAN** — every commit screened by the token's **value** *and* its **8-character prefix**, **0 hits**, verified **independently by the orchestrator** |
+| The estate | `/mnt/fast/secrets/discogs.env` remains the **single** estate copy, `600 root` |
+| Scrubbability | **Three of the four are append-only session transcripts** and cannot be reliably scrubbed; the fourth's deletion was refused by policy from inside the session |
+
+**Why the operator's position is the stronger one:** because the residue cannot be reliably
+deleted, **rotation — not deletion — is the effective remedy.** Rotating makes every copy inert
+regardless of how many exist; deleting three of four would lower the count while leaving the
+credential live. **The action goes to project close carrying all four causes**, so whoever executes
+it does not act on the one-cause problem DEF-03-04 opened.
+
 **Why not fixed here.** There is nothing left to fix on the host — the technique was corrected
 mid-teardown and the exposure window is closed. What remains is a **rotation decision that belongs
 to the operator** and one workstation file this session cannot delete.

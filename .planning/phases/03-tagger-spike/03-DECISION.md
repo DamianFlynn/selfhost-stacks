@@ -1722,6 +1722,22 @@ have accumulated well beyond D-04's original one:
 at the closing checkpoint rather than acted on unilaterally: **the decision on when to rotate is
 theirs, and this record's job is to make sure it is made on current facts.**
 
+> **AMENDED 2026-09-04 at the closing gate — the timing was re-raised and REAFFIRMED.** The
+> paragraph above was written before the checkpoint and correctly left the decision open. **It is
+> now closed.** Cause 4 was put to the operator with the full facts, including that the orchestrator
+> independently found **four** plaintext copies on the workstation rather than the single file § 8
+> names — one of them a **different session's transcript** entirely. Their answer, verbatim:
+> **"Keep project close"**. **Rotation stays at project close as an informed, reaffirmed decision —
+> not an oversight, and not an open risk for a later plan to re-open.** The four copies are **local
+> and unpublished**; **this repository is provably clean** (every commit screened by token value
+> **and** 8-character prefix, 0 hits, verified independently by the orchestrator);
+> `/mnt/fast/secrets/discogs.env` remains the single estate copy at `600 root`. **Three of the four
+> are append-only session transcripts that cannot be reliably scrubbed, which is precisely why
+> rotation rather than deletion is the effective remedy.** Full record, including the reconciliation
+> of the "two unrecoverable" figure in the table above against the "three" put to the operator, in
+> § *OPERATOR CONFIRMATION — 2026-09-04* § 3. **Whoever executes this action must read it there: it
+> is a four-cause problem, not the one-cause problem D-04 opened.**
+
 **The standing rule this repository operates under, restated because it was breached here:** this
 repo is **public** and pushed to `origin`. Credentials live in `/mnt/fast/secrets/` (mode `600`,
 root-owned) and `~/.claude/secrets/`, and are referenced **by variable name only**. Screen every
@@ -1769,3 +1785,147 @@ the remaining Music-tree assertions are run at the closing checkpoint.
 
 Both spike containers are **throwaway**. The spike measures; **Phase 4 deletes the loser; Phase 6
 configures the winner.** Do not half-deploy a decision that has not been made.
+
+---
+
+## OPERATOR CONFIRMATION — 2026-09-04, plan 03-11 task 3: the gate is SATISFIED and Phase 3 closes
+
+Task 3 is a `checkpoint:human-action` gate marked `gate="blocking"`. **It is not satisfied by an
+agent agreeing with the record.** Its whole purpose is that this project's documented failure mode
+is a tool abandoned because nobody actually believed in it, and a decision ratified by an agent
+would reproduce exactly that. The gate is satisfied by the operator reading the record and saying
+whether the decision stands.
+
+**They did. It does.**
+
+### 1. What was put to the operator, so the confirmation is auditable as *informed*
+
+The operator was not asked to rubber-stamp a headline. They were presented with the decision **and
+the case against it**:
+
+| Put to them | Substance |
+|---|---|
+| The two-axis decision | Engine **beets 2.13.1**; front end **beets-flask's policy-carrying inboxes, explicitly not the interactive picker** |
+| T1 | **FIRED** — backlog-weighted strict Discogs rate **27.08%** against a 40% threshold. beets wins with its headline advantage at under half of what would have made it decisive alone |
+| T2 | **NOT FIRED**, neither limb — 21.8 min projected, 0 observed HTTP 429 |
+| T3 | **FIRED**, on their own words, obtained 2026-09-04 |
+| wrtag | **Disqualified on measurement** (03-08), at both ends of its version pin — not out-argued |
+| The teardown | Three containers gone, both scratch trees deleted, both spike snapshots destroyed, token copies on the estate 4 → 1, `/` at 35 G |
+| The tension, undiscounted | beets-flask rc6 is **both** their stated preference **and** the arm with the worst measured safety record in the phase — a silent 9-file loss with 4 tracks mis-written under a UI asserting nothing was missing |
+
+They were **explicitly invited to reject it** on three specific grounds, which are the three the
+record is most vulnerable on:
+
+1. whether **criterion 4** is answered concretely, or amounts to *"that content lives outside the
+   tool"* — the failure mode the criterion exists to catch;
+2. whether **axis two stands on its own evidence** rather than being derived from axis one's, which
+   is what TAGR-06 requires and what a record answering only *"which engine"* fails;
+3. whether their **week-six verdict still reads true** now the trial is over.
+
+**A "no" on any of the three was a legitimate and available outcome**, and the plan's own text says
+so. The gate was put as a real question, not a formality.
+
+### 2. The answer, verbatim and dated
+
+> **"Decision stands — close phase 03"**
+>
+> — the operator, 2026-09-04, having been shown the decision, the three threshold verdicts,
+> wrtag's disqualification and the teardown evidence
+
+**Task 3's gate is recorded SATISFIED on that basis.** Criterion 8's confirmation — and therefore
+Phase 3's closure — was the operator's to give, and it has been given. The record was neither
+amended nor softened to obtain it: the answer above is a response to the record exactly as it
+stands in this document.
+
+**Phase 3 is CLOSED.** Axis one is **beets 2.13.1**; axis two is **beets-flask's policy-carrying
+inboxes, not its picker**. Phase 4 deletes the loser and Phase 6 grants the winner `rw`.
+
+### 3. The rotation question was re-raised at this gate with new facts, and the timing was REAFFIRMED
+
+**This must not be read as an oversight, and it must not be re-litigated as an open risk.** The
+concern was raised, materially new facts were put to the operator, and they reaffirmed the original
+timing on those facts. That is a decision, not a gap.
+
+**What was newly disclosed at the gate**, beyond what § 8 and § 9 above already recorded:
+
+- That **this plan's own teardown sweep** passed the token as a command-line argument, leaving it
+  world-readable via `/proc` for ~45 minutes — the exposure caused by the command written to
+  *verify* the credential was gone.
+- That the count is now **four independent causes**, and that the residue of **three of them**
+  cannot be recovered.
+- That the orchestrator, checking rather than trusting this plan's own report, found **four**
+  plaintext copies on the workstation — **not the single file § 8 named**:
+
+| # | Workstation copy | Note |
+|---|---|---|
+| 1 | `~/.claude/projects/-Users-damian-Development-damianflynn-selfhost-stacks/0b75bb5a-63a3-4199-866d-ba8e3aad77d9.jsonl` | **A different session's transcript** — outside this phase's own session tree, and the copy this plan did not know existed |
+| 2 | `…/0322cd2a-…/subagents/agent-a7f083d3ca24630c9.jsonl` | This plan (03-11) |
+| 3 | `…/0322cd2a-…/subagents/agent-a2f9378b36744194d.jsonl` | Plan 03-06 |
+| 4 | `…/0322cd2a-…/tool-results/bla6jts0m.txt` | 131 KB; **deletion was refused by policy from inside the session** |
+
+All four were confirmed **present on disk** at Phase 3 close by an existence-and-size check that
+did **not** read their contents — copy 4 measured **131,433 bytes**, matching the reported 131 KB.
+
+**The operator's answer, given all of the above:**
+
+> **"Keep project close"**
+>
+> — the operator, 2026-09-04, on being re-asked whether rotation should be brought forward
+
+**Recorded as an informed, reaffirmed operator decision.** This plan did not rotate and did not
+block on it, and no later plan should treat the timing as unsettled.
+
+**Reconciling the "unrecoverable" count, because two figures are now in circulation and the house
+rule is that a number is quoted with the rule that produced it** — the same discipline applied to
+the 144/151 denominator in § 3 above:
+
+- § 9's table and DEF-03-21 say **two** of four are permanently unrecoverable. That reading counts
+  the causes whose residue is unrecoverable **in whole** — causes 1 and 4.
+- The figure put to the operator at this gate was **three**. That reading counts every cause that
+  left an **unrecoverable agent-transcript residue** — causes 1, 2 and 4, adding cause 2, whose
+  `644` file was shredded but whose transcript half was not.
+- **Cause 3** (the argv window) left **no persisting artefact** — the processes were killed — but
+  the window cannot be un-opened, so it is not "recovered" either.
+
+**Neither figure is wrong; they count different things.** The count that matters for the rotation
+decision is that **rotation is the only remedy that addresses any of them**, which is true on both
+readings. Prior wording in § 9 and DEF-03-21 is left standing and amended here rather than
+overwritten.
+
+**What is and is not exposed, stated plainly so nobody re-derives it under pressure later:**
+
+| | Status |
+|---|---|
+| The four workstation copies | **LOCAL and UNPUBLISHED.** They are agent session artefacts on the operator's own machine. None is in any repository, none was pushed, none left the workstation |
+| **This repository** | **PROVABLY CLEAN.** Every commit was screened by the token's **value** *and* by its **8-character prefix** — **0 hits** — verified **independently by the orchestrator**, not self-reported by the plan that would have caused a hit |
+| The estate | `/mnt/fast/secrets/discogs.env` remains the **single** copy on the estate, `600 root`. This phase's own copies went 4 → 1 |
+| Scrubbability | **Three of the four are append-only session transcripts.** They cannot be reliably scrubbed — editing them in place is neither supported nor verifiable — and the fourth's deletion was refused by policy from inside the session |
+
+**That last row is the whole argument for the operator's position, and it is a good one:** because
+the residue cannot be reliably deleted, **rotation — not deletion — is the effective remedy.** Once
+the token is rotated the copies are inert regardless of how many exist or where they sit. Deleting
+three of four would reduce the count while leaving the credential live, which is the weaker
+outcome. **The action is therefore carried to project close as decided, and it is carried with all
+four causes attached** (§ 9), so whoever executes it does not act on the two-cause problem this
+started as.
+
+### 4. What closing this phase does NOT settle
+
+Recorded here rather than buried, because a closing record that reads cleaner than the evidence is
+the failure this phase spent eleven plans avoiding.
+
+| Open item | Status at close |
+|---|---|
+| **DEF-03-17** — `mastermixdj.com` canonical for ~76% of the backlog | Rests on **ONE verified product page**. Coverage across the 99 Mastermix folders is **UNPROVEN**. It reframes what T1's 27.08% *means*; it changes **nothing** about T1's value, threshold, definition, estimator or denominator. Phase 4 research must measure coverage before anything is designed around it |
+| The **~76% / 115-of-151** figure in DEF-03-17 | Quoted against **151**, not the authoritative **144** — permitted by § 3's ruling *only* because it is labelled as such here. **It must never be paired with 144-based weights.** Flagged so the two denominators stop circulating unlabelled |
+| **Criterion 8's verdict** in `03-ERGONOMICS-SHEET.md` | **Scribe-assembled and labelled so**, and it stays that way. The operator's T3 verbatim is their own words on the same question; the **analytical paragraphs remain the executor's**. The distinction is deliberate and must not be collapsed by a later reader treating the whole section as the operator's voice |
+| **The measurements that were not taken** | `wall_clock_s` and `interventions` read `not measured` on **9 of 10** sheet rows, and **4 of 5** terminal rows read `not run`. **The trial was decided by a defect, not by a stopwatch** — and no quantitative ergonomics claim is made in either direction |
+| **DEF-03-19** — `zfs diff tank/media/Music@pre-project` | Has been **non-clean since 2026-08-18** (2,674 `M` lines from Phase 1 plan 01-08's chown) and **three plans assert otherwise**. Carried forward unfixed; the substitute instruments are used in § 11 above |
+| **The 144 / 151 denominator** | **SETTLED** by § 3 — 144 is authoritative *for this phase* because it is T1's frozen estimator basis, and must be quoted with its date; 151 is a different measurement, not a wrong one. Anyone re-counting must record the **path set, the audio test and the timestamp**, because sabnzbd is still writing into the tree |
+| **Friction 5 / the 144-folder case** | **NOT EXERCISED.** beets-flask's *"laggy past some hundred folders"* limitation was never tested against this backlog. Phase 9 inherits it |
+| **The Discogs token** | **Not rotated** — the operator's reaffirmed timing, honoured (§ 3 above) |
+
+**The closing verdict, stated at its true strength:** one engine and one front end were chosen on
+numbers from this library's own content, against thresholds committed before the evidence existed
+and **none of them moved**. What the phase did **not** produce is a timed ergonomics comparison, and
+it does not claim one.
