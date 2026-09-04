@@ -232,3 +232,123 @@ not either, but a `grep -c 'connectionpool'` would.
 
 **Why not fixed here.** Same reason as DEF-03-04: 03-07's acceptance criteria are what 03-07 is
 measured against.
+
+**CLOSED by plan 03-07, 2026-09-04, with the failure demonstrated at full scale.** The substitution
+was applied. On six cells the bare form returned **25 every time — including the two MB-only cells
+that issued zero Discogs requests** — against a true count of **0 HTTP 429** on both correct
+instruments. Recorded as a dated amendment in `03-DECISION.md` § *AMENDMENT — 2026-09-04*.
+
+---
+
+## DEF-03-06 — `grep -c 'api\.discogs\.com'` over-counts Discogs requests exactly 2×
+
+**Found by:** plan 03-07, task 2, 2026-09-04.
+**Severity:** low, corrected in place; recorded because it is named in **T2's own `Instrument`
+column** in `03-DECISION.md` and will be inherited by any later plan that re-reads it.
+
+T2's cross-check instrument is *"`grep -c 'api\.discogs\.com'` on the probe stderr (`urllib3`
+DEBUG)"*. `urllib3` emits **two** lines mentioning the host per request:
+
+```
+DEBUG urllib3.connectionpool Starting new HTTPS connection (1): api.discogs.com:443
+DEBUG urllib3.connectionpool https://api.discogs.com:443 "GET /database/search?...  HTTP/1.1" 200 None
+```
+
+So on the headline cell the bare form returns **150** where the probe's in-process counter — which
+parses the status code and is scoped to `api.discogs.com` — returns **75**. The two "independent
+instruments" T2 requires therefore disagree by a factor of two, and the naive one inflates the
+request extrapolation and the API-floor minutes accordingly.
+
+**The correct form, which reproduces the in-process counter exactly:**
+
+```bash
+grep -cE 'api\.discogs\.com.*HTTP/1\.1"' <stderr>     # -> 75, matching the probe
+```
+
+This also explains why the measured **M = 3.125** requests per folder sits so far below
+03-RESEARCH.md's predicted 6–11: the prediction was sound, and 03-06's smoke measurement of 7 for
+one folder was correct, but a folder whose search returns nothing costs **one** request with no
+release fetches behind it, and this backlog has many of those.
+
+**Suggested fix (Phase 4, or whoever re-reads T2):** quote the restricted form wherever the bare
+one appears, and prefer the probe's own counter, which cannot confuse a connection with a request
+or a `musicbrainz.org` line with a Discogs one.
+
+---
+
+## DEF-03-07 — MusicBrainz signals rate limiting with HTTP 503, not 429
+
+**Found by:** plan 03-07, task 1, 2026-09-04.
+**Severity:** medium for any later plan that watches for 429 as its rate-limit signal — it will
+report a clean run while MusicBrainz is throttling it.
+
+Every Discogs cell in plan 03-07 logged HTTP 503 responses, and **every one of them came from
+`musicbrainz.org`; zero came from `api.discogs.com`**:
+
+| Cell | 200 | 503 | All 503s from |
+|---|---|---|---|
+| `raw-mbdiscogs` | 216 | 13 | `musicbrainz.org` |
+| `normalised-mbdiscogs` (headline) | 213 | **44** | `musicbrainz.org` |
+| `raw-mbdiscogs-it` | 216 | 26 | `musicbrainz.org` |
+| `normalised-mbdiscogs-it` | 219 | 28 | `musicbrainz.org` |
+| `raw-mb` | 144 | 14 | `musicbrainz.org` |
+| `normalised-mb` | 144 | 28 | `musicbrainz.org` |
+
+**Two consequences that outlive this plan:**
+
+1. **It is the dominant term in the wall-clock.** Projected wall-clock for the backlog is 21.8
+   minutes against a pure-Discogs-API floor of 7.43 minutes — a ~3× gap, and MusicBrainz backoff is
+   most of it. T2's 4-hour limb is nowhere near either figure, so nothing is at stake *here*; a
+   phase that actually imports the backlog will feel it.
+2. **It produced the only cross-check disagreement in this plan.** Two of the five hand-read
+   `beet import -t` folders returned a different *MusicBrainz* candidate set from the probe, because
+   the probe collected its set while MusicBrainz was returning 503s and the cross-check ran later.
+   The Discogs half — the half T1 is computed from — agreed on 5 of 5.
+
+**Why not fixed here.** Nothing to fix in this phase: T2 names 429 explicitly and Discogs returned
+none, so the threshold is answered as written. This is a note about the *signal*, logged so a later
+plan does not build a rate-limit guard that only ever looks for 429.
+
+**Suggested fix (Phase 6/7, when bulk import is real):** treat `503` from `musicbrainz.org` and
+`429` from `api.discogs.com` as the same class of event, and count both.
+
+---
+
+## DEF-03-08 — D-05's strict rule admits confident wrong matches
+
+**Found by:** plan 03-07, task 1, 2026-09-04.
+**Severity:** the phase's headline metric is an upper bound on the thing it is read as measuring.
+
+D-05 defines a strict match as *a Discogs candidate appears AND its track count agrees with the
+folder AND `extra_items == 0` AND `extra_tracks == 0`*. It does **not** require the candidate to be
+the right release. Reading every strict-satisfying candidate on the headline cell:
+
+| Folder | Queried `album` | Discogs release that satisfied D-05 | Confidence | Correct? |
+|---|---|---|---|---|
+| `Mastermix_Issue_410` / `_410.1` | `Mastermix Issue 410` | `32813244` *Mastermix Issue 410* | 75.6% | yes |
+| `VA-Mastermix.Issue.426-2021` / `.1` | `Mastermix Issue 426` | `25298851` *Mastermix Issue 426* | 64.3% | yes |
+| `VA-Mastermix.Issue.427.2CD-2021` | `Mastermix Issue 427` | `32816841` *Mastermix Issue 427* | 59.6% | yes |
+| **`Mastermix_Issue_412`** | **`Issue 412`** | **`1534659` *Specialten Issue 14*** | **31.2%** | **NO** |
+
+**One of six.** A 2006 Specialten DVD matched a Mastermix issue because both carry ten tracks —
+precisely the outcome `CLAUDE.md` § *Autotagging ceiling* calls worse than no match.
+
+The weighted rate is **27.08%** on D-05 as written and **22.80%** on "strict and correct". **T1
+fires on both**, so the phase's verdict does not turn on this — but any later plan that reads
+27.08% as "27% of the backlog will autotag correctly" is reading it wrong.
+
+**The proximate cause is a stratum definition, not the rule.** `Mastermix_Issue_412`'s album tag is
+the bare string `Issue 412`. It is classified **V1** — "already the good case" — so no normalisation
+rule fired on it, and `Issue 412` is a hopelessly generic Discogs query. This is the same defect
+class 03-SAMPLE.md found when it reclassified `album == artist` out of V1: **V1 admits album
+strings that are clean but identify no release.**
+
+**Why not fixed here.** D-05 is a pre-committed definition inside the threshold commit; changing it
+mid-phase is exactly the goalpost move criterion 5 exists to prevent. The correct-match reading is
+reported *beside* the D-05 reading instead.
+
+**Suggested fix (Phase 4):** extend the V1 test to require the album string to contain the label
+*and* an issue number, so `Issue 412` normalises to `Mastermix Issue 412` under rule 2 rather than
+being exempted as already-clean. A confidence floor near 50% would also have separated all six
+cleanly in this sample — every correct match scored ≥ 59.5% and the wrong one 31.2% — but that is a
+one-sample observation, not a calibrated threshold.
