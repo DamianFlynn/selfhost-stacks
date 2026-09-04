@@ -48,7 +48,7 @@ the same filesystem paths and the same beets state.
 - [x] **Phase 1: Safety Harness and Freeze the Writers** - One writer on the library, everything irreplaceable copied somewhere no tagger can reach, and a before-state tag snapshot taken while the library is still untouched
 - [x] **Phase 2: NFS Export and Music Assistant Reachability** - The second consumer proven on three albums, before any content flows (completed 2026-09-01; D-55 approved after the operator played tracks)
 - [x] **Phase 02.1: Jellyfin transcode retention** *(INSERTED)* - Relocate the anonymous transcode volume off `/` and set a retention policy, so the 19 GB cache that emptied `/` mid-Phase-3 cannot refill there (all 10 plans executed 2026-09-03; `/` free 20.18 GiB -> 34.48 GiB, margin over the D-17 floor 185 MiB -> 14.48 GiB, `check-jellyfin-transcode.sh` FAILURES 0 and folded into `quick-health-check.sh`. **VERIFIED 2026-09-03: `gaps_found`, 8/10 must-haves** -- the structural relocation is real and re-verified live, but two gaps block completion, both confirmed independently: (CR-01) `TranscodingTempPath` is REPORTED not asserted, so drift off the quota'd dataset leaves the standing check green -- which undercuts the goal's own "a standing fail-closed check would have caught the incident"; and (CR-02) the "Jellyfin publishes NO host port" claim is FALSE -- `curl http://172.16.1.76:8096/health` returns 200 from the LAN -- and it is the last compensating control for the admin-equivalent API key this phase widened from read to write. Close with `/gsd-plan-phase 02.1 --gaps`) (completed 2026-09-03)
-- [ ] **Phase 3: Tagger Spike** - One tagger *and* one front end chosen on numbers from this library's own content, against thresholds committed in advance
+- [x] **Phase 3: Tagger Spike** - One tagger *and* one front end chosen on numbers from this library's own content, against thresholds committed in advance (completed 2026-09-04)
 - [ ] **Phase 4: Collapse to One Tagger** - One tagger, one database, no idle container holding a rw mount — independently shippable
 - [ ] **Phase 5: Inbox Structure and the Junk Gate** - A staging queue outside the library, with the junk already out of it
 - [ ] **Phase 6: Tagger Configuration and Dry Run** - The intended tree proven on paper before it is produced on disk
@@ -491,7 +491,7 @@ that four independent lines of evidence already agree on.
 
 **Wave 8** *(blocked on Wave 7)*
 
-- [ ] 03-11-PLAN.md — The two-axis decision record, criterion 4's concrete answer, teardown and closure (wave 8, blocking checkpoint)
+- [x] 03-11-PLAN.md — The two-axis decision record, criterion 4's concrete answer, teardown and closure (wave 8, blocking checkpoint)
 
 **Research**: `--research-phase` — the spike is itself research, and without a defined evidence
 protocol with pre-committed thresholds it drifts into tool advocacy. The normalisation pre-step is
@@ -726,7 +726,7 @@ Phase 7. Plans within a phase run sequentially.
 | 1. Safety Harness and Freeze the Writers | 9/9 | Complete | 2026-08-18 |
 | 2. NFS Export and Music Assistant Reachability | 9/9 | Complete    | 2026-09-01 |
 | 02.1. Jellyfin Transcode Retention *(inserted)* | 15/15 | Complete   | 2026-09-03 |
-| 3. Tagger Spike | 10/11 | In Progress|  |
+| 3. Tagger Spike | 11/11 | Complete   | 2026-09-04 |
 | 4. Collapse to One Tagger | 0/TBD | Not started | - |
 | 5. Inbox Structure and the Junk Gate | 0/TBD | Not started | - |
 | 6. Tagger Configuration and Dry Run | 0/TBD | Not started | - |
