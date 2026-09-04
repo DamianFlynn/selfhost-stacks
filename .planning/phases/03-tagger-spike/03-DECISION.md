@@ -528,6 +528,240 @@ is load-bearing and not stylistic.
 
 ---
 
+## Criterion 5 — the thresholds, and the proof none of them moved
+
+All three rows of § *Pre-committed thresholds* now carry a `Tested?` and a `Returned` line.
+**Two fired, one did not**, and the outcomes are recorded whichever way they went.
+
+| # | Outcome | What it changed about the decision |
+|---|---|---|
+| **T1** | **FIRED** — weighted strict **27.08%** against a 40% threshold | It did **not** flip the engine, because the alternative was disqualified independently (criterion 3). What it changed is what the winner is expected to *do*: **the plan may not assume Discogs autotags this backlog.** It fires on every reading — unweighted 25.00%, most-favourable V6 bound 36.80%, strict-and-correct 22.80% |
+| **T2** | **NOT FIRED — neither limb** — 21.8 min projected against a 4-hour limb, **0** HTTP 429 on both correct instruments | Rate limiting is **not** the obstacle, so no design may be justified on the grounds that it is. Recorded as a result in its own right: three of T2's originally-named instruments were defective (DEF-03-05/06/07) and were substituted with instruments that measure the stated quantity, **without the limb's value changing** |
+| **T3** | **FIRED** — the operator's own words, quoted verbatim in the threshold table | It removed the raw terminal prompt from axis two. **It did not produce the consequence 03-02 predicted** — see § *AMENDMENT — 2026-09-04, plan 03-11* § 2 |
+
+**No threshold was recorded indeterminate.** The one place a hole stratum could have straddled the
+threshold was V6 — 1 sampled folder, 0.0972 weight, `0.0000` contribution — and its 0%/100%
+contribution band gives **27.08–36.80%**, whose *upper* bound is still below 40%. So T1's outcome
+is robust to the thinnest stratum in the sample rather than resting on it.
+
+### Custody: the threshold commit, and why a remote is the only proof
+
+**`git log -p` on a local branch is evidence, not proof** — a local history can be amended or
+rebased before it is published, so custody resting on local commit ordering rests on the author's
+restraint. **A pushed commit is a fact about a remote.** The threshold commit is:
+
+```
+137b6d9e92cb44d9c6a48b3963bb33fe0194622f
+```
+
+Re-asserted **in this plan**, from this worktree, rather than taken on plan 03-07's word:
+
+| Assertion | Command | Result |
+|---|---|---|
+| It resolves to a commit object | `git cat-file -t 137b6d9e92cb44d9c6a48b3963bb33fe0194622f` | **`commit`** |
+| It is reachable from `origin/main` | `git branch -r --contains 137b6d9e92cb44d9c6a48b3963bb33fe0194622f` | **`origin/main`** (and `origin/HEAD -> origin/main`) |
+| It is an ancestor of `origin/main` | `git merge-base --is-ancestor 137b6d9e92cb44d9c6a48b3963bb33fe0194622f origin/main` | **exit 0** |
+
+That closes the open item recorded in § *Threshold commit provenance*: at 03-02 close the commit
+was reachable only from `origin/worktree-agent-a810735978952a3c4`, because `origin/main` then stood
+behind this phase's own base. **The orchestrator has since merged the waves, and because this
+repository merges rather than squashes or rebases, the SHA survived that merge unchanged** — which
+is exactly what the provenance section predicted and is now verified rather than assumed.
+
+**The commits that put each piece of evidence in place, all of them after the threshold commit:**
+
+| Evidence | Introducing commit | Covers |
+|---|---|---|
+| Thresholds, estimator, empty ergonomics sheet | `137b6d9e92cb44d9c6a48b3963bb33fe0194622f` | T1, T2, T3, the denominator, the sheet's definitions |
+| `03-DISCOGS-EVIDENCE.md` | `316af3a9339bae3c324e035142af77108da4934b` (03-07) | criterion 1 — the four-cell matrix |
+| T1/T2 marked tested | `88c3295721e2f6364adff92f44ed3c01389bf2ce` (03-07) | criterion 2 — timing and extrapolation |
+| `03-WRTAG-EVIDENCE.md` | `621a5b525d4b77d27a1141fb07ad8b7bdc30b59e` (03-08) | criterion 3 |
+| `03-NORMALISER-BAKEOFF.md` | `7c82cd0805da9f51518d8075f9035ab0d00e9914` (03-09) | D-13 |
+| `03-BEETS-FLASK.md` | `497361cce9374c73d25ceae9a8c144240f245518` (03-10) | criteria 7 and 8 |
+
+### Two things were fixed pre-evidence, and neither moved afterwards
+
+Stated explicitly because criterion 5 is unprovable retroactively and this is the shape of the
+proof:
+
+1. **The threshold *values*** — 40%; 4 hours **or** any 429; an honest self-assessment.
+2. **The *estimator* T1 is tested against** — the backlog-weighted per-stratum roll-up.
+
+**Both were fixed in the same pre-evidence commit**, before a single folder was sampled, a single
+weight measured or a single Discogs request issued. **An estimator chosen after a rate exists is
+goalpost-moving; an estimator specified before any rate can exist is simply specifying the
+measurement** — the same structure as OD-3's widening. Plan 03-03, which drew the sample and
+measured the weights, depends on 03-02 and could not run before it; plan 03-07, which measured the
+rates, depends on 03-03.
+
+Asserted mechanically in this plan, not claimed:
+
+- The T1/T2/T3 rows' **Threshold**, **Falsifiable form** and **Instrument** columns are
+  **byte-identical** to `137b6d9e` — extracted with `cut -d'|' -f2,3,4,5` on both revisions and
+  `diff`ed to zero lines.
+- § *The estimator T1 is tested against* differs from `137b6d9e` **only in its `PENDING` weight and
+  rate cells**; every line of its prose, including the definitions and § *Why fixing the estimator
+  here preserves criterion 5*, is unchanged.
+
+### The weighted and unweighted figures, side by side
+
+| Figure | Value | Status |
+|---|---|---|
+| **Backlog-weighted strict rate** | **27.08%** | **This is what T1 was tested against.** Fires the 40% threshold |
+| Unweighted per-folder sample rate | 25.00% (6/24) | Reported beside it, **explicitly not the tested figure** |
+| Most-favourable bound (V6 at 100%) | 36.80% | Still fires |
+| Strict **and** the release is correct | 22.80% weighted | Reported beside it; fires more clearly. 1 of 6 strict hits is a confident wrong release (DEF-03-08) |
+| Weighted **loose** rate (normalised) | 51.39% | The strict/loose gap is **7 folders / 29.2%** — a deliverable in its own right, not a softer headline |
+
+**Both weighted and unweighted are honest numbers about different things. Only the weighted one is
+tested against T1**, because request volume and match likelihood vary by stratum by construction —
+a V3 folder with no `album` tag issues no Discogs query at all, while a V1 folder paginates.
+
+---
+
+## Criterion 7 — beets-flask, evaluated by name
+
+Required to be evaluated **by name**, not dismissed and not assumed. It was deployed as
+`metasauce/beets-flask:v2.0.0-rc6` (digest `sha256:9548e78f…`, re-verified against the live host)
+behind a recorded operator acknowledgement (`deploy-rc6`, verbatim, dated, and **provably
+pre-deployment** — zero containers named `beets-flask-spike` existed at the moment of answering).
+Full record: [`03-BEETS-FLASK.md`](03-BEETS-FLASK.md).
+
+**All eight researched frictions carry an observation. A ninth was found by this deployment.**
+*"Not exercised"* is used honestly and is not a synonym for *"fine"*.
+
+| # | Friction (as researched) | Verdict | What was actually seen |
+|---|---|---|---|
+| 1 | 1.0 removed the interactive terminal import in favour of UI candidate selection; a tmux-backed web terminal exists for pasting a release ID | **OBSERVED** | Present and enabled. The shipped example defaults `gui.terminal.start_path` to a `/music/inbox` that does not exist here; the spike overrode it rather than mounting a `/music` to satisfy a default. The terminal grants a shell inside a container that mounts `tank` — which is why the service is loopback-bound with **zero** Traefik labels |
+| 2 | Inbox entries must be directories; loose files never trigger (documented wontfix) | **OBSERVED — by direct probe** | A single loose `LOOSE-FILE-PROBE.mp3` was never imported. The reaction is subtler than "nothing happens": the watchdog enqueued **the inbox root itself** as a preview task and the API reported `tagged_via_gui: 1, imported_via_gui: 0`. A loose file produces **a task against the wrong unit of work** |
+| 3 | Music paths must match inside and outside the container | **OBSERVED — identical-path mounts sufficed** | `beet ls` inside returns paths that resolve on the host; the import wrote to the host path the config names. Cross-checked for mount freshness: 21 host-side and 21 container-side |
+| 4 | Only `copy` is supported, never `move` | **OBSERVED — and favourable here** | Source folder kept all 20 mp3; `bf-clean` held 20 copies. It enforces what `PROJECT.md`'s storage constraint already wants. Recorded as a friction only because a later phase that genuinely wants `move` cannot have it |
+| 5 | UI gets laggy past "some hundred" folders (#164, #175) | **NOT EXERCISED — and structurally cannot be by this trial** | The backlog is 144 folders; the trial ran **one** folder through `bootleg` and **five** through the picker. **No score this trial produced is evidence either way about the 144-folder case.** Recorded before any score existed. Carried as a **Phase 9** handoff |
+| 6 | `beets==2.12.0` hard pin | **OBSERVED — pin held, both instruments** | `requirements.txt` written pinned; the startup install resolved without touching beets. Runtime assertion `beets.__version__` → **2.12.0**. OD-2 enforced by prevention **and** confirmed by detection |
+| 7 | Still in RC since 2025-12-29; last stable v1.2.1 | **OBSERVED — a durability risk, not a defect** | Self-reports `Backend 2.0.0-rc6 / Frontend 2.0.0-rc6 / Mode prod`. Nothing about the RC status broke. Eight months in RC is a statement about maintenance cadence for a tool this project would depend on |
+| 8 | Docs' `apk`-based `startup.sh` examples are stale (Debian base since rc4) | **NOT EXERCISED — deliberately** | No `startup.sh` was written, so the stale examples were never followed. One correction *to* the research: the mechanism is `uv pip install -r`, **not** plain `pip`, and it checks **two** requirements paths |
+| **9** | **NEW —** rc6 validates the **beets** config against its own JSON schema, stricter than beets | **OBSERVED — a startup-breaking trap** | `plugins:` as beets' canonical space-separated string is **rejected**: *"…is not of type 'array', 'null'"*. **The danger is what survived it** — the server started and served a page while `launch_watchdog_worker.py` died, so **the three policy inboxes would have been inert** and the trial would have scored a beets-flask whose central architecture was not running, against a UI that looked alive. Same defect class as TAGR-05: a configuration failure presenting as *"nothing is happening"* |
+
+### The `bootleg` finding, and its boundary
+
+`autotag: "bootleg"` is confirmed present in rc6 **from primary source**
+(`backend/beets_flask/config/schema.py:110`) — and note that the **shipped example config never
+mentions it**, so the example file alone would have hidden the feature entirely. It is *"Import
+as-is using the meta data of files, and group albums using the metadata… Effectively
+`beet import ... --group-albums -A`"*.
+
+**Measured twice, on the same button, with opposite outcomes**, and both are recorded:
+
+| Folder | `album` tag | Result |
+|---|---|---|
+| `VA-Mastermix.Crate.068-070-2025` | populated | **The best result either arm produced.** 3 correct albums × 20 files, `APIC` 60/60, `TBPM` 60/60, `TALB`/`TCON` 60/60, one `mv`, zero decisions, `COPY` with source intact — on a folder Discogs scored at **zero** strict candidates. **But `TRCK` 0/60** |
+| `VA-Mastermix.Crate.071.Afro.House-2025` | **empty** | **One 20-track release became twenty single-track albums.** `album` empty, `track` `00`, no album directory level, `comp` False. **No error, no prompt, and a clean log** |
+
+**`--group-albums` groups on the metadata that is *there*.** So `bootleg` is a fast path for
+already-correctly-grouped content, **not** an answer for untagged content — which vindicates
+`PROJECT.md`'s *normalise first, then import* sequencing rather than replacing it. **The only
+difference between the two outcomes is whether `album` is populated, and nothing in the UI
+distinguishes them before the operator commits** (DEF-03-16).
+
+### The architecture confirmation — this is the Phase 5 structure
+
+Confirmed from primary source (D-12 claim-audit row 16) **and exercised at runtime**, which matters
+because friction 9 shows a config that validates is not a config that runs:
+
+- `config/beets/config.yaml` is a **normal beets config**, so there is exactly **one `library`**.
+- `config/beets-flask/config.yaml` defines `gui.inbox.folders.*`, **each with its own `autotag`
+  policy** — `off` / `preview` / `auto` / `bootleg`.
+- rc6's own watchdog registered all three at startup, which is the runtime proof rather than a
+  documentation read:
+
+```
+[INFO] beets-flask.wdog: Registering watchdog with debounce of 30 seconds for inboxes:
+  ['/mnt/tank/downloads/spike-03/bf-inbox/preview',
+   '/mnt/tank/downloads/spike-03/bf-inbox/auto',
+   '/mnt/tank/downloads/spike-03/bf-inbox/bootleg']
+```
+
+**One shared `library.db` across N policy-carrying inbox folders is therefore verified, not
+assumed — and it is exactly the Phase 5 structure the roadmap needs.** It is also the thing the
+terminal arm has no equivalent of: there, every decision is made per album, at the prompt, by hand,
+and there is nowhere to express *"content of this shape is handled this way"* other than in the
+operator's head.
+
+**One credential check, recorded because this phase leaked the Discogs token to disk twice.**
+`python3-discogs-client` sends the token as a **`?token=` query parameter**, not an `Authorization`
+header (DEF-03-04), and beets-flask has **no authentication at all** — so anything its API renders
+is readable by anyone who reaches the port. Probed **inside the container**, comparing against the
+live value so it never crossed a transcript: `/api_v1/config/`, `/api_v1/config` and
+`/openapi.json` **all returned no token and no `user_token` key.**
+
+---
+
+## Criterion 8 — the week-six verdict, in the operator's own words
+
+The pre-committed rubric for this section, restored verbatim above the verdict in
+[`03-ERGONOMICS-SHEET.md`](03-ERGONOMICS-SHEET.md): **"It works" is not the finding — "it works and
+I will still open it" is.**
+
+**The operator has now answered exactly that question, and this is their answer, word for word:**
+
+> **"If you're asking me directly if I'm going to use the command line or the web interface, then
+> it's the web interface ahead of the command line any day. Right? It is a much more pleasing
+> experience, and the web interface is clean. I understand what's happening, and I know that I need
+> to remove the stuff from the inbox when it's all copied. The command line interface, I'm not a
+> fan. It's fine for a bot to drive us, but for me, as a human, no."**
+>
+> — the operator, 2026-09-04, after driving both arms
+
+**And the `stuck_points` that produced it**, recorded beside it as the criterion requires. The
+trial produced **one** contemporaneous operator verbatim across all ten rows, on being asked to
+read the flask arm's diff modal before the page crashed:
+
+> **"this is what i see if i move fast"**
+
+The remaining `stuck_points` are the executor's contemporaneous notes, not the operator's voice,
+and are reproduced from the sheet:
+
+| Row | `stuck_points` |
+|---|---|
+| `clean-1` / terminal | operator wrote outcome `tagged`, not one of the four permitted values; reconciled to `imported` in AMENDMENT B-2, **with the original word kept because it is itself data** — on an arm whose whole interaction was pressing `A`, describing the result as *"tagged"* rather than *"imported"* suggests it did not leave them confident an import had happened |
+| `clean-1` / flask | 88% preview was already waiting before the operator looked; 21 → 21, nothing dropped |
+| `clean-2` / flask | **full-page `TypeError` crash reproduced on this album**, across 2 browsers. 10 → 10 |
+| `hard-va-compilation` / flask | 86%; 47 → 47, 3 non-audio correctly ignored. The 46-distinct-artist case cost nothing |
+| `hard-flat-multidisc` / flask | **75% accepted → 9 of 31 audio files silently dropped and 4 tracks mis-tagged onto different songs**, while the UI asserted *"All tracks on disk found online"*. Crash also reproduced here. `UNDO IMPORT` verified working |
+| `dj-no-match` / flask | picker's best offer was a **44% wrong** match. `bootleg` instead: one `mv`, zero decisions, 3 correct albums, 60/60 covers, 60/60 `TBPM` — but **no `track` tag at all** |
+| four terminal rows | `not run` — operator decision (AMENDMENT B-3) |
+
+### How the operator's answer and the measured defects are both honoured
+
+**Read carefully, the answer is about legibility and it is not a safety endorsement.** The operator
+says *"I understand what's happening"* of the web interface — and they say it **after** the trial in
+which that interface silently dropped 9 files and mis-wrote 4 tracks under a false safety claim.
+**Both things are true at once**: rc6's *workflow* is legible and its *correctness* is not
+established. This record does not read the first as the second, and criterion 8 is answered on the
+first because that is what criterion 8 asks about.
+
+**And what the answer explicitly does not reject is the CLI as a mechanism.** *"It's fine for a bot
+to drive us, but for me, as a human, no."* A scripted, agent-driven `beet` invocation remains
+acceptable to the operator. **What is rejected is the human sitting at the prompt** — which is
+precisely T3's falsifiable form and precisely what the policy-inbox architecture removes.
+
+**One ergonomics result worth more than any timing that was not taken:** *"I know that I need to
+remove the stuff from the inbox when it's all copied."* The copy-then-clean mental model
+transferred **within a single trial, unprompted.** That is a direct, measured hit against the
+abandoned-halfway failure mode this project exists to prevent, and it is the strongest positive
+evidence axis two produced.
+
+**Confidence boundaries, so this is not over-read** — carried unchanged from the sheet:
+
+- **Not** a wall-clock or intervention-count finding. Neither was measured on 9 of 10 rows.
+- **Not** evidence about the 144-folder case. Friction 5 stays `NOT EXERCISED`.
+- **Not** a finding about the beets *engine*: the 22-track mis-match is candidate behaviour that
+  the front end then *misdescribed*, and the arms ran different beets versions (OD-2). **The
+  front-end failure is the false safety claim, not the bad match.**
+- **Not** a paired comparison: 1 terminal row against 5 flask rows.
+
+---
+
 ## D-13 — the stated prediction, recorded before the bake-off
 
 Stated honestly, before the measurement, so the bake-off is not theatre:
