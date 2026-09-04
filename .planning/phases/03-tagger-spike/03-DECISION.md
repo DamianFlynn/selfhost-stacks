@@ -1490,6 +1490,276 @@ restraint.
 
 ---
 
+## Teardown — 2026-09-04, plan 03-11
+
+Everything this phase created is throwaway by construction. This section records each step, the
+command, the result, and the route for anything delegated to atlantis. **The artefacts are the
+deliverable and are kept**: every `.md` in the phase directory, the six committed scripts under
+`scripts/`, and the three archived YAMLs.
+
+### 1. Containers — all three gone, confirmed with no status filter
+
+```
+docker compose -p spike-03-beets-flask --profile manual -f 03-spike-beets-flask.yaml down
+docker compose -p spike-03            --profile manual -f 03-spike-beets.yaml       down
+```
+
+| Container | `docker ps -a --format '{{.Names}}' \| grep -cx` |
+|---|---|
+| `beets-spike` | **0** |
+| `beets-spike-rw` | **0** (already down since 03-05's `--apply`) |
+| `beets-flask-spike` | **0** |
+| any name containing `spike` | **(none)** |
+
+**No status filter was used**, deliberately: this estate has a documented `created`-state blind
+spot, and `status=restarting/dead/exited` once missed two containers that were silently down for
+six weeks. **`--remove-orphans` was not passed to either file** (DEF-03-12), and an **explicit
+`-p`** was passed to both so neither could reach the other's container.
+
+**A trap found while doing it, recorded because it fails silently.** The flask arm's service
+carries `profiles: ["manual"]`. The first `down` **without** `--profile manual` **exited 0, printed
+nothing at all, and left the container running** — and a teardown that greps for "Removed" in the
+output would have recorded a pass. It was caught only by asserting the container's absence
+afterwards rather than trusting the command's exit code. Written into the file's own banner.
+
+**Container count: 104, against the `03-REAP-LIST.md` baseline of 103 — and the +1 is not this
+phase's.** All three spike containers are provably absent. The delta is a non-spike container
+created **2026-09-02**, after the 2026-09-01T23:02Z baseline was taken; the `cal-*` (keeper.sh)
+stack was recreated that day. **Stated as unattributed rather than explained away** — the baseline
+recorded a count, not a name list, so the specific container cannot be identified from the record.
+
+### 2. Credential-bearing runtime files — deleted, and the sweep found MORE than the plan named
+
+**The plan named one file: `/mnt/fast/spike-03/beets-config/spike-runtime.yaml`. That path did not
+exist.** A value sweep found **three** token-bearing files under `/mnt/fast/spike-03/`:
+
+```
+/mnt/fast/spike-03/beets-config/config.yaml
+/mnt/fast/spike-03/beets-config/import-xcheck.yaml
+/mnt/fast/spike-03/bf-config/beets/config.yaml
+```
+
+**Delete-by-name alone would have left all three.** This is why the acceptance criterion is a value
+sweep and not a filename: the plan's own inventory of where a credential went was wrong, in the
+direction of under-counting.
+
+The whole `/mnt/fast/spike-03/` tree (215 M) was then removed by exact path.
+
+| Sweep | Result |
+|---|---|
+| `/mnt/fast/` full recursive, **before** teardown | **4** files — the 3 above **+** `/mnt/fast/secrets/discogs.env` |
+| `/mnt/fast/` full recursive, **after** teardown | **1** file — `/mnt/fast/secrets/discogs.env` **only** |
+| `/mnt/fast/secrets/discogs.env` | **present**, `mode=600`, `owner=root:root` — the phase cleaned up its copies, not the source |
+| Shell history on LXC 100 | **0 hits.** Only **one** history file exists at all (`/root/.bash_history`, 522 bytes, **mtime 2026-08-15** — before this phase began). `/root/.zsh_history`, `.python_history` and `.sqlite_history` do not exist and `/home` is empty. Non-interactive `ssh host 'cmd'` does not append, which is why 03-07's design intent held |
+
+**The `/mnt/tank/downloads` half is answered by containment, not by scanning, and the reason is
+stated so the substitution is auditable.** A full-content sweep of that pool is not viable —
+`zfs list` reports it at **2.05 TB** (it holds a large `dropbox`, `google takeout` and `icloud`
+archive alongside the backlog), and a byte-by-byte grep would run for hours. Two bounded
+instruments answer the same question:
+
+1. **Containment, from the archived compose files.** Every `/mnt/tank/**` mount on **either** arm
+   points inside `/mnt/tank/downloads/spike-03/` — asserted mechanically:
+   `grep -hoE 'source: /mnt/tank/[^ ]*' <both files> | sort -u | grep -v '/mnt/tank/downloads/spike-03'`
+   returns **nothing**. **No spike process could reach any other path under that pool**, so the
+   scratch tree is the complete candidate set.
+2. **A full, unbounded grep of that candidate set, run BEFORE it was deleted:**
+   `/mnt/tank/downloads/spike-03/` held **0** token-bearing files. The tree is now gone regardless.
+
+**Both instruments were run with the token supplied through `grep -f <(printf …)`** — `printf` is a
+bash builtin, so the value never entered any process's argv. **That technique was adopted
+mid-teardown after the earlier one leaked; see § 8.**
+
+### 3. The scratch tree — gone, and nothing over-deleted
+
+`/mnt/tank/downloads/spike-03` (**45 G**) removed by exact path. All ten children the phase created
+were present and went with it: `raw/`, `normalised/`, `normalised-metadata/`, `wrtag-src/`,
+`bf-inbox/`, `bf-clean/`, `smoke/`, `wav-raw/`, `wav-mutagen/`, `wav-metadata/`.
+
+**No `git clean`, no blanket `rm -rf` of a parent, no glob.** Siblings asserted intact afterwards:
+`complete`, `dropbox`, `google takeout`, `icloud`, `incomplete`, `lidarr-import`, `media`,
+`pickup`.
+
+**ZFS was re-read after a deliberate wait**, because it frees asynchronously and a figure taken
+immediately is not a measurement:
+
+| | Before | After |
+|---|---|---|
+| `tank/downloads` used | 2.05 T | **2.00 T** |
+| pool available | 8.98 T | **8.99 T** |
+
+**Only ~50 G came back from a 45 G tree, and that is the expected result, not a discrepancy:** the
+tree was **reflinked** from the real backlog, so most of its blocks were shared and are still
+referenced by `complete/nzb`. Reflinked clones free space only when the last reference goes.
+
+### 4. Snapshots — two destroyed, Phase 1's fence untouched
+
+**Route: run on atlantis (`172.16.1.158`), the Proxmox host.** LXC 100 is unprivileged and cannot
+destroy a ZFS snapshot. Destroyed by exact name, one at a time:
+
+| Snapshot | Decision | Reason |
+|---|---|---|
+| `tank/downloads@spike-03-t0` | **DESTROYED** | Its only purpose was `normalise-dj-tags.py`'s rollback, and the tree it protected no longer exists |
+| `tank/downloads@spike-03-t2-wav` | **DESTROYED** | Same, for the 03-09 WAV bake-off |
+| `tank/downloads@pre-project` | **KEPT** | Phase 1's fence. Not this phase's to touch |
+| `tank/downloads@pre-chown` | **KEPT** | Phase 1's |
+| `tank/media/Music@pre-project` | **KEPT** — asserted present | Phase 1's fence |
+
+**A measured confirmation of why a stale snapshot is not free.** `@spike-03-t2-wav` held **236 M**
+while the scratch tree existed. The moment the tree was deleted it held **31.6 G** — the snapshot
+had become the last reference to every block the delete released. Had it been kept, the 45 G tree
+would have been "deleted" while costing more disk than before.
+
+### 5. The three spike YAMLs — ARCHIVED, and the trade-off recorded in both directions
+
+**This is a deliberate exception to the teardown, decided by the operator, and it cuts against this
+project's own documented failure mode. It is recorded as a resolved trade-off so a later reader
+does not read it as an oversight.**
+
+**For deleting them:** a surviving spike config is exactly how a fourth tagging path gets read back
+into the repo six weeks later, and **this project exists because the pipeline was built three times
+and abandoned three times.** `PROJECT.md` § *Core Value* names a fourth half-built path as "the one
+outcome that must not happen".
+
+**For archiving them:** these files sit under `.planning/`, **never under `stacks/`**, so they are
+not on any deployable path in this repo's documented workflow. Deleting them destroys — one-
+directionally — **the exact executable configuration behind every number in this phase**, which is
+what makes the spike reproducible and auditable if the decision is later challenged. A prose
+reproduction in a summary is not the same artefact.
+
+**The operator chose archiving.** The controls that make it safe, each asserted:
+
+| Control | Assertion | Result |
+|---|---|---|
+| Banner is the literal first line | `head -1` on each of the three | **`# THROWAWAY — DO NOT DEPLOY`** ×3 |
+| Nothing deployable points at them | `grep -rl '03-spike-' stacks/` | **(nothing)** |
+| Still tracked, not deleted | `git ls-files .planning/phases/03-tagger-spike/` | all three present |
+| State recorded in-file | each carries a block naming the removed containers, that absence was confirmed with **no status filter**, that the trees it mounts are gone so an accidental `up` fails on missing binds, and that any future use needs a decision recorded in a plan | added by this plan |
+
+**What this does NOT relax:** the containers are still gone, and **every credential-bearing runtime
+file is still deleted**. The banner is a marker on an inert file, not permission for one to run.
+The residual risk is a human deliberately running `docker compose -f` against a `.planning/` path
+in defiance of the banner — and none of the three would start, because their binds no longer exist.
+
+**No archived YAML ever carried a credential.** `03-spike-beets-config.yaml` has no `user_token`
+key by construction, and both compose files reach the token through `env_file:` by variable name.
+
+### 6. Images — a decision per image, no blanket sweep
+
+| Image | Size | Decision | Reason |
+|---|---|---|---|
+| `lscr.io/linuxserver/beets:2.13.1-ls349` | 638 MB | **RETAIN** | Axis one's winner. Phase 6 configures it, and the digest-pinned tag is the exact build every axis-one number was measured on |
+| `metasauce/beets-flask:v2.0.0-rc6` | 1.12 GB | **RETAIN** | Axis two's winner (the inbox architecture). Phase 5 needs this exact RC — it is what the frictions and the `bootleg` results were measured against, and rc7 would not be the same tool |
+| `sentriz/wrtag:v0.33.0` | 186 MB | **PRUNED** | Loser, pulled by this phase for criterion 3. Disqualified on measurement; nothing downstream needs it |
+| `sentriz/wrtag:v0.34.0` | 189 MB | **PRUNED** | Same. OD-5 recorded it as a path-format no-op against v0.33.0, so re-pulling would answer nothing new |
+| `sentriz/wrtag:v0.20.0` | 172 MB | **LEFT ALONE — not this phase's to decide** | It **predates** this phase and is the tag `stacks/selfhosted/music/wrtag.yaml` still pins. Pruning it would break a frozen stack definition D-03 forbids this phase from touching. **Phase 4 owns it, alongside TAGR-03** |
+
+Both removals were **by tag, never by ID** — 03-01 measured that deleting by ID fails where two
+tags share one image — and each was preflighted with a check that **no container in `docker ps -a`
+referenced it** (none did).
+
+### 7. `/` headroom — better than the phase found it
+
+| Reading | Value |
+|---|---|
+| `03-REAP-LIST.md` § *After* (2026-09-02, post-prune) | 36 GiB |
+| During the trial (03-10 close) | 34 G |
+| **At Phase 3 close** | **35 G free of 126 G (72% used)** |
+| OD-1 floor | 8 GiB |
+
+**`/` is 1 G better than the phase left it at 03-10 close and 1 G below the post-prune high-water
+mark**, having carried a 215 M runtime tree, a 638 MB and a 1.12 GB image and a beets import
+destination on it throughout. **No remediation needed.** The thing to watch on this path is
+`df -h /`, never `zfs list`: `/mnt/fast/spike-03` was on **LXC 100's ext4 root, not the `fast`
+pool**, and `/` has a documented history of being filled to zero.
+
+### 8. A credential exposure caused by this plan's own verification, recorded rather than buried
+
+**The Discogs token was exposed three ways during this teardown, by my own improvised sweep
+command.** It is recorded here in full because DEF-03-04 already warned about exactly this class
+of lapse and this is its third occurrence in the phase.
+
+**What happened.** The first sweeps passed the token as a **command-line argument**
+(`grep -lF -- "$TOK" …`). A process's argv is world-readable through `/proc` on Linux, so for the
+~45 minutes those scans ran, **any local user on LXC 100 could read the live token from `ps`.**
+Then, while trying to confirm the scans had stopped, `pgrep -af` **rendered that argv** — printing
+the token into the executing agent's transcript **and** into a persisted tool-output file on the
+workstation at
+`~/.claude/projects/-Users-damian-Development-damianflynn-selfhost-stacks/…/tool-results/bla6jts0m.txt`.
+**That file could not be deleted from within this session** (the delete was refused by policy) and
+**is still on disk.**
+
+**Contained, to the extent it can be.** Every token-bearing process was terminated and
+`pgrep -c -x grep` returns **0**, so the value is no longer in any argv on the host. The remaining
+sweeps were re-run with `grep -f <(printf '%s' "$TOK")` — `printf` is a bash **builtin**, so the
+value never enters any process's argv. Nothing token-bearing was committed to this repository.
+
+**What cannot be contained:** the transcript, and the persisted workstation file named above.
+
+**This is not a new *kind* of finding — it is the same one, a third time.** DEF-03-04 recorded the
+token written to a `644` file by `urllib3` DEBUG logging because it travels as a **query
+parameter**, not an `Authorization` header, and its closing instruction was explicit: *"Never write
+a credential to disk from an improvised verification command… screen by value, from inside the
+container, printing only counts."* **This plan printed only counts and still leaked**, because the
+leak channel was the **argv of the counting command**, which that instruction did not name.
+
+**Consequences for the standing rotation action — see § 9.** Logged as **DEF-03-21**.
+
+### 9. Standing action carried forward: rotate the Discogs token — now with FOUR causes
+
+**The operator has DECIDED that rotation happens at PROJECT CLOSE, not now.** This plan did **not**
+rotate and did **not** block on it. The action is carried forward prominently because the reasons
+have accumulated well beyond D-04's original one:
+
+| # | Cause | Recoverable? |
+|---|---|---|
+| 1 | D-04: the token passed through a conversation transcript when it was first supplied | **No** |
+| 2 | DEF-03-04: written in cleartext to a `644 root:root` file by `urllib3` DEBUG, because `python3-discogs-client` sends it as a **`?token=` query parameter**, not a header. Contained same-day — redacted copy at `600`, original `shred -u -n 3`ed | The file, yes; the agent transcript it also reached, **no** |
+| 3 | This plan, § 8: exposed in **process argv** on LXC 100 for ~45 min, world-readable via `/proc` | Processes killed; the window cannot be un-opened |
+| 4 | This plan, § 8: rendered by `pgrep -af` into an agent transcript **and** a persisted workstation file that **could not be deleted from this session** | **No — and the file is still on disk** |
+
+**Cause 4 is new information the operator did not have when they set the timing.** It is surfaced
+at the closing checkpoint rather than acted on unilaterally: **the decision on when to rotate is
+theirs, and this record's job is to make sure it is made on current facts.**
+
+**The standing rule this repository operates under, restated because it was breached here:** this
+repo is **public** and pushed to `origin`. Credentials live in `/mnt/fast/secrets/` (mode `600`,
+root-owned) and `~/.claude/secrets/`, and are referenced **by variable name only**. Screen every
+artefact by **value** and by token prefix before committing — and **never pass a secret as a
+command-line argument**, on any host, even to a command that prints only a count.
+
+### 10. Retained deliberately, and why
+
+| Artefact | Why it is kept |
+|---|---|
+| `scripts/normalise-dj-tags.py` | **D-08 requires it committed and regenerable**, and D-13 named it *the* normalisation tool. Its WAV defect (DEF-03-09) is Phase 4's to fix |
+| `scripts/spike03-discogs-probe.py` | Criterion 1's paired figures must be reproducible. Also carries the `SecretRedactingFilter` that closed DEF-03-04 at the logging record |
+| `scripts/spike03-variant-survey.sh` | Produced the per-stratum weights T1's estimator is computed from |
+| `scripts/spike03-wrtag-arms.sh` | Criterion 3's six arms; the disqualifier must be re-runnable |
+| `scripts/spike03-image-headroom.sh` | The OD-1 gate, read-only `inventory` mode included |
+| `scripts/spike03-gen-import-config.sh` | Rendered the `beet import -t` config from `os.environ` **without** the token reaching argv or a plan file |
+| Every `.md` in the phase directory | **This is the deliverable.** Nine evidence artefacts plus this record |
+
+All six scripts are **committed and tracked** (`git ls-files scripts/`), so deleting the host
+staging copies under `/mnt/fast/spike-03/` lost nothing.
+
+### 11. Library integrity at close
+
+| Assertion | Instrument | Result |
+|---|---|---|
+| Real backlog untouched | `find /mnt/tank/downloads/complete/nzb -type f \| wc -l`, before and after teardown | **8,934 → 8,934** |
+| Real backlog not written during this plan | `find … -newermt '2026-09-04 16:00'` and `-newerct` | **0 and 0** |
+| …and the instrument was **sighted**, not blind | the same `find` over the downloads tree at `-maxdepth 2` | **1** — the downloads root itself, whose mtime moved when `spike-03/` was removed. Per DEF-03-11, a zero from an instrument that cannot see anything is not a pass |
+| Phase 1 fence intact | `zfs list -t snapshot` on both datasets, from atlantis | `tank/downloads@pre-project` and `tank/media/Music@pre-project` both **present** |
+
+**`zfs diff tank/media/Music@pre-project` is NOT asserted "clean", because that assertion is
+unsatisfiable and has been since 2026-08-18** (DEF-03-19). It returns 2,674 lines against a tree of
+exactly 2,674 entries — the signature of Phase 1 plan 01-08's ownership normalisation against a
+snapshot predating it. **The substitute instruments DEF-03-19 recommended are used instead**, and
+the remaining Music-tree assertions are run at the closing checkpoint.
+
+---
+
 ## Files this phase reads and quotes but does NOT edit (D-03)
 
 - `stacks/selfhosted/music/wrtag.yaml` — lines 71 and 73, quoted verbatim above.
