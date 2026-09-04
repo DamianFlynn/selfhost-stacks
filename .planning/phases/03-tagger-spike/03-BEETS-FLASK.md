@@ -8,8 +8,9 @@ Nothing here is applied by `docker compose`. This is the record of what beets-fl
 what it was acknowledged to be **before** it was deployed, and what its eight known frictions turned
 out to look like against observation rather than against documentation.
 
-State as of 2026-09-04 — **acknowledgement drafted, nothing deployed.** No `beets-flask-spike`
-container exists.
+State as of 2026-09-04 — **acknowledgement ANSWERED (`deploy-rc6`), instance deployed, frictions
+checked against observation.** See § *Operator decision* for the verbatim answer and the
+pre-deployment assertion that dates it.
 
 ---
 
@@ -144,14 +145,36 @@ A good five-album score must not be read as evidence that the UI scales to the r
 
 ### Operator decision
 
-**Status: AWAITING OPERATOR — nothing deployed.**
+**Status: ANSWERED — `deploy-rc6` selected.**
 
-> _Decision (verbatim):_ **PENDING**
+> _Decision (verbatim):_ **approved — deploy rc6**
 >
-> _Date:_ **PENDING**
+> _Date:_ **2026-09-04**
 
-Recorded here verbatim, with a date, before any container is created. Task 2 of plan 03-10 does not
-begin until this line is filled.
+The operator approved deploying `metasauce/beets-flask:v2.0.0-rc6` for the axis-two trial,
+loopback-bound, having acknowledged all three recorded risks: the RC status (in RC since
+2025-12-29 against a v1.2.1 stable now eight months stale), the absent authentication plus the
+tmux-backed web terminal with shell access to the container, and the startup pip install pinned to
+`beets[discogs]==2.12.0`.
+
+**The acknowledgement is provably pre-deployment, and that was re-asserted at the moment of
+answering rather than inferred.** Two independent readings on LXC 100 at `2026-09-04T08:59:45Z`,
+immediately before Task 2 created anything:
+
+```
+$ ssh root@172.16.1.159 'docker ps -a --format "{{.Names}}" | grep -cx "beets-flask-spike"'
+0
+$ ssh root@172.16.1.159 "docker images --digests --format '{{.Repository}}:{{.Tag}} {{.Digest}} {{.Size}}' | grep beets-flask"
+metasauce/beets-flask:v2.0.0-rc6 sha256:9548e78f8bcda864bf557b7bb7490f7dcfb852ce3abf2f4c1501d5bb812ec2cd 1.12GB
+```
+
+Zero containers named `beets-flask-spike` existed when the decision was given, and the digest the
+operator acknowledged is character-for-character the digest that was then deployed. **An
+acknowledgement written beside an already-running container is a record of consent that was never
+sought**; this one is not that.
+
+Recorded here verbatim, with a date, before any container was created. Task 2 of plan 03-10 was
+gated on this line and began only after it was filled.
 
 ---
 
