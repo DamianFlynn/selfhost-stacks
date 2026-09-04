@@ -452,3 +452,69 @@ tool proposed** — which is exactly what `normalise-dj-tags.py`'s own dry-run N
 and what a blind tool structurally cannot. Add the on-disk ID3v2 frame-ID multiset comparison
 against an untouched twin (03-05, re-used here) as the third instrument; it is the only one of the
 three that saw the ID3v2.4 promotion.
+
+---
+
+## DEF-03-11 — `check-music-freeze.sh` run from the workstation reports a green summary while blind
+
+**Found by:** plan 03-10, task 2, 2026-09-04.
+**Severity:** medium. It fails closed today, but for a reason unrelated to what it prints.
+
+The plan's acceptance criteria say to run `bash scripts/check-music-freeze.sh` and confirm
+`tagger-class writers: 0` and `declared rw reaching Music: 0`. Run **from the macOS workstation**,
+where `/mnt/tank`, `/mnt/fast/safety` and docker are all absent, it prints exactly that:
+
+```
+  [0;34m0 running containers, 0 mounts enumerated
+  tagger-class writers:        0   (target 0)
+  declared rw reaching Music:  0   (target 0, jellyfin.yaml excluded)
+```
+
+Both target counters read green **because nothing could be looked at**. The same run on LXC 100
+enumerates a real container set and returns `consumer-class writers: 1` (Jellyfin, D-21).
+
+**It does fail closed** — it exits 1 on the five missing fence assertions, and section 4 prints a
+red `/mnt/tank/media/Music not present on this host`. So the script honours README § *Health
+Checks* rule 1 overall. **The defect is narrower and is about how it will be read**: the § 7
+summary block, which is the part a reader copies into a plan record, contains no indication that
+sections 1 and 2 were unobservable. A future plan that greps the summary for
+`declared rw reaching Music:  0` and records a pass will record a pass it did not measure — and
+D-20 is the constraint being asserted.
+
+**Why not fixed here.** `check-music-freeze.sh` is the shared Phase 1 harness, frozen by D-03, and
+every plan in this wave asserts against its current behaviour.
+
+**Suggested fix (Phase 7):** make section 1 distinguish "0 rw holders" from "docker unavailable",
+and have the § 7 summary print counters as `UNKNOWN` rather than `0` whenever their input was
+unobservable — the same "could not look is not nothing is wrong" rule the README already states,
+applied to the summary block and not only to the exit code.
+
+---
+
+## DEF-03-12 — both spike compose files share one compose project, and compose offers to delete the other arm
+
+**Found by:** plan 03-10, task 2, 2026-09-04. **Fixed for this file; the hazard is generic.**
+
+Compose derives the project name from the compose file's directory when none is given. Both
+`03-spike-beets.yaml` (terminal arm) and `03-spike-beets-flask.yaml` are run from
+`/mnt/fast/spike-03`, so they shared the project `spike-03`. The first `up` of the flask file
+printed:
+
+```
+level=warning msg="Found orphan containers ([beets-spike]) for this project.
+ If you removed or renamed this service in your compose file, you can run this command
+ with the --remove-orphans flag to clean it up."
+```
+
+`beets-spike` **is the terminal arm** — half of the axis-two experiment. Compose was suggesting a
+flag that would delete it, in a message that reads like routine tidying.
+
+**Fixed** in `03-spike-beets-flask.yaml` by an explicit `name: spike-03-beets-flask`, verified: the
+warning is gone and `beets-spike` survived the recreate.
+
+**Not fixed** in `03-spike-beets.yaml`, which is a frozen artefact of the earlier plans in this wave
+and is asserted against by their records.
+
+**Carry into plan 03-11 (teardown):** never pass `--remove-orphans` to either spike compose file.
+With the explicit project name the flask file can no longer reach the terminal arm, but the
+terminal arm's file can still reach anything else that ever ran unnamed from that directory.
