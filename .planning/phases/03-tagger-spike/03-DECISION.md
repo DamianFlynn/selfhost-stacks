@@ -269,8 +269,8 @@ measured against.
 | 1 | wrtag: *"Metadata sources: **MusicBrainz only**"* | README §"Available operations", §Configuration; no non-MB backend in `cmd/` or `go.mod` | **HOLDS** | **This is the argument that does all the work, and it survives intact.** |
 | 2 | *"Non-MusicBrainz DJ releases: [wrtag] **Cannot.** No non-MB source exists or is planned"* | Same; v0.30.0–v0.34.0 changelogs add no source backends | **HOLDS** | Unchanged |
 | 3 | *"Repairing existing wrong tags: [wrtag] **No facility.**"* | `cmd/metadata/` exists at **v0.20.0 and v0.34.0**; ships in the container | **FALSIFIED** — as D-12 states | wrtag *can* write tags. **But see row 3a** — the capability is far narrower than the falsification implies |
-| 3a | *(D-12's inference)* `metadata` is *"plausibly a direct competitor to the mutagen script"* | `cmd/metadata/main.go` `cmdWrite()`: builds one literal `map[string][]string` and applies it to **every** path via `iterFiles`; **no `-dry-run`, no diff, no field-to-field move**; only flags are `-log-level`, `-properties` (read), `-index`/`-type`/`-desc`/`-mime-type` (images) | **CHANGED — materially weaker than claimed** | An `artist`→`album` remap needs one `read` + one `write` **per file**, in a shell loop, writing blind. D-13's bake-off is still worth running (it is cheap) but the reviewability requirement in D-08 is unmet by `metadata` unless wrapped |
-| 3b | *(new, not in PROJECT.md)* what `metadata write` does to unlisted tags | `tags.WriteTags(path, t, 0)` — flag `0`, **not** `tags.Clear` | **NEW — favourable to `metadata`** | `metadata write` **merges**; it will not silently drop `TKEY`/`EnergyLevel`. Confirm empirically with `diff-music-tags.sh` — do not take this from source alone |
+| 3a | *(D-12's inference)* `metadata` is *"plausibly a direct competitor to the mutagen script"* | `cmd/metadata/main.go` `cmdWrite()`: builds one literal `map[string][]string` and applies it to **every** path via `iterFiles`; **no `-dry-run`, no diff, no field-to-field move**; only flags are `-log-level`, `-properties` (read), `-index`/`-type`/`-desc`/`-mime-type` (images) | **CHANGED — materially weaker than claimed**; **MEASURED 2026-09-04, plan 03-09** | An `artist`→`album` remap needs one `read` + one `write` **per file**, in a shell loop, writing blind. D-13's bake-off is still worth running (it is cheap) but the reviewability requirement in D-08 is unmet by `metadata` unless wrapped. **Measured, no longer an inference:** 205 changed files cost **540** invocations (335 `read` + 205 `write`), the loop is **134 lines / 80 code lines** of bespoke `sh`, `metadata write` accepts **no flags at all** and prints **nothing** on success, and the loop written for this bake-off wrote the artist value into the album field on **20 of 205** files while `diff-music-tags.sh` scored it `FIELDS_DROPPED = 0`. See [`03-NORMALISER-BAKEOFF.md`](03-NORMALISER-BAKEOFF.md) |
+| 3b | *(new, not in PROJECT.md)* what `metadata write` does to unlisted tags | `tags.WriteTags(path, t, 0)` — flag `0`, **not** `tags.Clear` | **NEW — favourable to `metadata`**; **CONFIRMED EMPIRICALLY 2026-09-04, plan 03-09, with a boundary** | `metadata write` **merges**; it will not silently drop `TKEY`/`EnergyLevel`. Confirm empirically with `diff-music-tags.sh` — do not take this from source alone. **Confirmed, no longer a source read:** `FIELDS_DROPPED = 0` on both the `audio_md5` and the path-keyed join, `TKEY` **40 → 40**, `EnergyLevel` **20 → 20**, `TBPM` **110 → 110**, values byte-identical to the untouched twin, with live `ffprobe` agreeing on every cell. **The boundary the source read did not imply:** the merge holds only **inside the ID3v2 container** — the same `save()` promoted 205 files from ID3v2.3 to v2.4 (`TYER`→`TDRC` on 155, invisible to `ffprobe`), rewrote 175 ID3v1 blocks, **created an ID3v1 block on 30 files that had none**, and re-serialised the APEv2 tag on 14. Nothing was lost; nothing was requested, reported or preventable either. See [`03-NORMALISER-BAKEOFF.md`](03-NORMALISER-BAKEOFF.md) |
 | 3c | *(new)* what a real `wrtag move`/`copy` does to unlisted tags | `wrtag.go:267` — `tags.WriteTags(destPath, destTags, tags.Clear)` | **NEW — decisive for TAGR-02** | **A real wrtag run WIPES every tag not in its computed set.** 148 `TKEY` and 45 `EnergyLevel` files in `dj-mixes` would be destroyed without a configured `keep` rule. This belongs in the criterion 4 record |
 | 4 | *"beets: `import -A`, `edit`, `modify` (`+=`/`-=` since 2.13.0), `zero`, `write`, query language"* | beets changelog 2.13.0 confirms `modify +=`/`-=` and the `edit` album-YAML header | **HOLDS** | Unchanged. Note `+=`/`-=` is **absent from beets-flask rc6** (pinned 2.12.0) |
 | 5 | *"Current version: beets 2.13.1 (29 Jul 2026) / wrtag v0.33.0 (11 Jul 2026)"* | PyPI: beets 2.13.1 still latest 2026-09-01. Docker Hub: **wrtag v0.34.0, 26 Aug 2026** | **CHANGED** | Criterion 3 runs at v0.20.0, v0.33.0 **and** v0.34.0 (OD-5), so D-01 is honoured as written and the question is settled by measurement |
@@ -347,16 +347,26 @@ would be a genuine, unanticipated reason to prefer it for one stratum.
 
 | Axis | mutagen script | wrtag `metadata` | Measured result |
 |---|---|---|---|
-| Dry-run | **Yes, and it is the default** | **No.** No flag exists on `write` | PENDING |
-| Reviewable diff before writing | Yes, per-file | No | PENDING |
-| Per-file distinct values in one invocation | Yes | **No** — one literal map to every path | PENDING |
-| Field-to-field move | Yes (read then write) | **No primitive** | PENDING |
-| Preserves unlisted tags | Yes | Yes — `WriteTags(path, t, 0)`. **Verify empirically** | PENDING |
-| Formats | MP3, FLAC, WAV (partial) | MP3, FLAC, **WAV** and 30+ others via taglib | PENDING |
-| Committed, versioned, auditable | Yes (`scripts/`) | The loop would be; the tool is not | PENDING |
+| Dry-run | **Yes, and it is the default** | **No.** No flag exists on `write` | **CONFIRMED, observed.** `metadata write -h` errors `stat -h: no such file or directory` — `write` takes no flags at all. Every one of this plan's 205 MP3 writes and 134 WAV writes was blind |
+| Reviewable diff before writing | Yes, per-file | No | **CONFIRMED, observed.** mutagen: 292 NDJSON records (MP3) and 134 (WAV), each with `old`/`new`. `metadata`: `driver-writes.log` is **0 lines** across 205 successful writes — it prints nothing on success |
+| Per-file distinct values in one invocation | Yes | **No** — one literal map to every path | **CONFIRMED, observed.** mutagen: 1 process for 335 files / 205 distinct value pairs. `metadata`: **540** invocations (335 `read` + 205 `write`), exactly two per changed file |
+| Field-to-field move | Yes (read then write) | **No primitive** | **CONFIRMED, observed.** Rule 2 canonicalises the album it just read on 155 files; `metadata` needs the value computed outside the tool and handed back as a literal, which is the sole reason its read pass exists |
+| Preserves unlisted tags | Yes | Yes — `WriteTags(path, t, 0)`. **Verify empirically** | **A3 CONFIRMED, with a boundary.** Inside ID3v2 `metadata` merges: `FIELDS_DROPPED` 0 on both joins, `TKEY` 40→40, `EnergyLevel` 20→20, `TBPM` 110→110, values identical, `ffprobe` agreeing. **Outside ID3v2 it does not:** ID3v2.3→2.4 on 205 files, `TYER`→`TDRC` on 155, ID3v1 rewritten on 175 and **created on 30**, APEv2 re-serialised on 14. No loss (audio identical 335/335, no APE item lost) but none of it requested, reported, preventable or visible to the gate. mutagen: frame set moved on exactly 40 files = the 40 frames its rules created, ID3v1/APEv2/ID3v2-version untouched |
+| Formats | MP3, FLAC, WAV (partial) | MP3, FLAC, **WAV** and 30+ others via taglib | **OVERTURNED, and by more than predicted.** MP3: both 335/335. **WAV: `metadata` 130 of 134; the committed mutagen script 0 of 134** (`TypeError: … not a Frame instance` on every file — `mutagen.File(easy=True)` on WAVE returns a raw frame-id-keyed `ID3`, not an EasyID3 map). `metadata`'s 4 failures are files whose ID3 text frames carry non-ASCII; it throws inside taglib-on-WASM and can neither read nor write them. **The path hypothesis was falsified** by an ASCII rename. FLAC unexercised on both — neither sample contains any |
+| Committed, versioned, auditable | Yes (`scripts/`) | The loop would be; the tool is not | **CONFIRMED, observed.** mutagen: **0** lines of bespoke driver — the committed 948-line script is the tool, sha-verified before every run. `metadata`: **134 total / 80 code lines** of bespoke `sh` per arm, before any rule logic, and this run proved they need review — 20 of 205 files were written wrong by that shell on the first attempt |
 
 **Prediction:** the mutagen script wins on reviewability; `metadata` may win on WAV. **Verdict:**
-PENDING — filled by plan 03-09.
+~~PENDING — filled by plan 03-09~~ → **THE NORMALISATION TOOL IS THE COMMITTED MUTAGEN SCRIPT,
+`scripts/normalise-dj-tags.py`, AND THAT HOLDS REGARDLESS OF WHICH ENGINE WINS THE MAIN
+DECISION.** Not split by stratum. The prediction **held on reviewability** — demonstrated rather
+than argued: the `metadata` arm's own driver wrote the artist value into the album field on 20 of
+205 files and `diff-music-tags.sh` scored that run `FIELDS_DROPPED = 0`. It was **overturned on
+WAV**, by a wider margin than it anticipated (130 written against 0), and the overturn is
+nonetheless **not** carried into the verdict, because the mutagen failure is a three-line defect in
+*our* script that mutagen's own WAVE API resolves on the first attempt — including on the exact
+file `metadata` cannot open — while `metadata` hard-fails on 3.0% of the stratum and would cost two
+tools for one job. Full evidence, including the cost this verdict leaves unpaid:
+[`03-NORMALISER-BAKEOFF.md`](03-NORMALISER-BAKEOFF.md).
 
 ---
 
@@ -490,6 +500,75 @@ when it reclassified `album == artist` out of V1.
 against a folder that is *Commercial Collection 498*. `CLAUDE.md` records Discogs carrying *DMC
 Commercial Collection 350*; this backlog's issues are 498, 499, 233 and 234, and the catalogue does
 not reach them.
+
+---
+
+## AMENDMENT — 2026-09-04, plan 03-09: D-13 measured, A3 settled, the WAV question answered
+
+**Nothing in this section changes T1, T2, T3, the 40% threshold value, the estimator definition or
+any denominator.** D-13 is not one of the pre-committed thresholds; it is a bake-off whose outcome
+this document was always going to receive, and its **prediction text above is byte-identical to
+threshold commit `137b6d9e92cb44d9c6a48b3963bb33fe0194622f`** — asserted with
+`git show 137b6d9e…:03-DECISION.md | sed -n '/^## D-13/,/^---$/p'` diffed against the current file,
+which returns zero lines of difference. Only `PENDING` result cells were replaced. Full evidence:
+[`03-NORMALISER-BAKEOFF.md`](03-NORMALISER-BAKEOFF.md).
+
+### 1. The prediction is scored honestly: held on one half, overturned on the other
+
+**Held — reviewability.** And it was demonstrated rather than argued. The `metadata` arm's driver
+silently wrote the **artist value into the album field on 20 of 205 files** on its first run
+(`Mastermix.Issue.421.2021` ×10 and `Mastermix_Issue_415` ×10 — exactly the artist-only rows), and
+**`diff-music-tags.sh` scored that run `FIELDS_DROPPED = 0`**. `metadata write` has no dry run in
+which to have caught it, and a correct-shaped wrong value drops no field. The cause was a POSIX
+subtlety — TAB is an IFS *whitespace* character, so `IFS=$TAB read -r p album artist` collapses the
+empty column — and the run was repeated from a re-materialised, byte-identical tree.
+
+**Overturned — WAV, by more than the prediction anticipated.** Not *"`metadata` may handle WAV
+better"*: `metadata` wrote **130 of 134** WAV files and the committed mutagen script wrote **0 of
+134**, failing `TypeError: … not a Frame instance` on every one.
+
+### 2. The overturn is recorded and then argued down, not suppressed
+
+The verdict is still the mutagen script, and the three measured reasons are: the WAV failure is a
+defect in **our own script** — `mutagen.File(path, easy=True)` on a WAVE returns a raw frame-id-keyed
+`ID3`, not an EasyID3 map — which mutagen's own `WAVE()` API resolves on the first attempt on all
+three probe classes, **including the exact non-ASCII file `metadata` cannot open**; `metadata`
+hard-fails on **4 of 134 (3.0%)** of the stratum; and adopting it for one stratum costs two tools,
+two drivers and two review surfaces for one job, against a core value of *exactly one pipeline that
+someone owns*.
+
+**The cost this leaves unpaid is carried, not dissolved:** `scripts/normalise-dj-tags.py` has a
+**broken WAV write path today**. It fails loudly into its `.failed` ledger rather than silently, and
+the stratum is **268 of 8,492 audio files (3.2%)** — all Now-compilation content, none of it the
+DJ-service content the three committed rules fire on. A dry run of those rules over all 134 WAV
+files reports `files that would change: 0`.
+
+### 3. A3 is confirmed, and its boundary is narrower than row 3b implied
+
+Recorded above in claim-audit row 3b. In one line: **`metadata write`'s flag-`0` `WriteTags` merges
+inside the ID3v2 container and does not touch `TKEY` or `EnergyLevel`** — but the same `save()`
+promotes ID3v2.3 to v2.4, rewrites or creates the ID3v1 block, and re-serialises any APEv2 tag.
+Note the asymmetry with row 3c, which stays a source read: a real `wrtag move`/`copy` calls
+`WriteTags(..., tags.Clear)` and **wipes**; `metadata write` **adds**.
+
+### 4. Recorded, not corrected: the phase's field-loss gate has now hidden three different writes
+
+`diff-music-tags.sh` scored `FIELDS_DROPPED = 0` on all of: 03-05's `TYER`→`TDRC` translation (both
+render as `date`), this plan's `metadata` arm promoting 205 files to ID3v2.4 with the same
+translation, and this plan's run-1 driver writing the wrong value into the right field. It is
+working exactly as specified — it detects **field loss** — and that is a narrower question than
+"did the tool do what was asked". Any later phase that gates on it alone should read this and
+03-05's finding 1 together.
+
+### 5. Recorded, not corrected: `metadata` cannot open a file whose tags carry non-ASCII
+
+4 of 134 WAV files threw `__cxa_allocate_exception (recovered by wazero)` inside taglib-compiled-to-
+WASM, on both `read` and `write`. The obvious path-encoding hypothesis was **falsified** — an
+ASCII-renamed copy fails identically, and all 3 of the 335 MP3 files with non-ASCII paths
+succeeded. The correlation is with **ID3 text-frame content**: `no tags` 47 → 0 failures, `ASCII
+ID3 text` 83 → 0 failures, **`non-ASCII ID3 text` 4 → 4 failures**. Nothing in this phase depends on
+it, since the verdict does not adopt `metadata`; it is logged so a later phase does not reach for
+`metadata` on a European-artist library and discover it there.
 
 ---
 
