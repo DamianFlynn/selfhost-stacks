@@ -518,3 +518,296 @@ and is asserted against by their records.
 **Carry into plan 03-11 (teardown):** never pass `--remove-orphans` to either spike compose file.
 With the explicit project name the flask file can no longer reach the terminal arm, but the
 terminal arm's file can still reach anything else that ever ran unnamed from that directory.
+
+---
+
+## DEF-03-13 — beets-flask rc6's import page has no error boundary around its cover-art fetch
+
+**Found by:** plan 03-10, task 3 (the operator's trial), 2026-09-04.
+**Severity:** high for any adoption of rc6 — **the interactive picker cannot be relied on to
+import.** This is an upstream defect, not a configuration error.
+
+The candidate-selection page crashes to a full-page *"Unexpected Error"* with
+`Error Type: TypeError`, `Message: Load failed` (Safari) / `Failed to fetch` (Arc/Chrome), and
+`Stack Trace: No stack trace available`. `RETRY` merely navigates back one page. **Reproduced on
+two albums (Garth Brooks, Lady Gaga) across two browsers.**
+
+**The backend logged zero errors** — `docker logs beets-flask-spike | grep -icE
+"error|traceback|exception"` returned **0** across the whole container lifetime. So nothing
+server-side will ever alert on it.
+
+**Root cause established, not inferred.** The DevTools initiator chain is
+`art?url=…` → `front-250` → `mbid-<uuid>-…`. rc6 does **not proxy the image bytes**: it
+*redirects the browser out* to third-party hosts (`coverartarchive.org`, which redirects again to
+`ia*.us.archive.org`). The page is served from `http://127.0.0.1:5002` and `fetch()`es those
+hosts, which is **CORS-blocked** — hence a failed status, a `TypeError`, and no server log.
+Confirmed by asymmetry: calling the same proxy endpoint **from inside the container** returned
+**HTTP 200, 3516 bytes** for both MusicBrainz and Cover Art Archive URLs, and container egress to
+`coverartarchive.org` / `musicbrainz.org` / `api.discogs.com` is HTTP 200 in ~0.2–0.3 s.
+
+**It is a missing rejection handler, not a missing fallback.** rc6 *does* ship a
+`missing_cover-C8vp4wkz.webp` placeholder and renders it correctly for genuinely absent art. A
+cosmetic thumbnail failure takes down the entire import page.
+
+**Intermittent, which is the worse finding.** Later attempts held, with some art fetches succeeding
+(`blob:http://127.0.0.1:5002/…`) alongside a pile of red failures. **An operator cannot tell in
+advance whether a given run is safe.** The ergonomics cost, in the operator's own words:
+*"this is what i see if i move fast"* — the diff modal had to be read by outrunning the crash.
+
+**Why not fixed here.** It is a defect in a third-party release candidate's frontend, not in
+anything this repository owns, and Phase 3 decides *whether* to adopt beets-flask rather than
+patching it. Fixing it would also have altered the tool mid-trial and made the measurement
+unattributable.
+
+**Suggested action (plan 03-11, then whoever revisits beets-flask):** record it as an axis-two
+finding against adoption, and if beets-flask is ever reconsidered, file it upstream and require a
+release in which the art fetch is **proxied server-side** (or wrapped in an error boundary) before
+pointing it at content that matters.
+
+---
+
+## DEF-03-14 — beets accepted a 75% match that dropped 9 files and mis-tagged 4 tracks, and the UI asserted nothing was missing
+
+**Found by:** plan 03-10, task 3, 2026-09-04.
+**Severity:** the highest-consequence finding in the phase. **This is D-05's confident-wrong-match
+at *track* level.**
+
+`hard-flat-multidisc` (Lady Gaga — *Born This Way: The Collection*) was imported at the highest
+offered match, **75%**. Verified on disk at the time and **re-verified independently at plan
+close**:
+
+| Evidence | Value |
+|---|---|
+| Source audio files | **31** |
+| Imported audio files | **22** |
+| Silently dropped, no warning | **9** |
+| Tracks written onto a different song | **4** |
+
+The four titles beets wrote — `Born This Way (The Country Road version)`,
+`Judas (DJ White Shadow remix)`, `Marry the Night (Zedd remix)` and
+`Fashion of His Love (Fernando Garibay remix)` — **exist nowhere in the 31-file source folder.**
+Their durations identify what the audio actually is:
+
+| Imported as | Duration | Audio actually is | Source duration |
+|---|---|---|---|
+| `18 Born This Way (The Country Road version)` | 245.41 s | `Born This Way (Twin Shadow Remix)` | 245 s |
+| `19 Judas (DJ White Shadow remix)` | 237.56 s | `Judas (Hurts Remix)` | 238 s |
+| `20 Marry the Night (Zedd remix)` | 243.71 s | `Marry The Night (The Weekend & Illangelo Remix)` | 244 s |
+| `22 Fashion of His Love (Fernando Garibay remix)` | 230.84 s | `You And I (Wild Beasts Remix)` | 231 s |
+
+The last row is a **different song entirely**. The embedded `title` tags carry the wrong names, so
+**the error is written into the files, not just into the paths.**
+
+**On that same screen the UI asserted *"All tracks on disk found online"* AND *"All tracks online
+present on disk"*. Both false.** An interface that states a falsifiable safety claim and gets it
+wrong is worse than one that says nothing.
+
+**Cause is the folder shape**, not a general defect: two releases (`Born This Way` 17 tracks +
+`Born This Way: The Remix` 14 tracks) flattened into one directory. beets matched a 22-track
+edition, took 17 + 5, mis-mapped those 5 and discarded 9.
+
+**Bounded, not endemic — verified on the other three albums:** Taylor Swift 21→21, Garth Brooks
+10→10 (2 non-audio correctly ignored), Now 116 47→47 (3 non-audio correctly ignored). **Zero
+dropped.** The failure is specific to the flattened-two-releases shape, which is exactly why
+`hard-flat-multidisc` was in the D-10 draw.
+
+**Worse than 03-07's `Mastermix_Issue_412` → Specialten DVD (DEF-03-08),** because there the whole
+album was obviously wrong, whereas here **17 of 22 tracks are perfect, so nothing looks amiss.**
+
+**Why not fixed here.** Nothing to fix in this phase — it is a measured behaviour of the engine on
+a known-hard folder shape, and it is one of the trial's two headline results.
+
+**Suggested fix (Phase 6/7, alongside the import gate):** before accepting any album import, assert
+**source audio count == imported item count** and fail closed on a mismatch. `CLAUDE.md` already
+says *"never accept a match without a track-count check"*; this is that rule at file granularity,
+and it is the only instrument that would have caught this. Add a duration cross-check per track
+where the source carries one — it is what identified the mis-mapping here.
+
+---
+
+## DEF-03-15 — `DELETE IMPORTED FOLDERS` is keyed on a badge that does not mean what it reads as
+
+**Found by:** plan 03-10, task 3, 2026-09-04.
+**Severity:** high — a one-click bulk destructive action gated on an unreliable signal.
+
+beets-flask's per-folder import-state badges (`Tagged` / `Imported`) are persistent and per-folder,
+and are genuinely **the best resume signal either arm offers** — directly mitigating the
+abandoned-halfway failure mode this project exists to prevent.
+
+**But the Lady Gaga folder was badged `Imported` while being 9 audio files short and 4 tracks
+mis-titled** (DEF-03-14). `DELETE IMPORTED FOLDERS` is a **one-click bulk destructive action whose
+only signal is that badge.** Pressing it would have destroyed the only intact copy of the 9 dropped
+tracks.
+
+A second instance of the same shape: **`IMPORT BEST`** is a one-click bulk import of "best"
+candidates with **no per-album review**, reachable from the inbox list — on a collection where
+03-07 measured a **1-in-6 wrong-strict-match rate**.
+
+**Why not fixed here.** Upstream UI behaviour in a throwaway RC container; and plan 03-11 owns
+teardown. **Neither button was pressed or scripted at any point in this plan**, deliberately.
+
+**Suggested action:** if beets-flask is ever adopted, treat `Imported` as *"an import ran"* and
+never as *"the import was complete and correct"*, and gate any deletion on the file-count assertion
+in DEF-03-14 rather than on the badge. Do not use `IMPORT BEST` on this collection at all.
+
+---
+
+## DEF-03-16 — `bootleg`'s outcome is decided by whether `album` is populated, with no UI signal either way
+
+**Found by:** plan 03-10, tasks 2 and 3, 2026-09-04.
+**Severity:** medium-high. The affordance is excellent and completely unguarded.
+
+`autotag: "bootleg"` produced **the best single result either arm produced** on
+`VA-Mastermix.Crate.068-070-2025` — a folder 03-07 measured at **zero** strict Discogs candidates.
+One `mv`, zero candidate decisions, *"Imported 39 seconds ago"*. Re-verified on disk at plan close:
+
+| Check | Result |
+|---|---|
+| Albums created | **3** — Crate 068 / 069 / 070, **20 files each** |
+| Embedded cover art (`APIC`) | **60 / 60** |
+| `TBPM` | **60 / 60** |
+| `TALB` / `TCON` | **60 / 60** each; genre correct per crate |
+| **`TRCK` (track number)** | **0 / 60 — absent, not zero** |
+| Operation | `COPY`; source intact at 60 mp3 |
+
+**Two caveats, both verified.** There is **no `track` tag at all**, so playback order is undefined
+— the source has none and `-A` faithfully preserved none. And `album.nfo` was not carried across
+(destination is audio-only); not a loss, the source retains it.
+
+**The sharp edge:** the same button shredded `VA-Mastermix.Crate.071.Afro.House-2025` into **twenty
+single-track albums** in Task 2, because that folder's `album` tag was **empty**. `--group-albums`
+groups on the metadata that is *there*. **The only difference between the two outcomes is whether
+`album` is populated, and nothing in the UI distinguishes the cases before the operator commits.**
+
+**Why this is not a niche case:** sampling 12 Mastermix folders' embedded `album` tags, **~40%
+carry the bare, useless `album=Mastermix`**, which identifies no release — precisely 03-03's
+reclassified V5 stratum, and precisely the condition under which `bootleg` destroys a folder. **So
+the Crate 068–070 success is not representative of the Mastermix backlog.**
+
+**Why not fixed here.** Upstream behaviour, and PROJECT.md's *normalise first, then import*
+sequencing already prescribes the mitigation.
+
+**Suggested action (Phase 6/7):** never route a folder to `bootleg` without first asserting that
+`album` is populated **and** distinct across the intended album groups. The committed
+`scripts/normalise-dj-tags.py` (D-13's winner) is what makes that true; running `bootleg` before it
+produces a confidently wrong library shape silently, which `CLAUDE.md` § *Autotagging ceiling*
+names as worse than no match.
+
+---
+
+## DEF-03-17 — a publisher source is canonical for ~76% of the backlog, and it is plain HTML
+
+**Found by:** the operator, during plan 03-10 task 3, 2026-09-04.
+**Severity:** this is an **opportunity**, not a defect — and it reframes what T1's number means.
+
+The operator identified `https://mastermixdj.com/product/crate-068-pop-dance-reimagined/` and the
+release's back-cover tracklisting card.
+
+| Evidence | Value |
+|---|---|
+| Catalogue | **MDJ2159** |
+| Tracks | **20** |
+| Stated running time | **1:09:43** |
+| Running time beets-flask computed from the files | **1 h 9 m 44 s** — **one second apart** |
+| Per-track data on the page | track number, artist, title, version, **BPM**, duration |
+| BPM vs embedded `TBPM` | **every one matches** |
+| Duration vs disk | **matches within ~1 s** |
+| Format | **plain HTML table — no VLM required** |
+
+So the missing track numbers (DEF-03-16) can be assigned **deterministically by duration match**,
+not guessed. **The tracklist card is not embedded in the files** — verified via APIC frames: exactly
+one picture per file, `comment=Cover (front)`. The running order must come from the web.
+
+**Scale, measured on the real backlog rather than the sample:**
+
+| | Folders |
+|---|---|
+| Backlog total | **151** (see DEF-03-18) |
+| Mastermix-branded | **99** |
+| DMC-branded | 13 |
+| Toolkit-branded | 3 |
+| Crate-branded | 2 |
+| **DJ-service branded** | **115 ≈ 76%** |
+
+**~76% of the backlog is publisher-branded content for which the publisher's own site is
+canonical — while T1 fired at 27.08% measuring *Discogs* match rate against it.** That does **not**
+invalidate T1's number, which was measured correctly against its stated definition and threshold.
+It materially reframes what the number *means*: **Discogs was substantially the wrong instrument
+for the majority of the backlog.** Recorded as a reframing in `03-DECISION.md` § *AMENDMENT —
+2026-09-04, plan 03-10*; T1's threshold text, definition, denominator and measured value are
+**unaltered**.
+
+**Do not overstate it.** Only **one** product page was checked; coverage across all 99 Mastermix
+folders is **unproven**. Mastermix's own tagging is inconsistent (~40% bare `album=Mastermix`, see
+DEF-03-16), so folder-name parsing — not tags — is the likely join key. It is a **commercial site**:
+any lookup must be gentle, cached, and rate-limited, and this project should not build a scraper
+without checking the site's terms.
+
+**Suggested action (Phase 4 research, then Phase 6):** measure publisher-page coverage across a
+sample of the 99 Mastermix folders before designing anything around it. If coverage holds, this
+likely displaces both the Discogs path *and* the planned VLM cover-scan extraction (54 images /
+27 folders) for Mastermix content.
+
+---
+
+## DEF-03-18 — two backlog denominators are now in circulation, 151 and 144
+
+**Found by:** plan 03-10, task 3, 2026-09-04.
+**Severity:** low today, but a phase decided on weighted rates must not carry two denominators.
+
+This session counted **151** backlog folders — `/mnt/tank/downloads/complete/nzb/{unsorted,music}`,
+`-maxdepth 1 -type d` — against 03-03's deduplicated **144** (itself a correction of the committed
+143; see `03-DECISION.md` § *AMENDMENT — 2026-09-04, plan 03-07*). Different path set and different
+dedup rule. **Both figures are now in circulation.**
+
+Nothing in this phase's results turns on it: T1's weights are stated as explicit fractions over
+**144** (37/144, 39/144, 11/144, 0/144, 43/144, 14/144) and T2's 21.8-minute projection is nowhere
+near its 4-hour limb, so neither threshold outcome moves. The risk is a later plan quoting 151
+against weights computed on 144.
+
+**Suggested action (plan 03-11):** state which denominator is authoritative and why — including the
+exact path set and dedup rule — rather than letting both stand.
+
+---
+
+## DEF-03-19 — `zfs diff` on the Music snapshot cannot return clean, and three plans assert that it does
+
+**Found by:** plan 03-10, task 3 close, 2026-09-04.
+**Severity:** low, but it is a **closing safety assertion**, so a permanently-failing one trains
+readers to wave it through.
+
+`03-10-PLAN.md`'s Task 3 acceptance criteria require *"`zfs diff tank/media/Music@pre-project` run
+from atlantis returns clean"*. **It cannot, and it could not before this trial began.** Measured
+from atlantis at plan close:
+
+| Evidence | Value |
+|---|---|
+| `zfs diff tank/media/Music@pre-project` | **2,674 lines** |
+| Change types | **2,674 `M`** — zero `+`, zero `-`, zero `R` |
+| `find /mnt/tank/media/Music \| wc -l` | **2,674** — the diff covers the **entire tree** |
+| Snapshot creation | **2026-08-18 13:08** |
+
+That is the signature of **Phase 1 plan 01-08's ownership normalisation**, which `CLAUDE.md` records
+as *"`568:568` across all 2,674 entries, library root included, verified from the Proxmox host and
+by `zfs diff`"*. The chown moved every inode's metadata, so every entry reports `M` against a
+snapshot taken before it. **The diff has been non-clean since 2026-08-18 and will stay that way for
+as long as the snapshot is retained.**
+
+**The assertion the criterion was reaching for does hold, on a better instrument:**
+
+```bash
+find /mnt/tank/media/Music -newermt '2026-09-04 09:00' | wc -l   # -> 0
+find /mnt/tank/media/Music -newerct '2026-09-04 09:00' | wc -l   # -> 0
+```
+
+Zero files under Music have an mtime **or** ctime inside the trial window, and neither spike
+container mounts `/mnt/tank/media` at any mode.
+
+**Why not fixed here.** Editing a plan's own acceptance criteria while executing it is the lapse
+DEF-03-04 and DEF-03-05 both record; the criterion is answered honestly instead, with the better
+instrument recorded beside it.
+
+**Suggested fix (plan 03-11, and any later plan inheriting this assertion):** replace *"`zfs diff`
+returns clean"* with either **"`zfs diff` reports zero `+`/`-`/`R` entries"** (which is the real
+tamper signal and does pass) or the mtime/ctime window check above. A blanket "returns clean" on
+this dataset is unsatisfiable and will be waved through on sight.

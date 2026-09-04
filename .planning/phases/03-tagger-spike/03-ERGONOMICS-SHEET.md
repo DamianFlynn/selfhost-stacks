@@ -359,7 +359,7 @@ diff covers the entire tree. That is the signature of Phase 1 plan 01-08's owner
 `zfs diff`"*) against a snapshot created **2026-08-18 13:08**, and it has been non-clean ever
 since. **Zero `+`, `-` or `R` entries** — nothing created, deleted or renamed. The assertion the
 criterion was reaching for holds on a better instrument: 0 files under Music have an mtime or
-ctime inside the trial window. Logged as **DEF-03-18**.
+ctime inside the trial window. Logged as **DEF-03-19**.
 
 ---
 
