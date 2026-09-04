@@ -57,6 +57,25 @@
 # Every value below is therefore written as a LITERAL. `568:568` is `apps:apps` per CLAUDE.md
 # § Storage and Permissions.
 
+# ---------------------------------------------------------------------------------------------
+# EXPLICIT PROJECT NAME — added after an observed near-miss, not from theory
+# ---------------------------------------------------------------------------------------------
+# Compose derives the project name from the COMPOSE FILE'S DIRECTORY when none is given. Both this
+# file and `03-spike-beets.yaml` are run from /mnt/fast/spike-03, so without this line they share
+# the project `spike-03` — and the first `up` of this file printed it:
+#
+#     level=warning msg="Found orphan containers ([beets-spike]) for this project.
+#      If you removed or renamed this service in your compose file, you can run this command
+#      with the --remove-orphans flag to clean it up."
+#
+# `beets-spike` IS THE TERMINAL ARM. Compose was inviting a flag that would delete the other half
+# of the experiment. An explicit name puts the two spikes in separate projects so no teardown of
+# one can reach the other, and so plan 03-11 can reap this file's container without a flag that
+# depends on getting the working directory right.
+#
+# TEARDOWN CAUTION FOR 03-11: never pass `--remove-orphans` to either spike compose file.
+name: spike-03-beets-flask
+
 services:
 
   beets-flask-spike:
