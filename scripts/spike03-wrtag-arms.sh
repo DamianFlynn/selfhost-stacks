@@ -87,6 +87,10 @@
 #        that cannot be resolved is a refusal, never a proceed. `--self-test` runs that fence
 #        against the exact bypass string above and against the legitimate defaults.
 #     3. `find "$SRC" "$LIB" -newer <stamp> -type f` must return ZERO lines. Cheap, and first.
+#        It must also have BEEN ABLE TO LOOK (CR-02): the inputs are asserted present and
+#        readable first, find's exit status is read rather than swallowed, and anything it
+#        wrote to stderr is a refusal. "could not look" is reported as its own non-green
+#        outcome and never as "0 files newer than the stamp" - CLAUDE.md § Health Checks.
 #     4. A WHOLE-SUBTREE MANIFEST DIFF over all of $SRC and $LIB must be empty, on both a
 #        `%p %s %T@` listing and a sha256sum of every file.
 #
@@ -499,14 +503,60 @@ printf 'arm=%s image=%s album=%s class=%s mbid=%s yes=%s container_exit=%s path_
 say "== wrote-nothing assertion =="
 rule
 FAILED=0
-NEWER="$(find "$SRC" "$LIB" -newer "$STAMP" -type f 2>/dev/null || true)"
-NEWER_COUNT="$(printf '%s' "$NEWER" | grep -c . || true)"
-if [ "${NEWER_COUNT:-0}" -eq 0 ]; then
-  ok "instrument 1 (find -newer, \$SRC and \$LIB): 0 files newer than the stamp"
-else
-  bad "instrument 1: $NEWER_COUNT files are newer than the stamp - THE DRY RUN WROTE:"
-  printf '%s\n' "$NEWER" | sed 's/^/         /'
+
+# CR-02. "COULD NOT LOOK" IS NOT "NOTHING CHANGED", AND IT IS NOT A PASS.
+#
+# This used to be `find ... 2>/dev/null || true` feeding a count. `2>/dev/null` discarded the
+# error and `|| true` discarded the exit code, so EVERY failure mode of find - $SRC gone, $LIB
+# gone, a re-materialised bind mount pointing at a vanished inode (03-05 finding 3, and the
+# realistic trigger on this estate), EACCES on a subtree, the stamp deleted - produced an empty
+# result, a zero count and a green tick claiming the dry run wrote nothing. That is the exact
+# failure CLAUDE.md § Health Checks forbids, inside the assertion this script exists to make,
+# and it is the first of the four controls the header claims.
+#
+# So: assert the inputs are there and readable BEFORE looking, then read find's exit status
+# instead of swallowing it, and route "could not look" to its own non-green outcome. Note the
+# house rule that `cmd | wc -l` silently exits 0 - `set -euo pipefail` is set at the top of
+# this file, and the count below is taken from an already-captured string, not from a pipeline
+# whose head could have failed unnoticed.
+INSTR1_BLIND=""
+for probe_dir in "$SRC" "$LIB"; do
+  if [ ! -d "$probe_dir" ]; then
+    INSTR1_BLIND="'$probe_dir' is not a directory (vanished, or a stale bind mount)"
+    break
+  fi
+  if [ ! -r "$probe_dir" ] || [ ! -x "$probe_dir" ]; then
+    INSTR1_BLIND="'$probe_dir' is not readable and searchable"
+    break
+  fi
+done
+if [ -z "$INSTR1_BLIND" ] && [ ! -f "$STAMP" ]; then
+  INSTR1_BLIND="the stamp '$STAMP' is gone, so -newer has no reference"
+fi
+
+NEWER_ERR="$OUT/wrtag-${ARM}.find-newer.err"
+: > "$NEWER_ERR"
+if [ -n "$INSTR1_BLIND" ]; then
+  bad "instrument 1 COULD NOT LOOK: $INSTR1_BLIND"
+  bad "  This is NOT a pass. 'could not look' is a distinct outcome from 'nothing changed'"
+  bad "  (CLAUDE.md § Health Checks), and the wrote-nothing claim is UNPROVEN for this arm."
   FAILED=1
+else
+  NEWER_RC=0
+  NEWER="$(find "$SRC" "$LIB" -newer "$STAMP" -type f 2>"$NEWER_ERR")" || NEWER_RC=$?
+  if [ "$NEWER_RC" -ne 0 ] || [ -s "$NEWER_ERR" ]; then
+    bad "instrument 1 COULD NOT LOOK (find rc=$NEWER_RC) - this is NOT a pass:"
+    sed 's/^/         /' "$NEWER_ERR" >&2 || true
+    bad "  The wrote-nothing claim is UNPROVEN for this arm, which is not the same as false."
+    FAILED=1
+  elif [ -z "$NEWER" ]; then
+    ok "instrument 1 (find -newer, \$SRC and \$LIB): 0 files newer than the stamp"
+  else
+    NEWER_COUNT="$(printf '%s\n' "$NEWER" | grep -c . || true)"
+    bad "instrument 1: $NEWER_COUNT files are newer than the stamp - THE DRY RUN WROTE:"
+    printf '%s\n' "$NEWER" | sed 's/^/         /'
+    FAILED=1
+  fi
 fi
 
 # --- Instrument 2: whole-subtree manifest diff ---------------------------------------------
@@ -541,7 +591,9 @@ rm -f "$STAMP"
 
 say ""
 if [ "$FAILED" -ne 0 ]; then
-  bad "ARM ${ARM}: WROTE SOMETHING. Exiting 1."
+  bad "ARM ${ARM}: WROTE SOMETHING, or the wrote-nothing assertion COULD NOT BE MADE."
+  bad "Read the instrument lines above - the two are different findings and only one of them"
+  bad "is about wrtag. Exiting 1."
   exit 1
 fi
 ok "ARM ${ARM}: ran and wrote nothing, on both mounts, by both instruments."
