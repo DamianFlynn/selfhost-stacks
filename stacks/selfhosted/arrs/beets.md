@@ -1004,10 +1004,36 @@ in Phase 3, deliberately**:
 ### Standing action, carried forward
 
 **Rotate the Discogs personal access token at project close.** It is not a Phase 3 task — the
-operator decided the timing — but the reasons have accumulated: it was written to a `644` file by a
-logging path nobody expected (`python3-discogs-client` puts the token in the **query string**, not
-an `Authorization` header), written to disk a second time by an ad-hoc verification command, and
-rendered into an agent transcript that cannot be shredded. Every on-disk copy was removed and
-verified gone at Phase 3 close; `/mnt/fast/secrets/discogs.env` remains the single source at
-`600 root`. **This repository is public** — credentials go in `/mnt/fast/secrets/` and
-`~/.claude/secrets/`, referenced by variable name only.
+operator decided the timing, was shown the full picture at the closing gate on 2026-09-04 and
+reaffirmed it — but the reasons have accumulated to **four independent causes**, and the action
+goes forward carrying all four so that whoever executes it is not acting on the one-cause problem
+`DEF-03-04` opened:
+
+1. It was written to a `644` file by a logging path nobody expected —
+   `python3-discogs-client` puts the token in the **query string**, not an `Authorization`
+   header, so anything that logs request lines is a credential sink.
+2. It was written to disk a second time by an ad-hoc verification command.
+3. It was **passed as a command-line argument**, and so was world-readable via
+   `/proc/<pid>/cmdline` for ~45 minutes on a host running 100+ containers — then rendered a
+   second time by a `pgrep -af` that printed the argv back. *Never pass a secret as a command-line
+   argument, on any host, even to a command that prints only a count.*
+4. It was rendered into agent transcripts that cannot be shredded.
+
+**What is and is not clean, stated precisely** (see `.planning/phases/03-tagger-spike/deferred-items.md`
+`DEF-03-21` for the full record):
+
+- **The estate is clean.** Every copy **on the estate** — `/mnt/fast/spike-03` and the generated
+  runtime beets config — was removed and verified gone at Phase 3 close.
+  `/mnt/fast/secrets/discogs.env` is the **single remaining estate copy**, at `600 root`.
+- **This repository is provably clean.** Every commit was screened by the token's **value** *and*
+  by its **8-character prefix**: **0 hits**, verified independently.
+- **Four plaintext copies survive on the operator's workstation.** They are local and
+  unpublished — agent session artefacts on his own machine, none in any repository and none
+  pushed — but **three of the four are append-only session transcripts that cannot be reliably
+  scrubbed**, and the fourth (a 131,433-byte tool-results cache) had its deletion refused by
+  policy from inside the session.
+
+**Rotation, not deletion, is therefore the effective remedy.** Rotating makes every surviving copy
+inert regardless of how many there are; deleting what *can* be deleted lowers the count while
+leaving the credential live. **This repository is public** — credentials go in `/mnt/fast/secrets/`
+and `~/.claude/secrets/`, referenced by variable name only, and never in a process argument.
