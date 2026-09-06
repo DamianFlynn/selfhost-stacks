@@ -1,0 +1,47 @@
+# TeslaMate Stack - Tesla vehicle data logger with its own Grafana
+# https://github.com/teslamate-org/teslamate
+#
+# Adapted from upstream's docker-compose.yml. Three deliberate departures:
+#
+#   1. Both upstream `ports:` blocks are removed. Upstream publishes 4000
+#      (TeslaMate) and 3000 (Grafana); 3000 collides with cal-web (keeper-sh),
+#      and this estate routes everything through Traefik anyway.
+#   2. Both web UIs sit behind chain-authelia@file. This is not optional -
+#      the database holds the vehicle's complete location history, and upstream
+#      explicitly warns its default setup is safe on a home network only.
+#   3. Upstream's `./import:/opt/app/import` relative bind would put runtime
+#      data inside the git working tree at /mnt/fast/stacks. Replaced with the
+#      named volume `teslamate-import`. To load a Tesla data export, copy it in
+#      with `docker cp <file> teslamate:/opt/app/import/`.
+#
+# No Tesla credentials live in this repo. Access/refresh tokens are entered in
+# the TeslaMate web UI and encrypted at rest with ENCRYPTION_KEY.
+
+name: teslamate
+
+########################### NETWORKS
+networks:
+  # Reverse proxy. Only teslamate and grafana join it.
+  t3_proxy:
+    external: true
+  # Internal only: database and mosquitto are never reachable from outside.
+  teslamate:
+    driver: bridge
+
+include:
+  ########################### SERVICES
+  - teslamate-db.yaml
+  - mosquitto.yaml
+  - teslamate.yaml
+  - teslamate-grafana.yaml
+
+########################### VOLUMES
+# Plain named volumes, as upstream. /mnt/fast/appdata is NOT a mountpoint
+# (see MEDIA.md 3), so a bind there would land on LXC 100's ext4 root just
+# as these do, with no dataset or quota to show for it.
+volumes:
+  teslamate-db:
+  teslamate-grafana-data:
+  teslamate-import:
+  mosquitto-conf:
+  mosquitto-data:

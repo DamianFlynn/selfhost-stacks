@@ -1,0 +1,67 @@
+# TeslaMate Grafana - Prebuilt dashboards over the TeslaMate database
+#
+# Purpose:
+#   Ships ~20 curated dashboards (drives, charges, efficiency, battery health,
+#   projected range, trip maps) provisioned against the TeslaMate database.
+#   This is a separate Grafana from the `monitoring` stack, by upstream design -
+#   it owns its own provisioning and must not be pointed at Prometheus.
+#
+# Workflow:
+#   Browser -> Traefik (TLS, chain-authelia) -> grafana:3000 -> database:5432
+#
+# Access:
+#   URL: https://teslamate-grafana.deercrest.info
+#   Middleware: chain-authelia@file
+#
+# Notes:
+#   Served from its own subdomain, not a /grafana subpath, so
+#   GF_SERVER_SERVE_FROM_SUB_PATH stays off and the root URL is plain.
+#   Anonymous auth is disabled and the admin password comes from .env: Authelia
+#   is the outer gate, but leaving Grafana on the stock admin/admin behind it
+#   would make any Authelia bypass a full compromise of the location history.
+#   After first boot, set Settings -> URLs inside TeslaMate to these two
+#   hostnames so the cross-links between the apps resolve.
+
+services:
+  grafana:
+    image: teslamate/grafana:4.2.0
+    container_name: teslamate-grafana
+    hostname: grafana
+    mem_limit: 512m
+    mem_reservation: 128m
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - TZ=${TZ:-Europe/Dublin}
+      - DATABASE_USER=teslamate
+      - DATABASE_PASS=${TESLAMATE_DB_PASS}
+      - DATABASE_NAME=teslamate
+      - DATABASE_HOST=database
+      # Grafana's own admin account, behind Authelia. Required - see .env.sample.
+      - GRAFANA_PASSWD=${TESLAMATE_GRAFANA_PASS}
+      - GF_SECURITY_ADMIN_USER=${TESLAMATE_GRAFANA_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${TESLAMATE_GRAFANA_PASS}
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+      - GF_SERVER_DOMAIN=teslamate-grafana.deercrest.info
+      - GF_SERVER_ROOT_URL=https://%(domain)s/
+    volumes:
+      - teslamate-grafana-data:/var/lib/grafana
+    networks:
+      - t3_proxy
+      - teslamate
+    depends_on:
+      database:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=t3_proxy
+      - traefik.http.routers.teslamate-grafana-rtr.entrypoints=websecure
+      - traefik.http.routers.teslamate-grafana-rtr.rule=Host(`teslamate-grafana.deercrest.info`)
+      - traefik.http.routers.teslamate-grafana-rtr.tls=true
+      - traefik.http.routers.teslamate-grafana-rtr.tls.certresolver=dns-cloudflare
+      - traefik.http.routers.teslamate-grafana-rtr.middlewares=chain-authelia@file
+      - traefik.http.routers.teslamate-grafana-rtr.service=teslamate-grafana-svc
+      - traefik.http.services.teslamate-grafana-svc.loadbalancer.server.port=3000

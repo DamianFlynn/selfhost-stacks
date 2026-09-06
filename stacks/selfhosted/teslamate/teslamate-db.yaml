@@ -1,0 +1,43 @@
+# TeslaMate PostgreSQL Database
+#
+# Purpose:
+#   Stores every drive, charge, position and state transition TeslaMate
+#   records. This is the crown jewels of the stack - it is a complete
+#   location history of the vehicle.
+#
+# Notes:
+#   postgres:18-trixie is upstream's specified image, not this repo's usual
+#   postgres:18-alpine. TeslaMate's migrations and Grafana dashboards are
+#   tested against it; do not swap it without checking upstream.
+#   Internal network only - never joined to t3_proxy, never published.
+#   POSTGRES_PASSWORD and teslamate/grafana's DATABASE_PASS are all driven from
+#   the single TESLAMATE_DB_PASS so they cannot drift apart.
+
+services:
+  database:
+    image: postgres:18-trixie
+    container_name: teslamate-db
+    hostname: database
+    # Cap bounds a runaway; Postgres will size shared buffers below this.
+    mem_limit: 1g
+    mem_reservation: 256m
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - TZ=${TZ:-Europe/Dublin}
+      - POSTGRES_USER=teslamate
+      - POSTGRES_PASSWORD=${TESLAMATE_DB_PASS}
+      - POSTGRES_DB=teslamate
+    volumes:
+      - teslamate-db:/var/lib/postgresql
+    networks:
+      - teslamate
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U teslamate -d teslamate"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    security_opt:
+      - no-new-privileges:true

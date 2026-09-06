@@ -1,0 +1,77 @@
+# TeslaMate - Tesla vehicle data logger
+#
+# Purpose:
+#   Polls the Tesla owners API continuously and records drives, charges, state
+#   transitions, efficiency and position into PostgreSQL, so the vehicle's
+#   history survives beyond what the Tesla app itself retains.
+#
+# Key Features:
+#   - Drive and charge logging with per-trip efficiency
+#   - Sleep-aware polling, so it does not keep the car awake
+#   - Geofences and address resolution
+#   - Publishes live vehicle state to MQTT for Home Assistant
+#
+# Workflow:
+#   teslamate -> tesla.com (outbound, owners API)
+#   teslamate -> database  (PostgreSQL, internal network)
+#   teslamate -> mosquitto (MQTT, internal network)
+#   Browser -> Traefik (TLS, chain-authelia) -> teslamate:4000
+#
+# Access:
+#   URL: https://teslamate.deercrest.info
+#   Middleware: chain-authelia@file
+#
+# Notes:
+#   ENCRYPTION_KEY wraps the stored Tesla access/refresh tokens. If it is lost
+#   or changed the tokens become unreadable and must be re-entered in the UI.
+#   CHECK_ORIGIN + VIRTUAL_HOST are required behind a reverse proxy: without
+#   them the Phoenix LiveView WebSocket rejects the proxied origin and the UI
+#   loads but never updates.
+
+services:
+  teslamate:
+    image: teslamate/teslamate:4.2.0
+    container_name: teslamate
+    hostname: teslamate
+    # Upstream asks for >=1 GB. The cap bounds a runaway, not steady state.
+    mem_limit: 1g
+    mem_reservation: 256m
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - TZ=${TZ:-Europe/Dublin}
+      # Wraps the Tesla API tokens at rest. Required - see .env.sample.
+      - ENCRYPTION_KEY=${TESLAMATE_ENCRYPTION_KEY}
+      - DATABASE_USER=teslamate
+      - DATABASE_PASS=${TESLAMATE_DB_PASS}
+      - DATABASE_NAME=teslamate
+      - DATABASE_HOST=database
+      - MQTT_HOST=mosquitto
+      # Behind Traefik: accept the proxied origin for the LiveView WebSocket.
+      - VIRTUAL_HOST=teslamate.deercrest.info
+      - CHECK_ORIGIN=true
+    volumes:
+      - teslamate-import:/opt/app/import
+    networks:
+      - t3_proxy
+      - teslamate
+    depends_on:
+      database:
+        condition: service_healthy
+      mosquitto:
+        condition: service_started
+    cap_drop:
+      - all
+    security_opt:
+      - no-new-privileges:true
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=t3_proxy
+      - traefik.http.routers.teslamate-rtr.entrypoints=websecure
+      - traefik.http.routers.teslamate-rtr.rule=Host(`teslamate.deercrest.info`)
+      - traefik.http.routers.teslamate-rtr.tls=true
+      - traefik.http.routers.teslamate-rtr.tls.certresolver=dns-cloudflare
+      - traefik.http.routers.teslamate-rtr.middlewares=chain-authelia@file
+      - traefik.http.routers.teslamate-rtr.service=teslamate-svc
+      - traefik.http.services.teslamate-svc.loadbalancer.server.port=4000
