@@ -36,6 +36,11 @@ services:
     hostname: "dispatcharr"
     image: ghcr.io/dispatcharr/dispatcharr:0.29.0
     container_name: dispatcharr
+    # measured 1299 MB 2026-09-06; cap bounds a runaway, not steady state.
+    # Deliberately generous at 3g: live-stream buffers scale with concurrent
+    # viewers, and under-capping this OOM-kills the exact stream that froze on
+    # 2026-09-05 and started this work.
+    mem_limit: 3g
     restart: unless-stopped
     networks:
       iot_macvlan:

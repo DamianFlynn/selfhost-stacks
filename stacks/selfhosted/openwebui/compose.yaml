@@ -123,6 +123,8 @@ services:
   # Useful for external document processing integrations
   ai-docling:
     container_name: ai-docling
+    # measured 912 MB 2026-09-06; cap bounds a runaway, not steady state
+    mem_limit: 2g
     # renovate: datasource=docker depName=quay.io/docling-project/docling-serve
     image: quay.io/docling-project/docling-serve:v1.31.0
     pull_policy: always
@@ -273,6 +275,8 @@ services:
   # Extracts text and metadata from various document formats
   ai-tika:
     container_name: ai-tika
+    # measured 372 MB 2026-09-06; cap bounds a runaway, not steady state
+    mem_limit: 1g
     # renovate: datasource=docker depName=apache/tika
     image: apache/tika:3.3.1.0-full
     pull_policy: always
@@ -292,6 +296,8 @@ services:
   # Features: Chat, document upload, web search, voice synthesis
   openwebui:
     container_name: ai-openwebui
+    # measured 609 MB 2026-09-06; cap bounds a runaway, not steady state
+    mem_limit: 1536m
     # renovate: datasource=docker depName=ghcr.io/open-webui/open-webui
     image: ghcr.io/open-webui/open-webui:v0.11.1
     pull_policy: always

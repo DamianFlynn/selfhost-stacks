@@ -2,6 +2,8 @@ services:
   homarr:
     image: ghcr.io/homarr-labs/homarr:v1.72.0
     container_name: homarr
+    # measured 462 MB 2026-09-06; cap bounds a runaway, not steady state
+    mem_limit: 1g
     restart: unless-stopped
     env_file:
       - .env

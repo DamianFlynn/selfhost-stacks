@@ -17,6 +17,9 @@ networks:
 services:
   immich-server:
     container_name: immich_server
+    # measured 1720 MB 2026-09-06; cap bounds a runaway, not steady state.
+    # Generous at 3g because upload + thumbnail generation burst well above idle.
+    mem_limit: 3g
     # renovate: datasource=docker depName=ghcr.io/immich-app/immich-server
     image: ghcr.io/immich-app/immich-server:v2.7.5
     pull_policy: always

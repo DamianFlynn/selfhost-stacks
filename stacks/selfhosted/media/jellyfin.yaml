@@ -73,6 +73,11 @@ services:
   jellyfin:
     hostname: jellyfin
     container_name: jellyfin
+    # measured 1022 MB 2026-09-06; cap bounds a runaway, not steady state.
+    # Deliberately generous at 3g: hardware transcode is off (D-30 amdgpu
+    # mitigation) so transcodes are CPU-side and bursty, and library scans
+    # spike independently of playback.
+    mem_limit: 3g
     image: jellyfin/jellyfin:10.11.11
     security_opt:
       - no-new-privileges:true

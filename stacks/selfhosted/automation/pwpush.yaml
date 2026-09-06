@@ -50,6 +50,8 @@ services:
 
   pwpush:
     container_name: "pwpush"
+    # measured 565 MB 2026-09-06; cap bounds a runaway, not steady state
+    mem_limit: 1g
     image: docker.io/pglombardo/pwpush:2.9.4
     #ports:
     #  - "443:443"

@@ -3,6 +3,8 @@ services:
     # renovate: datasource=docker depName=ghcr.io/paperless-ngx/paperless-ngx
     image: ghcr.io/paperless-ngx/paperless-ngx:3.0.4
     container_name: paperless
+    # measured 553 MB 2026-09-06; cap bounds a runaway, not steady state
+    mem_limit: 1536m
     restart: unless-stopped
     env_file:
       - .env
