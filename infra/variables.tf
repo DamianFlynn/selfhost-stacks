@@ -259,6 +259,22 @@ variable "mpe_memory_mb" {
     to match the running host, which had been set to 8192 by hand and never
     reflected here. The code was the drifted side, not the host.
 
+    Lowered again 8192 -> 3072 on 2026-09-06. Derived from LXC 102's measured
+    cgroup memory.peak of 2.17 GB over a 5 d 15 h window (memory.current 1.77 GB),
+    so 3072 leaves ~42% headroom above the observed peak.
+
+    Why it matters: the caps were 24576 (LXC 100) + 8192 (this) = 32768 MB on a
+    29686 MB host — 3082 MB oversubscribed before ZFS ARC's 3113 MB c_max was even
+    asked for. The new total of 27648 leaves 2038 MB for the host and ARC, whose
+    c_min is 972 MB.
+
+    Why not 4096: it would leave only 1014 MB for host + ARC, re-creating the
+    starved-ARC condition this change exists to remove.
+
+    Sized from peak rather than current because LXC 102's workload is bursty: it
+    runs ERPNext (frappe backend, scheduler, two queue workers, mariadb), n8n,
+    traefik and cloudflared.
+
     Do not raise this without a reason. atlantis has 28 GB total and a live kernel
     bug where memory pressure drives compaction, compaction fires the amdgpu MMU
     notifier, and amdgpu_hmm_invalidate_gfx NULL-derefs — which wedged the whole
@@ -267,7 +283,7 @@ variable "mpe_memory_mb" {
     pressure that arms that bug.
   DESC
   type        = number
-  default     = 8192
+  default     = 3072
 }
 
 variable "mpe_cores" {
