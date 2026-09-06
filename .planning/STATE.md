@@ -1264,6 +1264,7 @@ Recent decisions affecting current work:
 | 260902-fxf | Refresh keeper-sh docs against live state, add keeper-mcp service, relocate misfiled Innofactor docs | 2026-09-02 | complete ✓ |
 | 260902-gln | Document who gets reminders for Keeper-created events; plan the Work-calendar split | 2026-09-02 | complete ✓ |
 | 260902-hya | Complete the keeper-sh .env.sample and correct the compose description comment | 2026-09-02 | complete ✓ |
+| 260906-e6l | Bound atlantis memory oversubscription — cap mpe LXC at 3 GB, add mem_limit to 12 containers | 2026-09-06 | complete ✓ |
 
 ## Session Continuity
 
