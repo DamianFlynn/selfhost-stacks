@@ -156,7 +156,7 @@ dataset behind it writes to `/` — and looks identical to one that doesn't.
 mountpoint -q /mnt/fast/appdata/<stack> && echo "dataset ✓" || echo "ON / — unbounded ⚠"
 ```
 
-Six stacks are currently in this state (`monitoring`, `agentic-os`, `mattermost`, `documents`,
+Five stacks are currently in this state (`monitoring`, `agentic-os`, `documents`,
 `open-archiver`, `rustdesk`) — see [MEDIA.md](MEDIA.md) § 8.
 
 ### ⛔ Never leave an anonymous volume

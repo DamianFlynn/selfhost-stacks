@@ -221,15 +221,6 @@ do_pwpush() {
     "pwpush-db"
 }
 
-do_mattermost() {
-  # mattermost-db.yaml is included by mattermost/compose.yaml which defines network
-  migrate_pg \
-    "mattermost-db" \
-    "$STACKS/mattermost" \
-    "compose.yaml" \
-    "mattermost-db"
-}
-
 do_booklore() {
   migrate_pg \
     "booklore_postgres" \
@@ -316,7 +307,6 @@ run_all() {
   # PG16
   do_n8n
   do_pwpush
-  do_mattermost
   # PG17
   do_booklore
   do_paperless
@@ -337,7 +327,6 @@ case "${1:-all}" in
   jellystat)     do_jellystat ;;
   n8n)           do_n8n ;;
   pwpush)        do_pwpush ;;
-  mattermost)    do_mattermost ;;
   booklore)      do_booklore ;;
   paperless)     do_paperless ;;
   keeper)        do_keeper ;;
@@ -349,7 +338,7 @@ case "${1:-all}" in
   teleport)      do_teleport ;;
   *)
     echo "Unknown instance: $1"
-    echo "Valid: all openwebui jellystat n8n pwpush mattermost booklore paperless"
+    echo "Valid: all openwebui jellystat n8n pwpush booklore paperless"
     echo "       keeper open-archiver postiz calcom social-postiz rybbit teleport"
     exit 1
     ;;

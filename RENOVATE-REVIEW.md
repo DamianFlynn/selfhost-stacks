@@ -8,7 +8,7 @@
 
 ### 1. PostgreSQL 17 → 18 (MAJOR VERSION)
 **Branch:** `origin/renovate/docker.io-postgres-18.x`  
-**Impact:** 16 PostgreSQL instances across multiple stacks  
+**Impact:** 15 PostgreSQL instances across multiple stacks (was 16; `mattermost` retired 2026-09-06)  
 **Status:** ⛔ **BLOCKED - Requires pg_dump/restore or pg_upgrade**
 
 **Affected Stacks:**
@@ -18,7 +18,6 @@
 - `automation/pwpush` - postgres:16 → postgres:18
 - `books/booklore` - postgres:17-alpine → postgres:18-alpine
 - `documents/paperless` - postgres:17-alpine → postgres:18-alpine
-- `mattermost` - postgres:16-alpine → postgres:18-alpine
 - `media/jellystat` - postgres:15.17 → postgres:18
 - `postiz` - postgres:17-alpine → postgres:18-alpine
 - `saas/calcom` - postgres:17-alpine → postgres:18-alpine

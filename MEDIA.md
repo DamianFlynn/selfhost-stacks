@@ -276,7 +276,7 @@ for the design rules.
 | Gap | Detail |
 |-----|--------|
 | **`audiobookshelf` stores on `/`** | Its binds are `/audiobooks` and `/audiobookshelf` — root-level paths on the **LXC ext4 root disk**, not under `/mnt/fast/appdata` and not on any dataset. Currently tiny (4 K + 548 K) so it is latent, not urgent — but loading a real audiobook library into it writes to `/`. Violates the STANDARDS base-path convention. |
-| **Six other stacks are also on `/`** | `monitoring` (3.9 G), `agentic-os` (674 M), `mattermost` (250 M), `documents`/paperless (95 M), `open-archiver` (67 M), `rustdesk` (1.2 M) — all under `/mnt/fast/appdata/` with **no backing dataset**. ~5 G total today. `monitoring` is the one to watch: Prometheus TSDB grows continuously. See § 3. |
+| **Five other stacks are also on `/`** | `monitoring` (3.9 G), `agentic-os` (674 M), `documents`/paperless (95 M), `open-archiver` (67 M), `rustdesk` (1.2 M) — all under `/mnt/fast/appdata/` with **no backing dataset**. ~4.7 G total today, down from ~5 G after `mattermost` (250 M) was retired on 2026-09-06. `monitoring` is the one to watch: Prometheus TSDB grows continuously. See § 3. |
 | **`deinterlace_vaapi` on the Radeon 890M** | ffmpeg exits 251. Moot while hardware acceleration is off. |
 | **Live TV latency** | ~7.7 s per channel change in Jellyfin, inherent. Use TiviMate. |
 

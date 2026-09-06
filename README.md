@@ -189,7 +189,7 @@ cd /mnt/fast/stacks
 git pull
 
 # Run the migration script for a single instance
-bash scripts/pg-migrate.sh mattermost
+bash scripts/pg-migrate.sh n8n
 
 # Or migrate all instances in correct order
 bash scripts/pg-migrate.sh all
