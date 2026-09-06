@@ -179,6 +179,11 @@ On LXC 100, `python3 /mnt/fast/stacks/scripts/dispatcharr-recordings.py` checks 
 library and lists indexed videos. `--configure-library` creates the library if
 missing and validates the mount and library settings. Credentials stay in the
 existing root-only Jellyfin secret file. This script does not modify encoding.
+`--scan-recordings` refreshes the existing recording library. On first setup,
+Jellyfin skipped the empty root; a normal library scan after the first recording
+was needed before its `/recordings` file watcher started. The 35-second aerial
+test is retained under `TV_Shows/DVR setup test`; Jellyfin indexing, media probing
+as its service UID, and HTTP range playback were verified.
 
 The account's one-upstream limit still applies to recordings. Aerial recordings
 use the separate HDHomeRun tuners. TiviMate's Record button still records on its

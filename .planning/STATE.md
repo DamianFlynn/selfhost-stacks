@@ -1266,6 +1266,7 @@ Recent decisions affecting current work:
 | 260902-hya | Complete the keeper-sh .env.sample and correct the compose description comment | 2026-09-02 | complete ✓ |
 | 260906-e6l | Bound atlantis memory oversubscription — cap mpe LXC at 3 GB, add mem_limit to 12 containers | 2026-09-06 | complete ✓ |
 | 260906-eza | Reclaim ~2.8 GB: retire Mattermost, stop postiz/open-archiver/homarr, add TREK + TeslaMate | 2026-09-06 | complete ✓ |
+| 260906-ilx | Dispatcharr server DVR: 250 GB recording dataset and verified Jellyfin playback (`85f6d26`, `e5076cd`) | 2026-09-06 | complete ✓ |
 
 ## Session Continuity
 
