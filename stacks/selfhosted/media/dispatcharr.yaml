@@ -69,6 +69,8 @@ services:
       - 9192:9191
     volumes:
       - /mnt/fast/appdata/media/dispatcharr/data:/data:rw  # Application config, recordings queue, and processing state
+      # 250 GB quota on tank/media/Recordings, declared in infra/dispatcharr-recordings.tf.
+      - /mnt/tank/media/Recordings:/data/recordings:rw
     environment:
       - DISPATCHARR_ENV=aio
       - REDIS_HOST=localhost
@@ -154,6 +156,5 @@ services:
       - traefik.http.middlewares.dispatcharr-tv-ratelimit.ratelimit.average=30
       - traefik.http.middlewares.dispatcharr-tv-ratelimit.ratelimit.burst=60
       - traefik.http.middlewares.dispatcharr-tv-ratelimit.ratelimit.period=1m
-
 
 

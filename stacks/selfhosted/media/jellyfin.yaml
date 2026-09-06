@@ -122,6 +122,7 @@ services:
       # said exactly that until 2026-09-03, three days after the setting was turned off.
       - /dev/dri:/dev/dri
     volumes:
+      - /mnt/tank/media/Recordings:/recordings:ro  # Dispatcharr DVR playback library
       - /etc/localtime:/etc/localtime:ro  # System timezone for scheduling
       - /mnt/fast/appdata/media/jellyfin:/config:rw  # Application config, metadata, and database
       # NOTE (2026-08-18): this mount stays BROAD and READ-WRITE on purpose. Every other
@@ -357,7 +358,6 @@ services:
       # HTTP Services
       - traefik.http.routers.jellyfin.service=jellyfin-svc
       - traefik.http.services.jellyfin-svc.loadbalancer.server.port=8096
-
 
 
 
