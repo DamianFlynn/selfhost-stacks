@@ -160,6 +160,32 @@ do not fit.
 
 ## Operating notes
 
+### Server recordings (2026-09-06)
+
+Dispatcharr writes `/data/recordings` to `/mnt/tank/media/Recordings`, the
+`tank/media/Recordings` ZFS dataset. Its **250 GB (250,000,000,000 bytes) quota**
+is declared in `infra/dispatcharr-recordings.tf`; no automatic deletion is enabled.
+The filesystem may display this as 233 GiB. A full quota stops new writes rather
+than consuming application storage. Proxmox mount `mp31` persists it in LXC 100.
+
+Schedule programmes in Dispatcharr's TV Guide or **DVR → New Recording**.
+Add extra end time for sport. The server continues recording with the TV off.
+Jellyfin has a **TV Recordings** home-video library at `/recordings`, a read-only
+bind of the same dataset. It scans completed MKV files with real-time monitoring;
+internet metadata and local metadata writes are disabled to avoid misidentifying
+sport as movies. Recordings are managed/deleted in Dispatcharr, not Jellyfin.
+
+On LXC 100, `python3 /mnt/fast/stacks/scripts/dispatcharr-recordings.py` checks the
+library and lists indexed videos. `--configure-library` creates the library if
+missing and validates the mount and library settings. Credentials stay in the
+existing root-only Jellyfin secret file. This script does not modify encoding.
+
+The account's one-upstream limit still applies to recordings. Aerial recordings
+use the separate HDHomeRun tuners. TiviMate's Record button still records on its
+device; it does not schedule this server DVR. At setup, channels 402, 440 and 442
+had `is_catchup=False`, so server recordings do not give these channels live pause
+or rewind in TiviMate. No timeshift integration has been added.
+
 **`/tmp` inside LXC 100 is a 15 G tmpfs, not disk.** Staging EPG guides there consumes host RAM.
 Doing so with ~1.1 GB of XML took the 28 GB host to load average 869 with SSH dead on both the
 LXC *and* the Proxmox host while `ping` still answered; `arc_reap` blocked in D state as ZFS ARC

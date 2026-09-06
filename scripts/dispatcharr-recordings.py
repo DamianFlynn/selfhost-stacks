@@ -16,6 +16,8 @@ def command(*args):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--configure-library', action='store_true')
+    parser.add_argument('--scan-recordings', action='store_true',
+                        help='Refresh only the TV Recordings library')
     args = parser.parse_args()
     secret = Path('/mnt/fast/secrets/jellyfin-deercrest.env')
     assert secret.stat().st_uid == 0 and secret.stat().st_mode & 0o777 == 0o600
@@ -72,17 +74,27 @@ def main():
         assert matches[0]['CollectionType'] == 'homevideos'
         opts = matches[0]['LibraryOptions']
         assert not opts['SaveLocalMetadata'] and not opts['EnableInternetProviders']
+        assert opts['EnableRealtimeMonitor']
         assert api('/System/Configuration/encoding') == encoding, 'Encoding settings changed'
+    if args.scan_recordings:
+        assert len(matches) == 1, 'TV Recordings library missing'
+        query = urllib.parse.urlencode({'Recursive': 'true',
+            'MetadataRefreshMode': 'Default', 'ImageRefreshMode': 'Default',
+            'ReplaceAllMetadata': 'false', 'ReplaceAllImages': 'false'})
+        api('/Items/' + matches[0]['ItemId'] + '/Refresh?' + query, method='POST')
     print('TV Recordings library:', json.dumps([
         {k: v.get(k) for k in ('Name', 'Locations', 'CollectionType', 'ItemId')}
         for v in matches]))
+    print('Library scan tasks:', json.dumps([
+        {k: t.get(k) for k in ('Name', 'State', 'CurrentProgressPercentage')}
+        for t in api('/ScheduledTasks') if t.get('Key') == 'RefreshLibrary']))
     if matches:
         query = urllib.parse.urlencode({'ParentId': matches[0]['ItemId'],
-            'Recursive': 'true', 'IncludeItemTypes': 'Video', 'Fields': 'Path'})
+            'Recursive': 'true', 'Fields': 'Path'})
         items = api('/Items?' + query)
         print('Recorded videos:', json.dumps([
-            {k: item.get(k) for k in ('Id', 'Name', 'Path', 'RunTimeTicks')}
-            for item in items['Items']]))
+            {k: item.get(k) for k in ('Id', 'Name', 'Type', 'Path', 'RunTimeTicks')}
+            for item in items['Items'] if not item.get('IsFolder')]))
 
 
 if __name__ == '__main__':

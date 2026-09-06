@@ -240,6 +240,12 @@ not tunable. TiviMate plays MPEG-TS natively and switches in the ~1.1 s dispatch
 See [stacks/selfhosted/media/dispatcharr.md](stacks/selfhosted/media/dispatcharr.md) for the channel
 lineup, EPG sources, and the `ChannelOverride` durability rules.
 
+**Server DVR:** Dispatcharr records to the quota-limited `tank/media/Recordings`
+dataset (250 GB, LXC `mp31`). Jellyfin reads it through `/recordings` as the
+**TV Recordings** library; TiviMate remains the live-TV client. Schedule recordings
+in Dispatcharr. There is no automatic recording deletion or TiviMate timeshift
+integration. See the Dispatcharr companion document for operation and checks.
+
 ---
 
 ## 6. Music library export

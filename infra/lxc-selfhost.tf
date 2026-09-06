@@ -295,7 +295,6 @@ resource "proxmox_virtual_environment_container" "selfhost" {
     path   = "/mnt/tank/timemachine"
   }
 
-  # DO NOT REMOVE prevent_destroy WITHOUT READING THIS.
   # DVR mount is reconciled by null_resource.dispatcharr_recordings because
   # mount_point changes are ignored below. The live Proxmox slot is mp31.
   mount_point {
@@ -303,6 +302,7 @@ resource "proxmox_virtual_environment_container" "selfhost" {
     path   = "/mnt/tank/media/Recordings"
   }
 
+  # DO NOT REMOVE prevent_destroy WITHOUT READING THIS.
   #
   # This resource IS the Docker host: LXC 100, ~102 running containers, every
   # compose stack in the estate. Replacing it is never a routine act.
