@@ -13,6 +13,11 @@
 #      data inside the git working tree at /mnt/fast/stacks. Replaced with the
 #      named volume `teslamate-import`. To load a Tesla data export, copy it in
 #      with `docker cp <file> teslamate:/opt/app/import/`.
+#   4. Upstream's bundled `mosquitto` service is REMOVED. TeslaMate and Home
+#      Assistant must share one MQTT broker to exchange vehicle data, and HA
+#      already runs one - so a private broker here would have meant HA could
+#      never see the car. TeslaMate points at HA's broker instead; see
+#      TESLAMATE_MQTT_* in .env.sample.
 #
 # No Tesla credentials live in this repo. Access/refresh tokens are entered in
 # the TeslaMate web UI and encrypted at rest with ENCRYPTION_KEY.
@@ -24,14 +29,13 @@ networks:
   # Reverse proxy. Only teslamate and grafana join it.
   t3_proxy:
     external: true
-  # Internal only: database and mosquitto are never reachable from outside.
+  # Internal only: the database is never reachable from outside.
   teslamate:
     driver: bridge
 
 include:
   ########################### SERVICES
   - teslamate-db.yaml
-  - mosquitto.yaml
   - teslamate.yaml
   - teslamate-grafana.yaml
 
@@ -43,5 +47,3 @@ volumes:
   teslamate-db:
   teslamate-grafana-data:
   teslamate-import:
-  mosquitto-conf:
-  mosquitto-data:

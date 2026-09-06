@@ -9,12 +9,13 @@
 #   - Drive and charge logging with per-trip efficiency
 #   - Sleep-aware polling, so it does not keep the car awake
 #   - Geofences and address resolution
-#   - Publishes live vehicle state to MQTT for Home Assistant
+#   - Publishes live vehicle state to Home Assistant's MQTT broker, with
+#     discovery on, so the car appears in HA as a device with no YAML
 #
 # Workflow:
-#   teslamate -> tesla.com (outbound, owners API)
-#   teslamate -> database  (PostgreSQL, internal network)
-#   teslamate -> mosquitto (MQTT, internal network)
+#   teslamate -> tesla.com     (outbound, owners API)
+#   teslamate -> database      (PostgreSQL, internal network)
+#   teslamate -> HA's broker   (MQTT, over the LAN - NOT a local mosquitto)
 #   Browser -> Traefik (TLS, chain-authelia) -> teslamate:4000
 #
 # Access:
@@ -47,7 +48,19 @@ services:
       - DATABASE_PASS=${TESLAMATE_DB_PASS}
       - DATABASE_NAME=teslamate
       - DATABASE_HOST=database
-      - MQTT_HOST=mosquitto
+      # MQTT points at HOME ASSISTANT'S broker, not a local one. TeslaMate and
+      # Home Assistant must share a single broker to exchange vehicle data, so
+      # running our own would have meant HA could never see the car.
+      - MQTT_HOST=${TESLAMATE_MQTT_HOST}
+      - MQTT_PORT=${TESLAMATE_MQTT_PORT:-1883}
+      - MQTT_USERNAME=${TESLAMATE_MQTT_USER}
+      - MQTT_PASSWORD=${TESLAMATE_MQTT_PASS}
+      # Publishes one retained device discovery payload per vehicle, so the car
+      # appears in Home Assistant with all its entities and no YAML. Upstream
+      # default is false. Do NOT also keep manual MQTT sensors in HA's YAML -
+      # the two together produce duplicate entity IDs.
+      - MQTT_HOME_ASSISTANT_DISCOVERY=true
+      - MQTT_HOME_ASSISTANT_DISCOVERY_URL=https://teslamate.deercrest.info
       # Behind Traefik: accept the proxied origin for the LiveView WebSocket.
       - VIRTUAL_HOST=teslamate.deercrest.info
       - CHECK_ORIGIN=true
@@ -59,8 +72,6 @@ services:
     depends_on:
       database:
         condition: service_healthy
-      mosquitto:
-        condition: service_started
     cap_drop:
       - all
     security_opt:
