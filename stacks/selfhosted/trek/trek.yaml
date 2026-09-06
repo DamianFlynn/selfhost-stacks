@@ -1,0 +1,88 @@
+# TREK - Self-hosted travel/trip planner
+#
+# Purpose:
+#   Plans trips and holidays: itineraries, interactive maps, budgets, packing
+#   lists and reminders, shared between household members in real time.
+#   NestJS 11 + React 19 in a single container, persisted to SQLite.
+#
+# Key Features:
+#   - Collaborative trip planning with real-time updates over a WebSocket
+#   - Interactive maps and place search
+#   - Budgets, packing lists, documents and photo uploads
+#   - Progressive web app - installable on phones
+#
+# Workflow:
+#   Browser -> Traefik (TLS, chain-authelia) -> trek:3000
+#   The UI opens a WebSocket to /ws for live collaboration. Traefik performs the
+#   HTTP/1.1 Upgrade natively - do not add compression, buffering or a
+#   Retry/CircuitBreaker middleware to this router, any of which would break it.
+#   State lives in SQLite under /app/data; user uploads under /app/uploads.
+#
+# Access:
+#   URL: https://trek.deercrest.info
+#   Middleware: chain-authelia@file
+#
+# Notes:
+#   ENCRYPTION_KEY protects stored secrets. If it is lost or changed, the values
+#   it wrapped become unreadable. Back it up with the volumes.
+#   read_only + cap_drop are upstream's own hardening; /tmp is a tmpfs so the
+#   app still has scratch space.
+
+services:
+  trek:
+    image: mauriceboe/trek:4.2.0
+    container_name: trek
+    hostname: trek
+    # Upstream sizes TREK at ~250 MB; the cap bounds a runaway, not steady state.
+    mem_limit: 1g
+    mem_reservation: 128m
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - TZ=${TZ:-Europe/Dublin}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      # Wraps stored secrets at rest. Required - see .env.sample.
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      # CORS surface and the base URL used in notification e-mail links.
+      - ALLOWED_ORIGINS=https://trek.deercrest.info
+      # Traefik terminates TLS, so TREK must trust one proxy hop before it can
+      # issue secure cookies and the HSTS/upgrade-insecure-requests headers.
+      - TRUST_PROXY=1
+      - FORCE_HTTPS=true
+      # Sibling *.deercrest.info hosts are not all HTTPS-only yet.
+      - HSTS_INCLUDE_SUBDOMAINS=false
+    volumes:
+      - trek_data:/app/data
+      - trek_uploads:/app/uploads
+    networks:
+      - t3_proxy
+    read_only: true
+    tmpfs:
+      - /tmp:noexec,nosuid,size=128m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=t3_proxy
+      - traefik.http.routers.trek-rtr.entrypoints=websecure
+      - traefik.http.routers.trek-rtr.rule=Host(`trek.deercrest.info`)
+      - traefik.http.routers.trek-rtr.tls=true
+      - traefik.http.routers.trek-rtr.tls.certresolver=dns-cloudflare
+      - traefik.http.routers.trek-rtr.middlewares=chain-authelia@file
+      - traefik.http.routers.trek-rtr.service=trek-svc
+      - traefik.http.services.trek-svc.loadbalancer.server.port=3000

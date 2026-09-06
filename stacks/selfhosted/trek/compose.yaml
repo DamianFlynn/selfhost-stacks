@@ -1,0 +1,26 @@
+# TREK Stack - Self-hosted travel and trip planner
+# https://github.com/liketrek/TREK
+#
+# Single service, SQLite-backed. No published host port: cal-web (keeper-sh)
+# already owns 127.0.0.1:3000, so TREK is reachable through Traefik only.
+
+name: trek
+
+########################### NETWORKS
+networks:
+  t3_proxy:
+    external: true
+
+include:
+  ########################### SERVICES
+  - trek.yaml
+
+########################### VOLUMES
+# Plain named volumes rather than the /mnt/fast/appdata bind used elsewhere.
+# Both land on LXC 100's ext4 root either way (/mnt/fast/appdata is NOT a
+# mountpoint - see MEDIA.md 3), so the bind buys nothing here and the named
+# volume keeps the data out of the git working tree. TREK's SQLite database and
+# uploads are small; revisit if uploads grow.
+volumes:
+  trek_data:
+  trek_uploads:
