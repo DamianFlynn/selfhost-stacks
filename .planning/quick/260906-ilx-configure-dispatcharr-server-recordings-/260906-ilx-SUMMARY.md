@@ -1,5 +1,10 @@
 # Server DVR configured
 
+Documentation follow-up: updated the README media HLD and quota inventory,
+MEDIA.md storage/mount tables and DVR LLD, NETWORK.md access implications, and
+DEPLOYMENT.md recording deployment procedure. Kept the implementation and runbook
+as the detailed sources; no new service changes were required.
+
 Completed 2026-09-06. Implementation: `85f6d26`; runbook and scan helper: `e5076cd`.
 
 - Terraform saved targeted plan: 1 create, 0 changes, 0 destroys. Applied

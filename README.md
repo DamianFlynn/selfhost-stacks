@@ -33,6 +33,7 @@ This repository is split into two clean domains:
 | Dataset | Mountpoint | Quota | Why |
 |---------|------------|-------|-----|
 | `fast/transcode` | `/mnt/fast/transcode` | **50 G** | Jellyfin's transcode cache. Bound into the container at `/cache/transcodes` |
+| `tank/media/Recordings` | `/mnt/tank/media/Recordings` | **250 GB** | Dispatcharr server DVR; Jellyfin's TV Recordings library. No automatic deletion |
 
 `fast/transcode` exists because an **anonymous Docker volume** holding Jellyfin's transcode cache
 grew to 19 GB on LXC 100's root filesystem and drove `/` to zero mid-Phase-3. Anonymous volumes live
@@ -50,6 +51,32 @@ be invisible to them.
 **Standing check:** `scripts/check-jellyfin-transcode.sh` asserts the quota, the mount shape, and
 five Jellyfin retention settings, and exits non-zero on drift. It is folded into
 `scripts/quick-health-check.sh`.
+
+### Media and TV — high-level design
+
+```mermaid
+flowchart LR
+    A[HDHomeRun aerial tuner] --> D[Dispatcharr]
+    P[IPTV provider] --> D
+    D -->|Live TV| T[TiviMate]
+    D -->|Scheduled server recording| R[Recordings storage: 250 GB]
+    R --> J[Jellyfin: TV Recordings]
+    D -->|Alternative live TV client| J
+```
+
+TiviMate is the preferred live-TV interface. Schedule recordings in Dispatcharr's
+TV Guide or DVR page; the server records even when the television is off. Watch
+saved programmes in Jellyfin's **TV Recordings** library. Recording storage has
+a 250,000,000,000-byte quota (about 233 GiB); reaching it stops new writes rather
+than deleting older recordings. The IPTV account permits one upstream channel,
+so recording and watching different IPTV channels simultaneously is constrained.
+The aerial tuner is independent.
+
+TiviMate's Record button still uses its own recorder. This server DVR setup does
+not provide live pause/rewind in TiviMate; that integration remains outstanding.
+Implementation, storage mappings and verification are in the [media LLD](MEDIA.md#5-live-tv-chain)
+and [Dispatcharr runbook](stacks/selfhosted/media/dispatcharr.md#server-recordings-2026-09-06).
+The recording dataset is managed by `infra/dispatcharr-recordings.tf`.
 
 ## 📁 Repository Structure
 

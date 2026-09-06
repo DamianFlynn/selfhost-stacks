@@ -8,6 +8,8 @@ Storage conventions live in [STANDARDS.md](STANDARDS.md).
 
 **All figures verified live against `atlantis` (172.16.1.158) and LXC 100 (172.16.1.159) on
 2026-09-03.** Where a claim is inherited rather than measured, it says so.
+**Server DVR additions verified 2026-09-06:** recording dataset, container mounts,
+Jellyfin library, completed aerial recording and HTTP range playback.
 
 ---
 
@@ -19,7 +21,7 @@ has its own file, and `name: media` is the compose project.
 | Service | Image (live) | Hostname | Role |
 |---------|--------------|----------|------|
 | **jellyfin** | `jellyfin/jellyfin:10.11.11` | `jellyfin.deercrest.info` | Media server — the library |
-| **dispatcharr** | `ghcr.io/dispatcharr/dispatcharr:0.29.0` | `dispatcharr.deercrest.info`, `tv.deercrest.info` | IPTV/tuner aggregator — Live TV |
+| **dispatcharr** | `ghcr.io/dispatcharr/dispatcharr:0.29.0` | `dispatcharr.deercrest.info`, `tv.deercrest.info` | IPTV/tuner aggregator and server DVR |
 | **jellystat** | `cyfershepard/jellystat:1.1.11` | `jellystats.deercrest.info` | Playback analytics |
 | **jellystat-db** | `postgres:18-alpine` | — | Jellystat's database |
 | **seerr** | `ghcr.io/seerr-team/seerr:v3.4.1` | `requests.deercrest.info` | Request management |
@@ -86,8 +88,9 @@ Three distinct backing stores. Getting these confused is how `/` was emptied onc
 | `/mnt/fast/appdata/media` | `fast/appdata/media` | Media app config/state |
 | `/mnt/fast/appdata/arrs` | `fast/appdata/arrs` | Arr config/state |
 | `/mnt/fast/transcode` | `fast/transcode` — **50 G quota** | Jellyfin transcode scratch |
+| `/mnt/tank/media/Recordings` | `tank/media/Recordings` — **250 GB quota** | Dispatcharr DVR files; Jellyfin playback |
 
-`/mnt/tank/media` has a **per-library child dataset**: `tank/media/{Books,Movies,Music,Photos,TV}`.
+`/mnt/tank/media` has **per-library child datasets**: `tank/media/{Books,Movies,Music,Photos,TV,Recordings}`.
 
 ### ⚠️ `/mnt/fast` and `/mnt/fast/appdata` are NOT mountpoints
 
@@ -118,6 +121,7 @@ findmnt -no TARGET,SOURCE,FSTYPE | grep /mnt/fast   # authoritative
 | `/mnt/tank/media` | `/media` | **rw** | broad and read-write **on purpose** — D-21 |
 | `/mnt/fast/transcode` | `/cache/transcodes` | rw | the quota'd dataset |
 | `/mnt/fast/appdata/media/jellyfin/cache` | `/cache` | rw | general cache |
+| `/mnt/tank/media/Recordings` | `/recordings` | ro | TV Recordings library |
 | `/etc/localtime` | `/etc/localtime` | ro | |
 
 **Anonymous volume count must be zero.** `check-jellyfin-transcode.sh` asserts
@@ -137,6 +141,11 @@ that reads like a writer at a glance and is not one.**
 | `sonarr` | `/mnt/tank/media/TV` | true |
 | `radarr` | `/mnt/tank/media/Movies` | true |
 | `bazarr` | `Movies` + `TV` | true |
+| `dispatcharr` | `/mnt/tank/media/Recordings` only | true |
+
+Jellyfin uses the read-only `/recordings` path for its recording library. Its
+existing broad read-write `/media` mount remains a separate path to that data;
+the new mount does not make the entire container read-only to recordings.
 
 Jellyfin is **consumer-class**, not tagger-class, and is excluded from the WRIT-01 tagger count.
 Its writing is disabled at the *application* layer, not the mount: `SaveLocalMetadata`, real-time
@@ -223,7 +232,14 @@ both the remux and re-encode paths; `/` moved −4.15 MiB across ~25 minutes of 
 ```
 HDHomeRun (172.16.1.161)  ─┐
 IPTV provider streams     ─┴─→  dispatcharr (172.16.1.75:9191)  ─┬─→ Jellyfin  (HDHR + XMLTV)
-                                                                 └─→ TiviMate  (Xtream Codes)
+                                                                 ├─→ TiviMate  (Xtream Codes)
+                                                                 └─→ /data/recordings (server DVR)
+                                                                       │
+                                                           tank/media/Recordings (250 GB)
+                                                                       │
+                                                           Jellyfin /recordings (read-only)
+                                                                       │
+                                                               TV Recordings library
 ```
 
 **dispatcharr is the single source** — since 2026-08-14 the HDHomeRun is no longer a direct Jellyfin
@@ -245,6 +261,29 @@ dataset (250 GB, LXC `mp31`). Jellyfin reads it through `/recordings` as the
 **TV Recordings** library; TiviMate remains the live-TV client. Schedule recordings
 in Dispatcharr. There is no automatic recording deletion or TiviMate timeshift
 integration. See the Dispatcharr companion document for operation and checks.
+
+| Recording layer | Configuration |
+|---|---|
+| Proxmox dataset | `tank/media/Recordings`, quota `250000000000` bytes, mounted at `/mnt/tank/media/Recordings` |
+| LXC 100 | Persistent `mp31` bind at the same path; declared in Terraform and explicitly reconciled because provider mount changes are ignored |
+| Dispatcharr | Host recording path → `/data/recordings:rw`; records HLS working segments, then remuxes completed recordings to MKV |
+| Jellyfin | Host recording path → `/recordings:ro`; `TV Recordings` library, type `homevideos` |
+| Library options | Real-time monitoring on; internet metadata and local metadata writes off |
+| Retention | No automatic deletion; full quota stops writes. Manage recordings through Dispatcharr |
+| Connection limit | Recording and watching the same channel can share upstream; different IPTV channels need additional provider capacity |
+
+The setup test recorded 35 seconds from RTÉ One using the aerial tuner, avoiding
+the IPTV slot. Jellyfin indexed it, ffprobe read its audio/video as UID 568, and
+the authenticated playback endpoint returned HTTP 206 for a requested byte range.
+The initially empty library needed a normal scan after the first recording;
+Jellyfin then logged its watcher on `/recordings`. The retained sample is under
+`TV_Shows/DVR setup test`.
+
+Run `python3 /mnt/fast/stacks/scripts/dispatcharr-recordings.py` on LXC 100 to
+inspect library state and indexed files; `--scan-recordings` refreshes the existing
+library. This helper does not assert the live ZFS quota or change encoding settings.
+Check the quota on Proxmox with
+`zfs get -Hp quota,mounted tank/media/Recordings`.
 
 ---
 

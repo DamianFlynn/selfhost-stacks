@@ -387,6 +387,14 @@ HDHomeRun (**172.16.1.161**) + IPTV streams → **dispatcharr** → two independ
 | Jellyfin (Deer Crest) | `172.16.1.75:9191/hdhr` + `/output/epg` | HDHR tuner + XMLTV |
 | TiviMate (Fosse Road TV) | `172.16.1.75:9191` over **Tailscale** | Xtream Codes (`fosse-tv`) |
 
+**Server DVR (2026-09-06):** Dispatcharr also records to the local
+`tank/media/Recordings` dataset (250 GB, LXC `mp31`). Jellyfin reads the same files
+through `/recordings` as its **TV Recordings** library. Scheduling uses the existing
+Dispatcharr web interface; playback uses existing Jellyfin access. This adds no
+network listener, hostname or firewall rule. TiviMate remains the live-TV client;
+its recording controls do not schedule Dispatcharr, and live pause/rewind is not
+provided by this setup. See [MEDIA.md](MEDIA.md#5-live-tv-chain) for the DVR LLD.
+
 Jellyfin is for the media library; **TiviMate is the live-TV client**. Jellyfin's Live TV path
 adds ~7.7s to every channel change (3s ffprobe + 3s HLS segment build + ~1s tuner connect) and
 that is inherent to how it does Live TV — not tunable. TiviMate plays the MPEG-TS natively and

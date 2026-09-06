@@ -141,9 +141,21 @@ docker compose -f stacks/selfhosted/<stack>/compose.yaml ps
 | `/mnt/fast/appdata/<stack>` | persistent app state |
 | `/mnt/fast/transcode` | Jellyfin transcode scratch (`fast/transcode`, 50 G quota) |
 | `/mnt/tank/media` | media library (9 T) |
+| `/mnt/tank/media/Recordings` | server DVR (`tank/media/Recordings`, 250 GB quota, LXC `mp31`) |
 | `/mnt/tank/downloads` | download staging |
 
 Ownership `apps:apps` = **568:568**.
+
+**DVR deployment:** `infra/dispatcharr-recordings.tf` declares the recording
+dataset and reconciles `mp31`; `infra/lxc-selfhost.tf` also declares the path.
+Review a saved plan before applying: the LXC resource's `mount_point` changes are
+ignored to prevent replacement. Confirm the actual dataset is mounted inside
+LXC 100 before recreating Dispatcharr or Jellyfin with their recording binds.
+Use the normal git deployment flow and check both apps for active playback first.
+Then run `python3 /mnt/fast/stacks/scripts/dispatcharr-recordings.py --configure-library`
+on LXC 100. The [runbook](stacks/selfhosted/media/dispatcharr.md#server-recordings-2026-09-06)
+covers the first scan and a recording/playback test. The helper verifies library
+settings; verify the ZFS quota separately on Proxmox.
 
 ### ⚠️ `/mnt/fast/appdata` is not a mountpoint — check before you assume
 
