@@ -21,7 +21,7 @@ services:
     # Generous at 3g because upload + thumbnail generation burst well above idle.
     mem_limit: 3g
     # renovate: datasource=docker depName=ghcr.io/immich-app/immich-server
-    image: ghcr.io/immich-app/immich-server:v2.7.5
+    image: ghcr.io/immich-app/immich-server:v3.2.0
     pull_policy: always
     env_file:
       - /mnt/fast/stacks/stacks/selfhosted/immich/.env
@@ -70,7 +70,7 @@ services:
   immich-machine-learning:
     container_name: immich_machine_learning
     # renovate: datasource=docker depName=ghcr.io/immich-app/immich-machine-learning
-    image: ghcr.io/immich-app/immich-machine-learning:v2.7.5
+    image: ghcr.io/immich-app/immich-machine-learning:v3.2.0
     pull_policy: always
     env_file:
       - /mnt/fast/stacks/stacks/selfhosted/immich/.env
