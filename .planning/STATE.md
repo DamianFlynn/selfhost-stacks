@@ -9,9 +9,9 @@ progress:
   total_phases: 10
   completed_phases: 4
   total_plans: 57
-  completed_plans: 47
+  completed_plans: 50
   percent: 40
-stopped_at: Phase 04 wave 1 complete (04-01, 04-02, 04-03) — wave 2 of 8 next (04-04, 04-05, 04-06), sequential on main tree
+stopped_at: Phase 04 waves 1-2 complete (04-01..04-06) — wave 3 of 8 next (04-07 host deletions, 04-08 probe prep), sequential on main tree
 ---
 
 # Project State
@@ -30,7 +30,7 @@ pipeline that someone owns.
 ## Current Position
 
 Phase: 04 (collapse-to-one-tagger) — EXECUTING
-Plan: 4 of 13
+Plan: 7 of 13
 Status: Executing Phase 04
 
 **02.1-10 COMPLETE. THE ESTATE'S ROUTINE HEALTH CHECK NOW COVERS THE THING THAT EMPTIED `/`, AND
