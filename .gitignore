@@ -42,7 +42,9 @@ stacks/mpe/erpnext/frappe_docker/
 # a committed credential recoverable long after it is deleted.
 #
 # Deliberately NARROW - it names the generated file, not `*config*.yaml`, so it cannot mask a
-# legitimate tracked config such as stacks/selfhosted/music/wrtag.yaml or a stack's config.yaml.
+# legitimate tracked config such as stacks/selfhosted/arrs/sabnzbd/beets-config.yaml or a stack's
+# config.yaml. (Example updated 2026-09-11, plan 04-05: the file previously named here was one of
+# the tagger definitions Phase 4 deleted, and an example nobody can open proves nothing.)
 # The real artefact is /mnt/fast/spike-03/beets-config/import-xcheck.yaml (03-DISCOGS-EVIDENCE.md
 # § Screening); both its bare name and its beets-config/ parent are covered, because a bypass
 # would most likely be a copy of the whole directory into the checkout.

@@ -139,6 +139,37 @@
 #   The one thing NOT under this script's control is MusicBrainz: a different match on a
 #   different day renders a different path. The matched release MBID is captured for exactly
 #   that reason.
+#
+# KEPT AFTER PHASE 4 (2026-09-11)
+#   This script is KEPT, deliberately. It is Phase 3 criterion 3's instrument, and
+#   .planning/phases/03-tagger-spike/03-WRTAG-EVIDENCE.md cites it as the source of the
+#   measurements recorded there. Deleting it would destroy the reproducibility of a recorded
+#   measurement, so the D-07 stale-reference sweep gave it a keep-with-reason verdict rather
+#   than a delete.
+#
+#   TWO REFERENCES IN THIS FILE ARE NOW STALE. Neither is repaired in place, because repairing
+#   either one would silently change what the recorded arms measured:
+#
+#   1. The WRTAG_YAML default below points at stacks/selfhosted/music/wrtag.yaml, which plan
+#      04-03 DELETED from this repo on 2026-09-11 (D-05). The path format is read from that file
+#      and never re-typed, so the default now fails its precheck with exit 2 ("path-format file
+#      not found") rather than measuring anything. To reproduce a recorded arm, restore the exact
+#      file the measurement ran against from the last commit that contains it - 5d0af70 - and
+#      point the documented override at the restored copy:
+#
+#          git show 5d0af708ae9f04b9ab491cec731b6551ba6bb205:stacks/selfhosted/music/wrtag.yaml \
+#            > "${TMPDIR:-/tmp}/wrtag.yaml"
+#          WRTAG_YAML="${TMPDIR:-/tmp}/wrtag.yaml" \
+#            bash scripts/spike03-wrtag-arms.sh --album <name>
+#
+#      The banner prints the sha256 of the extracted path format, so a reader can confirm the
+#      restored file yields the same format string the recorded arms ran against.
+#
+#   2. "WHAT THIS MEASURES" above cites renovate.json5:91. That Renovate rule was DELETED by plan
+#      04-03 (D-14). The citation is left as written because it names the rule the measurement was
+#      actually taken against - but that rule's stated cause was REVERSED, and the correction now
+#      lives in stacks/selfhosted/arrs/beets.md, section "Correction: the wrtag pin's stated cause
+#      was reversed".
 
 set -euo pipefail
 
