@@ -530,7 +530,7 @@ than it started, so attempt five does not inherit attempt four's wreckage.
 Plans:
 **Wave 1**
 
-- [ ] 04-01-PLAN.md — Fence gaps (wrtag.db D-35, beets.log) + measured baseline incl. the routine health-check state + D-12 evidence checklist (pre-hook byte test)
+- [x] 04-01-PLAN.md — Fence gaps (wrtag.db D-35, beets.log) + measured baseline incl. the routine health-check state + D-12 evidence checklist (pre-hook byte test)
 - [ ] 04-02-PLAN.md — normalise-dj-tags.py WAV write path + three-case --self-test (D-23)
 - [ ] 04-03-PLAN.md — Delete wrtag/soulbeet definitions, survivor to 2.13.1-ls349, two-rule beets Renovate policy, check-renovate.sh repairs (validator-gated; legitimacy checkpoint)
 
@@ -768,7 +768,7 @@ Phase 7. Plans within a phase run sequentially.
 | 2. NFS Export and Music Assistant Reachability | 9/9 | Complete    | 2026-09-01 |
 | 02.1. Jellyfin Transcode Retention *(inserted)* | 15/15 | Complete   | 2026-09-03 |
 | 3. Tagger Spike | 11/11 | Complete    | 2026-09-04 |
-| 4. Collapse to One Tagger | 0/TBD | Not started | - |
+| 4. Collapse to One Tagger | 1/13 | In Progress|  |
 | 5. Inbox Structure and the Junk Gate | 0/TBD | Not started | - |
 | 6. Tagger Configuration and Dry Run | 0/TBD | Not started | - |
 | 7. Pilot — 12 Albums End to End | 0/TBD | Not started | - |
