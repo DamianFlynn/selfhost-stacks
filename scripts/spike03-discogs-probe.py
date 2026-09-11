@@ -43,7 +43,7 @@ WHERE IT RUNS
 
 USAGE
   spike03-discogs-probe.py FOLDER [FOLDER ...] [--folders-from FILE] --ledger PREFIX
-                           [--folder-meta FILE] [--max-seconds N] [--user-agent UA]
+                           [--folder-meta FILE] [--max-seconds N] [--user-agent UA] [--mb-only]
 
   FOLDER            one or more directories to probe. Each is probed as ONE album.
   --folders-from    a file of newline-separated folder paths, appended to the positional list.
@@ -63,6 +63,25 @@ ENVIRONMENT (all three REQUIRED; a missing one is exit 2 before any audio file i
   DISCOGS_USER_TOKEN   supplied by compose `env_file`. Injected into `config` in Python. It never
                        appears in argv, never in a config file in this repository, never in a log
                        line and never in an emitted record. See SECURITY.
+                       NOT REQUIRED, AND NEVER READ, UNDER `--mb-only` - see MB-ONLY MODE.
+
+MB-ONLY MODE (`--mb-only`) - phase 04 F14 / D-16 / D-24, Pitfall 9
+  The phase-04 criterion-4 probe measures MusicBrainz behaviour inside the SURVIVOR container. The
+  Discogs credential was DISMISSED by the operator in that phase (D-24), so dragging it into the
+  survivor to satisfy this script's default gate would re-expose a credential for no measurement.
+  `--mb-only` therefore makes every Discogs site inert rather than making the gate weaker:
+    * only SPIKE_CONFIG and SPIKE_DB are required; the token is neither looked up nor registered
+      for redaction (there is nothing to redact - it is never read);
+    * `config["discogs"]["user_token"]` is not assigned;
+    * refusal 1 gains its INVERSE: if `discogs` IS among the loaded plugins the whole run is
+      refused, because an MB-only measurement that silently issued Discogs requests would be
+      mislabelled at its source;
+    * the identity probe (refusal 2) is skipped entirely - no request is made to api.discogs.com;
+    * the `discogs.index_tracks` / `discogs.search_limit` reads are skipped: with the plugin absent
+      those keys do not exist, and reading them would raise rather than measure.
+  `--require-plugin` is UNCHANGED and still mandatory in spirit: an MB-only run must STATE its
+  narrower plugin expectation on the command line (`--require-plugin musicbrainz`), exactly as
+  03-07's MB-only cells do. Nothing about the default (Discogs) path changes.
 
 WORKFLOW
   # the container already carries DISCOGS_USER_TOKEN via env_file - never pass `docker exec -e`
@@ -108,7 +127,12 @@ THE THREE REFUSALS (all before any audio file is opened)
        `beet config -d` STILL prints a full `discogs:` block. PRESENCE OF A CONFIG BLOCK IS NOT
        PROOF OF LOADING. `plugins.find_plugins()` is the authoritative instrument, the in-process
        equivalent of `beet ... version`'s `plugins:` line.
+    1b. UNDER `--mb-only`, THE INVERSE OF 1: `discogs` must NOT be among the loaded plugins. Exit 2
+       naming `discogs` as loaded. A run that calls itself MB-only while the Discogs plugin is
+       built would attribute Discogs candidates to a MusicBrainz-only measurement, and the record's
+       `source` field is the only thing that would have said otherwise.
     2. `GET https://api.discogs.com/oauth/identity` must return 200. Anything else is a refusal.
+       SKIPPED under `--mb-only`: no request is issued and no token is read.
        The `x-discogs-ratelimit` header value goes into the run banner, because criterion 2's
        whole extrapolation rests on it (research assumption A6 says 60/min; VERIFY, do not trust).
        Headers are LOWERCASE on the wire - read them case-insensitively via HTTPMessage.get(),
@@ -271,6 +295,17 @@ REQUIRED_PLUGINS = ("discogs", "musicbrainz")
 # "no match found" - is still caught for whichever plugins the caller names.
 
 REQUIRED_ENV = ("SPIKE_CONFIG", "SPIKE_DB", "DISCOGS_USER_TOKEN")
+
+# Phase 04 F14 / Pitfall 9. `--mb-only` drops the token from the required set, because in MB-only
+# mode it is never read, never assigned to `config`, and never sent anywhere. The two remaining
+# variables are exactly the two Pitfall 1 exists for, so the gate they provide is UNCHANGED: a
+# bare `beet`-style default config/library open is still impossible.
+REQUIRED_ENV_MB_ONLY = ("SPIKE_CONFIG", "SPIKE_DB")
+
+
+def required_env(mb_only: bool) -> tuple[str, ...]:
+    """The required-variable set for the mode. Parameterised, never silently shortened."""
+    return REQUIRED_ENV_MB_ONLY if mb_only else REQUIRED_ENV
 
 # Same extension set the research sketch uses. Deliberately NOT snapshot-music-tags.sh's wider
 # AUDIO_EXT: beets' importer only ever sees what its own `Item.from_path` can read, and a
@@ -458,32 +493,50 @@ def configure_logging(verbose: bool) -> None:
 # --------------------------------------------------------------------------------------------
 
 
-def require_env() -> dict[str, str]:
-    """Refusal 3. Names every missing variable, not just the first."""
-    missing = [k for k in REQUIRED_ENV if not os.environ.get(k)]
+def require_env(mb_only: bool = False) -> dict[str, str]:
+    """Refusal 3. Names every missing variable, not just the first.
+
+    `mb_only` narrows the required set to SPIKE_CONFIG and SPIKE_DB. The refusal TEXT narrows with
+    it: an MB-only run must not so much as name the dismissed credential (D-24), or the operator
+    reading the transcript is told to go and set a variable this mode deliberately never reads.
+    """
+    keys = required_env(mb_only)
+    missing = [k for k in keys if not os.environ.get(k)]
     if missing:
+        if mb_only:
+            detail = (
+                "  MB-only mode: SPIKE_CONFIG and SPIKE_DB are the ONLY required variables, and\n"
+                "  they must name the THROWAWAY spike paths, never the image defaults (Pitfall 1).\n"
+                "  No Discogs credential is required, read or sent in this mode.\n"
+            )
+        else:
+            detail = (
+                "  DISCOGS_USER_TOKEN reaches the container through compose `env_file`; never\n"
+                "  pass it with `docker exec -e` (T-03-32: this host runs 100+ containers with a\n"
+                "  readable process table). SPIKE_CONFIG and SPIKE_DB must name the THROWAWAY\n"
+                "  spike paths, never the image defaults (Pitfall 1).\n"
+            )
         sys.stderr.write(
             colour(
                 "REFUSING TO RUN: required environment variable(s) not set: "
                 + ", ".join(missing)
                 + "\n"
-                "  DISCOGS_USER_TOKEN reaches the container through compose `env_file`; never\n"
-                "  pass it with `docker exec -e` (T-03-32: this host runs 100+ containers with a\n"
-                "  readable process table). SPIKE_CONFIG and SPIKE_DB must name the THROWAWAY\n"
-                "  spike paths, never the image defaults (Pitfall 1).\n",
+                + detail,
                 RED,
             )
         )
         sys.exit(2)
-    env = {k: os.environ[k] for k in REQUIRED_ENV}
+    env = {k: os.environ[k] for k in keys}
     # Net 2 of the redaction: register the live secret by VALUE, so a serialisation the
     # parameter-name net does not recognise is still scrubbed before it reaches stderr. This runs
     # before the first Discogs request by construction - both refusals below come after it.
-    SECRETS.append(env["DISCOGS_USER_TOKEN"])
+    # Under MB-only there is nothing to register: the variable is never read, so it cannot leak.
+    if not mb_only:
+        SECRETS.append(env["DISCOGS_USER_TOKEN"])
     return env
 
 
-def bootstrap_beets(env: dict[str, str], required_plugins=REQUIRED_PLUGINS):
+def bootstrap_beets(env: dict[str, str], required_plugins=REQUIRED_PLUGINS, mb_only: bool = False):
     """Configure beets EXPLICITLY, never by default, then load and verify the plugins.
 
     `required_plugins` defaults to REQUIRED_PLUGINS, so every caller that does not pass it keeps
@@ -502,7 +555,10 @@ def bootstrap_beets(env: dict[str, str], required_plugins=REQUIRED_PLUGINS):
     # This must happen BEFORE load_plugins: DiscogsPlugin reads user_token during setup(), and
     # without it the plugin RAISES and does not load while `beet config -d` still prints its
     # block (plan 03-04 finding 1).
-    config["discogs"]["user_token"] = env["DISCOGS_USER_TOKEN"]
+    # SKIPPED under MB-only: the token is not in `env` at all there (see require_env), and the
+    # whole point of the mode is that this assignment never happens.
+    if not mb_only:
+        config["discogs"]["user_token"] = env["DISCOGS_USER_TOKEN"]
 
     # `load_plugins()` TAKES NO ARGUMENTS in beets 2.13.1 - verified against the live
     # `inspect.signature` in the image, not assumed. 03-RESEARCH.md's probe sketch passes
@@ -513,6 +569,28 @@ def bootstrap_beets(env: dict[str, str], required_plugins=REQUIRED_PLUGINS):
     requested = list(config["plugins"].as_str_seq())
     plugins.load_plugins()
     loaded = sorted(p.name for p in plugins.find_plugins())
+
+    # Refusal 1b - the INVERSE of refusal 1, and only in MB-only mode. Placed here, immediately
+    # after the authoritative plugin reading and BEFORE any lookup or network call, so a
+    # mislabelled run is stopped before it can issue a single Discogs request.
+    # Pitfall 9: an "MB-only" run with the Discogs plugin built would emit records whose `source`
+    # is the only evidence of where a candidate came from - a measurement that lies at its source.
+    if mb_only and "discogs" in loaded:
+        sys.stderr.write(
+            colour(
+                "REFUSING TO RUN: --mb-only was requested but the `discogs` plugin IS loaded.\n"
+                f"  requested by config: {', '.join(requested) or '(none)'}\n"
+                f"  actually loaded:     {', '.join(loaded) or '(none)'}\n"
+                f"  config: {env['SPIKE_CONFIG']}\n"
+                "  MB-only exists so this phase's criterion-4 probe measures MusicBrainz WITHOUT\n"
+                "  the dismissed Discogs credential (D-24). With `discogs` built, candidates from\n"
+                "  Discogs would be counted inside a run labelled MusicBrainz-only.\n"
+                "  Remove `discogs` from the config's `plugins:` line, or drop --mb-only. Do NOT\n"
+                "  weaken this branch: it is the only thing making the mode's name true.\n",
+                RED,
+            )
+        )
+        sys.exit(2)
 
     # Refusal 1. The authoritative instrument - the in-process equivalent of `beet ... version`'s
     # `plugins:` line, and it is authoritative for the same reason: `_get_plugin` returns None for
@@ -815,8 +893,12 @@ def parse_args(argv):
         epilog=(
             "Exit codes: 0 every folder probed with no failures; 1 failures in PREFIX.failed or "
             "the run stopped early (signal.alarm() ceiling, SIGINT/SIGTERM); 2 usage error, "
-            "missing environment variable, a required plugin not loaded, or the Discogs identity "
-            "probe not returning 200. Requires SPIKE_CONFIG, SPIKE_DB and DISCOGS_USER_TOKEN."
+            "missing environment variable, a required plugin not loaded, the `discogs` plugin "
+            "loaded under --mb-only, or the Discogs identity probe not returning 200. "
+            "Requires SPIKE_CONFIG, SPIKE_DB and DISCOGS_USER_TOKEN. "
+            "With --mb-only the required set is SPIKE_CONFIG and SPIKE_DB ONLY: no Discogs "
+            "credential is read, no identity probe is issued, no `discogs` config key is read, "
+            "and a loaded `discogs` plugin refuses the run."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -857,6 +939,15 @@ def parse_args(argv):
         "cell that omits a plugin BY DESIGN (03-07's MB-only cells), never to work around a "
         "plugin that failed to build",
     )
+    p.add_argument(
+        "--mb-only",
+        action="store_true",
+        dest="mb_only",
+        help="MusicBrainz-only mode (phase 04 F14/D-24). Drops the Discogs user-token requirement "
+        "and the Discogs identity probe, reads no `discogs` config key, issues no request to "
+        "api.discogs.com, and REFUSES the run if the `discogs` plugin is loaded. Requires only "
+        "SPIKE_CONFIG and SPIKE_DB. Still state the plugin expectation with --require-plugin",
+    )
     p.add_argument("--user-agent", default=DEFAULT_USER_AGENT, help="UA for the identity probe only")
     p.add_argument("--verbose", action="store_true", help="DEBUG on the root logger too")
     return p.parse_args(argv)
@@ -883,7 +974,7 @@ def main(argv=None) -> int:
         sys.stderr.write(colour("REFUSING TO RUN: --max-seconds must be >= 1.\n", RED))
         return 2
 
-    env = require_env()  # refusal 3
+    env = require_env(args.mb_only)  # refusal 3
     try:
         meta = read_folder_meta(args.folder_meta)
     except Exception as exc:  # noqa: BLE001
@@ -891,11 +982,31 @@ def main(argv=None) -> int:
         return 2
 
     required_plugins = tuple(args.require_plugin) if args.require_plugin else REQUIRED_PLUGINS
-    config, loaded = bootstrap_beets(env, required_plugins)  # refusal 1
-    identity = discogs_identity_probe(env["DISCOGS_USER_TOKEN"], args.user_agent)  # refusal 2
+    config, loaded = bootstrap_beets(env, required_plugins, args.mb_only)  # refusal 1 (and 1b)
 
-    index_tracks = bool(config["discogs"]["index_tracks"].get())
-    search_limit = int(config["discogs"]["search_limit"].get())
+    if args.mb_only:
+        # Refusal 2 is SKIPPED, not weakened: no token is read and no request reaches
+        # api.discogs.com, so there is no identity to probe and nothing its failure could mask.
+        identity = None
+        # The `discogs` config view only exists when the plugin built. Reading it here would raise
+        # rather than measure. Both fields still travel in every record, as null.
+        index_tracks = None
+        search_limit = None
+        discogs_banner = (
+            "  MB-only:           "
+            + colour("no identity probe, no Discogs request, no token read", GREEN)
+            + " (F14 / D-24)\n"
+        )
+    else:
+        identity = discogs_identity_probe(env["DISCOGS_USER_TOKEN"], args.user_agent)  # refusal 2
+        index_tracks = bool(config["discogs"]["index_tracks"].get())
+        search_limit = int(config["discogs"]["search_limit"].get())
+        discogs_banner = (
+            f"  discogs.index_tracks / search_limit: {index_tracks} / {search_limit}\n"
+            f"  discogs identity:  HTTP {identity['status']} as {identity['username']}\n"
+            f"  x-discogs-ratelimit: {identity['ratelimit']} "
+            f"(used {identity['ratelimit_used']}, remaining {identity['ratelimit_remaining']})\n"
+        )
     scratch_root = "/mnt/tank/downloads/spike-03"
 
     def arm_of(folder: str) -> str | None:
@@ -934,10 +1045,7 @@ def main(argv=None) -> int:
         f"  plugins loaded:    {', '.join(loaded)}\n"
         f"  plugins REQUIRED:  {', '.join(required_plugins)}"
         f"{'' if tuple(required_plugins) == REQUIRED_PLUGINS else colour('  <-- NARROWED from ' + ' + '.join(REQUIRED_PLUGINS), YELLOW)}\n"
-        f"  discogs.index_tracks / search_limit: {index_tracks} / {search_limit}\n"
-        f"  discogs identity:  HTTP {identity['status']} as {identity['username']}\n"
-        f"  x-discogs-ratelimit: {identity['ratelimit']} "
-        f"(used {identity['ratelimit_used']}, remaining {identity['ratelimit_remaining']})\n"
+        f"{discogs_banner}"
         f"  wall-clock ceiling: {args.max_seconds}s, enforced by signal.alarm()\n"
         f"  started:           {time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(started))}\n\n"
     )
@@ -1054,6 +1162,27 @@ def main(argv=None) -> int:
         return f"{(100.0 * n / probed):.1f}%" if probed else "n/a"
 
     per_folder_mean = f"{(elapsed / probed):.1f}s" if probed else "n/a"
+    if args.mb_only:
+        # Stated rather than left to inference: LOOSE/STRICT score DISCOGS candidates (score_folder
+        # filters on source == "Discogs"), so in this mode they are 0 BY CONSTRUCTION and a reader
+        # must not take them for a MusicBrainz result. The counters below are the ones that mean
+        # something here, and a non-zero response count would itself be the defect.
+        discogs_summary = (
+            "  MB-only:                      no identity probe, no `discogs` config key read\n"
+            f"  discogs HTTP responses seen:  {STATE.discogs_responses}  (expected 0 in MB-only)\n"
+            f"  discogs new connections:      {STATE.discogs_connections}  (expected 0 in MB-only)\n"
+            "  LOOSE/STRICT above score DISCOGS only and are 0 BY CONSTRUCTION in this mode -\n"
+            "  count MusicBrainz records from the NDJSON `source` field instead.\n"
+        )
+    else:
+        discogs_summary = (
+            f"  discogs.index_tracks:         {index_tracks}\n"
+            f"  discogs.search_limit:         {search_limit}\n"
+            f"  discogs HTTP responses seen:  {STATE.discogs_responses}\n"
+            f"  discogs new connections:      {STATE.discogs_connections}\n"
+            f"  discogs 429 responses:        {STATE.discogs_429}\n"
+            f"  x-discogs-ratelimit at start: {identity['ratelimit']}\n"
+        )
     sys.stderr.write(
         "\nSUMMARY\n"
         f"  folders requested:            {len(folders)}\n"
@@ -1064,12 +1193,7 @@ def main(argv=None) -> int:
         f"  LOOSE  (>=1 Discogs cand.):   {loose_folders}  ({pct(loose_folders)})\n"
         f"  STRICT (D-05 track-count OK): {strict_folders}  ({pct(strict_folders)})\n"
         f"  LOOSE-STRICT GAP:             {gap}  ({pct(gap)} of folders probed)\n"
-        f"  discogs.index_tracks:         {index_tracks}\n"
-        f"  discogs.search_limit:         {search_limit}\n"
-        f"  discogs HTTP responses seen:  {STATE.discogs_responses}\n"
-        f"  discogs new connections:      {STATE.discogs_connections}\n"
-        f"  discogs 429 responses:        {STATE.discogs_429}\n"
-        f"  x-discogs-ratelimit at start: {identity['ratelimit']}\n"
+        f"{discogs_summary}"
         f"  wall clock:                   {elapsed:.1f}s\n"
         f"  per folder (probed):          {per_folder_mean}\n"
     )
