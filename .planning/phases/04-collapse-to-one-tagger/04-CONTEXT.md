@@ -226,6 +226,103 @@ already editing.
   open** until the milestone completes; **#307 (rybbit) is unrelated** to this phase. A closing
   comment that says *why* is what stops it being reopened on a whim.
 
+### Operator rulings after research (2026-09-11)
+
+`04-RESEARCH.md` measured the live estate read-only on 2026-09-11 and found fifteen places where
+the decisions above rest on facts the estate does not support (§ *⚠ Facts CONTEXT.md relies on*,
+rows F1–F15). The operator ruled on every one that touches a locked decision's letter. **The
+decisions above are left as written; these amend them in-band.** Where they conflict, these win.
+
+- **D-27 (OQ1, amends TAGR-05 scope): the survivor gets a minimal vendored beets config.** The live
+  `/mnt/fast/appdata/arrs/beets/config/config.yaml` is a pasted compose service definition with no
+  `plugins:`, `library:` or `directory:` key, and is not in the repo (F4). Replace it with a minimal
+  beets config — `plugins: musicbrainz`, the three SAFE-01 keys, and an explicit
+  `library: /config/library.db` — **vendored into the repo** in plan 01-07's shape and bind-mounted,
+  so "every remaining beets config declares musicbrainz" is checkable in git. Delete
+  `config.yaml.old` (LSIO's default: arms `scrub`/`lastgenre`, omits `musicbrainz`). This is the
+  minimal slice TAGR-05 forces; **all other survivor configuration stays in Phase 6.**
+
+- **D-28 (OQ2, amends D-04/D-25): both existing survivor databases go; the survivor starts from one
+  fresh `library.db`.** The operator uses neither `library.db` (Nov 2025) nor `musiclibrary.blb`
+  (Oct 2025) and left the choice to Claude. Both are deleted, **after** confirming each has a fence
+  copy — both are in `/mnt/fast/safety/music-pre-project/library-db/` and in the off-box Mac Mini
+  copy, re-verified 2026-09-11 (69/69 sha256 against `MANIFEST.txt`, 15/15 `PRAGMA
+  integrity_check ok`). The single surviving database is a fresh one created at D-27's explicit
+  `library:` path by the survivor at `2.13.1-ls349`, so its schema is current; criterion 5's
+  "one `library.db`" counts that file. `Music/__` (~1.4 GB accidental 2025-11-18 import into beets'
+  default `directory`) is **not touched** — Phase 6.
+
+- **D-29 (OQ3, amends D-18): the probe album is `Garth Brooks-Scarecrow-CD-FLAC-2001-FLACME-xpost`.**
+  D-18's album is gone from `/mnt/tank/downloads` (F1). Scarecrow meets every D-18 criterion:
+  skipped by the broken config on 6 Sep (named in `beets.log`), 12 FLAC, single disc, not Def
+  Leppard, and MusicBrainz carries a 12-track 2001-11-13 release at score 100. The downloads tree is
+  live, so the plan **re-asserts its presence at execution** before the probe runs.
+
+- **D-30 (OQ4, amends D-15): the survivor's Renovate rule is the effective two-rule shape.** A rule
+  mirroring the Jellyfin one is inert — Renovate reads `-ls349` as a compatibility suffix and has
+  never offered this image an update — and putting `versioning` in the same rule as
+  `matchUpdateTypes` is rejected by the validator (F9). Ship a versioning-only rule followed by the
+  manual-review rule (`04-RESEARCH.md` § Code Example 1), validated `--strict` in both modes.
+  **Renovate will then immediately propose `2.13.1-ls350` as a patch and automerge it in the repo;
+  that PR is expected and is recorded as expected, not as drift.** The host stays on ls349 until a
+  deliberate redeploy.
+
+- **D-31 (OQ5, confirms D-10's letter): strip line 285 only.** The two residual `Audio.txt` lines —
+  `Matching N tracks with Beets` and `ERROR: Unable to match using beets to a musicbrainz release` —
+  are **pre-declared** in the D-12 evidence so a verifier does not read them as a failure (F7).
+  Likewise the baseline `Completed` + `Exit(1): chmod …` that **every** music job has recorded since
+  at least 2026-08-01 (`audio.bash:334`, EPERM on `tank`) is named as baseline, not regression, and
+  is **not fixed here** (F8).
+
+- **D-32 (OQ6, amends D-11): sabnzbd's second beets database is deleted too.**
+  `/mnt/fast/appdata/arrs/sabnzbd/config/.config/beets/` (`library.db` + 11 `.bak`, created
+  2026-08-18 by Phase 1's `beet config` probe) goes alongside `scripts/library.blb`, after its fence
+  copy is confirmed. While it exists "one `library.db`" is false (F3).
+
+- **D-33 (OQ7, new): remove the `wrtag.deercrest.info` Cloudflare DNS record.** Host-side on LXC
+  100 using Traefik's DNS-01 token file (`/mnt/fast/appdata/traefik/secrets/cf_dns_api_token`);
+  the token is never placed on a command line and never written to the repo, which is public.
+  Verified by `dig` returning nothing.
+
+- **D-34 (OQ8, amends D-06): correct the survivor's include line to `#  - beets/beets.yaml`.** The
+  current `#  - beets.yaml` resolves to `arrs/beets.yaml`, which does not exist; uncommenting it
+  would break the arrs project (F11). It stays commented out (D-02).
+
+- **D-35 (F2, completes D-04's precondition): fence `wrtag.db` before deleting its tree.**
+  `/mnt/fast/appdata/media/wrtag/data/wrtag.db` (315,392 B) is **not** in the Phase 1 fence — it
+  lives under `media/`, not `arrs/` or `music/` — so D-04's "confirm the fence holds a copy" fails
+  for it as written. Copy it with `sqlite3 .backup`, `PRAGMA integrity_check`, and a sha256 line
+  appended to `MANIFEST.txt` (the 01-02 method), **then** delete `media/wrtag/`. An off-box copy is
+  not required: it is wrtag's web job queue, not an irreplaceable class under Phase 1's D-07.
+
+**Corrections the research measured that need no ruling** (details in `04-RESEARCH.md` § ⚠ Facts):
+- **D-13 builds the first vendored-file drift check, not an extension** — plan 01-09 never added
+  one for `beets-config.yaml` (F6). Cover **both** vendored files in one assertion, and correct the
+  `sabnzbd.yaml:89-90` comment that claims the check exists.
+- **D-16's probe hard-requires the Discogs token** (F14). Add an MB-only mode that drops the token
+  and the identity probe, so the dismissed credential (D-24) is never dragged into the survivor.
+- **D-22's lines 90 and 100 are a different shape** from 115/138/157 (F12) — fix all five with the
+  right remedy per shape.
+- **Criterion 2's validator runs in the wrong mode**: `check-renovate.sh:62` passes a filename,
+  which validates it as *global* config (F13). Use `--no-global`.
+- **Deleting the wrtag rule shifts `packageRules` indices** and falsifies two index references in
+  the Jellyfin rule's description — correct them in the same edit.
+- **`CLAUDE.md:159-343` is generated** from `.planning/research/STACK.md` (F15) — correct both, or
+  the D-07/D-14 fix reverts on regeneration.
+- **Criterion 5's rw counter** prints Jellyfin (the only rw holder over Music across all 97
+  containers, the D-21 exception) **separately**, and states "0 excluding the D-21 consumer
+  exception" (F10).
+
+**Files added to this phase's edit list by these rulings:** the vendored survivor beets config
+(D-27) and its bind mount in `stacks/selfhosted/arrs/beets/beets.yaml`;
+`stacks/selfhosted/arrs/compose.yaml` include path (D-34); `scripts/spike03-discogs-probe.py`
+MB-only mode; `.planning/research/STACK.md` (F15); `scripts/spike03-image-headroom.sh` (it protects
+the retired wrtag image from ever being reaped).
+
+**Deferred by these rulings:** every other `-lsNNN`-pinned LinuxServer image in the estate shows the
+same Renovate silence D-30 fixes for the survivor (F9). That is estate-wide and outside this phase —
+record it as a follow-up, do not fix it here.
+
 ### Claude's Discretion
 
 - Plan decomposition and ordering, subject to two constraints the discussion fixed: the D-17
