@@ -104,12 +104,20 @@ OUT_DIR="${OUT_DIR:-/mnt/fast/spike-03/out}"
 REAP_LIST="${REAP_LIST:-$OUT_DIR/reap-list.txt}"
 
 # Allow-list. Anything whose REPOSITORY:TAG contains one of these substrings is never a candidate,
-# even with no container referencing it. The three spike images are here so that a re-run of
+# even with no container referencing it. The surviving spike images are here so that a re-run of
 # `inventory` after task 3's pulls cannot list the images the phase just fetched; `redis` is here
 # because A4 (03-RESEARCH.md) may need redis:7-alpine as a beets-flask sidecar and it is already
 # on the host. Substring match, deliberately generous - erring toward keeping.
+#
+# THE RETIRED ENTRY (Pitfall 11, plan 04-07, 2026-09-11): this list used to open with the wrtag
+# image, and that entry was REMOVED rather than left harmlessly in place. An allow-list entry is
+# unconditional: it protects a tag whether or not anything references it, so an entry naming a
+# RETIRED image exempts a dead 172 MB image from reaping FOREVER, and no future `inventory` run can
+# ever surface it. That is the one failure mode this list has. Phase 4 retired wrtag completely -
+# repo definition, host appdata tree, public DNS record and the resident image itself - so the
+# entry now had nothing left to protect. Both beets entries STAY (the survivor, D-01) and
+# `metasauce/beets-flask` STAYS because Phase 5 stands it up.
 KEEP_PATTERNS=(
-  "sentriz/wrtag"
   "lscr.io/linuxserver/beets"
   "linuxserver/beets"
   "metasauce/beets-flask"
