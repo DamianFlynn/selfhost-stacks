@@ -56,10 +56,14 @@ echo -e "${GREEN}✅ $CONFIG_FILE found${NC}"
 # Deliberately NOT `npx --yes renovate-config-validator`: that downloads and executes an unverified
 # package from the registry on every run of a health check. If the validator is wanted here, install
 # it explicitly and knowingly.
+#
+# --no-global (D-22 / F13): given a bare filename the validator checks it as GLOBAL (self-hosted
+# admin) config, which is not what this file is. --no-global validates it as the repo config that
+# Renovate actually reads, the same semantics as running it with no argument from the repo root.
 VALIDATOR_ROUTE="unavailable"
 if command -v renovate-config-validator >/dev/null 2>&1; then
   VALIDATOR_ROUTE="local"
-  if renovate-config-validator "$CONFIG_FILE"; then
+  if renovate-config-validator --no-global "$CONFIG_FILE"; then
     echo -e "${GREEN}✅ $CONFIG_FILE validates (renovate-config-validator)${NC}"
   else
     echo -e "${RED}❌ $CONFIG_FILE FAILED validation — a config error silently stops the WHOLE repo run${NC}"
@@ -87,7 +91,9 @@ echo ""
 echo "🐳 Checking Docker image declarations..."
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-YAML_WITH_IMAGES=$(grep -rl "image:" stacks/selfhosted --include="*.yaml" --include="*.yml" 2>/dev/null | sort)
+# `{ grep … || true; }` (D-22 / F12): grep exits 1 on zero matches, and under `set -euo pipefail`
+# that aborts the whole script. Zero image lines is a legitimate answer, not an error.
+YAML_WITH_IMAGES=$( { grep -rl "image:" stacks/selfhosted --include="*.yaml" --include="*.yml" 2>/dev/null || true; } | sort)
 IMAGE_FILE_COUNT=$(echo "$YAML_WITH_IMAGES" | wc -l | tr -d ' ')
 
 echo -e "${BLUE}Found $IMAGE_FILE_COUNT YAML files with Docker images${NC}"
@@ -97,7 +103,7 @@ echo ""
 echo "🏷️  Extracting unique Docker images..."
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-IMAGES=$(grep -rh "^\s*image:" stacks/selfhosted --include="*.yaml" --include="*.yml" 2>/dev/null | \
+IMAGES=$( { grep -rh "^\s*image:" stacks/selfhosted --include="*.yaml" --include="*.yml" 2>/dev/null || true; } | \
   sed 's/^\s*image:\s*//' | \
   sed 's/#.*//' | \
   sed 's/\s*$//' | \
@@ -112,7 +118,9 @@ echo "🐘 PostgreSQL instances..."
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 POSTGRES_INSTANCES=$(echo "$IMAGES" | grep -i postgres || true)
-POSTGRES_COUNT=$(echo "$POSTGRES_INSTANCES" | grep -v '^$' | wc -l | tr -d ' ')
+# Count non-empty lines with awk, not `grep -v '^$' | wc -l`: that grep exits 1 on an empty set and,
+# under pipefail, aborted the script whenever there was nothing to count (D-22 / F12).
+POSTGRES_COUNT=$(printf '%s\n' "$POSTGRES_INSTANCES" | awk 'NF{n++} END{print n+0}')
 
 if [[ $POSTGRES_COUNT -gt 0 ]]; then
   echo -e "${YELLOW}⚠️  Found $POSTGRES_COUNT PostgreSQL images:${NC}"
@@ -135,7 +143,7 @@ echo "🔴 Redis/Valkey instances..."
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 REDIS_INSTANCES=$(echo "$IMAGES" | grep -iE 'redis|valkey' || true)
-REDIS_COUNT=$(echo "$REDIS_INSTANCES" | grep -v '^$' | wc -l | tr -d ' ')
+REDIS_COUNT=$(printf '%s\n' "$REDIS_INSTANCES" | awk 'NF{n++} END{print n+0}')
 
 if [[ $REDIS_COUNT -gt 0 ]]; then
   echo -e "${BLUE}Found $REDIS_COUNT Redis/Valkey images:${NC}"
@@ -154,7 +162,10 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 
 git fetch origin --quiet 2>/dev/null || true
 RENOVATE_BRANCHES=$(git branch -r | grep "origin/renovate/" | sed 's/origin\///' | sed 's/^\s*//' || true)
-RENOVATE_COUNT=$(echo "$RENOVATE_BRANCHES" | grep -v '^$' | wc -l | tr -d ' ')
+# The old `grep -v '^$' | wc -l` form here aborted EXACTLY when zero Renovate PRs were pending -- the
+# healthy state -- so "No pending Renovate PRs" below was unreachable and a clean estate failed the
+# check (D-22). Proven with a PATH-stubbed `git` whose `branch -r` prints nothing (04-03-SUMMARY.md).
+RENOVATE_COUNT=$(printf '%s\n' "$RENOVATE_BRANCHES" | awk 'NF{n++} END{print n+0}')
 
 if [[ $RENOVATE_COUNT -gt 0 ]]; then
   echo -e "${BLUE}Found $RENOVATE_COUNT pending Renovate PRs:${NC}"
