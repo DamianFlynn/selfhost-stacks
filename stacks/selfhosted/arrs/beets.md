@@ -1,8 +1,11 @@
 # Beets: library state and the bulk-import backlog
 
-Companion to [`beets/beets.yaml`](beets/beets.yaml) (manual container) and
-[`soulbeet.yaml`](soulbeet.yaml) + [`soulbeet/beets_config.yaml`](soulbeet/beets_config.yaml)
-(automated Soulseek → beets path).
+Companion to [`beets/beets.yaml`](beets/beets.yaml) — the one surviving tagger definition.
+
+`soulbeet.yaml`, `soulbeet/beets_config.yaml` and `../music/wrtag.yaml` were **deleted from this
+repo on 2026-09-11** by plan 04-03 (D-01, D-05), which is why they are no longer linked here. The
+last commit that contains them is `5d0af70`; recover any one of them with
+`git show 5d0af70:stacks/selfhosted/arrs/soulbeet.yaml` or the equivalent path.
 
 Nothing here is applied by `docker compose`. This is the record of what the music library
 currently looks like, why the tagging pipeline stalled, and how to work the backlog.
@@ -10,7 +13,12 @@ currently looks like, why the tagging pipeline stalled, and how to work the back
 State as of 2026-09-04, after the Phase 1 safety harness and the Phase 3 tagger spike (last two
 sections).
 
-> **Both beets definitions now mount the library `:ro`, and wrtag's library mount is deleted.**
+> **Amended 2026-09-11 (plan 04-05).** The wrtag and soulbeet **definitions are deleted from this
+> repository** (plan 04-03, D-01/D-05), so what they used to mount is now moot rather than
+> reassuring. The one surviving definition, `beets/beets.yaml`, mounts the library `:ro`.
+> **Host runtime retirement has not happened yet:** the images, the appdata trees and the
+> `wrtag.deercrest.info` DNS record were all still present when this line was written, and plans
+> 04-07 and 04-11 of this phase own removing them.
 > Nothing in this document's "how to work the backlog" advice will write to `/mnt/tank/media/Music`
 > until Phase 6 grants the surviving tagger `rw` again. That is intentional — see the last section.
 
@@ -25,6 +33,8 @@ sections).
 ---
 
 ## Two beets, one library
+
+> **Superseded by Phase 4 (2026-09-11)** — rewritten in § *Phase 4* when the runtime change lands (plan 04-13).
 
 There are **two** beets entry points writing to the same destination. This is the first thing
 to understand before running anything.
@@ -989,6 +999,47 @@ one import, in a release candidate, and it reverses the import, not the tag writ
 files. Phase 4 owns amending the constraint in `CLAUDE.md` and `PROJECT.md`; **Phase 7's "undo
 exercised" criterion now has two candidate mechanisms rather than one.**
 
+### Correction: the wrtag pin's stated cause was reversed (2026-09-11, Phase 4 D-14)
+
+This page's advice was written while the repo pinned wrtag below v0.30.0 behind a Renovate rule.
+**That rule's stated evidence was wrong, and wrong in a way that reversed cause and effect.** It
+blamed three path-format fields for a v0.30.0 break; **two of them — `.Release.Date.Year` and
+`.Release.Media` — are present at v0.20.0** and render without complaint. The rule is paraphrased
+here deliberately and never quoted, so its reversed wording cannot be reproduced in a new place.
+
+**The two real defects, both at v0.20.0:**
+
+1. It **forces `d.Track.Position = -1`** (`pathformat/pathformat.go:113-115`), so every single-disc
+   track renders `-1 - `. `grep -c "Track.Position = -1"` returns 1 at v0.20.0 and 0 at both
+   v0.33.0 and v0.34.0.
+2. **`.Media` is absent from v0.20.0's `Data` struct**, so `.Media.Position` is a template execute
+   error — but only on multi-disc releases, because Go evaluates `{{ if }}` bodies lazily. That is
+   also why startup validation never caught it: v0.20.0's `validate()` constructs single-medium
+   synthetic releases only.
+
+**The finding, verbatim from Phase 3:**
+
+> *this repository's `WRTAG_PATH_FORMAT` works on none of v0.20.0, v0.33.0 or v0.34.0 — it renders
+> `-1 - ` on every single-disc track and hard-errors on multi-disc at v0.20.0, and is refused at
+> startup by both current tags — and the sole cause of the startup refusal is the `Disc N/`
+> **subdirectory**, proven by an ablation that changes nothing else and validates at both current
+> tags.*
+
+**Unpinning buys nothing.** The obvious reading — "the pin was inverted, so lift it" — is a trap,
+and the answer was measured rather than argued:
+
+| Question | Answer, measured (three image tags, plan 03-08) |
+|---|---|
+| Would this repo deploy wrtag at any version? | **No.** wrtag lost the Phase 3 engine decision and Phase 4 deletes it. There is no version to deploy |
+| Does unpinning to v0.33.0 fix the path format? | **No.** v0.33.0 **refuses the format at startup**, exit 2, `ambiguous format: multiple directories created for the same release`, before a file is read |
+| Does v0.34.0 differ from v0.33.0 on this? | **No — it is a path-format no-op**, on three instruments: byte-identical refusal text, byte-identical rendered path sets under the ablation, and a changelog whose only breaking change is a Go version bump |
+
+The full measurement, including both `Data` struct listings and the field-by-field table against
+what the rule claimed, is
+[`03-WRTAG-EVIDENCE.md`](../../../.planning/phases/03-tagger-spike/03-WRTAG-EVIDENCE.md)
+§ *The corrected pin-inversion proof*. The rule itself was deleted by plan 04-03; nothing in this
+repo now instructs anyone to keep, fix or unpin wrtag.
+
 ### Two buttons never to press on this collection
 
 Both are one-click bulk actions in beets-flask, and **neither was pressed or scripted at any point
@@ -1002,6 +1053,19 @@ in Phase 3, deliberately**:
   collection measured at a **1-in-6** wrong-strict-match rate.
 
 ### Standing action, carried forward
+
+> **Dismissed by the operator 2026-09-06, Phase 4 D-24.** The rotation described below is **not**
+> going to happen, and that is a decision rather than a lapse. The operator's words, verbatim:
+> *"Discogs token rotation is not important at all, there is nothing there that has any value, i
+> am not concerned"*.
+>
+> This is recorded as **a choice, not an oversight or a silence**, so that a future security review
+> meets a reasoned answer rather than an open action nobody ever closed. **No rotation step is
+> taken by Phase 4, and no plan in it spends a step on the token.** The original text is left
+> standing below in full: the four causes it records were correct against what they measured, and
+> they remain the right briefing for anyone who revisits the decision. The dismissal is recorded in
+> its estate-wide form in `.planning/PROJECT.md` § *Key Decisions*, and the full record stays at
+> `.planning/phases/03-tagger-spike/deferred-items.md` `DEF-03-21`.
 
 **Rotate the Discogs personal access token at project close.** It is not a Phase 3 task — the
 operator decided the timing, was shown the full picture at the closing gate on 2026-09-04 and
