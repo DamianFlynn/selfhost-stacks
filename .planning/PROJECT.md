@@ -8,7 +8,7 @@ built over time and three are dead; meanwhile 97 GB of downloaded music sits unt
 Jellyfin reads. This project picks one tagger, retires the rest, and starts working the backlog
 down — beginning with the content that autotags cleanly.
 
-Tracked in GitHub issue #305. Related: #306 (soulbeet), #307 (rybbit).
+Tracked in GitHub issue #305. Related: #306 (soulbeet; plan 04-03 deleted its definition from the repo on 2026-09-11, and closing the issue is pending plan 04-07), #307 (rybbit).
 
 ## Core Value
 
@@ -60,8 +60,8 @@ outcome that must not happen.
 | Entry point | Defined in | State |
 |---|---|---|
 | `beets` (manual) | `arrs/beets/beets.yaml` | Last import **18 Nov 2025**. `library.db` untouched since. Profile-gated, runs only when invoked. |
-| `soulbeet` | `arrs/soulbeet.yaml` | Image `ghcr.io/terry90/soulbeet` **gone from GHCR**. Never deployed. Issue #306. |
-| `wrtag` | `music/wrtag.yaml` | Container up, `wrtag.db` unchanged since **23 Jan 2026**. Pinned `<0.30.0` by a Renovate rule blocking a `WRTAG_PATH_FORMAT` rewrite. |
+| `soulbeet` | `arrs/soulbeet.yaml`, *deleted 2026-09-11 by plan 04-03* | Image `ghcr.io/terry90/soulbeet` **gone from GHCR**. Never deployed. Issue #306. **Amended 2026-09-11:** plan 04-03 deleted the definition and `arrs/soulbeet/beets_config.yaml` from the repo; both are recoverable with `git show 5d0af70:<path>`. Closing issue #306 is pending plan 04-07. |
+| `wrtag` | `music/wrtag.yaml`, *deleted 2026-09-11 by plan 04-03, with `music/compose.yaml`* | *Was (2026-08-17):* Container up, `wrtag.db` unchanged since **23 Jan 2026**. Pinned `<0.30.0` by a Renovate rule blocking a `WRTAG_PATH_FORMAT` rewrite. **Amended 2026-09-11:** plan 04-03 deleted the definition and its Renovate pin from the repo. The pin's stated cause was **reversed**. The rule blamed v0.30.0's path-format field changes, but every field it named exists at v0.20.0, and v0.20.0 itself is the broken tag. The newer tags refuse this repo's path format for a separate reason. For the corrected finding (D-14), see `03-DECISION.md` § *Handoff to Phase 4* and § *AMENDMENT — 2026-09-03, plan 03-08*. On the host, 04-01 found no wrtag container on LXC 100 (unfiltered `docker ps -a`, 2026-09-11). The image, the appdata tree and the DNS record remain until plan 04-07. |
 | `audio.bash` beets | sabnzbd post-proc, `music` category | Runs per download, but `rm`s its own `library.blb` each run (stateless by design) and imports `-q` in place. Last two jobs (1 Aug, 8 Aug) both logged `skip`. **Cause now known:** `/config/scripts/beets-config.yaml` declares `plugins: embedart` and nothing else — since beets 2.4.0 MusicBrainz is a plugin, so that config has *no metadata source at all* and every album must skip. Do not "fix" this with `quiet_fallback: asis`. |
 | **Lidarr** *(added 2026-08-17)* | `arrs/lidarr.yaml` | **The fifth writer, never counted.** Root folder is `/media/Music` with `renameTracks: True` — it has been actively renaming files inside the shared library tree. |
 
@@ -189,7 +189,11 @@ that plan rather than restating it.
   two this document assumed: the manual `beets` one, plus **two under `sabnzbd/`** that nobody
   counted, of which `sabnzbd/config/scripts/library.blb` is the most recently written of the whole
   set (8 Aug 2026). The `soulbeet` database does not exist at all — its data directory is empty.
-  Phase 4 is therefore retiring more state than it was scoped for. Take a `zfs snapshot` of `tank/media/Music` in
+  Phase 4 is therefore retiring more state than it was scoped for. *(Noted 2026-09-11 by plan 04-04:
+  Phase 4 is reducing these databases to **one**, a fresh survivor `library.db` (D-28). Each retired
+  database is deleted only after its fence copy is confirmed. This is in progress, not done. Plan
+  04-13 will record the measured outcome in a Phase 4 section of `stacks/selfhosted/arrs/beets.md`,
+  and this document deliberately does not state it.)* Take a `zfs snapshot` of `tank/media/Music` in
   the *same step*, because rolling back only the tree leaves `incremental` state claiming the work
   is done. Add the `ffprobe` tag-dump of `dj-mixes` and the cover-scan archive to the same fence.
 - **ZFS**: frees space asynchronously; `zfs list` can lag a large delete by ~20 s.
@@ -216,6 +220,7 @@ that plan rather than restating it.
 | Phase 02.1's operational detail lives beside the thing it describes, not here | `stacks/selfhosted/media/jellyfin.yaml` carries the transcode retention controls, the ZFS-quota caveat, the "IF THE TV STOPPED" runbook, the **Live TV latent gap** and the volume inventory. The person who needs any of it will be editing the stack file, not reading a music-library planning document | Recorded 2026-09-03 (02.1-10) |
 | `scripts/quick-health-check.sh` is **manual-only** and always has been (D-22) | It fires only when someone runs it; scheduling and alerting are deliberately deferred because Phase 2 closed with a notification path that was never proven to deliver. The detail, and the reason, are in-band in that script's third `EXIT-CODE BEHAVIOUR CHANGED` notice — where the person about to trust a green tick will be standing | Recorded 2026-09-03 (02.1-10) |
 | Three pieces of Phase 2 runtime state live **only on the NUC** and in no git repository | Stated so a NUC rebuild is a known cost rather than a discovery: (1) Supervisor's `mounts.json` — the `music` NFS mount; (2) **MA's provider settings** — MA 2.11 does not expose a filesystem provider's `path` through its API at all, so the configuration is recoverable only from a SUMMARY; (3) MA's `library.db`. Plus `/config/packages/music02_ma_nfs_mount.yaml` and one `/config/secrets.yaml` key, both reproduced verbatim in `02-08-SUMMARY.md` and in `stacks/selfhosted/arrs/beets.md` — the token excepted, which must be re-minted | Recorded 2026-09-01 (02-06, 02-07, 02-08). Mitigation is the written record, not a backup |
+| **Discogs token rotation: dismissed by the operator (Phase 4 D-24)** | Recorded as a **choice, not an oversight or a silence**, so a future security review meets a reasoned answer. The operator's words, verbatim: *"Discogs token rotation is not important at all, there is nothing there that has any value, i am not concerned"*. This replaces the rotate-at-project-close timing that Phase 3 recorded and reaffirmed on 2026-09-04: rotation is **dismissed, not deferred**, and no plan schedules it. The basis is the operator's assessment that the account holds nothing of value. It is not a claim that the exposures did not happen. The standing action and its **four** exposure causes stay on the record, unedited, in `.planning/phases/03-tagger-spike/03-DECISION.md` § 9 and `.planning/phases/03-tagger-spike/deferred-items.md` DEF-03-21, so a reviewer can weigh them against this answer. No Phase 4 step rotates, reads or otherwise touches the credential. The survivor's criterion-4 probe runs in an MB-only mode (plan 04-08) precisely so that the credential is never loaded into it | Recorded 2026-09-11 (04-04). **Revisit if** the Discogs account gains a paid subscription, stored payment details, marketplace selling or any write-capable use, or if the credential is ever reused for anything else |
 
 ## Evolution
 
