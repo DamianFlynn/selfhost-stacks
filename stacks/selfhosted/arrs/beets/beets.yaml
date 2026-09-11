@@ -15,6 +15,37 @@ services:
       PGID: $PGID
     volumes:
       - /mnt/fast/appdata/arrs/beets/config:/config:rw  # Application config and library.db
+      # beets config. NOTE (2026-09-11): beets/config.yaml is now VENDORED in this repo
+      # (plan 04-08, TAGR-05 / D-27). It is this container's own beets configuration at
+      # /config/config.yaml — the file every `beet` invocation inside it reads unless a
+      # `-c` overlay is passed. It declares `plugins: musicbrainz`, an explicit
+      # `library: /config/library.db`, and the three SAFE-01 `auto: no` keys.
+      #
+      # Why it is vendored: TAGR-05 requires that every remaining beets config declares
+      # `musicbrainz`, and a config that exists only on the host cannot be checked in git.
+      # Note what this mount does NOT do — it does not preserve an existing configuration.
+      # The host file it replaces was not a beets config at all: it was a pasted compose
+      # SERVICE DEFINITION with no `plugins:`, `library:` or `directory:` key anywhere in
+      # it (04-RESEARCH.md F4). This installs the survivor's first real config.
+      #
+      # What breaks if you revert it: the container falls back to LinuxServer's default
+      # beets config, which ARMS scrub.auto, lastgenre.auto and embedart.auto — all three
+      # default to `yes` in 2.13.1 — and OMITS `musicbrainz` from its `plugins:` line.
+      # That is the worst of both: no metadata source at all, so every album skips, and
+      # three automatic tag-destroying plugins armed against a 34 GB library and a 97 GB
+      # backlog, with no `beet undo`.
+      #
+      # How much :ro protects, and what is NOT yet measured. It makes the file read-only
+      # to the container, which is the half the sabnzbd :rw mount does not cover: that one
+      # was measured on 2026-08-18 to block `mv tmp dest` (EBUSY) but NOT in-place `> dest`
+      # truncation (../sabnzbd.yaml:80-90). The open question is BOOT, not tamper —
+      # LinuxServer images run an `lsiown -R abc:abc /config` pass at start, which may log
+      # EROFS against this single-file mount. That is UNMEASURED at this commit: plan 04-09
+      # starts the container on its `manual` profile and records whatever it logs. If EROFS
+      # lines appear and the container is otherwise healthy, :ro stays and the lines are
+      # recorded as tolerated (the D-09 rule); only a container that cannot start justifies
+      # flipping this one line to :rw.
+      - /mnt/fast/appdata/arrs/beets/config/config.yaml:/config/config.yaml:ro  # Vendored beets config (see above)
       - /mnt/tank/downloads:/downloads:rw  # Import source — backlog staging area
       # NOTE (2026-08-18): :ro is deliberate (D-20). Nobody holds read-write on
       # /mnt/tank/media/Music during Phases 1-3, including this container. Phase 3 chooses

@@ -1,0 +1,96 @@
+# beets configuration for the SURVIVING manual beets container
+#
+# Consumed by:
+#   container  beets  (lscr.io/linuxserver/beets:2.13.1-ls349 — the one surviving tagger
+#              definition, ./beets.yaml)
+#   state      DORMANT by design (D-02): `restart: "no"`, `profiles: ["manual"]`, and the
+#              definition is commented out of ../compose.yaml's include list. The container
+#              runs only when someone starts it on its `manual` profile.
+#   trigger    nothing automatic. No hook, no schedule and no watcher reads this file.
+#
+# VENDORED 2026-09-11 (plan 04-08, TAGR-05 / D-27). The repo copy is for review and history;
+# the compose mount in ./beets.yaml points at the appdata copy
+# /mnt/fast/appdata/arrs/beets/config/config.yaml, which is AUTHORITATIVE at runtime.
+# Those two copies are compared byte-for-byte by the vendored-file drift block in
+# scripts/quick-health-check.sh — a block that plan 04-10 BUILDS as a candidate and plan 04-11
+# PROMOTES into the routine check. IT DOES NOT EXIST AT THIS COMMIT. Until 04-10 lands, nothing
+# detects divergence between this file and the host; do not read this paragraph as a guarantee
+# that is already in force.
+#
+# AUTHORED, NOT SEEDED — the one way this differs from ../sabnzbd/beets-config.yaml, which plan
+# 01-07 copied verbatim from its host original. This file REPLACES a host file that was not a
+# beets config at all: /mnt/fast/appdata/arrs/beets/config/config.yaml (3,293 B, sha256
+# 8b09078d4779b44cf145fbbb886ea19bcf9e6048b1f3f8c0389b6b575037f1ae) is a pasted compose SERVICE
+# DEFINITION, carrying no `plugins:`, no `library:` and no `directory:` key anywhere in it
+# (04-RESEARCH.md F4). Seeding from it was therefore impossible, and copying it would also have
+# dragged a declared read-write library volume line into a file that three separate repo tools
+# scan. It is fenced at /mnt/fast/safety/music-pre-project/audit/ (plan 04-01, MANIFEST line 886)
+# and remains recoverable from there.
+#
+# `library:` is declared EXPLICITLY rather than left to default, so the database this container
+# opens is a stated fact instead of an inherited one. `beet` is not read-only and an unset
+# `library` resolves to a BEETSDIR default — in Phase 1 a bare `beet config` opened the default
+# library and ran 11 migrations beside the real database. D-28's single fresh library.db is
+# created at exactly this path.
+#
+# EVERYTHING ELSE ABOUT THIS TAGGER'S CONFIGURATION BELONGS TO PHASE 6. This file is the minimal
+# slice TAGR-05 forces — "every remaining beets config declares musicbrainz" — plus the three
+# SAFE-01 keys, and nothing else. Do not add path formats, match thresholds or import behaviour
+# here; Phase 6 owns them and a half-configured survivor is this project's known failure mode.
+#
+# Credential screen: NO credential of any kind is present. There is no Discogs user token here and
+# there must never be one — Phase 4 D-24 dismissed that credential, and the criterion-4 probe runs
+# in an explicit MB-only mode (plan 04-08) precisely so it is never loaded into this container.
+# Screened for a Discogs user credential, for any field named after a credential class, for URLs
+# carrying embedded credentials, for e-mail addresses and for high-entropy strings. All checks
+# returned clean, so nothing is redacted and there is no placeholder to substitute. THIS
+# REPOSITORY IS PUBLIC. Re-screen before committing any future change to this file.
+
+# --------------------------------------------------------------------------------
+# TAGR-05 — the metadata source, named explicitly
+# --------------------------------------------------------------------------------
+# Since beets 2.4.0 MusicBrainz is itself a PLUGIN. A customised `plugins:` list that omits it
+# silently disables autotagging entirely, and the symptom presents as "no match found", never as
+# a config error. That is the confirmed cause of the 1 Aug, 8 Aug and 6 Sep 2026 ingest skips in
+# the sabnzbd pipeline. Naming it here is the entire reason this file exists.
+#
+# A config block is NOT proof a plugin loaded: `beet config -d` prints a full block for a plugin
+# that raised while building. The authoritative instrument is the `plugins:` line of
+# `beet ... version`, which plan 04-09 runs inside this container.
+plugins: musicbrainz
+
+# The database this container opens. D-28: exactly one beets library.db survives Phase 4, and it
+# is the fresh one created at this path by 2.13.1-ls349, so its schema is current.
+library: /config/library.db
+
+# --------------------------------------------------------------------------------
+# SAFE-01 — destructive defaults, all three explicitly OFF
+# --------------------------------------------------------------------------------
+# Carried over from ../sabnzbd/beets-config.yaml, where plan 01-07 measured this on 2026-08-18.
+# Every one of these keys defaults to `yes` in beets 2.13.1. Measured, not assumed:
+#
+#     beet -c <cfg naming the plugin> -l /tmp/throwaway.blb config -d
+#       scrub.auto      -> yes
+#       lastgenre.auto  -> yes
+#       embedart.auto   -> yes
+#
+# So an ABSENT key is not an off switch — it is the on switch, waiting for someone to add the
+# plugin name to the `plugins:` line above. None of these three plugins is enabled here today;
+# the keys are set anyway, precisely so that enabling a plugin later cannot silently re-arm
+# automatic tag destruction.
+#
+# There is no `beet undo`. These run against a 34 GB library that is already correctly tagged and
+# a 97 GB backlog carrying irreplaceable DJ metadata that exists nowhere else. Reversal is a ZFS
+# rollback, not a command.
+
+scrub:
+    auto: no   # scrub STRIPS all existing tags from a file on import. Off: this pipeline
+               # ingests content whose existing tags are the only metadata it has.
+
+lastgenre:
+    auto: no   # lastgenre OVERWRITES the genre field from Last.fm. Off: it discards
+               # hand-curated and DJ-service genre data in favour of crowd tags.
+
+embedart:
+    auto: no   # embedart REWRITES the audio file to embed cover artwork. Off: a file
+               # rewrite is the one operation here that can corrupt the stream itself.
