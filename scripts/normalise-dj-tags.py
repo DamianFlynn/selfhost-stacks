@@ -96,7 +96,23 @@ CONTRACT
     write is followed by assert_frame_set_unchanged(): the on-disk ID3v2 frame-ID multiset, parsed
     WITHOUT mutagen, must equal what it was plus the two frames this script wrote. Anything else
     is a hard failure into the .failed ledger, not a silently larger diff.
-  * The script contains no `rm`, no `mv`, no `chown`, no `chmod` and no directory creation.
+  * WAV (D-23, DEF-03-09). A WAVE carries TWO tag containers: an ID3 tag inside a RIFF `id3 `
+    chunk, and a RIFF LIST/INFO chunk (`IPRD` is its album). This script writes the ID3 tag
+    ONLY, through `mutagen.wave.WAVE` + `add_tags()` + `tags.setall()` and reads it back through
+    `tags.getall()`. It never uses `mutagen.File(easy=True)` for a WAV: on a WAVE that yields a
+    raw frame-keyed ID3, not an EasyID3 map, which is how the tool wrote 0 of 134 WAVs
+    (`TypeError: ... not a Frame instance` on every one) and read album=None from the 87 that
+    carry one. ID3 only, because D-23 records that ID3 is what both consumers read. The INFO
+    chunk is left byte-identical, so a stale `IPRD` is REPORTED rather than silently kept:
+    every album record for a WAV whose `IPRD` disagrees with the new album carries `info_iprd`,
+    in the dry run and the apply alike. A later reader then meets a recorded finding, not two
+    containers that look like corruption. Which value a reader that parses BOTH containers
+    prefers is not established here, and that is the reason the disagreement is recorded. The
+    same load options as MP3 apply (on-disk ID3 major kept, `load_v1=False`), and the frame-set
+    backstop runs on the `id3 ` chunk rather than at file offset 0 (see
+    assert_frame_set_unchanged()). FLAC and every other format keep the easy-mode path.
+  * A TARGET run contains no `rm`, no `mv`, no `chown`, no `chmod` and no directory creation.
+    `--self-test` creates exactly one mkdtemp() directory of its own and removes it.
 
 THE KEY
   In `--apply` mode it REFUSES TO RUN unless a proof of `tank/downloads@spike-03-t0` is supplied,
@@ -477,7 +493,7 @@ def assert_inside_scratch(path: str, *, fence_root: str = SCRATCH_ROOT) -> None:
 # --------------------------------------------------------------------------------------------
 
 
-def id3v2_major(path: str) -> int | None:
+def id3v2_major(path: str, offset: int = 0) -> int | None:
     """The ID3v2 major version as it is ON DISK, read from the 10-byte header.
 
     Needed BEFORE the tag is loaded, because mutagen's `v2_version` is a LOAD-time option, not
@@ -487,25 +503,30 @@ def id3v2_major(path: str) -> int | None:
     up with a v2.3 header carrying a `TDRC` frame, which is a v2.4-only frame ID. Measured: a
     `TYER` frame of 5 bytes came back as a `TDRC` frame of 6. `ffprobe` maps both to `date`, so
     `diff-music-tags.sh` reports nothing and the change is invisible to the phase's own gate.
+
+    `offset` is 0 for an MP3. For a WAV it is the data offset of the RIFF `id3 ` chunk
+    (wave_id3_offset()), because that is where a WAVE's ID3 header sits.
     """
     try:
         with open(path, "rb") as fh:
+            fh.seek(offset)
             head = fh.read(10)
     except OSError:
         return None
     return head[3] if head[:3] == b"ID3" else None
 
 
-def id3v2_frame_ids(path: str) -> "collections.Counter[bytes] | None":
+def id3v2_frame_ids(path: str, offset: int = 0) -> "collections.Counter[bytes] | None":
     """Multiset of ID3v2 frame IDs as they are ON DISK, parsed without mutagen.
 
     Deliberately independent of the library doing the writing: a post-write assertion that used
     mutagen's own view of the file could not catch mutagen normalising something on load. Returns
     None for ID3v2.2 (3-byte frame IDs) and for files with no ID3v2 tag, in which case the caller
-    skips the assertion rather than guessing.
+    skips the assertion rather than guessing. `offset` as for id3v2_major().
     """
     try:
         with open(path, "rb") as fh:
+            fh.seek(offset)
             head = fh.read(10)
             if head[:3] != b"ID3" or head[3] < 3:
                 return None
@@ -587,10 +608,46 @@ def read_riff_info(path: str) -> dict[str, str]:
     return info
 
 
+def is_wave(path: str) -> bool:
+    """The ONE predicate that routes a file to the WAV branch of read_tags()/write_tags() (D-23)."""
+    return path.lower().endswith(".wav")
+
+
+def wave_id3_offset(path: str) -> int | None:
+    """Data offset of the WAV's RIFF `id3 ` chunk, or None if it has none.
+
+    Raises if there are two: which one a reader honours is then undefined, and the frame-set
+    backstop would be checking a chunk the write might not have touched.
+    """
+    offsets = [off for cid, off, _size in riff_chunks(path) if cid in (b"id3 ", b"ID3 ")]
+    if len(offsets) > 1:
+        raise ValueError(f"{len(offsets)} ID3 chunks in one WAV; refusing to guess: {path}")
+    return offsets[0] if offsets else None
+
+
 def read_tags(path: str):
     """Return (handle, {'album': str|None, 'artist': str|None}). Raises on unreadable files."""
     import mutagen
     from mutagen.id3 import ID3, ID3NoHeaderError
+
+    if is_wave(path):
+        import mutagen.wave
+
+        # D-23 / DEF-03-09. NOT easy mode: on a WAVE, `mutagen.File(path, easy=True).tags` is a
+        # raw frame-keyed ID3, so `.get("album")` read None from every tagged WAV. Frame level
+        # through FIELD_FRAME instead, exactly as the MP3 branch below does, and with the same
+        # two load options for the same reasons: keep the on-disk ID3 major (or TYER/TDAT/TIME
+        # become TDRC in memory and are written back so), and never merge an ID3v1 block.
+        # A WAV with no ID3 chunk reads as all-None; the tag is added at WRITE time, never here.
+        offset = wave_id3_offset(path)
+        major = (id3v2_major(path, offset) if offset is not None else None) or 4
+        w = mutagen.wave.WAVE(path, v2_version=3 if major <= 3 else 4, load_v1=False)
+        values = {}
+        for field in WRITABLE_FIELDS:
+            frames = w.tags.getall(FIELD_FRAME[field]) if w.tags is not None else []
+            text = frames[0].text[0] if frames and frames[0].text else None
+            values[field] = text if (text is None or str(text).strip()) else None
+        return w, values
 
     if path.lower().endswith(".mp3"):
         major = id3v2_major(path) or 4
@@ -674,8 +731,13 @@ def preserve_id3v1_trailer(path: str, original: bytes | None) -> None:
             fh.write(original)
 
 
-def assert_frame_set_unchanged(path, before, changes: dict[str, str]) -> None:
+def assert_frame_set_unchanged(path, before, changes: dict[str, str], *, offset: int = 0) -> None:
     """After the write, the on-disk ID3v2 frame-ID multiset must be what it was, plus the two.
+
+    `offset` is where the ID3 tag starts: 0 for MP3, the `id3 ` chunk for a WAV. Without it this
+    read `RIFF` at offset 0 for every WAV and returned silently, a vacuous pass. The WAV branch
+    re-locates the chunk AFTER the save (an untagged WAV has none before it), and passes an
+    empty multiset, never None, as `before` for an untagged WAV so the check still runs.
 
     This is the backstop for the class of defect that produced three corrections in this plan:
     mutagen does not write back what it read - it re-serialises its own normalised model, and two
@@ -689,7 +751,7 @@ def assert_frame_set_unchanged(path, before, changes: dict[str, str]) -> None:
     """
     if before is None:
         return
-    after = id3v2_frame_ids(path)
+    after = id3v2_frame_ids(path, offset)
     if after is None:
         raise RuntimeError("ID3v2 tag became unreadable during save")
     written = {FIELD_FRAME[f].encode("ascii") for f in changes}
@@ -724,6 +786,47 @@ def write_tags(
     for field in changes:
         if field not in WRITABLE_FIELDS:
             raise AssertionError(f"refusing to write non-writable field {field!r}")
+
+    if is_wave(path):
+        import mutagen.id3 as id3
+
+        # D-23: ID3 ONLY. mutagen's WAVE save rewrites the `id3 ` chunk and leaves the RIFF
+        # LIST/INFO chunk byte-identical; a stale IPRD is reported by build_record() as
+        # `info_iprd`, never rewritten here.
+        offset = wave_id3_offset(path)
+        if offset is None:
+            frames_before = collections.Counter()  # untagged: afterwards exactly the written set
+            major = 3
+        else:
+            frames_before = id3v2_frame_ids(path, offset)
+            if frames_before is None:
+                # ID3v2.2 or an unparseable header. The MP3 branch skips its backstop here; a
+                # WAV write refuses instead, because writing without the backstop is exactly the
+                # silent path it exists to close.
+                raise RuntimeError(
+                    "WAV id3 chunk is not a parseable ID3v2.3/2.4 tag; refusing to write "
+                    "without the frame-set backstop"
+                )
+            major = id3v2_major(path, offset) or 3
+        if handle.tags is None:
+            handle.add_tags()
+        for field, new in changes.items():
+            frame_id = FIELD_FRAME[field]
+            existing = handle.tags.getall(frame_id)
+            # The MP3 branch's encoding choice, unchanged: reuse the frame's encoding when the
+            # new value fits it, otherwise UTF-16 with BOM.
+            encoding = existing[0].encoding if existing else 1
+            try:
+                new.encode({0: "latin-1", 1: "utf-16", 2: "utf-16-be", 3: "utf-8"}[encoding])
+            except (UnicodeEncodeError, KeyError):
+                encoding = 1
+            handle.tags.setall(frame_id, [getattr(id3, frame_id)(encoding=encoding, text=[new])])
+        handle.save(v2_version=3 if major <= 3 else 4)
+        offset_after = wave_id3_offset(path)
+        if offset_after is None:
+            raise RuntimeError("WAV has no id3 chunk after the save")
+        assert_frame_set_unchanged(path, frames_before, changes, offset=offset_after)
+        return
 
     if path.lower().endswith(".mp3"):
         import mutagen.id3 as id3
@@ -907,8 +1010,12 @@ def build_record(*, mode, folder, path, field, rule, old, new, written, artist_p
     """One NDJSON record per (file, field) change: the shape --out has always written.
 
     Factored out of main() so --self-test checks the record the real run emits, not a copy of it.
+
+    D-23: an album record for a WAV whose RIFF `IPRD` is non-empty and differs from the new album
+    carries `info_iprd`, the stale INFO value this script deliberately leaves in place. An INFO
+    chunk that cannot be parsed is `info_riff_unreadable`, kept distinct from "no IPRD".
     """
-    return {
+    record = {
         "mode": mode,
         "folder": folder,
         "path": path,
@@ -919,6 +1026,15 @@ def build_record(*, mode, folder, path, field, rule, old, new, written, artist_p
         "written": written,
         "artist_policy": artist_policy,
     }
+    if field == "album" and is_wave(path):
+        try:
+            iprd = read_riff_info(path).get("IPRD")
+        except (OSError, ValueError) as exc:
+            record["info_riff_unreadable"] = f"{type(exc).__name__}: {str(exc)[:200]}"
+        else:
+            if iprd and iprd.strip() and iprd.strip() != (new or "").strip():
+                record["info_iprd"] = iprd
+    return record
 
 
 def collect_folders(root: str) -> dict[str, list[str]]:
