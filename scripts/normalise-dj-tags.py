@@ -38,8 +38,10 @@ WHERE IT RUNS
 USAGE
   normalise-dj-tags.py TARGET [--apply] [--dry-run] [--snapshot-proof FILE]
                               [--artist-policy {label,various,keep}] [--out FILE] [--verbose]
+  normalise-dj-tags.py --self-test
 
   TARGET                 a directory under /mnt/tank/downloads/spike-03. Anything else exits 2.
+  --self-test            the WAV regression test (D-23). Takes no TARGET. See SELF-TEST below.
   --dry-run              THE DEFAULT. Reads and reports; writes no tag.
   --apply                writes tags in place. Requires --snapshot-proof.
   --snapshot-proof FILE  a file naming `tank/downloads@spike-03-t0`, written by the caller from
@@ -132,6 +134,25 @@ EXIT-CODE CONVENTION (stated here deliberately, not inherited)
     the docker `created`-state blind spot hid two down containers for six weeks under a green
     check.
 
+SELF-TEST (D-23, DEF-03-09)
+  `--self-test` builds three synthetic WAVs - untagged, ASCII-tagged, and non-ASCII-tagged with a
+  hand-written RIFF LIST/INFO/IPRD chunk - and drives each one through the SAME read_tags(),
+  write_tags() and build_record() the real run uses. Per case it asserts that the album reads
+  back, that APIC, TDRC, TIT2, TPE1 and TRCK are equal before and after, that no other ID3 frame
+  appeared or vanished, that the RIFF INFO chunk is untouched, and that the NDJSON record carries
+  `info_iprd` exactly when IPRD disagrees with the new album. One `ok`/`bad` line per case, a
+  reason under every `bad`. Exit 0 all passed, 1 any case failed, 2 could not run (mutagen is
+  absent everywhere except the beets image - see WHERE IT RUNS):
+
+      docker run --rm --pull never --network none --entrypoint python3 \\
+          -v /mnt/fast/stacks/scripts:/w:ro lscr.io/linuxserver/beets:2.13.1-ls349 \\
+          /w/normalise-dj-tags.py --self-test
+
+  The test writes ONLY inside its own mkdtemp() directory. write_tags() still runs its fence
+  first: the self-test passes that directory as `fence_root`, and fence_root_or_raise() accepts
+  no override other than a real `normalise-dj-selftest-*` directory directly under the temp dir,
+  so the real run's SCRATCH_ROOT fence is not relaxed.
+
 HAZARD NOTES
   * SCRATCH ROOT. D-07: normalisation runs on copies, never on originals. TARGET is resolved with
     os.path.realpath and must be the scratch root or a descendant of it. Anything else - most
@@ -148,11 +169,14 @@ HAZARD NOTES
     the RESOLVED path, refuses a symlink, a non-regular file and st_nlink > 1, and runs BOTH in
     the per-file loop (so the dry run reports it) and as the first statement of write_tags() (so
     no caller can reach a write without it). A refusal is a .failed record, never a skip.
-  * NOTHING IS WRITTEN TO THE SYSTEM TEMP DIRECTORY. On LXC 100 the system temp directory is
-    tmpfs backed by host RAM and a large spill there has previously taken the whole 28 GB box
-    down (T-01-15). This script needs no scratch file at all: mutagen saves in place and the
-    NDJSON is streamed straight to --out, flushed per record so an interrupted run still leaves
-    the evidence it had produced. There is therefore no `tempfile` import and no scratch path.
+  * THE REAL RUN WRITES NOTHING TO THE SYSTEM TEMP DIRECTORY. On LXC 100 the system temp
+    directory is tmpfs backed by host RAM and a large spill there has previously taken the whole
+    28 GB box down (T-01-15). A TARGET run needs no scratch file at all: mutagen saves in place
+    and the NDJSON is streamed straight to --out, flushed per record so an interrupted run still
+    leaves the evidence it had produced. The ONE use of `tempfile` is --self-test, which writes
+    three WAVs of ~1.6 KB each into a private mkdtemp() directory and removes it. It is meant to
+    run in a throwaway `docker run --rm` container, whose temp dir is the container's own
+    writable layer, not LXC 100's tmpfs.
   * PATH-DERIVED DATA CROSSES A TRUST BOUNDARY. Rule 1 writes a folder name into file metadata
     (T-03-26). It is sanitised first: Unicode NFC-normalised, path separators stripped, control
     characters stripped, whitespace collapsed, length bounded, and the result rejected outright
@@ -174,8 +198,11 @@ import json
 import logging
 import os
 import re
+import shutil
 import stat
+import struct
 import sys
+import tempfile
 import time
 import unicodedata
 
@@ -185,6 +212,10 @@ import unicodedata
 
 SCRATCH_ROOT = "/mnt/tank/downloads/spike-03"
 SNAPSHOT_NAME = "tank/downloads@spike-03-t0"
+
+# The only fence root other than SCRATCH_ROOT that write_tags() will accept: --self-test's own
+# mkdtemp() directory. See fence_root_or_raise().
+SELFTEST_PREFIX = "normalise-dj-selftest-"
 
 # The ONLY two fields this script may write. Asserted before every write (D-08 rule 4).
 WRITABLE_FIELDS = ("album", "artist")
@@ -356,8 +387,36 @@ def label_of(album: str) -> str | None:
 # --------------------------------------------------------------------------------------------
 
 
-def assert_inside_scratch(path: str) -> None:
+def fence_root_or_raise(fence_root: str) -> str:
+    """The resolved fence root: SCRATCH_ROOT, or --self-test's own mkdtemp() directory. Nothing else.
+
+    The override exists so --self-test can drive the REAL write_tags(), fence included, on files
+    it built itself. It is not a general knob: anything other than SCRATCH_ROOT must resolve to an
+    existing directory whose parent is the system temp directory and whose name carries
+    SELFTEST_PREFIX. realpath() first, so a symlink named like a self-test directory that points
+    at the library resolves to the library and is refused.
+    """
+    if fence_root == SCRATCH_ROOT:
+        return os.path.realpath(SCRATCH_ROOT)
+    root = os.path.realpath(fence_root)
+    tmp = os.path.realpath(tempfile.gettempdir())
+    if (
+        os.path.dirname(root) != tmp
+        or not os.path.basename(root).startswith(SELFTEST_PREFIX)
+        or not os.path.isdir(root)
+    ):
+        raise RuntimeError(
+            f"refusing fence root {fence_root} -> {root}: only {SCRATCH_ROOT} or a "
+            f"{tmp}/{SELFTEST_PREFIX}* self-test directory is accepted (D-07)"
+        )
+    return root
+
+
+def assert_inside_scratch(path: str, *, fence_root: str = SCRATCH_ROOT) -> None:
     """Refuse to touch a file whose RESOLVED path is outside the scratch root (CR-04).
+
+    `fence_root` is for --self-test only, and fence_root_or_raise() refuses every value except
+    SCRATCH_ROOT and the self-test's own temp directory. The real run never passes it.
 
     resolve_target_or_die() realpaths the TARGET and refuses anything outside SCRATCH_ROOT, and
     the module docstring calls that the single most important behaviour in the file. It was then
@@ -390,7 +449,7 @@ def assert_inside_scratch(path: str) -> None:
     the rest of this file already establishes for a file it will not process. A refused file is
     NEVER counted as unchanged.
     """
-    root = os.path.realpath(SCRATCH_ROOT)
+    root = fence_root_or_raise(fence_root)
     real = os.path.realpath(path)
     if real != root and not real.startswith(root + os.sep):
         raise RuntimeError(
@@ -470,6 +529,62 @@ def id3v2_frame_ids(path: str) -> "collections.Counter[bytes] | None":
         ids[frame_id] += 1
         i += 10 + fsz
     return ids
+
+
+def riff_chunks(path: str) -> list[tuple[bytes, int, int]]:
+    """[(chunk_id, data_offset, data_size)] for every top-level chunk of a RIFF/WAVE file.
+
+    A WAV's ID3 tag lives in an `id3 ` chunk, not at offset 0, and its LIST/INFO chunk is a
+    second, independent tag container that mutagen's WAVE API neither reads nor writes (D-23).
+    Plain `struct`, deliberately: the stdlib `chunk` module is gone in Python 3.13. Raises
+    ValueError on anything that is not a well-formed RIFF/WAVE, so a caller can keep "could not
+    look" distinct from "nothing there".
+    """
+    chunks = []
+    with open(path, "rb") as fh:
+        head = fh.read(12)
+        if len(head) < 12 or head[:4] != b"RIFF" or head[8:12] != b"WAVE":
+            raise ValueError(f"not a RIFF/WAVE file: {path}")
+        end = min(8 + struct.unpack("<I", head[4:8])[0], os.fstat(fh.fileno()).st_size)
+        pos = 12
+        while pos + 8 <= end:
+            fh.seek(pos)
+            cid, size = struct.unpack("<4sI", fh.read(8))
+            if pos + 8 + size > end:
+                raise ValueError(f"chunk {cid!r} at offset {pos} overruns the RIFF body: {path}")
+            chunks.append((cid, pos + 8, size))
+            pos += 8 + size + (size & 1)
+    return chunks
+
+
+def read_riff_info(path: str) -> dict[str, str]:
+    """The RIFF LIST/INFO chunk as {4-char key: text}, e.g. {'IPRD': album}. {} if there is none.
+
+    Read-only. This script never writes RIFF INFO (D-23); it reads it only to report when `IPRD`
+    disagrees with the ID3 album it is about to write.
+    """
+    info: dict[str, str] = {}
+    with open(path, "rb") as fh:
+        for cid, offset, size in riff_chunks(path):
+            if cid != b"LIST" or size < 4:
+                continue
+            fh.seek(offset)
+            if fh.read(4) != b"INFO":
+                continue
+            body = fh.read(size - 4)
+            i = 0
+            while i + 8 <= len(body):
+                key, n = struct.unpack("<4sI", body[i:i + 8])
+                if i + 8 + n > len(body):
+                    raise ValueError(f"INFO subchunk {key!r} overruns its LIST chunk: {path}")
+                raw = body[i + 8:i + 8 + n].split(b"\x00", 1)[0]
+                try:
+                    text = raw.decode("utf-8")
+                except UnicodeDecodeError:
+                    text = raw.decode("latin-1")
+                info[key.decode("latin-1")] = text
+                i += 8 + n + (n & 1)
+    return info
 
 
 def read_tags(path: str):
@@ -595,14 +710,16 @@ def assert_frame_set_unchanged(path, before, changes: dict[str, str]) -> None:
             )
 
 
-def write_tags(handle, path: str, changes: dict[str, str]) -> None:
+def write_tags(
+    handle, path: str, changes: dict[str, str], *, fence_root: str = SCRATCH_ROOT
+) -> None:
     """Write ONLY the fields in WRITABLE_FIELDS, and ONLY inside the scratch root.
 
     Both are asserted, not assumed, and the fence is FIRST - before any byte can move. It is
     also checked in the per-file loop so the dry run reports it, but this call is the one that
     cannot be bypassed by a future caller (CR-04).
     """
-    assert_inside_scratch(path)
+    assert_inside_scratch(path, fence_root=fence_root)
 
     for field in changes:
         if field not in WRITABLE_FIELDS:
@@ -656,7 +773,9 @@ def parse_args(argv):
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    p.add_argument("target", help=f"directory under {SCRATCH_ROOT}")
+    # nargs="?" only so --self-test can run without one; a missing TARGET is still an argparse
+    # error and still exits 2, enforced below.
+    p.add_argument("target", nargs="?", help=f"directory under {SCRATCH_ROOT}")
     mode = p.add_mutually_exclusive_group()
     mode.add_argument(
         "--dry-run",
@@ -689,7 +808,22 @@ def parse_args(argv):
     )
     p.add_argument("--out", metavar="FILE", help="NDJSON output, one record per change")
     p.add_argument("--verbose", action="store_true", help="DEBUG logging on stderr")
-    return p.parse_args(argv)
+    p.add_argument(
+        "--self-test",
+        action="store_true",
+        help=(
+            "the D-23 WAV regression test: three synthetic WAVs in a private temp directory, "
+            "driven through the real read/write/record code. Takes no TARGET. Run it inside "
+            "the beets image"
+        ),
+    )
+    args = p.parse_args(argv)
+    if args.self_test:
+        if args.target or args.apply or args.dry_run or args.snapshot_proof or args.out:
+            p.error("--self-test takes no TARGET, no mode flag, no --snapshot-proof and no --out")
+    elif args.target is None:
+        p.error("the following arguments are required: target")
+    return args
 
 
 def resolve_target_or_die(target: str) -> str:
@@ -769,6 +903,24 @@ def check_snapshot_proof_or_die(proof_path: str | None) -> str:
 # --------------------------------------------------------------------------------------------
 
 
+def build_record(*, mode, folder, path, field, rule, old, new, written, artist_policy) -> dict:
+    """One NDJSON record per (file, field) change: the shape --out has always written.
+
+    Factored out of main() so --self-test checks the record the real run emits, not a copy of it.
+    """
+    return {
+        "mode": mode,
+        "folder": folder,
+        "path": path,
+        "field": field,
+        "rule": rule,
+        "old": old,
+        "new": new,
+        "written": written,
+        "artist_policy": artist_policy,
+    }
+
+
 def collect_folders(root: str) -> dict[str, list[str]]:
     folders: dict[str, list[str]] = collections.defaultdict(list)
     for dirpath, dirnames, filenames in os.walk(root):
@@ -786,6 +938,11 @@ def main(argv=None) -> int:
         level=logging.DEBUG if args.verbose else logging.INFO,
         format="%(levelname)s %(message)s",
     )
+
+    if args.self_test:
+        # Before resolve_target_or_die(): the self-test has no TARGET and touches only its own
+        # temp directory.
+        return self_test()
 
     applying = bool(args.apply)
     target = resolve_target_or_die(args.target)
@@ -966,17 +1123,17 @@ def main(argv=None) -> int:
                 for field, (rule, old, new) in sorted(fields.items()):
                     out_fh.write(
                         json.dumps(
-                            {
-                                "mode": "apply" if applying else "dry-run",
-                                "folder": folder_name,
-                                "path": path,
-                                "field": field,
-                                "rule": rule,
-                                "old": old,
-                                "new": new,
-                                "written": written,
-                                "artist_policy": args.artist_policy,
-                            }
+                            build_record(
+                                mode="apply" if applying else "dry-run",
+                                folder=folder_name,
+                                path=path,
+                                field=field,
+                                rule=rule,
+                                old=old,
+                                new=new,
+                                written=written,
+                                artist_policy=args.artist_policy,
+                            )
                         )
                         + "\n"
                     )
@@ -1052,6 +1209,211 @@ def main(argv=None) -> int:
         return 1
     sys.stderr.write(colour("  OK\n", GREEN))
     return 0
+
+
+# --------------------------------------------------------------------------------------------
+# --self-test (D-23). Table-driven ok/bad in the shape of scripts/spike03-wrtag-arms.sh
+# self_test(): one line per case, a reason under every `bad`, a failure count, exit 1 on any.
+# --------------------------------------------------------------------------------------------
+
+SELFTEST_NEW_ALBUM = "Self Test Album"
+SELFTEST_OLD_ALBUM = "Old Album"
+SELFTEST_KEPT_FRAMES = ("APIC", "TDRC", "TIT2", "TPE1", "TRCK")
+SELFTEST_PNG = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
+
+# name | ID3 tag? | TPE1 | RIFF IPRD (None = no LIST/INFO chunk) | why the case exists
+SELFTEST_CASES = (
+    ("untagged-wav", False, None, None,
+     "no ID3 chunk at all: the write must create one holding exactly TALB"),
+    ("ascii-wav", True, "Self Test Artist", None,
+     "ASCII ID3: TALB replaced, APIC/TDRC/TIT2/TPE1/TRCK untouched, no info_iprd without INFO"),
+    ("non-ascii-wav", True, "Beyoncé Knowles – Ñ", SELFTEST_OLD_ALBUM,
+     "non-ASCII TPE1 + stale RIFF IPRD: ID3 written, INFO untouched, info_iprd recorded"),
+)
+
+
+def _selftest_inject_info(path: str, info: dict[str, str]) -> None:
+    """Append a LIST/INFO chunk and fix up the RIFF size.
+
+    SELF-TEST FIXTURE ONLY. The real run never writes RIFF INFO (D-23).
+    """
+    body = b"INFO"
+    for key, value in info.items():
+        data = value.encode("utf-8") + b"\x00"
+        body += key.encode("ascii") + struct.pack("<I", len(data)) + data
+        body += b"\x00" * (len(data) & 1)
+    with open(path, "r+b") as fh:
+        fh.seek(0, os.SEEK_END)
+        fh.write(b"LIST" + struct.pack("<I", len(body)) + body)
+        riff_size = fh.tell() - 8
+        fh.seek(4)
+        fh.write(struct.pack("<I", riff_size))
+
+
+def _selftest_build(path: str, tagged: bool, artist: str | None, iprd: str | None) -> None:
+    import wave
+
+    import mutagen.id3 as id3
+    import mutagen.wave
+
+    with wave.open(path, "wb") as pcm:  # 0.1 s of 16-bit mono silence
+        pcm.setnchannels(1)
+        pcm.setsampwidth(2)
+        pcm.setframerate(8000)
+        pcm.writeframes(b"\x00\x00" * 800)
+    if iprd is not None:
+        _selftest_inject_info(path, {"IPRD": iprd, "INAM": "Self Test Title"})
+    if tagged:
+        w = mutagen.wave.WAVE(path)
+        w.add_tags()
+        for frame in (
+            id3.TIT2(encoding=3, text=["Self Test Title"]),
+            id3.TPE1(encoding=3, text=[artist]),
+            id3.TRCK(encoding=3, text=["3/12"]),
+            id3.TDRC(encoding=3, text=["2020-05-01"]),
+            id3.APIC(encoding=3, mime="image/png", type=3, desc="cover", data=SELFTEST_PNG),
+            id3.TALB(encoding=3, text=[SELFTEST_OLD_ALBUM]),
+        ):
+            w.tags.add(frame)
+        w.save()
+
+
+def _selftest_frames(path: str) -> dict[str, tuple]:
+    """The oracle: {HashKey: (FrameID, encoding, text, mime, type, desc, data)} for every frame.
+
+    Read straight through mutagen.wave, NOT through read_tags(): the thing under test does not
+    get to grade itself.
+    """
+    import mutagen.wave
+
+    w = mutagen.wave.WAVE(path)
+    if w.tags is None:
+        return {}
+    out = {}
+    for key in sorted(w.tags.keys()):
+        f = w.tags[key]
+        out[key] = (
+            f.FrameID,
+            getattr(f, "encoding", None),
+            tuple(str(t) for t in getattr(f, "text", ())),
+            getattr(f, "mime", None),
+            getattr(f, "type", None),
+            getattr(f, "desc", None),
+            getattr(f, "data", None),
+        )
+    return out
+
+
+def _selftest_case(tmp: str, name: str, tagged: bool, artist, iprd) -> list[str]:
+    """Run one case through the real read_tags() / write_tags() / build_record(). [] means ok."""
+    path = os.path.join(tmp, name + ".wav")
+    _selftest_build(path, tagged, artist, iprd)
+    frames_before = _selftest_frames(path)
+    info_before = read_riff_info(path)
+    problems: list[str] = []
+
+    # Non-vacuity: a fixture that lacks what the checks compare would pass them trivially.
+    if tagged:
+        have = {v[0] for v in frames_before.values()}
+        missing = [f for f in SELFTEST_KEPT_FRAMES + ("TALB",) if f not in have]
+        if missing:
+            problems.append(f"fixture lacks {missing}: the frame checks would be vacuous")
+    if iprd is not None and info_before.get("IPRD") != iprd:
+        problems.append(f"fixture IPRD = {info_before.get('IPRD')!r}, expected {iprd!r}")
+
+    want_old = SELFTEST_OLD_ALBUM if tagged else None
+    handle, values = read_tags(path)
+    if values["album"] != want_old:
+        problems.append(
+            f"read_tags() album before the write = {values['album']!r}, expected {want_old!r}"
+        )
+
+    try:
+        write_tags(handle, path, {"album": SELFTEST_NEW_ALBUM}, fence_root=tmp)
+    except Exception as exc:  # noqa: BLE001 - the failure IS the finding
+        problems.append(f"write_tags() raised {type(exc).__name__}: {str(exc)[:160]}")
+        return problems
+
+    _handle, after = read_tags(path)
+    if after["album"] != SELFTEST_NEW_ALBUM:
+        problems.append(
+            f"read_tags() album after the write = {after['album']!r}, "
+            f"expected {SELFTEST_NEW_ALBUM!r}"
+        )
+
+    frames_after = _selftest_frames(path)
+    talb = [v[2] for v in frames_after.values() if v[0] == "TALB"]
+    if talb != [(SELFTEST_NEW_ALBUM,)]:
+        problems.append(f"on-disk TALB after the write = {talb}, expected [{SELFTEST_NEW_ALBUM!r}]")
+
+    for key in sorted(set(frames_before) | set(frames_after)):
+        fid = (frames_before.get(key) or frames_after.get(key))[0]
+        if fid == "TALB":
+            continue
+        if frames_before.get(key) != frames_after.get(key):
+            problems.append(
+                f"{key} changed: {frames_before.get(key)!r} -> {frames_after.get(key)!r}"
+            )
+
+    info_after = read_riff_info(path)
+    if info_after != info_before:
+        problems.append(
+            f"RIFF LIST/INFO changed: {info_before} -> {info_after} (D-23 writes ID3 only)"
+        )
+
+    rec = json.loads(
+        json.dumps(
+            build_record(
+                mode="apply", folder="self-test", path=path, field="album", rule=0,
+                old=want_old, new=SELFTEST_NEW_ALBUM, written=True, artist_policy="self-test",
+            )
+        )
+    )
+    if iprd is not None:
+        if rec.get("info_iprd") != iprd:
+            problems.append(f"NDJSON info_iprd = {rec.get('info_iprd')!r}, expected {iprd!r}")
+    elif "info_iprd" in rec:
+        problems.append(f"NDJSON carries info_iprd={rec['info_iprd']!r} with no RIFF IPRD")
+    return problems
+
+
+def self_test() -> int:
+    """--self-test. Exit 0 every case ok, 1 any case bad, 2 could not run."""
+    out = sys.stdout
+    out.write("== normalise-dj-tags.py --self-test: the WAV write path (D-23, DEF-03-09) ==\n")
+    try:
+        import mutagen
+        import mutagen.wave  # noqa: F401
+    except ImportError as exc:
+        out.write(
+            f"COULD NOT RUN: mutagen is not importable ({exc}). Run inside "
+            "lscr.io/linuxserver/beets:2.13.1-ls349 - see the module docstring.\n"
+        )
+        return 2
+    out.write(f"   python {sys.version.split()[0]}, mutagen {mutagen.version_string}\n")
+    fails = 0
+    tmp = tempfile.mkdtemp(prefix=SELFTEST_PREFIX)
+    try:
+        for name, tagged, artist, iprd, why in SELFTEST_CASES:
+            try:
+                problems = _selftest_case(tmp, name, tagged, artist, iprd)
+            except Exception as exc:  # noqa: BLE001 - a raising case is a failing case
+                problems = [f"case raised {type(exc).__name__}: {str(exc)[:160]}"]
+            if problems:
+                fails += 1
+                out.write(f"bad  {name}: {why}\n")
+                for problem in problems:
+                    out.write(f"       reason: {problem}\n")
+            else:
+                out.write(f"ok   {name}: {why}\n")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    if os.path.exists(tmp):
+        fails += 1
+        out.write(f"bad  cleanup: {tmp} still exists after rmtree\n")
+    out.write(f"-- {len(SELFTEST_CASES)} cases, {fails} failed --\n")
+    out.flush()
+    return 1 if fails else 0
 
 
 if __name__ == "__main__":
