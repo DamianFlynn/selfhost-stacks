@@ -6,12 +6,57 @@
 
 ---
 
+## Corrections after Phase 4 (2026-09-11)
+
+- **Dated 2026-08-17 snapshot, corrected in place 2026-09-11 by plan 04-04 (D-07, D-14):** beets won the Phase 3 decision, and Phase 4 deleted the wrtag definition and its Renovate pin (plan 04-03), so nothing on this page is an instruction to pin, fix, unpin or deploy wrtag. The backlog denominator is 144 folders. Each correction is dated inline.
+
+This page recommended beets over wrtag, and Phase 3 confirmed that recommendation on measurement.
+Three of the page's claims did not survive Phase 3's measurements. On 2026-09-11 they were
+corrected where they stand. `CLAUDE.md`'s *Technology Stack* section is generated from this page's
+headings, tables and bullets, so a correction made only there reverts on regeneration
+(04-RESEARCH F15).
+
+1. **The wrtag fix.** Headline finding 1 concluded that bumping the image to v0.33.0 and dropping
+   the Renovate pin would fix this repo with the path format unchanged. The v0.20.0 half was right
+   and was confirmed at runtime: 21 of 21 single-disc paths rendered `-1 - `, and the multi-disc
+   arm errored. The fix half was wrong. v0.33.0 and v0.34.0 **refuse this repo's format at
+   startup**, before a file is read. The cause is multi-disc path validation that shipped in
+   v0.30.0, which this page's reading of that release missed (`03-DECISION.md`
+   § *AMENDMENT — 2026-09-03, plan 03-08*). Phase 4 then deleted the wrtag definition and its pin
+   (plan 04-03), so no pin is left to keep, fix or remove. The migration paragraph, the
+   Installation block, both *What NOT to Use* wrtag rows, the wrtag *Alternatives* row, the
+   wrtag-wins variant and the `v0.30.0+` compatibility row now say so.
+2. **The backlog size.** The rate-limit row in *Evidence that would overturn this* used a folder
+   count about seven times the measured one. The measured denominator is **144 folders**:
+   `unsorted` holds 120 folders / 7,451 files, and `nzb/music` holds 24 / 277
+   (`03-DECISION.md` § *AMENDMENT — 2026-09-04, plan 03-07* § 1). The 7,451 file count was right
+   and is kept. That row's threshold was then tested and did not fire: 21.8 minutes projected,
+   zero HTTP 429.
+3. **The soulbeet config** named under Installation was deleted with soulbeet (plan 04-03). The
+   `audio.bash` skips it was offered as a contributor to were later attributed to sabnzbd's own
+   config, which declares `plugins: embedart` and nothing else. Phase 4's criterion-4 negative
+   control is what turns that attribution into a measurement.
+
+A dated note was also added under *Recommendation*: Phase 3 made the decision, and Phase 4
+executed it in the repo.
+
+**The original wording is left standing wherever it was correct against what it measured.** That
+covers the v0.20.0 source analysis, the v0.30.0 migration table (this repo's format genuinely uses
+none of the removed fields), the head-to-head table, and the MusicBrainz and Discogs findings.
+**Do not over-read the corrections either.** wrtag was measured against *this repo's*
+`WRTAG_PATH_FORMAT` only. Nothing here says wrtag cannot work with a different path format; that
+was out of scope and was not tested.
+
+---
+
 ## Headline: three findings that change the plan
 
 Before the stack table, three things surfaced during research that contradict what the
 project's own documents currently assert. Each is verified against primary sources.
 
 ### 1. The wrtag version pin is inverted — v0.20.0 is the *broken* one, not v0.30.0
+
+- **Corrected 2026-09-11 (plan 04-04; D-07, D-14):** the v0.20.0 half of this finding is right, but the fix it implied is not. The pin and the wrtag definition were deleted in Phase 4 (plan 04-03), so there is nothing to keep, fix or unpin. Measured in Phase 3: *this repository's `WRTAG_PATH_FORMAT` works on none of v0.20.0, v0.33.0 or v0.34.0 — it renders `-1 - ` on every single-disc track and hard-errors on multi-disc at v0.20.0, and is refused at startup by both current tags — and the sole cause of the startup refusal is the `Disc N/` **subdirectory**, proven by an ablation that changes nothing else and validates at both current tags.*
 
 `stacks/selfhosted/music/wrtag.yaml` pins `sentriz/wrtag:v0.20.0` with the comment
 *"v0.30.0 changed path-format fields — pinned to last compatible version"*. Verified against
@@ -55,10 +100,12 @@ between the two tags apart from an added `Aliases` field). `.IsCompilation` and
 `.ReleaseDisambiguation` were dropped from `Data` in v0.30.0 but are **still injected** by
 `withLegacyFields()` in v0.33.0, so they keep working.
 
-**Migration for this repo is therefore: change the image tag, change nothing else.**
-`sentriz/wrtag:v0.20.0` → `sentriz/wrtag:v0.33.0`, drop the Renovate pin. The existing
-`WRTAG_PATH_FORMAT` string is already correct for v0.33.0. Optional modernisation:
-`{{ if .IsCompilation }}` → `{{ if isCompilation .Release.ReleaseGroup }}`.
+**Migration advice withdrawn 2026-09-11 (plan 04-04).** This paragraph originally concluded that
+a one-line image bump to v0.33.0, plus removing the Renovate pin, would fix this repo with the
+path format unchanged. Phase 3 measured that false: v0.33.0 and v0.34.0 refuse this repo's format
+at startup. See the correction bullet under this finding's heading, and § *Corrections after
+Phase 4* at the top of this page. wrtag and its pin were deleted in Phase 4 (plan 04-03), so
+nothing is left to migrate.
 
 Confidence: **HIGH** — read directly from tagged upstream source.
 
@@ -168,6 +215,8 @@ Both are alive and well maintained. This is not a maintenance-risk decision.
 
 ### Recommendation
 
+- **Decided and executed (dated note, 2026-09-11):** Phase 3 made this decision on measurement (`03-DECISION.md`; engine beets 2.13.1). Phase 4 executed it in the repo: plan 04-03 deleted the wrtag and soulbeet definitions and the wrtag Renovate pin, and later Phase 4 plans retire the host runtime. The head-to-head table and the overturning table stay as the dated 2026-08-17 research record.
+
 **Use beets 2.13.1. Retire wrtag.** Confidence: **HIGH**.
 
 The reasoning is not "beets is better software". wrtag is faster, has a better import UI, and
@@ -192,13 +241,15 @@ should flip the recommendation:
 | Overturning evidence | Why it flips the decision | How to test |
 |---|---|---|
 | **Discogs matches < ~40% of `dj-mixes` folders** even after tag normalisation | beets' only structural advantage evaporates; DJ metadata comes from scans/manual either way, and wrtag's speed + import UI win on buckets A/B | Normalise tags on 20 folders, then `beet import -t` with `discogs` enabled; count folders where a Discogs candidate appears at all |
-| **Discogs rate limiting makes bulk import impractical** (60 req/min authenticated) | 7,451 files across ~1,000 folders is hours of wall-clock even before think time | Time 20 folder imports with `discogs` enabled; extrapolate |
+| **Discogs rate limiting makes bulk import impractical** (60 req/min authenticated) | The backlog (7,451 `unsorted` files, 144 folders in all) could be hours of wall-clock even before think time. *Corrected 2026-09-11: the original folder figure was about seven times the measured count. 144 is the measured denominator (`unsorted` 120 folders / 7,451 files plus `nzb/music` 24 / 277, `03-DECISION.md` § AMENDMENT 03-07 § 1). Tested in Phase 3: 21.8 min projected and zero HTTP 429, so this row did not fire* | Time 20 folder imports with `discogs` enabled; extrapolate |
 | **Damian will not sit at an interactive prompt** | beets bucket B/C work is inherently interactive; wrtag's notify-and-confirm queue is a better fit for "do it later, from a phone" | Honest self-assessment, not a measurement. If the answer is no, the plan needs wrtag for A/B and manual/scan work for C — two tools, which contradicts the core value |
 | **wrtag v0.33.0 clears bucket A materially faster with equal accuracy** | If A is 80% of the *files*, throughput on A might outweigh source coverage on C | Run both over the same 30 mainstream albums; compare wall-clock and count wrong matches |
 
 **Non-evidence — do not let these decide it:** wrtag's version number (0.x is the author's
 choice, not immaturity — the project is 3 years old with a stable release cadence), and the
-current wrtag container's brokenness (that's the inverted pin, fixable in one line).
+current wrtag container's brokenness (attributed here to the inverted pin. *Corrected
+2026-09-11: it was not fixable in one line, because the newer tags refuse this repo's path format
+at startup; see headline finding 1*).
 
 ---
 
@@ -409,10 +460,7 @@ pip install "beets[discogs]"
 pip install mutagen==1.48.1
 apt-get install -y kid3-cli    # 3.10.1, optional plan B
 
-# --- wrtag: EITHER fix the pin, OR remove the stack entirely ---
-# If keeping temporarily for a comparison spike:
-#   image: sentriz/wrtag:v0.33.0     <-- existing WRTAG_PATH_FORMAT works unchanged
-#   and drop the Renovate rule pinning <0.30.0
+# --- wrtag: removed in Phase 4 (plan 04-03, 2026-09-11) — definition and Renovate pin deleted; nothing to pin, fix or unpin ---
 ```
 
 Minimum viable `plugins:` list for this project's beets config:
@@ -446,6 +494,10 @@ currently declares a custom `plugins:` list of `[fetchart, embedart, lastgenre, 
 replaygain, missing, duplicates]` with **no `musicbrainz`**. On beets ≥ 2.4.0 that config has
 no metadata source at all — autotagging cannot succeed. This is a plausible contributor to the
 `audio.bash` "skip" outcomes and should be verified as part of resolving that requirement.
+*(2026-09-11: that file was deleted with soulbeet in plan 04-03. The skips were later attributed
+to sabnzbd's own config, which declares `plugins: embedart` and nothing else. The `musicbrainz`
+requirement now binds the surviving configs, per ROADMAP Phase 4 criterion 4 and REQUIREMENTS
+TAGR-05.)*
 
 ---
 
@@ -453,7 +505,7 @@ no metadata source at all — autotagging cannot succeed. This is a plausible co
 
 | Recommended | Alternative | When to Use Alternative |
 |-------------|-------------|-------------------------|
-| beets 2.13.1 | **wrtag 0.33.0** | If the spike shows Discogs coverage of `dj-mixes` is poor (< ~40%), *and* the interactive prompt proves to be the blocker. wrtag's notify/confirm web queue and `wrtag sync` are genuinely better for a hands-off, MusicBrainz-only library. Cost: DJ content becomes 100% manual. |
+| beets 2.13.1 | **wrtag 0.33.0** | If the spike shows Discogs coverage of `dj-mixes` is poor (< ~40%), *and* the interactive prompt proves to be the blocker. wrtag's notify/confirm web queue and `wrtag sync` are genuinely better for a hands-off, MusicBrainz-only library. Cost: DJ content becomes 100% manual. *Closed 2026-09-11: the spike decided for beets (Phase 3) and wrtag was deleted (Phase 4, plan 04-03). v0.33.0 would also have refused this repo's path format at startup (headline finding 1).* |
 | beets `discogs` plugin | **beetcamp 0.24.3** (Bandcamp) | Not relevant to this collection — DJ service releases aren't on Bandcamp. Worth knowing it exists if the library grows toward electronic/indie. |
 | mutagen script | **kid3-cli 3.10.1** | If per-folder conditional logic turns out simpler than expected and a shell loop suffices. |
 | mutagen script | **Mp3tag (Mac) actions** | For *prototyping* the field-mapping rules interactively on ~20 files before encoding them. Not for the 794-file run. |
@@ -467,8 +519,8 @@ no metadata source at all — autotagging cannot succeed. This is a plausible co
 
 | Avoid | Why | Use Instead |
 |-------|-----|-------------|
-| `sentriz/wrtag:v0.20.0` (current pin) | v0.20.0 hard-sets `Track.Position = -1`, so the repo's path format names every file `-1 - Title.ext`. Also references `.Media`, absent from v0.20's `Data` struct → runtime error on any multi-disc release. Startup validation does not catch either | `v0.33.0` — the existing path format is already correct for it |
-| Renovate rule pinning wrtag `<0.30.0` | It is enforcing the broken state. It was added on a misdiagnosis (2026-06-24, "v0.30.0 broke path-format") | Remove the rule; or remove wrtag entirely |
+| `sentriz/wrtag` at any tag *(the v0.20.0 pin was deleted with the wrtag definition in Phase 4, plan 04-03)* | v0.20.0 hard-sets `Track.Position = -1`, so the repo's path format names every file `-1 - Title.ext`. Also references `.Media`, absent from v0.20's `Data` struct → runtime error on any multi-disc release. Startup validation does not catch either. *Corrected 2026-09-11:* the newer tags are no way out, because v0.33.0 and v0.34.0 refuse this repo's format at startup (headline finding 1) | Nothing: wrtag lost the Phase 3 decision and is retired. beets 2.13.1 is the one tagger |
+| Renovate rule pinning wrtag `<0.30.0` | It enforced the broken state. It was added on 2026-06-24 on a misdiagnosis whose stated cause was reversed (headline finding 1) | Deleted in Phase 4 (plan 04-03) with the wrtag definition. The beets and Jellyfin Renovate rules deliberately carry no `allowedVersions` ceiling for this reason |
 | beets config with a custom `plugins:` list omitting `musicbrainz` | Since 2.4.0 this silently disables all MusicBrainz autotagging. Symptom looks like "no match found", not like a config error | Always list `musicbrainz` explicitly |
 | `lscr.io/linuxserver/beets:latest` or `:nightly` | LSIO publishes a `nightly` stream tracking beets **master**, updated daily. A floating tag on a tool that writes to 34 GB of library is not a risk worth taking — and this repo already has a documented Renovate deploy-drift problem | `lscr.io/linuxserver/beets:2.13.1` |
 | Tesseract for the cover scans | Accuracy falls below ~60% on text over artwork backgrounds; CD inserts are the worst case for classical OCR | A VLM (Gemini 3 Flash / Claude Opus 4.6) |
@@ -502,7 +554,7 @@ no metadata source at all — autotagging cannot succeed. This is a plausible co
   floor — correct-but-minimal beats untagged
 
 **If the spike overturns the recommendation (wrtag wins):**
-- `sentriz/wrtag:v0.33.0`, existing path format unchanged, Renovate pin removed
+- *Moot 2026-09-11 (this bullet and the two after it are the wrtag-wins variant):* the spike did not overturn the recommendation, and wrtag was deleted in Phase 4 (plan 04-03). The variant's first step, v0.33.0 with the path format unchanged and the pin removed, would also have failed, because v0.33.0 refuses this repo's format at startup (headline finding 1).
 - Buckets A/B via `wrtagweb` queue; bucket C entirely manual/scan-driven
 - Accept that this leaves two workflows, which conflicts with the stated core value — so the
   bar for overturning should be high
@@ -517,7 +569,7 @@ no metadata source at all — autotagging cannot succeed. This is a plausible co
 | beets 2.13.1 | mutagen (bundled dep) | Standalone mutagen 1.48.1 writes tags beets reads identically |
 | beets ≥ 2.4.0 | `plugins:` lists | **Breaking for this repo:** `musicbrainz` must be listed explicitly in any customised list |
 | beets 2.13.0 | `beet modify` `+=` / `-=` | New in 2.13.0 — multi-valued field edits without replacing the whole field |
-| wrtag v0.30.0+ | path formats using `.TrackNum` / `len .Tracks` / `.Tracks` | Breaking. **Not used by this repo's format** |
+| wrtag v0.30.0+ | path formats using `.TrackNum` / `len .Tracks` / `.Tracks` | Breaking. **Not used by this repo's format**. *Corrected 2026-09-11: the same release added multi-disc path validation that refuses this repo's format outright (headline finding 1)* |
 | wrtag v0.33.0 | `.IsCompilation`, `.ReleaseDisambiguation` | Still supplied via `withLegacyFields()`. Deprecated in favour of `isCompilation` / `disambiguation` helpers |
 | wrtag v0.20.0 | this repo's `WRTAG_PATH_FORMAT` | **Incompatible** — see headline finding 1 |
 | HAOS 18.2 | Network storage (NFS + CIFS ≥ 2.1) | Requires HAOS ≥ 10.2; satisfied |
