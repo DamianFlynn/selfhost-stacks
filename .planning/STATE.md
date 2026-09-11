@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-11T17:46:54.000Z"
-last_activity: 2026-09-11 -- Phase 4 planning complete
+last_updated: "2026-09-11T17:49:38.005Z"
+last_activity: 2026-09-11 -- Phase 04 execution started
 progress:
   total_phases: 10
   completed_phases: 4
   total_plans: 57
   completed_plans: 44
   percent: 40
-stopped_at: Phase 4 replanned from cross-AI reviews (04-REVIEWS rows 1–17) — 13 plans in 8 waves, ready to execute
+stopped_at: Phase 04 execution started — wave 1 of 8 (04-01, 04-02, 04-03), sequential on main tree
 ---
 
 # Project State
@@ -22,16 +22,16 @@ See: .planning/PROJECT.md (updated 2026-08-17)
 
 **Core value:** New music downloads land in the library correctly tagged, through exactly one
 pipeline that someone owns.
-**Current focus:** Phase 4 — collapse to one tagger
+**Current focus:** Phase 04 — collapse-to-one-tagger
 
 **Definition of done (CONS-04):** a file is imported only when verified with `ffprobe` on the file
 *and* visible in both Jellyfin and Music Assistant. Never "tool configured".
 
 ## Current Position
 
-Phase: 4
-Plan: Not started
-Status: Ready to execute
+Phase: 04 (collapse-to-one-tagger) — EXECUTING
+Plan: 1 of 13
+Status: Executing Phase 04
 
 **02.1-10 COMPLETE. THE ESTATE'S ROUTINE HEALTH CHECK NOW COVERS THE THING THAT EMPTIED `/`, AND
 EVERY ONE OF ITS FAIL-CLOSED BRANCHES HAS BEEN DRIVEN RATHER THAN READ.**
