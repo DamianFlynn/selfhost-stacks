@@ -24,14 +24,10 @@ scrape_configs:
     static_configs:
       - targets: ['localhost:9090']
 
-  # Docker container metrics via cAdvisor
-  - job_name: 'cadvisor'
-    static_configs:
-      - targets: ['cadvisor:8080']
-    relabel_configs:
-      - source_labels: [__address__]
-        target_label: instance
-        replacement: 'selfhost-lxc100'
+  # cAdvisor removed 2026-08-17 -- it leaked ~30MB/s to its 1g cap and was
+  # OOM-killed every ~31s (21,598 restarts). The resulting target up/down churn
+  # was also driving Prometheus to 1.8GB for only 44k active series; with
+  # cAdvisor gone Prometheus settles at ~200MB. See the monitoring README.
 
   # Host system metrics via node-exporter
   - job_name: 'node-exporter'
