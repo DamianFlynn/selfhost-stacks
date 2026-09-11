@@ -9,9 +9,9 @@ progress:
   total_phases: 10
   completed_phases: 4
   total_plans: 57
-  completed_plans: 50
+  completed_plans: 52
   percent: 40
-stopped_at: Phase 04 waves 1-2 complete (04-01..04-06) — wave 3 of 8 next (04-07 host deletions, 04-08 probe prep), sequential on main tree
+stopped_at: Phase 04 waves 1-3 complete (04-01..04-08) — wrtag/soulbeet retired from repo AND estate; wave 4 next (04-09 survivor stand-up + criterion-4 probe)
 ---
 
 # Project State
@@ -30,7 +30,7 @@ pipeline that someone owns.
 ## Current Position
 
 Phase: 04 (collapse-to-one-tagger) — EXECUTING
-Plan: 7 of 13
+Plan: 9 of 13
 Status: Executing Phase 04
 
 **02.1-10 COMPLETE. THE ESTATE'S ROUTINE HEALTH CHECK NOW COVERS THE THING THAT EMPTIED `/`, AND
