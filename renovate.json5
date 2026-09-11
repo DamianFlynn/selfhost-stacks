@@ -88,21 +88,6 @@
       ]
     },
     {
-      "description": "wrtag: HOLD at v0.20.x -- v0.30.0 changed path-format fields. WRTAG_PATH_FORMAT in stacks/selfhosted/music/wrtag.yaml uses .Release.Date.Year, .Release.Media, .Track.Position and artistsString, which that release reworked. PR #191 was already a rollback for exactly this. Rewrite the path-format first, then raise allowedVersions. Without this rule the automerge rules above would silently land v0.33.0 and break music tagging again.",
-      "matchDatasources": [
-        "docker"
-      ],
-      "matchPackageNames": [
-        "sentriz/wrtag"
-      ],
-      "allowedVersions": "<0.30.0",
-      "addLabels": [
-        "stack:music",
-        "pinned",
-        "manual-update-only"
-      ]
-    },
-    {
       "description": "Security: Pin digests for security-critical components",
       "matchDatasources": [
         "docker"
@@ -413,15 +398,6 @@
       ]
     },
     {
-      "description": "Auto-label by stack: Music",
-      "matchFileNames": [
-        "**/stacks/selfhosted/music/**"
-      ],
-      "addLabels": [
-        "stack:music"
-      ]
-    },
-    {
       "description": "Auto-label by stack: FreshRSS",
       "matchFileNames": [
         "**/stacks/selfhosted/freshrss/**"
@@ -449,7 +425,7 @@
       ]
     },
     {
-      "description": "Jellyfin: minor releases are de-facto majors -- require manual review. Jellyfin has been on 10.x since 2019, so its biggest releases present to Renovate as MINOR and fall straight through packageRules[2] (auto-merge minor, platformAutomerge, at any time) unattended: 10.9 introduced segment deletion, 10.10 changed lyric saving, 10.11 reworked encoding. packageRules[5] only catches MAJOR, which for Jellyfin means never. THE THREAT, STATED ACCURATELY: an image upgrade does NOT overwrite the settings -- they live in encoding.xml under /mnt/fast/appdata and swapping the image does not touch appdata. The two real mechanisms are (i) a release CHANGING THE SEMANTICS of the settings, since 10.9 introduced EnableSegmentDeletion in the first place and 10.11 reworked encoding, so a value that still reads back correctly can stop meaning what it meant; and (ii) this estate's documented RENOVATE DEPLOY DRIFT, where a merged PR never reaches /mnt/fast/stacks on the host and docker ps disagrees with git, so an unattended merge leaves the repo and the running container describing different software. The surface at risk is the five phase-02.1 settings: EnableSegmentDeletion, EnableThrottling, SegmentKeepSeconds, ThrottleDelaySeconds, TranscodingTempPath. PATCH automerge is deliberately PRESERVED -- a stream of pre-11.0 builds is shipping now and this estate's documented failure mode is a Renovate backlog nobody works through. NO allowedVersions ceiling: see packageRules[3], the wrtag <0.30.0 pin added on a misdiagnosis on 2026-06-24, which has been enforcing a broken state ever since. KNOWN COSMETIC WART, documented rather than fixed: addLabels is additive and Renovate has no removeLabels, so a Jellyfin minor PR inherits 'automerge' and 'safe' from packageRules[2] while NOT automerging -- the automerge:false here is what governs and those labels are decoration. Filter on 'manual-review-required'. Excluding Jellyfin from packageRules[2] was considered and deferred (CONTEXT.md, Deferred Ideas): it is a behaviour change to EVERY Docker image rule to fix a label that misleads nobody who reads this rule.",
+      "description": "Jellyfin: minor releases are de-facto majors -- require manual review. Jellyfin has been on 10.x since 2019, so its biggest releases present to Renovate as MINOR and fall straight through packageRules[2] (auto-merge minor, platformAutomerge, at any time) unattended: 10.9 introduced segment deletion, 10.10 changed lyric saving, 10.11 reworked encoding. The 'Default: Require manual review for major updates' rule only catches MAJOR, which for Jellyfin means never. THE THREAT, STATED ACCURATELY: an image upgrade does NOT overwrite the settings -- they live in encoding.xml under /mnt/fast/appdata and swapping the image does not touch appdata. The two real mechanisms are (i) a release CHANGING THE SEMANTICS of the settings, since 10.9 introduced EnableSegmentDeletion in the first place and 10.11 reworked encoding, so a value that still reads back correctly can stop meaning what it meant; and (ii) this estate's documented RENOVATE DEPLOY DRIFT, where a merged PR never reaches /mnt/fast/stacks on the host and docker ps disagrees with git, so an unattended merge leaves the repo and the running container describing different software. The surface at risk is the five phase-02.1 settings: EnableSegmentDeletion, EnableThrottling, SegmentKeepSeconds, ThrottleDelaySeconds, TranscodingTempPath. PATCH automerge is deliberately PRESERVED -- a stream of pre-11.0 builds is shipping now and this estate's documented failure mode is a Renovate backlog nobody works through. NO allowedVersions ceiling: see the retired wrtag <0.30.0 pin, deleted in Phase 4 -- it was added on a misdiagnosis on 2026-06-24 and enforced a broken state for months until it was removed. KNOWN COSMETIC WART, documented rather than fixed: addLabels is additive and Renovate has no removeLabels, so a Jellyfin minor PR inherits 'automerge' and 'safe' from packageRules[2] while NOT automerging -- the automerge:false here is what governs and those labels are decoration. Filter on 'manual-review-required'. Excluding Jellyfin from packageRules[2] was considered and deferred (CONTEXT.md, Deferred Ideas): it is a behaviour change to EVERY Docker image rule to fix a label that misleads nobody who reads this rule.",
       "matchDatasources": [
         "docker"
       ],
@@ -463,6 +439,35 @@
       "automerge": false,
       "addLabels": [
         "stack:media",
+        "major-update",
+        "manual-review-required"
+      ]
+    },
+    {
+      "description": "beets (1 of 2): LSIO tag scheme, versioning ONLY. Default docker versioning treats the '-ls349' in '2.13.1-ls349' as a COMPATIBILITY suffix, so Renovate never proposed a single update for this image -- the Dependency Dashboard listed 2.5.1-ls295 with no update for months. This regex makes the LSIO build number a real version component; build (lsNNN) bumps are handled like PATCH and so still automerge. A packageRules object may NOT combine versioning with matchUpdateTypes (renovate-config-validator rejects it: 'packageRules cannot combine both matchUpdateTypes and versioning'), which is why versioning lives here alone and the manual-review rule is the separate object that follows. Keep the two together and in this order.",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "lscr.io/linuxserver/beets"
+      ],
+      "versioning": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-ls(?<build>\\d+)$"
+    },
+    {
+      "description": "beets (2 of 2): minor and major releases require manual review. PATCH automerge is deliberately PRESERVED, which with the versioning rule above includes LSIO build (lsNNN) bumps. NO allowedVersions ceiling: the retired wrtag <0.30.0 pin, deleted in Phase 4, is exactly why a ceiling is the wrong instrument -- it enforced a broken state for months. Why a MINOR needs a human: beets 2.4.0, a minor release, turned MusicBrainz into a plugin, so any config whose plugins: list did not name musicbrainz silently lost all autotagging -- a minor release changing semantics, the same shape as the Jellyfin rule above. Must stay after the 'Default: Auto-merge minor updates for all Docker images' rule so that automerge:false wins. KNOWN COSMETIC WART, inherited from the Jellyfin rule and documented rather than fixed: addLabels is additive, so a beets minor PR also carries 'automerge' and 'safe' from the auto-merge-minor rule while NOT automerging. Filter on 'manual-review-required'.",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "lscr.io/linuxserver/beets"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "major"
+      ],
+      "automerge": false,
+      "addLabels": [
+        "stack:arrs",
         "major-update",
         "manual-review-required"
       ]

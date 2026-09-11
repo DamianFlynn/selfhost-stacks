@@ -3,7 +3,7 @@ services:
 
   beets:
     hostname: beets
-    image: lscr.io/linuxserver/beets:2.5.1-ls295
+    image: lscr.io/linuxserver/beets:2.13.1-ls349
     container_name: beets
     security_opt:
       - no-new-privileges:true
