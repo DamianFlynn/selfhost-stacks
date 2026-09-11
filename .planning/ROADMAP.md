@@ -530,7 +530,7 @@ than it started, so attempt five does not inherit attempt four's wreckage.
 Plans:
 **Wave 1**
 
-- [ ] 04-01-PLAN.md — Fence gaps (wrtag.db D-35, beets.log) + measured baseline + D-12 evidence checklist
+- [ ] 04-01-PLAN.md — Fence gaps (wrtag.db D-35, beets.log) + measured baseline incl. the routine health-check state + D-12 evidence checklist (pre-hook byte test)
 - [ ] 04-02-PLAN.md — normalise-dj-tags.py WAV write path + three-case --self-test (D-23)
 - [ ] 04-03-PLAN.md — Delete wrtag/soulbeet definitions, survivor to 2.13.1-ls349, two-rule beets Renovate policy, check-renovate.sh repairs (validator-gated; legitimacy checkpoint)
 
@@ -538,32 +538,32 @@ Plans:
 
 - [ ] 04-04-PLAN.md — D-20 criterion 4/5 + TAGR-05 amendments, D-24 dismissal, CLAUDE.md/STACK.md corrections
 - [ ] 04-05-PLAN.md — beets.md D-14 verbatim correction + D-24 amendment, .gitignore, spike03-wrtag-arms.sh keep note, interim sweep
-- [ ] 04-06-PLAN.md — Behaviour-based tagger census in check-music-freeze.sh + fold-in (first run red = negative control)
-- [ ] 04-08-PLAN.md — Probe --mb-only mode + vendored survivor config (D-27) and :ro mount
+- [ ] 04-06-PLAN.md — Behaviour-based tagger census in check-music-freeze.sh as a CANDIDATE check (red-first on real state + fixtures; routine path unchanged until 04-11 promotes it)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
 - [ ] 04-07-PLAN.md — Fence-gated host teardown (wrtag, soulbeet, old survivor DBs), image + reap exemption, wrtag DNS record, close #306
+- [ ] 04-08-PLAN.md — Probe --mb-only mode (discogs refusal driven) + vendored survivor config (D-27) and :ro mount
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 04-09-PLAN.md — Survivor stand-up, fresh library.db (D-28), criterion-4 probe with D-17 negative control, back to dormant
+- [ ] 04-09-PLAN.md — Survivor stand-up in one trap-guarded lifecycle: fresh library.db (D-28), criterion-4 probe with D-17 negative control, guaranteed return to dormant
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 04-10-PLAN.md — Vendor audio.bash (strip line 285), :ro mounts, beets-config declares musicbrainz, vendored-file drift block
+- [ ] 04-10-PLAN.md — Vendor audio.bash (strip line 285), :ro mounts, beets-config declares musicbrainz, vendored-file drift block as a CANDIDATE check
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 04-11-PLAN.md — Install + sabnzbd recreate with boot proof, delete sabnzbd beets state, all guards green
+- [ ] 04-11-PLAN.md — Install + sabnzbd recreate with boot proof, ledger-gated delete of sabnzbd beets state, promote census + drift into the routine check (all guards green)
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
-- [ ] 04-12-PLAN.md — D-12 real music job end to end (human checkpoint; OPEN if no job)
+- [ ] 04-12-PLAN.md — D-12 real music job end to end with a pre-hook byte comparison (human checkpoint; OPEN if no job)
 
 **Wave 8** *(blocked on Wave 7 completion)*
 
-- [ ] 04-13-PLAN.md — D-25 closure in beets.md from an executed census, final sweep, Renovate observation
+- [ ] 04-13-PLAN.md — D-25 closure (PASS) or interim status (OPEN/FAIL) in beets.md from an executed census, final sweep, Renovate observation
 
 **Research**: done 2026-09-11 (`04-RESEARCH.md`). *Originally "not needed — retirement is deletion
 plus documented config changes"; the operator chose to measure the live estate anyway, and it found

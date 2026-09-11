@@ -39,13 +39,14 @@ retired path, or the check is not measuring anything.
   any `renovate.json5` touch; `bash -n` + the script's `--self-test` for any script touch;
   `docker compose -f <file> config --quiet` for any compose touch.
 - **After every plan wave:** `bash scripts/quick-health-check.sh` from the workstation, **after** the
-  host `git pull` in `/mnt/fast/stacks` (the host was at `3327dcf` vs origin `4604764` on
+  host `git pull` — its exit code and `❌`/`⚠️` set must be within the 04-01 ROUTINE BASELINE until
+  04-11 promotes the candidate checks (REVIEWS row 1); the host `git pull` in `/mnt/fast/stacks` (the host was at `3327dcf` vs origin `4604764` on
   2026-09-11 — a check run against a stale checkout proves nothing about the repo).
 - **Before `/gsd-verify-work`:** full suite green **plus** the D-12 job evidence **plus** the
   executed D-21 census run whose counters are pasted into `stacks/selfhosted/arrs/beets.md` (D-25).
 - **Max feedback latency:** 200 s. *(Raised from 120 s at plan-check, 2026-09-11: the D-21 census
   deliberately walks every container state and ZFS child dataset without `-xdev` to avoid the
-  Pitfall 12 blind spot, so the two verifies that run it — 04-06 Task 2 and 04-11 Task 2 — carry a
+  Pitfall 12 blind spot, so the two verifies that run it — 04-06 Task 2 and 04-11 Task 3 — carry a
   200 s outer bound. Tightening the bound would buy speed by reintroducing the blindness.)*
 
 ---
@@ -65,13 +66,13 @@ and each plan task must cite the row it satisfies.
 | C2-c | TAGR-03 | Renovate accepted the config | observation | Dependency Dashboard #3 no longer lists soulbeet or `music/wrtag.yaml`; no "Action Required" issue opened | Renovate not yet run → "not yet observed" | manual | ⬜ pending |
 | C3-a | TAGR-04 | Beets call stripped, guard untouched | static | `grep -cE '^\s*beet ' <vendored audio.bash>` → 0; guard lines 27–35 byte-identical to the live `fdcddca2…` copy's; only line 285 differs (`diff` shows one removed line) | n/a | ❌ (file not yet vendored) | ⬜ pending |
 | C3-b | TAGR-04 (D-09) | SABnzbd boots and post-processes with `:ro` mounts | e2e | after recreate: `docker logs sabnzbd` shows `[custom-init] scripts_init.bash: exited 0`; `docker inspect` shows both vendored mounts `RW=false`; HTTP 200 on `:8084`; sha256 of both files unchanged | container not running → **FAIL**, not UNKNOWN | manual | ⬜ pending |
-| C3-c | TAGR-04 (D-12) | A real music job completes with no tagger | e2e | SAB history row `Completed` with `script_line` equal to the **baseline** `Exit(1): chmod …` (F8 — pre-existing, not a regression); `find …/scripts -newer <stamp>` shows no `library.blb`/`*.bak`/`beets.log`/`beets-match`; `ffprobe` on the job's files shows no beets-written `MUSICBRAINZ_*` tags; `Audio.txt` shows exactly the two pre-declared residual lines (OQ5) | no job arrived in the window → criterion **open**, not passed | ❌ W0 (evidence checklist) | ⬜ pending |
-| C3-d | TAGR-04 (D-13) | Vendored-file drift is detected | health | `quick-health-check.sh` drift block: exit 0 green naming both vendored files; **driven control**: override the expected hash → exit 1 naming the file and both hashes | ssh empty → UNKNOWN; RC 124 → UNKNOWN (timeout); RC≠0 → could not look | ❌ W0 | ⬜ pending |
+| C3-c | TAGR-04 (D-12) | A real music job completes with no tagger | e2e | SAB history row `Completed` with `script_line` equal to the **baseline** `Exit(1): chmod …` (F8 — pre-existing, not a regression); `find …/scripts -newer <stamp>` shows no `library.blb`/`*.bak`/`beets.log`/`beets-match`; a pre-hook tag baseline of the job's audio files matches the tags at completion (no beets-written `MUSICBRAINZ_*` keys; REVIEWS row 11 — no mtime provenance argument) and `ReplaygainTagging="false"` with an unchanged `extended.conf` hash at window open and close; `Audio.txt` shows exactly the two pre-declared residual lines (OQ5) | no job arrived in the window, or no pre-hook baseline captured → criterion **open**, not passed | ❌ W0 (evidence checklist) | ⬜ pending |
+| C3-d | TAGR-04 (D-13) | Vendored-file drift is detected | health | `quick-health-check.sh` drift block, a candidate (`VENDORED_DRIFT_PROMOTED=0`, run under `VENDORED_DRIFT_CANDIDATE=1`) until 04-11 promotes it: exit 0 green naming the three vendored files (`audio.bash`, sabnzbd `beets-config.yaml`, survivor `config.yaml`); **driven control**: additive `DRIFT_EXPECT_*` override → exit 1 naming the file, both hashes and the override; any non-default `DRIFT_APPDATA_ROOT` → exit 1 | ssh empty → UNKNOWN; RC 124 → UNKNOWN (timeout); RC≠0 → could not look | ❌ W0 | ⬜ pending |
 | C4-a | TAGR-05 (OQ1) | Every remaining beets config declares musicbrainz | static + live | repo: every beets config's `plugins:` contains `musicbrainz` (sabnzbd `beets-config.yaml` **and** the newly vendored survivor config); host: same grep over the census list; `config.yaml.old` absent | host unreachable → UNKNOWN | ❌ W0 | ⬜ pending |
 | C4-b | TAGR-05 (D-16/D-20, OQ3) | Probe: broken → 0 MB candidates; fixed → ≥1 | e2e | probe on `Garth Brooks-Scarecrow-CD-FLAC-2001-FLACME-xpost` (presence re-asserted at execution) in **MB-only mode** (no Discogs token): NDJSON `jq '[.[]\|select(.source=="MusicBrainz")]\|length'` → 0 then ≥1; `beet version` plugin lines differ; hand-read `import -t` shows a MusicBrainz candidate list | HTTP 503 from musicbrainz.org → re-run, **never** read as zero | ❌ W0 (MB-only probe mode) | ⬜ pending |
-| C5-a | TAGR-03/04 (D-21/D-25, OQ2, OQ6) | tagger defs = 1; beets DBs = 1 (the fresh survivor `library.db`); retired DBs absent; rw-on-Music on non-tagger containers = 0, Jellyfin (D-21 exception) printed separately; all container states counted | health | `check-music-freeze.sh` new census section + summary counters, widened into `quick-health-check.sh`. Retired paths include both old survivor DBs (`library.db`, `musiclibrary.blb`), sabnzbd `scripts/library.blb` + `.bak`, sabnzbd `.config/beets/`, `media/wrtag/`. **Driven control:** first run **before** deletion fails naming each retired path; `RETIRED_DB_PATHS` override at an existing scratch file → exit 1 | docker unavailable → counters print UNKNOWN, exit 1 (DEF-03-11) | ❌ W0 | ⬜ pending |
-| C5-b | D-04 | Every deleted DB was fenced first | live | each deleted DB has a `MANIFEST.txt` line with sha256 and `integrity_check ok` **before** its `rm`; `wrtag.db` specifically (F2 — not in the Phase 1 fence) copied via `sqlite3 .backup` | fence unreadable → refuse the delete | ❌ | ⬜ pending |
-| C5-c | D-04 | Retired runtime state gone | live | `docker ps -a --format '{{.Names}}' \| grep -ciE 'wrtag\|soulbeet'` → 0; `test ! -e` on each deleted path | — | covered by C5-a | ⬜ pending |
+| C5-a | TAGR-03/04 (D-21/D-25, OQ2, OQ6) | tagger defs = 1; beets DBs = 1 (the fresh survivor `library.db`); retired DBs absent; rw-on-Music on any container in any state = 0, tagger-capable included (REVIEWS row 7), Jellyfin (D-21 exception) printed separately | health | `check-music-freeze.sh` census section 6b + summary counters — a candidate (`TAGGER_CENSUS_PROMOTED=0`, run under `CENSUS_CANDIDATE=1`) from 04-06, promoted into the routine `quick-health-check.sh` path in 04-11 (REVIEWS row 1); `SURVIVOR_DB`/`APPDATA_ROOT` are constants. Retired paths include both old survivor DBs (`library.db`, `musiclibrary.blb`), sabnzbd `scripts/library.blb` + `.bak`, sabnzbd `.config/beets/`, `media/wrtag/`. **Driven control:** first run **before** deletion fails naming each retired path; additive `RETIRED_DB_PATHS` override at an existing scratch file → exit 1; created-then-exited fixture container with rw on a `CENSUS_EXTRA_LIBRARY_ROOTS` scratch root → exit 1 | docker unavailable, `find` RC other than 0/1, or the Jellyfin positive-control DB absent → counters print UNKNOWN, exit 1 (DEF-03-11) | docker unavailable → counters print UNKNOWN, exit 1 (DEF-03-11) | ❌ W0 | ⬜ pending |
+| C5-b | D-04 | Every deleted DB was fenced first | live | a per-file ledger (REVIEWS row 4): each deleted DB **and every `library.blb*` / `.config/beets/*.bak` sibling** has a `MANIFEST.txt` sha256 match or a fresh `.backup`/`cp -p` + `integrity_check ok` line **before** its `rm`; files deleted one by one, directories by `rmdir` (never `rm -rf`), so an unledgered file blocks the delete; `wrtag.db` specifically (F2 — not in the Phase 1 fence) copied via `sqlite3 .backup` | fence unreadable → refuse the delete | ❌ | ⬜ pending |
+| C5-c | D-04 | Retired runtime state gone | live | `docker ps -a --format '{{.Names}}'` status captured first and the listing must contain `sabnzbd` (positive control) before `wrtag`/`soulbeet` absence is read; image absence only on an explicit `No such image` (REVIEWS row 2); `test ! -e` on each deleted path | docker error/timeout (driven via `DOCKER_HOST=unix:///nonexistent-04.sock`) → UNKNOWN, never absent | covered by C5-a | ⬜ pending |
 | C5-d | OQ7 | wrtag DNS record removed | live | `dig +short wrtag.deercrest.info @1.1.1.1` → empty; Cloudflare API list for the name → 0 records; token read host-side, never on argv | dig/API failure → UNKNOWN | manual | ⬜ pending |
 | D-22 | — | `check-renovate.sh` survives empty inputs; line 157 no longer inverted | unit-ish | PATH-stubbed `git` with empty `branch -r` → "✅ No pending Renovate PRs", exit 0; empty postgres/redis sets → counts 0, exit 0 | — | ❌ W0 (stub harness, 02.1-08 precedent) | ⬜ pending |
 | D-23 | — | WAV write works, other frames intact, IPRD disagreement surfaced | unit | `docker run --rm --entrypoint python3 -v <scratch>:/w lscr.io/linuxserver/beets:2.13.1-ls349 /w/normalise-dj-tags.py --self-test` → exit 0; old `easy=True` path → self-test exit 1 | image absent → refuse, never pull silently | ❌ W0 | ⬜ pending |
@@ -83,7 +84,7 @@ and each plan task must cite the row it satisfies.
 | Row | Plans | Row | Plans |
 |-----|-------|-----|-------|
 | C1-a | 04-03, 04-13 | C4-a | 04-09, 04-11 |
-| C1-b | 04-07 | C4-b | 04-01, 04-09 |
+| C1-b | 04-07 | C4-b | 04-01, 04-08, 04-09 |
 | C1-c | 04-03 | C5-a | 04-11, 04-13 |
 | C2-a | 04-03 | C5-b | 04-01, 04-11 |
 | C2-b | 04-03, 04-13 | C5-c | 04-07 |
@@ -97,10 +98,12 @@ and each plan task must cite the row it satisfies.
 
 ## Wave 0 Requirements
 
-- [ ] `scripts/check-music-freeze.sh` — all-states census section + summary counters +
-      `RETIRED_DB_PATHS` / `SURVIVOR_DB` env overrides (C5-a)
-- [ ] `scripts/quick-health-check.sh` — drift block for both vendored files; selector widened to the
-      new counters (C3-d, C5-a)
+- [ ] `scripts/check-music-freeze.sh` — all-states census section 6b + summary counters,
+      gated as a candidate (`TAGGER_CENSUS_PROMOTED=0` / `CENSUS_CANDIDATE`); additive `RETIRED_DB_PATHS` /
+      `CENSUS_EXTRA_LIBRARY_ROOTS` overrides; `SURVIVOR_DB` is a constant (C5-a)
+- [ ] `scripts/quick-health-check.sh` — drift block for the three vendored files, a candidate
+      (`VENDORED_DRIFT_PROMOTED=0` / `VENDORED_DRIFT_CANDIDATE`); 04-11 promotes both blocks and widens the
+      selector to the new counters (C3-d, C5-a)
 - [ ] `scripts/spike03-discogs-probe.py` — MB-only mode with no token and no identity probe (C4-b)
 - [ ] `scripts/normalise-dj-tags.py` — `--self-test` with three synthetic WAVs (D-23)
 - [ ] `scripts/check-renovate.sh` — `--no-global`; PATH-stub control for line 157 (C2-a, D-22)
@@ -122,9 +125,9 @@ and each plan task must cite the row it satisfies.
 
 ## Validation Sign-Off
 
-- [x] All tasks have `<automated>` verify or Wave 0 dependencies — 31 of 33 tasks carry
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies — 33 of 35 tasks carry
       `<automated>`; the other 2 are the human checkpoints in 04-03 (package legitimacy) and 04-12
-      (the D-12 job). Counted by the orchestrator, not taken from the checker
+      (the D-12 job). Recounted by the orchestrator after the `--reviews` revision, not taken from the checker
 - [x] Sampling continuity: no 3 consecutive tasks without automated verify — counted per plan, no
       run found
 - [x] Wave 0 covers all MISSING references — each Wave 0 gap is built by an early plan before
@@ -132,11 +135,12 @@ and each plan task must cite the row it satisfies.
 - [x] No watch-mode flags — no `tail -f`, `logs -f`, `--watch`, `watch -n` or `inotifywait` in any plan
 - [x] Feedback latency ≤ 200 s — see § Sampling Rate for why 200, not 120
 - [x] Every census/drift check's first run is before the deletion it guards, and fails — 04-06's
-      census runs before 04-07's deletions; 04-10's drift block runs before 04-11 installs
-      (plan-checker, 2026-09-11)
+      census runs before 04-07's deletions; 04-10's drift block runs before 04-11 installs — both as
+      candidate checks, promoted into the routine path only in 04-11 (REVIEWS row 1; plan-checker, 2026-09-11)
 - [x] `nyquist_compliant: true` set in frontmatter
 
 **Wave 0 is not complete and is not claimed to be:** its checks are built *during* execution
 (04-02, 04-03, 04-06, 04-08, 04-10). `wave_0_complete` flips when those plans land.
 
-**Approval:** plan-checked 2026-09-11 (0 blockers); operator approval pending
+**Approval:** plan-checked 2026-09-11 (0 blockers); re-checked after the `--reviews` revision 2026-09-11
+(0 blockers; its 2 VALIDATION-drift warnings and 1 info fixed in this file); operator approval pending
