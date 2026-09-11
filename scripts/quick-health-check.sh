@@ -16,6 +16,16 @@
 #     The harness's two library mode counts are REPORTED, not asserted, so this script does not
 #     inherit a permanent red — see MODE SCOPE in scripts/check-music-freeze.sh.
 #
+#     THE SAME PRINCIPLE NOW COVERS THE PHASE 4 TAGGER CENSUS (2026-09-11, plan 04-06). The
+#     harness gained a section 6b that asserts Phase 4's own outcome — one tagger definition, one
+#     beets database, the retired tagger trees and databases gone, and no container in any state
+#     holding rw on Music except Jellyfin. That outcome is not true until plan 04-11 finishes the
+#     host teardown, so 6b is a CANDIDATE: it runs only when the caller sets CENSUS_CANDIDATE=1,
+#     and the fold-in below passes no environment. Nothing this script exits with changes until
+#     04-11 promotes it. The selector below is widened for those counters IN ADVANCE, so the
+#     promotion commit does not have to touch two files to avoid the WR-09 UNKNOWN branch; until
+#     then the widened tokens simply match nothing and the output is unchanged.
+#
 # ⚠️  EXIT-CODE BEHAVIOUR CHANGED AGAIN — A SECOND FATAL BLOCK WAS ADDED 2026-09-01 (plan 02-09,
 #     D-41).
 #     (Retitled 2026-09-03 by plan 02.1-10. Only the first six words are new: this notice was
@@ -536,8 +546,23 @@ elif [ "$MUSIC_RC" -eq 0 ]; then
     # "✅ Intact" with no supporting detail at all. check-music-freeze.sh treats that heading as
     # load-bearing and says so in capitals - a documented coupling with no detector is a coupling
     # that will break, and it would break on the branch that still prints a tick.
+    # CROSS-FILE CONTRACT with scripts/check-music-freeze.sh. This selector is the consumer of
+    # that file's summary labels, and it lives in a different file from the thing it depends on,
+    # so the coupling can only be kept true by saying out loud what it selects. The anchor is the
+    # literal heading `📊 7. Summary`; the labels selected are:
+    #     tagger-class          unclassified          declared rw         ownership mismatches
+    #     tagger definitions    beets databases       tagger databases    retired paths present
+    #     rw on Music           tagger-capable
+    # Renaming any of those labels in check-music-freeze.sh, or renumbering that heading, MUST
+    # change this file in the same commit. A grep that selects nothing looks exactly like a check
+    # with nothing to report, which is how the WR-09 coupling broke silently once already.
+    #
+    # The six Phase 4 tokens on the last two lines select the section 6b census counters. Section
+    # 6b is a CANDIDATE and prints no counters on a routine run, so until plan 04-11 promotes it
+    # these tokens match nothing and this block's output is byte-for-byte what it was before.
+    # They are added now so the promotion is a one-file change.
     SUMMARY=$(echo "$MUSIC_OUT" | sed -n '/^📊 7\. Summary/,$p' \
-              | grep -E 'tagger-class|unclassified|declared rw|ownership mismatches')
+              | grep -E 'tagger-class|unclassified|declared rw|ownership mismatches|tagger definitions|beets databases|tagger databases|retired paths present|rw on Music|tagger-capable')
     if [ -z "$SUMMARY" ]; then
         echo "⚠️  UNKNOWN — the harness exited 0 but its '📊 7. Summary' block was not found."
         echo "  The section heading this fold-in anchors on has changed, so nothing here was"
