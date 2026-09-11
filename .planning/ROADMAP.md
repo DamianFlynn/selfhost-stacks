@@ -523,9 +523,43 @@ than it started, so attempt five does not inherit attempt four's wreckage.
      confirmed cause of the 1 Aug and 8 Aug ingest skips: since beets 2.4.0 MusicBrainz is a
      plugin, and `/config/scripts/beets-config.yaml` declares `embedart` and nothing else.
 
+     > **Amended 2026-09-11 by plan 04-04 (D-20).** The second clause reads "…a `--pretend` run on
+     > one known-good album returns a MusicBrainz candidate instead of skipping", and it is
+     > **unsatisfiable as written**. In beets v2.13.1, `beets/importer/session.py`
+     > `ImportSession.run()` appends only `stagefuncs.log_files` to the pipeline when `pretend` is
+     > set; `stagefuncs.lookup_candidates` is appended only on the non-pretend branch. Under
+     > `--pretend` it is therefore never called, no metadata-source request is issued, and zero
+     > candidates are returned **by construction**, whatever the config declares (excerpt:
+     > `03-DECISION.md` § *Handoff to Phase 4*). The substitute instrument is a **pair**, and both
+     > runs pass an explicit throwaway `-l <db>` because `beet` is not read-only (D-16). (1) The
+     > `tag_album()` probe, `scripts/spike03-discogs-probe.py --mb-only`, runs **inside the survivor
+     > container** on its `manual` profile (D-19). The `--mb-only` mode is added by plan 04-08 and
+     > never loads the dismissed Discogs credential (D-24). The album is
+     > `Garth Brooks-Scarecrow-CD-FLAC-2001-FLACME-xpost` (D-29), which replaces D-18's album because
+     > that album is gone from the downloads tree; Scarecrow's presence is re-asserted at execution.
+     > The probe runs first against the **live** `plugins: embedart` config, where it must return
+     > **zero** MusicBrainz candidates (the D-17 negative control). It then runs against the fixed
+     > config, with the same album, the same throwaway `-l` and only the `plugins:` line differing,
+     > where it must return **≥ 1**. (2) One agent-driven `beet import -t -W -C` runs on the same
+     > album, is read by hand, and is aborted at the candidate prompt, as the cross-check. The
+     > **substance is kept, not reduced**. The probe asserts exactly what the original clause wanted:
+     > a MusicBrainz candidate where the broken config produced none. The negative control also
+     > turns the stated cause of the 1 Aug and 8 Aug skips from an inference into a measurement,
+     > which the original clause never demanded. The first clause ("every remaining beets config
+     > declares `musicbrainz`") is unchanged; REQUIREMENTS TAGR-05's addendum clarifies its scope.
+
   5. Taken alone, this phase leaves the estate strictly better: one tagger, one `library.db`, zero
      read-write library mounts on non-tagger containers — checked and stated as an outcome, not
      assumed from the diff.
+
+     > **Amended 2026-09-11 by plan 04-04 (F10).** The rw counter above is stated, and will be
+     > reported, as "0 excluding the documented D-21 consumer exception". That exception is
+     > Phase 1's D-21: Jellyfin keeps `/mnt/tank/media → /media:rw` as the consumer-class holder,
+     > frozen at the application layer. `docker inspect` across every container in every state (97)
+     > on 2026-09-11 found Jellyfin to be the **only** read-write holder over the library. It is
+     > printed on its **own line**, beside the counter and never folded into it. This is the WRIT-01
+     > shape: a bare "0" cannot read as a pass, and Jellyfin's presence is not a gap. The
+     > criterion's substance is unchanged.
 **Plans**: 13 plans in 8 waves
 Plans:
 **Wave 1**

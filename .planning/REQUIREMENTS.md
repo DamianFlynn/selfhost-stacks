@@ -264,7 +264,7 @@ Populated during roadmap creation (2026-08-17). Every v1 requirement maps to exa
 | TAGR-06 | Phase 3 | Complete |
 | TAGR-03 | Phase 4 | Pending |
 | TAGR-04 | Phase 4 | Pending |
-| TAGR-05 | Phase 4 | Pending |
+| TAGR-05 | Phase 4 | Pending. **ADDENDUM 2026-09-11 (04-04, D-20/D-27)** — two clarifications to the requirement text, neither of which reduces it. (1) **Scope:** "every remaining beets config" includes the survivor's **newly vendored** `stacks/selfhosted/arrs/beets/config.yaml` (D-27), alongside `stacks/selfhosted/arrs/sabnzbd/beets-config.yaml`. Vendoring makes the requirement checkable in git for both. The vendored file is created by plan 04-08 and does not exist at this addendum's commit. The survivor's live host config is a pasted compose service definition with no `plugins:` key at all (04-RESEARCH F4), which is why it is replaced by a vendored file rather than edited in place. (2) **Instrument:** the proving instrument is the probe pair named in ROADMAP Phase 4 criterion 4's amendment: the MB-only `tag_album()` probe with its D-17 negative control, plus a hand-read `beet import -t`. It is **not `--pretend`**, which in beets v2.13.1 never calls `lookup_candidates` and so returns zero candidates by construction. The text above is deliberately not rewritten. |
 | INBX-01 | Phase 5 | Pending |
 | INBX-02 | Phase 5 | Pending |
 | INBX-03 | Phase 5 | Pending |
