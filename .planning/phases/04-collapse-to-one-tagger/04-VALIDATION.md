@@ -1,8 +1,8 @@
 ---
 phase: 4
 slug: collapse-to-one-tagger
-status: draft
-nyquist_compliant: false
+status: planned
+nyquist_compliant: true
 wave_0_complete: false
 created: 2026-09-11
 ---
@@ -43,7 +43,10 @@ retired path, or the check is not measuring anything.
   2026-09-11 — a check run against a stale checkout proves nothing about the repo).
 - **Before `/gsd-verify-work`:** full suite green **plus** the D-12 job evidence **plus** the
   executed D-21 census run whose counters are pasted into `stacks/selfhosted/arrs/beets.md` (D-25).
-- **Max feedback latency:** 120 s.
+- **Max feedback latency:** 200 s. *(Raised from 120 s at plan-check, 2026-09-11: the D-21 census
+  deliberately walks every container state and ZFS child dataset without `-xdev` to avoid the
+  Pitfall 12 blind spot, so the two verifies that run it — 04-06 Task 2 and 04-11 Task 2 — carry a
+  200 s outer bound. Tightening the bound would buy speed by reintroducing the blindness.)*
 
 ---
 
@@ -75,6 +78,21 @@ and each plan task must cite the row it satisfies.
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
+**Owning plans** (from the plans' own citations, 2026-09-11 plan-check):
+
+| Row | Plans | Row | Plans |
+|-----|-------|-----|-------|
+| C1-a | 04-03, 04-13 | C4-a | 04-09, 04-11 |
+| C1-b | 04-07 | C4-b | 04-01, 04-09 |
+| C1-c | 04-03 | C5-a | 04-11, 04-13 |
+| C2-a | 04-03 | C5-b | 04-01, 04-11 |
+| C2-b | 04-03, 04-13 | C5-c | 04-07 |
+| C2-c | 04-13 | C5-d | 04-07 |
+| C3-a | 04-10 | D-22 | 04-03 |
+| C3-b | 04-11 | D-23 | 04-02, 04-13 |
+| C3-c | 04-01, 04-12 | | |
+| C3-d | 04-10, 04-11 | | |
+
 ---
 
 ## Wave 0 Requirements
@@ -104,12 +122,21 @@ and each plan task must cite the row it satisfies.
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 120 s
-- [ ] Every census/drift check's first run is before the deletion it guards, and fails
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies — 31 of 33 tasks carry
+      `<automated>`; the other 2 are the human checkpoints in 04-03 (package legitimacy) and 04-12
+      (the D-12 job). Counted by the orchestrator, not taken from the checker
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify — counted per plan, no
+      run found
+- [x] Wave 0 covers all MISSING references — each Wave 0 gap is built by an early plan before
+      anything depends on it (plan-checker, 2026-09-11)
+- [x] No watch-mode flags — no `tail -f`, `logs -f`, `--watch`, `watch -n` or `inotifywait` in any plan
+- [x] Feedback latency ≤ 200 s — see § Sampling Rate for why 200, not 120
+- [x] Every census/drift check's first run is before the deletion it guards, and fails — 04-06's
+      census runs before 04-07's deletions; 04-10's drift block runs before 04-11 installs
+      (plan-checker, 2026-09-11)
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Wave 0 is not complete and is not claimed to be:** its checks are built *during* execution
+(04-02, 04-03, 04-06, 04-08, 04-10). `wave_0_complete` flips when those plans land.
+
+**Approval:** plan-checked 2026-09-11 (0 blockers); operator approval pending

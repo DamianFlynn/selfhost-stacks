@@ -845,7 +845,25 @@ UTC+1). Do not compare them naively.
 | A7 | MusicBrainz's 12-track 2001 *Scarecrow* is the release the folder's audio actually is | F1 / OQ3 | The negative/positive pair still discriminates. The candidate may just score lower |
 | A8 | `renovate` npm package legitimacy (slopcheck unavailable in check-only mode) | Package audit | Negligible: official repo, 205k/wk, pinned version, `--ignore-scripts` |
 
-## Open Questions (for the planner, several for the operator)
+## Open Questions (for the planner, several for the operator) (RESOLVED)
+
+> **All ten resolved on 2026-09-11**, after this document was written. The operator ruled on
+> OQ1–OQ8; OQ9 and OQ10 were settled by the orchestrator within CONTEXT's discretion. The
+> questions below are kept as written; the answers are in `04-CONTEXT.md` § *Operator rulings
+> after research* and in the plans:
+>
+> | OQ | Resolved by | Ruling |
+> |---|---|---|
+> | 1 | D-27 | Minimal vendored survivor config (`plugins: musicbrainz`, SAFE-01 keys, explicit `library:`); `config.yaml.old` deleted |
+> | 2 | D-28 | **Neither** — both old survivor DBs deleted after fence check; one fresh `library.db` at the explicit path |
+> | 3 | D-29 | Scarecrow, presence re-asserted at execution |
+> | 4 | D-30 | Two-rule shape, effective; the `ls350` PR is expected |
+> | 5 | D-31 | Line 285 only; residual log lines and baseline `Exit(1)` pre-declared |
+> | 6 | D-32 | Delete sabnzbd `.config/beets/` after fence check |
+> | 7 | D-33 | Remove the DNS record host-side, token never on argv |
+> | 8 | D-34 | Correct the include line to `#  - beets/beets.yaml` |
+> | 9 | plan 04-12 | Human checkpoint: trigger a Lidarr search or wait for an organic job; OPEN if none arrives |
+> | 10 | plans 04-10/04-11 | `beets-config.yaml` goes `:ro` in the same recreate as `audio.bash`; `:rw` rollback only if boot fails |
 
 1. **The survivor's host `config.yaml` (TAGR-05).** It is compose junk, not in the repo, with no
    `plugins:` key. *Recommendation:* replace it with a minimal beets config (`plugins: musicbrainz`
