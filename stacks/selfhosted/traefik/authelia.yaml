@@ -27,7 +27,7 @@ services:
   authelia:
     container_name: authelia
     # renovate: datasource=docker depName=authelia/authelia
-    image: authelia/authelia:4.39.20@sha256:1b363e9279e742397966333f364e0876ae02bf5c876de73e83af6d48c57ff51b
+    image: authelia/authelia:4.39.26@sha256:16b804fbf6704b456ffb6e474c8e9d2406f9544ca0fecfeca7b4dcbed647deb4
     pull_policy: always
     security_opt:
       - no-new-privileges:true
