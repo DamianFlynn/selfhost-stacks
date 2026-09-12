@@ -35,16 +35,29 @@ services:
       # three automatic tag-destroying plugins armed against a 34 GB library and a 97 GB
       # backlog, with no `beet undo`.
       #
-      # How much :ro protects, and what is NOT yet measured. It makes the file read-only
+      # How much :ro protects, and what BOOT actually did. It makes the file read-only
       # to the container, which is the half the sabnzbd :rw mount does not cover: that one
       # was measured on 2026-08-18 to block `mv tmp dest` (EBUSY) but NOT in-place `> dest`
-      # truncation (../sabnzbd.yaml:80-90). The open question is BOOT, not tamper —
+      # truncation (../sabnzbd.yaml:80-90). The open question was BOOT, not tamper —
       # LinuxServer images run an `lsiown -R abc:abc /config` pass at start, which may log
-      # EROFS against this single-file mount. That is UNMEASURED at this commit: plan 04-09
-      # starts the container on its `manual` profile and records whatever it logs. If EROFS
-      # lines appear and the container is otherwise healthy, :ro stays and the lines are
-      # recorded as tolerated (the D-09 rule); only a container that cannot start justifies
-      # flipping this one line to :rw.
+      # EROFS against this single-file mount.
+      #
+      # MEASURED 2026-09-11 (plan 04-09), superseding this block's previous "UNMEASURED at
+      # this commit". The survivor was started twice on its `manual` profile at
+      # 2.13.1-ls349 with this mount in place. Across 175 container log lines there were
+      # ZERO `Read-only file system`, ZERO `Permission denied`, ZERO `lsiown` and ZERO
+      # `chmod` lines; it reached `running` both times, reported `User UID/GID 568`, and
+      # `docker inspect` showed `/config/config.yaml RW=false` alongside `/media RW=false`.
+      # :ro therefore STAYS. No EROFS line had to be tolerated under the D-09 rule, and
+      # nothing justified flipping this line to :rw.
+      #
+      # What DID bite, recorded so nobody rediscovers it: `.State.Status` reports `running`
+      # IMMEDIATELY, before s6 has remapped `abc` to PUID. A `docker exec` issued in that
+      # window runs as the image-default uid and takes EACCES on this 0770 apps-owned file
+      # ("configuration error: /config/config.yaml could not be read: [Errno 13] Permission
+      # denied") — and in the same window `docker logs` is still EMPTY, so an EROFS grep
+      # taken there reads a false "(none)". Gate on
+      # `docker exec -u abc … test -r /config/config.yaml`, never on `running` alone.
       - /mnt/fast/appdata/arrs/beets/config/config.yaml:/config/config.yaml:ro  # Vendored beets config (see above)
       - /mnt/tank/downloads:/downloads:rw  # Import source — backlog staging area
       # NOTE (2026-08-18): :ro is deliberate (D-20). Nobody holds read-write on
