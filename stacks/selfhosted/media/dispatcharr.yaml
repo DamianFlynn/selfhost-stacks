@@ -34,7 +34,7 @@ networks:
 services:
   dispatcharr:
     hostname: "dispatcharr"
-    image: ghcr.io/dispatcharr/dispatcharr:0.29.0
+    image: ghcr.io/dispatcharr/dispatcharr:0.30.0
     container_name: dispatcharr
     # measured 1299 MB 2026-09-06; cap bounds a runaway, not steady state.
     # Deliberately generous at 3g: live-stream buffers scale with concurrent
