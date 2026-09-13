@@ -158,20 +158,82 @@ the two naively. Convert one side, and state which.
 
 ## 6. Result
 
-PENDING — filled by 04-12
+Filled by plan 04-12 on 2026-09-13. **Two** real `music` jobs completed inside the window, fourteen
+seconds apart, both triggered by the operator's Lidarr search. Sections 1–5 were not edited.
+
+Job folders are identified by a 12-character sha256 prefix of the folder name (`job A`, `job B`), so
+the mapping to a release stays out of this public repo. The mapping lived only in host scratch and
+was deleted with it.
 
 | Field | Value |
 |---|---|
-| Stamp time (UTC) | PENDING — filled by 04-12 |
-| Window open / close (UTC) | PENDING — filled by 04-12 |
-| SAB row (completed UTC, status, truncated `script_line`, `storage` prefix only) | PENDING — filled by 04-12 |
-| `find /mnt/fast/appdata/arrs/sabnzbd/config/scripts -newer <stamp>` output | PENDING — filled by 04-12 |
-| `find /mnt/fast/appdata/arrs/sabnzbd/config -name '*.bak' -newer <stamp>` output | PENDING — filled by 04-12 |
-| `Audio.txt` lines for the job (Europe/Dublin), and delta of the two residual-line counts | PENDING — filled by 04-12 |
-| PRE-HOOK snapshot time, and its position relative to the `Matching` line | PENDING — filled by 04-12 |
-| COMPLETION snapshot time | PENDING — filled by 04-12 |
-| Per-file comparison summary (identical / MOVED / deleted-by-clean / changed / COMPLETION-only) | PENDING — filled by 04-12 |
-| `extended.conf` at open: `ReplaygainTagging` line, sha256, mtime | PENDING — filled by 04-12 |
-| `extended.conf` at close: `ReplaygainTagging` line, sha256, mtime | PENDING — filled by 04-12 |
-| ffprobe tag-key sets (PRE-HOOK vs COMPLETION) | PENDING — filled by 04-12 |
-| **Verdict** (PASS / FAIL / OPEN, with the reason) | PENDING — filled by 04-12 |
+| Stamp time (UTC) | **2026-09-13T09:56:48Z** (epoch `1789293408`), a 0-byte marker at `/mnt/fast/scratch-04/12/d12.stamp`, inode 1049970 |
+| Window open / close (UTC) | open **2026-09-13T09:56:48Z** (stamp) → close **2026-09-13T12:21:30Z** (watcher stopped by `SIGTERM`; it was still alive, scheduled to self-exit at 12:23:00Z). Evidence read 12:21:27Z–12:24:55Z |
+| SAB row (completed UTC, status, truncated `script_line`, `storage` prefix only) | **job A** `2026-09-13 12:17:59` · `Completed` · `Exit(1): chmod: changing permissions of '/downloads/complete` · `/downloads/complete/nzb/music/`<br>**job B** `2026-09-13 12:18:13` · `Completed` · `Exit(1): chmod: changing permissions of '/downloads/complete` · `/downloads/complete/nzb/music/`<br>Both are the F8 baseline shape of § 1 item 1. Music rows total 119 → **121**; rows between the § 2 baseline read (2026-09-11 01:22:11Z) and the stamp: **0**, so § 2's `Audio.txt` counts were still current at window open |
+| `find …/config/scripts -newer <stamp>` output | RC **0**. Exactly **one** entry, the directory `/mnt/fast/appdata/arrs/sabnzbd/config/scripts` itself (last written 2026-09-13T12:18:13Z). **No `library.blb`, no `library.blb*`, no `beets.log`.** A second name-targeted `find` for `library.blb*` / `beets.log` / `beets-match` also returned nothing at RC **0**, and `test ! -e …/scripts/beets-match` held. Positive control: `audio.bash` is present in the same listing. The directory entry is the pre-declared § 2 row 3 — the transient `beets-match` created at line 281 and removed at 298–301 |
+| `find …/config -name '*.bak' -newer <stamp>` output | RC **0**, **empty**. Positive control: the same `find` without `-newer` (RC 0) returns exactly one file, `…/config/sabnzbd.ini.bak`, 9,837 B, 2026-08-17 — the § 1 item 3 pre-declared exception, unchanged and identical to the listing plan 04-12 Task 1 recorded at window open |
+| `Audio.txt` lines for the jobs (Europe/Dublin), and delta of the two residual-line counts | 240,997 B, 3,063 lines, last written 2026-09-13T12:18:13Z. `tracks with Beets` **98 → 100 (+2)**; `Unable to match using beets to a musicbrainz release` **87 → 89 (+2)**; `SUCCESS: Matched with beets` **0**. Quoted verbatim:<br>`2026-09-13 13:17:59 :: Audio :: 1.9 :: Matching 10 tracks with Beets`<br>`2026-09-13 13:17:59 :: Audio :: 1.9 :: ERROR: Unable to match using beets to a musicbrainz release`<br>`2026-09-13 13:18:12 :: Audio :: 1.9 :: Matching 15 tracks with Beets`<br>`2026-09-13 13:18:13 :: Audio :: 1.9 :: ERROR: Unable to match using beets to a musicbrainz release`<br>Converted (Dublin = UTC+1): job A `Matching` = **12:17:59Z**, job B `Matching` = **12:18:12Z**. Each job's first hook line (`Configuration:`) is 12:17:58Z and 12:18:10Z. **Exactly the two pre-declared D-31 residual lines per job, and no success line** |
+| PRE-HOOK snapshot time, and its position relative to the `Matching` line | **job A** — folder first seen 12:18:00.074Z…**pre-snapshot time 12:18:00.074Z**, written 12:18:00.291Z, 10 files. Its `Matching` line is **12:17:59Z**. The snapshot is **LATER** than the `Matching` line → **INVALID**.<br>**job B** — **pre-snapshot time 12:18:12.758Z**, written 12:18:12.932Z, 15 files. Its `Matching` line is **12:18:12Z**, and `Audio.txt` resolves to one second, so the line falls anywhere in `[12:18:12.000Z, 12:18:13.000Z)`. The ordering is **INDETERMINATE** — not provably earlier → **INVALID**.<br>**Neither job has a valid PRE-HOOK snapshot under § 1 item 4 / § 5.** |
+| COMPLETION snapshot time | **job A** 12:18:00.309Z, written 12:18:00.511Z, 10 files; row completed 12:17:59Z, so `post.time ≥ completed` holds. **job B** 12:18:17.067Z, written 12:18:17.249Z, 15 files; row completed 12:18:13Z, holds |
+| Per-file comparison summary (identical / MOVED / deleted-by-clean / changed / COMPLETION-only) | **job A**: in both **10**, byte-identical **10**, changed **0**, PRE-only **0**, COMPLETION-only **0** (MOVED 0, new 0).<br>**job B**: in both **15**, byte-identical **15**, changed **0**, PRE-only **0**, COMPLETION-only **0** (MOVED 0, new 0).<br>**Totals 25 / 25 / 0 / 0 / 0.** No pass condition was violated — but see the verdict: both snapshots of each pair were taken at or after the hook had run, so this comparison does not span the stage it was built to span |
+| `extended.conf` at open: `ReplaygainTagging` line, sha256, mtime | `ReplaygainTagging="false"` present (line 27, trailing comment on the same line); sha256 `54c5433bba38c61e372425c34cc0c8aad2001922ca1fb6bd55e98dc1ada1b49d`; mtime `2025-10-24T08:41:54Z`; size 2,955 B |
+| `extended.conf` at close: `ReplaygainTagging` line, sha256, mtime | `ReplaygainTagging="false"` present, `grep -c '^ReplaygainTagging="false"'` = **1**; sha256 `54c5433bba38c61e372425c34cc0c8aad2001922ca1fb6bd55e98dc1ada1b49d`; mtime `2025-10-24T08:41:54Z`; size 2,955 B. **Unchanged open → close, and equal to the § 3 / 04-01 baseline.** The § 3 prerequisite **HELD at both ends** |
+| ffprobe tag-key sets (PRE-HOOK vs COMPLETION) | Read at COMPLETION on all 25 files; because every file is byte-identical across the pair, the PRE-HOOK set is the same set by construction, not by a second read.<br>**job A**, identical on all 10: `ALBUM, ARTIST, DATE, GENRE, ORGANIZATION, TITLE, TRACKTOTAL, album_artist, disc, track`.<br>**job B**, identical on all 15: `ALBUM, ARTIST, COMMENT, COMPILATION, COPYRIGHT, DATE, DISCTOTAL, ENCODED-BY, PUBLISHER, RELEASECOUNTRY, TITLE, WORK, album_artist, disc, track`.<br>**`MUSICBRAINZ_*` keys: 0 of 25 files. `REPLAYGAIN_*` / `R128_*` keys: 0 of 25 files.** |
+| **Verdict** (PASS / FAIL / OPEN, with the reason) | see the single verdict line below |
+
+Verdict: OPEN — two music jobs completed in the window and every other pass condition held, but neither job has a valid PRE-HOOK snapshot: job A's was taken after its `Matching` line and job B's cannot be ordered against its own, so the "untagged by bytes" condition of § 1 item 4 is UNPROVEN and § 5 requires OPEN rather than PASS.
+
+### Why no valid PRE-HOOK snapshot exists — the mechanism, recorded
+
+This is a defect in the **instrument**, not in the estate, and it is structural rather than a
+mis-execution.
+
+SABnzbd moves a finished job into `/downloads/complete/nzb/music/` and **then** invokes the
+post-processing script. The watcher armed in Task 1 watches that destination tree, so the earliest
+moment it can see a job is the moment the hook is already starting. Measured on job A: the watcher's
+first pass saw the folder at 12:18:00.074Z; the hook's own first line is timestamped 12:17:58Z and
+its `Matching` line 12:17:59Z. On job B the first pass was 12:18:10.710Z against a hook that started
+at 12:18:10Z and reached `Matching` at 12:18:12Z.
+
+On top of that, § 1 item 4 requires the snapshot to be the *first stable* one — two consecutive
+agreeing passes at least 2 s apart — which puts a floor of roughly 2–4 s between first sighting and
+the snapshot. Job A's hook ran from first log line to SAB completion in **1 second**. No stability
+rule with a 2-second floor can produce a snapshot inside that.
+
+**What would close it**, for whoever carries criterion 3 forward: snapshot the job in
+`/downloads/incomplete/` before the move, where the bytes are final after unpack but the hook has not
+been invoked; or key the PRE-HOOK snapshot on the appearance of the folder with no stability wait,
+accepting that a snapshot taken mid-move may need to be retaken. Both are changes to the watcher, not
+to the estate.
+
+### What the window did establish, recorded as weaker evidence and not as the pass condition
+
+These are **not** substitutes for the byte proof, and they do not upgrade the verdict. They are
+recorded because they are what the window bought.
+
+- Nothing in `audio.bash`'s own artefact set reappeared: no `library.blb`, no `library.blb*` backup,
+  no `beets.log`, no new `.bak`, and `beets-match` transient-then-gone exactly as § 2 pre-declares.
+- Both jobs produced the two pre-declared residual log lines and **zero** `SUCCESS: Matched with
+  beets`, with the `-newer beets-match` count structurally 0 now that line 285 is gone.
+- No file in either job carries a single `MUSICBRAINZ_*` key.
+- Both job folders are still in `complete/nzb/music/`, i.e. left in place.
+
+### One correction to § 3's rationale, measured
+
+§ 3 asserts the `ReplaygainTagging="false"` prerequisite, and that assertion **held**. But
+`Audio.txt` logs `Replaygain Tagging: ENABLED` on both jobs, which reads as a contradiction and is
+not one. In the live hook, that string is a **hardcoded literal at line 86 inside
+`if [ "${ConversionFormat}" = FLAC ]`** — it never consults `ReplaygainTagging` at all. The real gate
+is line 325, `if [ "${ReplaygainTagging}" = TRUE ]`, a case-sensitive comparison against the bare word
+`TRUE` that the string `"false"` cannot satisfy. `replaygain()` therefore did not run, corroborated
+independently by ffprobe: **0 `REPLAYGAIN_*` / `R128_*` keys across all 25 files**. Recorded so a
+future reader meeting that log line does not conclude the prerequisite failed.
+
+### Routine checks after the jobs
+
+`bash scripts/quick-health-check.sh` from the workstation, 2026-09-13T12:24:42Z: **exit 0** in 13 s.
+One `❌` (`Traefik dashboard: Not accessible`, report-only, in the 04-01 ROUTINE BASELINE), zero
+`⚠️`. Census counters all at target — `beets databases: 1`, `tagger databases: 0`, `retired paths
+present: 0`, `rw on Music, non-tagger: 0`, `rw on Music, tagger-capable: 0`, `FAILURES total: 0` —
+and the drift block green (`✅ vendored files match (3)`). **No beets database was regenerated by
+either job.**
