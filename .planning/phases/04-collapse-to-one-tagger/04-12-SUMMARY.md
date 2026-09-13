@@ -212,6 +212,10 @@ stated rather than a second ffprobe pass being run and presented as independent 
 - The launcher's recorded PID and the script's self-recorded PID agree (765427). The watcher wrote its
   own PID into `$OUT/watch.pid` precisely because `setsid` may fork and the launcher's `$!` is not
   reliably the script — that defence worked.
+- **Re-confirmed after cleanup, with an instrument that cannot match itself** (see deviation 6): both
+  PIDs **DEAD** by `kill -0`, **0** `ps` rows for either, **0** matches for the watcher's name across
+  **767** sampled processes, and **0** processes with a working directory inside the removed tree.
+  Positive control on the same sample: 4 `sshd` processes found, so the scan was capable of matching.
 
 ## Cleanup
 
@@ -275,10 +279,32 @@ a reading rather than a failure to look. The job→folder mapping went with it.
   none was performed. `quick-health-check.sh` ran from the **workstation**; its freeze fold-in runs the
   host's copy, which carries 04-11's promoted guards (`2572b71`, an ancestor of `763b851`).
 
+### 6. [My own defective instrument] A `pgrep -f` that matched itself and reported the watcher alive
+
+- **Issue:** the post-cleanup assertion `pgrep -f watch-d12 && echo 'WATCHER STILL RUNNING'` printed
+  **`WATCHER STILL RUNNING`** — on a watcher that had been dead for four minutes.
+- **Mechanism:** `pgrep -f` matches against the *full command line* of every process, and my own ssh
+  command string contained the literal path `…/scratch-04/12/watch-d12.sh` in an adjacent `test -e`.
+  The inspecting shell therefore matched itself. A later attempt to dodge it by assembling the pattern
+  at runtime **still** matched, for the same reason — the path literal was elsewhere in the same
+  command string, so building the *pattern* from pieces achieved nothing.
+- **Resolution:** re-checked with an instrument that carries neither the pattern nor the path: the
+  pattern was written to a file and matched with `grep -F -f`, over a `ps` snapshot captured to a
+  second file. Result **0 matches across 767 processes**, with `sshd` = 4 on the same snapshot as a
+  positive control, plus the instrument-independent facts that both PIDs fail `kill -0` and `ps -p`
+  returns 0 rows. The watcher is stopped.
+- **Recorded because the failure direction is the dangerous one for a different check.** Here a
+  self-match produced a **false alarm**, which is loud and self-correcting. The same defect in an
+  *absence* assertion — `pgrep -f <thing> || echo GONE` — produces a **false all-clear**, silently,
+  and that is this estate's documented "silence read as clean" class. This is the third instrument of
+  mine in the phase to be caught this way (04-11 deviations 6 and 7), and the second in *this plan*
+  after the `map.tsv` path (deviation 2).
+
 ---
 
-**Total deviations:** 5 — 1 defective plan assertion recorded, 1 refuted orchestrator fact with its
-mechanism, 1 measured correction to a contract rationale, 1 instrument limit, 1 pre-existing condition.
+**Total deviations:** 6 — 1 defective plan assertion recorded, 1 refuted orchestrator fact with its
+mechanism, 1 measured correction to a contract rationale, 1 instrument limit, 1 pre-existing condition,
+**1 defective instrument of my own**.
 **No assertion was weakened, no file was edited to make a check pass, no evidence was fabricated, and
 the verdict was not upgraded on inference.**
 
@@ -329,7 +355,8 @@ None. `04-D12-EVIDENCE.md` § 6 is filled; zero `PENDING — filled by 04-12` ma
 - FOUND `.planning/phases/04-collapse-to-one-tagger/04-D12-EVIDENCE.md`; `grep -cE '^Verdict: (PASS|OPEN|FAIL)'` = **1**, `grep -c 'PENDING — filled by 04-12'` = **0**.
 - FOUND `.planning/phases/04-collapse-to-one-tagger/04-12-SUMMARY.md`.
 - FOUND commit `293fa35`, touching exactly one file: `04-D12-EVIDENCE.md`.
-- `/mnt/fast/scratch-04/12` and `/mnt/fast/scratch-04` both absent, with two positive controls visible; no `watch-d12` process remains.
+- `/mnt/fast/scratch-04/12` and `/mnt/fast/scratch-04` both absent, with two positive controls visible (`/mnt/fast/stacks`, `/mnt/fast/appdata`).
+- No watcher process remains, proven with a self-match-proof instrument after a first attempt gave a false alarm (deviation 6): both PIDs DEAD by `kill -0`, 0 `ps` rows, 0 matches across 767 processes, `sshd`=4 as the positive control.
 - `.planning/STATE.md` and `.planning/ROADMAP.md` were **NOT** modified by this plan, and no `gsd-sdk query state.*` or `roadmap.*` verb was called.
 - No commit deleted any tracked file. Only explicit paths were staged; the working tree's other files were left as found.
 
