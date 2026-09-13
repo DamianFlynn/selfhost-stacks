@@ -3,15 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-11T17:49:38.005Z"
-last_activity: 2026-09-11 -- Phase 04 execution started
+last_updated: "2026-09-13T14:47:04.501Z"
+last_activity: 2026-09-13 -- Phase 04 planning complete
 progress:
   total_phases: 10
   completed_phases: 4
-  total_plans: 57
+  total_plans: 60
   completed_plans: 57
   percent: 40
-stopped_at: Phase 04 EXECUTED 13/13 plans; verification status gaps_found — 4/5 criteria verified, criterion 3 (TAGR-04 behavioural half) OPEN: no valid PRE-HOOK snapshot is obtainable while the watcher samples the destination tree. Next: /gsd-plan-phase 4 --gaps
 ---
 
 # Project State
@@ -31,7 +30,7 @@ pipeline that someone owns.
 
 Phase: 04 (collapse-to-one-tagger) — EXECUTING
 Plan: 13 of 13 (all executed; phase NOT complete — gaps_found)
-Status: Executing Phase 04
+Status: Ready to execute
 
 **02.1-10 COMPLETE. THE ESTATE'S ROUTINE HEALTH CHECK NOW COVERS THE THING THAT EMPTIED `/`, AND
 EVERY ONE OF ITS FAIL-CLOSED BRANCHES HAS BEEN DRIVEN RATHER THAN READ.**
