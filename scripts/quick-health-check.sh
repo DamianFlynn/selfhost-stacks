@@ -153,6 +153,46 @@
 #     these two sites, was NOT ACTUALLY DELIVERED. This notice records that the declaration and
 #     the code have been reconciled, not that a new class of failure was invented.
 #
+# ⚠️  EXIT-CODE BEHAVIOUR CHANGED AGAIN — PHASE 4: THE TAGGER CENSUS AND A FOURTH FATAL BLOCK (VENDORED-FILE DRIFT) WERE PROMOTED 2026-09-13 (plan 04-11, D-13/D-21/D-25)
+#     Both had been running as CANDIDATES since waves 2 and 5 (see the two CANDIDATE -> PROMOTED
+#     blocks below and in scripts/check-music-freeze.sh). They were promoted in the same commit as
+#     the run that first turned them green, which is why this file has not carried a red at any
+#     wave boundary. Measured immediately before the promotion: the census RC 0 in 4 s on LXC 100,
+#     and this script RC 0 in 20 s with the drift block green.
+#
+#     WHAT NOW EXITS THIS SCRIPT 1 THAT DID NOT BEFORE — every one of these is new:
+#       A. A CENSUS ASSERTION in scripts/check-music-freeze.sh section 6b, which is folded in
+#          below and whose non-zero exit this script already propagates:
+#            - tagger definitions != 1, or the one found is not
+#              stacks/selfhosted/arrs/beets/beets.yaml
+#            - beets databases != 1, or the one found is not SURVIVOR_DB
+#              (/mnt/fast/appdata/arrs/beets/config/library.db)
+#            - any wrtag/soulbeet tagger database present
+#            - any retired tagger path present
+#            - ANY container, in ANY state (created and exited included), holding a rw mount that
+#              reaches /mnt/tank/media/Music — tagger-capable or not. Jellyfin is the single
+#              documented D-21 consumer exception and is counted on its own line, so no total can
+#              read as a pass for the wrong reason.
+#       B. THE CENSUS BEING BLIND — "could not look", kept distinct from "nothing is wrong":
+#          docker unreadable, `find` RC outside {0,1}, the find exceeding its bound (124), or the
+#          Jellyfin positive-control database missing from the result set. Each prints UNKNOWN
+#          rather than 0 and increments FAILURES.
+#       C. A VENDORED FILE HAVING DRIFTED — repo-vs-host sha256 mismatch on any of audio.bash,
+#          sabnzbd beets-config.yaml or the survivor config.yaml.
+#       D. THE DRIFT BLOCK BEING BLIND — no output, RC 124, any other non-zero, a short answer
+#          (fewer than 3 comparison lines), or an unrecognised label. All UNKNOWN, all exit 1.
+#       E. THE DRIFT BLOCK BEING RUN WITH A NON-DEFAULT DRIFT_APPDATA_ROOT. That override exists
+#          ONLY to drive the could-not-look branch, so any non-default value forces red whatever
+#          the comparison finds — it can never be used to make a red run report green.
+#
+#     CENSUS_CANDIDATE AND VENDORED_DRIFT_CANDIDATE ARE NOW IGNORED. Neither can disable its
+#     block, and setting either to 0 does NOT switch anything off — they only ever asked for a
+#     block early. There is deliberately no sentinel that skips either check; do not add one.
+#
+#     REMOTE_TIMEOUT WAS LEFT AT 120 s, on measurement rather than on hope: the census is the
+#     slowest thing promoted here and it ran in 4 s (04-06 measured 6 s), both an order of
+#     magnitude inside the bound. Raising it would have been a change made for no measured reason.
+#
 # ⚠️  KNOWN LIMIT, AND IT APPLIES TO THIS WHOLE FILE: THIS SCRIPT IS MANUAL. IT ONLY EVER FIRES
 #     WHEN SOMEBODY TYPES IT (D-22, phase 02.1).
 #     There is no cron entry, no systemd timer and no notification path. Nothing here will tell
@@ -244,29 +284,30 @@ SSH_OPTS="-o BatchMode=yes -o ConnectTimeout=10"
 REMOTE_TIMEOUT="${REMOTE_TIMEOUT:-120}"
 
 # CANDIDATE -> PROMOTED (Phase 4). The constant below is the switch for the "Vendored-file drift
-# (D-13)" block further down, and it is the reason THIS SCRIPT'S ROUTINE EXIT CODE DOES NOT CHANGE
-# in the commit that adds that block.
+# (D-13)" block further down.
 #
-#   While it is 0, the drift block runs ONLY when the caller sets VENDORED_DRIFT_CANDIDATE=1.
-#   The routine invocation — `bash scripts/quick-health-check.sh`, no environment — sets nothing,
-#   so the block prints one CANDIDATE line and touches neither EXIT_CODE nor anything else.
+#   PROMOTED 2026-09-13 by plan 04-11, after the first green candidate run
+#   (2026-09-13T09:39:43Z: `✅ vendored files match (3)`, this script RC 0 in 20 s). The block now
+#   ALWAYS runs, VENDORED_DRIFT_CANDIDATE IS IGNORED AND CANNOT DISABLE IT, and a drifted or
+#   unreadable comparison exits this script 1. See the sixth notice at the top of this file for
+#   the full list of what that added to the fatal path.
 #
-# Why it is gated at all, rather than simply being switched on: the block compares the three
-# VENDORED files in this repo against their runtime copies on LXC 100, and at the commit that
-# introduces it two of those three have deliberately NOT been installed on the host yet (plan
-# 04-11 does that). Landing it ungated would make the routine check red-by-design for a whole
-# wave — which is precisely the permanent red the notice at the top of this file promises this
-# script does not inherit, and a permanently-red check trains the reader to ignore it. The first
-# run being red on REAL state is valuable and is kept: it is this block's driven negative control.
-# It is just run deliberately, under the opt-in, instead of at everyone who types the script.
+# THE HISTORY IS KEPT, because the reason for the gate is the reason the promotion is safe.
+# While the constant was 0, the block ran ONLY when the caller set VENDORED_DRIFT_CANDIDATE=1, and
+# the routine invocation — `bash scripts/quick-health-check.sh`, no environment — set nothing, so
+# the block printed one CANDIDATE line and touched neither EXIT_CODE nor anything else.
 #
-# Plan 04-11 sets this to 1 in the same commit as the run where the candidate is first green.
-# After that the block ALWAYS runs, VENDORED_DRIFT_CANDIDATE is ignored and cannot disable it,
-# and 04-11 adds the exit-code notice that the promotion earns — worded in the greppable
-# convention this file uses for them, which is why that phrase is deliberately NOT spelled out
-# here. This commit adds no such notice on purpose: the routine exit behaviour does not change
-# in this commit, and the count of those notices must therefore still read exactly 5.
-VENDORED_DRIFT_PROMOTED=0
+# Why it was gated at all, rather than simply switched on: the block compares the three VENDORED
+# files in this repo against their runtime copies on LXC 100, and at the commit that introduced it
+# two of those three had deliberately NOT been installed on the host yet (plan 04-11 installed
+# them). Landing it ungated would have made the routine check red-by-design for a whole wave —
+# precisely the permanent red the notice at the top of this file promises this script does not
+# inherit, and a permanently-red check trains the reader to ignore it. The first run being red on
+# REAL state was valuable and was kept: it is this block's driven negative control (04-10 named
+# both undelivered files with both hashes). It was simply run deliberately, under the opt-in,
+# rather than at everyone who typed the script. It is green now because the host was given the
+# files, not because the comparison was loosened.
+VENDORED_DRIFT_PROMOTED=1
 
 # ENV OVERRIDES for the drift block, all ${VAR:-default} so a grep can prove they exist. Every one
 # of them can only make the block REDDER. There is deliberately no success-producing override:
@@ -562,7 +603,12 @@ elif [ "${VENDORED_DRIFT_CANDIDATE:-0}" = "1" ]; then
 fi
 
 if [ "$DRIFT_RUN" -eq 0 ]; then
-    echo "Vendored-file drift: CANDIDATE — not in the routine check until plan 04-11 promotes it (VENDORED_DRIFT_CANDIDATE=1 to run it)"
+    # UNREACHABLE since the 2026-09-13 promotion (VENDORED_DRIFT_PROMOTED=1 forces DRIFT_RUN=1
+    # whatever VENDORED_DRIFT_CANDIDATE says). Kept as a fail-closed tell, and it sets EXIT_CODE:
+    # if this ever prints, someone has set the constant back to 0 and NOTHING was compared.
+    echo "⚠️  UNKNOWN — the vendored-file drift block did NOT run: VENDORED_DRIFT_PROMOTED has been set back to 0."
+    echo "  Nothing was compared. This is NOT 'the vendored files match'."
+    EXIT_CODE=1
 else
     echo "Vendored-file drift:"
     DRIFT_ROOT_OVERRIDDEN=0

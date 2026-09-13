@@ -28,8 +28,8 @@
 #                                         widened 2026-08-18 by plan 01-06 to include .png and
 #                                         .txt — see the block above section 5 for why
 #   6. Fence presence and spot-check      SAFE-02, SAFE-03, SAFE-04, D-06, D-08, D-10
-#  6b. Tagger census (CANDIDATE)          D-21, D-25 - NOT in the routine result until plan
-#                                         04-11 promotes it. See CANDIDATE -> PROMOTED below.
+#  6b. Tagger census (PROMOTED)           D-21, D-25 - IN the routine result since 2026-09-13
+#                                         (plan 04-11). See CANDIDATE -> PROMOTED below.
 #   7. Summary
 #
 # EXIT-CODE CONVENTION (established here deliberately; the estate has none):
@@ -45,20 +45,29 @@
 #                   stderr, so the list can be redirected to a file on its own.
 #
 # CANDIDATE -> PROMOTED (Phase 4, plan 04-06, REVIEWS row 1):
-#   Section 6b is a CANDIDATE check. While TAGGER_CENSUS_PROMOTED is 0 it runs ONLY when the
-#   caller sets CENSUS_CANDIDATE=1. The routine fold-in from scripts/quick-health-check.sh sets
-#   NOTHING, so a routine run prints one line saying 6b is a candidate, touches no counter, and
-#   the routine result stays exactly at its pre-phase state. That is deliberate and it is the
-#   whole point: 6b asserts THIS PHASE'S OUTCOME (the retired databases and trees are gone), and
-#   that outcome is not true until plan 04-11 does the host teardown. Wiring it into the routine
-#   fatal path in wave 2 would leave quick-health-check.sh red at every wave boundary from 2 to 6
-#   - and that file's own header says it is built so it "does not inherit a permanent red".
-#   A check that is red for a condition nobody has got to yet trains the reader to ignore it,
-#   which is the 01-09 trap, and it also masks any GENUINE new failure in the same block.
+#   PROMOTED 2026-09-13 by plan 04-11, after the first green candidate run (2026-09-13T09:39:21Z,
+#   RC 0 in 4 s: tagger definitions 1, beets databases 1 = SURVIVOR_DB, tagger databases 0,
+#   retired paths present 0, rw on Music non-tagger 0 and tagger-capable 0, Jellyfin printed
+#   separately, FAILURES total 0). TAGGER_CENSUS_PROMOTED is now 1, so SECTION 6b ALWAYS RUNS and
+#   CENSUS_CANDIDATE IS IGNORED - the variable can never disable 6b, only ever ask for it early,
+#   and setting it to 0 does NOT turn the section off. Section 6b is now part of the routine
+#   fatal path: a failed census assertion exits this script non-zero, and scripts/quick-health-
+#   check.sh propagates that to its own exit 1.
 #
-#   Plan 04-11 sets TAGGER_CENSUS_PROMOTED to 1 in the same commit as the run where the candidate
-#   is first green. After that 6b ALWAYS runs and CENSUS_CANDIDATE is ignored - the variable can
-#   never disable 6b, only ask for it early.
+#   THE HISTORY IS KEPT, because the reason for the gate is the reason the promotion is safe.
+#   6b was written as a CANDIDATE by plan 04-06 in wave 2: while TAGGER_CENSUS_PROMOTED was 0 it
+#   ran ONLY when the caller set CENSUS_CANDIDATE=1, and the routine fold-in from
+#   scripts/quick-health-check.sh sets NOTHING, so a routine run printed one line saying 6b was a
+#   candidate and touched no counter. That was deliberate: 6b asserts THIS PHASE'S OUTCOME (the
+#   retired databases and trees are gone), and that outcome was not true until plan 04-11 did the
+#   host teardown. Wiring it into the routine fatal path in wave 2 would have left
+#   quick-health-check.sh red at every wave boundary from 2 to 6 - and that file's own header says
+#   it is built so it "does not inherit a permanent red". A check that is red for a condition
+#   nobody has got to yet trains the reader to ignore it, which is the 01-09 trap, and it also
+#   masks any GENUINE new failure in the same block. The candidate ran red on real state first
+#   (04-06: 7 retired paths, 26 beets databases) and is green now because the estate changed, not
+#   because the check was weakened - the classifier was never narrowed, *.blb and .bak were never
+#   excluded, and sabnzbd was never special-cased.
 #
 # ENV OVERRIDES - three, all in the ${VAR:-default} form so a grep can prove they exist:
 #     CENSUS_CANDIDATE           run section 6b before it is promoted
@@ -132,7 +141,7 @@ CENSUS_FIND_TIMEOUT=90
 # the candidate names for CONTROL ONLY - it is never counted as a beets or tagger database. If the
 # census cannot see this, the census cannot see anything, and "0 beets databases" would be a lie.
 JELLYFIN_CONTROL_DB="jellyfin.db"
-TAGGER_CENSUS_PROMOTED=0
+TAGGER_CENSUS_PROMOTED=1
 
 # --- env overrides (see ENV OVERRIDES in the header; every one can only make this check red) ---
 CENSUS_CANDIDATE="${CENSUS_CANDIDATE:-0}"
@@ -665,7 +674,8 @@ echo ""
 # send the fold-in into its WR-09 UNKNOWN branch - silently, because a grep that selects nothing
 # looks exactly like a check with nothing to report.
 #
-# CANDIDATE until plan 04-11 promotes it - see CANDIDATE -> PROMOTED in the header.
+# PROMOTED 2026-09-13 by plan 04-11 - see CANDIDATE -> PROMOTED in the header. This section now
+# runs on every invocation and its assertions are fatal; CENSUS_CANDIDATE can no longer disable it.
 CENSUS_RAN=0
 TAGGER_DEFS="UNKNOWN"
 BEETS_DB_COUNT="UNKNOWN"
@@ -677,7 +687,10 @@ RW_JELLYFIN="UNKNOWN"
 TAGGER_CAPABLE_ALL="UNKNOWN"
 
 if [[ $TAGGER_CENSUS_PROMOTED -eq 0 ]] && [[ "$CENSUS_CANDIDATE" != "1" ]]; then
-  echo "  6b. Tagger census: CANDIDATE — not in the routine check until plan 04-11 promotes it (run with CENSUS_CANDIDATE=1)"
+  # UNREACHABLE since the 2026-09-13 promotion (TAGGER_CENSUS_PROMOTED=1 makes the guard above
+  # false whatever CENSUS_CANDIDATE says). Kept as a fail-closed tell: if it ever prints again,
+  # someone has set the constant back to 0 and the census is NOT being asserted.
+  echo "  6b. Tagger census: NOT RUN — TAGGER_CENSUS_PROMOTED has been set back to 0. The census is not being asserted."
 else
   CENSUS_RAN=1
   echo "🧮 6b. Tagger census (D-21, D-25)"
