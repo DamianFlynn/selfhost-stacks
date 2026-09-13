@@ -32,29 +32,40 @@ sections).
 
 ---
 
-## Two beets, one library
+## One beets, one library
 
-> **Superseded by Phase 4 (2026-09-11)** — rewritten in § *Phase 4* when the runtime change lands (plan 04-13).
+*Rewritten 2026-09-13 by plan 04-13. This section used to be headed "Two beets, one library" and
+described `beets` and `soulbeet` as two entry points writing to the same tree with separate
+databases. Phase 4 retired soulbeet — definition deleted from the repo on 2026-09-11, host runtime
+and appdata removed on 2026-09-13 — so that hazard no longer exists and the old table is not
+preserved here; `git show 5d0af70:stacks/selfhosted/arrs/soulbeet.yaml` still has it.*
 
-There are **two** beets entry points writing to the same destination. This is the first thing
-to understand before running anything.
+There is now **one** beets definition, and it is deliberately dormant. There is also one **defused**
+beets config under sabnzbd that nothing invokes. Both are listed because the second one exists on
+disk and will otherwise be mistaken for a second entry point.
 
-| | `beets` (manual) | `soulbeet` (automated) |
+| | the survivor | the defused sabnzbd guard |
 |---|---|---|
-| Defined in | `arrs/beets/beets.yaml` | `arrs/soulbeet.yaml` |
-| Runs | `restart: "no"`, `profiles: ["manual"]` — only when invoked | `restart: unless-stopped` |
-| Config | `/mnt/fast/appdata/arrs/beets/config/` | `/mnt/fast/appdata/arrs/soulbeet/beets_config.yaml` |
-| Library db | `config/library.db` | `/data/beets_library.db` |
-| Destination | `/media` → `/mnt/tank/media` | `/music` → `/mnt/tank/media/Music` |
-| URL | `beets.deercrest.info` | `soulbeet.deercrest.info` |
+| Defined in | `arrs/beets/beets.yaml` | `arrs/sabnzbd.yaml` (config only — sabnzbd is not a tagger) |
+| Image | `lscr.io/linuxserver/beets:2.13.1-ls349` | n/a |
+| Runs | **never unattended** — `restart: "no"`, `profiles: ["manual"]`, and its `include:` line in `arrs/compose.yaml` is commented out (`#  - beets/beets.yaml`) | n/a — **nothing invokes beets on this path** since `audio.bash`'s line-285 `beet … import` was stripped (plan 04-10) |
+| Config | `arrs/beets/config.yaml`, **vendored in this repo** and bind-mounted `:ro` over `/config/config.yaml` | `arrs/sabnzbd/beets-config.yaml`, **vendored** and bind-mounted `:ro` |
+| `plugins:` | `musicbrainz` | `embedart musicbrainz` |
+| Library db | **one** `library.db`, at the explicit `library: /config/library.db` — created fresh by the survivor itself at `2.13.1-ls349` on 2026-09-11 (D-28) | **none.** `scripts/library.blb` and `.config/beets/` were fenced and deleted on 2026-09-13 (plan 04-11) |
+| Destination | `/media` → `/mnt/tank/media`, **`:ro`** | n/a |
 
-**They keep separate `library.db` files but write to the same tree.** Anything imported by one
-is invisible to the other's database. Treat that as a known hazard, not a thing to fix casually —
-reconciling them means re-importing one side.
+**Why the sabnzbd config is kept rather than deleted (D-11).** Restoring stock `setup.bash`
+re-downloads a beets config with `scrub.auto`, `lastgenre.auto` and `embedart.auto` all defaulting
+to **yes**, against a 34 GB library with no `undo`. A vendored, `:ro`, defused config is cheaper
+than trusting that nobody ever reverts. `audio.bash` is vendored `:ro` for the same reason — it is
+the file upstream re-downloads, and re-downloading it silently restores the beets invocation.
 
-> The file at `/mnt/fast/appdata/arrs/beets/config/config.yaml` on the host is **not** a beets
-> config — it is a copy of the compose service definition. The real tunables live in
-> `soulbeet/beets_config.yaml`.
+> The file at `/mnt/fast/appdata/arrs/beets/config/config.yaml` **used to be** a copy of the compose
+> service definition rather than a beets config — no `plugins:`, no `library:`, no `directory:` key
+> anywhere in it. It was replaced on 2026-09-11 (D-27) by the vendored file above, which declares
+> `plugins: musicbrainz` explicitly. Since beets 2.4.0 MusicBrainz is itself a plugin, and a
+> customised `plugins:` list that omits it silently disables all autotagging — see § *Phase 4* for
+> the measurement that turned that from inference into a number.
 
 ---
 
@@ -99,9 +110,17 @@ docker exec -it beets beet import "/downloads/complete/nzb/unsorted/<album folde
 
 ## Two config gaps that will bite a bulk run
 
-`soulbeet/beets_config.yaml` is otherwise sane — sensible `paths`, `scrub`, `fetchart`,
-strict-ish `strong_rec_thresh: 0.04`. Two things are missing, and they map exactly onto the
-two known problem classes.
+> **Corrected 2026-09-13 (plan 04-13, D-07).** The config this section was written against —
+> `soulbeet/beets_config.yaml` — was **deleted** with the soulbeet definition on 2026-09-11. It is
+> named below only as the thing that was measured. **The two gaps themselves still stand**, and
+> they are now advice for whoever configures the survivor: the vendored `arrs/beets/config.yaml`
+> is deliberately minimal (D-27 — `plugins: musicbrainz`, an explicit `library:`, and the three
+> SAFE-01 `auto: no` keys, nothing else), so neither gap is closed there either. **Phase 6 owns
+> closing them.** Do not read the code blocks below as describing a file that exists today.
+
+The deleted `soulbeet/beets_config.yaml` was otherwise sane — sensible `paths`, `scrub`,
+`fetchart`, strict-ish `strong_rec_thresh: 0.04`. Two things were missing, and they map exactly
+onto the two known problem classes.
 
 ### 1. No release-country preference → "Now That's What I Call Music" mismatches
 
@@ -1101,3 +1120,125 @@ goes forward carrying all four so that whoever executes it is not acting on the 
 inert regardless of how many there are; deleting what *can* be deleted lowers the count while
 leaving the credential live. **This repository is public** — credentials go in `/mnt/fast/secrets/`
 and `~/.claude/secrets/`, referenced by variable name only, and never in a process argument.
+
+---
+
+## Phase 4 — interim status (2026-09-13): criterion 3 OPEN
+
+**Phase 4 is NOT closed, and this section is deliberately not headed as a closure.** Four of the
+phase's five success criteria are measured and hold. The fifth — criterion 3, *"a real music job
+completes with no tagger"* — is recorded **OPEN**. Quoted from
+`.planning/phases/04-collapse-to-one-tagger/04-D12-EVIDENCE.md`, which carries exactly one verdict
+line:
+
+> *Verdict: OPEN — two music jobs completed in the window and every other pass condition held, but
+> neither job has a valid PRE-HOOK snapshot: job A's was taken after its `Matching` line and job B's
+> cannot be ordered against its own, so the "untagged by bytes" condition of § 1 item 4 is UNPROVEN
+> and § 5 requires OPEN rather than PASS.*
+
+**Nothing failed.** OPEN is not FAIL: a FAIL needs a violated condition and there is none. The
+condition could not be *evaluated*, for a reason that is a defect in the instrument and not in the
+estate. SABnzbd moves a finished job into `/downloads/complete/nzb/music/` and **then** invokes the
+post-processing hook, so a watcher pointed at that destination tree can never sample a job before
+the hook has started — its earliest possible sighting is after the fact. Measured on the two real
+jobs of 2026-09-13: the hook's first log line preceded the watcher's first sighting of the folder in
+both cases, and one job ran hook-start to completion in **one second**, against an evidence contract
+that requires a *stable* snapshot (two agreeing passes ≥ 2 s apart). **What closes it:** snapshot in
+`/downloads/incomplete/` before the move, where the bytes are final after unpack but the hook has
+not been invoked; or drop the stability wait and snapshot on first sighting, accepting a possible
+retake. Both are changes to the watcher. **The estate needs nothing**, and one more organic or
+operator-triggered music job re-runs the whole test.
+
+The narrative — every plan, its measurements and its deviations — is in
+`.planning/phases/04-collapse-to-one-tagger/`.
+
+### The census, executed
+
+From `bash scripts/check-music-freeze.sh` on LXC 100, 2026-09-13T12:37:32Z, ANSI stripped,
+otherwise unedited. A **routine** run: no environment variables were set, because plan 04-11
+promoted the census out of its candidate gate into the standing check, so these lines must appear
+unprompted. The run exited **0** with zero `❌`, against host HEAD `90581f3`.
+
+```
+📊 7. Summary
+  tagger definitions:          1   (target 1)
+  beets databases:             1   (target 1 = SURVIVOR_DB)
+  tagger databases:            0   (target 0 — wrtag.db*/soulbeet.db*)
+  retired paths present:       0   (target 0)
+  rw on Music, non-tagger:     0   (target 0, excluding the D-21 consumer exception)
+  rw on Music, tagger-capable: 0   (target 0 — Phase 1 D-20, any container state)
+  rw on Music, Jellyfin D-21:  1   (documented consumer exception, printed separately)
+  tagger-capable containers:   2   (mounts a beets/wrtag/soulbeet config or DB; reported)
+  FAILURES total:              0
+```
+
+**`tagger-capable containers: 2` is the expected value, not a defect.** The two are `sabnzbd`
+(it mounts the defused `beets-config.yaml`, and holds **no** `/mnt/tank/media` mount at any mode)
+and `lidarr` (matched by the renamer clause, holding `/mnt/tank/media:ro`). Neither holds `rw` on
+Music and neither fails anything — that is what the `rw on Music, tagger-capable: 0` line above
+asserts. Jellyfin is printed on its own line because it is the documented D-21 consumer exception;
+counting it into a bare total would make "exactly one rw holder" read as a pass for the wrong
+reason.
+
+### The five criteria
+
+| Criterion | Evidence | Where |
+|---|---|---|
+| **1 — one tagger definition** | `git ls-files stacks \| grep -lE '^\s*image:\s*(beets\|wrtag\|soulbeet\|beets-flask)'` resolves to exactly `stacks/selfhosted/arrs/beets/beets.yaml`; the census counts `tagger definitions: 1` from the repo itself. Issue **#306 closed** with the D-26 evidence | 04-03, 04-07 |
+| **2 — Renovate config valid** | `renovate-config-validator --strict --no-global renovate.json5` → exit **0** (re-run 2026-09-13 at the pinned 44.80.0); negative control, a copy with `"automerg": false`, → exit **1** naming the misspelled key | 04-03, re-run 04-13 |
+| **3 — a real music job completes with no tagger** | **`Verdict: OPEN`** — quoted verbatim above. Two real jobs ran clean; the byte proof could not be taken | 04-12, `04-D12-EVIDENCE.md` |
+| **4 — every beets config declares `musicbrainz`** | Same album, same throwaway `-l`, two configs differing by exactly one line: live broken `plugins: embedart` → **0** MusicBrainz candidates; fixed → **1** (12 of 12 tracks, distance 0.048), cross-read by hand at **95.2%**. Both live configs now declare `musicbrainz` | 04-09, 04-11 |
+| **5 — one database, no idle `rw` holder** | The executed census above | 04-11, this section |
+
+### What keeps these true
+
+Two standing guards, both promoted by plan 04-11 into the **fatal** routine path in the same commit
+as the runs that turned them green, then each driven red through that routine path to prove it can
+still fail:
+
+- **`scripts/check-music-freeze.sh` § 6b** (`TAGGER_CENSUS_PROMOTED=1`) — asserts every counter
+  above. A resurrected tagger, a reappearing retired database, or any container in **any** state
+  taking `rw` on Music fails it.
+- **`scripts/quick-health-check.sh`'s vendored-file drift block** (`VENDORED_DRIFT_PROMOTED=1`) —
+  asserts the three vendored files (`audio.bash`, sabnzbd `beets-config.yaml`, survivor
+  `config.yaml`) are byte-identical on the host and in the repo. Upstream `setup.bash` re-downloads
+  two of them on every sabnzbd boot; this is what notices.
+
+`scripts/quick-health-check.sh` folds in the first and runs the second. Routine run 2026-09-13T12:39:12Z:
+**exit 0**, zero `⚠️`, and one `❌` — `Traefik dashboard: Not accessible`, which is report-only and
+pre-dates this phase.
+
+### Recorded, not fixed
+
+Real, out of Phase 4's scope, and written down rather than silently carried:
+
+- **The estate-wide `-lsNNN` Renovate silence (F9).** Every other LinuxServer image in the estate
+  has the same versioning gap D-30 fixed for the survivor. Deferred by the D-30 ruling.
+- **`pip install -U beets` on every sabnzbd boot.** `scripts_init.bash` still does it, and it ran
+  during the 04-11 recreate. Nothing invokes beets after the strip. Phase 8 (INGS-01) owns the
+  hook's eventual shape.
+- **The baseline `Exit(1): chmod …` on every music job (D-31).** `audio.bash:334` runs
+  `chmod 777 "$1"`, which fails `EPERM` on `tank`, and the hook's global `set -e` ends it at 1. Every
+  music job has recorded this since at least 2026-08-01. **Baseline, not regression.** Not fixed here.
+- **`Music/__`** — ~1.4 GB accidentally imported into beets' default `directory` on 2025-11-18,
+  deliberately untouched. Phase 6.
+- **The census's `tagger definitions: 1` expectation must be revised when beets-flask lands.**
+  Phase 5 stands it up; a second legitimate definition will fail this counter until the target is
+  changed with it.
+- **The "beets has no `undo` command" constraint is narrower than it reads, and two files still
+  state it unqualified.** It remains true of the beets **CLI**, but beets-flask rc6 has a working
+  `UNDO IMPORT`, verified by use (see § *One correction to this page's own § The recovery fence*).
+  `CLAUDE.md:152` and `.planning/PROJECT.md:187` both still carry the bare claim. Phase 4 was
+  expected to amend them and **no plan in it did**; neither file is in this plan's mandate. Deferred
+  in writing as **DEF-04-01**, in
+  `.planning/phases/04-collapse-to-one-tagger/deferred-items.md`, to **Phase 7**, which owns the
+  "undo exercised" criterion and now has two candidate mechanisms rather than one.
+
+### `Replaygain Tagging: ENABLED` in `Audio.txt` is not what it looks like
+
+Recorded here because it will mislead the next reader of a job log. That string is a **hardcoded
+literal at `audio.bash:86`**, inside `if [ "${ConversionFormat}" = FLAC ]` — it never consults
+`ReplaygainTagging`. The real gate is line **325**, `if [ "${ReplaygainTagging}" = TRUE ]`, a
+case-sensitive test against the bare word `TRUE` that `"false"` cannot satisfy. Corroborated
+independently on the 2026-09-13 jobs: **0 `REPLAYGAIN_*` / `R128_*` keys across all 25 files**.
+`replaygain()` did not run.
