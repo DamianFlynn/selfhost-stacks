@@ -1,6 +1,6 @@
 services:
   postiz:
-    image: ghcr.io/gitroomhq/postiz-app:v2.22.1
+    image: ghcr.io/gitroomhq/postiz-app:v2.23.0
     container_name: postiz
     # measured 969 MB 2026-09-06; cap bounds a runaway, not steady state
     mem_limit: 2g
