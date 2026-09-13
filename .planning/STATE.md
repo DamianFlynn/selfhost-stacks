@@ -9,9 +9,9 @@ progress:
   total_phases: 10
   completed_phases: 4
   total_plans: 57
-  completed_plans: 55
+  completed_plans: 56
   percent: 40
-stopped_at: Phase 04 waves 1-6 complete (04-01..04-11) — ONE tagger definition, ONE beets database, both guards PROMOTED and routine check green; wave 7 next (04-12 D-12 real-job evidence, needs operator trigger)
+stopped_at: Phase 04 waves 1-7 complete (04-01..04-12) — criterion 3 verdict OPEN (real jobs ran clean, but no valid PRE-HOOK snapshot); wave 8 next (04-13 interim status, NOT a closure, per REVIEWS row 6)
 ---
 
 # Project State
@@ -30,7 +30,7 @@ pipeline that someone owns.
 ## Current Position
 
 Phase: 04 (collapse-to-one-tagger) — EXECUTING
-Plan: 12 of 13
+Plan: 13 of 13
 Status: Executing Phase 04
 
 **02.1-10 COMPLETE. THE ESTATE'S ROUTINE HEALTH CHECK NOW COVERS THE THING THAT EMPTIED `/`, AND
