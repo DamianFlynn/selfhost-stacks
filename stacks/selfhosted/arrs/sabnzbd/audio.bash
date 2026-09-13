@@ -282,7 +282,6 @@ Main () {
 		sleep 0.1
 
 		if [ $(find "$1" -type f -regex ".*/.*\.\(flac\|opus\|m4a\|mp3\)" | wc -l) -gt 0 ]; then
-			beet -c /config/scripts/beets-config.yaml -l /config/scripts/library.blb -d "$1" import -q "$1"
 			if [ $(find "$1" -type f -regex ".*/.*\.\(flac\|opus\|m4a\|mp3\)" -newer "/config/scripts/beets-match" | wc -l) -gt 0 ]; then
 				log "SUCCESS: Matched with beets!"
 			else
