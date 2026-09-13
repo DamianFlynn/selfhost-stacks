@@ -4,10 +4,22 @@ Unified observability platform for selfhost infrastructure, Home Assistant, and 
 
 ## Stack Components
 
-- **Prometheus** (v3.2.2): Time-series metrics database and scraping engine
+- **Prometheus** (v3.13.2): Time-series metrics database and scraping engine
 - **Grafana** (v11.5.2): Visualization and dashboarding platform
-- **cAdvisor** (v0.51.0): Container resource metrics collector
 - **node-exporter** (v1.8.2): Host system metrics collector
+
+> **cAdvisor was removed on 2026-08-17.** It leaked ~30 MB/s up to its 1 GB cap
+> and was OOM-killed roughly every 31 seconds, reaching 21,598 restarts. It
+> accounted for 31 of the 42 OOM kills in the kernel ring buffer, and the
+> constant target up/down churn also inflated Prometheus to 1.8 GB for only
+> ~44k active series. With cAdvisor stopped, Prometheus settled at ~200 MB and
+> the OOM kills ceased entirely.
+>
+> The usual containment flags were already set (`--docker_only=true`,
+> `--housekeeping_interval=30s`, and a wide `--disable_metrics`) and did not
+> help. It behaved until the Renovate bump to **v0.55.1** on 2026-03-07 (#151),
+> so that tag is the prime suspect. Do not re-add cAdvisor without first
+> reproducing the leak against a pinned older tag.
 
 ## Architecture
 
@@ -19,7 +31,6 @@ Unified observability platform for selfhost infrastructure, Home Assistant, and 
 │  Scrapes metrics from:                                      │
 │  • 7 Exportarr instances (media automation metrics)         │
 │  • Traefik (reverse proxy metrics)                          │
-│  • cAdvisor (container CPU, RAM, network, disk)             │
 │  • node-exporter (host CPU, RAM, disk, network)             │
 │  • Future: Home Assistant (home automation metrics)         │
 │  • Future: Cerebro VM (OpenClaw AI metrics)                 │
@@ -49,10 +60,6 @@ Unified observability platform for selfhost infrastructure, Home Assistant, and 
   - Protected by Authelia authentication
   - Direct PromQL query interface
 
-- **cAdvisor**: https://cadvisor.deercrest.info
-  - Protected by Authelia authentication
-  - Container resource visualization
-
 - **node-exporter**: Internal only (no web UI)
   - Metrics endpoint: `http://node-exporter:9100/metrics`
 
@@ -76,7 +83,7 @@ docker compose -f stacks/selfhosted/monitoring/compose.yaml up -d
 ### 3. Verify Services
 
 ```bash
-docker ps | grep -E "prometheus|grafana|cadvisor|node-exporter"
+docker ps | grep -E "prometheus|grafana|node-exporter"
 
 # Check Prometheus targets are healthy
 docker exec prometheus wget -qO- http://localhost:9090/api/v1/targets | jq '.data.activeTargets[] | {job, health}'
@@ -104,9 +111,9 @@ Grafana → Create → Import → Enter Dashboard ID:
   - Queue size, downloads, disk space, health
   - https://grafana.com/grafana/dashboards/15709
 
-- **Docker Container Monitoring (cAdvisor)**: ID `11600`
+- ~~**Docker Container Monitoring (cAdvisor)**: ID `11600`~~
   - Per-container CPU, RAM, network, disk I/O
-  - https://grafana.com/grafana/dashboards/11600
+  - No longer has a data source — cAdvisor was removed 2026-08-17 (see above)
 
 - **Node Exporter Full**: ID `1860`
   - Host CPU, RAM, disk, network, filesystem
@@ -132,7 +139,6 @@ Grafana → Create → Import → Enter Dashboard ID:
 
 ### Infrastructure Components
 - `traefik:8080` - Reverse proxy metrics
-- `cadvisor:8080` - Container resource metrics
 - `node-exporter:9100` - Host system metrics
 
 ### Future Integrations
@@ -194,13 +200,18 @@ docker restart prometheus
 
 ## Resource Usage
 
+Measured 2026-08-17 on LXC 100 at 43,937 active series — not estimated.
+
 | Service        | RAM Usage    | CPU Usage | Disk Usage      |
 |----------------|--------------|-----------|-----------------|
-| Prometheus     | 200-400 MB   | 1-3%      | 5-10 GB (30d)   |
+| Prometheus     | ~200 MB      | 1-3%      | 4.7 GB (30d)    |
 | Grafana        | 100-200 MB   | 1-2%      | 500 MB          |
-| cAdvisor       | 100-150 MB   | 2-5%      | Minimal         |
 | node-exporter  | 10-20 MB     | <1%       | Minimal         |
-| **Total**      | **~500 MB**  | **5-10%** | **6-11 GB**     |
+| **Total**      | **~350 MB**  | **3-6%**  | **~5 GB**       |
+
+Prometheus briefly held 1.8 GB while cAdvisor was crash-looping. That was churn
+from constant target up/down transitions, not working set — a single clean
+restart after removing cAdvisor dropped it to 200 MB.
 
 ## Troubleshooting
 
@@ -248,8 +259,9 @@ docker exec radarr-exporter wget -qO- http://localhost:9707/metrics | grep radar
 docker compose -f stacks/selfhosted/monitoring/compose.yaml down
 docker compose -f stacks/selfhosted/monitoring/compose.yaml up -d
 
-# Disable high-cardinality metrics in cAdvisor
-# Already configured with --disable_metrics flag
+# cAdvisor was the dominant memory consumer here and has been removed.
+# If container-level metrics are ever reinstated, cap the new collector and
+# watch `docker inspect -f '{{.RestartCount}}'` before trusting it.
 ```
 
 ## Alerting (Future Enhancement)
@@ -308,7 +320,7 @@ docker compose -f stacks/selfhosted/monitoring/compose.yaml down
 
 ## Security Notes
 
-- Prometheus and cAdvisor are protected by Authelia (SSO authentication)
+- Prometheus is protected by Authelia (SSO authentication)
 - Grafana uses its own authentication system
 - **Change default Grafana password immediately** after first login
 - Consider enabling Grafana LDAP/OAuth if available
