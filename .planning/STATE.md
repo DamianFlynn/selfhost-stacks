@@ -9,9 +9,9 @@ progress:
   total_phases: 10
   completed_phases: 4
   total_plans: 57
-  completed_plans: 53
+  completed_plans: 54
   percent: 40
-stopped_at: Phase 04 waves 1-4 complete (04-01..04-09) — criterion 4 MEASURED (0 candidates broken / 1 fixed); wave 5 next (04-10 vendor audio.bash)
+stopped_at: Phase 04 waves 1-5 complete (04-01..04-10) — audio.bash vendored and stripped in git; wave 6 next (04-11 host install, ledger deletions, promote both guards)
 ---
 
 # Project State
@@ -30,7 +30,7 @@ pipeline that someone owns.
 ## Current Position
 
 Phase: 04 (collapse-to-one-tagger) — EXECUTING
-Plan: 10 of 13
+Plan: 11 of 13
 Status: Executing Phase 04
 
 **02.1-10 COMPLETE. THE ESTATE'S ROUTINE HEALTH CHECK NOW COVERS THE THING THAT EMPTIED `/`, AND
