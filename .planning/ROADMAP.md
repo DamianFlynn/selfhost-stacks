@@ -560,7 +560,10 @@ than it started, so attempt five does not inherit attempt four's wreckage.
      > printed on its **own line**, beside the counter and never folded into it. This is the WRIT-01
      > shape: a bare "0" cannot read as a pass, and Jellyfin's presence is not a gap. The
      > criterion's substance is unchanged.
-**Plans**: 13 plans in 8 waves
+**Plans**: 16 plans in 11 waves — 13 executed, then 3 gap-closure plans added 2026-09-13 to close
+criterion 3 / TAGR-04's behavioural half, which `04-VERIFICATION.md` recorded OPEN at 4/5 criteria.
+Criteria 1, 2, 4 and 5 are verified and are **not** re-planned; the estate is not re-planned either.
+The gap is in the measuring instrument (`04-D12-EVIDENCE.md` § 6, lines 186-207).
 Plans:
 **Wave 1**
 
@@ -598,6 +601,18 @@ Plans:
 **Wave 8** *(blocked on Wave 7 completion)*
 
 - [x] 04-13-PLAN.md — D-25 closure (PASS) or interim status (OPEN/FAIL) in beets.md from an executed census, final sweep, Renovate observation
+
+**Wave 9** *(gap closure, added 2026-09-13 — criterion 3 / TAGR-04 behavioural half)*
+
+- [ ] 04-14-PLAN.md — Rebuild the D-12 watcher to snapshot under `downloads/incomplete` (structurally pre-hook), drive it to PASS/FAIL/UNPROVEN on synthetic fixtures, amend the evidence contract before the window opens
+
+**Wave 10** *(blocked on Wave 9 completion)*
+
+- [ ] 04-15-PLAN.md — Observation window 2: one real music job with a valid PRE-HOOK byte comparison; section 7 verdict PASS, FAIL or OPEN (human checkpoint; OPEN if no job arrives)
+
+**Wave 11** *(blocked on Wave 10 completion)*
+
+- [ ] 04-16-PLAN.md — Record the window-2 verdict in beets.md, heading selected by the verdict line: closure only on PASS
 
 **Research**: done 2026-09-11 (`04-RESEARCH.md`). *Originally "not needed — retirement is deletion
 plus documented config changes"; the operator chose to measure the live estate anyway, and it found
