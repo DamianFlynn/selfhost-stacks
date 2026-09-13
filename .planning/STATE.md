@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-13T21:55:24.816Z"
-last_activity: 2026-09-13 -- 04-14 complete (D-12 instrument rebuilt and driven to every outcome on eight synthetic controls; evidence contract amended before window 2 exists)
+last_updated: "2026-09-13T23:02:59.000Z"
+last_activity: 2026-09-13 -- 04-15 complete (D-12 window 2 ran on three real music jobs; Verdict (window 2) OPEN — all three UNPROVEN no-attributed-pre, no PRE-HOOK snapshot published, side effects clean for the third window running)
 progress:
   total_phases: 10
   completed_phases: 4
   total_plans: 60
-  completed_plans: 58
+  completed_plans: 59
   percent: 40
 ---
 
@@ -29,9 +29,17 @@ pipeline that someone owns.
 ## Current Position
 
 Phase: 04 (collapse-to-one-tagger) — EXECUTING
-Plan: 15 of 16 (14 complete; gap-closure plans 15-16 remain — criterion 3 OPEN)
-Status: Executing Phase 04 — wave 10 (plan 04-15 next). The D-12 instrument is rebuilt and
-self-tested, and the evidence contract is amended; the second observation window is NOT yet armed.
+Plan: 16 of 16 (15 complete; gap-closure plan 16 remains — criterion 3 still OPEN)
+Status: Executing Phase 04 — wave 10 complete (plan 04-15). Window 2 ran
+2026-09-13T22:04:18Z→22:27:08Z over **three** real music jobs and recorded
+`Verdict (window 2): OPEN`: all three are UNPROVEN `no-attributed-pre` with a zero-file
+intersection, because under `direct_unpack=1` two of them never exposed a single audio file to a
+1-second poll of `incomplete/` and the third was still growing when SABnzbd moved it, its one hash
+attempt refused mid-pass. **Every side-effect condition held for the third window running** — 0
+`library.blb`, 0 new `.bak`, 0 `beets.log`, 0 `SUCCESS: Matched with beets`, `extended.conf`
+provably never written. **04-16 must not treat criterion 3 as passed.** The choice it inherits is a
+decision, not a measurement: accept threefold unanimous side-effect evidence, or leave it OPEN —
+nothing more can be measured without changing where the byte capture happens.
 
 **02.1-10 COMPLETE. THE ESTATE'S ROUTINE HEALTH CHECK NOW COVERS THE THING THAT EMPTIED `/`, AND
 EVERY ONE OF ITS FAIL-CLOSED BRANCHES HAS BEEN DRIVEN RATHER THAN READ.**
