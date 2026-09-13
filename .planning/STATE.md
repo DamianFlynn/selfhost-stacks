@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-13T21:27:19.000Z"
-last_activity: 2026-09-13 -- Phase 04 execution started (resuming at plan 14)
+last_updated: "2026-09-13T21:55:24.816Z"
+last_activity: 2026-09-13 -- 04-14 complete (D-12 instrument rebuilt and driven to every outcome on eight synthetic controls; evidence contract amended before window 2 exists)
 progress:
   total_phases: 10
   completed_phases: 4
   total_plans: 60
-  completed_plans: 57
+  completed_plans: 58
   percent: 40
 ---
 
@@ -29,8 +29,9 @@ pipeline that someone owns.
 ## Current Position
 
 Phase: 04 (collapse-to-one-tagger) — EXECUTING
-Plan: 14 of 16 (13 complete; gap-closure plans 14-16 remain — criterion 3 OPEN)
-Status: Executing Phase 04 — wave 9 (plan 04-14)
+Plan: 15 of 16 (14 complete; gap-closure plans 15-16 remain — criterion 3 OPEN)
+Status: Executing Phase 04 — wave 10 (plan 04-15 next). The D-12 instrument is rebuilt and
+self-tested, and the evidence contract is amended; the second observation window is NOT yet armed.
 
 **02.1-10 COMPLETE. THE ESTATE'S ROUTINE HEALTH CHECK NOW COVERS THE THING THAT EMPTIED `/`, AND
 EVERY ONE OF ITS FAIL-CLOSED BRANCHES HAS BEEN DRIVEN RATHER THAN READ.**
@@ -627,7 +628,7 @@ back onto anything under `/mnt/tank/media`.
 Phase 1 complete: SAFE-01…05, WRIT-01…04, QUAL-01
 Phase 2 complete: CONS-01, CONS-02, CONS-03
 
-Progress: [██░░░░░░░░] 22%  *(MILESTONE progress: **2 of 9 phases** complete. All 19 plans written so far are executed 19/19 — but phases 3-9 are not planned yet, so plan-count is not milestone progress. ⚠ `gsd-sdk query state.update-progress` recomputed this as **51%** on 2026-09-02 by counting SUMMARY files against a 39-plan denominator that only covers planned phases; that figure is WRONG and was reverted. Do not let the SDK rewrite this line — phase 02.1 is an INSERTION and is not one of the 9 milestone phases.)*
+Progress: [██░░░░░░░░] 22%  *(MILESTONE progress: **2 of 9 phases** complete. All 19 plans written so far are executed 19/19 — but phases 3-9 are not planned yet, so plan-count is not milestone progress. ⚠ `gsd-sdk query state.update-progress` recomputed this as **51%** on 2026-09-02 by counting SUMMARY files against a 39-plan denominator that only covers planned phases; that figure is WRONG and was reverted. Do not let the SDK rewrite this line — phase 02.1 is an INSERTION and is not one of the 9 milestone phases. ⚠ **It happened a second time on 2026-09-13** during plan 04-14, recomputed as **97%** against a 60-plan denominator, and was reverted again. The verb rewrites this line every time it runs; `git diff .planning/STATE.md` after any state write is not optional.)*
 
 Plans 02-01 through 02-09 are executed. **CONS-01, CONS-02 and CONS-03 are all complete.**
 
@@ -808,6 +809,7 @@ already open so only 2049 is this phase's delta.
 | 01-01 | 20m | 3 tasks | 1 file |
 | 01-02 | 25m | 3 tasks | 1 file |
 | 01-03 | 45m | 3 tasks | 2 files |
+| 04-14 | ~16m | 3 tasks | 1 file |
 
 **Recent Trend:**
 
@@ -848,6 +850,23 @@ already open so only 2049 is this phase's delta.
 
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
+
+- [04-14]: **The PRE-HOOK snapshot moved to the `incomplete` tree, chosen on measurement rather than
+  taste.** Job A's earliest *possible* destination-tree sighting was 12:18:00.074Z while its
+  `Matching` line was already at 12:17:59Z, so the alternative — key the snapshot on first sighting
+  with no stability wait — still races the hook and can never be *proven* earlier. Snapshotting while
+  the folder is still under `incomplete` makes the ordering **structural**: SABnzbd cannot invoke the
+  hook until it has performed the move. The assumption this rests on is named rather than hidden —
+  SABnzbd's move preserves bytes — and the byte comparison is what tests it.
+
+- [04-14]: **Where two causes are indistinguishable from the evidence, the ladder resolves to
+  UNPROVEN, not FAIL.** Under `direct_unpack = 1` (measured, with `incomplete` and `complete` on the
+  same dataset, device 68, and `postproc_time` under 4 s on 86 of 121 music rows) a file appearing only
+  at COMPLETION is equally consistent with late extraction and with a hook rewrite. So snapshot
+  completeness is *published* (`pre.inv` vs `last.inv`) and every UNPROVEN clause is evaluated before
+  every FAIL clause. Reporting a late extraction as FAIL would be a false accusation against a clean
+  estate — invariant 1's mirror. Driven by control SC-6, which fed a would-be-FAIL input and got
+  `UNPROVEN reason=baseline-stale`.
 
 - [02.1-07]: **A verification embedded in the mutating function it verifies CANNOT be fault-injected
   from outside.** `do_enable` re-captures live state before mutating, so perturb-then-rerun captures
@@ -1269,9 +1288,9 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-09-06T10:25:07.438Z
-Stopped at: Phase 4 context gathered
-Resume file: .planning/phases/04-collapse-to-one-tagger/04-CONTEXT.md
+Last session: 2026-09-13T21:55:24.803Z
+Stopped at: Completed 04-14 (D-12 instrument rebuilt, eight controls driven, contract amended)
+Resume file: .planning/phases/04-collapse-to-one-tagger/04-15-PLAN.md
 
 **NEXT: 02.1-10, the last plan of the phase (wave 9).** It is unblocked — it depends on 02.1-06 and
 02.1-09 and both are now complete. Two things it should carry in:
