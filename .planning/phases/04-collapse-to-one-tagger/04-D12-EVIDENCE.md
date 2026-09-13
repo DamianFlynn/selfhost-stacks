@@ -60,6 +60,77 @@ Criterion 3 **PASSES** only on one real `music` SABnzbd job that completes **aft
      snapshot precedes `clean()`.
    - File mtimes are NOT used as tag provenance.
 
+   > **Amended 2026-09-13 by plan 04-14 (gap closure, criterion 3 / TAGR-04).**
+   >
+   > **The clause being amended.** The PRE-HOOK snapshot above is defined as "the first stable
+   > snapshot (two consecutive passes with identical per-file size and mtime) that plan 04-12's
+   > read-only watcher takes of the job folder", valid only if it precedes the job's
+   > `Matching N tracks with Beets` line in `Audio.txt`. Every word of that stands above; nothing
+   > here edits or deletes it.
+   >
+   > **Why it is unsatisfiable, on the measurements already recorded in section 6.** SABnzbd moves a
+   > finished job into `complete/nzb/music/` and only **then** invokes the hook, so the earliest
+   > sighting a destination-tree watcher can have is already after the hook has started — job A's
+   > first sighting was 12:18:00.074Z against a `Matching` line at 12:17:59Z. The first-stable rule
+   > adds a 2–4 s floor on top of that, against a hook that ran start-to-finish in 1 second. And
+   > `Audio.txt` resolves only to the second, which left job B's ordering indeterminate even at a
+   > millisecond watcher clock. The defect is in the instrument, not the estate.
+   >
+   > **The replacement, in three load-bearing parts.**
+   >
+   > - **Where.** The PRE-HOOK snapshot is now the **last** stable snapshot (`STABLE_PASSES`
+   >   consecutive passes with an identical whole-folder inventory) taken while the job folder still
+   >   exists under `/mnt/tank/downloads/incomplete`, attributed to its completion folder through the
+   >   SAB history row's `path` and `storage` columns.
+   > - **When it is published.** Only if the folder's full recursive inventory is identical
+   >   immediately before and immediately after the hash pass, **and** the folder still exists at the
+   >   incomplete path when hashing finishes. `vanished.time` records when a later poll *observed*
+   >   absence, not when the move occurred, and an already-open file descriptor survives a rename —
+   >   so two timestamps alone cannot establish that the hash pass did not straddle the move.
+   > - **When it is still valid at judgement time.** Only if `pre.time` is earlier than the recorded
+   >   `vanished.time` **and** the inventory it was taken from (`pre.inv`) is identical to the last
+   >   inventory observed before the folder vanished (`last.inv`). If the folder changed in between,
+   >   the snapshot may be a proper subset of the final post-unpack set and the job is **UNPROVEN**,
+   >   never FAIL.
+   >
+   > **The substance is kept, not reduced — it is strengthened.** The ordering becomes *structural*
+   > rather than a timestamp comparison: SABnzbd cannot invoke the hook until it has performed the
+   > move, and the move is what removes the folder from the incomplete tree. No comparison against a
+   > second-resolution log is required for validity at all. The assumption this rests on is named
+   > rather than hidden — **SABnzbd's move preserves bytes**, the hook being the only thing in the
+   > pipeline that would rewrite them — and the byte comparison is precisely what tests it.
+   >
+   > **The COMPLETION-only FAIL clause is narrowed, because this is where a false-FAIL path was left
+   > open.** The clause above makes "an audio file appearing only at COMPLETION whose sha256 matches
+   > no PRE-HOOK file" a FAIL, and the 04-01 clarification scoped that to `clean()` flattening. It
+   > needs a second scope, for three measured reasons: SABnzbd runs with `direct_unpack = 1`, so
+   > audio extracts **during** the download; `incomplete` and `complete` are the same ZFS dataset
+   > (both `stat -c %d` = 68), so the move is an instant rename with no observable window; and music
+   > `postproc_time` is 1–3 s on recent jobs, with only 35 of 121 rows reaching 4 s. A mid-download
+   > lull can therefore leave a subset stable and hashed, and the later-extracted files then appear
+   > only at COMPLETION. **Bytes cannot distinguish that from a hook rewrite.** So the amended rule
+   > is: the COMPLETION-only FAIL clause applies **only when the PRE-HOOK snapshot is established
+   > complete** (`pre.inv` equals `last.inv`); otherwise the job is UNPROVEN, with the reason token
+   > `baseline-stale`. The general principle, stated once: **every UNPROVEN clause is evaluated
+   > before every FAIL clause**, so an unestablished baseline can never be reported as the estate
+   > having rewritten bytes.
+   >
+   > **A floor against a vacuous pass.** A job with **zero** audio files present in both snapshots is
+   > UNPROVEN (reason token `empty-intersection`), not BYTES-OK. "Every file present in both
+   > snapshots is byte-identical" is vacuously true on an empty intersection, and PRE-only files are
+   > explicitly exempt, so without this floor a zero-entry COMPLETION manifest would pass having
+   > compared nothing.
+   >
+   > **The instrument, named by content.** `watch-d12b.sh`, sha256
+   > `59f067bdc5dc236096fbd3281534ac5db992a83d8800328dc5d57dd87e92e759`, and `judge-d12b.sh`, sha256
+   > `7ab24c9e96b0464f1632bf8f4a05967ceb778e5b38485462ab18ff56808837e2`. Both were driven against
+   > eight synthetic controls before any real music job was spent on them, so this contract's reader
+   > can see the judge is capable of all three outcomes and the watcher is capable of waiting:
+   > **SC-2** returned FAIL on bytes deliberately changed after the move (`changed=1`); **SC-6** fed
+   > it a would-be-FAIL input — a file present only at COMPLETION, matching no PRE-HOOK file — and
+   > got `UNPROVEN reason=baseline-stale` rather than FAIL; and **SC-5** proved the watcher stays
+   > alive on an empty window rather than self-exiting with nothing to watch.
+
 The job folder is found by the SAB `history.storage` column. For all 119 `music` rows it is the final
 path under `/downloads/complete/nzb/music/`, while `path` is the `/downloads/incomplete/…` working
 directory (measured 2026-09-11, counts only). The container's `/downloads` is the host's
@@ -153,6 +224,51 @@ completeness fail_message url_info bytes meta series md5sum password duplicate_k
 `import started` headers are container-local, Europe/Dublin (UTC+1 in September). Measured pairing:
 SAB `2026-09-06 22:24:04` UTC is `beets.log` `import started Sun Sep  6 23:24:04 2026`. Never compare
 the two naively. Convert one side, and state which.
+
+> **Amended 2026-09-13 by plan 04-14 (gap closure, criterion 3 / TAGR-04).**
+>
+> **Every rule above stands, unchanged and restated here so none is lost by implication:** if no
+> music job arrives in the window, criterion 3 is recorded **OPEN**, not passed; if a job arrives but
+> no valid PRE-HOOK snapshot exists for it, the untagged condition is **UNPROVEN** and criterion 3 is
+> recorded **OPEN**, not passed; if section 3's prerequisite fails, criterion 3 is **OPEN**; and a
+> FAIL on any item in section 1 is a **FAIL**, not OPEN. The timezone trap above is unchanged.
+>
+> **What changes is the definition of "no valid PRE-HOOK snapshot".** It previously meant "the
+> watcher was not running, or its first stable snapshot is later than the job's `Matching` line".
+> It now means any one of: the watcher was not running; no attributed `pre.sha256` exists for the
+> job; `pre.time` is not earlier than that folder's `vanished.time`; the snapshot's inventory
+> (`pre.inv`) does not match the last inventory observed before the folder vanished (`last.inv`);
+> the COMPLETION manifest could not be acquired; or no audio file is present in both snapshots.
+> Each maps to one reason token — `no-attributed-pre`, `ordering-unproven`, `baseline-stale`,
+> `no-completion`, `empty-intersection` — and every one of them yields **UNPROVEN**, hence OPEN,
+> never FAIL. The comparison against `Audio.txt`'s second-resolution `Matching` line is no longer
+> required for validity, because the ordering is now structural (see the section 1 item 4
+> amendment).
+>
+> **Two rules the first window did not need.** Window 1 produced **two** music jobs fourteen seconds
+> apart from a single Lidarr search, so one job per window cannot be assumed.
+>
+> - **Every** post-stamp `category='music'` row is evaluated and recorded separately, and the
+>   window's verdict is: **FAIL if any job is FAIL; otherwise OPEN if any job is UNPROVEN; otherwise
+>   PASS if at least one job is BYTES-OK.**
+> - The section 2 `Audio.txt` residual-line expectation is **per job**, so J jobs add `+J`
+>   `Matching`, `+J` `ERROR: Unable to match` and `+0` `SUCCESS: Matched with beets`.
+>
+> **A second window is being opened under plan 04-15**, and its result is recorded in a new
+> section 7. Section 6's window-1 record — including its single verdict line, which reads OPEN — is
+> left standing verbatim as the honest record of the first window, and is not revised in the light
+> of anything window 2 produces.
+>
+> **The window-2 verdict line has one exact form**, fixed here so that plans 04-15 and 04-16 cannot
+> disagree about it. It begins at column 1 and matches the regular expression
+> `^Verdict \(window 2\): (PASS|OPEN|FAIL) — `. The em-dash delimiter is required on **all three**
+> outcomes, PASS included: without it, a line reading `Verdict (window 2): PASSING` would parse as
+> PASS under a prefix match. Note that this form deliberately cannot collide with section 6's
+> `^Verdict: ` line, so that file-wide invariant still counts exactly one of each.
+>
+> **A verdict must be supported, not asserted beside evidence.** Section 7 also carries a
+> machine-readable observation block whose lines begin at column 1 with the token `OBS window2`, and
+> the verdict is required to follow from those lines rather than to sit next to them.
 
 ---
 
