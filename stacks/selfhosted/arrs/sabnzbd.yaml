@@ -53,12 +53,13 @@ services:
       #
       # The scripts live in /config/scripts (persistent) -- see each file's header for provenance.
       - /mnt/fast/appdata/arrs/sabnzbd/arr-scripts:/custom-cont-init.d  # Post-processing scripts (vendored, see above)
-      # beets config. NOTE (2026-08-18): sabnzbd/beets-config.yaml is now VENDORED in
-      # this repo (plan 01-07, SAFE-01 / D-28). It is the config audio.bash line 285
-      # hands to beets on EVERY music download:
-      #     beet -c /config/scripts/beets-config.yaml -l /config/scripts/library.blb \
-      #          -d "$1" import -q "$1"
-      # Until now it existed only on the host and had never been reviewed.
+      # beets config. NOTE (2026-08-18, amended 2026-09-13): sabnzbd/beets-config.yaml is
+      # VENDORED in this repo (plan 01-07, SAFE-01 / D-28). It USED to be the config that
+      # audio.bash handed to beets on every single music download. It no longer is —
+      # plan 04-10 (TAGR-04 / D-10) stripped that one invocation, so nothing reads this
+      # config at runtime any more. It is kept, mounted and now CORRECT as a DEFUSED
+      # GUARD (D-11); see its own header for why a config nothing reads is worth keeping,
+      # and the audio.bash NOTE below for the strip itself.
       #
       # Why the three auto keys in it are deliberately `no`: scrub.auto, lastgenre.auto
       # and embedart.auto ALL DEFAULT TO YES in beets 2.13.1 — verified by running
@@ -78,21 +79,70 @@ services:
       # a 97 GB backlog with no undo.
       #
       # How much the bind mount actually protects — measured 2026-08-18 in a throwaway
-      # container, NOT assumed, because the honest answer is "partly":
+      # container, NOT assumed, because at `:rw` the honest answer was "partly":
       #   `mv tmp dest`  -> BLOCKED, "Resource busy" (EBUSY). This is the pattern
       #                     scripts_init.bash itself uses for sma.ini, i.e. the real
       #                     upstream overwrite path, so the mount does stop it.
-      #   `> dest`       -> SUCCEEDS, and the write reaches the host file.
-      # So the mount is a genuine barrier against rename-based replacement and NOT a
-      # barrier against in-place truncation. The durable guarantee is the pair: the
-      # mount stops the overwrite upstream actually performs, and the repo copy makes
-      # any divergence detectable. Plan 01-09 folds that comparison into
-      # scripts/quick-health-check.sh. Do not read this mount as tamper-proof.
+      #   `> dest`       -> SUCCEEDED at `:rw`, and the write reached the host file.
+      # THAT SECOND HOLE IS CLOSED as of 2026-09-13 (plan 04-10, D-09): the mount below is
+      # now `:ro`, which refuses in-place truncation as well as the rename. Both writes
+      # from INSIDE the container are now blocked. It is still not tamper-proof — it does
+      # nothing about an edit made on the HOST, and that is what the other half of the
+      # pair is for: the repo copy makes any divergence detectable.
+      #
+      # A CLAIM THAT USED TO SIT HERE IS WITHDRAWN (plan 04-10, research finding F6). It
+      # named an earlier plan as having already folded that repo-vs-host comparison into
+      # scripts/quick-health-check.sh. No such comparison was ever built. It is paraphrased
+      # rather than quoted so a mechanical grep for it over this repo keeps returning zero.
+      # The comparison DOES exist now: the block headed "Vendored-file drift (D-13)" in
+      # scripts/quick-health-check.sh hashes all three vendored files repo-against-host.
+      # Cited by that heading and never by line number — a stale pointer is exactly how the
+      # withdrawn claim survived this long. Plan 04-10 builds it as a CANDIDATE (it runs
+      # only under VENDORED_DRIFT_CANDIDATE=1, so the routine check is unchanged) and plan
+      # 04-11 promotes it into the routine path in the same wave that turns it green.
       #
       # The repo copy is for review and history; THIS appdata path is authoritative at
-      # runtime. Same hybrid shape as arrs/soulbeet.yaml. The file's `plugins:` line is
-      # knowingly broken and is knowingly NOT fixed here — Phase 4 TAGR-05 owns it.
-      - /mnt/fast/appdata/arrs/sabnzbd/config/scripts/beets-config.yaml:/config/scripts/beets-config.yaml:rw  # Vendored beets config (see above)
+      # runtime. Same hybrid shape as arrs/beets/config.yaml, the surviving tagger's own
+      # vendored config. The file's `plugins:` line was knowingly broken and deliberately
+      # left so by plan 01-07; plan 04-10 FIXED it to `embedart musicbrainz` (TAGR-05),
+      # after plan 04-09 had measured the broken one returning zero MusicBrainz candidates.
+      - /mnt/fast/appdata/arrs/sabnzbd/config/scripts/beets-config.yaml:/config/scripts/beets-config.yaml:ro  # Vendored beets config (see above)
+      # Post-processing hook. NOTE (2026-09-13): sabnzbd/audio.bash is VENDORED in this
+      # repo (plan 04-10, TAGR-04 / D-08). SABnzbd invokes it by name — sabnzbd.ini
+      # carries `[[music]] script = audio.bash` — so it runs on EVERY music job, including
+      # failed ones (see the arr-scripts NOTE above for the SAB_PP_STATUS guard that
+      # handles that). Provenance: RandomNinjaAtk/arr-scripts sabnzbd/audio.bash,
+      # scriptVersion 1.9, as it stood on the host at sha256 fdcddca234b2… (339 lines).
+      # It was committed BYTE-IDENTICAL first and stripped in a separate commit, so the
+      # diff a reviewer reads is exactly one line. DELIBERATELY NO PROVENANCE HEADER INSIDE
+      # audio.bash ITSELF: byte-identity against the live copy is the thing being asserted,
+      # and a header would break it — which is why this provenance lives here instead.
+      #
+      # What was removed (D-10), and what was NOT: one line, the
+      # `beet -c … -l … -d "$1" import -q "$1"` invocation. Everything else stays and is
+      # REPORTED rather than removed, because Phase 8 (INGS-01) owns this hook's shape:
+      # clean() still deletes non-audio files, flattens subdirectories and deletes MP3s
+      # when FLACs are present; verify() still `rm -rf`s the folder on a flac -t failure;
+      # detectsinglefilealbums() still fails oversized files; the beets() body still logs
+      # "Matching N tracks with Beets" and then "ERROR: Unable to match…" (both are
+      # EXPECTED after the strip, pre-declared in the D-12 evidence so nobody reads them as
+      # beets having run) and still removes library.blb behind an existence guard; and the
+      # chmod at the end still fails EPERM on tank, which is the baseline Exit(1) every
+      # music job has recorded since at least 2026-08-01, not a regression. r128gain is the
+      # only other tag writer and it is off (ReplaygainTagging="false"), so after the strip
+      # no tag-writing step is active at all.
+      #
+      # What breaks if you revert this: restoring the stock upstream setup.bash re-downloads
+      # audio.bash from GitHub, which silently restores the beets invocation AND drops the
+      # SAB_PP_STATUS guard — the same class of silent revert the scripts_init.bash
+      # vendoring above exists to stop. The next music download would then be tagged by an
+      # unreviewed beets config against a 34 GB library with no undo.
+      #
+      # How much this mount protects: `:ro` blocks BOTH the rename-based overwrite (EBUSY,
+      # the path upstream actually uses) and in-place truncation from inside the container.
+      # It does NOT protect against a host-side edit; the "Vendored-file drift (D-13)" block
+      # in scripts/quick-health-check.sh is what detects that.
+      - /mnt/fast/appdata/arrs/sabnzbd/config/scripts/audio.bash:/config/scripts/audio.bash:ro  # Vendored post-processing hook (see above)
       - /mnt/tank/downloads:/downloads:rw  # Download output directory (incomplete and complete)
     environment:
       PUID: $PUID
