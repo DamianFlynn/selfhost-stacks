@@ -1123,13 +1123,25 @@ and `~/.claude/secrets/`, referenced by variable name only, and never in a proce
 
 ---
 
-## Phase 4 — interim status (2026-09-13): criterion 3 OPEN
+## Phase 4 — interim status (2026-09-14): criterion 3 OPEN
 
 **Phase 4 is NOT closed, and this section is deliberately not headed as a closure.** Four of the
 phase's five success criteria are measured and hold. The fifth — criterion 3, *"a real music job
-completes with no tagger"* — is recorded **OPEN**. Quoted from
+completes with no tagger"* — is recorded **OPEN after two observation windows**. Quoted from
 `.planning/phases/04-collapse-to-one-tagger/04-D12-EVIDENCE.md`, which carries exactly one verdict
-line:
+line per window — § 6 for window 1, § 7 for window 2. The current verdict is window 2's:
+
+> *Verdict (window 2): OPEN — three music jobs completed in the window and every side-effect
+> condition and both ends of the § 3 prerequisite held, but none of the three published a PRE-HOOK
+> snapshot, so all three are STATUS=UNPROVEN reason=no-attributed-pre with a zero-file intersection:
+> under direct_unpack two of them never exposed a single audio file to a 1-second poll of the
+> incomplete tree and the third was still growing when SABnzbd moved it, its one hash attempt
+> refused mid-pass, so the "untagged by bytes" condition of § 1 item 4 is UNPROVEN and § 5 requires
+> OPEN rather than PASS.*
+
+Window 1's verdict stands beside it, unrevised in the light of anything window 2 produced. It is
+kept because it is the record of *why* the first attempt could not close the criterion, which is the
+more durable half of that window:
 
 > *Verdict: OPEN — two music jobs completed in the window and every other pass condition held, but
 > neither job has a valid PRE-HOOK snapshot: job A's was taken after its `Matching` line and job B's
@@ -1143,11 +1155,36 @@ post-processing hook, so a watcher pointed at that destination tree can never sa
 the hook has started — its earliest possible sighting is after the fact. Measured on the two real
 jobs of 2026-09-13: the hook's first log line preceded the watcher's first sighting of the folder in
 both cases, and one job ran hook-start to completion in **one second**, against an evidence contract
-that requires a *stable* snapshot (two agreeing passes ≥ 2 s apart). **What closes it:** snapshot in
-`/downloads/incomplete/` before the move, where the bytes are final after unpack but the hook has
-not been invoked; or drop the stability wait and snapshot on first sighting, accepting a possible
-retake. Both are changes to the watcher. **The estate needs nothing**, and one more organic or
-operator-triggered music job re-runs the whole test.
+that requires a *stable* snapshot (two agreeing passes ≥ 2 s apart).
+
+**What has happened since, recorded in band and dated 2026-09-14.** The first of the two fixes that
+paragraph named was built. Plan **04-14** moved the PRE-HOOK snapshot into `/downloads/incomplete/`,
+which is structurally before SABnzbd's move and therefore before the hook — so the ordering no longer
+depends on comparing a millisecond watcher clock against a second-resolution log — and self-tested it
+against **eight** synthetic controls before it was allowed near a real job. Plan **04-15** then ran a
+**second** observation window, 2026-09-13T22:04:18Z → 22:27:08Z, over **three** real music jobs. Its
+verdict is the one quoted at the top of this section: **still OPEN, and for a new reason.** None of
+the three published a PRE-HOOK snapshot at all. Under SABnzbd's `direct_unpack`, two of them never
+exposed a single audio file to a one-second poll of the incomplete tree, and the third was still
+growing when SABnzbd moved it, so the watcher **refused** its one hash pass mid-pass rather than
+publish a snapshot that had straddled the move. That is the instrument failing **safe**, exactly as
+designed: UNPROVEN, never a false FAIL.
+
+**OPEN means the instrument could not look. It does not mean the estate is dirty.** The estate side
+is now measured clean for the third window running, across five real music jobs in total: no
+`library.blb`, no `library.blb*` backup, no `beets.log`, no new `.bak`, **zero** `SUCCESS: Matched
+with beets` lines, and `extended.conf` provably never written during the window. Window 2 also
+recorded the **positive control** the question needed — when a folder genuinely rests under
+`incomplete/`, the watcher publishes, and publishes complete. What is unproven is the estate's
+behaviour at the one moment the criterion asks about; the watcher works as specified.
+
+**What is still needed**, named so a later reader meets a decision rather than a silence: a capture
+point that survives `direct_unpack`. The bytes must be sampled somewhere a job cannot skip past in
+three seconds, which rules out both the destination tree (window 1's dead end) and a poll of the
+incomplete tree (window 2's). **The estate still needs nothing changed** — every remaining obstacle
+is in the measuring instrument, and nothing further can be measured with the current one. Until then
+criterion 3 keeps its static half verified (`grep -cE '^[[:space:]]*beet ' audio.bash` → **0**, with
+the vendored-drift guard green) and its behavioural half **OPEN**.
 
 The narrative — every plan, its measurements and its deviations — is in
 `.planning/phases/04-collapse-to-one-tagger/`.
@@ -1186,7 +1223,7 @@ reason.
 |---|---|---|
 | **1 — one tagger definition** | `git ls-files stacks \| grep -lE '^\s*image:\s*(beets\|wrtag\|soulbeet\|beets-flask)'` resolves to exactly `stacks/selfhosted/arrs/beets/beets.yaml`; the census counts `tagger definitions: 1` from the repo itself. Issue **#306 closed** with the D-26 evidence | 04-03, 04-07 |
 | **2 — Renovate config valid** | `renovate-config-validator --strict --no-global renovate.json5` → exit **0** (re-run 2026-09-13 at the pinned 44.80.0); negative control, a copy with `"automerg": false`, → exit **1** naming the misspelled key | 04-03, re-run 04-13 |
-| **3 — a real music job completes with no tagger** | **`Verdict: OPEN`** — quoted verbatim above. Two real jobs ran clean; the byte proof could not be taken | 04-12, `04-D12-EVIDENCE.md` |
+| **3 — a real music job completes with no tagger** | **`window 2: OPEN`** — quoted verbatim above. Three real jobs ran in the second window and none published a PRE-HOOK snapshot under `direct_unpack`, so the byte proof is UNPROVEN rather than violated; window 1's two jobs likewise ran clean with the byte proof untakeable | 04-12, 04-14, 04-15, `04-D12-EVIDENCE.md` |
 | **4 — every beets config declares `musicbrainz`** | Same album, same throwaway `-l`, two configs differing by exactly one line: live broken `plugins: embedart` → **0** MusicBrainz candidates; fixed → **1** (12 of 12 tracks, distance 0.048), cross-read by hand at **95.2%**. Both live configs now declare `musicbrainz` | 04-09, 04-11 |
 | **5 — one database, no idle `rw` holder** | The executed census above | 04-11, this section |
 
