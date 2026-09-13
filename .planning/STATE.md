@@ -29,15 +29,16 @@ pipeline that someone owns.
 ## Current Position
 
 Phase: 04 (collapse-to-one-tagger) — EXECUTING
-Plan: 16 of 16 (15 complete; gap-closure plan 16 remains — criterion 3 still OPEN)
-Status: Executing Phase 04 — wave 10 complete (plan 04-15). Window 2 ran
+Plan: 16 of 16 (all executed; phase NOT complete — criterion 3 OPEN, verification pending)
+Status: All 16 plans executed (wave 11 / plan 04-16 landed). Window 2 ran
 2026-09-13T22:04:18Z→22:27:08Z over **three** real music jobs and recorded
 `Verdict (window 2): OPEN`: all three are UNPROVEN `no-attributed-pre` with a zero-file
 intersection, because under `direct_unpack=1` two of them never exposed a single audio file to a
 1-second poll of `incomplete/` and the third was still growing when SABnzbd moved it, its one hash
 attempt refused mid-pass. **Every side-effect condition held for the third window running** — 0
 `library.blb`, 0 new `.bak`, 0 `beets.log`, 0 `SUCCESS: Matched with beets`, `extended.conf`
-provably never written. **04-16 must not treat criterion 3 as passed.** The choice it inherits is a
+provably never written. **04-16 did not treat criterion 3 as passed:** `beets.md` keeps an
+interim-status heading dated 2026-09-14 recording `window 2: OPEN`. The choice now standing is a
 decision, not a measurement: accept threefold unanimous side-effect evidence, or leave it OPEN —
 nothing more can be measured without changing where the byte capture happens.
 
