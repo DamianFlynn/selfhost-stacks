@@ -243,6 +243,45 @@ SSH_OPTS="-o BatchMode=yes -o ConnectTimeout=10"
 # how plan 02.1-13 drove it against a real sleeping remote script.
 REMOTE_TIMEOUT="${REMOTE_TIMEOUT:-120}"
 
+# CANDIDATE -> PROMOTED (Phase 4). The constant below is the switch for the "Vendored-file drift
+# (D-13)" block further down, and it is the reason THIS SCRIPT'S ROUTINE EXIT CODE DOES NOT CHANGE
+# in the commit that adds that block.
+#
+#   While it is 0, the drift block runs ONLY when the caller sets VENDORED_DRIFT_CANDIDATE=1.
+#   The routine invocation — `bash scripts/quick-health-check.sh`, no environment — sets nothing,
+#   so the block prints one CANDIDATE line and touches neither EXIT_CODE nor anything else.
+#
+# Why it is gated at all, rather than simply being switched on: the block compares the three
+# VENDORED files in this repo against their runtime copies on LXC 100, and at the commit that
+# introduces it two of those three have deliberately NOT been installed on the host yet (plan
+# 04-11 does that). Landing it ungated would make the routine check red-by-design for a whole
+# wave — which is precisely the permanent red the notice at the top of this file promises this
+# script does not inherit, and a permanently-red check trains the reader to ignore it. The first
+# run being red on REAL state is valuable and is kept: it is this block's driven negative control.
+# It is just run deliberately, under the opt-in, instead of at everyone who types the script.
+#
+# Plan 04-11 sets this to 1 in the same commit as the run where the candidate is first green.
+# After that the block ALWAYS runs, VENDORED_DRIFT_CANDIDATE is ignored and cannot disable it,
+# and 04-11 adds the exit-code notice that the promotion earns — worded in the greppable
+# convention this file uses for them, which is why that phrase is deliberately NOT spelled out
+# here. This commit adds no such notice on purpose: the routine exit behaviour does not change
+# in this commit, and the count of those notices must therefore still read exactly 5.
+VENDORED_DRIFT_PROMOTED=0
+
+# ENV OVERRIDES for the drift block, all ${VAR:-default} so a grep can prove they exist. Every one
+# of them can only make the block REDDER. There is deliberately no success-producing override:
+#   DRIFT_APPDATA_ROOT   the runtime tree the vendored copies are compared against. It exists ONLY
+#                        to drive the could-not-look branch, so ANY non-default value forces
+#                        EXIT_CODE=1 regardless of what the comparison finds. Pointing it somewhere
+#                        harmless can therefore never be used to make a red run report green.
+#   DRIFT_EXPECT_*       ADDITIVE expectations. When set, the host hash must equal the repo hash
+#                        AND the override. Setting one can only turn a green file red; unsetting it
+#                        restores the plain repo-vs-host assertion, never a skip.
+DRIFT_APPDATA_ROOT="${DRIFT_APPDATA_ROOT:-/mnt/fast/appdata}"
+DRIFT_EXPECT_AUDIO_BASH="${DRIFT_EXPECT_AUDIO_BASH:-}"
+DRIFT_EXPECT_SABNZBD_BEETS_CONFIG="${DRIFT_EXPECT_SABNZBD_BEETS_CONFIG:-}"
+DRIFT_EXPECT_SURVIVOR_BEETS_CONFIG="${DRIFT_EXPECT_SURVIVOR_BEETS_CONFIG:-}"
+
 # WR-01: THE TWO PROBES BELOW USED TO BE UNBOUNDED, ON A JUSTIFICATION THAT WAS FALSE.
 # Corrected 2026-09-03 by plan 02.1-15. The withdrawn claim was that the only way these two can
 # fail to return is a dead transport, and that the ConnectTimeout set above therefore already
@@ -484,6 +523,116 @@ if ssh $SSH_OPTS root@172.16.1.159 "timeout $REMOTE_TIMEOUT curl -s -o /dev/null
     echo "✅ Accessible (HTTP 200)"
 else
     echo "❌ Not accessible"
+fi
+
+# Vendored-file drift (D-13). THREE files in this repo are vendored copies of files that a
+# container reads at runtime from /mnt/fast/appdata, and for all three the APPDATA COPY IS
+# AUTHORITATIVE while the repo copy exists for review, history and exactly this comparison:
+#
+#   stacks/selfhosted/arrs/sabnzbd/audio.bash          -> .../arrs/sabnzbd/config/scripts/audio.bash
+#   stacks/selfhosted/arrs/sabnzbd/beets-config.yaml   -> .../arrs/sabnzbd/config/scripts/beets-config.yaml
+#   stacks/selfhosted/arrs/beets/config.yaml           -> .../arrs/beets/config/config.yaml
+#
+# WHY THIS BLOCK EXISTS (D-08). Upstream arr-scripts' setup.bash re-downloads audio.bash and
+# beets-config.yaml from GitHub on container start. That revert path is real and measured, it is
+# silent, and before this block NOTHING detected it. The `:ro` binds declared in sabnzbd.yaml stop
+# a write from INSIDE the container; they do nothing about a host-side edit. This is the half that
+# catches the host-side edit, which is why the two are described as a pair in that file.
+#
+# The comparison runs HOST-SIDE, both halves: `git show HEAD:<path>` inside /mnt/fast/stacks and
+# sha256sum of the appdata copy. So the workstation's own working tree is irrelevant — a dirty or
+# stale checkout here cannot produce a false green or a false red — and the host checkout being
+# BEHIND origin shows up as real drift, which is correct: the host runs what the host has.
+#
+# FAIL-CLOSED, and never info(). "Could not look" and "the files match" are different answers and
+# must not share a verdict (the CR-01 defect this estate spent four plans repairing). Every UNKNOWN
+# branch below sets EXIT_CODE=1. The branch ORDER is the house S1 order and matters: empty output
+# first (a zero-byte or never-started remote exits 0 with no output, which ONLY the empty test
+# catches), deferring to 124 so a killed command is not reported as an unreachable host; then 124;
+# then any other non-zero; and only then is anything asserted.
+#
+# The remote string contains pipes, so it starts `set -o pipefail` and the ssh status is captured
+# on the very next line with NO local pipe in the assignment — `timeout T cmd | sha256sum` would
+# otherwise report the hash of an empty stream and exit 0. See the container-count note above.
+DRIFT_RUN=0
+if [ "$VENDORED_DRIFT_PROMOTED" = "1" ]; then
+    DRIFT_RUN=1
+elif [ "${VENDORED_DRIFT_CANDIDATE:-0}" = "1" ]; then
+    DRIFT_RUN=1
+fi
+
+if [ "$DRIFT_RUN" -eq 0 ]; then
+    echo "Vendored-file drift: CANDIDATE — not in the routine check until plan 04-11 promotes it (VENDORED_DRIFT_CANDIDATE=1 to run it)"
+else
+    echo "Vendored-file drift:"
+    DRIFT_ROOT_OVERRIDDEN=0
+    if [ "$DRIFT_APPDATA_ROOT" != "/mnt/fast/appdata" ]; then
+        DRIFT_ROOT_OVERRIDDEN=1
+        echo "  ⚠️  DRIFT_APPDATA_ROOT override in effect — this run cannot report the vendored files green"
+        EXIT_CODE=1
+    fi
+    DRIFT_CMD="set -o pipefail; cd /mnt/fast/stacks || exit 3
+_drift_pair() {
+  r=\$(timeout $REMOTE_TIMEOUT git show \"HEAD:\$2\" | sha256sum | cut -d' ' -f1) || exit 4
+  h=\$(timeout $REMOTE_TIMEOUT sha256sum \"\$3\" | cut -d' ' -f1) || exit 5
+  echo \"\$1 repo=\$r host=\$h\"
+}
+_drift_pair audio.bash stacks/selfhosted/arrs/sabnzbd/audio.bash \"$DRIFT_APPDATA_ROOT/arrs/sabnzbd/config/scripts/audio.bash\"
+_drift_pair sabnzbd-beets-config.yaml stacks/selfhosted/arrs/sabnzbd/beets-config.yaml \"$DRIFT_APPDATA_ROOT/arrs/sabnzbd/config/scripts/beets-config.yaml\"
+_drift_pair survivor-config.yaml stacks/selfhosted/arrs/beets/config.yaml \"$DRIFT_APPDATA_ROOT/arrs/beets/config/config.yaml\""
+    DRIFT_OUT=$(ssh -n $SSH_OPTS root@172.16.1.159 "$DRIFT_CMD")
+    DRIFT_RC=$?   # ssh propagates the remote status — NO local pipe above, see the note above
+    if [ -z "$DRIFT_OUT" ] && [ "$DRIFT_RC" -ne 124 ]; then
+        echo "  ⚠️  UNKNOWN — could not look: the drift comparison produced no output (ssh exit $DRIFT_RC)."
+        echo "  Nothing was compared. This is NOT 'the vendored files match'."
+        EXIT_CODE=1
+    elif [ "$DRIFT_RC" -eq 124 ]; then
+        echo "  ⚠️  UNKNOWN — the drift comparison exceeded its ${REMOTE_TIMEOUT}s bound and was killed."
+        echo "  Nothing was compared. This is NOT 'the vendored files match'."
+        EXIT_CODE=1
+    elif [ "$DRIFT_RC" -ne 0 ]; then
+        echo "  ⚠️  UNKNOWN — could not look (ssh exit $DRIFT_RC; 3 = no /mnt/fast/stacks checkout,"
+        echo "  4 = 'git show HEAD:<path>' failed, 5 = the appdata copy could not be hashed)."
+        echo "  Nothing was compared. This is NOT 'the vendored files match'."
+        EXIT_CODE=1
+    else
+        DRIFT_LINES=$(printf '%s\n' "$DRIFT_OUT" | grep -c 'repo=')
+        if [ "$DRIFT_LINES" -ne 3 ]; then
+            echo "  ⚠️  UNKNOWN — expected 3 comparison lines, got $DRIFT_LINES. Nothing is asserted."
+            echo "  A short answer is 'could not look', NOT 'the files that did report are fine'."
+            EXIT_CODE=1
+        else
+            DRIFT_BAD=0
+            while read -r d_label d_r d_h; do
+                [ -z "$d_label" ] && continue
+                d_repo=${d_r#repo=}
+                d_host=${d_h#host=}
+                case "$d_label" in
+                    audio.bash)                d_exp="$DRIFT_EXPECT_AUDIO_BASH" ;;
+                    sabnzbd-beets-config.yaml) d_exp="$DRIFT_EXPECT_SABNZBD_BEETS_CONFIG" ;;
+                    survivor-config.yaml)      d_exp="$DRIFT_EXPECT_SURVIVOR_BEETS_CONFIG" ;;
+                    *)
+                        echo "  ⚠️  UNKNOWN — unrecognised comparison label '$d_label'; nothing asserted for it."
+                        EXIT_CODE=1
+                        DRIFT_BAD=$((DRIFT_BAD + 1))
+                        continue
+                        ;;
+                esac
+                if [ "$d_repo" != "$d_host" ]; then
+                    echo "  ❌ $d_label DRIFTED — repo=$d_repo host=$d_host"
+                    EXIT_CODE=1
+                    DRIFT_BAD=$((DRIFT_BAD + 1))
+                elif [ -n "$d_exp" ] && [ "$d_host" != "$d_exp" ]; then
+                    echo "  ❌ $d_label DRIFTED — repo=$d_repo host=$d_host expected-override=$d_exp"
+                    EXIT_CODE=1
+                    DRIFT_BAD=$((DRIFT_BAD + 1))
+                fi
+            done <<< "$DRIFT_OUT"
+            if [ "$DRIFT_BAD" -eq 0 ] && [ "$DRIFT_ROOT_OVERRIDDEN" -eq 0 ]; then
+                echo "  ✅ vendored files match (3): audio.bash, sabnzbd beets-config.yaml, survivor config.yaml"
+            fi
+        fi
+    fi
 fi
 
 # Music freeze harness (D-29). The audit is host-resident by design — stat over the library, a
@@ -766,6 +915,6 @@ if [ "$EXIT_CODE" -ne 0 ]; then
     # was written to save.
     echo "❌ Health check FAILED. The failing block is whichever one above carries a ❌ or a ⚠️ —"
     echo "   that is any of: the container counts, the music freeze harness, the consumers audit,"
-    echo "   or the Jellyfin transcode retention audit."
+    echo "   the Jellyfin transcode retention audit, or the vendored-file drift block."
     exit 1
 fi
