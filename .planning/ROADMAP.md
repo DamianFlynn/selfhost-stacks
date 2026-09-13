@@ -802,7 +802,7 @@ Phase 7. Plans within a phase run sequentially.
 | 2. NFS Export and Music Assistant Reachability | 9/9 | Complete    | 2026-09-01 |
 | 02.1. Jellyfin Transcode Retention *(inserted)* | 15/15 | Complete   | 2026-09-03 |
 | 3. Tagger Spike | 11/11 | Complete    | 2026-09-04 |
-| 4. Collapse to One Tagger | 13/13 | In Progress| verification pending (criterion 3 OPEN) |
+| 4. Collapse to One Tagger | 13/13 | In Progress| gaps_found — criterion 3 OPEN (04-VERIFICATION.md) |
 | 5. Inbox Structure and the Junk Gate | 0/TBD | Not started | - |
 | 6. Tagger Configuration and Dry Run | 0/TBD | Not started | - |
 | 7. Pilot — 12 Albums End to End | 0/TBD | Not started | - |

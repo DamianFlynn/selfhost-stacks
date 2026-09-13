@@ -9,9 +9,9 @@ progress:
   total_phases: 10
   completed_phases: 4
   total_plans: 57
-  completed_plans: 56
+  completed_plans: 57
   percent: 40
-stopped_at: Phase 04 waves 1-7 complete (04-01..04-12) — criterion 3 verdict OPEN (real jobs ran clean, but no valid PRE-HOOK snapshot); wave 8 next (04-13 interim status, NOT a closure, per REVIEWS row 6)
+stopped_at: Phase 04 EXECUTED 13/13 plans; verification status gaps_found — 4/5 criteria verified, criterion 3 (TAGR-04 behavioural half) OPEN: no valid PRE-HOOK snapshot is obtainable while the watcher samples the destination tree. Next: /gsd-plan-phase 4 --gaps
 ---
 
 # Project State
@@ -30,7 +30,7 @@ pipeline that someone owns.
 ## Current Position
 
 Phase: 04 (collapse-to-one-tagger) — EXECUTING
-Plan: 13 of 13
+Plan: 13 of 13 (all executed; phase NOT complete — gaps_found)
 Status: Executing Phase 04
 
 **02.1-10 COMPLETE. THE ESTATE'S ROUTINE HEALTH CHECK NOW COVERS THE THING THAT EMPTIED `/`, AND
