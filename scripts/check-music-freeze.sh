@@ -762,6 +762,27 @@ else
   # metasauce/beets-flask; when it lands, THIS ASSERTION MUST BE REVISED in the same commit -
   # it is listed in the pattern below on purpose so a Phase 5 definition goes red here rather
   # than arriving unnoticed.
+  #
+  # WR-03/WR-04: THE PATTERN MATCHES THE IMAGE *NAME*, NOT FOUR LITERAL IMAGE REFERENCES.
+  # It used to be a fixed alternation of four full references, which made this census a test for
+  # four exact strings rather than a test for "a tagger is defined". Every one of these read as
+  # `tagger definitions: 1` and sailed past: a registry-qualified form (docker.io/sentriz/wrtag),
+  # a QUOTED form (image: "sentriz/wrtag:v0.33.0"), a different registry for the same software
+  # (ghcr.io/beetbox/beets), or any other tagger entirely (mikenye/picard). The whole point of
+  # this counter is to notice a RESURRECTED tagger, and the shape most likely to resurrect one is
+  # somebody pasting a definition from upstream documentation - which is exactly where a
+  # registry-qualified or quoted reference comes from.
+  #
+  # So: an optional registry/namespace prefix `([a-z0-9._-]+/)*`, an optional opening quote, the
+  # bare software NAME, and then a terminator so a longer name cannot match by prefix. `picard` is
+  # added because it is a real tagger this project explicitly evaluated and rejected; it was never
+  # in the old list, so a Picard container could have held the library with this counter green.
+  #
+  # `beets-flask` IS LISTED BEFORE `beets` on purpose - leftmost-longest is the POSIX rule, but
+  # ordering it first makes the intent legible and does not depend on the engine getting it right.
+  # The pattern is double-quoted so the single quote inside the character classes does not need
+  # the `'\''` dance; that readability is load-bearing, because stacks/selfhosted/arrs/beets.md
+  # QUOTES THIS PATTERN VERBATIM as criterion 1's evidence (WR-12) and the two must not drift.
   GIT_LS=""
   GIT_RC=0
   GIT_LS="$(git ls-files stacks 2>/dev/null)" || GIT_RC=$?
@@ -769,7 +790,7 @@ else
     fail "tagger definition census: UNKNOWN — 'git ls-files stacks' exited $GIT_RC or listed nothing. Nothing was counted; this is NOT 'one definition'."
   else
     DEF_FILES="$(printf '%s\n' "$GIT_LS" \
-      | { xargs -r -d '\n' grep -lE '^[[:space:]]*image:[[:space:]]*(lscr\.io/linuxserver/beets|sentriz/wrtag|ghcr\.io/terry90/soulbeet|metasauce/beets-flask)' 2>/dev/null || true; } \
+      | { xargs -r -d '\n' grep -lE "^[[:space:]]*image:[[:space:]]*[\"']?([a-z0-9._-]+/)*(beets-flask|beets|wrtag|soulbeet|picard)([:@\"'[:space:]]|\$)" 2>/dev/null || true; } \
       | sort)"
     TAGGER_DEFS="$(count_lines "$DEF_FILES")"
     if [[ "$TAGGER_DEFS" == "1" ]] && [[ "$DEF_FILES" == "stacks/selfhosted/arrs/beets/beets.yaml" ]]; then
