@@ -479,8 +479,29 @@ EXTCONF_PATH="${EXTCONF_PATH:-/config/extended.conf}"
 # THE SENTINEL IS NOT DECORATION. Driven measurement: when the watchdog TERMs it, ssh exits 255 —
 # THE SAME 255 AN UNREACHABLE HOST GIVES. So the exit status alone CANNOT tell "the bound expired"
 # from "the transport is dead", and this file's whole doctrine is that those two answers must not
-# share a verdict. The sentinel file is written by the watchdog immediately before it kills, so
-# its existence afterwards is proof the bound is what ended the call. Driven under bash 3.2.57:
+# share a verdict. The sentinel is WRITTEN INTO by the watchdog immediately before it kills, so a
+# NON-EMPTY sentinel afterwards is proof the bound is what ended the call.
+#
+# WR-10: THE SIGNAL IS THE CONTENT, NOT THE FILE'S EXISTENCE, AND THAT CHANGED 2026-09-14.
+# This function used to create the file safely with `mktemp` and then IMMEDIATELY `rm -f` it,
+# making the signal its later existence. That threw away the one thing mktemp is for: between the
+# unlink and the watchdog's truncating write the path was predictable AND UNOWNED, so anything
+# able to create a file there could pre-place a symlink and redirect that write somewhere else.
+# There was also a fallback — a guessable "${TMPDIR:-/tmp}/qhc-bound.$$.$RANDOM", used UNGUARDED
+# whenever mktemp was unavailable — which was worse again, because $$ and $RANDOM are not a
+# substitute for an atomic exclusive create.
+#
+# Impact was low in practice: macOS gives each user a private TMPDIR and this script is typed
+# interactively by its owner. It is fixed anyway because it was a NEEDLESS reintroduction of the
+# exact race mktemp exists to close, sitting in the one function that GATES this entire file —
+# and a health check whose own watchdog can be redirected is not a health check. The file is now
+# kept for the whole call and `[ -s ]` reads it; the guessable fallback is GONE; and an
+# unavailable mktemp is now a NAMED refusal rather than a silent downgrade.
+#
+# THE REFUSAL DOES NOT REUSE THE CALLER'S BRANCHES, deliberately. Returning non-zero here would
+# have been read by both call sites as "the host is unreachable" — a confident wrong diagnosis,
+# which is the one thing this whole block exists to prevent. It says what actually happened and
+# exits. Driven under bash 3.2.57:
 #   ssh true                    -> rc=0   timed_out=0  0s
 #   ssh 'exit 3'                -> rc=3   timed_out=0  0s   (a real answer is never masked)
 #   ssh 'sleep 300', bound 6    -> rc=255 timed_out=1  6s
@@ -497,14 +518,23 @@ bounded_ssh() {
     local secs="$1"; shift
     local cmd_pid watch_pid rc sentinel
     BOUNDED_SSH_TIMED_OUT=0
-    sentinel=$(mktemp -t qhc-bound 2>/dev/null) || sentinel="${TMPDIR:-/tmp}/qhc-bound.$$.$RANDOM"
-    rm -f "$sentinel"
+    # WR-10: created ONCE, atomically, and KEPT. No unlink-then-recreate, no guessable fallback.
+    if ! sentinel=$(mktemp -t qhc-bound 2>/dev/null); then
+        echo "⚠️  UNKNOWN — could not create the watchdog sentinel with mktemp."
+        echo "  Without it NO remote call below can be bounded, and a hang would once again be"
+        echo "  indistinguishable from a slow answer — the one failure mode that leaves no"
+        echo "  transcript at all. This is UNKNOWN, not healthy, and it is specifically NOT a"
+        echo "  finding that 172.16.1.159 is unreachable. Check TMPDIR, then re-run."
+        exit 1
+    fi
     "$@" </dev/null & cmd_pid=$!
-    { sleep "$secs"; : > "$sentinel"; kill -TERM "$cmd_pid" 2>/dev/null; } & watch_pid=$!
+    { sleep "$secs"; printf 'timeout' > "$sentinel"; kill -TERM "$cmd_pid" 2>/dev/null; } & watch_pid=$!
     wait "$cmd_pid" 2>/dev/null; rc=$?
     kill -TERM "$watch_pid" 2>/dev/null
     wait "$watch_pid" 2>/dev/null
-    [ -e "$sentinel" ] && BOUNDED_SSH_TIMED_OUT=1
+    # NON-EMPTY, not merely present: mktemp leaves the file empty, and only the watchdog writes
+    # into it. `-e` would now be true on every single call.
+    [ -s "$sentinel" ] && BOUNDED_SSH_TIMED_OUT=1
     rm -f "$sentinel"
     return "$rc"
 }
