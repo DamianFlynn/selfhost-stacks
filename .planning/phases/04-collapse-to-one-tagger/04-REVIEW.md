@@ -1,6 +1,6 @@
 ---
 phase: 04-collapse-to-one-tagger
-reviewed: 2026-09-14T00:00:00Z
+reviewed: 2026-09-14T09:00:00Z
 depth: standard
 files_reviewed: 14
 files_reviewed_list:
@@ -20,13 +20,13 @@ files_reviewed_list:
   - stacks/selfhosted/arrs/sabnzbd/beets-config.yaml
 findings:
   critical: 1
-  warning: 10
-  info: 7
-  total: 18
+  warning: 12
+  info: 10
+  total: 23
 status: issues_found
 ---
 
-# Phase 4: Code Review Report
+# Phase 4: Code Review Report (re-review)
 
 **Reviewed:** 2026-09-14
 **Depth:** standard
@@ -35,245 +35,246 @@ status: issues_found
 
 > Severity key: `Critical` = BLOCKER (must fix before this ships). `Warning` = should fix.
 > `Info` = suggestion. `CR-` ids are Critical-tier, `WR-` Warning-tier, `IN-` Info-tier.
+> This is a **re-review** of the same 14 files against the prior report at `f39e417`. Ids are
+> preserved across reviews: a still-open finding keeps its id, a closed one is listed under
+> *Already Closed Since Previous Review* and is never re-issued, and new ids continue the
+> existing sequence (`CR-02`, `WR-11`+, `IN-08`+).
 
 ## Summary
 
-The phase does what it claims: one tagger definition survives (`git ls-files stacks | grep -lE
-'image:…'` resolves to exactly `stacks/selfhosted/arrs/beets/beets.yaml`, verified), both vendored
-beets configs declare `musicbrainz`, and the `beet` invocation is gone from `audio.bash`
-(`grep -cE '^[[:space:]]*beet ' → 0`, and the git history shows one line removed, none added). No
-credential, token, API key or password appears in any reviewed file — the two vendored configs
-carry explicit screening notes and both are clean. The fail-closed discipline in the check scripts
-is genuinely good: "could not look" is kept distinct from "nothing is wrong" at almost every site,
-positive controls are used, and the census refuses to report `0` for a census that never ran.
+Only **one** of the fourteen reviewed files changed since the previous review — verified
+mechanically (`git diff --name-only f39e417..HEAD -- scripts/ stacks/selfhosted/arrs/` returns
+`scripts/quick-health-check.sh` and nothing else). The other two commits (`220dcf4`, `e19c178`)
+touch `.planning/` only. So every prior finding outside `quick-health-check.sh` is, by
+construction, untouched — and I re-verified each one against the file on disk rather than carrying
+it forward on faith.
 
-The defects are concentrated in two places.
+**CR-01 and WR-01 are genuinely closed at the guard layer.** The fifth fatal block at
+`scripts/quick-health-check.sh:805-934` reads `/config/extended.conf` out of the sabnzbd container
+over `docker exec`, matches remote-side, returns two label lines, and sets `EXIT_CODE=1` on a wrong
+value, an absent key, an unreadable file, an empty read, a bound expiry, a short answer or an
+unrecognised label. The negative controls were driven, not asserted, and the transcript records the
+per-switch independence proof correctly. The block is reachable on the routine path (it sits between
+the drift block and the freeze fold-in, after both early-exit probes), the key names are right (the
+green run at `260914-a2y-negative-controls.txt:160` proves both greps matched the real file), and
+`bash -n` passes. That is real work and it is not padding.
 
-First, the one that matters: **stripping the `beet` call converted `audio.bash`'s beets() failure
-branch from occasional to unconditional, and the only thing standing between that branch and
-`rm -rf "$1"/*` on every completed music download is a single line in an untracked host file**
-(`/config/extended.conf`) that no guard in this repo asserts, vendors, or hashes. The phase built
-a byte-exact drift guard for three files and left the one file that arms a destructive path
-outside it. The D-10 side-effect inventory in `sabnzbd.yaml` enumerates the surviving behaviours
-of beets() and omits this branch entirely.
+**But the guard has a demonstrated false-green mode, and it is on the one destructive path it
+exists to watch.** Both value patterns are start-anchored *and unbounded at the right*, and both
+assertions are `grep -q` over the whole file — "does any line match" — while `audio.bash` gets its
+values from `source`, where the **last** assignment wins. I drove both cases locally:
+`ConversionFormat="FLACX"` is reported `ok`; a file containing `ConversionFormat="FLAC"` followed by
+`ConversionFormat="MP3"` is reported `ok` while `source` yields `MP3`; and a file containing
+`requireBeetsMatch="false"` followed by `requireBeetsMatch="true"` is reported `ok` while `source`
+yields `true` — which is precisely the value that arms `rm -rf "$1"/*` at `audio.bash:290`. The
+`found=` text makes it worse rather than better: it is taken with `sed -n '1p'`, the **first**
+match, so even a red verdict quotes a line that may not be the effective one. That is `CR-02`.
 
-Second, several of the phase's own standing guards are narrower than the claims made for them: the
-"false-pass guard" in `check-music-freeze.sh` §2 parses volume lines as strings and silently drops
-quoted, variable-interpolated and long-form binds; the tagger-definition census matches four
-literal image prefixes rather than "a tagger". Neither has a live hole today — I verified no
-quoted or long-form mount exists and no second tagger image is present — but both are guards whose
-stated purpose is catching exactly the thing they cannot see.
+The 220dcf4 "defective Task 3 gate" is real and is honestly recorded, but it is a defect in the
+plan's own acceptance grep (`grep -c 'extended.conf'`, unescaped `.` matching the task's own
+`…-extended-conf-…` directory name), **not** in the shipped script. I confirmed the underlying
+property independently: no file named `extended.conf` exists in this repo or in commit `c0b04c3`.
+The "key-name grep finding" in the same commit is about that same regex-wildcard family — the two
+switch key names (`requireBeetsMatch`, `ConversionFormat`) are correct and do match the live file.
+So the specific worry that prompted this re-review is **not** where the defect landed; `CR-02` is.
 
-Separately, three in-band comments now assert the opposite of what the code does (they still
-describe the census and drift blocks as unpromoted candidates), and one of them instructs a future
-editor to treat live selector tokens as dead. In a codebase whose own doctrine is that "a false
-claim left in-band verbatim is one that gets re-copied", that is a defect and not a nit.
+One half of CR-01's prescribed fix was not done and is not mentioned anywhere as a decision: the
+D-10 side-effect inventory in `sabnzbd.yaml:121-133` still enumerates the surviving behaviours of
+`beets()` and still omits the `rm -rf` branch (`grep -n 'rm -rf' sabnzbd.yaml` returns one hit, and
+it is about `verify()`, not `beets()`). That is `WR-11`.
 
-## Critical Issues
+Everything else in the prior report is **still open, verbatim**, at line numbers that shifted only
+in `quick-health-check.sh` (+259 lines). WR-09 in particular is no longer theoretical: the quick
+task's own summary records `Traefik dashboard: ❌ Not accessible` printing on the green run that
+exited 0 — a red glyph in the transcript of a check that reported success.
 
-### CR-01: Stripping the `beet` call made `audio.bash`'s destructive failure branch unconditional, guarded only by an unversioned host file
+Three new defects outside the changed file surfaced on this pass, all of the same family this
+estate names in its own doctrine — a documented claim that the code does not support: `beets.md`'s
+criterion-1 evidence command resolves to **zero** files when run (`WR-12`), `spike03-discogs-probe.py`
+sets the **root** logger to DEBUG under `--verbose` inside the very function whose docstring says it
+does not (`WR-13`), and `beets.md`'s "Two standing guards" closing section never learned about the
+third (`IN-09`).
 
-**File:** `stacks/selfhosted/arrs/sabnzbd/audio.bash:284-295` (the `rm -rf` at `:290`)
-**Also:** `stacks/selfhosted/arrs/sabnzbd.yaml:121-133` (the D-10 inventory that omits it)
+## Narrative Findings (AI reviewer)
+
+### Critical Issues
+
+#### CR-02: The extended.conf destructive-switch guard reports green on values that arm `rm -rf` — unbounded prefix match, and "any line" where bash takes the last
+
+**File:** `scripts/quick-health-check.sh:834`, `:841` (the two assertion patterns), `:832`, `:839`
+(the `found=` display)
 
 **Issue:**
 
-`beets()` decides success by touching a sentinel and then looking for audio files newer than it:
+The block asserts the only two values standing between every completed music download and an
+`rm -rf "$1"/*`. Both assertions are wrong in the same two ways.
 
-```bash
-touch "/config/scripts/beets-match"
-...
-if [ $(find "$1" ... -newer "/config/scripts/beets-match" | wc -l) -gt 0 ]; then
-    log "SUCCESS: Matched with beets!"
-else
-    log "ERROR: Unable to match using beets to a musicbrainz release"
-    if [ $requireBeetsMatch = true ]; then
-        rm -rf "$1"/*
-        log "ERROR: Marking download as failed..."
-        exit 1
-    fi
-fi
+**(a) The value patterns have no right-hand boundary.** Driven locally:
+
+```
+$ printf 'ConversionFormat="FLACX"\n' | grep -qE '^[[:space:]]*ConversionFormat="?(FLAC|OPUS)"?' && echo OK
+OK
+$ printf 'ConversionFormat=FLACTEST\n' | grep -qE '^[[:space:]]*ConversionFormat="?(FLAC|OPUS)"?' && echo OK
+OK
 ```
 
-The removed line was the only thing in that window that could ever make a file newer than the
-sentinel. Before the strip, a successful `beet … import` took the SUCCESS branch. After the strip
-**nothing can**, so the `else` branch now executes on every music job, unconditionally and forever.
+`audio.bash:220` tests `[ "${ConversionFormat}" = FLAC ]` and `:226` tests `= OPUS`, both exact. So
+any value that merely *begins* `FLAC` or `OPUS` — `FLACX`, `FLAC ` with a stray trailing space
+inside the quotes, `OPUS2` — is reported `✅ extended.conf switches disarmed (2)` while
+`conversion()` falls straight through to the `rm -rf "$1"/*` at `audio.bash:237`. One stray
+character in a hand-edited config produces a confident green on a data-destruction guard.
 
-`sabnzbd.yaml:127-129` pre-declares the two log lines as expected. It does not mention that the
-same branch contains an `rm -rf` of the completed download. The gate is `requireBeetsMatch`, which
-lives in `/config/extended.conf` — a host file that is **not in this repo, not vendored, not in the
-`Vendored-file drift (D-13)` block's three-file set, and not asserted by
-`check-music-freeze.sh`**. It is recorded as `"false"` only inside `.planning/` research notes
-(`04-RESEARCH.md:315`, `04-D12-EVIDENCE.md:184`). One edit to that untracked file — or any restore
-of an upstream-shipped `extended.conf` — deletes every completed music download and marks the job
-failed, against content the project describes as irreplaceable and with no `beet undo`.
+The in-band comment at `:785-788` forbids a `$` anchor and `grep -x`, and that reasoning is
+correct — plan 04-12 measured an end-anchored pattern false-redding a value with a trailing
+comment. But "no end anchor" is not the same requirement as "no boundary", and the block took the
+first as licence for the second.
 
-This is the same class the phase's own vendoring exists to prevent (upstream `setup.bash`
-re-downloading files), applied to a file the vendoring does not cover. Note also
-`[ $requireBeetsMatch = true ]` is unquoted: if the variable is unset the test errors with rc 2
-rather than evaluating false. It lands in the safe direction here only because a failing `[` inside
-an `if` condition is treated as false — safety by accident, not by design.
+**(b) Both assertions ask "does any line match", while `audio.bash` gets its values from
+`source /config/extended.conf:41`, where the last assignment wins.** Driven end-to-end:
 
-**Fix:** Do not edit `audio.bash` — byte-identity against the host copy is the asserted property.
-Close it at the guard layer instead. Add `extended.conf` to the drift set:
-
-```bash
-# scripts/quick-health-check.sh, inside DRIFT_CMD (needs a repo-side vendored copy to compare):
-_drift_pair extended.conf stacks/selfhosted/arrs/sabnzbd/extended.conf \
-  "$DRIFT_APPDATA_ROOT/arrs/sabnzbd/config/extended.conf"
-# ...and DRIFT_LINES -ne 3  ->  -ne 4
+```
+$ printf 'requireBeetsMatch="false"\nrequireBeetsMatch="true"\n' > /tmp/ecdemo2.conf
+$ ( . /tmp/ecdemo2.conf; echo "effective=$requireBeetsMatch" )
+effective=true
+$ grep -qE '^[[:space:]]*requireBeetsMatch="?false"?' /tmp/ecdemo2.conf && echo "GUARD SAYS OK"
+GUARD SAYS OK
 ```
 
-If vendoring the whole file is undesirable (it may hold site values), assert the three switches
-directly instead — this is the minimum, and it fails closed on "could not look":
+Same for `ConversionFormat="FLAC"` followed by `ConversionFormat="MP3"` — guard `ok`, effective
+value `MP3`, `rm -rf`. Appending a line rather than editing one in place is the normal way an
+operator or a restored upstream block modifies a sourced bash config, and the safe direction
+(appending `false` under a `true`) is exactly as likely as the unsafe one — but only the unsafe one
+is undetected.
 
-```bash
-# scripts/check-music-freeze.sh, new section: the extended.conf switch census
-EC=/mnt/fast/appdata/arrs/sabnzbd/config/extended.conf
-if [[ ! -r "$EC" ]]; then
-  fail "extended.conf unreadable — the audio.bash destructive switches are UNKNOWN, not safe"
-else
-  grep -qE '^[[:space:]]*requireBeetsMatch="?false"?'  "$EC" \
-    || fail "requireBeetsMatch is not false — audio.bash beets() will rm -rf every music job"
-  grep -qE '^[[:space:]]*ConversionFormat="?FLAC"?'    "$EC" \
-    || fail "ConversionFormat is not FLAC — conversion() will rm -rf every job carrying a FLAC (WR-01)"
-  grep -qE '^[[:space:]]*ReplaygainTagging="?false"?'  "$EC" \
-    || fail "ReplaygainTagging is not false — a tag writer is active after the strip"
-fi
+**(c) The `found=` diagnostic compounds it.** `:832` and `:839` take `sed -n '1p'` — the **first**
+matching line — while `source` takes the last. On a duplicated key the operator is shown a line
+that is not the one in force, on the branch whose entire job is to tell them what is wrong.
+
+This does not reopen CR-01: the block exists, it runs on every invocation, and it fails closed on
+every "could not look" branch. It is filed Critical because it is a **demonstrated false green on
+the sole standing detector for an unconditional `rm -rf`** of content this project describes as
+irreplaceable, and the trigger is a single stray character or a duplicated line.
+
+**Fix:** Assert the **effective** value, not the presence of a matching line, and bound the value.
+Keep the matching remote-side and keep returning labels only, per (c) at `:766-772`. Replace both
+`grep -q` tests with a last-match extraction:
+
+```sh
+# inside EXTCONF_CMD, replacing the two if/grep -q pairs:
+_ec_val() {  # $1 = key name -> prints the LAST assignment's bare value, comment and quotes stripped
+  printf '%s\n' "$_ec" \
+    | grep -E "^[[:space:]]*$1=" \
+    | tail -n 1 \
+    | sed -e "s/^[[:space:]]*$1=//" -e 's/[[:space:]]*#.*$//' -e 's/^"//' -e 's/"$//' \
+          -e "s/^'//" -e "s/'$//" -e 's/[[:space:]]*$//'
+}
+_rbm=$(_ec_val requireBeetsMatch); [ -n "$_rbm" ] || _rbm='(absent)'
+[ "$_rbm" = "false" ] && echo 'requireBeetsMatch=ok' || echo "requireBeetsMatch=BAD found=$_rbm"
+_cf=$(_ec_val ConversionFormat);  [ -n "$_cf" ] || _cf='(absent)'
+case "$_cf" in FLAC|OPUS) echo 'ConversionFormat=ok' ;; *) echo "ConversionFormat=BAD found=$_cf" ;; esac
 ```
 
-And amend the `sabnzbd.yaml:121-133` D-10 inventory to name the `rm -rf` branch explicitly, since
-that block is the document a future reader will trust.
+`tail -n 1` matches `source` semantics; the `sed` strips the trailing comment (preserving the
+04-12 tolerance the current comment is right to insist on) and then compares the **whole** value,
+which closes (a) without adding an end anchor to a regex. Add a driven control for each: a fixture
+with a duplicated key in the unsafe order, and one with `ConversionFormat="FLAC "`. Both must go
+red; today both go green.
 
-## Warnings
+### Warnings
 
-### WR-01: `conversion()` deletes the download folder for every non-OPUS format; the `ffmpeg` block below it is unreachable
+#### WR-02: `beets.yaml` publishes port 8337 LAN-wide while its Authelia labels cannot possibly apply
 
-**File:** `stacks/selfhosted/arrs/sabnzbd/audio.bash:226-255`
-**Issue:** Inside the `for fname in "$1"/*.flac` loop, the `if/else` on `ConversionFormat = OPUS`
-has no fallthrough — the `else` runs `rm -rf "$1"/*; exit 1` for **every** other format. The
-`if ffmpeg …` block at `:242-255`, which is the actual conversion path for MP3/AAC/ALAC, is
-unreachable dead code. Only `ConversionFormat=FLAC` escapes, because `:220` short-circuits it
-before the loop. So any value other than `FLAC` or `OPUS` destroys a download that contains FLACs.
-
-This is inherited upstream code and was not changed by this phase — which is why it is Warning and
-not Critical — but it is now vendored into this repo and shipped, and it depends on the same
-unguarded `extended.conf` value as CR-01. It is closed by the same fix.
-**Fix:** The `ConversionFormat=FLAC` assertion in the CR-01 snippet covers it. Do not patch
-`audio.bash` in place (drift guard); if upstream is ever re-vendored, carry the fix as a documented
-local change alongside the `SAB_PP_STATUS` guard.
-
-### WR-02: `beets.yaml` publishes port 8337 LAN-wide while its Authelia labels cannot possibly apply
-
-**File:** `stacks/selfhosted/arrs/beets/beets.yaml:70-85`
-**Issue:** The service declares a full Traefik router chained through `chain-authelia@file`, but
-its `networks:` block is commented out at `:70-71`. With no `networks:` key, Compose attaches it to
-the implicit project `default` network, not the external `t3_proxy` that Traefik uses — so the
-router can never reach it and the Authelia protection is illusory. Meanwhile `ports: - 8337:8337`
-binds the host interface directly, which is the one path that *does* work and it has no
-authentication in front of it.
-
-This is an outlier, not a house convention: of the 15 service files under `stacks/selfhosted/arrs/`,
-`beets.yaml` is the **only** one with `traefik.enable=true` and zero `networks:` declarations —
-every sibling declares one or two.
-
-Not rated Critical because it is not currently exploitable: the vendored `config.yaml` declares
-`plugins: musicbrainz` only, so the `web` plugin never loads and nothing listens on 8337; and the
-container is `restart: "no"` + `profiles: ["manual"]` + commented out of the include list. It
-becomes a live LAN-wide unauthenticated exposure the moment the `web` plugin is enabled — which is
-exactly what Phase 5/6 will want — on a container that holds `/downloads:rw` and, from Phase 6, rw
-on the library.
-**Fix:**
+**Status:** STILL OPEN. Unchanged since `f39e417`.
+**File:** `stacks/selfhosted/arrs/beets/beets.yaml:70-86` (networks commented at `:70-71`, host
+port at `:72-73`, `chain-authelia@file` at `:79`)
+**Issue:** The `networks:` key is still commented out while `traefik.enable=true` and a full
+`chain-authelia@file` router are declared, so Compose attaches the service to the implicit project
+`default` network and the Traefik router can never reach it — the Authelia protection is
+illusory. `ports: - 8337:8337` is the one path that does work and has no authentication.
+Re-verified as an outlier, not a convention: of the 16 files under `stacks/selfhosted/arrs/`,
+`beets/beets.yaml` is the **only** one with `traefik.enable=true` and `networks=0`; every sibling
+declares one or two. Still not exploitable today (`config.yaml:60` declares `plugins: musicbrainz`
+only, so the `web` plugin never loads and nothing listens on 8337; the service is `restart: "no"`,
+`profiles: ["manual"]`, and commented out of `compose.yaml:39`). It becomes a live unauthenticated
+LAN exposure the moment Phase 5/6 enables `web`, on a container holding `/downloads:rw`.
+**Fix:** unchanged from the prior review —
 ```yaml
     networks:
       - t3_proxy
-    # drop the host port entirely; reach it through Traefik + Authelia
+    # drop the host port; reach it through Traefik + Authelia
     # ports:
     #   - 8337:8337
 ```
-If a host port is genuinely wanted for local use, bind it to loopback: `- "127.0.0.1:8337:8337"`.
+or bind to loopback: `- "127.0.0.1:8337:8337"`.
 
-### WR-03: The §2 "false-pass guard" parses volume lines as strings and silently drops three mount shapes
+#### WR-03: The §2 "false-pass guard" parses volume lines as strings and silently drops three mount shapes
 
-**File:** `scripts/check-music-freeze.sh:411-457`
-**Issue:** The guard exists specifically to catch library-reaching `rw` mounts that section 1
-cannot see. Its input is `grep -rn '/mnt/tank/media'` and its parsing is pure string slicing
-(`host_side="${mapping%%:*}"`), with `touches_library()` doing literal prefix matching and no
-`realpath`. Three real shapes escape it:
-
-1. **Quoted mappings.** `- "/mnt/tank/media:/media:rw"` yields `host_side='"/mnt/tank/media'` with a
-   leading quote, so `touches_library` returns false and the row is printed in the table but
-   silently excluded from `DECLARED_MUSIC_RW`. A false pass in the guard named for false passes.
-2. **Variable interpolation.** `- ${TANK}/media/Music:/music:rw` never matches the grep at all. This
-   repo already interpolates `$TZ`/`$PUID`/`${SABNZBD_API_KEY}`, so the shape is plausible.
-3. **Long-form binds.** `type: bind` / `source:` / `target:` is invisible to a one-line parser.
-   (Only a commented example exists today, in `automation/pwpush.yaml:88`.)
-
-I verified none of these is present in the tree right now, so there is no live hole — but the guard
-cannot prove that, and its own summary line reads as though it can.
-**Fix:** Strip surrounding quotes before splitting, and add a detector that refuses rather than
-guesses when it meets a shape it cannot parse:
-
+**Status:** STILL OPEN. Unchanged.
+**File:** `scripts/check-music-freeze.sh:411-457` (the parse at `:420-421`, the filter at `:443-449`)
+**Issue:** `host_side="${mapping%%:*}"` with no quote-stripping and no `realpath`. Quoted mappings
+(`- "/mnt/tank/media:/media:rw"`) yield a leading `"` and fall out of `DECLARED_MUSIC_RW` silently;
+variable-interpolated host paths never match the driving grep at `:429` at all; long-form
+`type: bind` is invisible to a one-line parser.
+**New evidence strengthening this:** I re-ran all three probes. No quoted `/mnt/tank` mapping
+exists, and the only `type: bind` is commented (`automation/pwpush.yaml:88`) — but
+**variable-interpolated volume lines now number ten in the tree** (`immich/compose.yaml:33,117`,
+`arrs/listenarr.yaml:17-19`, `automation/n8n-postgres.yaml:28`, `monitoring/prometheus.yaml:13`,
+`monitoring/grafana.yaml:14`, `media/audiobookshelf.yaml:15-16`), one of them
+`${MEDIA}/audiobooks` inside `arrs/`. None resolves into the library today, but the guard cannot
+prove that and its summary line at `:453` reads as though it can.
+**Fix:** unchanged — strip surrounding quotes before splitting, and add loud refusals rather than
+silent misses:
 ```bash
 mapping="$(printf '%s' "$mapping" | sed 's/^["'"'"']//; s/["'"'"']$//')"
 ...
-# elsewhere, a loud refusal rather than a silent miss:
 if grep -rqE '^[[:space:]]*(-[[:space:]]*)?type:[[:space:]]*bind' "$STACKS" --include='*.yaml'; then
   fail "long-form 'type: bind' mounts exist; this parser cannot see them — §2 is UNKNOWN, not clean"
 fi
-if grep -rn '^\s*-\s*.*\$\{\?[A-Z_]\+.*:/' "$STACKS" --include='*.yaml' | grep -q .; then
+if grep -rqE '^[[:space:]]*-[[:space:]]*\$\{?[A-Za-z_]+[^:]*:/' "$STACKS" --include='*.yaml'; then
   fail "a volume line interpolates a variable; its host path cannot be resolved statically — UNKNOWN"
 fi
 ```
 
-### WR-04: The tagger-definition census matches four literal image prefixes, not "a tagger"
+#### WR-04: The tagger-definition census matches four literal image prefixes, not "a tagger"
 
-**File:** `scripts/check-music-freeze.sh:710-719`
-**Issue:** The census that backs criterion 1 greps for
-`^[[:space:]]*image:[[:space:]]*(lscr\.io/linuxserver/beets|sentriz/wrtag|ghcr\.io/terry90/soulbeet|metasauce/beets-flask)`.
-That detects *resurrection of three known retired images*. It does not detect a tagger, and several
-plausible spellings read as green (`tagger definitions: 1`):
-
-- a registry-qualified form — `image: docker.io/sentriz/wrtag`;
-- a quoted form — `image: "sentriz/wrtag:v0.33.0"`;
-- any other tagger entirely — `ghcr.io/beetbox/beets`, `mikenye/picard`, `ghcr.io/…/musicbrainz-picard`.
-
-The anchor also makes the assertion brittle in the other direction: the comment at `:714` already
-flags that Phase 5's `beets-flask` will fail this counter, which is deliberate.
-**Fix:** Allow an optional registry prefix and optional quoting, and treat the image *name* rather
-than the full reference as the token:
-
+**Status:** STILL OPEN. Unchanged.
+**File:** `scripts/check-music-freeze.sh:711` (the pattern), `:714` (the assertion)
+**Issue:** The pattern is four full image references. A registry-qualified form
+(`docker.io/sentriz/wrtag`), a quoted form (`image: "sentriz/wrtag:v0.33.0"`) or any other tagger
+(`ghcr.io/beetbox/beets`, `mikenye/picard`) reads as `tagger definitions: 1`.
+**Re-verified, no live hole:** `git ls-files stacks | xargs grep -nE '^[[:space:]]*image:.*(beets|wrtag|soulbeet|picard)'`
+returns exactly one line, `beets/beets.yaml:6`.
+**Fix:** unchanged — allow an optional registry prefix and optional quoting, matching the image
+*name* rather than the full reference:
 ```bash
-| { xargs -r -d '\n' grep -lE '^[[:space:]]*image:[[:space:]]*["'"'"']?([a-z0-9.-]+/)*(beets|beets-flask|wrtag|soulbeet|picard)\b' 2>/dev/null || true; }
+| { xargs -r -d '\n' grep -lE '^[[:space:]]*image:[[:space:]]*["'"'"']?([a-z0-9.-]+/)*(beets|beets-flask|wrtag|soulbeet|picard)\b' 2>/dev/null || true; } \
 ```
-Then assert the *set* of files, not just the count, which the code already does correctly at `:714`.
 
-### WR-05: Three in-band comments now state the opposite of what the code does, and one of them will cause the WR-09 selector to be broken
+#### WR-05: Three in-band comments state the opposite of what the code does, and one instructs a future editor to treat live selector tokens as dead
 
-**File:** `scripts/quick-health-check.sh:19-27`, `scripts/quick-health-check.sh:754-758`,
-`stacks/selfhosted/arrs/beets/config.yaml:14-18`
-**Issue:** All three were true before plan 04-11 and are false now:
-
-- `quick-health-check.sh:23-25` — "6b is a CANDIDATE: it runs only when the caller sets
+**Status:** STILL OPEN. Line numbers shifted in `quick-health-check.sh` (+253) by `c0b04c3`; the
+text is byte-unchanged.
+**File:** `scripts/quick-health-check.sh:19-27` (was 19-27), `scripts/quick-health-check.sh:1007-1010`
+(was 754-758), `stacks/selfhosted/arrs/beets/config.yaml:14-18`
+**Issue:** All three were true before plan 04-11 and are false now, confirmed by grep:
+- `quick-health-check.sh:23` still reads "6b is a CANDIDATE: it runs only when the caller sets
   `CENSUS_CANDIDATE=1` … Nothing this script exits with changes until 04-11 promotes it." The
-  constant is `TAGGER_CENSUS_PROMOTED=1`; 6b always runs and is fatal. The sixth notice at `:156`
-  says so, directly contradicting this one.
-- `quick-health-check.sh:756-758` — "Section 6b is a CANDIDATE and prints no counters on a routine
-  run, so until plan 04-11 promotes it these tokens match nothing and this block's output is
-  byte-for-byte what it was before." This is the dangerous one. It tells a future editor that six
-  tokens in the live `grep -E` selector are inert. Removing them as dead weight would not produce a
-  visible failure: `SUMMARY` stays non-empty (the four original tokens still match), so the branch
-  still prints `✅ Intact` — while silently dropping every census counter from the displayed
-  output. That is precisely the WR-09 class of silent coupling break the surrounding comment block
-  exists to prevent.
-- `beets/config.yaml:14-18` — "a block that plan 04-10 BUILDS as a candidate and plan 04-11
-  PROMOTES … **IT DOES NOT EXIST AT THIS COMMIT.** Until 04-10 lands, nothing detects divergence
-  between this file and the host." The block exists, is promoted, and hashes this exact file.
-
-**Fix:** Rewrite all three to the present tense in one commit, following the file's own withdrawal
-convention (paraphrase the withdrawn claim rather than quoting it, so a grep for it keeps returning
-zero). For `:756-758` specifically:
-
+  constant is `TAGGER_CENSUS_PROMOTED=1` (`check-music-freeze.sh:144`); 6b always runs and is
+  fatal. The sixth notice at `:156` says so, directly contradicting this one, in the same file.
+- `quick-health-check.sh:1008` still reads "Section 6b is a CANDIDATE and prints no counters on a
+  routine run, so until plan 04-11 promotes it these tokens match nothing." This is the dangerous
+  one: it tells a future editor that six tokens in the **live** `grep -E` selector at `:1012` are
+  inert. Removing them produces no visible failure — `SUMMARY` stays non-empty because the four
+  original tokens still match, so the branch still prints `✅ Intact` while silently dropping every
+  census counter. That is precisely the WR-09-class silent coupling break the surrounding comment
+  block exists to prevent.
+- `beets/config.yaml:16` still reads "**IT DOES NOT EXIST AT THIS COMMIT.** Until 04-10 lands,
+  nothing detects divergence between this file and the host." The drift block exists at
+  `quick-health-check.sh:630-743`, is promoted (`VENDORED_DRIFT_PROMOTED=1` at `:357`), and hashes
+  this exact file at `:689`.
+**Fix:** rewrite all three to the present tense in one commit, following the file's own withdrawal
+convention (paraphrase the withdrawn claim so a mechanical grep for it keeps returning zero). For
+`:1007-1010`:
 ```bash
     # The six Phase 4 tokens on the last two lines select section 6b's census counters. 6b is
     # PROMOTED (TAGGER_CENSUS_PROMOTED=1) and prints those counters on every routine run, so these
@@ -281,69 +282,58 @@ zero). For `:756-758` specifically:
     # still prints — it silently drops a counter from the output. Change both files together.
 ```
 
-### WR-06: `normalise-dj-tags.py` double-counts skipped files, so the summary does not reconcile
+#### WR-06: `normalise-dj-tags.py` double-counts skipped files, so the summary does not reconcile
 
-**File:** `scripts/normalise-dj-tags.py:1161-1163`, `:1188`, `:1204-1207`
-**Issue:** When rule 1 cannot derive an album it does `counts["skipped"] += 1; continue`, which
-skips only the *rule* loop. The emit loop then iterates `loaded` again, finds no proposal for that
-path, and does `counts["unchanged"] += 1`. The same file is counted in both buckets. Rule 3 is
-worse: `counts["skipped"] += len(loaded)` charges the entire folder as skipped, on top of any
-per-file rule-1 skips, and every one of those files is *also* counted unchanged (or changed, if
-rule 1 or 2 proposed something for it).
-
-`files_seen` therefore never equals `changed + unchanged + skipped + failed`, in either mode. Since
-the dry run *is* the D-08 review artefact and `.summary.json` is what a later reader will quote,
-the headline counts are not trustworthy.
-**Fix:** Track skip state per path and make the buckets disjoint:
-
+**Status:** STILL OPEN. Unchanged.
+**File:** `scripts/normalise-dj-tags.py:1161`, `:1188`, `:1206`
+**Issue:** `counts["skipped"] += 1; continue` at `:1161-1163` leaves the *rule* loop only; the emit
+loop at `:1203` then iterates `loaded` again, finds no proposal, and adds `counts["unchanged"] += 1`
+at `:1206`. The same file lands in both buckets. Rule 3 is worse: `:1188` charges
+`len(loaded)` to `skipped` for the whole folder, on top of any per-file rule-1 skips, and every one
+of those files is *also* counted unchanged or changed. `files_seen` (`:1105`) therefore never equals
+`changed + unchanged + skipped + failed` in either mode, and the dry run **is** the D-08 review
+artefact whose `.summary.json` (`:1264-1279`) a later reader will quote.
+**Fix:** unchanged — track skip state per path, make the buckets disjoint, and assert the invariant
+before writing the summary:
 ```python
 skipped_paths: set[str] = set()
-# rule 1:
-            if derived is None:
-                skipped_paths.add(path)
-                log.warning("rule 1 skipped %s: %s", path, reason)
-                continue
-# rule 3:
-                if not chosen:
-                    skipped_paths.update(p for p, _h, _v in loaded)
-                    log.warning("rule 3 skipped folder %s: no label token in its albums", folder_name)
-# emit loop:
-            if not fields:
-                counts["skipped" if path in skipped_paths else "unchanged"] += 1
-                continue
+# :1160  if derived is None:  skipped_paths.add(path); log.warning(...); continue
+# :1187  if not chosen:       skipped_paths.update(p for p, _h, _v in loaded); log.warning(...)
+# :1205  if not fields:       counts["skipped" if path in skipped_paths else "unchanged"] += 1; continue
+assert counts["files_seen"] == counts["changed"] + counts["unchanged"] + counts["skipped"] + counts["failed"]
 ```
-Then assert the invariant before writing the summary, so a future regression is loud:
-`assert counts["files_seen"] == counts["changed"] + counts["unchanged"] + counts["skipped"] + counts["failed"]`.
 
-### WR-07: `check-renovate.sh` reports `1` for three empty sets — the exact defect it fixed elsewhere
+#### WR-07: `check-renovate.sh` reports `1` for three empty sets — the exact defect it fixed elsewhere
 
-**File:** `scripts/check-renovate.sh:83-84`, `:96-97`, `:106-112`
-**Issue:** `COMPOSE_COUNT=$(echo "$COMPOSE_FILES" | wc -l)` counts the single newline `echo` emits
-for an empty string, so zero compose files reports as `1`. Verified: `echo "" | wc -l` → `1`. The
-same bug is in `IMAGE_FILE_COUNT` and `IMAGE_COUNT`. The script already knows this pattern is wrong
-— `POSTGRES_COUNT`, `REDIS_COUNT` and `RENOVATE_COUNT` were deliberately converted to
-`awk 'NF{n++} END{print n+0}'` for exactly this reason, with the fix documented at `:121-122` and
-`:165-167`. Three call sites were missed. The summary block at `:200-202` then reports fabricated
-counts, and "1 compose file" on a repo where the find returned nothing reads as healthy.
-**Fix:** Apply the same awk form the file already standardised on:
+**Status:** STILL OPEN. Unchanged.
+**File:** `scripts/check-renovate.sh:84`, `:97`, `:112`; consumed at `:200-202`
+**Issue:** `$(echo "$X" | wc -l | tr -d ' ')` counts the newline `echo` emits for an empty string.
+Re-verified: `echo "" | wc -l` → `1`. So zero compose files, zero image-bearing YAMLs and zero
+unique images each report `1`. The file already knows this pattern is wrong — `POSTGRES_COUNT`
+(`:123`), `REDIS_COUNT` (`:146`) and `RENOVATE_COUNT` (`:168`) were deliberately converted to
+`awk 'NF{n++} END{print n+0}'` for exactly this reason, with the rationale written at `:121-122`
+and `:165-167`. Three call sites were missed.
+**Fix:** unchanged — apply the form the file already standardised on:
 ```bash
-COMPOSE_COUNT=$(printf '%s\n' "$COMPOSE_FILES"   | awk 'NF{n++} END{print n+0}')
+COMPOSE_COUNT=$(printf '%s\n' "$COMPOSE_FILES"       | awk 'NF{n++} END{print n+0}')
 IMAGE_FILE_COUNT=$(printf '%s\n' "$YAML_WITH_IMAGES" | awk 'NF{n++} END{print n+0}')
-IMAGE_COUNT=$(printf '%s\n' "$IMAGES"            | awk 'NF{n++} END{print n+0}')
+IMAGE_COUNT=$(printf '%s\n' "$IMAGES"                | awk 'NF{n++} END{print n+0}')
 ```
 
-### WR-08: `avail_gb()`'s documented "could not read df" branch is unreachable under `set -e`
+#### WR-08: `avail_gb()`'s documented "could not read df" branch is unreachable under `set -e`
 
-**File:** `scripts/spike03-image-headroom.sh:171-176`, consumed at `:249`, `:265-266`, `:365`, `:451`
-**Issue:** The function is written to return an empty string so callers can report
-`could not read available GiB from df - UNKNOWN, not healthy`. But the script sets
-`set -euo pipefail` at `:100`, and `b="$(df -B1 --output=avail / … | tail -1 | tr -dc '0-9')"` is a
-standalone assignment: if `df` fails, `pipefail` propagates it, the assignment fails, and `set -e`
-terminates the script before the `[ -z "$b" ]` guard is ever reached. The caller
-`before_avail="$(avail_gb)"` inherits the same fate. So the UNKNOWN branch — the one that upholds
-"could not look ≠ healthy" for the OD-1 floor — cannot fire, and a df failure exits with a bare
-non-zero status and no explanation instead.
-**Fix:** Make the failure explicit inside the function so the guard is reachable:
+**Status:** STILL OPEN. Unchanged.
+**File:** `scripts/spike03-image-headroom.sh:171-176`; consumed at `:249`, `:265-266`, `:335`,
+`:365`, `:451`, `:470-475`
+**Issue:** `set -euo pipefail` at `:100`. `b="$(df -B1 --output=avail / 2>/dev/null | tail -1 | tr -dc '0-9')"`
+at `:173` is a standalone assignment, so `pipefail` propagates a `df` failure to the assignment and
+`set -e` terminates the script before the `[ -z "$b" ]` guard at `:174` is reached. The
+`could not read available GiB from df - UNKNOWN, not healthy` branch at `:266`, and the
+`the floor is UNKNOWN, not met` failure at `:471` — the two sites that uphold "could not look ≠
+healthy" for the OD-1 floor — cannot fire. A `df` failure exits with a bare non-zero status and no
+explanation instead. (Note the split declaration matters: `local b="$(...)"` would mask the status;
+`local b` then a separate assignment does not.)
+**Fix:** unchanged — make the failure explicit inside the function so the guard is reachable:
 ```bash
 avail_gb() {
   local b=""
@@ -353,17 +343,22 @@ avail_gb() {
 }
 ```
 
-### WR-09: A down Traefik still exits `quick-health-check.sh` with 0
+#### WR-09: A down Traefik still exits `quick-health-check.sh` with 0 — and this now has a live transcript
 
-**File:** `scripts/quick-health-check.sh:463-471`, `:474-479`, `:562-567`
-**Issue:** The three legacy blocks print `❌ Not running` / `❌ Not accessible` without touching
+**Status:** STILL OPEN. Line numbers shifted; behaviour unchanged.
+**File:** `scripts/quick-health-check.sh:524-532`, `:535-540`, `:623-628` (was 463-471, 474-479,
+562-567)
+**Issue:** All three blocks print `❌ Not running` / `❌ Not accessible` without touching
 `EXIT_CODE`. The estate's single health-check entry point therefore exits 0 — "healthy" to any
 caller reading the status rather than the transcript — with Traefik down, which takes every
-`*.deercrest.info` service with it. The file documents this as WR-02 at `:452-462` and explicitly
-declines to fix it, and the reasoning given (these are wrong-diagnosis, not false-green) is sound
-as far as the transcript goes. It is still a check that cannot fail on the estate's highest-blast-
-radius outage. Pre-existing, not introduced by this phase.
-**Fix:** Capture the status and branch, the same shape the container-count sites already use:
+`*.deercrest.info` service with it. The file documents this at `:513-523` and explicitly declines to
+fix it.
+**New evidence promoting this from theoretical to observed:** the quick task's own summary records
+that on the green routine run, `Traefik dashboard: ❌ Not accessible` printed while the script
+exited 0 (`260914-a2y-SUMMARY.md:175-177`, `…-negative-controls.txt:154-164`). A red glyph is
+currently sitting in the transcript of a check that reports success, on every run.
+**Fix:** unchanged — capture the status and branch, the shape the container-count sites at
+`:575-588` already use:
 ```bash
 ssh -n $SSH_OPTS root@172.16.1.159 \
     "set -o pipefail; timeout $REMOTE_TIMEOUT docker ps --format '{{.Names}}' | grep -q '^traefik$'"
@@ -376,17 +371,20 @@ case "$TRAEFIK_RC" in
 esac
 ```
 
-### WR-10: `bounded_ssh` recreates a deleted `mktemp` path, reintroducing the race `mktemp` exists to close
+#### WR-10: `bounded_ssh` recreates a deleted `mktemp` path, reintroducing the race `mktemp` exists to close
 
-**File:** `scripts/quick-health-check.sh:378-392`
-**Issue:** The sentinel is created safely with `mktemp`, immediately `rm -f`'d at `:383`, and then
-written back at `:385` by the watchdog (`: > "$sentinel"`). Between the `rm` and the write the path
-is predictable and unowned, so anything able to create a file there can pre-place a symlink and
-redirect the truncating write. The fallback path is worse — `"${TMPDIR:-/tmp}/qhc-bound.$$.$RANDOM"`
-is guessable and is used unguarded whenever `mktemp` is unavailable. Impact is low in practice
-(macOS gives each user a private `TMPDIR`, and the script is run interactively by its owner), but
-this is a needless reintroduction of a closed hole in a file that otherwise reasons carefully.
-**Fix:** Keep the file and use its content as the sentinel rather than its existence:
+**Status:** STILL OPEN. Line numbers shifted (was 378-392).
+**File:** `scripts/quick-health-check.sh:439-453` (the `rm -f` at `:444`, the write-back at `:446`,
+the guessable fallback at `:443`)
+**Issue:** The sentinel is created safely with `mktemp -t qhc-bound`, immediately `rm -f`'d, then
+written back by the watchdog (`: > "$sentinel"`). Between the `rm` and the write the path is
+predictable and unowned, so anything able to create a file there can pre-place a symlink and
+redirect the truncating write. The fallback is worse —
+`"${TMPDIR:-/tmp}/qhc-bound.$$.$RANDOM"` is guessable and used unguarded whenever `mktemp` is
+unavailable. Impact is low in practice (macOS gives each user a private `TMPDIR`; the script is run
+interactively by its owner), but it is a needless reintroduction of a closed hole in a file that
+otherwise reasons carefully.
+**Fix:** unchanged — keep the file and use its *content* as the sentinel rather than its existence:
 ```bash
 sentinel=$(mktemp -t qhc-bound) || { echo "cannot create sentinel"; return 1; }
 "$@" </dev/null & cmd_pid=$!
@@ -397,80 +395,222 @@ kill -TERM "$watch_pid" 2>/dev/null; wait "$watch_pid" 2>/dev/null
 rm -f "$sentinel"
 ```
 
-## Info
+#### WR-11: The D-10 side-effect inventory still omits the `rm -rf` branch — CR-01's documentation half was not done
 
-### IN-01: `sqlite3` is load-bearing in §6b but absent from the §0 toolchain preconditions
+**File:** `stacks/selfhosted/arrs/sabnzbd.yaml:121-133`
+**Issue:** CR-01's fix had two halves: the standing assertion (delivered, `quick-health-check.sh:805-934`)
+and "amend the `sabnzbd.yaml:121-133` D-10 inventory to name the `rm -rf` branch explicitly, since
+that block is the document a future reader will trust." The second half was not done and is not
+recorded anywhere as a declined decision — the quick task's `decisions:` list
+(`260914-a2y-SUMMARY.md:23-27`) does not mention it.
 
+The block still reads, at `:127-129`, that "the `beets()` body still logs 'Matching N tracks with
+Beets' and then 'ERROR: Unable to match…' (both are EXPECTED after the strip …) and still removes
+`library.blb` behind an existence guard" — an inventory of that function's surviving behaviour that
+enumerates two log lines and a `library.blb` unlink while omitting the `rm -rf "$1"/*` sitting three
+lines below them in the same `else`. `grep -n 'rm -rf' stacks/selfhosted/arrs/sabnzbd.yaml` returns
+exactly one hit, `:125`, and it is about `verify()`, not `beets()`. A reader reconstructing the
+post-strip behaviour from the authoritative in-repo note comes away believing the branch only logs.
+**Fix:** extend `:127-129` in place (do **not** touch `audio.bash`, whose byte-identity is asserted
+by the drift block):
+```yaml
+      # ... and the beets() body still logs "Matching N tracks with Beets" and then
+      # "ERROR: Unable to match…". BOTH ARE NOW UNCONDITIONAL: the strip removed the only
+      # writer that could make a file newer than the /config/scripts/beets-match sentinel, so
+      # the SUCCESS branch at audio.bash:286 is structurally unreachable and the else at :287
+      # is taken on every music job. THAT else CONTAINS `rm -rf "$1"/*` AT :290, gated solely
+      # by requireBeetsMatch in the container's /config/extended.conf — a file this repo does
+      # NOT vendor (it carries five *ArrApiKey fields and this repo is public). The value is
+      # asserted instead, on every run, by the "extended.conf destructive switches" block in
+      # scripts/quick-health-check.sh. conversion() has the same shape (WR-01) at :237.
+```
+
+#### WR-12: `beets.md`'s criterion-1 evidence command resolves to nothing when run
+
+**File:** `stacks/selfhosted/arrs/beets.md:1224`
+**Issue:** The closing acceptance table cites, as the evidence for criterion 1, the command
+`git ls-files stacks | grep -lE '^\s*image:\s*(beets|wrtag|soulbeet|beets-flask)'` and states it
+"resolves to exactly `stacks/selfhosted/arrs/beets/beets.yaml`". Run verbatim, it resolves to
+**nothing** — exit 1, no output — because the repo's only tagger line is
+`image: lscr.io/linuxserver/beets:2.13.1-ls349` (`beets/beets.yaml:6`), which does not begin with
+`beets`. The census in `check-music-freeze.sh:711` gets the right answer because it uses a
+*different*, registry-qualified pattern that the doc does not quote.
+
+The stated outcome is correct and the criterion genuinely holds; the *instrument* recorded beside
+it does not reproduce it. That is the failure mode this estate's own doctrine names — a claim that
+looks twice-confirmed because a command is printed next to it, where re-running the command gives
+zero and a reader would reasonably conclude the census is broken rather than the doc.
+**Fix:** quote what the census actually runs, so the two cannot drift:
+```markdown
+| **1 — one tagger definition** | `git ls-files stacks \| xargs grep -lE '^[[:space:]]*image:[[:space:]]*(lscr\.io/linuxserver/beets\|sentriz/wrtag\|ghcr\.io/terry90/soulbeet\|metasauce/beets-flask)'` resolves to exactly `stacks/selfhosted/arrs/beets/beets.yaml` — the same pattern `check-music-freeze.sh:711` asserts on; the census counts `tagger definitions: 1` … |
+```
+(Verified: that form returns the single expected path.) Note this row's pattern is also subject to
+WR-04 — fix both in the same commit so the doc keeps quoting the live pattern.
+
+#### WR-13: `spike03-discogs-probe.py --verbose` sets the **root** logger to DEBUG, inside the function whose docstring says it does not
+
+**File:** `scripts/spike03-discogs-probe.py:480`, claimed otherwise at `:463-471` and `:228-231`,
+exposed at `:952`, `:963`
+**Issue:** `configure_logging()`'s own docstring at `:465-466` states: "A root-level DEBUG would
+enable DEBUG for every library in the process. This turns DEBUG on for exactly one logger." Four
+lines later, `:480` reads `root.setLevel(logging.DEBUG if verbose else logging.INFO)` — which is a
+root-level DEBUG for every library in the process whenever `--verbose` is passed, and `--verbose`'s
+own help string at `:952` advertises exactly that ("DEBUG on the root logger too"). The SECURITY
+section at `:228-231` rests the same argument on `logging.basicConfig`, which is narrowly true (the
+file never calls it) while the stated *reason* — process-wide DEBUG — is defeated by `:480`.
+
+The redaction is on the handler (`:477`) rather than only the logger, so tokens in *rendered
+messages* stay redacted through this path, and `http.client.HTTPConnection.debuglevel` is genuinely
+never set — so this is not a live credential leak today. It is Warning rather than Info because the
+file's own SECURITY block is what a future reader will use to decide whether a new library's DEBUG
+output is safe here, and that block currently asserts a property the code does not have. This is
+the same defect class as WR-05.
+**Fix:** either drop the root-level escalation and keep the claim, or correct the claim and say what
+still holds:
+```python
+    # `--verbose` raises the ROOT logger to DEBUG, which DOES enable DEBUG for every library in
+    # the process — the one thing this docstring used to say it never did. It is kept because the
+    # redaction choke point is the HANDLER (below), so any record reaching stderr is scrubbed
+    # whatever logger emitted it. What is NOT enabled, ever, is
+    # http.client.HTTPConnection.debuglevel, which would log request HEADERS and is not covered by
+    # the query-string net. Do not set it.
+    root.setLevel(logging.DEBUG if verbose else logging.INFO)
+```
+
+### Info
+
+#### IN-01: `sqlite3` is load-bearing in §6b but absent from the §0 toolchain preconditions
+
+**Status:** STILL OPEN. Unchanged.
 **File:** `scripts/check-music-freeze.sh:296` (the tool list), `:768` (the dependency)
-**Issue:** Section 6b classifies every candidate database with `sqlite3 "file:${p}?mode=ro" '.tables'`.
-Section 0 asserts `ffprobe ffmpeg jq gzip sha256sum` and not `sqlite3`. If `sqlite3` is missing,
-every candidate falls into `UNCLASSIFIED_DBS` as "SQLite header but unreadable" and the run fails
-red — correct direction, but the reader is told the databases are unreadable rather than that the
-tool is absent, which are different answers by this file's own doctrine.
-**Fix:** Add `sqlite3` to the `for t in …` list at `:296`.
+**Issue:** §6b classifies every candidate database with `sqlite3 "file:${p}?mode=ro" '.tables'` at
+`:768`. §0 asserts `ffprobe ffmpeg jq gzip sha256sum` and not `sqlite3`. If `sqlite3` is missing,
+every candidate falls into `UNCLASSIFIED_DBS` as "SQLite header but unreadable" (`:770`) and the run
+fails red — correct direction, wrong answer: the reader is told the databases are unreadable rather
+than that the tool is absent.
+**Fix:** add `sqlite3` to the `for t in …` list at `:296`.
 
-### IN-02: `check-renovate.sh` omits `--strict`, and computes a version it never uses
+#### IN-02: `check-renovate.sh` omits `--strict`, and computes a version it never uses
 
+**Status:** STILL OPEN. Unchanged.
 **File:** `scripts/check-renovate.sh:66`, `:129`
-**Issue:** Two small things. (a) The standing check runs `renovate-config-validator --no-global`,
-while the recorded acceptance evidence for criterion 2 (`beets.md:1225`) was taken with
-`--strict --no-global`; the guard is weaker than the criterion it keeps true. (b) `VERSION=$(echo
-"$img" | grep -oE ':[0-9]+' | …)` is assigned and never referenced — dead code.
-**Fix:** Add `--strict` to the invocation; delete the `VERSION` assignment or print it in the row
-below it.
+**Issue:** (a) the standing check runs `renovate-config-validator --no-global` while the recorded
+acceptance evidence for criterion 2 (`beets.md:1225`) was taken with `--strict --no-global` — the
+guard is weaker than the criterion it keeps true. (b) `VERSION=$(echo "$img" | grep -oE ':[0-9]+' | …)`
+at `:129` is assigned and never referenced.
+**Fix:** add `--strict` to `:66`; delete the `:129` assignment or print it in the row below.
 
-### IN-03: Operator-supplied env vars are interpolated unvalidated into a remote root shell string
+#### IN-03: Operator-supplied env vars are interpolated unvalidated into a remote root shell string
 
-**File:** `scripts/quick-health-check.sh:321` / `:620-628` (`DRIFT_APPDATA_ROOT`), `:284` (`REMOTE_TIMEOUT`)
+**Status:** STILL OPEN, and now with two more variables (see IN-08).
+**File:** `scripts/quick-health-check.sh:368` / `:687-689` (`DRIFT_APPDATA_ROOT`), `:331` / `:525`
+etc. (`REMOTE_TIMEOUT`)
 **Issue:** `DRIFT_APPDATA_ROOT` is pasted into a double-quoted command string executed as root over
-ssh; a value containing `"` and `;` becomes remote command injection. This is self-injection by the
-operator on their own workstation, not a privilege-boundary crossing, and the override already
-forces `EXIT_CODE=1` so it cannot manufacture a green — hence Info. `REMOTE_TIMEOUT` is the same
-shape.
-**Fix:** Validate before use: `case "$DRIFT_APPDATA_ROOT" in /*[!a-zA-Z0-9/_.-]*|"") echo "refusing
-unsafe DRIFT_APPDATA_ROOT"; exit 2 ;; esac` and
-`case "$REMOTE_TIMEOUT" in ''|*[!0-9]*) exit 2 ;; esac`.
+ssh; a value containing `"` and `;` becomes remote command injection. Self-injection by the operator
+on their own workstation, and the override already forces `EXIT_CODE=1` so it cannot manufacture a
+green — hence Info. `REMOTE_TIMEOUT` is the same shape.
+**Fix:**
+```bash
+case "$DRIFT_APPDATA_ROOT" in ""|*[!a-zA-Z0-9/_.-]*) echo "refusing unsafe DRIFT_APPDATA_ROOT"; exit 2 ;; esac
+case "$REMOTE_TIMEOUT" in ''|*[!0-9]*) echo "refusing non-numeric REMOTE_TIMEOUT"; exit 2 ;; esac
+```
 
-### IN-04: The §2 Jellyfin exemption is file-scoped, not path-scoped
+#### IN-04: The §2 Jellyfin exemption is file-scoped, not path-scoped
 
+**Status:** STILL OPEN. Unchanged.
 **File:** `scripts/check-music-freeze.sh:447`
-**Issue:** `[[ "$f" == "stacks/selfhosted/media/jellyfin.yaml" ]] && continue` exempts *every* rw
-row in that file, so a second, narrower Music-reaching mount added to `jellyfin.yaml` would be
-invisible. Low impact — Jellyfin already holds the whole tree rw by D-21 — but the exemption is
-broader than the decision it encodes.
-**Fix:** Exempt the specific mapping instead of the file:
-`[[ "$f" == "stacks/selfhosted/media/jellyfin.yaml" && "$mapping" == "/mnt/tank/media:/media:rw" ]] && continue`.
+**Issue:** `[[ "$f" == "stacks/selfhosted/media/jellyfin.yaml" ]] && continue` exempts *every* rw row
+in that file, so a second, narrower Music-reaching mount added to `jellyfin.yaml` is invisible.
+**Fix:** exempt the mapping, not the file:
+`[[ "$f" == "stacks/selfhosted/media/jellyfin.yaml" && "$mapping" == "/mnt/tank/media:/media:rw" ]] && continue`
 
-### IN-05: A failed write still prints a change line to the review artefact
+#### IN-05: A failed write still prints a change line to the review artefact
 
+**Status:** STILL OPEN. Unchanged.
 **File:** `scripts/normalise-dj-tags.py:1208-1234`
-**Issue:** The `path :: field: old -> new` lines are written to stdout before `write_tags()` is
-attempted. Under `--apply`, a file whose write raises is correctly routed to `.failed` and excluded
-from the NDJSON, but its change line has already been emitted on stdout. A reader diffing stdout
-against the tree will see a change that never happened.
-**Fix:** In apply mode, buffer the stdout lines and emit them after the write succeeds; or append a
-`(FAILED)` marker on the error path.
+**Issue:** The `path :: field: old -> new` lines are written to stdout at `:1210-1212` before
+`write_tags()` is attempted at `:1216`. Under `--apply`, a file whose write raises is correctly
+routed to `.failed` and excluded from the NDJSON, but its change line has already been emitted. A
+reader diffing stdout against the tree sees a change that never happened.
+**Fix:** buffer the stdout lines in apply mode and emit them after the write succeeds, or append a
+`(FAILED)` marker on the error path at `:1220`.
 
-### IN-06: Two upstream nits in the vendored hook, recorded not fixed
+#### IN-06: Two upstream nits in the vendored hook, recorded not fixed
 
+**Status:** STILL OPEN. Unchanged, and correctly so — `audio.bash` must stay byte-identical.
 **File:** `stacks/selfhosted/arrs/sabnzbd/audio.bash:276-279`, `:289`
-**Issue:** `:276` tests `/config/scripts/beets/beets.log` but removes `/config/scripts/beets.log` —
-the guard can never fire for the path it deletes (already noted in `04-RESEARCH.md:576`). `:289`
-uses an unquoted `[ $requireBeetsMatch = true ]` (see CR-01). Both are upstream; neither should be
-edited in place while the drift guard asserts byte-identity.
-**Fix:** Carry both in the TO UPDATE notes at `:23-24` so they are re-applied if upstream is ever
-re-vendored.
+**Issue:** `:276` tests `/config/scripts/beets/beets.log` but `:277` removes
+`/config/scripts/beets.log` — the guard can never fire for the path it deletes. `:289` uses an
+unquoted `[ $requireBeetsMatch = true ]`; an unset variable makes `[` error rc 2, which an `if`
+reads as false, so it lands safe **by accident**. Both are upstream; neither should be edited in
+place while the drift block asserts byte-identity.
+**Fix:** carry both in the TO UPDATE notes at `:23-24` so they are re-applied if upstream is ever
+re-vendored. (The new guard at `quick-health-check.sh:790-793` already refuses to rely on the
+accidental safety, which is the right treatment for `:289`.)
 
-### IN-07: `--sidecars` emits a blank line when the sidecar set is empty
+#### IN-07: `--sidecars` emits a blank line when the sidecar set is empty
 
+**Status:** STILL OPEN. Unchanged.
 **File:** `scripts/check-music-freeze.sh:620`
 **Issue:** `printf '%s\n' "$SIDECARS" >&3` writes a single newline when `SIDECARS` is empty, so a
-redirected list file contains one blank line rather than being zero-byte. A consumer counting lines
+redirected list file holds one blank line rather than being zero-byte. A consumer counting lines
 reads 1 where the truth is 0 — the same family as WR-07.
 **Fix:** `[[ -n "$SIDECARS" ]] && printf '%s\n' "$SIDECARS" >&3`
+
+#### IN-08: The two new `EXTCONF_*` overrides extend the IN-03 injection surface, one of them into `ssh`'s own argv
+
+**File:** `scripts/quick-health-check.sh:384-385`, consumed at `:827` and `:847`
+**Issue:** Two shapes, both operator self-injection and both already forcing `EXIT_CODE=1`
+(`:807-816`), so neither can launder a red into a green — hence Info, consistent with IN-03.
+(a) `EXTCONF_PATH` is interpolated into a single-quoted remote string at `:827`
+(`sh -c 'cat "$EXTCONF_PATH"'`); a value containing `'` closes the quote and runs arbitrary
+commands as root on LXC 100. (b) `EXTCONF_HOST` is passed as ssh's first positional at `:847`, so a
+value beginning `-o` is parsed as an ssh **option** — `EXTCONF_HOST='-oProxyCommand=...'` executes
+on the workstation, before any remote connection.
+**Fix:** validate both at definition, alongside the IN-03 checks:
+```bash
+case "$EXTCONF_PATH" in /*) : ;; *) echo "EXTCONF_PATH must be an absolute container path"; exit 2 ;; esac
+case "$EXTCONF_PATH" in *[!a-zA-Z0-9/_.-]*) echo "refusing unsafe EXTCONF_PATH"; exit 2 ;; esac
+case "$EXTCONF_HOST" in -*|*[!a-zA-Z0-9@._-]*) echo "refusing unsafe EXTCONF_HOST"; exit 2 ;; esac
+```
+
+#### IN-09: `beets.md`'s "What keeps these true" still names two standing guards; there are now three
+
+**File:** `stacks/selfhosted/arrs/beets.md:1230-1245`
+**Issue:** The phase's closing record enumerates the standing guards that keep the five criteria
+true — `check-music-freeze.sh` §6b and the vendored-file drift block — and says "Two standing
+guards". Since `c0b04c3` there is a third promoted fatal block, the extended.conf destructive-switch
+assertion, and it is the only thing standing between a config edit and an `rm -rf` of every
+completed music download. `grep -n 'destructive switch\|fifth fatal\|EXTCONF\|260914-a2y' beets.md`
+returns nothing. The quoted routine run at `:1244` is also the pre-fix one (2026-09-13T12:39:12Z,
+before the block existed).
+**Fix:** add a third bullet naming `scripts/quick-health-check.sh`'s
+`extended.conf destructive switches` block, what it asserts (`requireBeetsMatch=false`,
+`ConversionFormat ∈ {FLAC, OPUS}`), and why (`audio.bash:290` and `:237`), and re-quote the routine
+run from the 2026-09-14 green transcript.
+
+#### IN-10: Unused loop variable in `spike03-image-headroom.sh`
+
+**File:** `scripts/spike03-image-headroom.sh:296`
+**Issue:** `local line name id size bytes` — `line` is declared and never referenced anywhere in
+`do_inventory()`. Dead declaration; harmless, but it invites a reader to look for a `$line` that
+does not exist.
+**Fix:** `local name id size bytes`
+
+## Already Closed Since Previous Review
+
+Verified against the code on disk, not against the commit messages. Do **not** re-apply these.
+
+| Id | Status | Closed by | Evidence |
+|---|---|---|---|
+| **CR-01** — stripping the `beet` call made `audio.bash`'s destructive failure branch unconditional, guarded only by an unversioned host file | **CLOSED** at the guard layer | `c0b04c3` | `scripts/quick-health-check.sh:805-934` — the "extended.conf destructive switches" block. Overrides at `:384-385`; both force `EXIT_CODE=1` when non-default (`:807-816`). Remote read with distinct exit codes at `:822-846` (3 = container absent, 4 = unreadable, 6 = empty, 124 = bound). Fail-closed branches at `:849-895` (empty-first-deferring-to-124, then 124, then any non-zero, then short-answer). Per-switch verdicts at `:902-928`, each setting `EXIT_CODE=1`. Announced by the sixth notice at `:196-241`; tail enumeration updated in the same commit at `:1214-1221`. Reachability confirmed: the block sits after both early-exit probes (`:457-495`) and executes on every routine run. Notice arithmetic re-verified — 6 notice headers (lines 4, 29, 55, 135, 156, 196), `grep -c 'EXIT-CODE BEHAVIOUR CHANGED'` = 7, exactly as `:199-211` claims. `bash -n` passes. Negative controls driven under a trap, live config sha256 identical at open and close (`260914-a2y-negative-controls.txt:13`, `:100`). **Residue:** the documentation half of the prescribed fix is not done — see `WR-11`; and the guard has a false-green mode — see `CR-02`. **Caveat worth carrying:** detection is manual-only, per this file's own KNOWN LIMIT at `:243-265`; nothing schedules it. |
+| **WR-01** — `conversion()` deletes the download folder for every non-`OPUS` format; the `ffmpeg` block is unreachable | **CLOSED** by the same block | `c0b04c3` | `scripts/quick-health-check.sh:841` asserts `ConversionFormat ∈ {FLAC, OPUS}` and `:915-921` names `audio.bash:237` and the dead `:242-255` explicitly. The widening from the review's `FLAC`-only snippet to `{FLAC, OPUS}` is correct and I verified it against the source: `audio.bash:220` short-circuits FLAC before the loop and `:226-234` handles OPUS via `opusenc` without reaching the `rm -rf` at `:237`. A `FLAC`-only assertion would have false-redded a correct OPUS estate. Rationale recorded at `:780-783`. Driven by control 2 (`…-negative-controls.txt:53-64`). **Subject to the same `CR-02` false green.** |
+| *(non-finding, recorded for the fixer)* | `ReplaygainTagging` deliberately **not** asserted | — | Declined as a scoped decision, not an oversight, at `scripts/quick-health-check.sh:774-778`: it gates a tag writer (`audio.bash:266`), not an `rm -rf`. `beets.md:1272-1281` independently corroborates that `replaygain()` did not run (0 `REPLAYGAIN_*`/`R128_*` keys across 25 files). Do not treat its absence from the guard as an unfixed part of CR-01. |
+| *(non-finding, recorded for the fixer)* | The "defective Task 3 gate" and the "key-name grep finding" from `220dcf4` | — | Both are defects in the **plan's own acceptance greps**, not in shipped source. The Task 3 gate is `grep -c 'extended.conf'` with an unescaped `.` matching the task's own `…-assert-extended-conf-…` directory name (`…-negative-controls.txt:167-190`). I confirmed the underlying property holds independently: no file named `extended.conf` exists in this repo or in `c0b04c3`. The two switch **key names** used by the shipped guard (`requireBeetsMatch`, `ConversionFormat`) are correct and match the live file — proven by the green routine run at `…-negative-controls.txt:160`. No source fix is required for either. |
 
 ---
 
 _Reviewed: 2026-09-14_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
+_Prior review: `git show f39e417:.planning/phases/04-collapse-to-one-tagger/04-REVIEW.md` (1 critical, 10 warning, 7 info)_
