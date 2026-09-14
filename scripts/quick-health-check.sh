@@ -19,12 +19,22 @@
 #     THE SAME PRINCIPLE NOW COVERS THE PHASE 4 TAGGER CENSUS (2026-09-11, plan 04-06). The
 #     harness gained a section 6b that asserts Phase 4's own outcome — one tagger definition, one
 #     beets database, the retired tagger trees and databases gone, and no container in any state
-#     holding rw on Music except Jellyfin. That outcome is not true until plan 04-11 finishes the
-#     host teardown, so 6b is a CANDIDATE: it runs only when the caller sets CENSUS_CANDIDATE=1,
-#     and the fold-in below passes no environment. Nothing this script exits with changes until
-#     04-11 promotes it. The selector below is widened for those counters IN ADVANCE, so the
-#     promotion commit does not have to touch two files to avoid the WR-09 UNKNOWN branch; until
-#     then the widened tokens simply match nothing and the output is unchanged.
+#     holding rw on Music except Jellyfin.
+#
+#     CORRECTED 2026-09-14 (code review WR-05). This paragraph used to describe 6b as an opt-in
+#     CANDIDATE, gated behind a caller-supplied environment variable, and told the reader that
+#     nothing this script exits with would change until plan 04-11 promoted it. That stopped
+#     being true on 2026-09-13. TAGGER_CENSUS_PROMOTED=1 (scripts/check-music-freeze.sh:144), 6b
+#     RUNS ON EVERY ROUTINE INVOCATION, ITS ASSERTIONS ARE FATAL TO THIS SCRIPT, and its counters
+#     ARE printed. The sixth notice below has said exactly that since the promotion, so this file
+#     was carrying two notices that contradicted each other about the same block — and this was
+#     the one a reader meets first. Paraphrased rather than quoted, the same convention as the
+#     other withdrawn claims in this file: a false statement left in-band verbatim is one that
+#     gets re-copied, and it is also one a mechanical grep can no longer prove absent.
+#
+#     The summary selector further down was widened for those census counters IN ADVANCE of the
+#     promotion, which is why promoting was a one-file change. THOSE TOKENS ARE LIVE NOW. Read
+#     the note at the selector itself before touching any of them.
 #
 # ⚠️  EXIT-CODE BEHAVIOUR CHANGED AGAIN — A SECOND FATAL BLOCK WAS ADDED 2026-09-01 (plan 02-09,
 #     D-41).
@@ -1060,10 +1070,18 @@ elif [ "$MUSIC_RC" -eq 0 ]; then
     # change this file in the same commit. A grep that selects nothing looks exactly like a check
     # with nothing to report, which is how the WR-09 coupling broke silently once already.
     #
-    # The six Phase 4 tokens on the last two lines select the section 6b census counters. Section
-    # 6b is a CANDIDATE and prints no counters on a routine run, so until plan 04-11 promotes it
-    # these tokens match nothing and this block's output is byte-for-byte what it was before.
-    # They are added now so the promotion is a one-file change.
+    # The six Phase 4 tokens on the last two lines select section 6b's census counters. 6b is
+    # PROMOTED (TAGGER_CENSUS_PROMOTED=1 in check-music-freeze.sh) and prints those counters on
+    # every routine run, so THESE TOKENS ARE LIVE.
+    #
+    # CORRECTED 2026-09-14 (code review WR-05). This note used to tell a future editor the exact
+    # opposite — that the six tokens matched nothing until plan 04-11 promoted the section — and
+    # that is the dangerous direction, because acting on it FAILS SILENTLY. Deleting one of these
+    # tokens does not fail this block: SUMMARY stays non-empty because the four original tokens
+    # still match, `✅ Intact` still prints, and a census counter simply disappears from the
+    # output with nothing saying so. That is precisely the silent coupling break the paragraph
+    # above exists to prevent, which is why a stale comment here was worse than a stale comment
+    # anywhere else in the file. Change both files together.
     SUMMARY=$(echo "$MUSIC_OUT" | sed -n '/^📊 7\. Summary/,$p' \
               | grep -E 'tagger-class|unclassified|declared rw|ownership mismatches|tagger definitions|beets databases|tagger databases|retired paths present|rw on Music|tagger-capable')
     if [ -z "$SUMMARY" ]; then
