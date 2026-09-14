@@ -767,9 +767,9 @@ fi
 #     first suggested fix was a fourth _drift_pair over a vendored copy. It is deliberately NOT
 #     taken: THIS REPOSITORY IS PUBLIC, and that file carries five *ArrApiKey fields — empty today,
 #     which is a fact about today and not a property. ASSERT THE VALUES; NEVER COPY THE FILE. All
-#     matching happens remote-side and only two label lines come back. The two greps that produce
-#     the optional `found=` text are anchored on the two switch names, so no other line of that
-#     file can structurally reach this transcript.
+#     matching happens remote-side and only two label lines come back. The single grep inside
+#     _ec_val is anchored on the key name it is asked for, and the value it prints is taken from
+#     that one matched line, so no other line of that file can structurally reach this transcript.
 #
 # (d) ReplaygainTagging IS DELIBERATELY OUT OF SCOPE — a decision, not an oversight. The review's
 #     snippet names three switches; this block asserts THE TWO THAT GATE AN `rm -rf`.
@@ -782,10 +782,41 @@ fi
 # never reaches the rm -rf. The set asserted here is {FLAC, OPUS} — the values that are actually
 # safe, which is the property being guarded.
 #
-# MATCH PATTERNS ARE START-ANCHORED ONLY, AND THAT IS LOAD-BEARING. extended.conf carries trailing
-# comments on the same line as a value; plan 04-12 measured an end-anchored pattern returning 0
-# against a CORRECT value for exactly that reason. Do not add a `$` anchor, and do not reach for
-# grep -x here — either one produces a confident false red on a healthy estate.
+# ⚠️  THE VALUE TEST WAS A DEMONSTRATED FALSE GREEN UNTIL 2026-09-14, AND THE FIX IS THE SHAPE OF
+# _ec_val BELOW (code review CR-02). The withdrawn reasoning is paraphrased rather than quoted,
+# the same convention as the other withdrawn claims in this file: a false claim left in-band
+# verbatim is one that gets re-copied, and it is also one a mechanical grep can no longer prove
+# absent.
+#
+# WHAT WAS TRUE AND IS KEPT: extended.conf carries trailing comments on the same line as a value,
+# and plan 04-12 measured an END-ANCHORED REGEX returning 0 against a CORRECT value for exactly
+# that reason. So a `$` anchor on the match pattern, and `grep -x`, are still both wrong here.
+#
+# WHAT WAS WRONG: the block read "do not end-anchor the pattern" as licence for the value having NO
+# RIGHT-HAND BOUNDARY AT ALL, and it asserted with `grep -q` — "does ANY line match" — over the
+# whole file. Both halves were false greens, and both were DRIVEN:
+#   - `ConversionFormat="FLACX"` matched `…ConversionFormat="?(FLAC|OPUS)"?` and reported ok, while
+#     audio.bash:220 tests `= FLAC` EXACTLY and falls through to `rm -rf "$1"/*` at :237.
+#   - `requireBeetsMatch="false"` followed by `requireBeetsMatch="true"` reported ok, while
+#     audio.bash sources the file at :41 and BASH TAKES THE LAST ASSIGNMENT — effective value
+#     `true`, which is precisely what arms the `rm -rf` at :290. Appending a line rather than
+#     editing one in place is the normal way a sourced bash config gets modified.
+#   - and the `found=` diagnostic took `sed -n 1p`, the FIRST match, so even a red verdict could
+#     quote a line that was not the one in force.
+#
+# THE FIX IS NOT A BETTER REGEX; IT IS EXTRACT-THEN-COMPARE. _ec_val takes the LAST matching
+# assignment (`tail -n 1`, matching `source` semantics), strips the key, and yields the value.
+# The caller then compares the WHOLE value — `[ "$v" = false ]` and a `case` over {FLAC, OPUS} —
+# which bounds it without putting a `$` anchor anywhere near a regex, so the 04-12 tolerance
+# survives intact. The `found=` text is now that same extracted value, so a red always quotes the
+# line that actually takes effect.
+#
+# THE QUOTE HANDLING IS ALSO A BOUNDARY, AND THE ORDER MATTERS. A double- or single-quoted value is
+# taken VERBATIM up to its closing quote and is NOT whitespace-stripped, because
+# `ConversionFormat="FLAC "` really does set a trailing space in bash and really does fail
+# audio.bash's exact test. Only an UNQUOTED value gets the trailing comment and trailing blanks
+# removed — which is what bash's own word splitting would do to it anyway. Do not "simplify" this
+# into a single strip-quotes-then-trim pass; that reintroduces the `"FLAC "` false green.
 #
 # ABSENCE IS A FAILURE, NOT A PASS. audio.bash's `[ $requireBeetsMatch = true ]` is unquoted, so an
 # unset variable makes `[` fail with rc 2, which an `if` reads as false: it lands in the safe
@@ -814,6 +845,33 @@ if [ "$EXTCONF_PATH" != "/config/extended.conf" ]; then
     echo "  ⚠️  EXTCONF_PATH override in effect — this run cannot report the switches green"
     EXIT_CODE=1
 fi
+# THE REMOTE-SIDE VALUE EXTRACTOR, IN ITS OWN SINGLE-QUOTED VARIABLE (CR-02). Two reasons, and
+# both are the point rather than style:
+#
+#   1. SINGLE QUOTES MEAN ZERO ESCAPING. It is interpolated into the double-quoted EXTCONF_CMD
+#      below, where every `$` and `"` would otherwise need a backslash. A value parser whose
+#      correctness turns on counting backslashes is a parser nobody can review. Note the
+#      consequence: NOTHING IN HERE IS EXPANDED LOCALLY — `$1`, `$_ec` and `$_ec_q` are all
+#      resolved on LXC 100, by the remote shell, at the time the function runs.
+#   2. IT CAN BE DRIVEN WITHOUT A HOST. Because it is a plain string holding a shell function and
+#      it references only `$_ec` (the config text) and its `$1` (the key name), a test can `eval`
+#      it locally with `_ec` set from a fixture and assert the extracted value — no ssh, no
+#      docker, no production estate. That is how CR-02's negative controls are driven: a
+#      duplicated key in the unsafe order, and `ConversionFormat="FLAC "`. Both must come back BAD.
+#
+# THE SINGLE QUOTE CHARACTER IS BUILT WITH `printf \47` RATHER THAN WRITTEN. A literal `'` cannot
+# appear inside a single-quoted bash string without the `'\''` dance, and doing that three times
+# inside a sed expression is exactly the unreviewable-escaping problem point 1 exists to avoid.
+EXTCONF_PARSER='_ec_val() {
+_ec_q=$(printf "\47")
+_ec_l=$(printf "%s\n" "$_ec" | grep -E "^[[:space:]]*$1=" | tail -n 1)
+[ -n "$_ec_l" ] || { printf "%s" "(absent)"; return 0; }
+_ec_x=${_ec_l#*=}
+_ec_x=$(printf "%s" "$_ec_x" | sed -e "s/^\"\([^\"]*\)\".*\$/\1/; t" -e "s/^$_ec_q\([^$_ec_q]*\)$_ec_q.*\$/\1/; t" -e "s/[[:space:]]*#.*\$//" -e "s/[[:space:]]*\$//")
+[ -n "$_ec_x" ] || _ec_x="(empty)"
+printf "%s" "$_ec_x"
+}'
+
 # Distinct remote exit codes so the UNKNOWN branch can NAME the cause instead of lumping every
 # could-not-look into one verdict: 3 = docker exec failed (container absent, docker unavailable),
 # 4 = the cat failed (path missing or unreadable), 6 = the read succeeded but returned no bytes.
@@ -829,20 +887,18 @@ _ec_rc=\$?
 [ \$_ec_rc -eq 124 ] && exit 124
 [ \$_ec_rc -ne 0 ] && exit 4
 [ -n \"\$_ec\" ] || exit 6
-_ec_v=\$(printf '%s\n' \"\$_ec\" | grep -E '^[[:space:]]*requireBeetsMatch' | sed -n '1p')
-[ -n \"\$_ec_v\" ] || _ec_v='(absent)'
-if printf '%s\n' \"\$_ec\" | grep -qE '^[[:space:]]*requireBeetsMatch=\"?false\"?'; then
+$EXTCONF_PARSER
+_ec_rbm=\$(_ec_val requireBeetsMatch)
+if [ \"\$_ec_rbm\" = false ]; then
   echo 'requireBeetsMatch=ok'
 else
-  echo \"requireBeetsMatch=BAD found=\$_ec_v\"
+  echo \"requireBeetsMatch=BAD found=\$_ec_rbm\"
 fi
-_ec_v=\$(printf '%s\n' \"\$_ec\" | grep -E '^[[:space:]]*ConversionFormat' | sed -n '1p')
-[ -n \"\$_ec_v\" ] || _ec_v='(absent)'
-if printf '%s\n' \"\$_ec\" | grep -qE '^[[:space:]]*ConversionFormat=\"?(FLAC|OPUS)\"?'; then
-  echo 'ConversionFormat=ok'
-else
-  echo \"ConversionFormat=BAD found=\$_ec_v\"
-fi
+_ec_cf=\$(_ec_val ConversionFormat)
+case \"\$_ec_cf\" in
+  FLAC|OPUS) echo 'ConversionFormat=ok' ;;
+  *) echo \"ConversionFormat=BAD found=\$_ec_cf\" ;;
+esac
 exit 0"
 EXTCONF_OUT=$(ssh -n $SSH_OPTS "$EXTCONF_HOST" "$EXTCONF_CMD")
 EXTCONF_RC=$?   # ssh propagates the remote status — NO local pipe above, see the note above
