@@ -67,10 +67,30 @@ services:
       # If you flip this back to :rw to "just run one import", you have re-created the exact
       # failure this project exists to prevent: a fourth half-built tagging path.
       - /mnt/tank/media:/media:ro  # Existing library — READ-ONLY until Phase 6 (see above)
-  #  networks:
-  #    - t3_proxy
-    ports:
-      - 8337:8337
+    # WR-02: THE networks: KEY AND THE HOST PORT ARE THE SAME DEFECT, SEEN FROM TWO SIDES.
+    # Until 2026-09-14 this key was COMMENTED OUT while `traefik.enable=true` and a full
+    # `chain-authelia@file` router sat in the labels below. Compose therefore attached this
+    # service to the implicit project `default` network, where the Traefik container cannot
+    # reach it — so the Authelia protection was ILLUSORY, and the one path that did work,
+    # `ports: - 8337:8337`, published the container LAN-WIDE WITH NO AUTHENTICATION.
+    #
+    # It was an outlier, not a convention: of the 16 files under stacks/selfhosted/arrs/, this
+    # was the ONLY one with traefik.enable=true and no network. Every sibling declares one.
+    #
+    # NOT EXPLOITABLE AT THE COMMIT THAT FIXED IT, AND THAT IS WHY IT WAS FIXED THEN. config.yaml
+    # declares `plugins: musicbrainz` only, so the `web` plugin never loads and nothing listens
+    # on 8337; the service is `restart: "no"`, `profiles: ["manual"]`, and commented out of
+    # ../compose.yaml's include list. It becomes a live unauthenticated LAN exposure THE MOMENT
+    # Phase 5/6 enables `web` — on a container holding /downloads:rw — and the person enabling
+    # `web` is not the person who would think to check this file for a stray host port.
+    networks:
+      - t3_proxy
+    # THE HOST PORT IS DELIBERATELY GONE. Reach beets through Traefik + Authelia at
+    # beets.deercrest.info, which is what the labels below have always claimed. If a host port is
+    # ever genuinely needed for local debugging, bind it to LOOPBACK — `- "127.0.0.1:8337:8337"` —
+    # never to all interfaces. Do not restore the bare form.
+    # ports:
+    #   - 8337:8337
     labels:
       - traefik.enable=true
 
@@ -83,4 +103,13 @@ services:
       - traefik.http.routers.beets.service=beets-svc
 
       - traefik.http.services.beets-svc.loadbalancer.server.port=8337
+
+# WR-02: t3_proxy declared here as well as in ../compose.yaml, because this file has to stand on
+# its own. It is commented out of that file's include list (../compose.yaml:39), so when it is
+# brought up directly on its `manual` profile there is no parent to inherit the network from.
+# Same shape as blockbusterr.yaml — which IS included, and declares t3_proxy itself anyway, so an
+# identical repeated external declaration is proven to merge cleanly rather than conflict.
+networks:
+  t3_proxy:
+    external: true
 
