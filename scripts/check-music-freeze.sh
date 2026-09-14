@@ -418,6 +418,13 @@ while IFS= read -r hit; do
   # skip commented-out volume lines - they declare nothing
   case "$(printf '%s' "$body" | sed 's/^[[:space:]]*//')" in '#'*) continue ;; esac
   mapping="$(printf '%s' "$body" | sed 's/^[[:space:]]*-[[:space:]]*//' | sed 's/[[:space:]]*#.*$//' | sed 's/[[:space:]]*$//')"
+  # WR-03: STRIP SURROUNDING QUOTES BEFORE THE SPLIT. Without this, a perfectly ordinary
+  # `- "/mnt/tank/media:/media:rw"` yields a host_side of `"/mnt/tank/media` — leading quote
+  # included — which touches_library can never match, so the row drops out of DECLARED_MUSIC_RW
+  # SILENTLY and §2 reports a clean pass it did not earn. A quoted mapping is not exotic; it is
+  # what anyone writes the moment a path contains a space. Zero such lines exist in the tree
+  # today, which is precisely why this had to be fixed before one appeared rather than after.
+  mapping="$(printf '%s' "$mapping" | sed 's/^["'"'"']//; s/["'"'"']$//')"
   host_side="${mapping%%:*}"
   suffix="${mapping##*:}"
   case "$suffix" in
@@ -438,6 +445,60 @@ while IFS='|' read -r f ln mapping sfx host_side; do
 done <<< "$DECLARED_ROWS"
 echo ""
 echo "  NO-SUFFIX means neither :ro nor :rw was written, and docker defaults that to rw."
+echo ""
+
+# WR-03: WHAT THIS PARSER CANNOT SEE, SAID OUT LOUD INSTEAD OF PASSED OVER.
+#
+# §2 is a one-line string split driven off `grep -rn '/mnt/tank/media'`. Its summary line claims
+# something about THE WHOLE TREE ("no file other than media/jellyfin.yaml declares a rw ... path
+# reaching the library"), but it can only have examined the subset it is able to parse. "Could not
+# look" and "nothing is wrong" must not share a verdict, so each blind spot is either CLOSED or
+# DECLARED. Three of them:
+#
+#   1. QUOTED MAPPINGS — CLOSED, above, by stripping surrounding quotes before the split.
+#   2. LONG-FORM `type: bind` — a multi-line mapping is structurally invisible to a one-line
+#      parser. REFUSED below. Zero uncommented occurrences in the tree today (the single hit
+#      anywhere is commented out, automation/pwpush.yaml:88), so this is green now and goes red
+#      the first time a real one is added. That is the point: it cannot be added quietly.
+#   3. VARIABLE-INTERPOLATED HOST PATHS — `- ${MEDIA}/audiobooks:/audiobooks` does not contain the
+#      literal /mnt/tank/media, so the driving grep never even SEES the line, and the host path
+#      cannot be resolved statically: THERE IS NO .env IN THIS REPO to resolve it against. Only
+#      .env.sample files are tracked and none of them defines MEDIA, APPDATA or DOWNLOADS.
+#
+# WHY (3) IS A PINNED INVENTORY AND NOT A BLANKET REFUSAL. Twelve such lines exist right now and
+# none of them resolves into the library — but this parser cannot prove that, and a `fail` on
+# their mere existence would make §2, and therefore quick-health-check.sh, PERMANENTLY RED. This
+# file's own history is the argument against that: a permanently-red check trains the reader to
+# ignore it, which is the 01-09 trap, and §2 going ignored is a worse outcome than §2 being
+# candid about its limit. So the count is pinned to a named constant, every line is printed, and
+# a CHANGE in that inventory is what fails. ${MEDIA} plausibly expands to /mnt/tank/media itself,
+# so a NEW interpolated mount is exactly the thing worth being told about — and when one appears,
+# read it by hand and move the constant in the SAME COMMIT, which is this estate's standing
+# answer to the permanent-red trap everywhere else.
+#
+#   DECLARED_INTERP_EXPECTED  the pinned size of that inventory. Overridable so the failure branch
+#                             can be driven without editing this file. It can only ever move a
+#                             green to a red or a red to a green BY DECLARATION — it resolves
+#                             nothing and can never make an unparsed line parsed.
+BIND_LONGFORM="$(grep -rnE '^[[:space:]]*(-[[:space:]]*)?type:[[:space:]]*bind' "$STACKS" --include='*.yaml' --include='*.yml' 2>/dev/null \
+  | awk '{ b=$0; sub(/^[^:]*:[0-9]+:/,"",b); sub(/^[[:space:]]+/,"",b); if (b !~ /^#/) print }' || true)"
+if [[ -n "$BIND_LONGFORM" ]]; then
+  fail "long-form 'type: bind' mounts exist; this one-line parser CANNOT see them, so §2 is UNKNOWN, not clean:"
+  printf '%s\n' "$BIND_LONGFORM" | sed 's/^/         /'
+else
+  pass "no long-form 'type: bind' mounts — every volume line in the tree is a form this parser can read"
+fi
+
+DECLARED_INTERP_EXPECTED="${DECLARED_INTERP_EXPECTED:-12}"
+INTERP_ROWS="$(grep -rnE '^[[:space:]]*-[[:space:]]*"?\$\{?[A-Za-z_][^:]*:/' "$STACKS" --include='*.yaml' --include='*.yml' 2>/dev/null || true)"
+INTERP_COUNT="$(count_lines "$INTERP_ROWS")"
+if [[ "$INTERP_COUNT" -eq "$DECLARED_INTERP_EXPECTED" ]]; then
+  info "$INTERP_COUNT volume lines interpolate a variable into the HOST path; none can be resolved statically (pinned inventory, expected=$DECLARED_INTERP_EXPECTED). §2's pass below is a claim about the resolvable lines only."
+else
+  fail "interpolated-host-path inventory MOVED: expected=$DECLARED_INTERP_EXPECTED, found=$INTERP_COUNT. These lines are invisible to §2's driving grep and cannot be resolved statically, so §2 is UNKNOWN until each new one is read by hand and DECLARED_INTERP_EXPECTED is moved in the same commit:"
+  printf '%s\n' "$INTERP_ROWS" | sed 's/^/         /'
+fi
+echo ""
 
 DECLARED_MUSIC_RW=""
 while IFS='|' read -r f ln mapping sfx host_side; do
