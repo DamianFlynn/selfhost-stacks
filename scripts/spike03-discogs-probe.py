@@ -225,10 +225,17 @@ SECURITY
         exact-value net catches a serialisation we have not seen.
       - The same redact() is applied to every exception detail written to PREFIX.failed, because
         `discogs_client` raises exceptions carrying the request URL.
-  * `http.client.HTTPConnection.debuglevel = 1` DOES log request headers. This file never sets it,
-    and never calls logging.basicConfig(level=DEBUG) on the ROOT logger, because that would enable
-    DEBUG for every library in the process (03-RESEARCH.md V7, ASVS V7). Both still hold; they
-    were simply never the binding constraint.
+  * `http.client.HTTPConnection.debuglevel = 1` DOES log request headers. This file NEVER sets it,
+    and that is the property this argument actually rests on (03-RESEARCH.md V7, ASVS V7).
+    CORRECTED 2026-09-14 (code review WR-13). This bullet used to rest the argument on
+    logging.basicConfig never being called, on the grounds that a process-wide DEBUG would enable
+    DEBUG for every library in the process. basicConfig genuinely is never called - but the stated
+    REASON does not hold, because configure_logging() raises the ROOT logger to DEBUG whenever
+    `--verbose` is passed, so every library in the process IS at DEBUG on that path. What makes
+    that safe is NOT the absence of a process-wide DEBUG; it is that the redaction choke point is
+    the stderr HANDLER, which scrubs every record regardless of which logger emitted it. Do not
+    reuse "we never enable DEBUG process-wide" to justify anything here - it is not true. Use the
+    handler, and keep debuglevel unset.
   * The token is read from os.environ and assigned to `config["discogs"]["user_token"]`. It is
     never an argv element, never deliberately written to a file by this script, and never a value
     in an emitted record. Do not add a "config dump" debug flag to this file.
@@ -460,11 +467,20 @@ class DiscogsTrafficCounter(logging.Handler):
 
 
 def configure_logging(verbose: bool) -> None:
-    """Explicitly NOT logging.basicConfig(level=DEBUG), and redacting at two layers.
+    """Explicitly NOT logging.basicConfig, and redacting at two layers.
 
-    A root-level DEBUG would enable DEBUG for every library in the process. This turns DEBUG on
-    for exactly one logger, and never touches http.client debuglevel, which WOULD log request
-    headers.
+    WITHDRAWN 2026-09-14 (code review WR-13). This docstring used to claim that DEBUG was turned
+    on for exactly one logger, and that a process-wide DEBUG was the one thing it never did. The
+    root.setLevel call below contradicted both halves whenever `--verbose` was passed, and
+    `--verbose`'s own help string advertises the root escalation. Paraphrased rather than quoted,
+    so a mechanical grep for the withdrawn wording keeps returning zero.
+
+    WHAT IS TRUE: `--verbose` DOES raise the ROOT logger to DEBUG, which DOES enable DEBUG for
+    every library in the process. It is kept, because the redaction choke point is the stderr
+    HANDLER (below), so any record reaching stderr is scrubbed whatever logger emitted it.
+
+    WHAT IS NEVER ENABLED, on any path: http.client.HTTPConnection.debuglevel, which WOULD log
+    request HEADERS and is NOT covered by the query-string net. Do not set it.
 
     The redaction is not belt-and-braces politeness: the request line urllib3 logs at DEBUG
     CONTAINS the Discogs user token, because python3-discogs-client passes it as a `?token=`
@@ -477,6 +493,11 @@ def configure_logging(verbose: bool) -> None:
     handler.addFilter(SecretRedactingFilter())
 
     root = logging.getLogger()
+    # THIS IS A ROOT-LEVEL DEBUG, AND IT REALLY DOES ENABLE DEBUG FOR EVERY LIBRARY IN THE
+    # PROCESS (WR-13). It is deliberate and advertised by --verbose's help string. It is safe
+    # only because the handler above is the redaction choke point: a record is scrubbed whatever
+    # logger emitted it. What is NOT covered by the query-string net, and is therefore never
+    # enabled, is http.client.HTTPConnection.debuglevel — it logs request HEADERS. Do not set it.
     root.setLevel(logging.DEBUG if verbose else logging.INFO)
     root.addHandler(handler)
 
