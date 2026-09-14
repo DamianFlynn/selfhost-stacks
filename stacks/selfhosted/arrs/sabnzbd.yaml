@@ -127,6 +127,26 @@ services:
       # "Matching N tracks with Beets" and then "ERROR: Unable to match…" (both are
       # EXPECTED after the strip, pre-declared in the D-12 evidence so nobody reads them as
       # beets having run) and still removes library.blb behind an existence guard; and the
+      #
+      # ⚠️  AND THAT beets() BRANCH DOES NOT ONLY LOG — IT CONTAINS AN `rm -rf`. Added
+      # 2026-09-14 (code review WR-11), because this inventory is the document a future
+      # reader will trust to reconstruct the post-strip behaviour, and enumerating two log
+      # lines and a library.blb unlink while omitting the `rm -rf` three lines below them in
+      # the same `else` reads as "the branch only logs". BOTH LOG LINES ARE NOW
+      # UNCONDITIONAL: the strip removed the only writer that could make an audio file newer
+      # than the /config/scripts/beets-match sentinel, so the SUCCESS branch at
+      # audio.bash:286 is STRUCTURALLY UNREACHABLE and the `else` at :287 is taken on every
+      # music job (measured — plan 04-15's window 2 recorded matching_delta=3 error_delta=3
+      # over three real jobs: three error lines, zero success lines). That `else` runs
+      # `rm -rf "$1"/*` at :290, gated SOLELY by `requireBeetsMatch` in the container's
+      # /config/extended.conf — a file this repo does NOT vendor and must not (it carries
+      # five *ArrApiKey fields and THIS REPOSITORY IS PUBLIC). conversion() has the identical
+      # shape (WR-01): every ConversionFormat outside {FLAC, OPUS} reaches a second
+      # `rm -rf "$1"/*` at :237. Neither value is versioned anywhere; both are ASSERTED on
+      # every run by the "extended.conf destructive switches" block in
+      # scripts/quick-health-check.sh, which is the only thing standing between a one-character
+      # edit of that host file and the deletion of every completed music download.
+      #
       # chmod at the end still fails EPERM on tank, which is the baseline Exit(1) every
       # music job has recorded since at least 2026-08-01, not a regression. r128gain is the
       # only other tag writer and it is off (ReplaygainTagging="false"), so after the strip
