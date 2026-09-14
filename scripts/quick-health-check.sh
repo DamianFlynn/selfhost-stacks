@@ -215,6 +215,12 @@
 #     documents and declines to "fix". So the count has always run one ahead of the number of
 #     notices, and a reader who greps expecting 6 has found the documented quirk, not a bug.
 #
+#     (AMENDED 2026-09-14 — THE ARITHMETIC ABOVE WAS CURRENT WHEN THIS NOTICE WAS WRITTEN AND IS
+#     NOW ONE BEHIND. The SEVENTH notice, added by code review WR-09, takes the headers to seven
+#     and the matching count to 8. The one-ahead quirk is unchanged and is still not to be
+#     "fixed". Amended in place rather than left to be discovered, because a self-describing
+#     count that has silently gone stale is worse than never having stated one.)
+#
 #     BLOCK ordinal and NOTICE ordinal are different numbers, and both are given deliberately: four
 #     blocks could exit this script 1 before today — the music freeze harness, the consumers audit,
 #     the Jellyfin transcode audit and the vendored-file drift block — so the block added below is
@@ -249,6 +255,47 @@
 #     added to the D-13 drift set. THIS REPOSITORY IS PUBLIC and the file carries five *ArrApiKey
 #     fields. The values are asserted remote-side and only two labels come back — see (c) at the
 #     block itself for why the review's "add a fourth _drift_pair" fix was declined.
+#
+# ⚠️  EXIT-CODE BEHAVIOUR CHANGED AGAIN — NO NEW BLOCK, A NEW FATAL CONDITION AT THREE EXISTING
+#     SITES, 2026-09-14 (code review WR-09).
+#     Same shape as the 02.1-15 notice above: nothing was folded in, no sixth script runs. Three
+#     probes that were REPORT-ONLY are now fatal — the Traefik container probe, the Authelia
+#     container probe, and the Traefik dashboard probe.
+#
+#     THIS IS THE SEVENTH SUCH NOTICE, and the arithmetic is restated because the sixth notice
+#     states the version that was current when IT was written: there are now SEVEN notice headers,
+#     and the count for the shared opening phrase goes 7 -> 8. It still runs exactly ONE ahead of
+#     the number of headers, for the documented reason — the 02.1-10 note near the top of this
+#     file writes that phrase out literally inside its own body. That quirk is deliberate; do not
+#     reword a notice to flatter a grep.
+#
+#     BLOCK ordinal is UNCHANGED at five. There is no sixth block.
+#
+#     THIS REVERSES A PREVIOUS DELIBERATE DECISION, AND THE REVERSAL IS THE POINT. The comment at
+#     those three sites used to decline this fix, on the reasoning that a confident wrong
+#     diagnosis is not a false green — the reader is shown a red, so the defect was rated below
+#     the CR-03 class and left legible rather than half-fixed. That reasoning is WITHDRAWN
+#     (paraphrased, not quoted, per this file's convention). It answered the wrong question. All
+#     three printed ❌ WITHOUT TOUCHING EXIT_CODE, so the estate's single health-check entry point
+#     exited 0 — "healthy" to any caller reading the STATUS rather than the transcript — with
+#     Traefik down, which takes every *.deercrest.info service with it. The README contract is
+#     "exits 0 healthy, 1 on any violation". A red glyph inside the transcript of a run that
+#     reports success is that contract being broken, not a stylistic wart.
+#
+#     WHAT OVERTURNED IT WAS EVIDENCE, NOT TASTE. The 2026-09-14 routine run recorded
+#     `Traefik dashboard: ❌ Not accessible` while the script exited 0
+#     (260914-a2y-SUMMARY.md:175-177). Not a hypothetical: a red sitting in the transcript of a
+#     green run, on every invocation, for as long as that condition lasts.
+#
+#     EACH SITE NOW DISTINGUISHES THREE ANSWERS RATHER THAN TWO: running / not running / COULD NOT
+#     LOOK. And that is why the REMOTE `grep -q` had to go, which is the subtle half of this
+#     change. With `set -o pipefail` and `grep -q` as the LAST stage, a bound expiry does NOT
+#     surface: `timeout` exits 124, `grep -q` exits 1 on the empty stream, and pipefail returns
+#     the RIGHTMOST non-zero status — so 124 was laundered into 1 and read as "the container is
+#     not running". The container-count sites above escape this ONLY because `wc -l` exits 0.
+#     Adding `pipefail` to these three would therefore have looked like a fix and fixed nothing.
+#     So the probes now capture `docker ps` output with NO REMOTE PIPE, branch on the ssh status,
+#     and do the matching LOCALLY.
 #
 # ⚠️  KNOWN LIMIT, AND IT APPLIES TO THIS WHOLE FILE: THIS SCRIPT IS MANUAL. IT ONLY EVER FIRES
 #     WHEN SOMEBODY TYPES IT (D-22, phase 02.1).
@@ -520,33 +567,74 @@ fi
 # mechanical grep for it over this repo keeps returning zero; a false claim left in-band verbatim
 # is one that gets re-copied, which is precisely how it survived long enough to defeat CR-03.
 #
-# THE THREE SITES BELOW ARE DELIBERATELY LEFT AS THEY ARE, and the reason is specific to their
-# last stage, not a blanket exemption. Traefik (`grep -q '^traefik$'`), Authelia (`grep -q
-# '^authelia$'`) and the dashboard (a LOCAL `| grep -q "200"`) all end in a `grep -q`, which
-# exits 1 on an empty stream. A killed first stage therefore lands in the `else` branch: they
-# print "❌ Not running" / "❌ Not accessible". That is a CONFIDENT WRONG DIAGNOSIS and it is a
-# real defect — it is filed as WR-02 and is NOT closed here — but it is not the CR-03 defect,
-# because it is not a false green: the reader is shown a red, and no branch here reports health
-# it did not measure. None of the three touches EXIT_CODE, which is why WR-02 is rated below
-# CR-03 rather than alongside it. Fixing them means a `case` over the captured status at each
-# site and changing what a genuinely-stopped container prints; that is its own change with its
-# own control, and doing it half-way inside this one would be worse than leaving it legible.
+# ⚠️  THE THREE SITES BELOW WERE REPORT-ONLY UNTIL 2026-09-14 AND ARE NOW FATAL (WR-09). The
+# comment that used to sit here declined the fix, reasoning that a confident wrong diagnosis is
+# not a false green because the reader is shown a red. That is WITHDRAWN — paraphrased rather
+# than quoted, the same convention as the other withdrawn claims in this file, so a mechanical
+# grep for it keeps returning zero. It measured the wrong thing: none of the three touched
+# EXIT_CODE, so this script exited 0 with a ❌ in its own transcript and Traefik down. See the
+# SEVENTH notice at the top of this file for the full argument and for the evidence that
+# overturned the earlier decision.
+#
+# THE REMOTE `grep -q` IS GONE FROM BOTH CONTAINER PROBES, AND THAT IS NOT COSMETIC. It is the
+# reason `set -o pipefail` could not have fixed these sites: with `grep -q` LAST, a bound expiry
+# gives `timeout` 124 and `grep -q` 1, and pipefail returns the RIGHTMOST non-zero status — so
+# 124 arrives as 1 and reads as "not running". `docker ps` output is therefore captured with NO
+# REMOTE PIPE (so the ssh status is `docker ps`'s own), and the match is done locally.
+#
+# BRANCH ORDER IS THE HOUSE S1 ORDER, same as the drift and extended.conf blocks: empty output
+# first, deferring when the status is 124 because a killed command usually produces none either;
+# then 124; then any other non-zero; and only then is anything asserted.
 echo -n "Traefik: "
-if ssh $SSH_OPTS root@172.16.1.159 "timeout $REMOTE_TIMEOUT docker ps --format '{{.Names}}' | grep -q '^traefik$'"; then
+TRAEFIK_OUT=$(ssh -n $SSH_OPTS root@172.16.1.159 "timeout $REMOTE_TIMEOUT docker ps --format '{{.Names}}'")
+TRAEFIK_RC=$?   # ssh propagates the remote status — NO remote pipe, so 124 cannot be laundered
+if [ -z "$TRAEFIK_OUT" ] && [ "$TRAEFIK_RC" -ne 124 ]; then
+    echo "⚠️  UNKNOWN — the container list came back empty (ssh exit $TRAEFIK_RC)."
+    echo "  Nothing was matched. This is NOT 'traefik is not running'."
+    EXIT_CODE=1
+elif [ "$TRAEFIK_RC" -eq 124 ]; then
+    echo "⚠️  UNKNOWN — 'docker ps' exceeded its ${REMOTE_TIMEOUT}s bound and was killed."
+    echo "  This is NOT 'traefik is not running'. Most likely cause: dockerd wedged."
+    EXIT_CODE=1
+elif [ "$TRAEFIK_RC" -ne 0 ]; then
+    echo "⚠️  UNKNOWN — could not list containers (ssh exit $TRAEFIK_RC)."
+    echo "  This is NOT 'traefik is not running'."
+    EXIT_CODE=1
+elif printf '%s\n' "$TRAEFIK_OUT" | grep -q '^traefik$'; then
     echo "✅ Running"
     # Check if it's healthy
-    STATUS=$(ssh $SSH_OPTS root@172.16.1.159 "timeout $REMOTE_TIMEOUT docker inspect traefik --format='{{.State.Health.Status}}' 2>/dev/null || echo 'no healthcheck'")
+    STATUS=$(ssh -n $SSH_OPTS root@172.16.1.159 "timeout $REMOTE_TIMEOUT docker inspect traefik --format='{{.State.Health.Status}}' 2>/dev/null || echo 'no healthcheck'")
     echo "  Health: $STATUS"
 else
     echo "❌ Not running"
+    echo "  Traefik being down takes every *.deercrest.info service with it. This exits 1 as of"
+    echo "  2026-09-14 (WR-09); it used to print this same line and exit 0."
+    EXIT_CODE=1
 fi
 
-# Check Authelia
+# Check Authelia — identical shape and identical reasoning to the Traefik probe above.
 echo -n "Authelia: "
-if ssh $SSH_OPTS root@172.16.1.159 "timeout $REMOTE_TIMEOUT docker ps --format '{{.Names}}' | grep -q '^authelia$'"; then
+AUTHELIA_OUT=$(ssh -n $SSH_OPTS root@172.16.1.159 "timeout $REMOTE_TIMEOUT docker ps --format '{{.Names}}'")
+AUTHELIA_RC=$?   # ssh propagates the remote status — NO remote pipe, so 124 cannot be laundered
+if [ -z "$AUTHELIA_OUT" ] && [ "$AUTHELIA_RC" -ne 124 ]; then
+    echo "⚠️  UNKNOWN — the container list came back empty (ssh exit $AUTHELIA_RC)."
+    echo "  Nothing was matched. This is NOT 'authelia is not running'."
+    EXIT_CODE=1
+elif [ "$AUTHELIA_RC" -eq 124 ]; then
+    echo "⚠️  UNKNOWN — 'docker ps' exceeded its ${REMOTE_TIMEOUT}s bound and was killed."
+    echo "  This is NOT 'authelia is not running'. Most likely cause: dockerd wedged."
+    EXIT_CODE=1
+elif [ "$AUTHELIA_RC" -ne 0 ]; then
+    echo "⚠️  UNKNOWN — could not list containers (ssh exit $AUTHELIA_RC)."
+    echo "  This is NOT 'authelia is not running'."
+    EXIT_CODE=1
+elif printf '%s\n' "$AUTHELIA_OUT" | grep -q '^authelia$'; then
     echo "✅ Running"
 else
     echo "❌ Not running"
+    echo "  Every *.deercrest.info route carries chain-authelia@file. This exits 1 as of"
+    echo "  2026-09-14 (WR-09); it used to print this same line and exit 0."
+    EXIT_CODE=1
 fi
 
 # Count containers
@@ -629,12 +717,41 @@ else
     echo "✅ No unhealthy containers"
 fi
 
-# Try to curl Traefik dashboard
+# Try to curl Traefik dashboard.
+#
+# WR-09: THE LOCAL `| grep -q "200"` IS GONE, for the reason stated at the container probes and
+# at the container-count sites — a local pipe in front of the status makes `$?` the GREP's, so a
+# killed or failed remote call was indistinguishable from a non-200 answer, and both printed the
+# same report-only ❌. The status is now captured with no pipe and the whitespace strip happens on
+# its own line afterwards.
+#
+# THE ONE DISTINCTION WORTH READING: ssh exit 255 means the TRANSPORT failed and curl never ran,
+# which is "could not look". Any OTHER non-zero is CURL's own exit — it ran, and could not reach
+# the dashboard — which is a real measurement of inaccessibility and is reported as such. Those
+# two must not share a verdict even though both are now fatal.
 echo -n "Traefik dashboard: "
-if ssh $SSH_OPTS root@172.16.1.159 "timeout $REMOTE_TIMEOUT curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/dashboard/" | grep -q "200"; then
+DASH_OUT=$(ssh -n $SSH_OPTS root@172.16.1.159 "timeout $REMOTE_TIMEOUT curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/dashboard/")
+DASH_RC=$?   # ssh propagates the remote status — NO local pipe above, see the note above
+DASH_OUT=$(printf '%s' "$DASH_OUT" | tr -d '[:space:]')
+if [ "$DASH_RC" -eq 124 ]; then
+    echo "⚠️  UNKNOWN — the dashboard probe exceeded its ${REMOTE_TIMEOUT}s bound and was killed."
+    echo "  Nothing was measured. This is NOT 'the dashboard is not accessible'."
+    EXIT_CODE=1
+elif [ "$DASH_RC" -eq 255 ]; then
+    echo "⚠️  UNKNOWN — the ssh to 172.16.1.159 failed (exit 255), so curl never ran."
+    echo "  Nothing was measured. This is NOT 'the dashboard is not accessible'."
+    EXIT_CODE=1
+elif [ "$DASH_RC" -ne 0 ]; then
+    echo "❌ Not accessible (curl exit $DASH_RC — it ran and could not reach the dashboard)"
+    EXIT_CODE=1
+elif [ "$DASH_OUT" = "200" ]; then
     echo "✅ Accessible (HTTP 200)"
+elif echo "$DASH_OUT" | grep -qE '^[0-9]+$'; then
+    echo "❌ Not accessible (HTTP $DASH_OUT)"
+    EXIT_CODE=1
 else
-    echo "❌ Not accessible"
+    echo "⚠️  UNKNOWN — the probe exited 0 but returned '$DASH_OUT', which is not an HTTP status."
+    EXIT_CODE=1
 fi
 
 # Vendored-file drift (D-13). THREE files in this repo are vendored copies of files that a
@@ -1289,9 +1406,14 @@ if [ "$EXIT_CODE" -ne 0 ]; then
     # Updated in the SAME COMMIT as the block itself, deliberately: plan 02.1-15 was bitten by
     # exactly this omission, and a tail that lists every block except the one that failed sends the
     # reader to the green ones.
+    # Extended again 2026-09-14 (code review WR-09) when the Traefik, Authelia and dashboard
+    # probes became fatal. Same discipline as the two amendments above: the tail is updated in
+    # the SAME COMMIT as the sites that can now reach it, because a tail that lists every block
+    # except the one that failed sends the reader to the green ones.
     echo "❌ Health check FAILED. The failing block is whichever one above carries a ❌ or a ⚠️ —"
-    echo "   that is any of: the container counts, the music freeze harness, the consumers audit,"
-    echo "   the Jellyfin transcode retention audit, the vendored-file drift block, or the"
+    echo "   that is any of: the Traefik or Authelia container probes, the Traefik dashboard"
+    echo "   probe, the container counts, the music freeze harness, the consumers audit, the"
+    echo "   Jellyfin transcode retention audit, the vendored-file drift block, or the"
     echo "   extended.conf destructive-switch block."
     exit 1
 fi

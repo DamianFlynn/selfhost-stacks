@@ -1242,8 +1242,16 @@ still fail:
   two of them on every sabnzbd boot; this is what notices.
 
 `scripts/quick-health-check.sh` folds in the first and runs the second. Routine run 2026-09-13T12:39:12Z:
-**exit 0**, zero `⚠️`, and one `❌` — `Traefik dashboard: Not accessible`, which is report-only and
-pre-dates this phase.
+**exit 0**, zero `⚠️`, and one `❌` — `Traefik dashboard: Not accessible`.
+
+> **Superseded 2026-09-14 (code review WR-09).** That `❌` was report-only when this was written,
+> and *that was the defect*: the Traefik, Authelia and dashboard probes each printed a red glyph
+> without touching `EXIT_CODE`, so the estate's single health-check entry point reported **exit 0**
+> with a failure sitting in its own transcript. All three now set `EXIT_CODE=1`, and each
+> distinguishes "not running" from "could not look". **A run in this state now exits 1, not 0** —
+> so the figures quoted above are a record of the old behaviour, not a target to reproduce. The
+> underlying dashboard `❌` itself still pre-dates this phase and is still unfixed; it is now
+> visible in the exit code instead of only in the transcript.
 
 ### Recorded, not fixed
 
