@@ -1151,6 +1151,19 @@ def main(argv=None) -> int:
         if not loaded:
             continue
 
+        # WR-06: SKIP IS A PER-PATH STATE, NOT A COUNTER INCREMENT.
+        # Both skip sites below used to do `counts["skipped"] += 1` and then `continue` out of
+        # the RULE loop only. The emit loop further down iterates `loaded` again, finds no
+        # proposal for that same path, and charges it to `unchanged` - so one file landed in TWO
+        # buckets. Rule 3 was worse: it charged len(loaded) to `skipped` for the whole folder, on
+        # top of any per-file rule-1 skips, and every one of those files was then ALSO counted
+        # unchanged or changed. files_seen never equalled changed + unchanged + skipped + failed
+        # in either mode, and the DRY RUN IS THE D-08 REVIEW ARTEFACT whose .summary.json a later
+        # reader will quote. Recording the state per path and reading it once, in the emit loop,
+        # is what makes the four buckets disjoint. The invariant is asserted before the summary
+        # is written, so the two can never drift apart again silently.
+        skipped_paths: set[str] = set()
+
         # ---- rules 1 and 2, per file -----------------------------------------------------
         proposals: dict[str, dict[str, tuple[int, str | None, str]]] = {}
         for path, _handle, values in loaded:
@@ -1158,7 +1171,7 @@ def main(argv=None) -> int:
             if album is None or not album.strip():
                 derived, reason = derive_album_from_folder(folder_name)
                 if derived is None:
-                    counts["skipped"] += 1
+                    skipped_paths.add(path)  # WR-06: state, not a counter - see above
                     log.warning("rule 1 skipped %s: %s", path, reason)
                     continue
                 proposals.setdefault(path, {})["album"] = (1, album, derived)
@@ -1185,7 +1198,9 @@ def main(argv=None) -> int:
                     modal = collections.Counter(finals).most_common(1)
                     chosen = label_of(modal[0][0]) if modal else None
                 if not chosen:
-                    counts["skipped"] += len(loaded)
+                    # WR-06: mark every path in the folder, rather than adding len(loaded) to a
+                    # counter those same paths are about to be counted into a second time.
+                    skipped_paths.update(p for p, _h, _v in loaded)
                     log.warning(
                         "rule 3 skipped folder %s: no label token in its albums", folder_name
                     )
@@ -1203,7 +1218,12 @@ def main(argv=None) -> int:
         for path, handle, _values in loaded:
             fields = proposals.get(path)
             if not fields:
-                counts["unchanged"] += 1
+                # WR-06: THE ONE PLACE a no-proposal file is counted, and the only place that
+                # decides which of the two buckets it belongs in. A path a rule refused is
+                # `skipped`; a path no rule had anything to say about is `unchanged`. Note a
+                # rule-1-skipped path can still pick up a rule-3 artist proposal, in which case
+                # it lands in `changed` here and is correctly in neither of these two.
+                counts["skipped" if path in skipped_paths else "unchanged"] += 1
                 continue
             for field, (rule, old, new) in sorted(fields.items()):
                 rule_hits[rule] += 1
@@ -1261,6 +1281,19 @@ def main(argv=None) -> int:
 
     sys.stdout.flush()
 
+    # WR-06: THE RECONCILIATION, ASSERTED RATHER THAN HOPED FOR.
+    # The four buckets are meant to be DISJOINT and to account for every file counted into
+    # files_seen. Every path takes exactly one route: `failed` (fence or read refused it, so it
+    # never reached `loaded`; or its write raised), `changed` (a rule proposed a field and, under
+    # --apply, the write succeeded), `skipped` (a rule refused it and no other rule proposed
+    # anything) or `unchanged` (no rule had anything to say). Stating that as an equation and
+    # checking it is the only thing that stops the two-buckets-for-one-file defect from silently
+    # coming back - the dry run IS the D-08 review artefact, and a summary nobody verifies is a
+    # summary a later reader will quote wrongly.
+    counts_reconciled = counts["files_seen"] == (
+        counts["changed"] + counts["unchanged"] + counts["skipped"] + counts["failed"]
+    )
+
     summary = {
         "mode": "apply" if applying else "dry-run",
         "target": target,
@@ -1273,6 +1306,9 @@ def main(argv=None) -> int:
         "files_unchanged": counts["unchanged"],
         "files_skipped": counts["skipped"],
         "failures": counts["failed"],
+        # WR-06: recorded IN the artefact, so a later reader can tell at a glance whether the
+        # numbers beside it add up rather than having to re-derive it.
+        "counts_reconciled": counts_reconciled,
         "rule_hits": {str(k): v for k, v in sorted(rule_hits.items())},
         "per_folder": folder_rows,
         "elapsed_s": round(time.time() - started, 2),
@@ -1314,6 +1350,24 @@ def main(argv=None) -> int:
             json.dump(summary, fh, indent=2, sort_keys=True)
             fh.write("\n")
 
+    if not counts_reconciled:
+        # WR-06, fail-closed: this is a defect in THIS SCRIPT's accounting, not a finding about
+        # the files, and it is reported as its own thing rather than folded into `failures`.
+        # Refusing is the point - a summary that does not add up must not be published as though
+        # it does, because the .summary.json is what a later reader quotes.
+        sys.stderr.write(
+            colour(
+                "  ⚠️  COUNTS DO NOT RECONCILE: "
+                f"files_seen={counts['files_seen']} != changed={counts['changed']} + "
+                f"unchanged={counts['unchanged']} + skipped={counts['skipped']} + "
+                f"failed={counts['failed']}.\n"
+                "  The four buckets are meant to be disjoint and to account for every file seen.\n"
+                "  They do not, so neither this summary nor the .summary.json beside it can be\n"
+                "  trusted. This is a bug in the accounting above, NOT a result.\n",
+                RED,
+            )
+        )
+        return 1
     if counts["failed"]:
         sys.stderr.write(
             colour(
