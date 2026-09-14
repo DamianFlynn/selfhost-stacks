@@ -81,7 +81,12 @@ echo "📋 Checking compose.yaml coverage..."
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 COMPOSE_FILES=$(find stacks/selfhosted -name "compose.yaml" | sort)
-COMPOSE_COUNT=$(echo "$COMPOSE_FILES" | wc -l | tr -d ' ')
+# Count non-empty lines with awk, NOT `echo "$X" | wc -l` (D-22 / F12, code review WR-07).
+# `echo ""` emits a newline, so wc -l returns 1 for an EMPTY set: zero compose files reported as
+# one. This is the same defect the POSTGRES/REDIS/RENOVATE counters below were already converted
+# away from, with the rationale written at those sites; three call sites were missed. Verified:
+# `echo "" | wc -l` -> 1, `printf '%s\n' "" | awk 'NF{n++} END{print n+0}'` -> 0.
+COMPOSE_COUNT=$(printf '%s\n' "$COMPOSE_FILES" | awk 'NF{n++} END{print n+0}')
 
 echo -e "${BLUE}Found $COMPOSE_COUNT compose.yaml files:${NC}"
 echo "$COMPOSE_FILES" | sed 's/^/  /'
@@ -94,7 +99,7 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 # `{ grep … || true; }` (D-22 / F12): grep exits 1 on zero matches, and under `set -euo pipefail`
 # that aborts the whole script. Zero image lines is a legitimate answer, not an error.
 YAML_WITH_IMAGES=$( { grep -rl "image:" stacks/selfhosted --include="*.yaml" --include="*.yml" 2>/dev/null || true; } | sort)
-IMAGE_FILE_COUNT=$(echo "$YAML_WITH_IMAGES" | wc -l | tr -d ' ')
+IMAGE_FILE_COUNT=$(printf '%s\n' "$YAML_WITH_IMAGES" | awk 'NF{n++} END{print n+0}')  # WR-07, see above
 
 echo -e "${BLUE}Found $IMAGE_FILE_COUNT YAML files with Docker images${NC}"
 echo ""
@@ -109,7 +114,7 @@ IMAGES=$( { grep -rh "^\s*image:" stacks/selfhosted --include="*.yaml" --include
   sed 's/\s*$//' | \
   sort -u)
 
-IMAGE_COUNT=$(echo "$IMAGES" | wc -l | tr -d ' ')
+IMAGE_COUNT=$(printf '%s\n' "$IMAGES" | awk 'NF{n++} END{print n+0}')  # WR-07, see above
 echo -e "${BLUE}Found $IMAGE_COUNT unique Docker images${NC}"
 echo ""
 
