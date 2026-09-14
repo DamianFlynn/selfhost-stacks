@@ -1,0 +1,164 @@
+=== 260914-a2y — negative controls for the extended.conf destructive-switch block ===
+Executed: 2026-09-14T06:31:45Z
+Script under test: scripts/quick-health-check.sh @ f39e417 (working tree, uncommitted)
+
+READ THIS BEFORE READING THE TRANSCRIPT:
+  Controls 1, 1b, 2, 3 and 4 ALL run with a non-default EXTCONF_PATH or EXTCONF_HOST, and by
+  design ANY non-default override forces EXIT_CODE=1 on its own. So THE EXIT CODE ALONE IS
+  NOT THE EVIDENCE in any of these five runs — a control whose verdict is guaranteed by the
+  override would be uninformative. THE LABEL LINES ARE THE EVIDENCE, and they are recorded
+  in full for every control.
+
+=== OPENING assertion: live /config/extended.conf sha256 ===
+54c5433bba38c61e372425c34cc0c8aad2001922ca1fb6bd55e98dc1ada1b49d  /config/extended.conf
+2955
+RESULT: matches the planned baseline 54c5433bba38c61e372425c34cc0c8aad2001922ca1fb6bd55e98dc1ada1b49d
+
+=== fixtures written into the sabnzbd container /tmp (NOT /config) ===
+wrote /tmp/ec-fixture-a2y.conf (rc=0); content:
+    requireBeetsMatch="true"   # WRONG: arms the rm -rf at audio.bash:290
+    ConversionFormat="FLAC"    # correct, and must stay green independently
+wrote /tmp/ec-fixture-a2y-absent.conf (rc=0); content:
+    ConversionFormat="FLAC"    # correct; requireBeetsMatch is ABSENT entirely
+wrote /tmp/ec-fixture-a2y-mp3.conf (rc=0); content:
+    requireBeetsMatch="false"  # correct, WITH a trailing comment (measured fact 2)
+    ConversionFormat="MP3"     # WRONG: falls to the rm -rf at audio.bash:237 (WR-01)
+
+================================================================
+CONTROL 1 — wrong requireBeetsMatch (=true), ConversionFormat valid (=FLAC)
+EXPECT: requireBeetsMatch RED naming the rm -rf; ConversionFormat NOT red (proves per-switch); exit 1
+$ env EXTCONF_PATH=/tmp/ec-fixture-a2y.conf bash scripts/quick-health-check.sh
+--- block output ---
+extended.conf destructive switches:
+  ⚠️  EXTCONF_PATH override in effect — this run cannot report the switches green
+  ❌ requireBeetsMatch is NOT false — found=requireBeetsMatch="true"   # WRONG: arms the rm -rf at audio.bash:290
+     audio.bash:290 will 'rm -rf' the completed download on EVERY music
+     job, because the beets() success branch at :286 is unreachable after
+     the Phase 4 strip. Set requireBeetsMatch="false" in /tmp/ec-fixture-a2y.conf.
+--- overall exit code: 1 ---
+
+================================================================
+CONTROL 1b — requireBeetsMatch ABSENT entirely, ConversionFormat valid (=FLAC)
+EXPECT: absence treated as FAILURE not as a pass; found=(absent); ConversionFormat still green; exit 1
+$ env EXTCONF_PATH=/tmp/ec-fixture-a2y-absent.conf bash scripts/quick-health-check.sh
+--- block output ---
+extended.conf destructive switches:
+  ⚠️  EXTCONF_PATH override in effect — this run cannot report the switches green
+  ❌ requireBeetsMatch is NOT false — found=(absent)
+     audio.bash:290 will 'rm -rf' the completed download on EVERY music
+     job, because the beets() success branch at :286 is unreachable after
+     the Phase 4 strip. Set requireBeetsMatch="false" in /tmp/ec-fixture-a2y-absent.conf.
+--- overall exit code: 1 ---
+
+================================================================
+CONTROL 2 — wrong ConversionFormat (=MP3), requireBeetsMatch valid (=false + trailing comment)
+EXPECT: ConversionFormat RED citing WR-01; requireBeetsMatch GREEN despite its trailing comment; exit 1
+$ env EXTCONF_PATH=/tmp/ec-fixture-a2y-mp3.conf bash scripts/quick-health-check.sh
+--- block output ---
+extended.conf destructive switches:
+  ⚠️  EXTCONF_PATH override in effect — this run cannot report the switches green
+  ❌ ConversionFormat is neither FLAC nor OPUS — found=ConversionFormat="MP3"     # WRONG: falls to the rm -rf at audio.bash:237 (WR-01)
+     audio.bash:237 will 'rm -rf' any completed download containing a
+     FLAC (WR-01): the ffmpeg path at :242-255 that would have converted
+     it is unreachable dead code.
+--- overall exit code: 1 ---
+
+================================================================
+CONTROL 3 — unreadable config path
+EXPECT: the exit-4 UNKNOWN branch, in words 'could not look'; NOT a tick and NOT silence; exit 1
+$ env EXTCONF_PATH=/config/does-not-exist-a2y.conf bash scripts/quick-health-check.sh
+--- block output ---
+extended.conf destructive switches:
+  ⚠️  EXTCONF_PATH override in effect — this run cannot report the switches green
+  ⚠️  UNKNOWN — could not read /config/does-not-exist-a2y.conf inside the sabnzbd container
+     (remote exit 4: the path is missing or unreadable).
+     Nothing was asserted. This is NOT 'the destructive switches are safe'.
+--- overall exit code: 1 ---
+
+================================================================
+CONTROL 4 — unreachable host (192.0.2.1, RFC 5737 TEST-NET-1)
+EXPECT: an UNKNOWN naming the ssh-failure/unreachable case; exit 1
+$ env EXTCONF_HOST=root@192.0.2.1 bash scripts/quick-health-check.sh
+--- block output ---
+extended.conf destructive switches:
+  ⚠️  EXTCONF_HOST override in effect — this run cannot report the switches green
+ssh: connect to host 192.0.2.1 port 22: Operation timed out
+  ⚠️  UNKNOWN — the ssh to root@192.0.2.1 failed (exit 255); the host is
+     most likely unreachable.
+     Nothing was asserted. This is NOT 'the destructive switches are safe'.
+--- overall exit code: 1 ---
+
+
+=== CLEANUP (runs from a trap on EXIT/INT/TERM, not on the happy path) ===
+$ ssh root@172.16.1.159 "docker exec sabnzbd sh -c 'rm -f /tmp/ec-fixture-a2y*.conf'"
+cleanup rc=0
+
+--- assert fixtures are gone (expect: no such file, count 0) ---
+0
+
+--- CLOSING assertion: live /config/extended.conf sha256 UNCHANGED ---
+54c5433bba38c61e372425c34cc0c8aad2001922ca1fb6bd55e98dc1ada1b49d  /config/extended.conf
+RESULT: live extended.conf sha256 MATCHES the opening baseline — the file was never mutated.
+
+================================================================
+WHAT THESE CONTROLS ACTUALLY PROVE — and the two inferences that are NOT obvious
+================================================================
+
+1. THE ASSERTION IS PER-SWITCH, NOT ONE FLAG THAT REDDENS THE WHOLE BLOCK.
+   This is the property plan 02.1-07's most informative transcript line turned on, and it is
+   proven by the PAIR of controls rather than by either one alone:
+     - Control 1  reds requireBeetsMatch ONLY. ConversionFormat produces no red.
+     - Control 2  reds ConversionFormat ONLY. requireBeetsMatch produces no red.
+   Each switch is therefore observed in BOTH verdicts across the pair. A single flag reddening the
+   whole block would have made controls 1 and 2 look identical; they do not.
+
+2. THE GREEN SWITCH WAS EVALUATED, NOT SKIPPED — and this needs saying, because an `ok` label
+   prints NOTHING on the local side, so its absence is visually indistinguishable from "that
+   switch was never looked at". The positive evidence is the short-answer guard: the block prints
+   `UNKNOWN — expected 2 switch lines, got N` unless EXACTLY TWO label lines come back. No control
+   printed that. So in every run both switches were read and both returned a verdict; only one of
+   them was BAD. Without that guard this transcript could not distinguish "green" from "blind".
+
+3. THE TRAILING-COMMENT TOLERANCE IS PROVEN, NOT ASSUMED (measured fact 2). Control 2's fixture
+   carries `requireBeetsMatch="false"  # correct, WITH a trailing comment` and that switch stayed
+   GREEN. Plan 04-12 measured an end-anchored pattern returning 0 against exactly this shape — an
+   end anchor or grep -x here would have produced a confident FALSE RED on a correct value. The
+   start-anchored pattern was driven against the defect rather than merely written to avoid it.
+
+4. ABSENCE IS A FAILURE, NOT A PASS (control 1b). `found=(absent)` — the block refuses to treat a
+   missing key as safe. audio.bash's unquoted `[ $requireBeetsMatch = true ]` lands in the safe
+   direction only because a failing `[` inside an `if` reads as false. That is safety by accident,
+   and this control is what stops it being relied upon.
+
+5. "COULD NOT LOOK" NEVER SHARES A VERDICT WITH "NOTHING IS WRONG", and the two could-not-look
+   causes do not share one with each other either. Control 3 names remote exit 4 (path unreadable);
+   control 4 names ssh exit 255 (host unreachable). Both say in words "Nothing was asserted. This
+   is NOT 'the destructive switches are safe'." Neither printed a tick and neither was silent.
+
+6. EXIT CODE IS NOT THE EVIDENCE IN ANY OF THESE FIVE RUNS — restated here because it is the
+   difference between a proof and a transcript that looks like one. Every control ran with a
+   non-default override, and a non-default override forces EXIT_CODE=1 on its own by design. The
+   label lines above are the evidence. The exit code is corroboration at best.
+
+NO BYTE OF THE LIVE CONFIG WAS MUTATED. All fixtures were written to the container's writable
+layer at /tmp, never to /config. The live /config/extended.conf sha256 is asserted at the top and
+the bottom of this transcript and is identical in both. Cleanup ran from a trap on EXIT/INT/TERM,
+not on the happy path, and the post-cleanup fixture count is 0.
+
+NO FILE CONTENT LEFT THE CONTAINER. The block matches remote-side and returns two labels. The
+optional `found=` text is produced by greps anchored on the two switch names, so the five
+*ArrApiKey fields in the real file cannot structurally reach this transcript — verified mechanically
+by this task's acceptance grep, which requires a count of 0 for all five names.
+
+================================================================
+TASK 3 — ROUTINE GREEN RUN (no environment overrides), 2026-09-14T06:34:54Z
+================================================================
+$ bash scripts/quick-health-check.sh
+observed exit code: 0   (required: 0 — this is the estate's only test suite)
+
+The new block's identifying line, quoted verbatim:
+    12:  ✅ extended.conf switches disarmed (2): requireBeetsMatch=false, ConversionFormat in {FLAC,OPUS}
+
+The new block's full section on the green path:
+    extended.conf destructive switches:
+      ✅ extended.conf switches disarmed (2): requireBeetsMatch=false, ConversionFormat in {FLAC,OPUS}

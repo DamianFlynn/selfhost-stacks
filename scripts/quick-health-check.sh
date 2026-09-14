@@ -193,6 +193,53 @@
 #     slowest thing promoted here and it ran in 4 s (04-06 measured 6 s), both an order of
 #     magnitude inside the bound. Raising it would have been a change made for no measured reason.
 #
+# ⚠️  EXIT-CODE BEHAVIOUR CHANGED AGAIN — A FIFTH FATAL BLOCK (THE extended.conf DESTRUCTIVE
+#     SWITCHES) WAS ADDED 2026-09-14 (quick task 260914-a2y, closing code-review CR-01 and WR-01).
+#
+#     THIS IS THE SIXTH SUCH NOTICE IN THIS FILE, AND THE ORDINAL IS STATED BECAUSE IT IS EASY TO
+#     GET WRONG — the brief that commissioned this block called it "the fourth", which would have
+#     made the file lie about itself. Measured before writing: the notice headers above sit at five
+#     distinct places, so this is the sixth header. The matching `grep -c` for the shared opening
+#     phrase goes 6 -> 7, NOT 5 -> 6, and that is not a miscount: the notice at the top of this
+#     file quotes the phrase inside its own body, an over-count the 02.1-15 notice below already
+#     documents and declines to "fix". So the count has always run one ahead of the number of
+#     notices, and a reader who greps expecting 6 has found the documented quirk, not a bug.
+#
+#     BLOCK ordinal and NOTICE ordinal are different numbers, and both are given deliberately: four
+#     blocks could exit this script 1 before today — the music freeze harness, the consumers audit,
+#     the Jellyfin transcode audit and the vendored-file drift block — so the block added below is
+#     the FIFTH, announced by the SIXTH notice.
+#
+#     WHY IT EXISTS. Phase 4 removed the `beet` call from stacks/selfhosted/arrs/sabnzbd/audio.bash.
+#     beets() there decides success by touching a sentinel and then looking for audio files NEWER
+#     than it, and the removed call was the only writer that could ever produce one. The
+#     `SUCCESS: Matched with beets!` branch is therefore STRUCTURALLY UNREACHABLE, and the `else`
+#     at audio.bash:287 now runs on every music job — corroborated, not theorised, by plan 04-15's
+#     window-2 block, which recorded `matching_delta=3 error_delta=3` across three real jobs. That
+#     `else` contains `rm -rf "$1"/*`, gated ONLY by `requireBeetsMatch` being true. conversion()
+#     has the same shape (WR-01): every ConversionFormat outside {FLAC, OPUS} falls through to a
+#     second `rm -rf "$1"/*`. Both gates live in ONE host file that nothing in this repo asserted.
+#
+#     WHAT NOW EXITS THIS SCRIPT 1 THAT DID NOT BEFORE:
+#       - `requireBeetsMatch` in the sabnzbd container's /config/extended.conf being anything other
+#         than false, INCLUDING ABSENT. Absence is a failure, not a pass: audio.bash's test is
+#         unquoted, so an unset variable makes `[` error with rc 2 and lands in the safe direction
+#         BY ACCIDENT. That is not a property to depend on, so it is not treated as one.
+#       - `ConversionFormat` being outside {FLAC, OPUS}, including absent.
+#       - COULD NOT LOOK — each kept distinct from "the switches are safe", and each its own named
+#         UNKNOWN rather than a shared one: the sabnzbd container absent or docker unavailable
+#         (remote exit 3); the config missing or unreadable (4); the read succeeding but returning
+#         no bytes (6); the read exceeding REMOTE_TIMEOUT (124); the host unreachable; a SHORT
+#         ANSWER (anything other than exactly two label lines); or an unrecognised label.
+#       - EITHER OVERRIDE BEING NON-DEFAULT. EXTCONF_HOST and EXTCONF_PATH exist ONLY to drive the
+#         could-not-look branches, so any non-default value forces EXIT_CODE=1 whatever the
+#         comparison finds. Neither can be used to make a red run report green.
+#
+#     WHAT IT DELIBERATELY DOES NOT DO: it does not vendor extended.conf, and that file must NOT be
+#     added to the D-13 drift set. THIS REPOSITORY IS PUBLIC and the file carries five *ArrApiKey
+#     fields. The values are asserted remote-side and only two labels come back — see (c) at the
+#     block itself for why the review's "add a fourth _drift_pair" fix was declined.
+#
 # ⚠️  KNOWN LIMIT, AND IT APPLIES TO THIS WHOLE FILE: THIS SCRIPT IS MANUAL. IT ONLY EVER FIRES
 #     WHEN SOMEBODY TYPES IT (D-22, phase 02.1).
 #     There is no cron entry, no systemd timer and no notification path. Nothing here will tell
@@ -322,6 +369,20 @@ DRIFT_APPDATA_ROOT="${DRIFT_APPDATA_ROOT:-/mnt/fast/appdata}"
 DRIFT_EXPECT_AUDIO_BASH="${DRIFT_EXPECT_AUDIO_BASH:-}"
 DRIFT_EXPECT_SABNZBD_BEETS_CONFIG="${DRIFT_EXPECT_SABNZBD_BEETS_CONFIG:-}"
 DRIFT_EXPECT_SURVIVOR_BEETS_CONFIG="${DRIFT_EXPECT_SURVIVOR_BEETS_CONFIG:-}"
+
+# ENV OVERRIDES for the "extended.conf destructive switches" block (CR-01/WR-01), added 2026-09-14.
+# Same contract as DRIFT_APPDATA_ROOT above, and the precedent is stated explicitly because it is
+# the only reason these are safe to exist at all: EVERY OVERRIDE HERE CAN ONLY MAKE THE BLOCK
+# REDDER. Any non-default value of EITHER forces EXIT_CODE=1 regardless of what the comparison
+# finds, so the negative controls can be driven without either one ever being usable to launder a
+# red run into a green one. There is deliberately NO success-producing override, and no sentinel
+# that skips the block; do not add one.
+#   EXTCONF_HOST   the host running the sabnzbd container.
+#   EXTCONF_PATH   a path INSIDE that container, NOT on the host. The file is read through
+#                  `docker exec`, so this names the container's own filesystem. It is not bind
+#                  mounted from the repo and it is not vendored — see (c) at the block itself.
+EXTCONF_HOST="${EXTCONF_HOST:-root@172.16.1.159}"
+EXTCONF_PATH="${EXTCONF_PATH:-/config/extended.conf}"
 
 # WR-01: THE TWO PROBES BELOW USED TO BE UNBOUNDED, ON A JUSTIFICATION THAT WAS FALSE.
 # Corrected 2026-09-03 by plan 02.1-15. The withdrawn claim was that the only way these two can
@@ -681,6 +742,197 @@ _drift_pair survivor-config.yaml stacks/selfhosted/arrs/beets/config.yaml \"$DRI
     fi
 fi
 
+# extended.conf destructive switches (CR-01, WR-01). Added 2026-09-14 by quick task 260914-a2y.
+# See the SIXTH EXIT-CODE notice at the top of this file for what this added to the fatal path.
+#
+# (a) WHY IT EXISTS. Phase 4 stripped the `beet` call out of audio.bash. beets() at :269-301
+#     touches /config/scripts/beets-match and then tests for audio files NEWER than that sentinel;
+#     the stripped call was the only writer in that window that could ever produce one. So
+#     `SUCCESS: Matched with beets!` at :286 is now STRUCTURALLY UNREACHABLE — not unlikely,
+#     unreachable — and the `else` at :287 is taken on EVERY music job. That `else` contains
+#     `rm -rf "$1"/*` at :290 behind nothing but `[ $requireBeetsMatch = true ]`. This is measured,
+#     not theorised: plan 04-15's window-2 block recorded `matching_delta=3 error_delta=3` over
+#     three real jobs — three error lines, zero success lines. conversion() has the identical shape
+#     (WR-01): FLAC short-circuits at :220 and OPUS is handled at :226-234, while every other value
+#     reaches a second `rm -rf "$1"/*` at :237 — which is also what makes the ffmpeg block at
+#     :242-255 unreachable dead code. TWO destructive branches, ONE unversioned host file.
+#
+# (b) WHY THE FIX IS HERE AND NOT IN audio.bash. The vendored-drift block directly above asserts
+#     BYTE-IDENTITY between this repo's audio.bash and the host copy. Patching the script in place
+#     would turn that block red against the host — the obvious fix breaks the guard that makes the
+#     file trustworthy in the first place. So the destructive branches are left exactly as upstream
+#     ships them, and THE VALUES THAT DISARM THEM are asserted instead.
+#
+# (c) WHY extended.conf IS NOT VENDORED, AND MUST NOT BE ADDED TO THE D-13 DRIFT SET. The review's
+#     first suggested fix was a fourth _drift_pair over a vendored copy. It is deliberately NOT
+#     taken: THIS REPOSITORY IS PUBLIC, and that file carries five *ArrApiKey fields — empty today,
+#     which is a fact about today and not a property. ASSERT THE VALUES; NEVER COPY THE FILE. All
+#     matching happens remote-side and only two label lines come back. The two greps that produce
+#     the optional `found=` text are anchored on the two switch names, so no other line of that
+#     file can structurally reach this transcript.
+#
+# (d) ReplaygainTagging IS DELIBERATELY OUT OF SCOPE — a decision, not an oversight. The review's
+#     snippet names three switches; this block asserts THE TWO THAT GATE AN `rm -rf`.
+#     ReplaygainTagging gates a tag WRITER (r128gain at audio.bash:266). That is a real concern
+#     after the strip and may deserve its own assertion, but it is a correctness problem, not a
+#     data-destruction one, and folding it in here would blur what a red in this block means.
+#
+# ONE DELIBERATE WIDENING OF THE REVIEW'S SNIPPET: it asserts ConversionFormat=FLAC alone. That
+# would be a FALSE RED on a correct OPUS estate, because OPUS really is handled at :226-234 and
+# never reaches the rm -rf. The set asserted here is {FLAC, OPUS} — the values that are actually
+# safe, which is the property being guarded.
+#
+# MATCH PATTERNS ARE START-ANCHORED ONLY, AND THAT IS LOAD-BEARING. extended.conf carries trailing
+# comments on the same line as a value; plan 04-12 measured an end-anchored pattern returning 0
+# against a CORRECT value for exactly that reason. Do not add a `$` anchor, and do not reach for
+# grep -x here — either one produces a confident false red on a healthy estate.
+#
+# ABSENCE IS A FAILURE, NOT A PASS. audio.bash's `[ $requireBeetsMatch = true ]` is unquoted, so an
+# unset variable makes `[` fail with rc 2, which an `if` reads as false: it lands in the safe
+# direction BY ACCIDENT. Accidental safety is not a property worth asserting against, so an absent
+# key is treated exactly like a wrong one.
+#
+# FAIL-CLOSED, house S1 branch order, same as the drift block: empty output first (deferring when
+# the status is 124, because a killed command usually produces no output either), then 124, then
+# any other non-zero, and only then is anything asserted. The remote string contains pipes, so it
+# starts `set -o pipefail`, and the ssh status is captured on the VERY NEXT LINE with no local pipe
+# in the assignment — see the container-count note above for why both halves are necessary.
+#
+# ONE SHAPE HERE IS DELIBERATELY NOT COPIED FROM THE DRIFT BLOCK. That block counts its `repo=`
+# lines, so an unrecognised label falls into the short-answer branch and its own `*)` case can
+# never fire. This one counts NON-EMPTY lines, so a wrong label is still two lines and DOES reach
+# the `*)` branch that names it. Both are fail-closed; this one can say which of the two went wrong.
+echo "extended.conf destructive switches:"
+EXTCONF_OVERRIDDEN=0
+if [ "$EXTCONF_HOST" != "root@172.16.1.159" ]; then
+    EXTCONF_OVERRIDDEN=1
+    echo "  ⚠️  EXTCONF_HOST override in effect — this run cannot report the switches green"
+    EXIT_CODE=1
+fi
+if [ "$EXTCONF_PATH" != "/config/extended.conf" ]; then
+    EXTCONF_OVERRIDDEN=1
+    echo "  ⚠️  EXTCONF_PATH override in effect — this run cannot report the switches green"
+    EXIT_CODE=1
+fi
+# Distinct remote exit codes so the UNKNOWN branch can NAME the cause instead of lumping every
+# could-not-look into one verdict: 3 = docker exec failed (container absent, docker unavailable),
+# 4 = the cat failed (path missing or unreadable), 6 = the read succeeded but returned no bytes.
+# 124 is preserved explicitly at both probes rather than being collapsed into 3 or 4 — a bound
+# expiry and a missing container are different answers.
+EXTCONF_CMD="set -o pipefail
+timeout $REMOTE_TIMEOUT docker exec sabnzbd true >/dev/null 2>&1
+_ec_rc=\$?
+[ \$_ec_rc -eq 124 ] && exit 124
+[ \$_ec_rc -ne 0 ] && exit 3
+_ec=\$(timeout $REMOTE_TIMEOUT docker exec sabnzbd sh -c 'cat \"$EXTCONF_PATH\"' 2>/dev/null)
+_ec_rc=\$?
+[ \$_ec_rc -eq 124 ] && exit 124
+[ \$_ec_rc -ne 0 ] && exit 4
+[ -n \"\$_ec\" ] || exit 6
+_ec_v=\$(printf '%s\n' \"\$_ec\" | grep -E '^[[:space:]]*requireBeetsMatch' | sed -n '1p')
+[ -n \"\$_ec_v\" ] || _ec_v='(absent)'
+if printf '%s\n' \"\$_ec\" | grep -qE '^[[:space:]]*requireBeetsMatch=\"?false\"?'; then
+  echo 'requireBeetsMatch=ok'
+else
+  echo \"requireBeetsMatch=BAD found=\$_ec_v\"
+fi
+_ec_v=\$(printf '%s\n' \"\$_ec\" | grep -E '^[[:space:]]*ConversionFormat' | sed -n '1p')
+[ -n \"\$_ec_v\" ] || _ec_v='(absent)'
+if printf '%s\n' \"\$_ec\" | grep -qE '^[[:space:]]*ConversionFormat=\"?(FLAC|OPUS)\"?'; then
+  echo 'ConversionFormat=ok'
+else
+  echo \"ConversionFormat=BAD found=\$_ec_v\"
+fi
+exit 0"
+EXTCONF_OUT=$(ssh -n $SSH_OPTS "$EXTCONF_HOST" "$EXTCONF_CMD")
+EXTCONF_RC=$?   # ssh propagates the remote status — NO local pipe above, see the note above
+if [ -z "$EXTCONF_OUT" ] && [ "$EXTCONF_RC" -ne 124 ]; then
+    case "$EXTCONF_RC" in
+        3)
+            echo "  ⚠️  UNKNOWN — the sabnzbd container is absent, or docker is unavailable on"
+            echo "     $EXTCONF_HOST (remote exit 3)."
+            ;;
+        4)
+            echo "  ⚠️  UNKNOWN — could not read $EXTCONF_PATH inside the sabnzbd container"
+            echo "     (remote exit 4: the path is missing or unreadable)."
+            ;;
+        6)
+            echo "  ⚠️  UNKNOWN — $EXTCONF_PATH read back EMPTY inside the sabnzbd container"
+            echo "     (remote exit 6). An empty config is not a disarmed one: with no"
+            echo "     requireBeetsMatch set at all, audio.bash:289 is an unquoted test on an unset"
+            echo "     variable."
+            ;;
+        0)
+            echo "  ⚠️  UNKNOWN — the switch read exited 0 but produced NO OUTPUT. A zero-byte or"
+            echo "     never-started remote command exits 0 with nothing to say, and ONLY this test"
+            echo "     catches it — plan 02.1-10 drove exactly that case (VALIDATION row 23), which"
+            echo "     is why the empty test is first and the status test cannot replace it."
+            ;;
+        *)
+            echo "  ⚠️  UNKNOWN — the ssh to $EXTCONF_HOST failed (exit $EXTCONF_RC); the host is"
+            echo "     most likely unreachable."
+            ;;
+    esac
+    echo "     Nothing was asserted. This is NOT 'the destructive switches are safe'."
+    EXIT_CODE=1
+elif [ "$EXTCONF_RC" -eq 124 ]; then
+    echo "  ⚠️  UNKNOWN — the switch read exceeded its ${REMOTE_TIMEOUT}s bound and was killed."
+    echo "     Nothing was asserted. This is NOT 'the destructive switches are safe', and it is NOT"
+    echo "     a failed assertion — the command never returned. Most likely cause: dockerd wedged."
+    echo "     Distinguish it on atlantis (172.16.1.158): /proc/pressure/io 'full' near 100% WITH"
+    echo "     AN IDLE CPU is the wedge; a busy CPU is not."
+    EXIT_CODE=1
+elif [ "$EXTCONF_RC" -ne 0 ]; then
+    echo "  ⚠️  UNKNOWN — the switch read returned output but exited $EXTCONF_RC, so the answer"
+    echo "     cannot be trusted. Nothing was asserted. This is NOT 'the destructive switches are"
+    echo "     safe'."
+    EXIT_CODE=1
+else
+    EXTCONF_LINES=$(printf '%s\n' "$EXTCONF_OUT" | grep -c '.')
+    if [ "$EXTCONF_LINES" -ne 2 ]; then
+        echo "  ⚠️  UNKNOWN — expected 2 switch lines, got $EXTCONF_LINES. Nothing is asserted."
+        echo "     A short answer is 'could not look', NOT 'the switch that did report is fine'."
+        EXIT_CODE=1
+    else
+        EXTCONF_BAD=0
+        while IFS= read -r ec_line; do
+            [ -z "$ec_line" ] && continue
+            ec_label=${ec_line%% *}
+            ec_rest=${ec_line#"$ec_label"}
+            case "$ec_label" in
+                requireBeetsMatch=ok)
+                    ;;
+                ConversionFormat=ok)
+                    ;;
+                requireBeetsMatch=BAD)
+                    echo "  ❌ requireBeetsMatch is NOT false —${ec_rest}"
+                    echo "     audio.bash:290 will 'rm -rf' the completed download on EVERY music"
+                    echo "     job, because the beets() success branch at :286 is unreachable after"
+                    echo "     the Phase 4 strip. Set requireBeetsMatch=\"false\" in $EXTCONF_PATH."
+                    EXIT_CODE=1
+                    EXTCONF_BAD=$((EXTCONF_BAD + 1))
+                    ;;
+                ConversionFormat=BAD)
+                    echo "  ❌ ConversionFormat is neither FLAC nor OPUS —${ec_rest}"
+                    echo "     audio.bash:237 will 'rm -rf' any completed download containing a"
+                    echo "     FLAC (WR-01): the ffmpeg path at :242-255 that would have converted"
+                    echo "     it is unreachable dead code."
+                    EXIT_CODE=1
+                    EXTCONF_BAD=$((EXTCONF_BAD + 1))
+                    ;;
+                *)
+                    echo "  ⚠️  UNKNOWN — unrecognised label '$ec_label'; nothing asserted for it."
+                    EXIT_CODE=1
+                    EXTCONF_BAD=$((EXTCONF_BAD + 1))
+                    ;;
+            esac
+        done <<< "$EXTCONF_OUT"
+        if [ "$EXTCONF_BAD" -eq 0 ] && [ "$EXTCONF_OVERRIDDEN" -eq 0 ]; then
+            echo "  ✅ extended.conf switches disarmed (2): requireBeetsMatch=false, ConversionFormat in {FLAC,OPUS}"
+        fi
+    fi
+fi
+
 # Music freeze harness (D-29). The audit is host-resident by design — stat over the library, a
 # find across 2,674 entries and the docker mount enumeration are not one-liners — so it runs over
 # a single ssh here. See scripts/check-music-freeze.sh for what it asserts.
@@ -959,8 +1211,13 @@ if [ "$EXIT_CODE" -ne 0 ]; then
     # three green ones. A pointer to the wrong place is the same class of defect as the stale
     # file:line references corrected in the same plan — it costs the reader the time the message
     # was written to save.
+    # Extended 2026-09-14 (quick task 260914-a2y) when the extended.conf switch block was added.
+    # Updated in the SAME COMMIT as the block itself, deliberately: plan 02.1-15 was bitten by
+    # exactly this omission, and a tail that lists every block except the one that failed sends the
+    # reader to the green ones.
     echo "❌ Health check FAILED. The failing block is whichever one above carries a ❌ or a ⚠️ —"
     echo "   that is any of: the container counts, the music freeze harness, the consumers audit,"
-    echo "   the Jellyfin transcode retention audit, or the vendored-file drift block."
+    echo "   the Jellyfin transcode retention audit, the vendored-file drift block, or the"
+    echo "   extended.conf destructive-switch block."
     exit 1
 fi
