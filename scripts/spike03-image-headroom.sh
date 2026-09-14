@@ -168,9 +168,23 @@ esac
 #
 #   03-01's acceptance criterion checks the floor externally with `df -BG ... -ge 8`. This measure
 #   is strictly more conservative, so anything that satisfies this one also satisfies that one.
+# ⚠ THE `[ -z "$b" ]` GUARD BELOW WAS UNREACHABLE UNTIL 2026-09-14 (code review WR-08), AND THE
+#   `|| b=""` IS WHAT MAKES IT REACHABLE. `set -euo pipefail` is in force at :100, so with a bare
+#   assignment `pipefail` propagates a `df` failure to the assignment and `set -e` TERMINATES THE
+#   SCRIPT before the guard is ever reached. The two call sites that uphold "could not look is not
+#   healthy" for the OD-1 floor — the `could not read available GiB from df - UNKNOWN, not healthy`
+#   report and the `the floor is UNKNOWN, not met` failure — therefore could not fire, and a `df`
+#   failure exited with a bare non-zero status and no explanation at all. `|| b=""` exempts the
+#   assignment from `set -e` (a command whose status is tested is not an `-e` trigger), so the
+#   failure becomes an EMPTY reading the guard can see and name.
+#
+#   THE SPLIT DECLARATION IS LOAD-BEARING AND MUST STAY SPLIT. `local b="$(...)"` takes the status
+#   of `local`, NOT of the command substitution, which masks the failure in the other direction.
+#   `local b=""` on its own line, then the assignment, is the only shape that neither masks the
+#   failure nor aborts on it. Do not fold these two lines back together.
 avail_gb() {
-  local b
-  b="$(df -B1 --output=avail / 2>/dev/null | tail -1 | tr -dc '0-9')"
+  local b=""
+  b="$(df -B1 --output=avail / 2>/dev/null | tail -1 | tr -dc '0-9')" || b=""
   [ -z "$b" ] && return 0
   printf '%s' "$(( b / 1073741824 ))"
 }
