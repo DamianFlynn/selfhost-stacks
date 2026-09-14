@@ -145,6 +145,27 @@ guard is the positive evidence: it fires unless exactly two labels return, and i
 - `bash scripts/quick-health-check.sh`, no overrides: **exit 0**, identifying line:
   `✅ extended.conf switches disarmed (2): requireBeetsMatch=false, ConversionFormat in {FLAC,OPUS}`
 
+## One of This Plan's Own Acceptance Gates Is Defective
+
+Task 3's verify contains `git show --name-only --format= HEAD | grep -c 'extended.conf'` and
+requires 0. **It cannot pass on a correct commit.** `.` is a regex wildcard and this task's own
+directory is `…-assert-extended-conf-guards-for-audio-ba`, so the pattern matches `extended-conf`
+in the three `.planning` paths the same task instructs be committed. Driven at commit `c0b04c3`:
+the loose pattern returns **3**, every hit a directory name.
+
+The underlying property holds, confirmed two independent ways — `grep -c 'extended\.conf'` (escaped
+dot) returns **0**, and a basename scan over every committed path finds nothing named
+`extended.conf`. This is the **fourth instance** of the family measured fact 6 documents, and the
+same shape as the false-red the planner caught in the prohibited-pattern grep before shipping. It
+is recorded rather than silently swapped for the escaped form, because measured fact 6 says why: a
+plan that quietly repairs its own gates teaches nothing. The expectation was not adjusted to match
+behaviour.
+
+**Not a defect, but it will look like one:** a commit-wide grep for the five API-key field names
+returns 3, all in the planner's own PLAN.md (measured fact 5, which names them to warn against
+copying them, and the Task 2 verify line that greps for them). The count is 0 in the script, 0 in
+this summary and 0 in the artifact, and no field carries an assigned value anywhere.
+
 ## Known Stubs
 
 None.

@@ -162,3 +162,37 @@ The new block's identifying line, quoted verbatim:
 The new block's full section on the green path:
     extended.conf destructive switches:
       ✅ extended.conf switches disarmed (2): requireBeetsMatch=false, ConversionFormat in {FLAC,OPUS}
+
+================================================================
+A DEFECTIVE ACCEPTANCE GATE IN THIS PLAN'S OWN TASK 3 — RECORDED, NOT QUIETLY SUBSTITUTED
+================================================================
+
+Task 3's verify contains:
+
+    test "$(git -C . show --name-only --format= HEAD | grep -c 'extended.conf')" -eq 0
+
+IT CANNOT PASS, and it fails on a CORRECT commit. `.` is a regex wildcard, and this quick task's
+own directory is named `260914-a2y-assert-extended-conf-guards-for-audio-ba` — so `extended.conf`
+matches the literal text `extended-conf` in the THREE .planning paths that the same task explicitly
+instructs be committed. Driven at the real commit c0b04c3: the loose pattern returns 3, and all
+three matches are directory names, not files.
+
+The property it was written to test is genuinely satisfied, confirmed two independent ways:
+    git show --name-only --format= HEAD | grep -c 'extended\.conf'        -> 0   (escaped dot)
+    basename scan over every committed path for exactly "extended.conf"   -> no matches
+No file named extended.conf was committed, and none exists in this repo.
+
+THIS IS THE FOURTH INSTANCE OF THE DEFECT FAMILY THIS PLAN'S OWN MEASURED FACT 6 DOCUMENTS — a gate
+that cannot discriminate — and it is the same shape as the false-red the planner caught and fixed
+in the prohibited-pattern grep before shipping. It is recorded here rather than silently replaced
+with the escaped form, because measured fact 6 states the reason plainly: a plan that quietly
+repairs its own gates teaches nothing. The expectation was NOT adjusted to match the behaviour; the
+gate is simply wrong, the underlying property holds, and the corrected form is given above.
+
+SEPARATELY, AND NOT A DEFECT: `git show HEAD | grep -cE '<the five *ArrApiKey names>'` returns 3
+over the whole commit. All three hits are in the planner's own PLAN.md — measured fact 5, which
+names the fields precisely in order to warn against copying them, and the Task 2 verify line, which
+greps for them. The counts are 0 in scripts/quick-health-check.sh, 0 in the SUMMARY and 0 in this
+artifact, and NO field carries an assigned value anywhere in the commit. The gate that governs this
+task's own output — Task 2's artifact-scoped grep — returned 0 as required. Recorded so a future
+reader who runs a commit-wide grep is not misled into thinking a secret leaked.
