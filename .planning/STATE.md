@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-13T23:02:59.000Z"
-last_activity: 2026-09-13 -- 04-15 complete (D-12 window 2 ran on three real music jobs; Verdict (window 2) OPEN — all three UNPROVEN no-attributed-pre, no PRE-HOOK snapshot published, side effects clean for the third window running)
+last_updated: "2026-09-14T06:40:00.000Z"
+last_activity: 2026-09-14 -- quick task 260914-a2y complete (the two extended.conf switches that disarm audio.bash's rm -rf branches are now asserted on every routine health check; closes code-review CR-01/WR-01 from phase 04)
 progress:
   total_phases: 10
   completed_phases: 4
   total_plans: 60
-  completed_plans: 59
+  completed_plans: 60
   percent: 40
 ---
 
@@ -1294,12 +1294,16 @@ Recent decisions affecting current work:
 | 260906-e6l | Bound atlantis memory oversubscription — cap mpe LXC at 3 GB, add mem_limit to 12 containers | 2026-09-06 | complete ✓ |
 | 260906-eza | Reclaim ~2.8 GB: retire Mattermost, stop postiz/open-archiver/homarr, add TREK + TeslaMate | 2026-09-06 | complete ✓ |
 | 260906-ilx | Dispatcharr server DVR: 250 GB recording dataset and verified Jellyfin playback (`85f6d26`, `e5076cd`) | 2026-09-06 | complete ✓ |
+| 260914-a2y | Assert the two `extended.conf` switches that disarm `audio.bash`'s `rm -rf` branches — fifth fatal block, four controls driven; closes CR-01/WR-01 (`c0b04c3`, `220dcf4`) | 2026-09-14 | complete ✓ |
 
 ## Session Continuity
 
-Last session: 2026-09-13T21:55:24.803Z
-Stopped at: Completed 04-14 (D-12 instrument rebuilt, eight controls driven, contract amended)
-Resume file: .planning/phases/04-collapse-to-one-tagger/04-15-PLAN.md
+Last session: 2026-09-14T06:40:00.000Z
+Stopped at: Phase 04 fully executed (16/16 plans) and re-verified — `gaps_found`, 4/5. Criterion 3 /
+TAGR-04's behavioural half stays OPEN **by operator decision** (2026-09-14) after two observation
+windows and five real music jobs; the override block in 04-VERIFICATION.md was deliberately NOT
+applied. Quick task 260914-a2y then closed code-review CR-01/WR-01.
+Resume file: .planning/phases/04-collapse-to-one-tagger/04-VERIFICATION.md
 
 **NEXT: 02.1-10, the last plan of the phase (wave 9).** It is unblocked — it depends on 02.1-06 and
 02.1-09 and both are now complete. Two things it should carry in:
