@@ -39,8 +39,14 @@ ssh root@172.16.1.159 "docker ps -a --filter 'status=exited' --format '{{.Names}
 echo
 
 # Test Traefik endpoint
+# 302 (to auth.deercrest.info) is the HEALTHY answer — the dashboard sits behind
+# chain-authelia@file and curl sends no cookies. Corrected 2026-09-15 (quick task 260915-k9p):
+# this used to curl port 8080 on the loopback, which traefik.yaml has never published on the host
+# (docker port traefik = 80, 443, 3023, 3024 only), so it could only ever print a refusal. This
+# script is report-only by design — it asserts nothing and sets no exit code. Use
+# scripts/quick-health-check.sh for the assertion.
 echo "=== Testing Traefik Dashboard ==="
-ssh root@172.16.1.159 "curl -s -o /dev/null -w 'HTTP Status: %{http_code}\n' http://localhost:8080/dashboard/ || echo 'Failed to reach Traefik'"
+ssh root@172.16.1.159 "curl -s -o /dev/null -w 'HTTP Status: %{http_code}\n' --resolve traefik.deercrest.info:443:127.0.0.1 https://traefik.deercrest.info/dashboard/ || echo 'Failed to reach Traefik'"
 echo
 
 # Check network connectivity

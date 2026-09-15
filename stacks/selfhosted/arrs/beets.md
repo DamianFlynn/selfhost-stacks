@@ -1253,6 +1253,22 @@ still fail:
 > underlying dashboard `❌` itself still pre-dates this phase and is still unfixed; it is now
 > visible in the exit code instead of only in the transcript.
 
+> **Corrected 2026-09-15 (quick task 260915-k9p).** That `❌` was **never an estate fault**, so the
+> block above is wrong to call it unfixed — it was the *probe* that was broken. The probe asked for
+> `/dashboard/` over plain HTTP on port 8080 of LXC 100's loopback, and `traefik.yaml` has never
+> published that port on the host (`docker port traefik` returns exactly 80, 443, 3023 and 3024).
+> `curl` exit 7 was therefore the **correct answer to a question the configuration never made** —
+> a permanent red that WR-09 promoted into a permanent exit 1 on a healthy estate. The `:8080`
+> entrypoint is nonetheless load-bearing for `--metrics.prometheus.entrypoint=traefik`
+> container-internally and was left alone; **nothing about the estate was changed.** The probe now
+> asserts the real serving chain — `https://traefik.deercrest.info/dashboard/` on the `websecure`
+> entrypoint, pinned to loopback with `--resolve`, expecting the `chain-authelia@file` redirect —
+> and an unauthenticated `200` is now its own violation, which the old probe could never detect.
+> **A healthy routine run has no `❌` at all.** Measured 2026-09-15T13:50:24Z: **exit 0**, zero
+> `❌`, zero `⚠️`, 96 containers running, dashboard line
+> `✅ Protected (HTTP 302 → Authelia)`. Those are the current figures; the 2026-09-13 ones above
+> are a record of the old probe, not a target to reproduce.
+
 ### Recorded, not fixed
 
 Real, out of Phase 4's scope, and written down rather than silently carried:

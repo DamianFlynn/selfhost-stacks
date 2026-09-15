@@ -287,6 +287,20 @@
 #     (260914-a2y-SUMMARY.md:175-177). Not a hypothetical: a red sitting in the transcript of a
 #     green run, on every invocation, for as long as that condition lasts.
 #
+#     ONE CORRECTION TO THE ABOVE, DATED 2026-09-15 (quick task 260915-k9p). The 2026-09-14
+#     evidence stands as history and the reasoning above is unchanged — but the dashboard ❌ it
+#     cites was NOT an estate fault. That probe curled an UNPUBLISHED PORT — plain HTTP to port
+#     8080 on the loopback, which `traefik.yaml` has never published on the LXC host (the old
+#     target URL is paraphrased rather than written out, this file's convention, so a mechanical
+#     grep for it keeps returning zero) — so curl exit 7 was the correct
+#     answer to a question the configuration never made, and making it fatal turned a probe that
+#     could only ever be red into a permanent exit 1. The probe now asserts the real serving
+#     chain — `https://traefik.deercrest.info/dashboard/` on the websecure entrypoint, pinned to
+#     loopback, expecting the Authelia redirect — and the full argument is at the block itself.
+#     WR-09's fatal-ness is UNCHANGED by that correction: all three sites still set EXIT_CODE=1,
+#     and nothing here was downgraded back to report-only. What changed is only that the
+#     dashboard site now measures something the configuration promises.
+#
 #     EACH SITE NOW DISTINGUISHES THREE ANSWERS RATHER THAN TWO: running / not running / COULD NOT
 #     LOOK. And that is why the REMOTE `grep -q` had to go, which is the subtle half of this
 #     change. With `set -o pipefail` and `grep -q` as the LAST stage, a bound expiry does NOT
@@ -440,6 +454,27 @@ DRIFT_EXPECT_SURVIVOR_BEETS_CONFIG="${DRIFT_EXPECT_SURVIVOR_BEETS_CONFIG:-}"
 #                  mounted from the repo and it is not vendored — see (c) at the block itself.
 EXTCONF_HOST="${EXTCONF_HOST:-root@172.16.1.159}"
 EXTCONF_PATH="${EXTCONF_PATH:-/config/extended.conf}"
+
+# ENV OVERRIDES for the TRAEFIK DASHBOARD PROBE, added 2026-09-15 (quick task 260915-k9p). Same
+# contract as the four above, stated again rather than cross-referenced because it is the only
+# reason these are safe to exist: EITHER ONE BEING NON-DEFAULT FORCES EXIT_CODE=1, whatever the
+# probe then measures. They exist ONLY to drive that block's could-not-look and failed-measurement
+# branches, so neither can ever be used to launder a red run green. There is deliberately NO
+# success-producing override and NO sentinel that skips the block; do not add one.
+#
+# BOTH ARE READ BY THE DASHBOARD PROBE AND BY NO OTHER BLOCK IN THIS FILE. Every other remote call
+# here hard-codes root@172.16.1.159, deliberately: widening these two into a file-wide host
+# override would let one variable retarget the whole check, which is a much larger blast radius
+# than the two negative controls they were added for.
+#   DASH_HOST         the ssh target for the probe. Exists only to drive the 255 branch (point it
+#                     at an unroutable address and the transport fails before curl runs).
+#   DASH_RESOLVE_IP   the address `--resolve` pins traefik.deercrest.info:443 to. Exists only to
+#                     drive the curl-failure branch (an address with nothing listening) and the
+#                     124 branch (an unroutable address, which hangs until the remote bound kills
+#                     it). It is NOT a way to point the probe at a different Traefik and call it
+#                     healthy — any non-default value is fatal on its own.
+DASH_HOST="${DASH_HOST:-root@172.16.1.159}"
+DASH_RESOLVE_IP="${DASH_RESOLVE_IP:-127.0.0.1}"
 
 # WR-01: THE TWO PROBES BELOW USED TO BE UNBOUNDED, ON A JUSTIFICATION THAT WAS FALSE.
 # Corrected 2026-09-03 by plan 02.1-15. The withdrawn claim was that the only way these two can
@@ -747,40 +782,131 @@ else
     echo "✅ No unhealthy containers"
 fi
 
-# Try to curl Traefik dashboard.
+# The Traefik dashboard probe.
 #
-# WR-09: THE LOCAL `| grep -q "200"` IS GONE, for the reason stated at the container probes and
-# at the container-count sites — a local pipe in front of the status makes `$?` the GREP's, so a
-# killed or failed remote call was indistinguishable from a non-200 answer, and both printed the
-# same report-only ❌. The status is now captured with no pipe and the whitespace strip happens on
-# its own line afterwards.
+# ⚠️  THIS PROBE ASKED THE WRONG QUESTION FROM THE DAY IT WAS WRITTEN UNTIL 2026-09-15 (quick task
+# 260915-k9p). It curled `/dashboard/` over plain HTTP on port 8080 of LXC 100's loopback — the
+# old target URL is paraphrased rather than written out, per this file's convention for a
+# withdrawn claim, so a mechanical grep for it keeps returning zero. `traefik.yaml` publishes
+# exactly FOUR ports to the host — 80, 443, 3023, 3024 — and 8080 is not among them, confirmed
+# live by `docker port traefik`. So `:8080` HAS NEVER EXISTED ON THE LXC HOST, curl exit 7
+# (connection refused) was the CORRECT answer, and this probe was a PERMANENT RED asserting
+# something the configuration never promised. WR-09 then made that branch fatal, which turned it
+# into a permanent exit 1 on a healthy estate — the single red that kept this script, the estate's
+# only health-check entry point, at 1 while every other block was green.
 #
-# THE ONE DISTINCTION WORTH READING: ssh exit 255 means the TRANSPORT failed and curl never ran,
-# which is "could not look". Any OTHER non-zero is CURL's own exit — it ran, and could not reach
-# the dashboard — which is a real measurement of inaccessibility and is reported as such. Those
-# two must not share a verdict even though both are now fatal.
+# THE FIX WAS THE PROBE, NOT THE ESTATE, AND NOTHING ABOUT THE ESTATE WAS TOUCHED. In particular
+# 8080 WAS NOT PUBLISHED and must not be: `traefik.yaml:48` declares
+# `--entrypoints.traefik.address=:8080` and `:57` binds `--metrics.prometheus.entrypoint=traefik`
+# to it, so that entrypoint is load-bearing for the monitoring stack CONTAINER-INTERNALLY. It is
+# correct that it is unreachable from the host. Do not "fix" this by adding a port mapping.
+#
+# WHAT IT ASSERTS NOW. The dashboard is really served at `https://traefik.deercrest.info` on the
+# `websecure` entrypoint by the `traefik-rtr` router behind `chain-authelia@file`
+# (`traefik.yaml:118-126`). One GET over that route therefore proves FOUR things at once — the
+# websecure entrypoint is listening, the Host-rule router matched, the certificate validated, and
+# the Authelia middleware is in the path — which is strictly more than a loopback hit on an
+# unpublished port could ever have proven.
+#
+# WHAT IT DELIBERATELY DOES NOT ASSERT, so nobody reads the green tick as more than it is:
+#
+#   * PUBLIC REACHABILITY. `--resolve traefik.deercrest.info:443:$DASH_RESOLVE_IP` pins the name
+#     to the loopback, so the request goes to THIS estate's Traefik and nothing else. That is the
+#     point: the probe cannot pass because Cloudflare is serving something else, and cannot fail
+#     because public DNS or hairpin NAT broke. Plain DNS also answers 302 here, but it egresses
+#     through Cloudflare and hairpins back, so a failure would be ambiguous. A green tick says
+#     NOTHING about whether the dashboard is reachable from the internet.
+#   * ANY AUTHENTICATED CONTENT. `curl` sends no cookies, so an authenticated 200 is unobtainable
+#     from a script. Demanding one would have been a NEW permanent red — the same defect class
+#     being fixed here. The pass condition is a PROTECTED answer, which is what the measured
+#     healthy response is: 302 to `auth.deercrest.info` (measured 2026-09-15, `ssl_verify_result`
+#     0 against the public CA).
+#
+# AND 200 IS A VIOLATION, NOT SUCCESS. An unauthenticated 200 from this route would mean
+# `chain-authelia@file` is NOT in the path and the Traefik dashboard is being served to anyone who
+# asks. It gets its own ❌ and its own wording. This is deliberate and it is the one thing the old
+# 8080 probe could never have detected — it was checking a port that answers nothing.
+#
+# NO `--max-time` ON CURL, DELIBERATELY. The Linux-side `timeout $REMOTE_TIMEOUT` is the bound
+# (house rule, point 3 of the four-point note above). `--max-time` would convert a hang into curl
+# exit 28 — a REAL MEASUREMENT — and so erase the 124 "could not look" distinction below.
+#
+# THE WR-09 PROPERTIES ARE CARRIED FORWARD UNCHANGED, and they are the reason this block is shaped
+# the way it is rather than more compactly:
+#
+#   * THERE IS NO LOCAL PIPE IN FRONT OF THE CAPTURED STATUS. `VAR=$(ssh ... | grep -q 200)` makes
+#     `$?` the GREP's, and `${PIPESTATUS[0]}` does not rescue an assignment — see the
+#     container-count note above. So `DASH_RC=$?` sits on the line IMMEDIATELY below the capture,
+#     and the split into status + redirect target happens on the lines AFTER that. Do not fold
+#     either back into the assignment.
+#   * ssh exit 255 means the TRANSPORT failed and curl never ran, and 124 means the remote bound
+#     killed it. BOTH ARE "COULD NOT LOOK" AND NEITHER IS A MEASUREMENT. Any OTHER non-zero is
+#     CURL's own exit — it ran and could not complete the request — which IS a real measurement of
+#     inaccessibility. All three are fatal; they must never share a verdict, because "we could not
+#     look" being recorded as "the dashboard route is broken" is the same misinformation as it
+#     being recorded as "nothing is wrong".
+#   * `%{http_code}` and `%{redirect_url}` come back as ONE space-separated field from ONE request.
+#     Two curls could straddle a state change and report a status from before it with a redirect
+#     target from after.
+#
+# The printed label `Traefik dashboard: ` is UNCHANGED ON PURPOSE — the failure tail at the bottom
+# of this file and several prior SUMMARY records name it.
+if [ "$DASH_HOST" != "root@172.16.1.159" ]; then
+    echo "⚠️  DASH_HOST override in effect — this run cannot report the dashboard green"
+    EXIT_CODE=1
+fi
+if [ "$DASH_RESOLVE_IP" != "127.0.0.1" ]; then
+    echo "⚠️  DASH_RESOLVE_IP override in effect — this run cannot report the dashboard green"
+    EXIT_CODE=1
+fi
 echo -n "Traefik dashboard: "
-DASH_OUT=$(ssh -n $SSH_OPTS root@172.16.1.159 "timeout $REMOTE_TIMEOUT curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/dashboard/")
+DASH_OUT=$(ssh -n $SSH_OPTS "$DASH_HOST" "timeout $REMOTE_TIMEOUT curl -s -o /dev/null -w '%{http_code} %{redirect_url}' --resolve traefik.deercrest.info:443:$DASH_RESOLVE_IP https://traefik.deercrest.info/dashboard/")
 DASH_RC=$?   # ssh propagates the remote status — NO local pipe above, see the note above
-DASH_OUT=$(printf '%s' "$DASH_OUT" | tr -d '[:space:]')
+DASH_STATUS=$(printf '%s' "$DASH_OUT" | awk '{print $1}')
+DASH_REDIR=$(printf '%s' "$DASH_OUT" | awk '{print $2}')
+DASH_TO_AUTHELIA=0
+case "$DASH_REDIR" in
+    https://auth.deercrest.info/*) DASH_TO_AUTHELIA=1 ;;
+esac
 if [ "$DASH_RC" -eq 124 ]; then
     echo "⚠️  UNKNOWN — the dashboard probe exceeded its ${REMOTE_TIMEOUT}s bound and was killed."
-    echo "  Nothing was measured. This is NOT 'the dashboard is not accessible'."
+    echo "  Nothing was measured. This is NOT 'the dashboard route is broken'."
     EXIT_CODE=1
 elif [ "$DASH_RC" -eq 255 ]; then
-    echo "⚠️  UNKNOWN — the ssh to 172.16.1.159 failed (exit 255), so curl never ran."
-    echo "  Nothing was measured. This is NOT 'the dashboard is not accessible'."
+    echo "⚠️  UNKNOWN — the ssh to $DASH_HOST failed (exit 255), so curl never ran."
+    echo "  Nothing was measured. This is NOT 'the dashboard route is broken'."
     EXIT_CODE=1
 elif [ "$DASH_RC" -ne 0 ]; then
-    echo "❌ Not accessible (curl exit $DASH_RC — it ran and could not reach the dashboard)"
+    echo "❌ Not reachable (curl exit $DASH_RC — it ran and could not complete the request)"
+    echo "  This IS a measurement, unlike the two branches above. Exit 7 means nothing is"
+    echo "  listening on 443 at $DASH_RESOLVE_IP; exit 60 means the certificate failed to validate."
     EXIT_CODE=1
-elif [ "$DASH_OUT" = "200" ]; then
-    echo "✅ Accessible (HTTP 200)"
-elif echo "$DASH_OUT" | grep -qE '^[0-9]+$'; then
-    echo "❌ Not accessible (HTTP $DASH_OUT)"
+elif [ "$DASH_STATUS" = "302" ] && [ "$DASH_TO_AUTHELIA" -eq 1 ]; then
+    echo "✅ Protected (HTTP 302 → Authelia)"
+elif [ "$DASH_STATUS" = "302" ]; then
+    echo "❌ The router answered 302 but NOT to Authelia — redirect target '$DASH_REDIR'"
+    echo "  The websecure entrypoint, router and TLS are fine; chain-authelia@file is not what"
+    echo "  answered. Check the traefik-rtr middleware label."
+    EXIT_CODE=1
+elif [ "$DASH_STATUS" = "401" ]; then
+    echo "✅ Protected (HTTP 401 from the Authelia chain)"
+    echo "  The measured-normal answer to a curl request here is 302; 401 is accepted because"
+    echo "  Authelia answers 401 rather than 302 for requests it reads as non-browser. Either one"
+    echo "  proves entrypoint, router, TLS and middleware, so making 401 red would buy a future"
+    echo "  false red for no gain."
+elif [ "$DASH_STATUS" = "200" ]; then
+    echo "❌ SUSPICIOUS — the dashboard answered 200 UNAUTHENTICATED. The chain-authelia@file"
+    echo "  middleware is not in the path."
+    echo "  THIS IS DELIBERATELY A VIOLATION AND NOT SUCCESS. curl sends no cookies, so a 200 here"
+    echo "  cannot be an authenticated answer — it means the Traefik dashboard is being served to"
+    echo "  anyone who asks. Check the traefik-rtr middlewares label in stacks/selfhosted/traefik."
+    EXIT_CODE=1
+elif echo "$DASH_STATUS" | grep -qE '^[0-9]+$'; then
+    echo "❌ Unexpected answer from the dashboard route (HTTP $DASH_STATUS)"
     EXIT_CODE=1
 else
     echo "⚠️  UNKNOWN — the probe exited 0 but returned '$DASH_OUT', which is not an HTTP status."
+    echo "  Nothing was measured. This is NOT 'the dashboard route is broken'."
     EXIT_CODE=1
 fi
 
