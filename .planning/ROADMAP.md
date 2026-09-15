@@ -560,10 +560,15 @@ than it started, so attempt five does not inherit attempt four's wreckage.
      > printed on its **own line**, beside the counter and never folded into it. This is the WRIT-01
      > shape: a bare "0" cannot read as a pass, and Jellyfin's presence is not a gap. The
      > criterion's substance is unchanged.
-**Plans**: 16 plans in 11 waves — 13 executed, then 3 gap-closure plans added 2026-09-13 to close
-criterion 3 / TAGR-04's behavioural half, which `04-VERIFICATION.md` recorded OPEN at 4/5 criteria.
+**Plans**: 17 plans in 12 waves — 13 executed, then 3 gap-closure plans added 2026-09-13 and a fourth
+added 2026-09-15, all to close criterion 3 / TAGR-04's behavioural half, which `04-VERIFICATION.md`
+recorded OPEN at 4/5 criteria across **two** observation windows and **five** real music jobs.
 Criteria 1, 2, 4 and 5 are verified and are **not** re-planned; the estate is not re-planned either.
-The gap is in the measuring instrument (`04-D12-EVIDENCE.md` § 6, lines 186-207).
+The gap is in the measuring instrument (`04-D12-EVIDENCE.md` § 6, lines 186-207; § 7's closing
+section records both previously-tried capture points as measured exhausted). Plan 04-17 is the third
+capture design — SABnzbd's own `pp` notification hook, category-filtered to music, with
+`direct_unpack` untouched — and it carries a pre-committed exit: on a non-PASS its final task
+prepares, explicitly unsigned, the criterion-3 override that `04-VERIFICATION.md` already drafts.
 Plans:
 **Wave 1**
 
@@ -613,6 +618,10 @@ Plans:
 **Wave 11** *(blocked on Wave 10 completion)*
 
 - [ ] 04-16-PLAN.md — Record the window-2 verdict in beets.md, heading selected by the verdict line: closure only on PASS
+
+**Wave 12** *(gap closure, added 2026-09-15 — criterion 3 / TAGR-04 behavioural half, third capture design)*
+
+- [ ] 04-17-PLAN.md — Observation window 3: capture the PRE-HOOK bytes from SABnzbd's own `pp` notification hook (`postproc.py:453`, before repair, unpack, the move and `audio.bash`), category-filtered to music with `direct_unpack` untouched; eight synthetic controls incl. a required FAIL before any real job; § 8 verdict PASS, FAIL or OPEN (human checkpoint; OPEN if no job arrives), then the estate restored — and on a non-PASS the criterion-3 override prepared UNSIGNED for the operator (blocking decision)
 
 **Research**: done 2026-09-11 (`04-RESEARCH.md`). *Originally "not needed — retirement is deletion
 plus documented config changes"; the operator chose to measure the live estate anyway, and it found
