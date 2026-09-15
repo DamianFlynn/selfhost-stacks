@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-15T14:15:00.000Z"
-last_activity: 2026-09-15 -- quick task 260915-k9p complete (the Traefik dashboard probe now measures the real serving chain instead of an unpublished port, so quick-health-check.sh exits 0 on a healthy estate again -- the fence prerequisite for phase 04's gap-closure plan 04-17)
+last_updated: "2026-09-15T17:40:00.000Z"
+last_activity: 2026-09-15 -- plan 04-17 COMPLETE (window-3 contract amended and committed alone BEFORE any stamp exists; the nscript instrument built in host scratch and all 14 synthetic controls returned their required outcome, 1 FAIL / 9 UNPROVEN / 7 distinct tokens / 2 BYTES-OK). NOTHING ARMED -- nscript_enable still 0, direct_unpack still 1, hook absent, config/scripts still 9 entries. Next: 04-18, which needs the operator for one real music job
 progress:
   total_phases: 10
   completed_phases: 4
-  total_plans: 60
-  completed_plans: 60
+  total_plans: 63
+  completed_plans: 61
   percent: 40
 ---
 
@@ -29,7 +29,7 @@ pipeline that someone owns.
 ## Current Position
 
 Phase: 04 (collapse-to-one-tagger) — EXECUTING
-Plan: 16 of 16 (all executed; phase NOT complete — criterion 3 OPEN, verification pending)
+Plan: 17 of 19 (04-17 complete 2026-09-15; 04-18 and 04-19 planned, not started. Phase NOT complete — criterion 3 still OPEN. Window 3 has not run: 04-18 arms the instrument and needs the operator for one real music job, and 04-19 prepares the unsigned override if window 3 also returns UNPROVEN)
 Status: All 16 plans executed (wave 11 / plan 04-16 landed). Window 2 ran
 2026-09-13T22:04:18Z→22:27:08Z over **three** real music jobs and recorded
 `Verdict (window 2): OPEN`: all three are UNPROVEN `no-attributed-pre` with a zero-file
