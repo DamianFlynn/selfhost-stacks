@@ -131,6 +131,198 @@ Criterion 3 **PASSES** only on one real `music` SABnzbd job that completes **aft
    > got `UNPROVEN reason=baseline-stale` rather than FAIL; and **SC-5** proved the watcher stays
    > alive on an empty window rather than self-exiting with nothing to watch.
 
+   > **Amended 2026-09-15 by plan 04-17 (gap closure, criterion 3 / TAGR-04).**
+   >
+   > **1. What is being replaced, and why — on measurements already in this file.** Sections 6 and 7
+   > are both recorded exhausted, across five real music jobs in two windows. Window 1 polled the
+   > destination tree and was structurally too late; window 2 polled the incomplete tree and
+   > published nothing on any of three jobs. Both designs sample a folder SABnzbd is actively
+   > draining, and this estate runs with `direct_unpack` set to 1, so the audio either never became
+   > visible to a one-second poll or was still being written when the move happened. Nothing above
+   > is edited or deleted; what follows replaces only the **capture mechanism** and the status
+   > ladder that reads it.
+   >
+   > **2. Where the PRE-HOOK snapshot now comes from.** SABnzbd's own post-processing notification.
+   > `postproc.py:453` sends it as the `pp` event; `notifier.py:203-205` dispatches it when
+   > `nscript_enable` is set and the job's category passes `nscript_cats`; and `notifier.py:512-519`
+   > invokes the script as `<script> <notification_type> <title> <msg>`, so the event name is the
+   > first argument and `nzo.final_name` is the third. The ordering, re-read live at SABnzbd 5.1.0
+   > on 2026-09-15, is the whole basis of the design: **:453** fires before the par-repair stage
+   > (`postproc.py:456` guards it; the `parring()` call itself is at :457), before
+   > `Status.EXTRACTING` and `unpacker()` at **:496-498**, before `Status.MOVING` and the move loop
+   > at **:513**, and before `external_processing()` — which is what runs `audio.bash` — at
+   > **:611**. There is no polling, no first-sighting race, and no comparison against `Audio.txt`'s
+   > one-second resolution.
+   >
+   > **3. Where the COMPLETION snapshot now comes from.** The same script at the `complete` event,
+   > sent at `postproc.py:713`, which is **after** `external_processing()` at :611. Both capture
+   > points are SABnzbd's own state transitions rather than an observer's guess about them.
+   >
+   > **4. THE HONEST LIMITATION, stated in-band and unsoftened.** `notifier.py:205` dispatches the
+   > hook as a `Thread(target=send_nscript, ...).start()` — a fire-and-forget thread. **The hook
+   > therefore cannot block the move.** What this design buys is a **structural head start**: the
+   > whole repair, sanitize, unpack-directory-prep and extraction stage runs between the trigger and
+   > the move. It is **not a mutex**, and nothing stronger than "structural head start" is claimed
+   > here, in any later section, or in any SUMMARY. What the head start does not remove: it is not a
+   > lock, so a hash pass can still in principle straddle the move. That is why the publication
+   > protocol below re-measures rather than assumes.
+   >
+   > **5. The publication protocol.** A PRE-HOOK snapshot is published **only if** the job folder's
+   > full recursive inventory (`relpath|size|inode`) is identical immediately before and immediately
+   > after the hash pass, **and** the folder still exists at its `/downloads/incomplete/` path when
+   > hashing finishes. Otherwise nothing is published and the refusal is recorded.
+   >
+   > **6. ⚠ THE SECOND LIMITATION, and the reason the ladder is REDESIGNED rather than transplanted.**
+   > Under this design **snapshot completeness is not establishable.** Plan 04-14's `pre_complete`
+   > property was measured by comparing `pre.inv` against `last.inv` — the last inventory observed
+   > *before the folder vanished*, which is a **later** observation and one only a poller can make. A
+   > hook fires once and never re-observes the folder. Its only completeness test is "did the
+   > inventory hold across my own hash pass", which is also its publication condition, so a published
+   > snapshot always implies completeness. The property is **pinned, not measured**. Three
+   > consequences follow, and they are why the clause table below differs from 04-14's:
+   >
+   > - every clause conditioned on `pre_complete` being false is **unreachable**, and is retired
+   >   rather than merely left untested;
+   > - the clause that made a completion-only file a FAIL when completeness held would carry a
+   >   **permanently open guard**. Because `pp` fires before the par-repair stage and before
+   >   `unpacker()`, a partially-extracted album under `direct_unpack` can publish a momentarily
+   >   stable inventory and have its remaining tracks appear only at COMPLETION. This file already
+   >   states that bytes cannot distinguish that from a hook rewrite, and section 7 measured the
+   >   shape on a real job whose inventory went 62 entries to 19 across a single hash pass.
+   >   Reporting it as FAIL would be a **false accusation against a clean estate**, which is worse
+   >   than OPEN, because a later plan would escalate it as a genuine finding;
+   > - therefore **completion-only audio is always UNPROVEN under window 3**, carrying its own reason
+   >   token rather than being folded into a FAIL.
+   >
+   > **7. ⚠ THE THIRD LIMITATION: SABnzbd itself rewrites files between the two capture points, so
+   > the FAIL clause must be GATED.** The measurement, re-read live: the par stage at
+   > `postproc.py:456` is par2 **repair**, and repair rewrites damaged files **in place at the same
+   > relative path**; and the unpack stage runs `unpacker()`, where `newsunpack.py:553-577` shows
+   > `while nzo.direct_unpacker.is_alive(): ... join(timeout=2) ...`, aborting only after two minutes
+   > of no change — **SABnzbd waits there for a direct unpacker that is still writing.** Both run
+   > **after** the `pp` notification. So with `direct_unpack` set to 1, a file that was mid-write or
+   > partially extracted when the hook fired, and was then completed by `unpacker()` or corrected by
+   > repair, presents as **the same relative path with a different sha256**. An ungated FAIL clause
+   > would report that as a tagger rewriting bytes **against a completely clean estate, on the
+   > NORMAL shape** — not on an edge case. Section 7 measured this class. The publication protocol
+   > cannot exclude it: a one-to-two-second lull between rar volumes satisfies both of its
+   > conditions, and the rewrite happens *after* publication, which a fire-once hook cannot observe
+   > by construction.
+   >
+   > **The gate is a structural precondition the hook can read with verbs it already has.** At the
+   > `pp` event the hook records **`archives_present`** as yes or no — whether the job folder still
+   > holds any `*.rar`, `*.r[0-9][0-9]`, `*.part*.rar`, `*.7z`, `*.zip` or `*.par2`. It is sound in
+   > both directions. With no archive and no par2 set present, the repair stage has nothing to repair
+   > (it logs that it found no par2 sets) and `unpacker()` has nothing to extract, so neither stage
+   > can rewrite an audio file. And while a direct unpacker is still alive its rar volumes are still
+   > in the folder, because SABnzbd removes them only after the set succeeds. The narrow residual is
+   > named rather than hidden: a direct unpacker that has consumed its last volume but has not
+   > flushed its final file. That case is covered by the publication condition of item 5, which
+   > requires the folder inventory to be identical immediately before and immediately after the hash
+   > pass.
+   >
+   > **8. The redesigned ladder.** Acquisition UNPROVENs come before the FAIL clause; interpretation
+   > UNPROVENs come after it. This **refines** 04-14's "every UNPROVEN clause is evaluated before
+   > every FAIL clause" rather than abandoning it: an *acquisition* failure leaves nothing to
+   > compare, so it must pre-empt; but a same-relative-path file whose bytes changed **with no
+   > archive left in the folder** is unambiguous, and a late extraction elsewhere in the same folder
+   > does not make it ambiguous, so it must not be masked.
+   >
+   > | # | Clause | Status |
+   > |---|---|---|
+   > | 1 | no `pp` line in `trigger.log` for the job | `UNPROVEN reason=no-pp-trigger` |
+   > | 2 | no `complete` line, or no COMPLETION manifest was published | `UNPROVEN reason=no-complete-trigger` |
+   > | 3 | `pre.sha256` absent, including refused | `UNPROVEN reason=no-attributed-pre` |
+   > | 4 | `files_in_both + moved == 0` | `UNPROVEN reason=empty-intersection` |
+   > | **5a** | a same-relative-path sha256 difference **and** archives still present | **`UNPROVEN reason=unpack-pending`** |
+   > | **5b** | a same-relative-path sha256 difference **and** no archive present | **`FAIL reason=bytes-changed`** — the ONLY FAIL path |
+   > | 6 | after MOVED matching, `pre_only > 0` **and** `completion_only > 0` | `UNPROVEN reason=unmatched-pair` |
+   > | 7 | after MOVED matching, `completion_only > 0` | `UNPROVEN reason=late-extraction` |
+   > | 8 | otherwise | `BYTES-OK` |
+   >
+   > **`unpack-pending` belongs to the ACQUISITION group for pre-emption purposes** — it is a fact
+   > about whether the baseline could be final, not an interpretation of a difference — but its
+   > predicate deliberately **includes** the byte difference, and that is load-bearing. An
+   > unconditional "archives present, therefore UNPROVEN" clause would divert **every** job with a
+   > lingering rar to UNPROVEN and make PASS unreachable on the normal shape under `direct_unpack`,
+   > which is the same defect class as making PASS unreachable on flattened content. A job where
+   > archives were present and **nothing changed** has a real byte proof, and keeps it.
+   >
+   > **9. Why this does not weaken the pass, stated so it is checkable rather than asserted.** The
+   > set of inputs reaching `BYTES-OK` is **identical** before and after this gate: clause 8 is
+   > untouched, and clause 5a only re-partitions inputs the previous single clause 5 would have
+   > called FAIL. So the invariant — **`BYTES-OK` implies every audio file in the COMPLETION snapshot
+   > is byte-equal to some file in the PRE-HOOK snapshot** — survives verbatim, while the FAIL set
+   > strictly shrinks. That is the conservative direction for a false-accusation risk. The cost is
+   > stated rather than buried: a real tagger rewrite on a job that still had an archive in its
+   > folder is recorded `unpack-pending` UNPROVEN rather than FAIL. It is never a silent pass.
+   >
+   > **10. Why one FAIL clause is sufficient for criterion 3 — and the two OTHER actors that can
+   > write the same bytes.** The threat criterion 3 tests is a tagger rewriting tags **in place** in
+   > files that already exist, and that signature is exactly clause 5b. A tagger does not create
+   > audio files that were not there; `audio.bash`'s `clean()` deletes non-audio files, deletes MP3s
+   > where FLAC is present, and flattens subdirectories — it does not create audio either. **But two
+   > non-tagger actors write the same shape and must be named.** (i) **SABnzbd's own repair and
+   > unpack**, handled by the `archives_present` gate in item 7. (ii) **Lidarr**, which polls the
+   > completed folder and can write tags on import: if it lands before the `complete`-side hash it
+   > presents identically, and would be **misattributed to the tagger**. The window-3 executor
+   > therefore records whether Lidarr imported during the window, and a FAIL is not written as "a
+   > tagger rewrote bytes" without that reading.
+   >
+   > **11. The named residual limitation of that choice**, recorded rather than left to be
+   > discovered: a file that was **both** rewritten **and** flattened by `clean()` matches no
+   > PRE-HOOK sha256 and so reaches clause 6, not clause 5 — it is reported `unmatched-pair`
+   > **UNPROVEN, never a silent pass**. Clause 6 exists for precisely this shape, which is why it
+   > sits above clause 7. Plan 04-17's self-test drives it.
+   >
+   > **12. MOVED, and the non-vacuity floor.** Per this item's 04-01 clarification, `clean()`
+   > flattens subdirectories, so a COMPLETION-only path whose sha256 equals a PRE-only path's sha256
+   > is a **MOVED** and counts as byte-identical. **The floor therefore counts MOVED pairs:
+   > `files_in_both + moved >= 1`.** The reason: on a release whose audio sits in a `Disc 1/` or
+   > similar subdirectory, *every* file is a MOVED and `files_in_both` is 0, so a floor on
+   > `files_in_both` alone would resolve a perfectly good byte proof to `empty-intersection` and make
+   > PASS unreachable on multi-disc content — which is much of this collection.
+   >
+   > **13. The operative definition of "audio file", recorded in-band as a named scope limit.** The
+   > instrument's extension set is `.flac .mp3 .m4a .ogg .opus .wav`, case-insensitive. This is the
+   > set the only FAIL clause and the non-vacuity floor are computed over, so the limit is stated
+   > plainly: a rewrite confined to a container outside that set — `.aiff`, `.ape`, `.wv`, `.dsf` —
+   > is invisible to clause 5b, and if covered files supply the floor while an uncovered file is
+   > rewritten, the job could reach BYTES-OK. It is adequate here because the estate's measured
+   > content is FLAC, MP3 and WAV (the DJ collection's 268 WAV files included), the tagger under test
+   > is beets, whose sabnzbd config writes those same formats, and no job in windows 1 or 2 carried
+   > any other extension. Extending the set is a one-line change if that ever stops holding.
+   >
+   > **14. Path comparison is RELATIVE.** The hook runs in the container and records container paths
+   > under `/downloads`; the judge runs on the host, where the same tree is under
+   > `/mnt/tank/downloads`. Comparison is therefore on paths **relative to the job folder** root. An
+   > absolute comparison would silently return `files_in_both=0` — indistinguishable from window 2's
+   > real result, and the reason this is written down rather than left to the implementation.
+   >
+   > **15. Pre-declared artefacts of the instrument itself**, so a later reader meets them rather
+   > than discovers them, in the same spirit as section 2's residual-line table:
+   >
+   > - `d12c-nscript.sh` lives in the sabnzbd `config/scripts` directory for the duration of the
+   >   window, because `make_script_path` resolves notification scripts only inside `script_dir`,
+   >   which is `scripts`. It is created **before the stamp**, so it appears in no
+   >   `find … -newer <stamp>` output — but it **does** add one entry to section 1 item 2's
+   >   positive-control listing of that directory, whose count moves from 9 to **10**. It is the
+   >   instrument, not a beets artefact, and it is removed at window close.
+   > - `/config/d12c/` (in the sabnzbd config tree) is the hook's output directory, written during
+   >   the window and outside section 1 item 2's `config/scripts` scope. **No file under it may be
+   >   named `*.bak`, `library.*` or `beets*`**, so it can trip neither section 1 item 3's
+   >   `-name '*.bak'` find nor the standing census. It is removed at window close.
+   > - The four `nscript_*` keys in `sabnzbd.ini` are changed for the window and restored from a
+   >   fenced pre-edit copy as the **terminal act** of the arming plan.
+   >
+   > **16. What the hook is handed, and what it may never do with it.** `create_env()` supplies the
+   > SABnzbd API key and the api url to every notification script, with no job fields. The key was
+   > measured at **32 characters**, so no 64-character-hex filter and no "run of 40 or more
+   > characters" heuristic can see it downstream; the screen over anything this instrument produces
+   > must therefore be **value-based**. The hook contains no verb that can dump its own environment,
+   > and it always exits 0, because `notifier.py:526-528` turns a non-zero exit into an ERROR in
+   > `sabnzbd.log` that a later reader would meet as an estate regression.
+
 The job folder is found by the SAB `history.storage` column. For all 119 `music` rows it is the final
 path under `/downloads/complete/nzb/music/`, while `path` is the `/downloads/incomplete/…` working
 directory (measured 2026-09-11, counts only). The container's `/downloads` is the host's
@@ -269,6 +461,52 @@ the two naively. Convert one side, and state which.
 > **A verdict must be supported, not asserted beside evidence.** Section 7 also carries a
 > machine-readable observation block whose lines begin at column 1 with the token `OBS window2`, and
 > the verdict is required to follow from those lines rather than to sit next to them.
+
+> **Amended 2026-09-15 by plan 04-17 (gap closure, criterion 3 / TAGR-04).**
+>
+> **1. Every rule above stands, restated in substance so none is lost by implication:** if no music
+> job arrives in the window, criterion 3 is recorded **OPEN**, not passed; if a job arrives but no
+> valid PRE-HOOK snapshot exists for it, the untagged condition is **UNPROVEN** and criterion 3 is
+> recorded **OPEN**, not passed; if section 3's prerequisite fails, criterion 3 is **OPEN**; and a
+> FAIL on any item in section 1 is a **FAIL**, not OPEN. Multi-job aggregation is unchanged:
+> **FAIL if any job is FAIL; otherwise OPEN if any job is UNPROVEN; otherwise PASS if at least one
+> job is BYTES-OK.** The per-job residual-line expectation stays `+J` / `+J` / `+0`. The timezone
+> trap above is unchanged.
+>
+> **2. "No valid PRE-HOOK snapshot"** now means any of the seven UNPROVEN reason tokens in the
+> section 1 item 4 window-3 clause table: `no-pp-trigger`, `no-complete-trigger`,
+> `no-attributed-pre`, `empty-intersection`, `unpack-pending`, `unmatched-pair` and
+> `late-extraction`. Every one of them yields UNPROVEN, hence OPEN, never FAIL.
+>
+> **3. The window-3 verdict line has one exact form.** It begins at column 1 and matches the regular
+> expression below. The em-dash delimiter is required on **all three** outcomes, PASS included,
+> because without it a line reading `PASSING` would parse as PASS under a prefix match. The form
+> deliberately cannot collide with section 6's or section 7's, so the file-wide invariant still
+> counts exactly one of each:
+>
+>     ^Verdict \(window 3\): (PASS|OPEN|FAIL) — 
+>
+> **4. ⚠ This amendment deliberately creates no column-1 decoy.** The illustrative rendering above
+> is indented inside this blockquote, so a line-anchored count of the window-3 verdict form returns
+> **0** until the window-3 executor writes the real one. The same trap already exists at the
+> window-2 form, where an unanchored count returns 2 — every grep over this file is line-anchored
+> for that reason.
+>
+> **5. Section 8 carries a machine-readable `OBS window3` block** whose lines begin at column 1, and
+> the window-3 verdict must **follow from** those lines rather than sit beside them.
+>
+> **6. `direct_unpack` is an asserted window condition, not a variable.** It must read `1` in
+> `sabnzbd.ini` at window open **and** at window close. A window in which it changed is **void**,
+> not passed — the whole `archives_present` gate of section 1 item 4 is reasoned against
+> `direct_unpack` being 1, so a window that silently changed it has been judged under the wrong
+> contract.
+>
+> **7. A bounded armed lifetime is part of this contract.** `quick-health-check.sh` carries no
+> `nscript_*` guard, so an armed estate is undetectable by the standing checks, and a later settings
+> save in the SABnzbd UI would persist it. Window 3 therefore declares a **maximum armed lifetime**,
+> after which the window closes on `jobs=0` — recorded **OPEN** — and the estate is restored whether
+> or not a human has answered. An unbounded arming is not a longer window; it is an undetected
+> estate change.
 
 ---
 
