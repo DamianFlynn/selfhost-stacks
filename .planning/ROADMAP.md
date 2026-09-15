@@ -632,9 +632,13 @@ Plans:
 
 - [ ] 04-18-PLAN.md — Observation window 3 end to end: write and drive the named idempotent restore FIRST, arm behind a fail-closed gate with the wiring proven in situ by SABnzbd's own startup invocation, wait (human checkpoint, **self-closing at a 90-minute deadline via a detached watchdog**), judge the bytes, write § 8 with its OBS block and one line-anchored verdict, commit — then **restore the estate as the terminal act on every branch**
 
+  **PLANNED BUT DELIBERATELY NOT EXECUTED (2026-09-16)** — window 3 was never armed: external review by four independent AI model families found roughly 30 defects in this plan, including a judge binary that self-reports every PASS condition, so a PASS from it would not have been trustworthy. Record: `04-18-EXTERNAL-REVIEWS.md`.
+
 **Wave 14** *(blocked on Wave 13 completion)*
 
 - [ ] 04-19-PLAN.md — Criterion 3's disposition: on PASS or FAIL write nothing; on OPEN prepare the override **UNSIGNED** in `04-VERIFICATION.md`'s frontmatter (every gate frontmatter-scoped, because the § Gaps Summary prose draft already matches `^overrides:` at column 1) and put the decision to the operator (blocking)
+
+  **PLANNED BUT DELIBERATELY NOT EXECUTED (2026-09-16)** — superseded: its disposition step was performed directly by quick task 260916-062, which prepared the unsigned override without running window 3. Record: `04-18-EXTERNAL-REVIEWS.md`.
 
 **Research**: done 2026-09-11 (`04-RESEARCH.md`). *Originally "not needed — retirement is deletion
 plus documented config changes"; the operator chose to measure the live estate anyway, and it found

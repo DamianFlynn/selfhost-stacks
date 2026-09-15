@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-15T17:40:00.000Z"
-last_activity: 2026-09-15 -- plan 04-17 COMPLETE (window-3 contract amended and committed alone BEFORE any stamp exists; the nscript instrument built in host scratch and all 14 synthetic controls returned their required outcome, 1 FAIL / 9 UNPROVEN / 7 distinct tokens / 2 BYTES-OK). NOTHING ARMED -- nscript_enable still 0, direct_unpack still 1, hook absent, config/scripts still 9 entries. Next: 04-18, which needs the operator for one real music job
+last_updated: "2026-09-16T00:25:00.000Z"
+last_activity: 2026-09-16 -- quick 260916-062 prepared the criterion-3 override UNSIGNED in 04-VERIFICATION.md's frontmatter (bound verbatim to gaps[0].truth; status stays gaps_found and overrides_applied stays 0 -- the operator signs, not the agent). Plans 04-18 and 04-19 marked PLANNED BUT DELIBERATELY NOT EXECUTED: window 3 was never armed after four independent AI model families found ~30 defects in 04-18, including a judge binary that self-reports every PASS condition. Reviews preserved verbatim at .planning/phases/04-collapse-to-one-tagger/04-18-EXTERNAL-REVIEWS.md. ESTATE UNTOUCHED -- nscript_enable still 0, direct_unpack still 1. Next: the operator signs the override, or leaves criterion 3 OPEN
 progress:
   total_phases: 10
   completed_phases: 4
@@ -29,18 +29,23 @@ pipeline that someone owns.
 ## Current Position
 
 Phase: 04 (collapse-to-one-tagger) — EXECUTING
-Plan: 17 of 19 (04-17 complete 2026-09-15; 04-18 and 04-19 planned, not started. Phase NOT complete — criterion 3 still OPEN. Window 3 has not run: 04-18 arms the instrument and needs the operator for one real music job, and 04-19 prepares the unsigned override if window 3 also returns UNPROVEN)
-Status: All 16 plans executed (wave 11 / plan 04-16 landed). Window 2 ran
-2026-09-13T22:04:18Z→22:27:08Z over **three** real music jobs and recorded
-`Verdict (window 2): OPEN`: all three are UNPROVEN `no-attributed-pre` with a zero-file
-intersection, because under `direct_unpack=1` two of them never exposed a single audio file to a
-1-second poll of `incomplete/` and the third was still growing when SABnzbd moved it, its one hash
-attempt refused mid-pass. **Every side-effect condition held for the third window running** — 0
-`library.blb`, 0 new `.bak`, 0 `beets.log`, 0 `SUCCESS: Matched with beets`, `extended.conf`
-provably never written. **04-16 did not treat criterion 3 as passed:** `beets.md` keeps an
-interim-status heading dated 2026-09-14 recording `window 2: OPEN`. The choice now standing is a
-decision, not a measurement: accept threefold unanimous side-effect evidence, or leave it OPEN —
-nothing more can be measured without changing where the byte capture happens.
+Plan: 17 of 19 (04-17 complete 2026-09-15. **04-18 and 04-19 are PLANNED BUT DELIBERATELY NOT EXECUTED, 2026-09-16** — they remain on the ROADMAP, unticked, and will not be run. Phase NOT complete — criterion 3 still OPEN)
+Status: **Window 3 never ran.** 04-17 built the third capture design (SABnzbd's own `pp`
+notification hook) and all 14 synthetic controls passed, but external review of 04-18 — the plan
+that would have armed it — by four independent AI model families found roughly 30 defects,
+including a judge binary that self-reports every PASS condition, an OPEN branch that can swallow a
+FAIL, and a restore contract that is count-checked rather than diffed. A PASS from that instrument
+would not have been trustworthy, so the window was closed unrun rather than run for the appearance
+of measurement. The reviews are preserved verbatim at
+`.planning/phases/04-collapse-to-one-tagger/04-18-EXTERNAL-REVIEWS.md`.
+**The disposition now sits with the operator.** Quick task 260916-062 prepared the criterion-3
+override in `04-VERIFICATION.md`'s frontmatter and left it **UNSIGNED**: `accepted_by` and
+`accepted_at` are literal placeholders, `status` is still `gaps_found`, `overrides_applied` is
+still 0. Signing it accepts the threefold unanimous side-effect evidence (5 real jobs, 2 windows,
+0 tagger artefacts) in place of a byte proof; not signing it leaves criterion 3 OPEN. Nothing
+further can be measured without a fourth capture design.
+**ESTATE UNTOUCHED** — `nscript_enable` still 0, `direct_unpack` still 1; this task ran no
+estate command at all.
 
 **02.1-10 COMPLETE. THE ESTATE'S ROUTINE HEALTH CHECK NOW COVERS THE THING THAT EMPTIED `/`, AND
 EVERY ONE OF ITS FAIL-CLOSED BRANCHES HAS BEEN DRIVEN RATHER THAN READ.**

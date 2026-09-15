@@ -65,6 +65,44 @@ deferred:
     addressed_in: "Phase 6"
     evidence: "04-13-SUMMARY / 04-16-SUMMARY living-text table; Phase 6 owns closing them on the survivor's deliberately minimal vendored config (D-27)"
 human_verification: []
+overrides:
+  - must_have: "The beets block is stripped from audio.bash, and a SABnzbd music job completes without invoking any tagger at all (ROADMAP Phase 4 success criterion 3 / TAGR-04)"
+    reason: >
+      Accepting the threefold unanimous side-effect evidence as sufficient proof that the estate
+      does not tag, in place of the byte-level PRE-HOOK/COMPLETION comparison this criterion's own
+      evidence contract requires, after three distinct capture designs were built, measured and
+      exhausted.
+
+      **(a)** Three capture designs were built and measured exhausted: the destination-tree poll
+      (window 1), the incomplete-tree poll (window 2), and SABnzbd's own `pp` notification hook
+      (window 3 — built and self-tested, but never armed).
+
+      **(b)** Five real music jobs across two observation windows all returned
+      `STATUS=UNPROVEN reason=no-attributed-pre`;
+      not one of the five produced a valid PRE-HOOK snapshot.
+
+      **(c)** Side-effect evidence is threefold and unanimous across those same five jobs:
+      0 `library.blb`, 0 new `.bak` beyond the pre-declared SABnzbd exception, 0 `beets.log`,
+      0 `SUCCESS: Matched with beets`, and `extended.conf` provably never written.
+
+      **(d)** Window 3 was
+      **deliberately NOT run**.
+      Plan 04-17 built the instrument and all 14 synthetic controls passed, but
+      four independent AI model families
+      (Claude, Google Gemini, GPT-5.5, Kimi-K3) reviewing plan 04-18 found roughly 30 defects
+      between them — including an unverified judge binary that self-reports every PASS condition,
+      an OPEN branch that can swallow a FAIL, and a restore contract that is count-checked rather
+      than diffed and so could leave the estate re-armed. A PASS from that instrument would not
+      have been trustworthy, which is the entire reason for running it. The window was therefore
+      closed unrun rather than run for the appearance of measurement. The reviews are recorded at
+      `.planning/phases/04-collapse-to-one-tagger/04-18-EXTERNAL-REVIEWS.md`.
+
+      This override is
+      **UNSIGNED** — prepared for the operator, not taken by the agent. `status` stays
+      `gaps_found` and `overrides_applied` stays 0 until the operator fills `accepted_by` and
+      `accepted_at` below.
+    accepted_by: "<developer name>"
+    accepted_at: "<ISO timestamp>"
 ---
 
 # Phase 4: Collapse to One Tagger — Verification Report (Re-Verification)
