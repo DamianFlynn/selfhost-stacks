@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-14T06:40:00.000Z"
-last_activity: 2026-09-14 -- quick task 260914-a2y complete (the two extended.conf switches that disarm audio.bash's rm -rf branches are now asserted on every routine health check; closes code-review CR-01/WR-01 from phase 04)
+last_updated: "2026-09-15T14:15:00.000Z"
+last_activity: 2026-09-15 -- quick task 260915-k9p complete (the Traefik dashboard probe now measures the real serving chain instead of an unpublished port, so quick-health-check.sh exits 0 on a healthy estate again -- the fence prerequisite for phase 04's gap-closure plan 04-17)
 progress:
   total_phases: 10
   completed_phases: 4
@@ -1295,6 +1295,7 @@ Recent decisions affecting current work:
 | 260906-eza | Reclaim ~2.8 GB: retire Mattermost, stop postiz/open-archiver/homarr, add TREK + TeslaMate | 2026-09-06 | complete ✓ |
 | 260906-ilx | Dispatcharr server DVR: 250 GB recording dataset and verified Jellyfin playback (`85f6d26`, `e5076cd`) | 2026-09-06 | complete ✓ |
 | 260914-a2y | Assert the two `extended.conf` switches that disarm `audio.bash`'s `rm -rf` branches — fifth fatal block, four controls driven; closes CR-01/WR-01 (`c0b04c3`, `220dcf4`) | 2026-09-14 | complete ✓ |
+| 260915-k9p | Correct the Traefik dashboard probe: `:8080` was never published to the host, so the probe asserted a promise the config never made. Now asserts the real chain (websecure + `traefik-rtr` + TLS + `chain-authelia@file`), with an unauthenticated 200 as a new violation branch. 9 branches driven; the plan's own control-B driver was measured false and replaced (`9db2e39`) | 2026-09-15 | complete ✓ |
 
 ## Session Continuity
 
