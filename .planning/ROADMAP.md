@@ -560,15 +560,20 @@ than it started, so attempt five does not inherit attempt four's wreckage.
      > printed on its **own line**, beside the counter and never folded into it. This is the WRIT-01
      > shape: a bare "0" cannot read as a pass, and Jellyfin's presence is not a gap. The
      > criterion's substance is unchanged.
-**Plans**: 17 plans in 12 waves — 13 executed, then 3 gap-closure plans added 2026-09-13 and a fourth
+**Plans**: 19 plans in 14 waves — 13 executed, then 3 gap-closure plans added 2026-09-13 and 3 more
 added 2026-09-15, all to close criterion 3 / TAGR-04's behavioural half, which `04-VERIFICATION.md`
 recorded OPEN at 4/5 criteria across **two** observation windows and **five** real music jobs.
 Criteria 1, 2, 4 and 5 are verified and are **not** re-planned; the estate is not re-planned either.
 The gap is in the measuring instrument (`04-D12-EVIDENCE.md` § 6, lines 186-207; § 7's closing
-section records both previously-tried capture points as measured exhausted). Plan 04-17 is the third
-capture design — SABnzbd's own `pp` notification hook, category-filtered to music, with
-`direct_unpack` untouched — and it carries a pre-committed exit: on a non-PASS its final task
-prepares, explicitly unsigned, the criterion-3 override that `04-VERIFICATION.md` already drafts.
+section records both previously-tried capture points as measured exhausted). Plans 04-17/18/19 are
+the **third capture design** — SABnzbd's own `pp` notification hook (`postproc.py:453`, structurally
+before repair, unpack, the move and `audio.bash`), category-filtered to music, with `direct_unpack`
+untouched at 1 — split so that **restoring the estate is the terminal act of 04-18** rather than a
+step behind a human checkpoint: `quick-health-check.sh` carries no `nscript_*` guard, so an armed
+estate is invisible to the standing checks and an unanswered prompt must not be able to strand it.
+The set carries a pre-committed exit: on a non-PASS, 04-19 prepares — explicitly unsigned, with
+unfilled `accepted_by`/`accepted_at` placeholders — the criterion-3 override that
+`04-VERIFICATION.md` already drafts, and puts the decision to the operator.
 Plans:
 **Wave 1**
 
@@ -621,7 +626,15 @@ Plans:
 
 **Wave 12** *(gap closure, added 2026-09-15 — criterion 3 / TAGR-04 behavioural half, third capture design)*
 
-- [ ] 04-17-PLAN.md — Observation window 3: capture the PRE-HOOK bytes from SABnzbd's own `pp` notification hook (`postproc.py:453`, before repair, unpack, the move and `audio.bash`), category-filtered to music with `direct_unpack` untouched; eight synthetic controls incl. a required FAIL before any real job; § 8 verdict PASS, FAIL or OPEN (human checkpoint; OPEN if no job arrives), then the estate restored — and on a non-PASS the criterion-3 override prepared UNSIGNED for the operator (blocking decision)
+- [ ] 04-17-PLAN.md — Contract + instrument, arming nothing: amend the D-12 contract for the nscript capture design and **redesign the ladder for a hook rather than transplanting the poller's** (`pre_complete` is pinned once the observer fires only once, so a same-relative-path sha256 change becomes the only FAIL path, completion-only audio is always UNPROVEN, and the non-vacuity floor counts MOVED pairs); build the hook and judge; drive **12 synthetic controls — 1 required FAIL and 6 distinct UNPROVEN tokens** — with the estate provably untouched
+
+**Wave 13** *(blocked on Wave 12 completion)*
+
+- [ ] 04-18-PLAN.md — Observation window 3 end to end: write and drive the named idempotent restore FIRST, arm behind a fail-closed gate with the wiring proven in situ by SABnzbd's own startup invocation, wait (human checkpoint, **self-closing at a 90-minute deadline via a detached watchdog**), judge the bytes, write § 8 with its OBS block and one line-anchored verdict, commit — then **restore the estate as the terminal act on every branch**
+
+**Wave 14** *(blocked on Wave 13 completion)*
+
+- [ ] 04-19-PLAN.md — Criterion 3's disposition: on PASS or FAIL write nothing; on OPEN prepare the override **UNSIGNED** in `04-VERIFICATION.md`'s frontmatter (every gate frontmatter-scoped, because the § Gaps Summary prose draft already matches `^overrides:` at column 1) and put the decision to the operator (blocking)
 
 **Research**: done 2026-09-11 (`04-RESEARCH.md`). *Originally "not needed — retirement is deletion
 plus documented config changes"; the operator chose to measure the live estate anyway, and it found
