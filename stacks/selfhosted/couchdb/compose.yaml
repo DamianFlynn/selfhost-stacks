@@ -1,0 +1,94 @@
+# CouchDB Stack - Sync backend for the neocortex Obsidian vault (Self-hosted LiveSync)
+# Single-node Apache CouchDB 3.5 behind Traefik. Deployment, init and verification: README.md
+#
+# Purpose:
+#   The replication target for Obsidian Self-hosted LiveSync on the M5, the mini and the iPhone
+#   (neocortex v2 Phase 2, TODO-214). Vault content is end-to-end encrypted by the plugin before
+#   it reaches this server.
+#
+# Workflow:
+#   Obsidian (LiveSync) -> Cloudflare -> Traefik (websecure, dns-cloudflare) -> couchdb:5984
+#   Continuous replication long-polls /_changes; websecure already runs readTimeout=0s.
+#
+# Access:
+#   URL: https://couchdb.deercrest.info
+#   Middleware: NONE, deliberately. CouchDB's own credentials are the boundary
+#   (require_valid_user=true) and CouchDB answers CORS itself. Do not add:
+#     - chain-authelia@file  -> forwardAuth bounces API clients to a login page, and its
+#                               `buffering` middleware caps request bodies at 10 MB
+#     - chain-no-auth@file   -> its `secure-headers` middleware sets accessControlAllowMethods
+#                               (GET, OPTIONS, PUT only), so Traefik would answer the CORS
+#                               preflight itself and block LiveSync's POST/DELETE
+#
+# Storage:
+#   Everything under /mnt/fast/appdata/automation/couchdb, on the mounted fast/appdata/automation
+#   ZFS dataset (infra/lxc-selfhost.tf). NOT a new /mnt/fast/appdata/couchdb: /mnt/fast/appdata is
+#   not a mountpoint, so that would land on LXC 100's ext4 root. The image declares
+#   VOLUME /opt/couchdb/data; it is bound below, so no anonymous volume is created.
+#
+# Runs as uid/gid 5984 (the image's `couchdb` user, which owns /opt/couchdb and its HOME), set
+# through PUID/PGID - not the estate's apps:apps (568). See README "Why 5984".
+
+name: couchdb
+
+
+########################### NETWORKS
+networks:
+  t3_proxy:
+    external: true
+
+
+services:
+  couchdb:
+    container_name: couchdb
+    hostname: couchdb
+    # renovate: datasource=docker depName=couchdb
+    # Excluded from ALL automerge in renovate.json5: an unattended bump must not land under live
+    # LiveSync replication. Merging still deploys nothing - see README "Renovate deploy drift".
+    image: couchdb:3.5.2
+    restart: unless-stopped
+    user: "${PUID:-5984}:${PGID:-5984}"
+    # A personal vault: small steady state. The cap bounds a runaway (README: memory headroom).
+    mem_limit: 1g
+    mem_reservation: 256m
+    environment:
+      TZ: ${TZ:-Europe/Dublin}
+      # Admin credentials, from the gitignored .env (Bitwarden: neocortex/shared/couchdb-admin).
+      # The entrypoint only writes them if no [admins] entry exists yet.
+      COUCHDB_USER: ${COUCHDB_USER}
+      COUCHDB_PASSWORD: ${COUCHDB_PASSWORD}
+    volumes:
+      - /mnt/fast/appdata/automation/couchdb/data:/opt/couchdb/data
+      # Holds neocortex.ini (copied from this directory on deploy), docker.ini (entrypoint) and
+      # zz-runtime.ini (last in the chain, so it receives every runtime/_config write).
+      - /mnt/fast/appdata/automation/couchdb/etc/local.d:/opt/couchdb/etc/local.d
+    # No host port: reachable through Traefik only (and `docker exec` on LXC 100).
+    networks:
+      - t3_proxy
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      # The image ships no curl or wget. bash's /dev/tcp + base64 (coreutils) instead.
+      # /_up needs credentials because require_valid_user=true. $$ escapes Compose interpolation.
+      test:
+        - CMD
+        - bash
+        - -c
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/5984 &&
+          printf 'GET /_up HTTP/1.0\r\nAuthorization: Basic %s\r\n\r\n'
+          "$$(printf '%s:%s' "$$COUCHDB_USER" "$$COUCHDB_PASSWORD" | base64 -w0)" >&3 &&
+          grep -q '"status":"ok"' <&3
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=t3_proxy
+      - traefik.http.routers.couchdb-rtr.entrypoints=websecure
+      - traefik.http.routers.couchdb-rtr.rule=Host(`couchdb.${DOMAINNAME}`)
+      - traefik.http.routers.couchdb-rtr.tls=true
+      - traefik.http.routers.couchdb-rtr.tls.certresolver=dns-cloudflare
+      - traefik.http.routers.couchdb-rtr.service=couchdb-svc
+      - traefik.http.services.couchdb-svc.loadbalancer.server.port=5984

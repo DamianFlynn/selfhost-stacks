@@ -471,6 +471,20 @@
         "major-update",
         "manual-review-required"
       ]
+    },
+    {
+      "description": "CouchDB (neocortex LiveSync): excluded from ALL automerge -- patch, minor and digest as well as major. Added 2026-09-16 (neocortex v2 TODO-214). Every Obsidian device replicates continuously against this server, so an unattended bump of the database under live replication is the one update this estate must not take unseen; a human merges it, then deploys it deliberately and checks _up and the neocortex doc_count. Merging deploys nothing: see the README 'Renovate deploy drift' check (git -C /mnt/fast/stacks log -1 vs docker ps). Must stay after the two 'Default: Auto-merge' rules so that automerge:false wins. Same KNOWN COSMETIC WART as the Jellyfin and beets rules: a CouchDB patch/minor PR still carries 'automerge' and 'safe' labels from the default rules while NOT automerging. Filter on 'manual-review-required'.",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "couchdb"
+      ],
+      "automerge": false,
+      "addLabels": [
+        "stack:couchdb",
+        "manual-review-required"
+      ]
     }
   ],
   // prConcurrentLimit:
