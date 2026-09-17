@@ -30,6 +30,9 @@ services:
       MEILI_ADDR: http://meilisearch:7700
       BROWSER_WEB_URL: http://chrome:9222
       OPENAI_API_KEY: ${OPENAI_API_KEY}
+      # The route is public and the first sign-up becomes admin. The admin (Damian) exists
+      # since 2026-09-17; further users (Breege) are created in Admin → Users.
+      DISABLE_SIGNUPS: "true"
     depends_on:
       - meilisearch
       - chrome
