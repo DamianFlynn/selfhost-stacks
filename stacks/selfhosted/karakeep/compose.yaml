@@ -153,6 +153,12 @@ services:
       - .env
     environment:
       MEILI_NO_ANALYTICS: "true"
+      # Every Meilisearch minor bump refuses the previous version's database ("Your database
+      # version (1.51.0) is incompatible with your current engine version (1.53.1)") and
+      # restart-loops. Seen 2026-09-17 when the stack was first recreated after Renovate's bumps
+      # (neocortex v2 TODO-218). Upgrade in place on startup; the index is rebuildable from
+      # Karakeep's own database (Admin → Background jobs → reindex) if an upgrade ever fails.
+      MEILI_UPGRADE_DB: "true"
     volumes:
       - /mnt/fast/appdata/hoarder/karakeep/meili:/meili_data
     networks:
