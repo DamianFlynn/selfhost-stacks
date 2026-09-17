@@ -12,7 +12,7 @@
 | selfhost | 172.16.1.159 | - | LXC | Proxmox | Docker Host (78 containers) | selfhost | 172.16.1.159 | ✅ Main stack |
 | cerebro | ~~172.16.1.160~~ | - | ~~LXC~~ | ~~Proxmox~~ | ~~AI workload~~ | - | - | ❌ REMOVED 2026-06-11 |
 | a0d7b954-ssh | 172.16.1.31 | - | Server | Intel NUC | Home Assistant OS | homeassistant | 172.16.1.31 | ✅ Core HA |
-| DATAs-Mac-mini | 172.16.1.138 | d0:11:e5:83:e8:c9 | Desktop | Apple | DATA's workstation | datas-mac-mini | 172.16.1.138 | 🔴 MISSING from docs! |
+| mac-mini | 172.16.1.199 | d0:11:e5:0f:c3:dc | Desktop | Apple | DATA's workstation; neocortex vault writer (tailnet `100.93.38.119`) | mac-mini | 172.16.1.199 | ✅ Rebuilt; was `DATAs-Mac-mini` 172.16.1.138 / d0:11:e5:83:e8:c9 / `100.115.47.23`. On the LAN it reaches LXC 100 directly over `en0`; off-LAN via the `Cloud-Gateway-Max` subnet router (primary for 172.16.1.0/24). Verified 2026-09-17 |
 | BYO-MBP-LY62L726TL | 172.16.1.31 | f4:4d:30:63:b5:ee | Laptop | Apple/Intel | Damian's MacBook | - | Dynamic | User device |
 
 ## Raspberry Pi Gateways

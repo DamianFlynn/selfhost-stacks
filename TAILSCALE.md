@@ -165,12 +165,14 @@ and `docling` show "Expiry disabled" in the console while `homeassistant` had to
 
 ### Pattern 4 — Stock clients
 
-`DATAs-Mac-mini` (`100.115.47.23`), `Living room TV`, iPads, iPhone, Apple TV, laptops.
+`mac-mini` (`100.93.38.119`, LAN `172.16.1.199`), `Living room TV`, iPads, iPhone, Apple TV, laptops.
 
-One detail that matters: **`DATAs-Mac-mini` runs the standalone (`macsys`) build, not the Mac App
-Store build.** Only the standalone build can advertise subnet routes or act as an exit node — the
-App Store build is sandboxed and cannot. It is also set never to sleep (`sleep 0`, `standby 0`),
-which is why it stays reachable and makes a viable emergency jump host (§7).
+One detail that matters: **the rebuilt `mac-mini` (formerly `DATAs-Mac-mini`, `100.115.47.23`) runs
+Homebrew `tailscaled` (1.102.4 on 2026-09-17), not the Mac App Store build.** Like the old standalone
+(`macsys`) build, it can advertise subnet routes or act as an exit node — the App Store build is
+sandboxed and cannot. It is also set never to sleep (`sleep 0`, `standby 0`), which is why it stays
+reachable and makes a viable emergency jump host (§7). It sits on the LAN and reaches LXC 100
+directly over `en0`; only off-LAN would it go through the `Cloud-Gateway-Max` subnet router.
 
 **Shared in from another tailnet** (`keith.flynn@`, `bicolor-vibes.ts.net`):
 `homeassistant.bicolor-vibes.ts.net`, `posca.bicolor-vibes.ts.net`. These are *not* Deer Crest
@@ -218,7 +220,7 @@ It flips with the roles. While HA was primary, `172.16.1.1` was the unreachable 
 - **Workaround: use the node's tailnet address**, which is better anyway — direct peer-to-peer,
   independent of which router is primary, and still working when the gateway is down.
   HA: `100.73.196.51` or MagicDNS `homeassistant`. Gateway: `100.78.147.125`.
-- This is **not** Tailscale's anti-spoof netfilter rule. `DATAs-Mac-mini` runs Tailscale on the
+- This is **not** Tailscale's anti-spoof netfilter rule. `mac-mini` runs Tailscale on the
   same LAN and stays reachable throughout — only the *advertising standby* is affected.
 
 ---
@@ -311,7 +313,7 @@ The gateway may be unreachable at `172.16.1.1` precisely because its Tailscale i
 via an independent LAN node:
 
 ```bash
-ssh -J data@datas-mac-mini root@172.16.1.1     # SSH user is 'data'; gateway prompts for password
+ssh -J data@mac-mini root@172.16.1.1          # SSH user is 'data'; gateway prompts for password
 ```
 
 Gateway root password: `UNIFI_USG_SSH_PASS` in `~/.claude/secrets/ha-deercrest.env`.
