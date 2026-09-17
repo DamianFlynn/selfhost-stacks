@@ -8,7 +8,7 @@ commit that introduced this file.
 
 | | |
 |---|---|
-| URL | `https://couchdb.deercrest.info` |
+| URL | `https://livesync.deercrest.info` |
 | Image | `couchdb:3.5.2` (Docker Hub official image) |
 | Container | `couchdb`, uid/gid `5984`, `mem_limit: 1g`, no host port |
 | Data | `/mnt/fast/appdata/automation/couchdb/data` |
@@ -20,14 +20,14 @@ commit that introduced this file.
 
 ```
 Obsidian LiveSync (app://obsidian.md, capacitor://localhost)
-  → Cloudflare        proxied CNAME  couchdb.deercrest.info → deercrest.info (orange cloud — to confirm, see "Cloudflare proxy")
+  → Cloudflare        proxied CNAME  livesync.deercrest.info → deercrest.info (orange cloud — to confirm, see "Cloudflare proxy")
   → Traefik           websecure, TLS via the dns-cloudflare DNS-01 resolver, readTimeout=0s
   → (no middleware)
   → couchdb:5984      t3_proxy network
 ```
 
 There is **no wildcard DNS record** on `deercrest.info` (see `trek/README.md`), so
-`couchdb.deercrest.info` needs its own record before anything below will resolve. A Traefik
+`livesync.deercrest.info` needs its own record before anything below will resolve. A Traefik
 certificate is not evidence that DNS resolves.
 
 ### Why no middleware
@@ -136,8 +136,9 @@ CDB_PASS="$(bw get password neocortex/shared/couchdb-admin)"
 ssh root@172.16.1.159 'cut -d= -f1 /mnt/fast/stacks/stacks/selfhosted/couchdb/.env'   # names only
 unset CDB_USER CDB_PASS
 
-# ── 5. DNS: Cloudflare record for couchdb.deercrest.info ─────────── (Cloudflare dashboard)
-#   CNAME couchdb → deercrest.info, same proxy setting as keeper.deercrest.info. See "Cloudflare proxy".
+# ── 5. DNS: Cloudflare record for livesync.deercrest.info ───────── DONE 2026-09-17
+#   CNAME livesync → deercrest.info, proxied (same as keeper.deercrest.info), created via the
+#   Cloudflare API with Traefik's zone DNS token. Verify: dig +short livesync.deercrest.info
 
 # ── 6. Start it ─────────────────────────────────────────────────── (LXC 100)
 cd /mnt/fast/stacks
@@ -170,7 +171,7 @@ curl -fsSL "${LS_RAW}/provision.ts"    | less     # review: only the config PUTs
 
 ( # subshell: the tool reads lower-case hostname/username/password, keep them out of your shell
   export provision_script_url="${LS_RAW}/provision.ts"
-  export hostname=https://couchdb.deercrest.info
+  export hostname=https://livesync.deercrest.info
   export username="$(bw get username neocortex/shared/couchdb-admin)"
   export password="$(bw get password neocortex/shared/couchdb-admin)"
   unset database            # deliberate — see below
@@ -186,7 +187,7 @@ it through the plugin's own onboarding.
 ### 8. Database `neocortex` and member user `damian` — from the M5
 
 ```bash
-CDB=https://couchdb.deercrest.info
+CDB=https://livesync.deercrest.info
 CDB_AUTH="$(bw get username neocortex/shared/couchdb-admin):$(bw get password neocortex/shared/couchdb-admin)"
 LS_USER="$(bw get username neocortex/shared/livesync-damian)"
 [ "$LS_USER" = damian ] || { echo "livesync-damian username is '$LS_USER', expected damian"; false; }
@@ -226,7 +227,7 @@ name, user and Bitwarden items — not a new stack.
 ## Verification — the six checks (TODO-214 Expected)
 
 ```bash
-CDB=https://couchdb.deercrest.info
+CDB=https://livesync.deercrest.info
 CDB_AUTH="$(bw get username neocortex/shared/couchdb-admin):$(bw get password neocortex/shared/couchdb-admin)"
 
 # 1. no anonymous access                                        → 401

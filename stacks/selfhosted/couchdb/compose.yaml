@@ -11,7 +11,7 @@
 #   Continuous replication long-polls /_changes; websecure already runs readTimeout=0s.
 #
 # Access:
-#   URL: https://couchdb.deercrest.info
+#   URL: https://livesync.deercrest.info  (DNS alias chosen by Damian 2026-09-17; container/db stay couchdb/neocortex)
 #   Middleware: NONE, deliberately. CouchDB's own credentials are the boundary
 #   (require_valid_user=true) and CouchDB answers CORS itself. Do not add:
 #     - chain-authelia@file  -> forwardAuth bounces API clients to a login page, and its
@@ -87,7 +87,7 @@ services:
       - traefik.enable=true
       - traefik.docker.network=t3_proxy
       - traefik.http.routers.couchdb-rtr.entrypoints=websecure
-      - traefik.http.routers.couchdb-rtr.rule=Host(`couchdb.${DOMAINNAME}`)
+      - traefik.http.routers.couchdb-rtr.rule=Host(`livesync.${DOMAINNAME}`)
       - traefik.http.routers.couchdb-rtr.tls=true
       - traefik.http.routers.couchdb-rtr.tls.certresolver=dns-cloudflare
       - traefik.http.routers.couchdb-rtr.service=couchdb-svc
