@@ -335,6 +335,16 @@ that can present as `172.16.1.31` can read the library. 2049 is not port-forward
 Standing check: `bash scripts/check-music-consumers.sh` on LXC 100, which also runs on every
 `scripts/quick-health-check.sh` from the workstation.
 
+### Cloudflare DNS records that are not the default
+
+Most `*.deercrest.info` hosts need no record of their own. Records created explicitly, so a zone
+rebuild can recreate them:
+
+| Record | Type → target | Proxy | Why | Created |
+|---|---|---|---|---|
+| `livesync.deercrest.info` | CNAME → `deercrest.info` | proxied (orange, same as `keeper`) | CouchDB for Obsidian LiveSync (`stacks/selfhosted/couchdb`, neocortex v2 TODO-214). If continuous replication misbehaves through the proxy, switch this one record to DNS-only | 2026-09-17, via the Cloudflare API with Traefik's zone DNS token |
+| `tv.deercrest.info` | — | **DNS-only** (grey) | see "TV / tuner chain" below | — |
+
 ### Services by Host
 - **selfhost (159):** Traefik, Authelia, Sonarr, Radarr, Lidarr, Prowlarr, qBittorrent, Grafana, Dawarich, Open WebUI, Ollama, Immich, FreshRSS, and 60+ others — plus host-level Pulse (above)
 - **atlantis (158):** Proxmox VE — plus host-level `nfs-server` on **2049** serving the music library `ro` and the Home Assistant backup dataset `rw` to the NUC (above)

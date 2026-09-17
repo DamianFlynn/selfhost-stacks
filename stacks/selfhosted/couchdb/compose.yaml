@@ -59,9 +59,12 @@ services:
       COUCHDB_PASSWORD: ${COUCHDB_PASSWORD}
     volumes:
       - /mnt/fast/appdata/automation/couchdb/data:/opt/couchdb/data
-      # Holds neocortex.ini (copied from this directory on deploy), docker.ini (entrypoint) and
-      # zz-runtime.ini (last in the chain, so it receives every runtime/_config write).
+      # Holds docker.ini (entrypoint) and zz-runtime.ini (last in the chain, so it receives every
+      # runtime/_config write). Created by scripts/setup-couchdb.sh prepare.
       - /mnt/fast/appdata/automation/couchdb/etc/local.d:/opt/couchdb/etc/local.d
+      # The committed settings, read-only STRAIGHT FROM THE REPO CHECKOUT: `git pull` is the only
+      # way this config changes, so a rebuilt LXC gets it back with the clone (no copy step).
+      - ./neocortex.ini:/opt/couchdb/etc/local.d/neocortex.ini:ro
     # No host port: reachable through Traefik only (and `docker exec` on LXC 100).
     networks:
       - t3_proxy

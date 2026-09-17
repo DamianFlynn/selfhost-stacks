@@ -94,62 +94,42 @@ Damian creates all three before step 4. Nothing below prints or embeds a value: 
 `bw` into shell variables. Run them on the **M5** (it has `bw`, `jq` and `deno`), in a single shell
 with an unlocked vault (`export BW_SESSION="$(bw unlock --raw)"`).
 
-## Deploy (Damian)
+## Deploy — and redeploy after an LXC rebuild
 
-Run the LXC steps as `root@172.16.1.159`; the rest from the M5. Every step is safe to re-run.
+Everything is in this repo: `compose.yaml`, `neocortex.ini` (mounted read-only from the checkout),
+`scripts/setup-couchdb.sh` (every host step, idempotent) and `wrappers/couchdb.app.yaml`. The only
+state outside git is the data on the Terraform-mounted `fast/appdata/automation` dataset and the
+gitignored `.env`, rebuilt from Bitwarden below. DNS (`livesync` CNAME → `deercrest.info`, proxied)
+is recorded in `NETWORK.md`. Re-running this whole section on a rebuilt LXC restores the service.
 
 ```bash
-# ── 0. Before: record the byte counts the acceptance compares ────── (LXC 100)
-df -B1 --output=used,avail / | tail -1
-du -sb /mnt/fast/appdata/automation 2>/dev/null | cut -f1
-docker system df
+# ── 0. (LXC 100) byte counts before — the TODO-214 acceptance compares them
+ssh root@172.16.1.159 'df -B1 --output=used,avail / | tail -1; du -sb /mnt/fast/appdata/automation | cut -f1'
 
-# ── 1. Prove the parent IS the mounted dataset, BEFORE creating anything ── (LXC 100)
-findmnt -T /mnt/fast/appdata/automation
-#   must print SOURCE fast/appdata/automation, FSTYPE zfs, TARGET /mnt/fast/appdata/automation.
-#   If TARGET is "/" — STOP. The dataset is not mounted and the dirs would land on the root disk.
-mountpoint -q /mnt/fast/appdata/automation && echo "dataset ✓" || { echo "ON / — STOP"; false; }
+# ── 1. (LXC 100) pull; mount check, directories as 5984, runtime ini
+ssh root@172.16.1.159 'cd /mnt/fast/stacks && git pull --ff-only origin main && scripts/setup-couchdb.sh prepare'
 
-# ── 2. Pull the stack and create the directories as uid/gid 5984 ─── (LXC 100)
-cd /mnt/fast/stacks && git pull --ff-only origin main
-install -d -m 0750 -o 5984 -g 5984 /mnt/fast/appdata/automation/couchdb
-install -d -m 0750 -o 5984 -g 5984 /mnt/fast/appdata/automation/couchdb/data
-install -d -m 0750 -o 5984 -g 5984 /mnt/fast/appdata/automation/couchdb/etc
-install -d -m 0750 -o 5984 -g 5984 /mnt/fast/appdata/automation/couchdb/etc/local.d
-findmnt -T /mnt/fast/appdata/automation/couchdb/data    # TARGET must still be /mnt/fast/appdata/automation
-
-# ── 3. Install the committed settings + the empty runtime file ───── (LXC 100)
-install -m 0640 -o 5984 -g 5984 stacks/selfhosted/couchdb/neocortex.ini \
-  /mnt/fast/appdata/automation/couchdb/etc/local.d/neocortex.ini
-[ -e /mnt/fast/appdata/automation/couchdb/etc/local.d/zz-runtime.ini ] || \
-  install -m 0640 -o 5984 -g 5984 /dev/null /mnt/fast/appdata/automation/couchdb/etc/local.d/zz-runtime.ini
-ls -la /mnt/fast/appdata/automation/couchdb/etc/local.d
-
-# ── 4. Write .env on the host from Bitwarden ─────────────────────── (M5)
-#   Values travel over ssh stdin, never argv. The key names are assembled by printf so that no
-#   "<name>=<value>" assignment for the password appears in this public file.
-CDB_USER="$(bw get username neocortex/shared/couchdb-admin)"
-CDB_PASS="$(bw get password neocortex/shared/couchdb-admin)"
-{ printf 'COUCHDB_%s=%s\n' USER "$CDB_USER" PASSWORD "$CDB_PASS"
+# ── 2. (any Mac with bw unlocked) .env from Bitwarden — values over ssh stdin, never argv
+{ printf 'COUCHDB_%s=%s\n' USER "$(bw get username neocortex/shared/couchdb-admin)" \
+                            PASSWORD "$(bw get password neocortex/shared/couchdb-admin)"
   printf '%s\n' PUID=5984 PGID=5984 TZ=Europe/Dublin DOMAINNAME=deercrest.info
-} | ssh root@172.16.1.159 'umask 077; cat > /mnt/fast/stacks/stacks/selfhosted/couchdb/.env'
-ssh root@172.16.1.159 'cut -d= -f1 /mnt/fast/stacks/stacks/selfhosted/couchdb/.env'   # names only
-unset CDB_USER CDB_PASS
+} | ssh root@172.16.1.159 '/mnt/fast/stacks/scripts/setup-couchdb.sh env'
 
-# ── 5. DNS: Cloudflare record for livesync.deercrest.info ───────── DONE 2026-09-17
-#   CNAME livesync → deercrest.info, proxied (same as keeper.deercrest.info), created via the
-#   Cloudflare API with Traefik's zone DNS token. Verify: dig +short livesync.deercrest.info
+# ── 3. (LXC 100) start
+ssh root@172.16.1.159 'cd /mnt/fast/stacks && docker compose -f stacks/selfhosted/couchdb/compose.yaml up -d'
+#   wait until healthy:  docker inspect couchdb --format '{{.State.Health.Status}}'
 
-# ── 6. Start it ─────────────────────────────────────────────────── (LXC 100)
-cd /mnt/fast/stacks
-docker compose -f stacks/selfhosted/couchdb/compose.yaml pull
-docker image inspect couchdb:3.5.2 --format '{{json .Config.Volumes}}'   # only /opt/couchdb/data (bound)
-docker compose -f stacks/selfhosted/couchdb/compose.yaml up -d
-docker compose -f stacks/selfhosted/couchdb/compose.yaml ps       # wait for (healthy)
-docker logs couchdb 2>&1 | tail -20
+# ── 4. (any Mac with bw unlocked) system dbs, database `neocortex`, user `damian`, _security
+bw get password neocortex/shared/livesync-damian | ssh root@172.16.1.159 '/mnt/fast/stacks/scripts/setup-couchdb.sh provision'
+
+# ── 5. (LXC 100) non-secret checks from the host
+ssh root@172.16.1.159 '/mnt/fast/stacks/scripts/setup-couchdb.sh verify'
 ```
 
-### 7. LiveSync provisioning (`couchdb-init.sh`) — from the M5
+Rotating a password: update Bitwarden, re-run step 2 + `docker compose … up -d` (admin) or step 4
+(member). Renovate never deploys: after merging a couchdb bump, `git pull` and step 3 by hand.
+
+### Optional: upstream LiveSync provisioning (`couchdb-init.sh`)
 
 Upstream's `utils/couchdb/couchdb-init.sh` is now a thin wrapper that runs `provision.ts` under
 **Deno 2** (it no longer curls the config keys itself). It performs `_cluster_setup
@@ -184,7 +164,7 @@ writes LiveSync's database-version document through Commonlib, so `doc_count` wo
 in verification. The database is created empty in step 8; the first device (TODO-215) initialises
 it through the plugin's own onboarding.
 
-### 8. Database `neocortex` and member user `damian` — from the M5
+### Manual equivalent of step 4 (reference only — `setup-couchdb.sh provision` does this)
 
 ```bash
 CDB=https://livesync.deercrest.info
