@@ -39,7 +39,9 @@ services:
       - t3_proxy
     labels:
       - traefik.enable=true
-      - traefik.http.routers.karakeep.rule=Host(`karakeep.${DOMAINNAME}`)
+      # Hostname is `pocket` (Damian 2026-09-17: memorable, it does Pocket's job). Must match
+      # NEXTAUTH_URL in .env and the Cloudflare CNAME in NETWORK.md - there is no wildcard record.
+      - traefik.http.routers.karakeep.rule=Host(`pocket.${DOMAINNAME}`)
       - traefik.http.routers.karakeep.entrypoints=web,websecure
       - traefik.http.routers.karakeep.tls=true
       - traefik.http.routers.karakeep.tls.certresolver=dns-cloudflare

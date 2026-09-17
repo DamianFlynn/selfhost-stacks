@@ -343,7 +343,7 @@ rebuild can recreate them:
 | Record | Type → target | Proxy | Why | Created |
 |---|---|---|---|---|
 | `livesync.deercrest.info` | CNAME → `deercrest.info` | proxied (orange, same as `keeper`) | CouchDB for Obsidian LiveSync (`stacks/selfhosted/couchdb`, neocortex v2 TODO-214). If continuous replication misbehaves through the proxy, switch this one record to DNS-only | 2026-09-17, via the Cloudflare API with Traefik's zone DNS token |
-| `karakeep.deercrest.info` | CNAME → `deercrest.info` | proxied | Karakeep (`stacks/selfhosted/karakeep`, own login, no Authelia). The record was missing, so the name never resolved even while the containers ran; restored in neocortex v2 TODO-218 | 2026-09-17, via the Cloudflare API with Traefik's zone DNS token |
+| `pocket.deercrest.info` | CNAME → `deercrest.info` | proxied | Karakeep (`stacks/selfhosted/karakeep`, own login, no Authelia, public sign-up disabled once the admin exists). Renamed from `karakeep.` on 2026-09-17 (no users yet, so nothing to keep). That record was missing, which is why the running stack was unreachable (neocortex v2 TODO-218) | 2026-09-17 |
 | `tv.deercrest.info` | — | **DNS-only** (grey) | see "TV / tuner chain" below | — |
 
 ### Services by Host
