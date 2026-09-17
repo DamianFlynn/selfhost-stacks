@@ -113,7 +113,8 @@ print(json.dumps(d))')
   code=$(printf '%s' "$body" | acurl "$auth" -o /dev/null -w '%{http_code}' -X PUT \
          -H 'Content-Type: application/json' --data-binary @- "$url/_users/org.couchdb.user:$MEMBER")
   unset pw body
-  case $code in 201|202) ok "user $MEMBER (${rev:+updated}${rev:-created}, $code)";; *) die "PUT user → $code";; esac
+  local verb=created; [ -n "$rev" ] && verb=updated
+  case $code in 201|202) ok "user $MEMBER ($verb, $code)";; *) die "PUT user → $code";; esac
   code=$(printf '{"admins":{"names":[],"roles":[]},"members":{"names":["%s"],"roles":[]}}' "$MEMBER" \
          | acurl "$auth" -o /dev/null -w '%{http_code}' -X PUT -H 'Content-Type: application/json' \
            --data-binary @- "$url/$DB/_security")
