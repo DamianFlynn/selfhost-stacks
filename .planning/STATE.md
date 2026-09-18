@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-18T17:36:05.865Z"
+last_updated: "2026-09-18T20:51:49.511Z"
 last_activity: 2026-09-18 -- Phase 05 execution started
 progress:
   total_phases: 10
   completed_phases: 4
   total_plans: 74
-  completed_plans: 66
+  completed_plans: 67
   percent: 40
 ---
 
@@ -29,14 +29,19 @@ pipeline that someone owns.
 ## Current Position
 
 Phase: 05 (inbox-structure-and-the-junk-gate) — EXECUTING
-Plan: 6 of 11 — **05-01 … 05-05 COMPLETE** (fence taken, `_inbox` created, D-21 inode
+Plan: 7 of 11 — **05-01 … 05-06 COMPLETE** (fence taken, `_inbox` created, D-21 inode
 proof driven; criteria 2/3/4 amended in band and criterion 4 now asserted by the standing check; the
 junk gate built and its refusals and positive control driven; **the sweep has RUN** — 40 rows
 removed, 4 moved, 8 excluded entirely, every affected path attributed to an approved row by
 `zfs diff`, `lidarr-import` retired and Phase 1's D-23 closed; and the **`Now!` tag inventory is
 durable again and D-04 is CLOSED** — 4,746 ffprobe records under `/mnt/fast`, zero failures, the
 +13/+9/+14 surplus shown to be a grouping artefact of an album tag that cannot separate three
-editions, and the 24-entry gap shown to be COLLISION rather than absence)
+editions, and the 24-entry gap shown to be COLLISION rather than absence; **05-06 produced the
+approvable mapping and moved nothing** — 4,751 rows, 119 manifest directories reduced to exactly
+115 volume folders under a driven total-coverage assertion, the two instruments disagreeing on
+**0 of 4,746** files, and the 23 flatten collisions reduced by the variant-edition merge to **4**
+cross-volume cases, every one decided by the file's own `album` tag with the rejected claim
+recorded in the map row)
 Status: Executing Phase 05. Do NOT run with `--auto`/`--chain` — four
 gates are `checkpoint:decision`, which auto-selects the first option under auto-mode.
 
@@ -662,7 +667,7 @@ back onto anything under `/mnt/tank/media`.
 Phase 1 complete: SAFE-01…05, WRIT-01…04, QUAL-01
 Phase 2 complete: CONS-01, CONS-02, CONS-03
 
-Progress: [██░░░░░░░░] 22%  *(MILESTONE progress: **2 of 9 phases** complete. All 19 plans written so far are executed 19/19 — but phases 3-9 are not planned yet, so plan-count is not milestone progress. ⚠ `gsd-sdk query state.update-progress` recomputed this as **51%** on 2026-09-02 by counting SUMMARY files against a 39-plan denominator that only covers planned phases; that figure is WRONG and was reverted. Do not let the SDK rewrite this line — phase 02.1 is an INSERTION and is not one of the 9 milestone phases. ⚠ **It happened a second time on 2026-09-13** during plan 04-14, recomputed as **97%** against a 60-plan denominator, and was reverted again. The verb rewrites this line every time it runs; `git diff .planning/STATE.md` after any state write is not optional. ⚠ **Third occurrence 2026-09-18** during plan 05-01, recomputed as **84%** against a 74-plan denominator, reverted again. ⚠ **Fourth occurrence 2026-09-18** during plan 05-02, recomputed as **85%** against the same 74-plan denominator, reverted again — and this time the verb ALSO truncated the frontmatter `last_activity:` back to a bare "Phase 05 execution started", so the damage is not confined to this line. ⚠ **Fifth occurrence 2026-09-18** during plan 05-03, recomputed as **86%** against the same 74-plan denominator, reverted again; on this run the collateral damage was all three of the documented sites at once — the frontmatter `last_activity:`, the `Status:` line (leaving `gates are ...` orphaned under it), and the `Last activity:` line 560 lines down. ⚠ **Sixth occurrence 2026-09-18** during plan 05-04, recomputed as **88%** against the same 74-plan denominator, reverted again, with the same three collateral sites damaged a second consecutive time — the damage set is now stable and predictable, which is the strongest argument yet for not running the verb against this line at all. ⚠ **Seventh occurrence 2026-09-18** during plan 05-05, recomputed as **89%** against the same 74-plan denominator, reverted again, same three collateral sites for the third consecutive run. Seven occurrences, seven figures, zero of them milestone progress — the verb cannot compute this figure and should not be run against this line.)*
+Progress: [██░░░░░░░░] 22%  *(MILESTONE progress: **2 of 9 phases** complete. All 19 plans written so far are executed 19/19 — but phases 3-9 are not planned yet, so plan-count is not milestone progress. ⚠ `gsd-sdk query state.update-progress` recomputed this as **51%** on 2026-09-02 by counting SUMMARY files against a 39-plan denominator that only covers planned phases; that figure is WRONG and was reverted. Do not let the SDK rewrite this line — phase 02.1 is an INSERTION and is not one of the 9 milestone phases. ⚠ **It happened a second time on 2026-09-13** during plan 04-14, recomputed as **97%** against a 60-plan denominator, and was reverted again. The verb rewrites this line every time it runs; `git diff .planning/STATE.md` after any state write is not optional. ⚠ **Third occurrence 2026-09-18** during plan 05-01, recomputed as **84%** against a 74-plan denominator, reverted again. ⚠ **Fourth occurrence 2026-09-18** during plan 05-02, recomputed as **85%** against the same 74-plan denominator, reverted again — and this time the verb ALSO truncated the frontmatter `last_activity:` back to a bare "Phase 05 execution started", so the damage is not confined to this line. ⚠ **Fifth occurrence 2026-09-18** during plan 05-03, recomputed as **86%** against the same 74-plan denominator, reverted again; on this run the collateral damage was all three of the documented sites at once — the frontmatter `last_activity:`, the `Status:` line (leaving `gates are ...` orphaned under it), and the `Last activity:` line 560 lines down. ⚠ **Sixth occurrence 2026-09-18** during plan 05-04, recomputed as **88%** against the same 74-plan denominator, reverted again, with the same three collateral sites damaged a second consecutive time — the damage set is now stable and predictable, which is the strongest argument yet for not running the verb against this line at all. ⚠ **Seventh occurrence 2026-09-18** during plan 05-05, recomputed as **89%** against the same 74-plan denominator, reverted again, same three collateral sites for the third consecutive run. Seven occurrences, seven figures, zero of them milestone progress — the verb cannot compute this figure and should not be run against this line ⚠ **Eighth occurrence 2026-09-18** during plan 05-06, recomputed as **91%** against the same 74-plan denominator, reverted again, same three collateral sites for the fourth consecutive run. Eight occurrences, eight figures, zero of them milestone progress.)*
 
 Plans 02-01 through 02-09 are executed. **CONS-01, CONS-02 and CONS-03 are all complete.**
 
@@ -878,6 +883,7 @@ already open so only 2049 is this phase's delta.
 | Phase 05 P03 | ~75 min | 2 tasks | 5 files |
 | Phase 05 P04 | ~60 min | 3 tasks | 11 files |
 | Phase 05 P05 | ~40 min | 3 tasks | 11 files |
+| Phase 05 P06 | ~55 min | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -1196,6 +1202,8 @@ Recent decisions affecting current work:
 - [Phase 05]: [05-05]: D-04 CLOSED — volumes 4/8/9 have NO surplus. The +13/+9/+14 reproduces exactly under the album-tag grouping and vanishes under the manifest volume directory; the tag is "Now That's What I Call Music 4/8/9" WITHOUT the exclamation mark and cannot separate three editions. Both instruments agree on the file sets (45/42/44), so nothing is mis-tagged in from another volume and the split is safe.
 - [Phase 05]: [05-05]: the 24-entry gap is COLLISION, not absence — 0 manifest lines lack a file on disk; 23 physical files are claimed by more than one volume directory (one by three). Named in artifacts/05-05-collided-files.tsv. Plan 05-06 needs an explicit placement rule; a file cannot be moved into two folders.
 - [Phase 05]: [05-05]: group the Now! collection by the manifest volume directory found from the END of the path, never by a fixed field index (three path depths) and never by a trailing-number parse of the album string (D-03). 119 distinct directories, not the documented 116.
+- [Phase 05]: 05-06: volume numbers come only from the manifest DIRECTORY component via a recorded rule chain; no regex touches an album value, and total coverage of 1..115 is asserted rather than counted
+- [Phase 05]: 05-06: the 4 cross-volume collisions surviving the variant-edition merge are decided by the file's own album tag, with the rejected claim recorded in the map row; zero guessed, zero flagged
 
 ### Pending Todos
 
@@ -1344,7 +1352,7 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-09-18T17:36:05.853Z
+Last session: 2026-09-18T20:51:41.333Z
 Stopped at: Completed 05-05-PLAN.md
 Resume file: None
 
