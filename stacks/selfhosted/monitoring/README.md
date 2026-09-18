@@ -342,6 +342,25 @@ Everything above is a **repo-side declaration**. Nothing in the commit that adde
 estate: no directory created, no container recreated, no unit installed, no credential supplied.
 The four steps below are the runbook, and they are waiting on an explicit decision.
 
+#### G0 — pull on the host · **NOT EXECUTED BY THIS CHANGE** · ⚠️ read this one first
+
+> ⚠️ **From the moment this change is merged, `scripts/quick-health-check.sh` exits 1 until the
+> host has pulled.** That is the fold-in failing closed, exactly as designed — `check-drift.sh`
+> only reaches `/mnt/fast/stacks` by git, and a check that cannot find its subject reports
+> `UNKNOWN` rather than skipping. The block says so in as many words:
+> `⚠️ UNKNOWN — /mnt/fast/stacks/scripts/check-drift.sh is NOT ON THE HOST.`
+>
+> It is called out here because it is the one effect of this change that reaches someone who did
+> not ask for it: anybody running the estate health check between the merge and the pull.
+
+```bash
+ssh root@172.16.1.159 'cd /mnt/fast/stacks && git pull --ff-only'
+bash scripts/quick-health-check.sh    # from the workstation — back to 0, drift count printed
+```
+
+G0 alone restores the health check and gives you the report on demand. **G1–G3 are what make it
+run unattended**, and G4 is what makes it able to tell you.
+
 #### G1 — create the textfile directory · **NOT EXECUTED BY THIS CHANGE**
 
 ```bash
