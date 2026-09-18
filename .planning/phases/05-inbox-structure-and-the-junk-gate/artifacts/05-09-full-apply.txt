@@ -1,0 +1,336 @@
+05-09 TASK 3 — THE REMAINING 21 VOLUMES, AND THE FOUR INSTRUMENTS THAT JUDGED THEM
+===================================================================================
+Run 2026-09-18 / 19, LXC 100 (root@172.16.1.159) and atlantis (root@172.16.1.158).
+Includes two things that went wrong and what was done about them. Neither reached the content.
+
+
+0. THE APPROVED SCOPE, AND WHAT THE OPERATOR'S NOTE GOT WRONG
+--------------------------------------------------------------
+Approved: 751 files in 22 volumes, 23 distinct (old -> new) substitutions, the 3,995
+already-canonical files left untouched.
+
+The operator's approval broke the 751 down as "20 volumes lacking the exclamation mark — 705
+files" plus Vol 001 (30), Vol 002 (30) and Vol 036 (36). That sub-breakdown does not add up —
+705 + 30 + 30 + 36 = 801, not 751 — so it was re-derived from the artefact rather than followed.
+MEASURED, from the operator-approved 05-08 dry run and reproduced exactly by the apply:
+
+    19 volumes lacking the `!`   655 files   (Vol 003,004,005,006,007,008,009,010,011,012,
+                                              013,015,016,017,021,023,024,027,029)
+    Vol 001, numberless           30 files
+    Vol 002, Roman numeral        30 files
+    Vol 036, three spellings      36 files
+                                 ---------
+                                 751 files in 22 volumes, 23 distinct pairs
+
+The TOTALS the operator stated — 751 files, 22 volumes, 23 pairs, 3,995 no-ops — are all correct
+and were all reproduced. Only the "20 volumes / 705 files" line was wrong, and it is corrected
+here rather than silently adopted or silently discarded.
+
+
+1. THE APPLY
+-------------
+Same throwaway arm as the pilot: `--rm --pull never --network none`, image asserted resident,
+scripts read-only, the collection bind-mounted READ-WRITE at its own absolute path, the snapshot
+proof read-only. Rule 4 is a fixed point on its own output, so `Vol 036` — already written by the
+pilot — was expected to contribute 40 no-ops rather than 40 rewrites.
+
+  exit 0, 288.17 s
+
+  measure                                  declared          observed        verdict
+  ---------------------------------------- ----------------- --------------- -------
+  folders seen                             115               115             MATCH
+  files seen                               4,746             4,746           MATCH
+  files changed                            715               715             MATCH
+  files unchanged                          4,031             4,031           MATCH
+    of which no-op proposals               4,031             4,031           MATCH
+  files skipped                            0                 0               MATCH
+  failures                                 0                 0               MATCH
+  rule 1 / 2 / 3 hits                      0 / 0 / 0         0 / 0 / 0       MATCH
+  rule 4 hits                              4,746             4,746           MATCH
+  counts_reconciled / rules_exclusive      true / true       true / true     MATCH
+
+4,031 = the 3,995 originally-correct files + the 36 the pilot wrote. `Vol 036` was a no-op on the
+second pass, which is the idempotence contract holding on real files rather than in a docstring.
+
+TOTAL WRITTEN ACROSS BOTH PASSES: 36 + 715 = 751. Exactly the approved scope. Not one file more.
+
+
+2. DEFECT 1 — THE APPLY RECORD LANDED IN THE CONTAINER'S EPHEMERAL LAYER
+-------------------------------------------------------------------------
+`--out` was pointed at /mnt/fast/safety/phase05/now-album-apply.ndjson, but only the
+.../phase05/05-09 SUBDIRECTORY and the proof FILE were bind-mounted. The parent directory was
+not. Docker created the path inside the container's writable layer, the tool wrote 4,746 records
+to it, and `--rm` discarded them.
+
+  * The WRITES were unaffected. The collection was correctly mounted read-write and all 715 files
+    were written; the tool exited 0 and its stderr summary is on disk. Only the EVIDENCE was lost.
+  * This is my invocation error, not a defect in the tool. Recorded rather than quietly re-run,
+    because "the artefact exists" and "the artefact was produced by the run it claims to describe"
+    are different statements and the second one is the one that matters.
+
+RECOVERY, in two parts, neither of which is "run it again and pretend":
+
+  (a) A corrected re-run, with .../phase05 mounted read-write. Because rule 4 is a fixed point,
+      this could not re-write anything — and did not. It produced `now-album-reapply.ndjson`:
+
+        4,746 records, `written: false` on ALL 4,746, `noop` on all 4,746,
+        files changed 0, failures 0, .failed 0 bytes, exit 0, 609.52 s
+
+      A path/mtime/size fingerprint of all 4,751 files either side of that run shows **0 moved,
+      0 vanished, 0 appeared**. A second `--apply` over already-normalised files writes nothing,
+      asserted at the filesystem level rather than from the tool's own counters. That is
+      T-05-09-06's mitigation, measured at full scale.
+
+  (b) `now-album-apply.ndjson` was RECONSTRUCTED FROM MEASUREMENT — and the reconstruction is
+      arguably a better artefact than the one that was lost, because it is not the writer's own
+      report. For each of the 751 paths whose mtime moved:
+
+        old  <- the ID3v2 TALB frame of the file's twin INSIDE the ZFS snapshot
+                `tank/downloads@pre-phase5`, joined by basename
+        new  <- the ID3v2 TALB frame of the live file
+
+      Both read by `albumscan.py`, a parser that is NEITHER mutagen (which did the writing) nor
+      ffprobe (which the QUAL-01 capture uses). 751 records, 0 unjoined.
+
+      CROSS-CHECKED against the operator-approved dry run on the full (path, old, new) triple:
+
+        rows in the reconstruction          751
+        rows in the 05-08 approved dry run  751
+        in the reconstruction, not approved   0
+        approved, not in the reconstruction   0
+
+      Two instruments sharing no input, agreeing on all 751 rows. Every record: field `album`,
+      rule 4, `written: true`, and `old != new` on all 751.
+
+      The 23 distinct (old -> new) pairs reproduce the operator's approved list exactly, including
+      `...! Vol.36  CD2` x20 with its double space and `...! Vol.36 CD1` x16.
+
+
+3. DEFECT 2 — ATLANTIS REBOOTED MID-VERIFICATION
+--------------------------------------------------
+While the 45 GB after-capture (`ffmpeg` + `ffprobe`, two processes per file) was running, a full
+ID3-header pass over the 4,746 snapshot twins was started CONCURRENTLY. ssh to LXC 100 then timed
+out during banner exchange, and both hosts came back with `up 0 min` / `up 2 min`.
+
+This is the documented atlantis memory-pressure signature, and running two whole-collection reads
+at once is a fair reading of the cause. Recorded so the next plan does not repeat it: on this
+estate, whole-collection passes over `tank` are run ONE AT A TIME.
+
+WHAT WAS AT RISK, AND WHY THE ANSWER IS NOTHING:
+
+  * No write was in flight. Both applies had completed and been fingerprinted before the capture
+    started, and the corrected re-run had already proved 0 further mtimes moved.
+  * Asserted rather than assumed: a fresh fingerprint after the reboot, compared to the one taken
+    before it — **4,751 rows either side, 0 moved, 0 vanished, 0 appeared**. No torn write, no
+    truncated file, no lost file.
+  * `zpool status -x`: all pools healthy.
+  * The interrupted work was READ-ONLY and resumable. The capture is ledger-based by design; it
+    resumed from 1,237 and completed at 4,746 with 0 failed.
+
+The resumed archive was VALIDATED rather than trusted, because a hard power-off during a
+gzip-append is exactly when a container file goes bad quietly:
+
+  gzip -t                                        exit 0
+  records                                        4,746
+  lines with a 32-hex audio_md5                  4,746  (i.e. every line parses)
+  distinct audio_md5                             4,735  (the 11 known DUPE-01 groups, 05-07)
+  duplicate source_path from the resume          0
+
+
+4. THE GATE — THE FULL-COLLECTION FIELD-LEVEL DIFF
+----------------------------------------------------
+  bash scripts/diff-music-tags.sh phase05-now-before.ndjson.gz phase05-now-after.ndjson.gz
+  exit 0
+
+  category                                    declared        observed    verdict
+  ------------------------------------------- --------------- ----------- -------
+  MATCHED                                     4,735           4,735       MATCH
+  MISSING_AFTER                               0               0           MATCH
+  NEW_AFTER                                   0               0           MATCH
+  FIELDS_DROPPED                              0               0           MATCH
+  FIELDS_GAINED                               0               0           MATCH
+  FIELDS_CHANGED                              740, album only 740, album   MATCH
+  matched files with ZERO tag fields BEFORE   0               0           MATCH
+
+TWO NUMBERS IN THAT TABLE ARE NOT THE ONES THE PLAN TEXT PRE-DECLARED, AND BOTH ARE CORRECT.
+
+  * The plan says "MATCHED equal to the collection's mp3 count", i.e. 4,746. The observed 4,735 is
+    right and 4,746 was never achievable: `diff-music-tags.sh` joins on `audio_md5`, and plan
+    05-07 measured 11 groups of files sharing one bitstream (9 of them inside `Vol 004`, a
+    three-edition merge). 4,746 records collapse to 4,735 distinct keys on BOTH sides. MATCHED
+    equals the distinct-key count, which is the correct form of the assertion.
+  * FIELDS_CHANGED is 740, not 751, for the same reason and it reconciles exactly. All 22 files in
+    the 11 duplicate groups fall inside the written set (the groups live in Vol 002/003/004, all
+    of which were written), so 22 written paths collapse to 11 keys: 751 - 11 = 740. Measured, not
+    argued: distinct changed keys = 740, duplicate groups in BEFORE = 11.
+
+ASSERTED MECHANICALLY, NOT BY READING 740 ROWS:
+
+  jq -r '.fields_changed[].field' | sort | uniq -c        ->   740 album
+
+  One distinct field name across every changed row, and it is `album`. No `tracktotal`, no
+  `artist`, no `title`, no `comment`, no `date`. D-10's exclusion of the volumes 4 / 8 / 9
+  tracktotal repair is therefore discharged by measurement: `tracktotal` does not appear in the
+  changed set at all. That repair belongs to Phase 6.
+
+  distinct AFTER values among changed rows                22   (= the 22 written volumes)
+  AFTER values failing ^Now That's What I Call Music! \d{1,3}$   0
+  changed source_paths NOT among the 751 written paths    0    (a strict subset)
+
+FIELDS_GAINED 0 is the other half of the safety statement: mutagen synthesised no
+`COMM:ID3v1 Comment` frame from the ID3v1 block and translated no `TYER` into `TDRC`. The two
+load-time defaults the tool sets explicitly against both held over 4,746 files.
+
+MATCHED 4,735 with MISSING_AFTER 0 and NEW_AFTER 0 is the direct measurement that `audio_md5`
+did not move on ANY of the 751 written files. Had `preserve_id3v1_trailer()` failed,
+`save(v1=UPDATE)` would have regenerated the ID3v1 block, moved the key, and the written files
+would have appeared as MISSING_AFTER plus NEW_AFTER instead of inside MATCHED. Phase 7's join key
+survives this write. That is D-10's whole safety argument, measured rather than restated.
+
+The vacuous-pass guard: ZERO matched files had an empty tag set on the BEFORE side. "No fields
+dropped" here means fields were present and survived.
+
+
+5. THE DELIVERABLE, ASSERTED FROM THE FILES BY A THIRD PARSER
+---------------------------------------------------------------
+Not from the NDJSON and not from the capture. `albumscan.py` walks the 115 `Vol NNN` folders and
+reads TALB straight out of the ID3v2 frame table, decoding per the frame's own encoding byte:
+
+  Vol NNN folders scanned                                     115
+  files with NO TALB frame                                    0
+  folders carrying more than one distinct album value         0
+  distinct album values across the collection                 115
+  every folder's value == its own canonical string            True
+  value set == the 115 expected canonical strings             True
+  VERDICT                                                     PASS
+
+That is the actual deliverable and the only reason the write was in scope: beets treats one
+directory as one album candidate, and `Vol 036` previously held three different album strings.
+It now holds one. 117 distinct values across the collection before, 115 after — one per volume.
+
+
+6. SCOPE — AND THE PLAN CRITERION THAT PASSES VACUOUSLY
+--------------------------------------------------------
+The plan's acceptance criterion is:
+
+    "`zfs diff tank/downloads@pre-phase5 tank/downloads` from atlantis shows modifications
+     confined to paths under the collection folder"
+
+IT WAS RUN, AND IT PASSES, AND IT PROVES NOTHING. Recorded rather than quoted:
+
+  total lines                                          28,845
+  change types                       23,996 `+`, 88 `-`, 7 `M`, 4,754 `R`
+  `M` lines on a REGULAR FILE                          0
+  `M` lines on any .mp3                                0
+  the 7 `M` lines                    all DIRECTORIES — /mnt/tank/downloads and six children
+  inside the collection              115 `+`, 9 `-`, 4,750 `R`, 0 `M`
+
+`zfs diff` collapses "renamed AND modified" into a single `R` record, and plan 05-07 renamed
+EVERY mp3 in this collection relative to `@pre-phase5`. Driven directly: a file this plan
+demonstrably wrote —
+
+  R  F  .../VA-Now_.../01. U2 - Discotheque.mp3 -> .../VA-Now_.../Vol 036/01. U2 - Discotheque.mp3
+
+— carries an `R` line and no `M` line at all. So this criterion would report the identical
+"0 modifications on any mp3" whether this plan had written 751 files or zero. It is
+non-discriminating, in the same family as 05-08's finding about its own plan's `jq` verify.
+
+(The 23,996 `+` and 88 `-` outside the collection are SABnzbd's ordinary inflow since
+2026-09-18T15:42 at roughly one job per 72 s. Not this plan's, and not new.)
+
+REPLACED WITH AN INSTRUMENT THAT CAN FAIL IN BOTH DIRECTIONS — whole-file md5 against the
+snapshot twin, on two arms:
+
+  WRITTEN arm    25 files, spread over 22 volumes
+     files whose content MATCHES the snapshot (must be 0)      0
+  UNWRITTEN arm  25 files, spread over 25 volumes
+     files whose content DIFFERS from the snapshot (must be 0) 0
+  twins not found in the snapshot                              0
+  VERDICT                                                      PASS
+
+The written arm proves the instrument can SEE a write; without it, "the unwritten files are
+identical" would be the same worthless statement `zfs diff` makes. The unwritten arm is the scope
+claim. Bounded to 25 per arm deliberately: an unbounded pass over 45 GB x 2 is what caused § 3.
+
+Corroborated by the fingerprint arithmetic over the whole collection, which needs no sampling:
+
+  files that moved during the pilot                            36
+  files that moved during the full apply                       715
+  files that moved during the corrected re-run                 0
+  files that moved across the reboot                           0
+  ------------------------------------------------------------------
+  total moved                                                  751
+  files in the collection                                      4,751
+  never touched                                                4,000  (3,995 mp3 + 5 sidecars)
+
+and the 715 that moved in the full apply were compared as a SET, not a count, against the
+operator-approved dry run's effective changes outside `Vol 036`:
+
+  moved but not approved   0        approved but not moved   0
+
+
+7. THE SCOPE ASSERTION THE PLAN ASKED FOR AS A 30-FILE SAMPLE, RUN OVER ALL 4,746
+----------------------------------------------------------------------------------
+The plan asks for "a sample of at least 30 files spread across volumes" whose ID3v2 frame-ID
+multiset is unchanged except TALB and whose trailing ID3v1 block is byte-identical. The ZFS
+snapshot makes a full census affordable, so the sample was not needed:
+
+  live mp3 found                                  4,746
+  joined to a snapshot twin by basename           4,746
+  UNJOINED                                        0
+  UNPARSEABLE ID3v2 either side                   0
+  ID3v2 FRAME SET MOVED                           0
+  ID3v1 TRAILER MOVED (byte-identical md5)        0
+  VERDICT                                         PASS
+
+Parsed WITHOUT mutagen, deliberately: an assertion made with the library that did the writing
+could not catch that library normalising something on load.
+
+Run TWICE — once before the full apply (which covers the pilot's 36 files independently of the
+pilot's own gate) and once after (which covers all 751). PASS both times.
+
+DRIVEN TO FAILURE, because an instrument only ever seen to pass has not been shown to
+distinguish anything. Re-run over `Vol 036` with each file joined to the WRONG twin (the next
+basename in sort order):
+
+  ID3v2 FRAME SET MOVED    36   e.g. symmetric difference [TCOM, TEXT, TMED, TSRC, TXXX]
+  ID3v1 TRAILER MOVED      34
+  VERDICT                  FAIL, exit 1
+
+
+8. WHAT WAS DELIBERATELY NOT TOUCHED
+-------------------------------------
+  * Volumes 4, 8 and 9's tracktotal disagreement (+13 / +9 / +13). D-10 declined it for this
+    phase; guessing a tracktotal is worse than leaving it flagged. Discharged by MEASUREMENT, not
+    by intention: `tracktotal` does not appear in the diff's changed-field set, which contains
+    `album` and nothing else. Repair belongs to Phase 6.
+  * Ownership and modes. No `chown`, no `chmod`. The 115 volume directories remain `root:root` and
+    the files `apps:apps`; D-24's tree-wide sweep is plan 05-10 and runs last per D-27.
+  * The QUAL-01 before-state `phase05-now-before.ndjson.gz` was neither regenerated nor modified.
+  * `/mnt/tank/media/Music`. Nothing in this plan mounted it, read it or wrote it. Phase 1's D-20
+    holds.
+
+
+9. ESTATE STATE
+----------------
+  * `scripts/quick-health-check.sh` exits **1**, unchanged in shape, for the pre-existing and
+    unrelated reason logged in `deferred-items.md` (`interpolated-host-path inventory MOVED:
+    expected=12, found=13`). The blocks this phase cares about are green: the `audio.bash` guard
+    block FAILURES total 0, the Jellyfin transcode block FAILURES total 0. Not attributable to
+    this plan and not touched.
+  * Repo on LXC 100 fast-forwarded d116447 -> 6496cda before the first write; the host-side copy
+    of `normalise-dj-tags.py` hashes 70406a10501dda0ded5286b69e66d6cf6cb5818814e6b9e8c73855881391aeea,
+    identical to 05-08's record. The tool was NOT edited by this plan.
+  * `tank/downloads@pre-phase5` remains, and remains the only undo for these 751 tag writes.
+  * INBX-01/02/03 remain UNTICKED; all ticks belong to plan 05-11.
+
+
+ARTEFACTS
+----------
+  /mnt/fast/safety/phase05/now-album-apply.ndjson       751 reconstructed applied-change records
+  /mnt/fast/safety/phase05/now-album-reapply.ndjson     4,746 records, 0 written — idempotence
+  /mnt/fast/safety/phase05/now-album-diff.txt           the full-collection gate verdict
+  /mnt/fast/safety/music-pre-project/tags/phase05-now-after.ndjson.gz   4,746 records, 0 failed
+  /mnt/fast/safety/phase05/05-09/                       every harness and transcript named above
+  atlantis:/root/05-09/zfsdiff.txt                      the 28,845-line zfs diff, kept because the
+                                                        vacuity finding is worth reproducing
