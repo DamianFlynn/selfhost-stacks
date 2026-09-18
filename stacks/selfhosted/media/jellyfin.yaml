@@ -82,6 +82,14 @@ services:
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped
+    # Docker's default is 10s, and that is NOT enough for Jellyfin 12: it runs
+    # VACUUM + ANALYZE on shutdown (12.0, untimed) and a WAL checkpoint (12.1).
+    # A SIGKILL part-way through corrupts jellyfin.db into a boot loop that is
+    # only recoverable from a full /config restore (jellyfin#17831). 5m is the
+    # maintainer's own figure from that thread.
+    # Set NOW, while still on 10.11.11, so the guard is already in place on the
+    # day of the 12.2 upgrade rather than being one more thing to remember.
+    stop_grace_period: 5m
     # profiles: ["media", "all"]
     # user: $PUID:$PGID
     group_add:
