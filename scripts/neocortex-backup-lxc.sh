@@ -101,13 +101,18 @@ op_prepare() {
   local dir; dir=$(run_dir)
   [[ -e $dir ]] && die "run directory already exists"
   install -d -m 0700 "$STAGING" "$dir"
+  # A partial run must not linger: `cleanup` deliberately refuses a directory with no
+  # manifest, so prepare removes its own mess. Cleared once the manifest is written.
+  trap 'rm -rf -- "$dir"' ERR
 
   # --- Postgres: dump inside the container, verify with the SAME image's pg_restore so
   #     the reader can never be an older major than the writer.
   docker exec "$PG_CONTAINER" sh -lc \
     "pg_dump -Fc --compress=0 -U \"\$POSTGRES_USER\" -d $PG_DB" > "$dir/agentic_os.dump"
   [[ -s $dir/agentic_os.dump ]] || die "pg_dump produced an empty file"
-  docker run -i --rm pgvector/pgvector:pg18 pg_restore --list - < "$dir/agentic_os.dump" > "$dir/agentic_os.toc" \
+  # pg_restore cannot read a custom-format dump from stdin ("could not open input file
+  # \"-\"") — it seeks. Mount the run directory read-only and name the file instead.
+  docker run --rm -v "$dir:/w:ro" pgvector/pgvector:pg18 pg_restore --list /w/agentic_os.dump > "$dir/agentic_os.toc" \
     || die "pg_restore --list refused the dump"
   grep -q ';' "$dir/agentic_os.toc" || die "pg_restore --list produced no table of contents"
 
@@ -151,6 +156,7 @@ print(json.dumps({
                 "doc_count": int(doc_count), "update_seq": update_seq},
 }, indent=2))
 PY
+  trap - ERR
   printf 'prepared %s\n' "$RUN_ID" >&2
   cat "$dir/lxc-manifest.json"
 }
