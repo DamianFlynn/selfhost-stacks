@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-18T20:51:49.511Z"
+last_updated: "2026-09-18T21:25:03.719Z"
 last_activity: 2026-09-18 -- Phase 05 execution started
 progress:
   total_phases: 10
   completed_phases: 4
   total_plans: 74
-  completed_plans: 67
+  completed_plans: 68
   percent: 40
 ---
 
@@ -29,7 +29,7 @@ pipeline that someone owns.
 ## Current Position
 
 Phase: 05 (inbox-structure-and-the-junk-gate) — EXECUTING
-Plan: 7 of 11 — **05-01 … 05-06 COMPLETE** (fence taken, `_inbox` created, D-21 inode
+Plan: 8 of 11 — **05-01 … 05-07 COMPLETE** (fence taken, `_inbox` created, D-21 inode
 proof driven; criteria 2/3/4 amended in band and criterion 4 now asserted by the standing check; the
 junk gate built and its refusals and positive control driven; **the sweep has RUN** — 40 rows
 removed, 4 moved, 8 excluded entirely, every affected path attributed to an approved row by
@@ -41,7 +41,14 @@ approvable mapping and moved nothing** — 4,751 rows, 119 manifest directories 
 115 volume folders under a driven total-coverage assertion, the two instruments disagreeing on
 **0 of 4,746** files, and the 23 flatten collisions reduced by the variant-edition merge to **4**
 cross-volume cases, every one decided by the file's own `album` tag with the rejected claim
-recorded in the map row)
+recorded in the map row; and **05-07 APPLIED the split** — the operator approved the mapping with no
+amendments, the approval bound to `sha256 9ef5da2b…` which was re-read unchanged both before the
+first rename and after the last, **4,750 inode-preserving renames** producing 115 flat `Vol 001`…
+`Vol 115` folders holding all 4,746 mp3 with **zero directories at depth 2** and zero mp3 left at the
+collection root, the affected set reconciled to the approved map by `zfs diff` at **0 off-map,
+0 unrenamed, 0 unattributed and 0 deletions**, the per-volume identity computed from the resulting
+tree landing on the pre-declared 11-row exception set exactly, and the **QUAL-01 before-state
+captured complete** at 4,746 records with a zero-tag-field count of 0)
 Status: Executing Phase 05. Do NOT run with `--auto`/`--chain` — four
 gates are `checkpoint:decision`, which auto-selects the first option under auto-mode.
 
@@ -667,7 +674,7 @@ back onto anything under `/mnt/tank/media`.
 Phase 1 complete: SAFE-01…05, WRIT-01…04, QUAL-01
 Phase 2 complete: CONS-01, CONS-02, CONS-03
 
-Progress: [██░░░░░░░░] 22%  *(MILESTONE progress: **2 of 9 phases** complete. All 19 plans written so far are executed 19/19 — but phases 3-9 are not planned yet, so plan-count is not milestone progress. ⚠ `gsd-sdk query state.update-progress` recomputed this as **51%** on 2026-09-02 by counting SUMMARY files against a 39-plan denominator that only covers planned phases; that figure is WRONG and was reverted. Do not let the SDK rewrite this line — phase 02.1 is an INSERTION and is not one of the 9 milestone phases. ⚠ **It happened a second time on 2026-09-13** during plan 04-14, recomputed as **97%** against a 60-plan denominator, and was reverted again. The verb rewrites this line every time it runs; `git diff .planning/STATE.md` after any state write is not optional. ⚠ **Third occurrence 2026-09-18** during plan 05-01, recomputed as **84%** against a 74-plan denominator, reverted again. ⚠ **Fourth occurrence 2026-09-18** during plan 05-02, recomputed as **85%** against the same 74-plan denominator, reverted again — and this time the verb ALSO truncated the frontmatter `last_activity:` back to a bare "Phase 05 execution started", so the damage is not confined to this line. ⚠ **Fifth occurrence 2026-09-18** during plan 05-03, recomputed as **86%** against the same 74-plan denominator, reverted again; on this run the collateral damage was all three of the documented sites at once — the frontmatter `last_activity:`, the `Status:` line (leaving `gates are ...` orphaned under it), and the `Last activity:` line 560 lines down. ⚠ **Sixth occurrence 2026-09-18** during plan 05-04, recomputed as **88%** against the same 74-plan denominator, reverted again, with the same three collateral sites damaged a second consecutive time — the damage set is now stable and predictable, which is the strongest argument yet for not running the verb against this line at all. ⚠ **Seventh occurrence 2026-09-18** during plan 05-05, recomputed as **89%** against the same 74-plan denominator, reverted again, same three collateral sites for the third consecutive run. Seven occurrences, seven figures, zero of them milestone progress — the verb cannot compute this figure and should not be run against this line ⚠ **Eighth occurrence 2026-09-18** during plan 05-06, recomputed as **91%** against the same 74-plan denominator, reverted again, same three collateral sites for the fourth consecutive run. Eight occurrences, eight figures, zero of them milestone progress.)*
+Progress: [██░░░░░░░░] 22%  *(MILESTONE progress: **2 of 9 phases** complete. All 19 plans written so far are executed 19/19 — but phases 3-9 are not planned yet, so plan-count is not milestone progress. ⚠ `gsd-sdk query state.update-progress` recomputed this as **51%** on 2026-09-02 by counting SUMMARY files against a 39-plan denominator that only covers planned phases; that figure is WRONG and was reverted. Do not let the SDK rewrite this line — phase 02.1 is an INSERTION and is not one of the 9 milestone phases. ⚠ **It happened a second time on 2026-09-13** during plan 04-14, recomputed as **97%** against a 60-plan denominator, and was reverted again. The verb rewrites this line every time it runs; `git diff .planning/STATE.md` after any state write is not optional. ⚠ **Third occurrence 2026-09-18** during plan 05-01, recomputed as **84%** against a 74-plan denominator, reverted again. ⚠ **Fourth occurrence 2026-09-18** during plan 05-02, recomputed as **85%** against the same 74-plan denominator, reverted again — and this time the verb ALSO truncated the frontmatter `last_activity:` back to a bare "Phase 05 execution started", so the damage is not confined to this line. ⚠ **Fifth occurrence 2026-09-18** during plan 05-03, recomputed as **86%** against the same 74-plan denominator, reverted again; on this run the collateral damage was all three of the documented sites at once — the frontmatter `last_activity:`, the `Status:` line (leaving `gates are ...` orphaned under it), and the `Last activity:` line 560 lines down. ⚠ **Sixth occurrence 2026-09-18** during plan 05-04, recomputed as **88%** against the same 74-plan denominator, reverted again, with the same three collateral sites damaged a second consecutive time — the damage set is now stable and predictable, which is the strongest argument yet for not running the verb against this line at all. ⚠ **Seventh occurrence 2026-09-18** during plan 05-05, recomputed as **89%** against the same 74-plan denominator, reverted again, same three collateral sites for the third consecutive run. Seven occurrences, seven figures, zero of them milestone progress — the verb cannot compute this figure and should not be run against this line ⚠ **Eighth occurrence 2026-09-18** during plan 05-06, recomputed as **91%** against the same 74-plan denominator, reverted again, same three collateral sites for the fourth consecutive run. Eight occurrences, eight figures, zero of them milestone progress. ✅ **Plan 05-07 broke the loop: `state.update-progress` was NOT RUN AT ALL**, on the strength of this note's own conclusion after eight identical reverts — acting on a written finding instead of re-deriving it a ninth time. This line is therefore untouched by that verb for the first time since 05-01. `state.advance-plan` was still required and still damaged its own three sites — the frontmatter `last_activity:`, the multi-line `Status:` field, and the `Last activity:` line ~600 — all three reverted, leaving only the intended `completed_plans` and `Plan:` changes. **The damage set has now been stable across five consecutive runs: `advance-plan` corrupts three sites, `update-progress` corrupts this one, and `record-metric`, `add-decision` and `record-session` were each driven this plan and corrupted nothing.** That breakdown is finer than "the SDK corrupts STATE.md" and is the actionable form: run the three clean verbs freely, diff after `advance-plan`, never run `update-progress` against this line.)*
 
 Plans 02-01 through 02-09 are executed. **CONS-01, CONS-02 and CONS-03 are all complete.**
 
@@ -884,6 +891,7 @@ already open so only 2049 is this phase's delta.
 | Phase 05 P04 | ~60 min | 3 tasks | 11 files |
 | Phase 05 P05 | ~40 min | 3 tasks | 11 files |
 | Phase 05 P06 | ~55 min | 2 tasks | 8 files |
+| Phase 05 P07 | ~30 min | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -1204,6 +1212,9 @@ Recent decisions affecting current work:
 - [Phase 05]: [05-05]: group the Now! collection by the manifest volume directory found from the END of the path, never by a fixed field index (three path depths) and never by a trailing-number parse of the album string (D-03). 119 distinct directories, not the documented 116.
 - [Phase 05]: 05-06: volume numbers come only from the manifest DIRECTORY component via a recorded rule chain; no regex touches an album value, and total coverage of 1..115 is asserted rather than counted
 - [Phase 05]: 05-06: the 4 cross-volume collisions surviving the variant-edition merge are decided by the file's own album tag, with the rejected claim recorded in the map row; zero guessed, zero flagged
+- [Phase 05]: 05-07: An operator approval is bound to a CONTENT HASH, re-read both before the first destructive act AND after the last — the second reading is what proves the tool acted FROM the approved artifact rather than rewriting it
+- [Phase 05]: 05-07: A destructive batch is reconciled against `zfs diff`, not against the tool's own counters — a tool reporting on itself cannot detect a path it affected but never recorded; an off-map path is a FAILURE, not a footnote
+- [Phase 05]: 05-07: Assert the (devid, inode) PAIR across a rename, never the inode alone — this estate has a known inode collision (tank/downloads and tank/media/Music both report inode 34), so an inode-only assertion can agree by accident
 
 ### Pending Todos
 
@@ -1352,8 +1363,8 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-09-18T20:51:41.333Z
-Stopped at: Completed 05-05-PLAN.md
+Last session: 2026-09-18T21:25:03.706Z
+Stopped at: Completed 05-07-PLAN.md — the split is APPLIED
 Resume file: None
 
 **NEXT: 02.1-10, the last plan of the phase (wave 9).** It is unblocked — it depends on 02.1-06 and
