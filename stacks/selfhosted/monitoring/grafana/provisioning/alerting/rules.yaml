@@ -55,19 +55,11 @@ groups:
             {{ $values.A.Value }} container(s) are running an image tag this repository no longer
             pins.
           description: >-
-            Renovate automerges image-tag PRs into git at any hour and NOTHING DEPLOYS — merging a
-            PR changes the compose file only, and the host keeps running the old image until
-            someone pulls and recreates the container. This alert is the instrument for that gap.
+            Run: ssh root@172.16.1.159 'bash /mnt/fast/stacks/scripts/check-drift.sh'
+            for the per-container list (running tag -> declared tag).
 
-            WHAT TO DO: ssh root@172.16.1.159, then
-            `bash /mnt/fast/stacks/scripts/check-drift.sh` for the per-container list
-            (name, running tag -> declared tag). Pull and recreate the ones you want moved.
-
-            THIS ALERT DOES NOT DEPLOY ANYTHING (D-01, v1 is alert-only). Nothing will clear it but
-            a human. See DEPLOYMENT.md § 5.
-
-            KNOWN LIMIT: a floating tag (:latest, :main, a two-part tag like 2.13) that has moved
-            upstream reads as NO drift here, because both sides still carry the same string.
+            Alert-only: nothing deploys itself, so only a human clears this.
+            Why it exists, and the floating-tag limit: monitoring/README.md § Image drift detection.
         data:
           - refId: A
             relativeTimeRange:
@@ -126,16 +118,11 @@ groups:
           summary: >-
             {{ $values.A.Value }} container(s) are unhealthy or stuck in state `created`.
           description: >-
-            `created` IS A DOCUMENTED ESTATE BLIND SPOT AND IT IS WHY THIS RULE COUNTS IT. The
-            obvious filter — `docker ps --filter status=restarting|dead|exited` — DOES NOT MATCH
-            `created`, and a bare `docker ps` does not list those containers at all. That gap once
-            left dispatcharr and teleport down for six weeks while every check reported a clean
-            estate.
+            Run: ssh root@172.16.1.159 'docker ps -a'  (NOT `docker ps` — it hides `created`,
+            and it reported cadvisor "Up 2 weeks" while inspect showed it exited 16 days earlier).
+            Then: docker inspect <name> --format '{{ .State.Status }} {{ .State.ExitCode }}'
 
-            WHAT TO DO: ssh root@172.16.1.159 and run `docker ps -a`, not `docker ps`. Then
-            `docker inspect <name> --format '{{ .State.Status }} {{ .State.ExitCode }}'` — and
-            BELIEVE INSPECT OVER ps. On 2026-09-18 `docker ps` reported cadvisor `Up 2 weeks` for a
-            container that had exited with code 137 sixteen days earlier.
+            Believe inspect over ps. Background: monitoring/README.md § Image drift detection.
         data:
           - refId: A
             relativeTimeRange:
@@ -199,24 +186,16 @@ groups:
           area: estate
         annotations:
           summary: >-
-            The image-drift measurement has not succeeded for {{ $values.A.Value }} seconds. THE
-            OTHER TWO RULES ARE NOW MEANINGLESS.
+            Drift check has not succeeded for {{ $values.A.Value }}s — the other two rules are
+            now stale and their silence is meaningless.
           description: >-
-            THIS IS THE ONE THAT MATTERS. `selfhost-image-drift.timer` has not produced a
-            successful run, so `selfhost_image_drift_containers`, `selfhost_containers_unhealthy`
-            and `selfhost_containers_created` are all FROZEN AT THEIR LAST VALUES. Rules 1 and 2
-            are reading a snapshot, and their SILENCE MEANS NOTHING — a dead timer and a healthy
-            estate look identical from here. That is why this rule exists and why it is critical.
+            The timer has stopped producing successful runs, so the other two rules are frozen at
+            their last values — their silence now means nothing.
 
-            NOTE `last_success` MEANS THE MEASUREMENT RAN. It does NOT mean there was no drift;
-            drift has its own gauge.
-
-            WHAT TO DO: ssh root@172.16.1.159, then
-            `systemctl list-timers selfhost-image-drift.timer` and
-            `journalctl -u selfhost-image-drift.service -n 50`. Check the textfile exists and is
-            fresh: `ls -l /mnt/fast/appdata/monitoring/node-exporter-textfile/image-drift.prom`.
-            A missing file after a failed run is CORRECT behaviour — check-drift.sh leaves the
-            previous file byte-identical rather than writing a fresh timestamp on a dead run.
+            Run: ssh root@172.16.1.159 'systemctl list-timers selfhost-image-drift.timer;
+            journalctl -u selfhost-image-drift.service -n 50'
+            A stale .prom after a failed run is CORRECT — the script never writes a fresh timestamp
+            on a dead run. Background: monitoring/README.md § Image drift detection.
 
             If this alert fires and the timer was never installed at all, that is gated host step
             G3 in stacks/selfhosted/monitoring/README.md, and it is expected until someone runs it.
