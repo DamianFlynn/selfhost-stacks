@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-18T07:36:35.000Z"
-last_activity: 2026-09-18 -- quick 260918-byj CLOSED PHASE 4. The operator signed the criterion-3 override in 04-VERIFICATION.md's frontmatter (accepted_by Damian Flynn, accepted_at 2026-09-18T07:36:35Z; status gaps_found -> passed, overrides_applied 0 -> 1), so the phase closes at 5/5 with criterion 3 discharged by a SIGNED OVERRIDE, not by a byte proof. ROADMAP Phase 4 ticked; beets.md's interim-status section superseded in band; 04-18 and 04-19 recorded as -PARTIAL (never executed, nothing armed). ESTATE UNTOUCHED -- nscript_enable still 0, direct_unpack still 1; this task ran no estate command at all. Next: plan Phase 5 (Inbox Structure and the Junk Gate)
+last_updated: "2026-09-18T10:47:24.493Z"
+last_activity: 2026-09-18 -- Phase 5 context gathered (/gsd-discuss-phase 5). 25 decisions captured across 8 gray areas in 05-CONTEXT.md. Three ROADMAP criteria corrected on live measurement: criterion 2's Harry Potter clause names the wrong tree (the rip is in unsorted/, dj-mixes holds no video) and its scope is narrowed to music paths (6 of 10 _FAILED_/_UNPACK_ belong to Sonarr/Radarr); criterion 3's target is FLAT (4,760 files, zero subdirs) so the split derives volumes from the m3u map cross-checked against album tags -- a trailing-number regex silently misfiles 36 tracks because Vol.36 CD1/CD2 end in 1 and 2; criterion 4 measured ALREADY GREEN (zero _-prefixed dirs under Music), so it becomes an assertion. beets-flask moved to Phase 6, amending Phase 4's D-01. Operator chose to normalise all 209,039 tank/downloads entries to 568:568 against the recommendation. ESTATE UNTOUCHED -- read-only probes only, nothing created, moved or chowned. Next: /gsd-plan-phase 5
 progress:
   total_phases: 10
   completed_phases: 5
@@ -1306,12 +1306,10 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-09-14T06:40:00.000Z
-Stopped at: Phase 04 fully executed (16/16 plans) and re-verified — `gaps_found`, 4/5. Criterion 3 /
-TAGR-04's behavioural half stays OPEN **by operator decision** (2026-09-14) after two observation
-windows and five real music jobs; the override block in 04-VERIFICATION.md was deliberately NOT
-applied. Quick task 260914-a2y then closed code-review CR-01/WR-01.
-Resume file: .planning/phases/04-collapse-to-one-tagger/04-VERIFICATION.md
+Last session: 2026-09-18T10:47:24.469Z
+Stopped at: Phase 5 context gathered — 05-CONTEXT.md written and committed (32a39fb). Phase 5 is
+discussed but UNPLANNED; no plan files exist. Nothing in the estate was changed by this session.
+Resume file: .planning/phases/05-inbox-structure-and-the-junk-gate/05-CONTEXT.md
 
 **NEXT: 02.1-10, the last plan of the phase (wave 9).** It is unblocked — it depends on 02.1-06 and
 02.1-09 and both are now complete. Two things it should carry in:
