@@ -1,0 +1,104 @@
+Phase 5 plan 05-04, Task 3 — lidarr-import retired, 99-quarantine at its terminal state
+=======================================================================================
+Recorded: 2026-09-18
+
+/mnt/tank/downloads/lidarr-import — REMOVED, D-23 CLOSED
+--------------------------------------------------------
+Both artist folders were routed by the sweep to the destination the operator approved on
+their R8 PROPOSAL rows:
+
+  lidarr-import/Madonna          -> _inbox/02-review/Madonna           60 audio files
+  lidarr-import/Michael Jackson  -> _inbox/02-review/Michael Jackson  473 audio files
+
+Both are reported by `zfs diff` as RENAMES, not as copies — `lidarr-import` and `_inbox`
+are both devid 68, one dataset, so each move is an atomic inode-preserving rename(2).
+
+The directory was then removed with `rmdir`, the empty-only form. NO recursive removal was
+used on it, and it could not have been: `find lidarr-import -mindepth 1 | wc -l` returned 0
+immediately before the call, and `rmdir` refuses a non-empty directory by definition. That
+is the point of using it — the safety is in the tool, not in a check that precedes it.
+
+  test -e /mnt/tank/downloads/lidarr-import   ->  false
+
+Phase 1's D-23 is CLOSED here rather than passed to Phase 8. The estate carries one fewer
+unowned staging location.
+
+D-17 / D-20 TENSION, STATED RATHER THAN HIDDEN
+-----------------------------------------------
+D-17 says the `_inbox` tree is created empty and only 99-quarantine ever receives content.
+D-20 explicitly permits routing these two folders into the inbox. D-20 is the more specific
+decision and it governs.
+
+So Phase 6 and Phase 7 must not be surprised: **_inbox/02-review is NOT empty.** It holds
+`Madonna` (60 audio) and `Michael Jackson` (473 audio), placed there deliberately by this
+plan under operator approval, before either of those phases runs.
+
+99-quarantine — TERMINAL STATE, WITH NAMED RESIDUE
+---------------------------------------------------
+The timestamped batch directory the sweep created, `20260918T165406Z`, was emptied by the
+sweep's own removal stage and then removed with `rmdir`. It is gone.
+
+99-quarantine does NOT end empty, and that is the operator's deliberate choice, not a
+failure of the sweep. It holds exactly two entries:
+
+  _FAILED_Garth.Brooks-Ropin.The.Wind-CDP.7.06330-2-CD-FLAC-1991-EMG    428,685,519 B
+  _FAILED_Garth.Brooks-The.Ultimate.Hits-2CD-FLAC-2007-WRS            1,633,336,396 B
+
+REASON (operator amendment 2 to the candidate list): the SABnzbd job failed, but 1.92 GB of
+real FLAC across 44 files is present and may be usable. They were therefore treated exactly
+as an R8 PROPOSAL row is treated — moved, never removed — instead of being destroyed with
+the rest of the R1/R2 set.
+
+  `find 99-quarantine -mindepth 1 | wc -l` returns **51**, not 0. The plan's Task 3
+  acceptance criterion offers two branches and this is the second one: every remaining
+  entry named, with the operator's reason. The 51 break down as
+    2 directories
+   44 .flac   the audio the amendment exists to preserve (10 + 34, matching the approved
+              audio counts exactly)
+    1 .m3u    000-garth_brooks-the_ultimate_hits-2cd-flac-2007-wrs.m3u
+    2 .nfo    the two release nfos
+    2 .zip    kET9YdrAzW9cau1PKu93G.zip and HpHSwA7JYYp73vKAeUMzHJsC.zip — random-named
+              artefacts of the failed jobs. Left in place: they arrived inside the
+              directories the operator chose to keep, and striking them was not approved.
+
+NO chmod AND NO chown WAS ATTEMPTED ANYWHERE IN THIS TASK
+----------------------------------------------------------
+A rename preserves ownership, so the moved content carries what it already had:
+
+  apps:apps 777  99-quarantine/_FAILED_Garth.Brooks-Ropin.The.Wind-...-EMG
+  apps:apps 777  99-quarantine/_FAILED_Garth.Brooks-The.Ultimate.Hits-...-WRS
+  apps:apps 777  02-review/Madonna
+  apps:apps 777  02-review/Michael Jackson
+
+That is D-26 working as designed — staging carries mixed ownership and is normalised once,
+tree-wide, by plan 05-10, per D-27. `chmod` is not attempted at all: it fails EPERM on tank
+even as real root.
+
+CLOSING ASSERTIONS
+------------------
+  criterion 2, the plan's verbatim find over music/unsorted/dj-mixes    0   (want 0)
+  D-22 / criterion 4, `_`-prefixed directories under /mnt/tank/media/Music
+                                                                       0   (want 0)
+  D-18, devid of _inbox and of 99-quarantine                          68   same as
+          downloads(68), nzb(68), unsorted(68), dj-mixes(68);
+          media/Music is 76 — still a different dataset, so the
+          atomic-rename property criterion 1 rests on is intact
+  incomplete/ before                          259 entries  108,927,263 B
+  incomplete/ after                           259 entries  108,927,263 B
+          Byte-identical, which is MORE than was expected and is not claimed as proof:
+          it is a live directory drained at roughly one music job per 72 s and simply
+          happened to be idle across the window. The fence proof is the zfs diff, which
+          shows zero destructive lines under that prefix.
+
+FINAL zfs diff AGAINST tank/downloads@pre-phase5
+-------------------------------------------------
+  before the sweep   +  20056   M  2   -   0   R  0
+  after the sweep    +  21036   M  7   -  87   R  4
+  after this task    +  22041   M  6   -  88   R  4
+
+Diffing the destructive lines of the last two captures returns exactly ONE new line:
+
+  -   /mnt/tank/downloads/lidarr-import
+
+which is this task's `rmdir` and nothing else. The batch directory left no line at all,
+because it was created after the snapshot and removed before the diff.
