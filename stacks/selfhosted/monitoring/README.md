@@ -252,21 +252,156 @@ docker compose -f stacks/selfhosted/monitoring/compose.yaml up -d
 # Already configured with --disable_metrics flag
 ```
 
-## Alerting (Future Enhancement)
+## Alerting
 
-To add alerting capabilities:
+> **Superseded 2026-09-18.** This section used to propose deploying Alertmanager and filling
+> Prometheus's `alerting:` block. **Do neither.** The estate alerts through **Grafana's own unified
+> alerting**, which is already running, straight to **Telegram** (D-02). `prometheus/prometheus.yml`
+> is deliberately left exactly as it is — node-exporter is already a scrape target, so the metrics
+> below arrive with no scrape-config change at all.
 
-1. Deploy Alertmanager:
-   ```yaml
-   # Add to compose.yaml
-   alertmanager:
-     image: prom/alertmanager:v0.27.0
-     volumes:
-       - ./alertmanager/config.yml:/etc/alertmanager/config.yml
-   ```
+Provisioned from three files, all read by Grafana at start-up from
+`grafana/provisioning/alerting/` (a **directory** mount, unlike the two single-file provisioning
+mounts):
 
-2. Configure alert rules in Prometheus
-3. Set up notification channels (Discord, Slack, Email, PagerDuty)
+| File | What it declares |
+|------|------------------|
+| `contact-points.yaml` | the `telegram-estate` receiver — **token and chat id as `$__env{}` placeholders only** |
+| `notification-policies.yaml` | one default route to that receiver, `repeat_interval: 12h` |
+| `rules.yaml` | the three rules below, all `noDataState: Alerting` |
+
+## Image drift detection
+
+**The question this answers:** *which containers are running an image that git no longer pins?*
+
+Renovate automerges image-tag PRs into this repo at any hour and **nothing deploys** — the host
+keeps running the old image until someone pulls and recreates the container. On 2026-09-18, **14 of
+the ~97 running containers were diverged and no instrument anywhere said so.**
+
+**v1 is ALERT-ONLY (D-01). It detects and tells you. It does not pull, recreate or apply anything.**
+
+### The instrument
+
+`scripts/check-drift.sh`, run **on LXC 100**:
+
+```bash
+ssh root@172.16.1.159 'bash /mnt/fast/stacks/scripts/check-drift.sh'        # human report
+ssh root@172.16.1.159 'bash /mnt/fast/stacks/scripts/check-drift.sh --prom' # write the metric
+bash /mnt/fast/stacks/scripts/check-drift.sh --help                        # the full contract
+```
+
+It resolves each container's declared pin through **that container's own compose labels** plus
+`docker compose config --format json`, so `include:` and `${VAR}` substitution both resolve and
+commented-out `image:` lines never enter the pin map. Keying per container rather than per image
+repo is what makes it correct: `socket-proxy` runs `v0.4.2` and the traefik project pins `v0.5.0`,
+while `stacks/mpe/edge/socket-proxy.yaml` *also* carries `v0.4.2` — a repo-wide search calls that
+clean, and it is not.
+
+### The metrics
+
+Written atomically into `/mnt/fast/appdata/monitoring/node-exporter-textfile/image-drift.prom` and
+picked up by node-exporter's textfile collector.
+
+| Metric | Meaning |
+|--------|---------|
+| `selfhost_image_drift_containers` | count of running containers on a tag git no longer pins |
+| `selfhost_image_drift_unresolvable_containers` | pins that cannot be read from the repo at all |
+| `selfhost_image_drift_container{name,running,declared}` | one series per drifted container |
+| `selfhost_containers_unhealthy` | docker health status `unhealthy` |
+| `selfhost_containers_created` | stuck in state `created` — the documented blind spot |
+| `selfhost_repo_commits_behind_origin` | **lower bound**, see limits below |
+| `selfhost_image_drift_last_success_timestamp_seconds` | when the measurement last **ran** |
+
+> ⚠️ `last_success` means **the measurement ran**. It does **not** mean there is no drift — drift
+> has its own gauge. It is written **only** on a successful run; on a could-not-look the existing
+> file is left **byte-identical** so it goes stale and the staleness rule fires. A fresh timestamp
+> on a failed run is the one outcome this metric exists to prevent.
+
+### ⚠️ The timer period and the staleness threshold are ONE decision
+
+`OnCalendar=hourly` + `RandomizedDelaySec=10m` means two healthy runs land **at most 70 minutes
+apart**, so `rules.yaml` uses **7200s** — one whole missed run of slack. A threshold *below* the
+period false-alarms on every ordinary gap; a threshold *far above* it hides a dead timer, which is
+the exact failure the metric exists to catch. **Change one and you must change the other in the
+same commit.** Both files say so.
+
+### Two known limits — stated because they make a green weaker than it reads
+
+1. **A floating tag that has moved upstream reads as no drift.** `:latest`, `:main` and two-part
+   tags like `2.13` all float: the registry re-points them, both sides of the comparison still
+   carry the same string, and the check says OK. This is DEPLOYMENT.md § 5's "two-part tags float"
+   trap in a new costume. Not fixed in v1 — fixing it means resolving digests against the registry,
+   a network dependency and rate-limit surface this check deliberately does not take on.
+2. **`commits behind` is a lower bound without a fetch.** It reads the last-fetched `origin/main`.
+   `DRIFT_GIT_FETCH=1` fetches first; it is **off by default** because a timer that mutates `.git`
+   hourly is a host change nobody asked for.
+
+### ⛔ Gated host steps — NOT EXECUTED BY THIS CHANGE
+
+Everything above is a **repo-side declaration**. Nothing in the commit that added it touched the
+estate: no directory created, no container recreated, no unit installed, no credential supplied.
+The four steps below are the runbook, and they are waiting on an explicit decision.
+
+#### G1 — create the textfile directory · **NOT EXECUTED BY THIS CHANGE**
+
+```bash
+ssh root@172.16.1.159
+install -d -o 568 -g 568 -m 0755 /mnt/fast/appdata/monitoring/node-exporter-textfile
+```
+
+#### G2 — pull and recreate node-exporter + grafana · **NOT EXECUTED BY THIS CHANGE**
+
+> ⚠️ **This recreates two running containers.**
+
+```bash
+ssh root@172.16.1.159
+cd /mnt/fast/stacks && git pull --ff-only
+docker compose -f stacks/selfhosted/monitoring/compose.yaml up -d node-exporter grafana
+```
+
+> **`node-exporter` is itself one of the drifted containers** (running `v1.11.1`, pinned
+> `v1.12.1`), so this step takes the count **14 → 13**. That is the change working, not a
+> regression. Record it; do not read a smaller number as a fault.
+
+#### G3 — install and enable the timer · **NOT EXECUTED BY THIS CHANGE**
+
+```bash
+ssh root@172.16.1.159
+cp /mnt/fast/stacks/scripts/systemd/selfhost-image-drift.{service,timer} /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now selfhost-image-drift.timer
+systemctl list-timers selfhost-image-drift.timer      # confirm it is scheduled
+systemctl start selfhost-image-drift.service          # one immediate run
+ls -l /mnt/fast/appdata/monitoring/node-exporter-textfile/image-drift.prom
+```
+
+#### G4 — supply the Telegram credentials **and prove delivery** · **NOT EXECUTED BY THIS CHANGE**
+
+The bot does not exist yet. Telegram bots cannot initiate a conversation, so the chat id only
+exists after you message it once.
+
+1. Telegram → **@BotFather** → `/newbot` → copy the HTTP API token
+2. Send the new bot one message
+3. `GET https://api.telegram.org/bot<TOKEN>/getUpdates` → `result[].message.chat.id`
+4. Store both in `~/.claude/secrets/` — **never in this repo, which is public** (D-04)
+5. Put them in `stacks/selfhosted/monitoring/.env` (gitignored) as `TELEGRAM_BOT_TOKEN=` and
+   `TELEGRAM_CHAT_ID=`, then recreate Grafana
+6. **Grafana → Alerting → Contact points → `telegram-estate` → Test → confirm a message actually
+   arrives on the phone**
+
+> ⚠️ **Until step 6 has produced a received message, the alert path is UNPROVEN and must not be
+> counted as coverage.** `grafana.yaml` uses `${TELEGRAM_BOT_TOKEN:-}` rather than `:?` so the
+> stack still parses without the secrets — the cost is that an **empty token means the contact
+> point exists, the rule fires, and the message goes nowhere**, which looks identical to a healthy
+> estate. Phase 2 closed on exactly that shape of notification path, and an unproven channel is
+> worse than a known-manual check because it *feels* covered.
+
+### What will fire first, and why it is not a misconfiguration
+
+`Containers unhealthy or stuck created` will alert as soon as G1–G3 land: on 2026-09-18 `cadvisor`
+reported health `unhealthy`. Note that **`docker ps` showed it `Up 2 weeks (health: starting)`
+while `docker inspect` on the same container id showed `exited`, code 137, finished 2026-09-02** —
+sixteen days dead behind a `docker ps` line that said it was up. Believe `inspect`.
 
 ## Backup
 

@@ -1,0 +1,23 @@
+# selfhost-image-drift.service — hourly IMAGE DRIFT measurement into a node-exporter textfile.
+#
+# NOT INSTALLED BY THE COMMIT THAT ADDED IT. This file is a repo-side declaration; installing it is
+# gated host step G3 in stacks/selfhosted/monitoring/README.md § Image drift detection.
+#
+# Shape copied verbatim from the estate's existing oneshot-plus-timer idiom,
+# /etc/systemd/system/podsync-ytdlp-update.service, read from the host rather than invented.
+#
+# `--prom` mode exits 0 on a SUCCESSFUL MEASUREMENT REGARDLESS OF THE DRIFT COUNT, and that is what
+# makes a oneshot the right unit type here. Exiting non-zero on drift would park this unit in
+# `failed` permanently for a condition the Grafana rule already owns, and would make a genuine
+# could-not-look indistinguishable from ordinary drift. See the EXIT CODES block in
+# scripts/check-drift.sh.
+
+[Unit]
+Description=Measure container image drift (running image vs the pin in git) into a node-exporter textfile
+Documentation=file:///mnt/fast/stacks/stacks/selfhosted/monitoring/README.md
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/mnt/fast/stacks/scripts/check-drift.sh --prom
