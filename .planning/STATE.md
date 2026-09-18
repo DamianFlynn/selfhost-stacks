@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-18T15:28:42.765Z"
-last_activity: 2026-09-18 -- Phase 05 plan 05-03 executed: the junk gate exists as two processes joined by a file (scripts/phase05-junk-sweep.sh, 943 lines), all four of its control paths DRIVEN on a synthetic fixture before it was pointed at the estate, and the approvable candidate list is written — 52 rows, 23.1 GB, at host:/mnt/fast/safety/phase05/junk-candidates.tsv. 2 tasks, 4 commits. ESTATE UNCHANGED (zfs diff against @pre-phase5: 0 removed lines, 0 renamed lines, before and after). NOT APPROVED — 05-04 must not sweep until the operator has read it.
+last_updated: "2026-09-18T17:04:44.257Z"
+last_activity: 2026-09-18 -- Phase 05 plan 05-04 executed: the junk gate's destructive half ran, under an operator approval bound to content by sha256 in both directions (as-read 52 rows 126ce3a0..., as-amended 44 rows fe2d3e2e...). 40 rows REMOVED, 4 MOVED, 8 EXCLUDED ENTIRELY. 3 tasks, 4 commits. Every removed and renamed path on the dataset is attributed to an approved row by zfs diff against @pre-phase5 — 88 removed lines and 4 renames, ZERO unexplained, ZERO approved rows missing, ZERO under incomplete/ or /mnt/tank/media, ZERO touching the 8 spared .covers dirs or the 5 KEEP sidecars. lidarr-import RETIRED (Phase 1 D-23 closed). _inbox/02-review is now PRE-SEEDED with Madonna + Michael Jackson (533 audio); 99-quarantine deliberately holds the two Garth Brooks _FAILED_ dirs (1.92 GB, 44 FLAC). INBX-02 is satisfiable but stays UNTICKED — all ticks belong to 05-11.
 progress:
   total_phases: 10
   completed_phases: 4
   total_plans: 74
-  completed_plans: 64
+  completed_plans: 65
   percent: 40
 ---
 
@@ -29,10 +29,11 @@ pipeline that someone owns.
 ## Current Position
 
 Phase: 05 (inbox-structure-and-the-junk-gate) — EXECUTING
-Plan: 4 of 11 — **05-01, 05-02 and 05-03 COMPLETE** (fence taken, `_inbox` created, D-21 inode proof
-driven; criteria 2/3/4 amended in band and criterion 4 now asserted by the standing check; the junk
-gate built, its refusals and its positive control driven, and its 52-row candidate list written and
-**awaiting operator approval** — 05-04 must not sweep until that approval exists)
+Plan: 5 of 11 — **05-01, 05-02, 05-03 and 05-04 COMPLETE** (fence taken, `_inbox` created, D-21 inode
+proof driven; criteria 2/3/4 amended in band and criterion 4 now asserted by the standing check; the
+junk gate built and its refusals and positive control driven; and **the sweep has RUN** — 40 rows
+removed, 4 moved, 8 excluded entirely, every affected path attributed to an approved row by
+`zfs diff`, `lidarr-import` retired and Phase 1's D-23 closed)
 Status: Executing Phase 05. Do NOT run with `--auto`/`--chain` — four
 gates are `checkpoint:decision`, which auto-selects the first option under auto-mode.
 
@@ -658,7 +659,7 @@ back onto anything under `/mnt/tank/media`.
 Phase 1 complete: SAFE-01…05, WRIT-01…04, QUAL-01
 Phase 2 complete: CONS-01, CONS-02, CONS-03
 
-Progress: [██░░░░░░░░] 22%  *(MILESTONE progress: **2 of 9 phases** complete. All 19 plans written so far are executed 19/19 — but phases 3-9 are not planned yet, so plan-count is not milestone progress. ⚠ `gsd-sdk query state.update-progress` recomputed this as **51%** on 2026-09-02 by counting SUMMARY files against a 39-plan denominator that only covers planned phases; that figure is WRONG and was reverted. Do not let the SDK rewrite this line — phase 02.1 is an INSERTION and is not one of the 9 milestone phases. ⚠ **It happened a second time on 2026-09-13** during plan 04-14, recomputed as **97%** against a 60-plan denominator, and was reverted again. The verb rewrites this line every time it runs; `git diff .planning/STATE.md` after any state write is not optional. ⚠ **Third occurrence 2026-09-18** during plan 05-01, recomputed as **84%** against a 74-plan denominator, reverted again. ⚠ **Fourth occurrence 2026-09-18** during plan 05-02, recomputed as **85%** against the same 74-plan denominator, reverted again — and this time the verb ALSO truncated the frontmatter `last_activity:` back to a bare "Phase 05 execution started", so the damage is not confined to this line. ⚠ **Fifth occurrence 2026-09-18** during plan 05-03, recomputed as **86%** against the same 74-plan denominator, reverted again; on this run the collateral damage was all three of the documented sites at once — the frontmatter `last_activity:`, the `Status:` line (leaving `gates are ...` orphaned under it), and the `Last activity:` line 560 lines down. Five occurrences, five figures, zero of them milestone progress — the verb cannot compute this figure and should not be run against this line.)*
+Progress: [██░░░░░░░░] 22%  *(MILESTONE progress: **2 of 9 phases** complete. All 19 plans written so far are executed 19/19 — but phases 3-9 are not planned yet, so plan-count is not milestone progress. ⚠ `gsd-sdk query state.update-progress` recomputed this as **51%** on 2026-09-02 by counting SUMMARY files against a 39-plan denominator that only covers planned phases; that figure is WRONG and was reverted. Do not let the SDK rewrite this line — phase 02.1 is an INSERTION and is not one of the 9 milestone phases. ⚠ **It happened a second time on 2026-09-13** during plan 04-14, recomputed as **97%** against a 60-plan denominator, and was reverted again. The verb rewrites this line every time it runs; `git diff .planning/STATE.md` after any state write is not optional. ⚠ **Third occurrence 2026-09-18** during plan 05-01, recomputed as **84%** against a 74-plan denominator, reverted again. ⚠ **Fourth occurrence 2026-09-18** during plan 05-02, recomputed as **85%** against the same 74-plan denominator, reverted again — and this time the verb ALSO truncated the frontmatter `last_activity:` back to a bare "Phase 05 execution started", so the damage is not confined to this line. ⚠ **Fifth occurrence 2026-09-18** during plan 05-03, recomputed as **86%** against the same 74-plan denominator, reverted again; on this run the collateral damage was all three of the documented sites at once — the frontmatter `last_activity:`, the `Status:` line (leaving `gates are ...` orphaned under it), and the `Last activity:` line 560 lines down. ⚠ **Sixth occurrence 2026-09-18** during plan 05-04, recomputed as **88%** against the same 74-plan denominator, reverted again, with the same three collateral sites damaged a second consecutive time — the damage set is now stable and predictable, which is the strongest argument yet for not running the verb against this line at all. Six occurrences, six figures, zero of them milestone progress — the verb cannot compute this figure and should not be run against this line.)*
 
 Plans 02-01 through 02-09 are executed. **CONS-01, CONS-02 and CONS-03 are all complete.**
 
@@ -872,6 +873,7 @@ already open so only 2049 is this phase's delta.
 | Phase 05 P01 | 12 min | 3 tasks | 4 files |
 | Phase 05 P02 | ~35 min | 2 tasks | 4 files |
 | Phase 05 P03 | ~75 min | 2 tasks | 5 files |
+| Phase 05 P04 | ~60 min | 3 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -1184,6 +1186,9 @@ Recent decisions affecting current work:
 - [Phase 05]: [05-02]: the whole-script exit code is NON-DISCRIMINATING for criterion 4 while check-music-freeze.sh's interpolated-host-path inventory (expected=12, found=13) stays red — read the block's own verdict line; logged in deferred-items.md, not fixed
 - [Phase 05]: [05-03]: the junk gate is two processes joined by a file on disk (D-13); sweep refuses without both the approved list and a proof naming tank/downloads@pre-phase5
 - [Phase 05]: [05-03]: .covers directories are VALUE-FLAGGED, never hard-KEPT — this half of the gate proposes, the operator decides
+- [Phase 05]: [05-04]: move-only is a property of the ROW (a destination field), not of the RULE — relabelling a spared row R8 would misreport it AND weaken its TOCTOU re-validation from rule+audio+size to audio alone
+- [Phase 05]: [05-04]: an approved destructive list is amended MECHANICALLY by one awk program, never by retyping a path — and the amendment procedure itself is driven on a synthetic fixture before it touches the live list
+- [Phase 05]: [05-04]: the 8 .covers rows were STRUCK from the approved list rather than redirected — a row in the list is a row the sweep moves, so striking is the only treatment that leaves them provably untouched
 
 ### Pending Todos
 
@@ -1332,8 +1337,8 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-09-18T15:28:37.158Z
-Stopped at: Completed 05-02-PLAN.md — the three in-band ROADMAP amendments, the INBX addenda, and the criterion-4 assertion driven red and green. Wave 1 is done. Next is 05-03 (write phase05-junk-sweep.sh and produce the approvable candidate file).
+Last session: 2026-09-18T17:04:36.807Z
+Stopped at: Completed 05-04-PLAN.md — the sweep RAN. 40 removed, 4 moved, 8 excluded entirely, reconciled line-for-line against `zfs diff`. `lidarr-import` retired (D-23 closed). Next is 05-05.
 Resume file: None
 
 **NEXT: 02.1-10, the last plan of the phase (wave 9).** It is unblocked — it depends on 02.1-06 and
