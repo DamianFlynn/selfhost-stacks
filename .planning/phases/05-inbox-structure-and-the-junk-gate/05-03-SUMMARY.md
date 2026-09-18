@@ -279,3 +279,9 @@ paths driven, and the candidate list is written, asserted and committed.
 
 None. This plan added no network endpoint, no auth path and no schema change. It reduced surface:
 the scope fence is now re-asserted per item in both subcommands, and two paths are refused by name.
+
+## Self-Check: PASSED
+
+All five created files exist on disk. All four commits (`7f82795`, `5e180a6`, `3ca2246`, `49f25a0`)
+are present in `git log`. The off-repo deliverable
+`host:/mnt/fast/safety/phase05/junk-candidates.tsv` exists and carries 52 rows.
