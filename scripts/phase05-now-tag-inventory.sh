@@ -23,6 +23,8 @@
 #   now-volume-dirnames.txt  the distinct manifest volume-directory names, one per line, UNPARSED
 #   now-album-values.tsv     count<TAB>album, the distinct album strings with their file counts
 #   now-reconciliation.txt   the per-volume `files_present == sum of tracktotal` report
+#   now-tracktotal-conflicts.tsv  every (volume,disc) group carrying more than one distinct
+#                            tracktotal, with the vote count and whether each value is the modal one
 #
 # WHY THIS EXISTS: the original scan was written to the system temp directory on LXC 100, which is
 #   tmpfs backed by host RAM, and it is gone. NOTHING this script writes goes there - a 1.1 GB file
@@ -115,6 +117,7 @@ MANIFEST_NDJSON="${OUT_DIR}/now-manifest.ndjson"
 VOLUME_DIRNAMES="${OUT_DIR}/now-volume-dirnames.txt"
 ALBUM_VALUES="${OUT_DIR}/now-album-values.tsv"
 RECONCILIATION="${OUT_DIR}/now-reconciliation.txt"
+TT_CONFLICTS="${OUT_DIR}/now-tracktotal-conflicts.tsv"
 
 PROGRESS_EVERY=250
 WORK_DIR=""
@@ -493,21 +496,49 @@ do_reconcile() {
   n_null_track="$(awk -F'\t' '$5==""' "$work/tags.tsv" | wc -l | tr -d '[:space:]')"
 
   # ── the per-volume identity: files_present == sum of tracktotal over that volume's discs ──
-  awk -F'\t' -v OFS='\t' '
+  # THE TRACKTOTAL FOR A (volume, disc) IS THE MODAL ONE, NOT THE FIRST ONE SEEN. A file whose leaf
+  # collided during the flatten is claimed by two volume directories, and it carries the tags of
+  # only ONE of them. First-wins therefore lets a single intruder's tracktotal set the expectation
+  # for a whole disc, and the delta it produces is an artefact of iteration order rather than a
+  # measurement. Groups carrying more than one distinct tracktotal are counted and listed in
+  # now-tracktotal-conflicts.tsv so the disagreement is visible rather than averaged away.
+  awk -F'\t' -v OFS='\t' -v CONFLICTS="$work/ttconflicts.tsv" '
     {
       vol=$3; dn=$5; tt=$8
       if (vol=="") next
       files[vol]++
       if (tt=="") { nullt[vol]++; next }
-      key = vol SUBSEP dn
-      if (!(key in seen)) { seen[key]=1; sumtt[vol] += tt; discs[vol]++ }
-      else if (ttof[key] != "" && ttof[key] != tt) { conflict[vol]++ }
-      ttof[key] = tt
+      k = vol SUBSEP dn
+      votes[k SUBSEP tt]++
+      if (!(k in seen)) { seen[k]=1; keys[++nk]=k; discs[vol]++ }
     }
     END {
-      for (v in files) printf "%s\t%d\t%d\t%d\t%d\t%d\n", v, files[v], sumtt[v], discs[v], nullt[v]+0, conflict[v]+0
+      for (kt in votes) {
+        split(kt, p, SUBSEP); k = p[1] SUBSEP p[2]
+        nvariant[k]++
+        if (votes[kt] > best[k]) { best[k]=votes[kt]; modal[k]=p[3]; tie[k]=0 }
+        else if (votes[kt] == best[k] && modal[k] != p[3]) { tie[k]=1 }
+      }
+      for (i=1; i<=nk; i++) {
+        k = keys[i]; split(k, p, SUBSEP); v = p[1]
+        sumtt[v] += modal[k]
+        if (nvariant[k] > 1) { conflict[v]++ }
+        if (tie[k]) { ties[v]++ }
+      }
+      for (kt in votes) {
+        split(kt, p, SUBSEP); k = p[1] SUBSEP p[2]
+        # printf(...) is PARENTHESISED so the trailing `>` is unambiguously a redirection: awk
+        # would otherwise parse `(ternary) > CONFLICTS` as a numeric comparison and write nothing.
+        if (nvariant[k] > 1) printf("%s\t%s\t%s\t%d\t%s\n", p[1], p[2], p[3], votes[kt], (modal[k]==p[3] ? "modal" : "minority")) > CONFLICTS
+      }
+      for (v in files) printf "%s\t%d\t%d\t%d\t%d\t%d\t%d\n", v, files[v], sumtt[v], discs[v], nullt[v]+0, conflict[v]+0, ties[v]+0
     }
   ' "$work/joined.tsv" | LC_ALL=C sort > "$work/pervol.tsv"
+  if [[ -s "$work/ttconflicts.tsv" ]]; then
+    LC_ALL=C sort "$work/ttconflicts.tsv" > "$TT_CONFLICTS"
+  else
+    : > "$TT_CONFLICTS"
+  fi
 
   local n_vol_groups n_balanced n_exceptions
   n_vol_groups="$(wc -l < "$work/pervol.tsv" | tr -d '[:space:]')"
@@ -552,11 +583,14 @@ do_reconcile() {
     printf '  %-46s %s\n' "balanced"                   "$n_balanced"
     printf '  %-46s %s\n' "EXCEPTIONS"                 "$n_exceptions"
     echo ""
-    echo "  volume_dir | files | sum(tracktotal) | delta | discs | null-tt | tt-conflicts"
-    awk -F'\t' '$2!=$3 {printf "  EXC  %s | %s | %s | %+d | %s | %s | %s\n", $1, $2, $3, $2-$3, $4, $5, $6}' "$work/pervol.tsv"
+    echo "  volume_dir | files | sum(tracktotal) | delta | discs | null-tt | tt-conflict-discs | ties"
+    awk -F'\t' '$2!=$3 {printf "  EXC  %s | %s | %s | %+d | %s | %s | %s | %s\n", $1, $2, $3, $2-$3, $4, $5, $6, $7}' "$work/pervol.tsv"
+    echo ""
+    printf '  %-46s %s\n' "(volume,disc) groups with >1 distinct tracktotal" "$(awk -F'\t' '{print $1 FS $2}' "$TT_CONFLICTS" | LC_ALL=C sort -u | wc -l | tr -d '[:space:]')"
+    printf '  %-46s %s\n' "detail"                                          "$TT_CONFLICTS"
     echo ""
     echo "  --- all volume directories, balanced included ---"
-    awk -F'\t' '{printf "  %-4s %s | %s | %s | %+d | %s | %s | %s\n", ($2==$3?"ok":"EXC"), $1, $2, $3, $2-$3, $4, $5, $6}' "$work/pervol.tsv"
+    awk -F'\t' '{printf "  %-4s %s | %s | %s | %+d | %s | %s | %s | %s\n", ($2==$3?"ok":"EXC"), $1, $2, $3, $2-$3, $4, $5, $6, $7}' "$work/pervol.tsv"
   } > "$RECONCILIATION"
 
   cat "$RECONCILIATION"
@@ -565,6 +599,7 @@ do_reconcile() {
   info "volume dirnames: $VOLUME_DIRNAMES"
   info "album values:    $ALBUM_VALUES"
   info "reconciliation:  $RECONCILIATION"
+  info "tt conflicts:    $TT_CONFLICTS"
 
   if [[ "$n_unjoined" != "0" || "$n_unresolved" != "0" ]]; then
     fail "$n_unjoined disk file(s) unjoined, $n_unresolved unresolved - not guessed, reported"
