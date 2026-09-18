@@ -277,3 +277,11 @@ None.
   or regenerated here. The 751-file write will move `TALB` and nothing else; `audio_md5` is stable
   only because `preserve_id3v1_trailer()` runs, which is now asserted by a self-test case with a
   proven-failing control rather than by a comment.
+
+## Self-Check: PASSED
+
+- `scripts/normalise-dj-tags.py`, `artifacts/05-08-dryrun-verification.txt` and this file all
+  present in the working tree.
+- Commits `d116447`, `0c12866`, `46bdf63` all present in `git log --all`.
+- Host artefacts non-empty: `now-album-dryrun.ndjson`, `…summary.json`, `05-08-tree-before.tsv`,
+  `05-08-tree-after.tsv`. The mutated-copy directory `05-08-negcontrol` is confirmed **removed**.

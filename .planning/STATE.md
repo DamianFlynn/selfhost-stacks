@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-18T21:25:03.719Z"
+last_updated: "2026-09-18T21:49:45.017Z"
 last_activity: 2026-09-18 -- Phase 05 execution started
 progress:
   total_phases: 10
   completed_phases: 4
   total_plans: 74
-  completed_plans: 68
+  completed_plans: 69
   percent: 40
 ---
 
@@ -29,7 +29,7 @@ pipeline that someone owns.
 ## Current Position
 
 Phase: 05 (inbox-structure-and-the-junk-gate) — EXECUTING
-Plan: 8 of 11 — **05-01 … 05-07 COMPLETE** (fence taken, `_inbox` created, D-21 inode
+Plan: 9 of 11 — **05-01 … 05-08 COMPLETE** (fence taken, `_inbox` created, D-21 inode
 proof driven; criteria 2/3/4 amended in band and criterion 4 now asserted by the standing check; the
 junk gate built and its refusals and positive control driven; **the sweep has RUN** — 40 rows
 removed, 4 moved, 8 excluded entirely, every affected path attributed to an approved row by
@@ -48,7 +48,20 @@ first rename and after the last, **4,750 inode-preserving renames** producing 11
 collection root, the affected set reconciled to the approved map by `zfs diff` at **0 off-map,
 0 unrenamed, 0 unattributed and 0 deletions**, the per-volume identity computed from the resulting
 tree landing on the pre-declared 11-row exception set exactly, and the **QUAL-01 before-state
-captured complete** at 4,746 records with a zero-tag-field count of 0)
+captured complete** at 4,746 records with a zero-tag-field count of 0; and **05-08 proved the
+album rule on paper and wrote nothing** — `normalise-dj-tags.py` gained a SECOND, NARROWER fence
+(`--collection now`, root = the one collection folder, snapshot = `tank/downloads@pre-phase5`) with
+`SCRATCH_ROOT` byte-identical and no constant equal to `/mnt/tank/downloads`, plus rule 4, which
+derives the canonical album from the `Vol NNN` FOLDER and never from the album tag; the dry run
+produced **4,746 proposals across 115 folders, one value per folder, 115 distinct values forming
+exactly 1…115**, `album` the only field and rule 4 the only rule, 0 refusals and 0 failures, with
+**volume 36's three spellings — including the double-space one — collapsing to a single value across
+all 40 files**; only **751 of 4,746** files are actually wrong, in 22 volumes, 21 of which carry the
+same missing exclamation mark, and the other 3,995 are recorded as `noop` rather than rewritten;
+NOTHING WAS WRITTEN, proven by an identical 4,751-file mtime/size fingerprint either side and by
+`zfs diff` showing **0 `M` lines on any mp3**; and both new self-test cases were proven able to FAIL
+from mutated copies, one of them catching `save(v1=UPDATE)` regenerating the ID3v1 block — the
+`audio_md5` hazard — in the act)
 Status: Executing Phase 05. Do NOT run with `--auto`/`--chain` — four
 gates are `checkpoint:decision`, which auto-selects the first option under auto-mode.
 
@@ -892,6 +905,7 @@ already open so only 2049 is this phase's delta.
 | Phase 05 P05 | ~40 min | 3 tasks | 11 files |
 | Phase 05 P06 | ~55 min | 2 tasks | 8 files |
 | Phase 05 P07 | ~30 min | 3 tasks | 10 files |
+| Phase 05 P08 | 25m | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -1215,6 +1229,9 @@ Recent decisions affecting current work:
 - [Phase 05]: 05-07: An operator approval is bound to a CONTENT HASH, re-read both before the first destructive act AND after the last — the second reading is what proves the tool acted FROM the approved artifact rather than rewriting it
 - [Phase 05]: 05-07: A destructive batch is reconciled against `zfs diff`, not against the tool's own counters — a tool reporting on itself cannot detect a path it affected but never recorded; an off-map path is a FAILURE, not a footnote
 - [Phase 05]: 05-07: Assert the (devid, inode) PAIR across a rename, never the inode alone — this estate has a known inode collision (tank/downloads and tank/media/Music both report inode 34), so an inode-only assertion can agree by accident
+- [Phase 05]: 05-08: the Phase 5 tag fence is a SECOND, NARROWER named (root, snapshot) pair scoped to the Now! collection folder — SCRATCH_ROOT is byte-identical and no constant equals /mnt/tank/downloads, so SABnzbd's live working tree never enters a tag writer's reach
+- [Phase 05]: 05-08: rule 4 derives the canonical album from the Vol NNN FOLDER, never from the album tag (D-03) — volume 36's three spellings, including the double-space one, collapse to one value across all 40 files
+- [Phase 05]: 05-08: rule 4 proposes on every file and marks the 3,995 already-correct ones noop, so the review artefact shows total coverage while 05-09's apply writes only the 751 that differ
 
 ### Pending Todos
 
@@ -1363,8 +1380,8 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-09-18T21:25:03.706Z
-Stopped at: Completed 05-07-PLAN.md — the split is APPLIED
+Last session: 2026-09-18T21:49:45.002Z
+Stopped at: Completed 05-08-PLAN.md
 Resume file: None
 
 **NEXT: 02.1-10, the last plan of the phase (wave 9).** It is unblocked — it depends on 02.1-06 and
