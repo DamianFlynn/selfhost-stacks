@@ -299,6 +299,27 @@ is_kept_basename() {
   return 1
 }
 
+# VALUE FLAG (added at execution, 2026-09-18, mitigating T-05-03-04 in a class the plan did not
+# anticipate). The threat register says a value-bearing sidecar must never be proposed for removal
+# by type alone, and mitigates it with a hard KEEP list plus R6's nine named files. That mitigation
+# covers the `Now!` collection root only. The live enumeration then proposed EIGHT `.covers`
+# directories - four release folders, each duplicated between dj-mixes/ and unsorted/ - every one of
+# which holds a real cover JPEG. PROJECT.md records cover scans as "more reliable than any
+# autotagger", and D-06's transferable lesson is that file type predicted nothing: three .bmp that
+# looked like generic artwork turned out to carry a full tracklist, a barcode and a catalogue number.
+#
+# These rows are NOT hard-KEPT. Deciding to keep is the operator's call and this half of the gate
+# only proposes. What is added is that such a row cannot arrive looking identical to an empty shell:
+# its reason carries the flag and `enumerate` lists them in a section of their own.
+VALUE_HINT_BASENAMES=( ".covers" "covers" "cover" "artwork" "art" "scans" "scan" "booklet" "images" "folder.jpg" )
+looks_value_bearing() {
+  local b="${1,,}" k
+  for k in "${VALUE_HINT_BASENAMES[@]}"; do
+    [ "$b" = "$k" ] && return 0
+  done
+  return 1
+}
+
 # A path whose own name contains a tab would corrupt the TSV that IS the gate. Such a path is
 # EXCLUDED from the candidate list rather than emitted - fail closed: an item nobody can approve is
 # an item nothing will act on.
@@ -374,6 +395,17 @@ path_bytes() {
   printf '%s' "${out:-0}"
 }
 
+# R3 IS APPLIED TO REGULAR FILES ONLY, AND THAT IS A SAFETY PROPERTY, NOT AN IMPLEMENTATION DETAIL.
+# Measured on the live tree 2026-09-18, both halves of the trap present on this estate:
+#   * `complete/nzb/music/[002+114] Def_Leppard-Slang-2LP-24BIT-FLAC-1995-REETKEVER.part001.rar`
+#     is a DIRECTORY whose name ends in .rar, and it holds one real 24-bit FLAC. 05-PREMEASURE.md
+#     § 5 counted it among "6 stray .rar files"; it is not a file and it is not a stray. Matching
+#     the name without checking the type would have proposed destroying content.
+#   * `complete/nzb/tv/Star.Trek.Voyager.S01E06...WEBDL-1080p.R75` and fifteen siblings are
+#     DIRECTORIES whose names end in a release-group suffix that satisfies the multipart
+#     `.r[0-9][0-9]` form exactly. They are out of scope anyway, but the shape is the same.
+# Both are reached only through the `-type f` walk, so neither can ever be emitted. Do not
+# "simplify" the caller by dropping `-type f`.
 has_rar_shape() {
   local b="$1"
   case "$b" in
@@ -483,6 +515,7 @@ file_rule() {
 
 declare -A EMITTED_DIRS=()
 CANDIDATE_DIRS=()
+VALUE_FLAGGED=()
 
 collect_dirs() {
   local root="$1" p real r rulepart audio reason
@@ -563,10 +596,26 @@ do_enumerate() {
       continue
     fi
     EMITTED_DIRS["$real"]=1
+    if looks_value_bearing "$(basename -- "$real")"; then
+      reason="${reason} ⚠ VALUE FLAG: this basename is one artwork or scans are usually kept under, and PROJECT.md records cover scans as more reliable than any autotagger. OPEN IT BEFORE APPROVING."
+      VALUE_FLAGGED+=( "$real" )
+    fi
     rows+=( "${rulepart}"$'\t'"${real}"$'\t'"dir"$'\t'"$(path_bytes "$real")"$'\t'"${audio}"$'\t'"${reason}" )
   done
   info "candidate directories emitted: ${#rows[@]}   suppressed as descendants: ${suppressed_dirs}"
   echo ""
+
+  if [ "${#VALUE_FLAGGED[@]}" -gt 0 ]; then
+    echo "🖼  1b. VALUE-FLAGGED rows - these are proposals, and they are the ones most likely to be wrong"
+    rule
+    warn "${#VALUE_FLAGGED[@]} candidate director(ies) carry a basename that usually holds artwork or scans."
+    warn "D-06 reached every one of its verdicts by OPENING the files; file type predicted nothing."
+    local vf
+    for vf in "${VALUE_FLAGGED[@]}"; do
+      info "$vf  ->  $(find -P "$vf" -type f -printf '%f ' 2>/dev/null | head -c 200)"
+    done
+    echo ""
+  fi
 
   echo "📄 2. Candidate files"
   rule
@@ -671,6 +720,7 @@ do_enumerate() {
   echo ""
   echo "  total rows:  $(wc -l < "$APPROVED_LIST" | tr -dc '0-9')"
   echo "  total bytes: $(awk -F'\t' '{s+=$4} END{print s+0}' "$APPROVED_LIST")"
+  echo "  VALUE-FLAGGED rows (open these before approving): ${#VALUE_FLAGGED[@]}"
   echo ""
 
   warn "NOTHING HAS BEEN MOVED AND NOTHING HAS BEEN REMOVED."
