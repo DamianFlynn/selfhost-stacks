@@ -36,19 +36,37 @@ WHERE IT RUNS
   immediately after.
 
 USAGE
-  normalise-dj-tags.py TARGET [--apply] [--dry-run] [--snapshot-proof FILE]
+  normalise-dj-tags.py TARGET [--collection {djmixes,now}] [--apply] [--dry-run]
+                              [--snapshot-proof FILE]
                               [--artist-policy {label,various,keep}] [--out FILE] [--verbose]
   normalise-dj-tags.py --self-test
 
-  TARGET                 a directory under /mnt/tank/downloads/spike-03. Anything else exits 2.
+  TARGET                 a directory under the SELECTED COLLECTION's root. Anything else exits 2.
+  --collection           which collection - and therefore which fence root and which rollback
+                         snapshot - this run is scoped to. Default `djmixes`, the Phase 3 spike.
+                         See COLLECTIONS below.
   --self-test            the WAV regression test (D-23). Takes no TARGET. See SELF-TEST below.
   --dry-run              THE DEFAULT. Reads and reports; writes no tag.
   --apply                writes tags in place. Requires --snapshot-proof.
-  --snapshot-proof FILE  a file naming `tank/downloads@spike-03-t0`, written by the caller from
-                         atlantis. See THE KEY below.
-  --artist-policy        which value rule 3 sets. Default `label`. See RULES below.
+  --snapshot-proof FILE  a file naming the SELECTED COLLECTION's snapshot, written by the caller
+                         from atlantis. See THE KEY below.
+  --artist-policy        which value rule 3 sets. Default `label`. See RULES below. Forced to
+                         `keep` under `--collection now`: D-10 is one field on one collection.
   --out FILE             machine-readable NDJSON, one record per (file, field) change. Two
                          sidecars are written beside it: FILE.failed and FILE.summary.json.
+
+COLLECTIONS (Phase 5, D-10)
+  Two named (fence root, rollback snapshot) pairs, and NOTHING that is a parent of both:
+
+    djmixes  /mnt/tank/downloads/spike-03                     tank/downloads@spike-03-t0
+    now      .../complete/nzb/unsorted/VA-Now_That.s_…_2023   tank/downloads@pre-phase5
+
+  ⚠ THE OBVIOUS EDIT HERE IS THE DANGEROUS ONE. The Phase 5 target is not under SCRATCH_ROOT, so
+  the tempting fix was to widen SCRATCH_ROOT to `/mnt/tank/downloads` - which would put SABnzbd's
+  live working directory, every in-flight download and the whole completed tree inside a tag
+  writer's reach. The second root is therefore strictly NARROWER than the first's parent: it is one
+  collection folder, so a mistake reaches 115 volume folders rather than the entire download tree.
+  Add a third collection the same way; never a root that contains two of them (T-05-08-01).
 
 WORKFLOW
   ssh root@172.16.1.158 'zfs list -t snapshot -H -o name tank/downloads@spike-03-t0' \\
@@ -115,7 +133,8 @@ CONTRACT
     `--self-test` creates exactly one mkdtemp() directory of its own and removes it.
 
 THE KEY
-  In `--apply` mode it REFUSES TO RUN unless a proof of `tank/downloads@spike-03-t0` is supplied,
+  In `--apply` mode it REFUSES TO RUN unless a proof of the SELECTED COLLECTION's snapshot is
+  supplied - `tank/downloads@spike-03-t0` for `djmixes`, `tank/downloads@pre-phase5` for `now` -
   BECAUSE THAT SNAPSHOT IS ITS ONLY ROLLBACK. beets has no `undo`, and neither has this. The
   snapshot was taken after raw/ was populated and before the first write into normalised/, so
   rolling back to it removes normalised/ and leaves raw/ to re-reflink from.
@@ -128,10 +147,12 @@ THE KEY
 
 IDEMPOTENT
   A second `--apply` over already-normalised files reports zero changes and writes nothing. Every
-  rule is a pure function of the current tag value and is a fixed point on its own output: rule 1
-  only fires on an EMPTY album, rule 2's canonical form is stable under re-canonicalisation, and
-  rule 3 compares before it sets. The dry run and the apply run compute identical proposals; the
-  only difference is whether the write happens.
+  rule is a pure function of its input and is a fixed point on its own output: rule 1 only fires on
+  an EMPTY album, rule 2's canonical form is stable under re-canonicalisation, rule 3 compares
+  before it sets, and rule 4 is a pure function of the FOLDER NAME - so it proposes the same value
+  every time, and a proposal equal to the file's current value is recorded as `noop` and never
+  written. The dry run and the apply run compute identical proposals; the only difference is
+  whether the write happens.
 
 EXIT-CODE CONVENTION (stated here deliberately, not inherited)
   0  ran - dry or applied - with no error
@@ -150,15 +171,17 @@ EXIT-CODE CONVENTION (stated here deliberately, not inherited)
     the docker `created`-state blind spot hid two down containers for six weeks under a green
     check.
 
-SELF-TEST (D-23, DEF-03-09)
+SELF-TEST (D-23, DEF-03-09; rule 4 cases added for D-10)
   `--self-test` builds three synthetic WAVs - untagged, ASCII-tagged, and non-ASCII-tagged with a
   hand-written RIFF LIST/INFO/IPRD chunk - and drives each one through the SAME read_tags(),
   write_tags() and build_record() the real run uses. Per case it asserts that the album reads
   back, that APIC, TDRC, TIT2, TPE1 and TRCK are equal before and after, that no other ID3 frame
   appeared or vanished, that the RIFF INFO chunk is untouched, and that the NDJSON record carries
-  `info_iprd` exactly when IPRD disagrees with the new album. One `ok`/`bad` line per case, a
-  reason under every `bad`. Exit 0 all passed, 1 any case failed, 2 could not run (mutagen is
-  absent everywhere except the beets image - see WHERE IT RUNS):
+  `info_iprd` exactly when IPRD disagrees with the new album. It then runs two rule-4 cases: the
+  derivation itself (all 115 volumes, the five named refusals, the no-digit guard, idempotence) and
+  a synthetic MP3 whose ID3v1 trailer must be byte-identical after an album write. One `ok`/`bad`
+  line per case, a reason under every `bad`. Exit 0 all passed, 1 any case failed, 2 could not run
+  (mutagen is absent everywhere except the beets image - see WHERE IT RUNS):
 
       docker run --rm --pull never --network none --entrypoint python3 \\
           -v /mnt/fast/stacks/scripts:/w:ro lscr.io/linuxserver/beets:2.13.1-ls349 \\
@@ -170,10 +193,12 @@ SELF-TEST (D-23, DEF-03-09)
   so the real run's SCRATCH_ROOT fence is not relaxed.
 
 HAZARD NOTES
-  * SCRATCH ROOT. D-07: normalisation runs on copies, never on originals. TARGET is resolved with
-    os.path.realpath and must be the scratch root or a descendant of it. Anything else - most
-    importantly /mnt/tank/media/Music - exits 2 naming BOTH the given path and the required root.
-    This is the single most important behaviour in the file.
+  * FENCE ROOT. D-07: normalisation runs on copies, never on originals. TARGET is resolved with
+    os.path.realpath and must be the SELECTED COLLECTION's root or a descendant of it. Anything
+    else - most importantly /mnt/tank/media/Music, where Phase 1's D-20 says nobody holds rw until
+    Phase 6 - exits 2 naming BOTH the given path and the required root. This is the single most
+    important behaviour in the file, and `--collection` chooses WHICH root it enforces, never
+    whether it is enforced.
 
     THE FENCE IS RE-ASSERTED ON EVERY FILE, NOT ONLY ON TARGET (CR-04). Fencing the target alone
     was not enough: collect_folders() returns symlinked FILES (os.walk declines to descend
@@ -229,7 +254,36 @@ import unicodedata
 SCRATCH_ROOT = "/mnt/tank/downloads/spike-03"
 SNAPSHOT_NAME = "tank/downloads@spike-03-t0"
 
-# The only fence root other than SCRATCH_ROOT that write_tags() will accept: --self-test's own
+# COLLECTION MODE (Phase 5, D-10, T-05-08-01). A SECOND named pair, NOT a widened first one.
+#
+# The Phase 5 target lives under /mnt/tank/downloads/complete/nzb/unsorted/, so the one-line fix
+# that suggests itself is to relax SCRATCH_ROOT to "/mnt/tank/downloads". DO NOT. That directory
+# holds SABnzbd's live `incomplete/` working set, every finished download and the whole `complete/`
+# tree; putting it behind a tag writer's fence means a mistake - a bad TARGET, a future rule, a
+# stray symlink - reaches all of it. The pair below is strictly NARROWER: it is ONE collection
+# folder, so the same mistake reaches 115 volume folders. If a later phase needs a third
+# collection, add a third PAIR here. Never add a root that is a parent of two of them, and never
+# edit SCRATCH_ROOT to make a new target fit.
+NOW_COLLECTION_ROOT = (
+    "/mnt/tank/downloads/complete/nzb/unsorted/"
+    "VA-Now_That.s_What_I_Call_Music__1-115_2023"
+)
+NOW_SNAPSHOT_NAME = "tank/downloads@pre-phase5"
+
+# name -> (fence root, rollback snapshot). --collection picks one; both halves move together,
+# because a run fenced to one collection with another collection's snapshot as its rollback has
+# no rollback at all.
+COLLECTIONS = {
+    "djmixes": (SCRATCH_ROOT, SNAPSHOT_NAME),
+    "now": (NOW_COLLECTION_ROOT, NOW_SNAPSHOT_NAME),
+}
+DEFAULT_COLLECTION = "djmixes"
+
+# The fence roots write_tags() will accept, as a set, so fence_root_or_raise() tests membership of
+# a declared literal rather than equality with one hardcoded name.
+COLLECTION_ROOTS = frozenset(root for root, _snap in COLLECTIONS.values())
+
+# The only fence roots write_tags() will accept: a declared collection root, or --self-test's own
 # mkdtemp() directory. See fence_root_or_raise().
 SELFTEST_PREFIX = "normalise-dj-selftest-"
 
@@ -398,22 +452,99 @@ def label_of(album: str) -> str | None:
 
 
 # --------------------------------------------------------------------------------------------
+# Rule 4 - the canonical `Now!` album, derived from the VOLUME FOLDER plan 05-07 created.
+# Phase 5, D-10. Same class as rule 1 (path -> metadata), NOT rule 2 (value -> value).
+# --------------------------------------------------------------------------------------------
+
+# Anchored: the literal `Vol `, exactly three digits, and nothing else. This is the form
+# scripts/phase05-now-split.sh produced - `Vol 001` … `Vol 115` - and matching it anchored is what
+# makes "wrong shape" a named refusal instead of a lucky parse.
+NOW_VOLUME_FOLDER_RE = re.compile(r"^Vol (\d{3})$")
+NOW_BARE_NUMBER_RE = re.compile(r"^\d+$")
+NOW_VOLUME_UNDERPADDED_RE = re.compile(r"^Vol (\d{1,2})$")
+NOW_VOLUME_OVERPADDED_RE = re.compile(r"^Vol (\d{4,})$")
+
+# The majority punctuation: 96 of the 117 measured album values spell it `Music!`, 21 `Music`
+# (05-NOW-INVENTORY.md § 2). Trailing space is deliberate - the volume number follows it.
+NOW_ALBUM_PREFIX = "Now That's What I Call Music! "
+NOW_VOLUME_MIN = 1
+NOW_VOLUME_MAX = 115
+
+
+def derive_now_album_from_folder(folder_name: str) -> tuple[str | None, str | None]:
+    """`Vol 036` -> `Now That's What I Call Music! 36`. Returns (album, None) or (None, reason).
+
+    THE INPUT IS THE FOLDER NAME, NOT THE ALBUM TAG, AND THAT IS THE WHOLE POINT (D-03).
+
+      Do NOT parse a trailing number off the `album` tag. Volume 1 is tagged
+      `Now That's What I Call Music` with no number at all; volume 2 is tagged
+      `Now, That's What I Call Music II` with a Roman numeral and a comma; and volume 36 is split
+      across three spellings - `...! Vol.36 CD1` on 16 files, `...! Vol.36  CD2` on 20 files WITH A
+      DOUBLE SPACE, and `...! 36` on 4 files. `...Vol.36 CD1` ends in 1 and `...Vol.36  CD2` ends
+      in 2, so a trailing-number regex silently misfiles 36 tracks into volumes 1 and 2. It exits 0
+      and it looks right.
+
+    The folder is the trustworthy source because plan 05-07 built it: 4,750 renames reconciled
+    against an operator-approved map by `zfs diff`, at zero off-map and zero unattributed paths.
+    The album tag is the field being REPAIRED; it cannot also be the authority for the repair.
+
+    CANONICAL FORM, and why this one. `Now That's What I Call Music! ` + the unpadded volume
+    number, one shape across all 115. Two properties make it the right choice:
+      * it carries a digit on EVERY volume, so sanitise_derived()'s guard that rejects any value
+        containing no digit accepts all 115. A form like a bare `Now That's What I Call Music!`
+        for volume 1 would be refused outright by that guard - correctly, since it identifies no
+        release;
+      * it uses the majority punctuation (`Music!`, 96 of 117 measured values), which makes the
+        string a usable Discogs query for the CONF-05 disambiguation Phase 6 needs on this series.
+
+    IDEMPOTENT. A pure function of the folder name, so it returns the same value every time; the
+    dispatch site proposes but does not WRITE a value that already equals the file's own, which is
+    what makes a second --apply a no-op.
+    """
+    if NOW_VOLUME_FOLDER_RE.match(folder_name) is None:
+        # Every rejection below is NAMED. A silent skip here would look exactly like a folder that
+        # had nothing to change, which is the one thing the dry run must never hide.
+        if NOW_BARE_NUMBER_RE.match(folder_name):
+            # e.g. `36`. The shape a trailing-number parse is happiest with, and the shape that
+            # carries no evidence it is a volume folder at all.
+            return None, "bare_number_no_vol_prefix"
+        if NOW_VOLUME_UNDERPADDED_RE.match(folder_name):
+            return None, "volume_number_underpadded"  # e.g. `Vol 36`
+        if NOW_VOLUME_OVERPADDED_RE.match(folder_name):
+            return None, "volume_number_overpadded"  # e.g. `Vol 0001`
+        return None, "not_a_volume_folder"  # e.g. `Disc 1`, the collection root, anything else
+
+    number = int(NOW_VOLUME_FOLDER_RE.match(folder_name).group(1))
+    if not NOW_VOLUME_MIN <= number <= NOW_VOLUME_MAX:
+        return None, "volume_out_of_range"  # e.g. `Vol 116`, `Vol 000`
+
+    # Path-derived data crossing into file metadata (T-03-26), sanitised exactly as rule 1's is:
+    # NFC, separators stripped, control characters stripped, whitespace collapsed, length bounded,
+    # then RE-VALIDATED rather than trusted.
+    derived = sanitise_derived(f"{NOW_ALBUM_PREFIX}{number}")
+    if derived is None:
+        return None, "unsafe_derived_album"
+    return derived, None
+
+
+# --------------------------------------------------------------------------------------------
 # The D-07 fence, re-asserted PER FILE. resolve_target_or_die() fences the TARGET; this fences
 # every path that is about to be written.
 # --------------------------------------------------------------------------------------------
 
 
 def fence_root_or_raise(fence_root: str) -> str:
-    """The resolved fence root: SCRATCH_ROOT, or --self-test's own mkdtemp() directory. Nothing else.
+    """The resolved fence root: a DECLARED COLLECTION root, or --self-test's own mkdtemp().
 
-    The override exists so --self-test can drive the REAL write_tags(), fence included, on files
-    it built itself. It is not a general knob: anything other than SCRATCH_ROOT must resolve to an
+    The accepted set is COLLECTIONS' roots - literals in this file, not arguments - plus the
+    self-test override, which exists so --self-test can drive the REAL write_tags(), fence
+    included, on files it built itself. It is not a general knob: anything else must resolve to an
     existing directory whose parent is the system temp directory and whose name carries
     SELFTEST_PREFIX. realpath() first, so a symlink named like a self-test directory that points
     at the library resolves to the library and is refused.
     """
-    if fence_root == SCRATCH_ROOT:
-        return os.path.realpath(SCRATCH_ROOT)
+    if fence_root in COLLECTION_ROOTS:
+        return os.path.realpath(fence_root)
     root = os.path.realpath(fence_root)
     tmp = os.path.realpath(tempfile.gettempdir())
     if (
@@ -422,8 +553,9 @@ def fence_root_or_raise(fence_root: str) -> str:
         or not os.path.isdir(root)
     ):
         raise RuntimeError(
-            f"refusing fence root {fence_root} -> {root}: only {SCRATCH_ROOT} or a "
-            f"{tmp}/{SELFTEST_PREFIX}* self-test directory is accepted (D-07)"
+            f"refusing fence root {fence_root} -> {root}: only one of "
+            f"{sorted(COLLECTION_ROOTS)} or a {tmp}/{SELFTEST_PREFIX}* self-test directory is "
+            "accepted (D-07)"
         )
     return root
 
@@ -865,20 +997,31 @@ def parse_args(argv):
         prog="normalise-dj-tags.py",
         description=(
             "Minimum-viable DJ tag normalisation (D-08/OD-4). Writes ONLY `album` and `artist`, "
-            "on copies under " + SCRATCH_ROOT + ", and only when --apply is given."
+            "inside the selected collection's fence root, and only when --apply is given."
         ),
         epilog=(
             "FLAG CONVENTION: --dry-run is THE DEFAULT and writes nothing; --apply is required to "
             "write and is refused without --snapshot-proof. This inverts scripts/"
             "check-music-freeze.sh deliberately - see the module docstring. "
-            "Exit codes: 0 ran, 1 a rule or a write failed, 2 usage / path outside the scratch "
-            "root / missing snapshot proof."
+            "Exit codes: 0 ran, 1 a rule or a write failed, 2 usage / path outside the selected "
+            "collection's fence root / missing snapshot proof."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     # nargs="?" only so --self-test can run without one; a missing TARGET is still an argparse
     # error and still exits 2, enforced below.
-    p.add_argument("target", nargs="?", help=f"directory under {SCRATCH_ROOT}")
+    p.add_argument("target", nargs="?", help="directory under the selected collection's root")
+    p.add_argument(
+        "--collection",
+        choices=tuple(COLLECTIONS),
+        default=DEFAULT_COLLECTION,
+        help=(
+            "which collection this run is scoped to, and therefore which fence root and which "
+            f"rollback snapshot apply. Default `{DEFAULT_COLLECTION}` ({SCRATCH_ROOT}), so every "
+            "existing invocation behaves identically. `now` is the Phase 5 D-10 collection: rule 4 "
+            "owns `album`, rules 1, 2 and 3 do not run, and the fence is that one collection folder"
+        ),
+    )
     mode = p.add_mutually_exclusive_group()
     mode.add_argument(
         "--dry-run",
@@ -929,19 +1072,23 @@ def parse_args(argv):
     return args
 
 
-def resolve_target_or_die(target: str) -> str:
-    """The scratch-root fence (T-03-23). Refuses loudly, naming both paths, and exits 2."""
-    root = os.path.realpath(SCRATCH_ROOT)
+def resolve_target_or_die(target: str, collection: str = DEFAULT_COLLECTION) -> str:
+    """The fence (T-03-23), on the SELECTED collection's root. Names both paths and exits 2."""
+    collection_root = COLLECTIONS[collection][0]
+    root = os.path.realpath(collection_root)
     real = os.path.realpath(target)
     if real != root and not real.startswith(root + os.sep):
         sys.stderr.write(
             colour(
-                "REFUSING TO RUN: target is outside the spike scratch root.\n"
-                f"  given:    {target}\n"
-                f"  resolved: {real}\n"
-                f"  required: {root} (or a descendant)\n"
-                "D-07: normalisation runs on reflinked COPIES, never on originals and never on "
-                "/mnt/tank/media/Music.\n",
+                f"REFUSING TO RUN: target is outside the `{collection}` collection's fence root.\n"
+                f"  given:      {target}\n"
+                f"  resolved:   {real}\n"
+                f"  required:   {root} (or a descendant)\n"
+                f"  collection: {collection}  (--collection selects the fence, never whether one "
+                "applies)\n"
+                "D-07: normalisation runs inside one named collection, never on originals and "
+                "never on /mnt/tank/media/Music - Phase 1's D-20 holds no rw there until Phase 6."
+                "\n",
                 RED,
             )
         )
@@ -952,17 +1099,24 @@ def resolve_target_or_die(target: str) -> str:
     return real
 
 
-def check_snapshot_proof_or_die(proof_path: str | None) -> str:
-    """`--apply` refuses unless the rollback snapshot is proven to exist. Never a skip."""
+def check_snapshot_proof_or_die(
+    proof_path: str | None, collection: str = DEFAULT_COLLECTION
+) -> str:
+    """`--apply` refuses unless the SELECTED collection's rollback snapshot is proven to exist.
+
+    Never a skip. The snapshot moves with the collection: a run fenced to one collection whose
+    proof names another collection's snapshot has no rollback at all, and is refused here.
+    """
+    snapshot_name = COLLECTIONS[collection][1]
     if not proof_path:
         sys.stderr.write(
             colour(
                 "REFUSING TO APPLY: --snapshot-proof is required.\n"
-                f"  {SNAPSHOT_NAME} is this script's ONLY rollback, and `zfs` cannot resolve on\n"
-                "  LXC 100 or inside this container, so the check is delegated. Produce the proof\n"
-                "  on atlantis and pass it:\n"
+                f"  {snapshot_name} is this script's ONLY rollback for the `{collection}`\n"
+                "  collection, and `zfs` cannot resolve on LXC 100 or inside this container, so\n"
+                "  the check is delegated. Produce the proof on atlantis and pass it:\n"
                 "    ssh -o BatchMode=yes -o ConnectTimeout=5 root@172.16.1.158 \\\n"
-                f"      'zfs list -t snapshot -H -o name {SNAPSHOT_NAME}' > <proof file>\n"
+                f"      'zfs list -t snapshot -H -o name {snapshot_name}' > <proof file>\n"
                 "  An unreachable atlantis means the snapshot state is UNKNOWN, which is a refusal,\n"
                 "  not a skip and not a pass.\n",
                 RED,
@@ -973,7 +1127,7 @@ def check_snapshot_proof_or_die(proof_path: str | None) -> str:
         sys.stderr.write(
             colour(
                 f"REFUSING TO APPLY: snapshot proof not found: {proof_path}\n"
-                f"  {SNAPSHOT_NAME} is this script's only rollback. Snapshot state is UNKNOWN.\n",
+                f"  {snapshot_name} is this script's only rollback. Snapshot state is UNKNOWN.\n",
                 RED,
             )
         )
@@ -984,11 +1138,12 @@ def check_snapshot_proof_or_die(proof_path: str | None) -> str:
     except OSError as exc:
         sys.stderr.write(colour(f"REFUSING TO APPLY: cannot read {proof_path}: {exc}\n", RED))
         sys.exit(2)
-    if SNAPSHOT_NAME not in body:
+    if snapshot_name not in body:
         sys.stderr.write(
             colour(
-                f"REFUSING TO APPLY: {proof_path} does not name {SNAPSHOT_NAME}.\n"
-                "  Snapshot state is UNKNOWN.\n",
+                f"REFUSING TO APPLY: {proof_path} does not name {snapshot_name}.\n"
+                f"  That is the `{collection}` collection's ONLY rollback; another collection's\n"
+                "  snapshot does not substitute for it. Snapshot state is UNKNOWN.\n",
                 RED,
             )
         )
@@ -1014,6 +1169,12 @@ def build_record(*, mode, folder, path, field, rule, old, new, written, artist_p
     D-23: an album record for a WAV whose RIFF `IPRD` is non-empty and differs from the new album
     carries `info_iprd`, the stale INFO value this script deliberately leaves in place. An INFO
     chunk that cannot be parsed is `info_riff_unreadable`, kept distinct from "no IPRD".
+
+    D-10: a record whose `new` already equals its `old` carries `noop: true`. Rule 4 proposes the
+    canonical album for EVERY file in a volume folder - so the dry run shows the whole collection
+    was covered rather than only its wrong half - and the ones already carrying that exact value
+    are recorded and then not written. Rules 1, 2 and 3 only ever propose a different value, so
+    this key never appears for them.
     """
     record = {
         "mode": mode,
@@ -1026,6 +1187,8 @@ def build_record(*, mode, folder, path, field, rule, old, new, written, artist_p
         "written": written,
         "artist_policy": artist_policy,
     }
+    if old == new:
+        record["noop"] = True
     if field == "album" and is_wave(path):
         try:
             iprd = read_riff_info(path).get("IPRD")
@@ -1035,6 +1198,19 @@ def build_record(*, mode, folder, path, field, rule, old, new, written, artist_p
             if iprd and iprd.strip() and iprd.strip() != (new or "").strip():
                 record["info_iprd"] = iprd
     return record
+
+
+def effective_changes(
+    fields: dict[str, tuple[int, str | None, str]]
+) -> dict[str, str]:
+    """The subset of a proposal that actually CHANGES a value; {} means the file is already right.
+
+    Factored out so --self-test drives the same expression the emit loop does, rather than a copy
+    of it. A proposal whose `new` equals its `old` is recorded in the NDJSON as `noop` and is never
+    written: re-serialising the tag of a file that already carries the canonical value moves its
+    mtime for nothing, and rule 4 proposes on every file in a volume folder by design.
+    """
+    return {field: new for field, (_rule, old, new) in fields.items() if old != new}
 
 
 def collect_folders(root: str) -> dict[str, list[str]]:
@@ -1061,24 +1237,46 @@ def main(argv=None) -> int:
         return self_test()
 
     applying = bool(args.apply)
-    target = resolve_target_or_die(args.target)
+    collection = args.collection
+    fence_root, snapshot_name = COLLECTIONS[collection]
+    target = resolve_target_or_die(args.target, collection)
+
+    # D-10 is ONE FIELD ON ONE COLLECTION. Rule 3 writes `artist`; under `now` it does not run, and
+    # coercing the policy here is the mechanism rather than a second condition at the rule site -
+    # the rule already gates on `keep`. Announced, never silent.
+    if collection == "now" and args.artist_policy != "keep":
+        sys.stderr.write(
+            colour(
+                f"  NOTE: --artist-policy {args.artist_policy} is forced to `keep` under "
+                "--collection now.\n        D-10 is one field on one collection: rule 4 writes "
+                "`album` and nothing writes `artist`.\n",
+                YELLOW,
+            )
+        )
+        args.artist_policy = "keep"
 
     route = None
     if applying:
         # Runs BEFORE any audio file is opened, which is the point.
-        route = check_snapshot_proof_or_die(args.snapshot_proof)
+        route = check_snapshot_proof_or_die(args.snapshot_proof, collection)
 
     mode_line = (
         colour("--apply (WRITES TAGS IN PLACE)", RED)
         if applying
         else colour("dry-run (default, writes nothing)", YELLOW)
     )
+    rules_line = (
+        "4 (canonical album from the Vol NNN folder)" if collection == "now" else "1, 2, 3"
+    )
     started = time.time()
     sys.stderr.write(
         "normalise-dj-tags.py - D-08/OD-4 minimum-viable DJ tag normalisation\n"
         f"  MODE:           {mode_line}\n"
+        f"  collection:     {collection}\n"
         f"  target:         {target}\n"
-        f"  scratch root:   {SCRATCH_ROOT}\n"
+        f"  fence root:     {fence_root}\n"
+        f"  rules:          {rules_line}\n"
+        f"  snapshot:       {snapshot_name}\n"
         f"  writable fields:{list(WRITABLE_FIELDS)}\n"
         f"  artist policy:  {args.artist_policy}\n"
         f"  snapshot proof: {args.snapshot_proof or '(not required in dry-run)'}"
@@ -1109,7 +1307,7 @@ def main(argv=None) -> int:
             # is not a preview. A refusal is a .failed record, never a skip and never an
             # "unchanged".
             try:
-                assert_inside_scratch(path)
+                assert_inside_scratch(path, fence_root=fence_root)
             except Exception as exc:  # noqa: BLE001 - routed to the ledger, never swallowed
                 counts["failed"] += 1
                 log.error("fence refused %s: %s", path, exc)
@@ -1164,21 +1362,44 @@ def main(argv=None) -> int:
         # is written, so the two can never drift apart again silently.
         skipped_paths: set[str] = set()
 
-        # ---- rules 1 and 2, per file -----------------------------------------------------
+        # ---- the album rules, per file ----------------------------------------------------
+        # MUTUALLY EXCLUSIVE BY MODE, NOT BY LUCK (T-05-08-05). A proposal is a tuple keyed by
+        # FIELD, so two rules proposing `album` for the same file would collide on the dict key and
+        # let the last writer win silently, with the `rule` number in the NDJSON naming the loser.
+        # The collection gate makes that impossible rather than unlikely: under `now`, rule 4 owns
+        # `album` outright and rules 1 and 2 do not execute; otherwise rules 1 and 2 run exactly as
+        # they did before and rule 4 does not exist.
         proposals: dict[str, dict[str, tuple[int, str | None, str]]] = {}
-        for path, _handle, values in loaded:
-            album = values["album"]
-            if album is None or not album.strip():
-                derived, reason = derive_album_from_folder(folder_name)
+        if collection == "now":
+            # Rule 4, D-10. Folder-scoped, exactly as rule 3's consensus is: the folder is the
+            # grouping the split produced, so the repair is "every file in this folder carries this
+            # one canonical string".
+            derived, reason = derive_now_album_from_folder(folder_name)
+            if derived is None:
+                log.warning("rule 4 refused folder %s: %s", folder_name, reason)
+            for path, _handle, values in loaded:
                 if derived is None:
                     skipped_paths.add(path)  # WR-06: state, not a counter - see above
-                    log.warning("rule 1 skipped %s: %s", path, reason)
                     continue
-                proposals.setdefault(path, {})["album"] = (1, album, derived)
-            else:
-                canonical = canonicalise_album(album)
-                if canonical and canonical != album:
-                    proposals.setdefault(path, {})["album"] = (2, album, canonical)
+                # Proposed for EVERY file, including the ones already carrying it. Those come back
+                # as `noop` records rather than as silence, so the dry run - which is the artefact
+                # the operator approves at 05-09 - shows the whole collection was covered. The
+                # emit loop below is where a no-op is recorded and NOT written.
+                proposals.setdefault(path, {})["album"] = (4, values["album"], derived)
+        else:
+            for path, _handle, values in loaded:
+                album = values["album"]
+                if album is None or not album.strip():
+                    derived, reason = derive_album_from_folder(folder_name)
+                    if derived is None:
+                        skipped_paths.add(path)  # WR-06: state, not a counter - see above
+                        log.warning("rule 1 skipped %s: %s", path, reason)
+                        continue
+                    proposals.setdefault(path, {})["album"] = (1, album, derived)
+                else:
+                    canonical = canonicalise_album(album)
+                    if canonical and canonical != album:
+                        proposals.setdefault(path, {})["album"] = (2, album, canonical)
 
         # ---- rule 3, per FOLDER, so beets sees a consensus artist ------------------------
         if args.artist_policy != "keep":
@@ -1228,12 +1449,19 @@ def main(argv=None) -> int:
             for field, (rule, old, new) in sorted(fields.items()):
                 rule_hits[rule] += 1
                 sys.stdout.write(
-                    f"{path} :: {field}: {'<MISSING>' if old is None else old} -> {new}\n"
+                    f"{path} :: {field}: {'<MISSING>' if old is None else old} -> {new}"
+                    f"{'  (no-op, already canonical)' if old == new else ''}\n"
                 )
+            # D-10 / idempotence: a proposal whose new value already EQUALS the old one is
+            # recorded and not written. Writing it would re-serialise the tag of a file that is
+            # already correct - moving its mtime, and on ~4,700 files for no gain. Rules 1, 2 and 3
+            # only ever propose a different value, so `effective` == `fields` for them and the
+            # default collection's behaviour is unchanged.
+            effective = effective_changes(fields)
             written = False
-            if applying:
+            if applying and effective:
                 try:
-                    write_tags(handle, path, {f: v[2] for f, v in fields.items()})
+                    write_tags(handle, path, effective, fence_root=fence_root)
                     written = True
                 except Exception as exc:  # noqa: BLE001
                     counts["failed"] += 1
@@ -1252,9 +1480,16 @@ def main(argv=None) -> int:
                         )
                         failed_fh.flush()
                     continue
-            counts["changed"] += 1
-            folder_changed += 1
-            changed_paths.add(path)
+            if effective:
+                counts["changed"] += 1
+                folder_changed += 1
+                changed_paths.add(path)
+            else:
+                # WR-06: the four reconciled buckets stay disjoint - a file whose only proposal is
+                # a no-op IS unchanged. `noop` is an extra, informational counter beside them, not
+                # a fifth bucket in the equation.
+                counts["noop"] += 1
+                counts["unchanged"] += 1
             if out_fh:
                 for field, (rule, old, new) in sorted(fields.items()):
                     out_fh.write(
@@ -1294,8 +1529,18 @@ def main(argv=None) -> int:
         counts["changed"] + counts["unchanged"] + counts["skipped"] + counts["failed"]
     )
 
+    # T-05-08-05, asserted rather than described. The mode gate above is what makes rules 1, 2 and
+    # 4 mutually exclusive on `album`; this is the check that the gate actually held. A hit on any
+    # other rule under `now` means two rules reached the same dict key, and the NDJSON beside it
+    # cannot then be trusted to name which one won.
+    allowed_rules = {4} if collection == "now" else {1, 2, 3}
+    stray_rules = {r: n for r, n in sorted(rule_hits.items()) if r not in allowed_rules}
+
     summary = {
         "mode": "apply" if applying else "dry-run",
+        "collection": collection,
+        "fence_root": fence_root,
+        "snapshot_name": snapshot_name,
         "target": target,
         "artist_policy": args.artist_policy,
         "snapshot_proof": args.snapshot_proof,
@@ -1304,11 +1549,16 @@ def main(argv=None) -> int:
         "files_seen": counts["files_seen"],
         "files_changed": counts["changed"],
         "files_unchanged": counts["unchanged"],
+        # Counted INSIDE files_unchanged, never beside it: a file already carrying the canonical
+        # value is unchanged. Reported separately because "how much of this collection was already
+        # right" is the first question a reviewer of the dry run asks.
+        "files_noop_proposal": counts["noop"],
         "files_skipped": counts["skipped"],
         "failures": counts["failed"],
         # WR-06: recorded IN the artefact, so a later reader can tell at a glance whether the
         # numbers beside it add up rather than having to re-derive it.
         "counts_reconciled": counts_reconciled,
+        "rules_exclusive": not stray_rules,
         "rule_hits": {str(k): v for k, v in sorted(rule_hits.items())},
         "per_folder": folder_rows,
         "elapsed_s": round(time.time() - started, 2),
@@ -1326,6 +1576,8 @@ def main(argv=None) -> int:
         f"  rule 2 hits (album canonicalised):          {rule_hits[2]}\n"
         f"  rule 3 hits (artist set, policy={args.artist_policy}):"
         f"{' ' * max(1, 12 - len(args.artist_policy))}{rule_hits[3]}\n"
+        f"  rule 4 hits (canonical Now! album, D-10):   {rule_hits[4]}\n"
+        f"  of which no-op (value already correct):     {summary['files_noop_proposal']}\n"
         f"  files skipped:     {summary['files_skipped']}\n"
         f"  failures:          {summary['failures']}\n"
         f"  elapsed:           {summary['elapsed_s']}s\n"
@@ -1364,6 +1616,18 @@ def main(argv=None) -> int:
                 "  The four buckets are meant to be disjoint and to account for every file seen.\n"
                 "  They do not, so neither this summary nor the .summary.json beside it can be\n"
                 "  trusted. This is a bug in the accounting above, NOT a result.\n",
+                RED,
+            )
+        )
+        return 1
+    if stray_rules:
+        sys.stderr.write(
+            colour(
+                f"  ⚠️  RULE EXCLUSIVITY BROKEN under --collection {collection}: "
+                f"unexpected hits {stray_rules}, allowed {sorted(allowed_rules)}.\n"
+                "  Two rules reached the same (file, field) key, so the `rule` number in the\n"
+                "  NDJSON beside this summary names an arbitrary winner. This is a bug in the\n"
+                "  dispatch above, NOT a result.\n",
                 RED,
             )
         )
@@ -1547,10 +1811,213 @@ def _selftest_case(tmp: str, name: str, tagged: bool, artist, iprd) -> list[str]
     return problems
 
 
+# ---- rule 4 (D-10): the canonical `Now!` album, derived from the Vol NNN folder ------------
+# folder name | expected album | expected refusal reason
+SELFTEST_RULE4_CASES = (
+    ("Vol 036", "Now That's What I Call Music! 36", None),
+    ("Vol 001", "Now That's What I Call Music! 1", None),
+    ("Vol 115", "Now That's What I Call Music! 115", None),
+    ("Vol 36", None, "volume_number_underpadded"),
+    ("Vol 0001", None, "volume_number_overpadded"),
+    ("36", None, "bare_number_no_vol_prefix"),
+    ("Disc 1", None, "not_a_volume_folder"),
+    ("Vol 116", None, "volume_out_of_range"),
+)
+
+
+def _selftest_rule4() -> list[str]:
+    """Rule 4's derivation, its five named refusals, the no-digit guard, and idempotence."""
+    problems: list[str] = []
+    for folder, want_album, want_reason in SELFTEST_RULE4_CASES:
+        album, reason = derive_now_album_from_folder(folder)
+        if (album, reason) != (want_album, want_reason):
+            problems.append(
+                f"{folder!r} -> ({album!r}, {reason!r}), expected ({want_album!r}, {want_reason!r})"
+            )
+    # The five refusals must be five DIFFERENT names: a single catch-all reason would make the
+    # .failed ledger unable to say which shape of folder was refused.
+    reasons = [r for _f, a, r in SELFTEST_RULE4_CASES if a is None]
+    if len(set(reasons)) != len(reasons):
+        problems.append(f"refusal reasons are not distinct: {reasons}")
+
+    # The no-digit guard in sanitise_derived() is the reason the canonical form carries the number
+    # on every volume. Volume 1 is the case that would fail a bare `Now That's What I Call Music!`.
+    vol1, _ = derive_now_album_from_folder("Vol 001")
+    if sanitise_derived(vol1) != vol1:
+        problems.append(f"sanitise_derived({vol1!r}) = {sanitise_derived(vol1)!r}, expected itself")
+
+    # All 115, once: one value each, 115 distinct, numbers exactly 1..115, every one sanitiser-safe.
+    values = {}
+    for n in range(NOW_VOLUME_MIN, NOW_VOLUME_MAX + 1):
+        album, reason = derive_now_album_from_folder(f"Vol {n:03d}")
+        if album is None:
+            problems.append(f"Vol {n:03d} refused: {reason}")
+            continue
+        if sanitise_derived(album) != album:
+            problems.append(f"Vol {n:03d} -> {album!r} does not survive sanitise_derived")
+        values[n] = album
+    distinct = len(set(values.values()))
+    if distinct != NOW_VOLUME_MAX:
+        problems.append(f"{distinct} distinct values over 115 volumes, expected 115")
+
+    # IDEMPOTENCE, two halves. The function is pure, so the same folder gives the same value; and
+    # once a file carries that value, effective_changes() - the expression the emit loop uses -
+    # returns {}, which is what makes a second --apply write nothing.
+    if derive_now_album_from_folder("Vol 036") != derive_now_album_from_folder("Vol 036"):
+        problems.append("derive_now_album_from_folder is not deterministic on `Vol 036`")
+    already = {"album": (4, values[36], values[36])}
+    if effective_changes(already) != {}:
+        problems.append(
+            f"effective_changes() on an already-canonical file = {effective_changes(already)!r}, "
+            "expected {} - a second --apply would rewrite every file"
+        )
+    still_wrong = {"album": (4, "Now That's What I Call Music! Vol.36  CD2", values[36])}
+    if effective_changes(still_wrong) != {"album": values[36]}:
+        problems.append("effective_changes() dropped a real change; the no-op test is vacuous")
+
+    # Rule 1 must have nothing to say about a volume folder, which is the other half of the mode
+    # gate: even if it were reached, it could not propose a competing `album`.
+    r1, r1_reason = derive_album_from_folder("Vol 036")
+    if r1 is not None:
+        problems.append(f"rule 1 derived {r1!r} from `Vol 036`; rules 1 and 4 are not exclusive")
+    elif r1_reason != "no_label_token":
+        problems.append(f"rule 1 refused `Vol 036` for {r1_reason!r}, expected no_label_token")
+    return problems
+
+
+# ---- the ID3v1 dependency D-10's safety claim rests on -------------------------------------
+SELFTEST_MP3_KEPT_FRAMES = (b"APIC", b"COMM", b"TIT2", b"TPE1", b"TRCK", b"TYER")
+
+
+def _selftest_id3v1_offsets(trailer: bytes) -> str:
+    """The album field of a 128-byte ID3v1 block: bytes 63..92."""
+    return trailer[63:93].rstrip(b"\x00").decode("latin-1")
+
+
+def _selftest_audio_body(path: str) -> bytes:
+    """The file with its ID3v2 tag and its ID3v1 trailer removed - what ffmpeg copies as audio."""
+    with open(path, "rb") as fh:
+        blob = fh.read()
+    if blob[:3] == b"ID3":
+        size = (blob[6] << 21) | (blob[7] << 14) | (blob[8] << 7) | blob[9]
+        blob = blob[10 + size:]
+    if blob[-128:][:3] == b"TAG":
+        blob = blob[:-128]
+    return blob
+
+
+def _selftest_build_mp3(path: str) -> None:
+    """A synthetic MP3 carrying an ID3v2.3 tag, a body, and a trailing ID3v1 block.
+
+    The mp3 branch of read_tags()/write_tags() is pure `mutagen.id3.ID3`, never `mutagen.mp3.MP3`,
+    so the body only has to be bytes that are neither an ID3 tag nor an ID3v1 trailer.
+    """
+    import mutagen.id3 as id3
+
+    body = b"\xff\xfb\x90\x00" + bytes(range(256)) * 8
+    v1 = (
+        b"TAG"
+        + b"Self Test Title".ljust(30, b"\x00")
+        + b"Self Test Artist".ljust(30, b"\x00")
+        + SELFTEST_OLD_ALBUM.encode("latin-1").ljust(30, b"\x00")
+        + b"2020"
+        + b"self test comment".ljust(30, b"\x00")
+        + bytes([255])
+    )
+    with open(path, "wb") as fh:
+        fh.write(body + v1)
+    tags = id3.ID3()
+    for frame in (
+        id3.TIT2(encoding=0, text=["Self Test Title"]),
+        id3.TPE1(encoding=0, text=["Self Test Artist"]),
+        id3.TRCK(encoding=0, text=["3/12"]),
+        id3.TYER(encoding=0, text=["2020"]),
+        id3.COMM(encoding=0, lang="eng", desc="", text=["self test comment"]),
+        id3.APIC(encoding=0, mime="image/png", type=3, desc="cover", data=SELFTEST_PNG),
+        id3.TALB(encoding=0, text=[SELFTEST_OLD_ALBUM]),
+    ):
+        tags.add(frame)
+    tags.save(path, v2_version=3)
+
+
+def _selftest_mp3_id3v1(tmp: str) -> list[str]:
+    """After a rule-4 album write: frame set unchanged but TALB, ID3v1 trailer BYTE-IDENTICAL.
+
+    THIS IS THE CASE D-10's SAFETY CLAIM DEPENDS ON, AND IT IS WHY preserve_id3v1_trailer() MUST
+    NOT BE SIMPLIFIED AWAY. `save(v1=UPDATE)` regenerates all 128 bytes of the ID3v1 block from the
+    ID3v2 frames, which MOVES `audio_md5` - the key snapshot-music-tags.sh and diff-music-tags.sh
+    join on, and therefore the key QUAL-01's before/after diff joins on. The claim that this write
+    is compatible with Phase 7's field-loss gate is true ONLY because that restore exists. The
+    `Now!` collection is 4,746 mp3, the exact format the trap was measured on.
+    """
+    path = os.path.join(tmp, "rule4-id3v1.mp3")
+    _selftest_build_mp3(path)
+    problems: list[str] = []
+
+    new_album, reason = derive_now_album_from_folder("Vol 036")
+    if new_album is None:
+        return [f"rule 4 refused `Vol 036`: {reason}"]
+
+    trailer_before = read_id3v1_trailer(path)
+    frames_before = id3v2_frame_ids(path)
+    body_before = _selftest_audio_body(path)
+    # Non-vacuity: without a trailer naming the OLD album, "unchanged after the write" is trivially
+    # true and the case proves nothing.
+    if trailer_before is None:
+        return ["fixture has no ID3v1 trailer: the whole case would be vacuous"]
+    if _selftest_id3v1_offsets(trailer_before) != SELFTEST_OLD_ALBUM:
+        problems.append(
+            f"fixture ID3v1 album = {_selftest_id3v1_offsets(trailer_before)!r}, "
+            f"expected {SELFTEST_OLD_ALBUM!r}"
+        )
+    if frames_before is None:
+        return ["fixture ID3v2 tag is unparseable: the frame-set check would be vacuous"]
+    missing = [f for f in SELFTEST_MP3_KEPT_FRAMES + (b"TALB",) if f not in frames_before]
+    if missing:
+        problems.append(f"fixture lacks {missing}: the frame checks would be vacuous")
+
+    handle, values = read_tags(path)
+    if values["album"] != SELFTEST_OLD_ALBUM:
+        problems.append(f"read_tags() album before = {values['album']!r}")
+    try:
+        write_tags(handle, path, {"album": new_album}, fence_root=tmp)
+    except Exception as exc:  # noqa: BLE001 - the failure IS the finding
+        problems.append(f"write_tags() raised {type(exc).__name__}: {str(exc)[:160]}")
+        return problems
+
+    _h, after_values = read_tags(path)
+    if after_values["album"] != new_album:
+        problems.append(
+            f"album after the write = {after_values['album']!r}, expected {new_album!r}"
+        )
+
+    frames_after = id3v2_frame_ids(path)
+    if frames_after != frames_before:
+        problems.append(
+            f"ID3v2 frame-ID multiset moved beyond TALB: {frames_before} -> {frames_after}"
+        )
+
+    trailer_after = read_id3v1_trailer(path)
+    if trailer_after != trailer_before:
+        problems.append(
+            "ID3v1 trailer is NOT byte-identical after the write: "
+            f"album field {_selftest_id3v1_offsets(trailer_before)!r} -> "
+            f"{_selftest_id3v1_offsets(trailer_after) if trailer_after else None!r}. "
+            "preserve_id3v1_trailer() did not hold, so audio_md5 has moved and Phase 7's diff "
+            "will report losses that did not happen"
+        )
+    if _selftest_audio_body(path) != body_before:
+        problems.append("the audio body between the ID3v2 tag and the ID3v1 trailer changed")
+    return problems
+
+
 def self_test() -> int:
     """--self-test. Exit 0 every case ok, 1 any case bad, 2 could not run."""
     out = sys.stdout
-    out.write("== normalise-dj-tags.py --self-test: the WAV write path (D-23, DEF-03-09) ==\n")
+    out.write(
+        "== normalise-dj-tags.py --self-test: the WAV write path (D-23, DEF-03-09) and "
+        "rule 4 (D-10) ==\n"
+    )
     try:
         import mutagen
         import mutagen.wave  # noqa: F401
@@ -1562,26 +2029,50 @@ def self_test() -> int:
         return 2
     out.write(f"   python {sys.version.split()[0]}, mutagen {mutagen.version_string}\n")
     fails = 0
+    cases = 0
     tmp = tempfile.mkdtemp(prefix=SELFTEST_PREFIX)
+
+    def run(name: str, why: str, fn) -> None:
+        nonlocal fails, cases
+        cases += 1
+        try:
+            problems = fn()
+        except Exception as exc:  # noqa: BLE001 - a raising case is a failing case
+            problems = [f"case raised {type(exc).__name__}: {str(exc)[:160]}"]
+        if problems:
+            fails += 1
+            out.write(f"bad  {name}: {why}\n")
+            for problem in problems:
+                out.write(f"       reason: {problem}\n")
+        else:
+            out.write(f"ok   {name}: {why}\n")
+
     try:
         for name, tagged, artist, iprd, why in SELFTEST_CASES:
-            try:
-                problems = _selftest_case(tmp, name, tagged, artist, iprd)
-            except Exception as exc:  # noqa: BLE001 - a raising case is a failing case
-                problems = [f"case raised {type(exc).__name__}: {str(exc)[:160]}"]
-            if problems:
-                fails += 1
-                out.write(f"bad  {name}: {why}\n")
-                for problem in problems:
-                    out.write(f"       reason: {problem}\n")
-            else:
-                out.write(f"ok   {name}: {why}\n")
+            run(
+                name,
+                why,
+                lambda n=name, t=tagged, a=artist, i=iprd: _selftest_case(tmp, n, t, a, i),
+            )
+        run(
+            "rule4-derivation",
+            "Vol NNN -> the canonical album: 115 distinct values, five NAMED refusals, the "
+            "no-digit guard accepts volume 1, idempotent, and rule 1 cannot compete",
+            _selftest_rule4,
+        )
+        run(
+            "rule4-mp3-id3v1-preserved",
+            "after a rule-4 album write the ID3v2 frame set is unchanged but TALB and the trailing "
+            "ID3v1 block is BYTE-IDENTICAL - the preserve_id3v1_trailer() dependency D-10's "
+            "audio_md5 safety claim rests on",
+            lambda: _selftest_mp3_id3v1(tmp),
+        )
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     if os.path.exists(tmp):
         fails += 1
         out.write(f"bad  cleanup: {tmp} still exists after rmtree\n")
-    out.write(f"-- {len(SELFTEST_CASES)} cases, {fails} failed --\n")
+    out.write(f"-- {cases} cases, {fails} failed --\n")
     out.flush()
     return 1 if fails else 0
 
