@@ -433,8 +433,13 @@ do_plan() {
     NR==FNR { seen[$1 + 0] = 1; next }
     END {
       miss = 0; extra = 0; n = 0
-      for (v in seen) { n++; if (v < a || v > b) { printf("      unexpected volume: %d\n", v) > "/dev/stderr"; extra++ } }
-      for (v = a; v <= b; v++) if (!(v in seen)) { printf("      missing volume: %d\n", v) > "/dev/stderr"; miss++ }
+      lo = a + 0; hi = b + 0
+      # `for (v in seen)` yields v as a STRING - always, regardless of how the key was stored. A
+      # bare `v < a` is therefore a STRING comparison, and "94" > "115" is true, so every volume
+      # above 11 reads as out of range. Coerce with `+ 0` before comparing. Driven: the first run
+      # of this assertion reported 96 of 115 volumes "out of range" on a correct list.
+      for (v in seen) { n++; vv = v + 0; if (vv < lo || vv > hi) { printf("      unexpected volume: %d\n", vv) > "/dev/stderr"; extra++ } }
+      for (v = lo; v <= hi; v++) if (!((v "") in seen)) { printf("      missing volume: %d\n", v) > "/dev/stderr"; miss++ }
       printf("%d\t%d\t%d\n", n, miss, extra)
     }
   ' "$work/vols_seen.txt" /dev/null > "$work/coverage.tsv" 2> "$work/coverage.err"
