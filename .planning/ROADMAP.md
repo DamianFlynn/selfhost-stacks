@@ -669,8 +669,24 @@ QUAL-01 before-state snapshot must already be taken — staging first destroys t
   4. No `_`-prefixed folder exists anywhere under `/mnt/tank/media/Music` — underscore names are
      fine in the staging tree because it is outside the library, and never inside it, because
      Music Assistant silently ignores them and Jellyfin does not.
-**Plans**: TBD
-**Research**: not needed — filesystem triage with documented traps.
+**Plans**: 11 plans
+
+Plans:
+- [ ] 05-01-PLAN.md — snapshot fence `tank/downloads@pre-phase5`, create the six `_inbox` directories, drive the D-21 inode proof with its cross-dataset negative control
+- [ ] 05-02-PLAN.md — dated in-band amendments to criteria 2, 3 and 4 plus INBX addenda; fold the criterion-4 assertion into `quick-health-check.sh` and drive it red
+- [ ] 05-03-PLAN.md — write `phase05-junk-sweep.sh` (enumerate + sweep) and produce the approvable candidate file
+- [ ] 05-04-PLAN.md — operator approves; sweep moves to `99-quarantine` then deletes; retire `lidarr-import`
+- [ ] 05-05-PLAN.md — regenerate the `Now!` tag inventory durably under `/mnt/fast`, reconcile per volume, answer D-04's surplus question
+- [ ] 05-06-PLAN.md — write `phase05-now-split.sh` and produce the reviewable src-to-dst mapping with total-coverage assertions
+- [ ] 05-07-PLAN.md — operator approves; apply the split into 115 flat `Vol NNN` folders; capture the QUAL-01 before-state
+- [ ] 05-08-PLAN.md — add a narrow Phase 5 collection mode and rule 4 to `normalise-dj-tags.py`; self-test; dry run
+- [ ] 05-09-PLAN.md — pilot the album write on `Vol 077`, gate on the field-level diff, then write the remaining 114 volumes
+- [ ] 05-10-PLAN.md — fresh chown baseline snapshots, tree-wide `chown` to `568:568` via a detached atlantis runner, `zfs diff` verification plus the library untouched-proof
+- [ ] 05-11-PLAN.md — re-assert all four criteria from live state and write the Phase 5 closure into `stacks/selfhosted/arrs/beets.md`
+
+**Research**: not needed — filesystem triage with documented traps. `05-CONTEXT.md` (27 locked
+decisions), `05-PREMEASURE.md` (measurements from atlantis, 2026-09-18) and `05-PATTERNS.md` (analog
+map) carry what a RESEARCH.md would have. Nyquist dimension 8 is thin by accepted, recorded choice.
 
 ### Phase 6: Tagger Configuration and Dry Run
 
