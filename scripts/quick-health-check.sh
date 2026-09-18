@@ -370,6 +370,51 @@
 #     block is unaffected by it — it runs the check live, in front of you — but do not read a green
 #     here as evidence that the timer is alive. Different instruments, different questions.
 #
+# ⚠️  EXIT-CODE BEHAVIOUR CHANGED AGAIN — A SEVENTH FATAL BLOCK (THE LIBRARY UNDERSCORE-DIRECTORY
+#     GUARD) WAS ADDED 2026-09-18 (plan 05-02, phase 5 D-22).
+#
+#     THIS IS THE NINTH SUCH NOTICE. Counts measured before and after this edit, not assumed —
+#     using the two greps the eighth notice quotes (this notice deliberately does NOT write the
+#     shared phrase out a second time in its own body, so it adds exactly one match to each):
+#         headers   8 -> 9
+#         raw      11 -> 12
+#     The raw count therefore still runs THREE ahead of the header count. That offset is entirely
+#     the eighth notice's two quoted patterns plus the 02.1-10 note near the top of this file; it
+#     is unchanged by this edit, which is the point of stating it rather than rounding it.
+#
+#     BLOCK ordinal goes six -> SEVEN.
+#
+#     WHAT IT ASSERTS: zero directories whose basename begins with `_` exist ANYWHERE under
+#     /mnt/tank/media/Music. This is ROADMAP Phase 5 criterion 4, which was ALREADY GREEN when the
+#     phase opened (05-PREMEASURE.md § 6 measured zero) — so it is a guard to maintain, not work to
+#     perform, and it is folded in here rather than budgeted for. Why it matters: Music Assistant
+#     SILENTLY IGNORES underscore-prefixed folders and Jellyfin does not, so a staging-style name
+#     leaking into the library makes the estate's two consumers diverge BY DESIGN, and NEITHER
+#     REPORTS AN ERROR. That is the class of fault this whole file exists for — a wrong state with
+#     no complaint attached to it.
+#
+#     WHAT NOW EXITS THIS SCRIPT 1 THAT DID NOT BEFORE:
+#       - A REAL VIOLATION: one or more `_`-prefixed directories under the library.
+#       - COULD NOT LOOK, kept distinct from the above and from a genuine zero: atlantis
+#         (172.16.1.158) unreachable (ssh 255, so `find` never ran); the remote command exceeding
+#         REMOTE_TIMEOUT (124); any other non-zero remote status; or output that is not a bare
+#         integer. Three verdicts, never two — "could not look", "there are none" and "BROKEN" are
+#         three different answers.
+#
+#     ⚠️ THIS IS THE FIRST BLOCK IN THIS FILE WHOSE PRIMARY READ TARGETS ATLANTIS RATHER THAN
+#     LXC 100, so the WR-10 reachability gate at the top does NOT cover it — that gate probes
+#     172.16.1.159. Atlantis unreachability is handled inside the block, as its own named UNKNOWN,
+#     and line 81 of this file already names an unreachable atlantis as a fatal could-not-look for
+#     the transcode fold-in. The target and the host are both overridable constants, and either
+#     override forces a non-green run, per the DASH_HOST / EXTCONF_HOST convention.
+#
+#     ⛔ THE ADJACENT TEMPTATION IS FORBIDDEN, AND IT IS NAMED HERE SO THE NEXT PERSON MEETS THE
+#     REASON RATHER THAN THE IDEA: do NOT add a `tank/downloads` ownership assertion to this file
+#     (phase 5 D-25). The download client keeps writing as uid 3000 at roughly one job per 72
+#     seconds, so such a check goes red on the next download — the exact permanent-red failure mode
+#     phase 02.1's CR-01 spent four gap-closure plans repairing in the other direction, and the
+#     same 01-09 trap that got the mode-bit assertions removed from check-music-freeze.sh.
+#
 # ⚠️  KNOWN LIMIT, AND IT APPLIES TO THIS WHOLE FILE: THIS SCRIPT IS MANUAL. IT ONLY EVER FIRES
 #     WHEN SOMEBODY TYPES IT (D-22, phase 02.1).
 #     There is no cron entry, no systemd timer and no notification path. Nothing here will tell
@@ -1527,6 +1572,102 @@ else
     EXIT_CODE=1
 fi
 
+# ── LIBRARY UNDERSCORE-DIRECTORY GUARD — ROADMAP Phase 5 criterion 4 (D-22) ──────────────────────
+#
+# WHAT AND WHY. Zero directories whose basename begins with `_` may exist anywhere under
+# /mnt/tank/media/Music. Music Assistant silently ignores underscore-prefixed folders and Jellyfin
+# does not, so a staging-style name leaking into the library makes the two consumers diverge BY
+# DESIGN — and neither of them reports an error. There is no symptom to notice; this assertion IS
+# the symptom. The staging tree under tank/downloads uses exactly those names on purpose
+# (_inbox/{01-auto,02-review,03-asis,04-hold,99-quarantine,_done}), which is precisely why a leak
+# is plausible rather than theoretical.
+#
+# THE SHAPE IS COPIED FROM THE CONTAINER-COUNT BLOCK ABOVE (:796-839), not its content. Both parts
+# of that block's two-part fix are present and BOTH ARE NECESSARY:
+#   1. `set -o pipefail` INSIDE THE REMOTE COMMAND STRING. `timeout T find … | wc -l` signals only
+#      the FIRST stage; without pipefail `wc -l` reads the empty stream, prints `0` and exits 0, so
+#      a killed find is indistinguishable from "there are none" — a bound expiry laundered into
+#      exactly the answer this block is supposed to prove.
+#   2. THE ssh STATUS CAPTURED ON THE VERY NEXT LINE, WITH NO LOCAL PIPE IN FRONT OF IT.
+#      `VAR=$(ssh ... | tr -d ' ')` makes `$?` the tr's status, and `${PIPESTATUS[0]}` DOES NOT
+#      rescue it — an assignment is a simple command, not a pipeline. The whitespace strip happens
+#      on its own line, AFTER the status has been taken. Do not fold it back into the assignment.
+#
+# THREE VERDICTS, NEVER TWO — could-not-look / there-are-none / BROKEN. The could-not-look verdict
+# has two arms (124 split out ahead of everything else, then any other non-zero or a non-integer
+# answer) because this file's doctrine is that a bound expiry and a broken command are worth
+# distinguishing in the message even though both mean "nothing was counted".
+#
+# ⚠️ THE READ TARGETS ATLANTIS (172.16.1.158), NOT LXC 100. It is the only host that can see the
+# library tree authoritatively — a container-side listing shows LXC 100's sparse-idmap view, which
+# is how phase 1 lost time to a phantom 65534. The WR-10 gate at the top of this file probes
+# 172.16.1.159 and therefore does NOT cover this block, so ssh 255 is handled here as its own named
+# UNKNOWN. Host and path are overridable, and either override forces a non-green run — the
+# DASH_HOST / EXTCONF_HOST convention, reused rather than a second convention invented.
+#
+# ⛔ DO NOT ADD A `tank/downloads` OWNERSHIP ASSERTION HERE (phase 5 D-25). It is the obvious next
+# thought while reading this block and it is forbidden: the download client keeps writing as uid
+# 3000 at roughly one job per 72 seconds, so an "everything is 568:568" check would go red on the
+# next download and train everyone to ignore the whole file. D-24's tree-wide chown is a one-time,
+# `zfs diff`-verified sweep whose measurement and date are the deliverable — not a standing check.
+#
+# DRIVEN NEGATIVE CONTROL, 2026-09-18 (plan 05-02). The true count is zero, which makes the green
+# path the default and would otherwise leave this an assertion nobody has seen fail. So it was
+# driven: `mkdir /mnt/tank/media/Music/_probe` from ATLANTIS AS REAL ROOT — the sanctioned route,
+# because phase 1's D-20 says no container holds rw on the library until phase 6 — and this block
+# went RED, printing the count 1 and exiting the script 1. `rmdir` removed the probe and the block
+# went GREEN again in the same session, with an EXIT trap guaranteeing removal and a follow-up find
+# asserting absence. No chmod was attempted: mkdir and rmdir work on tank, chmod fails EPERM even
+# as real root. Safe to do because jellyfin's real-time monitoring and metadata savers are off for
+# the Music library (phase 1, 01-06), so an empty directory present for seconds writes nothing.
+# Recorded here, in the VENDORED_DRIFT_PROMOTED style, because an instrument that has only ever
+# been observed passing has not been shown to distinguish anything.
+MUSIC_UNDERSCORE_HOST="${MUSIC_UNDERSCORE_HOST:-root@172.16.1.158}"
+MUSIC_UNDERSCORE_ROOT="${MUSIC_UNDERSCORE_ROOT:-/mnt/tank/media/Music}"
+if [ "$MUSIC_UNDERSCORE_HOST" != "root@172.16.1.158" ]; then
+    echo "⚠️  MUSIC_UNDERSCORE_HOST override in effect — this run cannot report the library guard green"
+    EXIT_CODE=1
+fi
+if [ "$MUSIC_UNDERSCORE_ROOT" != "/mnt/tank/media/Music" ]; then
+    echo "⚠️  MUSIC_UNDERSCORE_ROOT override in effect — this run cannot report the library guard green"
+    EXIT_CODE=1
+fi
+echo -n "Library underscore-dir guard: "
+UNDERSCORE_OUT=$(ssh -n $SSH_OPTS "$MUSIC_UNDERSCORE_HOST" "set -o pipefail; timeout $REMOTE_TIMEOUT find $MUSIC_UNDERSCORE_ROOT -type d -name '_*' | wc -l")
+UNDERSCORE_RC=$?   # ssh propagates the remote status — NO local pipe above, see the note above
+UNDERSCORE_COUNT=$(printf '%s' "$UNDERSCORE_OUT" | tr -d '[:space:]')
+if [ "$UNDERSCORE_RC" -eq 124 ]; then
+    echo "⚠️  UNKNOWN — the library scan exceeded its ${REMOTE_TIMEOUT}s bound and was killed."
+    echo "  NOTHING WAS COUNTED. This is NOT 'zero underscore directories under the library'."
+    echo "  Re-run with a wider bound before believing anything about criterion 4:"
+    echo "    REMOTE_TIMEOUT=300 bash scripts/quick-health-check.sh"
+    EXIT_CODE=1
+elif [ "$UNDERSCORE_RC" -ne 0 ] || ! echo "$UNDERSCORE_COUNT" | grep -qE '^[0-9]+$'; then
+    echo "⚠️  UNKNOWN — could not scan $MUSIC_UNDERSCORE_ROOT on $MUSIC_UNDERSCORE_HOST"
+    echo "  (ssh exit $UNDERSCORE_RC, output '$UNDERSCORE_COUNT')."
+    echo "  NOTHING WAS COUNTED. This is NOT 'zero underscore directories under the library'."
+    echo "  Exit 255 means the ssh to atlantis failed and find never ran — atlantis is the only"
+    echo "  host that can answer this; LXC 100's view of the tree is an idmapped lie."
+    echo "  A non-zero find status usually means the dataset is not mounted at that path."
+    EXIT_CODE=1
+elif [ "$UNDERSCORE_COUNT" -gt 0 ]; then
+    echo "❌ $UNDERSCORE_COUNT '_'-prefixed director(y|ies) under $MUSIC_UNDERSCORE_ROOT"
+    echo "  This IS a measurement, unlike the two branches above. ROADMAP phase 5 criterion 4 is"
+    echo "  violated: Music Assistant will silently ignore each of these and Jellyfin will not, so"
+    echo "  the two consumers now disagree about the library with no error on either side."
+    echo "  Offending paths (from atlantis, read-only):"
+    # Captured into a variable and printed on the NEXT line rather than piped inline. The pipe
+    # would be LOCAL and therefore harmless, but `grep -n 'timeout \$REMOTE_TIMEOUT.*|'` over this
+    # file is the house rule's own instrument (:444-453) and a line that needs a reader to work out
+    # which side of the quotes the pipe is on costs more than the variable does. This runs only on
+    # the already-red path, so its own failure cannot turn a green run red.
+    UNDERSCORE_PATHS=$(ssh -n $SSH_OPTS "$MUSIC_UNDERSCORE_HOST" "timeout $REMOTE_TIMEOUT find $MUSIC_UNDERSCORE_ROOT -type d -name '_*'")
+    printf '%s\n' "$UNDERSCORE_PATHS" | sed 's/^/    /'
+    EXIT_CODE=1
+else
+    echo "✅ No '_'-prefixed directories under $MUSIC_UNDERSCORE_ROOT"
+fi
+
 # Jellyfin transcode retention audit (D-20). Host-resident on LXC 100 because it CANNOT run here:
 # it measures free space with `df -B1 --output=avail`, which is GNU coreutils only. BSD df on macOS
 # silently ignores --output and prints its own layout, which would parse into a WRONG NUMBER rather
@@ -1807,11 +1948,15 @@ if [ "$EXIT_CODE" -ne 0 ]; then
     # it keeps nearly being forgotten: the tail is updated in the SAME COMMIT as the block that can
     # now reach it. A tail that lists every block except the failing one sends the reader to the
     # green ones and costs them exactly the time this message exists to save.
+    # Extended again 2026-09-18 (plan 05-02) when the library underscore-dir guard was added. Same
+    # discipline, same commit, fourth statement of it. Note this one can fail on a host the rest of
+    # the tail never mentions: atlantis, 172.16.1.158.
     echo "❌ Health check FAILED. The failing block is whichever one above carries a ❌ or a ⚠️ —"
     echo "   that is any of: the Traefik or Authelia container probes, the Traefik dashboard"
     echo "   probe, the container counts, the music freeze harness, the consumers audit, the"
-    echo "   Jellyfin transcode retention audit, the vendored-file drift block, the"
-    echo "   extended.conf destructive-switch block, or the container image-drift block."
+    echo "   library underscore-dir guard, the Jellyfin transcode retention audit, the"
+    echo "   vendored-file drift block, the extended.conf destructive-switch block, or the"
+    echo "   container image-drift block."
     echo "   ⚠️ The image-drift block CANNOT fail on the drift count itself — if it is red, it is"
     echo "      a could-not-look or the unresolvable set moved. Do not go looking for a tag."
     exit 1
