@@ -123,10 +123,19 @@ for why the v1 denominator of 39 is deliberately preserved.
       normalised DJ folders, import timing extrapolated against the API rate ceiling
 - [x] **TAGR-02**: The surviving tagger can own the whole tree, including content that will never
       match MusicBrainz
-- [ ] **TAGR-03**: The losing tagger definitions are deleted and their Renovate rules released,
+- [x] **TAGR-03**: The losing tagger definitions are deleted and their Renovate rules released,
       including the wrtag `<0.30.0` pin that enforces the broken state
-- [ ] **TAGR-04**: soulbeet is removed (issue #306) and the beets block stripped from `audio.bash`
-- [ ] **TAGR-05**: Every remaining beets config declares the `musicbrainz` plugin — the defect that
+- [x] **TAGR-04**: soulbeet is removed (issue #306) and the beets block stripped from `audio.bash`
+      *(**NOTE 2026-09-18** — this requirement's **own text** is fully measured, and both halves are
+      static: issue #306 is closed, and
+      `grep -cE '^[[:space:]]*beet ' stacks/selfhosted/arrs/sabnzbd/audio.bash` returns **0**. The
+      tick is honest on that basis. Separately, the phase records repeatedly speak of "TAGR-04's
+      behavioural half" — a job completing without invoking any tagger at all. That reading comes
+      from ROADMAP Phase 4 criterion 3's wording, not from the text above, and it was discharged by
+      the **operator-signed override** in `04-VERIFICATION.md` (signed 2026-09-18), which accepted
+      threefold unanimous side-effect evidence in place of the criterion's own
+      PRE-HOOK/COMPLETION byte comparison. **That byte proof was never obtained.**)*
+- [x] **TAGR-05**: Every remaining beets config declares the `musicbrainz` plugin — the defect that
       silently disabled autotagging since beets 2.4.0
 - [x] **TAGR-06**: Operator ergonomics is a weighted, recorded factor in the tagger decision, not
       an afterthought — including a reviewable-queue front end (e.g. beets-flask) rather than a
@@ -262,9 +271,9 @@ Populated during roadmap creation (2026-08-17). Every v1 requirement maps to exa
 | TAGR-01 | Phase 3 | Complete |
 | TAGR-02 | Phase 3 | Complete |
 | TAGR-06 | Phase 3 | Complete |
-| TAGR-03 | Phase 4 | Pending |
-| TAGR-04 | Phase 4 | Pending |
-| TAGR-05 | Phase 4 | Pending. **ADDENDUM 2026-09-11 (04-04, D-20/D-27)** — two clarifications to the requirement text, neither of which reduces it. (1) **Scope:** "every remaining beets config" includes the survivor's **newly vendored** `stacks/selfhosted/arrs/beets/config.yaml` (D-27), alongside `stacks/selfhosted/arrs/sabnzbd/beets-config.yaml`. Vendoring makes the requirement checkable in git for both. The vendored file is created by plan 04-08 and does not exist at this addendum's commit. The survivor's live host config is a pasted compose service definition with no `plugins:` key at all (04-RESEARCH F4), which is why it is replaced by a vendored file rather than edited in place. (2) **Instrument:** the proving instrument is the probe pair named in ROADMAP Phase 4 criterion 4's amendment: the MB-only `tag_album()` probe with its D-17 negative control, plus a hand-read `beet import -t`. It is **not `--pretend`**, which in beets v2.13.1 never calls `lookup_candidates` and so returns zero candidates by construction. The text above is deliberately not rewritten. |
+| TAGR-03 | Phase 4 | Complete (Phase 4) |
+| TAGR-04 | Phase 4 | Complete (Phase 4) |
+| TAGR-05 | Phase 4 | Complete (Phase 4). **ADDENDUM 2026-09-11 (04-04, D-20/D-27)** — two clarifications to the requirement text, neither of which reduces it. (1) **Scope:** "every remaining beets config" includes the survivor's **newly vendored** `stacks/selfhosted/arrs/beets/config.yaml` (D-27), alongside `stacks/selfhosted/arrs/sabnzbd/beets-config.yaml`. Vendoring makes the requirement checkable in git for both. The vendored file is created by plan 04-08 and does not exist at this addendum's commit. The survivor's live host config is a pasted compose service definition with no `plugins:` key at all (04-RESEARCH F4), which is why it is replaced by a vendored file rather than edited in place. (2) **Instrument:** the proving instrument is the probe pair named in ROADMAP Phase 4 criterion 4's amendment: the MB-only `tag_album()` probe with its D-17 negative control, plus a hand-read `beet import -t`. It is **not `--pretend`**, which in beets v2.13.1 never calls `lookup_candidates` and so returns zero candidates by construction. The text above is deliberately not rewritten. |
 | INBX-01 | Phase 5 | Pending |
 | INBX-02 | Phase 5 | Pending |
 | INBX-03 | Phase 5 | Pending |
