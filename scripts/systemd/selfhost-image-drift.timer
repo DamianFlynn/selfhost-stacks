@@ -1,0 +1,38 @@
+# selfhost-image-drift.timer — hourly schedule for selfhost-image-drift.service.
+#
+# NOT INSTALLED BY THE COMMIT THAT ADDED IT. Installing it is gated host step G3 in
+# stacks/selfhosted/monitoring/README.md § Image drift detection.
+#
+# ⚠️ THE PERIOD AND THE STALENESS THRESHOLD ARE ONE DECISION, NOT TWO. DO NOT TUNE EITHER ALONE.
+#
+#   OnCalendar=hourly with RandomizedDelaySec=10m means two healthy consecutive runs land AT MOST
+#   70 minutes apart. The Grafana rule `Drift check is stale` in
+#   grafana/provisioning/alerting/rules.yaml therefore fires at
+#
+#       time() - max(selfhost_image_drift_last_success_timestamp_seconds) > 7200
+#
+#   i.e. 7200s — one whole missed run of slack on top of that 70-minute worst case.
+#
+#   A THRESHOLD BELOW THE PERIOD FALSE-ALARMS on every ordinary gap, and a check that goes red for
+#   non-reasons trains the reader to ignore it. A THRESHOLD FAR ABOVE THE PERIOD HIDES A DEAD
+#   TIMER — which is the EXACT failure this metric exists to catch, because a dead timer leaves the
+#   drift and unhealthy rules reading a frozen snapshot whose silence means nothing at all.
+#
+#   So: change the period here and you MUST change 7200 in rules.yaml in the SAME COMMIT, and vice
+#   versa. Both files say so.
+#
+# Persistent=true so a run missed while the host was down fires on the next boot rather than
+# waiting out a whole period — same reasoning as podsync-ytdlp-update.timer, from which this
+# unit's shape is copied.
+
+[Unit]
+Description=Hourly container image drift measurement
+Documentation=file:///mnt/fast/stacks/stacks/selfhosted/monitoring/README.md
+
+[Timer]
+OnCalendar=hourly
+RandomizedDelaySec=10m
+Persistent=true
+
+[Install]
+WantedBy=timers.target

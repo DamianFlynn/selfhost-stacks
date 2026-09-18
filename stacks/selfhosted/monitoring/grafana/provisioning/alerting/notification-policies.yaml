@@ -1,0 +1,27 @@
+# Grafana provisioned notification policy tree.
+#
+# One default policy, routing everything to the Telegram contact point declared in
+# contact-points.yaml. There is deliberately no second route: this estate has ONE human and ONE
+# channel, and a routing tree nobody maintains is a place for alerts to get lost.
+#
+# ⚠️ repeat_interval IS THE ANTI-FATIGUE KNOB AND IT IS SET LONG ON PURPOSE. Image drift is a
+#    STANDING condition — 14 containers are drifted right now and v1 is alert-only (D-01), so
+#    nothing here will clear it. At Grafana's 4h default this would re-notify six times a day about
+#    a number that does not change, and the reliable outcome of that is a human who mutes the
+#    channel. 12h is long enough that the message stays worth reading and short enough that a
+#    genuinely new condition is not sat on overnight.
+#
+#    group_by on alertname keeps the three rules below as three separate conversations rather than
+#    one merged blob, so "the timer is dead" never arrives buried inside "12 containers drifted".
+
+apiVersion: 1
+
+policies:
+  - orgId: 1
+    receiver: telegram-estate
+    group_by:
+      - alertname
+      - grafana_folder
+    group_wait: 30s
+    group_interval: 5m
+    repeat_interval: 12h

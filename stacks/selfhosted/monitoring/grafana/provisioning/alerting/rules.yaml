@@ -1,0 +1,265 @@
+# Grafana provisioned alert rules for the image-drift instrument.
+#
+# ⚠️ `noDataState: Alerting` ON ALL THREE RULES IS THE FAIL-CLOSED LEVER, IN GRAFANA'S VOCABULARY.
+#    It is not a style choice and it must not be relaxed to OK or NoData "to reduce noise".
+#
+#    Grafana's DEFAULT for a rule with no data is NoData, which does not notify. So without this
+#    line, a metric that is ABSENT — the timer never installed, node-exporter never given the
+#    textfile flag, the .prom file never written, the collector directory never created — produces
+#    SILENCE, and silence is indistinguishable from a healthy estate. That is the precise failure
+#    this whole instrument exists to make impossible: quick-health-check.sh's KNOWN LIMIT notice
+#    records that the estate's previous coverage gap was not "we had no detector" but "nobody
+#    looked", and an alert rule that cannot fire when its input vanishes reopens it.
+#
+#    `execErrState: Alerting` is the same argument for a query that errors rather than one that
+#    returns nothing.
+#
+# THE DATASOURCE UID IS A LITERAL, AND IT WAS READ FROM THE LIVE INSTANCE, NOT INVENTED:
+#    `GET /api/datasources` on the running Grafana on 2026-09-18 returned
+#    {"uid":"PBFA97CFB590B2093","name":"Prometheus"}. Provisioned alert rules can only reference a
+#    datasource by uid, and ../datasources.yml declares no `uid:` field, so Grafana generated one.
+#    ADDING `uid:` TO datasources.yml WAS CONSIDERED AND DECLINED: provisioning matches an existing
+#    datasource by name and would REWRITE its uid, silently breaking every hand-imported dashboard
+#    that references the old one. Pinning the literal here changes nothing that is already running.
+#    If the datasource is ever recreated from scratch, re-read the uid and update this file.
+#
+# ⚠️ THE 7200s IN RULE 3 IS HALF OF A DECISION WHOSE OTHER HALF LIVES IN
+#    scripts/systemd/selfhost-image-drift.timer. Hourly + RandomizedDelaySec=10m means two healthy
+#    runs land at most 70 minutes apart; 7200s adds one whole missed run of slack. Change the timer
+#    period and you MUST change this number in the same commit, and vice versa. Both files say so.
+
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: image-drift
+    folder: Estate
+    interval: 5m
+    rules:
+
+      # -----------------------------------------------------------------------------------------
+      # 1. Image drift — the repo's pins moved and the host did not.
+      # -----------------------------------------------------------------------------------------
+      - uid: selfhost-image-drift-containers
+        title: Image drift
+        condition: C
+        for: 15m
+        noDataState: Alerting
+        execErrState: Alerting
+        isPaused: false
+        labels:
+          severity: warning
+          area: estate
+        annotations:
+          summary: >-
+            {{ $values.A.Value }} container(s) are running an image tag this repository no longer
+            pins.
+          description: >-
+            Renovate automerges image-tag PRs into git at any hour and NOTHING DEPLOYS — merging a
+            PR changes the compose file only, and the host keeps running the old image until
+            someone pulls and recreates the container. This alert is the instrument for that gap.
+
+            WHAT TO DO: ssh root@172.16.1.159, then
+            `bash /mnt/fast/stacks/scripts/check-drift.sh` for the per-container list
+            (name, running tag -> declared tag). Pull and recreate the ones you want moved.
+
+            THIS ALERT DOES NOT DEPLOY ANYTHING (D-01, v1 is alert-only). Nothing will clear it but
+            a human. See DEPLOYMENT.md § 5.
+
+            KNOWN LIMIT: a floating tag (:latest, :main, a two-part tag like 2.13) that has moved
+            upstream reads as NO drift here, because both sides still carry the same string.
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 10800
+              to: 0
+            datasourceUid: PBFA97CFB590B2093
+            model:
+              refId: A
+              editorMode: code
+              expr: max(selfhost_image_drift_containers)
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              range: false
+          - refId: C
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  evaluator:
+                    type: gt
+                    params:
+                      - 0
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    type: last
+                    params: []
+
+      # -----------------------------------------------------------------------------------------
+      # 2. Containers unhealthy or stuck in `created`.
+      # -----------------------------------------------------------------------------------------
+      - uid: selfhost-containers-unhealthy-or-created
+        title: Containers unhealthy or stuck created
+        condition: C
+        for: 15m
+        noDataState: Alerting
+        execErrState: Alerting
+        isPaused: false
+        labels:
+          severity: warning
+          area: estate
+        annotations:
+          summary: >-
+            {{ $values.A.Value }} container(s) are unhealthy or stuck in state `created`.
+          description: >-
+            `created` IS A DOCUMENTED ESTATE BLIND SPOT AND IT IS WHY THIS RULE COUNTS IT. The
+            obvious filter — `docker ps --filter status=restarting|dead|exited` — DOES NOT MATCH
+            `created`, and a bare `docker ps` does not list those containers at all. That gap once
+            left dispatcharr and teleport down for six weeks while every check reported a clean
+            estate.
+
+            WHAT TO DO: ssh root@172.16.1.159 and run `docker ps -a`, not `docker ps`. Then
+            `docker inspect <name> --format '{{ .State.Status }} {{ .State.ExitCode }}'` — and
+            BELIEVE INSPECT OVER ps. On 2026-09-18 `docker ps` reported cadvisor `Up 2 weeks` for a
+            container that had exited with code 137 sixteen days earlier.
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 10800
+              to: 0
+            datasourceUid: PBFA97CFB590B2093
+            model:
+              refId: A
+              editorMode: code
+              # Deliberately NOT wrapped in `or vector(0)`. If either series is absent the sum is
+              # empty, the rule goes NoData, and noDataState: Alerting fires. Defaulting the
+              # missing side to 0 would turn "the writer never ran" into a confident green — the
+              # exact conflation this file exists to refuse. Both series are written by the same
+              # atomic write, so partial absence means the write did not happen.
+              expr: max(selfhost_containers_unhealthy) + max(selfhost_containers_created)
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              range: false
+          - refId: C
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  evaluator:
+                    type: gt
+                    params:
+                      - 0
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    type: last
+                    params: []
+
+      # -----------------------------------------------------------------------------------------
+      # 3. Drift check is stale — THE RULE THAT WATCHES THE WATCHER.
+      # -----------------------------------------------------------------------------------------
+      - uid: selfhost-image-drift-stale
+        title: Drift check is stale
+        condition: C
+        # No `for:` on purpose. The 7200s threshold IS the debounce — two hours of staleness is
+        # already past every legitimate gap, and adding a pending period on top would only delay a
+        # signal that is, by construction, never transient.
+        noDataState: Alerting
+        execErrState: Alerting
+        isPaused: false
+        labels:
+          severity: critical
+          area: estate
+        annotations:
+          summary: >-
+            The image-drift measurement has not succeeded for {{ $values.A.Value }} seconds. THE
+            OTHER TWO RULES ARE NOW MEANINGLESS.
+          description: >-
+            THIS IS THE ONE THAT MATTERS. `selfhost-image-drift.timer` has not produced a
+            successful run, so `selfhost_image_drift_containers`, `selfhost_containers_unhealthy`
+            and `selfhost_containers_created` are all FROZEN AT THEIR LAST VALUES. Rules 1 and 2
+            are reading a snapshot, and their SILENCE MEANS NOTHING — a dead timer and a healthy
+            estate look identical from here. That is why this rule exists and why it is critical.
+
+            NOTE `last_success` MEANS THE MEASUREMENT RAN. It does NOT mean there was no drift;
+            drift has its own gauge.
+
+            WHAT TO DO: ssh root@172.16.1.159, then
+            `systemctl list-timers selfhost-image-drift.timer` and
+            `journalctl -u selfhost-image-drift.service -n 50`. Check the textfile exists and is
+            fresh: `ls -l /mnt/fast/appdata/monitoring/node-exporter-textfile/image-drift.prom`.
+            A missing file after a failed run is CORRECT behaviour — check-drift.sh leaves the
+            previous file byte-identical rather than writing a fresh timestamp on a dead run.
+
+            If this alert fires and the timer was never installed at all, that is gated host step
+            G3 in stacks/selfhosted/monitoring/README.md, and it is expected until someone runs it.
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 10800
+              to: 0
+            datasourceUid: PBFA97CFB590B2093
+            model:
+              refId: A
+              editorMode: code
+              expr: time() - max(selfhost_image_drift_last_success_timestamp_seconds)
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              range: false
+          - refId: C
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  evaluator:
+                    type: gt
+                    params:
+                      # 7200s. SEE THE WARNING AT THE TOP OF THIS FILE — this number and
+                      # OnCalendar/RandomizedDelaySec in selfhost-image-drift.timer are ONE
+                      # decision. Do not tune either alone.
+                      - 7200
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    type: last
+                    params: []

@@ -13,10 +13,21 @@ services:
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
       - /:/rootfs:ro
+      # Image-drift metrics, written by scripts/check-drift.sh --prom on an hourly systemd timer.
+      # Mounted `ro`: node-exporter only ever READS this directory; the writer is a root-run
+      # oneshot on the host. The host side lives under /mnt/fast/appdata and NEVER under /tmp —
+      # /tmp on LXC 100 is tmpfs, i.e. host RAM, and 1.1 GB left there once took the whole box down.
+      - ${APPDATA_DIR}/monitoring/node-exporter-textfile:/var/lib/node_exporter/textfile_collector:ro
     command:
       - '--path.procfs=/host/proc'
       - '--path.sysfs=/host/sys'
       - '--path.rootfs=/rootfs'
+      # Turns on the textfile collector. node-exporter globs *.prom in this directory on every
+      # scrape, which is why check-drift.sh writes to a temp name that does NOT end in .prom and
+      # then `mv`s it into place — a half-written .prom breaks the parse of the WHOLE directory.
+      # No `$$` escaping here: that is only needed for the regex `$` anchors in the exclude flags
+      # below, and neither of the two lines added for drift contains one.
+      - '--collector.textfile.directory=/var/lib/node_exporter/textfile_collector'
       - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
       - '--collector.netclass.ignored-devices=^(veth.*|br.*|docker.*|virbr.*|lo)$$'
       - '--collector.netdev.device-exclude=^(veth.*|br.*|docker.*|virbr.*|lo)$$'

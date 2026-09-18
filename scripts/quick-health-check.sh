@@ -311,6 +311,65 @@
 #     So the probes now capture `docker ps` output with NO REMOTE PIPE, branch on the ssh status,
 #     and do the matching LOCALLY.
 #
+# ⚠️  EXIT-CODE BEHAVIOUR CHANGED AGAIN — A SIXTH FATAL BLOCK (CONTAINER IMAGE DRIFT) WAS ADDED
+#     2026-09-18 (quick task 260918-c12).
+#
+#     THIS IS THE EIGHTH SUCH NOTICE, AND THE OFFSET THE SIXTH AND SEVENTH NOTICES DESCRIBE HAS
+#     CHANGED — measured, not assumed, before and after this edit:
+#         headers  (`grep -c '^# ⚠️  EXIT-CODE BEHAVIOUR CHANGED'`)   7 -> 8
+#         raw      (`grep -c 'EXIT-CODE BEHAVIOUR CHANGED'`)          8 -> 11
+#     So the raw count now runs THREE ahead of the header count, not one. This notice alone adds
+#     three matches: its own header, plus the two grep patterns quoted on the two lines directly
+#     above — because, like the 02.1-10 note near the top of this file, it writes the phrase out
+#     literally inside its own body, and it does so twice in order to state both counts exactly.
+#
+#     STATED PRECISELY RATHER THAN ROUNDED, because this file's own convention is that a
+#     self-describing count which has silently gone stale is worse than never having stated one,
+#     and the sixth notice was already amended once for exactly that. The quirk is deliberate: do
+#     not reword a notice to flatter a grep, and do not "fix" the offset by deleting the quotes.
+#     If you need the number of notices, count the HEADERS — that grep is unambiguous and is the
+#     one given first above.
+#
+#     BLOCK ordinal goes five -> SIX. scripts/check-drift.sh now also runs here.
+#
+#     WHAT NOW EXITS THIS SCRIPT 1 THAT DID NOT BEFORE:
+#       - COULD NOT LOOK, each its own named UNKNOWN: 172.16.1.159 unreachable; the drift check
+#         producing NO OUTPUT (which, for a while, will mostly mean the script has not reached
+#         /mnt/fast/stacks yet — it lands by `git pull`); the remote command exceeding
+#         REMOTE_TIMEOUT (124); the `📊 Summary` anchor having moved; the summary's FAILURES or
+#         could-not-look counters being unreadable or reading UNKNOWN rather than a number.
+#       - A FATAL FINDING REPORTED BY THE CHECK ITSELF — which is its own could-not-look count, or
+#         its UNRESOLVABLE COUNT / NAME SET having moved. A third unresolvable container means a
+#         new stale compose project, or a compose file this repo no longer carries.
+#
+#     ⚠️ WHAT IT EXPLICITLY CANNOT EXIT 1 ON: THE IMAGE DRIFT COUNT ITSELF. That is the whole
+#     judgement of the block and it is stated here so nobody has to read the code to find it.
+#     v1 of the drift instrument is ALERT-ONLY (D-01): nothing in it pulls, recreates or deploys,
+#     and 14 containers were drifted on the day it shipped. Asserting drift at 0 would have made
+#     the estate's single health entry point permanently red for a condition NOTHING IN THIS
+#     REPOSITORY CAN CLEAR — the 01-09 trap, the same one that got the mode-bit assertions removed
+#     from check-music-freeze.sh and that kept the `/` headroom floor green-with-margin rather than
+#     aspirational. The count is REPORTED on the green path so it cannot grow unseen; the thing
+#     that actually tells a human is the Grafana rule on an hourly timer into Telegram.
+#     The promotion seam is the named constant IMAGE_DRIFT_PROMOTED below — read the comment there
+#     before flipping it.
+#
+#     A NOTE ON THE EXIT CODES, because they look contradictory and are not: check-drift.sh EXITS 1
+#     ON DRIFT ALONE, for a human who typed it. This block therefore does NOT branch on the exit
+#     code alone — it reads `FAILURES total` and `could-not-look` out of that check's summary, both
+#     of which deliberately EXCLUDE the drift count. A non-zero exit with both at 0 means "drift
+#     exists, nothing is broken" and prints a tick. That split is a cross-file contract; see the
+#     comment at the block itself and at check-drift.sh's own summary.
+#
+#     ⚠️ AND THIS IS THE FIRST FOLD-IN HERE WHOSE SUBJECT ALSO RUNS UNATTENDED. The KNOWN LIMIT
+#     notice immediately below still applies to THIS script in full — nothing here is scheduled.
+#     What changed is that the thing it now asks about IS scheduled (an hourly systemd timer feeding
+#     node-exporter), which introduces a failure mode none of the other three blocks has: THE TIMER
+#     CAN DIE AND LEAVE A FROZEN METRIC THAT READS EXACTLY LIKE HEALTH. That is why check-drift.sh
+#     emits a last-success timestamp and why the Grafana rule set includes a STALENESS rule. This
+#     block is unaffected by it — it runs the check live, in front of you — but do not read a green
+#     here as evidence that the timer is alive. Different instruments, different questions.
+#
 # ⚠️  KNOWN LIMIT, AND IT APPLIES TO THIS WHOLE FILE: THIS SCRIPT IS MANUAL. IT ONLY EVER FIRES
 #     WHEN SOMEBODY TYPES IT (D-22, phase 02.1).
 #     There is no cron entry, no systemd timer and no notification path. Nothing here will tell
@@ -426,6 +485,35 @@ REMOTE_TIMEOUT="${REMOTE_TIMEOUT:-120}"
 # rather than at everyone who typed the script. It is green now because the host was given the
 # files, not because the comparison was loosened.
 VENDORED_DRIFT_PROMOTED=1
+
+# THE IMAGE-DRIFT PROMOTION SEAM. Deliberately 0, and it is NOT the same kind of constant as
+# VENDORED_DRIFT_PROMOTED directly above it — read the difference before flipping it.
+#
+# VENDORED_DRIFT_PROMOTED switches a block ON. THIS ONE DOES NOT. The image-drift block below ALWAYS
+# RUNS and is ALWAYS FATAL ON COULD-NOT-LOOK, whatever this constant says. What it controls is one
+# narrower question: WHETHER THE DRIFT COUNT ITSELF IS AN ASSERTION.
+#
+#   0 (today)  the count is REPORTED on the green path. Drift alone cannot fail this script.
+#   1          a non-zero drift count exits this script 1.
+#
+# WHY IT IS 0. v1 of the image-drift instrument is ALERT-ONLY (D-01): nothing in that change pulls,
+# recreates or deploys anything, and 14 containers are drifted TODAY. Asserting drift at 0 would
+# make the estate's single health entry point permanently red on the day it shipped, for a
+# condition nothing in the repository can clear. THAT IS THE 01-09 TRAP — the same one that got the
+# mode-bit assertions removed from check-music-freeze.sh, and the reason the `/` headroom floor in
+# check-jellyfin-transcode.sh was chosen to be green with measured margin rather than aspirational.
+# A permanently-red check trains the reader to ignore it, and then it is worth less than no check.
+#
+# SO WHAT TELLS A HUMAN? The Grafana rule, on the hourly timer, into Telegram — see
+# stacks/selfhosted/monitoring/README.md § Image drift detection. THIS block's job is narrower and
+# still worth having: make the number LEGIBLE ON THE GREEN PATH so it cannot grow unseen. A count
+# that is neither asserted nor displayed is the CR-01 defect, and this file has paid for it once.
+#
+# FLIPPING THIS TO 1 IS THE D-03 AUTO-APPLY FOLLOW-UP, NOT A V1 DECISION. It only becomes reasonable
+# once something can actually CLEAR the condition — i.e. once there is an apply path
+# (IMAGE_DRIFT_AUTOAPPLY in scripts/check-drift.sh) or a standing commitment to pull promptly.
+# Flipping it before then does not make the estate safer; it makes this script ignorable.
+IMAGE_DRIFT_PROMOTED=0
 
 # ENV OVERRIDES for the drift block, all ${VAR:-default} so a grep can prove they exist. Every one
 # of them can only make the block REDDER. There is deliberately no success-producing override:
@@ -1550,6 +1638,154 @@ else
     EXIT_CODE=1
 fi
 
+# Image drift (quick task 260918-c12). Host-resident on LXC 100 for the plainest of reasons: it
+# needs the docker daemon AND the repo checkout at /mnt/fast/stacks, and neither exists on this
+# workstation. It also needs bash >= 4 for associative arrays; macOS ships 3.2, so the script
+# guards on BASH_VERSINFO and exits 2 there — an ENVIRONMENT error, never a failed assertion. It
+# lands on the host by `git pull` into /mnt/fast/stacks; there is no copy step to remember.
+#
+# THIS BLOCK IS THE FOURTH FOLD-IN AND IT IS SHAPED EXACTLY LIKE THE THREE ABOVE ON PURPOSE. That
+# shape encodes four separate lessons this estate has already paid for, and each is load-bearing:
+#   - `ssh -n` with `RC=$?` ON THE VERY NEXT LINE and NO PIPE before the capture. A pipe launders
+#     124 into whatever the last stage returns (WR-09's subtle half), and `-n` stops a nested ssh
+#     eating this script's stdin.
+#   - the ANSI strip uses bash's $'\033' quoting, NOT `\x1b`, which is a GNU sed extension this
+#     script cannot use because it runs on macOS.
+#   - THE EMPTY-OUTPUT TEST COMES FIRST, deferring only to the bound. A zero-byte or absent script
+#     exits 0, so branching on RC first would report a truncated check as GREEN.
+#   - RC 124 is its own condition, distinct from a failed assertion: nothing was measured.
+#
+# WHAT IS FATAL HERE AND WHAT IS NOT — THE LOAD-BEARING JUDGEMENT OF THIS BLOCK:
+#   FATAL: the measurement could not be TAKEN (host unreachable, empty output, 124, the summary
+#          anchor missing), and any fatal finding the check itself reports — which is its
+#          could-not-look count and its unresolvable-count/name-set assertion.
+#   NOT FATAL: THE IMAGE DRIFT COUNT ITSELF. See IMAGE_DRIFT_PROMOTED near the top of this file for
+#          the full argument; the short version is that v1 is alert-only, 14 containers are drifted
+#          today, and nothing in this repository can clear that — so asserting it would make this
+#          script permanently red on arrival. That is the 01-09 trap.
+#
+# HOW THE TWO ARE TOLD APART, because check-drift.sh EXITS 1 ON DRIFT ALONE and a naive
+# `RC -eq 0` test would therefore send every ordinary run down the ❌ branch: its summary counts
+# FATAL findings in `FAILURES total` and keeps the drift count on its OWN line, deliberately
+# excluded from that total. So a non-zero exit carrying `FAILURES total: 0` AND `could-not-look: 0`
+# means "drift exists, nothing is broken". That split is a CROSS-FILE CONTRACT and check-drift.sh
+# says so at its own summary block; do not fold the drift count into FAILURES there without
+# changing this.
+# THE PRESENCE TEST IN THE REMOTE STRING IS NOT DECORATION — IT WAS ADDED AFTER THIS BLOCK WAS
+# DRIVEN AGAINST A HOST THAT DID NOT YET HAVE THE SCRIPT, AND GAVE A CONFIDENT WRONG ANSWER.
+# `bash <missing file>` writes "No such file or directory" to stderr, which `2>&1` captures — so
+# the output is NOT empty, the empty-output test does not fire, and the run fell through to the
+# summary-anchor branch and reported "the section heading has changed". Red, exit 1, and a
+# diagnosis pointing at a heading nobody had touched. That is precisely the failure mode WR-10
+# condemns at the top of this file: a confident wrong diagnosis rather than an honest UNKNOWN.
+# The three older fold-ins escape it only because their scripts have been on the host for months.
+#
+# `exit 7` is chosen because check-drift.sh itself uses 0, 1 and 2 (2 = usage or environment
+# error), so 7 cannot collide with anything the check reports. No pipe in the string, so the
+# REMOTE_TIMEOUT bound is not laundered, and `bash -s` is not used — this repo forbids it by name.
+echo -n "Container image drift: "
+IMAGEDRIFT_OUT=$(ssh -n $SSH_OPTS root@172.16.1.159 \
+    "[ -r /mnt/fast/stacks/scripts/check-drift.sh ] || exit 7; timeout $REMOTE_TIMEOUT bash /mnt/fast/stacks/scripts/check-drift.sh 2>&1")
+IMAGEDRIFT_RC=$?   # ssh propagates the remote exit status — do NOT pipe before capturing this
+IMAGEDRIFT_OUT=$(printf '%s\n' "$IMAGEDRIFT_OUT" | LC_ALL=C sed $'s/\033\\[[0-9;]*m//g')
+
+if [ "$IMAGEDRIFT_RC" -eq 7 ]; then
+    echo "⚠️  UNKNOWN — /mnt/fast/stacks/scripts/check-drift.sh is NOT ON THE HOST."
+    echo "  Not a fault in the estate and not drift: the check simply has not been pulled yet. It"
+    echo "  lands by git, like every other script here — there is no copy step:"
+    echo "    ssh root@172.16.1.159 'cd /mnt/fast/stacks && git pull --ff-only'"
+    echo "  Image drift state is UNKNOWN until then, which is why this is red rather than skipped."
+    EXIT_CODE=1
+elif [ -z "$IMAGEDRIFT_OUT" ] && [ "$IMAGEDRIFT_RC" -ne 124 ]; then
+    # Unreachable host, or the script is not on the host at all — the latter is the likely one for
+    # a while, because check-drift.sh only reaches /mnt/fast/stacks on the next `git pull`.
+    # Absence of a failure signal is NOT evidence of health. PROVEN REACHABLE, not assumed: driven
+    # by moving the host-side script aside and restoring it under a sha256 check, the same device
+    # plans 02.1-10 and 02.1-13 used.
+    echo "⚠️  UNKNOWN — 172.16.1.159 unreachable or the drift check produced no output"
+    echo "  Image drift state is unknown, NOT green — and 'no output' most often means the script"
+    echo "  is simply not on the host yet. Pull, then re-run:"
+    echo "  ssh root@172.16.1.159 'cd /mnt/fast/stacks && git pull --ff-only && bash scripts/check-drift.sh'"
+    EXIT_CODE=1
+elif [ "$IMAGEDRIFT_RC" -eq 124 ]; then
+    echo "⚠️  UNKNOWN — the remote drift check exceeded its ${REMOTE_TIMEOUT}s bound and was killed."
+    echo "  This is NOT a failed assertion and NOT drift. Nothing was measured."
+    echo "  This check runs 'docker compose config' once per distinct compose project (24 of them),"
+    echo "  so it is the most docker-dependent block here — a wedged dockerd stops it dead. Confirm"
+    echo "  on atlantis (172.16.1.158): /proc/pressure/io 'full' near 100% WITH AN IDLE CPU."
+    echo "    cat /proc/pressure/io; uptime"
+    echo "  A slow-but-healthy estate is the other possibility — re-run with a larger budget:"
+    echo "    REMOTE_TIMEOUT=300 bash scripts/quick-health-check.sh"
+    EXIT_CODE=1
+else
+    # The summary anchor. check-drift.sh says "KEEP THIS HEADING LITERAL AND NEVER RENUMBER IT
+    # SILENTLY" — grep that file for KEEP THIS HEADING LITERAL, one hit. A documented coupling with
+    # no detector is a coupling that will break, and it breaks on the branch that still prints a
+    # tick, so an empty selection is UNKNOWN and fatal rather than a quiet blank.
+    IMAGEDRIFT_SUMMARY=$(echo "$IMAGEDRIFT_OUT" | sed -n '/^📊 Summary/,$p' \
+              | grep -E 'image drift|unresolvable|unhealthy|created|commits behind|could-not-look|FAILURES total')
+    # Pull the discriminators out of the summary rather than trusting the exit code alone.
+    #
+    # `grep -o '^[0-9][0-9]*'` AND NOT `tr -dc '0-9'`. THE DIFFERENCE IS NOT COSMETIC AND IT WAS
+    # CAUGHT BY DRIVING THE GREEN PATH, NOT BY READING IT. Every one of these lines carries
+    # explanatory prose after the number, and that prose contains digits:
+    #     image drift:        14  (REPORTED, not asserted — v1 is ALERT-ONLY, D-01)
+    # `tr -dc '0-9'` over that keeps the 1 from "v1" and the 01 from "D-01" and yields 14101. The
+    # first run of this block printed "✅ Measured — 14101 drifted". It was still GREEN and still
+    # correct about being green, which is what makes the class of bug worth a comment: a mangled
+    # number on the reassuring path is exactly the kind of thing nobody re-reads.
+    #
+    # Anchoring at ^ keeps the UNKNOWN behaviour that matters: a counter reading UNKNOWN yields the
+    # EMPTY STRING, not a plausible 0, and empty is treated as fatal below rather than as "nothing
+    # wrong". Same reasoning as avail_bytes() in check-jellyfin-transcode.sh — "could not look" and
+    # "it is zero" are different answers and must not share a rendering.
+    IMAGEDRIFT_FAILURES=$(echo "$IMAGEDRIFT_SUMMARY" | grep 'FAILURES total:' | head -1 | sed 's/.*FAILURES total: *//' | grep -o '^[0-9][0-9]*')
+    IMAGEDRIFT_UNKNOWNS=$(echo "$IMAGEDRIFT_SUMMARY" | grep 'could-not-look:' | head -1 | sed 's/.*could-not-look: *//' | grep -o '^[0-9][0-9]*')
+    IMAGEDRIFT_COUNT=$(echo "$IMAGEDRIFT_SUMMARY" | grep 'image drift:' | head -1 | sed 's/.*image drift: *//' | grep -o '^[0-9][0-9]*')
+
+    if [ -z "$IMAGEDRIFT_SUMMARY" ]; then
+        # DELIBERATELY NOT A CONFIDENT DIAGNOSIS. Two different causes land here and this block
+        # cannot tell them apart from the outside: the anchor heading moved, or the check DIED
+        # before it printed one. Naming only the first is how the missing-script case above got
+        # reported as a renamed heading. So both are named and the output is shown.
+        echo "⚠️  UNKNOWN — no '📊 Summary' block in the drift check's output (remote exit $IMAGEDRIFT_RC)."
+        echo "  Either the heading this fold-in anchors on has moved, or the check died before it"
+        echo "  reached the summary. Nothing here was read, so the state is UNKNOWN, not green."
+        echo "  Last few lines of what came back:"
+        echo "$IMAGEDRIFT_OUT" | tail -5 | sed 's/^/    /'
+        EXIT_CODE=1
+    elif [ -z "$IMAGEDRIFT_FAILURES" ] || [ -z "$IMAGEDRIFT_UNKNOWNS" ]; then
+        echo "⚠️  UNKNOWN — the summary was found but its FAILURES/could-not-look counters were not"
+        echo "  readable. A counter reading UNKNOWN rather than a number means the check could not"
+        echo "  look; a missing label means the cross-file contract moved. Either way this is not"
+        echo "  green."
+        echo "$IMAGEDRIFT_SUMMARY" | sed 's/^/    /'
+        EXIT_CODE=1
+    elif [ "$IMAGEDRIFT_FAILURES" -gt 0 ] || [ "$IMAGEDRIFT_UNKNOWNS" -gt 0 ]; then
+        echo "❌ BROKEN (check-drift.sh exit $IMAGEDRIFT_RC; $IMAGEDRIFT_FAILURES fatal, $IMAGEDRIFT_UNKNOWNS could-not-look)"
+        echo "  Note: a fatal finding here is NOT the drift count. It is either a could-not-look, or"
+        echo "  the unresolvable count/name-set having moved — i.e. a NEW stale compose project."
+        echo "  Failed findings:"
+        echo "$IMAGEDRIFT_OUT" | grep '❌\|⚠️' | sed 's/^ */    /'
+        echo "  Summary:"
+        echo "$IMAGEDRIFT_SUMMARY" | sed 's/^/    /'
+        EXIT_CODE=1
+    elif [ "$IMAGE_DRIFT_PROMOTED" = "1" ] && [ "${IMAGEDRIFT_COUNT:-0}" -gt 0 ]; then
+        # Only reachable once somebody flips IMAGE_DRIFT_PROMOTED. See that constant for why doing
+        # so before an apply path exists makes this script ignorable rather than safer.
+        echo "❌ $IMAGEDRIFT_COUNT container(s) on an image git no longer pins (IMAGE_DRIFT_PROMOTED=1)"
+        echo "$IMAGEDRIFT_SUMMARY" | sed 's/^/    /'
+        EXIT_CODE=1
+    else
+        if [ "${IMAGEDRIFT_COUNT:-0}" -gt 0 ]; then
+            echo "✅ Measured — $IMAGEDRIFT_COUNT drifted (REPORTED, not asserted: v1 is alert-only, D-01)"
+        else
+            echo "✅ Every running container matches its pin in git"
+        fi
+        echo "$IMAGEDRIFT_SUMMARY" | sed 's/^/  /'
+    fi
+fi
+
 if [ "$EXIT_CODE" -ne 0 ]; then
     echo ""
     # This line used to name only the three fold-in blocks. Plan 02.1-15 made the two container
@@ -1566,10 +1802,17 @@ if [ "$EXIT_CODE" -ne 0 ]; then
     # probes became fatal. Same discipline as the two amendments above: the tail is updated in
     # the SAME COMMIT as the sites that can now reach it, because a tail that lists every block
     # except the one that failed sends the reader to the green ones.
+    # Extended again 2026-09-18 (quick task 260918-c12) when the container image-drift block was
+    # added. Same discipline as the three amendments above, and for the third time stated because
+    # it keeps nearly being forgotten: the tail is updated in the SAME COMMIT as the block that can
+    # now reach it. A tail that lists every block except the failing one sends the reader to the
+    # green ones and costs them exactly the time this message exists to save.
     echo "❌ Health check FAILED. The failing block is whichever one above carries a ❌ or a ⚠️ —"
     echo "   that is any of: the Traefik or Authelia container probes, the Traefik dashboard"
     echo "   probe, the container counts, the music freeze harness, the consumers audit, the"
-    echo "   Jellyfin transcode retention audit, the vendored-file drift block, or the"
-    echo "   extended.conf destructive-switch block."
+    echo "   Jellyfin transcode retention audit, the vendored-file drift block, the"
+    echo "   extended.conf destructive-switch block, or the container image-drift block."
+    echo "   ⚠️ The image-drift block CANNOT fail on the drift count itself — if it is red, it is"
+    echo "      a could-not-look or the unresolvable set moved. Do not go looking for a tag."
     exit 1
 fi

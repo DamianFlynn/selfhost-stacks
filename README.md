@@ -315,7 +315,7 @@ AMD Radeon 890M GPU is passed through to LXC `100`:
 ## 🩺 Health Checks
 
 `scripts/quick-health-check.sh` is the estate's single entry point. Run it **from the workstation**;
-it ssh's to LXC 100 and folds in three subordinate checks:
+it ssh's to LXC 100 and folds in four subordinate checks:
 
 ```bash
 bash scripts/quick-health-check.sh            # exits 0 healthy, 1 on any violation
@@ -327,6 +327,7 @@ REMOTE_TIMEOUT=300 bash scripts/quick-health-check.sh   # slower link / busy hos
 | `check-music-freeze.sh` | Jellyfin's Music library cannot write `.nfo`/`.jpg`/`.lrc` into the library |
 | `check-music-consumers.sh` | the NFS export and its consumers; Jellyfin addressing facts |
 | `check-jellyfin-transcode.sh` | the 50 G transcode quota, the mount shape, and five Jellyfin retention values |
+| `check-drift.sh` | which running containers are on an image tag git no longer pins; the unresolvable-pin set; unhealthy and `created` containers |
 
 ### Design rules these checks follow
 
@@ -348,6 +349,22 @@ came out of that, and new checks should honour them:
 Anything asserted must also be **proven able to fail** — drive it red once, deliberately, rather
 than trusting that it would. Every `EXPECT_*` in `check-jellyfin-transcode.sh` is env-overridable
 precisely so a negative control needs no file edit.
+
+#### A fourth rule, which `check-drift.sh` is the first check here to need
+
+4. **If a check runs unattended, its own staleness is part of what it asserts.** The other three
+   only ever fire when somebody types them, so "did it run?" is answered by the fact that you are
+   reading the output. `check-drift.sh` also runs on an hourly systemd timer, writing to a
+   node-exporter textfile — and **a timer that dies produces silence that looks exactly like
+   health**, with the last measurement frozen in place and every downstream rule quietly reading a
+   snapshot. So it emits `selfhost_image_drift_last_success_timestamp_seconds`, writes it **only**
+   on a successful run, and leaves the previous file **byte-identical** on a failure so it goes
+   stale rather than fresh-and-wrong. A dedicated Grafana rule alerts on that staleness, and all
+   three rules carry `noDataState: Alerting` so an absent metric alerts instead of going quiet.
+
+   Note rule 3 is deliberately **not** applied to the drift count itself: v1 is alert-only, so
+   asserting it would make this entry point permanently red for a condition nothing in the repo can
+   clear. See `IMAGE_DRIFT_PROMOTED` in `quick-health-check.sh`.
 
 ## 📊 Current Stacks
 

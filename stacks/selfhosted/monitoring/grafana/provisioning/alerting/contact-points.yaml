@@ -1,0 +1,34 @@
+# Grafana provisioned contact points.
+#
+# ⚠️ THIS REPOSITORY IS PUBLIC (D-04). NO TOKEN, CHAT ID, PASSWORD OR KEY MAY EVER BE WRITTEN INTO
+#    THIS FILE. `$__env{VAR}` is Grafana's OWN provisioning placeholder and it is the entire
+#    mechanism that keeps that satisfiable: the committed file carries the variable NAME, Grafana
+#    substitutes the value from its process environment at load time, and the value itself lives in
+#    this stack's gitignored .env, sourced from ~/.claude/secrets/.
+#
+#    A gateway password sat in this repo for ~6 months and is STILL recoverable via `git log -S`.
+#    Redaction is not rotation. Do not "temporarily" paste a real token here to test something.
+#
+# THE BOT DOES NOT EXIST UNTIL SOMEONE CREATES IT. Telegram bots cannot initiate a conversation, so
+# the chat id only exists after you message the bot once. Gated host step G4 in
+# ../../../README.md § Image drift detection has the full procedure — and, more importantly, the
+# requirement that a TEST MESSAGE ACTUALLY ARRIVES before any of this is counted as coverage. An
+# alert rule with an empty token fires into nothing and looks identical to an estate with no
+# alerts. Phase 2 closed on exactly that shape of unproven notification path.
+
+apiVersion: 1
+
+contactPoints:
+  - orgId: 1
+    name: telegram-estate
+    receivers:
+      - uid: telegram-estate-primary
+        type: telegram
+        settings:
+          bottoken: $__env{GF_TELEGRAM_BOT_TOKEN}
+          chatid: $__env{GF_TELEGRAM_CHAT_ID}
+          # Plain text: the alert annotations below carry image tags and container names, and
+          # Telegram's Markdown parser chokes on the underscores in names like immich_redis.
+          parse_mode: None
+          disable_notifications: false
+        disableResolveMessage: false

@@ -14,6 +14,10 @@ services:
       - ${APPDATA_DIR}/monitoring/grafana:/var/lib/grafana
       - ./grafana/provisioning/datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
       - ./grafana/provisioning/dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yml:ro
+      # A DIRECTORY mount, unlike the two single-file mounts above, because Grafana reads EVERY
+      # file in provisioning/alerting — contact points, notification policies and rules are three
+      # separate files and all three must be visible.
+      - ./grafana/provisioning/alerting:/etc/grafana/provisioning/alerting:ro
     environment:
       - GF_SERVER_ROOT_URL=https://grafana.${DOMAINNAME}
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
@@ -24,6 +28,20 @@ services:
       - GF_ANALYTICS_CHECK_FOR_UPDATES=true
       - GF_LOG_MODE=console
       - GF_LOG_LEVEL=info
+      # Telegram alert delivery. THE REPO IS PUBLIC (D-04): these carry the variable NAME only and
+      # the values live in this stack's gitignored .env, sourced from ~/.claude/secrets/. The
+      # provisioned contact point references them as $__env{GF_TELEGRAM_BOT_TOKEN} /
+      # $__env{GF_TELEGRAM_CHAT_ID}, so no literal token can ever reach a committed file.
+      #
+      # `:-` AND NOT `:?` IS DELIBERATE, AND IT HAS A COST. `:?` would make `docker compose config`
+      # fail for anyone without the secrets, which breaks the repo-side parse check. `:-` keeps it
+      # parsing — but AN EMPTY TOKEN MEANS THE CONTACT POINT EXISTS, THE RULE FIRES, AND THE
+      # MESSAGE GOES NOWHERE. That is a notification path that has never been proven to deliver,
+      # which is exactly what Phase 2 closed on and what quick-health-check.sh's KNOWN LIMIT notice
+      # calls worse than a known-manual check. See monitoring/README.md § Image drift detection,
+      # step G4: until a test message has landed on the phone this is not coverage.
+      - GF_TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - GF_TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.grafana.rule=Host(`grafana.${DOMAINNAME}`)"
