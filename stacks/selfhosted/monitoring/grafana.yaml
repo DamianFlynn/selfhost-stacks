@@ -40,8 +40,14 @@ services:
       # which is exactly what Phase 2 closed on and what quick-health-check.sh's KNOWN LIMIT notice
       # calls worse than a known-manual check. See monitoring/README.md § Image drift detection,
       # step G4: until a test message has landed on the phone this is not coverage.
-      - GF_TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
-      - GF_TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
+      # ⚠️ THE DEFAULT MUST BE NON-EMPTY. Grafana REFUSES to provision a telegram contact point
+      # with an empty bot token ("could not find Bot Token in settings"), the provisioning
+      # module then fails, and a failed provisioning module takes the WHOLE HTTP SERVER down —
+      # Grafana crash-loops. Measured 2026-09-18: `:-` with no value did exactly that.
+      # So the fallback is a visibly-fake placeholder: Grafana starts, the contact point exists,
+      # and a test send fails LOUDLY at G4 instead of Grafana failing silently at boot.
+      - GF_TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-UNSET-see-monitoring-README-G4}
+      - GF_TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-0}
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.grafana.rule=Host(`grafana.${DOMAINNAME}`)"
