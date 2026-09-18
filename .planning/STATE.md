@@ -1302,6 +1302,7 @@ Recent decisions affecting current work:
 | 260906-ilx | Dispatcharr server DVR: 250 GB recording dataset and verified Jellyfin playback (`85f6d26`, `e5076cd`) | 2026-09-06 | complete ✓ |
 | 260914-a2y | Assert the two `extended.conf` switches that disarm `audio.bash`'s `rm -rf` branches — fifth fatal block, four controls driven; closes CR-01/WR-01 (`c0b04c3`, `220dcf4`) | 2026-09-14 | complete ✓ |
 | 260915-k9p | Correct the Traefik dashboard probe: `:8080` was never published to the host, so the probe asserted a promise the config never made. Now asserts the real chain (websecure + `traefik-rtr` + TLS + `chain-authelia@file`), with an unauthenticated 200 as a new violation branch. 9 branches driven; the plan's own control-B driver was measured false and replaced (`9db2e39`) | 2026-09-15 | complete ✓ |
+| 260918-c12 | Scheduled image-drift detection (repo pin vs running image) with Grafana->Telegram alerting; alert-only v1. First sweep: 14 of 97 containers drifted. G0-G3 deployed; G4 Telegram creds open (`91ec081`, `d68da3a`) | 2026-09-18 | complete ✓ (G4 open) |
 
 ## Session Continuity
 
