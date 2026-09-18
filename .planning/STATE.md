@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-18T10:47:24.493Z"
-last_activity: 2026-09-18 -- Phase 5 context gathered (/gsd-discuss-phase 5). 25 decisions captured across 8 gray areas in 05-CONTEXT.md. Three ROADMAP criteria corrected on live measurement: criterion 2's Harry Potter clause names the wrong tree (the rip is in unsorted/, dj-mixes holds no video) and its scope is narrowed to music paths (6 of 10 _FAILED_/_UNPACK_ belong to Sonarr/Radarr); criterion 3's target is FLAT (4,760 files, zero subdirs) so the split derives volumes from the m3u map cross-checked against album tags -- a trailing-number regex silently misfiles 36 tracks because Vol.36 CD1/CD2 end in 1 and 2; criterion 4 measured ALREADY GREEN (zero _-prefixed dirs under Music), so it becomes an assertion. beets-flask moved to Phase 6, amending Phase 4's D-01. Operator chose to normalise all 209,039 tank/downloads entries to 568:568 against the recommendation. ESTATE UNTOUCHED -- read-only probes only, nothing created, moved or chowned. Next: /gsd-plan-phase 5
+last_updated: "2026-09-18T13:44:41.496Z"
+last_activity: 2026-09-18 -- Phase 5 planned (/gsd-plan-phase 5). 11 plans in 10 waves; only wave 1 is parallel, the rest serial because D-27's ordering forbids otherwise. Research skipped per ROADMAP ("not needed"), so no RESEARCH.md/VALIDATION.md and Nyquist Dimension 8 is thin by decision. Plan-checker passed on iteration 2 after three fixes: the four work-gating checkpoints were retyped human-verify -> checkpoint:decision (config is human_verify_mode=end-of-phase, under which human-verify does NOT halt mid-flight, so D-13's approval gate would never have prompted); a pre-chown checkpoint:decision was inserted before the 209,039-entry chown, which previously ran before any human saw it; and gate="blocking-human" (non-canonical) corrected to gate="blocking". A fourth checker warning claiming a wrong host IP in 05-03/05-05 was verified FALSE and rejected. Decision coverage audited by hand -- 27/27 -- because check.decision-coverage-plan reports "no trackable decisions" against this CONTEXT.md format and passes by SKIPPING. ESTATE UNTOUCHED -- planning only. Next: /gsd-execute-phase 5 (never with --auto/--chain)
 progress:
   total_phases: 10
   completed_phases: 5
-  total_plans: 63
+  total_plans: 74
   completed_plans: 61
   percent: 50
 ---
@@ -28,8 +28,9 @@ pipeline that someone owns.
 
 ## Current Position
 
-Phase: 05 (inbox-structure-and-the-junk-gate) — NOT_STARTED
-Plan: none yet — Phase 5 is unplanned. Run `/gsd-plan-phase 5`.
+Phase: 05 (inbox-structure-and-the-junk-gate) — PLANNED (11 plans, 10 waves)
+Plan: ready to execute. Run `/gsd-execute-phase 5`. Do NOT run with `--auto`/`--chain` — four
+gates are `checkpoint:decision`, which auto-selects the first option under auto-mode.
 Status: **Phase 4 CLOSED 2026-09-18 at 5/5 — criterion 3 discharged by a signed override, not
 by a byte proof.** Criteria 1, 2, 4 and 5 were verified by live measurement. Criterion 3's
 static half is measured (`grep -cE '^[[:space:]]*beet ' audio.bash` → 0, vendored-drift guard

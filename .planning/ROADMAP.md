@@ -357,6 +357,7 @@ which was re-verified sound in every particular:
   `quick-health-check.sh`'s selector does not display them on the green path. `TranscodingTempPath`
   could drift to Jellyfin's own default `/config/transcodes`, moving the cache off the quota'd
   dataset, while every instrument stayed green.
+
 - **Gap 2 (CR-02)** — the claim *"Jellyfin publishes NO host port … reachable only from a host that
   can route to its t3_proxy address"*, carried by both check scripts and used as the last
   compensating control in `PROJECT.md`'s residual-risk acceptance for the administrator-equivalent
@@ -670,18 +671,46 @@ QUAL-01 before-state snapshot must already be taken — staging first destroys t
      fine in the staging tree because it is outside the library, and never inside it, because
      Music Assistant silently ignores them and Jellyfin does not.
 **Plans**: 11 plans
-
 Plans:
+**Wave 1**
+
 - [ ] 05-01-PLAN.md — snapshot fence `tank/downloads@pre-phase5`, create the six `_inbox` directories, drive the D-21 inode proof with its cross-dataset negative control
 - [ ] 05-02-PLAN.md — dated in-band amendments to criteria 2, 3 and 4 plus INBX addenda; fold the criterion-4 assertion into `quick-health-check.sh` and drive it red
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 05-03-PLAN.md — write `phase05-junk-sweep.sh` (enumerate + sweep) and produce the approvable candidate file
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 05-04-PLAN.md — operator approves; sweep moves to `99-quarantine` then deletes; retire `lidarr-import`
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 05-05-PLAN.md — regenerate the `Now!` tag inventory durably under `/mnt/fast`, reconcile per volume, answer D-04's surplus question
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
 - [ ] 05-06-PLAN.md — write `phase05-now-split.sh` and produce the reviewable src-to-dst mapping with total-coverage assertions
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
 - [ ] 05-07-PLAN.md — operator approves; apply the split into 115 flat `Vol NNN` folders; capture the QUAL-01 before-state
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
 - [ ] 05-08-PLAN.md — add a narrow Phase 5 collection mode and rule 4 to `normalise-dj-tags.py`; self-test; dry run
+
+**Wave 8** *(blocked on Wave 7 completion)*
+
 - [ ] 05-09-PLAN.md — pilot the album write on `Vol 077`, gate on the field-level diff, then write the remaining 114 volumes
+
+**Wave 9** *(blocked on Wave 8 completion)*
+
 - [ ] 05-10-PLAN.md — fresh chown baseline snapshots, tree-wide `chown` to `568:568` via a detached atlantis runner, `zfs diff` verification plus the library untouched-proof
+
+**Wave 10** *(blocked on Wave 9 completion)*
+
 - [ ] 05-11-PLAN.md — re-assert all four criteria from live state and write the Phase 5 closure into `stacks/selfhosted/arrs/beets.md`
 
 **Research**: not needed — filesystem triage with documented traps. `05-CONTEXT.md` (27 locked
