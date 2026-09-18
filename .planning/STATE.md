@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-18T14:50:55.802Z"
-last_activity: 2026-09-18 -- Phase 05 plan 05-01 executed: tank/downloads@pre-phase5 fence taken, the six _inbox directories created empty and 568:568 on devid 68, D-21 inode proof driven with both controls. 3 tasks, 5 commits. ESTATE CHANGED (first mutation of Phase 5).
+last_updated: "2026-09-18T15:04:47.186Z"
+last_activity: 2026-09-18 -- Phase 05 plan 05-02 executed: ROADMAP criteria 2, 3 and 4 amended in band and dated (75 insertions, 0 deletions), INBX-01/02/03 addended, and criterion 4 folded into quick-health-check.sh as its seventh fatal block — driven RED on a deliberately created /mnt/tank/media/Music/_probe from atlantis and GREEN after its removal. 2 tasks, 2 commits. ESTATE UNCHANGED (the probe was transient and asserted absent).
 progress:
   total_phases: 10
   completed_phases: 4
   total_plans: 74
-  completed_plans: 62
+  completed_plans: 63
   percent: 40
 ---
 
@@ -29,15 +29,19 @@ pipeline that someone owns.
 ## Current Position
 
 Phase: 05 (inbox-structure-and-the-junk-gate) — EXECUTING
-Plan: 2 of 11 — **05-01 COMPLETE** (fence taken, `_inbox` created, D-21 inode proof driven)
+Plan: 3 of 11 — **05-01 and 05-02 COMPLETE** (fence taken, `_inbox` created, D-21 inode proof
+driven; criteria 2/3/4 amended in band and criterion 4 now asserted by the standing check)
 Status: Executing Phase 05. Do NOT run with `--auto`/`--chain` — four
 gates are `checkpoint:decision`, which auto-selects the first option under auto-mode.
 
-*(⚠ The three lines above were reassembled on 2026-09-18 by plan 05-01. A `state.*` write had
-replaced only the FIRST line of two multi-line fields, leaving their continuations dangling as
-orphaned sentence fragments — `gates are ...` under a `Plan:` line and `by a byte proof.** ...`
-under a `Status:` line. Nothing was deleted; both fragments were rejoined to the text they belong
-to. This is the same defect class as the Progress-line rewrite below.)*
+*(⚠ The three lines above were reassembled on 2026-09-18 by plan 05-01, and **the same corruption
+fired again on the 05-02 write and was repaired the same way**. A `state.*` write replaces only the
+FIRST line of a multi-line field, leaving its continuation dangling as an orphaned sentence fragment
+— `gates are ...` under a `Plan:` line, `by a byte proof.** ...` under a `Status:` line — and it
+also truncates the frontmatter `last_activity:` to a bare date and rewrites an unrelated
+`Last activity:` line 560 lines further down, mid-paragraph. Nothing was deleted either time; every
+fragment was rejoined to the text it belongs to. **Always `git diff .planning/STATE.md` after any
+`state.*` write.** This is the same defect class as the Progress-line rewrite below.)*
 
 **Phase 4 CLOSED 2026-09-18 at 5/5 — criterion 3 discharged by a signed override, not
 by a byte proof.** Criteria 1, 2, 4 and 5 were verified by live measurement. Criterion 3's
@@ -652,7 +656,7 @@ back onto anything under `/mnt/tank/media`.
 Phase 1 complete: SAFE-01…05, WRIT-01…04, QUAL-01
 Phase 2 complete: CONS-01, CONS-02, CONS-03
 
-Progress: [██░░░░░░░░] 22%  *(MILESTONE progress: **2 of 9 phases** complete. All 19 plans written so far are executed 19/19 — but phases 3-9 are not planned yet, so plan-count is not milestone progress. ⚠ `gsd-sdk query state.update-progress` recomputed this as **51%** on 2026-09-02 by counting SUMMARY files against a 39-plan denominator that only covers planned phases; that figure is WRONG and was reverted. Do not let the SDK rewrite this line — phase 02.1 is an INSERTION and is not one of the 9 milestone phases. ⚠ **It happened a second time on 2026-09-13** during plan 04-14, recomputed as **97%** against a 60-plan denominator, and was reverted again. The verb rewrites this line every time it runs; `git diff .planning/STATE.md` after any state write is not optional. ⚠ **Third occurrence 2026-09-18** during plan 05-01, recomputed as **84%** against a 74-plan denominator, reverted again. Three occurrences, three different denominators, zero of them milestone progress — the verb cannot compute this figure and should not be run against this line.)*
+Progress: [██░░░░░░░░] 22%  *(MILESTONE progress: **2 of 9 phases** complete. All 19 plans written so far are executed 19/19 — but phases 3-9 are not planned yet, so plan-count is not milestone progress. ⚠ `gsd-sdk query state.update-progress` recomputed this as **51%** on 2026-09-02 by counting SUMMARY files against a 39-plan denominator that only covers planned phases; that figure is WRONG and was reverted. Do not let the SDK rewrite this line — phase 02.1 is an INSERTION and is not one of the 9 milestone phases. ⚠ **It happened a second time on 2026-09-13** during plan 04-14, recomputed as **97%** against a 60-plan denominator, and was reverted again. The verb rewrites this line every time it runs; `git diff .planning/STATE.md` after any state write is not optional. ⚠ **Third occurrence 2026-09-18** during plan 05-01, recomputed as **84%** against a 74-plan denominator, reverted again. ⚠ **Fourth occurrence 2026-09-18** during plan 05-02, recomputed as **85%** against the same 74-plan denominator, reverted again — and this time the verb ALSO truncated the frontmatter `last_activity:` back to a bare "Phase 05 execution started", so the damage is not confined to this line. Four occurrences, four figures, zero of them milestone progress — the verb cannot compute this figure and should not be run against this line.)*
 
 Plans 02-01 through 02-09 are executed. **CONS-01, CONS-02 and CONS-03 are all complete.**
 
@@ -864,6 +868,7 @@ already open so only 2049 is this phase's delta.
 | Phase 02.1 P06 | ~85 minutes | 3 tasks | 3 files |
 | Phase 02.1 P07 | ~25 minutes | 2 tasks | 2 files |
 | Phase 05 P01 | 12 min | 3 tasks | 4 files |
+| Phase 05 P02 | ~35 min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -1171,6 +1176,9 @@ Recent decisions affecting current work:
 - [Phase 05]: [05-01]: D-21's negative control targets LXC 100's ext4 root, not the library — Phase 1 D-20 stays untouched
 - [Phase 05]: [05-01]: the library mount path is kept out of Task 2's prose as well as its commands, so the criterion stays mechanically checkable
 - [Phase 05]: [05-01]: host-side task evidence is committed as repo artifacts, because all three of Task 1's deliverables are otherwise off-repo
+- [Phase 05]: [05-02]: criterion 4 is now a STANDING ASSERTION in quick-health-check.sh (seventh fatal block), driven RED on a real /mnt/tank/media/Music/_probe created from atlantis as root and GREEN after rmdir — not a green claim
+- [Phase 05]: [05-02]: quick-health-check.sh has NO fail()/FAILURES helper — that is check-jellyfin-transcode.sh's mechanism; this file's failure counter is EXIT_CODE=1, and the plan named the wrong file
+- [Phase 05]: [05-02]: the whole-script exit code is NON-DISCRIMINATING for criterion 4 while check-music-freeze.sh's interpolated-host-path inventory (expected=12, found=13) stays red — read the block's own verdict line; logged in deferred-items.md, not fixed
 
 ### Pending Todos
 
@@ -1319,9 +1327,9 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-09-18T14:50:36.181Z
-Stopped at: Completed 05-01-PLAN.md — the D-01 fence and the inbox tree. Next is 05-02.
-Resume file: .planning/phases/05-inbox-structure-and-the-junk-gate/05-02-PLAN.md
+Last session: 2026-09-18T15:04:47.176Z
+Stopped at: Completed 05-02-PLAN.md — the three in-band ROADMAP amendments, the INBX addenda, and the criterion-4 assertion driven red and green. Wave 1 is done. Next is 05-03 (write phase05-junk-sweep.sh and produce the approvable candidate file).
+Resume file: None
 
 **NEXT: 02.1-10, the last plan of the phase (wave 9).** It is unblocked — it depends on 02.1-06 and
 02.1-09 and both are now complete. Two things it should carry in:
