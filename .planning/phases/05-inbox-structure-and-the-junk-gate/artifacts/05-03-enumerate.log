@@ -1,0 +1,77 @@
+🧹 Phase 5 - junk gate, enumerate (READ-ONLY)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  host:        selfhost
+  date:        2026-09-18T15:23:10Z
+  out dir:     /mnt/fast/safety/phase05
+  list:        /mnt/fast/safety/phase05/junk-candidates.tsv
+  mode:        enumerate (read-only)
+
+  scope roots (five, and nothing else):
+    /mnt/tank/downloads/complete/nzb/music
+    /mnt/tank/downloads/complete/nzb/unsorted
+    /mnt/tank/downloads/complete/nzb/dj-mixes
+    /mnt/tank/downloads/lidarr-import
+    /mnt/tank/downloads/complete/nzb/_inbox
+
+  /mnt/tank/downloads/incomplete is out of scope by name (D-15)
+  /mnt/tank/media is out of scope by name (Phase 1 D-20)
+
+📂 1. Candidate directories
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  candidate directories emitted: 41   suppressed as descendants: 0
+
+🖼  1b. VALUE-FLAGGED rows - these are proposals, and they are the ones most likely to be wrong
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ⚠️  8 candidate director(ies) carry a basename that usually holds artwork or scans.
+  ⚠️  D-06 reached every one of its verdicts by OPENING the files; file type predicted nothing.
+  /mnt/tank/downloads/complete/nzb/dj-mixes/VA - Mastermix Issue 441-WEB-2023-MST/.covers  ->  441_cover_1.jpg 
+  /mnt/tank/downloads/complete/nzb/dj-mixes/VA-Mastermix.Issue.439-WEB-2022-MS/.covers  ->  439_cover_1.jpg 
+  /mnt/tank/downloads/complete/nzb/dj-mixes/VA-Mastermix.Issue.443-WEB-2023-MST/.covers  ->  443_cover_1.jpg 
+  /mnt/tank/downloads/complete/nzb/dj-mixes/VA-Mastermix.Issue.444-WEB-2023-MST/.covers  ->  444_cover_1.jpg 
+  /mnt/tank/downloads/complete/nzb/unsorted/VA - Mastermix Issue 441-WEB-2023-MST/.covers  ->  441_cover_1.jpg 
+  /mnt/tank/downloads/complete/nzb/unsorted/VA-Mastermix.Issue.439-WEB-2022-MS/.covers  ->  439_cover_1.jpg 
+  /mnt/tank/downloads/complete/nzb/unsorted/VA-Mastermix.Issue.443-WEB-2023-MST/.covers  ->  443_cover_1.jpg 
+  /mnt/tank/downloads/complete/nzb/unsorted/VA-Mastermix.Issue.444-WEB-2023-MST/.covers  ->  444_cover_1.jpg 
+
+📄 2. Candidate files
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  candidate files emitted (running total includes directories above): 50
+  files suppressed as descendants of an emitted directory: 4
+  hard-KEEP sidecars skipped before any rule fired: 5   (target 5)
+
+🤔 3. R8 - ambiguous, NOT auto-junk (D-20)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  PROPOSAL /mnt/tank/downloads/lidarr-import/Michael Jackson  audio=473  -> _inbox/02-review
+  PROPOSAL /mnt/tank/downloads/lidarr-import/Madonna  audio=60  -> _inbox/02-review
+
+📝 4. Writing the candidate list
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✅ wrote 52 row(s) to /mnt/fast/safety/phase05/junk-candidates.tsv
+  ✅ every row carries 6 or 7 non-empty tab-separated fields
+
+📊 5. Per-rule summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  RULE  ROWS     BYTES              MEANING
+  R1    2        2062021915         _FAILED_ directory
+  R2    2        572313557          _UNPACK_ directory
+  R3    0        0                  stray archive volume
+  R4    37       257878             zero audio at any depth
+  R5    0        0                  video in a music path
+  R6    9        152962             named D-06 sidecar
+  R7    0        0                  zero-byte file / empty dir
+  R8    2        20480246125        PROPOSAL - content, operator decides
+
+  total rows:  52
+  total bytes: 23114992437
+  VALUE-FLAGGED rows (open these before approving): 8
+
+  ⚠️  NOTHING HAS BEEN MOVED AND NOTHING HAS BEEN REMOVED.
+  ⚠️  An operator must read and approve /mnt/fast/safety/phase05/junk-candidates.tsv before 'sweep' will act. Strike any row
+  ⚠️  you do not want acted on by removing that LINE from the file.
+  ⚠️  This list is a POINT-IN-TIME view of a tree written at roughly one music job per 72 s.
+  ⚠️  'sweep' re-derives every row against fresh state and aborts the whole run on any conflict.
+
+
+real	0m53.790s
+user	0m39.469s
+sys	0m21.017s
