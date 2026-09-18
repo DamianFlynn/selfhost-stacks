@@ -1,0 +1,101 @@
+### TEST A - sweep, snapshot proof MISSING (expect exit 2)
+❌ snapshot proof not found: /mnt/fast/safety/phase05/no-such-proof.txt
+   tank/downloads@pre-phase5 is this subcommand's ONLY rollback, and zfs cannot resolve on LXC 100,
+   so the check is delegated. Produce the proof on atlantis:
+     ssh -o BatchMode=yes -o ConnectTimeout=5 root@172.16.1.158 \
+       'zfs list -t snapshot -H -o name tank/downloads@pre-phase5' > /mnt/fast/safety/phase05/no-such-proof.txt
+   An unreachable atlantis means the snapshot state is UNKNOWN, which is a refusal, not a
+   skip and not a pass.
+
+### TEST B - sweep, proof names the WRONG snapshot (expect exit 2)
+❌ snapshot proof does not name tank/downloads@pre-phase5: /mnt/fast/safety/phase05/wrong-proof.txt
+   The 2026-08-18 @pre-project and @pre-chown snapshots are a month stale and are NOT a
+   Phase 5 baseline. A proof naming the wrong snapshot must fail, and does.
+
+### TEST D - a row changed after approval (expect exit 1, nothing moved)
+🧨 Phase 5 - junk gate, sweep (APPROVED LIST ONLY)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  host:      selfhost
+  date:      2026-09-18T15:16:19Z
+  list:      /mnt/fast/safety/phase05/fx.tsv
+  proof:     /mnt/fast/safety/phase05/snapshot-proof.txt  (names tank/downloads@pre-phase5)
+  mode:      sweep (MUTATES LIVE STATE)
+
+🔒 1. Re-deriving every listed row against FRESH state
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ❌ R4 /mnt/fast/safety/phase05/fixture/complete/nzb/music/ArtOnly size moved 2 -> 10 since approval
+
+  ❌ aborting: 1 approved row(s) changed after approval. NOTHING MOVED, NOTHING REMOVED.
+  ❌ Move /mnt/fast/safety/phase05/fx.tsv aside, re-run 'enumerate', and have the new list re-approved.
+
+### TEST C - positive control, full sweep on the fixture (expect exit 0)
+🧨 Phase 5 - junk gate, sweep (APPROVED LIST ONLY)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  host:      selfhost
+  date:      2026-09-18T15:16:33Z
+  list:      /mnt/fast/safety/phase05/fx.tsv
+  proof:     /mnt/fast/safety/phase05/snapshot-proof.txt  (names tank/downloads@pre-phase5)
+  mode:      sweep (MUTATES LIVE STATE)
+
+🔒 1. Re-deriving every listed row against FRESH state
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✅ all 19 approved row(s) still match the state they were approved against
+
+📦 2. Moving approved rows into quarantine
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  batch directory: /mnt/fast/safety/phase05/fixture/complete/nzb/_inbox/99-quarantine/20260918T151633Z
+  ✅ moved /mnt/fast/safety/phase05/fixture/complete/nzb/music/_FAILED_Garth.Brooks -> /mnt/fast/safety/phase05/fixture/complete/nzb/_inbox/99-quarantine/20260918T151633Z/001___FAILED_Garth.Brooks
+  ✅ moved /mnt/fast/safety/phase05/fixture/complete/nzb/music/_UNPACK_Ed Sheeran -> /mnt/fast/safety/phase05/fixture/complete/nzb/_inbox/99-quarantine/20260918T151633Z/002___UNPACK_Ed Sheeran
+  ✅ moved /mnt/fast/safety/phase05/fixture/complete/nzb/music/Def_Leppard-Slang.part001.rar -> /mnt/fast/safety/phase05/fixture/complete/nzb/_inbox/99-quarantine/20260918T151633Z/003__Def_Leppard-Slang.part001.rar
+  ✅ moved /mnt/fast/safety/phase05/fixture/complete/nzb/music/loose.r01 -> /mnt/fast/safety/phase05/fixture/complete/nzb/_inbox/99-quarantine/20260918T151633Z/004__loose.r01
+  ✅ moved /mnt/fast/safety/phase05/fixture/complete/nzb/dj-mixes/VA-Now_That.s_What_I_Call_Music__1-115_2023 -> /mnt/fast/safety/phase05/fixture/complete/nzb/_inbox/99-quarantine/20260918T151633Z/005__VA-Now_That.s_What_I_Call_Music__1-115_2023
+  ✅ moved /mnt/fast/safety/phase05/fixture/complete/nzb/music/ArtOnly -> /mnt/fast/safety/phase05/fixture/complete/nzb/_inbox/99-quarantine/20260918T151633Z/006__ArtOnly
+  ✅ moved /mnt/fast/safety/phase05/fixture/complete/nzb/unsorted/Harry.Potter.1080p.BluRay.x264-MOOVEE -> /mnt/fast/safety/phase05/fixture/complete/nzb/_inbox/99-quarantine/20260918T151633Z/007__Harry.Potter.1080p.BluRay.x264-MOOVEE
+  ✅ moved /mnt/fast/safety/phase05/fixture/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/00. play.m3u -> /mnt/fast/safety/phase05/fixture/complete/nzb/_inbox/99-quarantine/20260918T151633Z/008__00. play.m3u
+  ✅ moved /mnt/fast/safety/phase05/fixture/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Various - NOW That's What I Call Music! 114.log -> /mnt/fast/safety/phase05/fixture/complete/nzb/_inbox/99-quarantine/20260918T151633Z/009__Various - NOW That's What I Call Music! 114.log
+  ✅ moved /mnt/fast/safety/phase05/fixture/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Various - Now That's What I Call Music! 113.log -> /mnt/fast/safety/phase05/fixture/complete/nzb/_inbox/99-quarantine/20260918T151633Z/010__Various - Now That's What I Call Music! 113.log
+  ✅ moved /mnt/fast/safety/phase05/fixture/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Various Artists - NOW That’s What I Call Music! 115.log -> /mnt/fast/safety/phase05/fixture/complete/nzb/_inbox/99-quarantine/20260918T151633Z/011__Various Artists - NOW That’s What I Call Music! 115.log
+  ✅ moved /mnt/fast/safety/phase05/fixture/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Various Artists - Now That's What I Call Music!, Vol. 110 Disc 1.log -> /mnt/fast/safety/phase05/fixture/complete/nzb/_inbox/99-quarantine/20260918T151633Z/012__Various Artists - Now That's What I Call Music!, Vol. 110 Disc 1.log
+  ✅ moved /mnt/fast/safety/phase05/fixture/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Various Artists - Now That's What I Call Music!, Vol. 110 Disc 2.log -> /mnt/fast/safety/phase05/fixture/complete/nzb/_inbox/99-quarantine/20260918T151633Z/013__Various Artists - Now That's What I Call Music!, Vol. 110 Disc 2.log
+  ✅ moved /mnt/fast/safety/phase05/fixture/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Various Artists - Now That's What I Call Music!, Vol. 111 Disc 1.log -> /mnt/fast/safety/phase05/fixture/complete/nzb/_inbox/99-quarantine/20260918T151633Z/014__Various Artists - Now That's What I Call Music!, Vol. 111 Disc 1.log
+  ✅ moved /mnt/fast/safety/phase05/fixture/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Various Artists - Now That's What I Call Music!, Vol. 111 Disc 2.log -> /mnt/fast/safety/phase05/fixture/complete/nzb/_inbox/99-quarantine/20260918T151633Z/015__Various Artists - Now That's What I Call Music!, Vol. 111 Disc 2.log
+  ✅ moved /mnt/fast/safety/phase05/fixture/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/play.m3u -> /mnt/fast/safety/phase05/fixture/complete/nzb/_inbox/99-quarantine/20260918T151633Z/016__play.m3u
+  ✅ moved /mnt/fast/safety/phase05/fixture/complete/nzb/music/zerobyte.bin -> /mnt/fast/safety/phase05/fixture/complete/nzb/_inbox/99-quarantine/20260918T151633Z/017__zerobyte.bin
+  ✅ moved /mnt/fast/safety/phase05/fixture/lidarr-import/Madonna -> /mnt/fast/safety/phase05/fixture/complete/nzb/_inbox/02-review/Madonna
+  ✅ moved /mnt/fast/safety/phase05/fixture/lidarr-import/Michael Jackson -> /mnt/fast/safety/phase05/fixture/complete/nzb/_inbox/99-quarantine/Michael Jackson
+
+🗑  3. Removing what arrived in the quarantine batch
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✅ removed R1 001___FAILED_Garth.Brooks
+  ✅ removed R2 002___UNPACK_Ed Sheeran
+  ✅ removed R3 003__Def_Leppard-Slang.part001.rar
+  ✅ removed R3 004__loose.r01
+  ✅ removed R4 005__VA-Now_That.s_What_I_Call_Music__1-115_2023
+  ✅ removed R4 006__ArtOnly
+  ✅ removed R5 007__Harry.Potter.1080p.BluRay.x264-MOOVEE
+  ✅ removed R6 008__00. play.m3u
+  ✅ removed R6 009__Various - NOW That's What I Call Music! 114.log
+  ✅ removed R6 010__Various - Now That's What I Call Music! 113.log
+  ✅ removed R6 011__Various Artists - NOW That’s What I Call Music! 115.log
+  ✅ removed R6 012__Various Artists - Now That's What I Call Music!, Vol. 110 Disc 1.log
+  ✅ removed R6 013__Various Artists - Now That's What I Call Music!, Vol. 110 Disc 2.log
+  ✅ removed R6 014__Various Artists - Now That's What I Call Music!, Vol. 111 Disc 1.log
+  ✅ removed R6 015__Various Artists - Now That's What I Call Music!, Vol. 111 Disc 2.log
+  ✅ removed R6 016__play.m3u
+  ✅ removed R7 017__zerobyte.bin
+
+🔍 4. Asserting absence - the only instrument that is not subject to the ZFS lag
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✅ 17 row(s) absent from their original location
+  reclaimed space is INFORMATIONAL only - ZFS frees asynchronously and can lag by ~20 s
+
+📊 5. Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  rows approved:        19
+  moved:                19
+  move failures:        0   (target 0)
+  removed:              17
+  removal failures:     0   (target 0)
+  quarantine batch:     /mnt/fast/safety/phase05/fixture/complete/nzb/_inbox/99-quarantine/20260918T151633Z
+
+✅ sweep complete - every approved row acted on
