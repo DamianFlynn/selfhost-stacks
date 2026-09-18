@@ -1123,7 +1123,7 @@ and `~/.claude/secrets/`, referenced by variable name only, and never in a proce
 
 ---
 
-## Phase 4 — interim status (2026-09-14): criterion 3 OPEN
+## Phase 4 — closed 2026-09-18: criterion 3 discharged by a signed override, not by a byte proof
 
 **Phase 4 is NOT closed, and this section is deliberately not headed as a closure.** Four of the
 phase's five success criteria are measured and hold. The fifth — criterion 3, *"a real music job
@@ -1189,6 +1189,37 @@ the vendored-drift guard green) and its behavioural half **OPEN**.
 The narrative — every plan, its measurements and its deviations — is in
 `.planning/phases/04-collapse-to-one-tagger/`.
 
+> **Closed 2026-09-18 (quick task 260918-byj).** Everything above stays as the record of what was
+> known on 2026-09-14. It is **not retracted** — every word of it about windows 1 and 2 still holds,
+> and the instrument really could not look. What has changed is the *disposition*, not the evidence.
+>
+> Criterion 3 is now **closed by a signed override, not by a byte proof.** The operator signed it in
+> `.planning/phases/04-collapse-to-one-tagger/04-VERIFICATION.md`'s frontmatter on 2026-09-18,
+> accepting the threefold unanimous side-effect evidence — 5 real music jobs across 2 observation
+> windows, 0 `library.blb`, 0 `beets.log`, 0 new `.bak`, 0 `SUCCESS: Matched with beets`, and
+> `extended.conf` provably never written — in place of the PRE-HOOK/COMPLETION byte comparison the
+> criterion's own evidence contract asks for.
+>
+> A **third** capture design was built after the section above was written: SABnzbd's own `pp`
+> notification hook, built and self-tested in plan **04-17** with **all 14 synthetic controls
+> passing** — and **never armed**. The paragraph above asking for "a capture point that survives
+> `direct_unpack`" was answered in design and then deliberately left unused.
+>
+> **Window 3 was abandoned, not lost.** External review of plan 04-18 — the plan that would have
+> armed the hook — by **four independent AI model families** found roughly **30 defects** in it,
+> including an **unverified judge that self-reported every PASS condition**, an OPEN branch that
+> could swallow a FAIL, and a restore contract that was count-checked rather than diffed (and so
+> could have left the estate re-armed). A PASS from that instrument would not have been
+> trustworthy, which is the entire reason for running it, so the window was closed **unrun** rather
+> than run for the appearance of measurement. The reviews are preserved verbatim at
+> `.planning/phases/04-collapse-to-one-tagger/04-18-EXTERNAL-REVIEWS.md`.
+>
+> **The residual risk, in one sentence:** "no evidence of tagging" is not identical to
+> "proven absence of tagging at the byte level".
+>
+> **The estate was never changed by any of this** — `nscript_enable` stayed 0 and `direct_unpack`
+> stayed 1 throughout.
+
 ### The census, executed
 
 From `bash scripts/check-music-freeze.sh` on LXC 100, 2026-09-13T12:37:32Z, ANSI stripped,
@@ -1226,6 +1257,16 @@ reason.
 | **3 — a real music job completes with no tagger** | **`window 2: OPEN`** — quoted verbatim above. Three real jobs ran in the second window and none published a PRE-HOOK snapshot under `direct_unpack`, so the byte proof is UNPROVEN rather than violated; window 1's two jobs likewise ran clean with the byte proof untakeable | 04-12, 04-14, 04-15, `04-D12-EVIDENCE.md` |
 | **4 — every beets config declares `musicbrainz`** | Same album, same throwaway `-l`, two configs differing by exactly one line: live broken `plugins: embedart` → **0** MusicBrainz candidates; fixed → **1** (12 of 12 tracks, distance 0.048), cross-read by hand at **95.2%**. Both live configs now declare `musicbrainz` | 04-09, 04-11 |
 | **5 — one database, no idle `rw` holder** | The executed census above | 04-11, this section |
+
+> **Closed 2026-09-18 — row 3's disposition, superseded.** Row 3's verdict token above is left
+> deliberately standing, and is deliberately the only place in this file that carries it: it
+> remains the accurate record of the **byte** evidence, and nothing has been measured since that
+> would change it. What changed is the disposition — criterion 3 is now
+> **closed by the signed override** in
+> `.planning/phases/04-collapse-to-one-tagger/04-VERIFICATION.md`, not by a byte proof. The third
+> capture design (plan 04-17's `pp` notification hook, all 14 synthetic controls passing) was
+> **never armed**, and window 3 was closed unrun — see
+> `.planning/phases/04-collapse-to-one-tagger/04-18-EXTERNAL-REVIEWS.md`.
 
 ### What keeps these true
 

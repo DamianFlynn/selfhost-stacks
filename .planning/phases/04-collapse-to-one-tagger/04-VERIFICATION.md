@@ -1,9 +1,9 @@
 ---
 phase: 04-collapse-to-one-tagger
 verified: 2026-09-14T00:00:00Z
-status: gaps_found
+status: passed
 score: 4/5 success criteria verified (1 OPEN, by the phase's own evidence contract, across two observation windows)
-overrides_applied: 0
+overrides_applied: 1
 re_verification:
   previous_status: gaps_found
   previous_score: 4/5 success criteria verified
@@ -97,12 +97,13 @@ overrides:
       closed unrun rather than run for the appearance of measurement. The reviews are recorded at
       `.planning/phases/04-collapse-to-one-tagger/04-18-EXTERNAL-REVIEWS.md`.
 
-      This override is
-      **UNSIGNED** — prepared for the operator, not taken by the agent. `status` stays
-      `gaps_found` and `overrides_applied` stays 0 until the operator fills `accepted_by` and
+      This override was
+      **prepared UNSIGNED** by the agent, not taken by it, and **SIGNED by the operator on
+      2026-09-18** on their explicit instruction. `status` moved from `gaps_found` to `passed` and
+      `overrides_applied` from 0 to 1 at that signature, recorded in `accepted_by` and
       `accepted_at` below.
-    accepted_by: "<developer name>"
-    accepted_at: "<ISO timestamp>"
+    accepted_by: "Damian Flynn"
+    accepted_at: "2026-09-18T07:36:35Z"
 ---
 
 # Phase 4: Collapse to One Tagger — Verification Report (Re-Verification)

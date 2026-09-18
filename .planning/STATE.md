@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-16T00:25:00.000Z"
-last_activity: 2026-09-16 -- quick 260916-062 prepared the criterion-3 override UNSIGNED in 04-VERIFICATION.md's frontmatter (bound verbatim to gaps[0].truth; status stays gaps_found and overrides_applied stays 0 -- the operator signs, not the agent). Plans 04-18 and 04-19 marked PLANNED BUT DELIBERATELY NOT EXECUTED: window 3 was never armed after four independent AI model families found ~30 defects in 04-18, including a judge binary that self-reports every PASS condition. Reviews preserved verbatim at .planning/phases/04-collapse-to-one-tagger/04-18-EXTERNAL-REVIEWS.md. ESTATE UNTOUCHED -- nscript_enable still 0, direct_unpack still 1. Next: the operator signs the override, or leaves criterion 3 OPEN
+last_updated: "2026-09-18T07:36:35.000Z"
+last_activity: 2026-09-18 -- quick 260918-byj CLOSED PHASE 4. The operator signed the criterion-3 override in 04-VERIFICATION.md's frontmatter (accepted_by Damian Flynn, accepted_at 2026-09-18T07:36:35Z; status gaps_found -> passed, overrides_applied 0 -> 1), so the phase closes at 5/5 with criterion 3 discharged by a SIGNED OVERRIDE, not by a byte proof. ROADMAP Phase 4 ticked; beets.md's interim-status section superseded in band; 04-18 and 04-19 recorded as -PARTIAL (never executed, nothing armed). ESTATE UNTOUCHED -- nscript_enable still 0, direct_unpack still 1; this task ran no estate command at all. Next: plan Phase 5 (Inbox Structure and the Junk Gate)
 progress:
   total_phases: 10
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 63
   completed_plans: 61
-  percent: 40
+  percent: 50
 ---
 
 # Project State
@@ -21,31 +21,32 @@ See: .planning/PROJECT.md (updated 2026-08-17)
 
 **Core value:** New music downloads land in the library correctly tagged, through exactly one
 pipeline that someone owns.
-**Current focus:** Phase 04 — collapse-to-one-tagger
+**Current focus:** Phase 05 — inbox-structure-and-the-junk-gate
 
 **Definition of done (CONS-04):** a file is imported only when verified with `ffprobe` on the file
 *and* visible in both Jellyfin and Music Assistant. Never "tool configured".
 
 ## Current Position
 
-Phase: 04 (collapse-to-one-tagger) — EXECUTING
-Plan: 17 of 19 (04-17 complete 2026-09-15. **04-18 and 04-19 are PLANNED BUT DELIBERATELY NOT EXECUTED, 2026-09-16** — they remain on the ROADMAP, unticked, and will not be run. Phase NOT complete — criterion 3 still OPEN)
-Status: **Window 3 never ran.** 04-17 built the third capture design (SABnzbd's own `pp`
-notification hook) and all 14 synthetic controls passed, but external review of 04-18 — the plan
-that would have armed it — by four independent AI model families found roughly 30 defects,
-including a judge binary that self-reports every PASS condition, an OPEN branch that can swallow a
-FAIL, and a restore contract that is count-checked rather than diffed. A PASS from that instrument
-would not have been trustworthy, so the window was closed unrun rather than run for the appearance
-of measurement. The reviews are preserved verbatim at
-`.planning/phases/04-collapse-to-one-tagger/04-18-EXTERNAL-REVIEWS.md`.
-**The disposition now sits with the operator.** Quick task 260916-062 prepared the criterion-3
-override in `04-VERIFICATION.md`'s frontmatter and left it **UNSIGNED**: `accepted_by` and
-`accepted_at` are literal placeholders, `status` is still `gaps_found`, `overrides_applied` is
-still 0. Signing it accepts the threefold unanimous side-effect evidence (5 real jobs, 2 windows,
-0 tagger artefacts) in place of a byte proof; not signing it leaves criterion 3 OPEN. Nothing
-further can be measured without a fourth capture design.
-**ESTATE UNTOUCHED** — `nscript_enable` still 0, `direct_unpack` still 1; this task ran no
-estate command at all.
+Phase: 05 (inbox-structure-and-the-junk-gate) — NOT_STARTED
+Plan: none yet — Phase 5 is unplanned. Run `/gsd-plan-phase 5`.
+Status: **Phase 4 CLOSED 2026-09-18 at 5/5 — criterion 3 discharged by a signed override, not
+by a byte proof.** Criteria 1, 2, 4 and 5 were verified by live measurement. Criterion 3's
+static half is measured (`grep -cE '^[[:space:]]*beet ' audio.bash` → 0, vendored-drift guard
+green); its behavioural half was never proven at the byte level. Three capture designs were
+built: the destination-tree poll (window 1), the incomplete-tree poll (window 2), and
+SABnzbd's own `pp` notification hook (built and self-tested in 04-17, all 14 synthetic
+controls passing, **never armed**). Window 3 was closed unrun after external review of plan
+04-18 by four independent AI model families found roughly 30 defects, including a judge binary
+that self-reports every PASS condition — reviews preserved verbatim at
+`.planning/phases/04-collapse-to-one-tagger/04-18-EXTERNAL-REVIEWS.md`. The operator signed
+the prepared override on 2026-09-18, accepting the threefold unanimous side-effect evidence
+(5 real jobs, 2 windows, 0 tagger artefacts) in its place. **Residual risk, stated once:** "no
+evidence of tagging" is not identical to "proven absence of tagging at the byte level".
+Plans 04-18 and 04-19 were never executed and are recorded as `-PARTIAL.md`, not `-SUMMARY.md`
+— `04-18` in particular arms live SABnzbd config on a running container and must not be run
+until its recorded defects are fixed.
+**ESTATE UNTOUCHED** — `nscript_enable` still 0, `direct_unpack` still 1.
 
 **02.1-10 COMPLETE. THE ESTATE'S ROUTINE HEALTH CHECK NOW COVERS THE THING THAT EMPTIED `/`, AND
 EVERY ONE OF ITS FAIL-CLOSED BRANCHES HAS BEEN DRIVEN RATHER THAN READ.**
