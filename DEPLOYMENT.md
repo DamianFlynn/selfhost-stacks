@@ -215,10 +215,34 @@ anything is not evidence of cleanliness.
 Renovate raises PRs against this repo for image tags.
 
 > ⚠️ **Merging a Renovate PR does not deploy anything.** It changes the compose file in git only.
-> The host still runs the old image until someone pulls and recreates the container. Check
-> `docker ps`, not just the PR list.
+> The host still runs the old image until someone pulls and recreates the container.
 >
 > Two-part tags like `2.13` **float** — re-pull rather than rewriting the tag.
+
+**There is now an instrument for this. Use it instead of eyeballing `docker ps`:**
+
+```bash
+ssh root@172.16.1.159 'bash /mnt/fast/stacks/scripts/check-drift.sh'
+```
+
+`scripts/check-drift.sh` names every running container whose image tag differs from the pin in this
+repo, resolving each one through **its own compose labels** (so `include:` and `${VAR}` both
+resolve, and the same image pinned at two different tags in two stack files is never confused). It
+also runs **hourly on a systemd timer**, writing a node-exporter textfile that Grafana alerts on
+into **Telegram** — drift, unhealthy/`created` containers, and the check's own staleness. Full
+detail, the metric list and the gated install steps are in
+[stacks/selfhosted/monitoring/README.md](stacks/selfhosted/monitoring/README.md) § Image drift
+detection.
+
+> ⛔ **It alerts. It does not deploy.** The pull and the recreate are still manual and deliberately
+> so (v1 is alert-only). Nothing will clear a drift alert but a human.
+
+Two limits worth knowing before you trust a green:
+
+- **A floating tag that has moved upstream reads as no drift** — `:latest`, `:main` and two-part
+  tags all float, so both sides of the comparison still carry the same string. This is the same
+  trap as the note above, seen from the other side.
+- **`commits behind` is a lower bound** without a fetch: it reads the last-fetched `origin/main`.
 
 The real backlog lives on the **Dependency Dashboard issue**, not the PR list. A config error (e.g.
 a `"// key"` comment) silently stops the entire repo run — validate before merging:
@@ -237,9 +261,13 @@ bash scripts/quick-health-check.sh      # from the workstation. 0 = healthy, 1 =
 REMOTE_TIMEOUT=300 bash scripts/quick-health-check.sh   # busy host / slow link
 ```
 
-Folds in `check-music-freeze.sh`, `check-music-consumers.sh` and `check-jellyfin-transcode.sh`.
-Design rules for adding a check are in [README.md](README.md) § Health Checks — fail closed, bound
-remote commands Linux-side, assert rather than report.
+Folds in `check-music-freeze.sh`, `check-music-consumers.sh`, `check-jellyfin-transcode.sh` and
+`check-drift.sh`. Design rules for adding a check are in [README.md](README.md) § Health Checks —
+fail closed, bound remote commands Linux-side, assert rather than report, and (for anything that
+runs unattended) assert its own staleness.
+
+> The image-drift block is fatal on **could-not-look** and on the unresolvable-pin set moving, but
+> **never on the drift count itself** — see `IMAGE_DRIFT_PROMOTED` in `quick-health-check.sh`.
 
 ---
 
