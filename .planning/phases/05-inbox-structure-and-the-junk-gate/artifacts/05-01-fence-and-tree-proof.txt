@@ -1,0 +1,172 @@
+Phase 5 plan 05-01, Task 1 — the reversibility fence and the inbox tree
+Executed 2026-09-18 from atlantis (root@172.16.1.158), the only host where `zfs` and `chown` on
+tank both work. Every reading below is the real command output, not a transcription.
+
+This file exists because Task 1's three deliverables are all off-repo — a ZFS snapshot, six
+directories on tank, and two proof files on LXC 100's ext4 root. Evidence that lives only on a
+host nobody snapshots has not been recorded.
+
+
+================================================================================
+STEP 1 — re-verify the devid finding (05-PREMEASURE.md § 1)
+================================================================================
+
+05-PREMEASURE.md § Limits flags this as the single claim most deserving a re-check, because the
+whole phase rests on it. Re-measured 2026-09-18, and it HOLDS:
+
+    $ stat -c '%d %i %u:%g' <path>
+
+    /mnt/tank/downloads                           68 34      568:568
+    /mnt/tank/downloads/complete/nzb              68 3486    568:568
+    /mnt/tank/downloads/complete/nzb/unsorted     68 9044    568:568
+    /mnt/tank/downloads/complete/nzb/dj-mixes     68 243200  568:568
+    /mnt/tank/media/Music                         76 34      568:568
+
+The first four are identical at devid 68. /mnt/tank/media/Music is 76. The STOP gate did not fire.
+
+⚠ NOTE THE INODE COLLISION, because it is the reason D-21 asserts the PAIR (%d, %i) and never %i
+alone: /mnt/tank/downloads and /mnt/tank/media/Music BOTH report inode 34. Two different
+filesystems, same inode number. An instrument comparing inode alone would have called these two
+paths the same object. This is not a hypothetical — it is the first row of the first measurement
+this phase took.
+
+
+================================================================================
+STEP 2 — the fence (D-01, D-27)
+================================================================================
+
+Asserted absent first:
+
+    $ zfs list -t snapshot -H -o name tank/downloads@pre-phase5
+    cannot open 'tank/downloads@pre-phase5': dataset does not exist
+    rc=1
+
+Pre-existing snapshots on the dataset, both 2026-08-18 and a month stale (05-PREMEASURE.md § 2 —
+neither is a pre-Phase-5 baseline; rolling back to either would discard a month of unrelated
+downloads this project never touched):
+
+    tank/downloads@pre-project
+    tank/downloads@pre-chown
+
+Taken:
+
+    $ zfs snapshot tank/downloads@pre-phase5
+    rc=0
+
+Read back, and the readback is what was WRITTEN to the proof file — the file is derived from the
+query, never typed. A typed proof file can name a snapshot that does not exist, which is the one
+failure mode the proof file exists to prevent:
+
+    $ zfs list -t snapshot -H -o name tank/downloads@pre-phase5 | ssh root@172.16.1.159 \
+        'cat > /mnt/fast/safety/phase05/snapshot-proof.txt'
+    $ zfs get -H -p -o value creation tank/downloads@pre-phase5 | ssh root@172.16.1.159 \
+        'cat > /mnt/fast/safety/phase05/snapshot-creation.txt'
+
+    /mnt/fast/safety/phase05/snapshot-proof.txt      tank/downloads@pre-phase5$
+    /mnt/fast/safety/phase05/snapshot-creation.txt   1789742526$
+
+(`cat -A`, so the `$` is the line end — no trailing whitespace, bare integer epoch.)
+
+CREATION EPOCH 1789742526 is the D-27 ordering instrument. Every later mutating plan in this
+phase compares its own mtimes against that number to show the fence preceded it.
+
+
+================================================================================
+STEP 3 — the six directories (D-17, D-23, INBX-01)
+================================================================================
+
+Asserted absent first (05-PREMEASURE.md § 7 — entirely greenfield, no partial earlier attempt):
+
+    $ test -e /mnt/tank/downloads/complete/nzb/_inbox  ->  ABSENT
+
+Created with seven literal `mkdir -p` and seven literal `chown 568:568`, one per path, no
+variable interpolation and NO RECURSIVE FLAG anywhere (T-05-01-01: this runs as real root on the
+hypervisor, so a wrong path constant is not contained by a namespace).
+
+    $ ls -1 /mnt/tank/downloads/complete/nzb/_inbox | sort
+    01-auto
+    02-review
+    03-asis
+    04-hold
+    99-quarantine
+    _done
+    (count: 6)
+
+Created EMPTY, per D-17:
+
+    $ find .../_inbox -mindepth 1 -maxdepth 1 ! -type d     ->  0 lines
+    $ find .../_inbox -mindepth 2                           ->  0 lines
+
+Ownership, READ FROM ATLANTIS (`%u:%g %a %d`). A container-side listing is not evidence either
+way — CLAUDE.md § Constraints, and Phase 1 lost time to exactly this:
+
+    568:568 777 68   /mnt/tank/downloads/complete/nzb/_inbox
+    568:568 777 68   /mnt/tank/downloads/complete/nzb/_inbox/01-auto
+    568:568 777 68   /mnt/tank/downloads/complete/nzb/_inbox/02-review
+    568:568 777 68   /mnt/tank/downloads/complete/nzb/_inbox/03-asis
+    568:568 777 68   /mnt/tank/downloads/complete/nzb/_inbox/04-hold
+    568:568 777 68   /mnt/tank/downloads/complete/nzb/_inbox/99-quarantine
+    568:568 777 68   /mnt/tank/downloads/complete/nzb/_inbox/_done
+
+NO CHMOD WAS ATTEMPTED. The 0777 is inherited, and it is the estate-wide state that stays that
+way: chmod returns EPERM on this pool even as real root under aclmode=restricted +
+aclinherit=passthrough.
+
+Recorded for contrast, because the estate's documented hazard did NOT fire here and a reader
+should know why: LXC 100 reads these same directories as `568:568 68`, agreeing with the disk.
+The 65534 collapse fires on ids the container's sparse idmap cannot name (0:545, 568:545) — 568
+is inside the map. A container-side reading agreeing with atlantis is luck of the uid, not a
+reason to stop checking from atlantis.
+
+
+================================================================================
+STEP 4 — D-18 asserted mechanically, not assumed
+================================================================================
+
+    $ zfs list -H -o name -t filesystem -r tank/downloads
+    tank/downloads
+
+    $ zfs list -H -o name -t filesystem -r tank/downloads | grep -c '_inbox$'
+    0
+
+One dataset, itself. No `_inbox` dataset exists.
+
+    $ stat -c '%d %n'
+    68  /mnt/tank/downloads/complete/nzb/_inbox
+    68  /mnt/tank/downloads/complete/nzb/unsorted
+    68  /mnt/tank/downloads/complete/nzb/dj-mixes
+    76  /mnt/tank/media/Music
+
+_inbox shares devid 68 with the content that will move into it. This is asserted rather than
+assumed because making _inbox its own dataset LOOKS like a tidy improvement — quota and
+independent snapshots, exactly what fast/transcode got in Phase 02.1 — and would destroy
+criterion 1's atomic-rename property outright.
+
+
+================================================================================
+STEP 5 — criterion 1's second clause
+================================================================================
+
+    $ find /mnt/tank/media -maxdepth 3 -type d \( -name _inbox -o -name 01-auto -o -name 02-review \
+        -o -name 03-asis -o -name 04-hold -o -name 99-quarantine -o -name _done \)
+    (0 lines)
+
+Nothing equivalent to the staging tree exists under /mnt/tank/media.
+
+Also re-read while the connection was open, as the D-22 standing guard (05-PREMEASURE.md § 6):
+
+    $ find /mnt/tank/media/Music -type d -name '_*' | wc -l
+    0
+
+Criterion 4 remains green. This is a guard to maintain, not work to perform.
+
+
+================================================================================
+Scope statement
+================================================================================
+
+NOTHING ELSE WAS CHOWNED. D-24's tree-wide sweep over all 209,039 entries is plan 05-10 and runs
+LAST (D-27), so it also re-normalises these six directories. Task 1's chown only makes the tree
+correct from the moment it exists.
+
+Nothing was moved, deleted or tag-written by this task. The fence precedes all of it.
