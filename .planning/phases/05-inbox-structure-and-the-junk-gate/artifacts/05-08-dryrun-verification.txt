@@ -1,0 +1,223 @@
+Plan 05-08 — rule 4 on paper: driven evidence
+=============================================
+Executed 2026-09-18, 21:30–21:50Z. NOTHING WAS WRITTEN TO ANY AUDIO FILE BY THIS PLAN.
+
+Script under test: scripts/normalise-dj-tags.py at commit d116447
+  sha256 70406a10501dda0ded5286b69e66d6cf6cb5818814e6b9e8c73855881391aeea
+  identical on the workstation and on LXC 100 at /mnt/fast/stacks (asserted, not assumed).
+
+Execution arm (task 2 self-test and task 3 dry run alike):
+  docker run --rm --pull never --network none --entrypoint python3 \
+    -v /mnt/fast/stacks/scripts:/w:ro \
+    -v "<collection>":"<collection>":ro \
+    -v /mnt/fast/safety/phase05:/mnt/fast/safety/phase05 \
+    lscr.io/linuxserver/beets:2.13.1-ls349 /w/normalise-dj-tags.py …
+  `docker image inspect` asserted the image resident BEFORE each run, because --pull never turns
+  an absent image into a failure that reads like a different one.
+  THE COLLECTION IS MOUNTED :ro FOR THE DRY RUN — a write was mechanically impossible, not merely
+  unrequested.
+
+
+1. THE FENCE — driven refusals, not read
+----------------------------------------
+Workstation (the fence refuses before any file is opened, so it is drivable anywhere):
+
+  --collection now  /mnt/tank/downloads/complete/nzb/dj-mixes   -> exit 2
+      "REFUSING TO RUN: target is outside the `now` collection's fence root."
+      given/resolved/required all named; required = the Now! collection folder.
+  --collection now  /mnt/tank/media/Music                       -> exit 2 (same shape)
+  --collection djmixes /mnt/tank/media/Music                    -> exit 2, required = spike-03
+  --collection bogus /tmp                                       -> exit 2 (argparse choice)
+
+  THE ONE THAT MATTERS MOST — the fence was NOT widened:
+  (no --collection) /mnt/…/VA-Now_That.s_What_I_Call_Music__1-115_2023 -> exit 2,
+      "required: /mnt/tank/downloads/spike-03 (or a descendant)".
+      The default collection still cannot reach the Phase 5 tree. SCRATCH_ROOT is untouched and no
+      constant in the file equals /mnt/tank/downloads (grep -cE '^[A-Z_]+ *= *"/mnt/tank/downloads"'
+      returns 0).
+
+LXC 100, the snapshot half (runs before any audio file is opened):
+
+  --collection now --apply --snapshot-proof <file naming tank/downloads@spike-03-t0>  -> exit 2
+      "…does not name tank/downloads@pre-phase5. That is the `now` collection's ONLY rollback;
+       another collection's snapshot does not substitute for it. Snapshot state is UNKNOWN."
+  --collection now --apply  (no proof)                                                -> exit 2
+      names tank/downloads@pre-phase5 and prints the exact atlantis command that produces it.
+
+  NOT DRIVABLE, and recorded rather than claimed: the symmetric case (--collection djmixes --apply
+  with the pre-phase5 proof) cannot reach the snapshot check, because /mnt/tank/downloads/spike-03
+  NO LONGER EXISTS on the estate — Phase 4 retired the spike tree. The target fence refuses first
+  with "not a directory". Creating a directory there to force the path would be an estate change
+  this plan is not entitled to make, and would appear in the zfs diff § 5 relies on. The direction
+  that matters (a `now` apply refusing a djmixes proof) IS driven, above.
+
+
+2. THE SELF-TEST, inside the beets image — exit 0
+-------------------------------------------------
+  == normalise-dj-tags.py --self-test: the WAV write path (D-23, DEF-03-09) and rule 4 (D-10) ==
+     python 3.12.14, mutagen 1.48.1
+  ok   untagged-wav
+  ok   ascii-wav
+  ok   non-ascii-wav
+  ok   rule4-derivation: Vol NNN -> the canonical album: 115 distinct values, five NAMED refusals,
+       the no-digit guard accepts volume 1, idempotent, and rule 1 cannot compete
+  ok   rule4-mp3-id3v1-preserved: after a rule-4 album write the ID3v2 frame set is unchanged but
+       TALB and the trailing ID3v1 block is BYTE-IDENTICAL — the preserve_id3v1_trailer()
+       dependency D-10's audio_md5 safety claim rests on
+  -- 5 cases, 0 failed --
+
+  Rule 4's derivation, driven case by case:
+    'Vol 036'     -> ("Now That's What I Call Music! 36", None)
+    'Vol 001'     -> ("Now That's What I Call Music! 1",  None)
+    'Vol 115'     -> ("Now That's What I Call Music! 115",None)
+    'Vol 36'      -> (None, 'volume_number_underpadded')
+    'Vol 0001'    -> (None, 'volume_number_overpadded')
+    '36'          -> (None, 'bare_number_no_vol_prefix')
+    'Disc 1'      -> (None, 'not_a_volume_folder')
+    'Vol 116'     -> (None, 'volume_out_of_range')
+    'Vol 000'     -> (None, 'volume_out_of_range')
+    'Vol 001 CD1' -> (None, 'not_a_volume_folder')
+    ''            -> (None, 'not_a_volume_folder')
+  Five refusals, five DIFFERENT names — asserted by the case itself, because one catch-all reason
+  would leave the .failed ledger unable to say which shape was refused.
+
+
+3. NEGATIVE CONTROLS — both new cases were proven able to FAIL
+--------------------------------------------------------------
+A control that can only pass is uninformative (02.1-07). Two mutated COPIES of the script were run
+from /mnt/fast/safety/phase05/05-08-negcontrol/ (outside the git checkout, so no untracked file
+could block a later `git pull --ff-only`), and the directory was DELETED afterwards. The committed
+script was never modified: its sha256 is unchanged either side.
+
+  Control A — preserve_id3v1_trailer() neutered (an early `return` before its body):
+      bad  rule4-mp3-id3v1-preserved
+             reason: ID3v1 trailer is NOT byte-identical after the write: album field
+             'Old Album' -> "Now That's What I Call Music! ".  exit 1
+      That is save(v1=UPDATE) regenerating all 128 bytes from the ID3v2 frames, in the act —
+      the exact mechanism that MOVES audio_md5 and would make Phase 7's diff report losses that
+      never happened. The other four cases stayed green, so the control is attributable.
+
+  Control B — NOW_ALBUM_PREFIX moved to "NEGATIVE CONTROL Music! ":
+      bad  rule4-derivation, three reasons naming Vol 036 / 001 / 115.  exit 1
+      The other four cases stayed green.
+
+
+4. THE DRY RUN — 4,746 proposals, read rather than summarised
+--------------------------------------------------------------
+  target      /mnt/tank/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023
+  out         /mnt/fast/safety/phase05/now-album-dryrun.ndjson   (1,700,509 B, 4,746 lines)
+              …ndjson.failed 0 bytes, …ndjson.summary.json 9,675 B
+  exit 0, elapsed 134.39 s
+
+  summary.json (per_folder elided):
+    { "mode": "dry-run", "collection": "now",
+      "fence_root": ".../VA-Now_That.s_What_I_Call_Music__1-115_2023",
+      "snapshot_name": "tank/downloads@pre-phase5",
+      "folders_seen": 115, "files_seen": 4746,
+      "files_changed": 751, "files_unchanged": 3995, "files_noop_proposal": 3995,
+      "files_skipped": 0, "failures": 0,
+      "counts_reconciled": true, "rules_exclusive": true,
+      "rule_hits": { "4": 4746 } }
+
+  Read back off the NDJSON, not off the summary:
+    records                                   4746
+    fields proposed                           ['album']          (nothing else — D-10 is one field)
+    rules                                     [(4, 4746)]        (rules 1, 2, 3 = 0)
+    written flags                             [False]
+    distinct proposed values                  115
+    values failing ^Now That's What I Call Music! [1-9][0-9]{0,2}$   (none)
+    the number set equals exactly 1..115      True
+    folders proposing more than one value     {}                 (all 115 folders, one value each)
+    records with a null `old`                 0
+    REFUSALS                                  0  — stated even though it is zero
+    FAILURES                                  0  — .failed ledger is 0 bytes
+
+  no-op records (proposed value already equals the current value): 3995
+  real changes:                                                     751
+
+  THE CASE THE WHOLE RULE EXISTS FOR — Vol 036, 40 files, THREE spellings collapsing to ONE:
+      "Now That's What I Call Music! Vol.36  CD2"  x20   (double space)
+      "Now That's What I Call Music! Vol.36 CD1"   x16
+      "Now That's What I Call Music! 36"           x4    (already canonical -> noop)
+    all proposed  "Now That's What I Call Music! 36".  20 + 16 + 4 = 40, reproducing
+    05-NOW-INVENTORY.md § 2's measured 20 / 16 / 4 exactly. A trailing-number parse of those album
+    strings would have filed the first 20 into volume 2 and the next 16 into volume 1.
+
+  D-03's other two traps:
+    Vol 001  30 files, currently "Now That's What I Call Music"      (NO number) -> "…Music! 1"
+    Vol 002  30 files, currently "Now, That's What I Call Music II"  (Roman)     -> "…Music! 2"
+
+  The 751 in full — 22 volumes of 115 carry at least one wrong value, 93 are already canonical:
+
+    volume      files  changing  current value(s)
+    Vol 001        30        30  "Now That's What I Call Music" x30
+    Vol 002        30        30  "Now, That's What I Call Music II" x30
+    Vol 003        26        26  "Now That's What I Call Music 3" x26
+    Vol 004        45        45  "Now That's What I Call Music 4" x45
+    Vol 005        29        29  "Now That's What I Call Music 5" x29
+    Vol 006        29        29  "Now That's What I Call Music 6" x29
+    Vol 007        30        30  "Now That's What I Call Music 7" x30
+    Vol 008        42        42  "Now That's What I Call Music 8" x42
+    Vol 009        44        44  "Now That's What I Call Music 9" x44
+    Vol 010        30        30  "Now That's What I Call Music 10" x30
+    Vol 011        30        30  "Now That's What I Call Music 11" x30
+    Vol 012        32        32  "Now That's What I Call Music 12" x32
+    Vol 013        32        32  "Now That's What I Call Music 13" x32
+    Vol 015        31        31  "Now That's What I Call Music 15" x31
+    Vol 016        35        35  "Now That's What I Call Music 16" x35
+    Vol 017        32        32  "Now That's What I Call Music 17" x32
+    Vol 021        36        36  "Now That's What I Call Music 21" x36
+    Vol 023        39        39  "Now That's What I Call Music 23" x39
+    Vol 024        37        37  "Now That's What I Call Music 24" x37
+    Vol 027        38        38  "Now That's What I Call Music 27" x38
+    Vol 029        38        38  "Now That's What I Call Music 29" x38
+    Vol 036        40        36  the three spellings above
+
+  Twenty-one of those twenty-two are the SAME defect: the album string spells it `Music` with no
+  exclamation mark. 05-NOW-INVENTORY.md § 2 measured "96 values spell it `Music!` and 21 spell it
+  `Music`" — the 21 are exactly these volumes, which is the inventory and the dry run agreeing from
+  two different directions. Vol 004 / 008 / 009 carry 45 / 42 / 44 files, reproducing § 4's
+  album-tag family counts under the variant-edition merge.
+
+  Sample records (first, and a no-op):
+    {"mode":"dry-run","folder":"Vol 001","path":".../Vol 001/01. New Edition - Candy Girl.mp3",
+     "field":"album","rule":4,"old":"Now That's What I Call Music",
+     "new":"Now That's What I Call Music! 1","written":false,"artist_policy":"keep"}
+    {"mode":"dry-run","folder":"Vol 014","path":".../Vol 014/01. Marc Almond Featuring Gene Pitney
+     - Something's Gotten Hold Of My Heart.mp3","field":"album","rule":4,
+     "old":"Now That's What I Call Music! 14","new":"Now That's What I Call Music! 14",
+     "written":false,"artist_policy":"keep","noop":true}
+
+
+5. NOTHING WAS WRITTEN — two independent instruments
+-----------------------------------------------------
+  (a) A path/mtime/size fingerprint of all 4,751 files under the collection, taken BEFORE and
+      AFTER the dry run:
+        sha256 1b8b90c2e4801b886d4aced5b0ea94648c43d61b2e0d4b761ee09421ae4cedde  both times
+        `cmp` identical; files with an mtime after the run started: 0.
+  (b) `zfs diff -H tank/downloads@pre-phase5 tank/downloads` from atlantis (snapshot created
+      Fri Sep 18 15:42 2026), restricted to the collection: 4,876 lines —
+        4750 R   plan 05-07's renames
+         115 +   the volume directories 05-07 created
+          10 -   the sidecars 05-04 and the split removed
+           1 M   the collection DIRECTORY itself (its child set changed)
+        0 M lines on any .mp3.  Nothing in that set is attributable to this plan.
+
+
+6. TWO DEFECTS IN THIS PLAN'S OWN TEXT, LEFT FAILING RATHER THAN EDITED AROUND
+------------------------------------------------------------------------------
+  (i) Task 3's <automated> verify is NON-DISCRIMINATING. Run verbatim:
+        jq -r '.changes.album.new // empty' now-album-dryrun.ndjson | sort -u | wc -l   ->  0
+      The NDJSON record has no `changes` object — build_record() has always written a FLAT
+      (field, rule, old, new) record, and the self-test grades that same shape. `jq` therefore
+      emits nothing, `sort -u | wc -l` prints 0, and the pipeline EXITS 0: the assertion passes
+      whatever the file contains, including an empty one. The artefact was not reshaped to satisfy
+      it. The same assertion against the real shape:
+        jq -r 'select(.field=="album") | .new' now-album-dryrun.ndjson | sort -u | wc -l  ->  115
+
+  (ii) Task 1's acceptance says a --collection now run against .../nzb/dj-mixes and one against
+      /mnt/tank/media/Music each "exits 2 naming both the given and the required path" — true, and
+      driven. But the plan also expects `--collection djmixes` with the old spike-03 target to
+      "behave exactly as before"; there is no spike-03 tree left to run against (§ 1). The claim is
+      discharged at the fence and at the constant (SCRATCH_ROOT byte-identical, the Now! tree still
+      refused under the default collection), NOT by an end-to-end spike run.
