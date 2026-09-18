@@ -664,12 +664,82 @@ QUAL-01 before-state snapshot must already be taken — staging first destroys t
   2. Searching the download tree returns zero `_FAILED_`, `_UNPACK_` or stray `.rar` items outside
      `99-quarantine`, and the Harry Potter BluRay rip is out of `dj-mixes`.
 
+     > **Amended 2026-09-18 by plan 05-02 (D-12, D-14).** This criterion previously read
+     > "Searching the download tree returns zero `_FAILED_`, `_UNPACK_` or stray `.rar` items
+     > outside `99-quarantine`, and the Harry Potter BluRay rip is out of `dj-mixes`" — and as
+     > phrased it sweeps the **whole** download tree, which pulls two other services into a
+     > music project. Measured (`05-PREMEASURE.md` § 5): ten `_FAILED_`/`_UNPACK_` directories
+     > exist under `complete/nzb/`, of which only **four** are music — `_UNPACK_Ed Sheeran…`,
+     > `_UNPACK_Katy Perry - Prism (2013) FLAC`, `_FAILED_Garth.Brooks-Ropin.The.Wind…` and
+     > `_FAILED_Garth.Brooks-The.Ultimate.Hits…`. The other **six are TV and movies**:
+     > `Chicago.PD.S13E02`, two `Goldie.and.Bear.S02E26E27` variants, two `Prep.and.Landing.2009`
+     > variants, and `Disclosure.Day.2026`. **The change:** the sweep's scope narrows to the music
+     > paths — `complete/nzb/music/`, `complete/nzb/unsorted/`, `complete/nzb/dj-mixes/`,
+     > `/mnt/tank/downloads/lidarr-import/` and the new `complete/nzb/_inbox/`. `incomplete/` is
+     > out of scope entirely (D-15): it is SABnzbd's live working directory, drained at roughly one
+     > music job per 72 seconds, and moving or deleting anything under it can break an active
+     > download. **The substance is kept, not reduced** — the six TV/movie items are **not lost**;
+     > they are named above and in `05-PREMEASURE.md` § 5, and they belong to Sonarr's and Radarr's
+     > own failure handling. The alternative was **rejected**: quarantining another service's failed
+     > jobs into a music-project folder takes content this project does not own, and it would go red
+     > again the moment those services fail anything — a permanently-red assertion being the one
+     > outcome that trains a reader to ignore the whole check.
+     > **D-14's factual correction is folded in here as a note rather than given an amendment of its
+     > own:** the Potter clause **names the wrong tree** — a `find` over `dj-mixes` to depth 3 for
+     > `*potter*` returns **zero** (`05-PREMEASURE.md` § 4) — and the rip that exists is
+     > `complete/nzb/unsorted/Harry.Potter.And.The.Deathly.Hallows.Part.1.2010.PROPER.1080p.BluRay.x264-MOOVEE`,
+     > which is ordinary junk (a video in a music folder) taken through D-13's approval gate with
+     > everything else and deleted; refiling it to the movies tree was rejected because this phase
+     > does not hand content to another service's import path uninvited, and the second rip,
+     > `incomplete/Harry.Potter…hallowed` with its `__ADMIN__` directory, is SABnzbd's to resolve.
+
   3. The 45 GB `Now! 1-115` folder is split into per-volume folders, each independently importable
      and abortable, with the per-volume file counts summing back to the original count.
+
+     > **Amended 2026-09-18 by plan 05-02 (D-02, D-05, D-08).** This criterion previously read
+     > "The 45 GB `Now! 1-115` folder is split into per-volume folders, each independently
+     > importable and abortable, with the per-volume file counts summing back to the original
+     > count", and two of its words describe a shape the folder does not have. Measured
+     > (`05-PREMEASURE.md` § 3): the real folder
+     > `complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023` holds **4,760 files and
+     > ZERO subdirectories**, so the split cannot *move* existing subfolders — there are none, and
+     > volume boundaries must be **derived**. The 4,760 resolves as **4,746 mp3 plus 14 sidecars**.
+     > **The changes are all clarifications.** (1) The per-volume folders are **created, not moved**,
+     > and are created **inside** the existing folder as atomic same-dataset renames (D-07). (2)
+     > "the original count" is **4,746 mp3**; sidecars are accounted separately, and the 24
+     > manifest-only entries in the m3u are reported **on their own line** and never folded into the
+     > total (D-08). (3) The headline total is backed by the strictly stronger per-volume identity
+     > **`files_present == sum of tracktotal` across that volume's discs**, because a bare total of
+     > 4,746 would pass even if every file landed in the wrong folder. (4) **All discs of a volume
+     > live in ONE folder** — the CD1/CD2 split is not restored, because beets treats one directory
+     > as one album candidate and handing it two risks matching one volume as two albums (D-05).
+     > **The substance is kept, not reduced** — the split is still the deliverable and the
+     > reconciliation is *strengthened* rather than relaxed. Reconciling against the m3u manifest's
+     > **4,770** entries was **rejected**: it would fail by 24 on every run and train everyone to
+     > ignore it.
 
   4. No `_`-prefixed folder exists anywhere under `/mnt/tank/media/Music` — underscore names are
      fine in the staging tree because it is outside the library, and never inside it, because
      Music Assistant silently ignores them and Jellyfin does not.
+
+     > **Amended 2026-09-18 by plan 05-02 (D-22, D-25).** The wording above **stands unchanged** and
+     > is quoted here in full: "No `_`-prefixed folder exists anywhere under `/mnt/tank/media/Music`
+     > — underscore names are fine in the staging tree because it is outside the library, and never
+     > inside it, because Music Assistant silently ignores them and Jellyfin does not." Measured
+     > (`05-PREMEASURE.md` § 6): **zero** underscore-prefixed directories exist anywhere under
+     > `/mnt/tank/media/Music`. **The change is what kind of thing this criterion is:** it is a
+     > **guard to maintain, not work to perform**. It becomes a standing assertion in
+     > `scripts/quick-health-check.sh`, run before and after this phase's moves, and it is proven
+     > **capable of failing** by a driven probe rather than merely observed passing — the README
+     > § *Health Checks* rule, and the reason D-21's inode proof carries a negative control too.
+     > **The substance is kept, not reduced** — nothing is dropped; an unasserted green *claim*
+     > becomes an *asserted* one, with "could not look" kept distinct from "there are none".
+     > **The adjacent temptation is named here because it is where the next reader will go (D-25):
+     > no `tank/downloads` ownership assertion is added to the health check.** The download client
+     > keeps writing as uid 3000 at roughly one job per 72 seconds, so such a check would go red on
+     > the next download and train everyone to ignore it — the exact failure mode Phase 02.1's CR-01
+     > spent four gap-closure plans repairing in the other direction. D-24's `568:568` sweep is a
+     > one-time, `zfs diff`-verified measurement; its date is the deliverable, not a standing check.
 **Plans**: 11 plans
 Plans:
 **Wave 1**
@@ -716,6 +786,11 @@ Plans:
 **Research**: not needed — filesystem triage with documented traps. `05-CONTEXT.md` (27 locked
 decisions), `05-PREMEASURE.md` (measurements from atlantis, 2026-09-18) and `05-PATTERNS.md` (analog
 map) carry what a RESEARCH.md would have. Nyquist dimension 8 is thin by accepted, recorded choice.
+*Confirmed 2026-09-18 by plan 05-02: research was **deliberately skipped**, not overlooked. The
+measurements the three amended criteria above rest on come from `05-PREMEASURE.md` (read-only, taken
+from atlantis before the phase was discussed) and the rulings on them from `05-CONTEXT.md`; each
+amendment cites its `05-PREMEASURE.md` section by number so the chain from criterion to measurement
+is followable without a RESEARCH.md.*
 
 ### Phase 6: Tagger Configuration and Dry Run
 
