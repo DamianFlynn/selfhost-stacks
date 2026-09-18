@@ -148,3 +148,93 @@ ledgers) and `now-manifest.ndjson` (4,770 records). Committed under `artifacts/`
 `now-collided-files.tsv`, `now-tracktotal-conflicts.tsv` and `now-d04-answer.txt` → the matching
 `05-05-*` names. Tools: `scripts/phase05-now-tag-inventory.sh` (`scan`, `reconcile`) and
 `artifacts/05-05-d04-analysis.sh`, both read-only against the collection.
+
+---
+
+## AMENDMENT 2026-09-18 (plan 05-06, operator decisions 1 and 2)
+
+**Added in band; nothing above is rewritten.** § 7's open question — *"whether the four variant
+editions become their own folders or merge into the parent volume"* — and § 3's shortfall table were
+put to the operator, who decided both. Plan 05-06 implemented the decisions and measured the
+consequences. The measured mapping is `host:/mnt/fast/safety/phase05/now-split-map.tsv`
+(`sha256 9ef5da2b…1fba9`, taken 2026-09-18T20:45Z).
+
+### Decision 1 — the split is 115 folders, variant editions MERGED
+
+The 119 manifest directories fold to exactly 115 volume numbers. **The four variant-edition
+directories are recorded here and do NOT appear as directories on disk:**
+
+| Volume | Directory | Variant edition annotation |
+|---:|---|---|
+| 4 | `1984. Now That's What I Call Music! 4 [2019 Reissue]` | `[2019 Reissue]` |
+| 4 | `1984. Now That's What I Call Music! 4 [Genuine UK 1CD-Extremely Rare Estimated 500 copies Pressed]` | `[Genuine UK 1CD-Extremely Rare…]` |
+| 4 | `1984. Now That's What I Call Music! 4 [Original 1CD Extremely Rare Estimated 500 copies Pressed]` | `[Original 1CD Extremely Rare…]` |
+| 8 | `1986. Now That's What I Call Music! 8 [2021 Reissue]` | `[2021 Reissue]` |
+| 8 | `1986. Now That's What I Call Music! 8 [Original 1CD Rare]` | `[Original 1CD Rare]` |
+| 9 | `1987. Now That's What I Call Music! 9 [2021 Reissue]` | `[2021 Reissue]` |
+| 9 | `1987. Now That's What I Call Music! 9 [Original 1CD Rare]` | `[Original 1CD Rare]` |
+
+`Vol 004` holds the union of its three editions' tracks; `Vol 008` and `Vol 009` the union of two
+each. Full derivation, one row per directory with the rule that fired:
+`artifacts/05-06-volume-numbers.tsv`.
+
+⚠ **The merge re-creates D-04's surplus, and it is the SAME artefact § 4 dismantled — not a new
+finding.** Under the merge, volume-number grouping becomes equivalent to the album-tag grouping for
+these three families, so volumes 4, 8 and 9 report **+13 / +9 / +13** against the modal `tracktotal`.
+Nothing changed on disk between the two measurements; the folder simply holds the union of several
+editions' files while the modal expectation can only carry one edition's `tracktotal`. Read these
+three rows as *"a merged folder, expectation not meaningful"*, never as *"extra files appeared"*.
+
+### Decision 2 — short volumes are split anyway, and the shortfall is named track by track
+
+§ 3's seven directory-level shortfalls were measured per DIRECTORY. Post-merge, the identity is
+measured per VOLUME, and **11 exceptions result, not 7** — the three merged volumes above, plus one
+consequence of the collision tie-break described below. The missing audio itself is named
+**track by track** in `artifacts/05-06-missing-tracks.tsv`, 13 tracks across 10 (volume, disc)
+groups:
+
+| Volume | Disc | Expected | Present | Missing track numbers | Cause |
+|---:|---:|---:|---:|---|---|
+| 3 | 1 | 14 | 13 | 1 | lost to volume 4 by the tie-break |
+| 3 | 2 | 14 | 13 | 7 | lost to volume 4 by the tie-break |
+| 8 | 2 | 16 | 12 | 9, 10, 11, 12 | § 3's volume-8 per-disc imbalance, now visible |
+| 15 | 1 | 16 | 15 | 12 | lost to volume 31 by the tie-break |
+| 18 | 2 | 16 | 15 | 10 | **source rip** (pre-declared) |
+| 39 | 1 | 19 | 18 | 7 | lost to volume 100 by the tie-break |
+| 52 | 1 | 22 | 21 | 10 | **source rip** (pre-declared) |
+| 70 | 1 | 22 | 21 | 17 | **source rip** (pre-declared) |
+| 83 | 2 | 21 | 20 | 21 | **source rip** (pre-declared) |
+| 98 | 2 | 23 | 22 | 23 | **source rip** (pre-declared) |
+
+**Only 5 of the 13 are missing audio.** The other 8 are bookkeeping: 4 are one physical file being
+placed once rather than twice (below), and 4 are volume 8's per-disc imbalance, which § 3 already
+recorded as a cancellation. None of these volumes goes to `04-hold` (D-09).
+
+### The cross-volume collisions, and how each was decided
+
+§ 5 named 23 physical files claimed by more than one manifest directory and called this *"plan
+05-06's hardest problem"*. **The variant-edition merge dissolves 19 of them**: the competing claims
+were different editions of the same volume number, which now resolve to one destination. **Four
+still cross a real volume boundary**, and all four were decided by the file's own embedded `album`
+tag — never by manifest line order, which carries no information:
+
+| File | Claims | Won | Rejected | Deciding `album` tag |
+|---|---|---:|---:|---|
+| `01. Duran Duran - The Reflex.mp3` | 3, 4 | **4** | 3 | `Now That's What I Call Music 4` |
+| `07. Tina Turner - What's Love Got To Do With It.mp3` | 3, 4 | **4** | 3 | `Now That's What I Call Music 4` |
+| `12. Kirsty MacColl - Days.mp3` | 15, 31 | **31** | 15 | `Now That's What I Call Music! 31` |
+| `07. Robbie Williams - Angels.mp3` | 39, 100 | **100** | 39 | `Now That's What I Call Music! 100` |
+
+**Zero were flagged for operator review** — the album tag disambiguated every one. The rejected
+claim is recorded in the map row itself (`won=…;rejected=…`) and in
+`artifacts/05-06-cross-volume-collisions.tsv`, so the losing volume's shortfall is traceable to a
+decision rather than appearing as unexplained missing audio.
+
+### What the two instruments actually said
+
+**The disagreement count is 0 of 4,746.** Every file's `album` tag, resolved through the explicit
+alias table, points at the same volume the manifest does. All 117 album strings map to exactly one
+volume — none flagged, none tied — including D-03's three traps: the numberless volume-1 string, the
+Roman-numeral volume-2 string, and all three volume-36 spellings (`…! Vol.36 CD1` 16 files,
+`…! Vol.36  CD2` 20 files with the double space, `…! 36` 4 files) mapping to **36**. Nothing was
+routed to `99-quarantine/now-volume-disagreement/`; that path exists in the tool and is unused.
