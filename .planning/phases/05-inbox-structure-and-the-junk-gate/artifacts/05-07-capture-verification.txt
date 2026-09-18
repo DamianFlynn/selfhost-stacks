@@ -1,0 +1,64 @@
+== 1. THE CAPTURE EXISTS AND IS NON-EMPTY ==
+  -rw-r--r-- 1 apps apps  646945 Sep 18 21:15 /mnt/fast/safety/music-pre-project/tags/phase05-now-before.done
+  -rw-r--r-- 1 apps apps       0 Sep 18 21:03 /mnt/fast/safety/music-pre-project/tags/phase05-now-before.failed
+  -rw-r--r-- 1 apps apps 6693664 Sep 18 21:15 /mnt/fast/safety/music-pre-project/tags/phase05-now-before.ndjson.gz
+  failed ledger lines (expect 0)                       0
+
+== 2. RECORD COUNT == mp3 COUNT IN THE 115 VOLUME FOLDERS ==
+  records in the capture                               4746
+  mp3 across the 115 volume folders                    4746
+  ASSERT OK: the capture is COMPLETE
+
+== 3. EVERY RECORD CARRIES A NON-EMPTY audio_md5 - the join key ==
+  records with a non-empty audio_md5                   4746
+  records with a MISSING or EMPTY audio_md5            0
+  DISTINCT audio_md5 values                            4735
+  (a duplicate audio_md5 is a legitimate DUPE-01 finding, not a capture defect)
+
+== 4. ZERO-TAG-FIELD COUNT - stated beside the expected value of 0 ==
+  records with ZERO tag fields (expected: 0)           0
+  minimum tag fields on any record                     15
+  maximum tag fields on any record                     30
+  mean tag fields per record                           20.7
+
+  the three fields the split and the 05-09 repair turn on, present on every record?
+    album                present on 4746 records
+    disc                 present on 4746 records
+    track                present on 4746 records
+
+== 5. SCOPE - the capture read the SPLIT TREE, not 140 GB ==
+  distinct scan_root values                            1
+    /mnt/tank/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023
+  source_path values NOT under the collection          0
+  source_path values NOT under a 'Vol NNN' folder      0
+  distinct volume folders represented                  115
+
+== 6. THE PROPERTY THAT MAKES D-10's TAG WRITE AFFORDABLE, DRIVEN ==
+  The key is the ENCODED AUDIO BITSTREAM, not the container and not the path. A tag write
+  changes the container; it does not change the bitstream, so the join key survives it.
+  Driven rather than asserted - re-hash one file two ways and compare:
+    file:                 01. New Edition - Candy Girl.mp3
+    recorded audio_md5:   cc97fb70afb6d06f81f64406a0ec7118
+    re-hashed audio only: cc97fb70afb6d06f81f64406a0ec7118
+    whole-file md5:       b9421e949d79d377129a6170cf1da26c
+    OK:   the key reproduces from the audio stream alone
+    OK:   the key is NOT the whole-file hash - a tag write cannot move it
+
+== 7. THE 11 NON-DISTINCT audio_md5 VALUES, NAMED ==
+  4,746 records carry 4,735 distinct bitstreams. This is a DUPE-01 observation, NOT a
+  capture defect - diff-music-tags.sh reports it informationally and it never affects the
+  exit code. It is named here because plan 05-09 joins on this key.
+    x2  Vol 002/01. Queen - Radio Ga Ga.mp3 | Vol 004/15. Queen - Radio Ga Ga.mp3
+    x2  Vol 003/04. Orchestral Manoeuvres In The Dark - Locomotion.mp3 | Vol 004/05. O.M.D. - Locomotion.mp3
+    x2  Vol 004/02. Ray Parker Jr. - Ghostbusters.mp3 | Vol 004/09. Ray Parker Jr. - Ghostbusters.mp3
+    x2  Vol 004/02. Status Quo - The Wanderer.mp3 | Vol 004/13. Status Quo - The Wanderer.mp3
+    x2  Vol 004/03. Bronski Beat - Why!.mp3 | Vol 004/08. Bronski Beat - Why!.mp3
+    x2  Vol 004/03. Culture Club - The War Song.mp3 | Vol 004/09. Culture Club - The War Song.mp3
+    x2  Vol 004/04. John Waite - Missing You.mp3 | Vol 004/06. John Waite - Missing You.mp3
+    x2  Vol 004/06. UB40 - If It Happens Again.mp3 | Vol 004/10. UB40 - If It Happens Again.mp3
+    x2  Vol 004/09. Style Council - Shout To The Top.mp3 | Vol 004/12. The Style Council - Shout To The Top.mp3
+    x2  Vol 004/11. Julian Lennon - Too Late For Goodbyes.mp3 | Vol 004/12. Julian Lennon - Too Late For Goodbyes.mp3
+    x2  Vol 004/13. Thompson Twins - Doctor! Doctor!.mp3 | Vol 004/14. Thompson Twins - Doctor! Doctor!.mp3
+  groups sharing a bitstream: 11
+
+CAPTURE-VERIFY-6-COMPLETE

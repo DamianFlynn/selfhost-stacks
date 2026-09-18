@@ -1,0 +1,38 @@
+
+==================================================
+  snapshot-music-tags - capturing the pre-project tag before-state
+==================================================
+  basename:  phase05-now-before
+  ndjson:    /mnt/fast/safety/music-pre-project/tags/phase05-now-before.ndjson.gz
+  ledger:    /mnt/fast/safety/music-pre-project/tags/phase05-now-before.done
+  failed:    /mnt/fast/safety/music-pre-project/tags/phase05-now-before.failed
+  limit:     none
+  roots:     1
+               /mnt/tank/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023
+  date:      2026-09-18T21:03:38Z
+
+==> Resume ledger: 0 path(s) already captured
+
+==================================================
+  root: /mnt/tank/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023
+==================================================
+  4746 audio files found
+    seen=4746 processed=4746 skipped=0 failed=0
+    723s  48030482391 bytes  0.152 s/file  63.35 MB/s
+
+📊 Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  root                                       files  bytes  secs  failed
+  VA-Now_That.s_What_I_Call_Music__1-115_2023 4746   48030482391    723   0
+  ────────────────────────────────────────────────────────
+  Files seen:         4746
+  Records written:    4746
+  Skipped (in .done): 0
+  Failed:             0
+  Bytes read:         48030482391
+  Wall clock:         723s
+  Throughput:         0.152 s/file, 63.35 MB/s
+  ndjson:             /mnt/fast/safety/music-pre-project/tags/phase05-now-before.ndjson.gz
+  ledger:             /mnt/fast/safety/music-pre-project/tags/phase05-now-before.done (4746 lines)
+
+snapshot: complete
