@@ -25,6 +25,9 @@
 #   now-reconciliation.txt   the per-volume `files_present == sum of tracktotal` report
 #   now-tracktotal-conflicts.tsv  every (volume,disc) group carrying more than one distinct
 #                            tracktotal, with the vote count and whether each value is the modal one
+#   now-collided-files.tsv   claims<TAB>basename<TAB>every volume directory claiming it - the files
+#                            the flatten collapsed, which plan 05-06 cannot place in one folder
+#                            without a rule
 #
 # WHY THIS EXISTS: the original scan was written to the system temp directory on LXC 100, which is
 #   tmpfs backed by host RAM, and it is gone. NOTHING this script writes goes there - a 1.1 GB file
@@ -118,6 +121,7 @@ VOLUME_DIRNAMES="${OUT_DIR}/now-volume-dirnames.txt"
 ALBUM_VALUES="${OUT_DIR}/now-album-values.tsv"
 RECONCILIATION="${OUT_DIR}/now-reconciliation.txt"
 TT_CONFLICTS="${OUT_DIR}/now-tracktotal-conflicts.tsv"
+COLLIDED="${OUT_DIR}/now-collided-files.tsv"
 
 PROGRESS_EVERY=250
 WORK_DIR=""
@@ -474,6 +478,14 @@ do_reconcile() {
     }
   ' "$work/man.tsv" "$work/basename_to_leaf.tsv" "$work/tags.tsv" > "$work/joined.tsv"
 
+  # THE LIST PLAN 05-06 CANNOT DO WITHOUT. A physical file claimed by more than one volume
+  # directory cannot be moved into both, and there are 23 of them - one claimed by three. Emitted
+  # by name, with every claiming directory, so the split meets a list rather than a surprise.
+  awk -F'\t' -v OFS='\t' '
+    $9=="SHARED" { n[$1]++; d[$1] = d[$1] (d[$1]==""?"":" | ") $3 }
+    END { for (b in n) printf "%d\t%s\t%s\n", n[b], b, d[b] }
+  ' "$work/joined.tsv" | LC_ALL=C sort -rn -k1,1 > "$COLLIDED"
+
   local n_unjoined n_shared_rows n_shared_files
   n_unjoined="$(awk -F'\t' '$9=="UNJOINED"' "$work/joined.tsv" | wc -l | tr -d '[:space:]')"
   n_shared_rows="$(awk -F'\t' '$9=="SHARED"' "$work/joined.tsv" | wc -l | tr -d '[:space:]')"
@@ -567,6 +579,7 @@ do_reconcile() {
     printf '  %-46s %s\n' "distinct leaves carried by >1 line"      "$n_dup_leaves"
     printf '  %-46s %s\n' "disk files claimed by >1 volume directory" "$n_shared_files"
     printf '  %-46s %s\n' "join rows from those shared files"        "$n_shared_rows"
+    printf '  %-46s %s\n' "named in"                                 "$COLLIDED"
     echo ""
     echo "== nulls, counted rather than summed as zero =="
     printf '  %-46s %s\n' "records with a null album"       "$n_null_album"
@@ -600,6 +613,7 @@ do_reconcile() {
   info "album values:    $ALBUM_VALUES"
   info "reconciliation:  $RECONCILIATION"
   info "tt conflicts:    $TT_CONFLICTS"
+  info "collided files:  $COLLIDED"
 
   if [[ "$n_unjoined" != "0" || "$n_unresolved" != "0" ]]; then
     fail "$n_unjoined disk file(s) unjoined, $n_unresolved unresolved - not guessed, reported"
