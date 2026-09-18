@@ -1,0 +1,214 @@
+05-09 TASK 1 — THE PILOT WRITE, ON Vol 036, AND THE GATE IT WAS JUDGED BY
+=========================================================================
+Run 2026-09-18, LXC 100 (root@172.16.1.159) and atlantis (root@172.16.1.158).
+Every figure below was read back off the estate; none is inherited from the plan text.
+
+
+0. THE SUBSTITUTION, AND WHY IT IS NOT A SILENT ONE
+---------------------------------------------------
+The plan text (05-09-PLAN.md, Task 1) nominates `Vol 077` as the pilot. The operator
+substituted `Vol 036` when approving the write. Recorded here rather than silently followed,
+because the substitution is load-bearing:
+
+  * `Vol 077` has ZERO proposed changes in the 05-08 dry run. Every one of its 44 files already
+    carries `Now That's What I Call Music! 77`, so all 44 records are `noop: true`. Piloting
+    there writes nothing, exercises no write path, and the gate passes VACUOUSLY — it would have
+    reported MATCHED 44 / FIELDS_CHANGED 0 whether `preserve_id3v1_trailer()` worked or not.
+  * `Vol 036` is the ONLY volume in the collection whose files do not all share one current
+    album value: 20 read `...! Vol.36  CD2` (double space), 16 read `...! Vol.36 CD1`, 4 are
+    already canonical. It is therefore the only place a PER-FILE rather than per-folder write is
+    observable, and it is the exact case D-03's trap paragraph and rule 4 exist for.
+
+The plan's reasoning for `Vol 077` — that `back.bmp` corroborates it three ways — is sound as
+far as it goes, but it corroborates the TRACK COUNT, not the album string, and it is the album
+string this plan writes.
+
+Consequence for the pre-declared numbers: the plan's "44 files changed" becomes 40 files seen /
+36 changed / 4 no-op, and "MATCHED 44" becomes MATCHED 40. The SHAPE of every assertion is
+unchanged.
+
+
+1. THE FENCE, VERIFIED BEFORE THE FIRST BYTE MOVED
+---------------------------------------------------
+  ssh root@172.16.1.158 'zfs list -t snapshot -H -o name,creation tank/downloads@pre-phase5'
+    -> tank/downloads@pre-phase5   Fri Sep 18 15:42 2026     rc 0
+
+  /mnt/fast/safety/phase05/snapshot-proof.txt  ->  `tank/downloads@pre-phase5`
+
+This snapshot is THE ONLY UNDO for an in-place tag write. beets has no `undo` and neither has
+mutagen. An unreachable atlantis would have made the snapshot state UNKNOWN, which the tool
+treats as a refusal — not a skip and not a pass.
+
+  tool on LXC 100:  sha256 70406a10501dda0ded5286b69e66d6cf6cb5818814e6b9e8c73855881391aeea
+                    (identical to 05-08's recorded hash — the tool was NOT edited for this plan)
+  repo on LXC 100:  d116447 -> 6496cda, `git pull --ff-only`, tool hash unchanged across it
+
+
+2. NOTHING HAD MOVED SINCE THE DRY RUN — asserted, not assumed
+---------------------------------------------------------------
+A path/mtime/size fingerprint of all 4,751 files in the collection, taken immediately before the
+pilot write:
+
+  sha256(tree-pre.tsv) = 1b8b90c2e4801b886d4aced5b0ea94648c43d61b2e0d4b761ee09421ae4cedde
+
+That is BYTE-IDENTICAL to the hash 05-08 recorded either side of its read-only dry run. The
+collection is in exactly the state the operator approved the dry run against.
+
+
+3. THE APPLY
+-------------
+  docker run --rm --pull never --network none --entrypoint python3 \
+    -v /mnt/fast/stacks/scripts:/w:ro \
+    -v /mnt/fast/safety/phase05/05-09:<same>:rw \
+    -v /mnt/fast/safety/phase05/snapshot-proof.txt:<same>:ro \
+    -v "<collection>/Vol 036":"<same>":rw \
+    lscr.io/linuxserver/beets:2.13.1-ls349 \
+    /w/normalise-dj-tags.py "<collection>/Vol 036" --collection now --apply \
+      --snapshot-proof /mnt/fast/safety/phase05/snapshot-proof.txt \
+      --out .../now-album-apply-vol036.ndjson
+
+Image asserted RESIDENT first (sha256:159e62e4d611…), because `--pull never` turns an absent
+image into a failure that reads like a different one. `--network none`. Scripts read-only. The
+ONLY read-write bind on content is `Vol 036` itself, at its own absolute path so the fence's
+realpath checks resolve identically inside and outside the container. Nothing else on `tank` was
+mounted at all, let alone read-write.
+
+  exit code: 0            elapsed: 2.82 s
+  stderr banner confirmed: collection `now`, fence root the collection folder, rules
+  `4 (canonical album from the Vol NNN folder)`, snapshot `tank/downloads@pre-phase5`,
+  artist policy coerced to `keep` with the coercion ANNOUNCED on stderr.
+
+
+4. PRE-DECLARED vs OBSERVED, ITEM BY ITEM
+------------------------------------------
+Pre-declared before the artefact was read, per D-04's pattern and Phase 4's D-31:
+
+  property                                     declared              observed        verdict
+  -------------------------------------------- --------------------- --------------- -------
+  files seen                                   40                    40              MATCH
+  files changed (written)                      36                    36              MATCH
+  files no-op (already canonical)              4                     4               MATCH
+  files skipped                                0                     0               MATCH
+  failures / .failed ledger bytes              0 / 0                 0 / 0           MATCH
+  NDJSON records                               40                    40              MATCH
+  distinct `field` values in the NDJSON        {album}               {album}         MATCH
+  distinct `rule` values in the NDJSON         {4}                   {4}             MATCH
+  distinct `new` values                        1                     1               MATCH
+  the single new value        `Now That's What I Call Music! 36`     same            MATCH
+  `written: true` count                        36                    36              MATCH
+  `written` on every `noop` record             false                 false (x4)      MATCH
+  paths outside `Vol 036` in the NDJSON        0                     0               MATCH
+  counts_reconciled / rules_exclusive          true / true           true / true     MATCH
+
+The 36 old values are the two messy originals, in the proportion 05-NOW-INVENTORY.md § 2 and the
+05-08 dry run both measured:
+
+  20 x `Now That's What I Call Music! Vol.36  CD2`   (DOUBLE SPACE)
+  16 x `Now That's What I Call Music! Vol.36 CD1`
+   4 x `Now That's What I Call Music! 36`            (already canonical -> no-op, NOT written)
+
+A trailing-number regex over those strings would have filed 20 tracks into volume 2 and 16 into
+volume 1, exited 0, and looked right. Rule 4 read the FOLDER.
+
+
+5. THE SCOPE, TAKEN FROM THE FILESYSTEM RATHER THAN FROM THE TOOL'S OWN COUNTERS
+--------------------------------------------------------------------------------
+A tool reporting on itself cannot detect a file it affected but never recorded. A second
+path/mtime/size fingerprint of all 4,751 files was taken after the run and compared to the
+pre-run one by `treecmp.py`, which asserts that the set of paths whose mtime or size moved is
+EXACTLY the set the NDJSON recorded as `written: true`:
+
+  pre_rows / post_rows                      4,751 / 4,751
+  ndjson records / written:true             40 / 36
+  paths whose mtime or size moved           36
+    of which size also changed              0      <- in-place write, tag had room
+  MOVED BUT NOT WRITTEN (must be 0)         0      <- nothing outside the 36 was touched
+  WRITTEN BUT NOT MOVED (must be 0)         0      <- nothing claimed but not done
+  NO-OP FILES THAT MOVED (must be 0)        0      <- the 4 already-correct files are untouched
+  VANISHED / APPEARED (must be 0)           0 / 0
+  VERDICT                                   PASS
+
+The third line is the one that matters for the remaining volumes: the tool's idempotence contract
+says an already-canonical file is recorded and NOT written. On real files, it held.
+
+
+6. THE GATE: THE FIELD-LEVEL DIFF
+----------------------------------
+After-state captured with `snapshot-music-tags.sh phase05-vol036-after --roots "<...>/Vol 036"`
+— 40 records, 0 failed, 9 s, 429,859,086 bytes read. The QUAL-01 before-state
+(`phase05-now-before.ndjson.gz`, plan 05-07) was NOT touched or regenerated; a 40-record slice of
+it was taken by `source_path` prefix into a separate file.
+
+  bash scripts/diff-music-tags.sh phase05-vol036-before.ndjson.gz \
+                                  phase05-vol036-after.ndjson.gz  --full        exit 0
+
+  category                                      declared     observed    verdict
+  --------------------------------------------- ------------ ----------- -------
+  MATCHED                                       40           40          MATCH
+  MISSING_AFTER                                 0            0           MATCH
+  NEW_AFTER                                     0            0           MATCH
+  FIELDS_DROPPED                                0            0           MATCH
+  FIELDS_GAINED                                 0            0           MATCH
+  FIELDS_CHANGED                                36, album    36, album   MATCH
+  matched files with ZERO tag fields BEFORE     0            0           MATCH
+  exit code                                     0            0           MATCH
+
+The changed-field set was asserted MECHANICALLY, not by reading 36 rows by eye. From the
+`--json` output:
+
+  jq -r '..|objects|select(has("field"))|.field' | sort | uniq -c   ->   36 album
+
+36 rows, one distinct field name, and it is `album`. No `tracktotal`, no `artist`, no `title`, no
+`comment`, no `date`. FIELDS_GAINED 0 is the other half of that statement: mutagen synthesised no
+`COMM:ID3v1 Comment` frame and translated no `TYER` into `TDRC` — the two defaults the tool sets
+explicitly against.
+
+
+7. WHY `MATCHED 40` IS THE LOAD-BEARING NUMBER
+-----------------------------------------------
+MATCHED 40 is a DIRECT MEASUREMENT that `audio_md5` did not move on a single one of the 36
+written files. It is not an inference from one.
+
+`diff-music-tags.sh` joins the two captures on `audio_md5`, the md5 of the ENCODED AUDIO
+BITSTREAM (`ffmpeg -map 0:a -c copy -f md5 -`). If `preserve_id3v1_trailer()` had failed to hold,
+`mutagen.id3.ID3.save(v1=UPDATE)` would have regenerated all 128 bytes of the trailing ID3v1
+block from the ID3v2 frames — and for these files ffmpeg's mp3 demuxer emits those trailing bytes
+as part of the copied stream. The key would have moved, and the 36 files would have appeared as
+36 MISSING_AFTER plus 36 NEW_AFTER instead of falling inside MATCHED 40.
+
+That is not a hypothetical: plan 05-08 drove exactly this failure from a mutated copy of the tool
+with `preserve_id3v1_trailer()` neutered, and caught the regeneration in the act. Phase 4 measured
+it on 37 of 335 real files. D-10's entire safety argument — "writing a tag does not break Phase
+7's diff join" — rests on this property, and it has now been measured on real Phase 5 files
+rather than restated.
+
+The vacuous-pass guard is the companion figure and it is stated explicitly: ZERO matched files had
+an empty tag set on the BEFORE side (05-07 measured min 15 / mean 20.7 / max 30 tag fields per
+file). "No fields dropped" here means fields were there and survived, not that there was nothing
+to drop.
+
+
+8. THE GATE VERDICT
+--------------------
+CLEAN. `album` is the only field that moved, on 36 files, and `audio_md5` moved on none.
+
+Per the operator's approved sequence, step 2's condition is satisfied and step 3 — the remaining
+715 files across the other 21 volumes — may proceed.
+
+Had ANY other field moved, or any audio_md5 changed, the sequence stops here. The recovery path
+would be a rollback to `tank/downloads@pre-phase5`, which also discards the junk sweep, the split
+and everything downloaded since 2026-09-18T15:42 — an operator decision, never an automatic
+action.
+
+
+ARTEFACTS ON LXC 100 (all under /mnt/fast/safety/phase05/05-09/)
+-----------------------------------------------------------------
+  now-album-apply-vol036.ndjson             40 records, the applied changes with old and new
+  now-album-apply-vol036.ndjson.failed      0 bytes
+  now-album-apply-vol036.ndjson.summary.json
+  apply-vol036-stdout.txt / -stderr.txt     the run transcript
+  tree-pre.tsv / tree-post-vol036.tsv       4,751-row fingerprints either side
+  treecmp-vol036.txt                        the scope reconciliation, verdict PASS
+  phase05-vol036-before.ndjson.gz           the 40-record slice of the QUAL-01 before-state
+  now-album-diff-vol036.txt / .json         the gate verdict, human and machine readable
+  /mnt/fast/safety/music-pre-project/tags/phase05-vol036-after.ndjson.gz   40 records, 0 failed
