@@ -1,0 +1,125 @@
+Phase 5 plan 05-04, Task 1 — the operator decision, bound to a specific file content
+====================================================================================
+Recorded: 2026-09-18
+
+DECISION: approve-as-is, WITH TWO EXPLICIT AMENDMENTS.
+
+WHAT THE OPERATOR READ
+----------------------
+  file    host:/mnt/fast/safety/phase05/junk-candidates.tsv
+  rows    52
+  sha256  126ce3a0793500bea182814f7a2f8adb041b7dce75d1c6b6f28e3f6db3de8f48
+
+  That hash is byte-identical to the copy plan 05-03 committed at
+  .planning/phases/05-inbox-structure-and-the-junk-gate/artifacts/05-03-junk-candidates.tsv,
+  so the content approved is the content in the repository, and that was asserted rather
+  than assumed. The live file was re-hashed a second time immediately before the amendment
+  was applied and a third time (as the preserved as-read copy) after it, and all three reads
+  returned the same value. It is preserved on the host as
+  host:/mnt/fast/safety/phase05/junk-candidates-as-read-52row.tsv.
+
+THE TWO AMENDMENTS
+------------------
+1. EXCLUDE ENTIRELY — the eight R4 `.covers` rows. No action of any kind: not removed,
+   not moved, not chowned. They hold real cover art and are input to the planned VLM
+   tracklist extraction; PROJECT.md rates cover scans above any autotagger. The eight are
+   the `.covers` directories under four release folders, each duplicated between
+   `dj-mixes/` and `unsorted/`:
+     VA - Mastermix Issue 441-WEB-2023-MST
+     VA-Mastermix.Issue.439-WEB-2022-MS
+     VA-Mastermix.Issue.443-WEB-2023-MST
+     VA-Mastermix.Issue.444-WEB-2023-MST
+
+2. RECLASSIFY — the two R1 `_FAILED_` rows are MOVED to 99-quarantine, not removed:
+     _FAILED_Garth.Brooks-Ropin.The.Wind-CDP.7.06330-2-CD-FLAC-1991-EMG   0.40 GB, 10 audio
+     _FAILED_Garth.Brooks-The.Ultimate.Hits-2CD-FLAC-2007-WRS             1.52 GB, 34 audio
+   The SABnzbd job failed, but 1.92 GB of real FLAC across 44 files is present and may be
+   usable. Treated exactly as an R8 PROPOSAL row is treated: moved, never removed.
+
+THE APPROVED LIST, AS AMENDED
+-----------------------------
+  file    host:/mnt/fast/safety/phase05/junk-candidates.tsv
+  rows    44
+  sha256  fe2d3e2ef81451be178fe4c122e66d7075295b19ae822a125296a17b534d72e9
+  copy    artifacts/05-04-junk-candidates-approved.tsv
+
+  40 rows REMOVED   2 R2 `_UNPACK_`, 29 R4 empty directories, 9 R6 named D-06 sidecars
+   4 rows MOVED     2 R1 -> 99-quarantine, 2 R8 -> _inbox/02-review
+   8 rows EXCLUDED  the `.covers` directories
+  52 accounted for.
+
+HOW THE AMENDMENT WAS APPLIED
+-----------------------------
+Mechanically, by one awk program, never by retyping a path — a retyped path is a path that
+can be mistyped, and every row here names something that will be destroyed:
+
+  awk -F'\t' 'BEGIN{OFS="\t"}
+    $2 ~ /\/\.covers$/ { next }
+    $1 == "R1"         { $7 = "99-quarantine"; print; next }
+                       { print }'
+
+The same awk program was driven on a synthetic fixture BEFORE it was applied to the live
+list (artifacts/05-04-fixture-proof.txt, RUN 1). A `diff` of rule+path+destination between
+the as-read and amended files shows exactly two changes and nothing else: eight `.covers`
+lines deleted, two R1 lines gaining a seventh field. Nothing was added, widened or reworded.
+
+Shape assertions on the amended file: artifacts/05-04-list-verification.txt, 19 of 19 held,
+including the containment check that every surviving row existed VERBATIM in the as-read
+file apart from the two R1 rows that gained a destination.
+
+PRE-SWEEP STATE, CAPTURED BEFORE THE FIRST DESTRUCTIVE CALL
+-----------------------------------------------------------
+Reversibility fence (the sweep refuses to run without it):
+  host:/mnt/fast/safety/phase05/snapshot-proof.txt
+  sha256 c536d056afd3f4533a2ef9bedfa5fbdd0b13847e7ff9dea8733110667fe554cf
+  content: tank/downloads@pre-phase5
+
+The five value-bearing KEEP sidecars, devid inode bytes name.
+05-03 did NOT persist these values, so this is the baseline the post-sweep assertion uses:
+  68 1351  1090183  00.Now That's What I Call Music! 1-115(2023).m3u
+  68 18768 6363182  back.bmp
+  68 18769 4320054  cd1.bmp
+  68 18770 4320054  cd2.bmp
+  68 19960 4302     NOW That’s What I Call Music! 115.cue
+
+The eight EXCLUDED .covers directories, all present, each holding one file:
+  dj-mixes/VA - Mastermix Issue 441-WEB-2023-MST/.covers       1 file   32601 B
+  dj-mixes/VA-Mastermix.Issue.439-WEB-2022-MS/.covers          1 file   33388 B
+  dj-mixes/VA-Mastermix.Issue.443-WEB-2023-MST/.covers         1 file   31595 B
+  dj-mixes/VA-Mastermix.Issue.444-WEB-2023-MST/.covers         1 file   31355 B
+  unsorted/VA - Mastermix Issue 441-WEB-2023-MST/.covers       1 file   32601 B
+  unsorted/VA-Mastermix.Issue.439-WEB-2022-MS/.covers          1 file   33388 B
+  unsorted/VA-Mastermix.Issue.443-WEB-2023-MST/.covers         1 file   31595 B
+  unsorted/VA-Mastermix.Issue.444-WEB-2023-MST/.covers         1 file   31355 B
+
+One file inside each move-only R1 directory, for the same-dataset rename proof
+(devid inode size), plus the directory devid:
+  _FAILED_Garth.Brooks-Ropin.The.Wind-...-EMG          devid 68
+    68 278366 15144333  01-garth_brooks-against_the_grain.flac
+    68 278363 23675702  02-garth_brooks-rodeo.flac
+  _FAILED_Garth.Brooks-The.Ultimate.Hits-2CD-...-WRS   devid 68
+    68 278724 33202234  101-garth_brooks-aint_going_down_(til_the_sun_comes_up).flac
+    68 278721 29739579  102-garth_brooks-friends_in_low_places.flac
+
+  99-quarantine: devid 68, inode 246718 — the same dataset, so each move is an atomic
+  inode-preserving rename(2), not a copy-then-unlink. The (devid,inode) PAIR is asserted,
+  never the inode alone: 05-01 measured /mnt/tank/downloads and /mnt/tank/media/Music BOTH
+  reporting inode 34.
+
+  _inbox holds 6 entries (its own six policy directories), i.e. no content staged yet.
+
+D-15 baseline, for the "nothing under incomplete/ was touched" assertion:
+  /mnt/tank/downloads/incomplete   259 entries   108927263 bytes
+  It is a live directory drained at roughly one music job per 72 s, so exact equality is
+  NOT expected and is not asserted. What is asserted is that no path the sweep acted on
+  resolves under it.
+
+  /mnt/tank/downloads/lidarr-import holds exactly two entries, `Madonna` and
+  `Michael Jackson`, and no loose files — so an `rmdir` after both move out can succeed.
+
+WHAT WAS NOT DONE
+-----------------
+No row was added. No destination was widened. The eight excluded rows were not "kept in
+99-quarantine for later" — they were struck from the list entirely, which is the only
+treatment that leaves them provably untouched, because a row in the list is a row the
+sweep moves.

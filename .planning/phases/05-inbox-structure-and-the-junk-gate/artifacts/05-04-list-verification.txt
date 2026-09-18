@@ -1,0 +1,30 @@
+== amended approved list: /mnt/fast/safety/phase05/junk-candidates.tsv
+   sha256: fe2d3e2ef81451be178fe4c122e66d7075295b19ae822a125296a17b534d72e9
+   as-read sha256: 126ce3a0793500bea182814f7a2f8adb041b7dce75d1c6b6f28e3f6db3de8f48
+
+  PASS  total rows = 44
+  PASS  as-read rows = 52
+  PASS  rows with NO destination (remove) = 40
+  PASS  rows WITH a destination (move) = 4
+  PASS  malformed rows = 0
+  PASS  .covers rows surviving = 0
+  PASS  .covers rows in the as-read list = 8
+  PASS  R1 rows bound for 99-quarantine = 2
+  PASS  R8 rows bound for _inbox/02-review = 2
+  PASS  R1 rows = 2
+  PASS  R2 rows = 2
+  PASS  R4 rows = 29
+  PASS  R6 rows = 9
+  PASS  R8 rows = 2
+  PASS  rows under incomplete/ = 0
+  PASS  rows under /mnt/tank/media = 0
+  PASS  rows outside the five scope roots = 0
+  PASS  surviving rows absent from the as-read list = 2
+  PASS    ... and both of those are the two R1 rows = 2
+
+== the 4 move-only rows ==
+   R1  /mnt/tank/downloads/complete/nzb/music/_FAILED_Garth.Brooks-Ropin.The.Wind-CDP.7.06330-2-CD-FLAC-1991-EMG  ->  99-quarantine
+   R1  /mnt/tank/downloads/complete/nzb/music/_FAILED_Garth.Brooks-The.Ultimate.Hits-2CD-FLAC-2007-WRS  ->  99-quarantine
+   R8  /mnt/tank/downloads/lidarr-import/Madonna  ->  _inbox/02-review
+   R8  /mnt/tank/downloads/lidarr-import/Michael Jackson  ->  _inbox/02-review
+ALL ASSERTIONS HELD

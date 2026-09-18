@@ -1,0 +1,105 @@
+
+==============================================================
+RUN 1 - positive control: the amendment procedure, end to end
+==============================================================
+  PASS  enumerate exit: 0
+  PASS  enumerate rows: 5
+  --- as enumerated ---
+    R1	/mnt/fast/safety/phase05/fixture-05-04-20260918T164922Z/run1/complete/nzb/music/_FAILED_KeepMe
+    R2	/mnt/fast/safety/phase05/fixture-05-04-20260918T164922Z/run1/complete/nzb/music/_UNPACK_Junk
+    R4	/mnt/fast/safety/phase05/fixture-05-04-20260918T164922Z/run1/complete/nzb/dj-mixes/EmptyShell
+    R4	/mnt/fast/safety/phase05/fixture-05-04-20260918T164922Z/run1/complete/nzb/dj-mixes/Release-With-Art/.covers
+    R8	/mnt/fast/safety/phase05/fixture-05-04-20260918T164922Z/run1/lidarr-import/ArtistX
+  PASS  amended rows: 4
+  PASS  covers rows surviving: 0
+  PASS  R1 rows with 99-quarantine dest: 1
+  --- as amended ---
+    R1	/mnt/fast/safety/phase05/fixture-05-04-20260918T164922Z/run1/complete/nzb/music/_FAILED_KeepMe	99-quarantine
+    R2	/mnt/fast/safety/phase05/fixture-05-04-20260918T164922Z/run1/complete/nzb/music/_UNPACK_Junk
+    R4	/mnt/fast/safety/phase05/fixture-05-04-20260918T164922Z/run1/complete/nzb/dj-mixes/EmptyShell
+    R8	/mnt/fast/safety/phase05/fixture-05-04-20260918T164922Z/run1/lidarr-import/ArtistX	_inbox/02-review
+  PASS  sweep exit: 0
+    🧨 Phase 5 - junk gate, sweep (APPROVED LIST ONLY)
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      host:      selfhost
+      date:      2026-09-18T16:49:22Z
+      list:      /mnt/fast/safety/phase05/fixture-05-04-20260918T164922Z/run1-out/junk-candidates.tsv
+      proof:     /mnt/fast/safety/phase05/fixture-05-04-20260918T164922Z/run1-out/snapshot-proof.txt  (names tank/downloads@pre-phase5)
+      mode:      [0;31msweep (MUTATES LIVE STATE)[0m
+    
+    🔒 1. Re-deriving every listed row against FRESH state
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      [0;32m✅ all 4 approved row(s) still match the state they were approved against[0m
+    
+    📦 2. Moving approved rows into quarantine
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      [0;34mbatch directory: /mnt/fast/safety/phase05/fixture-05-04-20260918T164922Z/run1/complete/nzb/_inbox/99-quarantine/20260918T164922Z[0m
+      [0;32m✅ moved /mnt/fast/safety/phase05/fixture-05-04-20260918T164922Z/run1/complete/nzb/music/_FAILED_KeepMe -> /mnt/fast/safety/phase05/fixture-05-04-20260918T164922Z/run1/complete/nzb/_inbox/99-quarantine/_FAILED_KeepMe[0m
+      [0;32m✅ moved /mnt/fast/safety/phase05/fixture-05-04-20260918T164922Z/run1/complete/nzb/music/_UNPACK_Junk -> /mnt/fast/safety/phase05/fixture-05-04-20260918T164922Z/run1/complete/nzb/_inbox/99-quarantine/20260918T164922Z/002___UNPACK_Junk[0m
+      [0;32m✅ moved /mnt/fast/safety/phase05/fixture-05-04-20260918T164922Z/run1/complete/nzb/dj-mixes/EmptyShell -> /mnt/fast/safety/phase05/fixture-05-04-20260918T164922Z/run1/complete/nzb/_inbox/99-quarantine/20260918T164922Z/003__EmptyShell[0m
+      [0;32m✅ moved /mnt/fast/safety/phase05/fixture-05-04-20260918T164922Z/run1/lidarr-import/ArtistX -> /mnt/fast/safety/phase05/fixture-05-04-20260918T164922Z/run1/complete/nzb/_inbox/02-review/ArtistX[0m
+    
+    🗑  3. Removing what arrived in the quarantine batch
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      [0;32m✅ removed R2 002___UNPACK_Junk[0m
+      [0;32m✅ removed R4 003__EmptyShell[0m
+    
+    🔍 4. Asserting absence - the only instrument that is not subject to the ZFS lag
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      [0;32m✅ 2 row(s) absent from their original location[0m
+      [0;34mreclaimed space is INFORMATIONAL only - ZFS frees asynchronously and can lag by ~20 s[0m
+    
+    📊 5. Summary
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      rows approved:        4
+      moved:                4
+      move failures:        0   (target 0)
+      removed:              2
+      removal failures:     0   (target 0)
+      quarantine batch:     /mnt/fast/safety/phase05/fixture-05-04-20260918T164922Z/run1/complete/nzb/_inbox/99-quarantine/20260918T164922Z
+    
+    [0;32m✅ sweep complete - every approved row acted on[0m
+  PASS  exists: /mnt/fast/safety/phase05/fixture-05-04-20260918T164922Z/run1/complete/nzb/_inbox/99-quarantine/_FAILED_KeepMe
+  PASS  exists: /mnt/fast/safety/phase05/fixture-05-04-20260918T164922Z/run1/complete/nzb/_inbox/99-quarantine/_FAILED_KeepMe/a.flac
+  PASS  absent: /mnt/fast/safety/phase05/fixture-05-04-20260918T164922Z/run1/complete/nzb/music/_FAILED_KeepMe
+  PASS  move-only row audio survived (bytes): 10
+  PASS  (devid,inode) pair unchanged across the move: 64519 1050278
+  PASS  exists: /mnt/fast/safety/phase05/fixture-05-04-20260918T164922Z/run1/complete/nzb/_inbox/02-review/ArtistX
+  PASS  absent: /mnt/fast/safety/phase05/fixture-05-04-20260918T164922Z/run1/lidarr-import/ArtistX
+  PASS  absent: /mnt/fast/safety/phase05/fixture-05-04-20260918T164922Z/run1/complete/nzb/music/_UNPACK_Junk
+  PASS  absent: /mnt/fast/safety/phase05/fixture-05-04-20260918T164922Z/run1/complete/nzb/dj-mixes/EmptyShell
+  PASS  exists: /mnt/fast/safety/phase05/fixture-05-04-20260918T164922Z/run1/complete/nzb/dj-mixes/Release-With-Art/.covers/c.jpg
+  PASS  excluded .covers file bytes: 3
+  PASS  batch directory was parsed from the run: 1
+  PASS  entries left inside the timestamped batch: 0
+  PASS  99-quarantine deliberately holds the move-only row: 1
+
+==============================================================
+RUN 2 - negative control: an R8 PROPOSAL row with NO destination must fail closed
+==============================================================
+  PASS  run2 row count: 1
+  PASS  run2 field count: 6
+  PASS  run2 sweep exit: 1
+  PASS  run2 refusal names the missing destination
+  PASS  exists: /mnt/fast/safety/phase05/fixture-05-04-20260918T164922Z/run2/lidarr-import/ArtistX/s.mp3
+  PASS  run2 removed count: 0
+  PASS  run2 moved count: 0
+  PASS  run2 move failure count: 1
+
+==============================================================
+RUN 3 - negative control: the whole-sweep TOCTOU abort still fires after the change
+==============================================================
+  PASS  run3 sweep exit: 1
+  PASS  run3 abort names the size change
+  PASS  run3 states nothing moved
+  PASS  exists: /mnt/fast/safety/phase05/fixture-05-04-20260918T164922Z/run3/complete/nzb/music/_FAILED_KeepMe/a.flac
+  PASS  exists: /mnt/fast/safety/phase05/fixture-05-04-20260918T164922Z/run3/complete/nzb/music/_UNPACK_Junk/x.rar
+  PASS  exists: /mnt/fast/safety/phase05/fixture-05-04-20260918T164922Z/run3/complete/nzb/dj-mixes/EmptyShell
+  PASS  run3 quarantine entries: 0
+
+==============================================================
+RESULT
+==============================================================
+  fixture base: /mnt/fast/safety/phase05/fixture-05-04-20260918T164922Z
+  failures:     0
+  ALL FIXTURE EXPECTATIONS HELD
