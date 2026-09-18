@@ -26,7 +26,10 @@
 #   $APPROVED_LIST  (default /mnt/fast/safety/phase05/junk-candidates.tsv)
 #                   One candidate per line, TAB-separated, SIX fields:
 #                     rule  abs_path  type  bytes  audio_count  reason
-#                   R8 rows carry a SEVENTH field, the proposed destination. This file IS the gate.
+#                   A SEVENTH field, WHEN PRESENT, names a destination, and it means MOVE THIS ROW
+#                   THERE AND NEVER REMOVE IT. `enumerate` emits it on R8 PROPOSAL rows only; an
+#                   operator may add it BY HAND to any row to turn "remove this" into "move this".
+#                   This file IS the gate.
 #   stdout          The human report. Nothing else is written anywhere.
 #
 # CONTRACT:
@@ -49,6 +52,16 @@
 #   ONE approved file gates BOTH stages. D-13 says the gate blocks the move and the delete alike,
 #   so `sweep` moves each approved row into $QUARANTINE and then removes what arrived there, under
 #   that single approval. It is not two approvals.
+#
+#   MOVE-ONLY IS A PROPERTY OF THE ROW, NOT OF THE RULE (changed 2026-09-18, plan 05-04, acting on
+#   an operator amendment). A row that carries a seventh field is moved to that destination and is
+#   never removed; a row without one goes into the timestamped quarantine batch and is removed from
+#   it. This used to be keyed on `rule == R8`, which meant the ONLY way to express "keep this one,
+#   move it rather than destroy it" was to relabel the row R8 - and that would have been the wrong
+#   fix twice over: it misreports WHY the row was proposed, and it WEAKENS the row's TOCTOU
+#   protection, because stage 1 re-derives an R8 row on audio count alone while a row keeping its
+#   real rule is re-derived on rule, audio count AND size. The rule label stays honest and the
+#   re-validation stays strict.
 #
 # BANNED PRIMITIVES (the Phase 5 equivalent of the analog's prune prohibition):
 #   No find with a removal action. No pipe into an argument-batching remover. No removal over a
@@ -850,12 +863,21 @@ do_sweep() {
     real="$(assert_in_scope "$rpath" "(sweep, move)")"
     idx=$((idx + 1))
 
+    # An R8 PROPOSAL row is content, not junk (D-20), and must never fall through to the removal
+    # path. Before the move-only test below was keyed on the destination field, a destination-less
+    # R8 row failed closed here; that behaviour is preserved explicitly rather than by side effect.
+    if [ "$rrule" = "R8" ] && [ -z "${rdest:-}" ]; then
+      fail "R8 $real carries no destination - a PROPOSAL row is content and is never removed; left in place"
+      move_errors=$((move_errors + 1)); continue
+    fi
+
+    # MOVE-ONLY rows are the ones that name a destination. See the header note.
     local target
-    if [ "$rrule" = "R8" ]; then
-      case "${rdest:-}" in
+    if [ -n "${rdest:-}" ]; then
+      case "$rdest" in
         "_inbox/02-review") target="$REVIEW/$(basename -- "$real")" ;;
         "99-quarantine")    target="$QUARANTINE/$(basename -- "$real")" ;;
-        *) fail "$rrule $real has an unrecognised destination '${rdest:-}' - left in place"
+        *) fail "$rrule $real has an unrecognised destination '${rdest}' - left in place"
            move_errors=$((move_errors + 1)); continue ;;
       esac
     else
@@ -866,7 +888,9 @@ do_sweep() {
       if [ -e "$target" ] && [ ! -e "$real" ]; then
         pass "moved $real -> $target"
         moved=$((moved + 1))
-        if [ "$rrule" != "R8" ]; then
+        # Only rows WITHOUT a destination are queued for removal. A row naming a destination has
+        # already reached where the operator sent it and this stage must not touch it again.
+        if [ -z "${rdest:-}" ]; then
           Q_PATHS+=( "$target" ); Q_RULES+=( "$rrule" ); Q_ORIGINS+=( "$real" )
         fi
       else
@@ -883,8 +907,9 @@ do_sweep() {
 
   echo "🗑  3. Removing what arrived in the quarantine batch"
   rule
-  # R8 PROPOSAL rows are deliberately NOT here: they were moved to their proposed destination and
-  # are content, not junk (D-20).
+  # Rows that named a destination are deliberately NOT here: they were moved where the operator
+  # sent them and are never removed. That covers R8 PROPOSAL rows (content, not junk - D-20) and
+  # any other row the operator converted to move-only by adding a seventh field.
   local removed=0 remove_errors=0 i qpath
   for i in "${!Q_PATHS[@]}"; do
     qpath="${Q_PATHS[$i]}"
