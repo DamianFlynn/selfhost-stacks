@@ -773,7 +773,7 @@ Plans:
 
 **Wave 8** *(blocked on Wave 7 completion)*
 
-- [ ] 05-09-PLAN.md — pilot the album write on `Vol 077`, gate on the field-level diff, then write the remaining 114 volumes
+- [x] 05-09-PLAN.md — pilot the album write, gate on the field-level diff, then write the rest *(executed 2026-09-19 against an operator amendment: the pilot was `Vol 036`, not `Vol 077` — `Vol 077` has zero proposed changes, so its gate would have passed vacuously. 751 files in 22 volumes were written, not 4,746 across 115; the other 3,995 were already canonical and were deliberately not rewritten)*
 
 **Wave 9** *(blocked on Wave 8 completion)*
 
@@ -964,7 +964,7 @@ Phase 7. Plans within a phase run sequentially.
 | 02.1. Jellyfin Transcode Retention *(inserted)* | 15/15 | Complete   | 2026-09-03 |
 | 3. Tagger Spike | 11/11 | Complete    | 2026-09-04 |
 | 4. Collapse to One Tagger | 16/16 | In Progress| All 16 plans executed (gap-closure 04-14/15/16 included); phase-level verification pending. Criterion 3 remains OPEN: across windows 1 and 2, five real music jobs all returned UNPROVEN `no-attributed-pre` — no PRE-HOOK snapshot is publishable while `direct_unpack` drains the tree — while every side-effect condition held for the third window running. 04-16 recorded `window 2: OPEN` under an interim-status heading in `beets.md`. Closing criterion 3 is now a decision, not a measurement |
-| 5. Inbox Structure and the Junk Gate | 8/11 | In Progress|  |
+| 5. Inbox Structure and the Junk Gate | 9/11 | In Progress|  |
 | 6. Tagger Configuration and Dry Run | 0/TBD | Not started | - |
 | 7. Pilot — 12 Albums End to End | 0/TBD | Not started | - |
 | 8. Close the Inflow | 0/TBD | Not started | - |

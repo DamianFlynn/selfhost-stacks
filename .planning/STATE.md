@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-18T21:49:45.017Z"
+last_updated: "2026-09-18T23:20:33.233Z"
 last_activity: 2026-09-18 -- Phase 05 execution started
 progress:
   total_phases: 10
   completed_phases: 4
   total_plans: 74
-  completed_plans: 69
+  completed_plans: 70
   percent: 40
 ---
 
@@ -29,7 +29,7 @@ pipeline that someone owns.
 ## Current Position
 
 Phase: 05 (inbox-structure-and-the-junk-gate) — EXECUTING
-Plan: 9 of 11 — **05-01 … 05-08 COMPLETE** (fence taken, `_inbox` created, D-21 inode
+Plan: 10 of 11 — **05-01 … 05-09 COMPLETE** (fence taken, `_inbox` created, D-21 inode
 proof driven; criteria 2/3/4 amended in band and criterion 4 now asserted by the standing check; the
 junk gate built and its refusals and positive control driven; **the sweep has RUN** — 40 rows
 removed, 4 moved, 8 excluded entirely, every affected path attributed to an approved row by
@@ -61,7 +61,8 @@ same missing exclamation mark, and the other 3,995 are recorded as `noop` rather
 NOTHING WAS WRITTEN, proven by an identical 4,751-file mtime/size fingerprint either side and by
 `zfs diff` showing **0 `M` lines on any mp3**; and both new self-test cases were proven able to FAIL
 from mutated copies, one of them catching `save(v1=UPDATE)` regenerating the ID3v1 block — the
-`audio_md5` hazard — in the act)
+`audio_md5` hazard — in the act; **⚠ that plan's `zfs diff` evidence is now known to be vacuous — see 05-09**)
+**05-09 HAS WRITTEN.** D-10's album repair is complete: **751 in-place tag writes across 22 volumes**, piloted on `Vol 036` (the operator amended the plan's `Vol 077`, which has zero proposed changes and would have passed its gate vacuously) and gated before the remaining 715. `album` is the ONLY field that changed on any file — asserted mechanically, 740 changed keys and one distinct field name — and `audio_md5` moved on NONE, which is the direct measurement that Phase 7's diff join survived. Each of the **115 volume folders now carries exactly one album string** (117 distinct values before, 115 after), read by a parser that is neither mutagen nor ffprobe. The 3,995 already-correct files were never written: a second `--apply` reports 4,746 no-ops and moves 0 mtimes. ID3v2 frame set and ID3v1 trailer are byte-identical to `@pre-phase5` on all 4,746, instrument driven to FAIL. **⚠ `zfs diff` is NOT a valid scope instrument on this collection** — 05-07 renamed every mp3, and `zfs diff` collapses renamed-and-modified into a single `R`, so it reports 0 `M` lines on any mp3 whether 751 files were written or none; replaced with a two-arm content control against the snapshot. Atlantis rebooted mid-verification under two concurrent whole-collection reads; 4,751 files were re-fingerprinted across it and **0 moved, 0 lost, 0 new** — no write was in flight.
 Status: Executing Phase 05. Do NOT run with `--auto`/`--chain` — four
 gates are `checkpoint:decision`, which auto-selects the first option under auto-mode.
 
@@ -906,6 +907,7 @@ already open so only 2049 is this phase's delta.
 | Phase 05 P06 | ~55 min | 2 tasks | 8 files |
 | Phase 05 P07 | ~30 min | 3 tasks | 10 files |
 | Phase 05 P08 | 25m | 3 tasks | 2 files |
+| Phase 05 P09 | ~2h25m | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -1232,6 +1234,9 @@ Recent decisions affecting current work:
 - [Phase 05]: 05-08: the Phase 5 tag fence is a SECOND, NARROWER named (root, snapshot) pair scoped to the Now! collection folder — SCRATCH_ROOT is byte-identical and no constant equals /mnt/tank/downloads, so SABnzbd's live working tree never enters a tag writer's reach
 - [Phase 05]: 05-08: rule 4 derives the canonical album from the Vol NNN FOLDER, never from the album tag (D-03) — volume 36's three spellings, including the double-space one, collapse to one value across all 40 files
 - [Phase 05]: 05-08: rule 4 proposes on every file and marks the 3,995 already-correct ones noop, so the review artefact shows total coverage while 05-09's apply writes only the 751 that differ
+- [Phase 05]: 05-09: Pilot moved from the plan's Vol 077 to Vol 036 on the operator's amendment — Vol 077 has zero proposed changes, so its gate would have passed vacuously; Vol 036 is the only volume whose files do not all share one album value
+- [Phase 05]: 05-09: The plan's zfs diff scope criterion is NON-DISCRIMINATING here and was replaced, not quoted — 05-07 renamed every mp3, and zfs diff collapses renamed-and-modified into a single R, so it reports 0 M lines on any mp3 whether 751 files were written or none
+- [Phase 05]: 05-09: D-10's album write is COMPLETE — 751 files in 22 volumes, album the only field changed, audio_md5 unmoved on all of them, and each of the 115 volume folders now carries exactly one album string
 
 ### Pending Todos
 
@@ -1380,8 +1385,8 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-09-18T21:49:45.002Z
-Stopped at: Completed 05-08-PLAN.md
+Last session: 2026-09-18T23:20:25.277Z
+Stopped at: Completed 05-09-PLAN.md
 Resume file: None
 
 **NEXT: 02.1-10, the last plan of the phase (wave 9).** It is unblocked — it depends on 02.1-06 and
