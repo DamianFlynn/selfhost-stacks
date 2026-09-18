@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-18T13:44:41.496Z"
-last_activity: 2026-09-18 -- Phase 5 planned (/gsd-plan-phase 5). 11 plans in 10 waves; only wave 1 is parallel, the rest serial because D-27's ordering forbids otherwise. Research skipped per ROADMAP ("not needed"), so no RESEARCH.md/VALIDATION.md and Nyquist Dimension 8 is thin by decision. Plan-checker passed on iteration 2 after three fixes: the four work-gating checkpoints were retyped human-verify -> checkpoint:decision (config is human_verify_mode=end-of-phase, under which human-verify does NOT halt mid-flight, so D-13's approval gate would never have prompted); a pre-chown checkpoint:decision was inserted before the 209,039-entry chown, which previously ran before any human saw it; and gate="blocking-human" (non-canonical) corrected to gate="blocking". A fourth checker warning claiming a wrong host IP in 05-03/05-05 was verified FALSE and rejected. Decision coverage audited by hand -- 27/27 -- because check.decision-coverage-plan reports "no trackable decisions" against this CONTEXT.md format and passes by SKIPPING. ESTATE UNTOUCHED -- planning only. Next: /gsd-execute-phase 5 (never with --auto/--chain)
+last_updated: "2026-09-18T14:50:55.802Z"
+last_activity: 2026-09-18 -- Phase 05 plan 05-01 executed: tank/downloads@pre-phase5 fence taken, the six _inbox directories created empty and 568:568 on devid 68, D-21 inode proof driven with both controls. 3 tasks, 5 commits. ESTATE CHANGED (first mutation of Phase 5).
 progress:
   total_phases: 10
-  completed_phases: 5
+  completed_phases: 4
   total_plans: 74
-  completed_plans: 61
-  percent: 50
+  completed_plans: 62
+  percent: 40
 ---
 
 # Project State
@@ -28,10 +28,18 @@ pipeline that someone owns.
 
 ## Current Position
 
-Phase: 05 (inbox-structure-and-the-junk-gate) — PLANNED (11 plans, 10 waves)
-Plan: ready to execute. Run `/gsd-execute-phase 5`. Do NOT run with `--auto`/`--chain` — four
+Phase: 05 (inbox-structure-and-the-junk-gate) — EXECUTING
+Plan: 2 of 11 — **05-01 COMPLETE** (fence taken, `_inbox` created, D-21 inode proof driven)
+Status: Executing Phase 05. Do NOT run with `--auto`/`--chain` — four
 gates are `checkpoint:decision`, which auto-selects the first option under auto-mode.
-Status: **Phase 4 CLOSED 2026-09-18 at 5/5 — criterion 3 discharged by a signed override, not
+
+*(⚠ The three lines above were reassembled on 2026-09-18 by plan 05-01. A `state.*` write had
+replaced only the FIRST line of two multi-line fields, leaving their continuations dangling as
+orphaned sentence fragments — `gates are ...` under a `Plan:` line and `by a byte proof.** ...`
+under a `Status:` line. Nothing was deleted; both fragments were rejoined to the text they belong
+to. This is the same defect class as the Progress-line rewrite below.)*
+
+**Phase 4 CLOSED 2026-09-18 at 5/5 — criterion 3 discharged by a signed override, not
 by a byte proof.** Criteria 1, 2, 4 and 5 were verified by live measurement. Criterion 3's
 static half is measured (`grep -cE '^[[:space:]]*beet ' audio.bash` → 0, vendored-drift guard
 green); its behavioural half was never proven at the byte level. Three capture designs were
@@ -580,7 +588,7 @@ it asked for: the operator browsed MA's Filesystem (local disk) provider, spot-c
 **played tracks to confirm the audio matches the metadata**. No assertion in this phase could do
 that — every automated check verifies MA's *database* says the right thing, never that the *bytes*
 are the right song, and the documented stale state is precisely "entries exist, playback fails".
-Last activity: 2026-09-03 — 02.1-06 complete (**THE BOUNDS FIRE AND THE VOLUME IS GONE** — segment
+Last activity: 2026-09-18 -- Phase 05 execution started
 deletion and throttling proven from Jellyfin's own Debug log across two driven playback sessions, the
 ZFS quota proven to refuse a write while `/` moved by 0 bytes, the anonymous volume deleted by name
 after the observation it would have made vacuous, **12.95 GiB reclaimed**, and the standing check
@@ -644,7 +652,7 @@ back onto anything under `/mnt/tank/media`.
 Phase 1 complete: SAFE-01…05, WRIT-01…04, QUAL-01
 Phase 2 complete: CONS-01, CONS-02, CONS-03
 
-Progress: [██░░░░░░░░] 22%  *(MILESTONE progress: **2 of 9 phases** complete. All 19 plans written so far are executed 19/19 — but phases 3-9 are not planned yet, so plan-count is not milestone progress. ⚠ `gsd-sdk query state.update-progress` recomputed this as **51%** on 2026-09-02 by counting SUMMARY files against a 39-plan denominator that only covers planned phases; that figure is WRONG and was reverted. Do not let the SDK rewrite this line — phase 02.1 is an INSERTION and is not one of the 9 milestone phases. ⚠ **It happened a second time on 2026-09-13** during plan 04-14, recomputed as **97%** against a 60-plan denominator, and was reverted again. The verb rewrites this line every time it runs; `git diff .planning/STATE.md` after any state write is not optional.)*
+Progress: [██░░░░░░░░] 22%  *(MILESTONE progress: **2 of 9 phases** complete. All 19 plans written so far are executed 19/19 — but phases 3-9 are not planned yet, so plan-count is not milestone progress. ⚠ `gsd-sdk query state.update-progress` recomputed this as **51%** on 2026-09-02 by counting SUMMARY files against a 39-plan denominator that only covers planned phases; that figure is WRONG and was reverted. Do not let the SDK rewrite this line — phase 02.1 is an INSERTION and is not one of the 9 milestone phases. ⚠ **It happened a second time on 2026-09-13** during plan 04-14, recomputed as **97%** against a 60-plan denominator, and was reverted again. The verb rewrites this line every time it runs; `git diff .planning/STATE.md` after any state write is not optional. ⚠ **Third occurrence 2026-09-18** during plan 05-01, recomputed as **84%** against a 74-plan denominator, reverted again. Three occurrences, three different denominators, zero of them milestone progress — the verb cannot compute this figure and should not be run against this line.)*
 
 Plans 02-01 through 02-09 are executed. **CONS-01, CONS-02 and CONS-03 are all complete.**
 
@@ -855,6 +863,7 @@ already open so only 2049 is this phase's delta.
 | Phase 02.1 P05 | ~25 minutes | 2 tasks | 6 files |
 | Phase 02.1 P06 | ~85 minutes | 3 tasks | 3 files |
 | Phase 02.1 P07 | ~25 minutes | 2 tasks | 2 files |
+| Phase 05 P01 | 12 min | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -1159,6 +1168,9 @@ Recent decisions affecting current work:
 - [Phase 02.1]: [02.1-09]: `docker run --rm <image>` IS A PULL when the image is absent, and it is indistinguishable from a local run once it succeeds. The executor broke this plan's own no-pull constraint reaching for `curlimages/curl:latest` to probe an HTTP endpoint — an image 03-01 had already reaped. On a freshly reaped host the generic utility images are precisely the ones most likely to be gone. Probe with an image confirmed present in the before-listing, or `docker exec` into a running container. Reverted, and the store re-diffed identical to the recorded after-listing
 - [Phase 02.1]: [02.1-09]: WHEN AN IMAGE COUNT AND A TAG COUNT MOVE BY THE SAME AMOUNT, that equality is itself the finding — it proves no removed image carried a second tag, so no multi-tagged removal is hiding in the accounting. Five separate measures were recorded on both sides and all five moved by exactly 4. Dangling staying 9 -> 9 is the matching scope assertion: the three unreferenced untagged digests were surfaced and deliberately NOT deleted
 - [Phase 02.1]: [02.1-09]: A PRUNE EXIT CODE THAT ASSERTS A FLOOR THE HOST ALREADY CLEARED IS NEAR-VACUOUS EVIDENCE. `FLOOR_GB=20 ... prune` exiting 0 would have passed identically had it deleted nothing, because `/` was 13.11 GiB clear of the floor beforehand. Recorded as such rather than banked as a pass. Also: `already reclaimed: 0` alongside `removed: 4` is the positive evidence a destructive run happened exactly ONCE — a second invocation inverts the pair
+- [Phase 05]: [05-01]: D-21's negative control targets LXC 100's ext4 root, not the library — Phase 1 D-20 stays untouched
+- [Phase 05]: [05-01]: the library mount path is kept out of Task 2's prose as well as its commands, so the criterion stays mechanically checkable
+- [Phase 05]: [05-01]: host-side task evidence is committed as repo artifacts, because all three of Task 1's deliverables are otherwise off-repo
 
 ### Pending Todos
 
@@ -1307,10 +1319,9 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-09-18T10:47:24.469Z
-Stopped at: Phase 5 context gathered — 05-CONTEXT.md written and committed (32a39fb). Phase 5 is
-discussed but UNPLANNED; no plan files exist. Nothing in the estate was changed by this session.
-Resume file: .planning/phases/05-inbox-structure-and-the-junk-gate/05-CONTEXT.md
+Last session: 2026-09-18T14:50:36.181Z
+Stopped at: Completed 05-01-PLAN.md — the D-01 fence and the inbox tree. Next is 05-02.
+Resume file: .planning/phases/05-inbox-structure-and-the-junk-gate/05-02-PLAN.md
 
 **NEXT: 02.1-10, the last plan of the phase (wave 9).** It is unblocked — it depends on 02.1-06 and
 02.1-09 and both are now complete. Two things it should carry in:

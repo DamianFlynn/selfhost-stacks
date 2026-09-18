@@ -185,3 +185,39 @@ D-24's tree-wide sweep is plan 05-10 and runs last (D-27), so it will also re-no
 
 All four repo files exist on disk; all four commits (`1a14d38`, `c98bbd2`, `84d7241`, `3bc529c`)
 resolve in `git log`. All three host-side proof files exist on LXC 100.
+
+## State updates — two judgement calls and one repair
+
+**INBX-01 was deliberately NOT marked complete.** The plan's frontmatter claims it, but so do
+`05-02`, `05-10` and `05-11`. Ticking it here would put a green checkbox against a requirement
+three later plans still have work against — the precise false-green shape this project's CONS-04
+exists to prevent. The structural half ("a staging inbox exists under `tank/downloads` with
+per-policy folders, never under `media/`") is satisfied and evidenced above; the tick belongs to
+`05-11`, the closure plan. `REQUIREMENTS.md` is unmodified.
+
+**The `state.*` verbs corrupted STATE.md again, and it was repaired rather than committed.**
+Recorded because this is now the third occurrence and the project's own note says a diff after any
+state write is not optional:
+
+1. `state.update-progress` overwrote the milestone `Progress:` line — the line that carries an
+   explicit *"Do not let the SDK rewrite this line"* warning and a log of the two previous
+   occurrences. Recomputed as **84%** against a 74-plan denominator. Reverted, and occurrence #3
+   appended to the warning. Three occurrences, three different denominators, none of them
+   milestone progress.
+2. A `Last activity:` line **in the body** of the Phase 02.1 narrative, ~550 lines from the
+   frontmatter, was rewritten to a bare date. Restored. This is the unrelated-line corruption the
+   project note warns about — the verb matches on a line prefix, not on a section.
+3. The `Current Position` block had already been damaged before this plan started: a prior write
+   replaced only the FIRST line of two multi-line fields, leaving `gates are ...` dangling under a
+   `Plan:` line and `by a byte proof.** ...` dangling under a `Status:` line. Both fragments were
+   rejoined to the text they belong to; nothing was deleted.
+4. `state.add-decision` tagged all three entries `[Phase ?]`. Corrected to `[Phase 05]: [05-01]:`.
+   29 pre-existing `[Phase ?]` entries were left alone — not this plan's to fix.
+
+**Two SDK signature corrections for the next executor:** `state.record-metric` and
+`state.add-decision` take **named flags** (`--phase/--plan/--duration`, `--summary`), not the
+positional arguments the executor spec documents. Both fail with a bare `{"error": ...}` on
+positionals, which is easy to miss in a tail.
+
+`roadmap.update-plan-progress 5` ran clean — 05-01 ticked, the phase row moved
+`0/TBD Not started` → `1/11 In Progress`, no collateral edits.
