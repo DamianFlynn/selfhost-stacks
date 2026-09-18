@@ -21,7 +21,7 @@ services:
     # Generous at 3g because upload + thumbnail generation burst well above idle.
     mem_limit: 3g
     # renovate: datasource=docker depName=ghcr.io/immich-app/immich-server
-    image: ghcr.io/immich-app/immich-server:v2.7.5
+    image: ghcr.io/immich-app/immich-server:v3.2.2
     pull_policy: always
     env_file:
       - /mnt/fast/stacks/stacks/selfhosted/immich/.env
@@ -70,16 +70,28 @@ services:
   immich-machine-learning:
     container_name: immich_machine_learning
     # renovate: datasource=docker depName=ghcr.io/immich-app/immich-machine-learning
-    image: ghcr.io/immich-app/immich-machine-learning:v2.7.5
+    image: ghcr.io/immich-app/immich-machine-learning:v3.2.2
     pull_policy: always
     env_file:
       - /mnt/fast/stacks/stacks/selfhosted/immich/.env
     environment:
-      # CPU-only (works great on your N5)
+      # ⚠️ CPU-ONLY IS GUARANTEED BY THE IMAGE TAG, NOT BY THESE VARIABLES.
+      # Measured 2026-09-18: NO Immich ML code reads EXECUTION_PROVIDERS or
+      # IMMICH_ML_FORCE_CPU at any version -- providers come solely from
+      # ort.get_available_providers(), and this container offers only
+      # ['AzureExecutionProvider', 'CPUExecutionProvider'] because the tag has
+      # no -rocm/-cuda suffix. These four lines are INERT.
+      #
+      # THE HAZARD: switching this tag to :v3.2.2-rocm believing these vars
+      # will hold it to CPU would start ROCm inference on the amdgpu that took
+      # the estate down for ~6h on 2026-08-31. If GPU ML is ever wanted, that
+      # is a deliberate decision about amdgpu stability -- not a tag edit.
+      # Kept (not deleted) only because they are harmless and their absence
+      # would read as "nobody considered this".
       EXECUTION_PROVIDERS: CPUExecutionProvider
-      IMMICH_ML_FORCE_CPU: true        # hard force CPU provider
-      ROCR_VISIBLE_DEVICES:            # hide AMD GPUs from ROCm
-      HIP_VISIBLE_DEVICES:             # (belt-and-suspenders)
+      IMMICH_ML_FORCE_CPU: true        # inert -- see above
+      ROCR_VISIBLE_DEVICES:            # inert -- see above
+      HIP_VISIBLE_DEVICES:             # inert -- see above
     volumes:
       - model-cache:/cache
     restart: always
@@ -123,7 +135,7 @@ services:
   # Immich Kiosk - Display mode for photo slideshows
   immich-kiosk:
     # renovate: datasource=docker depName=ghcr.io/damongolding/immich-kiosk
-    image: ghcr.io/damongolding/immich-kiosk:0.43.1
+    image: ghcr.io/damongolding/immich-kiosk:0.43.2
     container_name: immich_kiosk
     restart: unless-stopped
     env_file:
