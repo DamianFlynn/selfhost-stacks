@@ -1,0 +1,76 @@
+D-04 answer - volumes 4, 8 and 9
+generated: 2026-09-18T17:26:50Z
+
+== part A: the album-tag grouping, which is where the surplus came from ==
+   files carrying each album string, beside the files the MANIFEST maps to each
+   directory that carries that string. No number is parsed off any album value.
+  1984. Now That's What I Call Music! 4 [2019 Reissue]                                                 manifest-files=32   albums: Now That's What I Call Music 4 x32; 
+  1984. Now That's What I Call Music! 4 [Genuine UK 1CD-Extremely Rare Estimated 500 copies Pressed]   manifest-files=11   albums: Now That's What I Call Music 4 x11; 
+  1984. Now That's What I Call Music! 4 [Original 1CD Extremely Rare Estimated 500 copies Pressed]     manifest-files=13   albums: Now That's What I Call Music 4 x13; 
+  1986. Now That's What I Call Music! 8 [2021 Reissue]                                                 manifest-files=32   albums: Now That's What I Call Music 8 x32; 
+  1986. Now That's What I Call Music! 8 [Original 1CD Rare]                                            manifest-files=17   albums: Now That's What I Call Music 8 x17; 
+  1987. Now That's What I Call Music! 9 [2021 Reissue]                                                 manifest-files=30   albums: Now That's What I Call Music 9 x30; 
+  1987. Now That's What I Call Music! 9 [Original 1CD Rare]                                            manifest-files=16   albums: Now That's What I Call Music 9 x16; 
+
+  files whose album tag is exactly "Now That's What I Call Music! 4": 0
+  files whose album tag is exactly "Now That's What I Call Music! 8": 0
+  files whose album tag is exactly "Now That's What I Call Music! 9": 0
+
+== part B: the decision procedure, per volume directory ==
+
+  --- 1984. Now That's What I Call Music! 4 [2019 Reissue]
+  1. files the manifest maps here: 32   (of which leaf-collided with another volume: 0)
+  2. distinct (disc,track) pairs: ALL DISTINCT - no file from another volume has leaked in
+  3. per-disc: max track number against the stated tracktotal
+       disc 1: files=16 maxtrack=16 statedtracktotal(s)= 16(x16) 
+       disc 2: files=16 maxtrack=16 statedtracktotal(s)= 16(x16) 
+
+  --- 1984. Now That's What I Call Music! 4 [Genuine UK 1CD-Extremely Rare Estimated 500 copies Pressed]
+  1. files the manifest maps here: 11   (of which leaf-collided with another volume: 11)
+  2. distinct (disc,track) pairs: ALL DISTINCT - no file from another volume has leaked in
+  3. per-disc: max track number against the stated tracktotal
+       disc 1: files=11 maxtrack=15 statedtracktotal(s)= 15(x11) 
+
+  --- 1984. Now That's What I Call Music! 4 [Original 1CD Extremely Rare Estimated 500 copies Pressed]
+  1. files the manifest maps here: 13   (of which leaf-collided with another volume: 12)
+  2. distinct (disc,track) pairs: ALL DISTINCT - no file from another volume has leaked in
+  3. per-disc: max track number against the stated tracktotal
+       disc 1: files=13 maxtrack=15 statedtracktotal(s)= 15(x13) 
+
+  --- 1986. Now That's What I Call Music! 8 [2021 Reissue]
+  1. files the manifest maps here: 32   (of which leaf-collided with another volume: 7)
+  2. REPEATED (disc,track) pairs - files from elsewhere are present:
+       pair disc=1 track=10
+         10. Grace Jones - I'm Not Perfect (But I'm Perfect For You).mp3   album="Now That's What I Call Music 8"  SOLE
+         10. It Bites - Calling All The Heroes.mp3   album="Now That's What I Call Music 8"  SHARED
+       pair disc=1 track=11
+         11. Doctor & The Medics With Roy Wood - Waterloo.mp3   album="Now That's What I Call Music 8"  SHARED
+         11. Mel & Kim - Showing Out (Get Fresh At The Weekend).mp3   album="Now That's What I Call Music 8"  SOLE
+       pair disc=1 track=12
+         12. Debbie Harry - French Kissin' In The USA.mp3   album="Now That's What I Call Music 8"  SHARED
+         12. Jermaine Stewart - We Don't Have To....mp3   album="Now That's What I Call Music 8"  SOLE
+       pair disc=1 track=9
+         09. Cameo - Word Up!.mp3   album="Now That's What I Call Music 8"  SOLE
+         09. Kim Wilde - You Keep Me Hangin' On.mp3   album="Now That's What I Call Music 8"  SHARED
+  3. per-disc: max track number against the stated tracktotal
+       disc 1: files=20 maxtrack=16 statedtracktotal(s)= 16(x13) 17(x7) 
+       disc 2: files=12 maxtrack=16 statedtracktotal(s)= 16(x12) 
+
+  --- 1986. Now That's What I Call Music! 8 [Original 1CD Rare]
+  1. files the manifest maps here: 17   (of which leaf-collided with another volume: 7)
+  2. distinct (disc,track) pairs: ALL DISTINCT - no file from another volume has leaked in
+  3. per-disc: max track number against the stated tracktotal
+       disc 1: files=17 maxtrack=17 statedtracktotal(s)= 17(x17) 
+
+  --- 1987. Now That's What I Call Music! 9 [2021 Reissue]
+  1. files the manifest maps here: 30   (of which leaf-collided with another volume: 2)
+  2. distinct (disc,track) pairs: ALL DISTINCT - no file from another volume has leaked in
+  3. per-disc: max track number against the stated tracktotal
+       disc 1: files=15 maxtrack=15 statedtracktotal(s)= 16(x2) 15(x13) 
+       disc 2: files=15 maxtrack=15 statedtracktotal(s)= 15(x15) 
+
+  --- 1987. Now That's What I Call Music! 9 [Original 1CD Rare]
+  1. files the manifest maps here: 16   (of which leaf-collided with another volume: 2)
+  2. distinct (disc,track) pairs: ALL DISTINCT - no file from another volume has leaked in
+  3. per-disc: max track number against the stated tracktotal
+       disc 1: files=16 maxtrack=16 statedtracktotal(s)= 16(x16) 

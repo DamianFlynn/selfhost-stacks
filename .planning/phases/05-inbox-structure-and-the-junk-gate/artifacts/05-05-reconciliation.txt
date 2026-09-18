@@ -1,0 +1,169 @@
+phase05-now-tag-inventory reconcile
+generated: 2026-09-18T17:29:03Z
+now root:  /mnt/tank/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023
+
+== inputs ==
+  now-tags.ndjson records                        4746
+  now-manifest.ndjson records                    4770
+
+== join (disk basename -> manifest leaf) ==
+  stage 1, exact                                 4744
+  stage 2, alphanumerics-only key                2
+  UNRESOLVED (never guessed)                     0
+  disk files with no manifest entry              0
+
+== the 24-entry gap, reported on its OWN line and never folded into any total ==
+  manifest-only entries (no file on disk)        0
+  manifest lines beyond the first per leaf       24
+  distinct leaves carried by >1 line             23
+  disk files claimed by >1 volume directory      23
+  join rows from those shared files              47
+  named in                                       /mnt/fast/safety/phase05/now-collided-files.tsv
+
+== nulls, counted rather than summed as zero ==
+  records with a null album                      0
+  records with a null disc number                0
+  records with a null track number               0
+  records with a null track total                0
+
+== distinct lists ==
+  distinct manifest volume directories           119
+  distinct album strings                         117
+
+== per-volume identity: files_present == sum of tracktotal ==
+  volume directories grouped                     119
+  balanced                                       112
+  EXCEPTIONS                                     7
+
+  volume_dir | files | sum(tracktotal) | delta | discs | null-tt | tt-conflict-discs | ties
+  EXC  1984. Now That's What I Call Music! 4 [Genuine UK 1CD-Extremely Rare Estimated 500 copies Pressed] | 11 | 15 | -4 | 1 | 0 | 0 | 0
+  EXC  1984. Now That's What I Call Music! 4 [Original 1CD Extremely Rare Estimated 500 copies Pressed] | 13 | 15 | -2 | 1 | 0 | 0 | 0
+  EXC  1990. Now That's What I Call Music! 18 | 31 | 32 | -1 | 2 | 0 | 0 | 0
+  EXC  2002. Now That's What I Call Music! 52 | 41 | 42 | -1 | 2 | 0 | 0 | 0
+  EXC  2008. Now That's What I Call Music! 70 | 42 | 43 | -1 | 2 | 0 | 0 | 0
+  EXC  2012. Now That's What I Call Music! 83 | 42 | 43 | -1 | 2 | 0 | 0 | 0
+  EXC  2017. Now That's What I Call Music! 98 | 45 | 46 | -1 | 2 | 0 | 0 | 0
+
+  (volume,disc) groups with >1 distinct tracktotal 5
+  detail                                         /mnt/fast/safety/phase05/now-tracktotal-conflicts.tsv
+
+  --- all volume directories, balanced included ---
+  ok   1983. Now That's What I Call Music! [2018 Reissue, Remastered] | 30 | 30 | +0 | 2 | 0 | 0 | 0
+  ok   1984. Now That's What I Call Music! 2 [2019 Reissue Remastered] | 30 | 30 | +0 | 2 | 0 | 0 | 0
+  ok   1984. Now That's What I Call Music! 3 [2019 Reissue] | 28 | 28 | +0 | 2 | 0 | 1 | 0
+  ok   1984. Now That's What I Call Music! 4 [2019 Reissue] | 32 | 32 | +0 | 2 | 0 | 0 | 0
+  EXC  1984. Now That's What I Call Music! 4 [Genuine UK 1CD-Extremely Rare Estimated 500 copies Pressed] | 11 | 15 | -4 | 1 | 0 | 0 | 0
+  EXC  1984. Now That's What I Call Music! 4 [Original 1CD Extremely Rare Estimated 500 copies Pressed] | 13 | 15 | -2 | 1 | 0 | 0 | 0
+  ok   1985. Now That's What I Call Music! 5 [2020 Reissue] | 29 | 29 | +0 | 2 | 0 | 0 | 0
+  ok   1985. Now That's What I Call Music! 6 [2020 Reissue] | 29 | 29 | +0 | 2 | 0 | 0 | 0
+  ok   1986. Now That's What I Call Music! 7 [2020 Reissue] | 30 | 30 | +0 | 2 | 0 | 0 | 0
+  ok   1986. Now That's What I Call Music! 8 [2021 Reissue] | 32 | 32 | +0 | 2 | 0 | 1 | 0
+  ok   1986. Now That's What I Call Music! 8 [Original 1CD Rare] | 17 | 17 | +0 | 1 | 0 | 0 | 0
+  ok   1987. Now That's What I Call Music! 10 [First 2CD Release] | 30 | 30 | +0 | 2 | 0 | 0 | 0
+  ok   1987. Now That's What I Call Music! 9 [2021 Reissue] | 30 | 30 | +0 | 2 | 0 | 1 | 0
+  ok   1987. Now That's What I Call Music! 9 [Original 1CD Rare] | 16 | 16 | +0 | 1 | 0 | 0 | 0
+  ok   1988. Now That's What I Call Music! 11 | 30 | 30 | +0 | 2 | 0 | 0 | 0
+  ok   1988. Now That's What I Call Music! 12 | 32 | 32 | +0 | 2 | 0 | 0 | 0
+  ok   1988. Now That's What I Call Music! 13 | 32 | 32 | +0 | 2 | 0 | 0 | 0
+  ok   1989. Now That's What I Call Music! 14 | 32 | 32 | +0 | 2 | 0 | 0 | 0
+  ok   1989. Now That's What I Call Music! 15 | 32 | 32 | +0 | 2 | 0 | 1 | 0
+  ok   1989. Now That's What I Call Music! 16 | 35 | 35 | +0 | 2 | 0 | 0 | 0
+  ok   1990. Now That's What I Call Music! 17 | 32 | 32 | +0 | 2 | 0 | 0 | 0
+  EXC  1990. Now That's What I Call Music! 18 | 31 | 32 | -1 | 2 | 0 | 0 | 0
+  ok   1991. Now That's What I Call Music! 19 | 34 | 34 | +0 | 2 | 0 | 0 | 0
+  ok   1991. Now That's What I Call Music! 20 | 35 | 35 | +0 | 2 | 0 | 0 | 0
+  ok   1992. Now That's What I Call Music! 21 | 36 | 36 | +0 | 2 | 0 | 0 | 0
+  ok   1992. Now That's What I Call Music! 22 | 34 | 34 | +0 | 2 | 0 | 0 | 0
+  ok   1992. Now That's What I Call Music! 23 | 39 | 39 | +0 | 2 | 0 | 0 | 0
+  ok   1993. Now That's What I Call Music! 24 | 37 | 37 | +0 | 2 | 0 | 0 | 0
+  ok   1993. Now That's What I Call Music! 25 | 35 | 35 | +0 | 2 | 0 | 0 | 0
+  ok   1993. Now That's What I Call Music! 26 | 40 | 40 | +0 | 2 | 0 | 0 | 0
+  ok   1994. Now That's What I Call Music! 27 | 38 | 38 | +0 | 2 | 0 | 0 | 0
+  ok   1994. Now That's What I Call Music! 28 | 40 | 40 | +0 | 2 | 0 | 0 | 0
+  ok   1994. Now That's What I Call Music! 29 | 38 | 38 | +0 | 2 | 0 | 0 | 0
+  ok   1995. Now That's What I Call Music! 30 | 40 | 40 | +0 | 2 | 0 | 0 | 0
+  ok   1995. Now That's What I Call Music! 31 | 40 | 40 | +0 | 2 | 0 | 0 | 0
+  ok   1995. Now That's What I Call Music! 32 | 40 | 40 | +0 | 2 | 0 | 0 | 0
+  ok   1996. Now That's What I Call Music! 33 | 40 | 40 | +0 | 2 | 0 | 0 | 0
+  ok   1996. Now That's What I Call Music! 34 | 42 | 42 | +0 | 2 | 0 | 0 | 0
+  ok   1996. Now That's What I Call Music! 35 | 40 | 40 | +0 | 2 | 0 | 0 | 0
+  ok   1997. Now That's What I Call Music! 36 | 40 | 40 | +0 | 2 | 0 | 0 | 0
+  ok   1997. Now That's What I Call Music! 37 | 41 | 41 | +0 | 2 | 0 | 0 | 0
+  ok   1997. Now That's What I Call Music! 38 | 41 | 41 | +0 | 2 | 0 | 0 | 0
+  ok   1998. Now That's What I Call Music! 39 | 41 | 41 | +0 | 2 | 0 | 1 | 0
+  ok   1998. Now That's What I Call Music! 40 | 40 | 40 | +0 | 2 | 0 | 0 | 0
+  ok   1998. Now That's What I Call Music! 41 | 42 | 42 | +0 | 2 | 0 | 0 | 0
+  ok   1999. Now That's What I Call Music! 42 | 40 | 40 | +0 | 2 | 0 | 0 | 0
+  ok   1999. Now That's What I Call Music! 43 | 41 | 41 | +0 | 2 | 0 | 0 | 0
+  ok   1999. Now That's What I Call Music! 44 | 42 | 42 | +0 | 2 | 0 | 0 | 0
+  ok   2000. Now That's What I Call Music! 45 | 45 | 45 | +0 | 2 | 0 | 0 | 0
+  ok   2000. Now That's What I Call Music! 46 | 43 | 43 | +0 | 2 | 0 | 0 | 0
+  ok   2000. Now That's What I Call Music! 47 | 42 | 42 | +0 | 2 | 0 | 0 | 0
+  ok   2001. Now That's What I Call Music! 48 | 41 | 41 | +0 | 2 | 0 | 0 | 0
+  ok   2001. Now That's What I Call Music! 49 | 41 | 41 | +0 | 2 | 0 | 0 | 0
+  ok   2001. Now That's What I Call Music! 50 | 44 | 44 | +0 | 2 | 0 | 0 | 0
+  ok   2002. Now That's What I Call Music! 51 | 43 | 43 | +0 | 2 | 0 | 0 | 0
+  EXC  2002. Now That's What I Call Music! 52 | 41 | 42 | -1 | 2 | 0 | 0 | 0
+  ok   2002. Now That's What I Call Music! 53 | 43 | 43 | +0 | 2 | 0 | 0 | 0
+  ok   2003. Now That's What I Call Music! 54 | 42 | 42 | +0 | 2 | 0 | 0 | 0
+  ok   2003. Now That's What I Call Music! 55 | 42 | 42 | +0 | 2 | 0 | 0 | 0
+  ok   2003. Now That's What I Call Music! 56 | 43 | 43 | +0 | 2 | 0 | 0 | 0
+  ok   2004. Now That's What I Call Music! 57 | 44 | 44 | +0 | 2 | 0 | 0 | 0
+  ok   2004. Now That's What I Call Music! 58 | 42 | 42 | +0 | 2 | 0 | 0 | 0
+  ok   2004. Now That's What I Call Music! 59 | 43 | 43 | +0 | 2 | 0 | 0 | 0
+  ok   2005. Now That's What I Call Music! 60 | 43 | 43 | +0 | 2 | 0 | 0 | 0
+  ok   2005. Now That's What I Call Music! 61 | 43 | 43 | +0 | 2 | 0 | 0 | 0
+  ok   2005. Now That's What I Call Music! 62 | 43 | 43 | +0 | 2 | 0 | 0 | 0
+  ok   2006. Now That's What I Call Music! 63 | 42 | 42 | +0 | 2 | 0 | 0 | 0
+  ok   2006. Now That's What I Call Music! 64 (Last audio cassette release) | 43 | 43 | +0 | 2 | 0 | 0 | 0
+  ok   2006. Now That's What I Call Music! 65 | 45 | 45 | +0 | 2 | 0 | 0 | 0
+  ok   2007. Now That's What I Call Music! 66 | 44 | 44 | +0 | 2 | 0 | 0 | 0
+  ok   2007. Now That's What I Call Music! 67 | 43 | 43 | +0 | 2 | 0 | 0 | 0
+  ok   2007. Now That's What I Call Music! 68 | 44 | 44 | +0 | 2 | 0 | 0 | 0
+  ok   2008. Now That's What I Call Music! 69 | 42 | 42 | +0 | 2 | 0 | 0 | 0
+  EXC  2008. Now That's What I Call Music! 70 | 42 | 43 | -1 | 2 | 0 | 0 | 0
+  ok   2008. Now That's What I Call Music! 71 | 45 | 45 | +0 | 2 | 0 | 0 | 0
+  ok   2009. Now That's What I Call Music! 72 | 43 | 43 | +0 | 2 | 0 | 0 | 0
+  ok   2009. Now That's What I Call Music! 73 | 44 | 44 | +0 | 2 | 0 | 0 | 0
+  ok   2009. Now That's What I Call Music! 74 | 45 | 45 | +0 | 2 | 0 | 0 | 0
+  ok   2010. Now That's What I Call Music! 75 | 43 | 43 | +0 | 2 | 0 | 0 | 0
+  ok   2010. Now That's What I Call Music! 76 | 46 | 46 | +0 | 2 | 0 | 0 | 0
+  ok   2010. Now That's What I Call Music! 77 | 44 | 44 | +0 | 2 | 0 | 0 | 0
+  ok   2011. Now That's What I Call Music! 78 | 42 | 42 | +0 | 2 | 0 | 0 | 0
+  ok   2011. Now That's What I Call Music! 79 | 44 | 44 | +0 | 2 | 0 | 0 | 0
+  ok   2011. Now That's What I Call Music! 80 | 43 | 43 | +0 | 2 | 0 | 0 | 0
+  ok   2012. Now That's What I Call Music! 81 | 42 | 42 | +0 | 2 | 0 | 0 | 0
+  ok   2012. Now That's What I Call Music! 82 | 44 | 44 | +0 | 2 | 0 | 0 | 0
+  EXC  2012. Now That's What I Call Music! 83 | 42 | 43 | -1 | 2 | 0 | 0 | 0
+  ok   2013. Now That's What I Call Music! 84 | 43 | 43 | +0 | 2 | 0 | 0 | 0
+  ok   2013. Now That's What I Call Music! 85 | 44 | 44 | +0 | 2 | 0 | 0 | 0
+  ok   2013. Now That's What I Call Music! 86 | 44 | 44 | +0 | 2 | 0 | 0 | 0
+  ok   2014. Now That's What I Call Music! 87 | 46 | 46 | +0 | 2 | 0 | 0 | 0
+  ok   2014. Now That's What I Call Music! 88 | 45 | 45 | +0 | 2 | 0 | 0 | 0
+  ok   2014. Now That's What I Call Music! 89 | 45 | 45 | +0 | 2 | 0 | 0 | 0
+  ok   2015. Now That's What I Call Music! 90 | 45 | 45 | +0 | 2 | 0 | 0 | 0
+  ok   2015. Now That's What I Call Music! 91 | 44 | 44 | +0 | 2 | 0 | 0 | 0
+  ok   2015. Now That's What I Call Music! 92 | 46 | 46 | +0 | 2 | 0 | 0 | 0
+  ok   2016. Now That's What I Call Music! 93 | 44 | 44 | +0 | 2 | 0 | 0 | 0
+  ok   2016. Now That's What I Call Music! 94 | 42 | 42 | +0 | 2 | 0 | 0 | 0
+  ok   2016. Now That's What I Call Music! 95 | 45 | 45 | +0 | 2 | 0 | 0 | 0
+  ok   2017. Now That's What I Call Music! 96 | 43 | 43 | +0 | 2 | 0 | 0 | 0
+  ok   2017. Now That's What I Call Music! 97 | 45 | 45 | +0 | 2 | 0 | 0 | 0
+  EXC  2017. Now That's What I Call Music! 98 | 45 | 46 | -1 | 2 | 0 | 0 | 0
+  ok   2018. Now That's What I Call Music! 100 | 44 | 44 | +0 | 2 | 0 | 0 | 0
+  ok   2018. Now That's What I Call Music! 101 | 46 | 46 | +0 | 2 | 0 | 0 | 0
+  ok   2018. Now That's What I Call Music! 99 | 45 | 45 | +0 | 2 | 0 | 0 | 0
+  ok   2019. Now That's What I Call Music! 102 | 46 | 46 | +0 | 2 | 0 | 0 | 0
+  ok   2019. Now That's What I Call Music! 103 | 48 | 48 | +0 | 2 | 0 | 0 | 0
+  ok   2019. Now That's What I Call Music! 104 | 47 | 47 | +0 | 2 | 0 | 0 | 0
+  ok   2020. Now That's What I Call Music! 105 | 46 | 46 | +0 | 2 | 0 | 0 | 0
+  ok   2020. Now That's What I Call Music! 106 | 41 | 41 | +0 | 2 | 0 | 0 | 0
+  ok   2020. Now That's What I Call Music! 107 | 43 | 43 | +0 | 2 | 0 | 0 | 0
+  ok   2021. Now That's What I Call Music! 108 | 46 | 46 | +0 | 2 | 0 | 0 | 0
+  ok   2021. Now That's What I Call Music! 109 | 48 | 48 | +0 | 2 | 0 | 0 | 0
+  ok   2021. Now That's What I Call Music! 110 | 49 | 49 | +0 | 2 | 0 | 0 | 0
+  ok   2022. Now That's What I Call Music! 111 | 50 | 50 | +0 | 2 | 0 | 0 | 0
+  ok   2022. Now That's What I Call Music! 112 | 48 | 48 | +0 | 2 | 0 | 0 | 0
+  ok   2022. Now That's What I Call Music! 113 | 48 | 48 | +0 | 2 | 0 | 0 | 0
+  ok   2023. Now That's What I Call Music! 114 | 50 | 50 | +0 | 2 | 0 | 0 | 0
+  ok   2023. Now That's What I Call Music! 115 | 50 | 50 | +0 | 2 | 0 | 0 | 0

@@ -1,0 +1,50 @@
+
+==================================================
+  phase05-now-tag-inventory scan
+==================================================
+  now root:  /mnt/tank/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023
+  manifest:  /mnt/tank/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/00.Now That's What I Call Music! 1-115(2023).m3u
+  ndjson:    /mnt/fast/safety/phase05/now-tags.ndjson
+  done:      /mnt/fast/safety/phase05/now-tags.done
+  failed:    /mnt/fast/safety/phase05/now-tags.failed
+  date:      2026-09-18T17:17:18Z
+
+==> Fresh measurement (a point-in-time snapshot of a live tree)
+    mp3 files:      4746      (2026-09-18 value: 4746)
+    non-mp3 files:  5      (2026-09-18 value: 14; the 05-04 sweep removed 9, so 5 is expected)
+    subdirectories: 0      (2026-09-18 value: 0)
+    file list:      4746 path(s) to consider
+==> Resume ledger: 0 path(s) already captured
+      250/4746   new=250   skipped=0     failed=0
+      500/4746   new=500   skipped=0     failed=0
+      750/4746   new=750   skipped=0     failed=0
+     1000/4746   new=1000  skipped=0     failed=0
+     1250/4746   new=1250  skipped=0     failed=0
+     1500/4746   new=1500  skipped=0     failed=0
+     1750/4746   new=1750  skipped=0     failed=0
+     2000/4746   new=2000  skipped=0     failed=0
+     2250/4746   new=2250  skipped=0     failed=0
+     2500/4746   new=2500  skipped=0     failed=0
+     2750/4746   new=2750  skipped=0     failed=0
+     3000/4746   new=3000  skipped=0     failed=0
+     3250/4746   new=3250  skipped=0     failed=0
+     3500/4746   new=3500  skipped=0     failed=0
+     3750/4746   new=3750  skipped=0     failed=0
+     4000/4746   new=4000  skipped=0     failed=0
+     4250/4746   new=4250  skipped=0     failed=0
+     4500/4746   new=4500  skipped=0     failed=0
+
+==> Parsing the manifest
+    manifest entries: 4770      (2026-09-18 value: 4770)
+    manifest ndjson:  /mnt/fast/safety/phase05/now-manifest.ndjson
+
+📊 scan summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  files seen:      4746
+  records written: 4746
+  skipped (done):  0
+  failed:          0
+  wall clock:      348s
+  ndjson lines:    4746
+  done ledger:     4746
+  [0;32m✅ scan complete, failed ledger empty[0m
