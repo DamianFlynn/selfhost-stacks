@@ -1,0 +1,96 @@
+Phase 5 plan 05-01, Task 2 — the D-21 inode proof
+Driven on LXC 100 (root@172.16.1.159) 2026-09-18T14:45:50Z. No zfs and no chown were needed, so
+atlantis was not involved and Phase 1's D-20 was not touched.
+
+Driver: /mnt/fast/safety/phase05/inode-proof.sh (host-resident, staged under /mnt/fast — never
+/tmp, which is tmpfs backed by host RAM on LXC 100). Output: /mnt/fast/safety/phase05/inode-proof.txt.
+This file is that output, verbatim, plus the post-run assertions.
+
+Why it exists: criterion 1 demands the atomic-rename property be verified BY INODE rather than by
+watching a move look fast. D-21 adds the half that makes the verification worth anything — an
+inode that has only ever been observed staying the same is an instrument nobody has shown can
+distinguish anything.
+
+
+================================================================================
+The proof file, verbatim
+================================================================================
+
+Phase 5 plan 05-01 Task 2 - D-21 inode proof
+Driven on LXC 100 (root@172.16.1.159) at 2026-09-18T14:45:50Z
+Fixture: .phase05-inode-fixture (dot-prefixed so nothing that later globs the tree sees it)
+
+Both controls are DRIVEN. Both observed value pairs are printed below; neither is
+asserted from the devid table alone.
+
+== POSITIVE CONTROL: an _inbox-to-_inbox move is an atomic same-dataset rename ==
+  before  /mnt/tank/downloads/complete/nzb/_inbox/01-auto/.phase05-inode-fixture
+          %d=68  %i=247882
+  after   /mnt/tank/downloads/complete/nzb/_inbox/02-review/.phase05-inode-fixture
+          %d=68  %i=247882
+  verdict INODE UNCHANGED
+
+== NEGATIVE CONTROL: the same fixture across a devid boundary ==
+  before  /mnt/tank/downloads/complete/nzb/_inbox/02-review/.phase05-inode-fixture
+          %d=68  %i=247882
+  after   /mnt/fast/safety/phase05/inode-negative/.phase05-inode-fixture
+          %d=64519  %i=1050087
+  verdict INODE CHANGED
+
+== Why the negative control does not target the library ==
+  Phase 1's D-20 says nobody holds rw on the library dataset (tank/media/Music) until
+  Phase 6, and D-21 states the property under test as 'a different devid changes the
+  inode', not 'the library specifically'. The target is LXC 100's ext4 root, which
+  satisfies the property without touching anything D-20 fences. The library's MOUNT
+  PATH is deliberately absent from every command this task runs, so that criterion
+  stays mechanically checkable rather than defeated by prose about it.
+
+== Why the assertion is on the PAIR (%d, %i), never %i alone ==
+  Task 1 measured /mnt/tank/downloads and the library root BOTH reporting inode 34 on
+  different filesystems. Inode numbers are only unique within a filesystem, so an
+  instrument comparing %i alone would call two distinct objects identical. Both
+  controls above assert the pair.
+
+
+================================================================================
+Post-run assertions (D-17 — the tree is created empty and must be empty again)
+================================================================================
+
+    find .../_inbox -mindepth 1 -maxdepth 2 | wc -l   = 6      (expect 6)
+    test -e /mnt/fast/safety/phase05/inode-negative   = false  (correct)
+    both controls held                                          (script exit 0)
+
+Re-read independently from atlantis after the run:
+
+    $ ls -1 /mnt/tank/downloads/complete/nzb/_inbox | sort
+    01-auto 02-review 03-asis 04-hold 99-quarantine _done
+
+    $ find .../_inbox -mindepth 1 -maxdepth 2 -name '.*' | wc -l
+    0
+
+No dot-prefixed residue. The fixture is gone from all three of the locations it occupied; the
+EXIT trap covered every one of them, and the cleanup was also run explicitly before the
+assertions so the assertions test the real end state rather than the trap's intention.
+
+    $ grep -c '/mnt/tank/media/Music' inode-proof.sh    = 0
+    $ grep -c '/mnt/tank/media/Music' inode-proof.txt   = 0
+
+The library's mount path appears in no command this task ran, and in nothing it wrote. The
+DATASET NAME appears once, in the prose above, explaining why the negative control targets
+something else. That distinction is deliberate: this estate has now been bitten five times by a
+mechanical check satisfied or defeated by prose ABOUT the thing rather than by the thing, so the
+path a criterion greps for is kept out of the text as well as out of the commands.
+
+
+================================================================================
+What this establishes, and what it does not
+================================================================================
+
+ESTABLISHES: a move between two _inbox directories preserves both devid and inode — it is a
+rename(2), not a copy-then-unlink. The instrument has been observed BOTH holding (68/247882 ->
+68/247882) and breaking (68/247882 -> 64519/1050087), so a future "INODE UNCHANGED" reading is
+evidence rather than a tautology.
+
+DOES NOT ESTABLISH: anything about moves into or out of the library dataset. Those remain
+copy-then-unlink across the tank/downloads -> tank/media/Music boundary, as CLAUDE.md
+§ Constraints already records. Nothing in this task measured that boundary.
