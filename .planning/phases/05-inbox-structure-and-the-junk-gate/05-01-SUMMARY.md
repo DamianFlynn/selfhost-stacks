@@ -180,3 +180,8 @@ block a later `git pull --ff-only` on LXC 100.
 Nothing was moved, deleted or tag-written. Nothing outside the seven new directories was chowned —
 D-24's tree-wide sweep is plan 05-10 and runs last (D-27), so it will also re-normalise these six.
 `99-quarantine` is empty; D-11's sweep is a later plan.
+
+## Self-Check: PASSED
+
+All four repo files exist on disk; all four commits (`1a14d38`, `c98bbd2`, `84d7241`, `3bc529c`)
+resolve in `git log`. All three host-side proof files exist on LXC 100.
