@@ -149,8 +149,17 @@ do_estate() {
 
   echo ""
   echo "== D-15: nothing the sweep acted on resolves under incomplete/ or /mnt/tank/media =="
-  eq "acted-on paths under incomplete/"     "0" "$(grep -c 'moved /mnt/tank/downloads/incomplete' "$P/junk-sweep-result.txt" 2>/dev/null || echo 0)"
-  eq "acted-on paths under /mnt/tank/media" "0" "$(grep -c 'moved /mnt/tank/media' "$P/junk-sweep-result.txt" 2>/dev/null || echo 0)"
+  # Counted with awk, not `grep -c`. `grep -c` prints the count AND exits 1 when the count is zero,
+  # so the obvious `$(grep -c ... || echo 0)` emits TWO lines ("0\n0") on the healthy outcome and
+  # the assertion fails precisely when the estate is correct. That defect was live in this file and
+  # fired on the real run; it is recorded here rather than silently corrected.
+  eq "result-file lines naming incomplete/"     "0" "$(awk '/\/mnt\/tank\/downloads\/incomplete/{c++} END{print c+0}' "$P/junk-sweep-result.txt" 2>/dev/null)"
+  eq "result-file lines naming /mnt/tank/media" "0" "$(awk '/\/mnt\/tank\/media/{c++} END{print c+0}' "$P/junk-sweep-result.txt" 2>/dev/null)"
+  eq "sweep exit line present"                  "1" "$(awk '/sweep complete - every approved row acted on/{c++} END{print c+0}' "$P/junk-sweep-result.txt" 2>/dev/null)"
+  eq "move failures reported by the sweep"      "0" "$(awk -F': +' '/^  move failures:/{print $2}' "$P/junk-sweep-result.txt" | awk '{print $1}' | tr -dc '0-9')"
+  eq "removal failures reported by the sweep"   "0" "$(awk -F': +' '/^  removal failures:/{print $2}' "$P/junk-sweep-result.txt" | awk '{print $1}' | tr -dc '0-9')"
+  eq "rows moved reported by the sweep"        "44" "$(awk -F': +' '/^  moved:/{print $2}' "$P/junk-sweep-result.txt" | tr -dc '0-9')"
+  eq "rows removed reported by the sweep"      "40" "$(awk -F': +' '/^  removed:/{print $2}' "$P/junk-sweep-result.txt" | tr -dc '0-9')"
 
   echo ""
   echo "== FAILURES: $FAILS"

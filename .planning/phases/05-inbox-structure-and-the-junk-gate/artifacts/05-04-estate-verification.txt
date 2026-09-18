@@ -1,0 +1,43 @@
+== ROADMAP criterion 2 as amended, across the five music paths ==
+  PASS  _FAILED_ / _UNPACK_ directories outside 99-quarantine = 0
+  PASS  stray archive FILES outside 99-quarantine = 0
+
+== named items the criterion calls out ==
+  PASS  the Potter directory is gone from unsorted/
+  PASS  the empty dj-mixes decoy is gone
+
+== every REMOVE row (no destination) must be absent ==
+  PASS  remove rows absent = 40
+  PASS  remove rows still present = 0
+
+== every MOVE row must be absent from its origin and present at its destination ==
+  PASS  origin gone: music/_FAILED_Garth.Brooks-Ropin.The.Wind-CDP.7.06330-2-CD-FLAC-1991-EMG
+  PASS  landed: 99-quarantine/_FAILED_Garth.Brooks-Ropin.The.Wind-CDP.7.06330-2-CD-FLAC-1991-EMG
+  PASS  origin gone: music/_FAILED_Garth.Brooks-The.Ultimate.Hits-2CD-FLAC-2007-WRS
+  PASS  landed: 99-quarantine/_FAILED_Garth.Brooks-The.Ultimate.Hits-2CD-FLAC-2007-WRS
+  PASS  Garth Ropin audio files at 99-quarantine = 10
+  PASS  Garth Ultimate Hits audio files at 99-quarantine = 34
+  PASS  origin gone: lidarr-import/Madonna
+  PASS  origin gone: lidarr-import/Michael Jackson
+  PASS  landed: 02-review/Madonna
+  PASS  landed: 02-review/Michael Jackson
+  PASS  Madonna audio files at 02-review = 60
+  PASS  Michael Jackson audio files at 02-review = 473
+
+== the 8 EXCLUDED .covers directories must all still exist, with their contents ==
+  PASS  excluded .covers directories intact = 8
+
+== the five value-bearing KEEP sidecars, by (devid,inode) ==
+  PASS  all five sidecars present with unchanged (devid,inode)
+
+== D-15: nothing the sweep acted on resolves under incomplete/ or /mnt/tank/media ==
+  PASS  result-file lines naming incomplete/ = 0
+  PASS  result-file lines naming /mnt/tank/media = 0
+  PASS  sweep exit line present = 1
+  PASS  move failures reported by the sweep = 0
+  PASS  removal failures reported by the sweep = 0
+  PASS  rows moved reported by the sweep = 44
+  PASS  rows removed reported by the sweep = 40
+
+== FAILURES: 0
+ALL ASSERTIONS HELD

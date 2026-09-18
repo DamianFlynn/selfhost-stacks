@@ -1,0 +1,48 @@
+Phase 5 plan 05-04, Task 2 — zfs diff reconciliation against the approved list
+==============================================================================
+Fence:  tank/downloads@pre-phase5
+Taken:  from atlantis (172.16.1.158); zfs cannot resolve on LXC 100
+Date:   2026-09-18
+
+BEFORE the sweep (captured minutes earlier, same fence):
+    +  20056     M  2     -  0     R  0
+  Zero removed and zero renamed lines: the tree was exactly as plan 05-03 left it.
+
+AFTER the sweep:
+    +  21036     M  7     -  87    R  4
+
+The '+' count is SABnzbd's own churn under incomplete/ and is not attributable to
+this plan; the in-scope claim is carried by the '-' and 'R' analysis below.
+
+ASSERTIONS
+----------
+  PASS  renamed OLD paths are EXACTLY the 4 approved move rows  (renamed=4, move rows=4)
+  PASS  every removed path is an approved remove row or a descendant of one  (unexplained=0)
+  PASS  every approved remove row appears in the removed set  (missing=0)
+  PASS  no destructive line under incomplete/ (D-15) or /mnt/tank/media (D-20)  (violations=0)
+  PASS  none of the 8 excluded .covers dirs or 5 KEEP sidecars is in any destructive line  (touched=0)
+
+THE 4 RENAMES, VERBATIM
+-----------------------
+  /mnt/tank/downloads/lidarr-import/Madonna
+    -> /mnt/tank/downloads/complete/nzb/_inbox/02-review/Madonna
+  /mnt/tank/downloads/lidarr-import/Michael Jackson
+    -> /mnt/tank/downloads/complete/nzb/_inbox/02-review/Michael Jackson
+  /mnt/tank/downloads/complete/nzb/music/_FAILED_Garth.Brooks-Ropin.The.Wind-CDP.7.06330-2-CD-FLAC-1991-EMG
+    -> /mnt/tank/downloads/complete/nzb/_inbox/99-quarantine/_FAILED_Garth.Brooks-Ropin.The.Wind-CDP.7.06330-2-CD-FLAC-1991-EMG
+  /mnt/tank/downloads/complete/nzb/music/_FAILED_Garth.Brooks-The.Ultimate.Hits-2CD-FLAC-2007-WRS
+    -> /mnt/tank/downloads/complete/nzb/_inbox/99-quarantine/_FAILED_Garth.Brooks-The.Ultimate.Hits-2CD-FLAC-2007-WRS
+
+THE 87 REMOVED LINES, ATTRIBUTED
+--------------------------------
+   29  /mnt/tank/downloads/complete/nzb/music/_UNPACK_Katy Perry - Prism (2013) FLAC
+   20  /mnt/tank/downloads/complete/nzb/music/_UNPACK_Ed Sheeran - Ed Sheeran [self titled] (EP) (2006) MP3
+   38  approved rows contributing exactly one line each (29 R4 empty dirs + 9 R6 sidecars)
+  ---
+   87  total, and 40 of the 40 approved remove rows are represented
+
+RESULT: ALL ASSERTIONS HELD
+
+The two _UNPACK_ directories account for every removed line beyond the 40 approved
+roots: a recursive removal reports each descendant. 29 lines under the Katy Perry
+directory and 20 under the Ed Sheeran one, the directories themselves included.

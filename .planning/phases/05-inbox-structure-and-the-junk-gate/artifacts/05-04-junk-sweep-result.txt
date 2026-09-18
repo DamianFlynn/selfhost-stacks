@@ -1,0 +1,118 @@
+🧨 Phase 5 - junk gate, sweep (APPROVED LIST ONLY)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  host:      selfhost
+  date:      2026-09-18T16:54:05Z
+  list:      /mnt/fast/safety/phase05/junk-candidates.tsv
+  proof:     /mnt/fast/safety/phase05/snapshot-proof.txt  (names tank/downloads@pre-phase5)
+  mode:      sweep (MUTATES LIVE STATE)
+
+🔒 1. Re-deriving every listed row against FRESH state
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✅ all 44 approved row(s) still match the state they were approved against
+
+📦 2. Moving approved rows into quarantine
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  batch directory: /mnt/tank/downloads/complete/nzb/_inbox/99-quarantine/20260918T165406Z
+  ✅ moved /mnt/tank/downloads/complete/nzb/music/_FAILED_Garth.Brooks-Ropin.The.Wind-CDP.7.06330-2-CD-FLAC-1991-EMG -> /mnt/tank/downloads/complete/nzb/_inbox/99-quarantine/_FAILED_Garth.Brooks-Ropin.The.Wind-CDP.7.06330-2-CD-FLAC-1991-EMG
+  ✅ moved /mnt/tank/downloads/complete/nzb/music/_FAILED_Garth.Brooks-The.Ultimate.Hits-2CD-FLAC-2007-WRS -> /mnt/tank/downloads/complete/nzb/_inbox/99-quarantine/_FAILED_Garth.Brooks-The.Ultimate.Hits-2CD-FLAC-2007-WRS
+  ✅ moved /mnt/tank/downloads/complete/nzb/music/_UNPACK_Ed Sheeran - Ed Sheeran [self titled] (EP) (2006) MP3 -> /mnt/tank/downloads/complete/nzb/_inbox/99-quarantine/20260918T165406Z/003___UNPACK_Ed Sheeran - Ed Sheeran [self titled] (EP) (2006) MP3
+  ✅ moved /mnt/tank/downloads/complete/nzb/music/_UNPACK_Katy Perry - Prism (2013) FLAC -> /mnt/tank/downloads/complete/nzb/_inbox/99-quarantine/20260918T165406Z/004___UNPACK_Katy Perry - Prism (2013) FLAC
+  ✅ moved /mnt/tank/downloads/complete/nzb/dj-mixes/VA-Mastermix.Issue.452-202 -> /mnt/tank/downloads/complete/nzb/_inbox/99-quarantine/20260918T165406Z/005__VA-Mastermix.Issue.452-202
+  ✅ moved /mnt/tank/downloads/complete/nzb/dj-mixes/VA-Mastermix.Issue.453-202 -> /mnt/tank/downloads/complete/nzb/_inbox/99-quarantine/20260918T165406Z/006__VA-Mastermix.Issue.453-202
+  ✅ moved /mnt/tank/downloads/complete/nzb/dj-mixes/VA-Mastermix.Issue.454-2024-xpost -> /mnt/tank/downloads/complete/nzb/_inbox/99-quarantine/20260918T165406Z/007__VA-Mastermix.Issue.454-2024-xpost
+  ✅ moved /mnt/tank/downloads/complete/nzb/dj-mixes/VA-Mastermix.Issue.455-2024 -> /mnt/tank/downloads/complete/nzb/_inbox/99-quarantine/20260918T165406Z/008__VA-Mastermix.Issue.455-2024
+  ✅ moved /mnt/tank/downloads/complete/nzb/dj-mixes/VA-Mastermix.Issue.456-2024 -> /mnt/tank/downloads/complete/nzb/_inbox/99-quarantine/20260918T165406Z/009__VA-Mastermix.Issue.456-2024
+  ✅ moved /mnt/tank/downloads/complete/nzb/dj-mixes/VA-Mastermix.Issue.467-2025 -> /mnt/tank/downloads/complete/nzb/_inbox/99-quarantine/20260918T165406Z/010__VA-Mastermix.Issue.467-2025
+  ✅ moved /mnt/tank/downloads/complete/nzb/dj-mixes/VA-Mastermix.Issue.467-2025.1 -> /mnt/tank/downloads/complete/nzb/_inbox/99-quarantine/20260918T165406Z/011__VA-Mastermix.Issue.467-2025.1
+  ✅ moved /mnt/tank/downloads/complete/nzb/dj-mixes/VA-Mastermix.Issue.468-470-2025 -> /mnt/tank/downloads/complete/nzb/_inbox/99-quarantine/20260918T165406Z/012__VA-Mastermix.Issue.468-470-2025
+  ✅ moved /mnt/tank/downloads/complete/nzb/dj-mixes/VA-NOW.Thats.What.I.Call.Music_.117.2CD-202 -> /mnt/tank/downloads/complete/nzb/_inbox/99-quarantine/20260918T165406Z/013__VA-NOW.Thats.What.I.Call.Music_.117.2CD-202
+  ✅ moved /mnt/tank/downloads/complete/nzb/dj-mixes/VA-Now_That.s_What_I_Call_Music__1-115_2023 -> /mnt/tank/downloads/complete/nzb/_inbox/99-quarantine/20260918T165406Z/014__VA-Now_That.s_What_I_Call_Music__1-115_2023
+  ✅ moved /mnt/tank/downloads/complete/nzb/dj-mixes/VA-Now_That.s_What_I_Call_Music__116__2023 -> /mnt/tank/downloads/complete/nzb/_inbox/99-quarantine/20260918T165406Z/015__VA-Now_That.s_What_I_Call_Music__116__2023
+  ✅ moved /mnt/tank/downloads/complete/nzb/dj-mixes/VA.-.Mastermix.Issue.440-WEB-2023-MST -> /mnt/tank/downloads/complete/nzb/_inbox/99-quarantine/20260918T165406Z/016__VA.-.Mastermix.Issue.440-WEB-2023-MST
+  ✅ moved /mnt/tank/downloads/complete/nzb/dj-mixes/VA.Now.That.s.What.I.Call.Music_.117.2024..CD.FLAC..CDNOW117 -> /mnt/tank/downloads/complete/nzb/_inbox/99-quarantine/20260918T165406Z/017__VA.Now.That.s.What.I.Call.Music_.117.2024..CD.FLAC..CDNOW117
+  ✅ moved /mnt/tank/downloads/complete/nzb/dj-mixes/VA_-_Mastermix_-_Issue_460-WEB-2024-MST -> /mnt/tank/downloads/complete/nzb/_inbox/99-quarantine/20260918T165406Z/018__VA_-_Mastermix_-_Issue_460-WEB-2024-MST
+  ✅ moved /mnt/tank/downloads/complete/nzb/dj-mixes/VA_-_Mastermix_-_Issue_461-WEB-2024-MST -> /mnt/tank/downloads/complete/nzb/_inbox/99-quarantine/20260918T165406Z/019__VA_-_Mastermix_-_Issue_461-WEB-2024-MST
+  ✅ moved /mnt/tank/downloads/complete/nzb/dj-mixes/VA_-_Mastermix_-_Issue_461-WEB-2024-MST.1 -> /mnt/tank/downloads/complete/nzb/_inbox/99-quarantine/20260918T165406Z/020__VA_-_Mastermix_-_Issue_461-WEB-2024-MST.1
+  ✅ moved /mnt/tank/downloads/complete/nzb/dj-mixes/VA_-_Mastermix_-_Issue_462-WEB-2024-MST -> /mnt/tank/downloads/complete/nzb/_inbox/99-quarantine/20260918T165406Z/021__VA_-_Mastermix_-_Issue_462-WEB-2024-MST
+  ✅ moved /mnt/tank/downloads/complete/nzb/dj-mixes/VA_-_Mastermix_-_Issue_462-WEB-2024-MST.1 -> /mnt/tank/downloads/complete/nzb/_inbox/99-quarantine/20260918T165406Z/022__VA_-_Mastermix_-_Issue_462-WEB-2024-MST.1
+  ✅ moved /mnt/tank/downloads/complete/nzb/dj-mixes/VA_-_Mastermix_-_Issue_463-WEB-2025-MST -> /mnt/tank/downloads/complete/nzb/_inbox/99-quarantine/20260918T165406Z/023__VA_-_Mastermix_-_Issue_463-WEB-2025-MST
+  ✅ moved /mnt/tank/downloads/complete/nzb/dj-mixes/VA_-_Mastermix_-_Issue_463-WEB-2025-MST.1 -> /mnt/tank/downloads/complete/nzb/_inbox/99-quarantine/20260918T165406Z/024__VA_-_Mastermix_-_Issue_463-WEB-2025-MST.1
+  ✅ moved /mnt/tank/downloads/complete/nzb/dj-mixes/VA_-_Mastermix_-_Issue_464-WEB-2025-MST -> /mnt/tank/downloads/complete/nzb/_inbox/99-quarantine/20260918T165406Z/025__VA_-_Mastermix_-_Issue_464-WEB-2025-MST
+  ✅ moved /mnt/tank/downloads/complete/nzb/dj-mixes/VA_-_Mastermix_-_Issue_464-WEB-2025-MST.1 -> /mnt/tank/downloads/complete/nzb/_inbox/99-quarantine/20260918T165406Z/026__VA_-_Mastermix_-_Issue_464-WEB-2025-MST.1
+  ✅ moved /mnt/tank/downloads/complete/nzb/dj-mixes/VA_-_Mastermix_-_Issue_465-WEB-2025-MST -> /mnt/tank/downloads/complete/nzb/_inbox/99-quarantine/20260918T165406Z/027__VA_-_Mastermix_-_Issue_465-WEB-2025-MST
+  ✅ moved /mnt/tank/downloads/complete/nzb/dj-mixes/VA_-_Mastermix_-_Issue_465-WEB-2025-MST.1 -> /mnt/tank/downloads/complete/nzb/_inbox/99-quarantine/20260918T165406Z/028__VA_-_Mastermix_-_Issue_465-WEB-2025-MST.1
+  ✅ moved /mnt/tank/downloads/complete/nzb/music/Ed Sheeran - ÷ (2017) FLAC -> /mnt/tank/downloads/complete/nzb/_inbox/99-quarantine/20260918T165406Z/029__Ed Sheeran - ÷ (2017) FLAC
+  ✅ moved /mnt/tank/downloads/complete/nzb/music/Garth.Brooks-Man.Against.Machine-CD-FLAC-2014-NBFLAC -> /mnt/tank/downloads/complete/nzb/_inbox/99-quarantine/20260918T165406Z/030__Garth.Brooks-Man.Against.Machine-CD-FLAC-2014-NBFLAC
+  ✅ moved /mnt/tank/downloads/complete/nzb/music/Madonna-Like A Virgin-REMASTERED-CD-FLAC-2001-c05 INT-xpost -> /mnt/tank/downloads/complete/nzb/_inbox/99-quarantine/20260918T165406Z/031__Madonna-Like A Virgin-REMASTERED-CD-FLAC-2001-c05 INT-xpost
+  ✅ moved /mnt/tank/downloads/complete/nzb/music/Michael Jackson-Thriller [2001 Special Edition] [1982] FLAC -> /mnt/tank/downloads/complete/nzb/_inbox/99-quarantine/20260918T165406Z/032__Michael Jackson-Thriller [2001 Special Edition] [1982] FLAC
+  ✅ moved /mnt/tank/downloads/complete/nzb/unsorted/Harry.Potter.And.The.Deathly.Hallows.Part.1.2010.PROPER.1080p.BluRay.x264-MOOVEE -> /mnt/tank/downloads/complete/nzb/_inbox/99-quarantine/20260918T165406Z/033__Harry.Potter.And.The.Deathly.Hallows.Part.1.2010.PROPER.1080p.BluRay.x264-MOOVEE
+  ✅ moved /mnt/tank/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/00. play.m3u -> /mnt/tank/downloads/complete/nzb/_inbox/99-quarantine/20260918T165406Z/034__00. play.m3u
+  ✅ moved /mnt/tank/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Various - NOW That's What I Call Music! 114.log -> /mnt/tank/downloads/complete/nzb/_inbox/99-quarantine/20260918T165406Z/035__Various - NOW That's What I Call Music! 114.log
+  ✅ moved /mnt/tank/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Various - Now That's What I Call Music! 113.log -> /mnt/tank/downloads/complete/nzb/_inbox/99-quarantine/20260918T165406Z/036__Various - Now That's What I Call Music! 113.log
+  ✅ moved /mnt/tank/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Various Artists - NOW That’s What I Call Music! 115.log -> /mnt/tank/downloads/complete/nzb/_inbox/99-quarantine/20260918T165406Z/037__Various Artists - NOW That’s What I Call Music! 115.log
+  ✅ moved /mnt/tank/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Various Artists - Now That's What I Call Music!, Vol. 110 Disc 1.log -> /mnt/tank/downloads/complete/nzb/_inbox/99-quarantine/20260918T165406Z/038__Various Artists - Now That's What I Call Music!, Vol. 110 Disc 1.log
+  ✅ moved /mnt/tank/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Various Artists - Now That's What I Call Music!, Vol. 110 Disc 2.log -> /mnt/tank/downloads/complete/nzb/_inbox/99-quarantine/20260918T165406Z/039__Various Artists - Now That's What I Call Music!, Vol. 110 Disc 2.log
+  ✅ moved /mnt/tank/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Various Artists - Now That's What I Call Music!, Vol. 111 Disc 1.log -> /mnt/tank/downloads/complete/nzb/_inbox/99-quarantine/20260918T165406Z/040__Various Artists - Now That's What I Call Music!, Vol. 111 Disc 1.log
+  ✅ moved /mnt/tank/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Various Artists - Now That's What I Call Music!, Vol. 111 Disc 2.log -> /mnt/tank/downloads/complete/nzb/_inbox/99-quarantine/20260918T165406Z/041__Various Artists - Now That's What I Call Music!, Vol. 111 Disc 2.log
+  ✅ moved /mnt/tank/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/play.m3u -> /mnt/tank/downloads/complete/nzb/_inbox/99-quarantine/20260918T165406Z/042__play.m3u
+  ✅ moved /mnt/tank/downloads/lidarr-import/Madonna -> /mnt/tank/downloads/complete/nzb/_inbox/02-review/Madonna
+  ✅ moved /mnt/tank/downloads/lidarr-import/Michael Jackson -> /mnt/tank/downloads/complete/nzb/_inbox/02-review/Michael Jackson
+
+🗑  3. Removing what arrived in the quarantine batch
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✅ removed R2 003___UNPACK_Ed Sheeran - Ed Sheeran [self titled] (EP) (2006) MP3
+  ✅ removed R2 004___UNPACK_Katy Perry - Prism (2013) FLAC
+  ✅ removed R4 005__VA-Mastermix.Issue.452-202
+  ✅ removed R4 006__VA-Mastermix.Issue.453-202
+  ✅ removed R4 007__VA-Mastermix.Issue.454-2024-xpost
+  ✅ removed R4 008__VA-Mastermix.Issue.455-2024
+  ✅ removed R4 009__VA-Mastermix.Issue.456-2024
+  ✅ removed R4 010__VA-Mastermix.Issue.467-2025
+  ✅ removed R4 011__VA-Mastermix.Issue.467-2025.1
+  ✅ removed R4 012__VA-Mastermix.Issue.468-470-2025
+  ✅ removed R4 013__VA-NOW.Thats.What.I.Call.Music_.117.2CD-202
+  ✅ removed R4 014__VA-Now_That.s_What_I_Call_Music__1-115_2023
+  ✅ removed R4 015__VA-Now_That.s_What_I_Call_Music__116__2023
+  ✅ removed R4 016__VA.-.Mastermix.Issue.440-WEB-2023-MST
+  ✅ removed R4 017__VA.Now.That.s.What.I.Call.Music_.117.2024..CD.FLAC..CDNOW117
+  ✅ removed R4 018__VA_-_Mastermix_-_Issue_460-WEB-2024-MST
+  ✅ removed R4 019__VA_-_Mastermix_-_Issue_461-WEB-2024-MST
+  ✅ removed R4 020__VA_-_Mastermix_-_Issue_461-WEB-2024-MST.1
+  ✅ removed R4 021__VA_-_Mastermix_-_Issue_462-WEB-2024-MST
+  ✅ removed R4 022__VA_-_Mastermix_-_Issue_462-WEB-2024-MST.1
+  ✅ removed R4 023__VA_-_Mastermix_-_Issue_463-WEB-2025-MST
+  ✅ removed R4 024__VA_-_Mastermix_-_Issue_463-WEB-2025-MST.1
+  ✅ removed R4 025__VA_-_Mastermix_-_Issue_464-WEB-2025-MST
+  ✅ removed R4 026__VA_-_Mastermix_-_Issue_464-WEB-2025-MST.1
+  ✅ removed R4 027__VA_-_Mastermix_-_Issue_465-WEB-2025-MST
+  ✅ removed R4 028__VA_-_Mastermix_-_Issue_465-WEB-2025-MST.1
+  ✅ removed R4 029__Ed Sheeran - ÷ (2017) FLAC
+  ✅ removed R4 030__Garth.Brooks-Man.Against.Machine-CD-FLAC-2014-NBFLAC
+  ✅ removed R4 031__Madonna-Like A Virgin-REMASTERED-CD-FLAC-2001-c05 INT-xpost
+  ✅ removed R4 032__Michael Jackson-Thriller [2001 Special Edition] [1982] FLAC
+  ✅ removed R4 033__Harry.Potter.And.The.Deathly.Hallows.Part.1.2010.PROPER.1080p.BluRay.x264-MOOVEE
+  ✅ removed R6 034__00. play.m3u
+  ✅ removed R6 035__Various - NOW That's What I Call Music! 114.log
+  ✅ removed R6 036__Various - Now That's What I Call Music! 113.log
+  ✅ removed R6 037__Various Artists - NOW That’s What I Call Music! 115.log
+  ✅ removed R6 038__Various Artists - Now That's What I Call Music!, Vol. 110 Disc 1.log
+  ✅ removed R6 039__Various Artists - Now That's What I Call Music!, Vol. 110 Disc 2.log
+  ✅ removed R6 040__Various Artists - Now That's What I Call Music!, Vol. 111 Disc 1.log
+  ✅ removed R6 041__Various Artists - Now That's What I Call Music!, Vol. 111 Disc 2.log
+  ✅ removed R6 042__play.m3u
+
+🔍 4. Asserting absence - the only instrument that is not subject to the ZFS lag
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✅ 40 row(s) absent from their original location
+  reclaimed space is INFORMATIONAL only - ZFS frees asynchronously and can lag by ~20 s
+
+📊 5. Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  rows approved:        44
+  moved:                44
+  move failures:        0   (target 0)
+  removed:              40
+  removal failures:     0   (target 0)
+  quarantine batch:     /mnt/tank/downloads/complete/nzb/_inbox/99-quarantine/20260918T165406Z
+
+✅ sweep complete - every approved row acted on
