@@ -299,3 +299,126 @@ that one of them is the 9,541-line map the split is verified against.
 - `_done/` pruning mechanics at backlog scale — Phase 9's batch cadence makes it operationally real.
 - DUPE-01 / DUPE-02 — still needs a roadmap decision before Phase 7.
 - `/mnt/tank/media/TV` on the orphan gid 545 — outside this milestone.
+
+---
+
+# Operator corrections — same session, after CONTEXT.md v1
+
+The operator reviewed the captured context and corrected three things. Each is recorded with what it
+superseded, because two of them reverse a decision made earlier in the same discussion.
+
+## Correction 1 — the Potter rip is not a blocker
+
+**Operator:** *"potter should not be a blocker - its a video - junk that is in a music folder, we need
+to just git rid of it."*
+
+**Superseded:** the earlier D-10, which made the Potter clause half of a two-part in-band criterion
+amendment and treated "what did the clause mean" as a decision needing ceremony.
+
+**Now (D-14):** it is ordinary junk. It goes through the same approval gate as everything else and is
+deleted. The criterion's factual error — it names `dj-mixes`, which contains no video at all — is
+corrected as a **one-line note inside the scope amendment**, not as an amendment of its own.
+
+## Correction 2 — sidecars are triaged by value, and 99-quarantine deletes
+
+**Operator:** *"we talk about side cars, most is also junk, but some might have context, a scan of the
+cd case with track listings, an nfo file or m3u that has context, - if its vaule - then keep it -
+otherwise it gets queued to 99 for review and delete."*
+
+**Superseded two decisions:**
+- The earlier D-06, "all 14 sidecars stay at the root, untouched", which was a blanket keep.
+- The earlier D-11, "move to `99-quarantine`, delete nothing", which made quarantine an archive.
+
+**Now (D-06, D-11, D-13):** each sidecar is judged individually on whether it carries context;
+`99-quarantine` is a review-and-delete queue and the deletion happens inside this phase, through the
+approval gate.
+
+**Evidence gathered to apply the rule** — the files were opened rather than judged by extension:
+
+| Sidecar | Found to be | Verdict |
+|---|---|---|
+| `00.Now…1-115.m3u` | The 9,541-line map the split depends on | Keep |
+| `back.bmp` | **NOW 77** back cover — both tracklists, barcode, `UK:CDNOW77` | Keep → vol 77 |
+| `cd1.bmp` | **NOW 77** disc 1 face | Keep → vol 77 |
+| `cd2.bmp` | Presumed NOW 77 disc 2 — not individually opened | Keep, verify at execution |
+| `NOW…115.cue` | EAC cue, per-track TITLE + PERFORMER, vol 115 | Keep → vol 115 |
+| 7 × `.log` | EAC rip-verification logs (vols 110, 111, 113, 114, 115) | → 99, delete |
+| `play.m3u`, `00. play.m3u` | 97- and 51-line playlists, no volume identity | → 99, delete |
+
+**The finding that justified the rule:** the scans turned out to belong to volume **77**, while the
+`.cue`/`.log` belong to 110–115. The sidecars are scattered leftovers from different volumes, so
+nothing but opening them could have attributed them. A blanket keep would have hoarded seven
+worthless rip logs; a blanket discard would have destroyed a tracklist scan and the map.
+
+## Correction 3 — the tags should be correct
+
+**Operator:** *"your now album point - each album has 1 2 or more disks and tracks, these can be all in
+the one folder, but the tags should be correct if at all possible."*
+
+**Confirmed** the earlier decision that all discs of a volume live in one folder (D-05).
+**Added** a requirement the earlier context did not carry: tag correctness, not merely tag
+preservation.
+
+**Measured in response, full scan of all 4,746 mp3:**
+
+| Check | Result |
+|---|---|
+| Missing `disc` tag | 0 |
+| Missing `track` tag | 0 |
+| Distinct `disc` formats | three only — `1/2`, `2/2`, `1/1` |
+| Distinct `album` values | 117, for 115 volumes |
+| Volumes failing `files == Σ tracktotal` | 13 |
+
+So `disc` and `track` are **already correct**; `album` is the one wrong field. This produced two new
+decisions and upgraded two existing ones.
+
+### New questions put to the operator
+
+| Option | Description | Selected |
+|--------|-------------|----------|
+| Yes, but only the album tag, in this phase | One field, one collection; reuses `normalise-dj-tags.py` | ✓ |
+| No — record the repair, let Phase 6 do it | Phase 5 stays pure filesystem | |
+| Yes, and fix the 3 surplus volumes' tracktotal too | Needs investigation first | |
+
+**User's choice:** Yes, but only the album tag, in this phase → **D-10**
+**Notes:** Volume 36's folder would otherwise contain three different album strings and beets would
+not see one album. Scoped deliberately narrow. The QUAL-01 snapshot is keyed on `audio_md5`, so a tag
+write does not break Phase 7's diff join — this was the deciding safety property.
+
+| Option | Description | Selected |
+|--------|-------------|----------|
+| Split them anyway, flag them in the record | An incomplete Now! volume is still importable | ✓ |
+| Split, and route the 13 to `04-hold` | `04-hold` is scoped for missing artwork, not missing audio | |
+| Investigate the 3 surplus volumes first | | |
+
+**User's choice:** Split them anyway, flag them in the record → **D-09**
+
+| Option | Description | Selected |
+|--------|-------------|----------|
+| Move to 99, operator reviews the list, approved items deleted | Quarantine is a review queue | ✓ |
+| Move to 99 now, delete in a later pass | | |
+| Delete outright, skip the quarantine hop | | |
+
+**User's choice:** Move to 99, review, delete → **D-11**
+
+### Upgrades this forced to existing decisions
+
+- **D-04** — the 24-file gap changed from *counted* to *located*. The identity
+  `files == Σ tracktotal` resolves it to named volumes: short by 1 (15, 18, 39, 52, 70, 83, 98),
+  short by 2 (3), surplus (4 +13, 8 +9, 9 +14), plus the vol 36 split-tag mess. The three surplus
+  volumes are flagged as needing an answer, not just a flag — they are all `[2019 Reissue]` and a
+  surplus could mean mis-tagged files leaking in, which would corrupt the split.
+- **D-08** — reconciliation is now per-volume rather than a single total of 4,746, because a bare
+  total would pass even if every file landed in the wrong folder.
+- **D-27** — the ordering gains a step: the tag repair runs **after** the split, since the split
+  produces the grouping the repair applies to.
+
+## Process notes worth keeping
+
+- **`ffprobe` takes one input file.** The first full tag scan used `xargs -n 50 ffprobe`, which fed
+  50 files to one invocation, produced zero output and exited clean. It reported "0 distinct album
+  values" and looked like a finding. Caught only because zero was implausible. Recorded in
+  CONTEXT.md § *Integration Points and Hazards*.
+- **The tag inventory was written to `/tmp/now_tags.tsv` on LXC 100, which is tmpfs.** It is not
+  durable and it consumes host RAM. CONTEXT.md § *Canonical References* requires the plan to
+  regenerate it under `/mnt/fast/`.
