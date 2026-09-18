@@ -1,0 +1,59 @@
+
+==========================================================================
+  zfs diff tank/downloads@pre-phase5 -> live, SCOPED TO THE COLLECTION
+==========================================================================
+  R (renames)        4750
+  + (created)        115
+  - (deleted)        9
+  M (modified)       1
+  other             0
+
+==========================================================================
+  1. RENAMES vs THE APPROVED MAP - must match EXACTLY
+==========================================================================
+  approved map moves (src != dst)              4750
+  renames zfs observed                         4750
+  renamed but NOT ON THE MAP  (FAILURE if >0)  0
+  on the map but NOT renamed  (FAILURE if >0)  0
+
+==========================================================================
+  2. DELETIONS - nothing may be deleted by this task
+==========================================================================
+  '-' lines under the collection               9
+    [F] /mnt/tank/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/00. play.m3u
+    [F] /mnt/tank/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Various - NOW That's What I Call Music! 114.log
+    [F] /mnt/tank/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Various - Now That's What I Call Music! 113.log
+    [F] /mnt/tank/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Various Artists - NOW That’s What I Call Music! 115.log
+    [F] /mnt/tank/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Various Artists - Now That's What I Call Music!, Vol. 110 Disc 1.log
+    [F] /mnt/tank/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Various Artists - Now That's What I Call Music!, Vol. 110 Disc 2.log
+    [F] /mnt/tank/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Various Artists - Now That's What I Call Music!, Vol. 111 Disc 1.log
+    [F] /mnt/tank/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Various Artists - Now That's What I Call Music!, Vol. 111 Disc 2.log
+    [F] /mnt/tank/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/play.m3u
+
+  Attribution: all of the above were recorded BEFORE this plan ran, in the pre-apply
+  baseline, and belong to plan 05-04's junk sweep (7 EAC .log, 2 play.m3u, 2 decoy dirs).
+
+==========================================================================
+  3. CREATIONS - must be exactly the 115 volume directories
+==========================================================================
+  '+' directory lines                          115
+  '+' NON-directory lines (FAILURE if >0)      0
+  created dirs not expected by the map         0
+  map dirs not observed as created             0
+
+==========================================================================
+  4. IN-PLACE ROW - the m3u map must NOT appear as a rename
+==========================================================================
+  OK: not renamed  /mnt/tank/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/00.Now That's What I Call Music! 1-115(2023).m3u
+
+==========================================================================
+  5. MODIFICATIONS
+==========================================================================
+    [/] /mnt/tank/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023
+
+==========================================================================
+  6. EVERY AFFECTED PATH ATTRIBUTED
+==========================================================================
+  unattributed changes under the collection    0
+
+  RECONCILIATION VERDICT: PASS

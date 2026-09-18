@@ -1,0 +1,84 @@
+== 1. DESTINATION SHAPE ==
+  directories at depth 1                         115
+  directories at depth 2                         0
+  depth-1 dirs NOT matching 'Vol NNN'            0
+  expected-but-absent volume folders             0
+  present-but-unexpected volume folders          0
+
+== 2. FILE PLACEMENT ==
+  mp3 still directly at the collection root      0
+  non-mp3 still at the collection root           1
+    ROOT: 00.Now That's What I Call Music! 1-115(2023).m3u
+  mp3 inside volume folders (depth 2)            4746
+  non-mp3 inside volume folders                  4
+  files anywhere below depth 2                   0
+
+== 3. THE FOUR VALUE-BEARING SIDECARS (D-06) ==
+  OK   back.bmp is inside 'Vol 077'
+  OK   cd1.bmp is inside 'Vol 077'
+  OK   cd2.bmp is inside 'Vol 077'
+  .cue files inside 'Vol 115': 1 (expect 1)
+    NOW That’s What I Call Music! 115.cue
+  .m3u files at the collection ROOT: 1 (expect 1)
+
+== 4. HEADLINE TOTAL, SUMMED PER VOLUME FOLDER FROM THE TREE ==
+  volume folders counted                         115
+  SUM of per-volume mp3 counts                   4746
+  freshly measured collection total (05-05)      4746
+
+== 5. PER-VOLUME IDENTITY files == sum(modal tracktotal), FROM THE TREE ==
+  tree rows (volume, basename)                   4746
+  distinct basenames in the tree                 4746
+  UNJOINED	0
+  volumes measured                               115
+  BALANCED                                       104
+  EXCEPTIONS                                     11
+
+  computed exception set (volume | files | sum(tracktotal) | delta):
+    EXC  Vol 003 |  26 |  28 | -2
+    EXC  Vol 004 |  45 |  32 | +13
+    EXC  Vol 008 |  42 |  33 | +9
+    EXC  Vol 009 |  44 |  31 | +13
+    EXC  Vol 015 |  31 |  32 | -1
+    EXC  Vol 018 |  31 |  32 | -1
+    EXC  Vol 039 |  40 |  41 | -1
+    EXC  Vol 052 |  41 |  42 | -1
+    EXC  Vol 070 |  42 |  43 | -1
+    EXC  Vol 083 |  42 |  43 | -1
+    EXC  Vol 098 |  45 |  46 | -1
+
+  --- diff against the PRE-DECLARED list (05-NOW-INVENTORY.md AMENDMENT + 05-06-SUMMARY) ---
+    EXCEPTION SET MATCHES THE PRE-DECLARED LIST EXACTLY (11 rows)
+
+== 6. MANIFEST-ONLY ENTRIES - THEIR OWN LINE, FOLDED INTO NO TOTAL ==
+  m3u manifest lines                             4770
+  distinct manifest leaves                       4746
+  MANIFEST-ONLY (no file on disk)                2
+    MANIFEST-ONLY: 01. Psy - Gangnam Style (?????).mp3
+    MANIFEST-ONLY: 10. Axwell ? Ingrosso - More Than You Know.mp3
+
+== 7. INODE SAMPLE: (devid, inode) PAIR BEFORE AND AFTER ==
+  sample size                                    31
+  (devid,inode) IDENTICAL after the move         31
+  (devid,inode) CHANGED                          0
+  destination missing                            0
+  negative control - the instrument can distinguish:
+    a DIFFERENT dataset reports a different devid:
+      collection root (tank/downloads)       68
+      library root (tank/media/Music)        76
+
+== 8. EVERY MAP ROW ACCOUNTED FOR ==
+  map rows                                       4751
+  moved (dst exists, src gone)                   4750
+  in place (dst == src, present)                 1
+  UNACCOUNTED                                    0
+
+== 9. OWNERSHIP AND MODE - NOTHING WAS CHOWNED OR CHMODDED ==
+  ownership of the new volume directories (D-26: staging carries mixed ownership by design):
+        115 root:root
+  ownership of the moved files (a rename preserves it):
+       4750 apps:apps
+  modes:
+    dir      115 777
+
+POSTMOVE-VERIFY-COMPLETE

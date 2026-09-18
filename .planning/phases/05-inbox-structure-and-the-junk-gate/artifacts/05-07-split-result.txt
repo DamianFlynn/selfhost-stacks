@@ -1,0 +1,19 @@
+
+==================================================
+  phase05-now-split apply
+==================================================
+  ✅ rollback proven: tank/downloads@pre-phase5
+  ✅ mapping present: /mnt/fast/safety/phase05/now-split-map.tsv
+
+==> Re-validating the map against live state
+  ✅ 4751 row(s) re-validated against live state
+  ✅ volume directories present
+
+📊 apply summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  moved:       4750
+  no-op:       1
+  errors:      0
+  files now inside volume folders: 4750
+  the map expects:                 4750
+  ✅ post-move reconciliation balances, measured from the resulting tree
