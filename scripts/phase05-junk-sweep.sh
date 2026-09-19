@@ -769,10 +769,19 @@ do_sweep() {
     echo "   skip and not a pass." >&2
     exit 2
   fi
-  if ! grep -qF "$SNAPSHOT_NAME" "$SNAPSHOT_PROOF"; then
-    echo "❌ snapshot proof does not name $SNAPSHOT_NAME: $SNAPSHOT_PROOF" >&2
+  # WHOLE-LINE match (-x), and that is not fussiness. A substring match ADMITS SUPERSETS, and the
+  # superset EXISTS on the pool: plan 05-10 created tank/downloads@pre-phase5-chown on 2026-09-19
+  # and deliberately kept it as evidence. That name CONTAINS tank/downloads@pre-phase5, so a
+  # `grep -F` here accepts a proof produced by any recursive `zfs list -t snapshot -r tank/downloads`
+  # even AFTER @pre-phase5 has been destroyed - and this subcommand would then run its moves and its
+  # rm -rf with no rollback in existence while printing "rollback proven". Same defect class as the
+  # `requireBeetsMatch` / FLAC-vs-FLACX prefix bug this estate recorded on 2026-09-14: an unbounded
+  # prefix match passes supersets. Whole-line matching is what makes a wrong-snapshot proof fail.
+  if ! grep -qxF -- "$SNAPSHOT_NAME" "$SNAPSHOT_PROOF"; then
+    echo "❌ snapshot proof does not name $SNAPSHOT_NAME on a line of its own: $SNAPSHOT_PROOF" >&2
     echo "   The 2026-08-18 @pre-project and @pre-chown snapshots are a month stale and are NOT a" >&2
-    echo "   Phase 5 baseline. A proof naming the wrong snapshot must fail, and does." >&2
+    echo "   Phase 5 baseline, and neither is tank/downloads@pre-phase5-chown, which merely has" >&2
+    echo "   $SNAPSHOT_NAME as a prefix. A proof naming the wrong snapshot must fail, and does." >&2
     exit 2
   fi
 

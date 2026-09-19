@@ -147,8 +147,14 @@
 #     rollback. `zfs` cannot resolve on LXC 100 (unprivileged), so the check is DELEGATED to a
 #     proof file produced on atlantis. An unreachable atlantis means the snapshot state is UNKNOWN,
 #     which is a REFUSAL - not a skip and not a pass. The existing @pre-project and @pre-chown
-#     snapshots are a month stale, so a proof naming the wrong snapshot MUST fail; the substring
-#     check gives that for free.
+#     snapshots are a month stale, so a proof naming the wrong snapshot MUST fail - and that takes
+#     a WHOLE-LINE match (`grep -qxF`), not a substring one. A substring check ADMITS SUPERSETS,
+#     and the superset exists: plan 05-10 created tank/downloads@pre-phase5-chown on 2026-09-19 and
+#     kept it as evidence, and that name CONTAINS tank/downloads@pre-phase5. Under `grep -F` a proof
+#     produced by any recursive `zfs list -t snapshot -r tank/downloads` would satisfy the fence even
+#     after @pre-phase5 had been destroyed, and `apply` would run 4,750 renames with no rollback in
+#     existence while printing "rollback proven". Same class as the requireBeetsMatch / FLAC-vs-FLACX
+#     prefix bug recorded on 2026-09-14. DO NOT relax the -x.
 #   * NOTHING is written to the system temp directory. On LXC 100 that directory is tmpfs backed by
 #     host RAM; a 1.1 GB file staged there once took the whole 28 GB box down and killed ssh on the
 #     host AND the container. Every byte this script writes lands under $OUT_DIR on /mnt/fast.
@@ -962,13 +968,17 @@ do_apply() {
     echo "   not a skip and not a pass." >&2
     exit 2
   fi
-  if ! grep -qF -- "$SNAPSHOT_NAME" "$SNAPSHOT_PROOF"; then
-    echo -e "${RED}❌ snapshot proof does not name ${SNAPSHOT_NAME}${NC}" >&2
+  # WHOLE-LINE, fixed-string. See the HAZARD NOTES above: tank/downloads@pre-phase5-chown exists on
+  # the pool and contains $SNAPSHOT_NAME as a prefix, so a substring match would admit it as proof
+  # of a snapshot that may already be gone.
+  if ! grep -qxF -- "$SNAPSHOT_NAME" "$SNAPSHOT_PROOF"; then
+    echo -e "${RED}❌ snapshot proof does not name ${SNAPSHOT_NAME} on a line of its own${NC}" >&2
     echo "   proof file: $SNAPSHOT_PROOF" >&2
     echo "   contents:   $(head -c 200 "$SNAPSHOT_PROOF" | tr '\n' ' ')" >&2
     echo "   The existing @pre-project and @pre-chown snapshots are a month stale: rolling back to" >&2
-    echo "   one of them would discard a month of unrelated downloads. A proof naming the wrong" >&2
-    echo "   snapshot MUST fail. Refusing." >&2
+    echo "   one of them would discard a month of unrelated downloads. tank/downloads@pre-phase5-chown" >&2
+    echo "   is not a substitute either - it merely has ${SNAPSHOT_NAME} as a prefix. A proof naming" >&2
+    echo "   the wrong snapshot MUST fail. Refusing." >&2
     exit 2
   fi
   pass "rollback proven: $SNAPSHOT_NAME"

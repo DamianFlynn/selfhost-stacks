@@ -1138,12 +1138,24 @@ def check_snapshot_proof_or_die(
     except OSError as exc:
         sys.stderr.write(colour(f"REFUSING TO APPLY: cannot read {proof_path}: {exc}\n", RED))
         sys.exit(2)
-    if snapshot_name not in body:
+    # WHOLE-LINE match, the same discipline as `grep -qxF`, and it is not fussiness. A substring
+    # test ADMITS SUPERSETS, and the superset exists on the pool: plan 05-10 created
+    # tank/downloads@pre-phase5-chown on 2026-09-19 and kept it as evidence, and that name CONTAINS
+    # tank/downloads@pre-phase5. With `snapshot_name in body`, a proof produced by any recursive
+    # `zfs list -t snapshot -r tank/downloads` satisfies this fence even AFTER @pre-phase5 has been
+    # destroyed - and --apply would then rewrite tags in place with no rollback in existence. Same
+    # defect class as the requireBeetsMatch / FLAC-vs-FLACX prefix bug recorded on 2026-09-14.
+    # Trailing whitespace and a trailing newline are tolerated exactly as `grep -x` tolerates them.
+    proof_lines = {line.strip() for line in body.splitlines()}
+    if snapshot_name not in proof_lines:
         sys.stderr.write(
             colour(
-                f"REFUSING TO APPLY: {proof_path} does not name {snapshot_name}.\n"
+                f"REFUSING TO APPLY: {proof_path} does not name {snapshot_name} on a line of\n"
+                "  its own.\n"
                 f"  That is the `{collection}` collection's ONLY rollback; another collection's\n"
-                "  snapshot does not substitute for it. Snapshot state is UNKNOWN.\n",
+                "  snapshot does not substitute for it, and neither does a LONGER name that merely\n"
+                f"  starts with {snapshot_name} (tank/downloads@pre-phase5-chown exists and is one).\n"
+                "  Snapshot state is UNKNOWN.\n",
                 RED,
             )
         )
