@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-18T23:20:33.233Z"
-last_activity: 2026-09-18 -- Phase 05 execution started
+last_updated: "2026-09-19T20:50:13.854Z"
+last_activity: 2026-09-19 -- Phase 05 plan 05-10 complete (the approved 26,005-entry chown)
 progress:
   total_phases: 10
   completed_phases: 4
   total_plans: 74
-  completed_plans: 70
+  completed_plans: 71
   percent: 40
 ---
 
@@ -29,7 +29,7 @@ pipeline that someone owns.
 ## Current Position
 
 Phase: 05 (inbox-structure-and-the-junk-gate) — EXECUTING
-Plan: 10 of 11 — **05-01 … 05-09 COMPLETE** (fence taken, `_inbox` created, D-21 inode
+Plan: 11 of 11 — **05-01 … 05-10 COMPLETE** (fence taken, `_inbox` created, D-21 inode
 proof driven; criteria 2/3/4 amended in band and criterion 4 now asserted by the standing check; the
 junk gate built and its refusals and positive control driven; **the sweep has RUN** — 40 rows
 removed, 4 moved, 8 excluded entirely, every affected path attributed to an approved row by
@@ -63,6 +63,8 @@ NOTHING WAS WRITTEN, proven by an identical 4,751-file mtime/size fingerprint ei
 from mutated copies, one of them catching `save(v1=UPDATE)` regenerating the ID3v1 block — the
 `audio_md5` hazard — in the act; **⚠ that plan's `zfs diff` evidence is now known to be vacuous — see 05-09**)
 **05-09 HAS WRITTEN.** D-10's album repair is complete: **751 in-place tag writes across 22 volumes**, piloted on `Vol 036` (the operator amended the plan's `Vol 077`, which has zero proposed changes and would have passed its gate vacuously) and gated before the remaining 715. `album` is the ONLY field that changed on any file — asserted mechanically, 740 changed keys and one distinct field name — and `audio_md5` moved on NONE, which is the direct measurement that Phase 7's diff join survived. Each of the **115 volume folders now carries exactly one album string** (117 distinct values before, 115 after), read by a parser that is neither mutagen nor ffprobe. The 3,995 already-correct files were never written: a second `--apply` reports 4,746 no-ops and moves 0 mtimes. ID3v2 frame set and ID3v1 trailer are byte-identical to `@pre-phase5` on all 4,746, instrument driven to FAIL. **⚠ `zfs diff` is NOT a valid scope instrument on this collection** — 05-07 renamed every mp3, and `zfs diff` collapses renamed-and-modified into a single `R`, so it reports 0 `M` lines on any mp3 whether 751 files were written or none; replaced with a two-arm content control against the snapshot. Atlantis rebooted mid-verification under two concurrent whole-collection reads; 4,751 files were re-fingerprinted across it and **0 moved, 0 lost, 0 new** — no write was in flight.
+**05-10 HAS CHOWNED — but not the chown D-24 described.** D-24 asked for "all 209,039 entries"; the survey measured **233,824**, of which **222,376** were not `568:568`, and the breakdown changed the decision: **84% of it was `dropbox/`** (196,327 entries of `code/`, `Archive/`, `Documents/`, `Projects/` — not downloads), 11% was `mac-music-archive/` (23,874 music entries **no phase has ever counted**), and `google takeout/` was being read by an **active** `takeout-import.service` throughout. The operator **narrowed the scope to 26,005 entries**; 26,005 + 196,371 excluded = 222,376, so the arithmetic closes and nothing was quietly dropped. **139 rows, 7 s of chown**, and `zfs diff` against a FRESH baseline returned exactly **`M 26005`** with zero `+`, `-` or `R` — the approved scope to the entry, and not one line under any excluded path. Library proof **0 lines**. The approved roots read back from atlantis at **37,191 entries, ZERO not `568:568`**. `dropbox/` and `google takeout/` proven untouched by a 330-line owner+ctime fingerprint (sha256 identical) that was **driven to FAIL** first. **⚠ D-24's preserved counter-argument is FALSE and was amended in band**: uid 3000 is outside every LXC 100 idmap range, has no passwd entry, and SABnzbd's own output is `568:568` — it is an orphan uid sitting on archives, not the download client. **⚠ `incomplete/` needed nothing** — the subtree D-24 singled out as the risky inclusion was already 100% correct. **⚠ The 115 `Vol NNN` dirs were never `root:root`** — that was 05-09's container view; on disk they were `100000:100000`. **⚠ ZFS devids have already moved** — `05-INBOX-PATHS.md`'s 68/76 read 70/75 a day later; never assert on a devid. D-25 holds: **no standing check, and there will not be one.**
+
 Status: Executing Phase 05. Do NOT run with `--auto`/`--chain` — four
 gates are `checkpoint:decision`, which auto-selects the first option under auto-mode.
 
@@ -624,7 +626,7 @@ it asked for: the operator browsed MA's Filesystem (local disk) provider, spot-c
 **played tracks to confirm the audio matches the metadata**. No assertion in this phase could do
 that — every automated check verifies MA's *database* says the right thing, never that the *bytes*
 are the right song, and the documented stale state is precisely "entries exist, playback fails".
-Last activity: 2026-09-18 -- Phase 05 execution started
+Last activity: 2026-09-19 -- Phase 05 plan 05-10 complete (the approved 26,005-entry chown)
 deletion and throttling proven from Jellyfin's own Debug log across two driven playback sessions, the
 ZFS quota proven to refuse a write while `/` moved by 0 bytes, the anonymous volume deleted by name
 after the observation it would have made vacuous, **12.95 GiB reclaimed**, and the standing check
@@ -688,7 +690,7 @@ back onto anything under `/mnt/tank/media`.
 Phase 1 complete: SAFE-01…05, WRIT-01…04, QUAL-01
 Phase 2 complete: CONS-01, CONS-02, CONS-03
 
-Progress: [██░░░░░░░░] 22%  *(MILESTONE progress: **2 of 9 phases** complete. All 19 plans written so far are executed 19/19 — but phases 3-9 are not planned yet, so plan-count is not milestone progress. ⚠ `gsd-sdk query state.update-progress` recomputed this as **51%** on 2026-09-02 by counting SUMMARY files against a 39-plan denominator that only covers planned phases; that figure is WRONG and was reverted. Do not let the SDK rewrite this line — phase 02.1 is an INSERTION and is not one of the 9 milestone phases. ⚠ **It happened a second time on 2026-09-13** during plan 04-14, recomputed as **97%** against a 60-plan denominator, and was reverted again. The verb rewrites this line every time it runs; `git diff .planning/STATE.md` after any state write is not optional. ⚠ **Third occurrence 2026-09-18** during plan 05-01, recomputed as **84%** against a 74-plan denominator, reverted again. ⚠ **Fourth occurrence 2026-09-18** during plan 05-02, recomputed as **85%** against the same 74-plan denominator, reverted again — and this time the verb ALSO truncated the frontmatter `last_activity:` back to a bare "Phase 05 execution started", so the damage is not confined to this line. ⚠ **Fifth occurrence 2026-09-18** during plan 05-03, recomputed as **86%** against the same 74-plan denominator, reverted again; on this run the collateral damage was all three of the documented sites at once — the frontmatter `last_activity:`, the `Status:` line (leaving `gates are ...` orphaned under it), and the `Last activity:` line 560 lines down. ⚠ **Sixth occurrence 2026-09-18** during plan 05-04, recomputed as **88%** against the same 74-plan denominator, reverted again, with the same three collateral sites damaged a second consecutive time — the damage set is now stable and predictable, which is the strongest argument yet for not running the verb against this line at all. ⚠ **Seventh occurrence 2026-09-18** during plan 05-05, recomputed as **89%** against the same 74-plan denominator, reverted again, same three collateral sites for the third consecutive run. Seven occurrences, seven figures, zero of them milestone progress — the verb cannot compute this figure and should not be run against this line ⚠ **Eighth occurrence 2026-09-18** during plan 05-06, recomputed as **91%** against the same 74-plan denominator, reverted again, same three collateral sites for the fourth consecutive run. Eight occurrences, eight figures, zero of them milestone progress. ✅ **Plan 05-07 broke the loop: `state.update-progress` was NOT RUN AT ALL**, on the strength of this note's own conclusion after eight identical reverts — acting on a written finding instead of re-deriving it a ninth time. This line is therefore untouched by that verb for the first time since 05-01. `state.advance-plan` was still required and still damaged its own three sites — the frontmatter `last_activity:`, the multi-line `Status:` field, and the `Last activity:` line ~600 — all three reverted, leaving only the intended `completed_plans` and `Plan:` changes. **The damage set has now been stable across five consecutive runs: `advance-plan` corrupts three sites, `update-progress` corrupts this one, and `record-metric`, `add-decision` and `record-session` were each driven this plan and corrupted nothing.** That breakdown is finer than "the SDK corrupts STATE.md" and is the actionable form: run the three clean verbs freely, diff after `advance-plan`, never run `update-progress` against this line.)*
+Progress: [██░░░░░░░░] 22%  *(MILESTONE progress: **2 of 9 phases** complete. All 19 plans written so far are executed 19/19 — but phases 3-9 are not planned yet, so plan-count is not milestone progress. ⚠ `gsd-sdk query state.update-progress` recomputed this as **51%** on 2026-09-02 by counting SUMMARY files against a 39-plan denominator that only covers planned phases; that figure is WRONG and was reverted. Do not let the SDK rewrite this line — phase 02.1 is an INSERTION and is not one of the 9 milestone phases. ⚠ **It happened a second time on 2026-09-13** during plan 04-14, recomputed as **97%** against a 60-plan denominator, and was reverted again. The verb rewrites this line every time it runs; `git diff .planning/STATE.md` after any state write is not optional. ⚠ **Third occurrence 2026-09-18** during plan 05-01, recomputed as **84%** against a 74-plan denominator, reverted again. ⚠ **Fourth occurrence 2026-09-18** during plan 05-02, recomputed as **85%** against the same 74-plan denominator, reverted again — and this time the verb ALSO truncated the frontmatter `last_activity:` back to a bare "Phase 05 execution started", so the damage is not confined to this line. ⚠ **Fifth occurrence 2026-09-18** during plan 05-03, recomputed as **86%** against the same 74-plan denominator, reverted again; on this run the collateral damage was all three of the documented sites at once — the frontmatter `last_activity:`, the `Status:` line (leaving `gates are ...` orphaned under it), and the `Last activity:` line 560 lines down. ⚠ **Sixth occurrence 2026-09-18** during plan 05-04, recomputed as **88%** against the same 74-plan denominator, reverted again, with the same three collateral sites damaged a second consecutive time — the damage set is now stable and predictable, which is the strongest argument yet for not running the verb against this line at all. ⚠ **Seventh occurrence 2026-09-18** during plan 05-05, recomputed as **89%** against the same 74-plan denominator, reverted again, same three collateral sites for the third consecutive run. Seven occurrences, seven figures, zero of them milestone progress — the verb cannot compute this figure and should not be run against this line ⚠ **Eighth occurrence 2026-09-18** during plan 05-06, recomputed as **91%** against the same 74-plan denominator, reverted again, same three collateral sites for the fourth consecutive run. Eight occurrences, eight figures, zero of them milestone progress. ✅ **Plan 05-07 broke the loop: `state.update-progress` was NOT RUN AT ALL**, on the strength of this note's own conclusion after eight identical reverts — acting on a written finding instead of re-deriving it a ninth time. This line is therefore untouched by that verb for the first time since 05-01. `state.advance-plan` was still required and still damaged its own three sites — the frontmatter `last_activity:`, the multi-line `Status:` field, and the `Last activity:` line ~600 — all three reverted, leaving only the intended `completed_plans` and `Plan:` changes. **The damage set has now been stable across five consecutive runs: `advance-plan` corrupts three sites, `update-progress` corrupts this one, and `record-metric`, `add-decision` and `record-session` were each driven this plan and corrupted nothing.** That breakdown is finer than "the SDK corrupts STATE.md" and is the actionable form: run the three clean verbs freely, diff after `advance-plan`, never run `update-progress` against this line. ✅ **Plan 05-10 did the same: `update-progress` NOT RUN**, and `advance-plan` damaged exactly the same three sites for the sixth consecutive run — frontmatter `last_activity:`, the multi-line `Status:` field, and `Last activity:` line 627 — all three reverted. Two further notes from 05-10, because the role prompt is wrong about both: `record-metric` and `add-decision` take **NAMED flags** (`--phase/--plan/--duration/--tasks/--files`, `--summary`), not positionals — called positionally they return `"error": "... required"` and write nothing; and `record-session` **also bumps `completed_plans`**, so `advance-plan` afterwards does not double-count it. `add-decision` still writes `[Phase ?]` and still needs correcting by hand.)*
 
 Plans 02-01 through 02-09 are executed. **CONS-01, CONS-02 and CONS-03 are all complete.**
 
@@ -908,6 +910,7 @@ already open so only 2049 is this phase's delta.
 | Phase 05 P07 | ~30 min | 3 tasks | 10 files |
 | Phase 05 P08 | 25m | 3 tasks | 2 files |
 | Phase 05 P09 | ~2h25m | 3 tasks | 7 files |
+| Phase 05 P10 | ~3 h 20 min | 4 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -1237,6 +1240,10 @@ Recent decisions affecting current work:
 - [Phase 05]: 05-09: Pilot moved from the plan's Vol 077 to Vol 036 on the operator's amendment — Vol 077 has zero proposed changes, so its gate would have passed vacuously; Vol 036 is the only volume whose files do not all share one album value
 - [Phase 05]: 05-09: The plan's zfs diff scope criterion is NON-DISCRIMINATING here and was replaced, not quoted — 05-07 renamed every mp3, and zfs diff collapses renamed-and-modified into a single R, so it reports 0 M lines on any mp3 whether 751 files were written or none
 - [Phase 05]: 05-09: D-10's album write is COMPLETE — 751 files in 22 volumes, album the only field changed, audio_md5 unmoved on all of them, and each of the 115 volume folders now carries exactly one album string
+- [Phase 05]: 05-10: D-24's scope was NARROWED from 222,376 entries to 26,005 by the operator, on a survey D-24 was written without — 84% of it was a personal Dropbox mirror and one subtree was being read by a live import. 26,005 + 196,371 excluded = 222,376, so the arithmetic closes and nothing was quietly dropped
+- [Phase 05]: 05-10: A decision's own stated rationale is evidence to be tested, not a premise — D-24's preserved counter-argument said uid 3000 is the download client legitimately owning what it wrote; uid 3000 is outside every LXC 100 idmap range, has no passwd entry, and SABnzbd's own output is 568:568
+- [Phase 05]: 05-10: Put every fence that needs no remote access AHEAD of the remote access — with the row fence sitting after route detection, all five excluded-tree negative controls exited 2 on 'no zfs route' and proved nothing while looking green
+- [Phase 05]: 05-10: Prove an untouched-claim with an instrument driven to FAIL on the same shape of change elsewhere, and prefer a whole-DATASET instrument over a whole-ROOTS one — zfs diff can see a reach into a tree the positive instrument never walks
 
 ### Pending Todos
 
@@ -1385,7 +1392,7 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-09-18T23:20:25.277Z
+Last session: 2026-09-19T20:49:37.663Z
 Stopped at: Completed 05-09-PLAN.md
 Resume file: None
 
