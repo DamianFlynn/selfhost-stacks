@@ -50,7 +50,7 @@ the same filesystem paths and the same beets state.
 - [x] **Phase 02.1: Jellyfin transcode retention** *(INSERTED)* - Relocate the anonymous transcode volume off `/` and set a retention policy, so the 19 GB cache that emptied `/` mid-Phase-3 cannot refill there (all 10 plans executed 2026-09-03; `/` free 20.18 GiB -> 34.48 GiB, margin over the D-17 floor 185 MiB -> 14.48 GiB, `check-jellyfin-transcode.sh` FAILURES 0 and folded into `quick-health-check.sh`. **VERIFIED 2026-09-03: `gaps_found`, 8/10 must-haves** -- the structural relocation is real and re-verified live, but two gaps block completion, both confirmed independently: (CR-01) `TranscodingTempPath` is REPORTED not asserted, so drift off the quota'd dataset leaves the standing check green -- which undercuts the goal's own "a standing fail-closed check would have caught the incident"; and (CR-02) the "Jellyfin publishes NO host port" claim is FALSE -- `curl http://172.16.1.76:8096/health` returns 200 from the LAN -- and it is the last compensating control for the admin-equivalent API key this phase widened from read to write. Close with `/gsd-plan-phase 02.1 --gaps`) (completed 2026-09-03)
 - [x] **Phase 3: Tagger Spike** - One tagger *and* one front end chosen on numbers from this library's own content, against thresholds committed in advance (completed 2026-09-04)
 - [x] **Phase 4: Collapse to One Tagger** - One tagger, one database, no idle container holding a rw mount — independently shippable (closed 2026-09-18 at 5/5: criteria 1, 2, 4 and 5 verified by live measurement; **criterion 3 discharged by a signed override, not by a byte proof** — the operator accepted the threefold unanimous side-effect evidence (5 real music jobs, 2 observation windows, 0 tagger artefacts of any kind) in place of the PRE-HOOK/COMPLETION byte comparison the criterion's own evidence contract asks for, after three capture designs were built and exhausted and the third was deliberately never armed. Signed record: `.planning/phases/04-collapse-to-one-tagger/04-VERIFICATION.md`)
-- [ ] **Phase 5: Inbox Structure and the Junk Gate** - A staging queue outside the library, with the junk already out of it
+- [x] **Phase 5: Inbox Structure and the Junk Gate** - A staging queue outside the library, with the junk already out of it (closed 2026-09-19 at **4/4 criteria TRUE, 0 FAIL** — each one **re-measured from live state at close** by plan 05-11 after the sweep, the split, the album write and the chown, rather than carried forward from the plan summaries: `artifacts/05-11-final-assertions.txt`. Criteria 2 and 3 are TRUE against their dated 2026-09-18 in-band amendments, not against their original wording. Criterion 4 was already green before the phase began and is now **asserted** by the standing health check, with its negative control driven once on 2026-09-18. Four items are recorded **OPEN**, none of them a violated condition: the pre-existing `interpolated-host-path` gate that makes `quick-health-check.sh` exit 1, `mac-music-archive/`'s 23,874 uncharacterised music entries, an Immich API key on a systemd command line, and `dropbox/` inside nine `rw` binds. Durable record: `stacks/selfhosted/arrs/beets.md` § *Phase 5*)
 - [ ] **Phase 6: Tagger Configuration and Dry Run** - The intended tree proven on paper before it is produced on disk
 - [ ] **Phase 7: Pilot — 12 Albums End to End** - A flow the operator believes: twelve albums including the painful shapes, no net metadata loss, undo exercised
 - [ ] **Phase 8: Close the Inflow** - A new download lands, gets tagged, and never silently skips
@@ -660,9 +660,28 @@ QUAL-01 before-state snapshot must already be taken — staging first destroys t
      `tank/downloads` and nothing equivalent exists under `media/`. Moving a release folder between
      two of them is an atomic same-dataset rename, verified by unchanged inode rather than by
      watching it look fast.
+     **✅ TRUE as of 05-01**, re-asserted from live state at close by **05-11**: six directories
+     present; `_inbox` on the same devid as `unsorted/` and `dj-mixes/` with the library on a
+     different one; **zero** ZFS datasets named `_inbox` (D-18); **zero** equivalents under
+     `/mnt/tank/media` to depth 3; and the inode proof **driven again after the chown**, both
+     controls — same-dataset `(70, 295296)` → `(70, 295296)`, cross-dataset → `(43, 128)`.
+     Two corrections this criterion needs: (a) **ZFS devids are not stable** — the same two paths
+     read 68/76, then 70/75, then 70/81 across three days, so the *property* is the assertion and
+     the *number* never is; (b) `/mnt/tank/downloads`, `/mnt/tank/media/Music` and `/mnt/fast` all
+     report **inode 34**, so the proof must compare the pair `(devid, inode)`, never the inode alone.
 
   2. Searching the download tree returns zero `_FAILED_`, `_UNPACK_` or stray `.rar` items outside
      `99-quarantine`, and the Harry Potter BluRay rip is out of `dj-mixes`.
+     **✅ TRUE as of 05-04** *(against the amendment below, not the wording above)*, re-asserted at
+     close by **05-11**: zero `_FAILED_`/`_UNPACK_` directories and zero `.rar`-form files across
+     the five music paths outside `99-quarantine`, with the same `find` **without** the exclusion
+     returning the two quarantined directories, so the instrument is not vacuous;
+     `/mnt/tank/downloads/lidarr-import` **absent** — Phase 1's D-23 closed here rather than handed
+     to Phase 8; the named Potter rip absent. The sweep was 52 candidates enumerated, **44 approved
+     with two operator amendments — 40 removed, 4 moved to `99-quarantine`, 8 `.covers` directories
+     struck untouched** — every removed and renamed path attributed to an approved row by `zfs diff`.
+     ⚠ A re-run must assert the **named** rip path: `-iname '*potter*'` now matches a legitimate
+     song moved into `Vol 066` by the 05-07 split.
 
      > **Amended 2026-09-18 by plan 05-02 (D-12, D-14).** This criterion previously read
      > "Searching the download tree returns zero `_FAILED_`, `_UNPACK_` or stray `.rar` items
@@ -695,6 +714,22 @@ QUAL-01 before-state snapshot must already be taken — staging first destroys t
 
   3. The 45 GB `Now! 1-115` folder is split into per-volume folders, each independently importable
      and abortable, with the per-volume file counts summing back to the original count.
+     **✅ TRUE as of 05-07** *(against the amendment below)*, with the tag deliverable that makes the
+     split coherent landed by **05-09** and the whole re-asserted at close by **05-11** using an
+     independent read-only `ffprobe` walk — neither the tool that split nor the tool that wrote the
+     tags: **115** depth-1 directories named exactly `Vol 001`…`Vol 115`, **0** at depth 2, **4,746**
+     mp3 summing to the freshly measured collection total, **0** mp3 left at the collection root,
+     **0** ffprobe failures, and **0** volumes carrying anything other than exactly one `album`
+     value (115 distinct strings across 115 folders). **Manifest-only entries: 0**, on its own line
+     and never folded into any total (D-08) — the m3u's 24-line excess is *collision, not absence*.
+     The `files == Σ modal tracktotal` exception set measured **11 rows** and matched the
+     pre-declared post-merge list — volumes 3, 4, 8, 9, 15, 18, 39, 52, 70, 83, 98 — **11 for 11**.
+     Read volumes 4/8/9's `+13/+9/+13` as *"a merged folder, expectation not meaningful"*: D-04's
+     surplus is a **grouping artefact**, settled by the album tag, the manifest directories and the
+     encoded bitstream (4,735 distinct `audio_md5` across 4,746 records, 9 of 11 duplicate groups
+     inside `Vol 004`). Two figures the criterion's own wording understates: the split was **4,750
+     renames**, and the album write touched **751 files across 22 volumes** — the other 3,995 were
+     already canonical and were deliberately not rewritten.
 
      > **Amended 2026-09-18 by plan 05-02 (D-02, D-05, D-08).** This criterion previously read
      > "The 45 GB `Now! 1-115` folder is split into per-volume folders, each independently
@@ -721,6 +756,18 @@ QUAL-01 before-state snapshot must already be taken — staging first destroys t
   4. No `_`-prefixed folder exists anywhere under `/mnt/tank/media/Music` — underscore names are
      fine in the staging tree because it is outside the library, and never inside it, because
      Music Assistant silently ignores them and Jellyfin does not.
+     **✅ TRUE as of 05-02** — already green before the phase began; what 05-02 made true is that it
+     is now **asserted** rather than claimed, as a fatal block in `scripts/quick-health-check.sh`
+     with "could not look" kept distinct from "there are none". D-22's **before** half ran
+     2026-09-18 with a **driven negative control** (a `_probe` created inside the library from
+     atlantis as real root: check red with it, green without it, the probe independently tripping
+     `check-music-freeze.sh`'s ownership assertion as a second instrument, `EXIT` trap confirming
+     removal). The **after** half ran at close in **05-11**, verbatim from the block:
+     `Library underscore-dir guard: ✅ No '_'-prefixed directories under /mnt/tank/media/Music`.
+     ⚠ **Read the block's verdict line, never the script's exit code.** `quick-health-check.sh`
+     exits **1** on a pre-existing, unrelated gate — `check-music-freeze.sh`'s
+     `interpolated-host-path inventory MOVED: expected=12, found=13` — which is the only red line
+     in the run, so the whole-script exit code is **non-discriminating** for this criterion.
 
      > **Amended 2026-09-18 by plan 05-02 (D-22, D-25).** The wording above **stands unchanged** and
      > is quoted here in full: "No `_`-prefixed folder exists anywhere under `/mnt/tank/media/Music`
@@ -740,7 +787,23 @@ QUAL-01 before-state snapshot must already be taken — staging first destroys t
      > the next download and train everyone to ignore it — the exact failure mode Phase 02.1's CR-01
      > spent four gap-closure plans repairing in the other direction. D-24's `568:568` sweep is a
      > one-time, `zfs diff`-verified measurement; its date is the deliverable, not a standing check.
-**Plans**: 11 plans
+**Plans**: 11 plans, **all 11 executed** (05-01 … 05-11), one wave at a time — every plan in this
+phase touches the same filesystem paths. Executed list, each with the objective it delivered:
+
+| Plan | Objective delivered |
+|---|---|
+| 05-01 | The `tank/downloads@pre-phase5` fence, the six `_inbox` directories, and the D-21 inode proof with its cross-dataset negative control |
+| 05-02 | The dated in-band amendments to criteria 2, 3 and 4 plus the INBX addenda, and criterion 4 folded into `quick-health-check.sh` and driven red |
+| 05-03 | `scripts/phase05-junk-sweep.sh` and the 52-row approvable candidate file |
+| 05-04 | The sweep executed on the operator's 44 approved rows — 40 removed, 4 moved, 8 untouched — and `lidarr-import` retired |
+| 05-05 | The durable `Now!` tag inventory under `/mnt/fast`, the per-volume reconciliation, and D-04's surplus answered |
+| 05-06 | `scripts/phase05-now-split.sh` and the reviewable src→dst mapping with total-coverage assertions |
+| 05-07 | The split applied: 4,750 renames into 115 flat `Vol NNN` folders, plus the QUAL-01 before-state capture |
+| 05-08 | The narrow Phase 5 collection mode and rule 4 in `normalise-dj-tags.py`, self-tested and dry-run |
+| 05-09 | The album write piloted on `Vol 036` and then applied — 751 files across 22 volumes, gated on the field-level diff |
+| 05-10 | Fresh chown baselines and the operator-scoped 26,005-entry `chown` to `568:568`, `zfs diff`-verified |
+| 05-11 | All four criteria re-asserted from live state, and the Phase 5 closure written into `stacks/selfhosted/arrs/beets.md` |
+
 Plans:
 **Wave 1**
 
@@ -781,7 +844,7 @@ Plans:
 
 **Wave 10** *(blocked on Wave 9 completion)*
 
-- [ ] 05-11-PLAN.md — re-assert all four criteria from live state and write the Phase 5 closure into `stacks/selfhosted/arrs/beets.md`
+- [x] 05-11-PLAN.md — re-assert all four criteria from live state and write the Phase 5 closure into `stacks/selfhosted/arrs/beets.md` *(executed 2026-09-19: all four criteria re-measured at close and all four TRUE, 0 FAIL; evidence `host:/mnt/fast/safety/phase05/phase05-final-assertions.txt`, committed copy `artifacts/05-11-final-assertions.txt`; closure written at `stacks/selfhosted/arrs/beets.md` § Phase 5)*
 
 **Research**: not needed — filesystem triage with documented traps. `05-CONTEXT.md` (27 locked
 decisions), `05-PREMEASURE.md` (measurements from atlantis, 2026-09-18) and `05-PATTERNS.md` (analog
