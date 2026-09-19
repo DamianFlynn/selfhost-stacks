@@ -2,8 +2,8 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-last_updated: "2026-09-19T21:22:46.195Z"
+status: ready_to_plan
+last_updated: 2026-09-19T22:20:20.641Z
 last_activity: 2026-09-19 -- Phase 05 CLOSED by plan 05-11 (4/4 criteria TRUE, re-measured from live state)
 progress:
   total_phases: 10
@@ -11,6 +11,7 @@ progress:
   total_plans: 74
   completed_plans: 72
   percent: 50
+stopped_at: Phase 05 complete (11/11) — ready to discuss Phase 6
 ---
 
 # Project State
@@ -21,15 +22,18 @@ See: .planning/PROJECT.md (updated 2026-08-17)
 
 **Core value:** New music downloads land in the library correctly tagged, through exactly one
 pipeline that someone owns.
-**Current focus:** Phase 05 — inbox-structure-and-the-junk-gate
+**Current focus:** Phase 6 — tagger configuration and dry run
 
 **Definition of done (CONS-04):** a file is imported only when verified with `ffprobe` on the file
 *and* visible in both Jellyfin and Music Assistant. Never "tool configured".
 
 ## Current Position
 
-Phase: 05 (inbox-structure-and-the-junk-gate) — **COMPLETE, closed 2026-09-19 at 4/4 criteria TRUE**
-Plan: 11 of 11 — **ALL 11 COMPLETE** (fence taken, `_inbox` created, D-21 inode
+Phase: 6 (tagger-configuration-and-dry-run) — not yet planned
+Plan: Not started
+
+Previous: Phase 05 (inbox-structure-and-the-junk-gate) — **COMPLETE, closed 2026-09-19 at 4/4
+criteria TRUE**, 11 of 11 plans (fence taken, `_inbox` created, D-21 inode
 proof driven; criteria 2/3/4 amended in band and criterion 4 now asserted by the standing check; the
 junk gate built and its refusals and positive control driven; **the sweep has RUN** — 40 rows
 removed, 4 moved, 8 excluded entirely, every affected path attributed to an approved row by
@@ -91,7 +95,7 @@ it now matches a real song the split moved into `Vol 066`; assert the named path
 before Phase 6 signs off** — it is the only undo for 4,750 renames, 751 tag writes and 26,005
 chowns, and it is **not** a clean undo.
 
-Status: Phase 05 COMPLETE. Next: Phase 06 (Tagger Configuration and Dry Run) — not yet planned.
+Status: Ready to plan
 Do NOT run with `--auto`/`--chain` — four
 gates are `checkpoint:decision`, which auto-selects the first option under auto-mode.
 
@@ -653,7 +657,7 @@ it asked for: the operator browsed MA's Filesystem (local disk) provider, spot-c
 **played tracks to confirm the audio matches the metadata**. No assertion in this phase could do
 that — every automated check verifies MA's *database* says the right thing, never that the *bytes*
 are the right song, and the documented stale state is precisely "entries exist, playback fails".
-Last activity: 2026-09-19 -- Phase 05 plan 05-10 complete (the approved 26,005-entry chown)
+Last activity: 2026-09-19 -- Phase 05 CLOSED (4/4 criteria TRUE; 2 code-review BLOCKERs fixed)
 deletion and throttling proven from Jellyfin's own Debug log across two driven playback sessions, the
 ZFS quota proven to refuse a write while `/` moved by 0 bytes, the anonymous volume deleted by name
 after the observation it would have made vacuous, **12.95 GiB reclaimed**, and the standing check
@@ -717,7 +721,7 @@ back onto anything under `/mnt/tank/media`.
 Phase 1 complete: SAFE-01…05, WRIT-01…04, QUAL-01
 Phase 2 complete: CONS-01, CONS-02, CONS-03
 
-Progress: [██░░░░░░░░] 22%  *(MILESTONE progress: **2 of 9 phases** complete. All 19 plans written so far are executed 19/19 — but phases 3-9 are not planned yet, so plan-count is not milestone progress. ⚠ `gsd-sdk query state.update-progress` recomputed this as **51%** on 2026-09-02 by counting SUMMARY files against a 39-plan denominator that only covers planned phases; that figure is WRONG and was reverted. Do not let the SDK rewrite this line — phase 02.1 is an INSERTION and is not one of the 9 milestone phases. ⚠ **It happened a second time on 2026-09-13** during plan 04-14, recomputed as **97%** against a 60-plan denominator, and was reverted again. The verb rewrites this line every time it runs; `git diff .planning/STATE.md` after any state write is not optional. ⚠ **Third occurrence 2026-09-18** during plan 05-01, recomputed as **84%** against a 74-plan denominator, reverted again. ⚠ **Fourth occurrence 2026-09-18** during plan 05-02, recomputed as **85%** against the same 74-plan denominator, reverted again — and this time the verb ALSO truncated the frontmatter `last_activity:` back to a bare "Phase 05 execution started", so the damage is not confined to this line. ⚠ **Fifth occurrence 2026-09-18** during plan 05-03, recomputed as **86%** against the same 74-plan denominator, reverted again; on this run the collateral damage was all three of the documented sites at once — the frontmatter `last_activity:`, the `Status:` line (leaving `gates are ...` orphaned under it), and the `Last activity:` line 560 lines down. ⚠ **Sixth occurrence 2026-09-18** during plan 05-04, recomputed as **88%** against the same 74-plan denominator, reverted again, with the same three collateral sites damaged a second consecutive time — the damage set is now stable and predictable, which is the strongest argument yet for not running the verb against this line at all. ⚠ **Seventh occurrence 2026-09-18** during plan 05-05, recomputed as **89%** against the same 74-plan denominator, reverted again, same three collateral sites for the third consecutive run. Seven occurrences, seven figures, zero of them milestone progress — the verb cannot compute this figure and should not be run against this line ⚠ **Eighth occurrence 2026-09-18** during plan 05-06, recomputed as **91%** against the same 74-plan denominator, reverted again, same three collateral sites for the fourth consecutive run. Eight occurrences, eight figures, zero of them milestone progress. ✅ **Plan 05-07 broke the loop: `state.update-progress` was NOT RUN AT ALL**, on the strength of this note's own conclusion after eight identical reverts — acting on a written finding instead of re-deriving it a ninth time. This line is therefore untouched by that verb for the first time since 05-01. `state.advance-plan` was still required and still damaged its own three sites — the frontmatter `last_activity:`, the multi-line `Status:` field, and the `Last activity:` line ~600 — all three reverted, leaving only the intended `completed_plans` and `Plan:` changes. **The damage set has now been stable across five consecutive runs: `advance-plan` corrupts three sites, `update-progress` corrupts this one, and `record-metric`, `add-decision` and `record-session` were each driven this plan and corrupted nothing.** That breakdown is finer than "the SDK corrupts STATE.md" and is the actionable form: run the three clean verbs freely, diff after `advance-plan`, never run `update-progress` against this line. ✅ **Plan 05-10 did the same: `update-progress` NOT RUN**, and `advance-plan` damaged exactly the same three sites for the sixth consecutive run — frontmatter `last_activity:`, the multi-line `Status:` field, and `Last activity:` line 627 — all three reverted. Two further notes from 05-10, because the role prompt is wrong about both: `record-metric` and `add-decision` take **NAMED flags** (`--phase/--plan/--duration/--tasks/--files`, `--summary`), not positionals — called positionally they return `"error": "... required"` and write nothing; and `record-session` **also bumps `completed_plans`**, so `advance-plan` afterwards does not double-count it. `add-decision` still writes `[Phase ?]` and still needs correcting by hand.)*
+Progress: [██░░░░░░░░] 22%  *(MILESTONE progress: **2 of 9 phases** complete. All 19 plans written so far are executed 19/19 — but phases 3-9 are not planned yet, so plan-count is not milestone progress. ⚠ `gsd-sdk query state.update-progress` recomputed this as **51%** on 2026-09-02 by counting SUMMARY files against a 39-plan denominator that only covers planned phases; that figure is WRONG and was reverted. Do not let the SDK rewrite this line — phase 02.1 is an INSERTION and is not one of the 9 milestone phases. ⚠ **It happened a second time on 2026-09-13** during plan 04-14, recomputed as **97%** against a 60-plan denominator, and was reverted again. The verb rewrites this line every time it runs; `git diff .planning/STATE.md` after any state write is not optional. ⚠ **Third occurrence 2026-09-18** during plan 05-01, recomputed as **84%** against a 74-plan denominator, reverted again. ⚠ **Fourth occurrence 2026-09-18** during plan 05-02, recomputed as **85%** against the same 74-plan denominator, reverted again — and this time the verb ALSO truncated the frontmatter `last_activity:` back to a bare "Phase 05 execution started", so the damage is not confined to this line. ⚠ **Fifth occurrence 2026-09-18** during plan 05-03, recomputed as **86%** against the same 74-plan denominator, reverted again; on this run the collateral damage was all three of the documented sites at once — the frontmatter `last_activity:`, the `Status:` line (leaving `gates are ...` orphaned under it), and the `Last activity:` line 560 lines down. ⚠ **Sixth occurrence 2026-09-18** during plan 05-04, recomputed as **88%** against the same 74-plan denominator, reverted again, with the same three collateral sites damaged a second consecutive time — the damage set is now stable and predictable, which is the strongest argument yet for not running the verb against this line at all. ⚠ **Seventh occurrence 2026-09-18** during plan 05-05, recomputed as **89%** against the same 74-plan denominator, reverted again, same three collateral sites for the third consecutive run. Seven occurrences, seven figures, zero of them milestone progress — the verb cannot compute this figure and should not be run against this line ⚠ **Eighth occurrence 2026-09-18** during plan 05-06, recomputed as **91%** against the same 74-plan denominator, reverted again, same three collateral sites for the fourth consecutive run. Eight occurrences, eight figures, zero of them milestone progress. ✅ **Plan 05-07 broke the loop: `state.update-progress` was NOT RUN AT ALL**, on the strength of this note's own conclusion after eight identical reverts — acting on a written finding instead of re-deriving it a ninth time. This line is therefore untouched by that verb for the first time since 05-01. `state.advance-plan` was still required and still damaged its own three sites — the frontmatter `last_activity:`, the multi-line `Status:` field, and the `Last activity:` line ~600 — all three reverted, leaving only the intended `completed_plans` and `Plan:` changes. **The damage set has now been stable across five consecutive runs: `advance-plan` corrupts three sites, `update-progress` corrupts this one, and `record-metric`, `add-decision` and `record-session` were each driven this plan and corrupted nothing.** That breakdown is finer than "the SDK corrupts STATE.md" and is the actionable form: run the three clean verbs freely, diff after `advance-plan`, never run `update-progress` against this line. ✅ **Plan 05-10 did the same: `update-progress` NOT RUN**, and `advance-plan` damaged exactly the same three sites for the sixth consecutive run — frontmatter `last_activity:`, the multi-line `Status:` field, and `Last activity:` line 627 — all three reverted. Two further notes from 05-10, because the role prompt is wrong about both: `record-metric` and `add-decision` take **NAMED flags** (`--phase/--plan/--duration/--tasks/--files`, `--summary`), not positionals — called positionally they return `"error": "... required"` and write nothing; and `record-session` **also bumps `completed_plans`**, so `advance-plan` afterwards does not double-count it. `add-decision` still writes `[Phase ?]` and still needs correcting by hand. ⚠ **`gsd-sdk query phase.complete` is ALSO a corrupting verb — recorded 2026-09-19 at Phase 05 close, the tenth occurrence overall.** It did NOT touch this `Progress:` line (so the 05-07 finding holds: `update-progress` is the verb that rewrites it, and phase.complete does not call it), but it inflicted `advance-plan`-class damage on two of the three known sites: it replaced the first TWO lines of the multi-line `Current Position` field with `Phase: 6` / `Plan: Not started`, orphaning the entire Phase 05 narrative as a dangling fragment beginning `proof driven; criteria 2/3/4 ...`, and it truncated the `Last activity:` line ~654 to a bare date. Both repaired by hand, nothing deleted. **The rule is now: diff STATE.md after `phase.complete` too, not only after `advance-plan`.**)*
 
 Plans 02-01 through 02-09 are executed. **CONS-01, CONS-02 and CONS-03 are all complete.**
 
@@ -878,7 +882,7 @@ already open so only 2049 is this phase's delta.
 
 **Velocity:**
 
-- Total plans completed: 43
+- Total plans completed: 54
 - Average duration: ~42m (excluding 01-06's 374-minute observation window)
 - Total execution time: ~375m of work
 
@@ -890,6 +894,7 @@ already open so only 2049 is this phase's delta.
 | 02 | 9 | - | - |
 | 02.1 | 14 | - | - |
 | 03 | 11 | - | - |
+| 05 | 11 | - | - |
 
 **Per Plan:**
 
