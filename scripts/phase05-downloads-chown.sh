@@ -1128,10 +1128,39 @@ do_apply() {
   echo ""
 
   # THE LIBRARY UNTOUCHED-PROOF. Zero lines, or Phase 1's D-20 was breached.
+  #
+  # THREE VERDICTS, NEVER TWO - could-not-look / zero-lines / BREACHED. This is the single
+  # instrument that would report a D-20 breach, and it previously could not distinguish "the diff
+  # returned nothing" from "the diff never ran", in three separate ways at once:
+  #   * the remote string carried a pipe and NO `set -o pipefail`, so a failed or killed `zfs diff`
+  #     left `wc -l` printing 0 and exiting 0 - defect class 1, the `timeout N cmd | wc -l` shape;
+  #   * `2>/dev/null` threw away the reason (`zfs diff` fails routinely on an unmounted dataset, a
+  #     destroyed snapshot, or while another `zfs diff` holds it);
+  #   * the ssh exit status was eaten by a LOCAL `| tr`, so even a 255 (atlantis unreachable) came
+  #     back as 0. `${libcount:-1}` defended only against an EMPTY result, and `wc -l` is never empty.
+  # The false green read "the scope guard held and Phase 1's D-20 is intact" - the strongest
+  # statement in the file, on the weakest instrument in it. Fixed to the shape
+  # quick-health-check.sh:1636-1650 already uses: pipefail INSIDE the remote string, stderr kept and
+  # reported, the status captured with NO local pipe in front of it, and any non-zero status or
+  # non-numeric answer treated as a REFUSAL rather than a pass.
   info "library untouched-proof: zfs diff $LIB_SNAPSHOT"
-  local libcount
-  libcount="$(zfs_exec "zfs diff -H '$LIB_SNAPSHOT' tank/media/Music 2>/dev/null | wc -l" | tr -dc '0-9')"
-  if [ "${libcount:-1}" = "0" ]; then
+  local libcount libout lib_rc
+  # `&& lib_rc=0 || lib_rc=$?` rather than a bare assignment + `$?`, because this file runs under
+  # `set -e` (line 195): a bare failing assignment would abort before the status could be read.
+  # 2>&1 is applied LOCALLY to zfs_exec so the remote stderr is captured for the message instead of
+  # being piped into `wc -l`. The command substitution is itself a subshell, so `set -o pipefail`
+  # inside the payload cannot leak into this script's own shell via zfs_exec's local `eval` route.
+  libout="$(zfs_exec "set -o pipefail; zfs diff -H '$LIB_SNAPSHOT' tank/media/Music | wc -l" 2>&1)" && lib_rc=0 || lib_rc=$?
+  libcount="$(printf '%s' "$libout" | tr -d '[:space:]')"
+  if [ "$lib_rc" -ne 0 ] || ! printf '%s' "$libcount" | grep -qE '^[0-9]+$'; then
+    fail "library untouched-proof UNKNOWN - the diff did not run (exit $lib_rc)."
+    fail "output was: ${libout:-<empty>}"
+    fail "NOTHING WAS COUNTED. This is NOT 'the chown stayed out of $LIBRARY'."
+    fail "Exit 255 means the ssh to atlantis ($ZFS_HOST) failed and zfs diff never ran. Re-run the"
+    fail "proof by hand before believing anything about Phase 1's D-20:"
+    fail "  ssh -o BatchMode=yes root@${ZFS_HOST} \"zfs diff -H '$LIB_SNAPSHOT' tank/media/Music | wc -l\""
+    libcount="UNKNOWN"
+  elif [ "$libcount" = "0" ]; then
     pass "library untouched-proof: 0 lines - the scope guard held and Phase 1's D-20 is intact"
   else
     fail "library untouched-proof: ${libcount} line(s). THE CHOWN REACHED $LIBRARY."
@@ -1154,7 +1183,11 @@ do_apply() {
     echo "runner sentinel:   $sentinel"
     echo "wall clock:        ${elapsed}s"
     echo "after census:      $a_total entries walked across the approved roots, $a_foreign not $UIDGID"
-    echo "library proof:     ${libcount} diff line(s)   (0 required)"
+    if [ "$libcount" = "UNKNOWN" ]; then
+      echo "library proof:     UNKNOWN - the diff did not run (exit $lib_rc). NOTHING WAS COUNTED."
+    else
+      echo "library proof:     ${libcount} diff line(s)   (0 required)"
+    fi
     echo ""
     echo "zfs diff line classes against $DL_SNAPSHOT:"
     printf '%s\n' "$diffcounts"
