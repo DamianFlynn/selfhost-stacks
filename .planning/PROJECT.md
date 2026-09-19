@@ -22,7 +22,19 @@ outcome that must not happen.
 
 ### Validated
 
-(None yet — ship to validate)
+- [x] **Bucket D triaged** — *Validated in Phase 5: Inbox Structure and the Junk Gate (2026-09-19).*
+      52 candidates enumerated behind an approval gate; 40 removed, 4 moved, 8 excluded by operator
+      decision. Zero `_FAILED_`/`_UNPACK_` directories and zero `.rar`-form files remain across the
+      five music paths outside `99-quarantine`, re-measured from live state at close.
+      Two corrections to the original wording, both recorded in band in ROADMAP.md: the Harry Potter
+      rip was in **`unsorted/`, not `dj-mixes/`** (a `find` over `dj-mixes` returns zero), and by the
+      time the sweep ran **the rip had already left the tree** — only its empty directory remained.
+      Also: `.rar` is a name, not a type — this estate has directories named `*.part001.rar` holding
+      real FLAC, so the rule was pinned to regular files.
+- [x] **A staging inbox exists outside the library** — *Validated in Phase 5 (2026-09-19).*
+      Six per-policy folders under `/mnt/tank/downloads/complete/nzb/_inbox`, sharing a dataset with
+      the content that moves into them so every move is an atomic rename, proven by inode with a
+      cross-filesystem negative control. Nothing equivalent exists under `/mnt/tank/media`.
 
 ### Active
 
@@ -33,8 +45,8 @@ outcome that must not happen.
       and `edit` plugins for DJ content
 - [ ] Bucket A (mainstream albums) imported end-to-end and visible in Jellyfin — proof the
       pipeline works before scaling it
-- [ ] Bucket D triaged — junk, `_FAILED_`/`_UNPACK_`, stray `.rar`, and misfiled non-music
-      (a Harry Potter BluRay rip is currently in `dj-mixes`)
+- [ ] The `Now! 1-115` monolith imported — **split done in Phase 5** (115 flat `Vol NNN` folders,
+      4,746 mp3, one canonical `album` value per folder); importing them is Phase 6/7 work
 - [ ] The 85 duplicate folder names between `dj-mixes` and `unsorted` investigated and resolved
 - [ ] DJ content on its own library path, not mixed into `Compilations/`
 - [ ] DJ metadata normalised — field mapping repaired across releases
@@ -240,6 +252,14 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-09-01 after Phase 2 (NFS export and Music Assistant reachability) — the mount
-route corrected from OPEN QUESTION to Route A on measurement, and seven Key Decisions recorded.
-Operational detail lives beside the stack in `stacks/selfhosted/arrs/beets.md` § "Phase 2".*
+*Last updated: 2026-09-19 after Phase 5 (Inbox Structure and the Junk Gate) — closed at 4/4 criteria
+TRUE, each re-measured from live state rather than restated. Two requirements moved to Validated.
+New this phase and NOT yet in scope: `mac-music-archive/` holds **23,874 music entries** last written
+2024-10-27 that no phase has counted and that are absent from this document's 144-folder denominator
+— a scoping question for the next milestone, deliberately not characterised. Also open: an Immich API
+key is passed on `takeout-import.service`'s command line (visible in `ps` host-wide, worth rotating),
+and `tank/downloads@pre-phase5` **must not be destroyed before Phase 6 signs off** — it is the only
+undo for 4,750 renames, 751 tag writes and 26,005 chowns, and it is not a clean one.
+Operational detail lives beside the stack in `stacks/selfhosted/arrs/beets.md` § "Phase 5".
+Previously: 2026-09-01 after Phase 2 — the mount route corrected from OPEN QUESTION to Route A on
+measurement, and seven Key Decisions recorded (`beets.md` § "Phase 2").*
