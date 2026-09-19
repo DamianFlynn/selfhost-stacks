@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-19T20:50:13.854Z"
-last_activity: 2026-09-19 -- Phase 05 plan 05-10 complete (the approved 26,005-entry chown)
+last_updated: "2026-09-19T21:22:46.195Z"
+last_activity: 2026-09-19 -- Phase 05 CLOSED by plan 05-11 (4/4 criteria TRUE, re-measured from live state)
 progress:
   total_phases: 10
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 74
-  completed_plans: 71
-  percent: 40
+  completed_plans: 72
+  percent: 50
 ---
 
 # Project State
@@ -28,8 +28,8 @@ pipeline that someone owns.
 
 ## Current Position
 
-Phase: 05 (inbox-structure-and-the-junk-gate) — EXECUTING
-Plan: 11 of 11 — **05-01 … 05-10 COMPLETE** (fence taken, `_inbox` created, D-21 inode
+Phase: 05 (inbox-structure-and-the-junk-gate) — **COMPLETE, closed 2026-09-19 at 4/4 criteria TRUE**
+Plan: 11 of 11 — **ALL 11 COMPLETE** (fence taken, `_inbox` created, D-21 inode
 proof driven; criteria 2/3/4 amended in band and criterion 4 now asserted by the standing check; the
 junk gate built and its refusals and positive control driven; **the sweep has RUN** — 40 rows
 removed, 4 moved, 8 excluded entirely, every affected path attributed to an approved row by
@@ -64,8 +64,35 @@ from mutated copies, one of them catching `save(v1=UPDATE)` regenerating the ID3
 `audio_md5` hazard — in the act; **⚠ that plan's `zfs diff` evidence is now known to be vacuous — see 05-09**)
 **05-09 HAS WRITTEN.** D-10's album repair is complete: **751 in-place tag writes across 22 volumes**, piloted on `Vol 036` (the operator amended the plan's `Vol 077`, which has zero proposed changes and would have passed its gate vacuously) and gated before the remaining 715. `album` is the ONLY field that changed on any file — asserted mechanically, 740 changed keys and one distinct field name — and `audio_md5` moved on NONE, which is the direct measurement that Phase 7's diff join survived. Each of the **115 volume folders now carries exactly one album string** (117 distinct values before, 115 after), read by a parser that is neither mutagen nor ffprobe. The 3,995 already-correct files were never written: a second `--apply` reports 4,746 no-ops and moves 0 mtimes. ID3v2 frame set and ID3v1 trailer are byte-identical to `@pre-phase5` on all 4,746, instrument driven to FAIL. **⚠ `zfs diff` is NOT a valid scope instrument on this collection** — 05-07 renamed every mp3, and `zfs diff` collapses renamed-and-modified into a single `R`, so it reports 0 `M` lines on any mp3 whether 751 files were written or none; replaced with a two-arm content control against the snapshot. Atlantis rebooted mid-verification under two concurrent whole-collection reads; 4,751 files were re-fingerprinted across it and **0 moved, 0 lost, 0 new** — no write was in flight.
 **05-10 HAS CHOWNED — but not the chown D-24 described.** D-24 asked for "all 209,039 entries"; the survey measured **233,824**, of which **222,376** were not `568:568`, and the breakdown changed the decision: **84% of it was `dropbox/`** (196,327 entries of `code/`, `Archive/`, `Documents/`, `Projects/` — not downloads), 11% was `mac-music-archive/` (23,874 music entries **no phase has ever counted**), and `google takeout/` was being read by an **active** `takeout-import.service` throughout. The operator **narrowed the scope to 26,005 entries**; 26,005 + 196,371 excluded = 222,376, so the arithmetic closes and nothing was quietly dropped. **139 rows, 7 s of chown**, and `zfs diff` against a FRESH baseline returned exactly **`M 26005`** with zero `+`, `-` or `R` — the approved scope to the entry, and not one line under any excluded path. Library proof **0 lines**. The approved roots read back from atlantis at **37,191 entries, ZERO not `568:568`**. `dropbox/` and `google takeout/` proven untouched by a 330-line owner+ctime fingerprint (sha256 identical) that was **driven to FAIL** first. **⚠ D-24's preserved counter-argument is FALSE and was amended in band**: uid 3000 is outside every LXC 100 idmap range, has no passwd entry, and SABnzbd's own output is `568:568` — it is an orphan uid sitting on archives, not the download client. **⚠ `incomplete/` needed nothing** — the subtree D-24 singled out as the risky inclusion was already 100% correct. **⚠ The 115 `Vol NNN` dirs were never `root:root`** — that was 05-09's container view; on disk they were `100000:100000`. **⚠ ZFS devids have already moved** — `05-INBOX-PATHS.md`'s 68/76 read 70/75 a day later; never assert on a devid. D-25 holds: **no standing check, and there will not be one.**
+**05-11 HAS CLOSED THE PHASE — 4/4 criteria TRUE, 0 FAIL, every one RE-MEASURED from live state**
+rather than carried forward from the plan summaries. Evidence:
+`host:/mnt/fast/safety/phase05/phase05-final-assertions.txt`, committed as
+`artifacts/05-11-final-assertions.txt`. **C1**: six `_inbox` dirs, devid shared with `unsorted/` and
+`dj-mixes/`, 0 `_inbox` datasets, 0 equivalents under `media/` to depth 3, and the D-21 inode proof
+**driven again after the chown** — `(70, 295296)` → `(70, 295296)` same-dataset, `→ (43, 128)`
+across. **C2** (against the D-12/D-14/D-15 amendment): 0 `_FAILED_`/`_UNPACK_` dirs and 0
+`.rar`-form files outside `99-quarantine`, `lidarr-import` **absent**, the exclusion shown
+non-vacuous by re-running without it. **C3** (against the D-02/D-05/D-08 amendment), measured by a
+purpose-written read-only `ffprobe` walk that neither split the collection nor wrote its tags: 115
+depth-1 `Vol 001`…`Vol 115`, 0 at depth 2, 4,746 mp3 summing to the live total, 0 at the root, 0
+probe failures, **0 volumes carrying more than one `album` value**, **manifest-only entries 0**, and
+the 11-row exception set matching the pre-declared post-merge list **11 for 11**. **C4** (D-22's
+AFTER half): `Library underscore-dir guard: ✅ No '_'-prefixed directories under
+/mnt/tank/media/Music`; the negative control was **deliberately not re-driven**, the 2026-09-18
+05-02 run is cited instead. **⚠ Read C4 from the BLOCK's verdict line — `quick-health-check.sh`
+exits 1 on the pre-existing `interpolated-host-path inventory MOVED: expected=12, found=13` gate,
+the only red line in the run, so the script's exit code is non-discriminating.**
+**⚠ Devids moved AGAIN**: 68/76 → 70/75 → **70/81**. **⚠ The inode-34 collision is THREE-way** —
+`downloads`, the library **and** `/mnt/fast`. **⚠ `-iname '*potter*'` is no longer a valid test** —
+it now matches a real song the split moved into `Vol 066`; assert the named path.
+**Open at close, none of them a FAIL:** the `interpolated-host-path` gate; `mac-music-archive/`'s
+23,874 uncharacterised music entries; an Immich API key on `takeout-import.service`'s command line;
+`dropbox/` inside nine `rw` binds. **The fence `tank/downloads@pre-phase5` MUST NOT be destroyed
+before Phase 6 signs off** — it is the only undo for 4,750 renames, 751 tag writes and 26,005
+chowns, and it is **not** a clean undo.
 
-Status: Executing Phase 05. Do NOT run with `--auto`/`--chain` — four
+Status: Phase 05 COMPLETE. Next: Phase 06 (Tagger Configuration and Dry Run) — not yet planned.
+Do NOT run with `--auto`/`--chain` — four
 gates are `checkpoint:decision`, which auto-selects the first option under auto-mode.
 
 *(⚠ The three lines above were reassembled on 2026-09-18 by plan 05-01, and **the same corruption
@@ -911,6 +938,7 @@ already open so only 2049 is this phase's delta.
 | Phase 05 P08 | 25m | 3 tasks | 2 files |
 | Phase 05 P09 | ~2h25m | 3 tasks | 7 files |
 | Phase 05 P10 | ~3 h 20 min | 4 tasks | 8 files |
+| Phase 05 P11 | ~50 min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -1244,6 +1272,9 @@ Recent decisions affecting current work:
 - [Phase 05]: 05-10: A decision's own stated rationale is evidence to be tested, not a premise — D-24's preserved counter-argument said uid 3000 is the download client legitimately owning what it wrote; uid 3000 is outside every LXC 100 idmap range, has no passwd entry, and SABnzbd's own output is 568:568
 - [Phase 05]: 05-10: Put every fence that needs no remote access AHEAD of the remote access — with the row fence sitting after route detection, all five excluded-tree negative controls exited 2 on 'no zfs route' and proved nothing while looking green
 - [Phase 05]: 05-10: Prove an untouched-claim with an instrument driven to FAIL on the same shape of change elsewhere, and prefer a whole-DATASET instrument over a whole-ROOTS one — zfs diff can see a reach into a tree the positive instrument never walks
+- [Phase 05]: Phase 5 closed at 4/4 criteria TRUE, every one re-measured from live state at close rather than carried forward from the plan summaries (05-11)
+- [Phase 05]: Criterion 4's negative control was deliberately NOT re-driven at close — creating a probe inside the library for no benefit; the 2026-09-18 plan 05-02 run is cited with its date instead
+- [Phase 05]: The Potter clause is recorded satisfied on the NAMED path and the -iname '*potter*' form recorded as now-invalid (it matches a real song in Vol 066), rather than widening the pattern to force a zero
 
 ### Pending Todos
 
@@ -1392,8 +1423,8 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-09-19T20:49:37.663Z
-Stopped at: Completed 05-09-PLAN.md
+Last session: 2026-09-19T21:22:46.178Z
+Stopped at: Completed 05-11-PLAN.md — Phase 5 CLOSED at 4/4 criteria TRUE
 Resume file: None
 
 **NEXT: 02.1-10, the last plan of the phase (wave 9).** It is unblocked — it depends on 02.1-06 and
