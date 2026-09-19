@@ -1,0 +1,300 @@
+================================================================================
+PHASE 5 — FINAL ASSERTIONS, RE-DERIVED FROM LIVE STATE AT PHASE CLOSE
+Plan 05-11, task 1.  Run 2026-09-19, 21:03Z - 21:35Z.
+Hosts: atlantis root@172.16.1.158 (Proxmox, real root) and LXC 100 root@172.16.1.159.
+================================================================================
+
+WHY THIS FILE EXISTS
+  A closure written from plan summaries records what was INTENDED. Every verdict below was
+  measured again, after every move this phase made — the junk sweep (05-04), the 4,750-rename
+  split (05-07), the 751 album writes (05-09) and the 26,005-entry chown (05-10).
+  OPEN is not FAIL. A FAIL needs a violated condition. Where a condition could not be
+  evaluated, the verdict says OPEN and says why.
+
+--------------------------------------------------------------------------------
+CRITERION 1 — the inbox exists under tank/downloads, nothing equivalent under media/,
+              and a move between two of its folders is an atomic same-dataset rename.
+VERDICT: TRUE
+--------------------------------------------------------------------------------
+
+[1a] The six directories, from atlantis:
+     $ ls -1 /mnt/tank/downloads/complete/nzb/_inbox
+     01-auto
+     02-review
+     03-asis
+     04-hold
+     99-quarantine
+     _done
+     -> 6 of 6 present.
+
+[1b] devid / inode / owner, from atlantis, stat -c '%d %i %U:%G %n':
+     70 34      apps:apps /mnt/tank/downloads
+     70 3486    apps:apps /mnt/tank/downloads/complete/nzb
+     70 9044    apps:apps /mnt/tank/downloads/complete/nzb/unsorted
+     70 243200  apps:apps /mnt/tank/downloads/complete/nzb/dj-mixes
+     70 232558  apps:apps /mnt/tank/downloads/complete/nzb/_inbox
+     81 34      apps:apps /mnt/tank/media/Music
+     43 34      root:root /mnt/fast
+     64513 5242881 root:root /root
+     -> _inbox shares devid 70 with unsorted/ and dj-mixes/. The library is on a different one.
+
+     WARNING, RECORDED AGAIN BECAUSE IT KEEPS BEING WRITTEN DOWN AS A CONSTANT:
+     ZFS DEVIDS ARE NOT STABLE ACROSS REBOOTS. downloads/library read 68/76 on 2026-09-18,
+     70/75 on 2026-09-19 earlier, and 70/81 in this run. The PROPERTY (same devid for the
+     staging tree, different for the library) holds; the NUMBERS do not. Never assert
+     `devid == 68`.
+
+     WARNING 2, THE INODE COLLISION, NOW THREE-WAY:
+     /mnt/tank/downloads, /mnt/tank/media/Music AND /mnt/fast all report inode 34.
+     Inode numbers are unique only within a filesystem. Assert the PAIR (devid, inode).
+
+[1c] No `_inbox` ZFS dataset (D-18), from atlantis:
+     $ zfs list -H -o name -t filesystem -r tank/downloads
+     tank/downloads
+     tank/downloads/icloud-export
+     -> zero datasets named `_inbox`. NOTE: tank/downloads is no longer a single-dataset
+        subtree — `tank/downloads/icloud-export` exists. D-18's prohibition is specifically
+        on `_inbox`, and it holds; the 05-INBOX-PATHS.md line that says this command
+        "returns exactly one line" is now stale as a description of the output.
+
+[1d] Nothing equivalent under /mnt/tank/media, from atlantis:
+     $ find /mnt/tank/media -maxdepth 3 -type d \( -name _inbox -o -name 01-auto -o \
+         -name 02-review -o -name 03-asis -o -name 04-hold -o -name 99-quarantine \
+         -o -name _done \) | wc -l
+     0
+
+[1e] The D-21 inode proof, DRIVEN FRESH at close, after the chown, from atlantis.
+     Both controls, both value pairs observed rather than inferred:
+     POSITIVE-BEFORE (70, 295296)     _inbox/01-auto/.phase05-close-inode-probe
+     POSITIVE-AFTER  (70, 295296)     moved to _inbox/02-review  -> INODE UNCHANGED
+     NEGATIVE-BEFORE (70, 295296)
+     NEGATIVE-AFTER  (43, 128)        moved to /mnt/fast (a different pool) -> PAIR CHANGED
+     CLEANUP: probe remnants under _inbox = 0; under /mnt/fast/safety/phase05 = 0
+     -> The atomic-rename property is unchanged by ownership normalisation, and the
+        instrument has again been seen both holding and breaking.
+
+--------------------------------------------------------------------------------
+CRITERION 2 — zero _FAILED_ / _UNPACK_ / .rar-form items across the five music paths
+              outside 99-quarantine (as amended 2026-09-18 by plan 05-02 under D-12/D-14/D-15).
+VERDICT: TRUE against the amended criterion.
+--------------------------------------------------------------------------------
+
+[2a] The five in-scope paths, from LXC 100:
+     PRESENT /mnt/tank/downloads/complete/nzb/music
+     PRESENT /mnt/tank/downloads/complete/nzb/unsorted
+     PRESENT /mnt/tank/downloads/complete/nzb/dj-mixes
+     ABSENT  /mnt/tank/downloads/lidarr-import          <- RETIRED by plan 05-04.
+     PRESENT /mnt/tank/downloads/complete/nzb/_inbox
+     -> Phase 1's D-23 is CLOSED here, not carried to Phase 8.
+
+[2b] $ find music unsorted dj-mixes _inbox -type d \( -name '_FAILED_*' -o -name '_UNPACK_*' \) \
+         -not -path '<99-quarantine>/*' -not -path '<99-quarantine>' | wc -l
+     0
+
+[2c] $ find music unsorted dj-mixes _inbox -type f \( -iname '*.rar' -o -iname '*.r[0-9][0-9]' \
+         -o -iname '*.part[0-9]*.rar' \) -not -path '<99-quarantine>/*' | wc -l
+     0
+
+[2d] The exclusion is not vacuous — the same find WITHOUT the exclusion returns the two
+     quarantined directories, so the instrument demonstrably can see this shape:
+     d .../99-quarantine/_FAILED_Garth.Brooks-The.Ultimate.Hits-2CD-FLAC-2007-WRS
+     d .../99-quarantine/_FAILED_Garth.Brooks-Ropin.The.Wind-CDP.7.06330-2-CD-FLAC-1991-EMG
+     99-quarantine entries: 51.  FLAC files: 44.  (1.92 GB, spared by operator choice, 05-04.)
+
+[2e] The Potter clause. The named rip is ABSENT:
+     ABSENT /mnt/tank/downloads/complete/nzb/unsorted/Harry.Potter.And.The.Deathly.Hallows.Part.1.2010.PROPER.1080p.BluRay.x264-MOOVEE
+
+     *** NEW TRAP, FOUND IN THIS RUN. *** A substring sweep is no longer a valid test:
+     $ find unsorted dj-mixes -maxdepth 3 -iname '*potter*' | wc -l
+     1
+     and the one hit is a legitimate song, not a rip:
+       .../Vol 066/21. The Proclaimers Featuring Brian Potter (2) & Andy Pipkin - \
+           I'm Gonna Be (500 Miles) (feat. Andy Pipkin,Brian Potter).mp3
+     The 05-07 split moved this file into a depth-2 volume folder where a depth-3 sweep
+     now reaches it. ASSERT THE NAMED PATH, never `*potter*`.
+
+[2f] Out of scope and still present, recorded so it is not mistaken for a miss:
+     d /mnt/tank/downloads/incomplete/Harry.Potter.and.the.Deathly.Hallows.Part.1.2010.BluRay.1080p.DDP.5.1.x264-hallowed
+     `incomplete/` is SABnzbd's live working directory and is out of scope entirely by D-15.
+
+[2g] The empty dj-mixes `Now!` decoy:
+     $ find dj-mixes -maxdepth 1 -name 'VA-Now_That.s_What_I_Call_Music__1-115_2023' | wc -l
+     0   -> absent.
+
+--------------------------------------------------------------------------------
+CRITERION 3 — the Now! monolith is split per volume, counts reconcile
+              (as amended 2026-09-18 by plan 05-02 under D-02/D-05/D-08, and as decided
+              by the operator in the 2026-09-18 amendment to 05-NOW-INVENTORY.md).
+VERDICT: TRUE
+--------------------------------------------------------------------------------
+
+Instrument: /mnt/fast/safety/phase05/close-c3-scan.py, a fresh read-only ffprobe walk of the
+collection written for this closure — NOT the tool that produced the split and NOT the tool
+that wrote the tags. Output: /mnt/fast/safety/phase05/close-c3-scan.json. 4,746 probes,
+0 failures. Run on LXC 100, one whole-tree pass at a time (see the trap at the foot of
+this file about running two).
+
+     depth-1 directories:                    115
+     names are exactly Vol 001 .. Vol 115:   True   (0 unexpected, 0 missing)
+     depth-2 directories:                    0
+     mp3 inside the volume folders:          4,746
+     mp3 left at the collection root:        0
+     files left at the collection root:      1  ("00.Now That's What I Call Music! 1-115(2023).m3u")
+     ffprobe failures:                       0
+     volumes NOT carrying exactly one album value:  0
+     distinct album values across the 115 folders:  115
+
+     -> The sum of the per-volume mp3 counts (4,746) equals the freshly measured collection
+        total (4,746). The tag deliverable that made the split coherent holds: every one of
+        the 115 folders carries exactly one album string, and the 115 strings are distinct.
+
+MANIFEST-ONLY ENTRIES, ON THEIR OWN LINE AND NEVER FOLDED INTO ANY TOTAL (D-08):
+     manifest records: 4,770   distinct manifest leaves: 4,746   distinct mp3 leaves on disk: 4,746
+     MANIFEST-ONLY ENTRIES (manifest leaves with no file on disk): 0
+     The 24-line gap is COLLISION, not absence — re-confirmed live, as 05-05 found it.
+
+THE PER-VOLUME `files == sum over discs of the MODAL tracktotal` EXCEPTION SET.
+Measured: 11 exceptions. Pre-declared post-merge set (05-NOW-INVENTORY.md § AMENDMENT,
+decision 1 + decision 2): volumes 3, 4, 8, 9, 15, 18, 39, 52, 70, 83, 98 — also 11.
+MATCH, 11 for 11, zero differences to name.
+
+     Vol 003  files=26 expected=28 delta=-2   two files lost to Vol 004 by the album-tag tie-break
+     Vol 004  files=45 expected=32 delta=+13  MERGED folder — three 1984 editions, expectation not meaningful
+     Vol 008  files=42 expected=33 delta=+9   MERGED folder — two editions
+     Vol 009  files=44 expected=31 delta=+13  MERGED folder — two editions
+     Vol 015  files=31 expected=32 delta=-1   one file lost to Vol 031 by the tie-break
+     Vol 018  files=31 expected=32 delta=-1   source rip (pre-declared)
+     Vol 039  files=40 expected=41 delta=-1   one file lost to Vol 100 by the tie-break
+     Vol 052  files=41 expected=42 delta=-1   source rip (pre-declared)
+     Vol 070  files=42 expected=43 delta=-1   source rip (pre-declared)
+     Vol 083  files=42 expected=43 delta=-1   source rip (pre-declared)
+     Vol 098  files=45 expected=46 delta=-1   source rip (pre-declared)
+
+     The +13 / +9 / +13 on volumes 4, 8 and 9 reproduce the operator-merge amendment's stated
+     figures exactly. READ THOSE THREE ROWS AS "a merged folder, expectation not meaningful",
+     NEVER AS "extra files appeared". 05-05 § 4 dismantled the surplus three independent ways
+     and 05-07 closed it with a fourth: 4,735 distinct encoded bitstreams across 4,746
+     records, 9 of the 11 duplicate groups sitting entirely inside Vol 004.
+
+--------------------------------------------------------------------------------
+CRITERION 4 — no `_`-prefixed folder anywhere under /mnt/tank/media/Music.
+VERDICT: TRUE, asserted by the standing health check AFTER this phase's moves.
+--------------------------------------------------------------------------------
+
+[4a] `bash scripts/quick-health-check.sh` from the workstation, 2026-09-19 21:30Z.
+     The criterion-4 block's own verdict line, verbatim:
+
+       Library underscore-dir guard: ✅ No '_'-prefixed directories under /mnt/tank/media/Music
+
+[4b] Independent read from atlantis in the same session:
+     $ find /mnt/tank/media/Music -type d -name '_*' | wc -l
+     0
+
+[4c] *** READ THE BLOCK'S VERDICT LINE, NOT THE SCRIPT'S EXIT CODE. ***
+     The script exits 1 today for a PRE-EXISTING reason unrelated to Phase 5:
+
+       Music freeze harness: ❌ BROKEN (check-music-freeze.sh exit 1)
+         ❌ interpolated-host-path inventory MOVED: expected=12, found=13.
+
+     That is a deliberate human-review gate on a compose change this phase did not make;
+     `check-music-freeze.sh:492` pins DECLARED_INTERP_EXPECTED=12 and its own failure text
+     requires each new line to be READ BY HAND and the constant moved in the same commit.
+     Logged at .planning/phases/05-.../deferred-items.md § 1. It is the ONLY red line in the
+     run — every other block, including the criterion-4 guard, is green. The whole-script
+     exit code is therefore NON-DISCRIMINATING for criterion 4.
+
+[4d] THE NEGATIVE CONTROL THAT MAKES [4a] CREDIBLE WAS DRIVEN ONCE, ON 2026-09-18, IN PLAN
+     05-02 — and is deliberately NOT re-driven here, because creating a probe inside the
+     library at phase close would be gratuitous. What was driven that day, under an EXIT trap:
+       - `mkdir /mnt/tank/media/Music/_probe` from atlantis as real root (the D-20 route)
+       - health check WITH probe:    ❌ 1 '_'-prefixed director(y|ies) …, path listed, exit 1
+       - health check WITHOUT probe: ✅ No '_'-prefixed directories …
+       - the probe independently tripped check-music-freeze.sh's ownership assertion, a
+         second instrument sharing no code with the first
+       - trap on exit: probe absent; the post-probe red/amber line set is byte-identical
+         to the pre-probe baseline
+     This is the BEFORE half of D-22's before-and-after pair; [4a] is the AFTER half.
+
+--------------------------------------------------------------------------------
+TWO DECISIONS CONFIRMED HELD RATHER THAN MERELY STATED
+--------------------------------------------------------------------------------
+
+D-25 — no `tank/downloads` ownership assertion in the standing health check:
+     $ grep -v '^[[:space:]]*#' scripts/quick-health-check.sh | grep -c 'tank/downloads.*568'
+     0
+     and in fact the comment-stripped script contains no `tank/downloads` reference at all.
+     The reason it must stay that way: the download client keeps writing as uid 3000 at
+     roughly one job per 72 s, so such a check would go red on the next download and train
+     everyone to ignore it.
+
+D-18 — no ZFS dataset named `_inbox` under tank/downloads: confirmed at [1c] above.
+
+--------------------------------------------------------------------------------
+THE FENCE — verified present at close, and it MUST NOT BE DESTROYED YET
+--------------------------------------------------------------------------------
+     $ zfs list -H -t snapshot -o name,creation,used,referenced tank/downloads@pre-phase5
+     tank/downloads@pre-phase5   Fri Sep 18 15:42 2026   842K   2.08T
+
+     This is the ONLY undo for 05-07's 4,750 renames, 05-09's 751 in-place tag writes and
+     05-10's 26,005 chowns. beets has no `undo` and none of those three operations kept a
+     copy. DO NOT DESTROY IT BEFORE PHASE 6 HAS SIGNED OFF.
+
+     Also retained, as plan 05-10's own evidence:
+     tank/downloads@pre-phase5-chown      Sat Sep 19 21:42 2026
+     tank/media/Music@pre-phase5-chown    Sat Sep 19 21:42 2026
+
+--------------------------------------------------------------------------------
+OPEN AT CLOSE — stated plainly, and none of these is a FAIL
+--------------------------------------------------------------------------------
+
+O-1  `scripts/quick-health-check.sh` exits 1 on the pre-existing interpolated-host-path
+     gate ([4c]). Unrelated to Phase 5; owned by whoever added the thirteenth interpolated
+     compose volume line.
+
+O-2  `/mnt/tank/downloads/mac-music-archive/` — 23,874 music entries, last written
+     2024-10-27, ownership normalised by 05-10, CONTENT DELIBERATELY NOT CHARACTERISED.
+     It is not in PROJECT.md's 144-folder backlog denominator. A next-milestone scoping
+     question, not an execution one.
+
+O-3  `takeout-import.service` on LXC 100 passes an Immich API key on the command line, so
+     it is readable in `ps` host-wide. The value is deliberately not recorded — this repo
+     is public. Rotate the key and move it out of ExecStart in the same change.
+
+O-4  `dropbox/` — 196,327 entries of personal code and documents, excluded from the chown
+     by operator decision, still inside the `rw` bind of nine containers.
+
+--------------------------------------------------------------------------------
+OPERATIONAL TRAPS RE-CONFIRMED OR FOUND DURING THIS RUN
+--------------------------------------------------------------------------------
+
+T-1  ZFS devids are not stable. 68/76 -> 70/75 -> 70/81 across three days. [1b]
+T-2  A three-way inode collision exists: downloads, the library and /mnt/fast all report
+     inode 34. Assert the pair (devid, inode). [1b]
+T-3  `zfs diff` collapses renamed-and-modified into a single `R` line, so a
+     "nothing was modified" check over files that were renamed is VACUOUS. This invalidated
+     one of plan 05-08's evidence lines and one of the orchestrator's own spot-checks.
+T-4  NEVER READ OWNERSHIP FROM LXC 100. It is an unprivileged container with a sparse
+     idmap, so an unmapped on-disk id surfaces as `root` or `65534` and several distinct
+     on-disk ids collapse to the same container-side reading. Plan 05-09's summary recorded
+     the 115 `Vol NNN` directories as `root:root`; on disk at the time they were
+     `100000:100000`. Verify from atlantis.
+     MEASURED AT CLOSE, from atlantis: all 115 `Vol NNN` directories and the collection root
+     are `568:568` (`apps:apps`), and `find <collection> ! -uid 568 -o ! -gid 568` returns
+     **0** — 05-10's chown landed on them. LXC 100 agrees here only because 568 IS inside
+     its idmap; that agreement is a coincidence of the value, not a reason to trust the view.
+T-5  Run ONE whole-tree pass over `tank` at a time. Atlantis rebooted under memory pressure
+     during 05-09 when two ran concurrently. Before this run: load 0.97, 8 GB available,
+     takeout-import.service inactive, no immich-go process.
+T-6  D-26: content moved into `_inbox` is NOT chowned per move, so staging carries mixed
+     ownership BY DESIGN. Never write an "everything under `_inbox` is 568:568" assertion.
+T-7  `-iname '*potter*'` over the music tree now returns a legitimate song. [2e]
+
+================================================================================
+SUMMARY
+  CRITERION 1: TRUE
+  CRITERION 2: TRUE (against the 2026-09-18 D-12/D-14/D-15 amendment)
+  CRITERION 3: TRUE (against the 2026-09-18 D-02/D-05/D-08 amendment and the operator's
+                     115-folders-merged / short-volumes-split-anyway decisions)
+  CRITERION 4: TRUE (AFTER half of D-22's pair; negative control driven 2026-09-18, 05-02)
+  FAILURES: 0.  OPEN items: 4, none of them a violated condition.
+================================================================================

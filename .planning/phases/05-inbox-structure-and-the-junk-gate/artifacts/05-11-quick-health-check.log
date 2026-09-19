@@ -1,0 +1,79 @@
+=== Quick Server Health Check ===
+Traefik: ✅ Running
+  Health: 
+no healthcheck
+Authelia: ✅ Running
+Containers running: 96
+✅ No unhealthy containers
+Traefik dashboard: ✅ Protected (HTTP 302 → Authelia)
+Vendored-file drift:
+  ✅ vendored files match (3): audio.bash, sabnzbd beets-config.yaml, survivor config.yaml
+extended.conf destructive switches:
+  ✅ extended.conf switches disarmed (2): requireBeetsMatch=false, ConversionFormat in {FLAC,OPUS}
+Music freeze harness: ❌ BROKEN (check-music-freeze.sh exit 1)
+  Failed assertions:
+    ❌ interpolated-host-path inventory MOVED: expected=12, found=13. These lines are invisible to §2's driving grep and cannot be resolved statically, so §2 is UNKNOWN until each new one is read by hand and DECLARED_INTERP_EXPECTED is moved in the same commit:
+    ❌ 1 failed checks
+  Summary:
+  📊 7. Summary
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    tagger-class writers:        0   (target 0)
+    consumer-class writers:      1   (Jellyfin, documented exception D-21)
+    unclassified writers:        0   (target 0)
+    declared /mnt/tank/media:    13 volume lines
+    declared rw reaching Music:  0   (target 0, jellyfin.yaml excluded)
+    media subtrees found:        6
+    artist folders:              13   (directories only)
+    stray top-level files:       1
+    ownership mismatches:        0   (target 0, want 568:568)
+    dir-mode mismatches:         88   (REPORTED not asserted — D-12 scoped out)
+    file-mode mismatches:        2586   (REPORTED not asserted — D-12 scoped out)
+    sidecars found (widened):    1341   (nfo 91 / jpg 88 / lrc 944 / png 43 / txt 175)
+    sidecars found (narrow D-18):1123   (nfo/jpg/lrc only — comparable to the 01-01 baseline)
+    .DS_Store under the library: 1   (macOS client — an uncounted writer)
+    tagger definitions:          1   (target 1)
+    beets databases:             1   (target 1 = SURVIVOR_DB)
+    tagger databases:            0   (target 0 — wrtag.db*/soulbeet.db*)
+    retired paths present:       0   (target 0)
+    rw on Music, non-tagger:     0   (target 0, excluding the D-21 consumer exception)
+    rw on Music, tagger-capable: 0   (target 0 — Phase 1 D-20, any container state)
+    rw on Music, Jellyfin D-21:  1   (documented consumer exception, printed separately)
+    tagger-capable containers:   2   (mounts a beets/wrtag/soulbeet config or DB; reported)
+    fence assertions failed:     0
+    toolchain missing:           0
+    FAILURES total:              1
+  
+  ❌ 1 failed checks
+Music consumers audit: ✅ Both consumers see the library
+    MA version (live):           2.11.0b2   (assertions proven at 2.11.0b0)
+    albums matched in MA:        2   (target 2, exact name+albumartist, provider-attributed)
+    albums matched in Jellyfin:  2   (target 2, exact name+albumartist)
+    FAILURES total:              0
+Library underscore-dir guard: ✅ No '_'-prefixed directories under /mnt/tank/media/Music
+Jellyfin transcode retention: ✅ Transcode retention intact
+    / headroom:              26952970240 bytes (25.10 GiB)  (target ≥ 21474836480)
+    volume mounts:           0  (target 0)
+    transcode quota:         53687091200 bytes  (target 53687091200)
+    transcode mounted:       zfs=yes devid=46 parent=64518  (target yes, and devid ≠ parent)
+    transcode target:        /cache/transcodes  (target /cache/transcodes)
+    encoding values:         5 asserted, 0 drifted; 2 amdgpu values REPORTED (see section 5)
+    unreachable:             0  (could-not-look, counted apart from bound violations — VALIDATION row 38)
+    toolchain missing:       0
+    FAILURES total:          0
+Container image drift: ✅ Measured — 10 drifted (REPORTED, not asserted: v1 is alert-only, D-01)
+    image drift:        10  (REPORTED, not asserted — v1 is ALERT-ONLY, D-01)
+    unresolvable:       2  (ASSERTED; expected 2)
+    unhealthy:          0
+    created:            0
+    commits behind:     0  (LOWER BOUND — DRIFT_GIT_FETCH=0)
+    could-not-look:     0
+    FAILURES total:     0  (fatal findings only — image drift is NOT in this total)
+
+❌ Health check FAILED. The failing block is whichever one above carries a ❌ or a ⚠️ —
+   that is any of: the Traefik or Authelia container probes, the Traefik dashboard
+   probe, the container counts, the music freeze harness, the consumers audit, the
+   library underscore-dir guard, the Jellyfin transcode retention audit, the
+   vendored-file drift block, the extended.conf destructive-switch block, or the
+   container image-drift block.
+   ⚠️ The image-drift block CANNOT fail on the drift count itself — if it is red, it is
+      a could-not-look or the unresolvable set moved. Do not go looking for a tag.
