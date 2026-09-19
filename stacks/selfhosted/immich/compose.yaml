@@ -17,9 +17,28 @@ networks:
 services:
   immich-server:
     container_name: immich_server
+    # RAISED 3g -> 6g on 2026-09-20 after 28 restarts in ~24h.
+    #
+    # The 1720 MB measurement below was taken at ~85k assets. The library is now
+    # ~127k assets after the Google Takeout import (+100 GB), and the container
+    # was peaking at 2.7G against a 3.0G cap -- 90% -- within minutes of starting.
+    #
+    # THE FAILURE MODE IS EASY TO MISDIAGNOSE: when the cgroup OOM-kills a WORKER
+    # inside the container, PID 1 exits cleanly, so `docker inspect` reports
+    # ExitCode=0 and **OOMKilled=false** and the logs show no shutdown at all.
+    # It looks like a clean restart. Check the cgroup instead:
+    #   memory.peak vs memory.max, and memory.events `oom_kill`
+    # (those counters reset on every restart, so read them while it is up).
+    #
+    # Each restart truncated in-flight uploads, which surfaced to the phone as
+    # upload errors and to the server as "VipsJpeg: premature end of JPEG image".
+    #
+    # 6g is a CEILING, not an allocation. Estate memory is not abundant (LXC 100
+    # had ~7G available of 24 when this was set), so if this needs raising again,
+    # check free memory on BOTH the LXC and atlantis first -- this estate has a
+    # documented outage caused by host memory exhaustion.
     # measured 1720 MB 2026-09-06; cap bounds a runaway, not steady state.
-    # Generous at 3g because upload + thumbnail generation burst well above idle.
-    mem_limit: 3g
+    mem_limit: 6g
     # renovate: datasource=docker depName=ghcr.io/immich-app/immich-server
     image: ghcr.io/immich-app/immich-server:v3.2.2
     pull_policy: always
