@@ -63,10 +63,29 @@ this entry deliberately carries **no** claim about what is in there: not its for
 it duplicates the 34 GB library or the `unsorted/` backlog, not whether it is tagged. Those are
 open questions, and answering them by guess would be worse than leaving them open.
 
-**Who should pick it up:** the **next milestone's scoping**, as a first-class question — is this
-content in the project or not? PROJECT.md's backlog denominator is 144 folders
-(`unsorted/` 120 + `nzb/music` 24); this tree is not in that count, and if it is in scope the
-denominator is wrong.
+**RESOLVED 2026-09-19 — the operator answered the scoping question: this tree IS in scope and
+must be fully processed.** Quote: *"mac-music-archive will need to be fully processed, it might
+have some duplication with existing libraries."* So this is no longer "is it in the project" but
+"when and how". Two consequences follow immediately:
+
+1. **PROJECT.md's 144-folder backlog denominator is WRONG** and must be restated before any phase
+   plans against it. 144 counts `unsorted/` 120 + `nzb/music` 24 and excludes this tree entirely.
+2. **Duplication against existing libraries is EXPECTED, not hypothetical** — the operator named it
+   directly. Any processing plan must lead with dedupe against both the 34 GB tagged library at
+   `/mnt/tank/media/Music` and the `unsorted/` backlog, rather than importing first and
+   reconciling after. Note the standing hazard this interacts with: PROJECT.md lists re-importing
+   the existing tagged library as **Out of Scope**, and this repo has **two** beets `library.db`
+   files whose reconciliation is already recorded as a known hazard. A naive import of 23,874
+   entries would walk straight into both.
+
+Its content is still **deliberately uncharacterised** — formats, tagging state and actual overlap
+are unmeasured, and this entry still makes no claim about them. Measuring them is the first task of
+whoever picks this up, not an assumption to carry in.
+
+**Who should pick it up:** the next milestone's planning, as confirmed in-scope work rather than an
+open question. Sequence it after the Phase 6/7 pipeline is proven — the reason this project exists
+is that the pipeline was built three times and abandoned three times, and a 24,000-entry archive is
+exactly the kind of scope that has derailed it before.
 
 ---
 
@@ -102,3 +121,11 @@ public.**
 
 **Who should pick it up:** whoever owns the takeout import — rotate the key and move it out of
 `ExecStart` in the same change.
+
+**STATUS 2026-09-19 — owned and scheduled, not outstanding.** The operator confirmed rotation is
+already planned, to happen once the other agents currently working on Immich are finished. Quote:
+*"2 is not a problem its planned for rotating after the other agents working on immich are done."*
+This entry stays open as the record of WHERE the key is exposed and what the structural fix is
+(`EnvironmentFile` or `--api-key-file`, not just a new value in the same `ExecStart`), so that the
+rotation closes the exposure rather than only changing the string. Do not re-raise it as an
+unowned finding.

@@ -48,6 +48,14 @@ outcome that must not happen.
 - [ ] The `Now! 1-115` monolith imported — **split done in Phase 5** (115 flat `Vol NNN` folders,
       4,746 mp3, one canonical `album` value per folder); importing them is Phase 6/7 work
 - [ ] The 85 duplicate folder names between `dj-mixes` and `unsorted` investigated and resolved
+- [ ] **`mac-music-archive/` fully processed** *(added 2026-09-19 by operator decision, after
+      Phase 5's ownership survey found it)* — 23,874 entries last written 2024-10-27, in the same
+      dataset as the backlog and never counted by any phase. **Duplication against existing
+      libraries is expected, not hypothetical** — so dedupe against both `/mnt/tank/media/Music`
+      and the `unsorted/` backlog comes first, before any import. Its formats, tagging state and
+      actual overlap are **unmeasured**; measuring them is the first task, not an assumption.
+      Sequence after the Phase 6/7 pipeline is proven — see Core Value on why a fourth half-built
+      path is the one outcome to avoid.
 - [ ] DJ content on its own library path, not mixed into `Compilations/`
 - [ ] DJ metadata normalised — field mapping repaired across releases
 - [ ] DJ artwork/tracklists sourced for releases that have neither tags nor local scans
@@ -254,11 +262,18 @@ This document evolves at phase transitions and milestone boundaries.
 ---
 *Last updated: 2026-09-19 after Phase 5 (Inbox Structure and the Junk Gate) — closed at 4/4 criteria
 TRUE, each re-measured from live state rather than restated. Two requirements moved to Validated.
-New this phase and NOT yet in scope: `mac-music-archive/` holds **23,874 music entries** last written
-2024-10-27 that no phase has counted and that are absent from this document's 144-folder denominator
-— a scoping question for the next milestone, deliberately not characterised. Also open: an Immich API
-key is passed on `takeout-import.service`'s command line (visible in `ps` host-wide, worth rotating),
-and `tank/downloads@pre-phase5` **must not be destroyed before Phase 6 signs off** — it is the only
+New this phase: `mac-music-archive/` holds **23,874 music entries** last written 2024-10-27 that no
+phase had counted. **Operator decision 2026-09-19: it IS in scope and must be fully processed, with
+duplication against existing libraries expected rather than hypothetical.** Added to Active
+Requirements above. ⚠ **This makes the 144-folder backlog denominator STALE** — 144 counts
+`unsorted/` 120 + `nzb/music` 24 and excludes this tree entirely. Restate it before any phase plans
+against it; `CLAUDE.md` carries the figure twice (§ *Corrections after Phase 4* and the Discogs
+rate-limit row) and both are now understated. The tree's formats, tagging state and actual overlap
+remain **deliberately unmeasured**.
+Also carried forward: an Immich API key is passed on `takeout-import.service`'s command line
+(visible in `ps` host-wide) — **rotation is owned and scheduled**, to follow the in-flight Immich
+work, and the structural fix is to move it out of `ExecStart`, not only to change the value.
+And `tank/downloads@pre-phase5` **must not be destroyed before Phase 6 signs off** — it is the only
 undo for 4,750 renames, 751 tag writes and 26,005 chowns, and it is not a clean one.
 Operational detail lives beside the stack in `stacks/selfhosted/arrs/beets.md` § "Phase 5".
 Previously: 2026-09-01 after Phase 2 — the mount route corrected from OPEN QUESTION to Route A on
