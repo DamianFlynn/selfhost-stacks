@@ -564,8 +564,12 @@ END {
 
   for (k in ow) { split(k, a, "\t"); printf("##OWNER\t%s\t%s\t%d\n", a[1], a[2], ow[k]) }
 
-  # top-level breakdown. The root directory's own entry is reported on its own line rather than
-  # folded into any child, so a bare number can never read as a pass.
+  # top-level breakdown. The entry for the root directory itself is reported on a line of its own
+  # rather than folded into any child, so a bare number can never read as a pass.
+  # NOTE FOR ANY LATER EDIT OF THIS BLOCK: no apostrophe may appear anywhere between the quotes
+  # that open and close this awk program. One in a COMMENT here closed the quote early, handed
+  # the rest of the program to bash, and produced "awk: missing } near end of file" followed by a
+  # bash syntax error on a line of awk - a failure whose message points nowhere near its cause.
   for (p in tot) {
     if (p == root) { continue }
     rest = substr(p, length(root) + 2)
