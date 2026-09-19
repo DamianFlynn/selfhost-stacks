@@ -101,6 +101,10 @@ op_prepare() {
   local dir; dir=$(run_dir)
   [[ -e $dir ]] && die "run directory already exists"
   install -d -m 0700 "$STAGING" "$dir"
+  # Sweep runs the mini never cleaned up. `cleanup` is only called after BOTH repositories
+  # confirm, so a night that fails at retention (seen 2026-09-19: exit 11 on a stale restic
+  # lock) leaves its staging behind — ~400 MB each, on a dataset shared with live services.
+  find "$STAGING" -mindepth 1 -maxdepth 1 -type d -mtime +2 -exec rm -rf {} + 2>/dev/null || true
   # A partial run must not linger: `cleanup` deliberately refuses a directory with no
   # manifest, so prepare removes its own mess. Cleared once the manifest is written.
   trap 'rm -rf -- "$dir"' ERR
