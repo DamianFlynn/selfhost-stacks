@@ -27,7 +27,7 @@ services:
   traefik:
     container_name: traefik
     # renovate: datasource=docker depName=traefik
-    image: traefik:v3.7.9@sha256:652929a140a32d7cafafb13c6cdfab5376cfeff800f51397b87b524501ed02a8
+    image: traefik:v3.7.13@sha256:1c32e7c368204fd72812152ebdd2ac0425993df6fd982317deb02e48f2d5423c
     pull_policy: always
     security_opt:
       - no-new-privileges:true
