@@ -1,0 +1,114 @@
+Phase 5 plan 05-10 - download-tree ownership normalisation
+date:              2026-09-19T20:44:19Z
+caller:            selfhost
+measured from:     atlantis (172.16.1.158) - every ownership reading in this record was
+                   taken on the hypervisor, never from inside LXC 100, whose sparse
+                   idmap surfaces unmapped on-disk ids as 65534.
+scope guard value: /mnt/tank/downloads   (literal, asserted before anything was delegated)
+target owner:      568:568
+fence snapshot:    tank/downloads@pre-phase5
+fresh baselines:   tank/downloads@pre-phase5-chown , tank/media/Music@pre-phase5-chown
+approved rows:     139   (sha256 3d71b27640cbee89802a6f77c2fa18cb2aea85cc220340d3f877aada70fbe952)
+runner sentinel:   exit=0 reason=complete rows=139 acted=139 errors=0 elapsed=7
+wall clock:        15s
+after census:       entries, 0 not 568:568
+library proof:     0 diff line(s)   (0 required)
+
+zfs diff line classes against tank/downloads@pre-phase5-chown:
+M 26005
+
+D-25: there is NO standing health check asserting 568:568 across /mnt/tank/downloads, and there
+will not be one. The download client keeps writing at roughly one music job per 72 s,
+so such a check would go red on the next download. THIS RECORD AND ITS DATE ARE THE
+DELIVERABLE.
+
+D-26: content moved into _inbox is NOT chowned per-move. A rename preserves ownership,
+and adding a privileged chown to every move would contradict the one-atomic-rename
+property the design rests on. Staging carries mixed ownership BY DESIGN. This tree-wide
+sweep makes that largely moot at phase end but does not make it false - do not write an
+'everything under _inbox is 568:568' assertion on the strength of this record.
+
+No mode bit was changed anywhere. It is impossible on this pool (EPERM as real root
+under aclmode=restricted); everything on tank is 0777 and stays that way.
+
+================================================================================
+ADDENDUM, appended 2026-09-19 after the run. The record above is left exactly as the
+tool wrote it, including its one defect, rather than rewritten - see item 1.
+================================================================================
+
+1. "after census:  entries, 0 not 568:568" is MISSING ITS TOTAL, and that is a defect in
+   the tool, not in the run. `apply` read the meta key `total_entries` while the survey
+   payload emits `walked_entries`. Fixed in the script. The correct line is:
+
+     after census:      37,191 entries walked across the approved roots, 0 not 568:568
+
+   Re-measured directly from atlantis after the run, per root:
+     /mnt/tank/downloads/mac-music-archive   23,874 entries   0 not 568:568
+     /mnt/tank/downloads/media                1,403 entries   0 not 568:568
+     /mnt/tank/downloads/complete            11,914 entries   0 not 568:568
+   A find for any remaining entry not 568:568 across all three roots returned NOTHING.
+
+2. THE SCOPE WAS NARROWED BY THE OPERATOR ON 2026-09-19, against the 05-10 survey.
+   D-24 as written says "all 209,039 entries". Measured: 233,824 entries, 222,376 not
+   568:568. Approved: 26,005. Excluded: 196,371.
+
+     APPROVED  26,005 = mac-music-archive 23,874 + media 1,403
+                      + 610 in 19 entirely-foreign folders under complete/
+                      + 115 Vol NNN directories + 3 .DS_Store
+     EXCLUDED 196,371 = dropbox/ 196,327 + google takeout/ 42 + icloud/ 1 + /.DS_Store 1
+
+   26,005 + 196,371 = 222,376, the full measured foreign count. The arithmetic closes, so
+   nothing was quietly dropped. Reasons: dropbox/ is a personal code and document archive
+   and not downloads; google takeout/ was being read by an ACTIVE takeout-import.service
+   (immich-go, 41 zips) throughout, and still was when this addendum was written.
+
+3. THE EXCLUDED TREES ARE PROVABLY UNTOUCHED, by three independent instruments:
+   a. An owner+ctime fingerprint of 330 lines - the five excluded paths, every depth-1
+      entry of dropbox/ and of google takeout/, and all 260 entries of incomplete/ -
+      taken before and after. sha256 IDENTICAL both sides:
+        c518cb108f53a725240e13fac2eb35812125c68537c137118aaefe32f4f0b972
+      A chown moves ctime, so this cannot be a false pass.
+   b. THE SAME INSTRUMENT, DRIVEN TO FAIL. On a throwaway pair outside tank, `chown -h
+      568:568` on one of them moved its fingerprint line and left the other untouched.
+      An instrument only ever seen to report "identical" has not been shown capable of
+      distinguishing anything.
+   c. `zfs diff` against tank/downloads@pre-phase5-chown is WHOLE-DATASET and returned
+      exactly "M 26005" - zero +, zero -, zero R, and not one line under any excluded
+      path. It reports on the dataset, not on the roots that were walked, so a chown that
+      had reached dropbox/ would appear here. Note also atime=off on tank/downloads, so
+      immich-go reading all 41 zips throughout produced no diff lines of its own.
+
+4. M 26005 EQUALS THE APPROVED SCOPE EXACTLY. Every entry the chown touched needed it:
+   GNU chown skips the syscall when ownership already matches, and every Vol NNN row was
+   `self` mode, so the 4,746 mp3s inside those folders were never opened.
+
+5. GUARDS DRIVEN before the real run, each observed to fire on its own merits:
+     - no detached-session launcher            -> exit 2, BEFORE any snapshot was created
+     - a pre-existing @pre-phase5-chown        -> exit 2, refusal not silent reuse
+     - a row inside dropbox/                   -> exit 2, by name
+     - a row inside google takeout/            -> exit 2, by name
+     - a row inside icloud/                    -> exit 2, by name
+     - a row inside incomplete/                -> exit 2, by name
+     - a row inside /mnt/tank/media            -> exit 2, Phase 1 D-20
+     - a relative path, or one containing ..   -> exit 2
+     - an in-scope row (POSITIVE control)      -> passed the fence
+     - runner drift abort, end to end          -> sentinel "exit=2 reason=drift rows=139
+       drift=1", NOTHING CHOWNED. The corrupt row was at position 70 of 139, and rows 1-69
+       were verified still carrying their original foreign owners afterwards: the runner
+       validates every row before acting on any.
+   Sentinel states driven: "finished with status 0" (the real run) and "finished with
+   status 2" (the drift run). "Still running" was driven by the real run's poll loop at
+   15s. NOT DRIVEN: "the runner died without writing a sentinel" - reaching it needs the
+   runner killed inside a sub-second window.
+
+6. THE 115 Vol NNN DIRECTORIES WERE NOT root:root. Plan 05-09's summary records them as
+   root:root; that was the CONTAINER view. On disk they were 100000:100000 - container
+   root through LXC 100's idmap (u 0 100000 568). Real 0:0 in this tree meant
+   mac-music-archive/ and icloud/, a different set entirely. All 115 are now 568:568.
+
+7. ZFS DEVICE NUMBERS HAVE ALREADY MOVED. 05-INBOX-PATHS.md records
+   /mnt/tank/downloads at devid 68 and /mnt/tank/media/Music at 76 on 2026-09-18. Read
+   2026-09-19 they are 70 and 75. A devid is assigned at mount time and does not survive
+   a remount. The PROPERTY that record proves - a different dataset means a different
+   devid, so a move across one is copy-then-unlink rather than rename - still holds. The
+   NUMBERS do not. Do not write an assertion on devid == 68.

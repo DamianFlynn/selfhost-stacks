@@ -1104,8 +1104,14 @@ do_apply() {
   after="$(survey_payload | remote_bash "$DOWNLOADS" "$WANT_UID" "$WANT_GID" "$RUNNER_DIR" "$WALK_TIMEOUT" "${SURVEY_ROOTS[@]}")" || true
   a() { printf '%s\n' "$after" | awk -F'\t' -v k="$1" '$1=="##META" && $2==k{print $3; exit}'; }
   local a_total a_foreign
-  a_total="$(a total_entries)"; a_foreign="$(a foreign_entries)"
-  echo "  after: $a_total entries, $a_foreign not $UIDGID"
+  # `walked_entries`, not `total_entries` - the survey payload reports what it WALKED, which is
+  # the approved roots and not the tree. Measured 2026-09-19: reading the old key here left the
+  # figure EMPTY and the verification record printed "after:  entries, 0 not 568:568". An empty
+  # number beside a correct one is the worst shape a record can take, because the correct half
+  # makes the line look read.
+  a_total="$(a walked_entries)"; a_foreign="$(a foreign_entries)"
+  if [ -z "${a_total:-}" ]; then fail "after census returned no entry count - the record would be incomplete"; a_total="UNKNOWN"; fi
+  echo "  after: $a_total entries walked across the approved roots, $a_foreign not $UIDGID"
   echo "  (entries that arrived AFTER the run started will be among them - the download client"
   echo "   writes at roughly one music job per 72 s. That is expected, and it is exactly why"
   echo "   D-25 forbids a standing check for this.)"
@@ -1147,7 +1153,7 @@ do_apply() {
     echo "approved rows:     $rows   (sha256 $list_sha)"
     echo "runner sentinel:   $sentinel"
     echo "wall clock:        ${elapsed}s"
-    echo "after census:      $a_total entries, $a_foreign not $UIDGID"
+    echo "after census:      $a_total entries walked across the approved roots, $a_foreign not $UIDGID"
     echo "library proof:     ${libcount} diff line(s)   (0 required)"
     echo ""
     echo "zfs diff line classes against $DL_SNAPSHOT:"

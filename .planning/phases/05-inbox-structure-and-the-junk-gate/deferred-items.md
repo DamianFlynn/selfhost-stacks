@@ -55,7 +55,18 @@ count. It may be a duplicate of content already held, it may be net-new, and nob
 music is Phase 6/7 work and would need its own decision on whether it is in scope for the
 milestone at all. Ownership is the only thing 05-10 touches.
 
-**Who should pick it up:** a Phase 6 scoping question — is this content in the project or not?
+**Its ownership WAS normalised** — all 23,874 entries are now `568:568` as of 2026-09-19, under
+the operator's approved scope. **Its content was not looked at, deliberately.** Operator decision
+the same day: *"`mac-music-archive/` is logged, not investigated … do not characterise its
+formats, overlap or duplication now — that is a planning question, not an execution one."* So
+this entry deliberately carries **no** claim about what is in there: not its formats, not whether
+it duplicates the 34 GB library or the `unsorted/` backlog, not whether it is tagged. Those are
+open questions, and answering them by guess would be worse than leaving them open.
+
+**Who should pick it up:** the **next milestone's scoping**, as a first-class question — is this
+content in the project or not? PROJECT.md's backlog denominator is 144 folders
+(`unsorted/` 120 + `nzb/music` 24); this tree is not in that count, and if it is in scope the
+denominator is wrong.
 
 ---
 

@@ -329,6 +329,56 @@ can write. `chown` cannot run from LXC 100 at all (sparse idmap); only from atla
   `tank/downloads` is **not exported**, is 0777, and uid 3000 is the download client legitimately
   owning what it wrote.
 
+  > **AMENDMENT — 2026-09-19, plan 05-10.** *The text above is left intact; this note narrows it.*
+  >
+  > **The original wording:** *"All of `tank/downloads` is normalised to `568:568` in one verified
+  > sweep … Scope is **all 209,039 entries**, `incomplete/` included … 197,776 of those entries are
+  > currently uid **3000**"*, with the counter-argument *"uid 3000 is the download client
+  > legitimately owning what it wrote."*
+  >
+  > **The measurement** (05-10 survey, read from atlantis, one `-xdev` pass, `05-10-SURVEY.md`):
+  > **233,824** entries, of which **222,376** are not `568:568`. The uid-3000 figure reproduces
+  > *exactly* — `3000:568` (197,733) plus `3000:545` (43) is **197,776** — but the **denominator
+  > does not**: 233,824 against 209,039 is **+24,785**, and since the uid-3000 population did not
+  > move, it is not download inflow. `mac-music-archive/` alone is 23,874 entries of it.
+  >
+  > Three further findings bear directly on the decision:
+  > - **84% of the operation is `dropbox/`** (196,327 entries: `code/`, `Archive/`, `Documents/`,
+  >   `Projects/`), last written 2026-01-03. The music download tree is **728 entries, 0.3%**.
+  > - **`incomplete/` — the subtree this decision singled out as the risky inclusion — needs
+  >   nothing.** It is 260 entries and every one was already `568:568`.
+  > - **The counter-argument's second clause does not survive measurement.** Host uid 3000 is
+  >   outside *every range* of LXC 100's idmap (`u 0 100000 568` / `u 568 568 1` /
+  >   `u 569 100569 64967`), so no process in that container can create a file owned 3000 on disk;
+  >   `getent passwd 3000` on atlantis returns nothing; and SABnzbd's own output — `incomplete/`
+  >   and the six `_inbox` directories — is `568:568`. uid 3000 is an **orphan uid**, the same
+  >   shape as the orphan gid 545, and it sits on archives rather than on downloads.
+  >
+  > **The narrowing, decided by the operator on the measurement:** the sweep covered **26,005
+  > entries**, not 222,376.
+  >
+  > | | entries | |
+  > |---|---:|---|
+  > | `mac-music-archive/` | 23,874 | recursive |
+  > | `media/` | 1,403 | recursive |
+  > | 19 entirely-foreign folders under `complete/` | 610 | recursive |
+  > | the 115 `Vol NNN` directories | 115 | self |
+  > | 3 `.DS_Store` under `complete/` | 3 | self |
+  > | **normalised** | **26,005** | 139 rows |
+  > | `dropbox/` | 196,327 | **excluded** — a personal code and document archive, not downloads |
+  > | `google takeout/` | 42 | **excluded** — `takeout-import.service` was actively reading all 41 zips |
+  > | `icloud/` · `/.DS_Store` | 2 | **excluded** |
+  > | **excluded** | **196,371** | |
+  >
+  > 26,005 + 196,371 = **222,376**, the full measured foreign count. The arithmetic closes, so
+  > nothing was quietly dropped.
+  >
+  > **Substance preserved:** the decision's purpose — that the project's own staging tree is
+  > uniformly `568:568`, verified from the hypervisor, as a one-time sweep with no standing check
+  > (D-25) — is **met in full**. What changed is that the sweep no longer reaches two archives
+  > that are not this project's and one that was in use. `zfs diff` against a fresh baseline
+  > returned exactly **`M 26005`**, zero `+`, `-` or `R`, and not one line under any excluded path.
+
 - **D-25: One-time sweep, verified, with NO standing assertion — this is what "normalised" means at
   phase end.** The download client keeps writing as uid 3000 at roughly one job per 72 seconds, so
   new 3000-owned files appear almost immediately after the chown completes. **Do not add a health
