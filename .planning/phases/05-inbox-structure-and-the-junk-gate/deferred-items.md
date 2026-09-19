@@ -36,3 +36,58 @@ red/amber line set, not on the script's exit code alone.
 
 **Who should fix it:** whoever added the thirteenth interpolated volume line, by reading it and
 moving `DECLARED_INTERP_EXPECTED` in the same commit.
+
+---
+
+## 2. `mac-music-archive/` is ~24,000 untriaged music entries nobody has counted (found 2026-09-19, plan 05-10)
+
+**What:** `/mnt/tank/downloads/mac-music-archive/` holds **23,874 entries** — `Compilations/`
+13,925, `iTunes/` 6,322, `NEW/` 1,154, `2024-03/` 700, `Various Artists/` 663, `Library/` 521,
+`MoreCompilations/` 447, `2024-10/` 99, `HitSquad/` 28, `Shamrock/` 13. Last written 2024-10-27.
+Owned `0:0` throughout, with its own top directory at `100000:100000`.
+
+**Why it matters:** this is a music archive, in the same dataset as the backlog this project
+exists to work down, and **no phase has measured, triaged or even mentioned it.** PROJECT.md's
+backlog denominator is 144 folders across `unsorted/` and `nzb/music`; this tree is not in that
+count. It may be a duplicate of content already held, it may be net-new, and nobody knows which.
+
+**Why it is not handled here:** plan 05-10 is an ownership sweep. Triaging 24,000 entries of
+music is Phase 6/7 work and would need its own decision on whether it is in scope for the
+milestone at all. Ownership is the only thing 05-10 touches.
+
+**Who should pick it up:** a Phase 6 scoping question — is this content in the project or not?
+
+---
+
+## 3. `dropbox/` is 84% of the download dataset and is not downloads (found 2026-09-19, plan 05-10)
+
+**What:** `/mnt/tank/downloads/dropbox/` holds **196,327 entries** (`code/` 130,348, `Archive/`
+52,074, `Documents/` 7,006, `Projects/` 3,706, `Shared/` 3,169). Uniformly `3000:568`, last
+written 2026-01-03, with `code/` and `Archive/` carrying the `2000-01-01` mtime sentinel of a
+timestamp-less archive extraction.
+
+**Why it matters:** it is inside the `rw` bind of **nine** containers, because every arr and the
+beets container mounts `/mnt/tank/downloads:/downloads:rw` wholesale. Nothing references it by
+name and nothing has written to it in eight months, yet a personal document and source archive is
+mounted read-write into nine network-facing services.
+
+**Why it is not handled here:** narrowing nine bind mounts is a stack change with its own blast
+radius, and 05-10 is an ownership sweep. Recorded rather than fixed.
+
+**Who should pick it up:** whoever next revises `stacks/selfhosted/arrs/`.
+
+---
+
+## 4. `takeout-import.service` passes an Immich API key on the command line (found 2026-09-19, plan 05-10)
+
+**What:** `/etc/systemd/system/takeout-import.service` on LXC 100 invokes `immich-go` with
+`--api-key=<value>` as a command-line argument, so the key is readable in `ps` by anything on the
+host and appears in the host's process table, not just the container's.
+
+**Why it is not fixed here:** it is not this phase's unit and the fix (an `EnvironmentFile` with
+restrictive mode, or `--api-key-file` if the binary supports it) is a change to a live import that
+was mid-run when this was found. **The value is deliberately not recorded in this repo, which is
+public.**
+
+**Who should pick it up:** whoever owns the takeout import — rotate the key and move it out of
+`ExecStart` in the same change.
