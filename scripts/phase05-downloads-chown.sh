@@ -203,6 +203,43 @@ UIDGID="568:568"
 WANT_UID="568"
 WANT_GID="568"
 
+# THE APPROVED SCOPE (operator decision, 2026-09-19, taken against the 05-10 survey).
+#
+# D-24 as written says "all 209,039 entries". The survey measured 233,824 entries with 222,376 not
+# 568:568, and the operator NARROWED the scope on that measurement to 26,005 entries. What was cut
+# and why - recorded here because a narrowing that is not written down reads as an omission:
+#   dropbox/        196,327 entries, 84% of the whole operation, and not downloads at all: code/,
+#                   Archive/, Documents/, Projects/. Chowning someone's code archive is outside
+#                   this project's remit.
+#   google takeout/ 42 entries. takeout-import.service was ACTIVE when the survey was taken and is
+#                   still running, with open descriptors on all 41 zips. Do not touch it, do not
+#                   wait for it, do not read it.
+#   icloud/         1 entry (an empty directory)
+#   /.DS_Store      1 entry at the downloads root
+# Together those are 196,371 entries, and 26,005 + 196,371 = 222,376 - the full foreign count. The
+# arithmetic closes, so nothing was quietly dropped.
+#
+# SURVEY_ROOTS is what `enumerate` walks. Walking the whole tree is not merely wasteful here, it is
+# the thing that DEFEATED the first attempt: behind the live 405 GB Immich import the pool sat at
+# ~48% `full` I/O pressure and a 233,824-entry walk was returning about 32 entries a second. These
+# three roots are 37,191 entries.
+SURVEY_ROOTS=(
+  "/mnt/tank/downloads/mac-music-archive"
+  "/mnt/tank/downloads/media"
+  "/mnt/tank/downloads/complete"
+)
+
+# EXCLUDED_ROOTS are refused BY NAME, in the caller and again inside the runner, on top of not
+# being walked. Belt and braces deliberately: the row list is a text file a human edits, so the
+# fence cannot rely on "we never enumerated it".
+EXCLUDED_ROOTS=(
+  "/mnt/tank/downloads/dropbox"
+  "/mnt/tank/downloads/google takeout"
+  "/mnt/tank/downloads/icloud"
+  "/mnt/tank/downloads/.DS_Store"
+  "/mnt/tank/downloads/incomplete"
+)
+
 ZFS_HOST="${ZFS_HOST:-172.16.1.158}"          # Proxmox host "atlantis" - the only place zfs and a
                                               # working chown on tank both exist
 FENCE_SNAPSHOT="tank/downloads@pre-phase5"    # D-01's phase fence. Must still exist.
@@ -281,9 +318,25 @@ assert_scope_literal() {
 # Called PER ROW, deliberately - a per-target fence checked once on the roots is not enough.
 assert_row_in_scope() {
   local given="$1" real=""
+  # `realpath -m` is the right tool - it resolves symlinks and `..` even for a path that does not
+  # exist - and it is what runs on LXC 100 and atlantis. It is GNU-only, and without a fallback
+  # this fence refuses on a workstation for the WRONG REASON, which makes every negative control
+  # of it non-discriminating. Measured 2026-09-19: the excluded-tree controls all "passed" on a
+  # resolution failure rather than on the fence. So: fall back to a lexical check that accepts
+  # only an absolute path with no `..` component, and refuses anything else.
   real="$(realpath -m -- "$given" 2>/dev/null)" || real=""
+  if [ -z "$real" ]; then real="$(realpath -- "$given" 2>/dev/null)" || real=""; fi
   if [ -z "$real" ]; then
-    echo "REFUSING: could not resolve approved row path" >&2
+    case "$given" in
+      /*) case "/$given/" in
+            */../*) real="" ;;
+            *) real="$given" ;;
+          esac ;;
+      *) real="" ;;
+    esac
+  fi
+  if [ -z "$real" ]; then
+    echo "REFUSING: could not resolve approved row path (not absolute, or contains ..)" >&2
     echo "   given: $given" >&2
     exit 2
   fi
@@ -301,6 +354,18 @@ assert_row_in_scope() {
     echo "   resolved: $real" >&2
     exit 2
   fi
+  local ex
+  for ex in "${EXCLUDED_ROOTS[@]}"; do
+    if [ "$real" = "$ex" ] || [ "${real#"$ex"/}" != "$real" ]; then
+      echo "REFUSING: $ex is OUT OF THE APPROVED SCOPE, by name." >&2
+      echo "   given:    $given" >&2
+      echo "   resolved: $real" >&2
+      echo "   The operator narrowed this run on 2026-09-19 to 26,005 entries and excluded this" >&2
+      echo "   tree explicitly. A row reaching it means the list was edited after enumerate" >&2
+      echo "   produced it, so the whole run stops rather than acting on part of it." >&2
+      exit 2
+    fi
+  done
   printf '%s' "$real"
 }
 
@@ -351,6 +416,12 @@ print_constants() {
   echo "    library proof apply creates:   $LIB_SNAPSHOT"
   echo "    row list (the gate):           $APPROVED_LIST"
   echo "    atlantis runner directory:     $RUNNER_DIR"
+  echo ""
+  echo "    APPROVED SCOPE - the only subtrees walked, and the only ones that can be chowned:"
+  local r
+  for r in "${SURVEY_ROOTS[@]}"; do echo "      $r"; done
+  echo "    EXCLUDED BY NAME - never walked, and refused per row in three places:"
+  for r in "${EXCLUDED_ROOTS[@]}"; do echo "      $r"; done
 }
 
 # --- the survey payload ---------------------------------------------------------------------------
@@ -370,7 +441,17 @@ survey_payload() {
 cat <<'PAYLOAD'
 set -uo pipefail
 ROOT="$1"; WUID="$2"; WGID="$3"; RDIR="$4"; TMOUT="$5"
-if [ ! -d "$ROOT" ]; then echo "##META	error	root_absent_on_$(hostname)"; exit 2; fi
+shift 5
+# Remaining arguments are the SURVEY ROOTS - the only subtrees walked. Everything else under
+# $ROOT, including the excluded trees, is never read at all.
+if [ "$#" -eq 0 ]; then echo "##META	error	no_survey_roots"; exit 2; fi
+for r in "$@"; do
+  if [ ! -d "$r" ]; then echo "##META	error	survey_root_absent_$(hostname)_${r}"; exit 2; fi
+  case "$r" in
+    "$ROOT"/*) : ;;
+    *) echo "##META	error	survey_root_outside_fence_${r}"; exit 2 ;;
+  esac
+done
 mkdir -p "$RDIR"
 RAW="$RDIR/survey.raw"
 SORTED="$RDIR/survey.sorted"
@@ -380,11 +461,13 @@ echo "##META	date	$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 echo "##META	root	$ROOT"
 echo "##META	root_devid	$(stat -c %d "$ROOT")"
 echo "##META	root_owner	$(stat -c %u:%g "$ROOT")"
+for r in "$@"; do echo "##META	survey_root	$r"; done
 
 # -xdev keeps the walk on the tank/downloads dataset and is a second fence: it cannot wander into
 # /mnt/tank/media even if something under here were a mountpoint. find's default is -P, so no
-# symlink is ever followed.
-timeout "$TMOUT" find "$ROOT" -xdev -printf '%U\t%G\t%y\t%D\t%i\t%p\n' > "$RAW"
+# symlink is ever followed. Multiple start points, ONE pass - the estate's recorded failure mode
+# is overlapping whole-tree passes, and running three finds concurrently would be exactly that.
+timeout "$TMOUT" find "$@" -xdev -printf '%U\t%G\t%y\t%D\t%i\t%p\n' > "$RAW"
 rc=$?
 echo "##META	find_rc	$rc"
 if [ "$rc" -ne 0 ]; then echo "##META	error	walk_failed_rc_$rc"; exit 2; fi
@@ -471,7 +554,7 @@ FNR == NR {
   }
 }
 END {
-  printf("##META\ttotal_entries\t%d\n", n + 0)
+  printf("##META\twalked_entries\t%d\n", n + 0)
   printf("##META\tforeign_entries\t%d\n", nf + 0)
   printf("##META\talready_ok\t%d\n", nok + 0)
   printf("##META\tsymlinks\t%d\n", nlink + 0)
@@ -565,7 +648,7 @@ do_enumerate() {
   echo ""
 
   local payload_out
-  payload_out="$(survey_payload | remote_bash "$DOWNLOADS" "$WANT_UID" "$WANT_GID" "$RUNNER_DIR" "$WALK_TIMEOUT")" || {
+  payload_out="$(survey_payload | remote_bash "$DOWNLOADS" "$WANT_UID" "$WANT_GID" "$RUNNER_DIR" "$WALK_TIMEOUT" "${SURVEY_ROOTS[@]}")" || {
     echo "REFUSING: the survey payload failed on atlantis." >&2
     exit 2
   }
@@ -580,7 +663,7 @@ do_enumerate() {
   m() { printf '%s\n' "$payload_out" | awk -F'\t' -v k="$1" '$1=="##META" && $2==k{print $3; exit}'; }
 
   local n_total n_foreign n_ok n_link n_bad n_out n_rows s_host s_date s_devid s_owner
-  n_total="$(m total_entries)";  n_foreign="$(m foreign_entries)"; n_ok="$(m already_ok)"
+  n_total="$(m walked_entries)"; n_foreign="$(m foreign_entries)"; n_ok="$(m already_ok)"
   n_link="$(m symlinks)";        n_bad="$(m unparseable)";         n_out="$(m outside_root)"
   n_rows="$(m rows)";            s_host="$(m host)";               s_date="$(m date)"
   s_devid="$(m root_devid)";     s_owner="$(m root_owner)"
@@ -589,7 +672,7 @@ do_enumerate() {
   rule
   echo "  measured on:              $s_host at $s_date"
   echo "  $DOWNLOADS devid:         $s_devid   owner: $s_owner"
-  echo "  total entries:            $n_total"
+  echo "  entries WALKED:           $n_total   (the approved roots only, NOT the whole tree)"
   echo "  already $UIDGID:          $n_ok"
   echo "  NOT $UIDGID:              $n_foreign"
   echo "  symlinks anywhere:        $n_link"
@@ -649,16 +732,22 @@ do_enumerate() {
     pass "every row carries 9 non-empty tab-separated fields"
   fi
 
-  # Every row must be in scope. Checked here, and checked AGAIN per row by `apply`.
-  local scope_bad=0 rp
+  # Every row must be in scope AND clear of the excluded trees. Checked here, and checked AGAIN
+  # per row by `apply`, and a third time inside the runner on atlantis. A violation here is a
+  # DEFECT rather than a finding, so it is fatal and the list is removed - enumerate reports what
+  # it finds, but it must never hand an operator a list it knows is out of bounds.
+  local rp
   while IFS=$'\t' read -r _ rp _ _ _ _ _ _ _; do
     [ -z "${rp:-}" ] && continue
-    case "$rp" in
-      "$DOWNLOADS"|"$DOWNLOADS"/*) : ;;
-      *) scope_bad=$((scope_bad + 1)); warn "row out of scope: $rp" ;;
-    esac
+    # Subshell deliberately: assert_row_in_scope exits 2 on a violation, and the point here is to
+    # catch that, remove the list, and then exit - rather than exit and leave the bad list on disk.
+    if ! ( assert_row_in_scope "$rp" >/dev/null ); then
+      rm -f "$APPROVED_LIST"
+      echo "REFUSING: removed $APPROVED_LIST - it contained an out-of-scope row." >&2
+      exit 2
+    fi
   done < "$APPROVED_LIST"
-  if [ "$scope_bad" -eq 0 ]; then pass "every row resolves inside $DOWNLOADS"; fi
+  pass "every row is inside $DOWNLOADS and clear of all ${#EXCLUDED_ROOTS[@]} excluded trees"
 
   # The rows must account for every foreign entry. A roll-up that loses entries is worse than no
   # roll-up at all, because the list looks complete.
@@ -701,6 +790,11 @@ runner_payload() {
 cat <<'PAYLOAD'
 set -uo pipefail
 ROWS="$1"; WANT="$2"; ROOT="$3"; SENTINEL="$4"; MEDIA="$5"
+shift 5
+# Remaining arguments are the EXCLUDED roots, refused by name on this side too. The caller already
+# refuses them twice; this is the copy that runs as real root, so it does not take the caller's
+# word for it.
+EXCL=( "$@" )
 started=$(date +%s)
 echo "runner start $(date -u +%Y-%m-%dT%H:%M:%SZ) on $(hostname)"
 
@@ -726,6 +820,16 @@ while IFS=$'\t' read -r mode path typ dev ino own ent sub note; do
     "$ROOT"|"$ROOT"/*) : ;;
     *) echo "DRIFT row $rows: $path is outside $ROOT"; drift=$((drift+1)); continue ;;
   esac
+  ex_hit=""
+  for ex in "${EXCL[@]}"; do
+    case "$path" in
+      "$ex"|"$ex"/*) ex_hit="$ex"; break ;;
+    esac
+  done
+  if [ -n "$ex_hit" ]; then
+    echo "DRIFT row $rows: $path is inside the EXCLUDED tree $ex_hit"
+    drift=$((drift+1)); continue
+  fi
   if [ -L "$path" ]; then
     echo "DRIFT row $rows: $path is now a symbolic link"; drift=$((drift+1)); continue
   fi
@@ -822,6 +926,19 @@ do_apply() {
     exit 2
   fi
 
+  # REFUSAL THREE, and it is deliberately BEFORE anything reaches atlantis. A row list containing
+  # an out-of-scope or excluded path is a DEFECT, it needs no remote access to detect, and
+  # detecting it here means such a run never creates a snapshot, never ships a list and never
+  # launches a runner. It also makes the fence drivable on its own, which the later placement did
+  # not: with the check sitting after the route detection, every excluded-tree negative control
+  # exited 2 on "no zfs route" instead and proved nothing.
+  local rows=0 rp real
+  while IFS=$'\t' read -r _ rp _ _ _ _ _ _ _; do
+    [ -z "${rp:-}" ] && continue
+    rows=$((rows + 1))
+    real="$(assert_row_in_scope "$rp")"
+  done < "$APPROVED_LIST"
+
   detect_zfs_route
   echo "Phase 5 - download-tree ownership, apply (APPROVED ROWS ONLY)"
   rule
@@ -844,14 +961,22 @@ do_apply() {
     exit 2
   fi
   pass "precondition: $FENCE_SNAPSHOT exists"
+  pass "$rows approved row(s), every one inside $DOWNLOADS and clear of the excluded trees"
 
   # Probe for a detached-session launcher BEFORE taking any snapshot. Refusal, not degradation.
-  local launcher=""
-  if zfs_exec "command -v setsid" >/dev/null 2>&1; then
-    launcher="setsid"
-  elif zfs_exec "command -v nohup" >/dev/null 2>&1; then
-    launcher="nohup"
-  else
+  # LAUNCHER_CANDIDATES exists so this refusal can be DRIVEN, which is the only way to know the
+  # guard can fail rather than merely be seen to pass. It can only ever NARROW: a candidate that
+  # is neither setsid nor nohup produces no launch command and falls through to the refusal, so
+  # the override cannot be used to smuggle in a weaker launcher.
+  local launcher="" cand
+  for cand in ${LAUNCHER_CANDIDATES:-setsid nohup}; do
+    case "$cand" in
+      setsid|nohup) : ;;
+      *) continue ;;
+    esac
+    if zfs_exec "command -v $cand" >/dev/null 2>&1; then launcher="$cand"; break; fi
+  done
+  if [ -z "$launcher" ]; then
     echo "REFUSING: neither setsid nor nohup exists on atlantis, so the chown cannot be" >&2
     echo "   detached from this ssh session. A dropped session mid-run would leave a partially" >&2
     echo "   normalised tree. Refusing rather than silently running synchronously." >&2
@@ -891,16 +1016,6 @@ do_apply() {
   pass "fresh baselines created and read back: $DL_SNAPSHOT and $LIB_SNAPSHOT"
   echo ""
 
-  # Per-row scope check on THIS side as well as inside the runner.
-  local rows=0 rp real
-  while IFS=$'\t' read -r _ rp _ _ _ _ _ _ _; do
-    [ -z "${rp:-}" ] && continue
-    rows=$((rows + 1))
-    real="$(assert_row_in_scope "$rp")"
-  done < "$APPROVED_LIST"
-  pass "$rows approved row(s), every one inside $DOWNLOADS"
-  echo ""
-
   # Ship the approved list to atlantis and prove it arrived byte-identical: the runner must act on
   # exactly what the operator approved, not on a re-derivation.
   local list_sha remote_sha
@@ -922,12 +1037,17 @@ do_apply() {
 
   # Write the runner and launch it detached, stdin closed, output to a log on atlantis.
   runner_payload | zfs_exec "cat > '$RUNNER_DIR/runner.sh'"
+  # Excluded roots carried to the far side as single-quoted arguments. One of them contains a
+  # space ("google takeout"), so the quoting is not cosmetic: unquoted it would arrive as two
+  # arguments and the fence would test against "/mnt/tank/downloads/google" and "takeout".
+  local excl_args="" e
+  for e in "${EXCLUDED_ROOTS[@]}"; do excl_args="${excl_args} '${e}'"; done
   zfs_exec "rm -f '$RUNNER_DIR/sentinel'"
   local launch
   if [ "$launcher" = "setsid" ]; then
-    launch="setsid bash '$RUNNER_DIR/runner.sh' '$RUNNER_DIR/rows.tsv' '$UIDGID' '$DOWNLOADS' '$RUNNER_DIR/sentinel' '$MEDIA_ROOT' < /dev/null > '$RUNNER_DIR/run.log' 2>&1 &"
+    launch="setsid bash '$RUNNER_DIR/runner.sh' '$RUNNER_DIR/rows.tsv' '$UIDGID' '$DOWNLOADS' '$RUNNER_DIR/sentinel' '$MEDIA_ROOT' ${excl_args} < /dev/null > '$RUNNER_DIR/run.log' 2>&1 &"
   else
-    launch="nohup bash '$RUNNER_DIR/runner.sh' '$RUNNER_DIR/rows.tsv' '$UIDGID' '$DOWNLOADS' '$RUNNER_DIR/sentinel' '$MEDIA_ROOT' < /dev/null > '$RUNNER_DIR/run.log' 2>&1 &"
+    launch="nohup bash '$RUNNER_DIR/runner.sh' '$RUNNER_DIR/rows.tsv' '$UIDGID' '$DOWNLOADS' '$RUNNER_DIR/sentinel' '$MEDIA_ROOT' ${excl_args} < /dev/null > '$RUNNER_DIR/run.log' 2>&1 &"
   fi
   local t0 t1
   t0="$(date +%s)"
@@ -977,7 +1097,7 @@ do_apply() {
   rule
   info "after census - ONE whole-tree pass, and nothing else may run one at the same time"
   local after
-  after="$(survey_payload | remote_bash "$DOWNLOADS" "$WANT_UID" "$WANT_GID" "$RUNNER_DIR" "$WALK_TIMEOUT")" || true
+  after="$(survey_payload | remote_bash "$DOWNLOADS" "$WANT_UID" "$WANT_GID" "$RUNNER_DIR" "$WALK_TIMEOUT" "${SURVEY_ROOTS[@]}")" || true
   a() { printf '%s\n' "$after" | awk -F'\t' -v k="$1" '$1=="##META" && $2==k{print $3; exit}'; }
   local a_total a_foreign
   a_total="$(a total_entries)"; a_foreign="$(a foreign_entries)"
