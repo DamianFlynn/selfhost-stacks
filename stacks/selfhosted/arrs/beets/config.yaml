@@ -83,14 +83,28 @@
 # NO credential of any kind is present. There is no Discogs user token here and there must never
 # be one — Phase 4 D-24 dismissed that credential, and the criterion-4 probe runs in an explicit
 # MB-only mode (plan 04-08) precisely so it is never loaded into either container.
-# Four checks were run against the whole file and each COUNT was recorded, zeroes included:
-# keys named after a credential class (token|secret|password|passwd|api_key|user_token|auth) — 0;
-# URLs carrying embedded credentials — 0; e-mail addresses — 0; high-entropy runs of 20+ base64/hex
-# characters — 1 MATCH, classified NOT a credential: the 64-hex sha256 of the fenced pre-existing
-# host file quoted in the AUTHORED, NOT SEEDED block above. It is a published file digest of a
-# file that is itself preserved on the host, it grants nothing, and it stays.
-# The screen was PROVEN CAPABLE of matching: a positive control — a known secret-shaped string —
-# was appended to a scratch COPY of this file (never to this file), the screen matched it, and the
+# Checks were run against the whole file and each COUNT was recorded, zeroes included:
+#   keys named after a credential class (token|secret|password|passwd|api_key|user_token|auth) — 0
+#   URLs carrying embedded credentials (a user:pass pair between the scheme and the host)     — 0
+#     ^ that pattern is PARAPHRASED, not written out, per this repo's convention for a matcher
+#       described in prose — so the screen's own grep keeps returning zero over this file.
+#   e-mail addresses                                                                          — 0
+#   opaque runs, tier 1: 20+ chars of [A-Za-z0-9+/=_-]                                        — 28
+#   opaque runs, tier 2: a tier-1 candidate with a >=20-char letter+digit segment, or          — 1
+#                        >=32 chars of pure hex, after splitting on / _ . = -
+# The 27 tier-1 candidates that are not tier 2 are file paths, dotted source citations and long
+# identifiers (`incremental_skip_later`, `PreferNonstandardArtistsTag`, `beets/library/models`).
+# ⚠ Tier 1 alone is NOT a credential screen — its character class contains `/`, `_` and `-`, so on
+# a file this full of paths it matches 28 things and means nothing. That is why tier 2 exists and
+# why tier 1's FULL match list is read, never just its count.
+# The single tier-2 match is classified NOT A CREDENTIAL: it is the 64-hex sha256 of the fenced
+# pre-existing host file quoted in the AUTHORED, NOT SEEDED block above — a published digest of a
+# file that is itself preserved on the host. It grants nothing, and it stays.
+# STATED LIMIT of the tier-2 rule: a PURELY ALPHABETIC secret of 20+ characters would not be
+# ranked by it. Tier 1 would still list it, which is the reason tier 1 is printed in full.
+# The screen was PROVEN CAPABLE of matching: a positive control — a `user_token:` key, a URL with
+# embedded credentials, two e-mail addresses and a 36-char mixed-case token — was appended to a
+# scratch COPY of this file (never to this file). ALL FIVE screens fired (+1/+1/+2/+1/+1), and the
 # copy was deleted. A screen that has never matched anything is not a screen.
 # THIS REPOSITORY IS PUBLIC. Re-screen, with the positive control, before committing any future
 # change to this file.
