@@ -1013,9 +1013,19 @@ This is a configuration phase, not a rename — but it touches five stores that 
 
 ---
 
-## Open Questions
+## Open Questions (ALL RESOLVED at plan time, 2026-09-20)
 
-### OQ-1 — Why does Jellyfin currently show three artists for a file it should show one for? *(highest planning impact)*
+> Dispositioned during `/gsd-plan-phase 6`. Each resolution is recorded inline below and carried
+> into `06-CONTEXT.md` (D-33…D-36) and the plans.
+>
+> | OQ | Resolution | Where it lives now |
+> |----|------------|--------------------|
+> | OQ-1 | **RESOLVED — operator decision.** Enable `PreferNonstandardArtistsTag`; do **not** enable `UseCustomTagDelimiters`. | D-34; plan 06-03 |
+> | OQ-2 | **RESOLVED — deferred with an owner.** Phase 6 proves the path rule on a throwaway; the flask-driven `albumtype=dj` *mechanism* is registered as a Phase 7 entry criterion with three named candidate routes. | plan 06-14 |
+> | OQ-3 | **RESOLVED — copy the real `library.db`** into the flask container, run the oracle against the copy, assert the original's sha256 is unchanged, and label the aunique count with which library it came from. | plans 06-09, 06-11 |
+> | OQ-4 | **RESOLVED — resolved by inspection**, made the literal first step of plan 06-12 Task 2. If `preview` does not show destination paths, agreement is defined on the chosen MBID + `albumartist`/`album`/`track` triple instead. Both outcomes are planned. | plan 06-12 |
+
+### OQ-1 — Why does Jellyfin currently show three artists for a file it should show one for? *(highest planning impact)* — **RESOLVED (D-34)**
 
 **What we know.** `ARTIST = "Marshmello;P!nk;Sting"` in a single Vorbis comment `[MEASURED: ffprobe]`. Jellyfin reports `ArtistItems = [Marshmello, P!nk, Sting]` with distinct Ids `[MEASURED: GET /Items]`. The Music library has `UseCustomTagDelimiters = False` and `PreferNonstandardArtistsTag = False` `[MEASURED]`. 10.11.11's prober splits on `CustomTagDelimiters` **only** when the former is true `[SOURCE: AudioFileProber.cs:227-246]`. ATL joins multiple same-named fields with an internal separator and converts it on read; it does **not** split a single field on `;` `[SOURCE: atldotnet ATL/Track.cs:1079, ATL/Settings.cs:63-72]`. There is no `.nfo` in that album directory `[MEASURED: ls]`. And the six `ARTISTS`-delimited files are **not** split, which is exactly what `PreferNonstandardArtistsTag: False` predicts — so the settings clearly are in force for that path.
 

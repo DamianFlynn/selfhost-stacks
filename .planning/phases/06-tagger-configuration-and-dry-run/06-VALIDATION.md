@@ -1,11 +1,18 @@
 ---
 phase: 6
 slug: tagger-configuration-and-dry-run
-status: draft
-nyquist_compliant: false
+status: approved
+nyquist_compliant: true
 wave_0_complete: false
 created: 2026-09-20
+approved: 2026-09-20
 ---
+
+> **Status note (2026-09-20, after plan verification).** `nyquist_compliant: true` — every task in
+> all 14 plans carries an `<automated>` verify command, no watch-mode flags, and no unbounded remote
+> pipelines (confirmed by `gsd-plan-checker`). `wave_0_complete` stays **false** on purpose: the
+> ❌ W0 rows below are *built by this phase's own plans* and do not exist yet. Each one's owning plan
+> is named in the map, so ❌ means "scheduled, not yet built" — **not** "unowned".
 
 # Phase 6 — Validation Strategy
 
@@ -71,15 +78,19 @@ Task IDs are assigned by the planner; this map is keyed by requirement until pla
 
 ## Wave 0 Requirements
 
-- [ ] `scripts/check-beets-config.sh` — reads the **server-committed** config and asserts CONF-01/02/03/05 keys. Must distinguish "could not look" from "correct".
-- [ ] `scripts/phase06-oracle.sh` — runs the throwaway import + `beet move -p`, emitting the path list in a stable, diffable form.
-- [ ] `.planning/phases/06-tagger-configuration-and-dry-run/06-SAMPLE.md` — the seeded draw, committed **before** any run (D-26).
-- [ ] `.planning/phases/06-tagger-configuration-and-dry-run/06-EXPECTED-TREE.txt` — committed **before** the first oracle run (D-27).
-- [ ] `scripts/phase06-incremental-control.sh` — D-31's two-overlay negative control.
-- [ ] `scripts/check-music-freeze.sh` — revise the tagger census to `expected=2, named` (D-11); add the throwaway-`-l` assertion (D-04).
-- [ ] `scripts/quick-health-check.sh` — extend the vendored-file drift block to cover **two** consumers of **one** file (D-03).
-- [ ] `scripts/check-music-consumers.sh` — add the per-consumer artist-entity check (D-22) reusing the existing argv-safe `jf_api`/`ma_api` helpers; add the D-34 flag assertion.
-- [ ] **No framework install.** Do not introduce pytest.
+Each is owned by a named plan. ❌ in the map above means *scheduled in that plan*, not unowned.
+
+| Artifact | Owning plan | Wave |
+|----------|-------------|------|
+| `scripts/check-beets-config.sh` — reads the **server-committed** config, asserts CONF-01/02/03/05 keys, distinguishes "could not look" from "correct" | **06-07** | 3 |
+| `scripts/phase06-oracle.sh` — throwaway import + `beet move -p`, stable diffable path list, 9 class assertions, `--self-test` | **06-09** | 3 |
+| `scripts/phase06-incremental-control.sh` — D-31's two-overlay negative control | **06-08** | 3 |
+| `06-SAMPLE.md` (seeded draw) and `06-EXPECTED-TREE.txt` — both committed **before** any oracle run (D-26/D-27) | **06-05** | 2 |
+| `scripts/check-music-freeze.sh` — tagger census to `expected=2, named` (D-11) + throwaway-`-l` assertion (D-04), in the same commit as `beets.md:1255` | **06-10** | 3 |
+| `scripts/quick-health-check.sh` — drift block widened 3 → 4 (count, `case`, `DRIFT_EXPECT_*`, green line moved together) (D-03) | **06-10** | 3 |
+| `scripts/check-music-consumers.sh` — per-consumer artist-entity check (D-22) on the argv-safe `jf_api`/`ma_api` helpers; D-34 flag assertion | **06-03**, **06-13** | 1, 4 |
+
+- [ ] **No framework install.** Do not introduce pytest — this repo has no test framework by design.
 
 ---
 
