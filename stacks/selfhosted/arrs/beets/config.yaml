@@ -1,21 +1,46 @@
-# beets configuration for the SURVIVING manual beets container
+# beets configuration — ONE vendored file, TWO containers (D-03)
 #
 # Consumed by:
-#   container  beets  (lscr.io/linuxserver/beets:2.13.1-ls349 — the one surviving tagger
-#              definition, ./beets.yaml)
-#   state      DORMANT by design (D-02): `restart: "no"`, `profiles: ["manual"]`, and the
-#              definition is commented out of ../compose.yaml's include list. The container
-#              runs only when someone starts it on its `manual` profile.
-#   trigger    nothing automatic. No hook, no schedule and no watcher reads this file.
+#   container  beets-flask  (metasauce/beets-flask:v2.0.0-rc6, which ships beets 2.12.0 —
+#              ./flask.yaml). THE ACTIVE RUNTIME. Its server process is what watches the three
+#              registered inboxes and what generates previews.
+#   container  beets  (lscr.io/linuxserver/beets:2.13.1-ls349 — ./beets.yaml). THE DORMANT
+#              agent-driven CLI arm (D-12): `restart: "no"`, `profiles: ["manual"]`, and the
+#              definition is commented out of ../compose.yaml's include list. It runs only when
+#              someone — or something scripted — starts it on its `manual` profile.
+#   trigger    nothing automatic reads this file on the 2.13.1 side. No hook, no schedule and no
+#              watcher. beets-flask's watchdog is the only automatic reader.
 #
-# VENDORED 2026-09-11 (plan 04-08, TAGR-05 / D-27). The repo copy is for review and history;
-# the compose mount in ./beets.yaml points at the appdata copy
+# D-03: both containers mount THIS ONE FILE and one `library.db` from
+# /mnt/fast/appdata/arrs/beets/config/. That keeps Phase 4's D-28 ("exactly one beets library.db
+# survives") true and makes "the effective config" an unambiguous phrase. The cost is that every
+# key below must be valid under BOTH rc6's stricter eyconf/JSON schema AND beets 2.13.1 — which is
+# what forces the plugins-list form below.
+#
+# D-04: only beets-flask's 2.12.0 ever opens the real `library.db`. The 2.13.1 survivor ALWAYS
+# passes an explicit throwaway `-l`, because 2.13.1 opening a 2.12.0 database would migrate the
+# schema under 2.12.0's feet. Phase 1 measured a bare `beet config` running 11 migrations unasked.
+# Accepted consequence: the CLI arm reads a throwaway and therefore cannot answer "what is in the
+# library" — the flask UI does that.
+#
+# VENDORED 2026-09-11 (plan 04-08, TAGR-05 / D-27), REWRITTEN IN FULL 2026-09-20 (plan 06-01).
+# The repo copy is for review and history; the compose mounts point at the appdata copy
 # /mnt/fast/appdata/arrs/beets/config/config.yaml, which is AUTHORITATIVE at runtime.
-# Those two copies are compared byte-for-byte by the vendored-file drift block in
+# Those copies are compared byte-for-byte by the vendored-file drift block in
 # scripts/quick-health-check.sh — a block that plan 04-10 BUILDS as a candidate and plan 04-11
-# PROMOTES into the routine check. IT DOES NOT EXIST AT THIS COMMIT. Until 04-10 lands, nothing
-# detects divergence between this file and the host; do not read this paragraph as a guarantee
-# that is already in force.
+# PROMOTES into the routine check, and whose scope assumption is one repo file to one appdata file.
+# D-03 makes it one repo file to one appdata file read by TWO containers; the cardinality of the
+# drift check itself is unchanged. Until 04-10/04-11 land, nothing detects divergence between this
+# file and the host; do not read this paragraph as a guarantee that is already in force.
+#
+# ⚠ THIS FILE MUST EXIST AT $BEETSDIR/config.yaml BEFORE beets-flask FIRST STARTS.
+# Noted 2026-09-20 (plan 06-01, threat T-06-03). rc6's `BeetsFlaskConfig.__init__` calls
+# `write_examples_as_user_defaults()` BEFORE `reload()`, and that function copies its own example
+# config into $BEETSDIR/config.yaml when — and only when — the file is absent. The example it
+# copies arms `embedart.auto: yes`, `lastgenre.auto: yes` with `force: yes`, `scrub` in the plugin
+# list, and `asciify_paths: yes`. That is three of the SAFE-01 switches Phase 1 turned off, plus a
+# path mangler, installed silently by a container that looks like it started cleanly. The
+# pre-start existence assertion is plan 06-03 task 3; this note is why it exists.
 #
 # AUTHORED, NOT SEEDED — the one way this differs from ../sabnzbd/beets-config.yaml, which plan
 # 01-07 copied verbatim from its host original. This file REPLACES a host file that was not a
@@ -27,41 +52,375 @@
 # scan. It is fenced at /mnt/fast/safety/music-pre-project/audit/ (plan 04-01, MANIFEST line 886)
 # and remains recoverable from there.
 #
-# `library:` is declared EXPLICITLY rather than left to default, so the database this container
-# opens is a stated fact instead of an inherited one. `beet` is not read-only and an unset
-# `library` resolves to a BEETSDIR default — in Phase 1 a bare `beet config` opened the default
-# library and ran 11 migrations beside the real database. D-28's single fresh library.db is
-# created at exactly this path.
+# --------------------------------------------------------------------------------
+# SCOPE — a dated retraction, not a quiet replacement
+# --------------------------------------------------------------------------------
+# This file's 2026-09-11 header closed with, verbatim:
 #
-# EVERYTHING ELSE ABOUT THIS TAGGER'S CONFIGURATION BELONGS TO PHASE 6. This file is the minimal
-# slice TAGR-05 forces — "every remaining beets config declares musicbrainz" — plus the three
-# SAFE-01 keys, and nothing else. Do not add path formats, match thresholds or import behaviour
-# here; Phase 6 owns them and a half-configured survivor is this project's known failure mode.
+#     "EVERYTHING ELSE ABOUT THIS TAGGER'S CONFIGURATION BELONGS TO PHASE 6. This file is the
+#      minimal slice TAGR-05 forces — 'every remaining beets config declares musicbrainz' — plus
+#      the three SAFE-01 keys, and nothing else. Do not add path formats, match thresholds or
+#      import behaviour here; Phase 6 owns them and a half-configured survivor is this project's
+#      known failure mode."
 #
-# Credential screen: NO credential of any kind is present. There is no Discogs user token here and
-# there must never be one — Phase 4 D-24 dismissed that credential, and the criterion-4 probe runs
-# in an explicit MB-only mode (plan 04-08) precisely so it is never loaded into this container.
-# Screened for a Discogs user credential, for any field named after a credential class, for URLs
-# carrying embedded credentials, for e-mail addresses and for high-entropy strings. All checks
-# returned clean, so nothing is redacted and there is no placeholder to substitute. THIS
-# REPOSITORY IS PUBLIC. Re-screen before committing any future change to this file.
+# RETRACTED 2026-09-20 (plan 06-01) — the sentence is kept above rather than deleted, per this
+# repo's standing style for a superseded claim (see beets.md:70-77, "Stated as retractions, not
+# quiet replacements"). Phase 6 IS that phase, and this commit is where the rest landed: the
+# path formats, the match thresholds and the import behaviour it forbade are all below, each
+# with its own WHY. The prohibition has been DISCHARGED, not violated. What survives of it is the
+# reasoning: a half-configured tagger is this project's known failure mode, so the correct move
+# was to add the remainder in ONE commit with the scope statement rewritten, not to let the file
+# grow past its own stated boundary one key at a time.
+#
+# What is still deliberately absent, and must stay absent:
+#   * any Discogs credential or `discogs` plugin entry — Phase 4 D-24 dismissed that credential;
+#   * any `env_file` — this file is read by two containers and scanned by three repo tools;
+#   * `fromfilename`, `edit`, `zero`, `importsource`, `duplicates` — bucket B/C and Phase 9 work.
+#
+# --------------------------------------------------------------------------------
+# Credential screen — RE-RUN AND RE-DATED 2026-09-20 (plan 06-01 task 2)
+# --------------------------------------------------------------------------------
+# NO credential of any kind is present. There is no Discogs user token here and there must never
+# be one — Phase 4 D-24 dismissed that credential, and the criterion-4 probe runs in an explicit
+# MB-only mode (plan 04-08) precisely so it is never loaded into either container.
+# Four checks were run against the whole file and each COUNT was recorded, zeroes included:
+# keys named after a credential class (token|secret|password|passwd|api_key|user_token|auth) — 0;
+# URLs carrying embedded credentials — 0; e-mail addresses — 0; high-entropy runs of 20+ base64/hex
+# characters — 1 MATCH, classified NOT a credential: the 64-hex sha256 of the fenced pre-existing
+# host file quoted in the AUTHORED, NOT SEEDED block above. It is a published file digest of a
+# file that is itself preserved on the host, it grants nothing, and it stays.
+# The screen was PROVEN CAPABLE of matching: a positive control — a known secret-shaped string —
+# was appended to a scratch COPY of this file (never to this file), the screen matched it, and the
+# copy was deleted. A screen that has never matched anything is not a screen.
+# THIS REPOSITORY IS PUBLIC. Re-screen, with the positive control, before committing any future
+# change to this file.
 
 # --------------------------------------------------------------------------------
-# TAGR-05 — the metadata source, named explicitly
+# TAGR-05 / D-10 — the metadata source, named explicitly, in LIST form
 # --------------------------------------------------------------------------------
-# Since beets 2.4.0 MusicBrainz is itself a PLUGIN. A customised `plugins:` list that omits it
+# Since beets 2.4.0 MusicBrainz is itself a PLUGIN. A customised plugin list that omits it
 # silently disables autotagging entirely, and the symptom presents as "no match found", never as
 # a config error. That is the confirmed cause of the 1 Aug, 8 Aug and 6 Sep 2026 ingest skips in
 # the sabnzbd pipeline. Naming it here is the entire reason this file exists.
 #
+# D-10 (2026-09-20): the value is a YAML flow sequence, NOT beets' canonical space-separated
+# string. rc6 types this key `list[str]` in `BeetsSchema` and REJECTS the string form with
+# `…is not of type 'array', 'null'`. A rejected config does not stop the server — it kills the
+# inbox WATCHDOG while the page keeps serving, so the inboxes go inert behind a UI that looks
+# alive (Phase 3 friction 9, D-09). Writing the list form means that rejection cannot fire in the
+# first place. beets 2.13.1 accepts the list form identically, so one file serves both containers.
+#
 # A config block is NOT proof a plugin loaded: `beet config -d` prints a full block for a plugin
 # that raised while building. The authoritative instrument is the `plugins:` line of
-# `beet ... version`, which plan 04-09 runs inside this container.
-plugins: musicbrainz
+# `beet ... version`, which plan 04-09 runs inside the dormant container.
+plugins: [musicbrainz]
 
-# The database this container opens. D-28: exactly one beets library.db survives Phase 4, and it
-# is the fresh one created at this path by 2.13.1-ls349, so its schema is current.
+# --------------------------------------------------------------------------------
+# The four keys rc6 would otherwise default FOR us (06-RESEARCH.md § "D-30's two arms")
+# --------------------------------------------------------------------------------
+# rc6's `commit_to_beets()` calls `confuse.Configuration.set(self.to_dict(extra_fields=True))`,
+# and `to_dict()` serialises the WHOLE `BeetsSchema` dataclass — so every schema field this file
+# leaves silent is injected at confuse's HIGHEST priority carrying rc6's default, not beets'.
+# An absent key here is therefore not "beets' default"; it is rc6's default. Three of them differ,
+# and one of those three is a delete. Each is pinned below with rc6's default named as the thing
+# being refused.
+
+# The real library root as the flask container sees it (/mnt/tank/media:/media:ro).
+# rc6's schema default is `/music/imported` — a path that does not exist in either container, so
+# leaving this silent aims every import at a directory that has to be created before it can be
+# wrong. NOTE: this key does not make anything safe. The `:ro` mount is what prevents writes to
+# /media for the whole of Phase 6 (D-05), and `beets.yaml`'s old comment claiming "Phase 6 grants
+# it rw" is WRONG — granting rw is Phase 7's first act, done with the snapshot fence in place.
+directory: /media/Music
+
+# The database. D-28: exactly one beets library.db survives Phase 4, and it is the fresh one
+# created at this path, so its schema is current. D-04: beets-flask's 2.12.0 opens this; the
+# 2.13.1 arm always overrides it with an explicit throwaway `-l`.
 library: /config/library.db
+
+# Named explicitly because `beet -l` does NOT redirect it. The incremental-import state lives in
+# a PICKLE, not in library.db — so the D-04 throwaway-`-l` discipline gives no protection here at
+# all, and two containers pointed at one statefile share one set of "already imported" marks.
+# D-29 layer 3 asserts the sha256 of exactly this file before and after every Phase 6 dry run,
+# which is the evidence that a `--pretend` run wrote no state.
+statefile: /config/state.pickle
+
+# --------------------------------------------------------------------------------
+# CONF-03 / D-13 / D-14 / D-15 / D-16 / D-19b — the path formats
+# --------------------------------------------------------------------------------
+# ORDER IS LOAD-BEARING AND IS NOT ALPHABETICAL. `Item.destination()` walks the path formats in
+# order and takes the FIRST non-`default` key whose query matches
+# [beets/library/models.py@v2.12.0:1182-1215]. The list is built by `get_path_formats()`
+# [beets/util/pathformats.py@v2.12.0 — byte-identical at 2.13.1], which reads the mapping through
+# confuse's `items()` view: user-config keys come first in YAML order, then keys present only in
+# the shipped defaults. Two consequences the stanza below is shaped around:
+#
+#   1. DEFINING `paths:` DOES NOT REMOVE THE INHERITED DEFAULT KEYS. `get_path_formats`'s own
+#      docstring says so verbatim — "This keeps inherited defaults such as `default`, `comp`, and
+#      `singleton` available unless they are explicitly replaced." So beets' shipped
+#      `comp: Compilations/$album%aunique{}/$track $title` SURVIVES unless `comp:` is overridden.
+#      D-15's "override, do not delete" is structurally required, not stylistic: there is no
+#      syntax for deleting an inherited path rule.
+#   2. An un-overridden `singleton:` lands AFTER every user key and therefore holds the LOWEST
+#      precedence of any non-default rule. D-19b's rule must be written out, and written FIRST.
+#
+# Two query-syntax traps, both of which silently produce a plausible wrong answer:
+#
+#   * `albumtype:dj` with a BARE COLON is a SUBSTRING match
+#     [beets/library/queries.py@v2.12.0:18-22 — `:` RegexpQuery, `=~` StringQuery, `=` MatchQuery,
+#     no prefix SubstringQuery]. It would also capture `djmix` and `adjacent`. Every DJ rule below
+#     uses the EXACT-match `=` prefix. `albumtype` is a FIXED Album field, not a flexible
+#     attribute [models.py@v2.12.0:278-279, 632-634], so the exact query is first-class typed and
+#     `beet import --set albumtype=dj` sets a real column.
+#   * A PATH-FORMAT KEY MUST NEVER CONTAIN A `/`. `PathQuery.is_path_query()` rewrites any bare
+#     term containing a slash into a path query, so a key like `DJ/foo` would silently stop being
+#     the query it looks like. Slashes belong only in the VALUES. Plan 06-01 task 2 proof 1
+#     asserts this mechanically over every key.
+#
+# The key is `shlex.split()` before parsing, so a space is an AND of two terms and shlex quoting
+# applies. `disctotal` is `types.PaddedInt(2)` → `NumericQuery`, which supports the Ruby-style
+# open range `2..` [beets/dbcore/query.py@v2.12.0:429-436].
+#
+# ⚠ THE RENDERING IS `02-05`, NOT `2-05` — decided, not discovered late. `disc` and `track` are
+# both `types.PaddedInt(2)`, so `$disc-$track` renders `02-05` where D-14's prose writes `2-05`.
+# `02-05` is ACCEPTED: it sorts correctly, and the alternative `%right{$disc,1}-$track` breaks at
+# disc 10 (`%right{"10",1}` = `0`). Stated so nobody reads the difference as a defect. Note the
+# existing 1,244-file library uses a THIRD convention — `CD 02-01 Artist - Title.ext`, e.g.
+# /mnt/tank/media/Music/P!nk/TRUSTFALL (2023)/CD 02-01 P!nk - Dreaming.flac. Phase 6 does NOT
+# reconcile the two; it only has to pick one and say which. 06-EXPECTED-TREE.txt is written to
+# `02-05`.
+paths:
+    # 1. D-19b — SINGLETONS FIRST, written out rather than inherited. An un-overridden
+    #    `singleton:` would sit below every user key (see consequence 2 above). `singleton` and
+    #    `comp` are the only two ALIAS keys: `get_path_formats` maps them to the queries
+    #    `singleton:true` and `comp:true`; every other key is a full beets query string.
+    #    `%sunique{}` is the singleton analogue of `%aunique{}` — keys `artist title`,
+    #    disambiguators `year trackdisambig` — and returns "" for anything with a non-null
+    #    album_id. The dry run FLAGS every folder that resolved here, because a folder landing in
+    #    Singles/ is usually an album beets failed to group, not a genuine single.
+    singleton:                      'Singles/$artist/$title%sunique{}'
+
+    # 2. D-13 + D-14 — DJ content, multi-disc. DJ releases go to a top-level `DJ/` SIBLING of the
+    #    artist tree, not into `Compilations/`: they are a different KIND of thing from a
+    #    various-artists album, and mixing them is what this rule exists to prevent.
+    'albumtype:=dj disctotal:2..':  'DJ/$albumartist/$album%aunique{}/$disc-$track $title'
+
+    # 3. D-13 — DJ content, single disc.
+    'albumtype:=dj':                'DJ/$albumartist/$album%aunique{}/$track $title'
+
+    # 4. D-14 — everything else, multi-disc. Flat, one directory per album, disc-prefixed
+    #    filename; no `Disc N/` subdirectory. Placed BEFORE `comp:` ON PURPOSE: a multi-disc
+    #    compilation must still get the disc prefix, and if `comp:` came first it would win and
+    #    the disc number would vanish from a set that needs it most.
+    'disctotal:2..':                '$albumartist/$album%aunique{}/$disc-$track $title'
+
+    # 5. D-15 — the compilation override. IDENTICAL TO `default` BY DESIGN. That identity is the
+    #    whole point: "the comp rule resolves to $albumartist" is expressed as an OVERRIDE, not as
+    #    a deletion, because there is no way to delete the inherited `Compilations/...` rule. If
+    #    this key is ever removed, `Compilations/` comes straight back — silently, with no error.
+    comp:                           '$albumartist/$album%aunique{}/$track $title'
+
+    # 6. The fallback. Reached only when no query above matched.
+    default:                        '$albumartist/$album%aunique{}/$track $title'
+
+# --------------------------------------------------------------------------------
+# The supporting keys the path results DEPEND on — stated, never inherited
+# --------------------------------------------------------------------------------
+
+# D-14 requires $track to be the PER-DISC index, not the absolute one. Default is `no`.
+# With `no`: `"track": self.index` — the absolute index across the whole release — so
+# `$disc-$track` renders `02-17` for disc 2 track 5. Plausible-looking, wrong, and nobody notices.
+# With `yes`: `medium_index` becomes `track` and `medium_total` becomes `tracktotal`
+# [beets/autotag/hooks.py@v2.12.0:415-455, MEDIA_FIELD_MAP]. This single key is the difference
+# between D-14 working and D-14 producing a number that reads as correct.
+per_disc_numbering: yes
+
+# beets' own default is already `no` — it is stated anyway because RC6'S EXAMPLE CONFIG SETS `yes`
+# (see the $BEETSDIR warning at the top of this file), and `asciify_paths: yes` would mangle
+# `P!nk`, every accented artist and every non-ASCII album name in the exact tree CONF-03 is about.
+asciify_paths: no
+
+# CONF-03's exact string, case included. `$albumartist` for a various-artists release resolves to
+# this value VERBATIM — which is what makes `Various Artists/` appear at the top level and, in
+# combination with the `comp:` override above, what makes `Compilations/` not appear at all.
+va_name: "Various Artists"
+
+# No truncation. The target filesystem is ZFS on `tank`; a silent mid-name truncation would make
+# the expected-tree diff (D-27) report a path difference that is really a length limit.
+max_filename_length: 0
+
+# D-16 — `%aunique{}` is KEPT, not removed, and every folder where it fires is REPORTED by the dry
+# run. Values below are beets' own defaults, written out so the dry-run reporter has an
+# inspectable list rather than an inference, and so a future default change cannot move the tree.
+# How it resolves [models.py@v2.12.0:1356-1395 tmpl_aunique, 1440-1525 _tmpl_unique]:
+#   returns "" immediately when album_id is None (so SINGLETONS never get one); queries the
+#   library for other albums matching `keys`; returns "" when exactly one album matches; otherwise
+#   walks `disambiguators` IN ORDER and takes the FIRST whose values are distinct across the whole
+#   ambiguous set; returns " [value]" — WITH A LEADING SPACE — so `$album%aunique{}` becomes
+#   `TRUSTFALL [2023]`.
+# ⚠ THE LANDMINE: when NO disambiguator separates the ambiguous set it falls back to the NUMERIC
+# DATABASE ID — ` [123]`. That value is not reproducible across libraries and will differ between
+# a throwaway library and the real one, so any committed expected tree containing a bare numeric
+# bracket is a trap, not a fixture.
+# ⚠ AND THE CONSEQUENCE FOR THE DRY RUN: `%aunique{}` is evaluated against WHATEVER LIBRARY THE
+# ITEM IS IN. A `beet move -p` against a throwaway library holding only the sample cannot see
+# collisions with the real 1,244-file library, so it reports FEWER firings than a real import
+# would. Whichever route the oracle takes, its aunique count is a LOWER BOUND unless it ran
+# against a copy of the real database — and that copy must be opened by flask's 2.12.0 (D-04).
+aunique:
+    keys: albumartist album
+    disambiguators: albumtype year label catalognum albumdisambig releasegroupdisambig
+    bracket: '[]'
+
+# --------------------------------------------------------------------------------
+# CONF-01 / CONF-02 — import behaviour
+# --------------------------------------------------------------------------------
+import:
+    # CONF-01. THERE IS NO `beet undo` — verified against the live CLI, not assumed. A bulk run
+    # over the 97 GB backlog with `move` set CONSUMES ITS OWN SOURCE, and the only reversal is a
+    # ZFS rollback of two datasets. `tank` has 9 T free, so the duplication `copy` costs is
+    # affordable and, unlike `move`, reversible by deleting the destination.
+    # rc6 additionally TYPE-enforces these two as `Literal[True]` / `Literal[False]`, so a config
+    # setting `move: yes` is REJECTED at validation rather than overridden. Do not read that as a
+    # safety net: a rejected config is the friction-9 kill path — the watchdog dies and the page
+    # keeps serving. The type is a tripwire, not a guard.
+    copy: yes
+    move: no
+
+    # CONF-02 — AND THESE TWO KEYS TRAVEL TOGETHER. The first without the second is the sharpest
+    # trap in this whole file. `ImportTask.finalize()` calls `save_history()` on a SKIPPED task
+    # unless `incremental_skip_later` is set [beets/importer/tasks.py@v2.12.0:310-322]. So one
+    # quiet pass over the backlog would permanently mark every album that was skipped — i.e.
+    # every HARD one — as already done, and the remaining work becomes INVISIBLE rather than
+    # unfinished. That is this project's stated failure mode arriving by config.
+    # Note also that `set_config` forces `resume: False` whenever `incremental` is truthy, so
+    # `incremental` and `resume` are mutually exclusive by construction; there is no `resume` key
+    # here because setting one would be inert.
+    incremental: yes
+    incremental_skip_later: yes
+
+    # rc6's schema default for this key is `remove` — WHICH DELETES THE DUPLICATE WITH NO PROMPT.
+    # Stated plainly because it is the single most destructive thing an absent key in this file
+    # can do: silence here is not beets' `ask`, it is rc6's delete. The 85 duplicate folder names
+    # between `dj-mixes` and `unsorted` are unreconciled and sizes differ in BOTH directions, so
+    # neither side is automatically the one to keep.
+    duplicate_action: ask
+
+    # Phase 7 behaviour, set here so it is a stated fact rather than an inherited one.
+    # ⚠ EVERY PHASE 6 INVOCATION OVERRIDES THIS TO `no` THROUGH A `-c` OVERLAY. Phase 6 writes
+    # nothing to any audio file; the overlay, the `:ro` mount (D-05) and the statefile sha256
+    # (D-29) are three independent expressions of that, and this key is deliberately NOT one of
+    # them — a phase that depended on this line being right would be one edit from writing.
+    # The D-18 register below is what a `write: yes` import is required not to damage.
+    write: yes
+
+# --------------------------------------------------------------------------------
+# CONF-05 — match disambiguation
+# --------------------------------------------------------------------------------
+match:
+    # beets' OWN default is 0.25; rc6 injects 0.10. Pinned to beets' value because 0.10 is a much
+    # narrower "medium" band and silently changes which candidates are offered as automatic — a
+    # difference that shows up as different import decisions, never as an error.
+    medium_rec_thresh: 0.25
+
+    preferred:
+        # ⚠ MUSICBRAINZ STORES `GB`, NOT `UK`. `UK` alone matches nothing and fails SILENTLY —
+        # the import simply prefers a different release and nobody sees a warning. This is the
+        # known config gap behind the *Now!* series picking US pressings over the UK ones this
+        # library actually holds.
+        # ⚠ AND THESE ENTRIES ARE REGEXES, NOT LITERALS. A stray `.` or `|` would widen the match
+        # rather than fail. Both values here are plain two-letter codes on purpose.
+        countries: ['GB', 'US']
+
+        # Prefer the release whose ORIGINAL release year is earliest, rather than whatever
+        # reissue MusicBrainz happens to rank first. Keeps a 1983 album filed as 1983 when its
+        # 2015 remaster is the higher-scoring candidate.
+        original_year: yes
+
+# Extra fields sent to MusicBrainz's search so the candidate ranking has something to discriminate
+# ON. Without these, two pressings of the same album that differ only by country/label/media are
+# indistinguishable to the matcher and it picks effectively at random — which is the other half of
+# the *Now!* problem `preferred.countries` above addresses.
+musicbrainz:
+    extra_tags: [year, catalognum, country, media, label]
+
+# --------------------------------------------------------------------------------
+# CONF-04 write side — AMENDED BY D-34. A comment block, because there is NO KEY TO SET.
+# --------------------------------------------------------------------------------
+# D-23 recorded that `;` would be "configured on the write side too". THAT IS WITHDRAWN, and the
+# superseded reading is stated here rather than quietly dropped.
+#
+# BEETS CANNOT BE CONFIGURED TO EMIT `;` IN `ARTIST`. `item.artist` is built by a plain
+# `"".join()` over MusicBrainz's OWN `joinphrase` values [beetsplug/musicbrainz.py@v2.12.0:341-367]
+# — so the separator between two artists is whatever MusicBrainz says it is ("&", " feat. ", ", ").
+# No delimiter, separator or join key exists anywhere in `config_default.yaml` at 2.12.0 or 2.13.1.
+# There is no key to add, so a plan that promised one was promising something that does not exist.
+#
+# What beets DOES write is the PER-ARTIST LIST into a second tag: `TXXX:ARTISTS` on MP3 and
+# `ARTISTS` on Vorbis. That tag is the real write side of CONF-04.
+#   * Music Assistant already PREFERS `ARTISTS` and splits it on `;` (`TAG_SPLITTER=";"`).
+#   * Jellyfin reads it ONLY with `PreferNonstandardArtistsTag` enabled — which D-34 turns on in
+#     plan 06-12. That is a LIVE-SERVICE change git does not capture, so it is also asserted in
+#     scripts/check-music-consumers.sh or it is one UI click from reverting.
+# With that switch on, the two consumers agree BY CONSTRUCTION rather than by coincidence.
+# Enabling Jellyfin's `UseCustomTagDelimiters` as well was REJECTED: `/`, `|` and `\` come along
+# with `;` across 1,244 files, and `AC/DC` is the canonical casualty.
+
+# --------------------------------------------------------------------------------
+# D-18 — THE PROTECTED DJ-FIELD REGISTER. A named list, per container format.
+# --------------------------------------------------------------------------------
+# These are fields to PRESERVE, not keys to set — hence a register and not a stanza. It is written
+# here so the dry-run reporter has an INSPECTABLE LIST rather than an inference about what matters.
+# The operator's own words are the reason: the DJ collection's BPM, key and energy data exists
+# nowhere else and cannot be re-fetched from any metadata source.
+#
+#   D-18 name     beets field                     ID3 (MP3 and WAV)   Vorbis (FLAC)
+#   -----------   -----------------------------   -----------------   ---------------------------
+#   bpm           bpm            (INTEGER)        TBPM                BPM
+#   initialkey    initial_key    (MusicalKey)     TKEY                INITIALKEY
+#   EnergyLevel   (NONE)                          TXXX:EnergyLevel    (no mediafile mapping)
+#   genre         genres         (MULTI_VALUE)    TCON                GENRE
+#   comment       comments       (STRING)         COMM                DESCRIPTION, then COMMENT
+#
+# THE MECHANISM, AND ITS LIMIT. `bpm`, `initial_key`, `genres` and `comments` ARE real beets
+# fields [`Item._media_tag_fields` = `set(MediaFile.fields()) & Item._field_names`,
+# beets/library/models.py@v2.12.0:711-717] — so they are read from disk on import and written back
+# by `Item.write()`. MusicBrainz supplies none of them, so with `scrub.auto: no` and
+# `overwrite_null` at its default they survive. THAT IS A MECHANISM, NOT A GUARANTEE, which is
+# exactly why D-18 asks for a named list AND a report rather than trusting the mechanism.
+#
+# Three traps, each of which produces a clean-looking false pass:
+#   * ⚠ `genre` IS NOT A BEETS FIELD IN 2.x. `Item._field_names` carries `genres`; there is no
+#     `genre` entry in `TYPE_BY_FIELD`. `$genre` in a template and `beet ls genre:...` do not do
+#     what they look like they do — use `genres`. And `MULTI_VALUE_DSV` joins with a literal
+#     backslash + U+2400 in the database, so `$genres` must be passed through `%first{}` if it is
+#     ever used in a path. It is not used in any path above.
+#   * ⚠ `EnergyLevel` IS NEITHER A BEETS FIELD NOR A MEDIAFILE FIELD. beets never reads it and
+#     never writes it, and mutagen preserves frames it did not touch — so `TXXX:EnergyLevel`
+#     survives any beets import UNLESS `scrub` runs. IT MUST BE ASSERTED BY A RAW ID3 FRAME-SET
+#     COMPARISON, NEVER BY A BEETS QUERY: a beets query for it returns empty, which reads as
+#     "clean" and is indistinguishable from "gone".
+#   * ⚠ A WAV's ID3 header IS NOT AT OFFSET 0 — it sits at the data offset of the RIFF `id3 `
+#     chunk, and a WAVE also carries a separate LIST/INFO chunk that beets never touches and that
+#     will silently disagree. Measured on this corpus: no WAV in this estate carries bpm, key or
+#     energy at all, so D-18's WAV branch has nothing to report — but the offset rule still binds
+#     any frame-set comparison that runs over one.
+#
+# D-19 applies: Phase 6 PRESERVES these fields and GENERATES none of them. Sourcing BPM, key or
+# energy for content that lacks them is out of scope here.
+#
+# D-19a — STATED HONESTLY, BECAUSE THE MISSING TRICK IS NOT AN OVERSIGHT.
+# D-19a asks that the path format be structurally incapable of producing an album folder whose
+# name equals its parent artist folder's name (the live `Def Leppard/Def Leppard (2015)/` defect,
+# which derives an EMPTY album artist in Music Assistant and hard-errors one FLAC). THERE IS NO
+# PATH-TEMPLATE EXPRESSION FOR IT: beets' query language and its template functions have no
+# field-to-field comparison — no way to write "album equals albumartist". Nothing is missing from
+# the stanza above; the capability does not exist.
+# The guard is therefore a BLOCKING CLASS ASSERTION in scripts/phase06-oracle.sh (plan 06-08):
+# zero produced album directories whose basename equals their parent artist directory's basename,
+# case-folded. The EXISTING defect is scheduled for repair in Phase 7, not here — D-05 forbids tag
+# repair this phase and nobody holds `rw` on /media/Music until then. Both halves are named so
+# neither reads as forgotten.
 
 # --------------------------------------------------------------------------------
 # SAFE-01 — destructive defaults, all three explicitly OFF
@@ -75,9 +434,10 @@ library: /config/library.db
 #       embedart.auto   -> yes
 #
 # So an ABSENT key is not an off switch — it is the on switch, waiting for someone to add the
-# plugin name to the `plugins:` line above. None of these three plugins is enabled here today;
-# the keys are set anyway, precisely so that enabling a plugin later cannot silently re-arm
-# automatic tag destruction.
+# plugin name to the plugin list above. None of these three plugins is enabled here today; the
+# keys are set anyway, precisely so that enabling a plugin later cannot silently re-arm automatic
+# tag destruction. rc6's example config enables all three, which is why the $BEETSDIR pre-start
+# note at the top of this file matters as much as these keys do.
 #
 # There is no `beet undo`. These run against a 34 GB library that is already correctly tagged and
 # a 97 GB backlog carrying irreplaceable DJ metadata that exists nowhere else. Reversal is a ZFS
@@ -85,11 +445,13 @@ library: /config/library.db
 
 scrub:
     auto: no   # scrub STRIPS all existing tags from a file on import. Off: this pipeline
-               # ingests content whose existing tags are the only metadata it has.
+               # ingests content whose existing tags are the only metadata it has — and it is
+               # the ONE switch that can take TXXX:EnergyLevel with it (D-18 above).
 
 lastgenre:
     auto: no   # lastgenre OVERWRITES the genre field from Last.fm. Off: it discards
-               # hand-curated and DJ-service genre data in favour of crowd tags.
+               # hand-curated and DJ-service genre data in favour of crowd tags. rc6's example
+               # sets `force: yes` on top, which overwrites even a populated genre.
 
 embedart:
     auto: no   # embedart REWRITES the audio file to embed cover artwork. Off: a file
