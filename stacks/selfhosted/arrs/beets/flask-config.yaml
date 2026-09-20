@@ -1,0 +1,136 @@
+# beets-flask configuration — the FRONT END's own config, not beets' (plan 06-04, D-06)
+#
+# Consumed by:
+#   container  beets-flask  (metasauce/beets-flask:v2.0.0-rc6 — ./flask.yaml). THE ACTIVE
+#              RUNTIME. This file is mounted at /config/beets-flask/config.yaml, which is
+#              $BEETSFLASKDIR/config.yaml at the image's own default BEETSFLASKDIR.
+#   trigger    rc6's `reload()` reads it at process start and its `validate()` runs immediately
+#              after. The inbox WATCHDOG is configured from it. Nothing else reads it.
+#
+# NOT the beets config. ./config.yaml is beets' own configuration and is a separate file mounted
+# at /config/config.yaml (see ./flask.yaml's BEETSDIR note). rc6 loads BOTH into the SAME eyconf
+# schema, so a key in the wrong file is not merely ignored — it is validated against a schema that
+# does not expect it.
+#
+# VENDORED, and on the same terms as ./config.yaml: the repo copy is for review and history; the
+# compose mount points at the appdata copy
+# /mnt/fast/appdata/arrs/beets/config/beets-flask/config.yaml, which is AUTHORITATIVE at runtime.
+# Until the vendored-file drift block in scripts/quick-health-check.sh is extended to cover this
+# second file, nothing detects divergence between this file and the host. Do not read that
+# sentence as a guarantee already in force.
+#
+# --------------------------------------------------------------------------------
+# Credential screen — run 2026-09-20 (plan 06-04)
+# --------------------------------------------------------------------------------
+# THERE IS NO CREDENTIAL IN THIS FILE AND THERE MUST NOT BE ONE. rc6 ships no authentication of
+# any kind, so there is no password to set here even if one were wanted; the authentication is
+# Traefik + chain-authelia@file, configured in ./flask.yaml. Counts, zeroes included:
+#   keys named after a credential class (token|secret|password|passwd|api_key|user_token|auth) — 0
+#   URLs carrying embedded credentials (a user:pass pair between the scheme and the host)      — 0
+#     ^ PARAPHRASED, not written out, per this repo's convention for a matcher described in
+#       prose, so the screen's own grep keeps returning zero over this file.
+#   e-mail addresses                                                                           — 0
+#   opaque runs of 20+ chars of [A-Za-z0-9+/=_-]                                               — all
+#     of them file paths and long identifiers (`debounce_before_autotag`, the inbox paths).
+# THIS REPOSITORY IS PUBLIC. Re-screen before committing any future change to this file.
+
+gui:
+
+  inbox:
+
+    # --------------------------------------------------------------------------------------
+    # Stated explicitly even though 30 IS the schema default — because a test depends on it
+    # --------------------------------------------------------------------------------------
+    # The watchdog waits this many seconds after a folder stops changing before it autotags.
+    # D-09 part 2 drives one throwaway folder through 02-review and waits for a preview: a test
+    # that polls for 10 s and gives up reads as a FAILURE that is really a DEBOUNCE. Writing the
+    # number here means the next person sizing a wait reads it from the config rather than
+    # guessing, and any future change to it is visible in a diff.
+    debounce_before_autotag: 30
+
+    # --------------------------------------------------------------------------------------
+    # D-06 — EXACTLY THREE INBOXES. The routing decision is a directory name.
+    # --------------------------------------------------------------------------------------
+    # `autotag` is `Literal["auto", "preview", "bootleg", "off"]`, default `off`
+    # [backend/beets_flask/config/schema.py@v2.0.0-rc6]. Note the shipped `config_bf_example.yaml`
+    # documents only off/auto/preview and NEVER MENTIONS `bootleg` — it is confirmed present from
+    # the schema, not from the docs.
+    #
+    # 04-hold, 99-quarantine and _done are DELIBERATELY NOT REGISTERED, and that is the control
+    # that makes them safe staging: nothing can be imported out of a folder the watchdog does not
+    # watch. 04-hold in particular now holds the Madonna/ and Michael Jackson/ content that plan
+    # 06-04 task 1 moved out of 02-review (D-35) precisely so registering 02-review could not
+    # enqueue two real preview tasks inside a phase whose premise is that it writes nothing.
+    #
+    # ⚠ ALL THREE PATHS MUST EXIST BEFORE THE CONTAINER STARTS. rc6's `validate()` raises
+    # `ConfigurationError` for any inbox whose `path` does not exist (the only exemption is paths
+    # under /music/beets_flask_config_example/). They do exist — measured 2026-09-20. `validate()`
+    # also strips trailing slashes and logs a warning, so none are written below.
+    #
+    # ⚠ A REJECTED CONFIG DOES NOT STOP THE SERVER — it kills the WATCHDOG while the page keeps
+    # serving, so the inboxes go inert behind a UI that looks alive (Phase 3 friction 9, D-09).
+    # That is why first start asserts the registration line and fails closed on FEWER THAN THREE,
+    # and why "the UI loads" is not evidence of anything.
+    #
+    # These are CONTAINER paths: /mnt/tank/downloads is bound at /downloads (./flask.yaml).
+    folders:
+
+      # Bucket A — mainstream releases that should autotag cleanly. `auto` imports without asking
+      # when the match clears the threshold.
+      "01-auto":
+        name: "01-auto"
+        path: /downloads/complete/nzb/_inbox/01-auto
+        autotag: auto
+
+      # Bucket B — anything that needs a human to choose between candidates. `preview` generates
+      # the candidate list and STOPS; nothing is imported until someone confirms in the UI. This
+      # is the inbox the operator's T3 self-assessment was about.
+      "02-review":
+        name: "02-review"
+        path: /downloads/complete/nzb/_inbox/02-review
+        autotag: preview
+
+      # Bucket C — the DJ services and anything MusicBrainz cannot resolve. `bootleg` imports
+      # as-is using the files' own metadata and groups albums by it. ⚠ Bootleg's grouping is only
+      # as good as the metadata it groups by, and bad metadata is the defining property of this
+      # bucket — Phase 3 recorded that tag NORMALISATION must precede a bootleg import, never
+      # follow it. Registered here because D-06 says so; nothing stages into it during Phase 6,
+      # which makes it a Phase 7 concern.
+      "03-asis":
+        name: "03-asis"
+        path: /downloads/complete/nzb/_inbox/03-asis
+        autotag: bootleg
+
+    # ----------------------------------------------------------------------------------------
+    # D-08 (read-only answer for Phase 9) — there is NO pagination knob, and that is measured
+    # ----------------------------------------------------------------------------------------
+    # beets-flask's docs/limitations.md says the UI "will get laggy" past "some hundred folder or
+    # so", and the backlog is 144 folders. `BeetsFlaskSchema` exposes, IN TOTAL:
+    #   gui.num_preview_workers, gui.inbox.ignore, gui.inbox.debounce_before_autotag,
+    #   gui.inbox.temp_dir, gui.inbox.folders{}, gui.library.readonly,
+    #   gui.library.artist_separators, gui.terminal.enabled, gui.terminal.start_path
+    # [backend/beets_flask/config/schema.py@v2.0.0-rc6]. There is no pagination, no page-size and
+    # no inbox-item-limit key ANYWHERE in it. The only levers on the lag risk are
+    # `gui.inbox.ignore` (reduce what is LISTED) and batch cadence, which is Phase 9's chosen
+    # mitigation. Recorded here so Phase 9 does not spend a session looking for a setting that
+    # does not exist.
+    #
+    # A second gap found in the same schema, flagged for Phase 7: `InboxFolderSchema` carries only
+    # `path`, `name`, `auto_threshold` and `autotag` — there is NO per-inbox `set_fields`, so
+    # D-13's `beet import --set albumtype=dj` has no flask-driven equivalent. The DJ routing
+    # mechanism for a real flask import is an UNOWNED GAP.
+
+  library:
+    # A cheap extra belt for a phase that writes nothing. ⚠ THIS IS A beets-flask UI GUARD, NOT A
+    # MOUNT. It is strictly weaker than `/mnt/tank/media:/media:ro` and DOES NOT REPLACE D-05: a
+    # UI flag can be flipped by a click or by a config reload, whereas a read-only bind cannot
+    # fail open. Keep both.
+    readonly: true
+
+  terminal:
+    # V4. rc6 ships a tmux-backed WEB TERMINAL with shell access inside a container that mounts
+    # `tank`, behind an application that has no authentication of its own. Phase 3 kept it on to
+    # measure ergonomics; that measurement is DISCHARGED, and this phase needs no terminal at all.
+    # Turning it off removes the surface rather than relying on the Authelia middleware to cover
+    # it — the middleware is still the primary control (./flask.yaml), this is defence in depth.
+    enabled: false
