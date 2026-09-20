@@ -1,4 +1,35 @@
-  ### Beets.io
+  ### Beets.io — THE DORMANT, AGENT-DRIVEN CLI ARM (D-12)
+#
+# WHAT THIS CONTAINER IS FOR, written here on 2026-09-20 (plan 06-04, D-12) because an
+# unstated purpose is how a spare tagger turns into a second pipeline — and a fourth
+# half-built tagging path is the one outcome this project exists to prevent.
+#
+# It is the SCRIPTED/AGENT arm. It exists so a bot can drive `beet` on the command line. The
+# operator's own words at the Phase 3 decision: *"It's fine for a bot to drive us, but for me,
+# as a human, no."* The HUMAN arm is beets-flask's web UI (./flask.yaml) — that is the ACTIVE
+# runtime, it is what watches the three registered inboxes, and it is what generates previews.
+#
+# Everything that keeps it dormant is deliberate and stays:
+#   * `restart: "no"` and `profiles: ["manual"]` — it never comes up on a daemon restart and is
+#     never swept in by a bare `docker compose up`.
+#   * commented out of ../compose.yaml's include list.
+#   * `/mnt/tank/media:/media:ro` — see the D-05 note further down.
+#
+# AND IT ALWAYS PASSES AN EXPLICIT THROWAWAY `-l`, PLUS A `-c` OVERLAY (D-04). Not a habit — a
+# requirement. One `library.db` is mounted into two beets versions (D-03), and this image is
+# 2.13.1 while beets-flask executes 2.12.0. A bare `beet` here would OPEN that database and
+# MIGRATE ITS SCHEMA under 2.12.0's feet; Phase 1 measured a bare `beet config` running 11
+# migrations unasked. And `-l` ALONE IS NOT ENOUGH: it redirects `library:` but NOT
+# `statefile:`, which is a separate pickle holding the incremental-import marks. So the overlay
+# must set `library`, `statefile` AND `directory`, e.g.
+#
+#   docker compose -f beets/beets.yaml --profile manual run --rm beets \
+#     beet -l /tmp/throwaway.db -c /tmp/throwaway-overlay.yaml <command>
+#
+# ACCEPTED CONSEQUENCE, stated rather than discovered: the CLI arm reads a throwaway library, so
+# IT CANNOT ANSWER "what is in the library". Flask's UI does that. If you find yourself reaching
+# for this container to run real imports — or removing the `-l` so it can see the real database —
+# stop: you have re-created the exact failure this project exists to prevent.
 services:
 
   beets:
@@ -66,7 +97,23 @@ services:
       # again. Until then beets can read the library for match context but cannot write it.
       # If you flip this back to :rw to "just run one import", you have re-created the exact
       # failure this project exists to prevent: a fourth half-built tagging path.
-      - /mnt/tank/media:/media:ro  # Existing library — READ-ONLY until Phase 6 (see above)
+      #
+      # CORRECTED 2026-09-20, plan 06-04, D-05. The third sentence above — "Phase 3 chooses the
+      # one tagger and Phase 6 grants it rw" — IS WRONG. It is kept visible rather than deleted,
+      # per this repo's standing style for a retracted claim (beets.md:70-77, "Stated as
+      # retractions, not quiet replacements"). The correct statement:
+      #
+      #   /mnt/tank/media stays :ro for the ENTIRE of Phase 6, for BOTH containers — this one and
+      #   beets-flask (./flask.yaml). Granting rw is PHASE 7'S FIRST ACT, done deliberately with
+      #   the snapshot fence already in place.
+      #
+      # Why the correction matters rather than being a date fix: Phase 6's whole claim is that it
+      # "wrote nothing", and a read-only mount is the only evidence for that which CANNOT FAIL
+      # OPEN. Phase 1 measured a path-set comparison returning a perfect pass while Jellyfin
+      # rewrote 83 of 91 .nfo files underneath it. A comment promising rw in the current phase is
+      # an invitation to flip the flag one plan early and lose the only structural control.
+      # The final sentence of the 2026-08-18 note stands unchanged and applies to both containers.
+      - /mnt/tank/media:/media:ro  # Existing library — READ-ONLY for all of Phase 6; rw is Phase 7's first act
     # WR-02: THE networks: KEY AND THE HOST PORT ARE THE SAME DEFECT, SEEN FROM TWO SIDES.
     # Until 2026-09-14 this key was COMMENTED OUT while `traefik.enable=true` and a full
     # `chain-authelia@file` router sat in the labels below. Compose therefore attached this
@@ -91,18 +138,23 @@ services:
     # never to all interfaces. Do not restore the bare form.
     # ports:
     #   - 8337:8337
-    labels:
-      - traefik.enable=true
-
-      - traefik.http.routers.beets.entrypoints=web,websecure
-      - traefik.http.routers.beets.rule=Host(`beets.deercrest.info`)
-      - traefik.http.routers.beets.middlewares=chain-authelia@file
-      - traefik.http.routers.beets.tls=true
-      - traefik.http.routers.beets.tls.certresolver=dns-cloudflare
-      - traefik.http.routers.beets.priority=99
-      - traefik.http.routers.beets.service=beets-svc
-
-      - traefik.http.services.beets-svc.loadbalancer.server.port=8337
+    # THE TRAEFIK LABELS ARE DELETED, NOT COMMENTED OUT (2026-09-20, plan 06-04, D-07).
+    # Removed: `traefik.enable=true`, the seven `routers.beets.*` labels (entrypoints, the
+    # Host(`beets.deercrest.info`) rule, the chain-authelia@file middleware, tls,
+    # tls.certresolver, priority, service) and `services.beets-svc.loadbalancer.server.port`.
+    # They MOVED to ./flask.yaml, unchanged except the port: 5001, not 8337. 8337 was the beets
+    # `web` plugin's port, and that plugin is not even loaded — config.yaml declares
+    # `plugins: [musicbrainz]` only.
+    #
+    # WHY: ONE HOSTNAME, ONE ROUTER. Two services claiming Host(`beets.deercrest.info`) is a
+    # coin-toss for which one Traefik binds and a self-inflicted outage on the one that matters.
+    # Router and service names were kept as `beets`/`beets-svc` over there so the existing
+    # Cloudflare record and the issued certificate keep working.
+    #
+    # Deleted rather than commented out because a commented-out router is one uncomment away from
+    # coming back, and this container is dormant — nobody would be looking at this file when the
+    # UI broke. The `networks:` key and the host-port note above are KEPT: they are correct
+    # independent of the labels, and the WR-02 defect they record was about this file specifically.
 
 # WR-02: t3_proxy declared here as well as in ../compose.yaml, because this file has to stand on
 # its own. It is commented out of that file's include list (../compose.yaml:39), so when it is

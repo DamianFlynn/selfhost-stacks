@@ -36,6 +36,7 @@ include:
   - janitorr.yaml
   - blockbusterr.yaml
 #  - boxarr.yaml  # Commented out - image not published to Docker Hub yet (needs to be built from source)
-#  - beets/beets.yaml
+  - beets/flask.yaml  # beets-flask — THE ACTIVE tagger runtime (plan 06-04, D-01). Included: it is the inbox watchdog and must come up with the stack.
+#  - beets/beets.yaml  # The DORMANT agent-driven CLI arm (D-12). Stays commented out: restart:"no" + profiles:["manual"], started by hand or by a bot, never by `docker compose up`.
 
 

@@ -1,0 +1,235 @@
+  ### beets-flask — THE ACTIVE TAGGER RUNTIME (plan 06-04, D-01)
+#
+# This is the thing that executes ./config.yaml. Its sibling ./beets.yaml is the DORMANT
+# agent-driven CLI arm (D-12) and runs nothing on its own. One vendored config and one
+# `library.db` are mounted into BOTH containers (D-03); `BEETSDIR: /config` below is what makes
+# that one path expression work on this side.
+#
+# WHY IT EXISTS AT ALL. D-01 ends a defer chain that ran Phase 4 -> 5 -> 6: a configuration proven
+# against a runtime that will not execute it proves the wrong thing. Phase 3 chose beets-flask as
+# the front end on the operator's own words — "It's fine for a bot to drive us, but for me, as a
+# human, no." The UI is the human arm; ./beets.yaml is the bot arm.
+#
+# --------------------------------------------------------------------------------
+# THE VERSION PIN IS DATED, WITH A NAMED REVISIT TRIGGER (D-02, researched 2026-09-20)
+# --------------------------------------------------------------------------------
+# The executing engine is beets 2.12.0, NOT the 2.13.1 named all over PROJECT.md — because rc6's
+# `backend/pyproject.toml` pins `beets==2.12.0`, confirmed verbatim at the tag rather than inferred
+# from the image tag. The operator asked directly whether we should be on 2.13.1 or latest. The
+# measured answer:
+#   * `v2.0.0-rc6` (published 2026-08-30) is still the newest beets-flask release. Nothing has
+#     shipped past it.
+#   * `main` is WORSE, not better: it is the stale 1.x line, last commit 2025-12-29, pinning
+#     `beets==2.5.1`. It is not a route to "latest".
+#   * Upstream has live `beets_2_13` and `beets_2_14` branches, repo pushed 2026-09-17, 65 open
+#     issues. The pin is active work, not an abandoned one.
+# So "latest beets" and "the chosen front end" are mutually exclusive today. What 2.13 buys over
+# 2.12 here is `beet modify +=`/`-=` and the `edit` album-YAML header — neither used by the
+# preview/auto/bootleg inbox path.
+#
+# REVISIT TRIGGER: an rc7 (or any release) on beets >= 2.13, or the `beets_2_13` branch merging.
+# Building our own image on 2.13.1 was CONSIDERED AND REJECTED: it makes this estate the maintainer
+# of a fork of a pre-release web app that writes to a 34 GB library, owning the blast radius of a
+# picker Phase 3 measured silently dropping 9 of 31 files, with no upstream to report to.
+#
+# The engine version is ASSERTED AT RUNTIME, not read off this tag:
+#   docker exec -u beetle beets-flask /venv/bin/python -c "import beets; print(beets.__version__)"
+# must print 2.12.0. A pin without verification and a verification without a pin are each half a
+# control. Use the absolute /venv/bin path: `beet` is NOT on PATH for a `docker exec` (the
+# ENTRYPOINT sources /venv/bin/activate; .bashrc sources a different, non-existent path).
+services:
+
+  beets-flask:
+    hostname: beets-flask
+    # NEVER :latest, never a floating tag — this container opens and migrates a real `library.db`
+    # at every start. Digest verified on this host on 2026-09-04 (Phase 3):
+    #   sha256:9548e78f8bcda864bf557b7bb7490f7dcfb852ce3abf2f4c1501d5bb812ec2cd
+    # It is a RELEASE CANDIDATE, and 2.0 has been in RC since 2025-12-29. That is recorded as a
+    # durability risk in its own right, not waved past.
+    image: metasauce/beets-flask:v2.0.0-rc6
+    container_name: beets-flask
+    security_opt:
+      - no-new-privileges:true
+    # Unlike the dormant survivor next door, this one is the ACTIVE runtime: it is the inbox
+    # watchdog, so it has to survive a daemon restart. The Jul-13 outage in this estate was caused
+    # by services that carried no `restart:` key at all.
+    restart: unless-stopped
+
+    environment:
+      # LITERALS, NOT $TZ/$PUID/$PGID — and that is a MEASURED correction, not a style choice.
+      #
+      # ../beets.yaml:12-15 uses $TZ/$PUID/$PGID and this file was planned to copy that. MEASURED
+      # 2026-09-20 (plan 06-04) that those variables resolve to the EMPTY STRING: the gitignored
+      # `.env` lives at stacks/selfhosted/arrs/.env, one directory ABOVE this file, and compose
+      # resolves `.env` from the compose file's own directory. Both
+      #   (cwd=/mnt/fast/stacks)                docker compose -f stacks/selfhosted/arrs/beets/beets.yaml config
+      #   (cwd=stacks/selfhosted/arrs)          docker compose -f beets/beets.yaml config
+      # emit `The "TZ" variable is not set. Defaulting to a blank string.` for all three. So the
+      # sibling-.env assumption is FALSIFIED for this subdirectory, and ../beets.yaml's own three
+      # values are blank whenever it is brought up the documented way. Recorded here rather than
+      # silently worked around; ../beets.yaml is left as it is because D-12 limits this plan to
+      # three named edits there and a PUID change is not one of them.
+      #
+      # The values below are the ones in stacks/selfhosted/arrs/.env. They are NOT credentials —
+      # a timezone and the estate service account, both already stated in CLAUDE.md — so writing
+      # them into this public repo discloses nothing.
+      TZ: Europe/Dublin
+      # 568:568 is apps:apps, the estate service account (CLAUDE.md § Storage and Permissions).
+      # rc6's entrypoint_fix_permissions.sh honours BOTH pairs; both are given so neither pair
+      # silently wins with a default.
+      PUID: "568"
+      PGID: "568"
+      USER_ID: "568"
+      GROUP_ID: "568"
+      # ---------------------------------------------------------------------------------------
+      # THE LOAD-BEARING LINE (D-03, and the mitigation for rc6's destructive-default landmine)
+      # ---------------------------------------------------------------------------------------
+      # The image ENV sets BEETSDIR=/config/beets. Overriding it to /config makes
+      # $BEETSDIR/config.yaml resolve to /config/config.yaml — the SAME single vendored file
+      # ../beets.yaml already mounts — and `library: /config/library.db` resolve to the same
+      # database in both containers. One vendored config, one database, one path expression.
+      #
+      # It is also the control against rc6 writing its own config. `BeetsFlaskConfig.__init__`
+      # calls `write_examples_as_user_defaults()` BEFORE `reload()`, and that copies rc6's example
+      # into $BEETSDIR/config.yaml when — and only when — the file is ABSENT. The example arms
+      # `embedart.auto: yes`, `lastgenre.auto: yes` with `force: yes`, `scrub` in the plugin list,
+      # and `asciify_paths: yes`: three of the SAFE-01 switches Phase 1 turned off, plus a path
+      # mangler that would rewrite `P!nk` and every accented name in the tree. Pointing BEETSDIR at
+      # the vendored file means the copy never fires. Its two log lines — `Beets config not found
+      # at ...` and `Copying default config to ...` — are the detector, asserted ABSENT at first
+      # start (plan 06-04 task 3), backed by an in-container sha256 and a `len(plugins) == 1`
+      # cross-check. A `plugins:` list 18 entries long is the warning sign.
+      #
+      # BEETSFLASKDIR is left at the image default /config/beets-flask, which is where
+      # ./flask-config.yaml is mounted.
+      BEETSDIR: /config
+      # INFO, never DEBUG. /logs is bound out to appdata below, but see the note there: /mnt/fast
+      # is NOT a mountpoint, it is LXC 100's 126 G ext4 root at 80% used. DEBUG on a watchdog is
+      # how that fills.
+      LOG_LEVEL_BEETSFLASK: INFO
+      # REDIS_URL is DELIBERATELY UNSET. rc6 bundles redis and entrypoint.sh starts it with
+      # `redis-server --daemonize yes` only `if [ -z "$REDIS_URL" ]`; setting it would silently
+      # point the job queue at nothing. FALSIFICATION INSTRUCTION, carried from the Phase 3 spike:
+      # if the container fails to start for want of redis, this assumption is FALSIFIED —
+      # `redis:7-alpine` is already present on this host — so add it as a service and RECORD the
+      # falsification here rather than silently working around it.
+
+    volumes:
+      # library.db and state.pickle live here. :rw because rc6's entrypoint.sh runs
+      # `run_migrations()` and then `_open_library()` against the REAL library.db at every start.
+      - /mnt/fast/appdata/arrs/beets/config:/config:rw
+      # The vendored beets config, READ-ONLY. This is $BEETSDIR/config.yaml given BEETSDIR=/config
+      # above, so it is both containers' beets configuration and the thing that must already exist
+      # at first start.
+      #
+      # WHY :ro IS SAFE HERE, AND WHY THE LSIO HAZARD NEXT DOOR IS NOT COPIED IN. rc6's
+      # `entrypoint_fix_permissions.sh` chowns only `/home/beetle /logs /repo` and does NOT touch
+      # /config — read from the entrypoint at the tag, not assumed. So there is no `lsiown -R
+      # /config` pass and no boot-time chown to take EROFS against this single-file mount. The
+      # s6/`lsiown` race written up at ../beets.yaml:45-60 is an LSIO-IMAGE fact and does NOT apply
+      # to this image; reproducing that block here would record a hazard this container does not
+      # have. What DOES carry over is the weaker, general lesson, and it is in the gate below the
+      # volumes list: never gate on `.State.Status == running`.
+      - /mnt/fast/appdata/arrs/beets/config/config.yaml:/config/config.yaml:ro
+      # The vendored beets-flask config (./flask-config.yaml): three inboxes, terminal off, library
+      # read-only. Also :ro — rc6 loads $BEETSFLASKDIR/config.yaml into the same eyconf schema.
+      - /mnt/fast/appdata/arrs/beets/config/beets-flask/config.yaml:/config/beets-flask/config.yaml:ro
+      # /logs bound OUT of the container writable layer, deliberately. /mnt/fast is NOT a
+      # mountpoint — only the CHILDREN of /mnt/fast/appdata are ZFS datasets — so this path and the
+      # container layer both land on LXC 100's 126 G ext4 root, measured 80% used with 25 G free on
+      # 2026-09-20. Binding it does not move the bytes to another filesystem; it makes them
+      # VISIBLE and rotatable from the host instead of hidden inside an overlay. Keep
+      # LOG_LEVEL_BEETSFLASK at INFO.
+      - /mnt/fast/appdata/arrs/beets/logs:/logs:rw
+      # The inbox tree and the backlog. :rw is required — this is where imports are staged and
+      # where the three registered inboxes live.
+      - /mnt/tank/downloads:/downloads:rw
+      # -----------------------------------------------------------------------------------------
+      # D-05 — THE WHOLE PHASE, IN ONE MOUNT FLAG
+      # -----------------------------------------------------------------------------------------
+      # /mnt/tank/media is READ-ONLY for the ENTIRE of Phase 6, for BOTH containers. This is the
+      # strongest evidence that the phase "wrote nothing", because a read-only mount CANNOT FAIL
+      # OPEN — and Phase 1 measured a path-set comparison returning a perfect pass while Jellyfin
+      # rewrote 83 of 91 .nfo files underneath it. A count that passes is not a control; this is.
+      #
+      # Granting rw is PHASE 7'S FIRST ACT, done deliberately with the snapshot fence already in
+      # place. Note that ../beets.yaml's original comment said "Phase 6 grants it rw"; that
+      # sentence is wrong and was corrected in place on 2026-09-20 by this same plan.
+      #
+      # If you flip this to :rw to "just run one import", you have re-created the exact failure
+      # this project exists to prevent: a fourth half-built tagging path.
+      - /mnt/tank/media:/media:ro
+
+    # -------------------------------------------------------------------------------------------
+    # NO /config/requirements.txt IS CREATED, AND THAT IS A DECISION
+    # -------------------------------------------------------------------------------------------
+    # rc6 runs `uv pip install -r /config/requirements.txt` (and the /config/beets-flask/ variant)
+    # AS ROOT at every start. With the file absent the hook is a no-op and the image's own
+    # `beets==2.12.0` pin holds unaltered. Creating the file would add an unpinned install surface
+    # that can move the engine UNDER the measurement between one restart and the next. Its absence
+    # is asserted INSIDE the container at first start, not inferred from this comment.
+
+    # -------------------------------------------------------------------------------------------
+    # WR-02: THE networks: KEY AND THE HOST PORT ARE THE SAME DEFECT, SEEN FROM TWO SIDES.
+    # -------------------------------------------------------------------------------------------
+    # Carried verbatim in substance from ../beets.yaml:70-93, because this container is the one the
+    # defect was actually dangerous for. Until 2026-09-14 the survivor had `traefik.enable=true`
+    # and a full `chain-authelia@file` router while its `networks:` key was COMMENTED OUT. Compose
+    # therefore attached it to the implicit project `default` network, where the Traefik container
+    # cannot reach it — so the Authelia protection was ILLUSORY, and the one path that did work,
+    # `ports: - 8337:8337`, published the container LAN-WIDE WITH NO AUTHENTICATION.
+    #
+    # BOTH HALVES MUST HOLD, and here the stakes are real rather than theoretical: rc6 ships NO
+    # AUTHENTICATION OF ANY KIND and a tmux-backed WEB TERMINAL with shell access inside a
+    # container that mounts `tank`. Traefik + chain-authelia@file is the only authentication there
+    # is. ./flask-config.yaml additionally sets `gui.terminal.enabled: false`, which removes the
+    # shell surface entirely — belt as well as braces, because the braces are a middleware.
+    networks:
+      - t3_proxy
+    # THERE IS NO ports: KEY, DELIBERATELY. Reach beets at https://beets.deercrest.info, which is
+    # what the labels below claim. The container port is 5001 — read from primary source, because
+    # this image declares NO `ExposedPorts` at all, so the only authority is
+    # /repo/backend/launch_server.py passing port=5001 to uvicorn. If a host port is ever genuinely
+    # needed for local debugging, bind it to LOOPBACK — `- "127.0.0.1:5002:5001"` — never to all
+    # interfaces, and remove it again afterwards. Do not restore a bare form.
+
+    # D-07: these labels MOVED HERE from ../beets.yaml on 2026-09-20 and were DELETED there, so two
+    # services cannot claim one hostname. Router and service names are kept as `beets`/`beets-svc`
+    # so the existing Cloudflare record and the issued certificate keep working. THE ONE CHANGED
+    # VALUE IS THE PORT: 5001, not 8337 — 8337 was the beets `web` plugin's port, and that plugin
+    # is not even loaded (config.yaml declares `plugins: [musicbrainz]` only).
+    labels:
+      - traefik.enable=true
+
+      - traefik.http.routers.beets.entrypoints=web,websecure
+      - traefik.http.routers.beets.rule=Host(`beets.deercrest.info`)
+      - traefik.http.routers.beets.middlewares=chain-authelia@file
+      - traefik.http.routers.beets.tls=true
+      - traefik.http.routers.beets.tls.certresolver=dns-cloudflare
+      - traefik.http.routers.beets.priority=99
+      - traefik.http.routers.beets.service=beets-svc
+
+      - traefik.http.services.beets-svc.loadbalancer.server.port=5001
+
+# READINESS GATE, for anything that has to talk to this container.
+# Do NOT gate on `docker inspect .State.Status == running`. The specific LSIO s6/`lsiown` race
+# written up at ../beets.yaml:54-60 does not apply to this image, but its general lesson does:
+# `running` is reported before the server is up, and in that same window `docker logs` is still
+# EMPTY, so a grep taken there reads a false "(none)" — a clean-looking answer to a question that
+# was never actually asked. The rc6 gate is the watchdog's inbox-registration line:
+#
+#   [INFO] beets-flask.wdog: Registering watchdog with debounce of 30 seconds for inboxes: [...]
+#
+# It prints ALL registered inboxes on ONE line, so "fewer than three" is directly checkable — and
+# fewer than three is a RED, not a partial pass. rc6 validates the beets config against its own
+# stricter eyconf schema and a rejected key kills the WATCHDOG while the server keeps serving a
+# page: the inboxes go inert behind a UI that looks alive (Phase 3 friction 9, D-09). "The UI
+# loads" is therefore not evidence of anything.
+
+# WR-02: t3_proxy is declared here as well as in ../compose.yaml, because this file has to be able
+# to stand on its own — brought up directly with `-f`, there is no parent to inherit the network
+# from. Same shape as blockbusterr.yaml, which IS included and declares t3_proxy itself anyway, so
+# an identical repeated external declaration is proven to merge cleanly rather than conflict.
+networks:
+  t3_proxy:
+    external: true
