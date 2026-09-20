@@ -273,8 +273,14 @@ remain **deliberately unmeasured**.
 Also carried forward: an Immich API key is passed on `takeout-import.service`'s command line
 (visible in `ps` host-wide) — **rotation is owned and scheduled**, to follow the in-flight Immich
 work, and the structural fix is to move it out of `ExecStart`, not only to change the value.
-And `tank/downloads@pre-phase5` **must not be destroyed before Phase 6 signs off** — it is the only
-undo for 4,750 renames, 751 tag writes and 26,005 chowns, and it is not a clean one.
+And `tank/downloads@pre-phase5` **is KEPT — its release moves to after Phase 7's pilot passes**
+(corrected 2026-09-20, plan 06-02, D-32). The superseded wording is kept legible, so that a
+mechanical grep for it keeps returning a hit with its retraction attached: it read "**must not be
+destroyed before Phase 6 signs off**". That is retracted, because **Phase 6 writes nothing, so it
+produces no evidence that Phase 5's changes were correct** — only Phase 7's real import exercises
+them. The snapshot is the only undo for 4,750 renames, 751 tag writes and 26,005 chowns, and it is
+not a clean one; releasing it on the word of a paper phase, immediately before the phase that first
+writes at scale, is the wrong trade. Disk cost on 9 T free is negligible.
 Operational detail lives beside the stack in `stacks/selfhosted/arrs/beets.md` § "Phase 5".
 Previously: 2026-09-01 after Phase 2 — the mount route corrected from OPEN QUESTION to Route A on
 measurement, and seven Key Decisions recorded (`beets.md` § "Phase 2").*
