@@ -283,6 +283,64 @@ D-18); the beets-flask folder-count lag risk (Phase 9, D-08); the `bootleg` albu
   4,750 renames, 751 tag writes and 26,005 chowns on the word of a paper phase, immediately before
   the phase that first writes at scale, is the wrong trade. Disk cost on 9 T free is negligible.
 
+### Amendments made at plan time (2026-09-20, after 06-RESEARCH.md)
+
+Four operator decisions taken during `/gsd-plan-phase`, each in response to a research finding that
+contradicted a locked decision or a live-estate condition that had changed since discuss-phase.
+
+- **D-33: CONF-06 keeps its text; `beet move -p` is added as the tree oracle by addendum.**
+  `beet import --pretend` **cannot** produce the intended tree: the pretend pipeline is
+  `read_tasks → log_files`, which prints the *source* album directory and *source* file paths;
+  `lookup_candidates` is never in the pipeline, so no destination is ever computed
+  (`beets/importer/session.py@v2.12.0:201-240`, `stages.py@v2.12.0:266-274`). This is not a new
+  finding — `.planning/REQUIREMENTS.md:276` recorded it against TAGR-05 on 2026-09-11 in Phase 4,
+  and CONF-06 was written anyway. **`beet move -p` is the destination-path oracle**; it prints
+  `source -> destination` via `item.destination()` (`ui/commands/move.py@v2.12.0`). Both are
+  read-only. `--pretend` is **kept** for what it genuinely proves — `incremental`, `ignore`, and
+  album grouping (so it still serves D-31). Follows the precedent TAGR-05 set: **the requirement
+  text is deliberately not rewritten**; the correction lands as a traceability addendum.
+  *Guards against:* Pitfall 1 — `--pretend` prints a line per file and so reads as a pass while
+  proving nothing about paths.
+
+- **D-34: `PreferNonstandardArtistsTag` is ENABLED on Jellyfin's Music library.** Criterion 4's
+  Jellyfin half is a **decision, not an observation**. The library measures
+  `UseCustomTagDelimiters=False` and `PreferNonstandardArtistsTag=False`
+  (`GET /Library/VirtualFolders`, 2026-09-20), and 10.11.11's prober splits on custom delimiters
+  only when the former is true (`AudioFileProber.cs@v10.11.11:227-246`) — so today's 3-artist
+  reading of `ARTIST=Marshmello;P!nk;Sting` is almost certainly **stale DB state from a pre-10.10
+  probe**, and D-24's targeted rescan could collapse it. Enabling
+  `PreferNonstandardArtistsTag` aligns Jellyfin with the `ARTISTS` tag beets actually writes
+  (C-2: beets **cannot** be configured to emit `;` in `ARTIST`) and with what MA already prefers
+  (`TAG_SPLITTER=";"`), so the two consumers agree **by construction rather than by coincidence**.
+  Enabling `UseCustomTagDelimiters` as well was **rejected**: `/`, `|` and `\` come along with `;`
+  across 1,244 files unless `CustomTagDelimiters` is narrowed and `DelimiterWhitelist` populated,
+  and `AC/DC` is the canonical casualty.
+  ⚠ **This is a live-service config change that git does not capture** — it must be recorded in
+  `stacks/selfhosted/arrs/beets.md` and **asserted** in `scripts/check-music-consumers.sh`, or it
+  is one UI click from silently reverting.
+  > **This AMENDS D-23.** CONF-04's write side is `ARTISTS` (TXXX / Vorbis), **not** `;` in
+  > `ARTIST` — no delimiter or join key exists in beets' `config_default.yaml` at either version.
+
+- **D-35: `02-review` is emptied into `04-hold` BEFORE any inbox is registered.** D-08's premise
+  ("there is no population to lag at") and Phase 5's D-17 ("the tree is created empty") are both
+  **stale**: `02-review` holds `Madonna/` and `Michael Jackson/` (measured 2026-09-20). Registering
+  it as-is would immediately enqueue two real preview tasks against real content — a live action
+  inside a phase whose premise is that it writes nothing. Both folders move to `04-hold`, which
+  D-06 leaves deliberately unregistered, so registration stays inert as D-08 assumed. Reversible,
+  and it keeps D-09's throwaway folder the **only** thing that ever transits `02-review` this phase.
+
+- **D-36: The Music Assistant arm is planned and gated, but NOT executed without operator
+  confirmation.** MA (`8095`) and Home Assistant (`8123`) on `172.16.1.31` are both closed —
+  measured twice, 2026-09-20 — because **the host is down for maintenance** (operator's own
+  statement, not an inference from the probe). The MA half of criterion 4 is therefore written in
+  full and gated two ways: (1) it asserts reachability first and reports **"could not look"
+  distinctly from "nothing is wrong"** per README § Health Checks, so criterion 4 stays `OPEN`
+  rather than passing if MA never returns; and (2) the task carrying it is **`autonomous: false`**
+  — execution **stops and confirms with the operator that MA is back online** before running.
+  Deferring the MA half to Phase 7 was rejected: Phase 7 is the phase that first writes at scale,
+  and discovering an MA parsing failure there is precisely the late discovery Phase 6 exists to
+  prevent.
+
 ### Claude's Discretion
 
 - Exact beets path-template syntax for D-13/D-14/D-15/D-19b.
