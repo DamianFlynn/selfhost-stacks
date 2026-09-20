@@ -169,6 +169,15 @@ Two things are explicitly NOT done and are somebody's next step:
 
 **Expected red, not a regression:** `scripts/check-music-freeze.sh` expects `tagger definitions: 1` and there are now two. Plan 06-10 revises it to expect exactly two, named and classed. The red is recorded rather than pre-emptively silenced here.
 
+## Self-Check: PASSED
+
+All seven claimed files exist on disk, and all four claimed commits are present in this branch's
+history (`9803100`, `f1848e2`, `2676d5f`, `4f64159`).
+
+**Git delivery note:** this plan ran as a parallel executor in a worktree. STATE.md, ROADMAP.md and
+REQUIREMENTS.md were deliberately NOT touched — the orchestrator owns those writes after the wave
+merges. The four commits above live on `worktree-agent-acfb6c03d07531133` until then.
+
 ---
 *Phase: 06-tagger-configuration-and-dry-run*
 *Completed: 2026-09-20*
