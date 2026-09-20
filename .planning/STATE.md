@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-20T08:34:55.099Z"
-last_activity: 2026-09-20 -- Phase 6 planning complete
+last_updated: "2026-09-20T21:28:30.756Z"
+last_activity: 2026-09-20 -- Phase 06 execution started
 progress:
   total_phases: 10
   completed_phases: 5
@@ -21,15 +21,15 @@ See: .planning/PROJECT.md (updated 2026-08-17)
 
 **Core value:** New music downloads land in the library correctly tagged, through exactly one
 pipeline that someone owns.
-**Current focus:** Phase 6 — tagger configuration and dry run
+**Current focus:** Phase 06 — tagger-configuration-and-dry-run
 
 **Definition of done (CONS-04):** a file is imported only when verified with `ffprobe` on the file
 *and* visible in both Jellyfin and Music Assistant. Never "tool configured".
 
 ## Current Position
 
-Phase: 6 (tagger-configuration-and-dry-run) — not yet planned
-Plan: Not started
+Phase: 06 (tagger-configuration-and-dry-run) — EXECUTING
+Plan: 1 of 14
 
 Previous: Phase 05 (inbox-structure-and-the-junk-gate) — **COMPLETE, closed 2026-09-19 at 4/4
 criteria TRUE**, 11 of 11 plans (fence taken, `_inbox` created, D-21 inode
@@ -94,7 +94,7 @@ it now matches a real song the split moved into `Vol 066`; assert the named path
 before Phase 6 signs off** — it is the only undo for 4,750 renames, 751 tag writes and 26,005
 chowns, and it is **not** a clean undo.
 
-Status: Ready to execute
+Status: Executing Phase 06
 Do NOT run with `--auto`/`--chain` — four
 gates are `checkpoint:decision`, which auto-selects the first option under auto-mode.
 
@@ -656,7 +656,7 @@ it asked for: the operator browsed MA's Filesystem (local disk) provider, spot-c
 **played tracks to confirm the audio matches the metadata**. No assertion in this phase could do
 that — every automated check verifies MA's *database* says the right thing, never that the *bytes*
 are the right song, and the documented stale state is precisely "entries exist, playback fails".
-Last activity: 2026-09-19 -- Phase 05 CLOSED (4/4 criteria TRUE; 2 code-review BLOCKERs fixed)
+Last activity: 2026-09-20 -- Phase 06 execution started
 deletion and throttling proven from Jellyfin's own Debug log across two driven playback sessions, the
 ZFS quota proven to refuse a write while `/` moved by 0 bytes, the anonymous volume deleted by name
 after the observation it would have made vacuous, **12.95 GiB reclaimed**, and the standing check
