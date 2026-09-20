@@ -171,6 +171,26 @@ None.
 - **Open for 06-13:** `config.yaml`'s "No truncation" comment on `max_filename_length: 0` is wrong; the effective limit is 200 characters per component.
 - **Gaps this sample does not close,** all named in 06-SAMPLE.md so they are inherited rather than rediscovered: path rule 2, `TKEY`, `TXXX:EnergyLevel`, and WAV (the draw is 105 mp3 + 69 flac + 0 wav).
 
+## Self-Check: PASSED
+
+Run after the SUMMARY was written, against the worktree and its git history.
+
+| Claim | Check | Result |
+|---|---|---|
+| `06-SAMPLE.md` exists | `ls` | FOUND, 25,095 B |
+| `06-EXPECTED-TREE.txt` exists | `ls` | FOUND, 26,169 B |
+| `06-05-SUMMARY.md` exists | `ls` | FOUND |
+| Task 1 commit `724448c` | `git log --oneline` | FOUND |
+| Task 2 commit `cb9f49a` | `git log --oneline` | FOUND |
+| Summary commit `2d9dd75` | `git log --oneline` | FOUND |
+| Working tree clean | `git status --short` | clean |
+| Task 1 verify | re-run | exit 0 |
+| Task 2 verify | re-run | exit 0 |
+
+Nothing outside `.planning/phases/06-tagger-configuration-and-dry-run/` was
+touched in the repository. `STATE.md` and `ROADMAP.md` were deliberately not
+modified — the orchestrator owns those writes after the wave merges.
+
 ---
 *Phase: 06-tagger-configuration-and-dry-run*
 *Completed: 2026-09-21*
