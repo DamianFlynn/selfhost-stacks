@@ -883,7 +883,55 @@ the last cheap moment before a path-format error can be applied at scale.
      regexes), `preferred.original_year`, and `musicbrainz.extra_tags` — shown by a *Now!* volume
      preferring the UK release over the US one under `--pretend`, with the run confirmed to have
      written nothing (source and library file counts unchanged).
-**Plans**: TBD
+**Plans**: 14 plans in 5 waves
+
+| Plan | Objective |
+|------|-----------|
+| 06-01 | The whole Phase 6 tagger configuration in the one vendored `config.yaml` — `plugins:` as a list, the `paths:` stanza, and every rc6 schema-default landmine pinned explicitly |
+| 06-02 | The D-33 and D-34 traceability addenda in `REQUIREMENTS.md` and D-32's snapshot-release correction in `PROJECT.md` |
+| 06-03 | Criterion 4's Jellyfin half: `PreferNonstandardArtistsTag` enabled, targeted scan, N distinct artist entities, and the standing assertion |
+| 06-04 | `02-review` emptied (D-35), `flask.yaml` and `flask-config.yaml` authored, `beets.yaml` corrected, and beets-flask's first start with its three assertions |
+| 06-05 | The stratified seeded draw (`06-SAMPLE.md`) and the committed pre-run oracle (`06-EXPECTED-TREE.txt`) |
+| 06-06 | D-09 part 2 — an inbox proven to FIRE — and D-07's exposure shape asserted from the runtime |
+| 06-07 | `scripts/check-beets-config.sh`: CONF-01/02/05 asserted from the SERVER-COMMITTED config, with D-30's two arms recorded as two objects |
+| 06-08 | `scripts/phase06-incremental-control.sh`: D-31's two-arm negative control, one key apart, opposite outcomes |
+| 06-09 | `scripts/phase06-oracle.sh`: `beet move -p`, the three-layer wrote-nothing proof, and nine class assertions, all self-tested |
+| 06-10 | Harness revisions: D-11's two-definition named census, D-03's drift/mount widening, D-04's throwaway-`-l` assertion |
+| 06-11 | The oracle RUN: zero-diff against the committed tree, the `%aunique{}`/singleton/DJ-field reports, and D-29 across all three layers |
+| 06-12 | CONF-05 driven — a *Now!* volume prefers the `GB` release with a track-count check and a negative control — plus D-30 arm 2 and the OQ-4 resolution |
+| 06-13 | The Music Assistant arm, gated on operator confirmation (D-36); CONF-04 stays OPEN if MA never returns |
+| 06-14 | All five criteria re-measured from live state, the Phase 6 closure in `beets.md`, and the Phase 7/9 carry-forward register |
+
+Plans:
+**Wave 1**
+
+- [ ] 06-01-PLAN.md — write the full Phase 6 tagger configuration into the vendored `config.yaml`, offline-validated and credential-screened
+- [ ] 06-02-PLAN.md — CONF-06's D-33 addendum (`beet move -p` is the oracle), CONF-04's D-34 addendum (`ARTISTS`, not `;` in `ARTIST`), and PROJECT.md's D-32 correction
+- [ ] 06-03-PLAN.md — enable `PreferNonstandardArtistsTag`, targeted-scan via `/Library/Media/Updated`, prove N distinct artist entities, extend `check-music-consumers.sh`
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 06-04-PLAN.md — empty `02-review` into `04-hold`, author `flask.yaml`/`flask-config.yaml`, correct `beets.yaml`, first-start beets-flask with three assertions
+- [ ] 06-05-PLAN.md — the deterministic seeded draw and the expected tree, both committed before any run
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 06-06-PLAN.md — drive a throwaway folder through `02-review` past the 30 s debounce, and assert D-07's exposure from `docker inspect`, DNS and HTTP
+- [ ] 06-07-PLAN.md — `scripts/check-beets-config.sh` with a `--self-test`, then both D-30 arms run and their disagreements named
+- [ ] 06-08-PLAN.md — `scripts/phase06-incremental-control.sh` with a `--self-test`, then both arms run to opposite outcomes
+- [ ] 06-09-PLAN.md — `scripts/phase06-oracle.sh`: the oracle core plus nine class assertions, every red branch driven by `--self-test`
+- [ ] 06-10-PLAN.md — revise the tagger census to two named-and-classed definitions, widen the drift block to four pairs, add the D-03 mount and D-04 throwaway assertions
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 06-11-PLAN.md — run the oracle: zero-diff, the class-assertion reports, and the three-layer wrote-nothing proof
+- [ ] 06-12-PLAN.md — the driven country-preference proof with its negative control, and D-30 arm 2's preview cross-check
+- [ ] 06-13-PLAN.md — **`autonomous: false`** — operator gate on Music Assistant being back online, then the MA artist-entity read-back or an explicit CONF-04 OPEN
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 06-14-PLAN.md — re-measure all five criteria from live state, write the Phase 6 closure, and hand the carried-forward items to Phases 7 and 9
+
 **Research**: not needed — the specific traps are already captured with citations in the research.
 
 ### Phase 7: Pilot — 12 Albums End to End
