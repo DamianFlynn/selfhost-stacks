@@ -1,0 +1,379 @@
+06-06 TASK 1 — D-09 PART 2: a registered inbox is proven to FIRE, not merely to be registered
+================================================================================
+Run:        2026-09-20T23:38:25Z .. 2026-09-20T23:45:06Z, plan 06-06 task 1
+Host:       LXC 100 (selfhost, 172.16.1.159), Linux 7.0.14-4-pve, over ssh from the workstation
+Container:  beets-flask, metasauce/beets-flask:v2.0.0-rc6, started 2026-09-20T22:37:55Z,
+            RestartCount 0 before and after this test
+Inbox:      /mnt/tank/downloads/complete/nzb/_inbox/02-review   (autotag: preview)
+Throwaway:  _PHASE06-LIVENESS-20260920T233825Z
+
+RESULT: PASS. The inbox fired. Both required instruments answered, a third corroborated,
+        the folder was removed, and `02-review` is back to ZERO entries.
+
+--------------------------------------------------------------------------------
+WHY THIS TASK EXISTS — REGISTRATION AND FIRING ARE SEPARABLE
+--------------------------------------------------------------------------------
+Phase 3's friction 9: rc6 validates the beets config against its own stricter JSON schema,
+and a rejected config KILLS THE WATCHDOG while the server keeps serving a page. Inboxes go
+inert behind a UI that looks alive. So "the UI loads" is evidence of nothing, and
+"the startup log named three inboxes" is evidence of registration only.
+
+  D-09 part 1 — REGISTRATION — was discharged by plan 06-04 at first start:
+    [INFO] beets-flask.wdog: Registering watchdog with debounce of 30 seconds for inboxes:
+    ['/downloads/complete/nzb/_inbox/01-auto', '/downloads/complete/nzb/_inbox/02-review',
+     '/downloads/complete/nzb/_inbox/03-asis']
+    [artifacts/06-04-first-start.txt, ASSERTION 2 — three distinct _inbox entries]
+
+  D-09 part 2 — FIRING — is this document.
+
+The operator chose both proofs over the cheaper one. This is the second half.
+
+--------------------------------------------------------------------------------
+THIS AMENDS PHASE 5's D-17, AND THAT IS THE WHOLE AMENDMENT
+--------------------------------------------------------------------------------
+Phase 5's D-17 says "the tree is created empty". D-09 AMENDS it in band:
+
+  EXACTLY ONE folder transited `02-review` during Phase 6 and was removed. That folder is
+
+      _PHASE06-LIVENESS-20260920T233825Z
+
+  created 2026-09-20T23:38:25Z, removed 2026-09-20T23:44:5xZ, holding three mp3 files that
+  were COPIES of files that remain in place elsewhere in the backlog.
+
+Recorded here rather than left to read as a contradiction between two decisions. Note this
+is the SECOND amendment to D-17 in this phase; the first is plan 06-04's, which records that
+the tree was created empty on 2026-09-18 and did not stay empty — real content
+(`Madonna/`, `Michael Jackson/`) arrived on 2026-09-19 and was moved to the deliberately
+unregistered `04-hold` before any inbox was registered
+[artifacts/06-04-inbox-before-after.txt]. The two amendments are consistent: 06-04 emptied
+`02-review` precisely so that this folder would be the only thing that ever transits it.
+
+--------------------------------------------------------------------------------
+THE THROWAWAY WAS BUILT FROM ALREADY-DUPLICATED MATERIAL, BY COPY
+--------------------------------------------------------------------------------
+Source folder (chosen because it is a duplicate edition, not unique content):
+
+    /mnt/tank/downloads/complete/nzb/music/Benson_Boone_-_American_Heart-WEB-2025-BENSONBOONE
+
+The same release exists in the same population as a FLAC edition,
+`.../music/Benson Boone-American Heart-24BIT-44KHZ-WEB-FLAC-2025-OBZEN-xpost` — both are
+drawn stratum-S1 folders in 06-SAMPLE.md, so this is an mp3 copy of content that is already
+held twice. Nothing unique was put at risk.
+
+`rsync -a` was deliberately NOT used: on `tank` it fails with `mkstemp ... Operation not
+permitted` under `acltype=nfsv4` + `aclmode=restricted`, while printing stats that look like
+success and exiting 23. Plain per-file `cp` was used instead, then `chown -R 568:568`.
+
+THE SOURCE MANIFEST IS IDENTICAL BEFORE, DURING AND AFTER — so it was a copy, not a move:
+
+    $ LC_ALL=C find "$SRC" -type f -print0 | LC_ALL=C sort -z | xargs -0 -r sha256sum
+
+    before the copy   : manifest sha256 f963ce43b2b91e2977c814d094e0683bcb1dee1255afa75f2e4ea0c01995fd0d   (10 files)
+    after  the copy   : manifest sha256 f963ce43b2b91e2977c814d094e0683bcb1dee1255afa75f2e4ea0c01995fd0d   (10 files)
+    after the removal : manifest sha256 f963ce43b2b91e2977c814d094e0683bcb1dee1255afa75f2e4ea0c01995fd0d   (10 files)
+
+    `diff` between the before and after manifests: EMPTY, twice.
+
+The three copies hash-matched their sources at creation time:
+
+    MATCH  f2dd7d0081cab49d926c4a3959fd537cd50ef03edce3f526292e929f36368af7  01_benson_boone_-_sorry_im_here_for_someone_else.mp3
+    MATCH  ec4477e36a56533be5ac31d69f529f2713275bc42c1c733a29ef022687830682  02_benson_boone_-_mr_electric_blue.mp3
+    MATCH  7a94ba84d8072e0a7ce0932fc8d636013b06984d75e1ef157c4acbbf106a6e03  03_benson_boone_-_man_in_me.mp3
+
+Throwaway on disk, owner `568:568` (`apps:apps`) as required:
+
+    drwxrwxrwx 2 apps apps       5 Sep 20 23:38 .
+    -rwxrwxrwx 1 apps apps 6270551 Sep 20 23:38 01_benson_boone_-_sorry_im_here_for_someone_else.mp3
+    -rwxrwxrwx 1 apps apps 7619439 Sep 20 23:38 02_benson_boone_-_mr_electric_blue.mp3
+    -rwxrwxrwx 1 apps apps 9147080 Sep 20 23:38 03_benson_boone_-_man_in_me.mp3
+
+PRE-STATE, asserted before anything was staged:
+    02-review entries at -mindepth 1 : 0
+    GET /api_v1/session/             : {"items":[],"next":null}
+    GET /api_v1/dbfolder/            : {"items":[],"next":null}
+Both endpoints empty beforehand is what makes "one item afterwards" mean something.
+(See DEVIATION 1 below for where that pre-state reading actually came from.)
+
+--------------------------------------------------------------------------------
+THE DEBOUNCE WAS WAITED OUT, AND THE BUDGET IS STATED
+--------------------------------------------------------------------------------
+`gui.inbox.debounce_before_autotag` is **30 seconds** — set explicitly in
+`flask-config.yaml` and also the `BeetsFlaskSchema` default
+[backend/beets_flask/config/schema.py@v2.0.0-rc6]. The watchdog will not act on a folder for
+at least 30 s after the last filesystem event under it.
+
+  A poll that gives up at 10 s measures the DEBOUNCE, not the watchdog, and reports a
+  healthy inbox as dead. 06-RESEARCH.md § P5c warns about exactly this.
+
+Budget actually used, and it clears the requirement on both ends:
+
+    sleep 40 s  (requirement: >= 35 s) BEFORE the first poll
+      stage A completed            2026-09-20T23:38:28Z
+      stage B sleep 40 began       2026-09-20T23:39:11Z
+      first poll issued            2026-09-20T23:39:51Z   (83 s after the folder appeared)
+    poll bound 240 s  (requirement: >= 180 s), 10 s cadence, 25 polls issued
+
+The watchdog in fact acted at ~23:38:59Z — BEFORE the first poll — so the debounce was never
+close to being the binding constraint. That is the outcome the budget is there to guarantee:
+had it fired late, the poll would still have caught it.
+
+--------------------------------------------------------------------------------
+INSTRUMENT 1 — THE CONTAINER LOG, GREPPED ON THE FOLDER'S OWN UNIQUE NAME
+--------------------------------------------------------------------------------
+Route recorded: `docker logs beets-flask 2>&1 | grep -- "_PHASE06-LIVENESS-20260920T233825Z"`
+
+The grep is anchored on the throwaway's own unique, timestamped name, so the match CANNOT be
+some other task. Two lines, both from the watchdog logger:
+
+    [INFO] beets-flask.wdog: Watchdog: Starting inbox handler task /downloads/complete/nzb/_inbox/02-review/_PHASE06-LIVENESS-20260920T233825Z
+    [INFO] beets-flask.wdog: Watchdog: Enqueuing /downloads/complete/nzb/_inbox/02-review/_PHASE06-LIVENESS-20260920T233825Z as preview
+
+    line count: 2
+
+`as preview` is the configured behaviour for this inbox (`autotag: preview` — generate the
+candidate list and STOP; nothing is imported until someone confirms). The watchdog picked the
+right mode for the right folder.
+
+VERDICT: FIRED.
+
+--------------------------------------------------------------------------------
+INSTRUMENT 2 — THE FLASK HTTP API, WITH ITS ROUTE RECORDED AND ITS JOIN RESOLVED
+--------------------------------------------------------------------------------
+The endpoint was NOT assumed. It was resolved by inspection against the running container:
+
+    /repo/backend/beets_flask/server/routes/__init__.py:13
+        backend_bp = Blueprint("backend", __name__, url_prefix="/api_v1")
+    /repo/backend/beets_flask/server/routes/db_models/session.py:80
+        super().__init__(SessionStateInDb, url_prefix="/session")
+    /repo/backend/beets_flask/server/routes/db_models/folder.py:14
+        url_prefix="/dbfolder"
+    /repo/backend/beets_flask/server/routes/db_models/base.py:43
+        self.blueprint.route("/", methods=["GET"])(self.get_all)
+
+Routes used, both container-internal (there is no host port — see task 2):
+
+    GET http://127.0.0.1:5001/api_v1/dbfolder/?n_items=50
+    GET http://127.0.0.1:5001/api_v1/session/?n_items=50
+    GET http://127.0.0.1:5001/api_v1/session/id/<id>
+
+>>> THE JOIN MATTERS, AND GETTING IT WRONG PRODUCED A FALSE NEGATIVE FIRST. SEE DEVIATION 2.
+    A session record carries `folder_hash`, NOT the folder path. The subject of a session is
+    established by joining `session.folder_hash == dbfolder.id`:
+
+    dbfolder items: 1
+    {
+      "full_path": "/downloads/complete/nzb/_inbox/02-review/_PHASE06-LIVENESS-20260920T233825Z",
+      "is_album": null,
+      "id": "48c833815fc548049248256da08db2a5",
+      "created_at": "2026-09-20T23:38:59+00:00",
+      "updated_at": "2026-09-20T23:39:06+00:00"
+    }
+
+    session items: 1
+    {
+      "folder_hash": "48c833815fc548049248256da08db2a5",
+      "folder_revision": 0,
+      "progress": 20,
+      "exc": null,
+      "id": "f97367e9-cc81-42f4-b033-a336145a2485",
+      "created_at": "2026-09-20T23:39:06+00:00",
+      "updated_at": "2026-09-20T23:39:06+00:00"
+    }
+
+    dbfolder rows whose full_path contains the marker : 1
+    sessions joined on folder_hash == id              : 1
+
+`progress: 20` is not a bare number. Quoted from the running image,
+`/repo/backend/beets_flask/importer/progress.py`:
+
+    NOT_STARTED = 0
+    # PreviewSession
+    READING_FILES = 10
+    GROUPING_ALBUMS = 11
+    LOOKING_UP_CANDIDATES = 12
+    IDENTIFYING_DUPLICATES = 13
+    PREVIEW_COMPLETED = 20  # dummy, only for comparison and report, has no actual stage
+    DELETION_COMPLETED = 21
+    # ImportSession
+    OFFERING_MATCHES = 30
+    ...
+    IMPORTING = 34
+    MANIPULATING_FILES = 35
+    IMPORT_COMPLETED = 40
+
+So the session reached **PREVIEW_COMPLETED (20)** with `exc: null` — the preview ran to
+completion and raised nothing — and it stopped there. It never entered the ImportSession
+range (30-40), which is the direct evidence that nothing was imported.
+
+VERDICT: FIRED. Instrument 2 is an answer, not an UNKNOWN.
+
+--------------------------------------------------------------------------------
+INSTRUMENT 3 (NOT REQUIRED, RECORDED BECAUSE IT IS THE STRONGEST) — THE PERSISTED STATE
+--------------------------------------------------------------------------------
+The plan required two instruments. A third was available and is recorded because it names
+the folder by PATH in persisted state and proves a real candidate lookup happened rather than
+a no-op that jumped straight to progress 20.
+
+Route: `sqlite3` opened READ-ONLY (`file:...?mode=ro`, URI) from inside the container against
+`/config/beets-flask/beets-flask-sqlite.db`
+(host path `/mnt/fast/appdata/arrs/beets/config/beets-flask/beets-flask-sqlite.db`, mtime
+2026-09-20 23:39 — i.e. the file itself moved at the moment of the preview).
+
+  Row counts at rest:
+    album_info 5   album_match_track_mappings 50   candidate 5   distances 20
+    folder 1       items 3                         matches 5     matches_album 5
+    penalties 100  session 1                       task 1        tasks_items 3
+    track_info 50  matches_track 0
+
+  The `task` row:
+    session_id        : f97367e9-cc81-42f4-b033-a336145a2485
+    toppath           : b'/downloads/complete/nzb/_inbox/02-review/_PHASE06-LIVENESS-20260920T233825Z'
+    paths             : (pickled list holding the same single path)
+    choice_flag       : None      <-- nothing was chosen, so nothing was imported
+    cur_artist        : 'Benson Boone'
+    cur_album         : 'American Heart'
+    progress          : 'PREVIEW_COMPLETED'
+
+  The three `items` rows are the three copied files, read correctly:
+    .../01_benson_boone_-_sorry_im_here_for_someone_else.mp3  Benson Boone  "Sorry I'm Here For Someone Else"  album American Heart  156.58 s
+    .../02_benson_boone_-_mr_electric_blue.mp3                Benson Boone  "Mr Electric Blue"                 album American Heart  190.32 s
+    .../03_benson_boone_-_man_in_me.mp3                       Benson Boone  "Man In Me"                        album American Heart  228.51 s
+
+  The five `album_info` candidate releases, all from MusicBrainz, with real MBIDs:
+    American Heart | Benson Boone | e4fdb1dc-f4a5-4d73-8e53-3f4d12c8df60 | MusicBrainz
+    American Heart | Benson Boone | c0df8104-7b49-4fa3-bcec-cb3d310aa9a5 | MusicBrainz
+    American Heart | Benson Boone | c33163f3-6217-4dc8-8e88-65f623b62c9b | MusicBrainz
+    American Heart | Benson Boone | b3a1e018-845b-44bd-a9a3-4f46c2e39d49 | MusicBrainz
+    American Heart | Benson Boone | cfb585a2-856d-4875-8ef4-1d4c017bab17 | MusicBrainz
+
+This is also, incidentally, the first positive runtime evidence that the `musicbrainz` plugin
+is live under rc6's config schema and actually reaching the MusicBrainz web service — D-10's
+list-form `plugins: [musicbrainz]` was accepted, and it WORKS, not merely parses.
+
+--------------------------------------------------------------------------------
+THE REMOVAL, AND `02-review` BACK TO ZERO
+--------------------------------------------------------------------------------
+    $ ls -la "$THROW"     (immediately before removal — three files, unchanged, 23:38)
+    $ rm -rf "$THROW"     rc=0
+    $ find /mnt/tank/downloads/complete/nzb/_inbox/02-review -mindepth 1 | wc -l
+      -> 0
+    $ ls -la /mnt/tank/downloads/complete/nzb/_inbox/02-review
+      drwxrwxrwx 2 apps apps 2 Sep 20 23:44 .
+      drwxrwxrwx 8 apps apps 8 Sep 18 14:42 ..
+
+PASS. `02-review` holds ZERO entries at -mindepth 1. It was empty before this task and it is
+empty after it.
+
+--------------------------------------------------------------------------------
+WHAT REMAINS AFTERWARDS — THE DANGLING-STATE FINDING, RECORDED NOT TIDIED
+--------------------------------------------------------------------------------
+The plan asked for this explicitly: a preview task pointing at a vanished folder is a finding
+worth having before Phase 7, not something to tidy away silently. It exists. Measured 20 s
+after the removal:
+
+    GET /api_v1/dbfolder/  items: 1   <-- STILL PRESENT, full_path points at the deleted folder
+    GET /api_v1/session/   items: 1   <-- STILL PRESENT, progress 20, exc null
+
+  >>> DELETING THE FOLDER DOES NOT REMOVE THE FOLDER ROW OR THE SESSION ROW. beets-flask's
+      state outlives the thing it describes.
+
+The watchdog noticed the deletion and logged it, non-fatally. The grep on the marker went
+from 2 lines to 10; the eight new lines are four pairs of:
+
+    could not list directory /downloads/.../,_PHASE06-LIVENESS-20260920T233825Z/<file>.mp3
+    FileNotFoundError: [Errno 2] No such file or directory: '/downloads/.../<file>.mp3'
+    (one pair per file, plus one pair for the directory itself)
+
+IS THE RESIDUE INERT? The honest answer is "inert as far as this test can see, and the limit
+is stated":
+  * The container is STILL RUNNING, `StartedAt 2026-09-20T22:37:55Z` unchanged, RestartCount
+    0. The FileNotFoundError did not take the process down and did not restart it.
+  * The session is at PREVIEW_COMPLETED with `choice_flag: None`, so no stage is pending on
+    it and nothing will act on it unaided.
+  * It was NOT tested whether the rows survive a container restart, and the container was
+    deliberately not restarted — restarting it is outside this plan's scope and would disturb
+    a phase whose premise is that it writes nothing.
+  * CARRY-FORWARD FOR PHASE 7: if a folder is renamed, moved or removed between preview and
+    import, expect a stale `dbfolder`/`session` pair to remain behind and expect the
+    watchdog to log FileNotFoundError against the vanished paths. Neither is a fault; both
+    will look like one to somebody reading the log cold.
+
+--------------------------------------------------------------------------------
+THE PHASE PREMISE HELD: NOTHING WAS WRITTEN THAT SHOULD NOT HAVE BEEN
+--------------------------------------------------------------------------------
+D-29 layer-3 baselines, read three times across this task — before staging, after the preview
+completed, and after the removal:
+
+    before staging          fbbdde0c416e72b9884e56c562fd88eaa4da447926e1cb6cc17c3e04aee7da1a  library.db
+                            f6a9a1ad7aa553e42e53a8056fa80724785111180a5e2122be4f8732d1e4bc7c  state.pickle
+    after PREVIEW_COMPLETED fbbdde0c416e72b9884e56c562fd88eaa4da447926e1cb6cc17c3e04aee7da1a  library.db
+                            f6a9a1ad7aa553e42e53a8056fa80724785111180a5e2122be4f8732d1e4bc7c  state.pickle
+    after the removal       fbbdde0c416e72b9884e56c562fd88eaa4da447926e1cb6cc17c3e04aee7da1a  library.db
+                            f6a9a1ad7aa553e42e53a8056fa80724785111180a5e2122be4f8732d1e4bc7c  state.pickle
+
+Byte-identical throughout, and identical to the pair plan 06-04 recorded at first start.
+A PREVIEW TOUCHES NEITHER THE BEETS LIBRARY NOR ITS IMPORT STATE. That is the measurement,
+not an inference from "preview means read-only".
+
+Nothing under `/mnt/tank/media` was written: this container mounts it `:ro` (D-05), the
+session never entered the ImportSession progress range, and `choice_flag` is None.
+
+The three copied files were the ONLY bytes written anywhere by this task, and they were
+deleted by it.
+
+--------------------------------------------------------------------------------
+DEVIATIONS — TWO OF MY OWN INSTRUMENTS WERE DEFECTIVE, AND BOTH ARE LEFT VISIBLE
+--------------------------------------------------------------------------------
+DEVIATION 1 — the in-script pre-state API probe was a silent no-op.
+  Stage A's script called `docker exec beets-flask /venv/bin/python - <<'PY'` WITHOUT `-i`.
+  Without `-i` docker does not attach stdin, so python read EOF from `-` immediately, printed
+  nothing and exited 0. The transcript shows section A3 with its route lines and then no
+  output at all — which reads like an empty result but is really "could not look".
+  The pre-state recorded above is therefore NOT from that probe. It is from the interactive
+  route-discovery probe run a few minutes earlier in the same session, before stage A
+  created anything, which returned `{"items":[],"next":null}` on BOTH
+  `/api_v1/session/` and `/api_v1/dbfolder/`. That is a genuine pre-state and it is what is
+  quoted. Stages B and C use `docker exec -i` and produced output correctly.
+  This is 02.1-06's Debug-liveness bug in a new costume: an instrument that cannot speak
+  returns the same silence as an instrument reporting nothing wrong.
+
+DEVIATION 2 — the poll loop's instrument-2 predicate asked the wrong question, and reported
+  a FALSE NEGATIVE for the whole 242 s bound. The loop counted occurrences of the folder NAME
+  inside the `/api_v1/session/` response body. A session record carries only `folder_hash`;
+  it never carries the path. So the count was structurally pinned at 0:
+
+      elapsed=0s    log_matches=2  api_matches=0
+      elapsed=10s   log_matches=2  api_matches=0
+      ...  (25 polls, identical) ...
+      elapsed=232s  log_matches=2  api_matches=0
+      bound 240 s exceeded at elapsed=242s
+      LOG_HIT=1  API_HIT=0
+
+  The loop's own summary line therefore says `API_HIT=0`. IT IS LEFT IN THE TRANSCRIPT ABOVE
+  WITH THAT FAILURE VISIBLE, because the defect is the useful part. `api_matches=0` was
+  "my predicate cannot match" — not "the API has no session". The very next read, at B4,
+  returned `items: 1` against the same endpoint at the same instant.
+  Resolved in stage C by joining on the real key (`session.folder_hash == dbfolder.id`), and
+  corroborated by instrument 3, whose `task.toppath` carries the path literally.
+  CARRY-FORWARD: before polling an API for a string, confirm the schema actually contains
+  that string. A poll predicate that cannot match is indistinguishable from a dead service.
+
+Neither deviation changed a fact. Both changed how long it took to see one, and the second
+would have been reported as "the inbox did not fire" by anyone who stopped at the loop's
+summary line.
+
+--------------------------------------------------------------------------------
+D-09 IS NOW DISCHARGED IN BOTH HALVES
+--------------------------------------------------------------------------------
+  part 1  REGISTERED  — plan 06-04, first-start log, three inboxes named, fail-closed on
+                        fewer than three.                                        PASS
+  part 2  FIRED       — this document. One throwaway folder, two required instruments plus
+                        a third, the debounce respected with the budget stated, the folder
+                        removed, `02-review` back to zero.                       PASS
+
+Scripts, kept on the host at /mnt/fast/safety/phase06/ and NOT committed (this repository is
+public and holds no non-Markdown data artefacts outside `artifacts/`):
+    06-06-liveness-a.sh   baselines, source manifest, build the throwaway
+    06-06-liveness-b.sh   the debounce wait and the poll loop
+    06-06-liveness-c.sh   the corrected join, the removal, the after-state
+================================================================================
