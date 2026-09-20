@@ -1641,3 +1641,104 @@ retained beside it as that plan's evidence.
 A rollback is therefore an **estate-wide** decision, not a music-project one. If only part of Phase
 5 needs reverting, mount the snapshot read-only and copy back the specific paths —
 `/mnt/tank/downloads/.zfs/snapshot/pre-phase5/…` — rather than rolling the dataset.
+
+## Phase 6 — tagger configuration and dry run (2026-09-20)
+
+### D-34: `PreferNonstandardArtistsTag` was ENABLED on Jellyfin's Music library
+
+**This is live-service state that git does not hold.** It lives in Jellyfin's own configuration
+database on LXC 100, nowhere in this repository, and it is one UI click from reverting with every
+gate in this estate still green. That is why it is written here and **asserted** in
+`scripts/check-music-consumers.sh` § 4 — see "the assertion" below.
+
+| | |
+|---|---|
+| **What** | Jellyfin library option `PreferNonstandardArtistsTag` |
+| **Which library** | **Music** only — `ItemId 7e64e319657a9516ec78490da03edccb`, `Locations ["/media/Music"]`. Movies and TV are untouched. |
+| **Before** | `false` |
+| **After** | `true` |
+| **When** | 2026-09-20, plan 06-03 task 2, `POST /Library/VirtualFolders/LibraryOptions` -> HTTP 204 |
+| **Jellyfin** | 10.11.11 |
+
+**Why.** beets writes multi-artist information as a **multi-valued `ARTISTS` tag** (`TXXX:ARTISTS`
+on MP3, `ARTISTS` on Vorbis) — and it **cannot be configured to emit `;` inside `ARTIST`**: there
+is no write-delimiter or join key anywhere in `config_default.yaml` at 2.12.0 or 2.13.1, and
+`item.artist` is MusicBrainz's own join phrases verbatim. Music Assistant already **prefers** the
+`ARTISTS` tag and splits it on `;` (`TAG_SPLITTER = ";"`). With `PreferNonstandardArtistsTag`
+false, Jellyfin **ignored** the one tag the pipeline actually produces. Enabling it makes the two
+consumers agree **by construction rather than by coincidence**, which is what CONF-04 is really
+asking for.
+
+**`UseCustomTagDelimiters` was deliberately NOT enabled, and must not be.** `;` is already present
+in `CustomTagDelimiters` — the switch is off, not the delimiter — but `/`, `|` and `\` are in that
+same list and `DelimiterWhitelist` is empty, so switching it on splits on all four across 1,244
+files. **`AC/DC` is the canonical casualty.** Narrowing the list and populating the whitelist first
+would be the only safe route, and it buys nothing the `ARTISTS` tag does not already give.
+
+### The finding that matters more than the change
+
+**Enabling this option does NOT retroactively re-parse the existing library, and the only
+mechanism that would is forbidden here.**
+
+`PreferNonstandardArtistsTag` is a **probe-time** option: it changes what `AudioFileProber` does
+the next time it runs on a file. A targeted `POST /Library/Media/Updated` produces a **Default**-mode
+refresh, and a Default-mode refresh does not re-run the prober on a file whose mtime has not
+changed. Measured twice on 2026-09-20 — once with the three album directories in the update body,
+once with the three individual track files — with the `LibraryMonitor` confirming by name in the
+log that it refreshed all six items. **Zero of 1,244 census rows changed: not a count, not a name,
+not an Id.**
+
+The refresh mode that *would* re-probe is the aggressive per-item one Phase 1 measured rewriting
+**83 of 91 `.nfo` files with `SaveLocalMetadata` already off**. It is forbidden in this estate and
+was not issued. So the evidence for CONF-04's Jellyfin half arrives when a file is **written or
+newly imported** — i.e. Phase 7 — which is also the case the project's core value is about.
+Before/after transcripts:
+`.planning/phases/06-tagger-configuration-and-dry-run/artifacts/06-03-jellyfin-artist-{before,after}.txt`.
+
+**The Phase 1 freeze survived the write, asserted field by field after it, by name:**
+`SaveLocalMetadata=false`, `EnableRealtimeMonitor=false`, `SaveLyricsWithMedia=false`,
+`MetadataSavers=["Nfo"]` (still armed behind the gate). The write was a read-modify-write over the
+complete options object and **exactly one field differed** — that endpoint is a full-object
+replace, the same hazard this estate already paid for once on `/System/Configuration/encoding`.
+
+### The assertion
+
+`scripts/check-music-consumers.sh` § 4 now reads `GET /Library/VirtualFolders` — nothing else in
+this repository did — and asserts four fields on the Music library by name, each its own red:
+`PreferNonstandardArtistsTag == true`, `UseCustomTagDelimiters == false`,
+`SaveLocalMetadata == false`, `EnableRealtimeMonitor == false`. It also carries the D-22
+artist-entity check: per pinned row it asserts the browseable **`ArtistItems` entity list** (not
+the flat `Artists` string list, which reads green on rows that have no entities at all), requires
+the Ids to be distinct, and goes **red immediately if any entity Name contains a `;`** — one
+artist literally called `A;B` is the precise failure D-22 exists to distinguish from success.
+
+### Still open
+
+- **CONF-04's Jellyfin read-back is PENDING, not passed.** The option is set; the three pinned
+  `ARTISTS` proof rows still read their pre-change entity counts (0, 1, 1 against a target of
+  4, 2, 2) because nothing has re-probed them. It is neither "could not look" nor "nothing is
+  wrong" — **do not record it as green.** It discharges when Phase 7 writes or imports a
+  multi-artist release.
+- **An operator decision was left untaken, deliberately.** Obtaining that proof *today* would mean
+  a one-off aggressive refresh on three albums, whose cost is their `.nfo` rewritten inside a phase
+  whose premise is that it writes nothing. The default is not to, and that is what plan 06-03 did.
+- **CONF-04's Music Assistant half is untouched here** — MA and Home Assistant on `172.16.1.31`
+  were both down for maintenance. Plan 06-13 owns it, and the MA branch of the check is written
+  and fails closed as `UNKNOWN, not green` rather than passing while the host is unreachable.
+- **The MA command `music/tracks/library_items` is research assumption A2** — inferred from the
+  album-side command's shape, **not** confirmed against `GET /api-docs/commands.json`, which is
+  that script's own stated authority. Resolve it before relying on the MA arm.
+- **MA's `mb_id_count == 1` short-circuit.** A track carrying exactly one `mb_artistid` and a
+  `;`-joined name reads as **one** artist in MA regardless of the delimiter. Relevant the moment
+  beets starts writing MusicBrainz ids at import.
+- **30 of the 1,244 library items have zero `ArtistItems`** while still carrying a non-empty
+  `Artists` string list — all of `Lady Gaga/ARTPOP (2013)` (15), all of `Lady Gaga/Joanne (2016)`
+  (14), and one Def Leppard track. Their `Artists` reads `["Lady GaGa"]`, with a capital G that
+  matches no artist entity. Unexplained; left alone; it is why the pinned Lady Gaga row's baseline
+  is 0 and not 1.
+- **Six `ARTIST`-delimited `P!nk/TRUSTFALL (2023)` tracks are marked DO NOT RESCAN** (OQ-1). They
+  already read as 2/2/2/3/2/2 distinct entities with distinct Ids despite `UseCustomTagDelimiters`
+  being false — almost certainly stale DB state from a pre-10.10 prober, and the only live evidence
+  in this estate of Jellyfin presenting multiple browseable artists for one track. They were
+  excluded from every scan body and are unchanged. The finding above also explains why they were
+  never at risk: nothing re-probes them either.
