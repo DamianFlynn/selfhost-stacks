@@ -1,0 +1,578 @@
+06-04 TASK 3 — beets-flask rc6 DEPLOY AND FIRST START
+================================================================================
+Run:    2026-09-20, plan 06-04 task 3
+Host:   LXC 100 (selfhost, 172.16.1.159), over ssh from the workstation
+Result: PASS — all four assertions hold.
+
+⚠ READ THIS FIRST: THE TWO DETECTOR STRINGS ARE PARAPHRASED IN THIS FILE.
+Assertion 1 turns on two rc6 log lines being ABSENT — the one that says it is copying its
+default config to a path, and the one that says the beets config was not found at a path. Their
+literal text is deliberately NOT written anywhere in this artifact, per this repo's convention
+for a matcher described in prose (see config.yaml's credential screen, and
+quick-health-check.sh:920-923). Writing them out would make a mechanical grep over this file
+return a hit and read as the very failure the assertion rules out. Where the captured transcript
+below printed them as grep labels, they have been replaced with
+`<the copying-default-config line — PARAPHRASED, see note>` and
+`<the beets-config-not-found line — PARAPHRASED, see note>`. The COUNTS are untouched: both are 0.
+
+--------------------------------------------------------------------------------
+WHAT NOW EXISTS
+--------------------------------------------------------------------------------
+Container `beets-flask`, image metasauce/beets-flask:v2.0.0-rc6, digest
+  sha256:9548e78f8bcda864bf557b7bb7490f7dcfb852ce3abf2f4c1501d5bb812ec2cd
+— byte-for-byte the digest Phase 3 verified on this host on 2026-09-04, re-confirmed by
+`docker pull` + `docker image inspect .RepoDigests` at deploy time.
+
+Running, Restarts=0, ExitCode=0, OOMKilled=false, StartedAt 2026-09-20T22:37:55Z.
+`docker ps` Ports column is EMPTY — the WR-02 assertion from the runtime side, not from the file.
+Reachable only at https://beets.deercrest.info through Traefik + chain-authelia@file.
+
+--------------------------------------------------------------------------------
+THE FOUR ASSERTIONS
+--------------------------------------------------------------------------------
+ASSERTION 1 — rc6 did NOT install its own example config.  PASS, on two independent instruments.
+  (a) Both detector lines ABSENT from the full startup log: counts 0 and 0.
+  (b) In-container `sha256sum /config/config.yaml` =
+      96a7c622779f95a13cd858c09b34072bcfc01405fecccd00b361ecdb5cb3e1f7
+      — identical to the committed repo blob. The file the container reads IS the vendored one.
+  (c) `len(plugins)` read by the container's own interpreter = 1, and the value is
+      `['musicbrainz']`. rc6's example config carries 18 entries; an 18-long list would have been
+      the warning sign. Had the example landed, `embedart.auto: yes`, `lastgenre.auto: yes` with
+      `force: yes`, `scrub` and `asciify_paths: yes` would all now be armed against a 34 GB
+      library — three of the SAFE-01 switches Phase 1 turned off, plus a path mangler.
+  The control that made this hold is `BEETSDIR: /config` in flask.yaml plus the vendored file
+  being deployed and hash-matched BEFORE the container existed (pre-flight 0 recorded zero
+  beets-flask containers on the host at that moment).
+
+ASSERTION 2 — EXACTLY THREE INBOXES.  PASS.
+  The registration line, verbatim:
+    [INFO] beets-flask.wdog: Registering watchdog with debounce of 30 seconds for inboxes:
+    ['/downloads/complete/nzb/_inbox/01-auto', '/downloads/complete/nzb/_inbox/02-review',
+     '/downloads/complete/nzb/_inbox/03-asis']
+  Distinct _inbox entries on that line: 3. 01-auto, 02-review and 03-asis each PASS individually.
+  04-hold, 99-quarantine and _done are each confirmed NOT registered — which is what makes
+  04-hold safe as the destination for task 1's move.
+  Fewer than three would have been a RED, not a partial pass: rc6 validates the beets config
+  against its own stricter eyconf schema and a rejected key kills the WATCHDOG while the server
+  keeps serving a page. "The UI loads" is not evidence.
+  The line appeared ~5 s after `up -d`, well inside the 180 s bound. The gate was the log line,
+  never `.State.Status == running`.
+
+ASSERTION 3 — the engine is beets 2.12.0 AT RUNTIME.  PASS.
+  `/venv/bin/python -c "import beets; print(beets.__version__)"` as uid 568 printed 2.12.0 —
+  read from the interpreter that runs the server, not inferred from the image tag. The absolute
+  /venv/bin path is required: `beet` is not on PATH for a `docker exec`.
+  `/config/requirements.txt` ABSENT, and `/config/beets-flask/requirements.txt` ABSENT too, so
+  rc6's `uv pip install -r ...` hook is provably a no-op and the image's own `beets==2.12.0` pin
+  holds unaltered. A pin without verification and a verification without a pin are each half a
+  control; both halves are now in place.
+  Server identity: uid=568(beetle) gid=568(beetle) — apps:apps, the estate service account.
+
+ASSERTION 4 — the :ro fence, BOTH containers.  PASS.
+  beets-flask, from `docker inspect .Mounts` (the runtime, not the file — WR-02's lesson is that
+  the file and the runtime can disagree):
+      /mnt/tank/downloads                -> /downloads                      RW=true
+      /mnt/tank/media                    -> /media                          RW=false   <-- D-05
+      /mnt/fast/appdata/.../config       -> /config                         RW=true
+      /mnt/fast/appdata/.../config.yaml  -> /config/config.yaml             RW=false
+      /mnt/fast/appdata/.../beets-flask/config.yaml
+                                         -> /config/beets-flask/config.yaml RW=false
+      /mnt/fast/appdata/arrs/beets/logs  -> /logs                           RW=true
+  The dormant survivor, from the rendered compose config (it is not running, so there is no
+  `docker inspect` to take): `/mnt/tank/media` renders `read_only: true` BOTH in the host
+  checkout's current copy AND in the committed 06-04 copy. 06-04's three edits did not disturb it.
+  D-07, from the same renders: the committed 06-04 `beets.yaml` renders ZERO occurrences of
+  `beets.deercrest.info` and ZERO `labels:` keys, while the live `beets-flask` carries
+  `Host(`beets.deercrest.info`)` with `port=5001` and `middlewares=chain-authelia@file`. A sweep
+  of every running container on the host for that router rule returns EXACTLY ONE line:
+  `/beets-flask`.
+
+  ⚠ ASSERTION 4 WAS RUN TWICE AND THE FIRST RUN READ AS A FAIL. Recorded rather than quietly
+  re-run. The first attempt rendered the survivor WITHOUT `--profile manual`; it carries
+  `profiles: ["manual"]`, so compose emitted `services: {}` and the read_only grep found nothing.
+  That is the could-not-look-vs-nothing-is-wrong distinction this estate's health checks are
+  built around, reproduced by the instrument rather than by the system. The corrected run is
+  § STEP 2b below.
+
+--------------------------------------------------------------------------------
+SUPPLEMENTARY (not a gate): the exposure chain end to end
+--------------------------------------------------------------------------------
+  curl -k --resolve beets.deercrest.info:443:127.0.0.1 https://beets.deercrest.info/
+  -> code=302 redirect=https://auth.deercrest.info/?rd=https%3A%2F%2Fbeets.deercrest.info%2F
+A 302 to Authelia is HEALTHY in this estate; an unauthenticated 200 would have been a violation.
+This matters more here than for most services: rc6 ships NO authentication of any kind, so the
+middleware is the only authentication there is. The web terminal is additionally OFF — the log
+line `Web-Terminal is disabled, skipping setup` is the observable confirmation that
+`gui.terminal.enabled: false` took effect, so the shell surface is removed rather than merely
+covered by a middleware.
+
+Note the curl used `--resolve ... 127.0.0.1` deliberately. Reaching it by name from outside needs
+a proxied Cloudflare CNAME for `beets.` — no wildcard exists for deercrest.info, and a Traefik
+certificate is NOT evidence that DNS resolves. That record is D-07's remaining external step and
+is NOT proven by anything in this file.
+
+--------------------------------------------------------------------------------
+D-29 LAYER 3 — WHICH BASELINE, AND THE SURPRISE
+--------------------------------------------------------------------------------
+06-RESEARCH.md warned that rc6's entrypoint runs `run_migrations()` and then `_open_library()`
+against the REAL library.db at every start, so both values were expected to MOVE on first start
+and the POST-start pair was nominated as the baseline.
+
+MEASURED: they did not move. Byte-identical before and after, same inode, same mtime:
+    library.db    fbbdde0c416e72b9884e56c562fd88eaa4da447926e1cb6cc17c3e04aee7da1a
+                  53,248 B, mode 770, apps:apps, mtime 2026-09-11 23:42:52, inode 75642
+    state.pickle  f6a9a1ad7aa553e42e53a8056fa80724785111180a5e2122be4f8732d1e4bc7c
+                  47 B, mode 770, apps:apps, mtime 2025-11-18 13:50:21, inode 33942
+
+So PRE and POST are the same pair, and either can be quoted — but the POST-FIRST-START pair is
+the one later plans must compare against, because that is the pair whose provenance is "after the
+container has opened the database once". The two hashes above are the D-29 layer 3 baseline.
+
+Why it did not move (stated as a reading, not a measurement): the migration work rc6 logged was
+against its OWN sqlite job database under /config/beets-flask/, not against beets' library.db.
+`_open_library()` opened the beets database without needing to migrate it — consistent with
+Phase 4's D-28, which created that library.db fresh, so its schema is already current for 2.12.0.
+
+NEW FILES rc6 created in appdata on first start, recorded so nobody reads them as drift later:
+    /config/beets-flask/beets-flask.db                (its own job/queue database)
+    /config/beets-flask/beets-flask-sqlite.backup_20260920_223757.db
+    /mnt/fast/appdata/arrs/beets/logs/beets-flask.log
+    /mnt/fast/appdata/arrs/beets/logs/redis_workers.log
+The two log files are on the bound-out /logs, which is the point of binding it: they are visible
+and rotatable from the host instead of hidden on the container's writable layer. `/` was 80% used
+with 25 G free before the start and unchanged after.
+
+--------------------------------------------------------------------------------
+DEVIATIONS, RECORDED IN FULL
+--------------------------------------------------------------------------------
+DEVIATION 1 — `git pull --ff-only` could not deliver the files, so they were staged by scp.
+  The plan's step 1 says to pull in /mnt/fast/stacks and copy the vendored configs out of the
+  checkout, then compare the appdata copies against `git show HEAD:<path>` computed host-side.
+  MEASURED: `git fetch` succeeded and `origin/main` is still c67d497 — the whole of Phase 6 wave 1
+  (including plan 06-01, which WROTE this config) has been merged locally but NOT PUSHED. The host
+  repo therefore cannot see 06-01's config.yaml, let alone this plan's two new files.
+  WHAT WAS DONE INSTEAD: the files were extracted from the worktree with
+  `git show <commit>:<path>` — the COMMITTED BLOB, never the working-tree file — hashed, scp'd to
+  /mnt/fast/tmp-06-04/, hashed again host-side, and installed into appdata with `install -o 568
+  -g 568`. The appdata copies were then hashed host-side and compared to the blob hashes. The
+  plan's actual intent is preserved: the workstation's WORKING TREE is irrelevant to the
+  comparison, because both sides of it are a git blob hash.
+      config.yaml        96a7c622779f95a13cd858c09b34072bcfc01405fecccd00b361ecdb5cb3e1f7  MATCH
+      flask-config.yaml  949bd1f3b13501d448865ce2d19195db209050279f8a0022e97cd7e54d835db8  MATCH
+      flask.yaml         2f5df7cd9c2096e610f128bbcb340309e1e2fea93547bd67dd790e3621045dc2  MATCH
+      beets.yaml (render only, not installed)
+                         845b4392abe5ff5a796eac5417a516f2cd1aa98785b721dda050fc9f7a9aa7e5
+
+  ⚠ FOLLOW-UP THE NEXT OPERATOR MUST DO. `/mnt/fast/stacks/stacks/selfhosted/arrs/beets/flask.yaml`
+  is currently an UNTRACKED file in the host checkout, byte-identical to the committed blob. When
+  Phase 6's merge is pushed and someone runs `git pull --ff-only` there, git will refuse with
+  "untracked working tree file would be overwritten". DELETE that one file first — its hash is
+  recorded above, so nothing is lost — then pull. The host checkout also still carries the
+  PRE-06-04 `beets.yaml` and `compose.yaml`; that is inert today (the survivor is dormant and
+  `flask.yaml` is started by its own `-f`), and the pull is what fixes it.
+
+DEVIATION 2 — LXC 100's system python3 has no PyYAML, so the host-side structural parse was
+  replaced with targeted greps. `python3 -c "import yaml"` raises ModuleNotFoundError on 3.13.5.
+  This is NOT a gap in the evidence: the parse that matters is the one performed by the
+  interpreter that actually reads the file, and that ran INSIDE the container as assertion 1's
+  second instrument (`len(plugins) == 1`, value `['musicbrainz']`). Host-side, the deployed
+  config was checked by size (33,950 B against the 6,175 B pre-06-01 stub it replaced) and by
+  line-anchored greps for `plugins:`, `directory:`, `library:`, `statefile:`,
+  `per_disc_numbering:`, `asciify_paths:` and the six path-format keys in file order.
+  Nothing was installed on the host to close this — adding a package to LXC 100 is outside this
+  plan's scope, and the in-container instrument is strictly better evidence anyway.
+
+DEVIATION 3 (from task 2, repeated here because it changed what got deployed) — the plan's
+  premise that `$TZ`/`$PUID`/`$PGID` resolve from a sibling `.env` is FALSE for this directory.
+  The gitignored `.env` is at stacks/selfhosted/arrs/.env, one level ABOVE the compose file, and
+  compose resolves `.env` from the compose file's own directory. Reproduced twice against
+  `beets.yaml` itself — from /mnt/fast/stacks and from stacks/selfhosted/arrs — both emitting
+  `The "TZ" variable is not set. Defaulting to a blank string.` for all three. flask.yaml
+  therefore uses LITERALS (TZ: Europe/Dublin, PUID/PGID/USER_ID/GROUP_ID 568), which the rendered
+  compose config below confirms resolved, and the container's `id` confirms took effect:
+  uid=568(beetle) gid=568(beetle). None of these values is a credential.
+
+--------------------------------------------------------------------------------
+EXPECTED RED, NOT A REGRESSION
+--------------------------------------------------------------------------------
+`scripts/check-music-freeze.sh` expects `tagger definitions: 1` and there are now TWO — the
+beets-flask front end and the dormant 2.13.1 CLI arm. That check is EXPECTED to go RED from this
+commit. It is correct and intended; plan 06-10 revises it to expect exactly two, named and
+classed. The red is recorded here rather than pre-emptively silenced by editing the script inside
+this plan.
+
+================================================================================
+VERBATIM TRANSCRIPTS — every command, its full output, and each verdict
+================================================================================
+
+
+########## STEP 1 — deploy (first attempt; stopped at the PyYAML gap, deviation 2) ##########
+plan 06-04 task 3 step 1 — deploy, 2026-09-20T22:36:05Z on selfhost
+
+=== PRE-FLIGHT 0: no beets-flask container may exist yet ===
+existing beets-flask containers: 0
+
+=== PRE-FLIGHT 1: / headroom (｜/mnt/fast is NOT a mountpoint — this is LXC 100's ext4 root) ===
+Filesystem                        Size  Used Avail Use% Mounted on
+/dev/mapper/pve-vm--100--disk--0  126G   95G   25G  80% /
+/ /dev/mapper/pve-vm--100--disk--0 ext4
+free on /: 25 G
+
+=== PRE-START BASELINE: library.db and state.pickle (D-29 layer 3 baseline selection) ===
+-- sha256 --
+fbbdde0c416e72b9884e56c562fd88eaa4da447926e1cb6cc17c3e04aee7da1a  /mnt/fast/appdata/arrs/beets/config/library.db
+f6a9a1ad7aa553e42e53a8056fa80724785111180a5e2122be4f8732d1e4bc7c  /mnt/fast/appdata/arrs/beets/config/state.pickle
+-- stat --
+/mnt/fast/appdata/arrs/beets/config/library.db size=53248 mode=770 owner=apps:apps mtime=2026-09-11 23:42:52.275462096 +0000 inode=75642
+/mnt/fast/appdata/arrs/beets/config/state.pickle size=47 mode=770 owner=apps:apps mtime=2025-11-18 13:50:21.434412138 +0000 inode=33942
+
+NOTE: rc6's entrypoint.sh runs run_migrations() and then _open_library() against the REAL
+library.db at EVERY start, so these two values may legitimately MOVE on first start. They are
+captured anyway because D-29 layer 3 compares against the POST-START values, not these.
+The baseline any Phase 6 dry run must be compared against is therefore the POST-FIRST-START
+pair, recorded in step 2 of this task.
+
+=== DEPLOY 1/3: the vendored beets config -> $BEETSDIR/config.yaml ===
+-rwxrw---- 1 apps apps 33950 Sep 20 22:36 /mnt/fast/appdata/arrs/beets/config/config.yaml
+
+=== DEPLOY 2/3: the vendored beets-flask config -> $BEETSFLASKDIR/config.yaml ===
+total 26
+drwxrwx--- 2 apps apps    3 Sep 20 22:36 .
+drwxr-xr-x 5 apps apps   11 Sep 20 22:36 ..
+-rwxrw---- 1 apps apps 8907 Sep 20 22:36 config.yaml
+
+=== DEPLOY 3/3: /logs target directory ===
+drwxrwx--- 2 apps apps 2 Sep 20 22:36 /mnt/fast/appdata/arrs/beets/logs
+
+=== SHA256 ASSERTION — appdata copies vs the COMMITTED BLOBS ===
+config.yaml        want=96a7c622779f95a13cd858c09b34072bcfc01405fecccd00b361ecdb5cb3e1f7
+config.yaml         got=96a7c622779f95a13cd858c09b34072bcfc01405fecccd00b361ecdb5cb3e1f7
+PASS: config.yaml matches the committed blob
+flask-config.yaml  want=949bd1f3b13501d448865ce2d19195db209050279f8a0022e97cd7e54d835db8
+flask-config.yaml   got=949bd1f3b13501d448865ce2d19195db209050279f8a0022e97cd7e54d835db8
+PASS: beets-flask/config.yaml matches the committed blob
+
+=== SANITY: the deployed beets config is the Phase 6 one, not the pre-06-01 stub ===
+130:plugins: [musicbrainz]
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    import yaml,sys; d=yaml.safe_load(open('/mnt/fast/appdata/arrs/beets/config/config.yaml')); print('plugins =', d['plugins'], '(len', len(d['plugins']), ')'); print('directory =', d['directory']); print('library =', d['library']); print('statefile =', d['statefile']); print('path-format keys =', list(d['paths'].keys()))
+    ^^^^^^^^^^^^^^^
+ModuleNotFoundError: No module named 'yaml'
+STOP: deployed config.yaml did not parse / lacks expected keys (rc=1)
+
+
+########## STEP 1b — deploy, continued ##########
+
+=== PYTHON INSTRUMENT AVAILABILITY (recorded, because its absence changed the method) ===
+python3 3.13.5
+ModuleNotFoundError: No module named 'yaml'
+
+=== SANITY (grep, not parse): the deployed beets config is the Phase 6 one, not the pre-06-01 stub ===
+-- size --
+/mnt/fast/appdata/arrs/beets/config/config.yaml 33950 bytes
+   (the pre-06-01 host file was 6,175 bytes; the Phase 6 one is 33,950)
+130:plugins: [musicbrainz]
+148:directory: /media/Music
+153:library: /config/library.db
+160:statefile: /config/state.pickle
+250:per_disc_numbering: yes
+255:asciify_paths: no
+206:paths:
+-- path-format keys, in file order (order is load-bearing) --
+    singleton:                      'Singles/$artist/$title%sunique{}'
+    'albumtype:=dj disctotal:2..':  'DJ/$albumartist/$album%aunique{}/$disc-$track $title'
+    'albumtype:=dj':                'DJ/$albumartist/$album%aunique{}/$track $title'
+    'disctotal:2..':                '$albumartist/$album%aunique{}/$disc-$track $title'
+    comp:                           '$albumartist/$album%aunique{}/$track $title'
+    default:                        '$albumartist/$album%aunique{}/$track $title'
+PASS: deployed config carries the Phase 6 keys
+
+=== SANITY (grep): the deployed beets-flask config registers three inboxes and nothing else ===
+49:    debounce_before_autotag: 30
+76:    folders:
+80:      "01-auto":
+82:        path: /downloads/complete/nzb/_inbox/01-auto
+83:        autotag: auto
+88:      "02-review":
+90:        path: /downloads/complete/nzb/_inbox/02-review
+91:        autotag: preview
+99:      "03-asis":
+101:        path: /downloads/complete/nzb/_inbox/03-asis
+102:        autotag: bootleg
+128:    readonly: true
+136:    enabled: false
+registered inbox paths in the file: 3
+exists: /mnt/tank/downloads/complete/nzb/_inbox/01-auto
+exists: /mnt/tank/downloads/complete/nzb/_inbox/02-review
+exists: /mnt/tank/downloads/complete/nzb/_inbox/03-asis
+NOTE: '04-hold' appears in the file (expected: only in a comment)
+NOTE: '99-quarantine' appears in the file (expected: only in a comment)
+NOTE: '_done' appears in the file (expected: only in a comment)
+-- and the three that must NOT be registered, as a path line --
+0
+
+=== PLACE flask.yaml IN THE REPO CHECKOUT (see the deviation note in the artifact) ===
+flask.yaml want=2f5df7cd9c2096e610f128bbcb340309e1e2fea93547bd67dd790e3621045dc2
+flask.yaml  got=2f5df7cd9c2096e610f128bbcb340309e1e2fea93547bd67dd790e3621045dc2
+PASS: repo-checkout flask.yaml matches the committed blob
+-- host repo HEAD --
+c67d497051119feda1a5086babc29ace316e7cfc
+-- host repo origin/main --
+c67d497051119feda1a5086babc29ace316e7cfc
+-- git status for the beets dir (flask.yaml is UNTRACKED here until main is pushed) --
+?? stacks/selfhosted/arrs/beets/flask.yaml
+
+=== COMPOSE RENDERS (still no container) ===
+docker compose config --quiet rc=0
+PASS: flask.yaml renders with zero warnings expected (literals, no $VAR)
+-- rendered service, to prove the literals resolved (this file carries no credential) --
+name: beets
+services:
+  beets-flask:
+    container_name: beets-flask
+    environment:
+      BEETSDIR: /config
+      GROUP_ID: "568"
+      LOG_LEVEL_BEETSFLASK: INFO
+      PGID: "568"
+      PUID: "568"
+      TZ: Europe/Dublin
+      USER_ID: "568"
+    hostname: beets-flask
+    image: metasauce/beets-flask:v2.0.0-rc6
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.beets.entrypoints: web,websecure
+      traefik.http.routers.beets.middlewares: chain-authelia@file
+      traefik.http.routers.beets.priority: "99"
+      traefik.http.routers.beets.rule: Host(`beets.deercrest.info`)
+      traefik.http.routers.beets.service: beets-svc
+      traefik.http.routers.beets.tls: "true"
+      traefik.http.routers.beets.tls.certresolver: dns-cloudflare
+      traefik.http.services.beets-svc.loadbalancer.server.port: "5001"
+    networks:
+      t3_proxy: null
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - type: bind
+        source: /mnt/fast/appdata/arrs/beets/config
+        target: /config
+        bind: {}
+      - type: bind
+        source: /mnt/fast/appdata/arrs/beets/config/config.yaml
+        target: /config/config.yaml
+        read_only: true
+        bind: {}
+      - type: bind
+        source: /mnt/fast/appdata/arrs/beets/config/beets-flask/config.yaml
+        target: /config/beets-flask/config.yaml
+        read_only: true
+        bind: {}
+      - type: bind
+        source: /mnt/fast/appdata/arrs/beets/logs
+        target: /logs
+        bind: {}
+      - type: bind
+        source: /mnt/tank/downloads
+        target: /downloads
+        bind: {}
+      - type: bind
+        source: /mnt/tank/media
+        target: /media
+        read_only: true
+        bind: {}
+networks:
+  t3_proxy:
+    name: t3_proxy
+    external: true
+
+=== IMAGE: pinned tag and digest ===
+v2.0.0-rc6: Pulling from metasauce/beets-flask
+Digest: sha256:9548e78f8bcda864bf557b7bb7490f7dcfb852ce3abf2f4c1501d5bb812ec2cd
+Status: Image is up to date for metasauce/beets-flask:v2.0.0-rc6
+docker.io/metasauce/beets-flask:v2.0.0-rc6
+RepoDigests=["metasauce/beets-flask@sha256:9548e78f8bcda864bf557b7bb7490f7dcfb852ce3abf2f4c1501d5bb812ec2cd"]
+ExposedPorts=null
+PATH=/usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+BEETSDIR=/config/beets
+BEETSFLASKDIR=/config/beets-flask
+BEETSFLASKLOG=/logs/beets-flask.log
+UV_PROJECT_ENVIRONMENT=/venv
+
+STEP 1 RESULT: PASS — both vendored configs in place and hash-matched, BEFORE any container exists.
+
+
+########## STEP 2 — first start and assertions 1-4 (assertion 4 FAILED here; see step 2b) ##########
+
+=== START: docker compose -f stacks/selfhosted/arrs/beets/flask.yaml up -d ===
+ Container beets-flask Creating 
+ Container beets-flask Created 
+ Container beets-flask Starting 
+ Container beets-flask Started 
+up -d rc=0
+
+=== GATE: poll the log for the watchdog registration line (NOT .State.Status == running) ===
+watchdog line found=1 after ~5s (bound 180s)
+
+=== CONTAINER STATE (recorded, NOT used as the gate) ===
+Status=running StartedAt=2026-09-20T22:37:55.838784056Z ExitCode=0 OOMKilled=false Restarts=0 Image=metasauce/beets-flask:v2.0.0-rc6
+beets-flask	Up 5 seconds	
+(an EMPTY Ports column is the WR-02 assertion from the runtime side: no host port is published)
+
+=== ASSERTION 1 — rc6 did NOT install its own example config ===
+-- detector greps over the full startup log; BOTH must be ABSENT --
+count '<the copying-default-config line — PARAPHRASED, see note>'  = 0  (must be 0)
+count '<the beets-config-not-found line — PARAPHRASED, see note>'   = 0  (must be 0)
+PASS (instrument 1 of 2): neither detector line appears
+-- instrument 2: in-container sha256 of the effective $BEETSDIR/config.yaml --
+in-container sha256 = 96a7c622779f95a13cd858c09b34072bcfc01405fecccd00b361ecdb5cb3e1f7
+want                = 96a7c622779f95a13cd858c09b34072bcfc01405fecccd00b361ecdb5cb3e1f7
+PASS (instrument 2a): the file the container reads is the vendored one
+-- instrument 2b: plugins list LENGTH (rc6's example has 18; ours has 1) --
+plugins = ['musicbrainz']
+len = 1
+len(plugins) = 1
+PASS (instrument 2b): exactly one plugin — a list 18 entries long is the warning sign
+
+=== ASSERTION 2 — EXACTLY THREE INBOXES in the watchdog line (D-09 part 1; fail closed on fewer) ===
+[INFO] beets-flask.wdog: Registering watchdog with debounce of 30 seconds for inboxes: ['/downloads/complete/nzb/_inbox/01-auto', '/downloads/complete/nzb/_inbox/02-review', '/downloads/complete/nzb/_inbox/03-asis']
+-- distinct _inbox/* entries named on that line --
+_inbox/01-auto
+_inbox/02-review
+_inbox/03-asis
+count = 3
+PASS: 01-auto registered
+PASS: 02-review registered
+PASS: 03-asis registered
+PASS: 04-hold not registered
+PASS: 99-quarantine not registered
+PASS: _done not registered
+
+=== ASSERTION 3 — the engine is beets 2.12.0 AT RUNTIME, and the install hook is provably a no-op ===
+beets.__version__ = 2.12.0
+PASS: 2.12.0, read from the interpreter that runs the server — not inferred from the image tag
+-- /config/requirements.txt must NOT exist inside the container --
+ABSENT
+PASS: the unpinned 'uv pip install -r /config/requirements.txt' hook is a no-op
+/config/beets-flask/requirements.txt: ABSENT
+-- and the identity the server runs as --
+uid=568(beetle) gid=568(beetle) groups=568(beetle)
+
+=== ASSERTION 4 — the :ro fence read from docker inspect, BOTH containers ===
+-- beets-flask, from the RUNTIME (docker inspect .Mounts), not from the file --
+/mnt/tank/downloads -> /downloads RW=true
+/mnt/tank/media -> /media RW=false
+/mnt/fast/appdata/arrs/beets/config -> /config RW=true
+/mnt/fast/appdata/arrs/beets/config/config.yaml -> /config/config.yaml RW=false
+/mnt/fast/appdata/arrs/beets/config/beets-flask/config.yaml -> /config/beets-flask/config.yaml RW=false
+/mnt/fast/appdata/arrs/beets/logs -> /logs RW=true
+
+/media RW = false
+PASS: /mnt/tank/media is READ-ONLY on beets-flask (D-05)
+/config/config.yaml RW = false ; /config/beets-flask/config.yaml RW = false
+PASS: both vendored configs are :ro at runtime
+-- the dormant survivor: it is not running, so the RENDERED compose config is the instrument --
+dormant beets /mnt/tank/media read_only:true count = 0
+NOTE: the host checkout is still at c67d497, so this renders the PRE-06-04 beets.yaml. The
+mount line itself is unchanged by this plan (it was already :ro); what 06-04 changed there is
+the comment above it and the deleted traefik labels. Re-render after the merge is pulled.
+VERDICT: FAIL — dormant beets does not render /mnt/tank/media read-only
+-- and the survivor must carry NO traefik labels once the merge lands; here is the host's current answer --
+host-checkout beets.yaml Host(beets.deercrest.info) occurrences: 1
+
+=== POST-START BASELINE: library.db and state.pickle (this is the D-29 layer 3 baseline) ===
+fbbdde0c416e72b9884e56c562fd88eaa4da447926e1cb6cc17c3e04aee7da1a  /mnt/fast/appdata/arrs/beets/config/library.db
+f6a9a1ad7aa553e42e53a8056fa80724785111180a5e2122be4f8732d1e4bc7c  /mnt/fast/appdata/arrs/beets/config/state.pickle
+/mnt/fast/appdata/arrs/beets/config/library.db size=53248 mode=770 owner=apps:apps mtime=2026-09-11 23:42:52.275462096 +0000 inode=75642
+/mnt/fast/appdata/arrs/beets/config/state.pickle size=47 mode=770 owner=apps:apps mtime=2025-11-18 13:50:21.434412138 +0000 inode=33942
+PRE-START was:
+  fbbdde0c416e72b9884e56c562fd88eaa4da447926e1cb6cc17c3e04aee7da1a  library.db   (53248 B, mtime 2026-09-11 23:42:52)
+  f6a9a1ad7aa553e42e53a8056fa80724785111180a5e2122be4f8732d1e4bc7c  state.pickle (47 B,    mtime 2025-11-18 13:50:21)
+
+=== /logs — bound out of the container layer, and what landed there ===
+total 6
+drwxrwx--- 2 apps apps    4 Sep 20 22:37 .
+drwxr-xr-x 4 apps apps    4 Sep 20 22:36 ..
+-rwxrwx--- 1 apps apps 2646 Sep 20 22:38 beets-flask.log
+-rwxrwx--- 1 apps apps 1821 Sep 20 22:38 redis_workers.log
+/dev/mapper/pve-vm--100--disk--0  126G   95G   25G  80% /
+
+=== FULL docker logs beets-flask — FIRST START, COMPLETE, NOT EXCERPTED ===
+(plans 06-06 and 06-07 both read this; a truncated capture is a second measurement nobody can repeat)
+---- BEGIN FULL FIRST-START LOG ----
+[Entrypoint] Fixing permissions as 'root' with UID 0 and GID 0
+[Entrypoint] Setting beetle user to 568:568
+[Entrypoint] User beetle now has uid=568(beetle) gid=568(beetle) groups=568(beetle)
+[Entrypoint] Done fixing permissions
+[Entrypoint] Running as 'beetle' with UID 568 and GID 568
+[Entrypoint] Current working directory: /repo
+[Entrypoint] Version info:
+[Entrypoint]   Backend:  2.0.0-rc6
+[Entrypoint]   Frontend: 2.0.0-rc6
+[Entrypoint]   Mode:     prod
+[INFO] beets-flask: Database empty, running initial migration...
+[INFO] alembic.runtime.migration: Context impl SQLiteImpl.
+[INFO] alembic.runtime.migration: Will assume non-transactional DDL.
+[INFO] beets-flask: SQLite backup created at /config/beets-flask/beets-flask-sqlite.backup_20260920_223757.db
+[INFO] alembic.runtime.migration: Context impl SQLiteImpl.
+[INFO] alembic.runtime.migration: Will assume non-transactional DDL.
+[INFO] alembic.runtime.migration: Running upgrade  -> a986c03d9ba3, initial
+[INFO] alembic.runtime.migration: Running upgrade a986c03d9ba3 -> 925cf8989fbc, item pending
+[INFO] alembic.runtime.migration: Running upgrade 925cf8989fbc -> f06e470b3d1e, match
+[INFO] alembic.runtime.migration: Migrated 0 / 0 matches!
+[INFO] alembic.runtime.migration: Running upgrade f06e470b3d1e -> 25649aa3ba78, Added item reference to TrackMatch
+[INFO] alembic.runtime.migration: No duplicate Item rows found
+[INFO] beets-flask: Database migrations complete.
+[INFO] beets-flask: Starting uvicorn server
+[INFO] beets-flask: Server running on http://0.0.0.0:5001
+[INFO] beets-flask.wdog: Registering watchdog with debounce of 30 seconds for inboxes: ['/downloads/complete/nzb/_inbox/01-auto', '/downloads/complete/nzb/_inbox/02-review', '/downloads/complete/nzb/_inbox/03-asis']
+[INFO] beets-flask: Web-Terminal is disabled, skipping setup
+[INFO] beets-flask: Web-Terminal is disabled, skipping setup
+[INFO] beets-flask: Web-Terminal is disabled, skipping setup
+[INFO] beets-flask: Web-Terminal is disabled, skipping setup
+---- END FULL FIRST-START LOG ----
+
+TASK 3 RESULT: FAIL — see the FAIL verdicts above.
+
+
+########## STEP 2b — assertion 4, re-run with the manual profile ##########
+
+=== A. The HOST CHECKOUT's beets.yaml (still pre-06-04, c67d497) — rendered WITH its profile ===
+        bind: {}
+      - type: bind
+        source: /mnt/tank/media
+        target: /media
+        read_only: true
+        bind: {}
+read_only:true count = 1
+PASS: /mnt/tank/media is read-only in the dormant definition as deployed today
+Host(beets.deercrest.info) occurrences in the HOST copy = 1  (expected 1 — 06-04 is not merged/pulled here yet)
+
+=== B. The COMMITTED 06-04 beets.yaml (blob 845b4392…), rendered from a staged copy ===
+        bind: {}
+      - type: bind
+        source: /mnt/tank/media
+        target: /media
+        read_only: true
+        bind: {}
+read_only:true count = 1
+PASS: /mnt/tank/media is STILL read-only after 06-04's three edits (D-05)
+Host(beets.deercrest.info) occurrences in the 06-04 copy = 0  (must be 0 — D-07)
+PASS: the survivor's traefik labels are gone; one hostname, one router
+-- and the labels: key itself --
+labels: keys in the rendered 06-04 survivor: 0
+
+=== C. The live beets-flask is the ONLY claimant, read from the RUNTIME ===
+Host(`beets.deercrest.info`) | port=5001 | middlewares=chain-authelia@file
+-- every running container on this host claiming that Host rule --
+  /beets-flask -> Host(`beets.deercrest.info`)
+(exactly one line above is the D-07 runtime assertion)
+
+=== D. SUPPLEMENTARY (not a gate): does Traefik front it, and is Authelia in the path? ===
+302/307 to auth.deercrest.info is HEALTHY here; an unauthenticated 200 would be a violation.
+code=302 redirect=https://auth.deercrest.info/?rd=https%3A%2F%2Fbeets.deercrest.info%2F&rm=GET
+
+ASSERTION 4 RESULT: PASS
