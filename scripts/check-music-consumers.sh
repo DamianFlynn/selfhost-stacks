@@ -50,8 +50,44 @@
 #   2. MA reachability + provider identity CONS-02, D-30, T-02-16
 #   3. The three proof albums in MA        CONS-02, D-06, D-07, D-09, D-10
 #   4. The three proof albums in Jellyfin  CONS-04 groundwork, D-42
+#   4a. The D-34 library options           CONF-04, plan 06-03, T-06-13
+#   4b. D-22 artist entities in Jellyfin   CONF-04, plan 06-03
+#   4c. D-22 artist entities in MA         CONF-04, plan 06-13 (fails closed while MA is down)
 #   5. Mount liveness                      CONS-03, D-11 adjacent
 #   6. Summary
+#
+# THE THREE BLOCKS ADDED 2026-09-20 BY PLAN 06-03, AND WHY THEY ARE HERE RATHER THAN IN A PLAN
+# TRANSCRIPT:
+#
+#   4a — THE D-34 FLAG ASSERTION. On 2026-09-20 the Music library's `PreferNonstandardArtistsTag`
+#        was switched false -> true. That change lives in Jellyfin's own configuration database
+#        and NOWHERE IN GIT: it is one UI click from reverting with every other gate in this
+#        estate still green. This block reads GET /Library/VirtualFolders — nothing else in this
+#        repository does — and asserts four fields by name, each its own red:
+#        `PreferNonstandardArtistsTag == true` (the change), `UseCustomTagDelimiters == false`
+#        (D-34 REJECTED it: `/`, `|` and `\` come along with `;` across 1,244 files and AC/DC is
+#        the canonical casualty), and `SaveLocalMetadata == false` + `EnableRealtimeMonitor ==
+#        false` (the Phase 1 freeze, re-asserted here because this is now the one place that
+#        reads this endpoint). It carries its OWN route, JELLYFIN_VFOLDER_ROUTE, because
+#        "Jellyfin answered /Items" is not evidence that /Library/VirtualFolders answered.
+#
+#   4b — THE D-22 ARTIST-ENTITY CHECK. Asserts N distinct browseable `ArtistItems` ENTITIES with
+#        DISTINCT Ids per pinned row, and goes red immediately if any entity Name contains a `;`
+#        — one artist literally called `A;B` is the precise failure D-22 separates from success.
+#        Each row carries BOTH a post-re-probe target and the measured 2026-09-20 baseline, and
+#        a row sitting at its baseline is reported as PENDING and counted in the summary, never
+#        ticked. See the ARTIST_PROOF_ROWS table for why that third state exists and why it is
+#        not a fudge: the option is probe-time, and the refresh that would re-probe is forbidden.
+#
+#   4c — THE MA HALF, WRITTEN NOW AND FAILING CLOSED. MA unreachable emits `ma_fail` with
+#        `UNKNOWN, not green`, NOT `warn` and NOT the out-of-scope branch, so criterion 4 stays
+#        OPEN instead of reading as passed while the consumer that would falsify it is down.
+#        ⚠ `music/tracks/library_items` is research assumption A2 — inferred, not confirmed
+#        against GET /api-docs/commands.json. Plan 06-13 resolves it.
+#
+#   THERE IS NO SKIP SENTINEL ANYWHERE IN THIS FILE AND NONE MAY BE ADDED. Every knob is
+#   `${VAR:-default}` and every one of them can only make a block REDDER. No override may
+#   manufacture success.
 #
 # EXIT-CODE CONVENTION (inherited verbatim from scripts/check-music-freeze.sh:31-42, which is
 # where the estate's convention was established; there was none before it):
@@ -293,6 +329,100 @@ PROOF_ALBUMS=(
   "various-artists|/mnt/tank/downloads/complete/nzb/unsorted/VA-Mastermix.Essential.Hits.Pop.4.2005-2009-2025|Mastermix Essential Hits - Pop 4 - 2005-2009|Various Artists|097b998f01a67d2f738d3cf415c9d7f2|50|temp-export"
 )
 
+# =============================================================================================
+# THE D-34 LIBRARY-OPTION TABLE (plan 06-03, 2026-09-20) — CONF-04's Jellyfin half.
+#
+# On 2026-09-20 the Music library's `PreferNonstandardArtistsTag` was switched from false to
+# true via POST /Library/VirtualFolders/LibraryOptions. THAT CHANGE LIVES IN JELLYFIN'S OWN
+# CONFIGURATION DATABASE AND NOWHERE IN GIT. It is one UI click from reverting with every other
+# gate in this estate still green, which is exactly why it is asserted here and recorded in
+# stacks/selfhosted/arrs/beets.md § "Phase 6 — tagger configuration and dry run".
+#
+# WHY IT WAS MADE: beets writes multi-artist information as a multi-valued ARTISTS tag and
+# CANNOT be configured to emit `;` inside ARTIST — there is no write-delimiter key in beets'
+# config_default.yaml at 2.12.0 or 2.13.1. Music Assistant already prefers ARTISTS and splits it
+# on `;`. With this flag false, Jellyfin ignored the one tag the pipeline actually produces.
+#
+# WHY UseCustomTagDelimiters IS ASSERTED **FALSE** AND NOT TRUE: `;` is already in
+# CustomTagDelimiters — the switch is off, not the delimiter — but so are `/`, `|` and backslash,
+# and DelimiterWhitelist is empty. Enabling it splits on all four across 1,244 files, and AC/DC
+# is the canonical casualty. A `true` here is somebody widening the blast radius, not a fix.
+#
+# Fields: option | expected value | why this option and not another
+# Each row is its own red. Nothing here may be relaxed into a warn.
+JELLYFIN_D34_OPTIONS=(
+  "PreferNonstandardArtistsTag|true|the D-34 change itself — a false here means it silently reverted"
+  "UseCustomTagDelimiters|false|D-34 REJECTED this one; a true here widens splitting to slash, pipe and backslash across 1,244 files"
+  "SaveLocalMetadata|false|the Phase 1 freeze, re-asserted because this is now the one place in the repo that reads this endpoint"
+  "EnableRealtimeMonitor|false|the Phase 1 freeze, same reason"
+)
+
+# THE D-22 ARTIST-ENTITY PROOF ROWS (plan 06-03) — pinned here, no fixture file, same stance as
+# PROOF_ALBUMS above.
+#
+# "Parsed correctly" (D-22) means N DISTINCT BROWSEABLE ARTIST ENTITIES WITH DISTINCT IDs in the
+# consumer's own API. It does NOT mean a matching count — Phase 3 measured four tracks written
+# onto entirely different songs with counts looking perfectly plausible — and it does NOT mean one
+# artist literally named `A;B`, which is the precise failure this check exists to distinguish from
+# success. Both are asserted below, separately.
+#
+# ⚠ THE `target` COLUMN IS NOT TRUE TODAY, AND THAT IS A MEASURED FACT, NOT A BUG IN THIS TABLE.
+#   PreferNonstandardArtistsTag is a PROBE-TIME option: it changes what the audio prober does the
+#   NEXT TIME IT RUNS on a file. Plan 06-03 measured — twice, at album scope and at file scope,
+#   with Jellyfin's LibraryMonitor confirming by name that it refreshed all six items — that a
+#   targeted POST /Library/Media/Updated produces a Default-mode refresh, and a Default-mode
+#   refresh does not re-run the prober on a file whose mtime has not changed. Zero of 1,244 census
+#   rows moved. The one refresh mode that WOULD re-probe is the aggressive per-item one Phase 1
+#   measured rewriting 83 of 91 .nfo files with SaveLocalMetadata already off; it is forbidden in
+#   this estate and it is not issued here or anywhere.
+#
+#   So each row carries BOTH numbers and the check is a DRIFT DETECTOR, not a wish:
+#     count == target   -> PASS. The re-probe has happened (Phase 7 wrote or imported the file).
+#     count == baseline -> PENDING. Reported with its reason, counted in the summary, NEVER a tick.
+#     anything else     -> RED. Something changed that nobody planned.
+#   A permanently-red check is one readers learn to ignore — 01-09 recorded exactly that — and a
+#   green one here would be manufacturing success. Pending is the honest third state, and it is
+#   the same report-not-assert stance the MA version banner and the scope=temp-export rows use.
+#
+#   The two consumers carry SEPARATE baselines, because they are at different points: Jellyfin's
+#   existing items have not been re-probed at all, while MA read these files fresh through the NFS
+#   export and already splits `ARTISTS` on `;` natively. Two of the three rows are at target in MA
+#   today. One is not, and that is a measured discrepancy rather than a pending state — see row 1.
+#
+# Fields: internal path | target N | Jellyfin baseline N | MA baseline N | tag position |
+#         search term | why this row
+#
+#   ⚠ THE SEARCH TERM MUST BE THE TRACK'S EXACT TITLE, not a fragment. Jellyfin's SearchTerm is a
+#     fuzzy narrowing and would accept "Jewels" — but the MA side matches the track NAME exactly
+#     (case-insensitively), because MA 2.11's own `search` argument returned [] for an item's own
+#     exact name when 02-07 measured it, so all matching in this file is done locally. A fragment
+#     therefore passes on the Jellyfin side and reports a bogus "not in MA" on the other.
+ARTIST_PROOF_ROWS=(
+  # 4-artist case, the widest N in the library, and the only row exercising a name with `$`
+  # (Too $hort) and a name with dots (T.I.) — both break naive splitters.
+  # Jellyfin baseline is 0, not 1: this whole album has a populated `Artists` string list
+  # (["Lady GaGa"], note the capital G) and NO linked artist ENTITIES at all. 30 of the 1,244
+  # items are like this. Asserting on `Artists` instead of `ArtistItems` would read green here.
+  # MA baseline is 3, not 4: MEASURED 2026-09-20 on MA 2.11.0b2, MA returns
+  # `T.I. | Lady GaGa | Too $hort` for a tag holding `Lady Gaga;T.I.;Too $hort;Twista`. Twista is
+  # absent and the spelling is the ARTIST tag's "Lady GaGa", not the ARTISTS tag's "Lady Gaga".
+  # That is a REAL DISCREPANCY, not a pending state, and plan 06-13 owns explaining it. It is
+  # recorded as a baseline so it is REPORTED every run rather than either passing or drowning the
+  # summary in a red nobody can act on yet.
+  # NOTE the path carries U+2019 (’) while the TITLE tag carries an ASCII apostrophe. The row is
+  # selected by exact Path, so the path spelling is load-bearing; the search term is the title.
+  "/media/Music/Lady Gaga/ARTPOP (2013)/CD 01-05 Lady Gaga - Jewels n’ Drugs.flac|4|0|3|ARTISTS|Jewels n' Drugs|widest N; exercises a dollar sign and dotted initials in artist names"
+  # Minimal 2-artist case in a DIFFERENT album and a DIFFERENT artist folder, so a result that is
+  # really "the ARTPOP album got re-probed" cannot masquerade as a pass on every row.
+  "/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-03 Katy Perry - California Gurls.flac|2|1|2|ARTISTS|California Gurls|different album and artist folder — isolates a per-album re-probe from a real fix"
+  # Third album, and the only row whose ARTISTS value puts the ALBUM ARTIST SECOND
+  # (`Nate Ruess;P!nk`). If JELLYFIN ever re-derived the list from ARTIST/AlbumArtist instead of
+  # from ARTISTS, this row's ORDER gives it away where the other two would not. That tell does NOT
+  # transfer to MA: MA normalises the order and returns `P!nk | Nate Ruess` (measured 2026-09-20),
+  # so only the SET is meaningful there.
+  "/media/Music/P!nk/The Truth About Love (2012)/CD 01-04 P!nk - Just Give Me a Reason.flac|2|1|2|ARTISTS|Just Give Me a Reason|albumartist is SECOND in the tag — the order is the tell in Jellyfin"
+)
+
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -341,6 +471,11 @@ EXPORT_ROUTE="unavailable"
 MA_ROUTE="unavailable"
 JELLYFIN_ROUTE="unavailable"
 HA_ROUTE="skipped"
+# The D-34 library-option read (plan 06-03). It is its own route because it is its own endpoint:
+# nothing else in this repository reads GET /Library/VirtualFolders, so "Jellyfin answered /Items"
+# is not evidence that the options read succeeded. It stays "unavailable" until an actual Music
+# library object has been parsed out of an actual array — see section 4.
+JELLYFIN_VFOLDER_ROUTE="unavailable"
 
 exportfs_query() { ssh "${SSH_OPTS[@]}" "root@${NFS_HOST}" "$@"; }
 
@@ -1009,6 +1144,238 @@ fi
 echo ""
 
 # ---------------------------------------------------------------------------------------------
+# 4a. The D-34 library options on Jellyfin's Music library (CONF-04, plan 06-03)
+#
+# Nothing else in this repository reads GET /Library/VirtualFolders. This block is therefore the
+# ONLY standing detector for a live-service change that git cannot hold — and for the three
+# Phase 1 freeze fields, which is why two of them are re-asserted here even though
+# check-music-freeze.sh has its own view of the freeze.
+# ---------------------------------------------------------------------------------------------
+echo "🎛  4a. The D-34 library options on Jellyfin's Music library (CONF-04, plan 06-03)"
+rule
+
+# S3(a): every value gets an UNKNOWN sentinel BEFORE the call, so a response that never arrives
+# cannot leave a stale or empty string being compared as if it had been measured.
+JF_LIBOBJ=""
+declare -A JF_D34_VALUE=()
+for opt_row in "${JELLYFIN_D34_OPTIONS[@]}"; do
+  IFS='|' read -r D34_OPT _ _ <<< "$opt_row"
+  JF_D34_VALUE["$D34_OPT"]="UNKNOWN"
+done
+
+if [[ "$JELLYFIN_ROUTE" == "unavailable" ]]; then
+  jellyfin_fail "CONF-04: Jellyfin unreachable — the D-34 library options are UNKNOWN, not green"
+else
+  JF_VF="$(jf_api /Library/VirtualFolders)"
+  if ! printf '%s' "$JF_VF" | jq -e 'type == "array"' >/dev/null 2>&1; then
+    jellyfin_fail "CONF-04: /Library/VirtualFolders did not return an array — UNKNOWN, not green"
+    echo "         (Jellyfin answered /Items above, so 'Jellyfin is up' is NOT evidence this"
+    echo "         endpoint answered. That is why it carries its own route.)"
+  else
+    JF_LIBOBJ="$(printf '%s' "$JF_VF" \
+      | jq -c --arg id "$JELLYFIN_MUSIC_LIBRARY_ID" '[.[] | select(.ItemId == $id)] | .[0] // empty')"
+    if [[ -z "$JF_LIBOBJ" ]]; then
+      jellyfin_fail "CONF-04: no library object with ItemId=$JELLYFIN_MUSIC_LIBRARY_ID — UNKNOWN, not green"
+      echo "         libraries present: $(printf '%s' "$JF_VF" | jq -r '[.[] | "\(.Name)=\(.ItemId)"] | join(" ")')"
+      echo "         If the Music library was deleted and recreated its ItemId CHANGED and the"
+      echo "         pinned JELLYFIN_MUSIC_LIBRARY_ID must be re-pinned from this endpoint."
+    else
+      JELLYFIN_VFOLDER_ROUTE="${JELLYFIN_ROUTE}+/Library/VirtualFolders"
+      for opt_row in "${JELLYFIN_D34_OPTIONS[@]}"; do
+        IFS='|' read -r D34_OPT D34_WANT D34_WHY <<< "$opt_row"
+        # `// "ABSENT"` is WRONG here and deliberately not used: jq's `//` treats `false` as
+        # empty, so a correctly-false option would report ABSENT. has() is the only safe test.
+        D34_GOT="$(printf '%s' "$JF_LIBOBJ" | jq -r --arg k "$D34_OPT" \
+          '(.LibraryOptions // {}) | if has($k) then (.[$k] | tostring) else "ABSENT" end')"
+        JF_D34_VALUE["$D34_OPT"]="$D34_GOT"
+        if [[ "$D34_GOT" == "$D34_WANT" ]]; then
+          pass "CONF-04: $D34_OPT is $D34_GOT — $D34_WHY"
+        elif [[ "$D34_GOT" == "true" || "$D34_GOT" == "false" ]]; then
+          jellyfin_fail "CONF-04: $D34_OPT is $D34_GOT, want $D34_WANT — $D34_WHY"
+          echo "         This is live-service state git does not hold. See"
+          echo "         stacks/selfhosted/arrs/beets.md § 'Phase 6 — tagger configuration and dry run'."
+        else
+          jellyfin_fail "CONF-04: $D34_OPT read back as '$D34_GOT' — UNKNOWN, not green"
+        fi
+      done
+      # Reported, not asserted: these two are the blast-radius context for UseCustomTagDelimiters.
+      # They are only load-bearing if that flag ever goes true, and it is asserted false above.
+      info "CustomTagDelimiters: $(printf '%s' "$JF_LIBOBJ" | jq -c '.LibraryOptions.CustomTagDelimiters // "ABSENT"')"
+      info "DelimiterWhitelist:  $(printf '%s' "$JF_LIBOBJ" | jq -c '.LibraryOptions.DelimiterWhitelist // "ABSENT"')"
+    fi
+  fi
+fi
+echo ""
+
+# ---------------------------------------------------------------------------------------------
+# 4b. D-22 — N distinct browseable artist ENTITIES in Jellyfin (CONF-04, plan 06-03)
+# ---------------------------------------------------------------------------------------------
+echo "🧑‍🎤 4b. D-22 artist entities in Jellyfin (CONF-04, plan 06-03)"
+rule
+echo "  ArtistItems is the BROWSEABLE ENTITY list — each entry has an Id a user can click."
+echo "  Artists is the flat string list and is NOT what is asserted: 30 of the 1,244 library items"
+echo "  carry a populated Artists list with ZERO linked entities, so asserting on Artists would"
+echo "  report green on a row nobody can navigate to."
+echo ""
+JELLYFIN_ARTIST_OK=0
+JELLYFIN_ARTIST_PENDING=0
+if [[ "$JELLYFIN_ROUTE" == "unavailable" ]]; then
+  jellyfin_fail "CONF-04: Jellyfin unreachable — artist-entity parsing is UNKNOWN, not green"
+else
+  for row in "${ARTIST_PROOF_ROWS[@]}"; do
+    IFS='|' read -r APATH_I ATARGET ABASE _AMABASE ATAGPOS ASEARCH AWHY <<< "$row"
+
+    JFA="$(jf_api /Items \
+      --data-urlencode "IncludeItemTypes=Audio" \
+      --data-urlencode "Recursive=true" \
+      --data-urlencode "ParentId=${JELLYFIN_MUSIC_LIBRARY_ID}" \
+      --data-urlencode "SearchTerm=${ASEARCH}" \
+      --data-urlencode "Fields=ArtistItems,Artists,Path")"
+
+    if ! printf '%s' "$JFA" | jq -e 'has("Items")' >/dev/null 2>&1; then
+      jellyfin_fail "CONF-04: no Items envelope for '$ASEARCH' — UNKNOWN, not green"
+      continue
+    fi
+
+    # Selected by EXACT internal path. SearchTerm only narrows the response; it never decides
+    # which row answered, because a substring match could credit the wrong track entirely.
+    ITEM="$(printf '%s' "$JFA" | jq -c --arg p "$APATH_I" \
+      '[.Items[] | select(.Path == $p)] | .[0] // empty')"
+    if [[ -z "$ITEM" ]]; then
+      jellyfin_fail "CONF-04: no item at exact path '$APATH_I' — UNKNOWN, not green"
+      echo "         SearchTerm='$ASEARCH' returned: $(printf '%s' "$JFA" | jq -r '[limit(5; .Items[].Path)] | join(" ; ")')"
+      continue
+    fi
+
+    A_N="$(printf '%s' "$ITEM" | jq -r '(.ArtistItems // []) | length')"
+    A_UNIQ="$(printf '%s' "$ITEM" | jq -r '[(.ArtistItems // [])[].Id] | unique | length')"
+    A_NAMES="$(printf '%s' "$ITEM" | jq -r '[(.ArtistItems // [])[].Name] | join(" | ")')"
+    A_SEMI="$(printf '%s' "$ITEM" | jq -r '[(.ArtistItems // [])[].Name | select(test(";"))] | length')"
+
+    # RED regardless of count: one entity whose Name still carries the delimiter is the precise
+    # failure D-22 exists to distinguish from success. Checked BEFORE the count, because a row
+    # sitting at its expected N with a `;` inside one name is the worst of both worlds.
+    if [[ "$A_SEMI" -gt 0 ]]; then
+      jellyfin_fail "CONF-04 (D-22): an artist ENTITY name still contains ';' on '$APATH_I'"
+      echo "         names were: $A_NAMES"
+      echo "         That is ONE artist called 'A;B', not N artists. It is the exact outcome this"
+      echo "         check exists to catch — do not read the count as a pass."
+      continue
+    fi
+
+    if [[ "$A_N" -gt 0 && "$A_UNIQ" -ne "$A_N" ]]; then
+      jellyfin_fail "CONF-04 (D-22): '$APATH_I' has $A_N ArtistItems but only $A_UNIQ distinct Ids"
+      echo "         names were: $A_NAMES — a repeated Id is one entity counted twice."
+      continue
+    fi
+
+    if [[ "$A_N" -eq "$ATARGET" ]]; then
+      pass "CONF-04 (D-22): [$ATAGPOS] $A_N distinct artist entities with distinct Ids — $A_NAMES"
+      JELLYFIN_ARTIST_OK=$((JELLYFIN_ARTIST_OK + 1))
+    elif [[ "$A_N" -eq "$ABASE" ]]; then
+      JELLYFIN_ARTIST_PENDING=$((JELLYFIN_ARTIST_PENDING + 1))
+      warn "CONF-04 (D-22): [$ATAGPOS] $A_N entities, target $ATARGET — PENDING A RE-PROBE, not green."
+      echo "      '$APATH_I'"
+      echo "      This is the 2026-09-20 baseline, unchanged. PreferNonstandardArtistsTag is a"
+      echo "      PROBE-TIME option and a Default-mode refresh does not re-run the prober on a file"
+      echo "      whose mtime has not changed (measured twice, plan 06-03). It discharges when"
+      echo "      Phase 7 writes or imports the file — NOT by rescanning, and NOT by the aggressive"
+      echo "      refresh mode, which rewrites .nfo into the library and is forbidden here."
+      echo "      why this row: $AWHY"
+    else
+      jellyfin_fail "CONF-04 (D-22): '$APATH_I' has $A_N artist entities — expected $ATARGET (post-re-probe)"
+      echo "         or $ABASE (the 2026-09-20 baseline). $A_N is neither, so something changed that"
+      echo "         nobody planned. names were: ${A_NAMES:-<none>}"
+    fi
+  done
+fi
+echo ""
+
+# ---------------------------------------------------------------------------------------------
+# 4c. D-22 — the same rows in Music Assistant (CONF-04, plan 06-13 owns closing it)
+#
+# Written now and FAILING CLOSED, so criterion 4 stays OPEN rather than reading as passed while
+# the consumer that would falsify it is unreachable. MA being down is COULD NOT LOOK.
+#
+# ⚠ `ma_fail`, NOT `warn`, and NOT the `scope != library` out-of-scope branch section 4 uses.
+#   That branch is right for a row Jellyfin STRUCTURALLY cannot see (it does not mount
+#   /mnt/tank/downloads); it is the WRONG precedent for a consumer that is merely down. An
+#   unreachable consumer is a failed assertion, not an out-of-scope row.
+# ---------------------------------------------------------------------------------------------
+echo "🎧 4c. D-22 artist entities in Music Assistant (CONF-04, plan 06-13)"
+rule
+MA_ARTIST_OK=0
+MA_ARTIST_PENDING=0
+if [[ "$MA_ROUTE" == "unavailable" ]]; then
+  ma_fail "CONF-04: MA unreachable — artist-entity parsing is UNKNOWN, not green"
+elif [[ -z "$MA_LOCAL_PROVIDER_INSTANCE" ]]; then
+  ma_fail "CONF-04: no provider instance pinned — an artist-entity read cannot be attributed (section 2)"
+else
+  # ⚠ `music/tracks/library_items` IS RESEARCH ASSUMPTION A2 (06-RESEARCH.md § P4). It was
+  #   inferred from the shape of the album-side command, NOT confirmed against
+  #   GET /api-docs/commands.json — which is this script's own stated authority and the thing
+  #   that caught `music/albums/count` silently ignoring its `provider` argument. Plan 06-13
+  #   resolves it against the live server. Until then a shape mismatch here is UNKNOWN, not a
+  #   statement about artists.
+  #
+  # ⚠ MA's `mb_id_count == 1` SHORT-CIRCUIT: a track carrying exactly ONE mb_artistid and a
+  #   `;`-joined name returns as a SINGLE artist regardless of the delimiter
+  #   (music_assistant/helpers/tags.py@2.10.4:328-350). So a red here can mean "MA suppressed
+  #   splitting because MusicBrainz gave it one id", which is not the same defect as a bad
+  #   delimiter and must not be reported as one.
+  #
+  # Provider-filtered, never unfiltered — a live Spotify provider is enabled in this MA and an
+  # unfiltered read would let Spotify's catalogue answer for the NFS export (D-30, Layer 1).
+  MA_TRACKS="$(ma_api music/tracks/library_items \
+              "$(provider_filter "$(jq -nc --argjson l "$MA_LIBRARY_SCAN_LIMIT" '{limit:$l}')")")"
+  if ! printf '%s' "$MA_TRACKS" | jq -e 'type == "array"' >/dev/null 2>&1; then
+    ma_fail "CONF-04: music/tracks/library_items did not return an array (assumption A2 unconfirmed) — UNKNOWN, not green"
+  else
+    for row in "${ARTIST_PROOF_ROWS[@]}"; do
+      IFS='|' read -r APATH_I ATARGET _AJFBASE AMABASE ATAGPOS ASEARCH AWHY <<< "$row"
+      # Matched locally, not via MA's `search` — 02-07 measured `search` returning [] for an
+      # item's own exact name. Same reasoning as section 3, stated there in full.
+      MA_TRACK="$(printf '%s' "$MA_TRACKS" | jq -c --arg n "$ASEARCH" \
+        '[.[] | select((.name // "" | ascii_downcase) == ($n | ascii_downcase))] | .[0] // empty')"
+      if [[ -z "$MA_TRACK" ]]; then
+        ma_fail "CONF-04 (D-22): no provider-attributed track named '$ASEARCH' in MA — UNKNOWN, not green"
+        echo "         The name is compared EXACTLY (case-insensitively). If the title tag was"
+        echo "         changed, re-pin the search term from this provider's own track list —"
+        echo "         do not relax the comparison to a substring, which is how a different track answers."
+        continue
+      fi
+      MA_N="$(printf '%s' "$MA_TRACK" | jq -r '(.artists // []) | length')"
+      MA_NAMES="$(printf '%s' "$MA_TRACK" | jq -r '[(.artists // [])[].name] | join(" | ")')"
+      MA_UNIQ="$(printf '%s' "$MA_TRACK" | jq -r '[(.artists // [])[].name] | unique | length')"
+      MA_SEMI="$(printf '%s' "$MA_TRACK" | jq -r '[(.artists // [])[].name | select(test(";"))] | length')"
+      if [[ "$MA_SEMI" -gt 0 ]]; then
+        ma_fail "CONF-04 (D-22): an MA artist name still contains ';' for '$ASEARCH' — names: $MA_NAMES"
+      elif [[ "$MA_N" -gt 0 && "$MA_UNIQ" -ne "$MA_N" ]]; then
+        ma_fail "CONF-04 (D-22): MA has $MA_N artists but only $MA_UNIQ distinct names for '$ASEARCH' — $MA_NAMES"
+      elif [[ "$MA_N" -eq "$ATARGET" ]]; then
+        pass "CONF-04 (D-22): [$ATAGPOS] MA reports $MA_N distinct artists for '$ASEARCH' — $MA_NAMES"
+        MA_ARTIST_OK=$((MA_ARTIST_OK + 1))
+      elif [[ "$MA_N" -eq "$AMABASE" ]]; then
+        MA_ARTIST_PENDING=$((MA_ARTIST_PENDING + 1))
+        warn "CONF-04 (D-22): MA reports $MA_N artists for '$ASEARCH', the tag holds $ATARGET —"
+        echo "      REPORTED at its 2026-09-20 baseline, NOT green. names: $MA_NAMES"
+        echo "      This is a MEASURED DISCREPANCY, not a 'not yet': MA read this file fresh through"
+        echo "      the export and still produced fewer artists than the ARTISTS tag carries."
+        echo "      Plan 06-13 owns explaining it. Two leads before blaming the delimiter:"
+        echo "        - MA's mb_id_count==1 short-circuit suppresses splitting outright;"
+        echo "        - the names returned may come from the ARTIST tag spelling, not ARTISTS."
+        echo "      why this row: $AWHY"
+      else
+        ma_fail "CONF-04 (D-22): MA reports $MA_N artists for '$ASEARCH' — expected $ATARGET (the tag)"
+        echo "         or $AMABASE (the 2026-09-20 baseline). $MA_N is neither, so something changed"
+        echo "         that nobody planned. names: ${MA_NAMES:-<none>}"
+      fi
+    done
+  fi
+fi
+echo ""
+
+# ---------------------------------------------------------------------------------------------
 # 5. Mount liveness (CONS-03)
 # ---------------------------------------------------------------------------------------------
 echo "🔌 5. Mount liveness (CONS-03)"
@@ -1135,6 +1502,7 @@ echo "  MA version (live):           $MA_VERSION_LIVE   (assertions proven at $M
 echo "  export route:                $EXPORT_ROUTE"
 echo "  ma route:                    $MA_ROUTE"
 echo "  jellyfin route:              $JELLYFIN_ROUTE"
+echo "  jellyfin vfolder route:      $JELLYFIN_VFOLDER_ROUTE   (its own endpoint, its own route)"
 echo "  ha route:                    $HA_ROUTE   (skipped is expected on LXC 100 — see header)"
 echo "  pinned provider instance:    ${MA_LOCAL_PROVIDER_INSTANCE:-<EMPTY — pinned by 02-06; re-pin from config/providers/get>}"
 echo "  temp provider instance:      ${MA_TEMP_PROVIDER_INSTANCE:-<unset — scope=temp-export rows reported, not asserted (D-15)>}"
@@ -1143,6 +1511,12 @@ echo "  albums matched in MA:        $MA_ALBUMS_FOUND   (target $(( ${#PROOF_ALB
 echo "  MA out-of-scope:             $MA_OUT_OF_SCOPE   (scope=temp-export with no temp provider pinned — reported, not asserted)"
 echo "  albums matched in Jellyfin:  $JELLYFIN_ALBUMS_FOUND   (target $(( ${#PROOF_ALBUMS[@]} - JELLYFIN_OUT_OF_SCOPE )), exact name+albumartist)"
 echo "  jellyfin out-of-scope:       $JELLYFIN_OUT_OF_SCOPE   (scope!=library — reported, not asserted)"
+echo "  D-34 options read:           PreferNonstandardArtistsTag=${JF_D34_VALUE[PreferNonstandardArtistsTag]}  UseCustomTagDelimiters=${JF_D34_VALUE[UseCustomTagDelimiters]}  SaveLocalMetadata=${JF_D34_VALUE[SaveLocalMetadata]}  EnableRealtimeMonitor=${JF_D34_VALUE[EnableRealtimeMonitor]}"
+echo "  artist rows pinned:          ${#ARTIST_PROOF_ROWS[@]}   (D-22, all in the ARTISTS tag position)"
+echo "  artist rows at target (JF):  $JELLYFIN_ARTIST_OK"
+echo "  artist rows PENDING (JF):    $JELLYFIN_ARTIST_PENDING   (at the 2026-09-20 baseline — NOT green; discharges on Phase 7's first write)"
+echo "  artist rows at target (MA):  $MA_ARTIST_OK"
+echo "  artist rows REPORTED (MA):   $MA_ARTIST_PENDING   (measured discrepancy against the tag — NOT green; plan 06-13 owns it)"
 echo "  MA albums, local provider:   $MA_PROVIDER_ALBUM_COUNT   (target >= 3)"
 echo "  toolchain missing:           $TOOLS_MISSING"
 echo "  export assertions failed:    $EXPORT_FAILURES"
@@ -1161,4 +1535,13 @@ if [[ $FAILURES -gt 0 ]]; then
   exit 1
 fi
 
+# The banner below is about the PINNED ALBUMS and nothing else. If any D-22 artist row is sitting
+# at a baseline rather than at its target, say so on the line ABOVE it — a green banner standing
+# alone over a summary with a non-zero pending count is exactly how a reader concludes CONF-04
+# passed. It has not: CONF-04 stays OPEN until both halves read at target.
+if [[ $(( JELLYFIN_ARTIST_PENDING + MA_ARTIST_PENDING )) -gt 0 ]]; then
+  echo -e "${YELLOW}⚠️  CONF-04 IS NOT CLOSED: $JELLYFIN_ARTIST_PENDING Jellyfin and $MA_ARTIST_PENDING MA artist"
+  echo -e "   row(s) are at a recorded baseline, not at target. Reported, not asserted — see 4b/4c"
+  echo -e "   and stacks/selfhosted/arrs/beets.md § 'Phase 6 — tagger configuration and dry run'.${NC}"
+fi
 echo -e "${GREEN}✅ Both music consumers see the pinned albums through the NFS export${NC}"

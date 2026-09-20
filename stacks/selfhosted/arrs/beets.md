@@ -1722,15 +1722,30 @@ artist literally called `A;B` is the precise failure D-22 exists to distinguish 
 - **An operator decision was left untaken, deliberately.** Obtaining that proof *today* would mean
   a one-off aggressive refresh on three albums, whose cost is their `.nfo` rewritten inside a phase
   whose premise is that it writes nothing. The default is not to, and that is what plan 06-03 did.
-- **CONF-04's Music Assistant half is untouched here** — MA and Home Assistant on `172.16.1.31`
-  were both down for maintenance. Plan 06-13 owns it, and the MA branch of the check is written
-  and fails closed as `UNKNOWN, not green` rather than passing while the host is unreachable.
-- **The MA command `music/tracks/library_items` is research assumption A2** — inferred from the
-  album-side command's shape, **not** confirmed against `GET /api-docs/commands.json`, which is
-  that script's own stated authority. Resolve it before relying on the MA arm.
-- **MA's `mb_id_count == 1` short-circuit.** A track carrying exactly one `mb_artistid` and a
-  `;`-joined name reads as **one** artist in MA regardless of the delimiter. Relevant the moment
-  beets starts writing MusicBrainz ids at import.
+- **Music Assistant came back up mid-plan, and its half is mostly GREEN.** Research recorded MA
+  and Home Assistant on `172.16.1.31` as both down for maintenance; by the time 06-03 ran the
+  assertion, MA answered. Two of the three pinned rows read **exactly at target**:
+  `California Gurls` -> `Katy Perry | Snoop Dogg`, `Just Give Me a Reason` -> `P!nk | Nate Ruess`.
+  MA prefers the `ARTISTS` tag and splits it on `;` natively, exactly as the source read said.
+  Plan 06-13 still owns closing CONF-04's MA half.
+- **One MA row is a measured discrepancy, and it is not the same thing as the Jellyfin pending
+  rows.** `Jewels n' Drugs` carries `ARTISTS = "Lady Gaga;T.I.;Too $hort;Twista"` — four values —
+  and MA returns **three**: `T.I. | Lady GaGa | Too $hort`. `Twista` is absent, and the spelling
+  returned is `Lady GaGa` (capital G), which is the **`ARTIST`** tag's spelling, not the `ARTISTS`
+  tag's. MA read this file fresh through the export, so "not yet re-probed" does not explain it.
+  Two leads before blaming the delimiter: MA's `mb_id_count == 1` short-circuit, and whether the
+  names are being taken from `ARTIST` rather than `ARTISTS`. Plan 06-13 owns it. The check reports
+  it every run against a pinned baseline rather than either passing it or going permanently red.
+- **MA normalises artist ORDER.** The tag reads `Nate Ruess;P!nk`; MA returns `P!nk | Nate Ruess`.
+  Only the SET is meaningful on the MA side. The order **is** still a meaningful tell in Jellyfin.
+- **Research assumption A2 is empirically confirmed but still not confirmed against the authority.**
+  `music/tracks/library_items` with `{limit, provider}` returned a 1,244-element array of track
+  objects carrying `artists[]` on MA **2.11.0b2**, 2026-09-20. It has still **not** been checked
+  against `GET /api-docs/commands.json`, which is that script's own stated authority and the thing
+  that caught `music/albums/count` silently ignoring its `provider` argument. Do that in 06-13.
+- **MA version drift: live `2.11.0b2`, `MA_VERSION_PROVEN` is `2.11.0b0`.** The banner warns, as
+  designed (`auto_update` is ON by operator choice, D-56). Re-prove the provider assertions against
+  the new build and move the constant in the same commit — do not just bump the number.
 - **30 of the 1,244 library items have zero `ArtistItems`** while still carrying a non-empty
   `Artists` string list — all of `Lady Gaga/ARTPOP (2013)` (15), all of `Lady Gaga/Joanne (2016)`
   (14), and one Def Leppard track. Their `Artists` reads `["Lady GaGa"]`, with a capital G that
