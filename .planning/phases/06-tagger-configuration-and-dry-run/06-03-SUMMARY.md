@@ -213,3 +213,17 @@ uses them reports rather than passes.
    Def Leppard track) while carrying a populated `Artists` string list. Unexplained, left alone, and
    the reason one pinned row's baseline is 0. It is also the reason the check asserts on
    `ArtistItems` and not on `Artists`.
+
+## Delivery note
+
+`scripts/check-music-consumers.sh` reaches LXC 100 **only by git** — the host runs it from
+`/mnt/fast/stacks` after `git pull --ff-only`. The live run recorded above was made from a
+throwaway copy at `/mnt/fast/06-03-test/`, which was **removed at the end of the plan** so no
+untracked copy of the script is left drifting on the host. The extension is not in effect on the
+host until this branch merges and the host pulls.
+
+## Self-Check: PASSED
+
+All five files present on disk; all four commits present in `git log --all`
+(`3936d7f`, `79b12e3`, `203e07f`, `de4d00f`).
+
