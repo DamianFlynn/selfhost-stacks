@@ -233,7 +233,14 @@ NUC_ADDR="172.16.1.31"                   # HA NUC's LAN source address on the ro
 MA_SECRETS="/mnt/fast/secrets/ma-deercrest.env"
 JELLYFIN_SECRETS="/mnt/fast/secrets/jellyfin-deercrest.env"
 
-MA_VERSION_PROVEN="2.11.0b0"             # D-21 as amended / D-56. See the header block.
+MA_VERSION_PROVEN="2.11.0b2"             # D-21 as amended / D-56. See the header block.
+                                         # Moved 2026-09-21 from 2.11.0b0 by plan 06-13, in the
+                                         # SAME commit that re-proved the assertions against the
+                                         # running build — the constant and the proof must never
+                                         # move apart, or the banner below claims a provenance
+                                         # nobody established. Re-proved: the ARTISTS-preference
+                                         # and `;`-splitter behaviour (A1) and the command name
+                                         # and return shape (A2). See the 06-13 artifact.
 
 # Pinned by plan 02-06 when the filesystem provider is created. While it is empty section 2 FAILS
 # LOUDLY - it must never pass by default, because an unpinned filter is exactly how a Spotify
@@ -406,9 +413,29 @@ ARTIST_PROOF_ROWS=(
   # MA baseline is 3, not 4: MEASURED 2026-09-20 on MA 2.11.0b2, MA returns
   # `T.I. | Lady GaGa | Too $hort` for a tag holding `Lady Gaga;T.I.;Too $hort;Twista`. Twista is
   # absent and the spelling is the ARTIST tag's "Lady GaGa", not the ARTISTS tag's "Lady Gaga".
-  # That is a REAL DISCREPANCY, not a pending state, and plan 06-13 owns explaining it. It is
-  # recorded as a baseline so it is REPORTED every run rather than either passing or drowning the
-  # summary in a red nobody can act on yet.
+  # That is a REAL DISCREPANCY, not a pending state. It is recorded as a baseline so it is
+  # REPORTED every run rather than either passing or drowning the summary in a red nobody can act
+  # on yet.
+  #
+  # CHARACTERISED 2026-09-21 by plan 06-13. Three candidate causes were tested and TWO ARE RULED
+  # OUT BY MEASUREMENT, which is what makes this actionable rather than a shrug:
+  #   - NOT the `;` delimiter. Rows 2 and 3 prove the splitter works on this exact build: each
+  #     has a SINGLE-name `Artist` tag ("Katy Perry", "P!nk") and a two-name `ARTISTS` tag, and MA
+  #     returns both names as distinct entities. The second name exists nowhere but ARTISTS, so
+  #     ARTISTS was read and split. No artist name anywhere in the library still contains a `;`.
+  #   - NOT the mb_id_count==1 short-circuit. This file carries FOUR MUSICBRAINZ_ARTISTID values,
+  #     so the short-circuit cannot fire; it would have returned 1 artist, not 3.
+  #   - The loss is at MA's ARTIST-ENTITY stage, not the tag-parsing stage: "Twista" does not
+  #     exist as an artist entity ANYWHERE in MA's 66 library artists, under that spelling or any
+  #     name matching /wista/i. The other three names all resolved to real entities (item_ids
+  #     159/209/217), and "Lady GaGa" is a pre-existing entity whose display name came from the
+  #     ARTIST tag — which is why the spelling differs from the ARTISTS tag.
+  # WHAT IS STILL OPEN, stated precisely rather than guessed: MA's whole artists-per-track
+  # distribution over this library is 1220 tracks at 1, 22 at 2, 2 at 3, and NONE above 3 — and
+  # this file is the library's ONLY 4-value tag. So "MA caps the list at 3" and "Twista
+  # specifically failed to map" are BOTH consistent with the evidence and cannot be told apart
+  # from a sample of one. Phase 7 is where a second >=4-artist track first lands; that is the
+  # measurement that discriminates, and it must not be pre-judged here.
   # NOTE the path carries U+2019 (’) while the TITLE tag carries an ASCII apostrophe. The row is
   # selected by exact Path, so the path spelling is load-bearing; the search term is the title.
   "/media/Music/Lady Gaga/ARTPOP (2013)/CD 01-05 Lady Gaga - Jewels n’ Drugs.flac|4|0|3|ARTISTS|Jewels n' Drugs|widest N; exercises a dollar sign and dotted initials in artist names"
@@ -1311,18 +1338,39 @@ if [[ "$MA_ROUTE" == "unavailable" ]]; then
 elif [[ -z "$MA_LOCAL_PROVIDER_INSTANCE" ]]; then
   ma_fail "CONF-04: no provider instance pinned — an artist-entity read cannot be attributed (section 2)"
 else
-  # ⚠ `music/tracks/library_items` IS RESEARCH ASSUMPTION A2 (06-RESEARCH.md § P4). It was
-  #   inferred from the shape of the album-side command, NOT confirmed against
-  #   GET /api-docs/commands.json — which is this script's own stated authority and the thing
-  #   that caught `music/albums/count` silently ignoring its `provider` argument. Plan 06-13
-  #   resolves it against the live server. Until then a shape mismatch here is UNKNOWN, not a
-  #   statement about artists.
+  # ✅ A2 IS RESOLVED — CONFIRMED against GET /api-docs/commands.json on the live 2.11.0b2
+  #   (plan 06-13, 2026-09-21). It had been INFERRED from the album-side command's shape and was
+  #   explicitly NOT VERIFIED. What the server's own schema declares, all four facts checked:
+  #     - `music/tracks/library_items` EXISTS (1 of the 311 declared commands);
+  #     - its return_type is `Array of Track` — an ARRAY, so the `type == "array"` guard below is
+  #       the right shape check, and the response is NOT `.result`-wrapped;
+  #     - the `Track` schema declares an `artists` property, so `artists[]` is a documented field
+  #       and not an artifact of one lucky response;
+  #     - it accepts `provider` ("Filter by provider instance ID"), which is what makes the
+  #       provider_filter below meaningful rather than decorative.
+  #   A successful call was NOT accepted as the resolution: a command can answer and still not be
+  #   the one carrying the field. The schema is the authority, which is the whole point of A2.
+  #
+  # ⚠ T-06-69, now proven at the schema level rather than anecdotally: `music/albums/count`
+  #   declares ONLY `favorite_only` and `album_types`. It has NO `provider` parameter at all —
+  #   so passing one is not "ignored with a warning", it is accepted and silently dropped, and
+  #   the count returned is the WHOLE library including Spotify. Never cite it as evidence.
   #
   # ⚠ MA's `mb_id_count == 1` SHORT-CIRCUIT: a track carrying exactly ONE mb_artistid and a
   #   `;`-joined name returns as a SINGLE artist regardless of the delimiter
   #   (music_assistant/helpers/tags.py@2.10.4:328-350). So a red here can mean "MA suppressed
   #   splitting because MusicBrainz gave it one id", which is not the same defect as a bad
   #   delimiter and must not be reported as one.
+  #   MEASURED per row 2026-09-21 (ffprobe, MUSICBRAINZ_ARTISTID): row 1 carries FOUR ids, rows 2
+  #   and 3 carry TWO each. NOT ONE of the three rows has a single id, so the short-circuit does
+  #   NOT fire on any of them and all three are VALID tests of the splitter. This is recorded so
+  #   that a future red is not waved away with a caveat that has been measured not to apply.
+  #
+  # ⚠ The `summary` parameter (default TRUE) returns "slim summary items containing only the
+  #   fields needed for a list view". That default is left in place DELIBERATELY: plan 06-13
+  #   read all three rows at BOTH summary=true and summary=false and the artists arrays were
+  #   byte-identical — same length, names, item_ids and uris. So the slim shape does not truncate
+  #   artists[], and this check is not silently reading a list-view stub.
   #
   # Provider-filtered, never unfiltered — a live Spotify provider is enabled in this MA and an
   # unfiltered read would let Spotify's catalogue answer for the NFS export (D-30, Layer 1).
@@ -1361,9 +1409,15 @@ else
         echo "      REPORTED at its 2026-09-20 baseline, NOT green. names: $MA_NAMES"
         echo "      This is a MEASURED DISCREPANCY, not a 'not yet': MA read this file fresh through"
         echo "      the export and still produced fewer artists than the ARTISTS tag carries."
-        echo "      Plan 06-13 owns explaining it. Two leads before blaming the delimiter:"
-        echo "        - MA's mb_id_count==1 short-circuit suppresses splitting outright;"
-        echo "        - the names returned may come from the ARTIST tag spelling, not ARTISTS."
+        echo "      CHARACTERISED 2026-09-21 (plan 06-13). Do NOT blame the delimiter — both easy"
+        echo "      explanations are ruled out by measurement:"
+        echo "        - the ';' splitter WORKS on this build (rows 2 and 3 each split a two-name"
+        echo "          ARTISTS tag whose ARTIST tag holds only one of the names);"
+        echo "        - mb_id_count==1 CANNOT fire here — this file carries FOUR musicbrainz"
+        echo "          artist ids, and the short-circuit would have returned 1 artist, not 3."
+        echo "      The loss is at MA's artist-ENTITY stage: 'Twista' exists nowhere in MA's"
+        echo "      library artists. Cap-at-3 vs Twista-specifically is undecidable on one sample;"
+        echo "      Phase 7's first >=4-artist track is the measurement that settles it."
         echo "      why this row: $AWHY"
       else
         ma_fail "CONF-04 (D-22): MA reports $MA_N artists for '$ASEARCH' — expected $ATARGET (the tag)"
