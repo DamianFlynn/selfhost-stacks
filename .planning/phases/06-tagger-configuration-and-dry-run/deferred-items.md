@@ -31,3 +31,56 @@ Proxmox host is exactly the kind of change that should not be made in passing.
 **Not urgent:** it makes the check hang rather than report wrong, which is worse to sit
 through but not a false green — and the reader is in front of it, because nothing
 schedules this script (its own KNOWN LIMIT notice).
+
+---
+
+## DEF-06-11-01 — the library will grow TWO "various artists" tops: `Various Artists/` and `Various/`
+
+**Found during:** plan 06-11, task 2, § 7.1 of the oracle run (2026-09-21).
+
+The zero-diff tree contains both `/media/Music/Various Artists/` (44 files, the S3
+stratum) and `/media/Music/Various/` (30 files, the S4 stratum). Neither is a path-rule
+defect and CONF-03 passes on both: each top level DOES equal its item's own
+`ALBUMARTIST`, byte-exact, which is what CONF-03 asserts. They differ because the two
+strata's **tags** differ — S3 is flagged compilation and takes `va_name`'s
+`Various Artists`, S4 is not flagged compilation and its files carry the literal tag
+`Various`.
+
+**Why it matters:** two spellings of the same idea means TWO ARTIST PAGES in Jellyfin
+and in Music Assistant — the same duplicate-artist-page defect CONF-03 exists to
+prevent, arriving through the tags rather than through the paths.
+
+**Why it is deferred, not fixed here:** no path rule can fix it. The fix is either a tag
+normalisation over the affected albums (set `albumartist` to the canonical string) or a
+`comp` flag correction on the S4-shaped content (which would route it through rule 5 and
+pick up `va_name` automatically). Both are Phase 7 decisions with their own blast radius:
+the *Now!* `1-115` set is 115 folders / 4,746 files, and it is the population this shape
+is drawn from. Choosing between "normalise the tag" and "fix the comp flag" needs a
+count of how many backlog albums carry each shape, which has not been taken.
+
+**Not urgent, and not a regression:** the fixture predicted both tops, so this is a
+pre-existing property of the content, surfaced by the dry run rather than caused by it.
+
+---
+
+## DEF-06-11-02 — plan 06-11's task-1 verify cannot distinguish a path from prose about a path
+
+**Found during:** plan 06-11, task 1, running the plan's own verify (2026-09-21).
+
+The verify greps `06-11-oracle-run.txt` for the literal `Compilations` + `/` and treats
+**any** occurrence as a failure. That predicate cannot tell a destination path from a
+sentence stating that no such path exists — nor from the oracle's own D-15 SUCCESS
+message, which reads "zero Compilations/ components". Including the run's verbatim
+console output therefore makes the check fail on the evidence that it passed.
+
+**Worked around, not weakened:** the artifact avoids the literal (writing the component
+name without its trailing slash, and saying why), and the verbatim console log is filed
+in the companion `06-11-wrote-nothing.txt`, which carries all three D-29 layers and every
+class-assertion verdict and explains the relocation. The check stayed strict on the file
+that carries the 174-line destination list.
+
+**The general form, which is the part worth keeping:** a "no such string anywhere in the
+artifact" predicate is not a substitute for "no such string in the MEASUREMENT". Future
+plans in this family should scope the negative to the machine-generated block — e.g.
+`sed -n '/^BEGIN DESTINATIONS$/,/^END DESTINATIONS$/p' | grep -q ...` — so that an
+artifact is free to discuss the defect it is proving absent.
