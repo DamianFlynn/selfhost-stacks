@@ -471,9 +471,16 @@
 #          that the tree is clean), or the comment strip removing nothing (which means it is not
 #          stripping, so the narrowed count cannot be trusted). All UNKNOWN, all exit 1.
 #       J. EITHER NEW BLOCK BEING RUN WITH A NON-DEFAULT OVERRIDE. Same contract as DASH_HOST and
-#          EXTCONF_HOST: every D03_* knob and D04_DOC_BASELINE forces a non-green run when it is
-#          non-default, so none of them can launder a red run into a green one. There is no
-#          success-producing override and no sentinel that skips either block; do not add one.
+#          EXTCONF_HOST: every D03_* knob, D04_DOC_BASELINE, D04_REPO_ROOT and DRIFT_REPO_ROOT
+#          forces a non-green run when it is non-default, so none of them can launder a red run
+#          into a green one. There is no success-producing override and no sentinel that skips
+#          either block; do not add one.
+#          ⚠️ DRIFT_REPO_ROOT AND D04_REPO_ROOT EXIST ONLY BECAUSE AN UNDRIVEABLE BRANCH IS AN
+#          UNPROVEN BRANCH. Both blocks read a host-side git checkout, and both were hard-coded to
+#          /mnt/fast/stacks, which meant their violation branches could only be driven by
+#          committing a deliberate footgun — or a file that is not there yet — to the DEPLOYED
+#          tree. Pointing them at a scratch checkout is how plan 06-10 drove those branches to red
+#          and back to green without touching the estate. Neither can produce a pass.
 #
 # ⚠️  KNOWN LIMIT, AND IT APPLIES TO THIS WHOLE FILE: THIS SCRIPT IS MANUAL. IT ONLY EVER FIRES
 #     WHEN SOMEBODY TYPES IT (D-22, phase 02.1).
@@ -630,6 +637,16 @@ IMAGE_DRIFT_PROMOTED=0
 #                        AND the override. Setting one can only turn a green file red; unsetting it
 #                        restores the plain repo-vs-host assertion, never a skip.
 DRIFT_APPDATA_ROOT="${DRIFT_APPDATA_ROOT:-/mnt/fast/appdata}"
+#   DRIFT_REPO_ROOT      the host-side checkout the `git show HEAD:<path>` half reads. Added
+#                        2026-09-21 by plan 06-10 for one reason and one reason only: WITHOUT IT
+#                        THE FOURTH PAIR'S RED BRANCHES CANNOT BE DRIVEN. The repo half was
+#                        hard-coded, so a pair whose file is not yet in the host's HEAD can only
+#                        ever produce the exit-4 could-not-look branch — the comparison, the label
+#                        arm and the DRIFT_EXPECT_* arm are all unreachable, and an undriveable
+#                        branch is an unproven branch. Same contract as DRIFT_APPDATA_ROOT: ANY
+#                        non-default value forces EXIT_CODE=1 whatever the comparison then finds,
+#                        so pointing it at a convenient checkout can never report green.
+DRIFT_REPO_ROOT="${DRIFT_REPO_ROOT:-/mnt/fast/stacks}"
 DRIFT_EXPECT_AUDIO_BASH="${DRIFT_EXPECT_AUDIO_BASH:-}"
 DRIFT_EXPECT_SABNZBD_BEETS_CONFIG="${DRIFT_EXPECT_SABNZBD_BEETS_CONFIG:-}"
 DRIFT_EXPECT_SURVIVOR_BEETS_CONFIG="${DRIFT_EXPECT_SURVIVOR_BEETS_CONFIG:-}"
@@ -658,6 +675,10 @@ D03_CLI_PROFILE="${D03_CLI_PROFILE:-manual}"
 # invocation-shaped lines in DOCUMENTATION (see the block for why documentation is scoped out of
 # the assertion but still counted), so the count cannot grow unseen.
 D04_DOC_BASELINE="${D04_DOC_BASELINE:-2}"
+# D04_REPO_ROOT exists for the same single reason as DRIFT_REPO_ROOT above — the scan reads the
+# host's HEAD, so without it the violation branch cannot be driven without committing a deliberate
+# footgun to the deployed checkout. Any non-default value forces EXIT_CODE=1.
+D04_REPO_ROOT="${D04_REPO_ROOT:-/mnt/fast/stacks}"
 
 # ENV OVERRIDES for the "extended.conf destructive switches" block (CR-01/WR-01), added 2026-09-14.
 # Same contract as DRIFT_APPDATA_ROOT above, and the precedent is stated explicitly because it is
@@ -1189,7 +1210,12 @@ else
         echo "  ⚠️  DRIFT_APPDATA_ROOT override in effect — this run cannot report the vendored files green"
         EXIT_CODE=1
     fi
-    DRIFT_CMD="set -o pipefail; cd /mnt/fast/stacks || exit 3
+    if [ "$DRIFT_REPO_ROOT" != "/mnt/fast/stacks" ]; then
+        DRIFT_ROOT_OVERRIDDEN=1
+        echo "  ⚠️  DRIFT_REPO_ROOT override in effect — this run cannot report the vendored files green"
+        EXIT_CODE=1
+    fi
+    DRIFT_CMD="set -o pipefail; cd $DRIFT_REPO_ROOT || exit 3
 _drift_pair() {
   r=\$(timeout $REMOTE_TIMEOUT git show \"HEAD:\$2\" | sha256sum | cut -d' ' -f1) || exit 4
   h=\$(timeout $REMOTE_TIMEOUT sha256sum \"\$3\" | cut -d' ' -f1) || exit 5
@@ -1210,7 +1236,7 @@ _drift_pair flask-config.yaml stacks/selfhosted/arrs/beets/flask-config.yaml \"$
         echo "  Nothing was compared. This is NOT 'the vendored files match'."
         EXIT_CODE=1
     elif [ "$DRIFT_RC" -ne 0 ]; then
-        echo "  ⚠️  UNKNOWN — could not look (ssh exit $DRIFT_RC; 3 = no /mnt/fast/stacks checkout,"
+        echo "  ⚠️  UNKNOWN — could not look (ssh exit $DRIFT_RC; 3 = no $DRIFT_REPO_ROOT checkout,"
         echo "  4 = 'git show HEAD:<path>' failed, 5 = the appdata copy could not be hashed)."
         echo "  Nothing was compared. This is NOT 'the vendored files match'."
         EXIT_CODE=1
@@ -1478,11 +1504,18 @@ fi
 # `D04-BEGIN` sentinel is emitted FIRST so that "looked and found nothing" is distinguishable from
 # "never ran". Without the sentinel those two produce identical empty output.
 echo "D-04 — throwaway -l plus -c overlay on every beet invocation:"
+D04_OVERRIDDEN=0
 if [ "$D04_DOC_BASELINE" != "2" ]; then
+    D04_OVERRIDDEN=1
     echo "  ⚠️  D04_DOC_BASELINE override in effect — this run cannot report D-04 green"
     EXIT_CODE=1
 fi
-D04_CMD="cd /mnt/fast/stacks || exit 3
+if [ "$D04_REPO_ROOT" != "/mnt/fast/stacks" ]; then
+    D04_OVERRIDDEN=1
+    echo "  ⚠️  D04_REPO_ROOT override in effect — this run cannot report D-04 green"
+    EXIT_CODE=1
+fi
+D04_CMD="cd $D04_REPO_ROOT || exit 3
 echo D04-BEGIN
 timeout $REMOTE_TIMEOUT git grep -n -I -w -E 'beet' HEAD -- scripts stacks
 D04_RC=\$?
@@ -1553,7 +1586,7 @@ else
             printf '%s\n' "$D04_INVOKE_DOC" | sed 's/^/       /'
             EXIT_CODE=1
         fi
-        if [ "$D04_BAD" -eq 0 ] && [ "$D04_N_DOC" -eq "$D04_DOC_BASELINE" ] && [ "$D04_DOC_BASELINE" = "2" ]; then
+        if [ "$D04_BAD" -eq 0 ] && [ "$D04_N_DOC" -eq "$D04_DOC_BASELINE" ] && [ "$D04_OVERRIDDEN" -eq 0 ]; then
             echo "  ✅ no executable beet invocation opens the real library ($D04_N_EXE invocation-shaped lines outside *.md)"
             echo "     documentation hits at the pinned baseline ($D04_N_DOC) — historic quotations, see the block comment"
         fi
