@@ -106,6 +106,16 @@ docker compose -f arrs/beets.yaml --profile manual up beets
 docker exec -it beets beet import "/downloads/complete/nzb/unsorted/<album folder>"
 ```
 
+> **⛔ DO NOT RUN THAT SECOND LINE. Historic quotation, kept verbatim as the Nov-2025 record
+> (note added 2026-09-21, Phase 6 D-04).** It is what the header comment said then, which is why
+> it is not rewritten. It is also now forbidden: one `library.db` is mounted into two beets
+> versions (D-03) — the CLI arm is 2.13.1, beets-flask executes 2.12.0 — so a bare `beet` here
+> opens that database and **migrates its schema under 2.12.0's feet**. Every CLI-arm invocation
+> must carry **both** a throwaway `-l` and a `-c` overlay, because `-l` alone does not redirect
+> `statefile:`. The human import path is beets-flask's UI. Asserted by
+> `scripts/quick-health-check.sh` § *D-04*, which scopes `*.md` out of its assertion for exactly
+> this reason and counts documentation hits against a pinned baseline instead.
+
 ---
 
 ## Two config gaps that will bite a bulk run
@@ -161,6 +171,12 @@ beet import -A --flat "/downloads/complete/nzb/dj-mixes/<folder>"
 ```
 
 `-A` = no autotag. Without it these become unusable.
+
+> **⛔ As written, that command is forbidden from Phase 6 onward** (note added 2026-09-21, Phase 6
+> D-04). It is the 2026-08-17 triage sketch and is kept verbatim for the `-A --flat` reasoning,
+> which still stands. What does not stand is running it bare: add a throwaway `-l` **and** a `-c`
+> overlay naming `library`, `statefile` and `directory`, or drive the import from beets-flask's UI.
+> Same mechanism as the note above.
 
 Consider giving DJ content its **own path format** so it does not land in `Compilations/`
 alongside genuine various-artist albums:
