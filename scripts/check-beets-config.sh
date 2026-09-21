@@ -213,11 +213,37 @@ cfg_pass() {
 read -r -d '' DUMP_TO_JSON <<'PYEOF' || true
 import json, re, sys
 
+def split_flow(inner):
+    """Split a YAML flow-sequence body on commas that are NOT inside quotes.
+
+    A plain inner.split(',') is wrong and fails QUIETLY: confuse dumps this config's
+    gui.library.artist_separators as [',', ;, '&'], whose FIRST ELEMENT IS A QUOTED COMMA.
+    Splitting naively turns one element into two half-quotes and the list silently gains an
+    entry. No key asserted by this script carries a quoted comma today, which is exactly why
+    the defect would have sat here unnoticed until one did.
+    """
+    out, buf, quote = [], '', None
+    for ch in inner:
+        if quote:
+            buf += ch
+            if ch == quote:
+                quote = None
+        elif ch in ("'", '"'):
+            quote = ch
+            buf += ch
+        elif ch == ',':
+            out.append(buf)
+            buf = ''
+        else:
+            buf += ch
+    out.append(buf)
+    return out
+
 def scalar(v):
     v = v.strip()
     if v.startswith('[') and v.endswith(']'):
         inner = v[1:-1].strip()
-        return [] if not inner else [scalar(x) for x in inner.split(',')]
+        return [] if not inner else [scalar(x) for x in split_flow(inner)]
     if len(v) >= 2 and v[0] == v[-1] and v[0] in ("'", '"'):
         return v[1:-1]
     if v in ('yes', 'true', 'True'):
