@@ -1945,3 +1945,252 @@ Full transcript:
   in this estate of Jellyfin presenting multiple browseable artists for one track. They were
   excluded from every scan body and are unchanged. The finding above also explains why they were
   never at risk: nothing re-probes them either.
+
+## Phase 6 closed 2026-09-21 — four criteria TRUE, one OPEN on a named half, all five RE-MEASURED at close
+
+The configuration that will import is asserted against the object that will actually do the
+importing, the intended tree is a committed fact rather than an intention, and **not one byte was
+written to the library or to the backlog in the whole phase**. The narrative — every plan, its
+measurements and its deviations — is in
+`.planning/phases/06-tagger-configuration-and-dry-run/`.
+
+**Every verdict below was measured AGAIN at close, from live state, on 2026-09-21 between 22:04Z
+and 22:07Z.** A closure written from plan summaries records what was true on the day each plan ran;
+this one quotes instruments run at sign-off. Where a verdict rests on a driven experiment that
+cannot be re-driven cheaply — the oracle's 174-file import, the two-arm incremental control, the
+country-preference overlays — the *instrument* was re-exercised at close (`--self-test`, exit 0)
+and the *result* is cited to its committed artifact by name. **OPEN is not FAIL.** A FAIL needs a
+violated condition; there is none in this phase.
+
+### The five criteria
+
+| # | Criterion (ROADMAP text, abbreviated) | Verdict at close | Evidence — runnable, quoted verbatim | Plan |
+|---|---|---|---|---|
+| 1 | Effective config shows imports **copying**, not moving | **TRUE** | `bash scripts/check-beets-config.sh` → exit 0, `FAILURES total: 0`; `✅ CONF-01 import.copy = true` and `✅ CONF-01 import.move = false`, both read from `CONFIG_ROUTE=server-committed` — arm 1, the object that will actually import | 06-01, 06-07 |
+| 2 | `incremental: yes` **with** `incremental_skip_later: yes` | **TRUE, and proven to FIRE** | `bash scripts/check-beets-config.sh` → `✅ CONF-02 import.incremental = true` / `✅ CONF-02 import.incremental_skip_later = true` (arm 1); and `bash scripts/phase06-incremental-control.sh --arm a` vs `--arm b`, two overlays **one key apart**, opposite outcomes | 06-07, 06-08 |
+| 3 | A run on a bucket-A sample prints top levels equal to `ALBUMARTIST` exactly, case included; `Various Artists/` appears and `Compilations/` does not | **TRUE** | `bash scripts/phase06-oracle.sh --run` → exit 0, **zero lines of difference** against `06-EXPECTED-TREE.txt` over 174 destinations; class assertion § 7.1 CONF-03 **0 mismatches, 0 could-not-compare**, § 7.2 **0** `Compilations` path components against a 44-row `Various Artists` positive control | 06-05, 06-09, 06-11 |
+| 4 | A multi-artist track shows its artists parsed correctly in **both** Jellyfin and Music Assistant | **TWO VERDICTS, NEVER SUMMED.** Jellyfin **OPEN**; Music Assistant **PROVEN, one row a measured discrepancy** | `bash scripts/check-music-consumers.sh` (on LXC 100) → § 4's four by-name library-option assertions and the D-22 per-row `ArtistItems` entity check. Re-measured directly at close through the same two APIs — see the table below | 06-02, 06-03, 06-13 |
+| 5 | Match disambiguation **demonstrated**, not merely set, with the run confirmed to have written nothing | **TRUE** | `bash scripts/check-beets-config.sh` → `✅ CONF-05 match.preferred.countries contains GB — ["GB","US"]`, `carries no UK entry`, `original_year = true`, `musicbrainz.extra_tags … 5 entries`; driven by overlays **K/L one key apart** choosing a *different* rank-0 release; wrote-nothing by the three-layer D-29 proof in `bash scripts/phase06-oracle.sh --run` | 06-01, 06-07, 06-11, 06-12 |
+
+Requirement ids, so the table and `REQUIREMENTS.md` cannot drift: criterion 1 is **CONF-01**,
+criterion 2 is **CONF-02**, criterion 3 is **CONF-03** (its instrument is **CONF-06**), criterion 4
+is **CONF-04**, criterion 5 is **CONF-05**.
+
+#### What was re-run at close, and what it printed
+
+`bash scripts/check-beets-config.sh`, 2026-09-21T22:04Z from the workstation, **exit 0**:
+
+```
+  arm 1 blind:                 0   (1 = nothing below section 4 was measured)
+  arm-1 assertion failures:    0
+  FAILURES total:              0
+  D-29 before:                 fbbdde0c… /config/library.db  f6a9a1ad… /config/state.pickle
+  D-29 after:                  fbbdde0c… /config/library.db  f6a9a1ad… /config/state.pickle
+```
+
+Twenty-three assertions green, including the positive control that proves the dump really is the
+server-committed object (`gui.num_preview_workers=4`, `gui.terminal.start_path=/repo` — rc6 schema
+keys the CLI view cannot see). `arm 1 blind: 0` is the line that makes the rest meaningful: a run
+that could not read arm 1 would have printed `1` and asserted nothing.
+
+`bash scripts/phase06-oracle.sh --self-test` and
+`bash scripts/phase06-incremental-control.sh --self-test`, both re-run at close, both **exit 0** —
+every fail-closed branch, every refusal and every could-not-look case behaved as expected. The
+judges still judge; they were not re-run against live content because doing so would import, and
+this phase's premise is that it does not.
+
+`06-EXPECTED-TREE.txt` is still at **commit `cb9f49a`** — the commit that landed it *before* the
+run it judges (D-27) — sha256 `37b2083eef14b936081495dcc6e80123528054fadbc4187d060e0d8d5a8430f0`,
+351 lines. A fixture edited after the run it judges proves nothing, so its provenance is asserted
+rather than assumed.
+
+#### Criterion 4, re-measured at close — the two halves, side by side
+
+Both consumers were read directly at close, read-only, through their own APIs. **The two rows are
+never averaged into one verdict**: the overall verdict is the weaker of them.
+
+| Pinned row (target N) | Jellyfin 10.11.11, 22:06:03Z | Music Assistant 2.11.0b2, 22:06:38Z |
+|---|---|---|
+| `Jewels n' Drugs` (4) | **0 of 4** — `ArtistItems` empty; `Artists` string list reads `Lady GaGa` | **3 of 4** — `T.I. \| Lady GaGa \| Too $hort`, item_ids 159, 209, 217 |
+| `California Gurls` (2) | **1 of 2** — `Katy Perry` | **2 of 2** — `Katy Perry \| Snoop Dogg`, item_ids 73, 244 |
+| `Just Give Me a Reason` (2) | **1 of 2** — `P!nk` | **2 of 2** — `P!nk \| Nate Ruess`, item_ids 63, 201 |
+| Verdict | **OPEN** — every row still at its pre-change baseline (0, 1, 1) | **Parsing PROVEN**; row 1 a measured discrepancy, not a pending state |
+
+The Jellyfin library option itself is **still set**, read from `GET /Library/VirtualFolders` at
+close: `PreferNonstandardArtistsTag=true`, `UseCustomTagDelimiters=false`, `SaveLocalMetadata=false`,
+`EnableRealtimeMonitor=false`. So the OPEN is not drift — it is the probe-time property recorded
+above: the option changes what the prober does *next time it runs*, and nothing has re-probed these
+files. **Zero of 1,244 census rows moved.**
+
+MA's side was read with its own controls in band: 1,244 tracks returned from the pinned local
+provider, artists-per-track distribution **1,220 at one / 22 at two / 2 at three / none above
+three**, no artist name anywhere containing a `;`, and a planted non-existent title returning **0**
+matches — so the selector is demonstrably able to miss, which is what makes the three hits a result
+rather than a tautology.
+
+#### Instrument corrections — dated notes, with the criterion text left standing
+
+> **Criterion 3's instrument is `beet move -p`, NOT `--pretend` (D-33, 2026-09-20, plan 06-02).**
+> The ROADMAP criterion says "a `--pretend` run" and **is deliberately not rewritten**; the
+> correction lives beside it, the way TAGR-05's did. `--pretend`'s pipeline in beets 2.12.0 is
+> exactly `read_tasks → log_files` (`beets/importer/session.py@v2.12.0:201-240`), so
+> `lookup_candidates` never runs, **no destination path is ever computed**, and every line it
+> prints is a SOURCE path. It prints one line per file and exits 0, which is precisely why it reads
+> as a pass. The mechanical discriminator: a `--pretend` transcript contains **no ` -> ` and no
+> `/mnt/tank/media/Music/` substring at all**. The oracle that does evaluate the full `paths:`
+> stanza — `%aunique{}`, `replace:`, `asciify_paths`, `legalize_path`, `max_filename_length` — is
+> `beet move -p`, via `item.destination()`. `--pretend` is **kept** for what it genuinely proves:
+> which folders are offered as tasks, i.e. `incremental`, `ignore`, `ignore_hidden`, `clutter`,
+> `singletons` and album grouping. That is why it still serves criterion 2. Full addendum against
+> CONF-06 in `.planning/REQUIREMENTS.md`.
+
+> **Criterion 5's "source and library file counts unchanged" is WEAKER than what was done
+> (D-29, 2026-09-21, plan 06-11).** The criterion text stands. A count would pass while content
+> changed underneath — **Phase 1 measured exactly that happening**, a path-set comparison passing
+> while file contents moved. What was actually produced is a three-layer proof, and it is what the
+> verdict rests on:
+> **layer 1, structural** — `docker inspect` says the mount whose Destination is `/media` carries
+> `RW=false`; **layer 2, source** — `meta` *and* `sha256` manifests over all 190 files of the ten
+> sampled folders (174 audio + 16 sidecars, deliberately the whole folder), identical before and
+> after and re-verified outside the script with `cmp`; **layer 3, beets state** — `/config/library.db`
+> `fbbdde0c…` and `/config/state.pickle` `f6a9a1ad…` byte-identical, **with mtimes recorded as well
+> as hashes**, because an empty-state pickle rewritten with identical content moves the mtime and
+> leaves the hash alone. Re-confirmed at close: the same two hashes appear either side of the
+> `check-beets-config.sh` run above.
+
+> **Criterion 4's write side is the `ARTISTS` tag, not `;` inside `ARTIST` (D-34, 2026-09-20,
+> plan 06-02).** The criterion says "separated with `;`" and is not rewritten. beets builds
+> `item.artist` by concatenating MusicBrainz artist-credit join phrases, and **no write-delimiter,
+> separator or join key exists anywhere in `config_default.yaml` at 2.12.0 or 2.13.1** — measured,
+> not assumed. beets therefore *cannot be configured* to emit `;` inside `ARTIST`. The `;` named in
+> the criterion is a property of **this library's existing twelve files**, not of anything the
+> pipeline will produce. What makes the two consumers agree is that both now read the same field:
+> MA prefers `ARTISTS` natively and splits on `;`, and D-34 pointed Jellyfin at the same tag.
+
+#### C-7 — "six criteria" versus five. Cosmetic, recorded so nobody hunts for a missing one
+
+`06-CONTEXT.md` refers three times to "six criteria"; the ROADMAP's Phase 6 entry lists **five**,
+numbered 1–5, and this closure answers those five. The discrepancy is a **numbering artefact** —
+six *requirements* (CONF-01…CONF-06) against five *criteria*, because CONF-03 and CONF-06 are
+discharged by the same oracle run. **There is no sixth criterion, and none was invented.** Recorded
+here because an unexplained 6-versus-5 reads exactly like a criterion somebody forgot to answer.
+
+#### D-32 — `tank/downloads@pre-phase5` is NOT released at Phase 6 sign-off. Standing instruction
+
+**Do not destroy `tank/downloads@pre-phase5`.** Phase 5's rollback section says "do not destroy it
+before Phase 6 has signed off" — and that sentence, read on its own, would authorise destroying it
+today. It must not be read that way.
+
+**Phase 6 wrote nothing, so it produced no evidence that Phase 5's changes were correct.** A phase
+whose entire deliverable is that the library and the backlog are byte-identical before and after
+cannot vindicate a set of writes it never exercised. The first run that does exercise them is
+**Phase 7's pilot import**. The snapshot is the only undo for Phase 5's **4,750 renames, 751 in-place
+tag writes and 26,005 chowns** — beets has no CLI `undo` and none of those three operations kept a
+copy — and it is **not a clean undo**: a `zfs rollback` discards everything written to
+`tank/downloads` since 2026-09-18 15:42 by every service that writes there, so it is an estate-wide
+decision, not a music-project one. Release it only when Phase 7's pilot has passed. This is also
+written into Phase 7's entry criteria in the ROADMAP, because a standing instruction that lives
+only in a phase-close document is one nobody reads at the moment it matters.
+
+#### D-08 — answered as a READ, not a measurement, and carried to Phase 9
+
+The risk was beets-flask's inbox view going "laggy past some hundred folders". **rc6's schema
+exposes no pagination, no page-size and no inbox-item-limit knob at all** — the only levers on it
+are `gui.inbox.ignore` and batch cadence. That is a settled read of the schema, not a measurement
+of the lag, and it is recorded as such: Phase 3's **friction 5 stays `NOT EXERCISED`**. Nothing in
+Phase 6 put a hundred folders in front of the UI, so nothing in Phase 6 can claim the risk is
+retired. Carried to **Phase 9**, which is the phase whose batch cadence makes it operationally
+real.
+
+### Still open at Phase 6 close
+
+Phase 6's own:
+
+- **CONF-04's Jellyfin half — the one open requirement, and a NAMED PHASE 7 ENTRY BLOCKER.** The
+  option is set and asserted; the three pinned rows still read 0, 1, 1 against targets 4, 2, 2
+  because a Default-mode refresh does not re-probe an unchanged file, and the refresh mode that
+  would is forbidden in this estate. Neither "could not look" nor "nothing is wrong" — **do not
+  record it as green, and do not sum it with the MA half.** It discharges on Phase 7's first write
+  or import of a multi-artist release.
+- **Path rule 2 (`albumtype:=dj disctotal:2..`) was never evaluated by any Phase 6 instrument**
+  (DEF-06-12-01). Both drawn S5 folders resolved through rule 3 because neither carries
+  `disctotal`. Seven `dj-mixes` folders in the population do carry it. Deferred to **Phase 7 by
+  explicit operator decision**, alongside OQ-2 — reaching outside the drawn sample for a folder
+  chosen *because* it carries the attribute under test is the hand-picking D-26 exists to prevent.
+- **`Various Artists/` and `Various/` will both exist in the grown library** (DEF-06-11-01, 44 and
+  30 files in the dry run). CONF-03 passes on both — each top level *does* equal its own
+  `ALBUMARTIST` byte-exactly — but two spellings of one idea is two artist pages in Jellyfin and in
+  MA, which is the defect CONF-03 exists to prevent, arriving through the **tags** rather than the
+  paths. **No path rule can fix it.** Phase 7 decision.
+- **`musicbrainz.search_limit` is 5** (DEF-06-12-02), so at the committed value whole classes of
+  candidate are never offered: on the S4 `Vol 001` row, 5 candidates offered **zero** US pressings
+  where 25 offered seven. **This is not a recommendation to raise it** — a longer list also means
+  more round-trips and more chances to pick the wrong one. It is a recommendation to *measure* it
+  during Phase 7's pilot: per folder, was the accepted candidate in the first 5?
+- **The D-34 Jellyfin library option is live-service state that git does not capture.** It lives in
+  Jellyfin's configuration database on LXC 100 and nowhere in this repository. Its **only**
+  protection is the by-name assertion in `scripts/check-music-consumers.sh` § 4. Narrow or remove
+  that assertion and a single UI click reverts the option with every gate in this estate still
+  green. **Name that dependency before touching § 4.**
+- **The repo is ahead of the host, and the estate is NOT in sync.** At close LXC 100's checkout of
+  `/mnt/fast/stacks` is at **`c67d497`** — all of Phase 6 is merged locally and **unpushed**, so
+  the host carries none of the three Phase 6 scripts and an older `check-music-consumers.sh` with
+  no § 4 at all. `quick-health-check.sh`'s drift block reports a correct **UNKNOWN** for this
+  reason; the vendored file itself is **not** drifted (repo and host both `949bd1f3…`). It clears
+  on `git push` plus `git pull --ff-only` on LXC 100 **and on nothing else** — and that pull will
+  refuse until the untracked host-side `/mnt/fast/stacks/stacks/selfhosted/arrs/beets/flask.yaml`
+  is removed. **The push is the operator's call and has not been made.**
+- **`tagger-capable containers` moved 2 → 3** — `beets-flask` joins `sabnzbd` and `lidarr`.
+  Reported, not asserted (none of the three holds `rw` on Music, which *is* asserted). § *Phase 4 →
+  The census, executed* above states 2 as "the expected value"; **that sentence is now dated** and
+  is left standing as the record of what was true then.
+
+Carried in from Phase 5 and untouched by Phase 6, because they are still open and a closure that
+omits them reads as if they were fixed:
+
+- **`check-music-freeze.sh`'s `interpolated-host-path inventory MOVED: expected=12, found=13`.**
+  Pre-existing, unrelated to Phase 6 — **verified**: not one of the 13 lines is under
+  `stacks/selfhosted/arrs/beets/`. Every music block in that harness is green; this single
+  human-review gate is why the script exits 1 on LXC 100 and why **`quick-health-check.sh`'s exit
+  code is non-discriminating for every criterion above — read the block verdicts.** The remedy is
+  the one the failure text states: read the new line by hand and move `DECLARED_INTERP_EXPECTED` in
+  the same commit, never bump the number.
+- **`takeout-import.service` on LXC 100 passes an Immich API key on the command line**, readable in
+  `ps` host-wide. Rotate the key and move it out of `ExecStart` in the same change. The value is
+  deliberately not recorded here — **this repo is public.**
+- **`dropbox/` is 84 % of the download dataset and is not downloads** — 196,327 entries inside the
+  `rw` bind of **nine** containers. Whoever next revises `stacks/selfhosted/arrs/` owns narrowing
+  those binds.
+- **`dj-mixes`'s 84 inconsistent top-level names** and **`mac-music-archive/`'s 23,874
+  uncharacterised music entries** both remain as Phase 5 left them.
+
+### How to re-run the Phase 6 evidence
+
+Everything below is **read-only**. The first three run **from the repo root on the workstation**
+(they ssh-delegate and `docker exec`); the fourth must run **on LXC 100**, which is why it needs a
+`git pull` first.
+
+```bash
+# Criteria 1, 2 (read-back) and 5 (config half) — the server-committed config.
+bash scripts/check-beets-config.sh
+
+# Criterion 2's negative control — two overlays ONE key apart, opposite outcomes.
+bash scripts/phase06-incremental-control.sh --self-test   # judge the judge; no ssh, no docker
+bash scripts/phase06-incremental-control.sh --arm a       # incremental_skip_later: no  -> trap FIRES
+bash scripts/phase06-incremental-control.sh --arm b       # incremental_skip_later: yes -> trap DEFEATED
+bash scripts/phase06-incremental-control.sh --cleanup
+
+# Criteria 3 and 5 (wrote-nothing) — the destination-path oracle.
+bash scripts/phase06-oracle.sh --self-test                # judge the judge
+bash scripts/phase06-oracle.sh --run                      # zero-diff against 06-EXPECTED-TREE.txt
+
+# Criterion 4 — both consumers, from LXC 100.
+ssh root@172.16.1.159 'cd /mnt/fast/stacks && git pull --ff-only && bash scripts/check-music-consumers.sh'
+```
+
+⚠ **`bash scripts/phase06-oracle.sh` with no arguments prints usage and exits 2, deliberately.** A
+script whose default action drives an import into a container that mounts the real library is a
+footgun. Its exit codes are four, not two: `0` zero-diff and every assertion green, `1` RED (the
+diff was non-empty, an assertion failed, **or the dry run wrote something**), `2` usage or a
+precheck refusal, `3` **UNKNOWN, not green** — the positive control failed, so the diff was never
+evaluated. Three of the four are not "the tree is wrong".
