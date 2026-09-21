@@ -21,6 +21,12 @@ human_verification:
   - test: "Sign in at https://beets.deercrest.info/ in a real browser"
     expected: "Authelia challenges first; the beets-flask UI loads only after authentication; no web terminal is offered anywhere in the UI (gui.terminal.enabled is false, confirmed in the deployed config, but not yet confirmed in a browser)"
     why_human: "The automated proof is a curl 302 against the origin, which carries no cookies — this estate's own documented failure mode (authelia-431-read-buffer.md) is exactly a curl test passing while every browser fails. Plan 06-06's own <human-check> is recorded as UNANSWERED in 06-06-SUMMARY.md and 06-06-PLAN.md."
+    status: answered
+    answered: 2026-09-22
+    answered_by: operator
+    answer: "yes beets.deercrest dose offer authellia and works"
+    discharges: "(1) Authelia challenges first and (2) the UI loads after authenticating — observed in a real browser, so the claim no longer rests on a cookieless curl"
+    not_discharged: "(3) no web terminal offered — not separately confirmed by eye; remains asserted by gui.terminal.enabled false in the deployed config and 06-04's 'Web-Terminal is disabled, skipping setup' log line"
 ---
 
 # Phase 6: Tagger Configuration and Dry Run — Verification Report
@@ -97,13 +103,32 @@ No `TBD`/`FIXME`/`XXX` markers were found in the phase's modified files (the deb
 **Expected:** Authelia challenges first; the beets-flask UI loads only after authentication; no web terminal is offered anywhere in the UI.
 **Why human:** The automated proof is a curl-based 302, which carries no cookies. This estate's own documented failure mode (`authelia-431-read-buffer.md`) is precisely a curl test passing while every browser fails. Plan 06-06's own `<human-check>` block is recorded as UNANSWERED in both `06-06-PLAN.md` and `06-06-SUMMARY.md`.
 
+**ANSWERED 2026-09-22 by the operator, in their own words:** *"yes beets.deercrest dose offer authellia and works"*.
+
+**What that settles, and what it does not — recorded separately so the two are not summed:**
+
+- **SETTLED: the cookie-carrying auth path.** Authelia challenges, and the beets-flask UI loads after
+  authenticating, from a real browser. This is the half no automated instrument in this phase could
+  supply, and it is the half the `authelia-431-read-buffer.md` failure mode attacks — a bare 431 in a
+  browser while curl passes. It did not occur. 06-06's curl-based 302 is now corroborated by a client
+  that carries cookies, so "Authelia protects it" no longer rests on a cookieless request.
+- **NOT separately confirmed in the browser: the absence of a web terminal.** The operator's answer
+  does not speak to it, and it is not inferred from "works". It is nonetheless supported by two
+  independent non-browser instruments already in evidence: 06-04 observed the container log line
+  `Web-Terminal is disabled, skipping setup` at first start, and `gui.terminal.enabled: false` is
+  present in the deployed `flask-config.yaml`. That is configuration-and-runtime evidence, not a
+  visual confirmation, and is deliberately not upgraded to one here.
+
+Status: the human-verification item is **discharged on its load-bearing half**. The web-terminal
+sub-clause remains at its prior standing — asserted by config and container log, never by eye.
+
 ### Gaps Summary
 
 The phase's central claim — CONF-01, CONF-02, CONF-03/06 and CONF-05 — is genuinely and strongly proven. The evidence is not vacuous: `check-beets-config.sh` asserts against a positive-control-gated read of the object that will actually import; `phase06-incremental-control.sh` is a real one-key-apart negative control driven to opposite outcomes; `phase06-oracle.sh` produces a 174-line zero-diff against a fixture independently confirmed (via `git log`) to predate the run it judges, backed by a three-layer hash proof that nothing was written. CONF-04 is correctly and honestly recorded as OPEN on its Jellyfin half — this matches the project's own disposition and `ROADMAP.md`'s `Closed — 1 open requirement` line, not a hidden gap.
 
 The one substantive gap this verification adds beyond what the phase already disclosed: the phase's own post-closure code review (`06-REVIEW.md`, run 2026-09-21T22:33:04Z, after 06-14 closed the phase) found a Critical, reproducible defect — the D-04 "no bare beet invocation" safety assertion is vacuous over exactly the scripts this phase built, and a real violation of that rule sits in `check-beets-config.sh` itself (undetected by the detector, though mitigated in practice by an unrelated hash-based control). That finding, plus 10 Warnings, remains completely unaddressed: the only commit after the review adds the review document itself, with no fix, no override, and no carry-forward into `deferred-items.md` or `ROADMAP.md`'s Phase 7/9 entry-criteria list. Given this phase's stated dominant defect class was exactly "assertions that cannot fail," an unresolved, self-diagnosed instance of that same defect class — undiscovered by tracking after the fact — is reported here as a gap rather than smoothed into the pass.
 
-Also outstanding, and already correctly flagged by the phase itself: plan 06-06's human-check (browser sign-in behind Authelia) has never been answered.
+Also flagged by the phase itself: plan 06-06's human-check (browser sign-in behind Authelia). **Answered by the operator 2026-09-22 and no longer outstanding on its load-bearing half** — Authelia challenges and the UI loads, confirmed from a real browser, so the claim no longer rests on a cookieless curl. The web-terminal sub-clause was not separately confirmed by eye and stays where it was, asserted by the deployed `gui.terminal.enabled: false` and 06-04's `Web-Terminal is disabled, skipping setup` log line. See § Human Verification Required above. **CR-01 is therefore the only gap remaining.**
 
 ---
 

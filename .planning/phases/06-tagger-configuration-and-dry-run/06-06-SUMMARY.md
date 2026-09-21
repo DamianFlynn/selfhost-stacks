@@ -140,6 +140,21 @@ None. This plan introduced no new surface. It asserted existing surfaces against
 
 Until that is answered, **"Authelia protects it" rests on a curl request that carries no cookies.** That is a real limit on what the 302 proves, not a formality — this estate's documented failure mode is exactly a curl smoke test passing while every browser fails with a bare `431`. The configuration half of item 3 *is* corroborated mechanically: `gui.terminal.enabled: false` in the deployed file. The browser half is not, and is recorded as outstanding in the artifact, here, and in the phase's open items.
 
+> **ANSWERED 2026-09-22 by the operator.** The paragraph above stands as the dated record of what was
+> true when this plan closed; it is amended, not rewritten. Operator's words: *"yes beets.deercrest
+> dose offer authellia and works"*.
+>
+> That discharges **items (1) and (2)** — Authelia challenges, and the UI loads after authenticating,
+> observed from a real browser. The `431` failure mode this section warns about did not occur, so the
+> curl-based 302 is now corroborated by a client that carries cookies.
+>
+> **Item (3) was not separately confirmed by eye** and is deliberately not read into "works". It stays
+> exactly where this paragraph left it: corroborated mechanically by `gui.terminal.enabled: false` in
+> the deployed file and by this plan's own observed `Web-Terminal is disabled, skipping setup` log
+> line — configuration and runtime evidence, not a visual check.
+>
+> Recorded in `06-VERIFICATION.md` § Human Verification Required.
+
 ## Next Phase Readiness
 
 **Ready for 06-07 onward.** The runtime is proven live end to end — a folder placed in a registered inbox produces a completed MusicBrainz preview, and the only way to reach the UI is through Authelia.
