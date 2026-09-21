@@ -120,9 +120,20 @@ to predicates that could never match or could never fail; this one is kept able
 to do both. The identifiers live in 06-13-PLAN.md § task 1 § options, and
 exactly one of them is written below, once, when the operator has chosen it.
 
-    OPERATOR ANSWER (verbatim) : <not yet given>
-    OPTION ID                  : <not yet given>
-    ANSWERED AT (UTC)          : <not yet given>
+    OPERATOR ANSWER (verbatim) : "Run the check (option 1)"
+    OPTION ID                  : run-now
+    ANSWERED AT (UTC)          : 2026-09-21T21:46:28Z
+
+The operator was shown the three-probe table in § 1.1, the HTTP-layer
+confirmation in § 1.2 (MA `/info` server_version=2.11.0b2 schema_version=68, HA
+200), AND BOTH CAVEATS IN § 1.3 — the 2.11.0b0 -> 2.11.0b2 `MA_VERSION_PROVEN`
+drift, and that A1 and A2 are both still unresolved — and chose to run on that
+basis. The answer is therefore given against a measurement taken in the same
+session and with the two known gaps in front of them, which is what D-36 asks of
+this gate.
+
+STATUS: GATE PASSED. Task 2 is authorised and runs. Task 3 records CONF-04's
+verdict for BOTH consumers as SEPARATE verdicts on one row — never summed.
 
 CONSEQUENCE OF EACH BRANCH, stated here so the record is unambiguous before the
 answer lands:
