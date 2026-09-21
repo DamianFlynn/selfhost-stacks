@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-20T21:28:30.756Z"
-last_activity: 2026-09-20 -- Phase 06 execution started
+last_updated: "2026-09-21T23:20:18.103Z"
+last_activity: 2026-09-21 -- Phase 06 planning complete
 progress:
   total_phases: 10
   completed_phases: 5
-  total_plans: 88
-  completed_plans: 72
+  total_plans: 95
+  completed_plans: 86
   percent: 50
 ---
 
@@ -94,7 +94,7 @@ it now matches a real song the split moved into `Vol 066`; assert the named path
 before Phase 6 signs off** — it is the only undo for 4,750 renames, 751 tag writes and 26,005
 chowns, and it is **not** a clean undo.
 
-Status: Phase 06 closed with 1 open requirement (CONF-04, Jellyfin half) + 1 verification gap (CR-01)
+Status: Phase 06 closed with 1 open requirement (CONF-04, Jellyfin half) + 1 verification gap (CR-01) — gap-closure plans 06-15..06-21 planned 2026-09-22 and ready to execute
 Do NOT run with `--auto`/`--chain` — four
 gates are `checkpoint:decision`, which auto-selects the first option under auto-mode.
 
@@ -656,7 +656,7 @@ it asked for: the operator browsed MA's Filesystem (local disk) provider, spot-c
 **played tracks to confirm the audio matches the metadata**. No assertion in this phase could do
 that — every automated check verifies MA's *database* says the right thing, never that the *bytes*
 are the right song, and the documented stale state is precisely "entries exist, playback fails".
-Last activity: 2026-09-20 -- Phase 06 execution started
+Last activity: 2026-09-21 -- Phase 06 planning complete
 deletion and throttling proven from Jellyfin's own Debug log across two driven playback sessions, the
 ZFS quota proven to refuse a write while `/` moved by 0 bytes, the anonymous volume deleted by name
 after the observation it would have made vacuous, **12.95 GiB reclaimed**, and the standing check
