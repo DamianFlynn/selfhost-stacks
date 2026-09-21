@@ -1,0 +1,410 @@
+06-06 TASK 2 — D-07: THE EXPOSURE SHAPE, ASSERTED FROM THE RUNTIME
+================================================================================
+Run:        2026-09-20T23:51:30Z .. 23:51:32Z (host) and 23:5xZ (workstation), plan 06-06 task 2
+Hosts:      LXC 100 (selfhost, 172.16.1.159) over ssh, AND the macOS workstation directly
+Containers: beets-flask  running, StartedAt 2026-09-20T22:37:55Z, RestartCount 0
+            traefik      running, StartedAt 2026-09-18T22:42:20Z, RestartCount 0
+
+RESULT: PASS on every automated assertion. ONE ITEM IS OUTSTANDING BY DESIGN — the
+        browser sign-in (§ 6), which is a `<human-check>`, not an automated verdict.
+
+--------------------------------------------------------------------------------
+WHY EVERY ASSERTION READS THE RUNTIME AND NOT `flask.yaml`
+--------------------------------------------------------------------------------
+WR-02, recorded at `stacks/selfhosted/arrs/beets/beets.yaml:173-200`:
+
+  THE `networks:` KEY AND THE HOST PORT ARE THE SAME DEFECT, SEEN FROM TWO SIDES.
+  Until 2026-09-14 the dormant survivor carried `traefik.enable=true` and a full
+  `chain-authelia@file` router WHILE ITS `networks:` KEY WAS COMMENTED OUT. Traefik
+  could not reach it, so the router was decorative — and the `ports: - 8337:8337`
+  it also carried published the container LAN-WIDE WITH NO AUTHENTICATION.
+
+The file looked protected. The runtime was not. So the file is not evidence, and nothing
+below reads it. Every command here interrogates the running system.
+
+################################################################################
+# 1. NO HOST PORT — PASS
+################################################################################
+    $ docker inspect beets-flask --format '{{json .NetworkSettings.Ports}}'
+    {}
+
+    $ docker port beets-flask
+      rc=0  bytes=0   -> EMPTY, i.e. no published port
+
+    $ docker inspect beets-flask --format '{{json .HostConfig.PortBindings}}'
+    {}
+
+    $ docker ps --filter name=beets-flask --format '{{.Names}} | PORTS=[{{.Ports}}]'
+    beets-flask | PORTS=[]
+
+Four runtime reads, all agreeing: there is no published port.
+
+--- 1b. TCP REFUSAL PROBES, WITH A POSITIVE CONTROL AND ON BOTH ADDRESSES ---
+
+`127.0.0.1` ALONE IS A FALSE CONTROL ON THIS ESTATE. Traefik binds `0.0.0.0:443`, so every
+address in 127/8 answers on 443 and a loopback-only probe can be read as proof of something
+it did not test. The LAN address `172.16.1.159` is therefore probed as well, and a POSITIVE
+CONTROL runs first so that a refusal cannot merely mean the probe is broken:
+
+    POSITIVE CONTROL (must connect, or every refusal below is meaningless)
+      127.0.0.1        443    -> CONNECTED
+      172.16.1.159     443    -> CONNECTED
+
+    THE ASSERTION (must be refused, on both addresses)
+      127.0.0.1        5001   -> REFUSED/closed (nc rc=1)
+      172.16.1.159     5001   -> REFUSED/closed (nc rc=1)
+      127.0.0.1        8337   -> REFUSED/closed (nc rc=1)
+      172.16.1.159     8337   -> REFUSED/closed (nc rc=1)
+
+    $ ss -ltnp | grep -E ':(5001|8337)[[:space:]]'
+      (no listener on 5001 or 8337 anywhere on this host)
+    $ ss -ltn | grep -c ':443 '
+      2                       <-- ss itself works; the control's listener is visible
+
+A timeout would have been recorded as UNKNOWN rather than as a refusal; none occurred.
+
+WHY 8337 IS PROBED AT ALL: it is the port the previous defect actually published. 8337 was
+the beets `web` plugin's port; rc6 listens on 5001. Probing only 5001 would miss a
+resurrection of the exact historical mistake.
+
+################################################################################
+# 2. ON t3_proxy, AND TRAEFIK CAN ACTUALLY REACH IT — PASS
+################################################################################
+    $ docker inspect beets-flask --format '{{json .NetworkSettings.Networks}}'
+    {"t3_proxy":{ ... "NetworkID":"8f40e177e381...","IPAddress":"192.168.90.58",
+      "Gateway":"192.168.90.1","MacAddress":"76:5b:0d:ad:f7:57","IPPrefixLen":24,
+      "DNSNames":["beets-flask","94143e5dd6e3"], ... }}
+
+      networks attached : 1        <-- t3_proxy and nothing else
+      t3_proxy address  : 192.168.90.58
+
+--- Traefik reaches the backend. This is the half the old defect failed. ---
+
+    $ docker exec traefik wget -S -q -O /dev/null --timeout=10 http://192.168.90.58:5001/
+        HTTP/1.1 200 OK
+        server: uvicorn
+        content-type: text/html; charset=utf-8
+        content-length: 3516
+
+    200 OK, served by uvicorn, FROM INSIDE THE TRAEFIK CONTAINER. The router has a backend
+    it can actually talk to.
+
+--- the matching negative control from the same place ---
+
+    $ docker exec traefik wget -S -q -O /dev/null --timeout=6 http://192.168.90.58:8337/
+        wget: can't connect to remote host (192.168.90.58): Connection refused
+
+    Correct: rc6 does not listen on 8337, so the probe distinguishes 5001 from 8337 rather
+    than answering 200 to anything.
+
+################################################################################
+# 3. EXACTLY ONE ROUTER CLAIMS THE HOSTNAME — PASS, VIA THREE RUNTIME INSTRUMENTS
+################################################################################
+>>> FIRST, AN HONEST "COULD NOT LOOK", RECORDED RATHER THAN SUBSTITUTED SILENTLY.
+
+The plan asked to read Traefik's own API/dashboard router view. That route is NOT available
+unauthenticated on this estate, and it was demonstrated rather than assumed:
+
+    $ docker exec traefik wget -q -O- --timeout=8 http://localhost:8080/api/version
+      wget: server returned error: HTTP/1.1 404 Not Found
+
+    $ docker inspect traefik --format '{{json .Config.Cmd}}' | tr ',' '\n' | grep -iE '"--api|metrics\.prometheus'
+      "--api=true"
+      "--api.dashboard=true"
+      "--metrics.prometheus=true"
+      "--metrics.prometheus.entrypoint=traefik"
+
+    There is no `--api.insecure`. The API is `api@internal`, published only through the
+    `traefik.deercrest.info` router, which itself carries `chain-authelia@file`:
+
+    $ docker inspect traefik --format '<labels>' | grep traefik-rtr
+      traefik.http.routers.traefik-rtr.entrypoints=websecure
+      traefik.http.routers.traefik-rtr.middlewares=chain-authelia@file
+      traefik.http.routers.traefik-rtr.rule=Host(`traefik.deercrest.info`)
+      traefik.http.routers.traefik-rtr.service=api@internal
+
+    The `traefik` entrypoint on :8080 carries Prometheus metrics ONLY. `curl localhost:8080`
+    exiting 7, or a 404 from it, is the CORRECT behaviour on this estate and must not be
+    "fixed" by publishing it.
+
+    ==> The direct API read is UNKNOWN / could not look. It is written down as that. Three
+        other runtime instruments answer the question, and they agree.
+
+--- 3a. INSTRUMENT A — the provider's actual input, swept over every running container ---
+
+This is not the repo read a second time. Traefik's docker provider reads container labels
+from the daemon (`--providers.docker.endpoint=tcp://socket-proxy:2375`); this sweep reads
+the same labels from the same daemon. A label present here is a router Traefik has; a label
+absent here is a router Traefik does not have, whatever any file says.
+
+      total running containers inspected        : 97
+      containers claiming beets.deercrest.info  : 1
+      CLAIMANT: beets-flask  (1 label naming the host)
+
+    VERDICT: EXACTLY ONE. Not zero (which would mean no route), not two (which would mean
+    a spoofing surface — the old dormant survivor's labels were DELETED, not commented out,
+    by plan 06-04, and this sweep is what confirms the deletion took effect at runtime).
+
+--- 3b. INSTRUMENT B — that claimant's traefik labels, verbatim from the running container ---
+
+      traefik.enable=true
+      traefik.http.routers.beets.entrypoints=web,websecure
+      traefik.http.routers.beets.middlewares=chain-authelia@file
+      traefik.http.routers.beets.priority=99
+      traefik.http.routers.beets.rule=Host(`beets.deercrest.info`)
+      traefik.http.routers.beets.service=beets-svc
+      traefik.http.routers.beets.tls.certresolver=dns-cloudflare
+      traefik.http.routers.beets.tls=true
+      traefik.http.services.beets-svc.loadbalancer.server.port=5001
+
+    The three assertions the plan names, pulled out individually:
+      rule         : Host(`beets.deercrest.info`)
+      middlewares  : chain-authelia@file
+      service port : 5001
+
+--- 3c. INSTRUMENT C — the behaviour, which is the only one that cannot be faked by a label ---
+
+    An anonymous request to the hostname is turned away by Authelia (§ 5). A middleware that
+    is merely declared but not wired produces a 200 and the app's own page; this produced a
+    302 to `auth.deercrest.info`. See § 5.
+
+--- 3d. WHAT TRAEFIK'S METRICS DO AND DO NOT SAY, MEASURED RATHER THAN GUESSED ---
+
+    $ docker exec traefik wget -q -O- http://localhost:8080/metrics | grep -i beets
+      (none)
+
+    That absence was investigated instead of being reported as a failure, and it has two
+    separate, checked causes:
+
+    (1) THERE IS NO `traefik_router_*` METRIC FAMILY AT ALL on this instance. Router labels
+        are opt-in (`--metrics.prometheus.addRoutersLabels`, default false) and it is absent:
+            $ docker inspect traefik --format '{{json .Config.Cmd}}' | tr ',' '\n' | grep -ci addRouters
+              0
+        The families that DO exist are entrypoint-level and service-level only:
+            traefik_entrypoint_requests_total, traefik_entrypoint_request_duration_seconds_*,
+            traefik_service_requests_total, traefik_service_request_duration_seconds_*,
+            traefik_config_reloads_total, traefik_tls_certs_not_after, traefik_open_connections
+        So no per-router series could ever name `beets@docker`, whatever happened.
+
+    (2) THERE IS NO `beets-svc` SERVICE SERIES EITHER, AND THAT IS THE EXPECTED RESULT, NOT A
+        FAULT. The grep is not broken — the family is populated for other services:
+            traefik_service_requests_total{code="0",method="GET",protocol="websocket",service="haos-svc@file"} 241
+        `beets-svc` has no series because the Authelia forwardauth middleware SHORT-CIRCUITED
+        the request with a 302 BEFORE Traefik ever forwarded it to the backend. The backend
+        is reachable — § 2 got a 200 from it directly — so "no service metric" here is
+        positive corroboration that the middleware ran, not evidence of a broken route.
+
+--- 3e. AND THE ACCESS LOG, ALSO EXPLAINED RATHER THAN GLOSSED ---
+
+    $ grep 'beets\.deercrest\.info' /mnt/fast/appdata/traefik/access.log | tail -5
+      (no matching line)
+
+    Cause, read from the runtime command line: `--accessLog.filters.statusCodes=204-299,
+    400-499,500-599`. A 302 falls in NONE of those ranges, so a successful Authelia redirect
+    is deliberately not logged. This was predicted in the script before the grep ran, and is
+    recorded so a later reader does not mistake the silence for a routing failure.
+
+################################################################################
+# 4. DNS IS VERIFIED, NOT CREATED — PASS, WITH THE WILDCARD CONTROL
+################################################################################
+>>> A TRAEFIK CERTIFICATE IS NOT EVIDENCE THAT DNS RESOLVES.
+    That sentence belongs here, and on this estate it is not a generality. Traefik's runtime
+    command line carries
+        --entrypoints.websecure.http.tls.domains[0].main=deercrest.info
+        --entrypoints.websecure.http.tls.domains[0].sans=*.deercrest.info
+    a WILDCARD. A valid certificate would be presented for a hostname with no DNS record at
+    all. The record has to be looked up, and a control name has to fail to resolve, or the
+    lookup only proves that a wildcard cert exists.
+
+--- from LXC 100 (172.16.1.159) ---
+
+    $ getent hosts beets.deercrest.info
+      2606:4700:3031::ac43:af8f beets.deercrest.info
+      2606:4700:3030::6815:5375 beets.deercrest.info
+      rc=0
+    $ dig +short beets.deercrest.info
+      104.21.83.117
+      172.67.175.143
+
+    Both IPv4 answers and both IPv6 answers are Cloudflare proxy addresses
+    (104.21.0.0/16 and 172.67.0.0/16; 2606:4700::/32). The record is real AND proxied.
+
+    $ getent hosts zzz-nonexistent-test.deercrest.info      <-- THE CONTROL
+      rc=2        (no output; did not resolve)
+    $ dig +short zzz-nonexistent-test.deercrest.info
+      (empty)
+
+    The control is what distinguishes a real record from a wildcard. There is NO DNS wildcard
+    for `deercrest.info`: an arbitrary name under the zone does not resolve, so
+    `beets.deercrest.info` resolving is a specific record that someone created.
+
+    $ dig +short CNAME beets.deercrest.info
+      (empty)
+    Recorded honestly: no CNAME is visible in DNS. That is expected for a Cloudflare PROXIED
+    record — Cloudflare flattens and answers with its own anycast A/AAAA regardless of how
+    the record is stored in the dashboard. So the correct claim is "the name resolves to
+    Cloudflare proxy addresses", NOT "a CNAME was observed". Do not upgrade the claim.
+
+    $ dig +short auth.deercrest.info
+      172.16.1.159
+    Noted for contrast: from inside the LAN, `auth.` resolves to the origin directly while
+    `beets.` goes out through Cloudflare. The two hostnames take different paths from this
+    vantage point, which is why § 5 was also run from a second one.
+
+--- from the macOS workstation, an INDEPENDENT vantage point ---
+
+    $ dig +short beets.deercrest.info
+      104.21.83.117
+      172.67.175.143                       <-- identical to LXC 100's answer
+    $ dig +short zzz-nonexistent-test.deercrest.info
+      (empty)                              <-- control fails here too
+
+>>> THIS SETTLES D-07's OUTSTANDING EXTERNAL HALF.
+    Plan 06-04 closed with: "The Cloudflare CNAME for `beets.` is not proven. The 302 was
+    measured with `curl --resolve` against the host." That is no longer the state. The name
+    resolves, from two independent resolvers, to Cloudflare proxy addresses, with a control
+    name that resolves nowhere — and the request in § 5 was answered BY CLOUDFLARE
+    (`server: cloudflare`, `cf-ray: a3e4bd198824715a-DUB`, `remote=172.67.175.143`), not by
+    a `--resolve` override pointed at the origin. The path public DNS -> Cloudflare ->
+    origin -> Traefik -> Authelia is exercised end to end.
+
+################################################################################
+# 5. AN UNAUTHENTICATED REQUEST IS REFUSED — PASS (302)
+################################################################################
+--- from LXC 100 ---
+
+    $ curl -sS -o /dev/null -D - --max-time 25 https://beets.deercrest.info/
+      HTTP/2 302
+      location: https://auth.deercrest.info/?rd=https%3A%2F%2Fbeets.deercrest.info%2F&rm=GET
+      set-cookie: authelia_session=...; domain=deercrest.info; path=/; HttpOnly; secure; SameSite=Lax
+      strict-transport-security: max-age=31536000; includeSubDomains; preload
+      x-frame-options: SAMEORIGIN
+      x-content-type-options: nosniff
+      referrer-policy: same-origin
+      server: cloudflare
+      cf-ray: a3e4bd198824715a-DUB
+      curl exit: 0
+
+      status=302  redirect=https://auth.deercrest.info/?rd=https%3A%2F%2Fbeets.deercrest.info%2F&rm=GET
+
+--- from the macOS workstation ---
+
+      status=302  redirect=https://auth.deercrest.info/?rd=https%3A%2F%2Fbeets.deercrest.info%2F&rm=GET  remote=172.67.175.143
+
+NOT a 200. NOT the beets-flask UI. A 302 to Authelia, from two vantage points, with an
+`authelia_session` cookie being set — which is Authelia answering, not Traefik guessing.
+
+--- the 431 attribution probe, run pre-emptively ---
+
+    $ curl -s -o /dev/null -w '%{http_code}' --max-time 25 https://auth.deercrest.info/
+      200
+
+    No 431 appeared. The probe is recorded anyway so the attribution is already in hand:
+    a bare `431 Request Header Fields Too Large` on ANY `*.deercrest.info` is Authelia's
+    `server.buffers.read: 4096` (fasthttp) and is NEVER the app's fault. Prove it by testing
+    `auth.deercrest.info` itself, exactly as above, and expect the same 431 there.
+
+>>> THE CAVEAT, STATED PLAINLY BECAUSE THIS ESTATE HAS ALREADY BEEN CAUGHT BY IT:
+>>>
+>>>     curl sends no cookies.
+>>>
+>>> Every result in this section exercises the UNAUTHENTICATED path and only that path. A
+>>> curl smoke test of this shape passes while every browser fails — that is the documented
+>>> estate failure mode, not a hypothetical. A 302 proves an anonymous caller is TURNED
+>>> AWAY. It does NOT prove an authenticated human gets in, and it does NOT exercise the
+>>> session layer at all.
+
+################################################################################
+# 6. THE BROWSER HALF IS DELIBERATELY NOT AUTOMATED — OUTSTANDING
+################################################################################
+STATUS: OUTSTANDING. This is a `<human-check>` in the plan and it is recorded here, in the
+plan summary, and nowhere disguised as a pass.
+
+  Sign in at https://beets.deercrest.info/ in a real browser and confirm:
+    1. Authelia challenges FIRST — you are not handed the beets-flask UI.
+    2. After authenticating, the beets-flask UI loads.
+    3. No web terminal is offered anywhere in the UI.
+
+UNTIL THAT CHECK IS ANSWERED, "Authelia protects it" rests on a curl request that carries
+no cookies. That is a real limit on what § 5 proves, not a formality.
+
+What CAN be corroborated mechanically is item 3's configuration, read from the DEPLOYED file
+(`/mnt/fast/appdata/arrs/beets/config/beets-flask/config.yaml`), not from the repo:
+
+      terminal:
+        # V4. rc6 ships a tmux-backed WEB TERMINAL with shell access inside a container that
+        # mounts `tank`, behind an application that has no authentication of its own. ...
+        enabled: false
+
+`gui.terminal.enabled: false`. Note what this is and is not: it is a UI flag, and a UI flag
+can be flipped by a config reload. It reduces the surface; the Traefik + `chain-authelia@file`
+chain remains the primary control, and the absence of a host port is the structural one.
+
+################################################################################
+# VERDICT TABLE
+################################################################################
+  1  no published port (4 runtime reads)                                      PASS
+  1b refused on 5001 and 8337, from 127.0.0.1 AND 172.16.1.159,
+     with a connecting positive control on 443                                PASS
+  2  attached to t3_proxy (192.168.90.58) and to nothing else                 PASS
+  2  Traefik reaches the backend on 5001 (200 OK, uvicorn); 8337 refused      PASS
+  3  Traefik HTTP API readable unauthenticated                                UNKNOWN (could not look — recorded, not substituted)
+  3a exactly one of 97 running containers claims beets.deercrest.info         PASS
+  3b that claimant carries chain-authelia@file and targets port 5001          PASS
+  3d/e metric and access-log silences explained and each attributed           PASS (explanatory, not assertive)
+  4  beets.deercrest.info resolves to Cloudflare proxy addresses,
+     from two independent resolvers                                           PASS
+  4  zzz-nonexistent-test.deercrest.info does NOT resolve (no wildcard)       PASS
+  4  D-07's external half (06-04's named follow-up)                           CLOSED
+  5  unauthenticated request returns 302 to auth.deercrest.info,
+     from two vantage points, through Cloudflare                              PASS
+  5  the "curl sends no cookies" caveat written down                          RECORDED
+  6  browser sign-in, UI loads, no terminal offered                           OUTSTANDING — human check
+
+Nothing was changed by this task. It is entirely read-only: no container was created,
+restarted or recreated, no image was pulled, no DNS record was created or modified, and no
+file on the host was written. `docker run --rm <image>` was deliberately never used — on
+this estate that is a PULL when the image is absent (T-06-SC); every command ran either as
+`docker exec` into an already-running container or directly on the host.
+
+Script kept on the host at /mnt/fast/safety/phase06/06-06-exposure.sh and NOT committed.
+
+################################################################################
+# APPENDIX — PLAN-LEVEL VERIFICATION FOR ALL OF 06-06, MEASURED 2026-09-20T23:54:18Z
+################################################################################
+The plan's `<verification>` block asks three things across both tasks. All three, re-measured
+from live state after every other command in this plan had already run:
+
+  1. `docker ps` still shows `beets-flask` up.
+         beets-flask   Up About an hour   metasauce/beets-flask:v2.0.0-rc6
+         status=running  started=2026-09-20T22:37:55.838784056Z  restarts=0
+     Same StartedAt as before this plan began, and RestartCount 0 — so neither the liveness
+     test nor the FileNotFoundError storm that followed the removal restarted anything.
+
+  2. Nothing under `/mnt/tank/media` changed.
+         $ docker inspect beets-flask -> /mnt/tank/media -> /media  RW=false
+         $ LC_ALL=C find /mnt/tank/media/Music | wc -l          -> 2674
+         $ find /mnt/tank/media/Music -newermt '2026-09-20 00:00:00'  -> (empty)
+         $ find /mnt/tank/media/Music -newerct '2026-09-20 00:00:00'  -> (empty)
+     2,674 entries, and NOT ONE of them has an mtime or a ctime on or after 2026-09-20.
+     Both instruments are used deliberately: mtime catches a content write, ctime catches a
+     metadata-only change (owner, mode, link count) that leaves mtime alone. The structural
+     guard (`:ro`, D-05) and the measurement agree.
+
+  3. `02-review` reports zero entries.
+         $ find .../_inbox/02-review -mindepth 1 | wc -l        -> 0
+
+  The full `_inbox` tree at the end of this plan, for the record:
+         01-auto          0
+         02-review        0      <-- the throwaway transited and is gone
+         03-asis          0
+         04-hold        535      <-- 06-04's D-35 staging, untouched by this plan
+         99-quarantine   51      <-- INBX-02's business, untouched by this plan
+         _done            0
+
+  And the D-29 layer-3 pair, read a fourth and final time:
+         fbbdde0c416e72b9884e56c562fd88eaa4da447926e1cb6cc17c3e04aee7da1a  library.db
+         f6a9a1ad7aa553e42e53a8056fa80724785111180a5e2122be4f8732d1e4bc7c  state.pickle
+     Unchanged from plan 06-04's first-start baseline, through a completed preview and a
+     folder deletion.
+================================================================================
