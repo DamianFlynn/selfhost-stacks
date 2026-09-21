@@ -175,6 +175,10 @@ None. Every branch added by this plan is driven — case 6 against a synthetic n
 - WR-04, WR-05, IN-01, IN-03, IN-04 and IN-07 are retired.
 - No blockers. `STATE.md` and `ROADMAP.md` deliberately untouched — the orchestrator owns those after the wave merges.
 
+## Self-Check: PASSED
+
+All three files exist on disk; all four commits (`8d74d40`, `4aaf79a`, `1e7103b`, `2e0fb5f`) resolve in `git log`. Claims re-checked against the tree rather than restated: `expect_ne` appears 4 times (retained and called), the preserved UK sentence is byte-present, the throwaway-library measurement (`53248`) appears in the artifact, exactly 3 compliant invocations survive comment-stripping, and `git status --porcelain` is empty.
+
 ---
 *Phase: 06-tagger-configuration-and-dry-run, plan 15*
 *Completed: 2026-09-21*
