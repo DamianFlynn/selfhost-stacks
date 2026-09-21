@@ -1,0 +1,1894 @@
+#!/usr/bin/env bash
+# phase06-oracle.sh - Phase 6 CONF-03 / CONF-06: make "the intended tree" a FACT.
+#
+# Where it runs:
+#   ON THE WORKSTATION (macOS), from the repo root. It ssh-delegates every measurement to
+#   LXC 100 (root@172.16.1.159) and `docker exec`s into the `beets-flask` container for the
+#   beets half. Nothing is computed locally except the JUDGING, which is deliberate: every
+#   function that decides green/red takes local files and local arguments, so `--self-test`
+#   drives the same code the real run does, without docker and without ssh.
+#
+# Usage:
+#   bash scripts/phase06-oracle.sh --self-test     # judge the judge; no docker, no ssh
+#   bash scripts/phase06-oracle.sh --baseline      # capture BEFORE state only; imports nothing
+#   bash scripts/phase06-oracle.sh --run           # the full oracle
+#   bash scripts/phase06-oracle.sh --help
+#
+#   --run is REQUIRED to do anything live. A script whose default action is "drive an import
+#   into a container that mounts the real library" is a footgun; no-args prints usage and exits 2.
+#
+# EXIT CODES - stated explicitly, because three of the four are not "failure"
+#   0  the oracle ran, the diff against the committed tree was EMPTY, and no assertion went red
+#   1  RED: the diff was non-empty, an assertion failed, or the dry run WROTE SOMETHING
+#   2  usage error, or a precheck refusal (dirty destination, unreachable host, missing fixture)
+#   3  UNKNOWN, not green: the positive control failed, so the measurement could not be trusted
+#      and THE DIFF WAS NOT EVALUATED. This is a distinct outcome from 1 and it is never a pass.
+#      CLAUDE.md § Health Checks: "could not look" is kept distinct from "nothing is wrong".
+#
+# ==============================================================================================
+# WHY `beet import --pretend` IS NOT THE INSTRUMENT, AND `beet move -p` IS  (D-33)
+# ==============================================================================================
+# CONF-06's requirement text names `--pretend`. It cannot do the job, and this is not an opinion:
+#
+#   if self.config["pretend"]:
+#       stages += [stagefuncs.log_files(self)]
+#   else:
+#       ... group_albums / lookup_candidates / user_query / import_asis ...
+#   [SOURCE: beets/importer/session.py@v2.12.0:201-240]
+#
+#   def log_files(session, task):
+#       log.info("Album: {}", displayable_path(task.paths[0]))
+#       for item in task.items: log.info("  {}", displayable_path(item["path"]))
+#   [SOURCE: beets/importer/stages.py@v2.12.0:266-274]
+#
+# The pipeline is `read_tasks -> log_files`. `lookup_candidates` is never in it, so NO DESTINATION
+# IS EVER COMPUTED. Every line it prints is a SOURCE path. It prints one line per file and exits
+# 0, which is exactly why it reads as a pass (Pitfall 1).
+#
+# The instrument that DOES evaluate the full `paths:` stanza is:
+#
+#   if pretend:
+#       show_path_changes([(item.path, item.destination(basedir=dest)) for ...])
+#   [SOURCE: beets/ui/commands/move.py@v2.12.0]
+#
+# `item.destination()` is the SAME call a real import makes, so `beet move -p` exercises the path
+# rules, `%aunique{}`, `replace:`, `asciify_paths`, `legalize_path` and `max_filename_length`.
+# Both commands are read-only. The mechanical discriminator between the two transcripts is that
+# `move -p` output contains ` -> ` and the string `/media/Music/`, and a `--pretend` transcript
+# contains neither. The positive control below asserts exactly that, so a `--pretend` transcript
+# handed to this script produces UNKNOWN (exit 3) rather than a zero-diff.
+#
+# ==============================================================================================
+# THE OVERRIDE CONTRACT
+# ==============================================================================================
+# Every knob below is `${VAR:-default}` and every one of them can only make the verdict REDDER:
+# a wrong host, a wrong container or a wrong output directory produces a refusal or an UNKNOWN,
+# never a pass. TWO PATHS ARE PLAIN CONSTANTS AND ARE DELIBERATELY NOT OVERRIDABLE:
+#
+#     EXPECTED_TREE   .planning/phases/06-tagger-configuration-and-dry-run/06-EXPECTED-TREE.txt
+#     SAMPLE_DOC      .planning/phases/06-tagger-configuration-and-dry-run/06-SAMPLE.md
+#
+# An override on either could manufacture a pass by pointing the diff at a file generated from
+# the run it is supposed to judge. The whole value of the fixture is the commit that predates
+# the run; a knob that lets a caller substitute it destroys that value silently.
+#
+# The sampled folder list is READ FROM 06-SAMPLE.md, never re-typed here, for the same reason
+# scripts/spike03-wrtag-arms.sh reads its path format from the file it is measuring: a re-typed
+# copy measures a set this project does not use.
+#
+# ==============================================================================================
+# THE THREE-LAYER "WROTE NOTHING" PROOF  (D-29)
+# ==============================================================================================
+#   Layer 1 - LIBRARY, structural. `/media` is mounted `RW=false` on beets-flask (D-05). Asserted
+#             from `docker inspect`, NEVER read off the compose file: the compose file is the
+#             intent, the inspect output is the fact, and only one of them is what the kernel is
+#             enforcing while the run happens.
+#   Layer 2 - SOURCE, a CHECKSUM MANIFEST and not a count. `%p %s %T@` catches path, size and
+#             mtime; a sha256 of every file catches content; together they also catch additions
+#             and deletions, because a vanished or a new path changes both listings. Taken over
+#             every sampled source folder, BEFORE and AFTER, compared with the three-outcome
+#             vocabulary (identical / CHANGED / COULD NOT COMPARE) that plan 03-05's WR-13
+#             review put into spike03-wrtag-arms.sh.
+#   Layer 3 - BEETS STATE. The real `library.db` AND the real `state.pickle`, sha256 identical
+#             before and after. BOTH are named because `-l` does not redirect `statefile:`
+#             (Pitfall 4): `ImportState.__init__` reads `config["statefile"].as_filename()` and
+#             there is no CLI flag for it, so a throwaway `-l` import still writes the SHARED
+#             pickle. state.pickle's mtime moving during a run that was supposed to write
+#             nothing is the warning sign.
+#   Plus     - a `find -newer $STAMP` sweep with the CR-02 could-not-look preflight. That sweep
+#             used to be `find ... 2>/dev/null || true` feeding a count, and every failure mode
+#             of find then produced an empty result, a zero count and a green tick claiming the
+#             dry run wrote nothing.
+#
+# ==============================================================================================
+# THE POSITIVE CONTROL IS INSIDE THE MEASUREMENT  (S3(c); T-06-42)
+# ==============================================================================================
+# A census that cannot see something it is KNOWN to contain has not measured zero - it has
+# failed to look, and those are different answers (scripts/check-music-freeze.sh:869-874).
+# The four controls, all of which must hold before the diff is evaluated at all:
+#
+#   1. every payload line of the transcript parses as a ` -> ` pair (or the two-line narrow-
+#      terminal form). An unclassifiable line is a refusal, not a skip.
+#   2. the number of pairs EQUALS the sampled audio-file count. Not "at least".
+#   3. the `(N already in place)` count is 0. `move_items` filters out items whose path already
+#      equals their destination; on an in-place import nothing can be in place, so a non-zero N
+#      means the run measured something other than what it claims to.
+#   4. the raw transcript contains the substring `/media/Music/`.
+#
+# If any of these fails the verdict is "UNKNOWN, not green", the diff is NOT evaluated, and the
+# exit code is 3. An oracle that could not look must not be able to produce a zero-diff by
+# having produced nothing.
+#
+# ==============================================================================================
+# THE LIBRARY THE ORACLE OPENS, AND WHY IT IS A COPY  (OQ-3 option (a); D-04; T-06-44/45)
+# ==============================================================================================
+# `%aunique{}` is evaluated against whatever library the item is in. A bare throwaway library has
+# no collisions to find, so it reports FEWER firings than a real import would - and on a library
+# with 828 measured duplicate groups a zero-firing report is the warning sign, not the good news.
+# So the oracle copies the REAL `/config/library.db` to `/tmp/p6/lib.db` INSIDE the container and
+# opens the copy with flask's own beets 2.12.0. It must be 2.12.0: beets 2.13.1 opening a 2.12.0
+# database migrates the schema under 2.12.0's feet (D-04; Phase 1 measured a bare `beet config`
+# running 11 migrations unasked).
+#
+# The original's sha256 is asserted unchanged before and after, AND asserted equal to the value
+# 06-EXPECTED-TREE.txt's header names. That second assertion is what makes the aunique count
+# comparable at all: a different library is a different collision set, and the fixture's
+# predicted firings were computed against one specific one.
+#
+# ==============================================================================================
+# THE `-c` OVERLAY, AND WHY `-l` IS NOT ENOUGH
+# ==============================================================================================
+# `docker exec` inherits the CONTAINER's resolved environment, so BEETSDIR=/config applies and
+# the vendored /config/config.yaml loads UNDERNEATH the overlay. The overlay must therefore set
+# every key it needs to win. It sets:
+#     library:   the throwaway copy            (-l alone would do this)
+#     statefile: a throwaway pickle            (-l does NOT do this - Pitfall 4)
+#     directory: /media/Music                  (what makes the printed destinations the REAL
+#                                               library paths CONF-03 is about; /media is :ro so
+#                                               it cannot be written regardless)
+#     import.copy/move/write/autotag: no       (import.write is `yes` in the vendored config as
+#                                               PHASE 7 behaviour - every Phase 6 invocation must
+#                                               override it)
+#     import.duplicate_action: skip            (Pitfall 3: unset means rc6 commits `remove`, and
+#                                               duplicates are deleted with no prompt)
+#
+# An overlay that sets `copy: no` does NOT thereby set `move: no`; the two are independent keys
+# and copy=no with move=yes is a MOVE. Both are named.
+#
+# ==============================================================================================
+# WHY THE IMPORT IS AS-IS (`-A`), WHICH IS A DESIGN DECISION AND NOT AN OMISSION
+# ==============================================================================================
+# As-is isolates the PATH-TEMPLATE variable - the thing this phase exists to test - from the
+# matcher, and it is what makes the expected tree computable BEFORE the run. A match-driven tree
+# is not pre-computable: the candidate set is a network result that can change between the
+# writing of the fixture and the run of the oracle. CONF-05's *Now!* proof is therefore a
+# separate class assertion in plan 06-12, not a row in the committed tree.
+#
+# Two per-stratum flags come from 06-EXPECTED-TREE.txt's own preconditions:
+#   P2  the two S5 (dj-mixes) folders are imported with `--set albumtype=dj`, or they fall
+#       through to `default` and land under Mastermix/ and Various Artists/ instead of DJ/.
+#       `--set` is a `beet import` CLI flag backed by `import.set_fields`, and rc6's
+#       `InboxFolderSchema` HAS NO PER-INBOX EQUIVALENT. So the MECHANISM for real flask-driven
+#       DJ routing is an unowned gap, registered for Phase 7 (OQ-2 / C-6). Phase 6 proves the
+#       PATH RULE, not the mechanism, and this script must not be read as evidence of the latter.
+#   P3  the S7 folder is imported with `-s` (singletons), or beets makes a one-track album and
+#       the `singleton:` rule - the first key in the stanza, written out precisely so it is
+#       reachable - is never exercised.
+#
+# ==============================================================================================
+# HOUSE RULES OBSERVED
+# ==============================================================================================
+#   * Every remote command is bounded LINUX-SIDE with `timeout $REMOTE_TIMEOUT` (macOS has no GNU
+#     `timeout`), the ssh status is read on the very next line with no local pipe in front of it,
+#     and 124 is branched out first. `timeout N cmd | wc -l` silently exits 0, so any remote
+#     string carrying a pipe also carries `set -o pipefail`.
+#   * THE CONTAINER'S /bin/sh IS dash AND HAS NO `pipefail`. So no command sent INTO the container
+#     carries a pipeline at all; each exit status is read explicitly on the LXC side instead.
+#   * `sed $'\033'`, never `\x1b` - `\x1b` is a GNU sed extension and this script runs on macOS.
+#   * There is no skip, force or auto-accept sentinel anywhere in this file, by construction.
+#
+# ==============================================================================================
+
+set -euo pipefail
+
+# --- Constants ------------------------------------------------------------------------------
+# NOT OVERRIDABLE. See "THE OVERRIDE CONTRACT" above.
+PHASE_DIR=".planning/phases/06-tagger-configuration-and-dry-run"
+EXPECTED_TREE="$PHASE_DIR/06-EXPECTED-TREE.txt"
+SAMPLE_DOC="$PHASE_DIR/06-SAMPLE.md"
+
+# The library the fixture's %aunique{} predictions were computed against. Recorded in
+# 06-EXPECTED-TREE.txt's header and in 06-SAMPLE.md § "Nothing was written".
+FIXTURE_LIB_SHA256="fbbdde0c416e72b9884e56c562fd88eaa4da447926e1cb6cc17c3e04aee7da1a"
+FIXTURE_STATE_SHA256="f6a9a1ad7aa553e42e53a8056fa80724785111180a5e2122be4f8732d1e4bc7c"
+
+# Overridable, and every one of them can only make the verdict redder.
+LXC_HOST="${LXC_HOST:-172.16.1.159}"
+CONTAINER="${CONTAINER:-beets-flask}"
+BEET_BIN="${BEET_BIN:-/venv/bin/beet}"
+PY_BIN="${PY_BIN:-/venv/bin/python}"
+CONTAINER_USER="${CONTAINER_USER:-beetle}"
+REAL_LIB_DB="${REAL_LIB_DB:-/config/library.db}"
+REAL_STATE_PICKLE="${REAL_STATE_PICKLE:-/config/state.pickle}"
+SCRATCH="${SCRATCH:-/tmp/p6}"
+LIB_ROOT="${LIB_ROOT:-/media/Music}"
+REMOTE_TIMEOUT="${REMOTE_TIMEOUT:-300}"
+SSH_CONNECT_TIMEOUT="${SSH_CONNECT_TIMEOUT:-5}"
+# The stamp is taken OUTSIDE both mounts, so taking it cannot itself perturb what it measures.
+# /mnt/fast is LXC 100's own root filesystem; nothing under /mnt/tank is touched by it.
+STAMP_REMOTE="${STAMP_REMOTE:-/mnt/fast/safety/phase06/oracle.stamp}"
+OUT="${OUT:-${TMPDIR:-/tmp}/phase06-oracle}"
+
+MODE=""
+REDS=0
+UNKNOWNS=0
+
+say()  { printf '%s\n' "$*"; }
+ok()   { printf '  \342\234\223 %s\n' "$*"; }
+bad()  { printf '  \342\234\227 %s\n' "$*"; REDS=$((REDS + 1)); }
+warn() { printf '  \342\232\240 %s\n' "$*"; }
+info() { printf '    %s\n' "$*"; }
+rule() { printf '  %s\n' "----------------------------------------------------------------"; }
+unknown() {
+  printf '  \342\232\240 UNKNOWN, not green: %s\n' "$*"
+  printf '    This is NOT a pass and it is NOT a failure of the thing measured. The measurement\n'
+  printf '    could not be trusted, so the diff was NOT evaluated.\n'
+  UNKNOWNS=$((UNKNOWNS + 1))
+}
+precheck_fail() { printf '  \342\234\227 %s\n' "$*" >&2; exit 2; }
+
+usage() {
+  say "Usage: bash scripts/phase06-oracle.sh --run | --baseline | --self-test | --help"
+  say ""
+  say "  --run        drive the throwaway import, run the oracle, diff and assert."
+  say "  --baseline   capture the BEFORE manifests and the layer-3 baselines only."
+  say "  --self-test  drive every fail-closed branch against synthetic fixtures. No docker."
+  say "  --help       print this file's header, which is the full contract."
+  say ""
+  say "  env: LXC_HOST CONTAINER BEET_BIN PY_BIN CONTAINER_USER REAL_LIB_DB REAL_STATE_PICKLE"
+  say "       SCRATCH LIB_ROOT REMOTE_TIMEOUT SSH_CONNECT_TIMEOUT STAMP_REMOTE OUT"
+  say "  The expected-tree and sample paths are CONSTANTS and cannot be overridden."
+  say ""
+  say "  exit 0 = zero-diff and zero reds   1 = red   2 = usage/precheck   3 = UNKNOWN"
+  exit 2
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --run)        MODE="run"; shift ;;
+    --baseline)   MODE="baseline"; shift ;;
+    --self-test)  MODE="self-test"; shift ;;
+    # The HEADER BLOCK is the --help output, and only the header block: a bare `grep '^#'` over
+    # the whole file would also print every section comment and every line of the embedded Python,
+    # which is a different document. Stop at the first line that is not a comment.
+    -h|--help)
+      LC_ALL=C awk 'NR == 1 { next } /^#/ { sub(/^# ?/, ""); print; next } { exit }' "${BASH_SOURCE[0]}"
+      exit 0
+      ;;
+    *)            say "unknown option: $1" >&2; usage ;;
+  esac
+done
+[ -n "$MODE" ] || usage
+
+# ==============================================================================================
+# THE PURE-LOCAL JUDGING LAYER
+# ==============================================================================================
+# Everything below this line decides green/red from LOCAL FILES and LOCAL ARGUMENTS ONLY. The
+# remote layer further down does nothing but PRODUCE those files. That split is what makes
+# `--self-test` honest: it drives the same functions the real run calls, so a branch that has
+# never fired in anger has still been proven to fire.
+
+# --- Layer 2's comparison, in the shape plan 03-05's WR-13 review settled on ------------------
+# `diff` exits 0 identical, 1 differing and >=2 ON TROUBLE - a missing or unreadable input - and
+# on trouble it writes to stderr and leaves STDOUT EMPTY. Read as `d="$(diff ... || true)";
+# [ -z "$d" ]`, that empty stdout was reported as "identical before and after". Three outcomes,
+# never two.
+DIFF_OUT=""
+DIFF_WHY=""
+manifest_compare() { # $1 = before file  $2 = after file
+  local b="$1" a="$2" f="" rc=0 errf="" err=""
+  DIFF_OUT=""
+  DIFF_WHY=""
+  for f in "$b" "$a"; do
+    if [ ! -e "$f" ]; then
+      DIFF_WHY="manifest '$f' does not exist - it was never captured, or something removed it"
+      return 2
+    fi
+    if [ ! -f "$f" ]; then
+      DIFF_WHY="manifest '$f' is not a regular file"
+      return 2
+    fi
+    if [ ! -r "$f" ]; then
+      DIFF_WHY="manifest '$f' is not readable"
+      return 2
+    fi
+  done
+  errf="$(mktemp "${TMPDIR:-/tmp}/p6-diff-XXXXXX")" || {
+    DIFF_WHY="could not create a temp file to capture diff's stderr"
+    return 2
+  }
+  DIFF_OUT="$(diff -- "$b" "$a" 2>"$errf")" || rc=$?
+  err="$(cat "$errf" 2>/dev/null || true)"
+  rm -f "$errf"
+  if [ "$rc" -ge 2 ]; then
+    DIFF_WHY="diff could not compare '$b' and '$a' (rc=$rc)"
+    [ -z "$err" ] || DIFF_WHY="$DIFF_WHY: $err"
+    return 2
+  fi
+  if [ -n "$err" ]; then
+    DIFF_WHY="diff exited $rc but wrote to stderr, which is unexplained: $err"
+    return 2
+  fi
+  [ "$rc" -eq 1 ] && return 1
+  if [ -n "$DIFF_OUT" ]; then
+    DIFF_WHY="diff exited 0 but printed a difference, which is unexplained"
+    return 2
+  fi
+  return 0
+}
+
+diff_manifest() { # $1 = label  $2 = kind (meta|sha)   returns 0 clean, 1 red
+  local b="$OUT/${1}.before.$2" a="$OUT/${1}.after.$2" rc=0
+  manifest_compare "$b" "$a" || rc=$?
+  case "$rc" in
+    0) ok "layer 2 (${1}.${2} manifest): identical before and after"; return 0 ;;
+    1)
+      bad "layer 2 (${1}.${2} manifest): CHANGED - THE DRY RUN WAS NOT DRY:"
+      printf '%s\n' "$DIFF_OUT" | head -n 40 | sed 's/^/         /'
+      return 1
+      ;;
+    *)
+      bad "layer 2 (${1}.${2} manifest) COULD NOT COMPARE: $DIFF_WHY"
+      info "'could not look' is a distinct outcome from 'nothing changed' (CLAUDE.md §"
+      info "Health Checks). The wrote-nothing claim is UNPROVEN, which is not the same as false."
+      return 1
+      ;;
+  esac
+}
+
+# --- Normalising the `beet move -p` transcript -------------------------------------------------
+# `show_path_changes` prints either `source -> destination` on one line, or, when the terminal is
+# too narrow, the source on one line and `  -> destination` on the next. Both forms are handled;
+# a transcript is not allowed to contain a payload line that is neither.
+#
+# Output: a TSV of source<TAB>destination (for the class assertions, which need to join back to
+# the library's own field view) AND a plain LC_ALL=C-sorted destination list (for the diff). The
+# RAW transcript is kept beside them on purpose - it is what a reader checks the normalisation
+# against, and a normaliser nobody can audit is just a second place for the bug to hide.
+NORM_WHY=""
+NORM_PAIRS=0
+NORM_INPLACE=0
+NORM_INPLACE_SEEN=0
+NORM_UNPARSED=0
+normalise_transcript() { # $1 = raw transcript  $2 = pairs out  $3 = destinations out
+  local raw="$1" pairs="$2" dests="$3"
+  NORM_WHY=""; NORM_PAIRS=0; NORM_INPLACE=0; NORM_INPLACE_SEEN=0; NORM_UNPARSED=0
+  if [ ! -f "$raw" ] || [ ! -r "$raw" ]; then
+    NORM_WHY="the raw transcript '$raw' is missing or unreadable"
+    return 2
+  fi
+  : > "$pairs"
+  : > "$OUT/.unparsed"
+  local prev="" line="" src="" dst=""
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in
+      "") continue ;;
+      "  -> "*)
+        dst="${line#"  -> "}"
+        if [ -z "$prev" ]; then
+          printf '%s\n' "$line" >> "$OUT/.unparsed"
+          continue
+        fi
+        printf '%s\t%s\n' "$prev" "$dst" >> "$pairs"
+        prev=""
+        continue
+        ;;
+      "("*" already in place)")
+        NORM_INPLACE_SEEN=1
+        NORM_INPLACE="$(printf '%s' "$line" | sed 's/^(\([0-9][0-9]*\) already in place)$/\1/')"
+        case "$NORM_INPLACE" in
+          ''|*[!0-9]*) NORM_INPLACE=-1 ;;
+        esac
+        continue
+        ;;
+    esac
+    case "$line" in
+      *" -> "*)
+        src="${line%%" -> "*}"
+        dst="${line#*" -> "}"
+        printf '%s\t%s\n' "$src" "$dst" >> "$pairs"
+        prev=""
+        ;;
+      *)
+        # Either the first half of a narrow-terminal pair, or a line that does not belong in a
+        # `move -p` transcript at all. Deciding which is the NEXT line's job: a source line is
+        # only a source line if a `  -> ` follows it. Anything still pending when the file ends,
+        # or pending when another bare line arrives, is unparsed - and unparsed is a refusal.
+        if [ -n "$prev" ]; then
+          printf '%s\n' "$prev" >> "$OUT/.unparsed"
+        fi
+        prev="$line"
+        ;;
+    esac
+  done < "$raw"
+  [ -z "$prev" ] || printf '%s\n' "$prev" >> "$OUT/.unparsed"
+
+  NORM_UNPARSED="$(wc -l < "$OUT/.unparsed" | tr -d ' ')"
+  NORM_PAIRS="$(wc -l < "$pairs" | tr -d ' ')"
+  LC_ALL=C cut -f2 "$pairs" | LC_ALL=C sort > "$dests"
+  return 0
+}
+
+# --- The positive control, INSIDE the measurement ---------------------------------------------
+PC_WHY=""
+positive_control() { # $1 = raw transcript  $2 = pairs  $3 = expected pair count
+  local raw="$1" pairs="$2" want="$3"
+  PC_WHY=""
+  if [ "$NORM_UNPARSED" -ne 0 ]; then
+    PC_WHY="$NORM_UNPARSED transcript line(s) are not a ' -> ' pair in either form. A
+    \`--pretend\` transcript taken from the importer fails here trivially, which is the point:
+    its lines are SOURCE paths and it never computes a destination at all (D-33). First offenders:
+$(head -n 5 "$OUT/.unparsed" | sed 's/^/      /')"
+    return 3
+  fi
+  if [ "$NORM_PAIRS" -eq 0 ]; then
+    PC_WHY="the transcript yielded ZERO destination pairs. A zero-diff produced by an empty
+    oracle is the failure mode this control exists to catch (T-06-42)."
+    return 3
+  fi
+  if [ "$NORM_PAIRS" -ne "$want" ]; then
+    PC_WHY="the transcript yielded $NORM_PAIRS destination pairs but the sample holds $want audio
+    files. This is an EQUALITY, not a floor: a partial import produces a valid-looking subset."
+    return 3
+  fi
+  if [ "$NORM_INPLACE" -ne 0 ]; then
+    PC_WHY="the '(N already in place)' line reports N=$NORM_INPLACE. \`move_items\` filters out
+    items whose path already equals their destination, and on an in-place import (copy: no,
+    move: no) nothing can be in place - so a non-zero N means the run measured something else."
+    return 3
+  fi
+  if ! LC_ALL=C grep -q "$LIB_ROOT/" "$raw"; then
+    PC_WHY="the raw transcript contains no '$LIB_ROOT/' substring at all, so whatever was
+    measured, it was not this library's destinations."
+    return 3
+  fi
+  return 0
+}
+
+# --- The diff against the committed tree ------------------------------------------------------
+# ANY CONSUMER MUST STRIP '^#' BEFORE DIFFING - 06-EXPECTED-TREE.txt says so in its own header,
+# because the header is part of the fixture's meaning and is deliberately not moved out.
+TREE_DIFF_WHY=""
+diff_expected_tree() { # $1 = expected tree file  $2 = normalised destination list
+  local exp="$1" got="$2" stripped="" rc=0
+  TREE_DIFF_WHY=""
+  if [ ! -f "$exp" ] || [ ! -r "$exp" ]; then
+    TREE_DIFF_WHY="the committed expected tree '$exp' is missing or unreadable"
+    return 2
+  fi
+  stripped="$OUT/expected.stripped"
+  LC_ALL=C grep -v '^#' "$exp" > "$stripped" || true
+  manifest_compare "$stripped" "$got" || rc=$?
+  case "$rc" in
+    0) return 0 ;;
+    1) return 1 ;;
+    *) TREE_DIFF_WHY="$DIFF_WHY"; return 2 ;;
+  esac
+}
+
+# --- Mapping a host path to its container path, from the inspect output and not from guesswork -
+MAP_OUT=""
+MAP_WHY=""
+map_host_to_container() { # $1 = host path  $2 = mounts file (Source|Destination|rw|ro per line)
+  local hp="$1" mf="$2" best="" bestdst="" src="" dst="" flag=""
+  MAP_OUT=""; MAP_WHY=""
+  if [ ! -f "$mf" ] || [ ! -r "$mf" ]; then
+    MAP_WHY="the mount table '$mf' is missing or unreadable"
+    return 2
+  fi
+  while IFS='|' read -r src dst flag; do
+    [ -n "$src" ] || continue
+    case "$hp" in
+      "$src"|"$src"/*)
+        # Longest matching Source wins: /mnt/tank/media must beat /mnt/tank if both are mounted.
+        if [ "${#src}" -gt "${#best}" ]; then best="$src"; bestdst="$dst"; fi
+        ;;
+    esac
+  done < "$mf"
+  if [ -z "$best" ]; then
+    MAP_WHY="no mount on '$CONTAINER' contains the host path '$hp'"
+    return 2
+  fi
+  MAP_OUT="${bestdst}${hp#"$best"}"
+  return 0
+}
+
+# --- Layer 1, structural: /media must be RW=false ----------------------------------------------
+RW_WHY=""
+assert_media_readonly() { # $1 = mounts file  $2 = container destination that must be read-only
+  local mf="$1" want="$2" src="" dst="" flag="" found=0
+  RW_WHY=""
+  if [ ! -f "$mf" ] || [ ! -r "$mf" ]; then
+    RW_WHY="the mount table '$mf' is missing or unreadable, so RW could not be read at all"
+    return 2
+  fi
+  while IFS='|' read -r src dst flag; do
+    [ -n "$dst" ] || continue
+    if [ "$dst" = "$want" ]; then
+      found=1
+      if [ "$flag" != "ro" ]; then
+        RW_WHY="'$want' is mounted RW=true (source $src). D-05 requires RW=false for the whole
+    of Phase 6, and a read-only mount is the only control here that CANNOT FAIL OPEN."
+        return 1
+      fi
+    fi
+  done < "$mf"
+  if [ "$found" -eq 0 ]; then
+    RW_WHY="no mount with destination '$want' was enumerated at all. This is NOT '/media is
+    read-only' - nothing was inspected, so nothing is known."
+    return 2
+  fi
+  return 0
+}
+
+# --- Reading the sampled folders out of 06-SAMPLE.md, never re-typing them ----------------------
+# The table is "The ten drawn folders": | Folder | Stratum | Files | ... . Parsed rather than
+# transcribed for the reason spike03-wrtag-arms.sh reads its path format from the file it
+# measures: a re-typed copy measures a set this project does not use, and drifts silently.
+SAMPLE_ROWS=0
+SAMPLE_FILES=0
+SAMPLE_WHY=""
+parse_sample() { # $1 = 06-SAMPLE.md  $2 = out TSV: folder<TAB>stratum<TAB>files
+  local doc="$1" out="$2"
+  SAMPLE_ROWS=0; SAMPLE_FILES=0; SAMPLE_WHY=""
+  if [ ! -f "$doc" ] || [ ! -r "$doc" ]; then
+    SAMPLE_WHY="the sample document '$doc' is missing or unreadable"
+    return 2
+  fi
+  LC_ALL=C awk -F'|' '
+    /^\| *\/mnt\// {
+      folder = $2; stratum = $3; files = $4
+      gsub(/^ +| +$/, "", folder); gsub(/^ +| +$/, "", stratum); gsub(/^ +| +$/, "", files)
+      if (folder != "" && stratum ~ /^S[0-9]+$/ && files ~ /^[0-9]+$/)
+        printf "%s\t%s\t%s\n", folder, stratum, files
+    }' "$doc" > "$out"
+  SAMPLE_ROWS="$(wc -l < "$out" | tr -d ' ')"
+  SAMPLE_FILES="$(LC_ALL=C awk -F'\t' '{s += $3} END {print s + 0}' "$out")"
+  if [ "$SAMPLE_ROWS" -eq 0 ]; then
+    SAMPLE_WHY="no sampled-folder row was parsed out of '$doc'. The table shape has moved, and
+    an empty folder list would import nothing and then diff nothing against 174 expected lines."
+    return 2
+  fi
+  return 0
+}
+
+# ==============================================================================================
+# THE CLASS ASSERTIONS  (D-27)
+# ==============================================================================================
+# The diff catches WRONG PATHS. These catch NEW FAILURE CLASSES nobody wrote an expected line
+# for - which is the whole reason D-27 asks for both halves and not just the cheaper one. Each
+# assertion is its own red with its own message, and each prints WHAT IT FOUND rather than only
+# that it failed.
+#
+# Every one of them sets ASSERT_WHY (one line) and writes its evidence rows to ASSERT_EVIDENCE,
+# then returns 0 clean / 1 RED / 2 COULD NOT LOOK. None of them prints. That is what lets
+# `--self-test` drive the red branch of each one and compare a return code, instead of grepping
+# a human-readable report - and it keeps the three-outcome vocabulary the same as layer 2's.
+ASSERT_WHY=""
+ASSERT_EVIDENCE=""
+
+# --- CONF-03: the top level of every destination is the item's own album artist ----------------
+# BYTE-EXACT, case included, and deliberately not case-folded: a capitalisation-only mismatch
+# renders a DUPLICATE ARTIST PAGE in Jellyfin, which is the defect CONF-03 exists to prevent.
+# Three shapes, all read off the committed `paths:` stanza rather than assumed:
+#   rules 3+2  DJ/<albumartist>/<album>/...        -> the SECOND component is the album artist
+#   rule 1     Singles/<artist>/<title>.<ext>      -> the SECOND component is $artist, not
+#                                                     $albumartist; the singleton rule names
+#                                                     $artist and a singleton often has no
+#                                                     album artist at all
+#   rules 4,5,6 <albumartist>/<album>/...          -> the FIRST component
+# A mismatch caused by the `replace:` block sanitising a character out of the album artist is a
+# FINDING to read, not a bug in this check: it means the tree cannot round-trip that artist name.
+assert_top_level() { # $1 = pairs TSV  $2 = fields TSV
+  local pairs="$1" fields="$2" ev="$OUT/assert.toplevel.txt" nbad=0 nblind=0
+  ASSERT_WHY=""; ASSERT_EVIDENCE="$ev"
+  if [ ! -r "$pairs" ] || [ ! -r "$fields" ]; then
+    ASSERT_WHY="the pairs or the fields file is missing or unreadable"
+    return 2
+  fi
+  LC_ALL=C awk -F'\t' -v root="$LIB_ROOT/" '
+    NR == FNR { aa[$1] = $2; ar[$1] = $5; seen[$1] = 1; next }
+    {
+      src = $1; dst = $2
+      if (index(dst, root) != 1) { printf "OUTSIDE-ROOT\t%s\n", dst; next }
+      rel = substr(dst, length(root) + 1)
+      n = split(rel, c, "/")
+      if (!seen[src]) { printf "NO-LIBRARY-ROW\t%s\n", src; next }
+      if (c[1] == "DJ")           { want = aa[src]; got = c[2]; shape = "DJ/<albumartist>/" }
+      else if (c[1] == "Singles") { want = ar[src]; got = c[2]; shape = "Singles/<artist>/" }
+      else                        { want = aa[src]; got = c[1]; shape = "<albumartist>/" }
+      if (got != want)
+        printf "MISMATCH\t%s\tfound <%s> expected <%s>\t%s\n", dst, got, want, shape
+    }' "$fields" "$pairs" > "$ev"
+  nbad="$(LC_ALL=C grep -c '^MISMATCH' "$ev" || true)"
+  nblind="$(LC_ALL=C grep -c -e '^NO-LIBRARY-ROW' -e '^OUTSIDE-ROOT' "$ev" || true)"
+  if [ "$nblind" -ne 0 ]; then
+    ASSERT_WHY="$nblind destination(s) have no library field row, or sit outside $LIB_ROOT/ - the
+    comparison could not be made for them"
+    return 2
+  fi
+  if [ "$nbad" -ne 0 ]; then
+    ASSERT_WHY="$nbad destination(s) do not carry their own album artist at the top level"
+    return 1
+  fi
+  ASSERT_WHY="every destination's top level is its item's own album artist, byte-exact"
+  return 0
+}
+
+# --- D-15: no `Compilations/`, and the compilation stratum must actually have been exercised ---
+# The `comp:` key is an OVERRIDE of an inherited rule, not a deletion - there is no way to delete
+# the inherited `Compilations/...` rule - so if that key is ever removed, `Compilations/` comes
+# straight back silently. Asserting its absence over a sample that contains no compilation at all
+# would be vacuous, which is why the `Various Artists` positive control is part of this check and
+# not a separate nicety.
+assert_no_compilations() { # $1 = destination list
+  local dest="$1" ev="$OUT/assert.comp.txt" nc=0 nva=0
+  ASSERT_WHY=""; ASSERT_EVIDENCE="$ev"
+  [ -r "$dest" ] || { ASSERT_WHY="the destination list is missing or unreadable"; return 2; }
+  LC_ALL=C grep -F '/Compilations/' "$dest" > "$ev" || true
+  nc="$(wc -l < "$ev" | tr -d ' ')"
+  nva="$(LC_ALL=C awk -v root="$LIB_ROOT/" '
+    index($0, root) == 1 {
+      rel = substr($0, length(root) + 1); split(rel, c, "/")
+      if (c[1] == "Various Artists") n++
+    } END { print n + 0 }' "$dest")"
+  if [ "$nc" -ne 0 ]; then
+    ASSERT_WHY="$nc destination(s) contain a Compilations/ component - the comp: override is gone"
+    return 1
+  fi
+  if [ "$nva" -eq 0 ]; then
+    printf 'NO-VARIOUS-ARTISTS\tnot one destination has the literal `Various Artists` at its top level\n' > "$ev"
+    ASSERT_WHY="zero Compilations/ - but ALSO zero destinations under the literal Various Artists,
+    so the compilation stratum never reached the comp: rule and the result is VACUOUS"
+    return 1
+  fi
+  ASSERT_WHY="zero Compilations/ components, and $nva destination(s) under the literal Various Artists"
+  return 0
+}
+
+# --- D-13: the DJ count is an EQUALITY, not a floor -------------------------------------------
+# `albumtype:dj` would be a SUBSTRING match; the config uses `albumtype:=dj` (exact). The failure
+# mode that matters is the silent one: a rule that fails to match lets everything fall through to
+# `default`, which still produces a perfectly valid-looking tree. Only the equality catches that.
+assert_dj_count() { # $1 = destination list  $2 = expected DJ file count
+  local dest="$1" want="$2" ev="$OUT/assert.dj.txt" got=0
+  ASSERT_WHY=""; ASSERT_EVIDENCE="$ev"
+  [ -r "$dest" ] || { ASSERT_WHY="the destination list is missing or unreadable"; return 2; }
+  LC_ALL=C awk -v root="$LIB_ROOT/" '
+    index($0, root) == 1 {
+      rel = substr($0, length(root) + 1); split(rel, c, "/")
+      if (c[1] == "DJ") print
+    }' "$dest" > "$ev"
+  got="$(wc -l < "$ev" | tr -d ' ')"
+  if [ "$got" -ne "$want" ]; then
+    ASSERT_WHY="$got destination(s) under DJ/, but the sample's S5 strata hold $want files. This is
+    an EQUALITY: a short count means the albumtype rule did not fire and the difference fell
+    through to default, which looks entirely healthy in the tree."
+    return 1
+  fi
+  ASSERT_WHY="DJ/ destinations = $got, exactly the sampled DJ file count"
+  return 0
+}
+
+# --- D-16: every %aunique{} firing is listed, and the numeric-id fallback is a hard guard -------
+# A firing is a trailing ` [...]` on the album component. The predicted set is taken from the
+# COMMITTED fixture's own path lines rather than from prose in its header: the header documents
+# one firing and the path lines carry exactly that one, and only the path lines are mechanically
+# checkable. Both directions are reported, because predicted-but-absent and present-but-
+# unpredicted are different findings.
+#
+# THE GUARD: when NO disambiguator separates an ambiguous set, beets appends the NUMERIC DATABASE
+# ID - " [123]" - which is not reproducible across libraries [beets/library/models.py@v2.12.0
+# _tmpl_unique]. A bracketed bare integer that is not a four-digit year is therefore a landmine,
+# not a disambiguator, and it is a red wherever it appears.
+assert_aunique() { # $1 = destination list  $2 = committed expected tree
+  local dest="$1" exp="$2" ev="$OUT/assert.aunique.txt" nid=0 nmiss=0 nextra=0
+  ASSERT_WHY=""; ASSERT_EVIDENCE="$ev"
+  if [ ! -r "$dest" ] || [ ! -r "$exp" ]; then
+    ASSERT_WHY="the destination list or the committed tree is missing or unreadable"
+    return 2
+  fi
+  LC_ALL=C awk -F/ 'NF >= 2 { a = $(NF-1); if (a ~ / \[.*\]$/) print a }' "$dest" \
+    | LC_ALL=C sort -u > "$OUT/.aunique.got"
+  LC_ALL=C grep -v '^#' "$exp" \
+    | LC_ALL=C awk -F/ 'NF >= 2 { a = $(NF-1); if (a ~ / \[.*\]$/) print a }' \
+    | LC_ALL=C sort -u > "$OUT/.aunique.want"
+  : > "$ev"
+  LC_ALL=C comm -13 "$OUT/.aunique.got" "$OUT/.aunique.want" | sed 's/^/PREDICTED-BUT-ABSENT\t/' >> "$ev"
+  LC_ALL=C comm -23 "$OUT/.aunique.got" "$OUT/.aunique.want" | sed 's/^/PRESENT-BUT-UNPREDICTED\t/' >> "$ev"
+  LC_ALL=C sed 's/^/FIRED\t/' "$OUT/.aunique.got" >> "$ev"
+  LC_ALL=C awk -F'\t' '$1 == "FIRED" {
+      v = $2; sub(/^.* \[/, "", v); sub(/\]$/, "", v)
+      if (v ~ /^[0-9]+$/ && !(length(v) == 4 && v + 0 >= 1900 && v + 0 <= 2099))
+        printf "NUMERIC-DATABASE-ID\t%s\n", $2
+    }' "$ev" > "$OUT/.aunique.id"
+  cat "$OUT/.aunique.id" >> "$ev"
+  nid="$(wc -l < "$OUT/.aunique.id" | tr -d ' ')"
+  nmiss="$(LC_ALL=C grep -c '^PREDICTED-BUT-ABSENT' "$ev" || true)"
+  nextra="$(LC_ALL=C grep -c '^PRESENT-BUT-UNPREDICTED' "$ev" || true)"
+  if [ "$nid" -ne 0 ]; then
+    ASSERT_WHY="$nid firing(s) rendered a bare integer that is not a four-digit year - that is the
+    NUMERIC DATABASE ID fallback, which is not reproducible across libraries"
+    return 1
+  fi
+  if [ "$nmiss" -ne 0 ] || [ "$nextra" -ne 0 ]; then
+    ASSERT_WHY="%aunique{} firings disagree with the fixture: $nmiss predicted-but-absent,
+    $nextra present-but-unpredicted"
+    return 1
+  fi
+  ASSERT_WHY="%aunique{} fired $(wc -l < "$OUT/.aunique.got" | tr -d ' ') time(s), exactly the set the fixture predicts"
+  return 0
+}
+
+# --- D-19b: every singleton resolution is LISTED; the list is the deliverable -------------------
+# Phase 3 measured rc6 turning ONE 20-track release into twenty single-track albums when `album`
+# was empty - no error, no prompt, no UI signal. So a folder landing in Singles/ is usually an
+# album beets failed to group, not a genuine single. An unexpected singleton is a red; an expected
+# one is a listed pass, and it is still listed.
+assert_singletons() { # $1 = destination list  $2 = committed expected tree  $3 = pairs TSV
+  local dest="$1" exp="$2" pairs="$3" ev="$OUT/assert.singles.txt" nmiss=0 nextra=0
+  ASSERT_WHY=""; ASSERT_EVIDENCE="$ev"
+  if [ ! -r "$dest" ] || [ ! -r "$exp" ] || [ ! -r "$pairs" ]; then
+    ASSERT_WHY="the destination list, the committed tree or the pairs file is unreadable"
+    return 2
+  fi
+  LC_ALL=C grep -F "$LIB_ROOT/Singles/" "$dest" | LC_ALL=C sort -u > "$OUT/.singles.got" || true
+  LC_ALL=C grep -v '^#' "$exp" | LC_ALL=C grep -F "$LIB_ROOT/Singles/" | LC_ALL=C sort -u > "$OUT/.singles.want" || true
+  : > "$ev"
+  # The source FOLDER is what a reader needs in order to go and look, so it is carried alongside.
+  LC_ALL=C awk -F'\t' -v root="$LIB_ROOT/Singles/" '
+    NR == FNR { src[$2] = $1; next }
+    index($0, root) == 1 {
+      s = src[$0]; sub(/\/[^\/]*$/, "", s)
+      printf "SINGLETON\t%s\tfrom %s\n", $0, (s == "" ? "<no source row>" : s)
+    }' "$pairs" "$OUT/.singles.got" >> "$ev"
+  LC_ALL=C comm -13 "$OUT/.singles.got" "$OUT/.singles.want" | sed 's/^/EXPECTED-BUT-ABSENT\t/' >> "$ev"
+  LC_ALL=C comm -23 "$OUT/.singles.got" "$OUT/.singles.want" | sed 's/^/UNEXPECTED-SINGLETON\t/' >> "$ev"
+  nmiss="$(LC_ALL=C grep -c '^EXPECTED-BUT-ABSENT' "$ev" || true)"
+  nextra="$(LC_ALL=C grep -c '^UNEXPECTED-SINGLETON' "$ev" || true)"
+  if [ "$nmiss" -ne 0 ] || [ "$nextra" -ne 0 ]; then
+    ASSERT_WHY="singleton resolutions disagree with the fixture: $nmiss expected-but-absent,
+    $nextra UNEXPECTED - and an unexpected singleton is usually an album beets failed to group"
+    return 1
+  fi
+  ASSERT_WHY="$(wc -l < "$OUT/.singles.got" | tr -d ' ') singleton resolution(s), all of them expected and all listed"
+  return 0
+}
+
+# --- D-19a, BLOCKING: no album directory whose basename equals its parent artist directory ------
+# THIS ASSERTION IS THE ONLY GUARD THERE IS, and that is a structural fact rather than a choice:
+# beets' query language has NO FIELD-TO-FIELD COMPARISON, so there is no path-template expression
+# for "album equals albumartist" and the rule cannot be made to refuse the shape by itself. The
+# existing live defect - `Def Leppard/Def Leppard (2015)/`, which derives an EMPTY album artist in
+# Music Assistant and hard-errors one FLAC - is scheduled for repair in Phase 7. Phase 6's job is
+# to stop anything NEW landing in that shape, so this is blocking.
+# The `<parent> (` prefix shape is REPORTED and not failed: it is the shape of the live defect,
+# and seeing it in a dry run is worth knowing without being worth blocking on.
+assert_album_ne_artist() { # $1 = destination list
+  local dest="$1" ev="$OUT/assert.albumartist.txt" neq=0 nrep=0
+  ASSERT_WHY=""; ASSERT_EVIDENCE="$ev"
+  [ -r "$dest" ] || { ASSERT_WHY="the destination list is missing or unreadable"; return 2; }
+  LC_ALL=C awk -F/ 'NF >= 3 {
+      a = $(NF-1); p = $(NF-2)
+      la = tolower(a); lp = tolower(p)
+      if (la == lp) { printf "ALBUM-EQUALS-ARTIST\t%s\n", $0; next }
+      if (index(la, lp " (") == 1) printf "REPORT-SAME-PREFIX\t%s\n", $0
+    }' "$dest" | LC_ALL=C sort -u > "$ev"
+  neq="$(LC_ALL=C grep -c '^ALBUM-EQUALS-ARTIST' "$ev" || true)"
+  nrep="$(LC_ALL=C grep -c '^REPORT-SAME-PREFIX' "$ev" || true)"
+  if [ "$neq" -ne 0 ]; then
+    ASSERT_WHY="$neq destination(s) have an album directory equal to their artist directory
+    (case-folded). BLOCKING - there is no beets query that can express this, so this check is it."
+    return 1
+  fi
+  ASSERT_WHY="zero album directories equal their artist directory; $nrep reported with the
+    '<artist> (' prefix shape, which is the live Def Leppard defect's shape and is NOT failed here"
+  return 0
+}
+
+# --- The `-1 - ` shape: the previous tagger's signature failure ---------------------------------
+# wrtag v0.20.0 hard-set `Track.Position = -1`, so this repo's path format named every file
+# `-1 - Title.ext`. wrtag is retired, but the grep costs nothing and a number that renders as -1
+# is a template defect in any engine.
+assert_no_minus_one() { # $1 = destination list
+  local dest="$1" ev="$OUT/assert.minusone.txt" n=0
+  ASSERT_WHY=""; ASSERT_EVIDENCE="$ev"
+  [ -r "$dest" ] || { ASSERT_WHY="the destination list is missing or unreadable"; return 2; }
+  LC_ALL=C awk -F/ '{ b = $NF; if (index(b, "-1 - ") == 1) printf "MINUS-ONE\t%s\n", $0 }' "$dest" > "$ev"
+  n="$(wc -l < "$ev" | tr -d ' ')"
+  if [ "$n" -ne 0 ]; then
+    ASSERT_WHY="$n destination filename(s) begin with '-1 - '"
+    return 1
+  fi
+  ASSERT_WHY="zero destination filenames begin with '-1 - '"
+  return 0
+}
+
+# --- The `.N` collision suffix shape ------------------------------------------------------------
+# beets appends `.1`, `.2` ... before the extension when a destination already exists. Phase 7's
+# criterion 7 sweep exists to hunt these; catching one in a dry run is cheaper than catching it
+# in the library. The predicate is `<name>.<digits>.<ext>` on the BASENAME.
+assert_no_collision_suffix() { # $1 = destination list
+  local dest="$1" ev="$OUT/assert.collision.txt" n=0
+  ASSERT_WHY=""; ASSERT_EVIDENCE="$ev"
+  [ -r "$dest" ] || { ASSERT_WHY="the destination list is missing or unreadable"; return 2; }
+  LC_ALL=C awk -F/ '{ b = $NF; if (b ~ /\.[0-9]+\.[^.\/]+$/) printf "COLLISION-SUFFIX\t%s\n", $0 }' "$dest" > "$ev"
+  n="$(wc -l < "$ev" | tr -d ' ')"
+  if [ "$n" -ne 0 ]; then
+    ASSERT_WHY="$n destination(s) carry a .N disambiguation suffix, which means beets found the
+    destination already taken"
+    return 1
+  fi
+  ASSERT_WHY="zero destinations carry a .N collision suffix"
+  return 0
+}
+
+# --- D-18: the protected DJ fields, as an NDJSON ledger ------------------------------------------
+# The ledger itself is generated inside the container (see ledger_payload below). THIS function
+# judges it, and it judges structurally rather than by parsing values, because the generator emits
+# canonical compact JSON with a fixed key order and a value-parser in awk would be a second place
+# for a bug to hide.
+#   * exactly FIVE records per sampled file - bpm, initial_key, genres, comments, EnergyLevel -
+#     so a file that was skipped is a count failure, not an invisible absence.
+#   * A REFUSAL IS A RECORD, NEVER A SKIP: a file that cannot be read produces five `failed`
+#     records carrying the exception, in the scripts/normalise-dj-tags.py:1316-1339 shape.
+#   * every record must carry `"noop":true`. Phase 6 writes nothing, so any record proposing a
+#     different value for a protected field is a red and is printed in full.
+assert_protected_fields() { # $1 = NDJSON ledger  $2 = expected sampled file count
+  local led="$1" files="$2" ev="$OUT/assert.protected.txt" want=0 got=0 nfail=0 nchg=0
+  ASSERT_WHY=""; ASSERT_EVIDENCE="$ev"
+  [ -r "$led" ] || { ASSERT_WHY="the D-18 ledger '$led' is missing or unreadable"; return 2; }
+  want=$((files * 5))
+  got="$(wc -l < "$led" | tr -d ' ')"
+  : > "$ev"
+  LC_ALL=C grep -F '"failed":' "$led" | sed 's/^/LEDGER-FAILED\t/' >> "$ev" || true
+  LC_ALL=C grep -v -F '"noop":true' "$led" | sed 's/^/PROPOSED-CHANGE\t/' >> "$ev" || true
+  nfail="$(LC_ALL=C grep -c '^LEDGER-FAILED' "$ev" || true)"
+  nchg="$(LC_ALL=C grep -c '^PROPOSED-CHANGE' "$ev" || true)"
+  if [ "$got" -ne "$want" ]; then
+    printf 'LEDGER-COUNT\t%s records, expected %s (5 protected fields x %s sampled files)\n' \
+      "$got" "$want" "$files" >> "$ev"
+    ASSERT_WHY="the ledger holds $got records against an expected $want - a file was not covered,
+    and an absence is exactly what a skip looks like"
+    return 2
+  fi
+  if [ "$nfail" -ne 0 ]; then
+    ASSERT_WHY="$nfail ledger record(s) are refusals - a protected field could not be read at all"
+    return 2
+  fi
+  if [ "$nchg" -ne 0 ]; then
+    ASSERT_WHY="$nchg ledger record(s) propose a CHANGE to a protected DJ field. MusicBrainz
+    carries none of bpm / key / energy / operator comments, so an import is the specific thing
+    that strips exactly what makes a track playable (D-18)."
+    return 1
+  fi
+  ASSERT_WHY="$got ledger records, five per sampled file, every one a noop - no protected DJ
+    field is proposed for change"
+  return 0
+}
+
+# --- CONF-04's write side (D-23 as amended by D-34), REPORTED ------------------------------------
+# Always returns 0: this is the dry run SHOWING what an import would write, which is what D-23
+# asked for, corrected by D-34. beets CANNOT be configured to emit `;` inside ARTIST - no
+# delimiter or join key exists in config_default.yaml at either version - so the multi-artist
+# information lands in ARTISTS (TXXX / Vorbis), and `artist` carries MusicBrainz's own join
+# phrases concatenated. That is why D-34 enables PreferNonstandardArtistsTag on Jellyfin's Music
+# library: it makes the two consumers agree by construction rather than by coincidence.
+report_multi_artist() { # $1 = fields TSV
+  local fields="$1" ev="$OUT/report.multiartist.txt"
+  ASSERT_WHY=""; ASSERT_EVIDENCE="$ev"
+  if [ ! -r "$fields" ]; then
+    ASSERT_WHY="the fields TSV is missing or unreadable, so the write side could not be shown"
+    return 0
+  fi
+  # `artists` is MULTI_VALUE_DSV and renders joined with a literal backslash + U+2400 in a
+  # template, so it is translated to '; ' for display only. The FILE is not touched.
+  LC_ALL=C awk -F'\t' '
+    NF >= 6 && $6 != "" {
+      v = $6; gsub(/\\\342\220\200/, "; ", v)
+      printf "WRITE-SIDE\t%s\tartist=<%s>\tartists=<%s>\n", $1, $5, v
+    }' "$fields" > "$ev"
+  ASSERT_WHY="$(wc -l < "$ev" | tr -d ' ') item(s) carry a multi-valued artists field; beets cannot
+    emit ';' inside ARTIST, so the multi-artist information lands in ARTISTS (D-23 amended by D-34)"
+  return 0
+}
+
+# --- The reporting wrapper the real run uses (the self-test compares return codes instead) -------
+run_assert() { # $1 = label  $2.. = assertion and its arguments
+  local label="$1" rc=0
+  shift
+  "$@" || rc=$?
+  case "$rc" in
+    0) ok "$label: $ASSERT_WHY" ;;
+    1)
+      bad "$label: $ASSERT_WHY"
+      [ ! -s "$ASSERT_EVIDENCE" ] || head -n 20 "$ASSERT_EVIDENCE" | sed 's/^/         /' || true
+      ;;
+    *)
+      unknown "$label: $ASSERT_WHY"
+      [ ! -s "$ASSERT_EVIDENCE" ] || head -n 20 "$ASSERT_EVIDENCE" | sed 's/^/         /' || true
+      ;;
+  esac
+  return 0
+}
+
+# ==============================================================================================
+# THE REMOTE LAYER - it PRODUCES files; it never decides anything
+# ==============================================================================================
+RSH_OUT=""
+RSH_RC=0
+rsh() { # $1 = command string, run by bash on LXC 100
+  RSH_OUT=""
+  RSH_RC=0
+  RSH_OUT="$(ssh -n -o BatchMode=yes -o ConnectTimeout="$SSH_CONNECT_TIMEOUT" "root@$LXC_HOST" "$1")" || RSH_RC=$?
+  return 0
+}
+
+rsh_to() { # $1 = command string  $2 = local output file
+  RSH_RC=0
+  ssh -n -o BatchMode=yes -o ConnectTimeout="$SSH_CONNECT_TIMEOUT" "root@$LXC_HOST" "$1" > "$2" 2> "${2}.err" || RSH_RC=$?
+  return 0
+}
+
+rsh_from() { # $1 = command string  $2 = local file fed to the remote command's stdin
+  RSH_RC=0
+  ssh -o BatchMode=yes -o ConnectTimeout="$SSH_CONNECT_TIMEOUT" "root@$LXC_HOST" "$1" < "$2" > /dev/null || RSH_RC=$?
+  return 0
+}
+
+rsh_from_to() { # $1 = command string  $2 = local stdin file  $3 = local stdout file
+  RSH_RC=0
+  ssh -o BatchMode=yes -o ConnectTimeout="$SSH_CONNECT_TIMEOUT" "root@$LXC_HOST" "$1" < "$2" > "$3" 2> "${3}.err" || RSH_RC=$?
+  return 0
+}
+
+# Every remote status is classified in the house S1 order: empty output first (deferring when the
+# status is 124, because a killed command usually produces none either), then 124, then any other
+# non-zero, and only then is anything asserted.
+rsh_classify() { # $1 = what was being read; returns 0 usable, 3 could-not-look
+  if [ -z "$RSH_OUT" ] && [ "$RSH_RC" -ne 124 ]; then
+    unknown "$1 came back empty (ssh exit $RSH_RC). Nothing was read."
+    return 3
+  fi
+  if [ "$RSH_RC" -eq 124 ]; then
+    unknown "$1 exceeded its ${REMOTE_TIMEOUT}s bound and was killed. Most likely a wedged dockerd."
+    return 3
+  fi
+  if [ "$RSH_RC" -ne 0 ]; then
+    unknown "$1 failed (ssh exit $RSH_RC)."
+    return 3
+  fi
+  return 0
+}
+
+# `docker exec` into the container, bounded Linux-side, with NO PIPELINE inside the container -
+# its /bin/sh is dash and has no `pipefail`, so a pipeline there would launder a failure.
+dex_cmd() { # $1.. = argv inside the container; echoes the remote command string
+  printf 'timeout %s docker exec -u %s %s %s' "$REMOTE_TIMEOUT" "$CONTAINER_USER" "$CONTAINER" "$*"
+}
+
+# The remote manifest. `%p %s %T@` catches path, size and mtime; the sha catches content;
+# together they catch additions and deletions too. GNU find's -printf is why this runs on LXC 100
+# and not on the macOS workstation.
+remote_manifest_meta() { # $1 = subtree
+  printf "set -o pipefail; timeout %s sh -c 'LC_ALL=C find %s -type f -printf \"%%p\\t%%s\\t%%T@\\n\"' | LC_ALL=C sort" \
+    "$REMOTE_TIMEOUT" "$(printf '%q' "$1")"
+}
+remote_manifest_sha() { # $1 = subtree
+  printf "set -o pipefail; timeout %s sh -c 'LC_ALL=C find %s -type f -print0' | LC_ALL=C sort -z | xargs -0 -r sha256sum" \
+    "$REMOTE_TIMEOUT" "$(printf '%q' "$1")"
+}
+
+capture_manifests() { # $1 = when (before|after)  $2 = folders TSV
+  local when="$1" list="$2" folder="" i=0
+  : > "$OUT/src.$when.meta"
+  : > "$OUT/src.$when.sha"
+  while IFS="$(printf '\t')" read -r folder _ _; do
+    [ -n "$folder" ] || continue
+    i=$((i + 1))
+    rsh_to "$(remote_manifest_meta "$folder")" "$OUT/.m.$when.$i.meta"
+    if [ "$RSH_RC" -ne 0 ]; then
+      unknown "layer 2: could not take the $when metadata manifest of '$folder' (ssh exit $RSH_RC)"
+      return 3
+    fi
+    cat "$OUT/.m.$when.$i.meta" >> "$OUT/src.$when.meta"
+    rsh_to "$(remote_manifest_sha "$folder")" "$OUT/.m.$when.$i.sha"
+    if [ "$RSH_RC" -ne 0 ]; then
+      unknown "layer 2: could not take the $when content manifest of '$folder' (ssh exit $RSH_RC)"
+      return 3
+    fi
+    cat "$OUT/.m.$when.$i.sha" >> "$OUT/src.$when.sha"
+  done < "$list"
+  LC_ALL=C sort -o "$OUT/src.$when.meta" "$OUT/src.$when.meta"
+  LC_ALL=C sort -o "$OUT/src.$when.sha" "$OUT/src.$when.sha"
+  return 0
+}
+
+# --- The D-18 ledger generator, run by the container's own interpreter --------------------------
+# Written to a local file and fed to `docker exec -i ... python -` on stdin, so it is an auditable
+# artefact rather than a string buried in a quoted remote command. It runs INSIDE the container
+# because that is where beets 2.12.0, mediafile and mutagen live, and using any other copy would
+# measure a different reader from the one the pipeline uses.
+write_ledger_payload() { # $1 = local output path
+  cat > "$1" <<'LEDGER_PY'
+"""Emit the D-18 protected-field ledger as NDJSON, one record per (file, field).
+
+Record shape follows scripts/normalise-dj-tags.py:1177-1212 so the two ledgers join cleanly:
+path, field, rule, old, new, then `noop: true` when old == new, or `failed` when the file could
+not be read. A REFUSAL IS A RECORD, NEVER A SKIP - an absence is exactly what a skip looks like.
+
+Two mechanisms, deliberately different:
+
+  bpm / initial_key / genres / comments ARE beets fields, so the library's item value is
+  compared against the value read fresh off the file through mediafile. Note `genres` and not
+  the singular: `Item._field_names` has no singular entry in beets 2.x, a query using the
+  singular silently matches nothing, and MULTI_VALUE_DSV joins with a literal backslash + U+2400
+  in the database.
+
+  EnergyLevel is NOT a beets field and NOT a mediafile field. beets never reads it and never
+  writes it, so A BEETS QUERY FOR IT RETURNS EMPTY AND READS AS CLEAN - indistinguishable from
+  "gone". The only sound instrument is a RAW frame-set read, and it needs the right offset:
+    * MP3  - the ID3 tag starts at file offset 0;
+    * WAV  - it starts at the DATA OFFSET OF THE RIFF `id3 ` CHUNK. Without that offset the read
+             sees `RIFF` at offset 0 for every WAV and returns silently: a vacuous pass. This is
+             the exact defect scripts/normalise-dj-tags.py:866-883 documents;
+    * FLAC - there is no ID3 tag; the convention key is a Vorbis comment. Vorbis keys are
+             case-insensitive by spec and THIS CORPUS IS INCONSISTENT about it, so every key is
+             folded to lower case before lookup.
+  No WAV in this estate carries bpm, key or energy at all, so the WAV branch will have nothing to
+  report on those three - and HAVING NOTHING TO REPORT IS DIFFERENT FROM NOT HAVING LOOKED, which
+  is why the records are emitted either way.
+"""
+import json
+import sys
+
+from beets.library import Library
+import mediafile
+import mutagen
+import mutagen.id3
+
+BEETS_FIELDS = ["bpm", "initial_key", "genres", "comments"]
+RULE = "D-18 protected DJ field"
+
+
+def out(rec):
+    # COMPACT separators on purpose: the judging half of this oracle matches `"noop":true` and
+    # `"failed":` structurally rather than parsing values, so the spacing is load bearing.
+    sys.stdout.write(json.dumps(rec, ensure_ascii=False, separators=(",", ":")) + "\n")
+
+
+def norm(v):
+    if v is None:
+        return None
+    if isinstance(v, (list, tuple)):
+        return [str(x) for x in v]
+    return str(v)
+
+
+def wave_id3_offset(path):
+    """Data offset of the WAV's RIFF `id3 ` chunk, or None. Raises if there are two: which one a
+    reader honours is then undefined, and the frame-set read would be checking the wrong chunk."""
+    import struct
+    offsets = []
+    with open(path, "rb") as fh:
+        if fh.read(4) != b"RIFF":
+            return None
+        fh.read(8)
+        while True:
+            hdr = fh.read(8)
+            if len(hdr) < 8:
+                break
+            cid, size = struct.unpack("<4sI", hdr)
+            if cid in (b"id3 ", b"ID3 "):
+                offsets.append(fh.tell())
+            fh.seek(size + (size & 1), 1)
+    if len(offsets) > 1:
+        raise ValueError("%d ID3 chunks in one WAV; refusing to guess" % len(offsets))
+    return offsets[0] if offsets else None
+
+
+def raw_id3(path, low):
+    """The ID3 frame set and a statement of WHERE it was read from. (tag_or_None, how)."""
+    if low.endswith(".wav"):
+        offset = wave_id3_offset(path)
+        if offset is None:
+            return None, "raw ID3 frame set: this WAV carries no id3 chunk"
+        handler = mutagen.File(path)
+        return (getattr(handler, "tags", None),
+                "raw ID3 frame set inside the RIFF id3 chunk, data offset %d" % offset)
+    try:
+        return mutagen.id3.ID3(path), "raw ID3 frame set at file offset 0"
+    except mutagen.id3.ID3NoHeaderError:
+        return None, "raw ID3 frame set at file offset 0 (no ID3 tag)"
+
+
+def energy_level(path):
+    """The raw read. Returns (value_or_None, how_it_was_read)."""
+    low = path.lower()
+    if low.endswith(".flac"):
+        handler = mutagen.File(path)
+        folded = {}
+        if handler is not None and handler.tags is not None:
+            for key, value in handler.tags:
+                folded.setdefault(key.lower(), []).append(value)
+        got = folded.get("energylevel")
+        return (got[0] if got else None,
+                "raw Vorbis comment, keys folded to lower case - this corpus is inconsistent")
+    tag, how = raw_id3(path, low)
+    if tag is None:
+        return None, how
+    for frame in tag.getall("TXXX"):
+        if frame.desc == "EnergyLevel":
+            return (str(frame.text[0]) if frame.text else "", how)
+    return None, how
+
+
+def main():
+    lib = Library(sys.argv[1])
+    for item in lib.items():
+        path = item.path.decode("utf-8", "surrogateescape")
+        try:
+            mf = mediafile.MediaFile(path)
+        except Exception as exc:
+            why = "%s: %s" % (type(exc).__name__, str(exc)[:200])
+            for field in BEETS_FIELDS + ["EnergyLevel"]:
+                out({"path": path, "field": field, "rule": RULE,
+                     "old": None, "new": None, "failed": why})
+            continue
+        for field in BEETS_FIELDS:
+            try:
+                old = norm(getattr(mf, field, None))
+                new = norm(item.get(field, None))
+            except Exception as exc:
+                out({"path": path, "field": field, "rule": RULE, "old": None, "new": None,
+                     "failed": "%s: %s" % (type(exc).__name__, str(exc)[:200])})
+                continue
+            rec = {"path": path, "field": field, "rule": RULE, "old": old, "new": new}
+            if old == new:
+                rec["noop"] = True
+            out(rec)
+        try:
+            value, how = energy_level(path)
+        except Exception as exc:
+            out({"path": path, "field": "EnergyLevel", "rule": RULE + " (raw frame set)",
+                 "old": None, "new": None,
+                 "failed": "%s: %s" % (type(exc).__name__, str(exc)[:200])})
+        else:
+            # beets cannot propose a change to a field it does not model, so new == old by
+            # construction. The VALUE is what matters: it is recorded so a later phase can prove
+            # it survived, which a beets query could never do.
+            out({"path": path, "field": "EnergyLevel", "rule": RULE + " (" + how + ")",
+                 "old": value, "new": value, "noop": True})
+
+
+main()
+LEDGER_PY
+}
+
+# ==============================================================================================
+# --self-test : drive every fail-closed branch, without docker and without ssh
+# ==============================================================================================
+ST_FAIL=0
+st_case() { # $1 = expectation  $2 = observed  $3 = description
+  if [ "$1" = "$2" ]; then
+    ok "$2 (expected): $3"
+  else
+    bad "SELF-TEST REGRESSION: expected '$1', got '$2': $3"
+    ST_FAIL=$((ST_FAIL + 1))
+  fi
+}
+
+st_mc() { # $1 = expected outcome  $2 = before  $3 = after  $4 = description
+  local rc=0 got=""
+  manifest_compare "$2" "$3" || rc=$?
+  case "$rc" in 0) got="identical" ;; 1) got="differs" ;; *) got="couldnotcompare" ;; esac
+  st_case "$1" "$got" "$4"
+}
+
+# Drives normalise_transcript + positive_control together, which is the pairing that matters:
+# the control is only meaningful over a transcript the normaliser has already classified.
+st_control() { # $1 = expected (ok|unknown)  $2 = transcript file  $3 = want count  $4 = desc
+  local rc=0 got="ok"
+  normalise_transcript "$2" "$OUT/st.pairs" "$OUT/st.dests" || rc=$?
+  if [ "$rc" -ne 0 ]; then
+    got="unknown"
+  else
+    rc=0
+    positive_control "$2" "$OUT/st.pairs" "$3" || rc=$?
+    [ "$rc" -eq 0 ] || got="unknown"
+  fi
+  st_case "$1" "$got" "$4"
+  [ "$got" != "unknown" ] || info "reason: $(printf '%s' "$PC_WHY" | head -n 2)"
+}
+
+self_test_core() {
+  local td=""
+  say ""
+  say "== --self-test: the transcript normaliser and the positive control (T-06-41/42) =="
+  rule
+  td="$OUT"
+
+  # (1) A `--pretend`-shaped transcript: source paths only, no ` -> ` anywhere. It prints a line
+  #     per file and exits 0, which is exactly why it reads as a pass (Pitfall 1).
+  {
+    printf 'Album: /downloads/complete/nzb/music/Benson Boone-American Heart\n'
+    printf '  /downloads/complete/nzb/music/Benson Boone-American Heart/01 Sorry.mp3\n'
+    printf '  /downloads/complete/nzb/music/Benson Boone-American Heart/02 Mr Blue.mp3\n'
+  } > "$td/st.pretend.txt"
+  st_control unknown "$td/st.pretend.txt" 3 \
+    "a --pretend transcript: no ' -> ' in any form, so no destination was ever computed."
+
+  # (2) The right shape, the wrong count. A partial import produces a valid-looking subset, and
+  #     a subset that happens to be a prefix of the fixture would diff clean on every line it has.
+  {
+    printf '/src/a.mp3 -> %s/A/Al/01 a.mp3\n' "$LIB_ROOT"
+    printf '/src/b.mp3 -> %s/A/Al/02 b.mp3\n' "$LIB_ROOT"
+  } > "$td/st.short.txt"
+  st_control unknown "$td/st.short.txt" 3 "right shape, two pairs against an expected three."
+
+  # (3) A non-zero '(N already in place)'.
+  {
+    printf '/src/a.mp3 -> %s/A/Al/01 a.mp3\n' "$LIB_ROOT"
+    printf '/src/b.mp3 -> %s/A/Al/02 b.mp3\n' "$LIB_ROOT"
+    printf '(4 already in place)\n'
+  } > "$td/st.inplace.txt"
+  st_control unknown "$td/st.inplace.txt" 2 \
+    "'(4 already in place)' - move_items filtered items out, so the census is not the sample."
+
+  # (4) The two-line narrow-terminal form must normalise IDENTICALLY to the wide form. If it did
+  #     not, a terminal width would change the verdict, which is not a property an oracle may have.
+  {
+    printf '/src/a.mp3\n'
+    printf '  -> %s/A/Al/01 a.mp3\n' "$LIB_ROOT"
+    printf '/src/b.mp3\n'
+    printf '  -> %s/A/Al/02 b.mp3\n' "$LIB_ROOT"
+  } > "$td/st.narrow.txt"
+  st_control ok "$td/st.narrow.txt" 2 "the narrow-terminal two-line form parses as two pairs."
+
+  # (5) A transcript with no '/media/Music/' substring at all - the warning sign Pitfall 1 names.
+  {
+    printf '/src/a.mp3 -> /tmp/elsewhere/A/Al/01 a.mp3\n'
+    printf '/src/b.mp3 -> /tmp/elsewhere/A/Al/02 b.mp3\n'
+  } > "$td/st.elsewhere.txt"
+  st_control unknown "$td/st.elsewhere.txt" 2 \
+    "no '$LIB_ROOT/' anywhere: whatever was measured, it was not this library."
+
+  # (6) The fully correct case. A control that can only fail is as uninformative as one that can
+  #     only pass.
+  {
+    printf '/src/a.mp3 -> %s/A/Al/01 a.mp3\n' "$LIB_ROOT"
+    printf '/src/b.mp3 -> %s/A/Al/02 b.mp3\n' "$LIB_ROOT"
+  } > "$td/st.good.txt"
+  st_control ok "$td/st.good.txt" 2 "a well-formed two-pair transcript, count matching."
+
+  say ""
+  say "== --self-test: layer 2's three outcomes (D-29; WR-13) =="
+  rule
+  printf 'a/one.mp3\t1\t1.0\na/two.mp3\t2\t2.0\n' > "$td/st.before.meta"
+  cp "$td/st.before.meta" "$td/st.after.meta"
+  st_mc identical "$td/st.before.meta" "$td/st.after.meta" \
+    "IDENTICAL manifests - the green case, which must still be green."
+  printf 'a/one.mp3\t1\t1.0\na/two.mp3\t2\t9.9\n' > "$td/st.after.meta"
+  st_mc differs "$td/st.before.meta" "$td/st.after.meta" \
+    "a CHANGED mtime - the dry run was not dry."
+  printf 'deadbeef  a/one.mp3\n' > "$td/st.before.sha"
+  printf 'cafebabe  a/one.mp3\n' > "$td/st.after.sha"
+  st_mc differs "$td/st.before.sha" "$td/st.after.sha" \
+    "a CHANGED sha256 - content moved while path, size and mtime could all have held."
+  st_mc couldnotcompare "$td/st.absent.meta" "$td/st.after.meta" \
+    "a MISSING before-manifest: diff exits 2, writes to stderr and leaves stdout EMPTY."
+  mkdir -p "$td/st.adir.meta"
+  st_mc couldnotcompare "$td/st.before.meta" "$td/st.adir.meta" \
+    "a DIRECTORY where a manifest should be - constructible as root, unlike mode 000."
+  if [ "$(id -u)" = "0" ]; then
+    warn "SKIPPED as root: an UNREADABLE manifest (mode 000). root bypasses the read bit, so"
+    info "the case cannot be constructed here - reported, never silently counted as a pass."
+  else
+    cp "$td/st.before.meta" "$td/st.noread.meta"
+    chmod 000 "$td/st.noread.meta"
+    st_mc couldnotcompare "$td/st.noread.meta" "$td/st.after.meta" "an UNREADABLE manifest."
+    chmod 644 "$td/st.noread.meta"
+  fi
+
+  say ""
+  say "== --self-test: the blind preflight, layer 1 and the host->container mapper =="
+  rule
+  local rc=0 got=""
+  # A blind source directory. This is the CR-02 case: `find ... 2>/dev/null || true` feeding a
+  # count turned every failure mode into a zero and a green tick.
+  rc=0; got="ok"
+  preflight_readable "$td/st.nosuchdir" || rc=$?
+  [ "$rc" -eq 0 ] || got="blind"
+  st_case blind "$got" "a source directory that does not exist is a refusal, not '0 files newer'."
+  [ "$got" != "blind" ] || info "reason: $PREFLIGHT_WHY"
+  rc=0; got="ok"
+  preflight_readable "$td" || rc=$?
+  [ "$rc" -eq 0 ] || got="blind"
+  st_case ok "$got" "a real, readable directory must still be accepted."
+
+  printf '/mnt/tank/media|/media|ro\n/mnt/tank/downloads|/downloads|rw\n/mnt/fast/appdata/arrs/beets/config|/config|rw\n' \
+    > "$td/st.mounts"
+  rc=0; assert_media_readonly "$td/st.mounts" /media || rc=$?
+  st_case 0 "$rc" "/media enumerated as ro - layer 1 holds."
+  printf '/mnt/tank/media|/media|rw\n' > "$td/st.mounts.rw"
+  rc=0; assert_media_readonly "$td/st.mounts.rw" /media || rc=$?
+  st_case 1 "$rc" "/media enumerated as rw - D-05 violated, and this must be a RED not a warning."
+  printf '/mnt/tank/downloads|/downloads|rw\n' > "$td/st.mounts.none"
+  rc=0; assert_media_readonly "$td/st.mounts.none" /media || rc=$?
+  st_case 2 "$rc" "no /media mount enumerated at all - UNKNOWN, never 'it is read-only'."
+
+  rc=0; map_host_to_container /mnt/tank/media/Music/Katy "$td/st.mounts" || rc=$?
+  st_case "/media/Music/Katy" "$MAP_OUT" "longest-prefix mapping picks /mnt/tank/media over /mnt/tank."
+  rc=0; map_host_to_container /var/tmp/elsewhere "$td/st.mounts" || rc=$?
+  st_case 2 "$rc" "a host path under no mount is a refusal, not a silently unmapped path."
+
+  say ""
+  say "== --self-test: the sampled-folder table is READ, never re-typed =="
+  rule
+  rc=0; parse_sample "$SAMPLE_DOC" "$td/st.sample.tsv" || rc=$?
+  st_case 0 "$rc" "06-SAMPLE.md's ten-folder table parses."
+  st_case 10 "$SAMPLE_ROWS" "ten rows, one per drawn folder."
+  st_case 174 "$SAMPLE_FILES" "the Files column sums to 174, the fixture's own line count."
+  rc=0; parse_sample "$td/st.nosuchfile.md" "$td/st.sample2.tsv" || rc=$?
+  st_case 2 "$rc" "a missing sample document is a refusal, never an empty folder list."
+}
+
+# --- The class assertions' red branches --------------------------------------------------------
+# Ten reds and then one clean list. A control that can only pass is uninformative, and every one
+# of the bugs this wave hit was a predicate that could never have matched in the first place -
+# so each of these fixtures is built to MAKE the predicate fire, and the clean case afterwards
+# proves the same predicate can also stay quiet.
+st_assert() { # $1 = expected rc  $2 = description  $3.. = assertion and its arguments
+  local want="$1" desc="$2" rc=0
+  shift 2
+  "$@" || rc=$?
+  st_case "$want" "$rc" "$desc"
+}
+
+st_write_clean() { # $1 = directory to build the clean fixture in
+  local d="$1"
+  {
+    printf '%s/Benson Boone/American Heart [Night Street Records]/01 Sorry.mp3\n' "$LIB_ROOT"
+    printf '%s/DJ/Mastermix/Issue 420/01 Club Cuts.mp3\n' "$LIB_ROOT"
+    printf '%s/DJ/Mastermix/Issue 420/02 Party On Fire.mp3\n' "$LIB_ROOT"
+    printf '%s/Singles/Cyril/Stumblin In.mp3\n' "$LIB_ROOT"
+    printf "%s/Various Artists/NOW 121/01 Manchild.mp3\n" "$LIB_ROOT"
+  } | LC_ALL=C sort > "$d/dest.txt"
+  # The fixture stands in for the committed tree in these cases, and it is written by hand so the
+  # assertions are compared against a KNOWN set rather than against the real 174-line file - a
+  # self-test that needs the production fixture to be correct is testing two things at once.
+  {
+    printf '# a synthetic stand-in for 06-EXPECTED-TREE.txt; the ^# strip must apply here too\n'
+    cat "$d/dest.txt"
+  } > "$d/expected.txt"
+  {
+    printf '/src/a.mp3\t%s/Benson Boone/American Heart [Night Street Records]/01 Sorry.mp3\n' "$LIB_ROOT"
+    printf '/src/dj/1.mp3\t%s/DJ/Mastermix/Issue 420/01 Club Cuts.mp3\n' "$LIB_ROOT"
+    printf '/src/dj/2.mp3\t%s/DJ/Mastermix/Issue 420/02 Party On Fire.mp3\n' "$LIB_ROOT"
+    printf '/src/s/1.mp3\t%s/Singles/Cyril/Stumblin In.mp3\n' "$LIB_ROOT"
+    printf '/src/va/1.mp3\t%s/Various Artists/NOW 121/01 Manchild.mp3\n' "$LIB_ROOT"
+  } > "$d/pairs.tsv"
+  {
+    printf '/src/a.mp3\tBenson Boone\tAmerican Heart\t\tBenson Boone\t\n'
+    printf '/src/dj/1.mp3\tMastermix\tIssue 420\tdj\tMastermix\t\n'
+    printf '/src/dj/2.mp3\tMastermix\tIssue 420\tdj\tMastermix\t\n'
+    printf '/src/s/1.mp3\t\tStumblin In\t\tCyril\t\n'
+    printf '/src/va/1.mp3\tVarious Artists\tNOW 121\t\tSabrina Carpenter\tSabrina Carpenter; Dua Lipa\n'
+  } > "$d/fields.tsv"
+}
+
+self_test_classes() {
+  local d="$OUT/st-classes" rc=0
+  rm -rf "$d"; mkdir -p "$d"
+  st_write_clean "$d"
+
+  say ""
+  say "== --self-test: the class assertions, red branch first (D-27) =="
+  rule
+
+  # (1) CONF-03 - a capitalisation-only top level. NOT case-folded on purpose: this is what
+  #     renders a duplicate artist page in Jellyfin.
+  sed 's|/Benson Boone/|/benson boone/|' "$d/pairs.tsv" > "$d/pairs.case.tsv"
+  st_assert 1 "CONF-03: a capitalisation-only top-level mismatch is a RED, never a tolerance." \
+    assert_top_level "$d/pairs.case.tsv" "$d/fields.tsv"
+  # ... and the blind case: a destination with no library row behind it.
+  printf '/src/orphan.mp3\t%s/Nobody/Album/01 x.mp3\n' "$LIB_ROOT" >> "$d/pairs.case.tsv"
+  st_assert 2 "CONF-03: a destination with no library field row is COULD NOT LOOK, not a pass." \
+    assert_top_level "$d/pairs.case.tsv" "$d/fields.tsv"
+
+  # (2) D-15 - a Compilations/ path, which is what returns the moment the comp: override is lost.
+  sed 's|/Various Artists/|/Compilations/Various Artists/|' "$d/dest.txt" > "$d/dest.comp.txt"
+  st_assert 1 "D-15: a Compilations/ component is a RED." \
+    assert_no_compilations "$d/dest.comp.txt"
+  # ... and the vacuous case: no Compilations/, but no Various Artists either, so nothing was tested.
+  LC_ALL=C grep -v '/Various Artists/' "$d/dest.txt" > "$d/dest.nova.txt"
+  st_assert 1 "D-15: zero Compilations/ with zero Various Artists is VACUOUS, so it is a RED." \
+    assert_no_compilations "$d/dest.nova.txt"
+
+  # (3) D-13 - the DJ count one short. The clean fixture has two DJ rows.
+  st_assert 1 "D-13: a DJ count of 2 against an expected 3 is a RED - it is an equality." \
+    assert_dj_count "$d/dest.txt" 3
+  st_assert 0 "D-13: the same list against its true count of 2 is clean." \
+    assert_dj_count "$d/dest.txt" 2
+
+  # (4) D-16 - an unpredicted %aunique{} firing.
+  sed 's|American Heart \[Night Street Records\]|American Heart|' "$d/expected.txt" > "$d/expected.noau.txt"
+  st_assert 1 "D-16: a firing present in the run but absent from the fixture is a RED." \
+    assert_aunique "$d/dest.txt" "$d/expected.noau.txt"
+  # (5) D-16's hard guard - a bracketed bare integer is the NUMERIC DATABASE ID fallback.
+  sed 's|American Heart \[Night Street Records\]|American Heart [1234567]|' "$d/dest.txt" > "$d/dest.id.txt"
+  sed 's|American Heart \[Night Street Records\]|American Heart [1234567]|' "$d/expected.txt" > "$d/expected.id.txt"
+  st_assert 1 "D-16 guard: a bracketed non-year integer is the numeric database id - a RED even
+    when it matches the fixture, because such a fixture is a landmine." \
+    assert_aunique "$d/dest.id.txt" "$d/expected.id.txt"
+  # ... and a four-digit year must NOT trip the guard, or the guard is unusable.
+  sed 's|American Heart \[Night Street Records\]|American Heart [2025]|' "$d/dest.txt" > "$d/dest.yr.txt"
+  sed 's|American Heart \[Night Street Records\]|American Heart [2025]|' "$d/expected.txt" > "$d/expected.yr.txt"
+  st_assert 0 "D-16 guard: a bracketed four-digit year is a legitimate disambiguator, not an id." \
+    assert_aunique "$d/dest.yr.txt" "$d/expected.yr.txt"
+
+  # (6) D-19b - an unexpected Singles/ resolution: usually an album beets failed to group.
+  printf '%s/Singles/Cyril/Another One.mp3\n' "$LIB_ROOT" >> "$d/dest.txt"
+  LC_ALL=C sort -o "$d/dest.txt" "$d/dest.txt"
+  st_assert 1 "D-19b: a singleton the fixture does not predict is a RED." \
+    assert_singletons "$d/dest.txt" "$d/expected.txt" "$d/pairs.tsv"
+  LC_ALL=C grep -v 'Another One' "$d/dest.txt" > "$d/dest.clean.txt"
+  mv "$d/dest.clean.txt" "$d/dest.txt"
+
+  # (7) D-19a - an album directory equal to its artist directory. BLOCKING.
+  printf '%s/Def Leppard/Def Leppard/01 x.flac\n' "$LIB_ROOT" > "$d/dest.eq.txt"
+  st_assert 1 "D-19a: album dir == artist dir is BLOCKING - no beets query can express it." \
+    assert_album_ne_artist "$d/dest.eq.txt"
+  # ... and the live defect's shape is REPORTED, not failed.
+  printf '%s/Def Leppard/Def Leppard (2015)/01 x.flac\n' "$LIB_ROOT" > "$d/dest.pref.txt"
+  st_assert 0 "D-19a: the '<artist> (' prefix shape is reported and NOT failed." \
+    assert_album_ne_artist "$d/dest.pref.txt"
+
+  # (8) the -1 - shape.
+  printf '%s/A/Al/-1 - Title.mp3\n' "$LIB_ROOT" > "$d/dest.m1.txt"
+  st_assert 1 "the '-1 - ' filename shape is a RED." assert_no_minus_one "$d/dest.m1.txt"
+  st_assert 0 "a clean list has no '-1 - ' filename." assert_no_minus_one "$d/dest.txt"
+
+  # (9) the .N collision suffix.
+  printf '%s/A/Al/01 Title.1.mp3\n' "$LIB_ROOT" > "$d/dest.sfx.txt"
+  st_assert 1 "a .N collision suffix is a RED." assert_no_collision_suffix "$d/dest.sfx.txt"
+  st_assert 0 "a clean list carries no .N suffix." assert_no_collision_suffix "$d/dest.txt"
+
+  # (10) D-18 - a proposed change to a protected field, a refusal, and a short ledger.
+  {
+    printf '{"path":"/src/a.mp3","field":"bpm","rule":"D-18","old":128,"new":128,"noop":true}\n'
+    printf '{"path":"/src/a.mp3","field":"initial_key","rule":"D-18","old":null,"new":null,"noop":true}\n'
+    printf '{"path":"/src/a.mp3","field":"genres","rule":"D-18","old":["House"],"new":["Pop"]}\n'
+    printf '{"path":"/src/a.mp3","field":"comments","rule":"D-18","old":"","new":"","noop":true}\n'
+    printf '{"path":"/src/a.mp3","field":"EnergyLevel","rule":"D-18","old":"7","new":"7","noop":true}\n'
+  } > "$d/ledger.changed.ndjson"
+  st_assert 1 "D-18: a record proposing a different value for a protected field is a RED." \
+    assert_protected_fields "$d/ledger.changed.ndjson" 1
+  sed 's|"old":\["House"\],"new":\["Pop"\]|"old":["House"],"new":["House"],"noop":true|' \
+    "$d/ledger.changed.ndjson" > "$d/ledger.clean.ndjson"
+  st_assert 0 "D-18: five noop records for one file is the clean case." \
+    assert_protected_fields "$d/ledger.clean.ndjson" 1
+  LC_ALL=C grep -v '"field":"EnergyLevel"' "$d/ledger.clean.ndjson" > "$d/ledger.short.ndjson"
+  st_assert 2 "D-18: four records where five are due is COULD NOT LOOK - an absence is exactly
+    what a skip looks like." \
+    assert_protected_fields "$d/ledger.short.ndjson" 1
+  sed 's|"noop":true|"failed":"OSError: nope"|' "$d/ledger.clean.ndjson" > "$d/ledger.failed.ndjson"
+  st_assert 2 "D-18: a refusal is a RECORD and it is COULD NOT LOOK, never an 'unchanged'." \
+    assert_protected_fields "$d/ledger.failed.ndjson" 1
+
+  say ""
+  say "== --self-test: the clean list must produce ZERO reds across every assertion =="
+  rule
+  st_assert 0 "CONF-03 clean" assert_top_level "$d/pairs.tsv" "$d/fields.tsv"
+  st_assert 0 "D-15 clean" assert_no_compilations "$d/dest.txt"
+  st_assert 0 "D-13 clean" assert_dj_count "$d/dest.txt" 2
+  st_assert 0 "D-16 clean" assert_aunique "$d/dest.txt" "$d/expected.txt"
+  st_assert 0 "D-19b clean" assert_singletons "$d/dest.txt" "$d/expected.txt" "$d/pairs.tsv"
+  st_assert 0 "D-19a clean" assert_album_ne_artist "$d/dest.txt"
+  st_assert 0 "-1 -  clean" assert_no_minus_one "$d/dest.txt"
+  st_assert 0 ".N clean" assert_no_collision_suffix "$d/dest.txt"
+  st_assert 0 "D-18 clean" assert_protected_fields "$d/ledger.clean.ndjson" 1
+  rc=0; report_multi_artist "$d/fields.tsv" || rc=$?
+  st_case 0 "$rc" "CONF-04 write side is a REPORT and always returns 0."
+  rc="$(LC_ALL=C grep -c '^WRITE-SIDE' "$OUT/report.multiartist.txt" || true)"
+  st_case 1 "$rc" "the one multi-artist row in the fixture is shown, not silently dropped."
+
+  # The payload the container runs is emitted here too, so a syntax error in it is caught by
+  # --self-test rather than at minute forty of a live run.
+  write_ledger_payload "$d/ledger.py"
+  rc=0
+  if command -v python3 >/dev/null 2>&1; then
+    python3 -c "import ast,sys; ast.parse(open(sys.argv[1]).read())" "$d/ledger.py" || rc=1
+    st_case 0 "$rc" "the D-18 ledger payload parses as Python."
+  else
+    warn "SKIPPED: no python3 on this workstation, so the ledger payload could not be parsed."
+    info "Reported rather than silently counted as a pass. The payload runs in the container."
+  fi
+}
+
+# --- The CR-02 could-not-look preflight, shared by the -newer sweep and the manifests ----------
+PREFLIGHT_WHY=""
+preflight_readable() { # $1 = local directory that must exist and be searchable
+  PREFLIGHT_WHY=""
+  if [ ! -d "$1" ]; then
+    PREFLIGHT_WHY="'$1' is not a directory (vanished, or a stale bind mount)"
+    return 1
+  fi
+  if [ ! -r "$1" ] || [ ! -x "$1" ]; then
+    PREFLIGHT_WHY="'$1' is not readable and searchable"
+    return 1
+  fi
+  return 0
+}
+
+# ==============================================================================================
+# MAIN
+# ==============================================================================================
+mkdir -p "$OUT"
+
+if [ "$MODE" = "self-test" ]; then
+  ST_FAIL=0
+  REDS=0
+  self_test_core
+  self_test_classes
+  say ""
+  if [ "$ST_FAIL" -ne 0 ] || [ "$REDS" -ne 0 ]; then
+    printf '  \342\234\227 self-test: %s case(s) FAILED\n' "$((ST_FAIL))"
+    exit 1
+  fi
+  ok "self-test: every fail-closed branch behaved exactly as expected"
+  exit 0
+fi
+
+# --- Step 0: the fixtures must be present before anything live happens -------------------------
+[ -f "$EXPECTED_TREE" ] || precheck_fail "the committed expected tree is missing: $EXPECTED_TREE"
+[ -f "$SAMPLE_DOC" ]    || precheck_fail "the sample document is missing: $SAMPLE_DOC"
+
+say ""
+say "== phase06-oracle.sh: $MODE =="
+rule
+say "  host       root@$LXC_HOST   container $CONTAINER   engine $BEET_BIN"
+say "  expected   $EXPECTED_TREE   (CONSTANT - not overridable)"
+say "  sample     $SAMPLE_DOC      (CONSTANT - not overridable)"
+say "  out        $OUT"
+say ""
+
+parse_sample "$SAMPLE_DOC" "$OUT/sample.tsv" || precheck_fail "$SAMPLE_WHY"
+ok "sampled folders read from 06-SAMPLE.md: $SAMPLE_ROWS folders, $SAMPLE_FILES audio files"
+
+EXPECTED_LINES="$(LC_ALL=C grep -cv '^#' "$EXPECTED_TREE" || true)"
+if [ "$EXPECTED_LINES" -ne "$SAMPLE_FILES" ]; then
+  precheck_fail "the fixture holds $EXPECTED_LINES path lines but the sample holds $SAMPLE_FILES
+    audio files. The two are checked against each other in the fixture's own self-check, so a
+    disagreement means one of them has moved and the diff is not comparable."
+fi
+ok "fixture and sample agree on the denominator: $EXPECTED_LINES lines / $SAMPLE_FILES files"
+
+# --- Step 1: reach the host, and refuse a dirty destination -----------------------------------
+rsh "timeout $REMOTE_TIMEOUT docker inspect -f '{{.State.Status}}' $CONTAINER"
+rsh_classify "the container status of $CONTAINER" || exit 3
+[ "$RSH_OUT" = "running" ] || precheck_fail "$CONTAINER is '$RSH_OUT', not running"
+ok "container $CONTAINER is running"
+
+rsh "$(dex_cmd sh -c "'[ ! -e $SCRATCH ] && echo absent || ls -A $SCRATCH | head -n 1'")"
+if [ "$RSH_RC" -ne 0 ]; then
+  precheck_fail "could not inspect '$SCRATCH' inside the container (ssh exit $RSH_RC)"
+fi
+if [ "$RSH_OUT" != "absent" ] && [ -n "$RSH_OUT" ]; then
+  precheck_fail "'$SCRATCH' already exists inside the container and is not empty (first entry:
+    $RSH_OUT). A wrote-nothing assertion against a dirty destination proves nothing - refusing."
+fi
+ok "container scratch '$SCRATCH' is absent or empty"
+
+# --- Step 2: layer 1, structural, read from docker inspect and never from the compose file ----
+# The `|` characters below are Go TEMPLATE separators, not shell pipes - but the house greppable
+# rule (`grep -n 'timeout $REMOTE_TIMEOUT.*|'` must return only lines that also carry `pipefail`)
+# reads the line, not the intent, so `set -o pipefail` is stated here too rather than leaving a
+# reader to adjudicate. It costs nothing and it keeps the rule mechanical.
+rsh_to "set -o pipefail; timeout $REMOTE_TIMEOUT docker inspect --format '{{range .Mounts}}{{.Source}}|{{.Destination}}|{{if .RW}}rw{{else}}ro{{end}}{{\"\n\"}}{{end}}' $CONTAINER" "$OUT/mounts.txt"
+if [ "$RSH_RC" -ne 0 ]; then
+  unknown "the mount table of $CONTAINER could not be read (ssh exit $RSH_RC)"
+  exit 3
+fi
+RC=0
+assert_media_readonly "$OUT/mounts.txt" /media || RC=$?
+case "$RC" in
+  0) ok "layer 1 (structural): /media is mounted RW=false on $CONTAINER" ;;
+  1) bad "layer 1: $RW_WHY" ;;
+  *) unknown "layer 1: $RW_WHY"; exit 3 ;;
+esac
+
+# --- Step 3: the layer-3 baselines, and the library identity the fixture assumes ---------------
+rsh "$(dex_cmd sha256sum "$REAL_LIB_DB" "$REAL_STATE_PICKLE")"
+rsh_classify "the layer-3 baseline hashes" || exit 3
+printf '%s\n' "$RSH_OUT" > "$OUT/layer3.before"
+LIB_SHA_BEFORE="$(LC_ALL=C awk -v p="$REAL_LIB_DB" '$2 == p {print $1}' "$OUT/layer3.before")"
+STATE_SHA_BEFORE="$(LC_ALL=C awk -v p="$REAL_STATE_PICKLE" '$2 == p {print $1}' "$OUT/layer3.before")"
+[ -n "$LIB_SHA_BEFORE" ] || { unknown "no sha256 line for $REAL_LIB_DB"; exit 3; }
+[ -n "$STATE_SHA_BEFORE" ] || { unknown "no sha256 line for $REAL_STATE_PICKLE"; exit 3; }
+say "  library.db    before: $LIB_SHA_BEFORE"
+say "  state.pickle  before: $STATE_SHA_BEFORE"
+
+if [ "$LIB_SHA_BEFORE" = "$FIXTURE_LIB_SHA256" ]; then
+  ok "the library this run opens IS the one 06-EXPECTED-TREE.txt's header names"
+else
+  bad "the real library.db sha256 is $LIB_SHA_BEFORE, but the fixture's %aunique{} predictions
+    were computed against $FIXTURE_LIB_SHA256. A different library is a DIFFERENT COLLISION SET,
+    so the aunique count below is not comparable with the fixture's and the diff may fail for a
+    reason that is not a configuration defect. Re-derive the fixture before reading the diff."
+fi
+if [ "$STATE_SHA_BEFORE" != "$FIXTURE_STATE_SHA256" ]; then
+  warn "state.pickle is not at its recorded baseline ($FIXTURE_STATE_SHA256). The real library
+    has never recorded incremental history, so any other value is positive evidence that a real
+    import ran at some point. Reported, not failed - the hard gate is before == after."
+fi
+
+# --- Step 4: BEFORE manifests over every sampled source folder (D-29 layer 2) -------------------
+say ""
+say "== layer 2: BEFORE manifests over every sampled source folder =="
+rule
+capture_manifests before "$OUT/sample.tsv" || exit 3
+ok "before-manifests captured: $(wc -l < "$OUT/src.before.meta" | tr -d ' ') files across $SAMPLE_ROWS folders"
+
+# The stamp is created OUTSIDE both mounts, so taking it cannot itself perturb what it measures.
+rsh "timeout $REMOTE_TIMEOUT sh -c 'mkdir -p $(dirname "$STAMP_REMOTE") && rm -f $STAMP_REMOTE && touch $STAMP_REMOTE && echo stamped'"
+rsh_classify "the -newer stamp" || exit 3
+ok "stamp taken outside both mounts: $STAMP_REMOTE"
+sleep 1
+
+if [ "$MODE" = "baseline" ]; then
+  say ""
+  ok "--baseline complete. Nothing was imported and nothing was run against the sample."
+  say "  Artefacts under $OUT: sample.tsv mounts.txt layer3.before src.before.{meta,sha}"
+  exit 0
+fi
+
+# --- Step 5: the throwaway library, from a COPY of the real one --------------------------------
+say ""
+say "== the throwaway library and the -c overlay =="
+rule
+rsh "$(dex_cmd sh -c "'mkdir -p $SCRATCH && cp $REAL_LIB_DB $SCRATCH/lib.db && echo copied'")"
+rsh_classify "the library copy into $SCRATCH" || exit 3
+ok "copied $REAL_LIB_DB -> $SCRATCH/lib.db (the ORIGINAL is never opened by this run)"
+
+{
+  printf 'library: %s/lib.db\n' "$SCRATCH"
+  printf 'statefile: %s/state.pickle\n' "$SCRATCH"
+  printf 'directory: %s\n' "$LIB_ROOT"
+  printf 'import:\n'
+  printf '    copy: no\n'
+  printf '    move: no\n'
+  printf '    write: no\n'
+  printf '    autotag: no\n'
+  printf '    resume: no\n'
+  printf '    incremental: no\n'
+  printf '    duplicate_action: skip\n'
+} > "$OUT/overlay.yaml"
+rsh_from "timeout $REMOTE_TIMEOUT docker exec -i -u $CONTAINER_USER $CONTAINER sh -c 'cat > $SCRATCH/overlay.yaml'" "$OUT/overlay.yaml"
+[ "$RSH_RC" -eq 0 ] || { unknown "could not place the overlay inside the container (ssh exit $RSH_RC)"; exit 3; }
+ok "overlay placed: library, statefile AND directory all redirected (-l alone redirects none but the first)"
+
+# --- Step 6: the as-is import into the throwaway ------------------------------------------------
+say ""
+say "== the as-is import into the throwaway library =="
+rule
+while IFS="$(printf '\t')" read -r folder stratum files; do
+  [ -n "$folder" ] || continue
+  map_host_to_container "$folder" "$OUT/mounts.txt" || { unknown "$MAP_WHY"; exit 3; }
+  CPATH="$MAP_OUT"
+  EXTRA=""
+  case "$stratum" in
+    S5) EXTRA="--set albumtype=dj" ;;
+    S7) EXTRA="-s" ;;
+  esac
+  say "  $stratum  $files files  $CPATH ${EXTRA:+[$EXTRA]}"
+  rsh "$(dex_cmd "$BEET_BIN" -c "$SCRATCH/overlay.yaml" import -A -q $EXTRA "$(printf '%q' "$CPATH")")"
+  if [ "$RSH_RC" -ne 0 ]; then
+    unknown "the as-is import of '$CPATH' exited $RSH_RC. A partial library would make the
+    line-count control fire anyway, but the cause belongs here, not there."
+    exit 3
+  fi
+done < "$OUT/sample.tsv"
+ok "all $SAMPLE_ROWS sampled folders imported as-is into the throwaway"
+
+# --- Step 7: the oracle itself ------------------------------------------------------------------
+say ""
+say "== the oracle: beet move -p =="
+rule
+rsh_to "$(dex_cmd "$BEET_BIN" -c "$SCRATCH/overlay.yaml" move -p)" "$OUT/oracle.raw.txt"
+if [ "$RSH_RC" -ne 0 ]; then
+  unknown "beet move -p exited $RSH_RC; the transcript is at $OUT/oracle.raw.txt"
+  exit 3
+fi
+normalise_transcript "$OUT/oracle.raw.txt" "$OUT/oracle.pairs.tsv" "$OUT/oracle.destinations.txt" \
+  || { unknown "$NORM_WHY"; exit 3; }
+say "  pairs parsed:            $NORM_PAIRS"
+say "  unparsed payload lines:  $NORM_UNPARSED"
+if [ "$NORM_INPLACE_SEEN" -eq 1 ]; then
+  say "  (N already in place):    $NORM_INPLACE   [line present]"
+else
+  say "  (N already in place):    0   [line ABSENT - beets prints it only when N > 0, so absence"
+  say "                                is informative but weaker than a printed zero]"
+fi
+
+# --- Step 8: the positive control, BEFORE the diff is evaluated ---------------------------------
+PC_RC=0
+positive_control "$OUT/oracle.raw.txt" "$OUT/oracle.pairs.tsv" "$SAMPLE_FILES" || PC_RC=$?
+if [ "$PC_RC" -ne 0 ]; then
+  unknown "$PC_WHY"
+  say ""
+  say "  The diff against $EXPECTED_TREE was NOT evaluated. Exiting 3."
+  exit 3
+fi
+ok "positive control: every line is a ' -> ' pair, $NORM_PAIRS == $SAMPLE_FILES, N in place = 0,"
+info "and '$LIB_ROOT/' appears in the raw transcript. The measurement can be trusted to have looked."
+
+# --- Step 9: AFTER manifests and the three-layer verdict ----------------------------------------
+say ""
+say "== the three-layer wrote-nothing verdict =="
+rule
+capture_manifests after "$OUT/sample.tsv" || exit 3
+diff_manifest src meta || true
+diff_manifest src sha  || true
+
+rsh "$(dex_cmd sha256sum "$REAL_LIB_DB" "$REAL_STATE_PICKLE")"
+rsh_classify "the layer-3 hashes after the run" || exit 3
+printf '%s\n' "$RSH_OUT" > "$OUT/layer3.after"
+LIB_SHA_AFTER="$(LC_ALL=C awk -v p="$REAL_LIB_DB" '$2 == p {print $1}' "$OUT/layer3.after")"
+STATE_SHA_AFTER="$(LC_ALL=C awk -v p="$REAL_STATE_PICKLE" '$2 == p {print $1}' "$OUT/layer3.after")"
+if [ "$LIB_SHA_AFTER" = "$LIB_SHA_BEFORE" ]; then
+  ok "layer 3: the real library.db is byte-identical before and after"
+else
+  bad "layer 3: the real library.db CHANGED ($LIB_SHA_BEFORE -> $LIB_SHA_AFTER)"
+fi
+if [ "$STATE_SHA_AFTER" = "$STATE_SHA_BEFORE" ]; then
+  ok "layer 3: the real state.pickle is byte-identical before and after"
+else
+  bad "layer 3: the real state.pickle CHANGED ($STATE_SHA_BEFORE -> $STATE_SHA_AFTER). -l does
+    not redirect statefile:, so this is what a missing overlay key looks like."
+fi
+
+# The -newer sweep, with its could-not-look preflight. `find ... 2>/dev/null || true` feeding a
+# count is exactly how a failed find produced an empty result, a zero count and a green tick.
+NEWER_ARGS=""
+BLIND=""
+while IFS="$(printf '\t')" read -r folder _ _; do
+  [ -n "$folder" ] || continue
+  NEWER_ARGS="$NEWER_ARGS $(printf '%q' "$folder")"
+done < "$OUT/sample.tsv"
+rsh "set -o pipefail; timeout $REMOTE_TIMEOUT sh -c 'for d in $NEWER_ARGS; do [ -d \"\$d\" ] && [ -r \"\$d\" ] && [ -x \"\$d\" ] || { echo BLIND:\$d; exit 0; }; done; [ -f $STAMP_REMOTE ] || { echo BLIND:stamp; exit 0; }; echo READY'"
+if [ "$RSH_RC" -ne 0 ]; then
+  unknown "the -newer preflight could not run (ssh exit $RSH_RC)"
+else
+  case "$RSH_OUT" in
+    READY)
+      rsh "timeout $REMOTE_TIMEOUT find $NEWER_ARGS -newer $STAMP_REMOTE -type f"
+      if [ "$RSH_RC" -ne 0 ]; then
+        bad "the -newer sweep COULD NOT LOOK (exit $RSH_RC). This is NOT '0 files newer'."
+      elif [ -z "$RSH_OUT" ]; then
+        ok "-newer sweep: 0 files newer than the stamp across all $SAMPLE_ROWS sampled folders"
+      else
+        bad "-newer sweep: files are newer than the stamp - THE DRY RUN WROTE:"
+        printf '%s\n' "$RSH_OUT" | head -n 20 | sed 's/^/         /'
+      fi
+      ;;
+    BLIND:*)
+      BLIND="${RSH_OUT#BLIND:}"
+      bad "the -newer sweep COULD NOT LOOK: '$BLIND' is missing, unreadable or unsearchable.
+    'could not look' is a distinct outcome from 'nothing changed' (CLAUDE.md § Health Checks)."
+      ;;
+    *) bad "the -newer preflight returned an unrecognised answer: $RSH_OUT" ;;
+  esac
+fi
+
+# --- Step 10: the diff against the committed tree ------------------------------------------------
+say ""
+say "== the diff against 06-EXPECTED-TREE.txt =="
+rule
+TD_RC=0
+diff_expected_tree "$EXPECTED_TREE" "$OUT/oracle.destinations.txt" || TD_RC=$?
+case "$TD_RC" in
+  0) ok "ZERO LINES OF DIFFERENCE against the committed expected tree. This is the pass." ;;
+  1)
+    bad "the oracle's tree DIFFERS from the committed fixture. Both directions follow: a '<'
+    line is expected-but-absent, a '>' line is present-but-unexpected."
+    printf '%s\n' "$DIFF_OUT" | sed 's/^/         /'
+    ;;
+  *) unknown "the diff could not be evaluated: $TREE_DIFF_WHY" ;;
+esac
+
+# --- Step 11: the class assertions ---------------------------------------------------------------
+# These run over the SAME measurement the diff just judged, and they run whether or not the diff
+# was clean: a zero-diff tells you the paths match the fixture, and it tells you nothing at all
+# about a failure class nobody wrote an expected line for.
+say ""
+say "== the class assertions (D-27) =="
+rule
+
+# A real tab, built locally and single-quoted into the remote string. beets' -f does NOT process
+# backslash escapes, so `\t` in the format would be a literal backslash-t and every row would
+# collapse into one field - which reads as a parse failure only if something checks the field
+# count, and this does.
+TAB="$(printf '\t')"
+LS_FMT="\$path${TAB}\$albumartist${TAB}\$album${TAB}\$albumtype${TAB}\$artist${TAB}\$artists"
+rsh_to "$(dex_cmd "$BEET_BIN" -c "$SCRATCH/overlay.yaml" ls -f "'$LS_FMT'")" "$OUT/fields.tsv"
+if [ "$RSH_RC" -ne 0 ]; then
+  unknown "the throwaway library's field view could not be read (ssh exit $RSH_RC)"
+else
+  BADCOLS="$(LC_ALL=C awk -F'\t' 'NF != 6 {n++} END {print n + 0}' "$OUT/fields.tsv")"
+  if [ "$BADCOLS" -ne 0 ]; then
+    unknown "$BADCOLS row(s) of the field view do not have six tab-separated columns - a path
+    containing a tab would do this, and the join behind CONF-03 cannot be trusted."
+  else
+    ok "field view read: $(wc -l < "$OUT/fields.tsv" | tr -d ' ') items, six columns each"
+  fi
+fi
+
+write_ledger_payload "$OUT/ledger.py"
+rsh_from_to "timeout $REMOTE_TIMEOUT docker exec -i -u $CONTAINER_USER $CONTAINER $PY_BIN - $SCRATCH/lib.db" \
+  "$OUT/ledger.py" "$OUT/ledger.ndjson"
+if [ "$RSH_RC" -ne 0 ]; then
+  unknown "the D-18 ledger generator exited $RSH_RC; stderr is at $OUT/ledger.ndjson.err"
+fi
+
+# The expected DJ file count comes from 06-SAMPLE.md's own S5 rows - READ, never re-typed - and is
+# cross-checked against the committed fixture. If those two ever disagree the equality below would
+# be testing a number nobody wrote down.
+DJ_SAMPLE="$(LC_ALL=C awk -F'\t' '$2 == "S5" {s += $3} END {print s + 0}' "$OUT/sample.tsv")"
+DJ_FIXTURE="$(LC_ALL=C grep -v '^#' "$EXPECTED_TREE" | LC_ALL=C grep -c "^$LIB_ROOT/DJ/" || true)"
+if [ "$DJ_SAMPLE" -ne "$DJ_FIXTURE" ]; then
+  bad "the sample's S5 strata hold $DJ_SAMPLE files but the fixture carries $DJ_FIXTURE DJ/ lines.
+    The D-13 equality below would be measured against a number the two sources disagree on."
+fi
+
+run_assert "CONF-03 top level"       assert_top_level "$OUT/oracle.pairs.tsv" "$OUT/fields.tsv"
+run_assert "D-15 no Compilations/"   assert_no_compilations "$OUT/oracle.destinations.txt"
+run_assert "D-13 DJ count equality"  assert_dj_count "$OUT/oracle.destinations.txt" "$DJ_SAMPLE"
+run_assert "D-16 %aunique{} firings" assert_aunique "$OUT/oracle.destinations.txt" "$EXPECTED_TREE"
+run_assert "D-19b singletons"        assert_singletons "$OUT/oracle.destinations.txt" "$EXPECTED_TREE" "$OUT/oracle.pairs.tsv"
+run_assert "D-19a album != artist"   assert_album_ne_artist "$OUT/oracle.destinations.txt"
+run_assert "the '-1 - ' shape"       assert_no_minus_one "$OUT/oracle.destinations.txt"
+run_assert "the .N collision shape"  assert_no_collision_suffix "$OUT/oracle.destinations.txt"
+run_assert "D-18 protected fields"   assert_protected_fields "$OUT/ledger.ndjson" "$SAMPLE_FILES"
+
+say ""
+say "== CONF-04's write side, REPORTED (D-23 as amended by D-34) =="
+rule
+run_assert "CONF-04 write side" report_multi_artist "$OUT/fields.tsv"
+say "  beets CANNOT be configured to emit ';' inside ARTIST - no delimiter or join key exists in"
+say "  config_default.yaml at either version. 'artist' carries MusicBrainz's own join phrases"
+say "  concatenated, and the multi-artist information lands in ARTISTS (TXXX / Vorbis). That is"
+say "  what D-34 aligns Jellyfin to by enabling PreferNonstandardArtistsTag on the Music library."
+
+# --- Step 12: cleanup ----------------------------------------------------------------------------
+say ""
+rsh "$(dex_cmd sh -c "'rm -rf $SCRATCH; [ -e $SCRATCH ] && echo present || echo gone'")"
+if [ "$RSH_RC" -eq 0 ] && [ "$RSH_OUT" = "gone" ]; then
+  ok "container scratch '$SCRATCH' removed and its absence asserted"
+else
+  bad "container scratch '$SCRATCH' is still present (or its removal could not be confirmed)"
+fi
+rsh "timeout $REMOTE_TIMEOUT rm -f $STAMP_REMOTE"
+
+say ""
+rule
+if [ "$UNKNOWNS" -ne 0 ]; then
+  say "  VERDICT: UNKNOWN, not green - $UNKNOWNS instrument(s) could not look."
+  exit 3
+fi
+if [ "$REDS" -ne 0 ]; then
+  say "  VERDICT: RED - $REDS assertion(s) failed."
+  exit 1
+fi
+ok "VERDICT: GREEN - zero-diff against the committed tree, and nothing was written."
+exit 0
