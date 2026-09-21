@@ -82,7 +82,8 @@
 #   assertion or drops a path from the census. CENSUS_CANDIDATE only ADDS a section. There is no
 #   sentinel that skips a check, however convenient one looks while debugging - do not add one.
 #
-#   SURVIVOR_DB and APPDATA_ROOT are deliberately PLAIN CONSTANTS, not overrides. An override on
+#   SURVIVOR_DB, APPDATA_ROOT and the TAGGER_DEF_* pair (added 2026-09-21, D-11) are deliberately
+#   PLAIN CONSTANTS, not overrides. An override on
 #   either could produce a PASS (point SURVIVOR_DB at whichever database happens to exist, or
 #   point APPDATA_ROOT at an empty directory and census nothing), and REVIEWS row 1 forbids any
 #   override that can manufacture success. Changing either is a one-line edit here, in the commit
@@ -135,6 +136,21 @@ CONSUMER_PATTERN='jellyfin'
 # Phase 4 census constants (D-21, D-25). NOT overrides - see ENV OVERRIDES in the header.
 SURVIVOR_DB="/mnt/fast/appdata/arrs/beets/config/library.db"
 APPDATA_ROOT="/mnt/fast/appdata"
+
+# Phase 6 census constants (D-11, 2026-09-21, plan 06-10). NOT overrides, for exactly the reason
+# SURVIVOR_DB is not one: an override on either of these could manufacture a PASS by naming
+# whichever definition happens to exist. Changing the expected pair is a two-line edit HERE, in the
+# commit that changes the policy - and in the SAME commit as stacks/selfhosted/arrs/beets.md, whose
+# criterion-1 row quotes this census's pattern and its expected output verbatim.
+#
+# THE PAIR IS ASSERTED BY NAME AND BY CLASS, NEVER BY COUNT ALONE. A count of two whose MEMBERS are
+# different files is a RED, not a pass; that is the entire reason the names are here rather than a
+# bare `-eq 2`. A third, unnamed definition still fails.
+TAGGER_DEF_FLASK="stacks/selfhosted/arrs/beets/flask.yaml"
+TAGGER_DEF_CLI="stacks/selfhosted/arrs/beets/beets.yaml"
+TAGGER_DEF_FLASK_CLASS="ACTIVE front end — metasauce/beets-flask:v2.0.0-rc6, engine beets 2.12.0"
+TAGGER_DEF_CLI_CLASS="DORMANT agent-driven CLI arm — lscr.io/linuxserver/beets:2.13.1-ls349"
+TAGGER_DEF_EXPECTED=2
 CENSUS_FIND_TIMEOUT=90
 # Positive control for the database census: a SQLite DB known to live under APPDATA_ROOT, fenced
 # by plan 01-06 and recorded in the fence MANIFEST under "## Jellyfin databases". It is added to
@@ -758,10 +774,25 @@ else
   rule
 
   # ---- (i) tagger definitions in git -----------------------------------------------------------
-  # One definition may declare a tagger image, and it must be the survivor. Phase 5 introduces
-  # metasauce/beets-flask; when it lands, THIS ASSERTION MUST BE REVISED in the same commit -
-  # it is listed in the pattern below on purpose so a Phase 5 definition goes red here rather
-  # than arriving unnoticed.
+  # SUPERSEDED 2026-09-21 by plan 06-10 (D-11). The paragraph below is kept visible rather than
+  # deleted, per this repo's standing style for a discharged pre-flag: it is the record of why the
+  # revision was safe to make, and it is the thing that actually worked.
+  #
+  #   > One definition may declare a tagger image, and it must be the survivor. Phase 5 introduces
+  #   > metasauce/beets-flask; when it lands, THIS ASSERTION MUST BE REVISED in the same commit -
+  #   > it is listed in the pattern below on purpose so a Phase 5 definition goes red here rather
+  #   > than arriving unnoticed.
+  #
+  # IT WENT RED, ON PURPOSE, AND IS REVISED HERE. Plan 06-04 landed
+  # stacks/selfhosted/arrs/beets/flask.yaml on 2026-09-20 and this counter failed on the next run.
+  # That is the mechanism working, not a defect. TWO definitions are now expected, and they are
+  # asserted BY NAME AND BY CLASS - see TAGGER_DEF_FLASK / TAGGER_DEF_CLI near the top of this
+  # file. A count of two whose members are different files is a RED.
+  #
+  # ⛔ THE PATTERN IS NOT NARROWED TO MAKE THE COUNT FIT. Dropping `beets-flask` from the
+  # alternation would make `tagger definitions: 1` true again and would disarm the exact mechanism
+  # that just caught a real new definition. Whatever the expected SET becomes, the pattern stays as
+  # wide as it is: a definition this census cannot SEE is the failure mode, not a passing count.
   #
   # WR-03/WR-04: THE PATTERN MATCHES THE IMAGE *NAME*, NOT FOUR LITERAL IMAGE REFERENCES.
   # It used to be a fixed alternation of four full references, which made this census a test for
@@ -787,17 +818,28 @@ else
   GIT_RC=0
   GIT_LS="$(git ls-files stacks 2>/dev/null)" || GIT_RC=$?
   if [[ $GIT_RC -ne 0 ]] || [[ -z "$GIT_LS" ]]; then
-    fail "tagger definition census: UNKNOWN — 'git ls-files stacks' exited $GIT_RC or listed nothing. Nothing was counted; this is NOT 'one definition'."
+    fail "tagger definition census: UNKNOWN — 'git ls-files stacks' exited $GIT_RC or listed nothing. Nothing was counted; this is NOT 'two definitions'."
   else
     DEF_FILES="$(printf '%s\n' "$GIT_LS" \
       | { xargs -r -d '\n' grep -lE "^[[:space:]]*image:[[:space:]]*[\"']?([a-z0-9._-]+/)*(beets-flask|beets|wrtag|soulbeet|picard)([:@\"'[:space:]]|\$)" 2>/dev/null || true; } \
       | sort)"
     TAGGER_DEFS="$(count_lines "$DEF_FILES")"
-    if [[ "$TAGGER_DEFS" == "1" ]] && [[ "$DEF_FILES" == "stacks/selfhosted/arrs/beets/beets.yaml" ]]; then
-      pass "tagger definitions: expected=1 at stacks/selfhosted/arrs/beets/beets.yaml — found exactly that"
+    # The expected SET, sorted the same way DEF_FILES is, so the comparison is of members and not
+    # of a count. `beets.yaml` sorts before `flask.yaml`; the sort is done rather than assumed.
+    DEF_EXPECTED="$(printf '%s\n%s\n' "$TAGGER_DEF_CLI" "$TAGGER_DEF_FLASK" | sort)"
+    if [[ "$TAGGER_DEFS" == "$TAGGER_DEF_EXPECTED" ]] && [[ "$DEF_FILES" == "$DEF_EXPECTED" ]]; then
+      pass "tagger definitions: expected=$TAGGER_DEF_EXPECTED — found exactly the named pair:"
+      # NAMED ON THEIR OWN LINES, never folded into the count — the same shape the `rw on Music`
+      # rows use in the summary below, and for the same reason: a total can read as a pass for the
+      # wrong reason, a named line cannot.
+      echo "         $TAGGER_DEF_FLASK — $TAGGER_DEF_FLASK_CLASS"
+      echo "         $TAGGER_DEF_CLI — $TAGGER_DEF_CLI_CLASS"
     else
-      fail "tagger definitions: expected=1 at stacks/selfhosted/arrs/beets/beets.yaml — found $TAGGER_DEFS:"
-      printf '%s\n' "$DEF_FILES" | sed 's/^/         /'
+      fail "tagger definitions: expected=$TAGGER_DEF_EXPECTED, exactly this named pair — found $TAGGER_DEFS:"
+      echo "         expected: $TAGGER_DEF_FLASK — $TAGGER_DEF_FLASK_CLASS"
+      echo "         expected: $TAGGER_DEF_CLI — $TAGGER_DEF_CLI_CLASS"
+      echo "         found:"
+      printf '%s\n' "$DEF_FILES" | sed 's/^/           /'
     fi
   fi
 
@@ -1042,7 +1084,13 @@ echo "  .DS_Store under the library: $DSSTORE_COUNT   (macOS client — an uncou
 # Each counter prints UNKNOWN rather than a number when its input was not observed. "0" on a
 # census that could not look is the exact false green this file exists to refuse.
 if [[ $CENSUS_RAN -eq 1 ]]; then
-  echo "  tagger definitions:          $TAGGER_DEFS   (target 1)"
+  echo "  tagger definitions:          $TAGGER_DEFS   (target $TAGGER_DEF_EXPECTED — the NAMED pair, not a count; D-11)"
+  # Both class lines deliberately REPEAT the `tagger definitions` token, because that token is what
+  # quick-health-check.sh's fold-in selector greps for (see the CROSS-FILE CONTRACT above). A line
+  # without it is dropped from the fold-in silently, and the whole point of D-11 is that the pair is
+  # visible BY NAME wherever this census is read.
+  echo "  tagger definitions, active:  $TAGGER_DEF_FLASK   ($TAGGER_DEF_FLASK_CLASS)"
+  echo "  tagger definitions, dormant: $TAGGER_DEF_CLI   ($TAGGER_DEF_CLI_CLASS)"
   echo "  beets databases:             $BEETS_DB_COUNT   (target 1 = SURVIVOR_DB)"
   echo "  tagger databases:            $TAGGER_DB_COUNT   (target 0 — wrtag.db*/soulbeet.db*)"
   echo "  retired paths present:       $RETIRED_PRESENT   (target 0)"

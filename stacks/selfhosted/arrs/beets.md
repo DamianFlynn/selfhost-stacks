@@ -1252,7 +1252,7 @@ reason.
 
 | Criterion | Evidence | Where |
 |---|---|---|
-| **1 — one tagger definition** | `git ls-files stacks \| xargs grep -lE "^[[:space:]]*image:[[:space:]]*[\"']?([a-z0-9._-]+/)*(beets-flask\|beets\|wrtag\|soulbeet\|picard)([:@\"'[:space:]]\|$)"` resolves to exactly `stacks/selfhosted/arrs/beets/beets.yaml` — **the same pattern `scripts/check-music-freeze.sh:793` asserts on**, quoted verbatim so the two cannot drift; the census counts `tagger definitions: 1` from the repo itself. Issue **#306 closed** with the D-26 evidence | 04-03, 04-07, re-quoted 2026-09-14 |
+| **1 — one tagger definition** | `git ls-files stacks \| xargs grep -lE "^[[:space:]]*image:[[:space:]]*[\"']?([a-z0-9._-]+/)*(beets-flask\|beets\|wrtag\|soulbeet\|picard)([:@\"'[:space:]]\|$)"` resolved to exactly `stacks/selfhosted/arrs/beets/beets.yaml` — **the same pattern `scripts/check-music-freeze.sh:824` asserts on** (`:793` when this row was written), quoted verbatim so the two cannot drift; the census counted `tagger definitions: 1` from the repo itself. Issue **#306 closed** with the D-26 evidence. ⚠️ **The RESOLUTION is superseded — the PATTERN is not.** See § *Phase 6 → D-11* below | 04-03, 04-07, re-quoted 2026-09-14, resolution superseded 2026-09-21 |
 | **2 — Renovate config valid** | `renovate-config-validator --strict --no-global renovate.json5` → exit **0** (re-run 2026-09-13 at the pinned 44.80.0); negative control, a copy with `"automerg": false`, → exit **1** naming the misspelled key | 04-03, re-run 04-13 |
 | **3 — a real music job completes with no tagger** | **`window 2: OPEN`** — quoted verbatim above. Three real jobs ran in the second window and none published a PRE-HOOK snapshot under `direct_unpack`, so the byte proof is UNPROVEN rather than violated; window 1's two jobs likewise ran clean with the byte proof untakeable | 04-12, 04-14, 04-15, `04-D12-EVIDENCE.md` |
 | **4 — every beets config declares `musicbrainz`** | Same album, same throwaway `-l`, two configs differing by exactly one line: live broken `plugins: embedart` → **0** MusicBrainz candidates; fixed → **1** (12 of 12 tracks, distance 0.048), cross-read by hand at **95.2%**. Both live configs now declare `musicbrainz` | 04-09, 04-11 |
@@ -1327,6 +1327,12 @@ Real, out of Phase 4's scope, and written down rather than silently carried:
 - **The census's `tagger definitions: 1` expectation must be revised when beets-flask lands.**
   Phase 5 stands it up; a second legitimate definition will fail this counter until the target is
   changed with it.
+  > **Discharged 2026-09-21 (Phase 6, plan 06-10, D-11).** The pre-flag is kept visible rather than
+  > deleted, because it is the record of a guard that did its job: plan 06-04 landed
+  > `stacks/selfhosted/arrs/beets/flask.yaml` on 2026-09-20, the counter went red on the next run,
+  > and nobody had to notice it by eye. The expectation is now **two definitions, asserted by name
+  > and by class**, and the pattern was **not** narrowed to make the count fit. Full record in
+  > § *Phase 6 → D-11* below.
 - **The "beets has no `undo` command" constraint is narrower than it reads, and two files still
   state it unqualified.** It remains true of the beets **CLI**, but beets-flask rc6 has a working
   `UNDO IMPORT`, verified by use (see § *One correction to this page's own § The recovery fence*).
@@ -1711,6 +1717,56 @@ artist-entity check: per pinned row it asserts the browseable **`ArtistItems` en
 the flat `Artists` string list, which reads green on rows that have no entities at all), requires
 the Ids to be distinct, and goes **red immediately if any entity Name contains a `;`** — one
 artist literally called `A;B` is the precise failure D-22 exists to distinguish from success.
+
+### D-11: the tagger census expects TWO definitions, named and classed (2026-09-21, plan 06-10)
+
+**The guard fired, and that is the headline.** Phase 4 wrote the `tagger definitions: 1`
+expectation with `beets-flask` deliberately already inside the match pattern, so that a Phase 5/6
+definition would go **red** rather than arrive unnoticed. Plan 06-04 landed
+`stacks/selfhosted/arrs/beets/flask.yaml` on 2026-09-20 and the counter failed on the next run.
+Nothing was discovered by eye.
+
+**The pattern is unchanged, byte for byte.** Narrowing it — dropping `beets-flask` from the
+alternation — would have made `tagger definitions: 1` true again and disarmed the exact mechanism
+that just worked. It is quoted here in a fenced block rather than a table cell so the pipes need no
+escaping and a mechanical `grep` can prove this page and `scripts/check-music-freeze.sh:824` have
+not drifted:
+
+```
+^[[:space:]]*image:[[:space:]]*["']?([a-z0-9._-]+/)*(beets-flask|beets|wrtag|soulbeet|picard)([:@"'[:space:]]|$)
+```
+
+**What changed is the expected SET, not the count.** The census asserts membership, so a count of
+two whose members are different files is a **red**, and a third unnamed definition still fails:
+
+| Definition | Class | Image |
+|---|---|---|
+| `stacks/selfhosted/arrs/beets/flask.yaml` | **ACTIVE front end** — the human arm, the inbox watchdog, the thing that executes `config.yaml` | `metasauce/beets-flask:v2.0.0-rc6`, engine **beets 2.12.0** |
+| `stacks/selfhosted/arrs/beets/beets.yaml` | **DORMANT agent-driven CLI arm** — `restart: "no"`, `profiles: ["manual"]`, out of `compose.yaml`'s include list | `lscr.io/linuxserver/beets:2.13.1-ls349` |
+
+**Evidence — a runnable command, and what it must print.** This is the criteria-table evidence cell
+for criterion 1 from Phase 6 onward; the Phase 4 row above records what it printed then:
+
+```bash
+ssh root@172.16.1.159 'cd /mnt/fast/stacks && bash scripts/check-music-freeze.sh' \
+  | grep 'tagger definitions'
+```
+
+```
+  ✅ tagger definitions: expected=2 — found exactly the named pair:
+         stacks/selfhosted/arrs/beets/flask.yaml — ACTIVE front end — metasauce/beets-flask:v2.0.0-rc6, engine beets 2.12.0
+         stacks/selfhosted/arrs/beets/beets.yaml — DORMANT agent-driven CLI arm — lscr.io/linuxserver/beets:2.13.1-ls349
+  tagger definitions:          2   (target 2 — the NAMED pair, not a count; D-11)
+  tagger definitions, active:  stacks/selfhosted/arrs/beets/flask.yaml   (ACTIVE front end — metasauce/beets-flask:v2.0.0-rc6, engine beets 2.12.0)
+  tagger definitions, dormant: stacks/selfhosted/arrs/beets/beets.yaml   (DORMANT agent-driven CLI arm — lscr.io/linuxserver/beets:2.13.1-ls349)
+```
+
+**Both class lines repeat the `tagger definitions` token on purpose.**
+`scripts/quick-health-check.sh`'s fold-in selects the harness summary with a `grep -E` over ten
+label tokens, and a line without one of them is dropped from that transcript **silently**. The
+label token `tagger definitions` is therefore unchanged and the new lines carry it — renaming it
+would break a consumer in a different file, which is the coupling that has broken once already
+(WR-09).
 
 ### Still open
 
