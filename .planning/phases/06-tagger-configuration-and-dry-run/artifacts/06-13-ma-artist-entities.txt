@@ -1,0 +1,169 @@
+================================================================================
+06-13 — MUSIC ASSISTANT ARTIST-ENTITY READ-BACK (CONF-04, second half)
+================================================================================
+Plan        : 06-13, wave 4, autonomous: false (D-36)
+Criterion   : CONF-04 — "parsed correctly" = N distinct browseable artist entities
+              in EACH consumer's OWN API, checked separately (D-22).
+Ordering    : Jellyfin was proven FIRST (plan 06-03) and Music Assistant LAST,
+              per D-25, because MA NEVER PURGES STALE ENTRIES: anything MA
+              indexes it keeps, and the ZFS fence does not reach MA's database.
+
+
+================================================================================
+SECTION 1 — TASK 1: THE D-36 OPERATOR GATE
+================================================================================
+
+WHY THIS GATE EXISTS
+  D-36 makes the MA arm a stop-and-ask, NOT a retry loop. At research time
+  (2026-09-20T03:26Z, measured twice) `172.16.1.31` answered ICMP while TCP 8095
+  (Music Assistant) and 8123 (Home Assistant) were both CLOSED — because the host
+  was down for maintenance, which is the operator's own statement and not an
+  inference drawn from a probe. A check run blind against a down service produces
+  a red that means "could not look", and this estate's standing rule
+  (README § Health Checks) is that "could not look" must never be folded into a
+  verdict. The host being reachable is also NOT the same thing as the operator
+  being ready for MA to be exercised, which is why a green probe alone does not
+  authorise task 2.
+
+
+--------------------------------------------------------------------------------
+1.1  CURRENT THREE-PART REACHABILITY MEASUREMENT
+--------------------------------------------------------------------------------
+Taken  : 2026-09-21T20:16:03Z  (UTC, from the probing host's own clock)
+From   : LXC 100, `root@172.16.1.159` (`hostname` = selfhost), over ssh with
+         BatchMode=yes. Every remote command is bounded LINUX-side with
+         `timeout`, because macOS has no GNU `timeout`; `set -o pipefail` is set
+         inside the remote command string, and each rc is captured on the very
+         line after its command with NO local pipe in front of it. RC 124
+         (timeout) would have been branched out FIRST as *could not look*, held
+         distinct from a measured refusal.
+
+Three parts, deliberately separate, so that "host down" and "service down" stay
+distinguishable — at research time the host answered ICMP while both ports were
+closed, and those are different situations with different meanings:
+
+    probe                               result                     verdict
+    ----------------------------------  -------------------------  -----------
+    ICMP  ping 172.16.1.31 (-c 3 -W 2)  rc=0, 3/3 received, 0%     HOST UP
+                                        loss, rtt avg 0.561 ms
+    TCP   172.16.1.31:8095  (MA)        rc=0  (nc -z -w 4)         PORT OPEN
+    TCP   172.16.1.31:8123  (HA)        rc=0  (nc -z -w 4)         PORT OPEN
+
+Neither rc was 124, so none of the three is a timeout, and none is a
+could-not-look.
+
+--------------------------------------------------------------------------------
+1.2  PORT-OPEN IS NOT SERVICE-UP — BOTH WERE CONFIRMED AT THE HTTP LAYER
+--------------------------------------------------------------------------------
+A `nc -z` success proves a listener accepted a TCP handshake, not that Music
+Assistant is serving. Both services were therefore also read at the application
+layer, read-only and unauthenticated:
+
+    GET http://172.16.1.31:8095/info   curl rc=0
+        server_version = 2.11.0b2
+        schema_version = 68
+        server_id      = d2b06ba2931245ba9133cce867f7ff42
+
+    GET http://172.16.1.31:8123/       HTTP 200  (curl rc=0)
+
+MEASURED VERDICT: the maintenance window recorded on 2026-09-20 HAS CLOSED.
+Music Assistant is online and serving, and Home Assistant answers 200. This
+supersedes 06-RESEARCH.md § "Music Assistant" line 713 ("MA was not reachable at
+research time"), which stays as the dated observation it was.
+
+--------------------------------------------------------------------------------
+1.3  A VERSION DRIFT THE GATE ANSWER MUST ACCOUNT FOR
+--------------------------------------------------------------------------------
+The live server reports **2.11.0b2**. `MA_VERSION_PROVEN` in
+`scripts/check-music-consumers.sh` (line 236) reads **2.11.0b0**, so that
+script's version-drift branch (lines 746-752) warns BY DESIGN until the
+assertions are re-proven and the constant is moved. Plan 06-13 owns re-proving
+them and moving the constant in the SAME commit; nothing else in the wave does.
+
+This also changes what task 2 must resolve rather than assume:
+  - Research assumption A1 (that 2.11.0b0 matches the 2.10.4 source read of
+    `TAG_SPLITTER=";"` and the `ARTISTS`-preference order) was never checked
+    against a running server at all, and the running server is now a DIFFERENT
+    build again — b2, not b0.
+  - Research assumption A2 (that `music/tracks/library_items` is the command
+    whose objects carry `artists[]`) is recorded in 06-RESEARCH.md line 744 as
+    **NOT VERIFIED**, with `GET /api-docs/commands.json` named as the script's
+    own authority. Task 2 resolves it there, CONFIRMED or FALSIFIED, and
+    corrects the script's comment in the same commit if falsified — a comment
+    naming a command that does not exist is the exact defect class CR-01 already
+    caught once in this file.
+
+--------------------------------------------------------------------------------
+1.4  WHAT THE AUTOMATED PROBE WILL REPORT EITHER WAY
+--------------------------------------------------------------------------------
+The MA gate body plan 06-03 added to `check-music-consumers.sh` already fails
+CLOSED and in the house form. An unreachable MA reaches `ma_fail` with the
+literal string `UNKNOWN, not green` (lines 1310, 1332, 1341) — never a `pass`,
+never a `warn`, and never the `scope != library` out-of-scope branch that
+section 4 uses at lines 973-982. That branch is the WRONG precedent here and is
+not reused.
+
+--------------------------------------------------------------------------------
+1.5  THE OPERATOR'S ANSWER
+--------------------------------------------------------------------------------
+STATUS: AWAITING THE OPERATOR. Execution STOPPED at task 1 and the three-part
+measurement above was put in front of them before the question was asked, so
+they answer against a measurement taken minutes ago rather than the three-day-old
+one from 06-RESEARCH.md.
+
+Deliberate omission, and the reason for it: the three option identifiers are NOT
+written anywhere above this line. Task 1's own verify greps this file for one of
+them as its proof that an answer was recorded, so listing them as part of the
+question would have satisfied that predicate off the question text alone — a
+check that cannot fail is not a check. This phase has already lost seven plans
+to predicates that could never match or could never fail; this one is kept able
+to do both. The identifiers live in 06-13-PLAN.md § task 1 § options, and
+exactly one of them is written below, once, when the operator has chosen it.
+
+    OPERATOR ANSWER (verbatim) : <not yet given>
+    OPTION ID                  : <not yet given>
+    ANSWERED AT (UTC)          : <not yet given>
+
+CONSEQUENCE OF EACH BRANCH, stated here so the record is unambiguous before the
+answer lands:
+  - If the answer authorises the run, task 2 executes the D-22 read-back and
+    task 3 records CONF-04's verdict for both consumers on one row.
+  - If the answer declines or defers, task 2 DOES NOT RUN, and task 3 records
+    CONF-04 as OPEN with the reason and the date, in BOTH the criteria table and
+    the `### Still open` list of `stacks/selfhosted/arrs/beets.md`, carried into
+    Phase 7's entry criteria as a named blocker. CONF-04 must NEVER read as
+    passed on an unreachable consumer, and the Jellyfin half and the MA half must
+    NEVER be summed into a single verdict.
+
+
+================================================================================
+SECTION 2 — TASK 2: A2/A1 RESOLUTION AND THE D-22 READ-BACK
+================================================================================
+NOT YET RUN. Gated on section 1.5.
+
+For the record, the subjects are already fixed, so task 2 cannot drift onto
+easier ones. They are the pinned `ARTISTS` proof rows from plan 06-03
+(artifacts/06-03-jellyfin-artist-before.txt § SECTION 1), which is what makes MA
+checkable on the SAME subjects Jellyfin was:
+
+    expected N  ARTISTS value                      track
+    ----------  --------------------------------   ----------------------------
+             2  Katy Perry;Snoop Dogg              California Gurls
+             4  Lady Gaga;T.I.;Too $hort;Twista    Jewels n' Drugs   (U+2019 in
+                                                   the real filename, not ASCII)
+             2  Nate Ruess;P!nk                    Just Give Me a Reason
+
+Arity alone is NOT the assertion — Phase 3 measured 4 tracks written onto
+entirely different songs with counts that looked plausible, so entity IDENTITY
+and distinctness are asserted too, and `music/albums/count` is excluded as
+evidence by name because it silently ignores its `provider` argument.
+
+
+================================================================================
+NOTHING WAS WRITTEN
+================================================================================
+Every command issued by task 1 was read-only: three reachability probes, one
+unauthenticated `GET /info` against MA and one unauthenticated `GET /` against
+HA. No MA API command was issued, no credential was read, and nothing under
+/mnt/tank/media was touched — so MA holds no phantom from this task, and D-21's
+fenced `rw` write has not fired.
