@@ -2134,12 +2134,45 @@ Phase 6's own:
   green. **Name that dependency before touching § 4.**
 - **The repo is ahead of the host, and the estate is NOT in sync.** At close LXC 100's checkout of
   `/mnt/fast/stacks` is at **`c67d497`** — all of Phase 6 is merged locally and **unpushed**, so
-  the host carries none of the three Phase 6 scripts and an older `check-music-consumers.sh` with
-  no § 4 at all. `quick-health-check.sh`'s drift block reports a correct **UNKNOWN** for this
-  reason; the vendored file itself is **not** drifted (repo and host both `949bd1f3…`). It clears
-  on `git push` plus `git pull --ff-only` on LXC 100 **and on nothing else** — and that pull will
-  refuse until the untracked host-side `/mnt/fast/stacks/stacks/selfhosted/arrs/beets/flask.yaml`
-  is removed. **The push is the operator's call and has not been made.**
+  the host carries none of the three Phase 6 scripts, an older `check-music-consumers.sh` with no
+  § 4 at all, and an older `check-music-freeze.sh` still on the pre-D-11 `tagger definitions: 1`
+  expectation. **Every consequence below was measured at close, not inferred:**
+  `quick-health-check.sh`'s vendored-drift block reports **`UNKNOWN — could not look`** with
+  `ssh exit 4`, and the cause names itself in the transcript —
+  `fatal: path 'stacks/selfhosted/arrs/beets/flask-config.yaml' does not exist in 'HEAD'`, i.e.
+  `git show HEAD:<path>` failed because that file was added by plan 06-04 and the host's HEAD
+  predates it. **Nothing was compared. That is NOT "the vendored files match".** In the same run
+  the host-side census printed `tagger definitions: 1 (target 1)` — which looks green and **is the
+  old instrument reading the old checkout**; the untracked host-side `flask.yaml` is invisible to
+  `git ls-files`, so the D-11 named-pair expectation never ran at all. It clears on `git push` plus
+  `git pull --ff-only` on LXC 100 **and on nothing else** — and that pull will refuse until the
+  untracked `/mnt/fast/stacks/stacks/selfhosted/arrs/beets/flask.yaml` is removed host-side.
+  **The push is the operator's call and has not been made.**
+
+### The routine health-check run at close
+
+`bash scripts/quick-health-check.sh` from the workstation, 2026-09-21, **exit 1 — and the exit code
+is non-discriminating, so these are the BLOCK verdicts**:
+
+| Block | Verdict at close |
+|---|---|
+| Traefik / Authelia / dashboard | ✅ running; dashboard `✅ Protected (HTTP 302 → Authelia)` |
+| Containers | ✅ 97 running, no unhealthy, none in `created` |
+| Vendored-file drift | ⚠️ **UNKNOWN — could not look** (`ssh exit 4`), cause quoted above. Not a green |
+| D-03 one vendored config into both containers | ✅ one config, both containers, `config :ro`, `/mnt/tank/media :ro` |
+| D-04 throwaway `-l` on every `beet` invocation | ✅ 0 executable invocations open the real library (documentation hits at the pinned baseline of 2) |
+| `extended.conf` destructive switches | ✅ disarmed — `requireBeetsMatch=false`, `ConversionFormat` in `{FLAC,OPUS}` |
+| Music freeze harness | ❌ **exit 1 on the Phase 5 `interpolated-host-path` gate alone** (`expected=12, found=13`). Every music counter inside it is at target: tagger-class writers 0, unclassified writers 0, declared `rw` reaching Music 0, ownership mismatches 0, retired paths 0, `rw` on Music tagger-capable 0, fence assertions failed 0 |
+| Music consumers audit | ✅ both consumers see the library; 2 of 2 albums matched in each, `FAILURES total: 0` |
+| Library underscore-dir guard | ✅ no `_`-prefixed directories under `/mnt/tank/media/Music` |
+| Jellyfin transcode retention | ✅ intact — 5 encoding values asserted, 0 drifted; `/` headroom 24.33 GiB; quota 50 G; `volume mounts: 0` |
+| Container image drift | ✅ measured — 10 drifted, **reported not asserted** (v1 is alert-only, D-01); unresolvable 2 as expected; could-not-look 0 |
+
+**Two reds, neither caused by Phase 6.** The freeze harness fails on a Phase 5 human-review gate —
+**verified**, not assumed: none of the 13 interpolated-host-path lines is under
+`stacks/selfhosted/arrs/beets/`. The drift block's UNKNOWN is the unpushed-host state above. The
+`tagger-capable containers: 3` line is the expected 2 → 3 move as `beets-flask` joined; it is
+reported, and the assertion that matters — `rw on Music, tagger-capable: 0` — is green.
 - **`tagger-capable containers` moved 2 → 3** — `beets-flask` joins `sabnzbd` and `lidarr`.
   Reported, not asserted (none of the three holds `rw` on Music, which *is* asserted). § *Phase 4 →
   The census, executed* above states 2 as "the expected value"; **that sentence is now dated** and
