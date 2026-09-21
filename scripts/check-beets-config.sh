@@ -6,12 +6,21 @@
 #   ON THE WORKSTATION, from the repo root. It is ssh-delegating, like
 #   scripts/quick-health-check.sh and scripts/check-music-consumers.sh, because everything it
 #   reads lives inside a container on LXC 100 (root@172.16.1.159) and each read is expressible
-#   as one bounded remote command. Nothing is installed anywhere and nothing is written.
+#   as one bounded remote command. Nothing is installed anywhere, and the ONE write this script
+#   makes is named below rather than denied.
 #
-# READ-ONLY BY CONTRACT. Every remote invocation is a read: a `docker logs` fetch, a `docker
-# exec` that dumps configuration, and a `sha256sum`. No import runs, no library is modified, and
-# the two pieces of beets state that CAN move under a careless read - /config/library.db and
-# /config/state.pickle - are hashed before and after and asserted unchanged (D-29 layer 3).
+# READ-ONLY BY CONTRACT, WITH ONE NAMED EXCEPTION. Every remote invocation is a read - a `docker
+# logs` fetch, a `docker exec` that dumps configuration, and a `sha256sum` - with exactly one
+# exception: arm 2 TRUNCATES a zero-byte no-op overlay at a fixed path inside the container's
+# /tmp (${OVERLAY}, below). It is truncated rather than created-if-absent, its emptiness is
+# MEASURED before it is used rather than assumed, and nothing removes it afterwards. That single
+# zero-byte file is the whole of what this script writes anywhere.
+#
+# No import runs and no library is modified. Stronger than that: every `beet` invocation here
+# carries `-l ${THROWAWAY_DB}`, so the real /config/library.db is never OPENED either (D-04). The
+# two pieces of beets state that CAN move under a careless read - /config/library.db and
+# /config/state.pickle - are still hashed before and after and asserted unchanged (D-29 layer 3),
+# which now CORROBORATES that redirect instead of carrying the whole claim on its own.
 #
 # --------------------------------------------------------------------------------------------
 # WHY THIS SCRIPT EXISTS: "the effective config" is ambiguous, and the ambiguity deletes files
@@ -59,9 +68,13 @@
 #   default mode  - every red finding increments FAILURES and the script ends non-zero.
 #   --baseline    - every finding is printed and the script always ends zero, so a before-state
 #                   can be recorded while a config is still being brought to its target.
-#   --self-test   - no ssh, no docker. Drives the assertion function over five synthetic dumps,
-#                   four of which MUST go red, and exits non-zero unless every expectation is
-#                   met. A control that can only pass is uninformative.
+#   --self-test   - no ssh, no docker. SIX cases, FIVE of which MUST go red, exiting non-zero
+#                   unless every expectation is met. Five drive the assertion function over
+#                   synthetic dumps; the sixth is a SOURCE assertion, because the assertion
+#                   function is pure over a dump and cannot see an invocation flag - it requires
+#                   the D-04 `-l` + `-c` contract of every `beet` call in this file and proves
+#                   itself against a synthetic -c-only line. A control that can only pass is
+#                   uninformative.
 #
 # ENV OVERRIDES - exactly one, in the ${VAR:-default} form so a grep can prove it exists:
 #     EXTRA_FORBIDDEN_SUBSTRINGS   colon-separated, APPENDED to a built-in list of substrings
@@ -70,11 +83,13 @@
 #   manufacture a pass, and THERE IS NO SENTINEL THAT SKIPS A CHECK - not in this file and not
 #   anywhere in this repository. Do not add one, however convenient one looks while debugging.
 #
-#   LXC_HOST, CONTAINER, BEET_BIN, PY_BIN, EXEC_USER and the two timeouts are deliberately PLAIN
-#   CONSTANTS for the reason check-music-freeze.sh:85-89 gives about SURVIVOR_DB: an override on
-#   any of them could produce a PASS by pointing the read at a different container, a different
-#   interpreter or a different host. Changing one is a one-line edit here, in the commit that
-#   changes the policy.
+#   LXC_HOST, CONTAINER, BEET_BIN, PY_BIN, EXEC_USER_FLAG, OVERLAY, THROWAWAY_DB and the two
+#   timeouts are deliberately PLAIN CONSTANTS for the reason check-music-freeze.sh:85-89 gives
+#   about SURVIVOR_DB: an override on any of them could produce a PASS by pointing the read at a
+#   different container, a different interpreter or a different host - and an override on
+#   THROWAWAY_DB specifically could point `-l` back at the real library, which is the one thing
+#   D-04 exists to forbid. Changing one is a one-line edit here, in the commit that changes the
+#   policy.
 #
 # THE READINESS GATE IS A LOG LINE, NOT A CONTAINER STATE FIELD. The docker state field that
 # reports a container is up flips the moment the process is exec'd, before rc6's entrypoint has
@@ -110,6 +125,9 @@ EXEC_USER_FLAG="-u beetle"
 BEET_BIN="/venv/bin/beet"
 PY_BIN="/venv/bin/python"
 OVERLAY="/tmp/phase06-check-beets-config-noop.yaml"
+# The throwaway library that every `beet` invocation in this file is pointed at (D-04). `.blb` is
+# beets' own library extension, and this path is INSIDE THE CONTAINER, not on the LXC.
+THROWAWAY_DB="/tmp/p6-cbc-throwaway.blb"
 LIBRARY_DB="/config/library.db"
 STATEFILE="/config/state.pickle"
 REMOTE_TIMEOUT=120
@@ -174,6 +192,7 @@ ARM1_FAILS=0
 TOOLS_MISSING=0
 LIB_HASH_BEFORE="UNKNOWN"
 LIB_HASH_AFTER="UNKNOWN"
+OVERLAY_SIZE="UNKNOWN"          # arm 2's no-op overlay, MEASURED - never assumed empty
 REDACTION_VERDICT="UNKNOWN"
 DIFF_ROWS=0
 
@@ -359,6 +378,55 @@ expect_ne() {  # key, forbidden, got, why
 }
 
 # =============================================================================================
+# THE D-04 SOURCE CONTRACT, AND WHY IT IS CHECKED AGAINST THIS FILE'S OWN TEXT.
+#
+# assert_effective_config() below is pure over a DUMP, so it cannot see invocation flags - which
+# means the thing plan 06-15 actually fixed (the missing `-l`) is invisible to every existing
+# self-test case. This pair of functions closes that: they read this script's own source and
+# require every line that invokes `beet` to carry BOTH `-l` and `-c`.
+#
+# EVERY PATTERN BELOW IS ASSEMBLED FROM `d` RATHER THAN WRITTEN AS A LITERAL. If the literal
+# expansions appeared here, this checker would match its OWN pattern lines and report itself as
+# a violation - and the repo-wide D-04 grep in quick-health-check.sh would count them too. The
+# variable is the only thing keeping the detector out of its own haystack.
+# =============================================================================================
+beet_invocation_violations() {  # stdin: shell source -> stdout: one line per non-compliant call
+  local d='$' line
+  local pat_bin="${d}{BEET_BIN}" pat_lib="${d}{THROWAWAY_DB}" pat_ovl="${d}{OVERLAY}"
+  while IFS= read -r line; do
+    [[ "$line" =~ ^[[:space:]]*# ]] && continue
+    [[ "$line" == *"$pat_bin"* ]] || continue
+    if [[ "$line" != *"$pat_lib"* || "$line" != *"$pat_ovl"* ]]; then
+      printf '%s\n' "$line"
+    fi
+  done
+}
+
+assert_beet_invocation_contract() {
+  local d='$' real synth synth_bad n
+  ARM1_FAILS=0
+
+  real="$(beet_invocation_violations <"${BASH_SOURCE[0]}")"
+  if [[ -n "$real" ]]; then
+    n="$(printf '%s\n' "$real" | wc -l | tr -d ' ')"
+    cfg_fail "D-04 contract: $n beet invocation(s) in this script's own source do NOT carry both -l and -c — $(printf '%s' "$real" | tr -s ' ')"
+  else
+    cfg_pass "D-04 contract: every beet invocation in this script's own source carries -l ${d}{THROWAWAY_DB} AND -c ${d}{OVERLAY}"
+  fi
+
+  # The driven negative. A checker that only ever sees compliant input has not been shown to
+  # reject anything, so it is handed a synthetic line carrying -c and no -l, and the REJECTION
+  # is what counts as this case's red.
+  synth_bad="    beet_exec \"${d}{BEET_BIN} -c ${d}{OVERLAY} config -d\""
+  synth="$(printf '%s\n' "$synth_bad" | beet_invocation_violations)"
+  if [[ -n "$synth" ]]; then
+    cfg_fail "D-04 contract, driven: the synthetic -c-only invocation was REJECTED, as it must be — $(printf '%s' "$synth" | tr -s ' ')"
+  else
+    echo -e "    ${RED}· D-04 contract: the synthetic -c-only invocation was NOT rejected — the checker is BLIND${NC}"
+  fi
+}
+
+# =============================================================================================
 # THE ASSERTION FUNCTION. Pure: JSON in, findings out, ARM1_FAILS set. No ssh, no docker, no
 # globals read other than the forbidden-substring lists - which is what lets --self-test drive
 # every red branch below without a container.
@@ -397,16 +465,21 @@ assert_effective_config() {
   has_gb="$(jget "$json" '.match.preferred.countries | if type=="array" then (index("GB") != null) else "UNKNOWN" end')"
   has_uk="$(jget "$json" '.match.preferred.countries | if type=="array" then (index("UK") != null) else "UNKNOWN" end')"
   if [[ "$has_gb" == "UNKNOWN" ]]; then
+    # The list itself is absent or is not a list. That is ONE finding about ONE key, so the UK
+    # sub-check below is not reached: reporting the same absence twice would inflate the red
+    # count without adding a second thing that is wrong.
     cfg_fail "CONF-05 match.preferred.countries: UNKNOWN, not green — absent, or not a list"
-  elif [[ "$has_gb" == "true" ]]; then
-    cfg_pass "CONF-05 match.preferred.countries contains GB — $countries"
   else
-    cfg_fail "CONF-05 match.preferred.countries does NOT contain GB — $countries"
-  fi
-  if [[ "$has_uk" == "true" ]]; then
-    cfg_fail "CONF-05 match.preferred.countries contains UK — MusicBrainz stores GB, so UK matches nothing and fails SILENTLY: the import simply prefers a different release"
-  elif [[ "$has_uk" == "false" ]]; then
-    cfg_pass "CONF-05 match.preferred.countries carries no UK entry"
+    if [[ "$has_gb" == "true" ]]; then
+      cfg_pass "CONF-05 match.preferred.countries contains GB — $countries"
+    else
+      cfg_fail "CONF-05 match.preferred.countries does NOT contain GB — $countries"
+    fi
+    # IN-01: routed through expect_ne rather than hand-rolled, so the two helpers stay symmetric
+    # and this case inherits expect_ne's UNKNOWN arm. The explanatory sentence is the load-bearing
+    # part of this check and is preserved word for word.
+    expect_ne "CONF-05 match.preferred.countries contains UK" "true" "$has_uk" \
+      "MusicBrainz stores GB, so UK matches nothing and fails SILENTLY: the import simply prefers a different release"
   fi
   expect_eq "CONF-05 match.preferred.original_year" "true" "$(jget "$json" '.match.preferred.original_year')"
 
@@ -483,8 +556,13 @@ assert_effective_config() {
     fi
   done
   if [[ -n "$EXTRA_FORBIDDEN_SUBSTRINGS" ]]; then
-    local IFS=':'
-    for forb in $EXTRA_FORBIDDEN_SUBSTRINGS; do
+    # IN-07: field splitting on ':' is WANTED here; pathname expansion is NOT. The old
+    # `local IFS=':'; for forb in $EXTRA_FORBIDDEN_SUBSTRINGS` gave both, so a value carrying
+    # `*` or `?` globbed against the repo root. `read -r -a` splits on IFS and cannot glob at
+    # all, which is the behaviour wanted and only that behaviour.
+    local -a forb_arr=()
+    IFS=':' read -r -a forb_arr <<<"$EXTRA_FORBIDDEN_SUBSTRINGS"
+    for forb in "${forb_arr[@]}"; do
       [[ -z "$forb" ]] && continue
       if printf '%s' "$raw" | grep -qF -- "$forb"; then
         cfg_fail "forbidden substring present (EXTRA_FORBIDDEN_SUBSTRINGS): '$forb'"
@@ -494,9 +572,9 @@ assert_effective_config() {
 }
 
 # =============================================================================================
-# --self-test. Five synthetic dumps, four of which MUST go red. Same device as
-# scripts/spike03-wrtag-arms.sh:23-27: drive the fail-closed branches without touching the
-# estate. A control that can only pass is uninformative.
+# --self-test. SIX cases, FIVE of which MUST go red: 5 synthetic dumps plus one assertion over
+# this file's own source. Same device as scripts/spike03-wrtag-arms.sh:23-27: drive the
+# fail-closed branches without touching the estate. A control that can only pass is uninformative.
 # =============================================================================================
 synthetic_correct_dump() {
   cat <<'DUMPEOF'
@@ -547,7 +625,7 @@ DUMPEOF
 }
 
 run_self_test() {
-  echo "🧪 --self-test — driving the assertion function over five synthetic dumps"
+  echo "🧪 --self-test — 6 cases: 5 synthetic dumps, plus the D-04 contract over this file's own source"
   rule
   echo ""
 
@@ -594,12 +672,28 @@ run_self_test() {
   # 5. Fully correct. Zero red.
   run_case "fully correct" 0 "$(synthetic_correct_dump)"
 
+  # 6. NOT a dump case. The five above drive a pure function over synthetic TEXT and therefore
+  #    cannot see an invocation flag; this one reads this script's own SOURCE and requires the
+  #    D-04 `-l` + `-c` contract of every `beet` call in it. Its red is a driven negative: a
+  #    synthetic -c-only line that the checker must reject. Strip `-l` from the three real
+  #    invocations and this case goes to 2 red and --self-test exits non-zero.
+  case_name="the -l + -c contract over this script's own source"; expect_reds=1
+  echo -e "  ${BLUE}case: $case_name  (expect $expect_reds red)${NC}"
+  assert_beet_invocation_contract
+  if [[ $ARM1_FAILS -eq $expect_reds ]]; then
+    echo -e "  ${GREEN}✅ case '$case_name': $ARM1_FAILS red, as expected${NC}"
+  else
+    echo -e "  ${RED}❌ case '$case_name': $ARM1_FAILS red, expected $expect_reds${NC}"
+    st_failures=$((st_failures + 1))
+  fi
+  echo ""
+
   rule
   if [[ $st_failures -gt 0 ]]; then
-    echo -e "${RED}❌ --self-test: $st_failures of 5 cases did not behave as expected${NC}"
+    echo -e "${RED}❌ --self-test: $st_failures of 6 cases did not behave as expected${NC}"
     return 1
   fi
-  echo -e "${GREEN}✅ --self-test: all 5 cases behaved as expected (4 of them red)${NC}"
+  echo -e "${GREEN}✅ --self-test: all 6 cases behaved as expected (5 of them red)${NC}"
   return 0
 }
 
@@ -670,7 +764,9 @@ else
       warn "readiness: not yet — the watchdog line is absent after attempt $attempt; sleeping ${READY_SLEEP}s"
       sleep "$READY_SLEEP"
     else
-      fail "readiness: UNKNOWN, not green — the watchdog registration line never appeared in $((READY_ATTEMPTS * READY_SLEEP))s. A rejected config kills the WATCHDOG while the page keeps serving, so a serving UI is not evidence."
+      # IN-03: the loop sleeps only BETWEEN attempts, so the wait is one sleep short of
+      # attempts x sleep. Rendering the larger number overstates what was actually waited.
+      fail "readiness: UNKNOWN, not green — the watchdog registration line never appeared in $(( (READY_ATTEMPTS - 1) * READY_SLEEP ))s. A rejected config kills the WATCHDOG while the page keeps serving, so a serving UI is not evidence."
     fi
   done
 fi
@@ -762,11 +858,38 @@ else
   # A no-op overlay: an empty file. The -c overlay sits ABOVE the vendored config, so anything
   # written into it would win; empty is the only value that leaves arm 2 an honest reading of
   # what the container actually assembles.
-  beet_exec "touch ${OVERLAY}"
-  if [[ $BEET_EXEC_RC -ne 0 ]]; then
-    fail "ARM 2: UNKNOWN, not green — could not create the no-op overlay (rc=$BEET_EXEC_RC)"
+  #
+  # WR-04: the create TRUNCATES, and the result is then MEASURED. `touch` guarantees existence,
+  # not emptiness, and this path is a fixed, predictable name inside a world-writable /tmp - so a
+  # file left by an aborted run, or written by anything else in the container, would outrank the
+  # vendored config and silently rewrite arm 2's answer. An overlay that is merely PRESENT is not
+  # an overlay that is EMPTY, and only the second of those is a no-op.
+  OVERLAY_TRUNC_RC=0
+  beet_exec "sh -c ': > ${OVERLAY}'"
+  OVERLAY_TRUNC_RC=$BEET_EXEC_RC
+  if [[ $OVERLAY_TRUNC_RC -eq 0 ]]; then
+    beet_exec "sh -c 'wc -c < ${OVERLAY}'"
+    if [[ $BEET_EXEC_RC -eq 0 ]]; then
+      OVERLAY_SIZE="$(tr -d '[:space:]' <"$WORKDIR/exec.out")"
+      [[ -z "$OVERLAY_SIZE" ]] && OVERLAY_SIZE="UNKNOWN"
+    fi
+  fi
+
+  if [[ $OVERLAY_TRUNC_RC -ne 0 ]]; then
+    fail "ARM 2: UNKNOWN, not green — could not truncate the no-op overlay ${OVERLAY} (rc=$OVERLAY_TRUNC_RC). No 'config' call was issued."
+  elif [[ "$OVERLAY_SIZE" != "0" ]]; then
+    fail "ARM 2: UNKNOWN, not green — the no-op overlay ${OVERLAY} measured '${OVERLAY_SIZE}' bytes, not 0. A non-empty overlay outranks the vendored config, so arm 2 would report something other than what the container assembles. No 'config' call was issued."
   else
-    beet_exec "${BEET_BIN} -c ${OVERLAY} config -d"
+    pass "ARM 2 no-op overlay ${OVERLAY}: truncated, then MEASURED at ${OVERLAY_SIZE} bytes — nothing in it can outrank the vendored config"
+    # D-04: `-l ${THROWAWAY_DB}` on every one of the three invocations below, and `-l` FIRST so
+    # the flag order matches the rule as quick-health-check.sh states it. WHY, in three parts.
+    # `beet` opens the library for EVERY subcommand including `config` - Phase 1 measured a bare
+    # `beet config` running 11 migrations unasked (stacks/selfhosted/arrs/beets/beets.yaml:71-78).
+    # With `-l` the real /config/library.db is never opened at all, which upgrades the D-29
+    # layer-3 comparison below from proving nothing CHANGED to corroborating that nothing was
+    # OPENED. And the overlay is still required alongside it, because `-l` alone does not redirect
+    # `statefile:` - that is a separate pickle which `-l` does not cover.
+    beet_exec "${BEET_BIN} -l ${THROWAWAY_DB} -c ${OVERLAY} config -d"
     if [[ $BEET_EXEC_RC -eq 124 ]]; then
       fail "ARM 2: UNKNOWN, not green — 'config -d' exceeded its ${REMOTE_TIMEOUT}s bound (rc=124)"
     elif [[ $BEET_EXEC_RC -ne 0 ]]; then
@@ -782,7 +905,7 @@ else
     fi
 
     # The source-file list: which files confuse actually assembled this from.
-    beet_exec "${BEET_BIN} -c ${OVERLAY} config -p -d"
+    beet_exec "${BEET_BIN} -l ${THROWAWAY_DB} -c ${OVERLAY} config -p -d"
     if [[ $BEET_EXEC_RC -ne 0 || ! -s "$WORKDIR/exec.out" ]]; then
       fail "ARM 2 source list: UNKNOWN, not green — 'config -p -d' exited $BEET_EXEC_RC"
     else
@@ -793,7 +916,7 @@ else
 
     # T-06-33: the redaction no-op, asserted.
     if [[ "$CONFIG_ROUTE_CLI" == "confuse" ]]; then
-      beet_exec "${BEET_BIN} -c ${OVERLAY} config -d -c"
+      beet_exec "${BEET_BIN} -l ${THROWAWAY_DB} -c ${OVERLAY} config -d -c"
       if [[ $BEET_EXEC_RC -ne 0 || ! -s "$WORKDIR/exec.out" ]]; then
         fail "T-06-33 redaction no-op: UNKNOWN, not green — the unredacted dump could not be read (rc=$BEET_EXEC_RC)"
       elif cmp -s "$WORKDIR/arm2.dump" "$WORKDIR/exec.out"; then
@@ -806,8 +929,11 @@ else
     fi
   fi
 
-  # D-29 layer 3, after. `beet` opens the library for every subcommand, so this is the direct
-  # evidence that reading a config moved neither the library nor the incremental statefile.
+  # D-29 layer 3, after. `beet` opens the library for every subcommand, which is why this hash
+  # pair was the original evidence that reading a config moved neither the library nor the
+  # incremental statefile. With `-l ${THROWAWAY_DB}` now on all three invocations it is no longer
+  # carrying that claim alone: the real library should never have been OPENED, and an equal pair
+  # here corroborates the redirect. An UNEQUAL pair is still the harder finding of the two.
   LIB_HASH_AFTER="$(hash_beets_state | tr '\n' ' ' | tr -s ' ')"
   [[ -z "$LIB_HASH_AFTER" ]] && LIB_HASH_AFTER="UNKNOWN"
   info "D-29 layer 3, after:  ${LIB_HASH_AFTER}"
@@ -891,6 +1017,7 @@ echo "  arm 1 blind:                 $ARM1_BLIND   (1 = nothing below section 4 
 echo "  arm 2 blind:                 $ARM2_BLIND"
 echo "  inter-arm differences:       $DIFF_ROWS of ${#COMPARE_KEYS[@]} compared keys (reported, not asserted)"
 echo "  redaction no-op (T-06-33):   $REDACTION_VERDICT"
+echo "  no-op overlay size (WR-04):  $OVERLAY_SIZE   (bytes; anything but 0 refuses arm 2)"
 echo "  D-29 before:                 $LIB_HASH_BEFORE"
 echo "  D-29 after:                  $LIB_HASH_AFTER"
 echo "  toolchain missing:           $TOOLS_MISSING"

@@ -1,0 +1,480 @@
+================================================================================
+06-15 - check-beets-config.sh RE-PROVED AFTER THE D-04 FIX
+Recorded 2026-09-21T23:41Z by plan 06-15 (CR-01 live half, WR-04, WR-05, IN-01, IN-03, IN-04, IN-07)
+Workstation: macOS, worktree worktree-agent-aca893c37621dbc6c at commit 4aaf79a
+Estate: LXC 100 (172.16.1.159), container beets-flask
+================================================================================
+
+WHAT CHANGED, IN ONE SENTENCE. All three beet invocations in ARM 2 now carry
+-l /tmp/p6-cbc-throwaway.blb ahead of their -c overlay, so the real /config/library.db
+is never OPENED rather than merely never changed; and the no-op overlay is truncated
+and MEASURED at 0 bytes before any config call, with a fail-closed branch if it is not.
+
+THIS RESULT IS RE-MEASURED, NOT CARRIED FORWARD. The 2026-09-21T22:04Z run quoted at
+stacks/selfhosted/arrs/beets.md:1986 predates the change and proves nothing about it.
+
+scripts/check-beets-config.sh sha256, BEFORE any perturbation:
+  fc8c6c91c2b014a6b615f620e166e898b4a03500ae50c7b02648882245311f68
+
+--------------------------------------------------------------------------------
+1. bash scripts/check-beets-config.sh --self-test
+--------------------------------------------------------------------------------
+🧪 --self-test — 6 cases: 5 synthetic dumps, plus the D-04 contract over this file's own source
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  case: empty dump (blind)  (expect 22 red)
+    · positive control: gui.num_preview_workers='UNKNOWN' gui.terminal.start_path='UNKNOWN' — neither vendored file sets these, so their absence means this is NOT the server-committed object. Every reading below is UNKNOWN, not green.
+    · CONF-01 import.copy: UNKNOWN, not green — absent from the server-committed dump, or unreadable
+    · CONF-01 import.move: UNKNOWN, not green — absent from the server-committed dump, or unreadable
+    · CONF-02 import.incremental: UNKNOWN, not green — absent from the server-committed dump, or unreadable
+    · CONF-02 import.incremental_skip_later: UNKNOWN, not green — absent from the server-committed dump, or unreadable
+    · CONF-05 match.preferred.countries: UNKNOWN, not green — absent, or not a list
+    · CONF-05 match.preferred.original_year: UNKNOWN, not green — absent from the server-committed dump, or unreadable
+    · CONF-05 musicbrainz.extra_tags: UNKNOWN, not green — absent, or not a list
+    · T-06-31 import.duplicate_action: UNKNOWN, not green — absent from the server-committed dump, or unreadable
+    · match.medium_rec_thresh: UNKNOWN, not green — absent from the server-committed dump, or unreadable
+    · directory: UNKNOWN, not green — absent from the server-committed dump, or unreadable
+    · statefile: UNKNOWN, not green — absent from the server-committed dump, or unreadable
+    · library: UNKNOWN, not green — absent from the server-committed dump, or unreadable
+    · SAFE-01 scrub.auto: UNKNOWN, not green — absent from the server-committed dump, or unreadable
+    · SAFE-01 lastgenre.auto: UNKNOWN, not green — absent from the server-committed dump, or unreadable
+    · SAFE-01 embedart.auto: UNKNOWN, not green — absent from the server-committed dump, or unreadable
+    · paths.comp / paths.default: UNKNOWN, not green — one or both absent (comp='UNKNOWN' default='UNKNOWN')
+    · paths: UNKNOWN, not green — the stanza is absent or is not a mapping
+    · per_disc_numbering: UNKNOWN, not green — absent from the server-committed dump, or unreadable
+    · asciify_paths: UNKNOWN, not green — absent from the server-committed dump, or unreadable
+    · va_name: UNKNOWN, not green — absent from the server-committed dump, or unreadable
+    · plugins: UNKNOWN, not green — absent, or not a list
+  ✅ case 'empty dump (blind)': 22 red, as expected
+
+  case: the silent-delete duplicate action  (expect 1 red)
+    · positive control: rc6 schema keys present in the dump (gui.num_preview_workers=4, gui.terminal.start_path=/repo) — this IS the server-committed object
+    · CONF-01 import.copy = true
+    · CONF-01 import.move = false
+    · CONF-02 import.incremental = true
+    · CONF-02 import.incremental_skip_later = true
+    · CONF-05 match.preferred.countries contains GB — ["GB","US"]
+    · CONF-05 match.preferred.countries contains UK = false (not 'true')
+    · CONF-05 match.preferred.original_year = true
+    · CONF-05 musicbrainz.extra_tags is a non-empty list (2 entries): ["year","catalognum"]
+    · T-06-31 import.duplicate_action = 'remove' — want 'ask'
+    · match.medium_rec_thresh = 0.25
+    · directory = /media/Music
+    · statefile = /config/state.pickle
+    · library = /config/library.db
+    · SAFE-01 scrub.auto = false
+    · SAFE-01 lastgenre.auto = false
+    · SAFE-01 embedart.auto = false
+    · paths.comp equals paths.default — the inherited compilation rule is OVERRIDDEN, which is the only way to neutralise it (there is no syntax for deleting an inherited path rule)
+    · paths: no rule routes anything into a Compilations/ tree
+    · per_disc_numbering = true
+    · asciify_paths = false
+    · va_name = Various Artists
+    · plugins is a one-entry list containing musicbrainz
+  ✅ case 'the silent-delete duplicate action': 1 red, as expected
+
+  case: incremental set, incremental_skip_later not  (expect 1 red)
+    · positive control: rc6 schema keys present in the dump (gui.num_preview_workers=4, gui.terminal.start_path=/repo) — this IS the server-committed object
+    · CONF-01 import.copy = true
+    · CONF-01 import.move = false
+    · CONF-02 import.incremental = true
+    · CONF-02 import.incremental_skip_later = 'false' — want 'true'
+    · CONF-05 match.preferred.countries contains GB — ["GB","US"]
+    · CONF-05 match.preferred.countries contains UK = false (not 'true')
+    · CONF-05 match.preferred.original_year = true
+    · CONF-05 musicbrainz.extra_tags is a non-empty list (2 entries): ["year","catalognum"]
+    · T-06-31 import.duplicate_action = ask
+    · match.medium_rec_thresh = 0.25
+    · directory = /media/Music
+    · statefile = /config/state.pickle
+    · library = /config/library.db
+    · SAFE-01 scrub.auto = false
+    · SAFE-01 lastgenre.auto = false
+    · SAFE-01 embedart.auto = false
+    · paths.comp equals paths.default — the inherited compilation rule is OVERRIDDEN, which is the only way to neutralise it (there is no syntax for deleting an inherited path rule)
+    · paths: no rule routes anything into a Compilations/ tree
+    · per_disc_numbering = true
+    · asciify_paths = false
+    · va_name = Various Artists
+    · plugins is a one-entry list containing musicbrainz
+  ✅ case 'incremental set, incremental_skip_later not': 1 red, as expected
+
+  case: preferred.countries carrying the wrong country code  (expect 2 red)
+    · positive control: rc6 schema keys present in the dump (gui.num_preview_workers=4, gui.terminal.start_path=/repo) — this IS the server-committed object
+    · CONF-01 import.copy = true
+    · CONF-01 import.move = false
+    · CONF-02 import.incremental = true
+    · CONF-02 import.incremental_skip_later = true
+    · CONF-05 match.preferred.countries does NOT contain GB — ["UK","US"]
+    · CONF-05 match.preferred.countries contains UK = 'true' — MusicBrainz stores GB, so UK matches nothing and fails SILENTLY: the import simply prefers a different release
+    · CONF-05 match.preferred.original_year = true
+    · CONF-05 musicbrainz.extra_tags is a non-empty list (2 entries): ["year","catalognum"]
+    · T-06-31 import.duplicate_action = ask
+    · match.medium_rec_thresh = 0.25
+    · directory = /media/Music
+    · statefile = /config/state.pickle
+    · library = /config/library.db
+    · SAFE-01 scrub.auto = false
+    · SAFE-01 lastgenre.auto = false
+    · SAFE-01 embedart.auto = false
+    · paths.comp equals paths.default — the inherited compilation rule is OVERRIDDEN, which is the only way to neutralise it (there is no syntax for deleting an inherited path rule)
+    · paths: no rule routes anything into a Compilations/ tree
+    · per_disc_numbering = true
+    · asciify_paths = false
+    · va_name = Various Artists
+    · plugins is a one-entry list containing musicbrainz
+  ✅ case 'preferred.countries carrying the wrong country code': 2 red, as expected
+
+  case: fully correct  (expect 0 red)
+    · positive control: rc6 schema keys present in the dump (gui.num_preview_workers=4, gui.terminal.start_path=/repo) — this IS the server-committed object
+    · CONF-01 import.copy = true
+    · CONF-01 import.move = false
+    · CONF-02 import.incremental = true
+    · CONF-02 import.incremental_skip_later = true
+    · CONF-05 match.preferred.countries contains GB — ["GB","US"]
+    · CONF-05 match.preferred.countries contains UK = false (not 'true')
+    · CONF-05 match.preferred.original_year = true
+    · CONF-05 musicbrainz.extra_tags is a non-empty list (2 entries): ["year","catalognum"]
+    · T-06-31 import.duplicate_action = ask
+    · match.medium_rec_thresh = 0.25
+    · directory = /media/Music
+    · statefile = /config/state.pickle
+    · library = /config/library.db
+    · SAFE-01 scrub.auto = false
+    · SAFE-01 lastgenre.auto = false
+    · SAFE-01 embedart.auto = false
+    · paths.comp equals paths.default — the inherited compilation rule is OVERRIDDEN, which is the only way to neutralise it (there is no syntax for deleting an inherited path rule)
+    · paths: no rule routes anything into a Compilations/ tree
+    · per_disc_numbering = true
+    · asciify_paths = false
+    · va_name = Various Artists
+    · plugins is a one-entry list containing musicbrainz
+  ✅ case 'fully correct': 0 red, as expected
+
+  case: the -l + -c contract over this script's own source  (expect 1 red)
+    · D-04 contract: every beet invocation in this script's own source carries -l ${THROWAWAY_DB} AND -c ${OVERLAY}
+    · D-04 contract, driven: the synthetic -c-only invocation was REJECTED, as it must be —  beet_exec "${BEET_BIN} -c ${OVERLAY} config -d"
+  ✅ case 'the -l + -c contract over this script's own source': 1 red, as expected
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ --self-test: all 6 cases behaved as expected (5 of them red)
+
+EXIT STATUS: 0
+
+Case 6 is new and is the only case that can see this plan's own change: the other
+five drive a pure function over a synthetic DUMP and so cannot see an invocation flag.
+Its red is a DRIVEN NEGATIVE - a synthetic -c-only line the checker must reject.
+
+Case 6's lines, quoted so the red is visible here and not only in the tally:
+  🧪 --self-test — 6 cases: 5 synthetic dumps, plus the D-04 contract over this file's own source
+    case: the -l + -c contract over this script's own source  (expect 1 red)
+      · D-04 contract: every beet invocation in this script's own source carries -l ${THROWAWAY_DB} AND -c ${OVERLAY}
+      · D-04 contract, driven: the synthetic -c-only invocation was REJECTED, as it must be —  beet_exec "${BEET_BIN} -c ${OVERLAY} config -d"
+    ✅ case 'the -l + -c contract over this script's own source': 1 red, as expected
+
+CASE 6 IS FALSIFIABLE, NOT MERELY PRESENT. A COPY of the script (repo file untouched)
+with -l stripped from ONE of the three real invocations:
+  🧪 --self-test — 6 cases: 5 synthetic dumps, plus the D-04 contract over this file's own source
+      · D-04 contract: 1 beet invocation(s) in this script's own source do NOT carry both -l and -c —  beet_exec "${BEET_BIN} -c ${OVERLAY} config -p -d"
+      · D-04 contract, driven: the synthetic -c-only invocation was REJECTED, as it must be —  beet_exec "${BEET_BIN} -c ${OVERLAY} config -d"
+    ❌ case 'the -l + -c contract over this script's own source': 2 red, expected 1
+  ❌ --self-test: 1 of 6 cases did not behave as expected
+  mutant --self-test EXIT STATUS: 1   (0 here would mean case 6 cannot fail)
+
+--------------------------------------------------------------------------------
+2. bash scripts/check-beets-config.sh   (live, post-change)
+--------------------------------------------------------------------------------
+🧰 0. Toolchain preconditions
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✅ ssh /usr/bin/ssh — OpenSSH_10.3p1, LibreSSL 3.3.6
+  ✅ jq /usr/bin/jq — jq-1.7.1-apple
+  ✅ python3 /opt/homebrew/bin/python3 — Python 3.14.7
+  ✅ base64 /usr/bin/base64 — base64: invalid option -- V
+  ✅ docker (remote, root@172.16.1.159) server 29.2.1
+
+⏳ 1. Readiness gate — the watchdog registration line
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✅ readiness: the watchdog registration line is present (attempt 1 of 6)
+  [INFO] beets-flask.wdog: Registering watchdog with debounce of 30 seconds for inboxes: ['/downloads/complete/nzb/_inbox/01-auto', '/downloads/complete/nzb/_inbox/02-review', '/downloads/complete/nzb/_inbox/03-asis']
+
+🅰  2. ARM 1 — the server-committed effective config (CONFIG_ROUTE)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  D-29 layer 3, before: fbbdde0c416e72b9884e56c562fd88eaa4da447926e1cb6cc17c3e04aee7da1a /config/library.db f6a9a1ad7aa553e42e53a8056fa80724785111180a5e2122be4f8732d1e4bc7c /config/state.pickle 
+  ✅ ARM 1 read via CONFIG_ROUTE=server-committed — 262 lines, 44 top-level keys
+
+🅱  3. ARM 2 — the CLI/confuse view (CONFIG_ROUTE_CLI)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✅ ARM 2 no-op overlay /tmp/phase06-check-beets-config-noop.yaml: truncated, then MEASURED at 0 bytes — nothing in it can outrank the vendored config
+  ✅ ARM 2 read via CONFIG_ROUTE_CLI=confuse — 227 lines
+  ✅ ARM 2 assembled from 3 file(s):
+      /tmp/phase06-check-beets-config-noop.yaml
+      /config/config.yaml
+      /venv/lib/python3.12/site-packages/beets/config_default.yaml
+  ✅ T-06-33: the redacted and unredacted dumps are byte-identical — no beets credential exists, asserted rather than assumed
+  D-29 layer 3, after:  fbbdde0c416e72b9884e56c562fd88eaa4da447926e1cb6cc17c3e04aee7da1a /config/library.db f6a9a1ad7aa553e42e53a8056fa80724785111180a5e2122be4f8732d1e4bc7c /config/state.pickle 
+  ✅ D-29 layer 3: library.db and state.pickle are byte-identical either side of this run
+
+🔎 4. Assertions over the server-committed config (ARM 1 only)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✅ positive control: rc6 schema keys present in the dump (gui.num_preview_workers=4, gui.terminal.start_path=/repo) — this IS the server-committed object
+  ✅ CONF-01 import.copy = true
+  ✅ CONF-01 import.move = false
+  ✅ CONF-02 import.incremental = true
+  ✅ CONF-02 import.incremental_skip_later = true
+  ✅ CONF-05 match.preferred.countries contains GB — ["GB","US"]
+  ✅ CONF-05 match.preferred.countries contains UK = false (not 'true')
+  ✅ CONF-05 match.preferred.original_year = true
+  ✅ CONF-05 musicbrainz.extra_tags is a non-empty list (5 entries): ["year","catalognum","country","media","label"]
+  ✅ T-06-31 import.duplicate_action = ask
+  ✅ match.medium_rec_thresh = 0.25
+  ✅ directory = /media/Music
+  ✅ statefile = /config/state.pickle
+  ✅ library = /config/library.db
+  ✅ SAFE-01 scrub.auto = false
+  ✅ SAFE-01 lastgenre.auto = false
+  ✅ SAFE-01 embedart.auto = false
+  ✅ paths.comp equals paths.default — the inherited compilation rule is OVERRIDDEN, which is the only way to neutralise it (there is no syntax for deleting an inherited path rule)
+  ✅ paths: no rule routes anything into a Compilations/ tree
+  ✅ per_disc_numbering = true
+  ✅ asciify_paths = false
+  ✅ va_name = Various Artists
+  ✅ plugins is a one-entry list containing musicbrainz
+
+⚖️  5. ARM 1 vs ARM 2 — reported, not asserted equal
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  KEY                                        ARM 1 (server-committed)     ARM 2 (confuse/CLI)
+  .library                                   "/config/library.db"         "/tmp/p6-cbc-throwaway.blb"
+  .gui.num_preview_workers                   4                            UNKNOWN
+  .gui.terminal.start_path                   "/repo"                      UNKNOWN
+  3 of 26 compared keys differ — expected, and the point of D-30
+
+  ⚠️  REPORTED, not asserted: import.write = true in the server-committed config. That is Phase 7 behaviour; a Phase 6 invocation overrides it to no through its own -c overlay.
+
+📊 6. Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  CONFIG_ROUTE (arm 1):        server-committed
+  CONFIG_ROUTE_CLI (arm 2):    confuse
+  READY_ROUTE:                 watchdog-log-line
+  arm 1 blind:                 0   (1 = nothing below section 4 was measured)
+  arm 2 blind:                 0
+  inter-arm differences:       3 of 26 compared keys (reported, not asserted)
+  redaction no-op (T-06-33):   no-op
+  no-op overlay size (WR-04):  0   (bytes; anything but 0 refuses arm 2)
+  D-29 before:                 fbbdde0c416e72b9884e56c562fd88eaa4da447926e1cb6cc17c3e04aee7da1a /config/library.db f6a9a1ad7aa553e42e53a8056fa80724785111180a5e2122be4f8732d1e4bc7c /config/state.pickle 
+  D-29 after:                  fbbdde0c416e72b9884e56c562fd88eaa4da447926e1cb6cc17c3e04aee7da1a /config/library.db f6a9a1ad7aa553e42e53a8056fa80724785111180a5e2122be4f8732d1e4bc7c /config/state.pickle 
+  toolchain missing:           0
+  arm-1 assertion failures:    0
+  FAILURES total:              0
+
+✅ CONF-01 (copy not move), CONF-02 (incremental AND incremental_skip_later), CONF-05
+   (GB not UK, original_year, musicbrainz.extra_tags), the four rc6 schema-default
+   landmines, the SAFE-01 three and the path stanza are all asserted TRUE of the
+   SERVER-COMMITTED config — the object that will actually import.
+
+EXIT STATUS: 0
+Script verdict: EXIT 0, FAILURES total: 0, arm-1 assertion failures: 0,
+arm 1 blind: 0 (1 would mean nothing below section 4 was measured, so the
+zeros above would be zeros of silence rather than zeros of measurement).
+
+--------------------------------------------------------------------------------
+2b. THE TWO D-29 LAYER-3 COMPARISONS - they are DIFFERENT CLAIMS
+--------------------------------------------------------------------------------
+
+Quoted verbatim from the run above, with their paths:
+  D-29 layer 3, before: fbbdde0c416e72b9884e56c562fd88eaa4da447926e1cb6cc17c3e04aee7da1a /config/library.db f6a9a1ad7aa553e42e53a8056fa80724785111180a5e2122be4f8732d1e4bc7c /config/state.pickle 
+  D-29 layer 3, after:  fbbdde0c416e72b9884e56c562fd88eaa4da447926e1cb6cc17c3e04aee7da1a /config/library.db f6a9a1ad7aa553e42e53a8056fa80724785111180a5e2122be4f8732d1e4bc7c /config/state.pickle 
+
+CLAIM 1 - identical WITHIN this run: YES. library.db and state.pickle did not move
+across the post-change run. This is what the script itself asserts.
+
+CLAIM 2 - identical to the PREVIOUS run. stacks/selfhosted/arrs/beets.md:1986 records
+the 2026-09-21T22:04Z run as:
+  D-29 before:  fbbdde0c... /config/library.db  f6a9a1ad... /config/state.pickle
+  D-29 after:   fbbdde0c... /config/library.db  f6a9a1ad... /config/state.pickle
+(that record abbreviates both digests to their first 8 hex characters, so the
+comparison below is over those 8 characters and is stated as such rather than
+claimed as a full-digest match.)
+  this run:     fbbdde0c... /config/library.db  f6a9a1ad... /config/state.pickle
+CLAIM 2 - unchanged since the previous run: YES on both 8-character prefixes.
+Nothing moved BETWEEN the two runs either, so the change this plan made did not
+disturb the library and neither did anything else in the interval.
+
+--------------------------------------------------------------------------------
+3. THE NEW EVIDENCE THE -l BUYS: is /tmp/p6-cbc-throwaway.blb there?
+--------------------------------------------------------------------------------
+
+With -l in place the three config calls are pointed at /tmp/p6-cbc-throwaway.blb instead of the real
+/config/library.db. The question is MEASURED, not assumed, and BOTH answers are
+informative - so this block reports the measurement and then says which reading it
+supports. It does NOT assert a particular answer.
+
+docker exec -u beetle beets-flask  ls -ld /tmp/p6-cbc-throwaway.blb ; wc -c < /tmp/p6-cbc-throwaway.blb :
+  rc=0
+  -rw-r--r-- 1 beetle beetle 53248 Sep 22 00:36 /tmp/p6-cbc-throwaway.blb
+  ----
+  53248
+
+And, for contrast, the real library it is standing in for:
+  rc=0
+  -rwxrwx--- 1 beetle beetle 53248 Sep 12 00:42 /config/library.db
+
+WHICH READING THIS SUPPORTS.
+  The throwaway EXISTS, owned by beetle, and carries a beets schema. That is the
+  DIRECT evidence the redirect took effect: beets created a fresh library at the
+  path -l named, which it could only do by opening that path instead of
+  /config/library.db. This is the reading that upgrades the D-29 comparison from
+  'the real library did not CHANGE' to 'the real library was not OPENED'.
+
+  Read the two MTIMES above, not only the sizes. The real /config/library.db
+  carries an mtime days older than every run recorded in this artifact - it was
+  not written today by anything. Section 5 re-measures the throwaway at close, so
+  whether the section-4 runs moved it is visible by comparing the two readings
+  rather than by assertion here.
+
+Either answer was reportable. This block measured first and interpreted second; it
+did not go looking for the answer it wanted.
+
+--------------------------------------------------------------------------------
+4. THE OVERLAY-EMPTINESS GUARD, DRIVEN RED AND BACK TO GREEN
+--------------------------------------------------------------------------------
+
+The guard has TWO fail-closed branches and both are driven here, because
+'could not look' and 'looked, and it was not empty' are different findings and the
+estate's health rules require them to stay distinct.
+
+4a. BRANCH A - could not truncate. The overlay path is replaced by a DIRECTORY (as
+    beetle, so the setup is reversible without root), which makes the ': >' redirect
+    fail. Setup:
+  rc=0
+  drwxr-xr-x 2 beetle beetle 4096 Sep 22 00:41 /tmp/phase06-check-beets-config-noop.yaml
+
+    Run, ARM 2 section verbatim:
+  🅱  3. ARM 2 — the CLI/confuse view (CONFIG_ROUTE_CLI)
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ❌ ARM 2: UNKNOWN, not green — could not truncate the no-op overlay /tmp/phase06-check-beets-config-noop.yaml (rc=2). No 'config' call was issued.
+    D-29 layer 3, after:  fbbdde0c416e72b9884e56c562fd88eaa4da447926e1cb6cc17c3e04aee7da1a /config/library.db f6a9a1ad7aa553e42e53a8056fa80724785111180a5e2122be4f8732d1e4bc7c /config/state.pickle 
+    ✅ D-29 layer 3: library.db and state.pickle are byte-identical either side of this run
+  
+    EXIT STATUS: 1
+    Did it proceed to 'config -d'?  (a hit below would mean the guard leaked)
+      NO. 'ARM 2 read via CONFIG_ROUTE_CLI' is absent from the whole transcript, and
+      the summary records CONFIG_ROUTE_CLI: unavailable
+
+    Restored:
+  rc=0
+  -rw-r--r-- 1 beetle beetle 0 Sep 22 00:41 /tmp/phase06-check-beets-config-noop.yaml
+  0
+
+4b. BRANCH B - the overlay IS non-empty and the script says so. This is the branch
+    that closes WR-04, so it is driven against exactly the defect WR-04 described:
+    a COPY of the script with the old 'touch' restored in place of the truncating
+    create, run against a stale non-empty overlay. Under 'touch' the file survives;
+    the NEW size assertion is what catches it. The repo script is not touched.
+
+    The one-line mutation applied to the copy:
+  868:  beet_exec "touch ${OVERLAY}"
+
+    A stale non-empty overlay is planted - a single line that, if it were used, would
+    silently redirect the whole library:
+  rc=0
+  --- bytes:
+  44
+  --- content:
+  directory: /tmp/hijacked-by-a-stale-overlay
+    The plant is CONFIRMED before the run, because a drive that silently failed to
+    perturb anything would look exactly like a guard that works: 44 bytes.
+
+    Run of the mutant, ARM 2 section verbatim:
+  🅱  3. ARM 2 — the CLI/confuse view (CONFIG_ROUTE_CLI)
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ❌ ARM 2: UNKNOWN, not green — the no-op overlay /tmp/phase06-check-beets-config-noop.yaml measured '44' bytes, not 0. A non-empty overlay outranks the vendored config, so arm 2 would report something other than what the container assembles. No 'config' call was issued.
+    D-29 layer 3, after:  fbbdde0c416e72b9884e56c562fd88eaa4da447926e1cb6cc17c3e04aee7da1a /config/library.db f6a9a1ad7aa553e42e53a8056fa80724785111180a5e2122be4f8732d1e4bc7c /config/state.pickle 
+    ✅ D-29 layer 3: library.db and state.pickle are byte-identical either side of this run
+  
+    EXIT STATUS: 1
+    Did it proceed to 'config -d'?
+      NO. 'ARM 2 read via CONFIG_ROUTE_CLI' is absent from the whole transcript, and
+      the summary records CONFIG_ROUTE_CLI: unavailable
+
+    The overlay is STILL non-empty at this point - 'touch' did not clear it:
+  rc=0
+  44
+
+4c. RESTORED AND GREEN. No cleanup command is issued between 4b and this run: the
+    stale overlay from 4b is still in place, and the REAL script's truncating create
+    is what clears it. That is the fix working, not the harness tidying up.
+
+  🅱  3. ARM 2 — the CLI/confuse view (CONFIG_ROUTE_CLI)
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ✅ ARM 2 no-op overlay /tmp/phase06-check-beets-config-noop.yaml: truncated, then MEASURED at 0 bytes — nothing in it can outrank the vendored config
+    ✅ ARM 2 read via CONFIG_ROUTE_CLI=confuse — 227 lines
+    ✅ ARM 2 assembled from 3 file(s):
+        /tmp/phase06-check-beets-config-noop.yaml
+        /config/config.yaml
+        /venv/lib/python3.12/site-packages/beets/config_default.yaml
+    ✅ T-06-33: the redacted and unredacted dumps are byte-identical — no beets credential exists, asserted rather than assumed
+    D-29 layer 3, after:  fbbdde0c416e72b9884e56c562fd88eaa4da447926e1cb6cc17c3e04aee7da1a /config/library.db f6a9a1ad7aa553e42e53a8056fa80724785111180a5e2122be4f8732d1e4bc7c /config/state.pickle 
+    ✅ D-29 layer 3: library.db and state.pickle are byte-identical either side of this run
+  
+    Summary block of the restored run:
+  📊 6. Summary
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    CONFIG_ROUTE (arm 1):        server-committed
+    CONFIG_ROUTE_CLI (arm 2):    confuse
+    READY_ROUTE:                 watchdog-log-line
+    arm 1 blind:                 0   (1 = nothing below section 4 was measured)
+    arm 2 blind:                 0
+    inter-arm differences:       3 of 26 compared keys (reported, not asserted)
+    redaction no-op (T-06-33):   no-op
+    no-op overlay size (WR-04):  0   (bytes; anything but 0 refuses arm 2)
+    D-29 before:                 fbbdde0c416e72b9884e56c562fd88eaa4da447926e1cb6cc17c3e04aee7da1a /config/library.db f6a9a1ad7aa553e42e53a8056fa80724785111180a5e2122be4f8732d1e4bc7c /config/state.pickle 
+    D-29 after:                  fbbdde0c416e72b9884e56c562fd88eaa4da447926e1cb6cc17c3e04aee7da1a /config/library.db f6a9a1ad7aa553e42e53a8056fa80724785111180a5e2122be4f8732d1e4bc7c /config/state.pickle 
+    toolchain missing:           0
+    arm-1 assertion failures:    0
+    FAILURES total:              0
+  
+  ✅ CONF-01 (copy not move), CONF-02 (incremental AND incremental_skip_later), CONF-05
+     (GB not UK, original_year, musicbrainz.extra_tags), the four rc6 schema-default
+     landmines, the SAFE-01 three and the path stanza are all asserted TRUE of the
+     SERVER-COMMITTED config — the object that will actually import.
+    EXIT STATUS: 0
+
+--------------------------------------------------------------------------------
+5. RESTORE-AND-ASSERT
+--------------------------------------------------------------------------------
+
+scripts/check-beets-config.sh sha256 AFTER the perturbation runs:
+  fc8c6c91c2b014a6b615f620e166e898b4a03500ae50c7b02648882245311f68
+EQUAL to the pre-perturbation sha256 above. Nothing in this task edited the script;
+both perturbations ran against copies in a scratchpad outside the repo.
+
+The overlay is left EMPTY in the container:
+  rc=0
+  -rw-r--r-- 1 beetle beetle 0 Sep 22 00:42 /tmp/phase06-check-beets-config-noop.yaml
+  0
+
+The throwaway library, re-measured at close:
+  rc=0
+  -rw-r--r-- 1 beetle beetle 53248 Sep 22 00:36 /tmp/p6-cbc-throwaway.blb
+  ----
+  53248
+
+git status --porcelain from the worktree root:
+  ?? .planning/phases/06-tagger-configuration-and-dry-run/artifacts/06-15-check-beets-config-rerun.txt
+
+NOT RUN, deliberately: scripts/phase06-oracle.sh, scripts/phase06-incremental-control.sh,
+and any beet import. This task's only remote actions were this script's own reads plus
+the overlay writes named in section 4.
+
+--------------------------------------------------------------------------------
+6. VERDICT
+--------------------------------------------------------------------------------
+
+  --self-test (6 cases, 5 red):           exit 0
+  case 6 falsifiability (mutant copy):    exit 1  (non-zero is the pass)
+  live run, post-change:                  exit 0
+  overlay guard branch A (could not look):exit 1  (non-zero is the pass)
+  overlay guard branch B (measured non-0):exit 1  (non-zero is the pass)
+  restored live run:                      exit 0
+  script sha256 unchanged:                YES
+
