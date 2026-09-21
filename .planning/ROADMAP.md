@@ -911,7 +911,7 @@ the last cheap moment before a path-format error can be applied at scale.
      clause fired and the demonstration was relocated to a genuine one-key rank-0 flip on another
      drawn row (`Benson Boone / American Heart`: `['XW','US']` → XW, `['US','XW']` → US, both
      10 tracks, distance 0.0). `GB`-works-and-`UK`-is-silently-inert was proven separately.*
-**Plans**: 14 plans in 5 waves
+**Plans**: 21 plans in 9 waves *(14 executed 2026-09-20/21; plans 06-15 … 06-21 added 2026-09-22 as GAP CLOSURE after `06-VERIFICATION.md` scored 5/6 — the D-04 "no bare `beet` invocation" assertion was vacuous (CR-01) — and to disposition all 24 findings in `06-REVIEW.md`, which the same verification marked NOT WIRED.)*
 
 | Plan | Objective |
 |------|-----------|
@@ -929,6 +929,13 @@ the last cheap moment before a path-format error can be applied at scale.
 | 06-12 | CONF-05 driven — a *Now!* volume prefers the `GB` release with a track-count check and a negative control — plus D-30 arm 2 and the OQ-4 resolution |
 | 06-13 | The Music Assistant arm, gated on operator confirmation (D-36); CONF-04 stays OPEN if MA never returns |
 | 06-14 | All five criteria re-measured from live state, the Phase 6 closure in `beets.md`, and the Phase 7/9 carry-forward register |
+| 06-15 | CR-01's violation half: the three `beet config` calls in `check-beets-config.sh` made D-04 compliant, the no-op overlay proven empty, and four same-file hygiene findings |
+| 06-16 | CR-01's detector half: the D-04 pattern widened to variable-built invocations, the missing vacuity guard added, and a NAMED exemption register pinned |
+| 06-17 | WR-03: `check-music-consumers.sh` gains a documented `exit 3` (measured-but-not-at-target) so CONF-04's open state has a machine-readable signal |
+| 06-18 | The oracle's remote-command construction: literal allow-list fences on the two destructive knobs, positional-parameter paths, unique temp names |
+| 06-19 | The oracle's fail-closed assertions: no green tick over a could-not-look, an empty-manifest guard, and a DJ-stratum vacuity guard |
+| 06-20 | The incremental control aligned with its sibling: a loud `exit 3` on a usage error, an unpinned path count, and the stated RED-vs-UNKNOWN convention |
+| 06-21 | The 24-finding disposition register, `06-REVIEW.md` wired, and CR-01's residue plus WR-09 carried into Phase 7's entry criteria |
 
 Plans:
 **Wave 1**
@@ -959,6 +966,29 @@ Plans:
 **Wave 5** *(blocked on Wave 4 completion)*
 
 - [x] 06-14-PLAN.md — re-measure all five criteria from live state, write the Phase 6 closure, and hand the carried-forward items to Phases 7 and 9 *(amended in band: re-measurement at close on 2026-09-21 22:04–22:07Z re-ran `check-beets-config.sh` (exit 0, `FAILURES total: 0`) and both `--self-test`s (exit 0), and re-read both consumers directly through their own APIs; the oracle and the two-arm incremental control were NOT re-driven live, because doing so would import, and their results are cited to their committed artifacts instead.)*
+
+**Wave 6 — GAP CLOSURE** *(added 2026-09-22; blocked on Wave 5 completion. `06-VERIFICATION.md`
+scored 5/6: the D-04 assertion plan 06-10 shipped matched the literal token `beet`, but every beet
+invocation this phase's own scripts make is built from a variable, so it asserted over an EMPTY set
+and printed a green tick — with a real violation of that same rule sitting uncaught in
+`check-beets-config.sh`. These three plans own different files and run in parallel.)*
+
+- [ ] 06-15-PLAN.md — add a throwaway `-l` to the three `check-beets-config.sh` invocations, truncate-and-assert the no-op overlay, and close WR-04/WR-05/IN-01/IN-03/IN-04/IN-07
+- [ ] 06-18-PLAN.md — fence `SCRATCH` and `STAMP_REMOTE` to literal allow-lists at both layers, pass remote paths as positional parameters, and close WR-07/WR-08/IN-06/IN-11
+- [ ] 06-20-PLAN.md — a loud `exit 3` on a usage error, a path count that is not pinned to 1, and the RED-vs-UNKNOWN convention stated; closes IN-02/IN-05/IN-10 and IN-08's incremental half
+
+**Wave 7 — GAP CLOSURE** *(blocked on Wave 6 completion)*
+
+- [ ] 06-16-PLAN.md — widen the D-04 pattern to variable-built invocations, add the missing vacuity guard in its own siblings' shape, pin a NAMED exemption register, and close WR-10/IN-13
+- [ ] 06-19-PLAN.md — route every could-not-look to UNKNOWN in `phase06-oracle.sh`, guard the empty manifest and the unexercised DJ stratum; closes WR-01/WR-02/WR-06/IN-09/IN-12 and IN-08's oracle half
+
+**Wave 8 — GAP CLOSURE** *(blocked on Wave 7 completion — shares `quick-health-check.sh` with 06-16)*
+
+- [ ] 06-17-PLAN.md — gate the green banner below a documented `exit 3`, and teach the health entry point that 3 means CONF-04 pending rather than BROKEN
+
+**Wave 9 — GAP CLOSURE** *(blocked on Waves 6–8 completion)*
+
+- [ ] 06-21-PLAN.md — the 24-row disposition register, `06-REVIEW.md` wired to it, `DEF-06-21-*` entries, and two new Phase 7 entry criteria carrying CR-01's residue and WR-09
 
 **Phase 6 disposition:** **CLOSED WITH ONE OPEN REQUIREMENT — CONF-04**, named, on its Jellyfin half
 only. Criteria 1, 2, 3 and 5 are TRUE and were re-measured from live state at close. Criterion 4
