@@ -68,9 +68,13 @@
 #   default mode  - every red finding increments FAILURES and the script ends non-zero.
 #   --baseline    - every finding is printed and the script always ends zero, so a before-state
 #                   can be recorded while a config is still being brought to its target.
-#   --self-test   - no ssh, no docker. Drives the assertion function over five synthetic dumps,
-#                   four of which MUST go red, and exits non-zero unless every expectation is
-#                   met. A control that can only pass is uninformative.
+#   --self-test   - no ssh, no docker. SIX cases, FIVE of which MUST go red, exiting non-zero
+#                   unless every expectation is met. Five drive the assertion function over
+#                   synthetic dumps; the sixth is a SOURCE assertion, because the assertion
+#                   function is pure over a dump and cannot see an invocation flag - it requires
+#                   the D-04 `-l` + `-c` contract of every `beet` call in this file and proves
+#                   itself against a synthetic -c-only line. A control that can only pass is
+#                   uninformative.
 #
 # ENV OVERRIDES - exactly one, in the ${VAR:-default} form so a grep can prove it exists:
 #     EXTRA_FORBIDDEN_SUBSTRINGS   colon-separated, APPENDED to a built-in list of substrings
@@ -374,6 +378,55 @@ expect_ne() {  # key, forbidden, got, why
 }
 
 # =============================================================================================
+# THE D-04 SOURCE CONTRACT, AND WHY IT IS CHECKED AGAINST THIS FILE'S OWN TEXT.
+#
+# assert_effective_config() below is pure over a DUMP, so it cannot see invocation flags - which
+# means the thing plan 06-15 actually fixed (the missing `-l`) is invisible to every existing
+# self-test case. This pair of functions closes that: they read this script's own source and
+# require every line that invokes `beet` to carry BOTH `-l` and `-c`.
+#
+# EVERY PATTERN BELOW IS ASSEMBLED FROM `d` RATHER THAN WRITTEN AS A LITERAL. If the literal
+# expansions appeared here, this checker would match its OWN pattern lines and report itself as
+# a violation - and the repo-wide D-04 grep in quick-health-check.sh would count them too. The
+# variable is the only thing keeping the detector out of its own haystack.
+# =============================================================================================
+beet_invocation_violations() {  # stdin: shell source -> stdout: one line per non-compliant call
+  local d='$' line
+  local pat_bin="${d}{BEET_BIN}" pat_lib="${d}{THROWAWAY_DB}" pat_ovl="${d}{OVERLAY}"
+  while IFS= read -r line; do
+    [[ "$line" =~ ^[[:space:]]*# ]] && continue
+    [[ "$line" == *"$pat_bin"* ]] || continue
+    if [[ "$line" != *"$pat_lib"* || "$line" != *"$pat_ovl"* ]]; then
+      printf '%s\n' "$line"
+    fi
+  done
+}
+
+assert_beet_invocation_contract() {
+  local d='$' real synth synth_bad n
+  ARM1_FAILS=0
+
+  real="$(beet_invocation_violations <"${BASH_SOURCE[0]}")"
+  if [[ -n "$real" ]]; then
+    n="$(printf '%s\n' "$real" | wc -l | tr -d ' ')"
+    cfg_fail "D-04 contract: $n beet invocation(s) in this script's own source do NOT carry both -l and -c — $(printf '%s' "$real" | tr -s ' ')"
+  else
+    cfg_pass "D-04 contract: every beet invocation in this script's own source carries -l ${d}{THROWAWAY_DB} AND -c ${d}{OVERLAY}"
+  fi
+
+  # The driven negative. A checker that only ever sees compliant input has not been shown to
+  # reject anything, so it is handed a synthetic line carrying -c and no -l, and the REJECTION
+  # is what counts as this case's red.
+  synth_bad="    beet_exec \"${d}{BEET_BIN} -c ${d}{OVERLAY} config -d\""
+  synth="$(printf '%s\n' "$synth_bad" | beet_invocation_violations)"
+  if [[ -n "$synth" ]]; then
+    cfg_fail "D-04 contract, driven: the synthetic -c-only invocation was REJECTED, as it must be — $(printf '%s' "$synth" | tr -s ' ')"
+  else
+    echo -e "    ${RED}· D-04 contract: the synthetic -c-only invocation was NOT rejected — the checker is BLIND${NC}"
+  fi
+}
+
+# =============================================================================================
 # THE ASSERTION FUNCTION. Pure: JSON in, findings out, ARM1_FAILS set. No ssh, no docker, no
 # globals read other than the forbidden-substring lists - which is what lets --self-test drive
 # every red branch below without a container.
@@ -412,16 +465,21 @@ assert_effective_config() {
   has_gb="$(jget "$json" '.match.preferred.countries | if type=="array" then (index("GB") != null) else "UNKNOWN" end')"
   has_uk="$(jget "$json" '.match.preferred.countries | if type=="array" then (index("UK") != null) else "UNKNOWN" end')"
   if [[ "$has_gb" == "UNKNOWN" ]]; then
+    # The list itself is absent or is not a list. That is ONE finding about ONE key, so the UK
+    # sub-check below is not reached: reporting the same absence twice would inflate the red
+    # count without adding a second thing that is wrong.
     cfg_fail "CONF-05 match.preferred.countries: UNKNOWN, not green — absent, or not a list"
-  elif [[ "$has_gb" == "true" ]]; then
-    cfg_pass "CONF-05 match.preferred.countries contains GB — $countries"
   else
-    cfg_fail "CONF-05 match.preferred.countries does NOT contain GB — $countries"
-  fi
-  if [[ "$has_uk" == "true" ]]; then
-    cfg_fail "CONF-05 match.preferred.countries contains UK — MusicBrainz stores GB, so UK matches nothing and fails SILENTLY: the import simply prefers a different release"
-  elif [[ "$has_uk" == "false" ]]; then
-    cfg_pass "CONF-05 match.preferred.countries carries no UK entry"
+    if [[ "$has_gb" == "true" ]]; then
+      cfg_pass "CONF-05 match.preferred.countries contains GB — $countries"
+    else
+      cfg_fail "CONF-05 match.preferred.countries does NOT contain GB — $countries"
+    fi
+    # IN-01: routed through expect_ne rather than hand-rolled, so the two helpers stay symmetric
+    # and this case inherits expect_ne's UNKNOWN arm. The explanatory sentence is the load-bearing
+    # part of this check and is preserved word for word.
+    expect_ne "CONF-05 match.preferred.countries contains UK" "true" "$has_uk" \
+      "MusicBrainz stores GB, so UK matches nothing and fails SILENTLY: the import simply prefers a different release"
   fi
   expect_eq "CONF-05 match.preferred.original_year" "true" "$(jget "$json" '.match.preferred.original_year')"
 
@@ -498,8 +556,13 @@ assert_effective_config() {
     fi
   done
   if [[ -n "$EXTRA_FORBIDDEN_SUBSTRINGS" ]]; then
-    local IFS=':'
-    for forb in $EXTRA_FORBIDDEN_SUBSTRINGS; do
+    # IN-07: field splitting on ':' is WANTED here; pathname expansion is NOT. The old
+    # `local IFS=':'; for forb in $EXTRA_FORBIDDEN_SUBSTRINGS` gave both, so a value carrying
+    # `*` or `?` globbed against the repo root. `read -r -a` splits on IFS and cannot glob at
+    # all, which is the behaviour wanted and only that behaviour.
+    local -a forb_arr=()
+    IFS=':' read -r -a forb_arr <<<"$EXTRA_FORBIDDEN_SUBSTRINGS"
+    for forb in "${forb_arr[@]}"; do
       [[ -z "$forb" ]] && continue
       if printf '%s' "$raw" | grep -qF -- "$forb"; then
         cfg_fail "forbidden substring present (EXTRA_FORBIDDEN_SUBSTRINGS): '$forb'"
@@ -509,9 +572,9 @@ assert_effective_config() {
 }
 
 # =============================================================================================
-# --self-test. Five synthetic dumps, four of which MUST go red. Same device as
-# scripts/spike03-wrtag-arms.sh:23-27: drive the fail-closed branches without touching the
-# estate. A control that can only pass is uninformative.
+# --self-test. SIX cases, FIVE of which MUST go red: 5 synthetic dumps plus one assertion over
+# this file's own source. Same device as scripts/spike03-wrtag-arms.sh:23-27: drive the
+# fail-closed branches without touching the estate. A control that can only pass is uninformative.
 # =============================================================================================
 synthetic_correct_dump() {
   cat <<'DUMPEOF'
@@ -562,7 +625,7 @@ DUMPEOF
 }
 
 run_self_test() {
-  echo "🧪 --self-test — driving the assertion function over five synthetic dumps"
+  echo "🧪 --self-test — 6 cases: 5 synthetic dumps, plus the D-04 contract over this file's own source"
   rule
   echo ""
 
@@ -609,12 +672,28 @@ run_self_test() {
   # 5. Fully correct. Zero red.
   run_case "fully correct" 0 "$(synthetic_correct_dump)"
 
+  # 6. NOT a dump case. The five above drive a pure function over synthetic TEXT and therefore
+  #    cannot see an invocation flag; this one reads this script's own SOURCE and requires the
+  #    D-04 `-l` + `-c` contract of every `beet` call in it. Its red is a driven negative: a
+  #    synthetic -c-only line that the checker must reject. Strip `-l` from the three real
+  #    invocations and this case goes to 2 red and --self-test exits non-zero.
+  case_name="the -l + -c contract over this script's own source"; expect_reds=1
+  echo -e "  ${BLUE}case: $case_name  (expect $expect_reds red)${NC}"
+  assert_beet_invocation_contract
+  if [[ $ARM1_FAILS -eq $expect_reds ]]; then
+    echo -e "  ${GREEN}✅ case '$case_name': $ARM1_FAILS red, as expected${NC}"
+  else
+    echo -e "  ${RED}❌ case '$case_name': $ARM1_FAILS red, expected $expect_reds${NC}"
+    st_failures=$((st_failures + 1))
+  fi
+  echo ""
+
   rule
   if [[ $st_failures -gt 0 ]]; then
-    echo -e "${RED}❌ --self-test: $st_failures of 5 cases did not behave as expected${NC}"
+    echo -e "${RED}❌ --self-test: $st_failures of 6 cases did not behave as expected${NC}"
     return 1
   fi
-  echo -e "${GREEN}✅ --self-test: all 5 cases behaved as expected (4 of them red)${NC}"
+  echo -e "${GREEN}✅ --self-test: all 6 cases behaved as expected (5 of them red)${NC}"
   return 0
 }
 
@@ -685,7 +764,9 @@ else
       warn "readiness: not yet — the watchdog line is absent after attempt $attempt; sleeping ${READY_SLEEP}s"
       sleep "$READY_SLEEP"
     else
-      fail "readiness: UNKNOWN, not green — the watchdog registration line never appeared in $((READY_ATTEMPTS * READY_SLEEP))s. A rejected config kills the WATCHDOG while the page keeps serving, so a serving UI is not evidence."
+      # IN-03: the loop sleeps only BETWEEN attempts, so the wait is one sleep short of
+      # attempts x sleep. Rendering the larger number overstates what was actually waited.
+      fail "readiness: UNKNOWN, not green — the watchdog registration line never appeared in $(( (READY_ATTEMPTS - 1) * READY_SLEEP ))s. A rejected config kills the WATCHDOG while the page keeps serving, so a serving UI is not evidence."
     fi
   done
 fi
