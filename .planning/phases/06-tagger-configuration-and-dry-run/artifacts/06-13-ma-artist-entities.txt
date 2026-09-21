@@ -1,0 +1,418 @@
+================================================================================
+06-13 — MUSIC ASSISTANT ARTIST-ENTITY READ-BACK (CONF-04, second half)
+================================================================================
+Plan        : 06-13, wave 4, autonomous: false (D-36)
+Criterion   : CONF-04 — "parsed correctly" = N distinct browseable artist entities
+              in EACH consumer's OWN API, checked separately (D-22).
+Ordering    : Jellyfin was proven FIRST (plan 06-03) and Music Assistant LAST,
+              per D-25, because MA NEVER PURGES STALE ENTRIES: anything MA
+              indexes it keeps, and the ZFS fence does not reach MA's database.
+
+
+================================================================================
+SECTION 1 — TASK 1: THE D-36 OPERATOR GATE
+================================================================================
+
+WHY THIS GATE EXISTS
+  D-36 makes the MA arm a stop-and-ask, NOT a retry loop. At research time
+  (2026-09-20T03:26Z, measured twice) `172.16.1.31` answered ICMP while TCP 8095
+  (Music Assistant) and 8123 (Home Assistant) were both CLOSED — because the host
+  was down for maintenance, which is the operator's own statement and not an
+  inference drawn from a probe. A check run blind against a down service produces
+  a red that means "could not look", and this estate's standing rule
+  (README § Health Checks) is that "could not look" must never be folded into a
+  verdict. The host being reachable is also NOT the same thing as the operator
+  being ready for MA to be exercised, which is why a green probe alone does not
+  authorise task 2.
+
+
+--------------------------------------------------------------------------------
+1.1  CURRENT THREE-PART REACHABILITY MEASUREMENT
+--------------------------------------------------------------------------------
+Taken  : 2026-09-21T20:16:03Z  (UTC, from the probing host's own clock)
+From   : LXC 100, `root@172.16.1.159` (`hostname` = selfhost), over ssh with
+         BatchMode=yes. Every remote command is bounded LINUX-side with
+         `timeout`, because macOS has no GNU `timeout`; `set -o pipefail` is set
+         inside the remote command string, and each rc is captured on the very
+         line after its command with NO local pipe in front of it. RC 124
+         (timeout) would have been branched out FIRST as *could not look*, held
+         distinct from a measured refusal.
+
+Three parts, deliberately separate, so that "host down" and "service down" stay
+distinguishable — at research time the host answered ICMP while both ports were
+closed, and those are different situations with different meanings:
+
+    probe                               result                     verdict
+    ----------------------------------  -------------------------  -----------
+    ICMP  ping 172.16.1.31 (-c 3 -W 2)  rc=0, 3/3 received, 0%     HOST UP
+                                        loss, rtt avg 0.561 ms
+    TCP   172.16.1.31:8095  (MA)        rc=0  (nc -z -w 4)         PORT OPEN
+    TCP   172.16.1.31:8123  (HA)        rc=0  (nc -z -w 4)         PORT OPEN
+
+Neither rc was 124, so none of the three is a timeout, and none is a
+could-not-look.
+
+--------------------------------------------------------------------------------
+1.2  PORT-OPEN IS NOT SERVICE-UP — BOTH WERE CONFIRMED AT THE HTTP LAYER
+--------------------------------------------------------------------------------
+A `nc -z` success proves a listener accepted a TCP handshake, not that Music
+Assistant is serving. Both services were therefore also read at the application
+layer, read-only and unauthenticated:
+
+    GET http://172.16.1.31:8095/info   curl rc=0
+        server_version = 2.11.0b2
+        schema_version = 68
+        server_id      = d2b06ba2931245ba9133cce867f7ff42
+
+    GET http://172.16.1.31:8123/       HTTP 200  (curl rc=0)
+
+MEASURED VERDICT: the maintenance window recorded on 2026-09-20 HAS CLOSED.
+Music Assistant is online and serving, and Home Assistant answers 200. This
+supersedes 06-RESEARCH.md § "Music Assistant" line 713 ("MA was not reachable at
+research time"), which stays as the dated observation it was.
+
+--------------------------------------------------------------------------------
+1.3  A VERSION DRIFT THE GATE ANSWER MUST ACCOUNT FOR
+--------------------------------------------------------------------------------
+The live server reports **2.11.0b2**. `MA_VERSION_PROVEN` in
+`scripts/check-music-consumers.sh` (line 236) reads **2.11.0b0**, so that
+script's version-drift branch (lines 746-752) warns BY DESIGN until the
+assertions are re-proven and the constant is moved. Plan 06-13 owns re-proving
+them and moving the constant in the SAME commit; nothing else in the wave does.
+
+This also changes what task 2 must resolve rather than assume:
+  - Research assumption A1 (that 2.11.0b0 matches the 2.10.4 source read of
+    `TAG_SPLITTER=";"` and the `ARTISTS`-preference order) was never checked
+    against a running server at all, and the running server is now a DIFFERENT
+    build again — b2, not b0.
+  - Research assumption A2 (that `music/tracks/library_items` is the command
+    whose objects carry `artists[]`) is recorded in 06-RESEARCH.md line 744 as
+    **NOT VERIFIED**, with `GET /api-docs/commands.json` named as the script's
+    own authority. Task 2 resolves it there, CONFIRMED or FALSIFIED, and
+    corrects the script's comment in the same commit if falsified — a comment
+    naming a command that does not exist is the exact defect class CR-01 already
+    caught once in this file.
+
+--------------------------------------------------------------------------------
+1.4  WHAT THE AUTOMATED PROBE WILL REPORT EITHER WAY
+--------------------------------------------------------------------------------
+The MA gate body plan 06-03 added to `check-music-consumers.sh` already fails
+CLOSED and in the house form. An unreachable MA reaches `ma_fail` with the
+literal string `UNKNOWN, not green` (lines 1310, 1332, 1341) — never a `pass`,
+never a `warn`, and never the `scope != library` out-of-scope branch that
+section 4 uses at lines 973-982. That branch is the WRONG precedent here and is
+not reused.
+
+--------------------------------------------------------------------------------
+1.5  THE OPERATOR'S ANSWER
+--------------------------------------------------------------------------------
+STATUS: AWAITING THE OPERATOR. Execution STOPPED at task 1 and the three-part
+measurement above was put in front of them before the question was asked, so
+they answer against a measurement taken minutes ago rather than the three-day-old
+one from 06-RESEARCH.md.
+
+Deliberate omission, and the reason for it: the three option identifiers are NOT
+written anywhere above this line. Task 1's own verify greps this file for one of
+them as its proof that an answer was recorded, so listing them as part of the
+question would have satisfied that predicate off the question text alone — a
+check that cannot fail is not a check. This phase has already lost seven plans
+to predicates that could never match or could never fail; this one is kept able
+to do both. The identifiers live in 06-13-PLAN.md § task 1 § options, and
+exactly one of them is written below, once, when the operator has chosen it.
+
+    OPERATOR ANSWER (verbatim) : "Run the check (option 1)"
+    OPTION ID                  : run-now
+    ANSWERED AT (UTC)          : 2026-09-21T21:46:28Z
+
+The operator was shown the three-probe table in § 1.1, the HTTP-layer
+confirmation in § 1.2 (MA `/info` server_version=2.11.0b2 schema_version=68, HA
+200), AND BOTH CAVEATS IN § 1.3 — the 2.11.0b0 -> 2.11.0b2 `MA_VERSION_PROVEN`
+drift, and that A1 and A2 are both still unresolved — and chose to run on that
+basis. The answer is therefore given against a measurement taken in the same
+session and with the two known gaps in front of them, which is what D-36 asks of
+this gate.
+
+STATUS: GATE PASSED. Task 2 is authorised and runs. Task 3 records CONF-04's
+verdict for BOTH consumers as SEPARATE verdicts on one row — never summed.
+
+CONSEQUENCE OF EACH BRANCH, stated here so the record is unambiguous before the
+answer lands:
+  - If the answer authorises the run, task 2 executes the D-22 read-back and
+    task 3 records CONF-04's verdict for both consumers on one row.
+  - If the answer declines or defers, task 2 DOES NOT RUN, and task 3 records
+    CONF-04 as OPEN with the reason and the date, in BOTH the criteria table and
+    the `### Still open` list of `stacks/selfhosted/arrs/beets.md`, carried into
+    Phase 7's entry criteria as a named blocker. CONF-04 must NEVER read as
+    passed on an unreachable consumer, and the Jellyfin half and the MA half must
+    NEVER be summed into a single verdict.
+
+
+================================================================================
+SECTION 2 — TASK 2: A2/A1 RESOLUTION AND THE D-22 READ-BACK
+================================================================================
+NOT YET RUN. Gated on section 1.5.
+
+For the record, the subjects are already fixed, so task 2 cannot drift onto
+easier ones. They are the pinned `ARTISTS` proof rows from plan 06-03
+(artifacts/06-03-jellyfin-artist-before.txt § SECTION 1), which is what makes MA
+checkable on the SAME subjects Jellyfin was:
+
+    expected N  ARTISTS value                      track
+    ----------  --------------------------------   ----------------------------
+             2  Katy Perry;Snoop Dogg              California Gurls
+             4  Lady Gaga;T.I.;Too $hort;Twista    Jewels n' Drugs   (U+2019 in
+                                                   the real filename, not ASCII)
+             2  Nate Ruess;P!nk                    Just Give Me a Reason
+
+Arity alone is NOT the assertion — Phase 3 measured 4 tracks written onto
+entirely different songs with counts that looked plausible, so entity IDENTITY
+and distinctness are asserted too, and `music/albums/count` is excluded as
+evidence by name because it silently ignores its `provider` argument.
+
+
+--------------------------------------------------------------------------------
+2.1  A2 — RESOLVED AGAINST THE SERVER'S OWN AUTHORITY: **CONFIRMED**
+--------------------------------------------------------------------------------
+Run 2026-09-21 from LXC 100. `GET /api-docs/commands.json` -> HTTP 200, 190,819
+bytes, a JSON ARRAY of 311 command objects, each shaped
+`{command, category, summary, description, parameters, return_type,
+authenticated, required_scope}`.
+
+A successful `library_items` call was explicitly NOT accepted as the resolution.
+A command can answer and still not be the one that carries the field; the whole
+reason A2 was raised is that research INFERRED the name from the album-side
+command's shape. So all four load-bearing claims were checked against the schema:
+
+    claim                                        schema says                verdict
+    -------------------------------------------  -------------------------  --------
+    `music/tracks/library_items` exists           1 match of 311 commands    CONFIRMED
+    it returns a list of tracks                   return_type =              CONFIRMED
+                                                  "Array of Track"
+    a Track carries artists[]                     `Track` schema (from       CONFIRMED
+                                                  /api-docs/schemas.json)
+                                                  declares: item_id,
+                                                  provider, name, version,
+                                                  sort_name, uri,
+                                                  external_ids, is_playable,
+                                                  media_type,
+                                                  provider_mappings,
+                                                  metadata, favorite,
+                                                  position, date_added,
+                                                  duration, **artists**,
+                                                  last_played, album,
+                                                  disc_number, track_number,
+                                                  audio_metadata
+    it can be filtered to one provider instance   parameter `provider`:      CONFIRMED
+                                                  "Filter by provider
+                                                  instance ID (single
+                                                  string or list)"
+
+**A2 VERDICT: CONFIRMED.** The command name research guessed is correct, the
+response is a bare ARRAY (so it is NOT `.result`-wrapped, and the script's
+`type == "array"` guard is the right shape check), and `artists` is a documented
+Track field rather than a lucky property of one response. No correction to the
+script's command name was needed; the *comment* was corrected from "NOT
+confirmed" to the resolved fact, in this same commit, because a comment that
+understates what is known stops the next reader looking just as surely as one
+that overstates it (CR-01's lesson, in the other direction).
+
+**T-06-69 got STRONGER as a side effect, and it is worth stating.** The schema
+shows `music/albums/count` declares ONLY `favorite_only` and `album_types`. It
+has **no `provider` parameter at all**. So "it silently ignores its provider
+argument" is understated: the argument is not ignored by a filter that declines
+to apply, it is a parameter that DOES NOT EXIST, and the integer returned counts
+the whole library including Spotify. It is excluded as evidence by name, and this
+check uses `library_items` exclusively.
+
+--------------------------------------------------------------------------------
+2.2  A1 — RE-CONFIRMED AGAINST THE RUNNING 2.11.0b2: **CONFIRMED**
+--------------------------------------------------------------------------------
+A1 is "the running build matches the 2.10.4 source read: MA prefers the `ARTISTS`
+tag and splits it on `;`". Research read that from source at 2.10.4 and rated it
+MEDIUM for 2.11.
+
+The source-read route is CLOSED on this estate: `/mnt/fast/secrets/ma-deercrest.env`
+declares no `HA_SSH_HOST`/`HA_SSH_KEY`, so there is no path from here to the
+add-on's installed `music_assistant/helpers/tags.py`. That is recorded as a
+could-not-look on the *route*, not on A1 — because A1 is answerable BEHAVIOURALLY
+against the running build, which is stronger evidence than any source read: it
+tests what the server does, not what a file says it should do.
+
+The test, and why it cannot be satisfied by accident:
+
+    row 2  file tags:  Artist  = "Katy Perry"          <- ONE name, no ";"
+                       ARTISTS = "Katy Perry;Snoop Dogg"
+           MA returns: Katy Perry | Snoop Dogg          (2 distinct entities)
+
+    row 3  file tags:  Artist  = "P!nk"                <- ONE name, no ";"
+                       ARTISTS = "Nate Ruess;P!nk"
+           MA returns: P!nk | Nate Ruess                (2 distinct entities)
+
+"Snoop Dogg" and "Nate Ruess" appear in NO tag on those files except `ARTISTS`.
+MA could not have obtained them from `Artist`, which holds a single name. So on
+2.11.0b2 the server demonstrably READ the `ARTISTS` tag and SPLIT it on `;`.
+Both halves of A1 hold. Row 3 also shows MA normalises ORDER (the tag puts the
+album artist second; MA returns it first), which 06-03 recorded and which is why
+the order tell is a Jellyfin-side signal only.
+
+**A1 VERDICT: CONFIRMED on 2.11.0b2**, behaviourally rather than by source read.
+`MA_VERSION_PROVEN` moves 2.11.0b0 -> 2.11.0b2 in the same commit as this proof.
+
+--------------------------------------------------------------------------------
+2.3  D-17 — THE PROVIDER, NAMED EXPLICITLY, AND NOT NARROWED
+--------------------------------------------------------------------------------
+    provider instance : filesystem_local--XJaJWNUS   (the pinned local provider)
+    domain            : filesystem_local
+    type              : music
+    enabled           : true
+
+Every read below is provider-filtered to that instance id. Unfiltered reads are
+not used anywhere: a live Spotify provider is enabled in this MA, and an
+unfiltered read would let Spotify's catalogue answer for the NFS export.
+
+`music/tracks/library_items` provider-filtered returns **1,244 tracks**, which is
+exactly the library's file count — the same 1,244 the Phase 1 fence and the
+Jellyfin census both report. DJ content is not excluded and the provider path is
+not narrowed: D-17 holds.
+
+--------------------------------------------------------------------------------
+2.4  THE `summary` PARAMETER — A TRAP THAT WAS CHECKED, AND DID NOT FIRE
+--------------------------------------------------------------------------------
+The schema revealed a parameter neither the research nor the plan anticipated:
+
+    summary (boolean, default TRUE) — "return slim summary items containing only
+    the fields needed for a list view. Set to False to get fully hydrated items."
+
+The script reads with the default. If the slim shape truncated `artists[]`, every
+count below would be measuring a list-view stub while looking perfectly healthy —
+the exact defect class that has cost this phase seven plans.
+
+So both were read and compared: **summary=true and summary=false return 1,244
+tracks each, and for all three proof rows the artists arrays are identical in
+length, names, item_ids and uris.** The slim shape does NOT truncate artists[].
+The default is therefore left in place deliberately, and the reason is recorded
+in the script so nobody "fixes" it later.
+
+--------------------------------------------------------------------------------
+2.5  THE D-22 READ-BACK — IDENTITY AND DISTINCTNESS, NOT ARITY
+--------------------------------------------------------------------------------
+Matched locally by EXACT track name (case-insensitively), never via MA's `search`
+argument, which 02-07 measured returning [] for an item's own exact name.
+
+ROW 2 — California Gurls                                          **AT TARGET**
+    ARTISTS tag        : Katy Perry;Snoop Dogg          (expected N = 2)
+    MA artists length  : 2
+    MA artist names    : Katy Perry | Snoop Dogg
+    MA artist item_ids : 73 | 244
+    MA artist uris     : library://artist/73 | library://artist/244
+    distinct item_ids  : 2 of 2      distinct names : 2 of 2
+    any name holds ';' : 0
+    mb artist ids      : 2  -> short-circuit CANNOT fire; valid splitter test
+    track uri          : library://track/1342
+
+ROW 3 — Just Give Me a Reason                                     **AT TARGET**
+    ARTISTS tag        : Nate Ruess;P!nk                (expected N = 2)
+    MA artists length  : 2
+    MA artist names    : P!nk | Nate Ruess              (order normalised by MA)
+    MA artist item_ids : 63 | 201
+    MA artist uris     : library://artist/63 | library://artist/201
+    distinct item_ids  : 2 of 2      distinct names : 2 of 2
+    any name holds ';' : 0
+    mb artist ids      : 2  -> short-circuit CANNOT fire; valid splitter test
+    track uri          : library://track/297
+
+ROW 1 — Jewels n' Drugs                          **MEASURED DISCREPANCY, 3 of 4**
+    ARTISTS tag        : Lady Gaga;T.I.;Too $hort;Twista  (expected N = 4)
+    MA artists length  : 3
+    MA artist names    : T.I. | Lady GaGa | Too $hort
+    MA artist item_ids : 159 | 209 | 217
+    MA artist uris     : library://artist/159 | .../209 | .../217
+    distinct item_ids  : 3 of 3      distinct names : 3 of 3
+    any name holds ';' : 0
+    mb artist ids      : 4  -> short-circuit CANNOT fire; valid splitter test
+    track uri          : library://track/508
+
+Identity, not just arity, is asserted: every returned artist is a distinct
+library entity with its own `item_id` and browseable `uri`. Rows 2 and 3 are
+therefore genuinely "N distinct browseable artist entities", which is what D-22
+asks for, and not one artist named `A;B` — no artist name anywhere in the result
+contains a `;`.
+
+--------------------------------------------------------------------------------
+2.6  ROW 1 CHARACTERISED — TWO CAUSES RULED OUT, ONE QUESTION LEFT OPEN
+--------------------------------------------------------------------------------
+The row is NOT dropped and NOT explained away. Three candidate causes were
+tested; two are eliminated by measurement:
+
+  RULED OUT — the `;` delimiter. Rows 2 and 3 prove the splitter works on this
+  exact build, by the argument in § 2.2: a name that exists only in `ARTISTS`
+  came back as its own entity. A delimiter failure cannot be selective.
+
+  RULED OUT — the `mb_id_count == 1` short-circuit. The file carries FOUR
+  `MUSICBRAINZ_ARTISTID` values
+  (`0bc858a1…;650e7db6…;8e0fe7bd…;f7ba7fbe…`). The short-circuit fires only at
+  exactly one id, and had it fired the answer would be 1 artist, not 3.
+
+  LOCATED — the loss is at MA's artist-ENTITY stage, not at tag parsing.
+  `music/artists/library_items` (provider-filtered) returns 66 artist entities,
+  and **"Twista" is not among them** — nor is any name matching /wista/i. The
+  other three names all resolved to real entities. "Lady GaGa" (item_id 209) is a
+  PRE-EXISTING entity whose display name came from the `Artist` tag spelling,
+  which is why MA shows "Lady GaGa" where the `ARTISTS` tag says "Lady Gaga" —
+  a de-duplication artefact, not a parsing error.
+
+  STILL OPEN, stated precisely instead of guessed: MA's artists-per-track
+  distribution across this library is **1,220 tracks at 1, 22 at 2, 2 at 3, and
+  none above 3** — and this file is the library's ONLY 4-value `ARTISTS` tag. So
+  "MA caps the returned list at 3" and "Twista specifically failed to map" are
+  BOTH consistent with every measurement available, and a sample of one cannot
+  tell them apart. Manufacturing a fourth-artist test case would mean writing to
+  the library, which D-25 forbids here for exactly the phantom reason. **Phase 7
+  is where a second >=4-artist track first lands, and that is the measurement
+  that discriminates.** Carried forward rather than resolved.
+
+--------------------------------------------------------------------------------
+2.7  NOTHING WAS WRITTEN — MANIFEST IDENTICAL, WITH A CONTROL
+--------------------------------------------------------------------------------
+`LC_ALL=C find` over the three proof albums, `%p|%s|%T@` (path, size, mtime),
+`LC_ALL=C sort`, taken BEFORE the login and AFTER the last read:
+
+    before : 88 entries
+    after  : 88 entries
+    cmp    : IDENTICAL — path, size and mtime all unchanged
+
+CONTROL, because "identical" is worthless if the comparison cannot see a
+difference: a planted extra line was appended to a COPY in /tmp (never on tank)
+and `cmp` detected it. So the identical verdict above is a real result and not a
+comparison that always passes.
+
+D-21's fenced `rw` grant DID NOT FIRE. The `:ro` invariant is unbroken. Every MA
+command issued was a read (`auth/login`, `config/providers`,
+`music/tracks/library_items`, `music/artists/library_items`) and every filesystem
+touch was `find`/`ffprobe`. **MA holds no phantom from this task.**
+
+--------------------------------------------------------------------------------
+2.8  CREDENTIAL HANDLING (T-06-66)
+--------------------------------------------------------------------------------
+    /mnt/fast/secrets/ma-deercrest.env  measured mode 600, owner root -> sourced.
+    Gate is REFUSE-not-source: had it been anything else the run would have
+    stopped with "UNKNOWN, not green" rather than reading it.
+    Sourced WITHOUT `set -a`, so nothing is exported to child processes.
+    The password reached `jq` through ITS OWN ENVIRONMENT as `$ENV.MA_PASSWORD`
+    (the `VAR=... jq ...` prefix form), never as an argv word.
+    The JWT reached curl only through `-H @<(printf ...)`, so argv carried a
+    path and never the token; `printf` is a bash builtin and has no argv.
+    Neither the password nor the token was printed to the transcript.
+    /proc/<pid>/cmdline is world-readable on LXC 100, which is why this matters.
+
+
+================================================================================
+NOTHING WAS WRITTEN — WHOLE-PLAN STATEMENT
+================================================================================
+Task 1 issued three reachability probes, one unauthenticated `GET /info` against
+MA and one unauthenticated `GET /` against HA. Task 2 issued four authenticated
+MA READ commands, two `/api-docs` GETs, and read-only `find`/`ffprobe` over the
+three proof albums. No POST that mutates, no import, no scan trigger, no tag
+write. Nothing under /mnt/tank/media was modified, proven by § 2.7's manifest
+with its control — so MA holds no phantom from this plan, and D-21's fenced `rw`
+write never fired.
