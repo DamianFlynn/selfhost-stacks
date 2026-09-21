@@ -1,0 +1,1013 @@
+================================================================================
+PHASE 6 / PLAN 06-12 / TASK 2 — D-30 ARM 2: THE FLASK PREVIEW CROSS-CHECK
+OQ-4 resolved by inspection, the agreement basis redefined and recorded, and
+the two arms compared on it.
+================================================================================
+
+Run          2026-09-21, LXC 100 `selfhost` (172.16.1.159)
+Container    beets-flask, metasauce/beets-flask:v2.0.0-rc6, beets 2.12.0,
+             started 2026-09-20T22:37:55Z, RestartCount 0 (never restarted here)
+Inbox        /mnt/tank/downloads/complete/nzb/_inbox/02-review  -> `autotag: preview`
+             `gui.inbox.debounce_before_autotag: 30`
+Subject      one drawn row of the committed sample:
+             /mnt/tank/downloads/complete/nzb/music/
+               Benson.Boone.-.Fireworks.&.Rollerblades.(2024).[16Bit-44.1kHz].FLAC.[PMEDIA].(star)-xpost
+             15 FLAC, 313 MB
+Throwaway    02-review/_PHASE06-12-XCHECK-20260921T083018Z   (copied, then removed)
+Driver 1     /mnt/fast/safety/phase06/06-12-stage/06-12-preview.sh          (the transit)
+Driver 2     /mnt/fast/safety/phase06/06-12-stage/06-12-preview-fixed.sh    (the fixed re-read)
+Instrument   /mnt/fast/safety/phase06/06-12-stage/06-12-preview-compare.py
+             /mnt/fast/safety/phase06/06-12-stage/06-12-preview-state.py
+
+VERDICT      **AGREE** — 15 of 15 tuples identical, zero lines either side, on
+             the OQ-4-resolved basis. Driver 2 exit 0, GREEN.
+             `02-review` holds ZERO entries at `-mindepth 1`.
+             Driver 1 exited 1 on TWO defects IN THE INSTRUMENT — neither in the
+             configuration under test — and both are recorded in full below
+             rather than quietly corrected.
+
+--------------------------------------------------------------------------------
+1. OQ-4 — RESOLVED. rc6's `preview` DOES NOT PRODUCE DESTINATION PATHS.
+--------------------------------------------------------------------------------
+The plan makes this the literal first step, because the comparison cannot be
+written until it is answered. It is answered three independent ways, and all
+three agree.
+
+  (a) THE CLASS DOCSTRING, quoted from the running image:
+      `backend/beets_flask/importer/session.py@v2.0.0-rc6`
+          class PreviewSession(BaseSession):
+              """Preview what would be imported. Only fetches candidates."""
+
+  (b) A GREP OVER THE WHOLE INSTALLED PACKAGE. `destination` and `.dest`
+      appear NOWHERE in `/venv/lib/python3.12/site-packages/beets_flask/` —
+      zero matches, zero files. beets computes a destination in
+      `Item.destination()`, which is reached from `manipulate_files`; a preview
+      session stops before that stage exists.
+
+  (c) THE PERSISTED SCHEMA. Every column in the whole beets-flask database
+      whose name contains `path` or `dest`:
+          folder.full_path   task.toppath   task.paths   task.old_paths
+      All four are SOURCE paths. There is no destination column anywhere, so a
+      preview cannot have stored a computed tree even in principle.
+
+      The progress ladder confirms where it stops
+      (`backend/beets_flask/importer/progress.py@v2.0.0-rc6`):
+          READING_FILES 10 -> GROUPING_ALBUMS 11 -> LOOKING_UP_CANDIDATES 12
+          -> IDENTIFYING_DUPLICATES 13 -> PREVIEW_COMPLETED 20
+          ... ImportSession only: OFFERING_MATCHES 30 ... MANIPULATING_FILES 35
+      Destinations are computed at 35. The session reached 20 and stopped.
+
+  WHAT PREVIEW DOES SHOW, since no record of it existed anywhere in this project
+  and the next phase will want it:
+    * the folder, as a `dbfolder` row keyed by a content hash, not by path;
+    * a `session` row carrying `progress` and `exc`;
+    * a `task` row carrying `toppath`, the pickled `paths` list, `cur_artist`,
+      `cur_album`, `chosen_candidate_id` and `choice_flag`;
+    * one `items` row per file, holding beets' FULL fixed field view as JSON
+      (`albumartist`, `album`, `title`, `track`, `disc`, `disctotal`,
+      `albumtype`, `comp`, `length`, `path`, …);
+    * five `candidate` rows, each joining through `matches` -> `matches_album`
+      -> `album_info` to a real MusicBrainz release, with a
+      `distances`/`penalties` breakdown.
+  It is a CANDIDATE view, not a TREE view. That is the whole of OQ-4.
+
+--------------------------------------------------------------------------------
+2. THE AGREEMENT BASIS, REDEFINED AND RECORDED
+--------------------------------------------------------------------------------
+Because preview shows no paths, the plan's second branch applies and the basis
+is redefined explicitly rather than stretched.
+
+  REDEFINED BASIS: the per-item tuple
+      (albumartist, album, zero-padded track, title, file extension)
+  compared as a set, arm 1's side obtained by DECOMPOSING its destination paths
+  and arm 2's side read from its `items` rows.
+
+  Arm 1's line     /media/Music/Benson Boone/Fireworks & Rollerblades/01 Intro.flac
+  decomposes to    ("Benson Boone", "Fireworks & Rollerblades", "01", "Intro", "flac")
+  because the rule that produced it is `$albumartist/$album%aunique{}/$track $title`.
+
+  ⚠ AND THE PLAN'S OWN CAVEAT IS HONOURED: the chosen-MBID half of the
+    redefinition is NOT USABLE HERE, and that is worth stating because the plan
+    names it as part of the basis. Arm 1 imported the sample **as-is** (`-A`),
+    so `lookup_candidates` never ran on arm 1 and arm 1 HAS NO MBID AT ALL.
+    Arm 2 has five candidates and no chosen one (`chosen_candidate_id: None`,
+    `choice_flag: None`), because a preview by definition stops before a choice.
+    So "the chosen MBID" exists on NEITHER side. Comparing them would have been
+    comparing two absences and calling it agreement. The triple is the half of
+    the redefinition that has values on both sides, and it is the whole basis
+    used.
+
+  WHY THE DECOMPOSITION IS LEGITIMATE AND NOT A RE-RENDERING: arm 2's values are
+  not pushed through a reimplementation of beets' path code. Arm 1's measured
+  OUTPUT is taken apart; arm 2's measured INPUT is read. If flask's
+  server-committed config view and the CLI's confuse view read different fields
+  off the same files — which is the live risk D-30 exists for, since rc6's
+  `commit_to_beets()` injects its whole `BeetsSchema` dataclass at confuse's
+  highest priority — the tuples would differ.
+
+  STATED LIMIT: the basis does not test `replace:`, `legalize_path`,
+  `asciify_paths` or `max_filename_length`, because those act on the rendered
+  path and only arm 1 renders one. None of them alters anything in this folder
+  (longest component 40 characters against the 200-character limit; no character
+  in the `replace:` set), but the basis cannot see them and does not claim to.
+
+--------------------------------------------------------------------------------
+3. THE COMPARISON — AGREE
+--------------------------------------------------------------------------------
+  arm 1 destination lines for this folder   15
+  arm 1 tuples                              15
+  arm 2 tuples                              15
+  only in arm 1                              0
+  only in arm 2                              0
+
+  VERDICT: **AGREE** — 15 of 15 identical, zero lines either side.
+
+  Arm 1's side is `06-EXPECTED-TREE.txt` lines 198-212, which is legitimate as
+  arm 1's *measured* output and not merely as a fixture: plan 06-11 ran
+  `beet move -p` over all 174 sampled files and diffed to ZERO LINES against
+  that file, so for this folder the fixture and arm 1's measurement are the same
+  15 strings. Arm 1's raw transcript for these 15 files is at
+  `artifacts/06-11-oracle-run.txt:182-212`.
+
+  The corroborating detail, which matters because it is what the agreement is
+  ABOUT: arm 2's own field view resolves to the SAME path rule arm 1 took.
+      disctotal values : [1]        -> `disctotal:2..` does not fire
+      albumtype values : ['']       -> neither DJ rule fires
+      comp             : False      -> `comp:` does not fire
+      singleton        : None       -> `singleton:` does not fire
+  so the applicable rule is `default`, `$albumartist/$album%aunique{}/$track $title`
+  — which is the rule that produced arm 1's 15 lines.
+
+  `cur_artist` / `cur_album` on the task row read `Benson Boone` /
+  `Fireworks & Rollerblades`, byte-identical to arm 1's top two path components.
+
+--------------------------------------------------------------------------------
+4. WHERE THE TWO ARMS GENUINELY DIFFER — recorded, because agreement on the
+   basis is NOT agreement on everything
+--------------------------------------------------------------------------------
+06-RESEARCH.md § "D-30's two arms measure two different objects" says the arms
+are not expected to be identical by construction. They are not, and the
+difference is exactly where the research predicted:
+
+  | | arm 1 (`docker exec` + `beet move -p`) | arm 2 (flask `preview`) |
+  |---|---|---|
+  | config route | confuse: vendored file + `-c` overlay | rc6's `commit_to_beets()` injects the whole `BeetsSchema` dataclass at confuse's HIGHEST priority |
+  | library | a COPY of the real `library.db` in `/tmp/p6` | the REAL `/config/library.db` |
+  | autotag | OFF (`-A`, as-is) | ON |
+  | MusicBrainz | never queried | 5 candidates fetched |
+  | chosen release | n/a — no candidate exists | none chosen; `choice_flag: None` |
+  | destination paths | 174, computed | none, ever (§1) |
+  | what it proves | the `paths:` stanza | that the inbox path reads the same fields |
+
+  So arm 2 CANNOT confirm or contradict a path, and arm 1 CANNOT confirm or
+  contradict a candidate. They overlap on the field view, and on the field view
+  they agree. That is the strongest claim the pair supports and it is the claim
+  made.
+
+  Arm 2's five candidates, for the record (distance = raw/max from the
+  `distances` row):
+      dist=0.012266  country -    2024   ef528afc-c3de-4b4a-8ef2-a0dd43dc9c83
+      dist=0.018245  country US   2024   2b2822ff-c2b4-41cd-ac49-6318bd55388b
+      dist=0.042080  country -    2024   a9283c59-a664-4168-83ee-411643ac32a2
+      dist=0.042080  country -    2024   20d98b93-a4eb-434e-a680-1b61690da200
+      dist=0.066347  country XW   2025   aeed0766-db67-41fa-833d-3b3482c97c59
+      all five: Benson Boone / Fireworks & Rollerblades
+
+  Two things follow, and both connect to task 1:
+    * the BEST candidate carries NO country at all, so
+      `match.preferred.countries` contributed nothing to this ordering — the
+      same conclusion task 1 reached from the other direction;
+    * `album_info.data` does NOT carry the track list (the tracks live in
+      `track_info`, keyed by `album_id`), so the per-candidate track count reads
+      0 out of this table. **No track count is claimed for arm 2.** Task 1's
+      track-count checks were taken from `tag_album()`'s own `AlbumInfo`
+      objects, where the list is present. Recorded so nobody later reads a `0`
+      here as "the candidate has no tracks".
+
+  NO CONFIG WAS EDITED TO MAKE THE ARMS AGREE. Nothing under
+  `stacks/selfhosted/arrs/beets/` was touched by this plan at all
+  (`git diff --stat` on the branch shows only `.planning/` artifacts). The arms
+  agreed on the first comparison that ran to completion; had they disagreed, the
+  disagreement would be here with both values, cross-referenced to plan 06-07's
+  inter-arm disagreement table. A config edited until two instruments agree is a
+  lost measurement.
+
+--------------------------------------------------------------------------------
+5. ⚠ AMENDMENT — THIS IS THE SECOND AND LAST `02-review` TRANSIT OF PHASE 6
+--------------------------------------------------------------------------------
+D-35's parenthetical states, verbatim, that emptying `02-review` into `04-hold`
+before registration "keeps D-09's throwaway folder the **only** thing that ever
+transits `02-review` this phase."
+
+D-30 requires this cross-check, and a cross-check of the inbox path cannot be
+done without using the inbox. So this is a SECOND, DELIBERATE, NAMED transit,
+and it is recorded here AS AN AMENDMENT rather than left to read as a
+contradiction between two locked decisions.
+
+  AMENDED: D-35's "the only thing that ever transits 02-review this phase" now
+  reads "the only two things". They are, exhaustively:
+
+    1. `_PHASE06-LIVENESS-20260920T233825Z`  — plan 06-06, D-09 part 2.
+       3 files copied from an already-duplicated sample folder. Removed.
+    2. `_PHASE06-12-XCHECK-20260921T083018Z` — this plan, D-30 arm 2.
+       15 files copied from an already-duplicated sample folder. Removed.
+
+  There is no third, and nothing in the remaining Phase 6 plans requires one.
+
+  THE TRANSIT DISCIPLINE, IDENTICAL TO D-09 PART 2'S, AND EVIDENCED:
+    * COPIED, never moved. `cp --reflink=auto -r` within the single ZFS dataset
+      `tank/downloads`, so it is a block clone and costs no space. The source
+      material is itself already duplicated sample content.
+    * Uniquely named with a timestamped marker, so every grep and every join in
+      this artifact is address-restricted to this transit and cannot pick up the
+      06-06 residue.
+    * sha256 manifest over the source — CONTENT and metadata (mode, owner, size,
+      mtime), not a path count — taken before the copy, immediately after the
+      copy, and after the preview. **All three identical.** Phase 1 proved a
+      path-set diff passes while content changes underneath.
+    * REMOVED at the end, and `02-review` asserted to hold ZERO entries at
+      `-mindepth 1`, from a bounded remote command.
+    * The real `library.db` and `state.pickle` re-hashed and found at their
+      06-04/06-11 baselines `fbbdde0c…` and `f6a9a1ad…`, mtimes unmoved
+      (2026-09-11 and 2025-11-18). A preview writes beets-flask's own sqlite;
+      it does not write beets' library or its incremental state.
+    * `/media` RW=false, read from `docker inspect`, not from compose.
+
+  THE DEBOUNCE, WAITED AND EVIDENCED (`debounce_before_autotag: 30`):
+    copy completed        08:30:18Z
+    slept                 35 s before the FIRST poll — a test that polls for
+                          10 s and gives up reads as a failure that is really a
+                          debounce (06-RESEARCH.md § P5c)
+    dbfolder row created  08:30:53Z   (+35 s)
+    session created       08:30:59Z   (+41 s), progress PREVIEW_COMPLETED
+    poll bound            180 s, unused beyond the second poll
+  The watchdog's own two lines, verbatim:
+    [INFO] beets-flask.wdog: Watchdog: Starting inbox handler task /downloads/complete/nzb/_inbox/02-review/_PHASE06-12-XCHECK-20260921T083018Z
+    [INFO] beets-flask.wdog: Watchdog: Enqueuing /downloads/complete/nzb/_inbox/02-review/_PHASE06-12-XCHECK-20260921T083018Z as preview
+  `as preview` is the configured behaviour for this inbox, observed rather than
+  assumed.
+
+--------------------------------------------------------------------------------
+6. TWO INSTRUMENT DEFECTS, AND THE SEVENTH PREDICATE-CANNOT-MATCH BUG
+--------------------------------------------------------------------------------
+Driver 1 exited 1. Neither cause was in the configuration under test, in the
+inbox, or in the estate. Both are in the instrument, and both are the shape this
+phase keeps producing: a confident-looking answer about something other than
+what it claimed to measure.
+
+  D2 — THE SEVENTH PREDICATE THAT COULD NOT MATCH.
+    The poll loop broke on the literal `"progress": 20`. But the two instruments
+    that report progress DISAGREE ABOUT THE REPRESENTATION:
+        sqlite `session.progress`        ->  'PREVIEW_COMPLETED'   (the enum NAME)
+        GET /api_v1/session/             ->  20                    (the enum VALUE)
+    Both forms are visible side by side in § TRANSCRIPT RUN 1 (steps 4 and 6) —
+    the same session, the same instant, two different renderings. The loop read
+    the sqlite form, so it could never match, spun out its full 180 s bound and
+    printed
+        ">>> COULD NOT LOOK: the session did not reach PREVIEW_COMPLETED within 180 s"
+    which was FALSE: the transcript shows it reached PREVIEW_COMPLETED at
+    08:31:06Z, on the SECOND poll, 48 s after the copy.
+    ⚠ Note the failure mode: this one failed LOUDLY, as a could-not-look, only
+      because the wait had a bound and the loop printed every poll. Written as a
+      bare `if done: pass` it would have been a silent green.
+    FIX: `is_done()` accepts the enum name, the integer and the integer-as-string,
+    and the fix is DRIVEN AGAINST PLANTED POSITIVES before any clean result from
+    it is believed — six planted values that must NOT pass, including
+    `LOOKING_UP_CANDIDATES` (mid-flight), `OFFERING_MATCHES` (an ImportSession
+    state) and `IMPORT_COMPLETED` (an import finished, which must never read as
+    a preview pass). All ten cases pass; see § TRANSCRIPT RUN 2 step 1.
+
+  D1 — A CRASH REPORTED AS AN EMPTY RESULT.
+    `items.fixed_values["path"]` is not a string. It is
+        {"__type__": "bytes", "data": "<base64>"}
+    `os.path.basename()` on it raises `TypeError: expected str, bytes or
+    os.PathLike object, not dict`. The driver caught the non-zero exit and
+    printed
+        ">>> COULD NOT LOOK: the comparison could not be made"
+    while the compare script's own exit-1 branch is labelled "arm 2 produced no
+    items" — and arm 2 had produced all 15. A wrong CAUSE attached to a real
+    failure is how the next reader concludes the preview found nothing.
+    FIX: `decode_path()` handles str, bytes and the dict encoding, REFUSES
+    anything else with a TypeError rather than guessing, and is self-tested both
+    ways. The compare script now distinguishes "the extractor raised" from "the
+    extractor ran and found nothing", and reports the exception text in the
+    verdict line.
+
+  HOW THE FIX WAS VERIFIED WITHOUT A THIRD TRANSIT.
+    beets-flask's `folder`, `session`, `task` and `items` rows OUTLIVE the
+    directory they describe — plan 06-06 recorded exactly that as its
+    dangling-state finding. So the fixed instrument was re-run against the state
+    the single run-1 transit had already persisted. `02-review` was empty for the
+    whole of run 2 and is asserted so in its own transcript. No folder was
+    staged twice, and the amendment in § 5 stands at two transits, not three.
+
+--------------------------------------------------------------------------------
+7. THE DANGLING-STATE FINDING, RE-CONFIRMED ON A SECOND FOLDER
+--------------------------------------------------------------------------------
+Plan 06-06 found that deleting an inbox folder removes neither its `dbfolder`
+row nor its `session` row. That is now confirmed twice, on two folders, and it
+is what § 6 relied on:
+
+  GET /api_v1/dbfolder/  ->  2 items, BOTH pointing at directories that no
+                             longer exist (`_PHASE06-LIVENESS-…` from 06-06 and
+                             `_PHASE06-12-XCHECK-…` from this plan)
+  GET /api_v1/session/   ->  2 items, both `progress: 20`, both `exc: null`
+  on-disk `02-review`    ->  0 entries
+
+  Both sessions sit at PREVIEW_COMPLETED with `choice_flag: None`, so no stage
+  is pending on either and nothing will act on them unaided. The container was
+  deliberately NOT restarted, so whether the rows survive a restart is still
+  untested — the same stated limit 06-06 recorded.
+  CARRY-FORWARD FOR PHASE 7, unchanged and now doubly evidenced: expect stale
+  `dbfolder`/`session` pairs behind any folder renamed, moved or removed between
+  preview and import, and expect the watchdog to log `FileNotFoundError` against
+  the vanished paths. Neither is a fault; both look like one read cold.
+
+--------------------------------------------------------------------------------
+8. THE `bootleg` GATE IS STILL UNEXERCISED, AND IS A PHASE 7 CONCERN
+--------------------------------------------------------------------------------
+Recorded because the same button produced Phase 3's best AND worst results
+purely on one condition, with no UI signal either way.
+
+  `03-asis` IS registered (D-06) with `autotag: bootleg`, and it is measured
+  EMPTY at the end of this task — 0 entries — as it has been all phase. Nothing
+  stages into it during Phase 6, so `bootleg` has not been run even once.
+
+  THE GATE, carried forward verbatim: never route a folder to `bootleg` without
+  first asserting that `album` is POPULATED and DISTINCT across the intended
+  groups. `bootleg` imports as-is and groups albums by the files' own metadata,
+  and bad metadata is the DEFINING property of the bucket it serves. Phase 3
+  recorded that tag NORMALISATION must precede a bootleg import, never follow
+  it.
+
+  This is a **Phase 7 routing-time** concern and it is unowned by any Phase 6
+  plan. It sits alongside OQ-2 / C-6 — `--set albumtype=dj` has no per-inbox
+  equivalent in rc6's `InboxFolderSchema`, so the DJ ROUTING MECHANISM is also
+  Phase 7's — and the two are the same shape: Phase 6 proved the path RULE, not
+  the mechanism that reaches it.
+
+  Inbox occupancy at the end of this task:
+      01-auto 0   02-review 0   03-asis 0   04-hold 535   99-quarantine 51   _done 0
+  `04-hold` and `99-quarantine` are deliberately UNREGISTERED (D-06), which is
+  the control that makes them safe staging.
+
+--------------------------------------------------------------------------------
+9. WHAT THIS TASK DOES NOT COVER
+--------------------------------------------------------------------------------
+1. One folder, 15 files, one path rule (`default`). The cross-check does not
+   touch the `singleton:`, `albumtype:=dj`, `albumtype:=dj disctotal:2..`,
+   `disctotal:2..` or `comp:` rules through the inbox path. A DJ folder was
+   deliberately NOT used: arm 1 supplied `--set albumtype=dj` from a shell and
+   flask has no equivalent (OQ-2), so any DJ comparison would have disagreed for
+   a reason that is already known and recorded rather than for a reason worth
+   learning.
+2. `%aunique{}` is not exercised. This album is not in the ambiguous set, and
+   the real `library.db` holds 0 items and 0 albums, so nothing could collide.
+3. The UI was never opened. Every reading is from the HTTP API (routes resolved
+   by inspection against the running container, printed in the transcript) and
+   from the sqlite opened read-only. What a human SEES in the preview pane is
+   therefore still unrecorded — what rc6 STORES is what is recorded here, and
+   the two need not be the same set.
+4. `auto` (01-auto) and `bootleg` (03-asis) were not driven. Only `preview` was.
+5. Whether the dangling `dbfolder`/`session` rows survive a container restart.
+6. The comparison is a set comparison on 5-tuples. It cannot see ordering, and
+   it cannot see the path-rendering layer (§ 2, stated limit).
+
+================================================================================
+TRANSCRIPT RUN 1 — THE TRANSIT (driver 1, exit 1: two instrument defects)
+Kept in full BECAUSE it is the record of the single 02-review transit, and
+because the two rejected readings are as much the substance as the agreement is.
+Its step-4 verdict line is WRONG and § 6 D2 explains why.
+================================================================================
+
+================================================================
+0. PROVENANCE
+================================================================
+host        : selfhost
+utc         : 2026-09-21T08:30:18Z
+container   : beets-flask  metasauce/beets-flask:v2.0.0-rc6 started=2026-09-20T22:37:55.838784056Z restarts=0
+/media RW   : false
+inbox       : /mnt/tank/downloads/complete/nzb/_inbox/02-review   (autotag: preview, per config/beets-flask/config.yaml)
+debounce    :  debounce_before_autotag: 30
+source      : /mnt/tank/downloads/complete/nzb/music/Benson.Boone.-.Fireworks.&.Rollerblades.(2024).[16Bit-44.1kHz].FLAC.[PMEDIA].⭐️-xpost
+throwaway   : /mnt/tank/downloads/complete/nzb/_inbox/02-review/_PHASE06-12-XCHECK-20260921T083018Z
+
+================================================================
+0b. STAGE THE READ-ONLY INSTRUMENTS (docker cp; /config is never written)
+================================================================
+   total 32
+   drwxr-xr-x 2 beetle beetle 4096 Sep 21 09:30 .
+   drwxrwxrwt 1 root   root   4096 Sep 21 09:27 ..
+   -rw-r--r-- 1 beetle beetle 1075 Sep 21 09:30 arm1.txt
+   -rw-r--r-- 1 beetle beetle 7595 Sep 21 09:30 compare.py
+   -rw-r--r-- 1 beetle beetle  287 Sep 21 09:28 probe_items.py
+   -rw-r--r-- 1 beetle beetle 4968 Sep 21 09:30 state.py
+   arm 1 reference (from 06-EXPECTED-TREE.txt, which plan 06-11's oracle reproduced
+   with ZERO lines of difference — so these ARE arm 1's measured destinations):
+     /media/Music/Benson Boone/Fireworks & Rollerblades/01 Intro.flac
+     /media/Music/Benson Boone/Fireworks & Rollerblades/02 Be Someone.flac
+     /media/Music/Benson Boone/Fireworks & Rollerblades/03 Slow It Down.flac
+     /media/Music/Benson Boone/Fireworks & Rollerblades/04 Beautiful Things.flac
+     /media/Music/Benson Boone/Fireworks & Rollerblades/05 Cry.flac
+     /media/Music/Benson Boone/Fireworks & Rollerblades/06 Forever and a Day.flac
+     /media/Music/Benson Boone/Fireworks & Rollerblades/07 In The Stars.flac
+     /media/Music/Benson Boone/Fireworks & Rollerblades/08 Drunk In My Mind.flac
+     /media/Music/Benson Boone/Fireworks & Rollerblades/09 My Greatest Fear.flac
+     /media/Music/Benson Boone/Fireworks & Rollerblades/10 There She Goes.flac
+     /media/Music/Benson Boone/Fireworks & Rollerblades/11 Hello Love.flac
+     /media/Music/Benson Boone/Fireworks & Rollerblades/12 Ghost Town.flac
+     /media/Music/Benson Boone/Fireworks & Rollerblades/13 Love Of Mine.flac
+     /media/Music/Benson Boone/Fireworks & Rollerblades/14 Friend.flac
+     /media/Music/Benson Boone/Fireworks & Rollerblades/15 What Do You Want.flac
+
+================================================================
+1. PREFLIGHT
+================================================================
+   02-review entries BEFORE: 0
+   library.db   fbbdde0c416e72b9884e56c562fd88eaa4da447926e1cb6cc17c3e04aee7da1a
+   state.pickle f6a9a1ad7aa553e42e53a8056fa80724785111180a5e2122be4f8732d1e4bc7c
+   beets-flask state row counts BEFORE (the 06-06 residue is expected):
+     album_info                     n=5      ['data', 'id', 'created_at', 'updated_at']
+     album_match_track_mappings     n=50     ['album_match_id', 'track_info_id', 'item_id', 'id', 'created_at', 'updated_at']
+     alembic_version                n=1      ['version_num']
+     candidate                      n=5      ['task_id', 'duplicate_ids', 'id', 'created_at', 'updated_at', 'match_id']
+     distances                      n=20     ['track_info_id', 'parent_distance_id', 'raw_distance', 'max_distance', 'id', 'created_at', 'updated_at']
+     folder                         n=1      ['full_path', 'is_album', 'id', 'created_at', 'updated_at']
+     items                          n=3      ['id', 'created_at', 'updated_at', 'flex_values', 'fixed_values']
+     matches                        n=5      ['id', 'type', 'distance_id', 'created_at', 'updated_at']
+     matches_album                  n=5      ['id', 'info_id']
+     matches_track                  n=0      ['id', 'info_id', 'item_id']
+     penalties                      n=100    ['key', 'value', 'distance_id', 'id', 'created_at', 'updated_at']
+     session                        n=1      ['folder_hash', 'folder_revision', 'progress', 'exc', 'id', 'created_at', 'updated_at']
+     sqlite_stat1                   n=1      ['tbl', 'idx', 'stat']
+     task                           n=1      ['session_id', 'chosen_candidate_id', 'toppath', 'paths', 'old_paths', 'choice_flag', 'cur_artist', 'cur_album', 'progress', 'id', 'created_at', 'updated_at']
+     tasks_items                    n=3      ['id', 'task_id', 'item_id', 'created_at', 'updated_at']
+     track_info                     n=50     ['album_id', 'data', 'id', 'created_at', 'updated_at']
+
+================================================================
+2. SOURCE MANIFEST, BEFORE
+================================================================
+   lines=31  sha256=bb51346c9b52f6f85fd5ee32909840be35a7bfddce430f84165cf14f426667f5  audio=15
+
+================================================================
+3. THE COPY — copied, NEVER moved
+================================================================
+   cp --reflink=auto -r (same ZFS dataset tank/downloads, so this is a clone)
+   cp rc=0
+   copied entries: 15
+   source manifest immediately after the copy:
+     PASS: source IDENTICAL after the copy
+
+================================================================
+4. THE DEBOUNCE WAIT — 30 s configured, >= 35 s waited, 180 s bound
+================================================================
+   sleeping 35 s past the last write before the first poll ...
+   08:30:56Z {"folder": true, "full_path": "/downloads/complete/nzb/_inbox/02-review/_PHASE06-12-XCHECK-20260921T083018Z", "session": false, "progress": null, "exc": null, "task": false, "task_progress": null}
+   08:31:06Z {"folder": true, "full_path": "/downloads/complete/nzb/_inbox/02-review/_PHASE06-12-XCHECK-20260921T083018Z", "session": true, "progress": "PREVIEW_COMPLETED", "exc": null, "task": true, "task_progress": "PREVIEW_COMPLETED"}
+   08:31:16Z {"folder": true, "full_path": "/downloads/complete/nzb/_inbox/02-review/_PHASE06-12-XCHECK-20260921T083018Z", "session": true, "progress": "PREVIEW_COMPLETED", "exc": null, "task": true, "task_progress": "PREVIEW_COMPLETED"}
+   08:31:26Z {"folder": true, "full_path": "/downloads/complete/nzb/_inbox/02-review/_PHASE06-12-XCHECK-20260921T083018Z", "session": true, "progress": "PREVIEW_COMPLETED", "exc": null, "task": true, "task_progress": "PREVIEW_COMPLETED"}
+   08:31:36Z {"folder": true, "full_path": "/downloads/complete/nzb/_inbox/02-review/_PHASE06-12-XCHECK-20260921T083018Z", "session": true, "progress": "PREVIEW_COMPLETED", "exc": null, "task": true, "task_progress": "PREVIEW_COMPLETED"}
+   08:31:46Z {"folder": true, "full_path": "/downloads/complete/nzb/_inbox/02-review/_PHASE06-12-XCHECK-20260921T083018Z", "session": true, "progress": "PREVIEW_COMPLETED", "exc": null, "task": true, "task_progress": "PREVIEW_COMPLETED"}
+   08:31:56Z {"folder": true, "full_path": "/downloads/complete/nzb/_inbox/02-review/_PHASE06-12-XCHECK-20260921T083018Z", "session": true, "progress": "PREVIEW_COMPLETED", "exc": null, "task": true, "task_progress": "PREVIEW_COMPLETED"}
+   08:32:06Z {"folder": true, "full_path": "/downloads/complete/nzb/_inbox/02-review/_PHASE06-12-XCHECK-20260921T083018Z", "session": true, "progress": "PREVIEW_COMPLETED", "exc": null, "task": true, "task_progress": "PREVIEW_COMPLETED"}
+   08:32:16Z {"folder": true, "full_path": "/downloads/complete/nzb/_inbox/02-review/_PHASE06-12-XCHECK-20260921T083018Z", "session": true, "progress": "PREVIEW_COMPLETED", "exc": null, "task": true, "task_progress": "PREVIEW_COMPLETED"}
+   08:32:26Z {"folder": true, "full_path": "/downloads/complete/nzb/_inbox/02-review/_PHASE06-12-XCHECK-20260921T083018Z", "session": true, "progress": "PREVIEW_COMPLETED", "exc": null, "task": true, "task_progress": "PREVIEW_COMPLETED"}
+   08:32:36Z {"folder": true, "full_path": "/downloads/complete/nzb/_inbox/02-review/_PHASE06-12-XCHECK-20260921T083018Z", "session": true, "progress": "PREVIEW_COMPLETED", "exc": null, "task": true, "task_progress": "PREVIEW_COMPLETED"}
+   08:32:46Z {"folder": true, "full_path": "/downloads/complete/nzb/_inbox/02-review/_PHASE06-12-XCHECK-20260921T083018Z", "session": true, "progress": "PREVIEW_COMPLETED", "exc": null, "task": true, "task_progress": "PREVIEW_COMPLETED"}
+   08:32:56Z {"folder": true, "full_path": "/downloads/complete/nzb/_inbox/02-review/_PHASE06-12-XCHECK-20260921T083018Z", "session": true, "progress": "PREVIEW_COMPLETED", "exc": null, "task": true, "task_progress": "PREVIEW_COMPLETED"}
+   08:33:07Z {"folder": true, "full_path": "/downloads/complete/nzb/_inbox/02-review/_PHASE06-12-XCHECK-20260921T083018Z", "session": true, "progress": "PREVIEW_COMPLETED", "exc": null, "task": true, "task_progress": "PREVIEW_COMPLETED"}
+   08:33:17Z {"folder": true, "full_path": "/downloads/complete/nzb/_inbox/02-review/_PHASE06-12-XCHECK-20260921T083018Z", "session": true, "progress": "PREVIEW_COMPLETED", "exc": null, "task": true, "task_progress": "PREVIEW_COMPLETED"}
+   08:33:27Z {"folder": true, "full_path": "/downloads/complete/nzb/_inbox/02-review/_PHASE06-12-XCHECK-20260921T083018Z", "session": true, "progress": "PREVIEW_COMPLETED", "exc": null, "task": true, "task_progress": "PREVIEW_COMPLETED"}
+   08:33:37Z {"folder": true, "full_path": "/downloads/complete/nzb/_inbox/02-review/_PHASE06-12-XCHECK-20260921T083018Z", "session": true, "progress": "PREVIEW_COMPLETED", "exc": null, "task": true, "task_progress": "PREVIEW_COMPLETED"}
+   08:33:47Z {"folder": true, "full_path": "/downloads/complete/nzb/_inbox/02-review/_PHASE06-12-XCHECK-20260921T083018Z", "session": true, "progress": "PREVIEW_COMPLETED", "exc": null, "task": true, "task_progress": "PREVIEW_COMPLETED"}
+   final poll: {"folder": true, "full_path": "/downloads/complete/nzb/_inbox/02-review/_PHASE06-12-XCHECK-20260921T083018Z", "session": true, "progress": "PREVIEW_COMPLETED", "exc": null, "task": true, "task_progress": "PREVIEW_COMPLETED"}
+   >>> COULD NOT LOOK: the session did not reach PREVIEW_COMPLETED within 180 s — UNKNOWN, not an agreement
+
+================================================================
+5. WHAT THE WATCHDOG LOGGED
+================================================================
+   [INFO] beets-flask.wdog: Watchdog: Starting inbox handler task /downloads/complete/nzb/_inbox/02-review/_PHASE06-12-XCHECK-20260921T083018Z
+   [INFO] beets-flask.wdog: Watchdog: Enqueuing /downloads/complete/nzb/_inbox/02-review/_PHASE06-12-XCHECK-20260921T083018Z as preview
+   (lines matching the marker: 2)
+
+================================================================
+6. WHAT THE HTTP API SHOWS — the route recorded, not assumed
+================================================================
+   GET http://127.0.0.1:5001/api_v1/dbfolder/?n_items=50
+     {
+       "items": [
+         {
+           "full_path": "/downloads/complete/nzb/_inbox/02-review/_PHASE06-12-XCHECK-20260921T083018Z",
+           "is_album": null,
+           "id": "5b52c00d678e936b72cb439a28b66b6e",
+           "created_at": "2026-09-21T08:30:53+00:00",
+           "updated_at": "2026-09-21T08:30:59+00:00"
+         },
+         {
+           "full_path": "/downloads/complete/nzb/_inbox/02-review/_PHASE06-LIVENESS-20260920T233825Z",
+           "is_album": null,
+           "id": "48c833815fc548049248256da08db2a5",
+           "created_at": "2026-09-20T23:38:59+00:00",
+           "updated_at": "2026-09-20T23:39:06+00:00"
+         }
+       ],
+       "next": null
+     }
+   GET http://127.0.0.1:5001/api_v1/session/?n_items=50
+     {
+       "items": [
+         {
+           "folder_hash": "5b52c00d678e936b72cb439a28b66b6e",
+           "folder_revision": 0,
+           "progress": 20,
+           "exc": null,
+           "id": "dc6b54aa-e10d-4119-90e5-be358cd40e2e",
+           "created_at": "2026-09-21T08:30:59+00:00",
+           "updated_at": "2026-09-21T08:30:59+00:00"
+         },
+         {
+           "folder_hash": "48c833815fc548049248256da08db2a5",
+           "folder_revision": 0,
+           "progress": 20,
+           "exc": null,
+           "id": "f97367e9-cc81-42f4-b033-a336145a2485",
+           "created_at": "2026-09-20T23:39:06+00:00",
+           "updated_at": "2026-09-20T23:39:06+00:00"
+         }
+       ],
+       "next": null
+     }
+
+================================================================
+7. OQ-4 RESOLVED, AND THE COMPARISON
+================================================================
+==============================================================================
+ARM 2 — WHAT rc6's `preview` ACTUALLY PRODUCED
+==============================================================================
+folder row   : {"full_path": "/downloads/complete/nzb/_inbox/02-review/_PHASE06-12-XCHECK-20260921T083018Z", "is_album": "None", "id": "5b52c00d678e936b72cb439a28b66b6e", "created_at": "2026-09-21 08:30:53", "updated_at": "2026-09-21 08:30:59"}
+session row  : {"folder_hash": "5b52c00d678e936b72cb439a28b66b6e", "folder_revision": "0", "progress": "PREVIEW_COMPLETED", "exc": "None", "id": "dc6b54aa-e10d-4119-90e5-be358cd40e2e", "created_at": "2026-09-21 08:30:59", "updated_at": "2026-09-21 08:30:59"}
+task row     :
+    session_id             dc6b54aa-e10d-4119-90e5-be358cd40e2e
+    chosen_candidate_id    None
+    toppath                <76 bytes>
+    paths                  <pickle> [b'/downloads/complete/nzb/_inbox/02-review/_PHASE06-12-XCHECK-20260921T083018Z']
+    old_paths              None
+    choice_flag            None
+    cur_artist             Benson Boone
+    cur_album              Fireworks & Rollerblades
+    progress               PREVIEW_COMPLETED
+    id                     09ba95dc-4cac-4556-8328-9876d7184a7a
+    created_at             2026-09-21 08:30:59
+    updated_at             2026-09-21 08:30:59
+
+-- OQ-4, answered from the schema: EVERY column in the whole beets-flask
+   database whose name contains 'path' or 'dest' --
+    ['folder.full_path', 'task.toppath', 'task.paths', 'task.old_paths']
+   -> the only path-bearing columns are SOURCE paths. There is no destination
+      column anywhere in the schema, so preview stores no computed tree.
+
+-- arm 2's per-item CURRENT field view (15 items) --
+Traceback (most recent call last):
+  File "/tmp/p6p/compare.py", line 130, in <module>
+    os.path.basename(it.get("path") or ""),
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen posixpath>", line 171, in basename
+TypeError: expected str, bytes or os.PathLike object, not dict
+   compare exit=1   (0 AGREE, 1 COULD NOT COMPARE, 2 DISAGREE)
+   >>> COULD NOT LOOK: the comparison could not be made
+
+================================================================
+8. THE FULL PERSISTED STATE, FOR THE RECORD
+================================================================
+   == every column name across the whole schema containing 'path' or 'dest' ==
+       ['folder.full_path', 'task.toppath', 'task.paths', 'task.old_paths']
+   
+   == folder rows matching the marker ==
+      [folder] {'full_path': "'/downloads/complete/nzb/_inbox/02-review/_PHASE06-12-XCHECK-20260921T083018Z'", 'is_album': 'None', 'id': "'5b52c00d678e936b72cb439a28b66b6e'", 'created_at': "'2026-09-21 08:30:53'", 'updated_at': "'2026-09-21 08:30:59'"}
+   
+   == session rows joined on folder_hash ==
+      [session] {'folder_hash': "'5b52c00d678e936b72cb439a28b66b6e'", 'folder_revision': '0', 'progress': "'PREVIEW_COMPLETED'", 'exc': 'None', 'id': "'dc6b54aa-e10d-4119-90e5-be358cd40e2e'", 'created_at': "'2026-09-21 08:30:59'", 'updated_at': "'2026-09-21 08:30:59'"}
+   
+   == task rows joined on session_id (the whole row, every column) ==
+      [task]
+          session_id             'dc6b54aa-e10d-4119-90e5-be358cd40e2e'
+          chosen_candidate_id    None
+          toppath                '/downloads/complete/nzb/_inbox/02-review/_PHASE06-12-XCHECK-20260921T083018Z'
+          paths                  <pickle> [b'/downloads/complete/nzb/_inbox/02-review/_PHASE06-12-XCHECK-20260921T083018Z']
+          old_paths              None
+          choice_flag            None
+          cur_artist             'Benson Boone'
+          cur_album              'Fireworks & Rollerblades'
+          progress               'PREVIEW_COMPLETED'
+          id                     '09ba95dc-4cac-4556-8328-9876d7184a7a'
+          created_at             '2026-09-21 08:30:59'
+          updated_at             '2026-09-21 08:30:59'
+   
+   == items rows reachable from those tasks ==
+      [candidate] {'task_id': "'09ba95dc-4cac-4556-8328-9876d7184a7a'", 'duplicate_ids': "''", 'id': "'7517f697-b0be-4e73-b8e1-79b901b2ad4a'", 'created_at': "'2026-09-21 08:30:59'", 'updated_at': "'2026-09-21 08:30:59'", 'match_id': "'c77dfb2f-5054-46fa-a935-a5a43a7386bc'"}
+      [candidate] {'task_id': "'09ba95dc-4cac-4556-8328-9876d7184a7a'", 'duplicate_ids': "''", 'id': "'885f500a-5733-402e-93ab-32d9092db1bc'", 'created_at': "'2026-09-21 08:30:59'", 'updated_at': "'2026-09-21 08:30:59'", 'match_id': "'f6d419ed-fee2-47bb-a827-4610c9a6b7d3'"}
+      [candidate] {'task_id': "'09ba95dc-4cac-4556-8328-9876d7184a7a'", 'duplicate_ids': "''", 'id': "'f891fe32-1928-4ef1-b067-da7414696ab6'", 'created_at': "'2026-09-21 08:30:59'", 'updated_at': "'2026-09-21 08:30:59'", 'match_id': "'e8a7b72c-f82b-464b-a43e-94244f76a407'"}
+      [candidate] {'task_id': "'09ba95dc-4cac-4556-8328-9876d7184a7a'", 'duplicate_ids': "''", 'id': "'e2feb982-5805-436c-9a84-551e11ee3e14'", 'created_at': "'2026-09-21 08:30:59'", 'updated_at': "'2026-09-21 08:30:59'", 'match_id': "'d38dcdd0-b1a5-4dcd-a883-b05647efba37'"}
+      [candidate] {'task_id': "'09ba95dc-4cac-4556-8328-9876d7184a7a'", 'duplicate_ids': "''", 'id': "'10037b65-c748-4284-9fb3-d6c657d25438'", 'created_at': "'2026-09-21 08:30:59'", 'updated_at': "'2026-09-21 08:30:59'", 'match_id': "'233aa263-e4fa-4ef6-ae97-b053a8915cc3'"}
+      [tasks_items] {'id': "'c991b096-5f42-4f4e-b569-d3d6fb7c292e'", 'task_id': "'09ba95dc-4cac-4556-8328-9876d7184a7a'", 'item_id': "'474dfa42-2c92-468b-9633-97aa751b12f8'", 'created_at': "'2026-09-21 08:30:59'", 'updated_at': "'2026-09-21 08:30:59'"}
+      [tasks_items] {'id': "'9108d3ee-68cd-483a-8dfb-fdc5ab98ea9a'", 'task_id': "'09ba95dc-4cac-4556-8328-9876d7184a7a'", 'item_id': "'588f3b2f-ad12-4b01-ba69-49dcfe46bd9f'", 'created_at': "'2026-09-21 08:30:59'", 'updated_at': "'2026-09-21 08:30:59'"}
+      [tasks_items] {'id': "'b43dab34-d84e-4db9-b2bd-9ce6c5c67aca'", 'task_id': "'09ba95dc-4cac-4556-8328-9876d7184a7a'", 'item_id': "'f422259c-bafe-45ba-8746-dcd9962b3774'", 'created_at': "'2026-09-21 08:30:59'", 'updated_at': "'2026-09-21 08:30:59'"}
+      [tasks_items] {'id': "'545eaad9-096b-4a2c-9ff4-7672b49871cb'", 'task_id': "'09ba95dc-4cac-4556-8328-9876d7184a7a'", 'item_id': "'05512f17-38d1-42ce-b75d-6972ac1bd989'", 'created_at': "'2026-09-21 08:30:59'", 'updated_at': "'2026-09-21 08:30:59'"}
+      [tasks_items] {'id': "'67402e9c-a3db-465e-ae56-ca39cf58d33a'", 'task_id': "'09ba95dc-4cac-4556-8328-9876d7184a7a'", 'item_id': "'a228a764-5965-48f5-bb33-90dabf5ddad8'", 'created_at': "'2026-09-21 08:30:59'", 'updated_at': "'2026-09-21 08:30:59'"}
+      [tasks_items] {'id': "'6803a861-7d7c-426e-9934-6054f0aa2d4a'", 'task_id': "'09ba95dc-4cac-4556-8328-9876d7184a7a'", 'item_id': "'119ac4b5-0c32-4169-8d49-5a53ca119be5'", 'created_at': "'2026-09-21 08:30:59'", 'updated_at': "'2026-09-21 08:30:59'"}
+      [tasks_items] {'id': "'1d2e5f33-962d-4b3e-9b3f-f07503a1f5fa'", 'task_id': "'09ba95dc-4cac-4556-8328-9876d7184a7a'", 'item_id': "'09623683-52aa-4f28-9895-9913a11d08e8'", 'created_at': "'2026-09-21 08:30:59'", 'updated_at': "'2026-09-21 08:30:59'"}
+      [tasks_items] {'id': "'29ca23be-4cad-420d-a87a-00c367b454af'", 'task_id': "'09ba95dc-4cac-4556-8328-9876d7184a7a'", 'item_id': "'efdf9531-bbe3-4577-bd2e-6d413a1598af'", 'created_at': "'2026-09-21 08:30:59'", 'updated_at': "'2026-09-21 08:30:59'"}
+      [tasks_items] {'id': "'56cfcd93-b9cb-4606-bc50-5dc4b841e457'", 'task_id': "'09ba95dc-4cac-4556-8328-9876d7184a7a'", 'item_id': "'97d27591-3480-485b-9a74-f9c525e229ad'", 'created_at': "'2026-09-21 08:30:59'", 'updated_at': "'2026-09-21 08:30:59'"}
+      [tasks_items] {'id': "'91f5d4bb-7d3b-478e-bbc0-5cc8bb3317a6'", 'task_id': "'09ba95dc-4cac-4556-8328-9876d7184a7a'", 'item_id': "'eda04c22-aa8a-4e69-ac01-29fbb0a82534'", 'created_at': "'2026-09-21 08:30:59'", 'updated_at': "'2026-09-21 08:30:59'"}
+      [tasks_items] {'id': "'ba749a44-01ac-4f53-b859-d6c93d0556dc'", 'task_id': "'09ba95dc-4cac-4556-8328-9876d7184a7a'", 'item_id': "'5ad0de59-2238-4fb5-953d-64a873268ac8'", 'created_at': "'2026-09-21 08:30:59'", 'updated_at': "'2026-09-21 08:30:59'"}
+      [tasks_items] {'id': "'cea23d51-aed8-4c48-aecb-781ff79d6720'", 'task_id': "'09ba95dc-4cac-4556-8328-9876d7184a7a'", 'item_id': "'7abd6691-f4f0-4263-99a5-0f2d284f7304'", 'created_at': "'2026-09-21 08:30:59'", 'updated_at': "'2026-09-21 08:30:59'"}
+      [tasks_items] {'id': "'70a36ac4-1d20-4f0b-b319-6327116bf778'", 'task_id': "'09ba95dc-4cac-4556-8328-9876d7184a7a'", 'item_id': "'bfb000e4-ed63-45de-8db9-e7da357c39ef'", 'created_at': "'2026-09-21 08:30:59'", 'updated_at': "'2026-09-21 08:30:59'"}
+      [tasks_items] {'id': "'dda342d9-e94b-4116-9c51-238ac25521fa'", 'task_id': "'09ba95dc-4cac-4556-8328-9876d7184a7a'", 'item_id': "'61ccf913-b52d-4bf1-a02c-e4a08acdd217'", 'created_at': "'2026-09-21 08:30:59'", 'updated_at': "'2026-09-21 08:30:59'"}
+      [tasks_items] {'id': "'75252005-ef48-4ee6-9539-8c36997a6b01'", 'task_id': "'09ba95dc-4cac-4556-8328-9876d7184a7a'", 'item_id': "'92225a8c-6d52-4960-891f-d9e3f7df9cf1'", 'created_at': "'2026-09-21 08:30:59'", 'updated_at': "'2026-09-21 08:30:59'"}
+      [items] {'id': "'474dfa42-2c92-468b-9633-97aa751b12f8'"}
+      [items] {'id': "'588f3b2f-ad12-4b01-ba69-49dcfe46bd9f'"}
+      [items] {'id': "'f422259c-bafe-45ba-8746-dcd9962b3774'"}
+      [items] {'id': "'05512f17-38d1-42ce-b75d-6972ac1bd989'"}
+      [items] {'id': "'a228a764-5965-48f5-bb33-90dabf5ddad8'"}
+      [items] {'id': "'119ac4b5-0c32-4169-8d49-5a53ca119be5'"}
+      [items] {'id': "'09623683-52aa-4f28-9895-9913a11d08e8'"}
+      [items] {'id': "'efdf9531-bbe3-4577-bd2e-6d413a1598af'"}
+      [items] {'id': "'97d27591-3480-485b-9a74-f9c525e229ad'"}
+      [items] {'id': "'eda04c22-aa8a-4e69-ac01-29fbb0a82534'"}
+      [items] {'id': "'5ad0de59-2238-4fb5-953d-64a873268ac8'"}
+      [items] {'id': "'7abd6691-f4f0-4263-99a5-0f2d284f7304'"}
+      [items] {'id': "'bfb000e4-ed63-45de-8db9-e7da357c39ef'"}
+      [items] {'id': "'61ccf913-b52d-4bf1-a02c-e4a08acdd217'"}
+      [items] {'id': "'92225a8c-6d52-4960-891f-d9e3f7df9cf1'"}
+   
+   == candidates / album_info reachable from those tasks ==
+      [candidate] rows=10 cols=['task_id', 'duplicate_ids', 'id', 'created_at', 'updated_at', 'match_id']
+          {'task_id': "'1007c4d7-3473-4941-9394-c29a555725ed'", 'duplicate_ids': "''", 'id': "'1db8e9d5-ddf5-42f6-a69b-66c1e587b731'", 'created_at': "'2026-09-20 23:39:06'", 'updated_at': "'2026-09-20 23:39:06'", 'match_id': "'36e0ecdb-7c3c-4837-a933-275dee428203'"}
+          {'task_id': "'1007c4d7-3473-4941-9394-c29a555725ed'", 'duplicate_ids': "''", 'id': "'9cd7dc39-ec35-4f7e-b1b4-efc7eb6bd6b7'", 'created_at': "'2026-09-20 23:39:06'", 'updated_at': "'2026-09-20 23:39:06'", 'match_id': "'bbb03781-52c3-4ae6-9f86-907116731231'"}
+          {'task_id': "'1007c4d7-3473-4941-9394-c29a555725ed'", 'duplicate_ids': "''", 'id': "'78c1cc58-aab5-440a-be53-783e1d2c9f55'", 'created_at': "'2026-09-20 23:39:06'", 'updated_at': "'2026-09-20 23:39:06'", 'match_id': "'c9d21cd9-06e2-4caf-b256-4371c1646b9c'"}
+          {'task_id': "'1007c4d7-3473-4941-9394-c29a555725ed'", 'duplicate_ids': "''", 'id': "'0949b3e2-91f2-4e12-a20b-cc0dbca88370'", 'created_at': "'2026-09-20 23:39:06'", 'updated_at': "'2026-09-20 23:39:06'", 'match_id': "'6811a843-be5d-4c8e-a0d6-a8b4b09d80dc'"}
+          {'task_id': "'1007c4d7-3473-4941-9394-c29a555725ed'", 'duplicate_ids': "''", 'id': "'43fc6634-5a2c-43f2-ba72-c09ef3fabfa9'", 'created_at': "'2026-09-20 23:39:06'", 'updated_at': "'2026-09-20 23:39:06'", 'match_id': "'654d0657-218a-4d30-aef7-a976dc6425ce'"}
+          {'task_id': "'09ba95dc-4cac-4556-8328-9876d7184a7a'", 'duplicate_ids': "''", 'id': "'7517f697-b0be-4e73-b8e1-79b901b2ad4a'", 'created_at': "'2026-09-21 08:30:59'", 'updated_at': "'2026-09-21 08:30:59'", 'match_id': "'c77dfb2f-5054-46fa-a935-a5a43a7386bc'"}
+          {'task_id': "'09ba95dc-4cac-4556-8328-9876d7184a7a'", 'duplicate_ids': "''", 'id': "'885f500a-5733-402e-93ab-32d9092db1bc'", 'created_at': "'2026-09-21 08:30:59'", 'updated_at': "'2026-09-21 08:30:59'", 'match_id': "'f6d419ed-fee2-47bb-a827-4610c9a6b7d3'"}
+          {'task_id': "'09ba95dc-4cac-4556-8328-9876d7184a7a'", 'duplicate_ids': "''", 'id': "'f891fe32-1928-4ef1-b067-da7414696ab6'", 'created_at': "'2026-09-21 08:30:59'", 'updated_at': "'2026-09-21 08:30:59'", 'match_id': "'e8a7b72c-f82b-464b-a43e-94244f76a407'"}
+          {'task_id': "'09ba95dc-4cac-4556-8328-9876d7184a7a'", 'duplicate_ids': "''", 'id': "'e2feb982-5805-436c-9a84-551e11ee3e14'", 'created_at': "'2026-09-21 08:30:59'", 'updated_at': "'2026-09-21 08:30:59'", 'match_id': "'d38dcdd0-b1a5-4dcd-a883-b05647efba37'"}
+          {'task_id': "'09ba95dc-4cac-4556-8328-9876d7184a7a'", 'duplicate_ids': "''", 'id': "'10037b65-c748-4284-9fb3-d6c657d25438'", 'created_at': "'2026-09-21 08:30:59'", 'updated_at': "'2026-09-21 08:30:59'", 'match_id': "'233aa263-e4fa-4ef6-ae97-b053a8915cc3'"}
+      [matches] rows=10 cols=['id', 'type', 'distance_id', 'created_at', 'updated_at']
+          {'id': "'36e0ecdb-7c3c-4837-a933-275dee428203'", 'type': "'album'", 'distance_id': "'e5afda3d-7378-4fa6-8e3a-bd30c569680a'", 'created_at': "'2026-09-20 23:39:06'", 'updated_at': "'2026-09-20 23:39:06'"}
+          {'id': "'bbb03781-52c3-4ae6-9f86-907116731231'", 'type': "'album'", 'distance_id': "'fac2f196-dd8a-47f1-8170-7a8ad5c10337'", 'created_at': "'2026-09-20 23:39:06'", 'updated_at': "'2026-09-20 23:39:06'"}
+          {'id': "'c9d21cd9-06e2-4caf-b256-4371c1646b9c'", 'type': "'album'", 'distance_id': "'ec58945f-0e57-4ebe-a6a6-35050c867ece'", 'created_at': "'2026-09-20 23:39:06'", 'updated_at': "'2026-09-20 23:39:06'"}
+          {'id': "'6811a843-be5d-4c8e-a0d6-a8b4b09d80dc'", 'type': "'album'", 'distance_id': "'f228aa61-b877-4159-a264-adbcf8f1fccf'", 'created_at': "'2026-09-20 23:39:06'", 'updated_at': "'2026-09-20 23:39:06'"}
+          {'id': "'654d0657-218a-4d30-aef7-a976dc6425ce'", 'type': "'album'", 'distance_id': "'f3318656-8285-4378-b938-56af63f9addf'", 'created_at': "'2026-09-20 23:39:06'", 'updated_at': "'2026-09-20 23:39:06'"}
+          {'id': "'c77dfb2f-5054-46fa-a935-a5a43a7386bc'", 'type': "'album'", 'distance_id': "'3261ac50-834d-47ad-bbed-a107abb2f9b1'", 'created_at': "'2026-09-21 08:30:59'", 'updated_at': "'2026-09-21 08:30:59'"}
+          {'id': "'f6d419ed-fee2-47bb-a827-4610c9a6b7d3'", 'type': "'album'", 'distance_id': "'088da291-a2b9-428f-9590-d36f9eb1c96a'", 'created_at': "'2026-09-21 08:30:59'", 'updated_at': "'2026-09-21 08:30:59'"}
+          {'id': "'e8a7b72c-f82b-464b-a43e-94244f76a407'", 'type': "'album'", 'distance_id': "'7b607fce-9b85-46ba-8f54-c1548153746d'", 'created_at': "'2026-09-21 08:30:59'", 'updated_at': "'2026-09-21 08:30:59'"}
+          {'id': "'d38dcdd0-b1a5-4dcd-a883-b05647efba37'", 'type': "'album'", 'distance_id': "'bf1512e6-891b-4b63-8e39-b115cdcd3168'", 'created_at': "'2026-09-21 08:30:59'", 'updated_at': "'2026-09-21 08:30:59'"}
+          {'id': "'233aa263-e4fa-4ef6-ae97-b053a8915cc3'", 'type': "'album'", 'distance_id': "'5b7edb95-7a9a-404f-988f-1e4a6d7a8a70'", 'created_at': "'2026-09-21 08:30:59'", 'updated_at': "'2026-09-21 08:30:59'"}
+      [matches_album] rows=10 cols=['id', 'info_id']
+          {'id': "'36e0ecdb-7c3c-4837-a933-275dee428203'", 'info_id': "'9614ae7d-c9f8-46f6-b622-5cdf7a1a17ec'"}
+          {'id': "'bbb03781-52c3-4ae6-9f86-907116731231'", 'info_id': "'1d331f97-0b59-49bd-9bf4-4be74c626f67'"}
+          {'id': "'c9d21cd9-06e2-4caf-b256-4371c1646b9c'", 'info_id': "'a85c8bda-75e8-424f-91af-f1377e0a6264'"}
+          {'id': "'6811a843-be5d-4c8e-a0d6-a8b4b09d80dc'", 'info_id': "'d34ebfa2-fe31-45db-900b-9e254b8a62b8'"}
+          {'id': "'654d0657-218a-4d30-aef7-a976dc6425ce'", 'info_id': "'e57e7458-a159-49d0-943a-421875e99dcf'"}
+          {'id': "'c77dfb2f-5054-46fa-a935-a5a43a7386bc'", 'info_id': "'fa07fdbc-d91e-4808-a7ae-511ed72b702b'"}
+          {'id': "'f6d419ed-fee2-47bb-a827-4610c9a6b7d3'", 'info_id': "'fb968cd0-9373-4e13-913b-c53b3d9bb6f8'"}
+          {'id': "'e8a7b72c-f82b-464b-a43e-94244f76a407'", 'info_id': "'c41f74b5-6b71-473f-a20d-314ce685c275'"}
+          {'id': "'d38dcdd0-b1a5-4dcd-a883-b05647efba37'", 'info_id': "'fe08d5a2-d2dc-4e13-b722-cd14358f6f47'"}
+          {'id': "'233aa263-e4fa-4ef6-ae97-b053a8915cc3'", 'info_id': "'a2764f52-aa1d-46a4-bbb1-5490b00a4012'"}
+      [album_info] rows=10 cols=['data', 'id', 'created_at', 'updated_at']
+          {'data': '\'{"album_id": "e4fdb1dc-f4a5-4d73-8e53-3f4d12c8df60", "albumdisambig":', 'id': "'9614ae7d-c9f8-46f6-b622-5cdf7a1a17ec'", 'created_at': "'2026-09-20 23:39:06'", 'updated_at': "'2026-09-20 23:39:06'"}
+          {'data': '\'{"album_id": "c0df8104-7b49-4fa3-bcec-cb3d310aa9a5", "albumdisambig":', 'id': "'1d331f97-0b59-49bd-9bf4-4be74c626f67'", 'created_at': "'2026-09-20 23:39:06'", 'updated_at': "'2026-09-20 23:39:06'"}
+          {'data': '\'{"album_id": "c33163f3-6217-4dc8-8e88-65f623b62c9b", "albumdisambig":', 'id': "'a85c8bda-75e8-424f-91af-f1377e0a6264'", 'created_at': "'2026-09-20 23:39:06'", 'updated_at': "'2026-09-20 23:39:06'"}
+          {'data': '\'{"album_id": "b3a1e018-845b-44bd-a9a3-4f46c2e39d49", "albumdisambig":', 'id': "'d34ebfa2-fe31-45db-900b-9e254b8a62b8'", 'created_at': "'2026-09-20 23:39:06'", 'updated_at': "'2026-09-20 23:39:06'"}
+          {'data': '\'{"album_id": "cfb585a2-856d-4875-8ef4-1d4c017bab17", "albumdisambig":', 'id': "'e57e7458-a159-49d0-943a-421875e99dcf'", 'created_at': "'2026-09-20 23:39:06'", 'updated_at': "'2026-09-20 23:39:06'"}
+          {'data': '\'{"album_id": "ef528afc-c3de-4b4a-8ef2-a0dd43dc9c83", "albumdisambig":', 'id': "'fa07fdbc-d91e-4808-a7ae-511ed72b702b'", 'created_at': "'2026-09-21 08:30:59'", 'updated_at': "'2026-09-21 08:30:59'"}
+          {'data': '\'{"album_id": "2b2822ff-c2b4-41cd-ac49-6318bd55388b", "albumdisambig":', 'id': "'fb968cd0-9373-4e13-913b-c53b3d9bb6f8'", 'created_at': "'2026-09-21 08:30:59'", 'updated_at': "'2026-09-21 08:30:59'"}
+          {'data': '\'{"album_id": "20d98b93-a4eb-434e-a680-1b61690da200", "albumdisambig":', 'id': "'c41f74b5-6b71-473f-a20d-314ce685c275'", 'created_at': "'2026-09-21 08:30:59'", 'updated_at': "'2026-09-21 08:30:59'"}
+          {'data': '\'{"album_id": "a9283c59-a664-4168-83ee-411643ac32a2", "albumdisambig":', 'id': "'fe08d5a2-d2dc-4e13-b722-cd14358f6f47'", 'created_at': "'2026-09-21 08:30:59'", 'updated_at': "'2026-09-21 08:30:59'"}
+          {'data': '\'{"album_id": "aeed0766-db67-41fa-833d-3b3482c97c59", "albumdisambig":', 'id': "'a2764f52-aa1d-46a4-bbb1-5490b00a4012'", 'created_at': "'2026-09-21 08:30:59'", 'updated_at': "'2026-09-21 08:30:59'"}
+      [distances] rows=100 cols=['track_info_id', 'parent_distance_id', 'raw_distance', 'max_distance', 'id', 'created_at', 'updated_at']
+          {'track_info_id': 'None', 'parent_distance_id': 'None', 'raw_distance': '6.806756756756757', 'max_distance': '21.3', 'id': "'e5afda3d-7378-4fa6-8e3a-bd30c569680a'", 'created_at': "'2026-09-20 23:39:06'", 'updated_at': "'2026-09-20 23:39:06'"}
+          {'track_info_id': 'None', 'parent_distance_id': 'None', 'raw_distance': '6.806756756756757', 'max_distance': '21.3', 'id': "'fac2f196-dd8a-47f1-8170-7a8ad5c10337'", 'created_at': "'2026-09-20 23:39:06'", 'updated_at': "'2026-09-20 23:39:06'"}
+          {'track_info_id': 'None', 'parent_distance_id': 'None', 'raw_distance': '6.806756756756757', 'max_distance': '21.3', 'id': "'ec58945f-0e57-4ebe-a6a6-35050c867ece'", 'created_at': "'2026-09-20 23:39:06'", 'updated_at': "'2026-09-20 23:39:06'"}
+          {'track_info_id': 'None', 'parent_distance_id': 'None', 'raw_distance': '7.056756756756757', 'max_distance': '21.3', 'id': "'f228aa61-b877-4159-a264-adbcf8f1fccf'", 'created_at': "'2026-09-20 23:39:06'", 'updated_at': "'2026-09-20 23:39:06'"}
+          {'track_info_id': 'None', 'parent_distance_id': 'None', 'raw_distance': '7.056756756756757', 'max_distance': '21.3', 'id': "'f3318656-8285-4378-b938-56af63f9addf'", 'created_at': "'2026-09-20 23:39:06'", 'updated_at': "'2026-09-20 23:39:06'"}
+          {'track_info_id': "'5ae32f1c-a73e-4981-b927-9443696f89de'", 'parent_distance_id': "'e5afda3d-7378-4fa6-8e3a-bd30c569680a'", 'raw_distance': '0.0', 'max_distance': '7.0', 'id': "'6303cecd-2f77-4db0-9b2b-1e7abd05ee2f'", 'created_at': "'2026-09-20 23:39:06'", 'updated_at': "'2026-09-20 23:39:06'"}
+          {'track_info_id': "'66f77b32-efd3-46d5-9d57-4e63e625cdb7'", 'parent_distance_id': "'e5afda3d-7378-4fa6-8e3a-bd30c569680a'", 'raw_distance': '0.0', 'max_distance': '7.0', 'id': "'a0619bbe-f0a0-4daf-a5af-936765a7a12a'", 'created_at': "'2026-09-20 23:39:06'", 'updated_at': "'2026-09-20 23:39:06'"}
+          {'track_info_id': "'deac9a63-e16a-41b2-a7aa-76f598ea0d3e'", 'parent_distance_id': "'e5afda3d-7378-4fa6-8e3a-bd30c569680a'", 'raw_distance': '0.0', 'max_distance': '7.0', 'id': "'304e59aa-cf05-4d2f-b708-63fce0fff0e7'", 'created_at': "'2026-09-20 23:39:06'", 'updated_at': "'2026-09-20 23:39:06'"}
+          {'track_info_id': "'a5f7a914-4b2c-4cb9-b2fb-98dd37bb5036'", 'parent_distance_id': "'fac2f196-dd8a-47f1-8170-7a8ad5c10337'", 'raw_distance': '0.0', 'max_distance': '7.0', 'id': "'d10e32e6-c66e-449e-ac85-308e7be89f9a'", 'created_at': "'2026-09-20 23:39:06'", 'updated_at': "'2026-09-20 23:39:06'"}
+          {'track_info_id': "'4bc17089-6904-4fcf-90a0-f7f165cb8ecc'", 'parent_distance_id': "'fac2f196-dd8a-47f1-8170-7a8ad5c10337'", 'raw_distance': '0.0', 'max_distance': '7.0', 'id': "'6811b976-d49b-4b15-8e1a-a8c8439a4c89'", 'created_at': "'2026-09-20 23:39:06'", 'updated_at': "'2026-09-20 23:39:06'"}
+          {'track_info_id': "'5c42335f-0827-4acf-b937-97755861f2ac'", 'parent_distance_id': "'fac2f196-dd8a-47f1-8170-7a8ad5c10337'", 'raw_distance': '0.0', 'max_distance': '7.0', 'id': "'04c7b9c0-1a4b-4153-baa5-b9b92285cc4d'", 'created_at': "'2026-09-20 23:39:06'", 'updated_at': "'2026-09-20 23:39:06'"}
+          {'track_info_id': "'89d79a69-b802-49bf-9cd3-5a05f7763302'", 'parent_distance_id': "'ec58945f-0e57-4ebe-a6a6-35050c867ece'", 'raw_distance': '0.0', 'max_distance': '7.0', 'id': "'b8b474ce-5a80-4060-b5f6-74fcc9ba077c'", 'created_at': "'2026-09-20 23:39:06'", 'updated_at': "'2026-09-20 23:39:06'"}
+          {'track_info_id': "'d3cf57e4-190d-47a6-8e28-fc5b8b1a8818'", 'parent_distance_id': "'ec58945f-0e57-4ebe-a6a6-35050c867ece'", 'raw_distance': '0.0', 'max_distance': '7.0', 'id': "'be586aa8-8137-4dc7-8a26-d6b224fff87e'", 'created_at': "'2026-09-20 23:39:06'", 'updated_at': "'2026-09-20 23:39:06'"}
+          {'track_info_id': "'0f639323-72c7-4e57-8f3d-7bd6d5b2798b'", 'parent_distance_id': "'ec58945f-0e57-4ebe-a6a6-35050c867ece'", 'raw_distance': '0.0', 'max_distance': '7.0', 'id': "'1f4689d5-dd31-4b97-816d-e1d65d95b308'", 'created_at': "'2026-09-20 23:39:06'", 'updated_at': "'2026-09-20 23:39:06'"}
+          {'track_info_id': "'6b595d19-59dd-41e9-a62d-e3ddf5b9f204'", 'parent_distance_id': "'f228aa61-b877-4159-a264-adbcf8f1fccf'", 'raw_distance': '0.0', 'max_distance': '7.0', 'id': "'7a679fae-f2cf-4616-af71-95491d51cff6'", 'created_at': "'2026-09-20 23:39:06'", 'updated_at': "'2026-09-20 23:39:06'"}
+          {'track_info_id': "'aada314b-dc87-480f-8282-20557a0fea87'", 'parent_distance_id': "'f228aa61-b877-4159-a264-adbcf8f1fccf'", 'raw_distance': '0.0', 'max_distance': '7.0', 'id': "'95b80572-6edb-4ae0-ab65-1b3fd4aa204a'", 'created_at': "'2026-09-20 23:39:06'", 'updated_at': "'2026-09-20 23:39:06'"}
+          {'track_info_id': "'17750e94-c736-4b9e-abd7-72a339918a8b'", 'parent_distance_id': "'f228aa61-b877-4159-a264-adbcf8f1fccf'", 'raw_distance': '0.0', 'max_distance': '7.0', 'id': "'bc255d68-18f8-4f91-9aeb-a4d8079cadb7'", 'created_at': "'2026-09-20 23:39:06'", 'updated_at': "'2026-09-20 23:39:06'"}
+          {'track_info_id': "'ae911957-640b-43d9-a068-077797e0fde7'", 'parent_distance_id': "'f3318656-8285-4378-b938-56af63f9addf'", 'raw_distance': '0.0', 'max_distance': '7.0', 'id': "'e567f107-37fd-485e-b7e3-32c7ee3ea2d1'", 'created_at': "'2026-09-20 23:39:06'", 'updated_at': "'2026-09-20 23:39:06'"}
+          {'track_info_id': "'01aef71a-f707-42aa-8586-b87f21832257'", 'parent_distance_id': "'f3318656-8285-4378-b938-56af63f9addf'", 'raw_distance': '0.0', 'max_distance': '7.0', 'id': "'a0f7f86d-677d-466c-93ad-6b6256a3b41c'", 'created_at': "'2026-09-20 23:39:06'", 'updated_at': "'2026-09-20 23:39:06'"}
+          {'track_info_id': "'6c0ed53b-1933-4c81-9ad4-4fec209df478'", 'parent_distance_id': "'f3318656-8285-4378-b938-56af63f9addf'", 'raw_distance': '0.0', 'max_distance': '7.0', 'id': "'7db25373-6135-4203-b50b-e8d19bc60b19'", 'created_at': "'2026-09-20 23:39:06'", 'updated_at': "'2026-09-20 23:39:06'"}
+          {'track_info_id': 'None', 'parent_distance_id': 'None', 'raw_distance': '0.4722222222222222', 'max_distance': '38.5', 'id': "'3261ac50-834d-47ad-bbed-a107abb2f9b1'", 'created_at': "'2026-09-21 08:30:59'", 'updated_at': "'2026-09-21 08:30:59'"}
+          {'track_info_id': 'None', 'parent_distance_id': 'None', 'raw_distance': '0.7115384615384616', 'max_distance': '39.0', 'id': "'088da291-a2b9-428f-9590-d36f9eb1c96a'", 'created_at': "'2026-09-21 08:30:59'", 'updated_at': "'2026-09-21 08:30:59'"}
+          {'track_info_id': 'None', 'parent_distance_id': 'None', 'raw_distance': '1.6579365079365078', 'max_distance': '39.4', 'id': "'7b607fce-9b85-46ba-8f54-c1548153746d'", 'created_at': "'2026-09-21 08:30:59'", 'updated_at': "'2026-09-21 08:30:59'"}
+          {'track_info_id': 'None', 'parent_distance_id': 'None', 'raw_distance': '1.6579365079365078', 'max_distance': '39.4', 'id': "'bf1512e6-891b-4b63-8e39-b115cdcd3168'", 'created_at': "'2026-09-21 08:30:59'", 'updated_at': "'2026-09-21 08:30:59'"}
+          {'track_info_id': 'None', 'parent_distance_id': 'None', 'raw_distance': '2.647252747252747', 'max_distance': '39.9', 'id': "'5b7edb95-7a9a-404f-988f-1e4a6d7a8a70'", 'created_at': "'2026-09-21 08:30:59'", 'updated_at': "'2026-09-21 08:30:59'"}
+          {'track_info_id': "'e85da59b-4cd3-4601-b10a-13cbe82d6cfa'", 'parent_distance_id': "'3261ac50-834d-47ad-bbed-a107abb2f9b1'", 'raw_distance': '0.0', 'max_distance': '7.0', 'id': "'8550f3cf-1ba2-41a5-8955-ba5e3296e40b'", 'created_at': "'2026-09-21 08:30:59'", 'updated_at': "'2026-09-21 08:30:59'"}
+          {'track_info_id': "'871a2512-4b21-4bbc-8cca-810f38f0797f'", 'parent_distance_id': "'3261ac50-834d-47ad-bbed-a107abb2f9b1'", 'raw_distance': '0.0', 'max_distance': '7.0', 'id': "'97beefb5-0b53-468d-9b7e-4eb401936f54'", 'created_at': "'2026-09-21 08:30:59'", 'updated_at': "'2026-09-21 08:30:59'"}
+          {'track_info_id': "'b871f822-d5aa-4797-a4ca-a01c8f4d3b4d'", 'parent_distance_id': "'3261ac50-834d-47ad-bbed-a107abb2f9b1'", 'raw_distance': '0.0', 'max_distance': '7.0', 'id': "'698c4951-8a5f-434f-b8be-e2dfc9e7505a'", 'created_at': "'2026-09-21 08:30:59'", 'updated_at': "'2026-09-21 08:30:59'"}
+          {'track_info_id': "'42832515-8b43-4b3c-916b-9e88af71c573'", 'parent_distance_id': "'3261ac50-834d-47ad-bbed-a107abb2f9b1'", 'raw_distance': '0.0', 'max_distance': '7.0', 'id': "'7982a23b-bdbe-4c7f-bba2-6a1b34298437'", 'created_at': "'2026-09-21 08:30:59'", 'updated_at': "'2026-09-21 08:30:59'"}
+          {'track_info_id': "'ece55d86-7a4c-4c83-88b1-c61c92ddccb7'", 'parent_distance_id': "'3261ac50-834d-47ad-bbed-a107abb2f9b1'", 'raw_distance': '0.0', 'max_distance': '7.0', 'id': "'6421917b-6c26-4faf-8e38-699be4223797'", 'created_at': "'2026-09-21 08:30:59'", 'updated_at': "'2026-09-21 08:30:59'"}
+          {'track_info_id': "'9d5b02da-407c-4f54-b331-33c3f6cde0e4'", 'parent_distance_id': "'3261ac50-834d-47ad-bbed-a107abb2f9b1'", 'raw_distance': '0.0', 'max_distance': '7.0', 'id': "'bd3cc1e3-8308-4384-9cce-c8da65b9b599'", 'created_at': "'2026-09-21 08:30:59'", 'updated_at': "'2026-09-21 08:30:59'"}
+          {'track_info_id': "'c736f2a6-9a9e-400c-8601-71e3719ea941'", 'parent_distance_id': "'3261ac50-834d-47ad-bbed-a107abb2f9b1'", 'raw_distance': '0.0', 'max_distance': '7.0', 'id': "'589a5725-6037-4019-bd42-4d53429cc9cf'", 'created_at': "'2026-09-21 08:30:59'", 'updated_at': "'2026-09-21 08:30:59'"}
+          {'track_info_id': "'45841dbf-59ff-4773-a08d-e4b5adecaf7b'", 'parent_distance_id': "'3261ac50-834d-47ad-bbed-a107abb2f9b1'", 'raw_distance': '0.0', 'max_distance': '7.0', 'id': "'a40b5f29-9918-4179-b9d6-cc2427c75d04'", 'created_at': "'2026-09-21 08:30:59'", 'updated_at': "'2026-09-21 08:30:59'"}
+          {'track_info_id': "'fb08fd01-1e77-49f5-9152-59181921f42a'", 'parent_distance_id': "'3261ac50-834d-47ad-bbed-a107abb2f9b1'", 'raw_distance': '0.0', 'max_distance': '7.0', 'id': "'fd169cfe-e205-4f27-aadf-56aee2e2a4cb'", 'created_at': "'2026-09-21 08:30:59'", 'updated_at': "'2026-09-21 08:30:59'"}
+          {'track_info_id': "'1409c5d3-0a30-4a6f-bafe-97e1acc209dd'", 'parent_distance_id': "'3261ac50-834d-47ad-bbed-a107abb2f9b1'", 'raw_distance': '0.0', 'max_distance': '7.0', 'id': "'8104f599-4a92-4786-a9b5-6bd11f16d319'", 'created_at': "'2026-09-21 08:30:59'", 'updated_at': "'2026-09-21 08:30:59'"}
+          {'track_info_id': "'20b3bc69-de21-4e9a-95ba-5cbaba6ead2b'", 'parent_distance_id': "'3261ac50-834d-47ad-bbed-a107abb2f9b1'", 'raw_distance': '0.0', 'max_distance': '7.0', 'id': "'fe5065bc-435e-41f6-8f5b-ee837e929994'", 'created_at': "'2026-09-21 08:30:59'", 'updated_at': "'2026-09-21 08:30:59'"}
+          {'track_info_id': "'fa86b784-acd2-477f-9258-67326ca26544'", 'parent_distance_id': "'3261ac50-834d-47ad-bbed-a107abb2f9b1'", 'raw_distance': '0.0', 'max_distance': '7.0', 'id': "'90b4507e-21b6-48d4-89a8-0ad2dafcab33'", 'created_at': "'2026-09-21 08:30:59'", 'updated_at': "'2026-09-21 08:30:59'"}
+          {'track_info_id': "'3e659107-9108-4e07-9969-607fec647954'", 'parent_distance_id': "'3261ac50-834d-47ad-bbed-a107abb2f9b1'", 'raw_distance': '0.0', 'max_distance': '7.0', 'id': "'13928549-2a95-48fa-b069-2df9bf95ac26'", 'created_at': "'2026-09-21 08:30:59'", 'updated_at': "'2026-09-21 08:30:59'"}
+          {'track_info_id': "'de6f4bbb-3cac-4be4-8454-6b7b384dc5b6'", 'parent_distance_id': "'3261ac50-834d-47ad-bbed-a107abb2f9b1'", 'raw_distance': '0.0', 'max_distance': '7.0', 'id': "'988cb92b-2527-47d7-916d-60fa7bfa5224'", 'created_at': "'2026-09-21 08:30:59'", 'updated_at': "'2026-09-21 08:30:59'"}
+          {'track_info_id': "'326febc5-1a40-44f8-8737-8641b197cfd9'", 'parent_distance_id': "'3261ac50-834d-47ad-bbed-a107abb2f9b1'", 'raw_distance': '0.0', 'max_distance': '7.0', 'id': "'8de6bd23-1ae7-4cd1-b921-a5298d41c58b'", 'created_at': "'2026-09-21 08:30:59'", 'updated_at': "'2026-09-21 08:30:59'"}
+
+================================================================
+9. SOURCE MANIFEST, AFTER
+================================================================
+   before: bb51346c9b52f6f85fd5ee32909840be35a7bfddce430f84165cf14f426667f5
+   after : bb51346c9b52f6f85fd5ee32909840be35a7bfddce430f84165cf14f426667f5
+   PASS: source manifest IDENTICAL either side
+
+================================================================
+10. D-29 LAYER 3, AFTER
+================================================================
+   library.db   fbbdde0c416e72b9884e56c562fd88eaa4da447926e1cb6cc17c3e04aee7da1a   mtime 2026-09-11 23:42:52.275462096 +0000
+   state.pickle f6a9a1ad7aa553e42e53a8056fa80724785111180a5e2122be4f8732d1e4bc7c   mtime 2025-11-18 13:50:21.434412138 +0000
+   PASS: both real beets state files byte-identical
+
+================================================================
+VERDICT
+================================================================
+RED / UNKNOWN — see the VIOLATION / COULD NOT LOOK lines above
+
+================================================================
+TEARDOWN — the folder is REMOVED and 02-review asserted empty
+================================================================
+   ls before removal:
+     total 319574
+     drwxrwxrwx 2 root root       17 Sep 21 08:30 .
+     drwxrwxrwx 3 apps apps        3 Sep 21 08:30 ..
+     -rwxrwxrwx 1 root root  5546797 Sep 21 08:30 01..Intro.flac
+     -rwxrwxrwx 1 root root 28131724 Sep 21 08:30 02..Be.Someone.flac
+     -rwxrwxrwx 1 root root 18894147 Sep 21 08:30 03..Slow.It.Down.flac
+     -rwxrwxrwx 1 root root 20319864 Sep 21 08:30 04..Beautiful.Things.flac
+     -rwxrwxrwx 1 root root 20293710 Sep 21 08:30 05..Cry.flac
+     -rwxrwxrwx 1 root root 24012945 Sep 21 08:30 06..Forever.and.a.Day.flac
+     -rwxrwxrwx 1 root root 24369412 Sep 21 08:30 07..In.The.Stars.flac
+     -rwxrwxrwx 1 root root 26099754 Sep 21 08:30 08..Drunk.In.My.Mind.flac
+     -rwxrwxrwx 1 root root 25314043 Sep 21 08:30 09..My.Greatest.Fear.flac
+     -rwxrwxrwx 1 root root 24445319 Sep 21 08:30 10..There.She.Goes.flac
+     -rwxrwxrwx 1 root root 21722028 Sep 21 08:30 11..Hello.Love.flac
+     -rwxrwxrwx 1 root root 19012214 Sep 21 08:30 12..Ghost.Town.flac
+     -rwxrwxrwx 1 root root 19100706 Sep 21 08:30 13..Love.Of.Mine.flac
+     -rwxrwxrwx 1 root root 20062372 Sep 21 08:30 14..Friend.flac
+     -rwxrwxrwx 1 root root 29760944 Sep 21 08:30 15..What.Do.You.Want.flac
+   rm -rf rc=0
+   02-review entries at -mindepth 1: 0
+
+================================================================================
+TRANSCRIPT RUN 2 — THE FIXED INSTRUMENT (driver 2, exit 0, GREEN)
+No second transit: this re-reads the state run 1's single transit persisted.
+`02-review` is asserted EMPTY at the start and at the end of this run.
+================================================================================
+
+================================================================
+0. PROVENANCE — run 2, the fixed instrument
+================================================================
+host        : selfhost
+utc         : 2026-09-21T20:05:16Z
+container   : beets-flask  metasauce/beets-flask:v2.0.0-rc6 started=2026-09-20T22:37:55.838784056Z restarts=0
+/media RW   : false
+marker      : _PHASE06-12-XCHECK-20260921T083018Z   (the run-1 transit; the folder itself is GONE)
+02-review   : 0 entries at -mindepth 1
+
+================================================================
+0b. STAGE THE FIXED INSTRUMENT
+================================================================
+   total 32
+   drwxr-xr-x 2 beetle beetle  4096 Sep 21 21:05 .
+   drwxrwxrwt 1 root   root    4096 Sep 21 21:03 ..
+   -rw-r--r-- 1 beetle beetle  1075 Sep 21 09:30 arm1.txt
+   -rw-r--r-- 1 beetle beetle 13657 Sep 21 21:05 compare.py
+   -rw-r--r-- 1 beetle beetle   463 Sep 21 21:03 probe_path.py
+
+================================================================
+1. THE PREDICATE SELF-TEST — it must MATCH, and it must FAIL
+================================================================
+   Seventh instance this phase of a predicate that cannot match reading as a
+   clean negative. Both fixed predicates are driven against planted positives
+   BEFORE any clean result from them is believed.
+-- is_done() self-test: the predicate must MATCH and must FAIL --
+   PASS   'PREVIEW_COMPLETED'      want=True  got=True   the real sqlite value
+   PASS   20                       want=True  got=True   the HTTP API's integer form
+   PASS   '20'                     want=True  got=True   the integer as a string
+   PASS   'DELETION_COMPLETED'     want=True  got=True   the other terminal preview state
+   PASS   'LOOKING_UP_CANDIDATES'  want=False got=False  PLANTED: mid-flight, must NOT pass
+   PASS   'OFFERING_MATCHES'       want=False got=False  PLANTED: an ImportSession state, must NOT pass
+   PASS   12                       want=False got=False  PLANTED: mid-flight integer, must NOT pass
+   PASS   None                     want=False got=False  PLANTED: no session yet, must NOT pass
+   PASS   ''                       want=False got=False  PLANTED: empty, must NOT pass
+   PASS   'IMPORT_COMPLETED'       want=False got=False  PLANTED: an IMPORT finished — never a preview pass
+-- decode_path() self-test (defect D1) --
+   PASS   dict-encoded bytes -> '/downloads/x/01. y.flac'
+   PASS   decode_path REFUSES an unhandled encoding rather than guessing
+SELFTEST: PASSED
+   selftest exit=0
+
+================================================================
+2. THE POLL, RE-READ WITH THE FIXED PREDICATE
+================================================================
+{"folder": true, "full_path": "/downloads/complete/nzb/_inbox/02-review/_PHASE06-12-XCHECK-20260921T083018Z", "session": true, "progress": "PREVIEW_COMPLETED", "done": true, "exc": null, "task": true, "task_progress": "PREVIEW_COMPLETED"}
+
+================================================================
+3. OQ-4 RESOLVED, AND THE COMPARISON
+================================================================
+==============================================================================
+ARM 2 — WHAT rc6's `preview` ACTUALLY PRODUCED
+==============================================================================
+folder row   : {"full_path": "/downloads/complete/nzb/_inbox/02-review/_PHASE06-12-XCHECK-20260921T083018Z", "is_album": "None", "id": "5b52c00d678e936b72cb439a28b66b6e", "created_at": "2026-09-21 08:30:53", "updated_at": "2026-09-21 08:30:59"}
+session row  : {"folder_hash": "5b52c00d678e936b72cb439a28b66b6e", "folder_revision": "0", "progress": "PREVIEW_COMPLETED", "exc": "None", "id": "dc6b54aa-e10d-4119-90e5-be358cd40e2e", "created_at": "2026-09-21 08:30:59", "updated_at": "2026-09-21 08:30:59"}
+session done?: True   (predicate accepts the enum NAME and the integer — defect D2)
+task row     :
+    session_id             dc6b54aa-e10d-4119-90e5-be358cd40e2e
+    chosen_candidate_id    None
+    toppath                <76 bytes>
+    paths                  <pickle> [b'/downloads/complete/nzb/_inbox/02-review/_PHASE06-12-XCHECK-20260921T083018Z']
+    old_paths              None
+    choice_flag            None
+    cur_artist             Benson Boone
+    cur_album              Fireworks & Rollerblades
+    progress               PREVIEW_COMPLETED
+    id                     09ba95dc-4cac-4556-8328-9876d7184a7a
+    created_at             2026-09-21 08:30:59
+    updated_at             2026-09-21 08:30:59
+
+-- OQ-4, answered from the schema: EVERY column in the whole beets-flask
+   database whose name contains 'path' or 'dest' --
+    ['folder.full_path', 'task.toppath', 'task.paths', 'task.old_paths']
+   -> all four are SOURCE paths. There is no destination column anywhere in
+      the schema, so preview stores no computed tree.
+
+-- arm 2's per-item CURRENT field view (15 items) --
+   1/1   Benson Boone  | Fireworks & Rollerblades  | Intro                          | comp=False type=''   | 01..Intro.flac
+   1/2   Benson Boone  | Fireworks & Rollerblades  | Be Someone                     | comp=False type=''   | 02..Be.Someone.flac
+   1/3   Benson Boone  | Fireworks & Rollerblades  | Slow It Down                   | comp=False type=''   | 03..Slow.It.Down.flac
+   1/4   Benson Boone  | Fireworks & Rollerblades  | Beautiful Things               | comp=False type=''   | 04..Beautiful.Things.flac
+   1/5   Benson Boone  | Fireworks & Rollerblades  | Cry                            | comp=False type=''   | 05..Cry.flac
+   1/6   Benson Boone  | Fireworks & Rollerblades  | Forever and a Day              | comp=False type=''   | 06..Forever.and.a.Day.flac
+   1/7   Benson Boone  | Fireworks & Rollerblades  | In The Stars                   | comp=False type=''   | 07..In.The.Stars.flac
+   1/8   Benson Boone  | Fireworks & Rollerblades  | Drunk In My Mind               | comp=False type=''   | 08..Drunk.In.My.Mind.flac
+   1/9   Benson Boone  | Fireworks & Rollerblades  | My Greatest Fear               | comp=False type=''   | 09..My.Greatest.Fear.flac
+   1/10  Benson Boone  | Fireworks & Rollerblades  | There She Goes                 | comp=False type=''   | 10..There.She.Goes.flac
+   1/11  Benson Boone  | Fireworks & Rollerblades  | Hello Love                     | comp=False type=''   | 11..Hello.Love.flac
+   1/12  Benson Boone  | Fireworks & Rollerblades  | Ghost Town                     | comp=False type=''   | 12..Ghost.Town.flac
+   1/13  Benson Boone  | Fireworks & Rollerblades  | Love Of Mine                   | comp=False type=''   | 13..Love.Of.Mine.flac
+   1/14  Benson Boone  | Fireworks & Rollerblades  | Friend                         | comp=False type=''   | 14..Friend.flac
+   1/15  Benson Boone  | Fireworks & Rollerblades  | What Do You Want               | comp=False type=''   | 15..What.Do.You.Want.flac
+   disctotal values: [1]   albumtype values: ["''"]   singleton: ['None']
+   -> the path rule this resolves to is `default` ($albumartist/$album%aunique{}/$track $title):
+      not `singleton:` (album_id present / singleton not set), not `albumtype:=dj ...` (albumtype empty),
+      not `disctotal:2..` (disctotal 1), not `comp:` (comp False).  Same rule arm 1 took.
+
+-- arm 2's CANDIDATES (what preview exists to produce; arm 1 fetched NONE) --
+   candidates recorded: 5
+   dist=0.066347  XW   2025  trks=0    aeed0766-db67-41fa-833d-3b3482c97c59 | Benson Boone / Fireworks & Rollerblades
+   dist=0.012266  -    2024  trks=0    ef528afc-c3de-4b4a-8ef2-a0dd43dc9c83 | Benson Boone / Fireworks & Rollerblades
+   dist=0.018245  US   2024  trks=0    2b2822ff-c2b4-41cd-ac49-6318bd55388b | Benson Boone / Fireworks & Rollerblades
+   dist=0.04208   -    2024  trks=0    a9283c59-a664-4168-83ee-411643ac32a2 | Benson Boone / Fireworks & Rollerblades
+   dist=0.04208   -    2024  trks=0    20d98b93-a4eb-434e-a680-1b61690da200 | Benson Boone / Fireworks & Rollerblades
+   chosen_candidate_id: None   choice_flag: None
+   -> nothing was chosen and nothing was imported: the session stopped at PREVIEW_COMPLETED (20)
+      and never entered the ImportSession range (30-40).
+
+==============================================================================
+THE COMPARISON — arm 1 decomposed, arm 2 as read
+==============================================================================
+arm 1 destination lines for this folder: 15
+   A1raw /media/Music/Benson Boone/Fireworks & Rollerblades/01 Intro.flac
+   A1raw /media/Music/Benson Boone/Fireworks & Rollerblades/02 Be Someone.flac
+   A1raw /media/Music/Benson Boone/Fireworks & Rollerblades/03 Slow It Down.flac
+   A1raw /media/Music/Benson Boone/Fireworks & Rollerblades/04 Beautiful Things.flac
+   A1raw /media/Music/Benson Boone/Fireworks & Rollerblades/05 Cry.flac
+   A1raw /media/Music/Benson Boone/Fireworks & Rollerblades/06 Forever and a Day.flac
+   A1raw /media/Music/Benson Boone/Fireworks & Rollerblades/07 In The Stars.flac
+   A1raw /media/Music/Benson Boone/Fireworks & Rollerblades/08 Drunk In My Mind.flac
+   A1raw /media/Music/Benson Boone/Fireworks & Rollerblades/09 My Greatest Fear.flac
+   A1raw /media/Music/Benson Boone/Fireworks & Rollerblades/10 There She Goes.flac
+   A1raw /media/Music/Benson Boone/Fireworks & Rollerblades/11 Hello Love.flac
+   A1raw /media/Music/Benson Boone/Fireworks & Rollerblades/12 Ghost Town.flac
+   A1raw /media/Music/Benson Boone/Fireworks & Rollerblades/13 Love Of Mine.flac
+   A1raw /media/Music/Benson Boone/Fireworks & Rollerblades/14 Friend.flac
+   A1raw /media/Music/Benson Boone/Fireworks & Rollerblades/15 What Do You Want.flac
+
+arm 1 tuples: 15   arm 2 tuples: 15
+
+      albumartist   album                     trk title                          ext  
+   A1 Benson Boone  Fireworks & Rollerblades  01  Intro                          flac 
+   A1 Benson Boone  Fireworks & Rollerblades  02  Be Someone                     flac 
+   A1 Benson Boone  Fireworks & Rollerblades  03  Slow It Down                   flac 
+   A1 Benson Boone  Fireworks & Rollerblades  04  Beautiful Things               flac 
+   A1 Benson Boone  Fireworks & Rollerblades  05  Cry                            flac 
+   A1 Benson Boone  Fireworks & Rollerblades  06  Forever and a Day              flac 
+   A1 Benson Boone  Fireworks & Rollerblades  07  In The Stars                   flac 
+   A1 Benson Boone  Fireworks & Rollerblades  08  Drunk In My Mind               flac 
+   A1 Benson Boone  Fireworks & Rollerblades  09  My Greatest Fear               flac 
+   A1 Benson Boone  Fireworks & Rollerblades  10  There She Goes                 flac 
+   A1 Benson Boone  Fireworks & Rollerblades  11  Hello Love                     flac 
+   A1 Benson Boone  Fireworks & Rollerblades  12  Ghost Town                     flac 
+   A1 Benson Boone  Fireworks & Rollerblades  13  Love Of Mine                   flac 
+   A1 Benson Boone  Fireworks & Rollerblades  14  Friend                         flac 
+   A1 Benson Boone  Fireworks & Rollerblades  15  What Do You Want               flac 
+
+   A2 Benson Boone  Fireworks & Rollerblades  01  Intro                          flac 
+   A2 Benson Boone  Fireworks & Rollerblades  02  Be Someone                     flac 
+   A2 Benson Boone  Fireworks & Rollerblades  03  Slow It Down                   flac 
+   A2 Benson Boone  Fireworks & Rollerblades  04  Beautiful Things               flac 
+   A2 Benson Boone  Fireworks & Rollerblades  05  Cry                            flac 
+   A2 Benson Boone  Fireworks & Rollerblades  06  Forever and a Day              flac 
+   A2 Benson Boone  Fireworks & Rollerblades  07  In The Stars                   flac 
+   A2 Benson Boone  Fireworks & Rollerblades  08  Drunk In My Mind               flac 
+   A2 Benson Boone  Fireworks & Rollerblades  09  My Greatest Fear               flac 
+   A2 Benson Boone  Fireworks & Rollerblades  10  There She Goes                 flac 
+   A2 Benson Boone  Fireworks & Rollerblades  11  Hello Love                     flac 
+   A2 Benson Boone  Fireworks & Rollerblades  12  Ghost Town                     flac 
+   A2 Benson Boone  Fireworks & Rollerblades  13  Love Of Mine                   flac 
+   A2 Benson Boone  Fireworks & Rollerblades  14  Friend                         flac 
+   A2 Benson Boone  Fireworks & Rollerblades  15  What Do You Want               flac 
+
+VERDICT: AGREE — 15 of 15 tuples identical, zero lines either side.
+
+   compare exit=0   (0 AGREE, 1 COULD NOT COMPARE, 2 DISAGREE)
+   -> AGREE
+
+================================================================
+4. THE INBOXES, AND WHAT STILL HAS NOT BEEN EXERCISED
+================================================================
+   01-auto        0 entries
+   02-review      0 entries
+   03-asis        0 entries
+   04-hold        535 entries
+   99-quarantine  51 entries
+   _done          0 entries
+
+================================================================
+5. D-29 LAYER 3
+================================================================
+   library.db   fbbdde0c416e72b9884e56c562fd88eaa4da447926e1cb6cc17c3e04aee7da1a   mtime 2026-09-11 23:42:52.275462096 +0000
+   state.pickle f6a9a1ad7aa553e42e53a8056fa80724785111180a5e2122be4f8732d1e4bc7c   mtime 2025-11-18 13:50:21.434412138 +0000
+   PASS: both real beets state files at their 06-04/06-11 baselines
+
+================================================================
+6. TEARDOWN
+================================================================
+   PASS: /tmp/p6p is GONE
+   02-review entries at -mindepth 1: 0
+
+================================================================
+VERDICT
+================================================================
+GREEN
+
+================================================================================
+CREDENTIAL SCREEN (T-06-65) — run over this artifact before committing
+================================================================================
+No credential of any kind is present. This file carries container paths, folder
+hashes, session/task UUIDs, MusicBrainz release IDs, config keys and two sha256
+baselines that are already published in 06-04's and 06-11's artifacts. No token,
+no API key, no password, no e-mail address. rc6 ships no authentication of its
+own, so there is no beets-flask credential to leak; the authentication in front
+of it is Traefik + `chain-authelia@file`, configured in `flask.yaml` and not
+quoted here. The HTTP calls in the transcript are container-internal to
+`127.0.0.1:5001` and carry no header.
+
+================================================================================
+SUMMARY OF THE FOUR THINGS THE PLAN ASKED THIS TASK TO RECORD
+================================================================================
+1. WHAT `preview` DISPLAYS, and the OQ-4 resolution with its reason.
+   -> § 1. It shows CANDIDATES, not a tree. Answered from the class docstring,
+      from a zero-match grep over the installed package, and from the persisted
+      schema, all three agreeing. The agreement basis was therefore redefined
+      (§ 2), and the chosen-MBID half of the plan's fallback was rejected with
+      its reason: arm 1 imported as-is and has no MBID, arm 2 chose none, so
+      that half would have compared two absences.
+2. THE COMPARISON VERDICT against arm 1 on the resolved basis.
+   -> § 3. **AGREE**, 15 of 15 tuples, zero lines either side. Not an implied
+      agreement: the comparison ran to completion with exit 0 and both sides are
+      printed in full in § TRANSCRIPT RUN 2.
+3. THE IN-BAND AMENDMENT naming this as the second and last `02-review` transit.
+   -> § 5. Folder named, copied not moved, removed, `02-review` asserted at ZERO
+      entries from a bounded remote command, both source manifests identical.
+4. THE `bootleg` GATE carried to Phase 7.
+   -> § 8. `03-asis` registered and measured empty; the album-populated gate
+      restated; grouped with OQ-2's DJ routing mechanism as the same shape of
+      Phase 7 routing-time gap.
+
+================================================================================
+END — plan 06-12 task 2
+================================================================================
