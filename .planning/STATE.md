@@ -28,8 +28,8 @@ pipeline that someone owns.
 
 ## Current Position
 
-Phase: 06 (tagger-configuration-and-dry-run) — EXECUTING
-Plan: 1 of 14
+Phase: 06 (tagger-configuration-and-dry-run) — 14/14 plans executed; VERIFIED 5/6, gaps_found
+Plan: 14 of 14 (all complete)
 
 Previous: Phase 05 (inbox-structure-and-the-junk-gate) — **COMPLETE, closed 2026-09-19 at 4/4
 criteria TRUE**, 11 of 11 plans (fence taken, `_inbox` created, D-21 inode
@@ -94,7 +94,7 @@ it now matches a real song the split moved into `Vol 066`; assert the named path
 before Phase 6 signs off** — it is the only undo for 4,750 renames, 751 tag writes and 26,005
 chowns, and it is **not** a clean undo.
 
-Status: Executing Phase 06
+Status: Phase 06 closed with 1 open requirement (CONF-04, Jellyfin half) + 1 verification gap (CR-01)
 Do NOT run with `--auto`/`--chain` — four
 gates are `checkpoint:decision`, which auto-selects the first option under auto-mode.
 
