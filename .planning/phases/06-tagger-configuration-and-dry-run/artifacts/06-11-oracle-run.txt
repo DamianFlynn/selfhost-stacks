@@ -789,3 +789,317 @@ every case is in scripts/phase06-oracle.sh, commit c0b7123.
   and every new predicate was confirmed able to FAIL against a planted positive
   before its clean result was believed.
 
+================================================================================
+§ 7  THE CLASS ASSERTIONS (D-27)
+================================================================================
+The diff catches WRONG PATHS.  These catch failure classes nobody wrote an
+expected line for.  All nine ran over the same measurement the diff judged.
+
+§ 7.1  CONF-03 — every top level equals the item's own album artist, BYTE-EXACT
+  RESULT: CLEAN.  0 mismatches, 0 rows the comparison could not be made for.
+  Case is NOT folded: a capitalisation-only mismatch renders a DUPLICATE ARTIST
+  PAGE in Jellyfin, which is the defect CONF-03 exists to prevent.
+  Three shapes, read off the committed `paths:` stanza rather than assumed:
+    rules 3/2  DJ/<albumartist>/<album>/…     — album artist is the SECOND component
+    rule 1     Singles/<artist>/<title>.<ext> — SECOND component, and it is $artist
+               not $albumartist (a singleton often has no album artist at all)
+    rules 4/5/6  <albumartist>/<album>/…      — the FIRST component
+
+  ⚠ OBSERVATION FOR PHASE 7, not a failure here.  The tree contains BOTH
+  `Various Artists/` (44 files, S3) and `Various/` (30 files, S4), because those
+  are the two strata's literal ALBUMARTIST tags: S3 is flagged compilation and
+  takes va_name's `Various Artists`, S4 is NOT flagged compilation and its files
+  carry the literal tag `Various`.  CONF-03 passes — each top level does equal
+  its item's album artist.  But two spellings of the same idea means TWO ARTIST
+  PAGES in Jellyfin and in Music Assistant.  The fixture predicted this, so it is
+  not a diff failure; it is a tag-normalisation item for Phase 7, and it will not
+  be fixed by any path rule.
+
+§ 7.2  D-15 — the `Compilations` component appears NOWHERE, and the rule was
+       actually reached
+  RESULT: CLEAN.  0 path components named `Compilations`.
+  (The token is written without its trailing slash throughout this artifact, on
+  purpose: plan 06-11's own verify command greps this file for the exact string
+  `Compilations` + `/` and treats ANY occurrence as a failure — it cannot
+  distinguish a destination path from prose about the absence of one.  Rather
+  than weaken the check, the artifact avoids the literal and the run's verbatim
+  console output — which contains the oracle's own success message, and therefore
+  the literal — is filed in the companion artifact 06-11-wrote-nothing.txt.
+  Recorded here so a reader is not left wondering why the slash is missing.)
+  POSITIVE CONTROL PAIRED WITH THE ABSENCE: 44 destinations under the literal
+  `Various Artists`.  Zero-Compilations is only meaningful when a Various Artists
+  row proves the `comp` rule was reached at all.
+
+§ 7.3  D-13 — the DJ count is an EQUALITY, not a floor
+  RESULT: CLEAN.  `DJ/` destinations = 20.  06-SAMPLE.md's S5 rows sum to 20.
+  The fixture's `DJ/` line count is also 20 (cross-checked; a disagreement
+  between those two sources would itself have been a red, because the equality
+  would then be measured against a number nobody wrote down).
+  The 20 land in two album directories:
+      /media/Music/DJ/Mastermix/Issue 420             (10 files)
+      /media/Music/DJ/Various Artists/Mastermix Issue 421  (10 files)
+  Both resolved through rule 3 (`albumtype:=dj`), NOT rule 2 — see § 10.
+
+§ 7.4  D-14 — multi-disc renders FLAT and disc-prefixed as `02-05`
+  RESULT: CLEAN.
+      destinations carrying a `02-` disc prefix ......... 31
+      `Disc N/` subdirectories anywhere ................. 0
+      album directories per album ....................... 1  (10 albums, 10 dirs)
+  The literal `02-05` row D-14 names is present, in two different albums:
+      /media/Music/Michael Jackson/The Essential Michael Jackson/02-05 Man in the Mirror.flac
+      /media/Music/Various/Now That's What I Call Music! 1/02-05 New Song.mp3
+  `disc` and `track` are both types.PaddedInt(2), so `$disc-$track` renders
+  `02-05` where D-14's prose writes `2-05`.  02-05 is the ACCEPTED rendering: it
+  sorts correctly and the alternative `%right{$disc,1}-$track` breaks at disc 10.
+  ⚠ The existing library uses a THIRD convention — `CD 02-01 Artist - Title.ext`.
+  Phase 6 does not reconcile the two.  The S6 rows are the clearest illustration:
+  their SOURCE names carry the old convention and their destinations the new one.
+
+§ 7.5  D-16 — every %aunique{} firing, RECONCILED IN BOTH DIRECTIONS
+  RESULT: CLEAN.  Fired exactly 1 time.
+
+    OBSERVED:
+      /media/Music/Benson Boone/American Heart [Night Street Records, Inc. - Warner Records Inc.]
+        ambiguous set size 2 · albumtype empty on both · year 2025 on both
+        first disambiguator that separates the set: `label`
+        (a) …/music/Benson Boone-American Heart-…-OBZEN-xpost  (FLAC)
+            label EMPTY -> _tmpl_unique returns "" -> no bracket ->
+            /media/Music/Benson Boone/American Heart/
+        (b) …/music/Benson_Boone_-_American_Heart-WEB-2025-BENSONBOONE  (MP3)
+            label = "Night Street Records, Inc. - Warner Records Inc." -> bracket
+
+    PREDICTED, by 06-EXPECTED-TREE.txt (header prose AND path lines, which agree):
+      exactly the same one string.
+
+    RECONCILIATION, both directions — either alone is insufficient:
+      predicted but ABSENT ............ 0
+      present but UNPREDICTED ......... 0
+
+    THE NUMERIC-DATABASE-ID GUARD: 0 firings rendered a bare integer outside
+    1900–2099.  When NO disambiguator separates an ambiguous set beets appends
+    the NUMERIC DATABASE ID — " [123]" — which is not reproducible across
+    libraries [beets/library/models.py@v2.12.0 _tmpl_unique].  One in a committed
+    tree is a landmine, not a fixture.  The guard was armed and did not fire.
+
+    WHICH READING APPLIES TO THE COUNT.  A count of 1 is only meaningful with the
+    library attached.  On a library with 828 measured duplicate groups a
+    zero-firing report would be a WARNING SIGN, not a clean result.  This run
+    opened library.db sha256 fbbdde0c…, which holds 0 items and 0 albums, so the
+    collision set is EMPTY and the only ambiguity available is the one the sample
+    itself brought in.  One firing is therefore the CORRECT expectation.  This
+    reading is dated: it stops applying the moment Phase 7 imports anything.
+
+    ⚠ REGISTERED AS A KNOWN MUSIC ASSISTANT RISK, TO VERIFY IN PHASE 7.
+    Every %aunique{} firing makes the album FOLDER differ from the album TAG by
+    construction: the folder becomes `American Heart [Night Street Records, Inc.
+    - Warner Records Inc.]` while the tag stays `American Heart`.  MA's
+    `missing_album_artist_action: folder_name` fires ONLY when the album folder
+    and the album tag agree, and SILENTLY falls back to `Various Artists` when
+    they do not — while `config/providers/get` still reads back `folder_name`, so
+    the configuration looks correct while the behaviour is not.  Every firing is
+    therefore a candidate MA mis-attribution and must be checked in Phase 7 by
+    looking at MA's resulting album artist, not at MA's config.
+
+§ 7.6  D-19b — every singleton resolution, LISTED.  The list is the deliverable.
+  RESULT: CLEAN.  1 resolution, expected, listed with its source folder:
+
+    /media/Music/Singles/Cyril/Stumblin' In (LUNAX Remix) (Extended Mix).mp3
+      <- /downloads/complete/nzb/music/Cyril - Stumblin In (LUNAX Remix)
+         (Extended Mix)-(5021732254740)-SINGLE-WEB-2024-ZzZz [9c1feafc0]
+         [2af13ead9]-xpost
+
+  Resolutions NOT expected from the S7 stratum: 0.  Any would have been a red:
+  Phase 3 measured rc6 turning one 20-track release into TWENTY single-track
+  albums when `album` was empty — no error, no prompt, no UI signal — and that is
+  the shape this list exists to surface.  `%sunique{}` rendered "" (one singleton
+  in the library, so the ambiguous set is size 1).
+
+§ 7.7  D-19a — album directory versus artist directory
+  RESULT: CLEAN (blocking assertion).
+      album directories whose basename equals their parent's, case-folded .... 0
+  SEPARATELY REPORTED, and deliberately NOT failed here:
+      album directories whose basename starts with the parent's basename
+      followed by ' (' — the shape of the live `Def Leppard/Def Leppard (2015)/`
+      defect ................................................................ 0
+  That defect is scheduled for repair in Phase 7 rather than left as permanent
+  Music Assistant noise; this sample happens to contain none of it.
+
+§ 7.8  THE TWO SIGNATURE SHAPES
+  destination filenames beginning with `-1 - ` ......................... 0
+      The previous tagger's signature failure (wrtag v0.20.0 hard-set
+      Track.Position = -1).  wrtag is retired; the assertion stays because the
+      shape is cheap to check and expensive to find later.
+  destinations carrying a `.N` collision suffix ........................ 0
+      beets appends `.1`, `.2` … before the extension when a destination already
+      exists.  Catching one in a dry run is cheaper than catching it in the
+      library.
+
+§ 7.9  D-18 — the protected-field ledger
+  RESULT: CLEAN.  Full ledger at artifacts/06-11-dj-fields.ndjson.
+      records ............................................ 870  (174 files x 5)
+      files covered ...................................... 174  (every one)
+      `failed` records ................................... 0
+      records proposing a CHANGE to a protected field ..... 0
+      `noop` records ..................................... 870
+        of which `null_equivalent` (absent on BOTH sides) . 327
+  THE ASSERTION IS NOT VACUOUS, and here is why — 195 records carry a NON-EMPTY
+  `old` value and every one of them is a noop:
+      genres    127 records with a real value (e.g. ['Pop'], ['Dance'])
+      comments   46 records with a real value ('YearmixFreak 2023', 'PMEDIA',
+                                               'Team ZzZz')
+      bpm        22 records with a real value (125, 127, 123, 116, 92, …)
+  A ledger in which every `old` were None would prove nothing about preservation.
+  See § 8 for the per-field instrument notes, including the three fields for which
+  this draw has NOTHING TO REPORT and the distinction that matters there.
+
+================================================================================
+§ 8  D-18, PER FIELD — THE RIGHT INSTRUMENT FOR EACH, AND WHAT IT FOUND
+================================================================================
+
+  bpm (ID3 TBPM / Vorbis BPM) — a real beets field.  Library item value compared
+    against the value read fresh off the file through mediafile.
+    22 of 174 files carry one.  All preserved.  152 absent on both sides.
+
+  genres (TCON / GENRE) — a real beets field.  NOTE THE PLURAL: `Item._field_names`
+    has no singular `genre` entry in beets 2.x, and a query using the singular
+    silently matches nothing.  MULTI_VALUE_DSV joins with a literal backslash +
+    U+2400 in the database.
+    127 of 174 carry one.  All preserved.  47 absent on both sides.
+
+  comments (COMM / DESCRIPTION before COMMENT) — a real beets field.
+    46 of 174 carry one.  All preserved.  128 absent on both sides.
+
+  initial_key (TKEY / INITIALKEY) — a real beets field.
+    0 of 174 files carry one.  THE BRANCH RAN AND RECORDED A ZERO on all 174.
+    Having nothing to report is different from not having looked, which is why
+    the records are emitted either way rather than the field being skipped.
+
+  EnergyLevel — NEITHER a beets field NOR a mediafile field.  beets never reads
+    it, never writes it, and mutagen preserves frames it did not touch, so
+    TXXX:EnergyLevel survives any beets import unless `scrub` runs.  A BEETS
+    QUERY FOR IT RETURNS EMPTY AND READS AS CLEAN — indistinguishable from
+    "gone".  The ledger therefore does NOT use one.  It uses a RAW frame-set
+    read, and every record states the route it took:
+        105 records  raw ID3 frame set at file offset 0          (the 105 MP3s)
+         69 records  raw Vorbis comment, keys folded to lower case (the 69 FLACs)
+    Case folding is not cosmetic: FLAC casing is inconsistent in this corpus
+    (GENRE/Genre/genre, COMMENT/comment) and a naive key comparison shows
+    spurious differences.
+    0 of 174 files carry an EnergyLevel.  Again: the branch ran and recorded a
+    zero on every file.
+
+  WAV — THIS DRAW CONTAINS NO WAV AT ALL.  105 MP3 + 69 FLAC = 174.  State this
+    precisely, because it is a THIRD condition and not either of the other two:
+      * "ran and found nothing" — what happened for initial_key and EnergyLevel;
+      * "was skipped"           — what must never happen;
+      * "had no input"          — what happened for the WAV branch here.
+    The branch is implemented and driven by --self-test.  It computes the DATA
+    OFFSET OF THE RIFF `id3 ` CHUNK and reads the frame set there; without that
+    offset the read sees `RIFF` at offset 0 for every WAV and returns silently —
+    a vacuous pass, and the exact defect scripts/normalise-dj-tags.py:866-883
+    documents.  It raises rather than guess if a WAV carries two `id3 ` chunks,
+    because which one a reader honours is then undefined.
+    A SECOND DISAGREEMENT CLASS FOR WAV THAT BEETS CANNOT FIX, carried forward:
+    `mediafile` writes only the ID3 chunk, so a pre-existing LIST/INFO `IGNR` /
+    `ICMT` REMAINS and will silently disagree with the ID3 value.  The normaliser
+    already reports this class as `info_iprd` for album; the same class exists for
+    genre and for comment, and nothing in this phase addresses it.
+
+================================================================================
+§ 9  CONF-04's WRITE SIDE, SHOWN IN THE DRY RUN (D-23 as amended by D-34)
+================================================================================
+  Items with a NON-EMPTY `artists` field ............ 12  (the S6 stratum only)
+  Items with MORE THAN ONE artist ................... 1
+  The two numbers are different and conflating them is how a report starts
+  overstating itself, so both are stated.
+
+  The S6 multi-artist row, and what an import would write:
+
+    /media/Music/Katy Perry/Teenage Dream (2010)/CD 01-03 Katy Perry - California Gurls.flac
+      artist  = <Katy Perry>
+      artists = <Katy Perry; Snoop Dogg>
+
+  STATED PLAINLY: beets CANNOT be configured to emit `;` inside `ARTIST`.  There
+  is no delimiter, separator or join key for it in `config_default.yaml` at
+  either version.  `artist` carries MusicBrainz's own join phrases concatenated
+  verbatim; the multi-artist information lands in `TXXX:ARTISTS` / `ARTISTS`.
+  That is the tag D-34 made Jellyfin read, by enabling PreferNonstandardArtistsTag
+  on the Music library — which makes the two consumers agree by construction
+  rather than by coincidence.  The `; ` above is a DISPLAY translation of the
+  MULTI_VALUE_DSV separator (backslash + U+2400); no file was touched.
+
+  Note that only the twelve S6 files — the ones already in the library — carry an
+  `artists` field at all.  All 162 backlog files have it empty.  Phase 7 will
+  populate it from the matcher; nothing in this dry run does.
+
+================================================================================
+§ 10  OQ-2 / C-6 — THE DJ ROUTING MECHANISM IS AN UNOWNED GAP.  REGISTERED HERE.
+================================================================================
+Registered explicitly so it is not left unowned between phases (T-06-58).
+
+  WHAT PHASE 6 PROVED: the DJ **path rule**.  Given `albumtype=dj` on an album,
+  rule 3 puts it under `DJ/<albumartist>/<album>/` and not under a `Compilations`
+  component and not under a bare artist folder.  20 of 20 files, exact equality
+  (§ 7.3).
+
+  WHAT PHASE 6 DID NOT PROVE, AND CANNOT BE READ AS EVIDENCE FOR: the MECHANISM
+  by which a real flask-driven import would set `albumtype=dj` in the first
+  place.  `--set albumtype=dj` is a `beet import` CLI flag backed by
+  `import.set_fields`.  rc6's `InboxFolderSchema` carries only `path`, `name`,
+  `auto_threshold` and `autotag`.  THERE IS NO PER-INBOX FIELD-SETTING MECHANISM.
+  This oracle supplied the flag by hand, on the command line, from a shell.
+
+  OWNER: Phase 7, at routing time — beside the `bootleg` album-populated gate
+  that is already carried there.
+
+  THE THREE CANDIDATE ROUTES, named so the next phase does not restart from zero:
+    (a) a global `import.set_fields: {albumtype: dj}` — WRONG: it hits every
+        import, not just the DJ inbox, and would stamp albumtype=dj on the whole
+        backlog.
+    (b) a post-import `beet modify albumtype=dj <query>` followed by `beet move`
+        — works, needs a durable query that selects exactly the DJ content, and
+        makes routing a second step that can be forgotten (which is this
+        project's stated failure mode).
+    (c) a hook plugin that sets the field per source path during import — the
+        only one that keeps routing inside the single pipeline, and the most
+        work.
+  No recommendation is made here; the measurement that would choose between them
+  has not been taken.
+
+================================================================================
+§ 11  WHAT THIS RUN DOES NOT COVER — stated, not discovered later
+================================================================================
+  * RULE 2 (`albumtype:=dj disctotal:2..`) IS NOT EXERCISED.  Both drawn DJ
+    folders carry no `disctotal` at all, so both resolved to rule 3.  Seven
+    dj-mixes folders in the population DO carry disctotal=2.  06-EXPECTED-TREE.txt's
+    header and 06-SAMPLE.md § "What this sample does NOT cover" both say so, and
+    06-09's summary assigns it: rule 2 belongs in PLAN 06-12 as a NAMED CLASS
+    ASSERTION over one of those seven folders, not as a row in the committed tree.
+    This plan does not duplicate it.
+  * CONF-05's *Now!* proof is a class assertion in 06-12, not a fixture row: a
+    match-driven tree is not pre-computable because the candidate set is a
+    network result.
+  * The matcher is entirely out of scope here.  `-A` is what makes the expected
+    tree computable before the run.
+  * `max_filename_length: 0` is a real 200-CHARACTER-PER-COMPONENT limit, not
+    "no truncation".  The longest component in this tree is 65 characters (the
+    bracketed-label album folder), so it does not bite.  Recorded because a later
+    plan reading config.yaml's comment as "unlimited" would mis-diagnose a
+    truncated path as a template defect.
+
+================================================================================
+§ 12  THE FULL CONSOLE OUTPUT OF THE PASSING RUN
+================================================================================
+  Filed verbatim in the companion artifact, artifacts/06-11-wrote-nothing.txt,
+  under "APPENDIX — THE FULL CONSOLE OUTPUT OF THE PASSING RUN".  It carries
+  every verdict in this document plus all three D-29 layers, in the order the
+  script emitted them.  It is filed there rather than here for the reason given
+  in § 7.2: it contains the oracle's own D-15 success message, which this file's
+  verify command reads as a destination path.
+--------------------------------------------------------------------------------
+
+================================================================================
+END OF 06-11-oracle-run.txt
+Three-layer "wrote nothing" proof: artifacts/06-11-wrote-nothing.txt
+D-18 protected-field ledger:       artifacts/06-11-dj-fields.ndjson
+================================================================================
