@@ -1784,13 +1784,114 @@ label token `tagger definitions` is therefore unchanged and the new lines carry 
 would break a consumer in a different file, which is the coupling that has broken once already
 (WR-09).
 
+### CONF-04 — the verdict, as TWO verdicts that must never be summed (2026-09-21, plan 06-13)
+
+D-22 asks for "N distinct browseable artist entities in **each** consumer, checked separately".
+The two consumers are at **different points**, and averaging them into one tick would hide the
+half that is not done. So the row carries both, and the overall verdict is the *weaker* of them.
+
+| | **Jellyfin 10.11.11** | **Music Assistant 2.11.0b2** |
+|---|---|---|
+| Field read | `ARTISTS` (via `PreferNonstandardArtistsTag=true`) | `ARTISTS` (native preference, `TAG_SPLITTER=";"`) |
+| `California Gurls` (target 2) | **0 of 2** — not re-probed | ✅ **2 of 2** — `Katy Perry \| Snoop Dogg`, item_ids 73, 244 |
+| `Just Give Me a Reason` (target 2) | **1 of 2** — not re-probed | ✅ **2 of 2** — `P!nk \| Nate Ruess`, item_ids 63, 201 |
+| `Jewels n' Drugs` (target 4) | **0 of 4** — not re-probed | ⚠ **3 of 4** — `T.I. \| Lady GaGa \| Too $hort`, item_ids 159, 209, 217 |
+| Verdict | **OPEN** — probe-time option, 0 of 1,244 rows moved | **Parsing PROVEN; one row a measured discrepancy** |
+| Discharges when | Phase 7 first writes or imports a multi-artist release | — (already read fresh through the export) |
+
+**What is actually proven, stated plainly.** Both consumers now read the **same field** — `ARTISTS`
+— **by construction rather than by coincidence**: beets cannot be configured to emit `;` inside
+`ARTIST` (no write-delimiter key exists at 2.12.0 or 2.13.1), MA prefers `ARTISTS` natively, and
+D-34 pointed Jellyfin at the same tag. The `;` in the requirement text is a property of **this
+library's twelve existing files**, not of anything the pipeline will produce.
+
+**MA's parsing is proven, not inferred, and the proof does not rest on arity.** Every artist MA
+returns is a distinct library entity with its own `item_id` and a browseable `library://artist/N`
+uri, and **no artist name anywhere contains a `;`** — one artist called `A;B` being the precise
+failure D-22 exists to distinguish from success. A1 and A2 were both resolved first:
+
+- **A2 — CONFIRMED** against `GET /api-docs/commands.json` on the live server, which is the
+  script's own stated authority. `music/tracks/library_items` exists among the 311 declared
+  commands, returns `Array of Track` (a bare array — **not** `.result`-wrapped), the `Track`
+  schema declares an `artists` property, and it accepts `provider` by instance id. A call that
+  merely succeeded was **not** accepted as the resolution.
+- **A2's side effect, worth more than A2 itself:** `music/albums/count` declares **only**
+  `favorite_only` and `album_types`. It has **no `provider` parameter at all** — so the argument
+  is not "silently ignored" by a filter that declines to apply, it is a parameter that does not
+  exist, and the integer it returns counts the whole library **including Spotify**. Never cite it.
+- **A1 — CONFIRMED** on the running 2.11.0b2, behaviourally rather than from source (there is no
+  SSH route from this estate to the add-on's installed `tags.py`). Rows 2 and 3 each carry a
+  **single-name `Artist` tag** and a two-name `ARTISTS` tag, and MA returns both names as distinct
+  entities — the second name exists in no other tag on the file, so `ARTISTS` was read and split
+  on `;`. `MA_VERSION_PROVEN` moved `2.11.0b0` -> `2.11.0b2` in the same commit as that proof.
+- **The `mb_id_count == 1` caveat was measured, not waved.** Row 1 carries **four**
+  `MUSICBRAINZ_ARTISTID` values, rows 2 and 3 **two** each. **Not one row carries a single id**, so
+  the short-circuit cannot fire on any of them and all three are valid tests of the splitter.
+- **A trap the plan did not anticipate, checked and cleared.** `library_items` takes a `summary`
+  parameter defaulting to **true** ("slim summary items containing only the fields needed for a
+  list view"). Read at both settings, the artists arrays are identical in length, names, item_ids
+  and uris — the slim shape does **not** truncate `artists[]`, so the check is not reading a stub.
+
+**Row 1 is characterised, not dropped.** `Jewels n' Drugs` tags `ARTISTS = "Lady Gaga;T.I.;Too
+$hort;Twista"` and MA returns three. Two candidate causes are **ruled out by measurement**: the
+`;` delimiter (rows 2 and 3 prove the splitter works on this exact build) and the `mb_id_count`
+short-circuit (four ids — it would have returned **1**, not 3). The loss is located at MA's
+**artist-entity stage**: `Twista` exists nowhere among MA's 66 library artists under any
+`/wista/i` spelling, and `Lady GaGa` is a **pre-existing entity** whose display name came from the
+`ARTIST` tag, which is why the spelling differs from `ARTISTS`. **Left open honestly:** MA's
+artists-per-track distribution is 1,220 at 1, 22 at 2, 2 at 3 and **none above 3**, and this file
+is the library's **only** 4-value tag — so "MA caps the list at 3" and "Twista specifically failed
+to map" are both consistent with the evidence and **cannot be told apart from a sample of one**.
+Phase 7's first >=4-artist track is the measurement that discriminates.
+
+**Nothing was written to get any of this.** `LC_ALL=C find` manifests over the three proof albums
+(88 entries; path, size and mtime) are **identical before and after**, and the comparison was
+proved able to see a planted difference. D-21's fenced `rw` grant never fired and **MA holds no
+phantom** — which matters precisely because MA never purges stale entries (D-25).
+
+**Evidence — runnable:**
+
+```bash
+ssh root@172.16.1.159 'cd /mnt/fast/stacks && bash scripts/check-music-consumers.sh' \
+  | grep 'CONF-04'
+```
+
+Full transcript:
+`.planning/phases/06-tagger-configuration-and-dry-run/artifacts/06-13-ma-artist-entities.txt`.
+
+### Two standing risks this criterion leaves behind
+
+- **Every `%aunique{}` firing is a known MA risk to verify in Phase 7.** MA's
+  `missing_album_artist_action: folder_name` fires only when the album **folder** and the album
+  **tag** agree, and **silently falls back to `Various Artists` when they do not** — while
+  `config/providers/get` still reads back `folder_name`, so the setting looks correct either way.
+  An `%aunique{}` firing makes folder and tag differ **by construction**, so each one on plan
+  06-11's list is a candidate for that silent fallback. Dropping the disambiguator is not the
+  answer: Phase 1 measured 828 duplicate groups / 19.4% duplication, so removing it trades a
+  *detectable* MA fallback for *silent* path collisions.
+- **The D-34 library option is live-service state that git does not capture.** It lives in
+  Jellyfin's configuration database on LXC 100 and nowhere in this repository. Its **only**
+  protection is the by-name assertion in `scripts/check-music-consumers.sh` § 4
+  (`PreferNonstandardArtistsTag == true`). If that assertion is ever removed or narrowed, a single
+  UI click reverts the option with every gate in this estate still green — and CONF-04's Jellyfin
+  half would then be resting on a setting nobody is checking. **Name that dependency before
+  touching § 4.**
+
 ### Still open
 
-- **CONF-04's Jellyfin read-back is PENDING, not passed.** The option is set; the three pinned
-  `ARTISTS` proof rows still read their pre-change entity counts (0, 1, 1 against a target of
-  4, 2, 2) because nothing has re-probed them. It is neither "could not look" nor "nothing is
-  wrong" — **do not record it as green.** It discharges when Phase 7 writes or imports a
-  multi-artist release.
+- **CONF-04 is OPEN overall, on its Jellyfin half, and is a NAMED PHASE 7 ENTRY BLOCKER.** The
+  option is set; the three pinned `ARTISTS` proof rows still read their pre-change entity counts
+  (0, 1, 1 against a target of 4, 2, 2) because nothing has re-probed them. It is neither "could
+  not look" nor "nothing is wrong" — **do not record it as green.** It discharges when Phase 7
+  writes or imports a multi-artist release, which is also the first moment the project's core
+  value is exercised. *(Re-confirmed 2026-09-21 by plan 06-13: the MA half is done and the
+  Jellyfin half is unchanged. The two halves are recorded separately in the CONF-04 verdict above
+  and **must not be summed** — an averaged tick would hide exactly the half that is not done.)*
+- **Two things Phase 7 must measure the first time it writes a multi-artist release**, both
+  carried from the CONF-04 verdict above rather than left as notes: whether Jellyfin's re-probe
+  produces 4/2/2 entities, and whether a **second >=4-artist track** gets four artists in MA or
+  three — the measurement that finally separates "MA caps at 3" from "Twista specifically failed
+  to map".
 - **An operator decision was left untaken, deliberately.** Obtaining that proof *today* would mean
   a one-off aggressive refresh on three albums, whose cost is their `.nfo` rewritten inside a phase
   whose premise is that it writes nothing. The default is not to, and that is what plan 06-03 did.
@@ -1799,25 +1900,40 @@ would break a consumer in a different file, which is the coupling that has broke
   assertion, MA answered. Two of the three pinned rows read **exactly at target**:
   `California Gurls` -> `Katy Perry | Snoop Dogg`, `Just Give Me a Reason` -> `P!nk | Nate Ruess`.
   MA prefers the `ARTISTS` tag and splits it on `;` natively, exactly as the source read said.
-  Plan 06-13 still owns closing CONF-04's MA half.
+  > **Closed 2026-09-21 by plan 06-13**, which re-probed first (ICMP 3/3, `:8095` and `:8123` both
+  > open, MA `/info` serving `2.11.0b2`) and ran the read-back under the D-36 operator gate. The MA
+  > half is recorded in the CONF-04 verdict above. **CONF-04 as a whole stays OPEN on its Jellyfin
+  > half** — the two are not summed.
 - **One MA row is a measured discrepancy, and it is not the same thing as the Jellyfin pending
   rows.** `Jewels n' Drugs` carries `ARTISTS = "Lady Gaga;T.I.;Too $hort;Twista"` — four values —
   and MA returns **three**: `T.I. | Lady GaGa | Too $hort`. `Twista` is absent, and the spelling
   returned is `Lady GaGa` (capital G), which is the **`ARTIST`** tag's spelling, not the `ARTISTS`
   tag's. MA read this file fresh through the export, so "not yet re-probed" does not explain it.
   Two leads before blaming the delimiter: MA's `mb_id_count == 1` short-circuit, and whether the
-  names are being taken from `ARTIST` rather than `ARTISTS`. Plan 06-13 owns it. The check reports
-  it every run against a pinned baseline rather than either passing it or going permanently red.
+  names are being taken from `ARTIST` rather than `ARTISTS`. The check reports it every run
+  against a pinned baseline rather than either passing it or going permanently red.
+  > **Both leads were closed on 2026-09-21 by plan 06-13, and neither was the cause.** The
+  > `mb_id_count` lead is dead: the file carries **four** MusicBrainz artist ids, and the
+  > short-circuit fires only at exactly one — it would have returned 1 artist, not 3. The
+  > `ARTIST`-instead-of-`ARTISTS` lead is dead as a *parsing* explanation: rows 2 and 3 prove MA
+  > reads and splits `ARTISTS` on this build. What survives is narrower and is recorded in the
+  > CONF-04 verdict above — `Twista` is absent from MA's **artist-entity** table entirely, and
+  > `Lady GaGa` is a pre-existing entity named from the `ARTIST` tag, which explains the spelling
+  > but not the missing fourth. Cap-at-3 vs Twista-specifically is **undecidable on one sample**
+  > and is carried into Phase 7.
 - **MA normalises artist ORDER.** The tag reads `Nate Ruess;P!nk`; MA returns `P!nk | Nate Ruess`.
   Only the SET is meaningful on the MA side. The order **is** still a meaningful tell in Jellyfin.
-- **Research assumption A2 is empirically confirmed but still not confirmed against the authority.**
-  `music/tracks/library_items` with `{limit, provider}` returned a 1,244-element array of track
-  objects carrying `artists[]` on MA **2.11.0b2**, 2026-09-20. It has still **not** been checked
-  against `GET /api-docs/commands.json`, which is that script's own stated authority and the thing
-  that caught `music/albums/count` silently ignoring its `provider` argument. Do that in 06-13.
-- **MA version drift: live `2.11.0b2`, `MA_VERSION_PROVEN` is `2.11.0b0`.** The banner warns, as
-  designed (`auto_update` is ON by operator choice, D-56). Re-prove the provider assertions against
-  the new build and move the constant in the same commit — do not just bump the number.
+- ~~**Research assumption A2 is empirically confirmed but still not confirmed against the
+  authority.**~~ **CLOSED 2026-09-21 by plan 06-13 — A2 CONFIRMED** against
+  `GET /api-docs/commands.json`. See the CONF-04 verdict above: the command exists, returns
+  `Array of Track`, the `Track` schema declares `artists`, and `provider` is a declared parameter.
+  The same read upgraded the `music/albums/count` warning from anecdote to schema fact — that
+  command declares **no `provider` parameter at all**.
+- ~~**MA version drift: live `2.11.0b2`, `MA_VERSION_PROVEN` is `2.11.0b0`.**~~ **CLOSED
+  2026-09-21 by plan 06-13.** The constant moved to `2.11.0b2` **in the same commit** as the
+  re-proof of A1 and A2 against that build, which is what the instruction asked for — the number
+  was not bumped on its own. `auto_update` remains ON by operator choice (D-56), so this banner
+  will warn again on the next build and the same discipline applies: re-prove, then move.
 - **30 of the 1,244 library items have zero `ArtistItems`** while still carrying a non-empty
   `Artists` string list — all of `Lady Gaga/ARTPOP (2013)` (15), all of `Lady Gaga/Joanne (2016)`
   (14), and one Def Leppard track. Their `Artists` reads `["Lady GaGa"]`, with a capital G that
