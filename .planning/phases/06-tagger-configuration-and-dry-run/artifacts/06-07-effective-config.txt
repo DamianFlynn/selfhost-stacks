@@ -1,0 +1,813 @@
+06-07 TASK 2 — THE EFFECTIVE BEETS CONFIG, BOTH ARMS OF D-30, SIDE BY SIDE
+================================================================================================
+Run:            2026-09-21, host UTC 01:35:25Z (workstation -> root@172.16.1.159 -> beets-flask)
+Instrument:     scripts/check-beets-config.sh, commit ce4f6d7
+Script verdict: EXIT 0, FAILURES total 0, arm-1 assertion failures 0
+
+WHICH ROUTE ANSWERED ARM 1
+--------------------------------------------------------------------------------
+CONFIG_ROUTE     = server-committed
+                   /venv/bin/python -c "import beets;
+                     from beets_flask.config.beets_config import get_config
+                     get_config(commit_to_beets=True)
+                     print(beets.config.dump(full=True, redact=True))"
+                   run inside the container as beetle. THE ROUTE THE PLAN NOMINATED ANSWERED ON
+                   THE FIRST ATTEMPT. No fallback route was needed and none was used.
+CONFIG_ROUTE_CLI = confuse
+                   /venv/bin/beet -c <empty overlay> config -d
+READY_ROUTE      = watchdog-log-line   (never the container liveness field)
+
+Container:  beets-flask, metasauce/beets-flask:v2.0.0-rc6
+            started 2026-09-20T22:37:55Z, RestartCount 0
+            beets.__version__ = 2.12.0 read from the interpreter that runs the server
+
+Dump sizes: arm 1  262 lines, 186 leaf keys, sha256 8f020a8547e800b14618fc8a20fbcbe54668aebe1a42b8bbe08ea4169e3791e1
+            arm 2  227 lines, 162 leaf keys, sha256 cc2c0b1586999a11f167cf7f4ff4ffeb72387e0127a53b658b9e36b820eb448c
+
+THE TWO ARMS ARE TWO OBJECTS, AND BOTH ARE NAMED RATHER THAN ONE STANDING FOR THE OTHER.
+Arm 1 is the config of the SERVER PROCESS - the thing that will actually import - after rc6's
+BeetsFlaskConfig.commit_to_beets() has injected its whole schema dataclass at confuse's HIGHEST
+priority. Arm 2 is what a CLI invocation assembles from files. Every assertion in section 3
+below is made from ARM 1 AND FROM NO OTHER ARM.
+
+
+================================================================================================
+§ 1. THE THREE RESEARCH ASSUMPTIONS THIS RUN RESOLVES
+================================================================================================
+
+A5 — the arm-1 call shape: get_config(commit_to_beets=True) then
+     beets.config.dump(full=True, redact=True)
+VERDICT: **CONFIRMED**, exactly as written in 06-RESEARCH.md:564-568. It was recorded there as
+  "shape confirmed from the module's own public API; NOT VERIFIED by execution". It now is:
+  the call returns, the dump is 262 lines, and it carries keys that exist nowhere in either
+  vendored file. No traceback, no fallback, no substitution of arm 2 for arm 1.
+
+A4 — "docker exec inherits the image ENV, so BEETSDIR=/config/beets applies"
+VERDICT: **FALSIFIED AS WRITTEN — and the correction is load-bearing, not pedantic.**
+  Measured from inside the container:
+      BEETSDIR=/config                 <- NOT the image default /config/beets
+      BEETSFLASKDIR=/config/beets-flask
+      BEETSFLASKLOG=/logs/beets-flask.log
+      UV_PROJECT_ENVIRONMENT=/venv
+  A `docker exec` inherits the CONTAINER'S RESOLVED ENVIRONMENT - the image ENV overlaid with
+  compose's `environment:` block - not the image ENV. flask.yaml deliberately sets
+  BEETSDIR: /config so that $BEETSDIR/config.yaml resolves to the ONE vendored file both
+  containers mount (D-03).
+  WHY THE DISTINCTION MATTERS: had the image ENV actually applied, $BEETSDIR/config.yaml would
+  be /config/beets/config.yaml - which is NOT the vendored file - and arm 2 would have been an
+  honest reading of the wrong config. The CONSEQUENCE the research drew from A4 (that the
+  vendored config loads underneath the -c overlay, which is what makes `beet config -d`
+  meaningful) SURVIVES, and is independently confirmed by the source list in § 2.
+
+A3 — whether a `-c` overlay passed to `beet` escapes rc6's eyconf validation
+VERDICT: **CONFIRMED — it escapes, and the mechanism is stronger than "escapes".**
+  Test: an overlay containing exactly
+      import:
+          copy: no
+  was passed as `beet -c /tmp/p6-a3-copyno.yaml config -d`.
+  Result: rc=0, EMPTY stderr (no validation refusal of any kind), and the overlay WON:
+      copy: no
+      move: no
+  MECHANISM, read at source rather than inferred: /venv/bin/beet is a four-line entry point
+  whose whole body is `from beets.ui import main`. It imports no beets_flask module at all, so
+  eyconf is never constructed and there is nothing for it to refuse. eyconf validation lives in
+  BeetsFlaskConfig.reload(), which only the SERVER calls.
+  CONSEQUENCE FOR PLAN 06-08: the D-31 control MAY use a `-c` overlay. It does not need the
+  fallback of copying into a /tmp tree.
+  ⚠ ONE THING THE TEST ALSO SHOWED, WORTH CARRYING: an overlay setting `copy: no` leaves
+  `move: no` alone. copy:no + move:no is beets' import-in-place mode, NOT a move. Anyone writing
+  06-08's overlay should set what they mean rather than assume the pair is a toggle.
+
+
+================================================================================================
+§ 2. ARM 2 — THE FILES THE CONFIG WAS ACTUALLY ASSEMBLED FROM (`config -p -d`)
+================================================================================================
+/tmp/p6-noop2.yaml                                          <- the empty no-op overlay
+/config/config.yaml                                         <- THE VENDORED FILE ($BEETSDIR=/config)
+/venv/lib/python3.12/site-packages/beets/config_default.yaml <- beets 2.12.0's shipped defaults
+
+Three files, in confuse priority order. The middle line is the independent confirmation of A4's
+surviving consequence: the vendored config IS what the container reads.
+
+THE REDACTION NO-OP, ASSERTED RATHER THAN ASSUMED (T-06-33)
+--------------------------------------------------------------------------------
+`beet config -d` redacts fields marked sensitive unless -c/--clear is passed. This repo holds no
+beets credential (Phase 4 D-24), so redaction must be a no-op. Measured by running both forms and
+comparing byte-for-byte:
+    beet -c <overlay> config -d        vs    beet -c <overlay> config -d -c
+    VERDICT: BYTE-IDENTICAL. Redaction is a no-op.
+Had they differed, the difference would BE a credential sitting in a config destined for a public
+repo, and the standing script fails closed on exactly that.
+
+
+================================================================================================
+§ 3. THE ASSERTIONS — ALL READ FROM ARM 1
+================================================================================================
+Reproduced verbatim from the run. 23 assertions, 0 red.
+
+  positive control: rc6 schema keys present in the dump
+                    (gui.num_preview_workers=4, gui.terminal.start_path=/repo)
+                    — this IS the server-committed object
+  CONF-01 import.copy = true
+  CONF-01 import.move = false
+  CONF-02 import.incremental = true
+  CONF-02 import.incremental_skip_later = true
+  CONF-05 match.preferred.countries contains GB — ["GB","US"]
+  CONF-05 match.preferred.countries carries no entry for the two-letter code MusicBrainz does
+          NOT store for the United Kingdom (it stores GB; the other code matches nothing and
+          fails silently). The code itself is PARAPHRASED here rather than written out, per this
+          repo's convention, so a mechanical grep over this artifact cannot read as the failure.
+  CONF-05 match.preferred.original_year = true
+  CONF-05 musicbrainz.extra_tags is a non-empty list (5 entries):
+          ["year","catalognum","country","media","label"]
+  T-06-31 import.duplicate_action = ask
+  match.medium_rec_thresh = 0.25
+  directory = /media/Music
+  statefile = /config/state.pickle
+  library = /config/library.db
+  SAFE-01 scrub.auto = false
+  SAFE-01 lastgenre.auto = false
+  SAFE-01 embedart.auto = false
+  paths.comp equals paths.default — the inherited compilation rule is OVERRIDDEN, which is the
+          only way to neutralise it (there is no syntax for deleting an inherited path rule)
+  paths: no rule routes anything into a Compilations/ tree
+  per_disc_numbering = true
+  asciify_paths = false
+  va_name = Various Artists
+  plugins is a one-entry list containing musicbrainz
+
+ALL FOUR rc6 SCHEMA-DEFAULT LANDMINES READ THE VENDORED VALUE, NOT rc6's:
+    import.duplicate_action  reads `ask`. rc6's schema default here is the silent-removal value,
+                             which deletes a duplicate with no prompt. THIS ASSERTION IS THE ONLY
+                             PLACE THAT VALUE IS VISIBLE - `beet config -d` cannot see the
+                             injection at all, so a CLI reading would have reported `ask` whether
+                             or not the server was about to delete. (T-06-31 mitigated.)
+    match.medium_rec_thresh  reads 0.25, beets' own value, not rc6's narrower 0.10.
+    directory                reads /media/Music, not rc6's /music/imported.
+    library / statefile      read the D-28 survivor and the pickle D-29 layer 3 fences.
+
+D-29 LAYER 3 — nothing moved across this read-only run:
+    before  library.db   fbbdde0c416e72b9884e56c562fd88eaa4da447926e1cb6cc17c3e04aee7da1a
+            state.pickle f6a9a1ad7aa553e42e53a8056fa80724785111180a5e2122be4f8732d1e4bc7c
+    after   library.db   fbbdde0c416e72b9884e56c562fd88eaa4da447926e1cb6cc17c3e04aee7da1a
+            state.pickle f6a9a1ad7aa553e42e53a8056fa80724785111180a5e2122be4f8732d1e4bc7c
+Both match plan 06-06's recorded baselines exactly. This is not a formality: `beet` opens the
+library for EVERY subcommand, so `config -d` is a real opportunity for the statefile or the
+database to move, and it did not.
+
+
+================================================================================================
+§ 4. THE TWO-ARM DISAGREEMENT TABLE — REPORTED, NOT ASSERTED EQUAL
+================================================================================================
+A wider sweep than the standing script's 26 asserted keys: every leaf key in both dumps, compared
+whole. Arm 1 carries 186 leaf keys, arm 2 carries 162. 26 rows disagree.
+
+| key | ARM 1 (server-committed) | ARM 2 (confuse/CLI) |
+|---|---|---|
+| `gui.inbox.debounce_before_autotag` | `30` | `<absent>` |
+| `gui.inbox.folders.01-auto.auto_threshold` | `null` | `<absent>` |
+| `gui.inbox.folders.01-auto.autotag` | `"auto"` | `<absent>` |
+| `gui.inbox.folders.01-auto.name` | `"01-auto"` | `<absent>` |
+| `gui.inbox.folders.01-auto.path` | `"/downloads/complete/nzb/_inbox/01-auto"` | `<absent>` |
+| `gui.inbox.folders.02-review.auto_threshold` | `null` | `<absent>` |
+| `gui.inbox.folders.02-review.autotag` | `"preview"` | `<absent>` |
+| `gui.inbox.folders.02-review.name` | `"02-review"` | `<absent>` |
+| `gui.inbox.folders.02-review.path` | `"/downloads/complete/nzb/_inbox/02-review"` | `<absent>` |
+| `gui.inbox.folders.03-asis.auto_threshold` | `null` | `<absent>` |
+| `gui.inbox.folders.03-asis.autotag` | `"bootleg"` | `<absent>` |
+| `gui.inbox.folders.03-asis.name` | `"03-asis"` | `<absent>` |
+| `gui.inbox.folders.03-asis.path` | `"/downloads/complete/nzb/_inbox/03-asis"` | `<absent>` |
+| `gui.inbox.folders.placeholder.auto_threshold` | `null` | `<absent>` |
+| `gui.inbox.folders.placeholder.autotag` | `"off"` | `<absent>` |
+| `gui.inbox.folders.placeholder.name` | `"Please check your config!"` | `<absent>` |
+| `gui.inbox.folders.placeholder.path` | `"/music/beets_flask_config_example/inbox_placeholder"` | `<absent>` |
+| `gui.inbox.ignore` | `"_use_beets_ignore"` | `<absent>` |
+| `gui.inbox.temp_dir` | `"/tmp/beets-flask/upload"` | `<absent>` |
+| `gui.library.artist_separators` | `[",",";","&"]` | `<absent>` |
+| `gui.library.readonly` | `true` | `<absent>` |
+| `gui.num_preview_workers` | `4` | `<absent>` |
+| `gui.terminal.enabled` | `false` | `<absent>` |
+| `gui.terminal.start_path` | `"/repo"` | `<absent>` |
+| `import.duplicate_keys.album` | `["albumartist","album"]` | `"albumartist album"` |
+| `import.duplicate_keys.item` | `["artist","title"]` | `"artist title"` |
+
+READING THE TABLE
+--------------------------------------------------------------------------------
+24 of the 26 rows are `gui.*` keys present in arm 1 and absent from arm 2. That is the expected
+and correct shape: `gui.*` is beets-flask's own schema, the plain CLI has no such namespace, and
+their presence in arm 1 is precisely what proves the commit_to_beets() injection happened. Four
+of them - `gui.inbox.folders.placeholder.*` - come from rc6's schema rather than from
+flask-config.yaml, which is why they are the positive control.
+
+THE TWO REAL ROWS are `import.duplicate_keys.album` and `.item`: a LIST in arm 1, a STRING in
+arm 2. This is the row 06-RESEARCH.md:557 predicted ("Equivalent via str_seq; harmless"), and it
+fired. Harmless is the right reading - beets coerces both through `str_seq` - but it is recorded
+rather than dismissed, because it is a concrete demonstration that the injection changes the TYPE
+of a key, not only its value, and a future key where type matters would look identical here.
+
+⚠ THE FOUR LANDMINE KEYS DO NOT APPEAR IN THIS TABLE, AND THAT IS THE RESULT, NOT AN OMISSION.
+The arms agree on `import.duplicate_action`, `match.medium_rec_thresh`, `directory` and
+`statefile` BECAUSE plan 06-01 pinned all four explicitly in the vendored config. rc6's
+`to_dict()` serialises the schema dataclass AS POPULATED FROM THE USER'S CONFIG, so a key the
+user set carries the user's value in both arms; only a key left SILENT carries rc6's default.
+The landmines are disarmed, and their absence from the disagreement table is what that looks
+like. Had 06-01 left any of the four silent, its row would be here with rc6's value in the arm-1
+column - which is exactly the failure this check exists to catch.
+
+
+================================================================================================
+§ 5. TWO POSITIVE CONTROLS ON THE INSTRUMENTS THEMSELVES
+================================================================================================
+Both were driven because § 4 reports a SMALL number of differences, and "few differences" and
+"the comparison never fires" produce the same-looking output. 06-06 lost a measurement to exactly
+this shape - a poll predicate searching a payload for a string the payload could not contain.
+
+CONTROL A — can the comparator report a VALUE difference, or only an absent key?
+  All 24 `gui.*` rows are absence rows. A value-difference row had never fired, so one was driven:
+  arm 1 was compared against an arm 2 produced with the A3 overlay (`import.copy: no`), using the
+  SAME extractor lifted verbatim out of the script rather than a second implementation.
+      .import.copy      true        false      <- fired
+      .gui.num_preview_workers  4   UNKNOWN
+      .gui.terminal.start_path  "/repo"  UNKNOWN
+      differing rows: 3
+  VERDICT: PASS. The comparator reports value differences. The 2-row live result is a
+  measurement, not a dead predicate.
+
+CONTROL B — can the wider sweep see keys whose value is `false`?
+  Asserted before the table was believed, because the FIRST version of the sweep could not.
+      present: import.move = false
+      present: asciify_paths = false
+      present: scrub.auto = false
+      present: lastgenre.auto = false
+      present: embedart.auto = false
+  VERDICT: PASS.
+
+⚠ CONTROL B EXISTS BECAUSE THE FIRST SWEEP WAS WRONG AND LOOKED RIGHT. Recorded rather than
+quietly corrected. The first predicate was
+      paths(scalars==true or type=="array")
+`scalars` EMITS the value when it is a scalar, so `scalars==true` asks whether the value EQUALS
+true - not whether it IS a scalar. The sweep saw 16 leaf keys out of 186 and reported exactly one
+disagreement. It produced a clean, plausible, completely false table. The obvious replacement,
+`leaf_paths`, is no better: it is `paths(scalars)`, and `paths(f)` keeps a path only when f is
+TRUTHY, so every `false` leaf is silently dropped - in this config that is `import.move`,
+`asciify_paths` and all three SAFE-01 switches, i.e. the five keys a music-library safety check
+most needs to see. Hence Control B.
+
+
+================================================================================================
+§ 6. FINDINGS THAT ARE NOT FAILURES — RECORDED, NOT FIXED HERE
+================================================================================================
+
+⚠ FINDING 1 — `max_filename_length: 0` IS NOT "NO TRUNCATION". THE COMMENT IS WRONG.
+  stacks/selfhosted/arrs/beets/config.yaml:263 says of `max_filename_length: 0`:
+      "# No truncation. The target filesystem is ZFS on `tank`; a silent mid-name truncation
+      #  would make the expected-tree diff (D-27) report a path difference that is really a
+      #  length limit."
+  Measured inside the container, against beets 2.12.0's own source:
+      config max_filename_length    = 0
+      effective max filename length = 200
+  `util.get_max_filename_length()` reads the config value and RETURNS IT ONLY IF TRUTHY:
+      if length := beets.config["max_filename_length"].get(int):
+          return length
+      limit = MAX_FILENAME_LENGTH           # 200
+      ... return min(os.statvfs(directory)[9], limit)
+  So `0` does not disable the limit - it falls through to min(statvfs NAME_MAX, 200), a real
+  200-character-per-path-component cap. The stated intent (avoid a truncation that D-27's
+  expected-tree diff would misread as a path difference) is NOT achieved by this value, and
+  the number that would achieve it is a large explicit one, not 0.
+  DELIBERATELY NOT FIXED IN THIS PLAN. Plan 06-07 asserts the effective config; it does not edit
+  the vendored config, and quietly editing a file until a check goes green is the shape this
+  project exists to avoid. This is a follow-up commit against plan 06-01's file, and it is
+  material to plan 06-08/06-09's expected-tree diff: any component of
+  `$albumartist/$album%aunique{}/$disc-$track $title` longer than 200 characters WILL be
+  truncated, and 06-EXPECTED-TREE.txt was written without that constraint in view.
+
+⚠ FINDING 2 — `import.write` IS `true` IN THE SERVER-COMMITTED CONFIG, AND IS REPORTED, NOT
+  ASSERTED. That is deliberate and is stated in the vendored file itself (config.yaml:323-329):
+  `write: yes` is Phase 7 behaviour, and EVERY Phase 6 invocation overrides it to `no` through
+  its own `-c` overlay. So the effective value under a Phase 6 run is NOT the value in this
+  artifact. The controls that do not depend on this key being right are the `:ro` mount (D-05)
+  and the statefile sha256 (D-29), and both are independently evidenced above. The standing
+  script prints this as a warning on every run rather than asserting it, because asserting
+  `write: no` here would be asserting something false about the file and true only about an
+  invocation.
+
+⚠ FINDING 3 — A DEFECT IN THIS PLAN'S OWN `<verify>` BLOCK, RECORDED RATHER THAN WORKED AROUND.
+  The task-2 verify contains:
+      if grep -qE "\bUK\b" "$f" | grep -qi "countries"; then ...
+  `grep -q` writes NOTHING to stdout, so the second grep always reads an empty stream, always
+  exits 1, and the `if` can never be true. The guard is structurally incapable of firing - the
+  same class of defect 06-06 hit with a poll predicate searching for a folder name in a payload
+  that carried only a hash, and the same class as § 5's first sweep. It is left as written rather
+  than edited: the assertion it was reaching for IS made, from arm 1, by the standing script, and
+  is driven red by self-test case 4.
+
+⚠ FINDING 4 — A DEFECT IN THIS PLAN'S INSTRUMENT, FOUND BY THE WIDER SWEEP AND FIXED IN BAND.
+  The dump extractor's flow-sequence splitter was not quote-aware, so
+  `gui.library.artist_separators: [',', ;, '&']` - whose first element is a QUOTED COMMA - was
+  split into four entries instead of three. No key this script asserts carries a quoted comma,
+  which is exactly why it would have sat unnoticed until one did. Fixed in commit ce4f6d7 with
+  the reason recorded in the code. Post-fix reading: `[",",";","&"]`.
+
+
+================================================================================================
+§ 7. ARM 1 — THE SERVER-COMMITTED CONFIG, COMPLETE AND UNEXCERPTED
+================================================================================================
+sha256 8f020a8547e800b14618fc8a20fbcbe54668aebe1a42b8bbe08ea4169e3791e1
+
+gui:
+    inbox:
+        ignore: _use_beets_ignore
+        debounce_before_autotag: 30
+        temp_dir: /tmp/beets-flask/upload
+        folders:
+            01-auto:
+                path: /downloads/complete/nzb/_inbox/01-auto
+                name: 01-auto
+                auto_threshold:
+                autotag: auto
+            02-review:
+                path: /downloads/complete/nzb/_inbox/02-review
+                name: 02-review
+                auto_threshold:
+                autotag: preview
+            03-asis:
+                path: /downloads/complete/nzb/_inbox/03-asis
+                name: 03-asis
+                auto_threshold:
+                autotag: bootleg
+            placeholder:
+                path: /music/beets_flask_config_example/inbox_placeholder
+                name: Please check your config!
+                auto_threshold:
+                autotag: 'off'
+# --------------- Main ---------------
+
+    library:
+        readonly: yes
+        artist_separators: [',', ;, '&']
+    terminal:
+        enabled: no
+        start_path: /repo
+    num_preview_workers: 4
+directory: /media/Music
+ignore:
+- .*
+- '*~'
+- System Volume Information
+- lost+found
+
+# --------------- Plugins ---------------
+
+plugins: [musicbrainz]
+
+import:
+    duplicate_action: ask
+    move: no
+    copy: yes
+    duplicate_keys:
+        album: [albumartist, album]
+        item: [artist, title]
+    incremental: yes
+    incremental_skip_later: yes
+    write: yes
+    timid: no
+    quiet: no
+    log:
+    default_action: apply
+    languages: []
+    quiet_fallback: skip
+    none_rec_action: ask
+    link: no
+    hardlink: no
+    reflink: no
+    delete: no
+    resume: ask
+    from_scratch: no
+    autotag: yes
+    singletons: no
+    detail: no
+    flat: no
+    group_albums: no
+    pretend: no
+    search_ids: []
+    duplicate_verbose_prompt: no
+    bell: no
+    set_fields: {}
+    ignored_alias_types: []
+    singleton_album_disambig: yes
+    fix_ext_inplace: no
+    remux_mp3_in_wav: yes
+
+match:
+    strong_rec_thresh: 0.04
+    medium_rec_thresh: 0.25
+    preferred:
+        countries: [GB, US]
+        original_year: yes
+        media: []
+    rec_gap_thresh: 0.25
+    max_rec:
+        missing_tracks: medium
+        unmatched_tracks: medium
+    distance_weights:
+        data_source: 2.0
+        artist: 3.0
+        album: 3.0
+        media: 1.0
+        mediums: 1.0
+        year: 1.0
+        country: 0.5
+        label: 0.5
+        catalognum: 0.5
+        albumdisambig: 0.5
+        album_id: 5.0
+        tracks: 2.0
+        missing_tracks: 0.9
+        unmatched_tracks: 0.6
+        track_title: 3.0
+        track_artist: 2.0
+        track_index: 1.0
+        track_length: 2.0
+        track_id: 5.0
+        medium: 1.0
+    ignored: []
+    required: []
+    ignored_media: []
+    ignore_data_tracks: yes
+    ignore_video_tracks: yes
+    track_length_grace: 10
+    track_length_max: 30
+    album_disambig_fields: data_source media year country label catalognum albumdisambig
+    singleton_disambig_fields: data_source index track_alt album
+# --------------- Main ---------------
+
+library: /config/library.db
+statefile: /config/state.pickle
+paths:
+    singleton: Singles/$artist/$title%sunique{}
+    albumtype:=dj disctotal:2..: DJ/$albumartist/$album%aunique{}/$disc-$track $title
+    albumtype:=dj: DJ/$albumartist/$album%aunique{}/$track $title
+    disctotal:2..: $albumartist/$album%aunique{}/$disc-$track $title
+    comp: $albumartist/$album%aunique{}/$track $title
+    default: $albumartist/$album%aunique{}/$track $title
+
+# --------------- Tagging ---------------
+
+per_disc_numbering: yes
+asciify_paths: no
+va_name: Various Artists
+max_filename_length: 0
+
+aunique:
+    keys: albumartist album
+    disambiguators: albumtype year label catalognum albumdisambig releasegroupdisambig
+    bracket: '[]'
+musicbrainz:
+    extra_tags:
+    - year
+    - catalognum
+    - country
+    - media
+    - label
+    search_limit: 5
+    data_source_mismatch_penalty: 0.5
+    search_query_ascii: no
+    genres: no
+    genres_tag: genre
+    external_ids:
+        discogs: no
+        bandcamp: no
+        spotify: no
+        deezer: no
+        tidal: no
+    aliases_as_credits: no
+scrub:
+    auto: no
+lastgenre:
+    auto: no
+embedart:
+    auto: no
+
+pluginpath: []
+
+raise_on_error: no
+
+# --------------- Import ---------------
+
+clutter: [Thumbs.DB, .DS_Store]
+ignore_hidden: yes
+
+# --------------- Paths ---------------
+
+path_sep_replace: _
+drive_sep_replace: _
+art_filename: cover
+replace:
+    '[<>:\?\*\|]': _
+    \": _
+    '[\\/]': _
+    ^\.: _
+    \.$: _
+    '[\x00-\x1f]': _
+    ^-: _
+    \s+$: ''
+    ^\s+: ''
+
+sunique:
+    keys: artist title
+    disambiguators: year trackdisambig
+    bracket: '[]'
+original_date: no
+artist_credit: no
+id3v23: no
+
+# --------------- Performance ---------------
+
+threaded: yes
+timeout: 5.0
+
+# --------------- UI ---------------
+
+verbose: 0
+terminal_encoding:
+
+ui:
+    terminal_width: 80
+    length_diff_thresh: 10.0
+    color: yes
+    colors:
+        text_success: [bold, green]
+        text_warning: [bold, yellow]
+        text_error: [bold, red]
+        text_highlight: [bold, red]
+        text_highlight_minor: [white]
+        action_default: [bold, cyan]
+        action: [bold, cyan]
+        text_faint: [faint]
+        import_path: [bold, blue]
+        import_path_items: [bold, blue]
+        changed: [yellow]
+        text_diff_added: [bold, green]
+        text_diff_removed: [bold, red]
+        action_description: [white]
+
+    import:
+        indentation:
+            match_header: 2
+            match_details: 2
+            match_tracklist: 5
+        layout: column
+
+# --------------- Search ---------------
+
+format_item: $artist - $album - $title
+format_album: $albumartist - $album
+time_format: '%Y-%m-%d %H:%M:%S'
+format_raw_length: no
+
+sort_album: albumartist+ album+
+sort_item: artist+ album+ disc+ track+
+sort_case_insensitive: yes
+
+# --------------- Autotagger ---------------
+
+overwrite_null:
+    album: []
+    track: []
+disabled_plugins: []
+
+
+
+================================================================================================
+§ 8. ARM 2 — THE CLI/CONFUSE VIEW, COMPLETE AND UNEXCERPTED
+================================================================================================
+sha256 cc2c0b1586999a11f167cf7f4ff4ffeb72387e0127a53b658b9e36b820eb448c
+
+
+# --------------- Plugins ---------------
+
+plugins: [musicbrainz]
+directory: /media/Music
+# --------------- Main ---------------
+
+library: /config/library.db
+statefile: /config/state.pickle
+paths:
+    singleton: Singles/$artist/$title%sunique{}
+    albumtype:=dj disctotal:2..: DJ/$albumartist/$album%aunique{}/$disc-$track $title
+    albumtype:=dj: DJ/$albumartist/$album%aunique{}/$track $title
+    disctotal:2..: $albumartist/$album%aunique{}/$disc-$track $title
+    comp: $albumartist/$album%aunique{}/$track $title
+    default: $albumartist/$album%aunique{}/$track $title
+
+# --------------- Tagging ---------------
+
+per_disc_numbering: yes
+asciify_paths: no
+va_name: Various Artists
+max_filename_length: 0
+
+aunique:
+    keys: albumartist album
+    disambiguators: albumtype year label catalognum albumdisambig releasegroupdisambig
+    bracket: '[]'
+
+import:
+    copy: yes
+    move: no
+    incremental: yes
+    incremental_skip_later: yes
+    duplicate_action: ask
+    write: yes
+    timid: no
+    quiet: no
+    log:
+    default_action: apply
+    languages: []
+    quiet_fallback: skip
+    none_rec_action: ask
+    link: no
+    hardlink: no
+    reflink: no
+    delete: no
+    resume: ask
+    from_scratch: no
+    autotag: yes
+    singletons: no
+    detail: no
+    flat: no
+    group_albums: no
+    pretend: no
+    search_ids: []
+    duplicate_keys:
+        album: albumartist album
+        item: artist title
+    duplicate_verbose_prompt: no
+    bell: no
+    set_fields: {}
+    ignored_alias_types: []
+    singleton_album_disambig: yes
+    fix_ext_inplace: no
+    remux_mp3_in_wav: yes
+
+match:
+    medium_rec_thresh: 0.25
+    preferred:
+        countries: [GB, US]
+        original_year: yes
+        media: []
+    strong_rec_thresh: 0.04
+    rec_gap_thresh: 0.25
+    max_rec:
+        missing_tracks: medium
+        unmatched_tracks: medium
+    distance_weights:
+        data_source: 2.0
+        artist: 3.0
+        album: 3.0
+        media: 1.0
+        mediums: 1.0
+        year: 1.0
+        country: 0.5
+        label: 0.5
+        catalognum: 0.5
+        albumdisambig: 0.5
+        album_id: 5.0
+        tracks: 2.0
+        missing_tracks: 0.9
+        unmatched_tracks: 0.6
+        track_title: 3.0
+        track_artist: 2.0
+        track_index: 1.0
+        track_length: 2.0
+        track_id: 5.0
+        medium: 1.0
+    ignored: []
+    required: []
+    ignored_media: []
+    ignore_data_tracks: yes
+    ignore_video_tracks: yes
+    track_length_grace: 10
+    track_length_max: 30
+    album_disambig_fields: data_source media year country label catalognum albumdisambig
+    singleton_disambig_fields: data_source index track_alt album
+musicbrainz:
+    extra_tags:
+    - year
+    - catalognum
+    - country
+    - media
+    - label
+    search_limit: 5
+    data_source_mismatch_penalty: 0.5
+    search_query_ascii: no
+    genres: no
+    genres_tag: genre
+    external_ids:
+        discogs: no
+        bandcamp: no
+        spotify: no
+        deezer: no
+        tidal: no
+    aliases_as_credits: no
+scrub:
+    auto: no
+lastgenre:
+    auto: no
+embedart:
+    auto: no
+
+pluginpath: []
+
+raise_on_error: no
+
+# --------------- Import ---------------
+
+clutter: [Thumbs.DB, .DS_Store]
+ignore:
+- .*
+- '*~'
+- System Volume Information
+- lost+found
+ignore_hidden: yes
+
+# --------------- Paths ---------------
+
+path_sep_replace: _
+drive_sep_replace: _
+art_filename: cover
+replace:
+    '[<>:\?\*\|]': _
+    \": _
+    '[\\/]': _
+    ^\.: _
+    \.$: _
+    '[\x00-\x1f]': _
+    ^-: _
+    \s+$: ''
+    ^\s+: ''
+
+sunique:
+    keys: artist title
+    disambiguators: year trackdisambig
+    bracket: '[]'
+original_date: no
+artist_credit: no
+id3v23: no
+
+# --------------- Performance ---------------
+
+threaded: yes
+timeout: 5.0
+
+# --------------- UI ---------------
+
+verbose: 0
+terminal_encoding:
+
+ui:
+    terminal_width: 80
+    length_diff_thresh: 10.0
+    color: yes
+    colors:
+        text_success: [bold, green]
+        text_warning: [bold, yellow]
+        text_error: [bold, red]
+        text_highlight: [bold, red]
+        text_highlight_minor: [white]
+        action_default: [bold, cyan]
+        action: [bold, cyan]
+        text_faint: [faint]
+        import_path: [bold, blue]
+        import_path_items: [bold, blue]
+        changed: [yellow]
+        text_diff_added: [bold, green]
+        text_diff_removed: [bold, red]
+        action_description: [white]
+
+    import:
+        indentation:
+            match_header: 2
+            match_details: 2
+            match_tracklist: 5
+        layout: column
+
+# --------------- Search ---------------
+
+format_item: $artist - $album - $title
+format_album: $albumartist - $album
+time_format: '%Y-%m-%d %H:%M:%S'
+format_raw_length: no
+
+sort_album: albumartist+ album+
+sort_item: artist+ album+ disc+ track+
+sort_case_insensitive: yes
+
+# --------------- Autotagger ---------------
+
+overwrite_null:
+    album: []
+    track: []
+disabled_plugins: []
+
