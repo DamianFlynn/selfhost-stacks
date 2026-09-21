@@ -517,7 +517,11 @@ assert_real_state() { # $1 = label; 0 = unchanged, 1 = MOVED, 2 = could not look
   fi
   bad "D-29 layer 3 ($label): the real state MOVED from the 06-04 baseline"
   [ "$REAL_LIB_SHA" = "$BASELINE_LIB_SHA256" ] || bad "  library.db expected $BASELINE_LIB_SHA256"
-  [ "$REAL_STATE_SHA" = "$BASELINE_STATE_SHA256" ] || bad "  state.pickle expected $BASELINE_STATE_SHA256 - `-l` does not redirect statefile, so an overlay without it poisons this file"
+  # The backticks around -l must stay escaped: inside a double-quoted string they are command
+  # substitution, and this message is the D-29 layer-3 violation branch — the one place the text
+  # has to survive intact. Unescaped, the shell tried to RUN `-l`, printed "-l: command not found"
+  # to stderr, and dropped the flag from the message. Found by shellcheck SC2215, fixed 2026-09-21.
+  [ "$REAL_STATE_SHA" = "$BASELINE_STATE_SHA256" ] || bad "  state.pickle expected $BASELINE_STATE_SHA256 - \`-l\` does not redirect statefile, so an overlay without it poisons this file"
   return 1
 }
 

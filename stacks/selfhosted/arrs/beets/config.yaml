@@ -259,8 +259,18 @@ asciify_paths: no
 # combination with the `comp:` override above, what makes `Compilations/` not appear at all.
 va_name: "Various Artists"
 
-# No truncation. The target filesystem is ZFS on `tank`; a silent mid-name truncation would make
-# the expected-tree diff (D-27) report a path difference that is really a length limit.
+# CORRECTED 2026-09-21 (plan 06-07, independently re-measured against beets 2.12.0 in-container).
+# The superseded wording is kept visible so a grep for it returns its retraction:
+#   "No truncation. The target filesystem is ZFS on `tank`; a silent mid-name truncation would make
+#    the expected-tree diff (D-27) report a path difference that is really a length limit."
+# That is WRONG. `0` does not mean "no truncation": `util.get_max_filename_length()` uses the
+# configured value ONLY IF TRUTHY, and otherwise falls through to `min(statvfs NAME_MAX, 200)`,
+# which on this filesystem is 200. So `0` selects a real 200-CHARACTER-PER-COMPONENT limit.
+# The intent behind the original comment still holds — a silent mid-name truncation would make the
+# D-27 expected-tree diff report a length limit as a path difference — so the constraint is worth
+# knowing rather than assuming away. It does NOT bite the Phase 6 fixture: the longest path
+# component in `06-EXPECTED-TREE.txt` is 65 characters, measured. Revisit before any content whose
+# artist/album/title could approach 200 characters is imported.
 max_filename_length: 0
 
 # D-16 — `%aunique{}` is KEPT, not removed, and every folder where it fires is REPORTED by the dry
