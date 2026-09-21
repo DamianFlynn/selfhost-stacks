@@ -1,0 +1,1104 @@
+================================================================================
+PHASE 6 / PLAN 06-12 / TASK 1 — CONF-05 DRIVEN, NOT READ BACK
+`match.preferred.countries` demonstrated against a real MusicBrainz candidate
+lookup, with one-key negative controls and a track-count check on every match.
+================================================================================
+
+Run          2026-09-21, LXC 100 `selfhost` (172.16.1.159)
+Container    beets-flask, metasauce/beets-flask:v2.0.0-rc6, beets 2.12.0,
+             started 2026-09-20T22:37:55Z, RestartCount 0 (not restarted here)
+Config       stacks/selfhosted/arrs/beets/config.yaml as committed —
+             match.preferred.countries: ['GB', 'US']        (line 357)
+             match.preferred.original_year: yes             (line 362)
+             musicbrainz.extra_tags: [year, catalognum, country, media, label]
+Driver       /mnt/fast/safety/phase06/06-12-stage/06-12-conf05.sh
+Instrument   /mnt/fast/safety/phase06/06-12-stage/06-12-conf05-probe.py
+Raw JSON     /mnt/fast/safety/phase06/06-12-stage/cand{A..L}.json  (at the fence)
+
+VERDICT      GREEN. Driver exit 0. Every assertion below is machine-generated;
+             the full console transcript is reproduced verbatim from § TRANSCRIPT.
+
+CONF-05 IS DISCHARGED BY DEMONSTRATION. The one-line reading:
+  * the configured `['GB','US']` chooses a **GB** release for the S4 *Now!* row,
+    over an available **US** alternative, with 30 tracks against 30 files;
+  * `preferred.countries` is proven to CHANGE THE CHOSEN RELEASE — one key,
+    opposite outcome — on the S1 row, where two countries are genuinely in
+    contention (§ FINDING 6);
+  * and the `GB`-not-`UK` literal is proven by measurement, not by reading the
+    comment that asserts it (§ FINDING 5).
+
+--------------------------------------------------------------------------------
+0. WHY THIS COULD NOT BE A `--pretend` RUN  (D-33)
+--------------------------------------------------------------------------------
+`beet import` run in pretend mode assembles the pipeline `read_tasks ->
+log_files` and nothing else (beets/importer/session.py@v2.12.0:201-240). The
+stage that fetches candidates, `lookup_candidates`, is in the ELSE branch. So a
+pretend transcript contains no candidate, no MBID, no country and no distance —
+there is nothing in it for CONF-05 to assert on. That is why this task runs a
+REAL lookup on a throwaway library instead.
+
+Two instruments are used, and they agree:
+
+  (a) `beet import -t` (timid), the instrument the plan names, run as `beetle`
+      on the absolute `/venv/bin/beet` inside the flask container. Its verbatim
+      output is in § TRANSCRIPT step 8. It prints the chosen candidate and,
+      under `More candidates`, the ranked list.
+
+  (b) a python probe calling beets' OWN `beets.autotag.tag_album()` — the same
+      call `lookup_candidates` makes — so that every field the plan asks for
+      (MBID, country, year, original_year, label, catalognum, media, mediums,
+      track count, and the per-key distance breakdown) can be recorded rather
+      than only the subset the CLI chooses to print.
+
+  Cross-check: (a) and (b) name the SAME chosen release for the S4 row,
+  `3b7a8210-85f7-4413-98db-479bc7c0f0aa`, GB, 2xCD, 2018, 30 tracks, and (a)
+  reports it at 97.7% where (b) reports distance 0.023195 (= 1 - 0.977).
+
+--------------------------------------------------------------------------------
+1. THE FENCE
+--------------------------------------------------------------------------------
+Every invocation used a `-c` overlay redirecting `library:`, `statefile:` AND
+`directory:` into `/tmp/p6c` inside the container, with `copy: no`, `move: no`,
+`write: no`, `incremental: no`. `-l` alone is NOT sufficient: `statefile` has no
+CLI flag, so a throwaway `-l` still writes the SHARED state.pickle
+(06-RESEARCH.md § "The throwaway library, and the state file `-l` does NOT
+cover"). This arm has `autotag` ON and is the closest thing in Phase 6 to a real
+import, which is exactly why the fence matters most here.
+
+  * The driver REFUSED TO RUN on its first attempt because a leftover scratch
+    directory from instrument development (`/tmp/p6smoke`) held 5 entries. The
+    refusal is in the record deliberately: a preflight that has never fired is
+    not a preflight. It was cleared and the run repeated.
+  * sha256 manifests over ALL THREE source folders — content AND metadata
+    (mode, owner, size, mtime), not a path count — taken before and after and
+    asserted identical. Phase 1 proved a path-set diff passes while content
+    changes underneath.
+  * `/media` is RW=false, read from `docker inspect`, not from compose.
+  * D-29 layer 3: the real `library.db` and `state.pickle` sha256 read before
+    and after and found byte-identical, at the 06-04/06-11 baselines
+    `fbbdde0c…` and `f6a9a1ad…`, with mtimes unmoved (2026-09-11, 2025-11-18).
+  * `/tmp/p6c` removed and its absence asserted.
+  * After the `beet import -t` run, `beet ls` against the throwaway library
+    returned **0 items** — measured, not inferred from the database file size.
+
+--------------------------------------------------------------------------------
+2. THE OVERLAY MATRIX — twelve lookups, each pair ONE KEY APART
+--------------------------------------------------------------------------------
+  id  folder              countries        original_year  search_limit  role
+  --  ------------------  ---------------  -------------  ------------  --------------------------
+  A   S4 / Vol 001        ['GB','US']      yes            5 (default)   AS COMMITTED
+  B   S4 / Vol 001        ['US','GB']      yes            5             negative control, one key
+  C   S4 / Vol 001        []               yes            5             negative control, one key
+  D   S4 / Vol 001        ['GB','US']      yes            25            widened pool (instrument)
+  E   S4 / Vol 001        ['US','GB']      yes            25            widened pool, one key
+  F   S4 / Vol 001        ['GB']           yes            5             the literal as written
+  G   S4 / Vol 001        ['UK']           yes            5             the silent-failure proof
+  H   S4 / Vol 001        ['GB','US']      NO             25            original_year exercised
+  I   S4 / Vol 002        ['GB','US']      yes            5             the SECOND S4 row
+  J   S4 / Vol 002        ['US','GB']      yes            5             second row, one key
+  K   S1 / Benson Boone   ['XW','US']      yes            5             THE RANK-0 FLIP
+  L   S1 / Benson Boone   ['US','XW']      yes            5             the flip, one key
+
+The diffs between each pair are printed in § TRANSCRIPT step 3 and are a single
+key plus the identifying comment line in every case.
+
+⚠ `search_limit: 25` on D/E/H is an INSTRUMENT WIDENING, not a configuration
+  change, and it is not proposed for the vendored config. It exists only to
+  answer "is a US alternative available at all", which the committed default of
+  5 cannot answer for this release. Nothing in the committed config is edited by
+  this plan.
+
+The three source folders are all drawn rows of the committed 06-SAMPLE.md:
+  S4  …/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001   30 mp3
+  S4  …/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 002   30 mp3   (next eligible S4 row)
+  S1  …/music/Benson Boone-American Heart-…-OBZEN-xpost        10 flac
+
+--------------------------------------------------------------------------------
+FINDING 1 — THE CHOSEN CANDIDATE IS GB, AND THE TRACK COUNT MATCHES
+--------------------------------------------------------------------------------
+S4 / Vol 001, overlay A (as committed), recommendation **strong** (3):
+
+  chosen  3b7a8210-85f7-4413-98db-479bc7c0f0aa
+          "Now That's What I Call Music" / Various Artists
+          country GB   year 2018   original_year 1983   2xCD
+          catalognum 0190758608020   label "Universal Music on Demand"
+          track count 30   distance 0.023195
+  folder  30 audio files
+  mapping 30 mapped, 0 unmatched files, 0 missing tracks
+
+The track-count check is not decoration. CLAUDE.md records that MusicBrainz
+entries for this content are frequently 5-10 track stubs against 15-20 track
+releases, so a confident wrong match is more likely than no match and is the
+worst outcome available. Here the count matches exactly and the mapping is
+complete in both directions — a count alone would not have shown the second
+half. See FINDING 7 for the case where a matching count is the MISLEADING
+signal.
+
+The four alternatives at the committed `search_limit: 5` are FI, DK, NZ and JP:
+
+  rk  distance  ctry  yr    orig  trks  media            mediums  MBID
+  0   0.023195  GB    2018  1983  30    CD               2        3b7a8210-85f7-4413-98db-479bc7c0f0aa
+  1   0.551859  FI    2003  2003  30    Copy Control CD  2        ae44a776-2879-4e04-9890-34b348960afc
+  2   0.570874  DK    2002  2002  20    CD               1        c185ad0b-f965-4c3a-b135-3b790bce2f87
+  3   0.605968  NZ    1992  1992  20    CD               1        12c32996-b791-4d6b-bc40-e481fb310349
+  4   0.616913  JP    1993  1993  16    CD               1        a73ab190-a26c-4617-81e5-a7edef0e66e7
+
+--------------------------------------------------------------------------------
+FINDING 2 — THE PREDICATE HAD TO BE WRITTEN THE OTHER WAY ROUND
+--------------------------------------------------------------------------------
+This is the sixth time this phase that a predicate which cannot match read as a
+clean result, and it was caught before it was believed.
+
+`Distance.add_priority()` assigns `index * (1/len(options))`, i.e. **0.0** to a
+value matching the FIRST entry, and 1.0 when nothing matches
+(beets/autotag/hooks.py@v2.12.0). `Distance.items()` then — quoting its own
+docstring — "Does not include penalties with a zero value."
+
+So the chosen GB candidate has NO `country` key in its penalty breakdown, and a
+predicate reading "the chosen candidate carries a country penalty" would have
+gone RED **because the preference worked perfectly**. The correct assertion is
+the inverse, and both halves are asserted:
+
+  * the chosen GB candidate carries NO country penalty  -> it matched at index 0
+  * all 4 non-GB candidates DO carry one                -> 4 of 4
+
+--------------------------------------------------------------------------------
+FINDING 3 — A US ALTERNATIVE IS AVAILABLE, AND IS NOT CHOSEN — BUT NOT AT THE
+            COMMITTED `search_limit`
+--------------------------------------------------------------------------------
+Stated plainly because the plan's own wording ("a preference that had nothing to
+prefer against proves nothing") makes this the load-bearing point:
+
+  * At the committed `musicbrainz.search_limit` of **5**, the countries offered
+    for Vol 001 are DK, FI, GB, JP, NZ. **There is no US candidate at all.**
+  * At `search_limit: 25` (overlay D) the pool holds 25 candidates of which
+    **7 are US**, at ranks 7, 11, 12, 14, 15, 17 and 20. Rank 0 is still GB.
+  * Every one of those 7 US candidates has **21 or 22 tracks** against the
+    folder's 30 files. They are the American *NOW That's What I Call Music!*
+    franchise, which is a different series from the UK one this library holds —
+    not a US pressing of the same release.
+  * The SECOND S4 row (Vol 002) DOES offer a US candidate at the committed
+    limit of 5 — rank 2, 18 tracks, `6c310189-0477-448e-a861-80771e336a0d` —
+    and it is not chosen.
+
+⇒ A dated correction to the vendored config's own comment. `config.yaml:351-354`
+  says `['GB','US']` addresses "the known config gap behind the *Now!* series
+  picking US pressings over the UK ones this library actually holds."
+  **That failure mode does not reproduce here.** The US releases MusicBrainz
+  offers for these titles are a different franchise with a different tracklist,
+  and they lose on track distance by an order of magnitude more than the country
+  term could ever supply. The setting is still correct and should stay — it is
+  free, it is directionally right, and FINDING 6 shows it does decide real
+  cases — but the specific mechanism the comment blames is not the one measured.
+  This is recorded as a finding, not applied as an edit: no config was changed
+  by this plan.
+
+--------------------------------------------------------------------------------
+FINDING 4 — THE NEGATIVE CONTROLS: IDENTICAL OUTCOME, MEASURABLY DIFFERENT SCORE
+--------------------------------------------------------------------------------
+  overlay  countries      rank-0 MBID                           country  distance
+  A        ['GB','US']    3b7a8210-85f7-4413-98db-479bc7c0f0aa  GB       0.023195
+  B        ['US','GB']    3b7a8210-85f7-4413-98db-479bc7c0f0aa  GB       0.026926
+  C        []             3b7a8210-85f7-4413-98db-479bc7c0f0aa  GB       0.023369
+
+  A vs B — chosen candidate IDENTICAL. The chosen release's own distance moved
+           +0.003731, exactly half a country unit: under B, `GB` sits at index 1
+           of 2, so `add_priority` charges 0.5 raw instead of 0.0.
+  A vs C — chosen candidate IDENTICAL. Removing the preference moved **5 of 5**
+           candidate distances: the GB winner +0.000174 and the four others
+           between −0.00337 and −0.004087, because they lose the 1.0-raw
+           "no preferred country matched" penalty.
+
+Read honestly: **this release does not discriminate the setting at rank 0.** The
+key is live — every distance moves, and it moves in the predicted direction and
+by the predicted magnitude — but the gap between the GB release and its nearest
+rival is 0.53, and the whole country term is worth at most 0.0075 here (weight
+0.5 against a total weight dominated by 30 per-track distances). No ordering of
+two country codes can close that.
+
+The plan requires that when the control is identical, **a second *Now!* volume
+from the S4 stratum's next eligible row is tried before CONF-05 is called
+demonstrated.** It was: overlays I/J on `Vol 002`. Outcome also IDENTICAL
+(FINDING 7). CONF-05 is therefore NOT rested on the S4 rows alone — see
+FINDING 6, which is the demonstration proper.
+
+--------------------------------------------------------------------------------
+FINDING 5 — `GB` WORKS AND `UK` SILENTLY DOES NOT. MEASURED.
+--------------------------------------------------------------------------------
+The config carries a warning that MusicBrainz stores `GB`, that `UK` alone
+matches nothing, and that it fails SILENTLY. That warning is now evidence.
+
+  overlay F, countries ['GB']
+    rank 0  3b7a8210…  distance 0.023195
+    penalties: {"year":0.012149,"catalognum":0.006889,"tracks":0.002211,"album":0.001947}
+    -> NO country key. The GB release matched at index 0.
+
+  overlay G, countries ['UK']    (ONE key changed)
+    rank 0  3b7a8210…  distance 0.030658
+    penalties: {"year":0.012149,"country":0.007463,"catalognum":0.006889,"tracks":0.002211,"album":0.001947}
+    -> the GB release now carries a FULL 1.0-raw country penalty, and every
+       other candidate carries one too:
+         3b7a8210 (GB) 0.007463   ae44a776 (FI) 0.007463
+         c185ad0b (DK) 0.009434   12c32996 (NZ) 0.009434
+         a73ab190 (JP) 0.010549
+       The penalty is uniform, so it cancels out of the ordering entirely: the
+       setting is INERT and nothing anywhere reports a problem. No warning, no
+       log line, no non-zero exit. Exactly the failure the comment describes.
+
+  ⚠ AND THE SOURCE DATA ITSELF SAYS `UK`. The raw ID3 frame set of the first
+    Vol 001 file carries `TXXX:COUNTRY = UK` (see § APPENDIX). So somebody
+    reading the files and writing the config to match them would write `UK`,
+    get no error, and quietly lose the preference. This is also why beets' own
+    `likelies["country"]` for this folder is the empty string: `TXXX:COUNTRY` is
+    not a mediafile-mapped field, so beets never sees it — which in turn is why
+    `country` is dropped from the MusicBrainz query (FINDING 8).
+
+  ⚠ The entries are REGEXES compiled with `re.I` (`re.compile(pat, re.I)` in
+    `beets/autotag/match.py@v2.12.0 distance()`), so a stray `.` or `|` widens
+    the match rather than failing. Both committed values are plain two-letter
+    codes on purpose.
+
+--------------------------------------------------------------------------------
+FINDING 6 — THE DEMONSTRATION PROPER: ONE KEY, DIFFERENT CHOSEN RELEASE
+--------------------------------------------------------------------------------
+CONF-05 asks that disambiguation be demonstrated, not merely set. FINDING 4
+shows the S4 row cannot demonstrate it because it has no near-tied rival in a
+second country. The S1 row — `Benson Boone / American Heart`, also a drawn row
+of the committed sample — does, because MusicBrainz holds this release as three
+**US** entries and two **XW** (worldwide) entries with IDENTICAL 10-track
+listings, so `country` is the ONLY term separating them.
+
+  overlay K, countries ['XW','US']
+    rank 0  b3a1e018-845b-44bd-a9a3-4f46c2e39d49  XW  Digital Media  10 tracks  distance 0.0
+  overlay L, countries ['US','XW']     (ONE key changed)
+    rank 0  e4fdb1dc-f4a5-4d73-8e53-3f4d12c8df60  US  12" Vinyl      10 tracks  distance 0.0
+
+  ⇒ `match.preferred.countries` CHANGES THE CHOSEN RELEASE. Both sides pass the
+    track-count check (10 files, 10 tracks each), so the flip is not an artefact
+    of one side being a worse match.
+
+  The same folder under the COMMITTED `['GB','US']` puts the three US releases
+  at 0.009091 (index 1 of 2) and the two XW releases at 0.018182 (no match,
+  1.0 raw) — one full priority unit apart, from a two-entry list. There is no
+  GB release of this album in MusicBrainz at all, at either search limit, which
+  is why the flip pair uses the two codes that are actually in contention.
+
+  Stated as a limitation rather than glossed: this pair demonstrates the
+  MECHANISM and its decisiveness, using country codes other than the committed
+  pair. FINDING 1 and FINDING 5 are what prove the committed `GB` literal.
+  Together they are the demonstration; neither alone is.
+
+--------------------------------------------------------------------------------
+FINDING 7 — THE SECOND S4 ROW, AND A TRACK COUNT THAT MATCHES THE WRONG RELEASE
+--------------------------------------------------------------------------------
+`Vol 002`, 30 mp3, overlay I (as committed):
+
+  rk  distance  ctry  yr    trks  catalognum       label          MBID
+  0   0.50006   FI    2003  30    5138742000       Sony Music     53337dd8-359e-485e-9869-0f920ec8e059
+  1   0.571945  DK    2002  20    NOW 5434642      NOW Music      408ba260-c16b-4029-9c2c-ee51ad8cb8fa
+  2   0.59267   US    1999  18    7243 8 47910 2   The EMI Group  6c310189-0477-448e-a861-80771e336a0d
+  3   0.598028  JP    1994  17    TOCP-8450        EMI            18d0871c-8e69-4770-bedf-af6660a79e8d
+  4   0.606133  NZ    1998  18    4955412          EMI            82835005-a289-47e7-bd88-07a65d798e94
+
+  * A/B outcome IDENTICAL again, so `preferred.countries` does not discriminate
+    this row either.
+  * **No GB candidate is offered at all.** The top candidate is Finnish.
+  * Its **track count is 30, matching the folder's 30 files exactly** — and it
+    is still the wrong release. Its `tracks` penalty is 0.48592, i.e. the
+    per-track title/length distances are terrible; the count agrees while the
+    content does not.
+  * beets itself refuses it: `recommendation: 0` = **none**. Vol 001 by contrast
+    is `3` = strong.
+
+  ⇒ THE ORDER OF THE CHECKS MATTERS AND IS NOW MEASURED. "Never accept a match
+    without a track-count check" is necessary and NOT sufficient: here the count
+    is the misleading signal and the recommendation is the true one. Carried to
+    Phase 7: gate on the recommendation FIRST, then the track count, then the
+    per-track distance — and treat a `none` recommendation with a matching count
+    as the specific shape most likely to be waved through by a human in a hurry.
+  * A US candidate IS present in this row's list at the committed search limit
+    and is not chosen — which is the "a US alternative was available" condition
+    satisfied without widening the pool.
+
+--------------------------------------------------------------------------------
+FINDING 8 — `musicbrainz.extra_tags` REACHED THE WIRE, AND TWO OF FIVE DID NOT
+--------------------------------------------------------------------------------
+Read from the plugin's own query builder (`get_search_query_with_filters`),
+not inferred from the config value.
+
+  declared           ['year', 'catalognum', 'country', 'media', 'label']
+  mapped to MB keys  year->date  catalognum->catno  country->country
+                     media->format  label->label          (5 of 5 mapped)
+  ACTUALLY SENT      {"release":"now that's what i call music! 1",
+                      "arid":"89ad4ac3-39f7-470e-963a-56509c546377",
+                      "date":"2018", "catno":"cdnow01", "format":"cd"}
+  dropped            country, label
+
+  `get_search_query_with_filters` drops any criterion whose value is empty after
+  `.lower().strip()`. `country` and `label` are dropped because beets reads both
+  as the empty string on this content: the files carry `TXXX:COUNTRY` and
+  `TXXX:ORGANIZATION`, neither of which is a mediafile field, rather than the
+  standard frames. So three of the five extra tags are doing work here and two
+  are inert *on this content* — not misconfigured, just unfed.
+
+  And they matter: `date=2018` plus `catno=cdnow01` is why the 2018 GB reissue
+  family dominates the result set at all.
+
+--------------------------------------------------------------------------------
+FINDING 9 — `preferred.original_year` IS IN FORCE BUT DOES NOT DECIDE THIS ROW
+--------------------------------------------------------------------------------
+  * The chosen candidate has year **2018** and original_year **1983** — they
+    differ, so the `original_year` branch of `distance()` is the one taken.
+  * It carries a `year` penalty of 0.012149. With `preferred.original_year: yes`
+    the penalty is `|year − original| / |today − original|` = |2018−1983| /
+    |2026−1983| = 35/43 = 0.814 raw. So the setting is measurably active — and
+    note it PENALISES the reissue the sample actually holds.
+  * A prediction made before the run — that turning it off would flip rank 0
+    between the two 30-track GB candidates (2009 and 2018 pressings) — was
+    WRONG and is recorded as wrong. On the widened pool, `original_year: yes`
+    (D) and `original_year: no` (H) both choose
+    `07971e8a-9b1a-31a0-a111-f69955974138` (GB, 2009, original 1983). The key is
+    exercised; it does not change the outcome for this row.
+
+--------------------------------------------------------------------------------
+THE D-28 SHORTCUT — RECORDED, NOT USED, AND ONE HALF OF IT CORRECTED
+--------------------------------------------------------------------------------
+D-28 says criterion 5 proves `preferred.countries` AS WRITTEN and that the
+embedded per-file Discogs release id is NOT used, because using it would prove a
+different mechanism and leave the configured one untested — and because Phase 4
+D-24 dismissed the Discogs credential, leaving the survivor deliberately
+MusicBrainz-only. It was not used. No Discogs credential was loaded, no Discogs
+plugin was enabled, and no request left this estate for any host but
+musicbrainz.org.
+
+Measured while confirming the premise, because a deferred item pointing at
+something that is not there is worse than no pointer:
+
+  * PRESENT on the *Now!* set. `Vol 001`'s first file carries
+    `TXXX:LOCATION = https://www.discogs.com/Various-Now-Thats-What-I-Call-Music/release/12289409`
+    — a direct Discogs release id, exactly as the Phase 5 note recorded.
+  * ABSENT from `dj-mixes`. All **60** `dj-mixes` folders were scanned (first
+    audio file of each, raw mutagen frame-set read, matching `discogs\.com` in
+    any frame key or value): **0 of 60** carry it.
+
+  ⇒ The shortcut is real but its reach is narrower than the note implies. It is
+    a shortcut for the *Now!* content, not for the DJ collection — and the DJ
+    collection is the content whose metadata MusicBrainz does not carry, i.e.
+    precisely where a Discogs id would have been worth most. Carried to
+    **Phase 9** with that correction attached.
+  STATED LIMIT of the scan: one file per folder, and `dj-mixes` only. A per-file
+  census across the whole backlog was not run and is not claimed.
+
+--------------------------------------------------------------------------------
+WHAT THIS TASK DOES NOT COVER
+--------------------------------------------------------------------------------
+1. No GB-versus-US rank-0 flip exists anywhere in the sampled content, at either
+   search limit. The flip in FINDING 6 is XW-versus-US. If a later phase needs
+   the GB/US pair demonstrated as a flip specifically, it needs a release that
+   MusicBrainz holds as both a GB and a US edition with the same tracklist, and
+   no such release was found in this draw.
+2. `search_limit` stays at beets' default of 5 in the committed config and this
+   plan does not propose changing it. FINDING 3 shows that at 5, whole classes
+   of candidate are never offered. Whether 5 is the right value is a Phase 7
+   question with a real cost on both sides (more candidates = more think time
+   and more chances to pick wrong).
+3. Nothing here says anything about what happens at IMPORT time. These are
+   candidate lookups on a throwaway library with `write: no`; no choice was
+   applied, no file was touched, `beet ls` on the throwaway returned 0 items.
+4. `preferred.media` is not set in the committed config and was not exercised.
+5. The `%aunique{}`, path-template and D-18 questions belong to plan 06-11's
+   oracle run and are not re-litigated here.
+
+================================================================================
+TRANSCRIPT — verbatim console output of the passing run (driver exit 0)
+================================================================================
+
+================================================================
+0. PROVENANCE
+================================================================
+host        : selfhost
+utc         : 2026-09-21T08:17:55Z
+container   : beets-flask  metasauce/beets-flask:v2.0.0-rc6 started=2026-09-20T22:37:55.838784056Z restarts=0
+beets       : 2.12.0
+/media RW   : false
+S4 row A    : /mnt/tank/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001
+S4 row B    : /mnt/tank/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 002
+S1 row      : /mnt/tank/downloads/complete/nzb/music/Benson Boone-American Heart-24BIT-44KHZ-WEB-FLAC-2025-OBZEN-xpost
+
+================================================================
+1. FENCE PREFLIGHT — refuse to run against a non-empty scratch
+================================================================
+   /tmp/p6c ABSENT
+   /tmp/p6smoke ABSENT
+
+-- D-29 layer 3, BEFORE --
+   library.db   fbbdde0c416e72b9884e56c562fd88eaa4da447926e1cb6cc17c3e04aee7da1a
+   state.pickle f6a9a1ad7aa553e42e53a8056fa80724785111180a5e2122be4f8732d1e4bc7c
+
+================================================================
+2. SOURCE MANIFESTS, BEFORE — content AND metadata, not a count
+================================================================
+   S4/Vol001 lines=61  sha256=a096450e529c41ff7655e84016533f2d7d349c54e264febda0827cc70c716f7e  audio=30
+   S4/Vol002 lines=61  sha256=e51db05bac8ea5f2a80e29f43fac41c4e70b73655c66bb690b3f522833748137  audio=30
+   S1/Boone lines=21  sha256=270d1815b84f73fe4ac6e3f75f9a75e2eb704dfb7d0c8bac805472daebf4da16  audio=10
+
+================================================================
+3. THE OVERLAYS — a matrix that changes ONE key at a time
+================================================================
+-- overlayA.yaml, in full --
+   # Phase 6 plan 06-12 throwaway overlay A — AS COMMITTED (config.yaml:357 + :362); search_limit at beets' default 5
+   library:   /tmp/p6c/libA.db
+   statefile: /tmp/p6c/stateA.pickle
+   directory: /tmp/p6c/tree
+   ui:
+       color: no
+   import:
+       copy: no
+       move: no
+       write: no
+       incremental: no
+       duplicate_action: keep
+   musicbrainz:
+       search_limit: 5
+   match:
+       preferred:
+           countries: ['GB', 'US']
+           original_year: yes
+-- diff overlayA -> overlayB (must be exactly one key) --
+   < # Phase 6 plan 06-12 throwaway overlay A — AS COMMITTED (config.yaml:357 + :362); search_limit at beets' default 5
+   > # Phase 6 plan 06-12 throwaway overlay B — NEGATIVE CONTROL 1 — same two codes, order reversed. ONE key from A
+   <         countries: ['GB', 'US']
+   >         countries: ['US', 'GB']
+-- diff overlayA -> overlayC (must be exactly one key) --
+   < # Phase 6 plan 06-12 throwaway overlay A — AS COMMITTED (config.yaml:357 + :362); search_limit at beets' default 5
+   > # Phase 6 plan 06-12 throwaway overlay C — NEGATIVE CONTROL 2 — the preference removed entirely. ONE key from A
+   <         countries: ['GB', 'US']
+   >         countries: []
+-- diff overlayD -> overlayE (must be exactly one key) --
+   < # Phase 6 plan 06-12 throwaway overlay D — WIDENED POOL — A with search_limit 25. Instrument change, NOT a config change
+   > # Phase 6 plan 06-12 throwaway overlay E — WIDENED POOL control — ONE key from D
+   <         countries: ['GB', 'US']
+   >         countries: ['US', 'GB']
+-- diff overlayF -> overlayG (must be exactly one key) --
+   < # Phase 6 plan 06-12 throwaway overlay F — THE LITERAL AS WRITTEN — GB alone
+   > # Phase 6 plan 06-12 throwaway overlay G — THE SILENT-FAILURE PROOF — UK alone. ONE key from F
+   <         countries: ['GB']
+   >         countries: ['UK']
+-- diff overlayD -> overlayH (must be exactly one key) --
+   < # Phase 6 plan 06-12 throwaway overlay D — WIDENED POOL — A with search_limit 25. Instrument change, NOT a config change
+   > # Phase 6 plan 06-12 throwaway overlay H — original_year EXERCISED — D with preferred.original_year flipped off
+   <         original_year: yes
+   >         original_year: no
+-- diff overlayK -> overlayL (must be exactly one key) --
+   < # Phase 6 plan 06-12 throwaway overlay K — THE RANK-0 FLIP — two codes both present in this release's candidate set
+   > # Phase 6 plan 06-12 throwaway overlay L — THE RANK-0 FLIP control — ONE key from K
+   <         countries: ['XW', 'US']
+   >         countries: ['US', 'XW']
+
+================================================================
+4. STAGE INTO THE CONTAINER (docker cp — /config is never written)
+================================================================
+   total 64
+   drwxr-xr-x 2 beetle beetle 4096 Sep 21 09:18 .
+   drwxrwxrwt 1 root   root   4096 Sep 21 09:18 ..
+   -rw-r--r-- 1 beetle beetle  431 Sep 21 09:18 overlayA.yaml
+   -rw-r--r-- 1 beetle beetle  429 Sep 21 09:18 overlayB.yaml
+   -rw-r--r-- 1 beetle beetle  420 Sep 21 09:18 overlayC.yaml
+   -rw-r--r-- 1 beetle beetle  440 Sep 21 09:18 overlayD.yaml
+   -rw-r--r-- 1 beetle beetle  400 Sep 21 09:18 overlayE.yaml
+   -rw-r--r-- 1 beetle beetle  389 Sep 21 09:18 overlayF.yaml
+   -rw-r--r-- 1 beetle beetle  407 Sep 21 09:18 overlayG.yaml
+   -rw-r--r-- 1 beetle beetle  430 Sep 21 09:18 overlayH.yaml
+   -rw-r--r-- 1 beetle beetle  415 Sep 21 09:18 overlayI.yaml
+   -rw-r--r-- 1 beetle beetle  400 Sep 21 09:18 overlayJ.yaml
+   -rw-r--r-- 1 beetle beetle  434 Sep 21 09:18 overlayK.yaml
+   -rw-r--r-- 1 beetle beetle  402 Sep 21 09:18 overlayL.yaml
+   -rw-r--r-- 1 beetle beetle 5493 Sep 21 09:09 probe.py
+
+================================================================
+5. THE DRIVEN LOOKUPS — beets' own tag_album(), REAL MusicBrainz queries
+================================================================
+   A  -> Vol 001 ... exit=0 bytes=5499
+   B  -> Vol 001 ... exit=0 bytes=5528
+   C  -> Vol 001 ... exit=0 bytes=5352
+   D  -> Vol 001 ... exit=0 bytes=21078
+   E  -> Vol 001 ... exit=0 bytes=21111
+   F  -> Vol 001 ... exit=0 bytes=5487
+   G  -> Vol 001 ... exit=0 bytes=5516
+   H  -> Vol 001 ... exit=0 bytes=21215
+   I  -> Vol 002 ... exit=0 bytes=5499
+   J  -> Vol 002 ... exit=0 bytes=5471
+   K  -> Benson Boone-American Heart-24BIT-44KHZ-WEB-FLAC-2025-OBZEN-xpost ... exit=0 bytes=4695
+   L  -> Benson Boone-American Heart-24BIT-44KHZ-WEB-FLAC-2025-OBZEN-xpost ... exit=0 bytes=4655
+
+================================================================
+6. THE CANDIDATE TABLES
+================================================================
+
+---------------- overlay A  (S4 Vol 001 — AS COMMITTED) ----------------
+source folder      : Vol 001 | audio files: 30
+countries in force : ['GB', 'US']   original_year: True   search_limit: 5
+extra_tags         : ['year', 'catalognum', 'country', 'media', 'label']
+extra_tag -> MB key: {"year": "date", "catalognum": "catno", "country": "country", "media": "format", "label": "label"}
+FILTERS SENT TO MB : {"release": "now that's what i call music! 1", "arid": "89ad4ac3-39f7-470e-963a-56509c546377", "date": "2018", "catno": "cdnow01", "format": "cd"}  va_likely: True
+plugins / library  : ['musicbrainz'] | /tmp/p6c/libA.db | /tmp/p6c/stateA.pickle
+write/copy/move    : False False False
+cur artist / album : Various / Now That's What I Call Music! 1   recommendation: 3   candidates: 5
+
+   rk  distance  ctry yr   orig trks media           mediums catalognum      label                    MBID
+   0   0.023195  GB   2018 1983 30   CD              2       0190758608020   Universal Music on Deman 3b7a8210-85f7-4413-98db-479bc7c0f0aa
+   1   0.551859  FI   2003 2003 30   Copy Control CD 2       7243 581391 2 9 EMI Finland              ae44a776-2879-4e04-9890-34b348960afc
+   2   0.570874  DK   2002 2002 20   CD              1       NOW 8133072     NOW Music                c185ad0b-f965-4c3a-b135-3b790bce2f87
+   3   0.605968  NZ   1992 1992 20   CD              1       9548316462      Warner Music New Zealand 12c32996-b791-4d6b-bc40-e481fb310349
+   4   0.616913  JP   1993 1993 16   CD              1       VJCP-25081      Blue Note                a73ab190-a26c-4617-81e5-a7edef0e66e7
+
+   penalties rk0: {"year": 0.012149, "catalognum": 0.006889, "tracks": 0.002211, "album": 0.001947}
+   penalties rk1: {"tracks": 0.52263, "media": 0.014925, "country": 0.007463, "catalognum": 0.006841}
+   penalties rk2: {"tracks": 0.421817, "unmatched_tracks": 0.113208, "mediums": 0.018868, "country": 0.009434, "catalognum": 0.007547}
+   penalties rk3: {"tracks": 0.455025, "unmatched_tracks": 0.113208, "mediums": 0.018868, "catalognum": 0.009434, "country": 0.009434}
+   penalties rk4: {"tracks": 0.399848, "unmatched_tracks": 0.177215, "mediums": 0.021097, "country": 0.010549, "catalognum": 0.008204}
+
+---------------- overlay B  (S4 Vol 001 — negative control 1, countries reversed) ----------------
+source folder      : Vol 001 | audio files: 30
+countries in force : ['US', 'GB']   original_year: True   search_limit: 5
+extra_tags         : ['year', 'catalognum', 'country', 'media', 'label']
+extra_tag -> MB key: {"year": "date", "catalognum": "catno", "country": "country", "media": "format", "label": "label"}
+FILTERS SENT TO MB : {"release": "now that's what i call music! 1", "arid": "89ad4ac3-39f7-470e-963a-56509c546377", "date": "2018", "catno": "cdnow01", "format": "cd"}  va_likely: True
+plugins / library  : ['musicbrainz'] | /tmp/p6c/libB.db | /tmp/p6c/stateB.pickle
+write/copy/move    : False False False
+cur artist / album : Various / Now That's What I Call Music! 1   recommendation: 3   candidates: 5
+
+   rk  distance  ctry yr   orig trks media           mediums catalognum      label                    MBID
+   0   0.026926  GB   2018 1983 30   CD              2       0190758608020   Universal Music on Deman 3b7a8210-85f7-4413-98db-479bc7c0f0aa
+   1   0.551859  FI   2003 2003 30   Copy Control CD 2       7243 581391 2 9 EMI Finland              ae44a776-2879-4e04-9890-34b348960afc
+   2   0.570874  DK   2002 2002 20   CD              1       NOW 8133072     NOW Music                c185ad0b-f965-4c3a-b135-3b790bce2f87
+   3   0.605968  NZ   1992 1992 20   CD              1       9548316462      Warner Music New Zealand 12c32996-b791-4d6b-bc40-e481fb310349
+   4   0.616913  JP   1993 1993 16   CD              1       VJCP-25081      Blue Note                a73ab190-a26c-4617-81e5-a7edef0e66e7
+
+   penalties rk0: {"year": 0.012149, "catalognum": 0.006889, "country": 0.003731, "tracks": 0.002211, "album": 0.001947}
+   penalties rk1: {"tracks": 0.52263, "media": 0.014925, "country": 0.007463, "catalognum": 0.006841}
+   penalties rk2: {"tracks": 0.421817, "unmatched_tracks": 0.113208, "mediums": 0.018868, "country": 0.009434, "catalognum": 0.007547}
+   penalties rk3: {"tracks": 0.455025, "unmatched_tracks": 0.113208, "mediums": 0.018868, "catalognum": 0.009434, "country": 0.009434}
+   penalties rk4: {"tracks": 0.399848, "unmatched_tracks": 0.177215, "mediums": 0.021097, "country": 0.010549, "catalognum": 0.008204}
+
+---------------- overlay C  (S4 Vol 001 — negative control 2, preference removed) ----------------
+source folder      : Vol 001 | audio files: 30
+countries in force : []   original_year: True   search_limit: 5
+extra_tags         : ['year', 'catalognum', 'country', 'media', 'label']
+extra_tag -> MB key: {"year": "date", "catalognum": "catno", "country": "country", "media": "format", "label": "label"}
+FILTERS SENT TO MB : {"release": "now that's what i call music! 1", "arid": "89ad4ac3-39f7-470e-963a-56509c546377", "date": "2018", "catno": "cdnow01", "format": "cd"}  va_likely: True
+plugins / library  : ['musicbrainz'] | /tmp/p6c/libC.db | /tmp/p6c/stateC.pickle
+write/copy/move    : False False False
+cur artist / album : Various / Now That's What I Call Music! 1   recommendation: 3   candidates: 5
+
+   rk  distance  ctry yr   orig trks media           mediums catalognum      label                    MBID
+   0   0.023369  GB   2018 1983 30   CD              2       0190758608020   Universal Music on Deman 3b7a8210-85f7-4413-98db-479bc7c0f0aa
+   1   0.548489  FI   2003 2003 30   Copy Control CD 2       7243 581391 2 9 EMI Finland              ae44a776-2879-4e04-9890-34b348960afc
+   2   0.566787  DK   2002 2002 20   CD              1       NOW 8133072     NOW Music                c185ad0b-f965-4c3a-b135-3b790bce2f87
+   3   0.602216  NZ   1992 1992 20   CD              1       9548316462      Warner Music New Zealand 12c32996-b791-4d6b-bc40-e481fb310349
+   4   0.612829  JP   1993 1993 16   CD              1       VJCP-25081      Blue Note                a73ab190-a26c-4617-81e5-a7edef0e66e7
+
+   penalties rk0: {"year": 0.01224, "catalognum": 0.00694, "tracks": 0.002228, "album": 0.001961}
+   penalties rk1: {"tracks": 0.52656, "media": 0.015038, "catalognum": 0.006892}
+   penalties rk2: {"tracks": 0.425834, "unmatched_tracks": 0.114286, "mediums": 0.019048, "catalognum": 0.007619}
+   penalties rk3: {"tracks": 0.459358, "unmatched_tracks": 0.114286, "mediums": 0.019048, "catalognum": 0.009524}
+   penalties rk4: {"tracks": 0.40411, "unmatched_tracks": 0.179104, "mediums": 0.021322, "catalognum": 0.008292}
+
+---------------- overlay D  (S4 Vol 001 — widened pool, GB first) ----------------
+source folder      : Vol 001 | audio files: 30
+countries in force : ['GB', 'US']   original_year: True   search_limit: 25
+extra_tags         : ['year', 'catalognum', 'country', 'media', 'label']
+extra_tag -> MB key: {"year": "date", "catalognum": "catno", "country": "country", "media": "format", "label": "label"}
+FILTERS SENT TO MB : {"release": "now that's what i call music! 1", "arid": "89ad4ac3-39f7-470e-963a-56509c546377", "date": "2018", "catno": "cdnow01", "format": "cd"}  va_likely: True
+plugins / library  : ['musicbrainz'] | /tmp/p6c/libD.db | /tmp/p6c/stateD.pickle
+write/copy/move    : False False False
+cur artist / album : Various / Now That's What I Call Music! 1   recommendation: 3   candidates: 25
+
+   rk  distance  ctry yr   orig trks media           mediums catalognum      label                    MBID
+   0   0.015779  GB   2009 1983 30   CD              2       NOW 1           Virgin EMI               07971e8a-9b1a-31a0-a111-f69955974138
+   1   0.023195  GB   2018 1983 30   CD              2       0190758608020   Universal Music on Deman 3b7a8210-85f7-4413-98db-479bc7c0f0aa
+   2   0.029482  GB   2018 1983 30   Digital Media   2       -               -                        7e917011-ab60-41c3-a65f-1fe2638e29ae
+   3   0.551859  FI   2003 2003 30   Copy Control CD 2       7243 581391 2 9 EMI Finland              ae44a776-2879-4e04-9890-34b348960afc
+   4   0.562795  IL   1999 1999 40   CD              2       20447-2         Helicon Records          0cd128af-de61-43d4-af44-de6880925135
+   5   0.570874  DK   2002 2002 20   CD              1       NOW 8133072     NOW Music                c185ad0b-f965-4c3a-b135-3b790bce2f87
+   6   0.572027  NZ   2018 2018 36   CD              2       5385897         Sony Music               ed27c87c-357d-4411-9bd5-48c696c8b4fe
+   7   0.574847  US   2018 2018 22   CD              1       19075808642     Sony Music               3528e529-505a-46ac-8cc1-25fd40c3e85f
+   8   0.581237  GB   2018 2018 44   CD              2       CDNOW100        Sony Music               5bedda69-20c1-411e-bb6c-a19d01724e51
+   9   0.587004  -    1998 1998 18   CD              1       7243 8 46795 2  PolyGram                 0f4b21b8-6296-4820-b921-2977c86983f9
+   10  0.587613  GB   2018 2018 45   CD              2       CDNOW99         Universal Music on Deman 51c1890e-0c0d-4cbf-853d-962f9acc531b
+   11  0.58972   US   2018 2018 22   Digital Media   1       -               Legacy                   3fb8f866-13ef-4d3f-b30e-7e322fdd15ad
+   12  0.58972   US   2018 2018 22   Digital Media   1       -               Legacy                   1e50b331-a262-49cf-ae95-786b3c5ca79b
+   13  0.593789  GB   2018 2018 46   CD              2       CDNOW101        NOW                      ec51a6df-53f5-4eda-b667-727449483f77
+   14  0.595608  US   2018 2018 21   CD              1       B0029162-02     Universal Music Group    fdab9864-4d7e-4686-a4a6-2db759da6405
+   15  0.596031  US   2018 2018 21   CD              1       19075863502     Sony Music               8fe7057e-e859-47ae-b5fa-dfdecff9f886
+   16  0.600906  NZ   2018 2018 18   CD              1       5383174         Universal Music New Zeal 1e313cd6-8eb0-49a0-aaf5-9d209b07afb0
+   17  0.604407  US   2018 2018 21   CD              1       B0028304-02     Sony Music               74f47294-352f-45a9-9889-c3be706df429
+   18  0.605968  NZ   1992 1992 20   CD              1       9548316462      Warner Music New Zealand 12c32996-b791-4d6b-bc40-e481fb310349
+   19  0.60903   NZ   2018 2018 18   CD              1       5384645         Sony Music               a29f73ff-9b93-40ae-83a7-be1f0548e46a
+   20  0.612153  US   2018 2018 21   Digital Media   1       -               Legacy                   54ff0c7b-283e-48b3-ba86-681215767fb5
+   21  0.616913  JP   1993 1993 16   CD              1       VJCP-25081      Blue Note                a73ab190-a26c-4617-81e5-a7edef0e66e7
+   22  0.625553  GB   2018 2018 44   Digital Media   1       -               NOW                      2d345c61-6814-4df4-94c4-8d4455971c62
+   23  0.625967  NZ   1997 1997 18   CD              1       8217092         EMI                      68012214-a808-48e5-9428-72aeba3b4806
+   24  0.647521  GB   2018 2018 45   Digital Media   1       -               NOW                      93d17bb9-64b8-4965-9666-03e6a8efdcda
+
+   penalties rk0: {"year": 0.009025, "catalognum": 0.003198, "album": 0.001947, "tracks": 0.00161}
+   penalties rk1: {"year": 0.012149, "catalognum": 0.006889, "tracks": 0.002211, "album": 0.001947}
+   penalties rk2: {"media": 0.015038, "year": 0.01224, "album": 0.001961, "tracks": 0.000243}
+   penalties rk3: {"tracks": 0.52263, "media": 0.014925, "country": 0.007463, "catalognum": 0.006841}
+   penalties rk4: {"tracks": 0.4295, "missing_tracks": 0.118421, "catalognum": 0.006579, "country": 0.006579, "album": 0.001716}
+   penalties rk5: {"tracks": 0.421817, "unmatched_tracks": 0.113208, "mediums": 0.018868, "country": 0.009434, "catalognum": 0.007547}
+
+---------------- overlay E  (S4 Vol 001 — widened pool, US first) ----------------
+source folder      : Vol 001 | audio files: 30
+countries in force : ['US', 'GB']   original_year: True   search_limit: 25
+extra_tags         : ['year', 'catalognum', 'country', 'media', 'label']
+extra_tag -> MB key: {"year": "date", "catalognum": "catno", "country": "country", "media": "format", "label": "label"}
+FILTERS SENT TO MB : {"release": "now that's what i call music! 1", "arid": "89ad4ac3-39f7-470e-963a-56509c546377", "date": "2018", "catno": "cdnow01", "format": "cd"}  va_likely: True
+plugins / library  : ['musicbrainz'] | /tmp/p6c/libE.db | /tmp/p6c/stateE.pickle
+write/copy/move    : False False False
+cur artist / album : Various / Now That's What I Call Music! 1   recommendation: 3   candidates: 25
+
+   rk  distance  ctry yr   orig trks media           mediums catalognum      label                    MBID
+   0   0.019511  GB   2009 1983 30   CD              2       NOW 1           Virgin EMI               07971e8a-9b1a-31a0-a111-f69955974138
+   1   0.026926  GB   2018 1983 30   CD              2       0190758608020   Universal Music on Deman 3b7a8210-85f7-4413-98db-479bc7c0f0aa
+   2   0.033241  GB   2018 1983 30   Digital Media   2       -               -                        7e917011-ab60-41c3-a65f-1fe2638e29ae
+   3   0.551859  FI   2003 2003 30   Copy Control CD 2       7243 581391 2 9 EMI Finland              ae44a776-2879-4e04-9890-34b348960afc
+   4   0.562795  IL   1999 1999 40   CD              2       20447-2         Helicon Records          0cd128af-de61-43d4-af44-de6880925135
+   5   0.570366  US   2018 2018 22   CD              1       19075808642     Sony Music               3528e529-505a-46ac-8cc1-25fd40c3e85f
+   6   0.570874  DK   2002 2002 20   CD              1       NOW 8133072     NOW Music                c185ad0b-f965-4c3a-b135-3b790bce2f87
+   7   0.572027  NZ   2018 2018 36   CD              2       5385897         Sony Music               ed27c87c-357d-4411-9bd5-48c696c8b4fe
+   8   0.584378  GB   2018 2018 44   CD              2       CDNOW100        Sony Music               5bedda69-20c1-411e-bb6c-a19d01724e51
+   9   0.5852    US   2018 2018 22   Digital Media   1       -               Legacy                   1e50b331-a262-49cf-ae95-786b3c5ca79b
+   10  0.587004  -    1998 1998 18   CD              1       7243 8 46795 2  PolyGram                 0f4b21b8-6296-4820-b921-2977c86983f9
+   11  0.590718  GB   2018 2018 45   CD              2       CDNOW99         Universal Music on Deman 51c1890e-0c0d-4cbf-853d-962f9acc531b
+   12  0.591012  US   2018 2018 21   CD              1       B0029162-02     Universal Music Group    fdab9864-4d7e-4686-a4a6-2db759da6405
+   13  0.591435  US   2018 2018 21   CD              1       19075863502     Sony Music               8fe7057e-e859-47ae-b5fa-dfdecff9f886
+   14  0.59686   GB   2018 2018 46   CD              2       CDNOW101        NOW                      ec51a6df-53f5-4eda-b667-727449483f77
+   15  0.599811  US   2018 2018 21   CD              1       B0028304-02     Sony Music               74f47294-352f-45a9-9889-c3be706df429
+   16  0.600906  NZ   2018 2018 18   CD              1       5383174         Universal Music New Zeal 1e313cd6-8eb0-49a0-aaf5-9d209b07afb0
+   17  0.605968  NZ   1992 1992 20   CD              1       9548316462      Warner Music New Zealand 12c32996-b791-4d6b-bc40-e481fb310349
+   18  0.607515  US   2018 2018 21   Digital Media   1       -               Legacy                   54ff0c7b-283e-48b3-ba86-681215767fb5
+   19  0.60903   NZ   2018 2018 18   CD              1       5384645         Sony Music               a29f73ff-9b93-40ae-83a7-be1f0548e46a
+   20  0.615041  US   2018 2018 21   Digital Media   1       -               Sony Music               5a49ab58-1740-487c-a145-f220c9c8d0b0
+   21  0.616913  JP   1993 1993 16   CD              1       VJCP-25081      Blue Note                a73ab190-a26c-4617-81e5-a7edef0e66e7
+   22  0.625967  NZ   1997 1997 18   CD              1       8217092         EMI                      68012214-a808-48e5-9428-72aeba3b4806
+   23  0.628714  GB   2018 2018 44   Digital Media   1       -               NOW                      2d345c61-6814-4df4-94c4-8d4455971c62
+   24  0.650646  GB   2018 2018 45   Digital Media   1       -               NOW                      93d17bb9-64b8-4965-9666-03e6a8efdcda
+
+   penalties rk0: {"year": 0.009025, "country": 0.003731, "catalognum": 0.003198, "album": 0.001947, "tracks": 0.00161}
+   penalties rk1: {"year": 0.012149, "catalognum": 0.006889, "country": 0.003731, "tracks": 0.002211, "album": 0.001947}
+   penalties rk2: {"media": 0.015038, "year": 0.01224, "country": 0.003759, "album": 0.001961, "tracks": 0.000243}
+   penalties rk3: {"tracks": 0.52263, "media": 0.014925, "country": 0.007463, "catalognum": 0.006841}
+   penalties rk4: {"tracks": 0.4295, "missing_tracks": 0.118421, "catalognum": 0.006579, "country": 0.006579, "album": 0.001716}
+   penalties rk5: {"tracks": 0.453798, "unmatched_tracks": 0.086022, "mediums": 0.017921, "catalognum": 0.008146, "album": 0.00448}
+
+---------------- overlay F  (S4 Vol 001 — GB alone) ----------------
+source folder      : Vol 001 | audio files: 30
+countries in force : ['GB']   original_year: True   search_limit: 5
+extra_tags         : ['year', 'catalognum', 'country', 'media', 'label']
+extra_tag -> MB key: {"year": "date", "catalognum": "catno", "country": "country", "media": "format", "label": "label"}
+FILTERS SENT TO MB : {"release": "now that's what i call music! 1", "arid": "89ad4ac3-39f7-470e-963a-56509c546377", "date": "2018", "catno": "cdnow01", "format": "cd"}  va_likely: True
+plugins / library  : ['musicbrainz'] | /tmp/p6c/libF.db | /tmp/p6c/stateF.pickle
+write/copy/move    : False False False
+cur artist / album : Various / Now That's What I Call Music! 1   recommendation: 3   candidates: 5
+
+   rk  distance  ctry yr   orig trks media           mediums catalognum      label                    MBID
+   0   0.023195  GB   2018 1983 30   CD              2       0190758608020   Universal Music on Deman 3b7a8210-85f7-4413-98db-479bc7c0f0aa
+   1   0.551859  FI   2003 2003 30   Copy Control CD 2       7243 581391 2 9 EMI Finland              ae44a776-2879-4e04-9890-34b348960afc
+   2   0.570874  DK   2002 2002 20   CD              1       NOW 8133072     NOW Music                c185ad0b-f965-4c3a-b135-3b790bce2f87
+   3   0.605968  NZ   1992 1992 20   CD              1       9548316462      Warner Music New Zealand 12c32996-b791-4d6b-bc40-e481fb310349
+   4   0.616913  JP   1993 1993 16   CD              1       VJCP-25081      Blue Note                a73ab190-a26c-4617-81e5-a7edef0e66e7
+
+   penalties rk0: {"year": 0.012149, "catalognum": 0.006889, "tracks": 0.002211, "album": 0.001947}
+   penalties rk1: {"tracks": 0.52263, "media": 0.014925, "country": 0.007463, "catalognum": 0.006841}
+   penalties rk2: {"tracks": 0.421817, "unmatched_tracks": 0.113208, "mediums": 0.018868, "country": 0.009434, "catalognum": 0.007547}
+   penalties rk3: {"tracks": 0.455025, "unmatched_tracks": 0.113208, "mediums": 0.018868, "catalognum": 0.009434, "country": 0.009434}
+   penalties rk4: {"tracks": 0.399848, "unmatched_tracks": 0.177215, "mediums": 0.021097, "country": 0.010549, "catalognum": 0.008204}
+
+---------------- overlay G  (S4 Vol 001 — UK alone (the silent failure)) ----------------
+source folder      : Vol 001 | audio files: 30
+countries in force : ['UK']   original_year: True   search_limit: 5
+extra_tags         : ['year', 'catalognum', 'country', 'media', 'label']
+extra_tag -> MB key: {"year": "date", "catalognum": "catno", "country": "country", "media": "format", "label": "label"}
+FILTERS SENT TO MB : {"release": "now that's what i call music! 1", "arid": "89ad4ac3-39f7-470e-963a-56509c546377", "date": "2018", "catno": "cdnow01", "format": "cd"}  va_likely: True
+plugins / library  : ['musicbrainz'] | /tmp/p6c/libG.db | /tmp/p6c/stateG.pickle
+write/copy/move    : False False False
+cur artist / album : Various / Now That's What I Call Music! 1   recommendation: 3   candidates: 5
+
+   rk  distance  ctry yr   orig trks media           mediums catalognum      label                    MBID
+   0   0.030658  GB   2018 1983 30   CD              2       0190758608020   Universal Music on Deman 3b7a8210-85f7-4413-98db-479bc7c0f0aa
+   1   0.551859  FI   2003 2003 30   Copy Control CD 2       7243 581391 2 9 EMI Finland              ae44a776-2879-4e04-9890-34b348960afc
+   2   0.570874  DK   2002 2002 20   CD              1       NOW 8133072     NOW Music                c185ad0b-f965-4c3a-b135-3b790bce2f87
+   3   0.605968  NZ   1992 1992 20   CD              1       9548316462      Warner Music New Zealand 12c32996-b791-4d6b-bc40-e481fb310349
+   4   0.616913  JP   1993 1993 16   CD              1       VJCP-25081      Blue Note                a73ab190-a26c-4617-81e5-a7edef0e66e7
+
+   penalties rk0: {"year": 0.012149, "country": 0.007463, "catalognum": 0.006889, "tracks": 0.002211, "album": 0.001947}
+   penalties rk1: {"tracks": 0.52263, "media": 0.014925, "country": 0.007463, "catalognum": 0.006841}
+   penalties rk2: {"tracks": 0.421817, "unmatched_tracks": 0.113208, "mediums": 0.018868, "country": 0.009434, "catalognum": 0.007547}
+   penalties rk3: {"tracks": 0.455025, "unmatched_tracks": 0.113208, "mediums": 0.018868, "catalognum": 0.009434, "country": 0.009434}
+   penalties rk4: {"tracks": 0.399848, "unmatched_tracks": 0.177215, "mediums": 0.021097, "country": 0.010549, "catalognum": 0.008204}
+
+---------------- overlay H  (S4 Vol 001 — widened pool, original_year OFF) ----------------
+source folder      : Vol 001 | audio files: 30
+countries in force : ['GB', 'US']   original_year: False   search_limit: 25
+extra_tags         : ['year', 'catalognum', 'country', 'media', 'label']
+extra_tag -> MB key: {"year": "date", "catalognum": "catno", "country": "country", "media": "format", "label": "label"}
+FILTERS SENT TO MB : {"release": "now that's what i call music! 1", "arid": "89ad4ac3-39f7-470e-963a-56509c546377", "date": "2018", "catno": "cdnow01", "format": "cd"}  va_likely: True
+plugins / library  : ['musicbrainz'] | /tmp/p6c/libH.db | /tmp/p6c/stateH.pickle
+write/copy/move    : False False False
+cur artist / album : Various / Now That's What I Call Music! 1   recommendation: 3   candidates: 25
+
+   rk  distance  ctry yr   orig trks media           mediums catalognum      label                    MBID
+   0   0.009879  GB   2009 1983 30   CD              2       NOW 1           Virgin EMI               07971e8a-9b1a-31a0-a111-f69955974138
+   1   0.011046  GB   2018 1983 30   CD              2       0190758608020   Universal Music on Deman 3b7a8210-85f7-4413-98db-479bc7c0f0aa
+   2   0.017242  GB   2018 1983 30   Digital Media   2       -               -                        7e917011-ab60-41c3-a65f-1fe2638e29ae
+   3   0.561593  FI   2003 2003 30   Copy Control CD 2       7243 581391 2 9 EMI Finland              ae44a776-2879-4e04-9890-34b348960afc
+   4   0.572027  NZ   2018 2018 36   CD              2       5385897         Sony Music               ed27c87c-357d-4411-9bd5-48c696c8b4fe
+   5   0.572054  IL   1999 1999 40   CD              2       20447-2         Helicon Records          0cd128af-de61-43d4-af44-de6880925135
+   6   0.574847  US   2018 2018 22   CD              1       19075808642     Sony Music               3528e529-505a-46ac-8cc1-25fd40c3e85f
+   7   0.581237  GB   2018 2018 44   CD              2       CDNOW100        Sony Music               5bedda69-20c1-411e-bb6c-a19d01724e51
+   8   0.583452  DK   2002 2002 20   CD              1       NOW 8133072     NOW Music                c185ad0b-f965-4c3a-b135-3b790bce2f87
+   9   0.587613  GB   2018 2018 45   CD              2       CDNOW99         Universal Music on Deman 51c1890e-0c0d-4cbf-853d-962f9acc531b
+   10  0.58972   US   2018 2018 22   Digital Media   1       -               Legacy                   1e50b331-a262-49cf-ae95-786b3c5ca79b
+   11  0.593789  GB   2018 2018 46   CD              2       CDNOW101        NOW                      ec51a6df-53f5-4eda-b667-727449483f77
+   12  0.595608  US   2018 2018 21   CD              1       B0029162-02     Universal Music Group    fdab9864-4d7e-4686-a4a6-2db759da6405
+   13  0.596031  US   2018 2018 21   CD              1       19075863502     Sony Music               8fe7057e-e859-47ae-b5fa-dfdecff9f886
+   14  0.600906  NZ   2018 2018 18   CD              1       5383174         Universal Music New Zeal 1e313cd6-8eb0-49a0-aaf5-9d209b07afb0
+   15  0.601376  -    1998 1998 18   CD              1       7243 8 46795 2  PolyGram                 0f4b21b8-6296-4820-b921-2977c86983f9
+   16  0.604407  US   2018 2018 21   CD              1       B0028304-02     Sony Music               74f47294-352f-45a9-9889-c3be706df429
+   17  0.60903   NZ   2018 2018 18   CD              1       5384645         Sony Music               a29f73ff-9b93-40ae-83a7-be1f0548e46a
+   18  0.612153  US   2018 2018 21   Digital Media   1       -               Legacy                   54ff0c7b-283e-48b3-ba86-681215767fb5
+   19  0.619679  US   2018 2018 21   Digital Media   1       -               Sony Music               5a49ab58-1740-487c-a145-f220c9c8d0b0
+   20  0.620397  NZ   1992 1992 20   CD              1       9548316462      Warner Music New Zealand 12c32996-b791-4d6b-bc40-e481fb310349
+   21  0.625553  GB   2018 2018 44   Digital Media   1       -               NOW                      2d345c61-6814-4df4-94c4-8d4455971c62
+   22  0.632895  JP   1993 1993 16   CD              1       VJCP-25081      Blue Note                a73ab190-a26c-4617-81e5-a7edef0e66e7
+   23  0.640392  NZ   1997 1997 18   CD              1       8217092         EMI                      68012214-a808-48e5-9428-72aeba3b4806
+   24  0.647521  GB   2018 2018 45   Digital Media   1       -               NOW                      93d17bb9-64b8-4965-9666-03e6a8efdcda
+
+   penalties rk0: {"catalognum": 0.003198, "year": 0.003124, "album": 0.001947, "tracks": 0.00161}
+   penalties rk1: {"catalognum": 0.006889, "tracks": 0.002211, "album": 0.001947}
+   penalties rk2: {"media": 0.015038, "album": 0.001961, "tracks": 0.000243}
+   penalties rk3: {"tracks": 0.52263, "media": 0.014925, "year": 0.009734, "country": 0.007463, "catalognum": 0.006841}
+   penalties rk4: {"tracks": 0.480176, "missing_tracks": 0.074586, "catalognum": 0.006906, "country": 0.006906, "album": 0.003453}
+   penalties rk5: {"tracks": 0.4295, "missing_tracks": 0.118421, "year": 0.009259, "catalognum": 0.006579, "country": 0.006579, "album": 0.001716}
+
+---------------- overlay I  (S4 Vol 002 — second S4 row, AS COMMITTED) ----------------
+source folder      : Vol 002 | audio files: 30
+countries in force : ['GB', 'US']   original_year: True   search_limit: 5
+extra_tags         : ['year', 'catalognum', 'country', 'media', 'label']
+extra_tag -> MB key: {"year": "date", "catalognum": "catno", "country": "country", "media": "format", "label": "label"}
+FILTERS SENT TO MB : {"release": "now that's what i call music! 2", "arid": "89ad4ac3-39f7-470e-963a-56509c546377", "date": "2019", "catno": "cdnow02,190759361825", "format": "cd"}  va_likely: True
+plugins / library  : ['musicbrainz'] | /tmp/p6c/libI.db | /tmp/p6c/stateI.pickle
+write/copy/move    : False False False
+cur artist / album : Various Artists / Now That's What I Call Music! 2   recommendation: 0   candidates: 5
+
+   rk  distance  ctry yr   orig trks media           mediums catalognum      label                    MBID
+   0   0.50006   FI   2003 2003 30   CD              2       5138742000      Sony Music               53337dd8-359e-485e-9869-0f920ec8e059
+   1   0.571945  DK   2002 2002 20   CD              1       NOW 5434642     NOW Music                408ba260-c16b-4029-9c2c-ee51ad8cb8fa
+   2   0.59267   US   1999 1999 18   CD              1       7243 8 47910 2  The EMI Group            6c310189-0477-448e-a861-80771e336a0d
+   3   0.598028  JP   1994 1994 17   CD              1       TOCP-8450       EMI                      18d0871c-8e69-4770-bedf-af6660a79e8d
+   4   0.606133  NZ   1998 1998 18   CD              1       4955412         EMI                      82835005-a289-47e7-bd88-07a65d798e94
+
+   penalties rk0: {"tracks": 0.48592, "country": 0.007463, "catalognum": 0.006677}
+   penalties rk1: {"tracks": 0.423981, "unmatched_tracks": 0.113208, "mediums": 0.018868, "country": 0.009434, "catalognum": 0.006455}
+   penalties rk2: {"tracks": 0.417004, "unmatched_tracks": 0.143426, "mediums": 0.01992, "catalognum": 0.007339, "country": 0.00498}
+   penalties rk3: {"tracks": 0.398286, "unmatched_tracks": 0.159836, "mediums": 0.020492, "country": 0.010246, "catalognum": 0.009167}
+   penalties rk4: {"tracks": 0.424963, "unmatched_tracks": 0.143426, "mediums": 0.01992, "country": 0.00996, "catalognum": 0.007863}
+
+---------------- overlay J  (S4 Vol 002 — second S4 row, control) ----------------
+source folder      : Vol 002 | audio files: 30
+countries in force : ['US', 'GB']   original_year: True   search_limit: 5
+extra_tags         : ['year', 'catalognum', 'country', 'media', 'label']
+extra_tag -> MB key: {"year": "date", "catalognum": "catno", "country": "country", "media": "format", "label": "label"}
+FILTERS SENT TO MB : {"release": "now that's what i call music! 2", "arid": "89ad4ac3-39f7-470e-963a-56509c546377", "date": "2019", "catno": "cdnow02,190759361825", "format": "cd"}  va_likely: True
+plugins / library  : ['musicbrainz'] | /tmp/p6c/libJ.db | /tmp/p6c/stateJ.pickle
+write/copy/move    : False False False
+cur artist / album : Various Artists / Now That's What I Call Music! 2   recommendation: 0   candidates: 5
+
+   rk  distance  ctry yr   orig trks media           mediums catalognum      label                    MBID
+   0   0.50006   FI   2003 2003 30   CD              2       5138742000      Sony Music               53337dd8-359e-485e-9869-0f920ec8e059
+   1   0.571945  DK   2002 2002 20   CD              1       NOW 5434642     NOW Music                408ba260-c16b-4029-9c2c-ee51ad8cb8fa
+   2   0.58769   US   1999 1999 18   CD              1       7243 8 47910 2  The EMI Group            6c310189-0477-448e-a861-80771e336a0d
+   3   0.598028  JP   1994 1994 17   CD              1       TOCP-8450       EMI                      18d0871c-8e69-4770-bedf-af6660a79e8d
+   4   0.606133  NZ   1998 1998 18   CD              1       4955412         EMI                      82835005-a289-47e7-bd88-07a65d798e94
+
+   penalties rk0: {"tracks": 0.48592, "country": 0.007463, "catalognum": 0.006677}
+   penalties rk1: {"tracks": 0.423981, "unmatched_tracks": 0.113208, "mediums": 0.018868, "country": 0.009434, "catalognum": 0.006455}
+   penalties rk2: {"tracks": 0.417004, "unmatched_tracks": 0.143426, "mediums": 0.01992, "catalognum": 0.007339}
+   penalties rk3: {"tracks": 0.398286, "unmatched_tracks": 0.159836, "mediums": 0.020492, "country": 0.010246, "catalognum": 0.009167}
+   penalties rk4: {"tracks": 0.424963, "unmatched_tracks": 0.143426, "mediums": 0.01992, "country": 0.00996, "catalognum": 0.007863}
+
+---------------- overlay K  (S1 Benson Boone — XW first) ----------------
+source folder      : Benson Boone-American Heart-24BIT-44KHZ-WEB-FLAC-2025-OBZEN-xpost | audio files: 10
+countries in force : ['XW', 'US']   original_year: True   search_limit: 5
+extra_tags         : ['year', 'catalognum', 'country', 'media', 'label']
+extra_tag -> MB key: {"year": "date", "catalognum": "catno", "country": "country", "media": "format", "label": "label"}
+FILTERS SENT TO MB : {"release": "american heart", "artist": "benson boone", "date": "2025"}  va_likely: False
+plugins / library  : ['musicbrainz'] | /tmp/p6c/libK.db | /tmp/p6c/stateK.pickle
+write/copy/move    : False False False
+cur artist / album : Benson Boone / American Heart   recommendation: 3   candidates: 5
+
+   rk  distance  ctry yr   orig trks media           mediums catalognum      label                    MBID
+   0   0.0       XW   2025 2025 10   Digital Media   1       -               Night Street Records     b3a1e018-845b-44bd-a9a3-4f46c2e39d49
+   1   0.0       XW   2025 2025 10   Digital Media   1       -               Night Street Records     cfb585a2-856d-4875-8ef4-1d4c017bab17
+   2   0.009091  US   2025 2025 10   12" Vinyl       1       093624834953    Night Street Records     e4fdb1dc-f4a5-4d73-8e53-3f4d12c8df60
+   3   0.009091  US   2025 2025 10   CD              1       -               Night Street Records     c0df8104-7b49-4fa3-bcec-cb3d310aa9a5
+   4   0.009091  US   2025 2025 10   CD              1       093624834588    Night Street Records     c33163f3-6217-4dc8-8e88-65f623b62c9b
+
+   penalties rk0: {}
+   penalties rk1: {}
+   penalties rk2: {"country": 0.009091}
+   penalties rk3: {"country": 0.009091}
+   penalties rk4: {"country": 0.009091}
+
+---------------- overlay L  (S1 Benson Boone — US first) ----------------
+source folder      : Benson Boone-American Heart-24BIT-44KHZ-WEB-FLAC-2025-OBZEN-xpost | audio files: 10
+countries in force : ['US', 'XW']   original_year: True   search_limit: 5
+extra_tags         : ['year', 'catalognum', 'country', 'media', 'label']
+extra_tag -> MB key: {"year": "date", "catalognum": "catno", "country": "country", "media": "format", "label": "label"}
+FILTERS SENT TO MB : {"release": "american heart", "artist": "benson boone", "date": "2025"}  va_likely: False
+plugins / library  : ['musicbrainz'] | /tmp/p6c/libL.db | /tmp/p6c/stateL.pickle
+write/copy/move    : False False False
+cur artist / album : Benson Boone / American Heart   recommendation: 3   candidates: 5
+
+   rk  distance  ctry yr   orig trks media           mediums catalognum      label                    MBID
+   0   0.0       US   2025 2025 10   12" Vinyl       1       093624834953    Night Street Records     e4fdb1dc-f4a5-4d73-8e53-3f4d12c8df60
+   1   0.0       US   2025 2025 10   CD              1       -               Night Street Records     c0df8104-7b49-4fa3-bcec-cb3d310aa9a5
+   2   0.0       US   2025 2025 10   CD              1       093624834588    Night Street Records     c33163f3-6217-4dc8-8e88-65f623b62c9b
+   3   0.009091  XW   2025 2025 10   Digital Media   1       -               Night Street Records     b3a1e018-845b-44bd-a9a3-4f46c2e39d49
+   4   0.009091  XW   2025 2025 10   Digital Media   1       -               Night Street Records     cfb585a2-856d-4875-8ef4-1d4c017bab17
+
+   penalties rk0: {}
+   penalties rk1: {}
+   penalties rk2: {}
+   penalties rk3: {"country": 0.009091}
+   penalties rk4: {"country": 0.009091}
+
+================================================================
+7. THE ASSERTIONS
+================================================================
+-- 1. the chosen candidate, as committed --
+   INFO: chosen MBID 3b7a8210-85f7-4413-98db-479bc7c0f0aa  country=GB  year=2018  original_year=1983  tracks=30  media=CD x2
+   PASS: chosen candidate country is 'GB' (expected GB)
+-- 2. TRACK COUNT — never accept a match without it --
+   INFO: folder audio file count: 30    chosen candidate track_count: 30
+   PASS: track count == folder file count (30)
+   INFO: mapped=30 extra_items(unmatched files)=0 extra_tracks(missing tracks)=0
+   PASS: no unmatched files and no missing tracks
+-- 3. the country term is LIVE (add_priority; Distance.items() omits ZERO penalties) --
+   PASS: chosen GB candidate carries NO country penalty -> it matched at index 0 (penalty 0.0, which items() drops)
+   PASS: all 4 non-GB candidates carry a country penalty (4 do)
+-- 4. was a US alternative AVAILABLE? --
+   INFO: countries offered at the committed search_limit 5: ['DK', 'FI', 'GB', 'JP', 'NZ']
+   INFO: NO US candidate is offered at the committed search_limit — see the widened pool below
+   INFO: widened pool (search_limit 25): 25 candidates, 7 of them US, at ranks [7, 11, 12, 14, 15, 17, 20]
+   INFO: widened-pool US track counts: [21, 22]   vs the folder's 30 files
+   PASS: a US alternative IS available and is NOT chosen (rank 0 stays GB / 07971e8a-9b1a-31a0-a111-f69955974138)
+   PASS: widened-pool rank 0 is still GB
+-- 5. original_year is EXERCISED --
+   INFO: chosen year=2018 original_year=1983  -> they DIFFER
+   PASS: a 'year' penalty term is present on the chosen candidate: 0.012149
+   INFO: original_year=yes -> rank0 07971e8a-9b1a-31a0-a111-f69955974138 (year 2009, orig 1983)
+   INFO: original_year=no  -> rank0 07971e8a-9b1a-31a0-a111-f69955974138 (year 2009, orig 1983)
+   INFO: flipping preferred.original_year does NOT change the chosen candidate
+-- 6. extra_tags reached the WIRE --
+   INFO: declared extra_tags : ['year', 'catalognum', 'country', 'media', 'label']
+   INFO: mapped to MB keys   : {"year": "date", "catalognum": "catno", "country": "country", "media": "format", "label": "label"}
+   INFO: filters actually sent: {"release": "now that's what i call music! 1", "arid": "89ad4ac3-39f7-470e-963a-56509c546377", "date": "2018", "catno": "cdnow01", "format": "cd"}
+   PASS: every declared extra_tag has an MB key mapping
+   INFO: dropped before the wire (source tag empty): ['country', 'label']
+-- 7. THE NEGATIVE CONTROLS — one key apart --
+   INFO: A  Vol 001 AS COMMITTED                        countries=['GB', 'US']   -> rank0 3b7a8210-85f7-4413-98db-479bc7c0f0aa  country=GB  dist=0.023195
+   INFO: B  Vol 001 countries reversed                  countries=['US', 'GB']   -> rank0 3b7a8210-85f7-4413-98db-479bc7c0f0aa  country=GB  dist=0.026926
+   INFO: C  Vol 001 preference removed                  countries=[]             -> rank0 3b7a8210-85f7-4413-98db-479bc7c0f0aa  country=GB  dist=0.023369
+   INFO: A vs B: chosen candidate IDENTICAL
+   INFO:    the chosen GB candidate's own distance moved 0.023195 -> 0.026926 (delta +0.003731)
+   INFO: A vs C: chosen candidate IDENTICAL
+   INFO:    removing the preference moved 5 of 5 candidate distances: [('3b7a8210-85f7-4413-98db-479bc7c0f0aa', 0.000174), ('ae44a776-2879-4e04-9890-34b348960afc', -0.00337), ('c185ad0b-f965-4c3a-b135-3b790bce2f87', -0.004087), ('12c32996-b791-4d6b-bc40-e481fb310349', -0.003752), ('a73ab190-a26c-4617-81e5-a7edef0e66e7', -0.004084)]
+   PASS: removing preferred.countries DOES change the measured distances
+-- 8. THE LITERAL: GB works, UK silently does not --
+   INFO: F countries=['GB'] -> rank0 3b7a8210-85f7-4413-98db-479bc7c0f0aa country=GB dist=0.023195 penalties={"year": 0.012149, "catalognum": 0.006889, "tracks": 0.002211, "album": 0.001947}
+   INFO: G countries=['UK'] -> the SAME MBID sits at rank 0 dist=0.030658 penalties={"year": 0.012149, "country": 0.007463, "catalognum": 0.006889, "tracks": 0.002211, "album": 0.001947}
+   PASS: under ['GB'] the GB release has NO country penalty; under ['UK'] it gains one -> 'UK' matches nothing
+   INFO:    under ['UK'] every candidate's country penalty: {"3b7a8210-85f7-4413-98db-479bc7c0f0aa": 0.007463, "ae44a776-2879-4e04-9890-34b348960afc": 0.007463, "c185ad0b-f965-4c3a-b135-3b790bce2f87": 0.009434, "12c32996-b791-4d6b-bc40-e481fb310349": 0.009434, "a73ab190-a26c-4617-81e5-a7edef0e66e7": 0.010549}
+   INFO: under ['UK'] the penalty is UNIFORM across candidates -> the preference is inert, with no warning
+-- 9. THE RANK-0 FLIP — one key, opposite outcome --
+   INFO: K countries=['XW','US'] -> rank0 b3a1e018-845b-44bd-a9a3-4f46c2e39d49 country=XW tracks=10 dist=0.0
+   INFO: L countries=['US','XW'] -> rank0 e4fdb1dc-f4a5-4d73-8e53-3f4d12c8df60 country=US tracks=10 dist=0.0
+   PASS: ONE key (match.preferred.countries) CHANGES THE CHOSEN RELEASE: XW(b3a1e018) -> US(e4fdb1dc)
+   PASS: both sides of the flip pass the track-count check (10 files, 10 and 10 tracks)
+-- 10. THE SECOND S4 ROW (required because the A/B control was identical) --
+   INFO: Vol 002 files=30
+   INFO: I  ['GB','US'] -> rank0 53337dd8-359e-485e-9869-0f920ec8e059 country=FI tracks=30 dist=0.50006
+   INFO: J  ['US','GB'] -> rank0 53337dd8-359e-485e-9869-0f920ec8e059 country=FI tracks=30 dist=0.50006
+   INFO: Vol 002 countries offered: ['DK', 'FI', 'JP', 'NZ', 'US']
+   INFO: Vol 002 A-vs-B outcome: IDENTICAL
+   INFO: Vol 002 chosen country is FI
+   PASS: Vol 002 track count 30 vs 30 files
+
+================================================================
+8. beet import -t (timid) — THE NAMED INSTRUMENT, autotag ON, run as beetle
+================================================================
+exit=0   (stdin runs out at the second prompt — that is the intended stop, nothing is applied)
+-- stdout --
+   
+   /downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001 (30 items)
+   
+     Match (97.7%):
+     Various Artists - Now That’s What I Call Music
+     ≠ album, year, catalognum, tracks
+     MusicBrainz, 2xCD, 2018, GB, Universal Music on Demand, 0190758608020, None
+     https://musicbrainz.org/release/3b7a8210-85f7-4413-98db-479bc7c0f0aa
+     * Artist: 
+     ≠ Album: Now That's What I Call Music! 1 -> Now That’s What I Call Music
+     * CD 1
+        ≠ (#1-1) You Can't Hurry Love (2:52) -> (#1-1) You Can’t Hurry Love (2:51)
+        ≠ (#1-4) Only For Love (3:54) -> (#1-4) Only for Love (3:55)
+        ≠ (#1-8) Total Eclipse Of   (4:28) -> (#1-8) Total Eclipse of the (4:28)
+                 The Heart                           Heart                      
+        ≠ (#1-16) Wherever I Lay My (3:59) -> (#1-16) Wherever I Lay My   (4:12)
+                  Hat (That's My Home)                Hat (That’s My Home)      
+     * CD 2
+        ≠ (#2-2) Big Apple (4:11) -> (#2-2) Big Apple (Metro mix) (4:10)
+        ≠ (#2-3) Let's Stay Together (3:37) -> (#2-3) Let’s Stay Together (3:39)
+        ≠ (#2-6) Please Don't Make  (3:25) -> (#2-6) Please Don’t Make Me (3:25)
+                 Me Cry                              Cry                        
+        ≠ (#2-8) They Don't Know (3:00) -> (#2-8) They Don’t Know (3:00)
+        ≠ (#2-10) That's All (4:24) -> (#2-10) That’s All (4:24)
+        ≠ (#2-13) The Sun And The   (3:31) -> (#2-13) The Sun and the     (3:28)
+                  Rain                                Rain                      
+   ➜ [A]pply, More candidates, Skip, Use as-is, as Tracks, Group albums,
+   Enter search, enter Id, aBort? 
+   Finding tags for album "Various - Now That's What I Call Music! 1".
+     Candidates:
+     1. 97.7% Various Artists - Now That’s What I Call Music
+                ≠ album, year, catalognum, ...
+                MusicBrainz, 2xCD, 2018, GB, Universal Music on Demand, 0190758608020, None
+     2. 44.8% Various Artists - NOW That’s What I Call Music! 1
+                ≠ media, country, catalognum, ...
+                MusicBrainz, 2xCopy Control CD, 2003, FI, EMI Finland, 7243 581391 2 9, Finland
+     3. 42.9% Various Artists - Now That’s What I Call Music! 1
+                ≠ mediums, country, catalognum, ...
+                MusicBrainz, CD, 2002, DK, NOW Music, NOW 8133072, None
+     4. 39.4% Various Artists - Now That’s What I Call Music 1
+                ≠ mediums, country, catalognum, ...
+                MusicBrainz, CD, 1992, NZ, Warner Music New Zealand, 9548316462, None
+     5. 38.3% Various Artists - Now That’s What I Call Music! 1
+                ≠ mediums, country, catalognum, ...
+                MusicBrainz, CD, 1993, JP, Blue Note, VJCP-25081, None
+   ➜ # selection (default 1), Skip, Use as-is, as Tracks, Group albums,
+   Enter search, enter Id, aBort? -- stderr --
+-- the throwaway library after the timid run: item count MUST be 0 --
+   beet ls -> 0 item(s)
+
+================================================================
+9. SOURCE MANIFESTS, AFTER
+================================================================
+   PASS: S4/Vol001 manifest IDENTICAL  (a096450e529c41ff7655e84016533f2d7d349c54e264febda0827cc70c716f7e)
+   PASS: S4/Vol002 manifest IDENTICAL  (e51db05bac8ea5f2a80e29f43fac41c4e70b73655c66bb690b3f522833748137)
+   PASS: S1/Boone  manifest IDENTICAL  (270d1815b84f73fe4ac6e3f75f9a75e2eb704dfb7d0c8bac805472daebf4da16)
+
+================================================================
+10. D-29 LAYER 3, AFTER
+================================================================
+   library.db   fbbdde0c416e72b9884e56c562fd88eaa4da447926e1cb6cc17c3e04aee7da1a   mtime 2026-09-11 23:42:52.275462096 +0000
+   state.pickle f6a9a1ad7aa553e42e53a8056fa80724785111180a5e2122be4f8732d1e4bc7c   mtime 2025-11-18 13:50:21.434412138 +0000
+   PASS: both real beets state files byte-identical
+
+================================================================
+11. SCRATCH TEARDOWN
+================================================================
+   before rm| total 120
+   before rm| drwxr-xr-x 2 beetle beetle  4096 Sep 21 09:20 .
+   before rm| drwxrwxrwt 1 root   root    4096 Sep 21 09:18 ..
+   before rm| -rw-r--r-- 1 beetle beetle 53248 Sep 21 09:20 libA.db
+   before rm| -rw-r--r-- 1 beetle beetle   431 Sep 21 09:18 overlayA.yaml
+   before rm| -rw-r--r-- 1 beetle beetle   429 Sep 21 09:18 overlayB.yaml
+   before rm| -rw-r--r-- 1 beetle beetle   420 Sep 21 09:18 overlayC.yaml
+   before rm| -rw-r--r-- 1 beetle beetle   440 Sep 21 09:18 overlayD.yaml
+   before rm| -rw-r--r-- 1 beetle beetle   400 Sep 21 09:18 overlayE.yaml
+   before rm| -rw-r--r-- 1 beetle beetle   389 Sep 21 09:18 overlayF.yaml
+   before rm| -rw-r--r-- 1 beetle beetle   407 Sep 21 09:18 overlayG.yaml
+   before rm| -rw-r--r-- 1 beetle beetle   430 Sep 21 09:18 overlayH.yaml
+   before rm| -rw-r--r-- 1 beetle beetle   415 Sep 21 09:18 overlayI.yaml
+   before rm| -rw-r--r-- 1 beetle beetle   400 Sep 21 09:18 overlayJ.yaml
+   before rm| -rw-r--r-- 1 beetle beetle   434 Sep 21 09:18 overlayK.yaml
+   before rm| -rw-r--r-- 1 beetle beetle   402 Sep 21 09:18 overlayL.yaml
+   before rm| -rw-r--r-- 1 beetle beetle  5493 Sep 21 09:09 probe.py
+   PASS: /tmp/p6c is GONE
+   PASS: /tmp/p6smoke is GONE
+
+================================================================
+VERDICT
+================================================================
+GREEN
+
+================================================================================
+APPENDIX A — the raw ID3 frame set of the first `Vol 001` file
+================================================================================
+Read with mutagen inside the container as `beetle`, opened for read, `save()`
+never called. Reproduced because three separate findings above turn on frames
+beets does not map:
+
+  $ docker exec -u beetle beets-flask /venv/bin/python -c '<mutagen frame dump>'
+  file: 01. New Edition - Candy Girl.mp3
+     APIC: = APIC(encoding=<Encoding.LATIN1: 0>, mime='image/jpeg', type=<PictureType.COVER_FRONT: 3>, desc='', data=b'\xff...
+     COMM::eng = YearmixFreak 2023
+     COMM:ID3v1 Comment:eng = YearmixFreak 2023
+     TALB = Now That's What I Call Music! 1
+     TCOM = Starr/Jonzun
+     TCON = Pop Rock/Indie Rock/Hip Hop/Electro/Synth-pop/Arena Rock/Classic Rock
+     TCOP = (C) - Now That's What I Call Music Llp
+     TDRC = 2018
+     TENC = djdezzie
+     TEXT = Starr/Jonzun
+     TIT1 = Electronic/Hip Hop/Rock/Reggae/Funk / Soul/Blues/Pop
+     TIT2 = Candy Girl
+     TMED = CD
+     TPE1 = New Edition
+     TPE2 = Various
+     TPOS = 2/2
+     TRCK = 01/14
+     TSRC = CDNOW01
+     TXXX:CATALOGNUMBER = CDNOW01
+     TXXX:COUNTRY = UK
+     TXXX:LOCATION = https://www.discogs.com/Various-Now-Thats-What-I-Call-Music/release/12289409
+     TXXX:ORGANIZATION = Sony Music,Universal Music On Demand
+
+Three things to take from it:
+
+  1. `TXXX:COUNTRY = UK` — the source literal is `UK`, MusicBrainz stores `GB`.
+     FINDING 5.
+  2. `TXXX:LOCATION = …/release/12289409` — the D-28 Discogs shortcut, present
+     here and absent from all 60 `dj-mixes` folders.
+  3. `TXXX:COUNTRY` and `TXXX:ORGANIZATION` are not mediafile fields, so beets
+     reads `country` and `label` as the empty string and drops both from the
+     MusicBrainz query. FINDING 8.
+
+Also visible and not chased here: `TRCK = 01/14` with `TPOS = 2/2` — the
+per-disc numbering the `disctotal:2..` path rule depends on (plan 06-11's
+oracle), and `TSRC` carrying a catalogue number rather than an ISRC.
+
+================================================================================
+APPENDIX B — the `dj-mixes` Discogs scan, verbatim
+================================================================================
+  $ docker exec -u beetle beets-flask /venv/bin/python -c '<mutagen scan>'
+    dj-mixes folders scanned: 60   carrying a discogs.com URL in tags: 0
+
+  Predicate: the first audio file of each of the 60 `dj-mixes` folders, every
+  frame key AND value tested against a case-insensitive `discogs\.com`.
+  The predicate was confirmed capable of matching before the zero was believed:
+  the same expression fires on `Vol 001`'s `TXXX:LOCATION` value in Appendix A.
+
+================================================================================
+CREDENTIAL SCREEN (T-06-65) — run over this artifact before committing
+================================================================================
+No credential of any kind is present. This file carries paths, MusicBrainz IDs,
+catalogue numbers, country codes, config keys and one public Discogs release
+URL. No Discogs token, no API key, no e-mail address. The Discogs credential
+was dismissed in Phase 4 D-24 and is explicitly NOT loaded by anything here
+(D-28); the only outbound host contacted by this task was musicbrainz.org.
+
+================================================================================
+END — plan 06-12 task 1
+================================================================================
