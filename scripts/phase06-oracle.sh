@@ -258,7 +258,13 @@ while [ $# -gt 0 ]; do
     --run)        MODE="run"; shift ;;
     --baseline)   MODE="baseline"; shift ;;
     --self-test)  MODE="self-test"; shift ;;
-    -h|--help)    grep '^#' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    # The HEADER BLOCK is the --help output, and only the header block: a bare `grep '^#'` over
+    # the whole file would also print every section comment and every line of the embedded Python,
+    # which is a different document. Stop at the first line that is not a comment.
+    -h|--help)
+      LC_ALL=C awk 'NR == 1 { next } /^#/ { sub(/^# ?/, ""); print; next } { exit }' "${BASH_SOURCE[0]}"
+      exit 0
+      ;;
     *)            say "unknown option: $1" >&2; usage ;;
   esac
 done
@@ -557,6 +563,366 @@ parse_sample() { # $1 = 06-SAMPLE.md  $2 = out TSV: folder<TAB>stratum<TAB>files
 }
 
 # ==============================================================================================
+# THE CLASS ASSERTIONS  (D-27)
+# ==============================================================================================
+# The diff catches WRONG PATHS. These catch NEW FAILURE CLASSES nobody wrote an expected line
+# for - which is the whole reason D-27 asks for both halves and not just the cheaper one. Each
+# assertion is its own red with its own message, and each prints WHAT IT FOUND rather than only
+# that it failed.
+#
+# Every one of them sets ASSERT_WHY (one line) and writes its evidence rows to ASSERT_EVIDENCE,
+# then returns 0 clean / 1 RED / 2 COULD NOT LOOK. None of them prints. That is what lets
+# `--self-test` drive the red branch of each one and compare a return code, instead of grepping
+# a human-readable report - and it keeps the three-outcome vocabulary the same as layer 2's.
+ASSERT_WHY=""
+ASSERT_EVIDENCE=""
+
+# --- CONF-03: the top level of every destination is the item's own album artist ----------------
+# BYTE-EXACT, case included, and deliberately not case-folded: a capitalisation-only mismatch
+# renders a DUPLICATE ARTIST PAGE in Jellyfin, which is the defect CONF-03 exists to prevent.
+# Three shapes, all read off the committed `paths:` stanza rather than assumed:
+#   rules 3+2  DJ/<albumartist>/<album>/...        -> the SECOND component is the album artist
+#   rule 1     Singles/<artist>/<title>.<ext>      -> the SECOND component is $artist, not
+#                                                     $albumartist; the singleton rule names
+#                                                     $artist and a singleton often has no
+#                                                     album artist at all
+#   rules 4,5,6 <albumartist>/<album>/...          -> the FIRST component
+# A mismatch caused by the `replace:` block sanitising a character out of the album artist is a
+# FINDING to read, not a bug in this check: it means the tree cannot round-trip that artist name.
+assert_top_level() { # $1 = pairs TSV  $2 = fields TSV
+  local pairs="$1" fields="$2" ev="$OUT/assert.toplevel.txt" nbad=0 nblind=0
+  ASSERT_WHY=""; ASSERT_EVIDENCE="$ev"
+  if [ ! -r "$pairs" ] || [ ! -r "$fields" ]; then
+    ASSERT_WHY="the pairs or the fields file is missing or unreadable"
+    return 2
+  fi
+  LC_ALL=C awk -F'\t' -v root="$LIB_ROOT/" '
+    NR == FNR { aa[$1] = $2; ar[$1] = $5; seen[$1] = 1; next }
+    {
+      src = $1; dst = $2
+      if (index(dst, root) != 1) { printf "OUTSIDE-ROOT\t%s\n", dst; next }
+      rel = substr(dst, length(root) + 1)
+      n = split(rel, c, "/")
+      if (!seen[src]) { printf "NO-LIBRARY-ROW\t%s\n", src; next }
+      if (c[1] == "DJ")           { want = aa[src]; got = c[2]; shape = "DJ/<albumartist>/" }
+      else if (c[1] == "Singles") { want = ar[src]; got = c[2]; shape = "Singles/<artist>/" }
+      else                        { want = aa[src]; got = c[1]; shape = "<albumartist>/" }
+      if (got != want)
+        printf "MISMATCH\t%s\tfound <%s> expected <%s>\t%s\n", dst, got, want, shape
+    }' "$fields" "$pairs" > "$ev"
+  nbad="$(LC_ALL=C grep -c '^MISMATCH' "$ev" || true)"
+  nblind="$(LC_ALL=C grep -c -e '^NO-LIBRARY-ROW' -e '^OUTSIDE-ROOT' "$ev" || true)"
+  if [ "$nblind" -ne 0 ]; then
+    ASSERT_WHY="$nblind destination(s) have no library field row, or sit outside $LIB_ROOT/ - the
+    comparison could not be made for them"
+    return 2
+  fi
+  if [ "$nbad" -ne 0 ]; then
+    ASSERT_WHY="$nbad destination(s) do not carry their own album artist at the top level"
+    return 1
+  fi
+  ASSERT_WHY="every destination's top level is its item's own album artist, byte-exact"
+  return 0
+}
+
+# --- D-15: no `Compilations/`, and the compilation stratum must actually have been exercised ---
+# The `comp:` key is an OVERRIDE of an inherited rule, not a deletion - there is no way to delete
+# the inherited `Compilations/...` rule - so if that key is ever removed, `Compilations/` comes
+# straight back silently. Asserting its absence over a sample that contains no compilation at all
+# would be vacuous, which is why the `Various Artists` positive control is part of this check and
+# not a separate nicety.
+assert_no_compilations() { # $1 = destination list
+  local dest="$1" ev="$OUT/assert.comp.txt" nc=0 nva=0
+  ASSERT_WHY=""; ASSERT_EVIDENCE="$ev"
+  [ -r "$dest" ] || { ASSERT_WHY="the destination list is missing or unreadable"; return 2; }
+  LC_ALL=C grep -F '/Compilations/' "$dest" > "$ev" || true
+  nc="$(wc -l < "$ev" | tr -d ' ')"
+  nva="$(LC_ALL=C awk -v root="$LIB_ROOT/" '
+    index($0, root) == 1 {
+      rel = substr($0, length(root) + 1); split(rel, c, "/")
+      if (c[1] == "Various Artists") n++
+    } END { print n + 0 }' "$dest")"
+  if [ "$nc" -ne 0 ]; then
+    ASSERT_WHY="$nc destination(s) contain a Compilations/ component - the comp: override is gone"
+    return 1
+  fi
+  if [ "$nva" -eq 0 ]; then
+    printf 'NO-VARIOUS-ARTISTS\tnot one destination has the literal `Various Artists` at its top level\n' > "$ev"
+    ASSERT_WHY="zero Compilations/ - but ALSO zero destinations under the literal Various Artists,
+    so the compilation stratum never reached the comp: rule and the result is VACUOUS"
+    return 1
+  fi
+  ASSERT_WHY="zero Compilations/ components, and $nva destination(s) under the literal Various Artists"
+  return 0
+}
+
+# --- D-13: the DJ count is an EQUALITY, not a floor -------------------------------------------
+# `albumtype:dj` would be a SUBSTRING match; the config uses `albumtype:=dj` (exact). The failure
+# mode that matters is the silent one: a rule that fails to match lets everything fall through to
+# `default`, which still produces a perfectly valid-looking tree. Only the equality catches that.
+assert_dj_count() { # $1 = destination list  $2 = expected DJ file count
+  local dest="$1" want="$2" ev="$OUT/assert.dj.txt" got=0
+  ASSERT_WHY=""; ASSERT_EVIDENCE="$ev"
+  [ -r "$dest" ] || { ASSERT_WHY="the destination list is missing or unreadable"; return 2; }
+  LC_ALL=C awk -v root="$LIB_ROOT/" '
+    index($0, root) == 1 {
+      rel = substr($0, length(root) + 1); split(rel, c, "/")
+      if (c[1] == "DJ") print
+    }' "$dest" > "$ev"
+  got="$(wc -l < "$ev" | tr -d ' ')"
+  if [ "$got" -ne "$want" ]; then
+    ASSERT_WHY="$got destination(s) under DJ/, but the sample's S5 strata hold $want files. This is
+    an EQUALITY: a short count means the albumtype rule did not fire and the difference fell
+    through to default, which looks entirely healthy in the tree."
+    return 1
+  fi
+  ASSERT_WHY="DJ/ destinations = $got, exactly the sampled DJ file count"
+  return 0
+}
+
+# --- D-16: every %aunique{} firing is listed, and the numeric-id fallback is a hard guard -------
+# A firing is a trailing ` [...]` on the album component. The predicted set is taken from the
+# COMMITTED fixture's own path lines rather than from prose in its header: the header documents
+# one firing and the path lines carry exactly that one, and only the path lines are mechanically
+# checkable. Both directions are reported, because predicted-but-absent and present-but-
+# unpredicted are different findings.
+#
+# THE GUARD: when NO disambiguator separates an ambiguous set, beets appends the NUMERIC DATABASE
+# ID - " [123]" - which is not reproducible across libraries [beets/library/models.py@v2.12.0
+# _tmpl_unique]. A bracketed bare integer that is not a four-digit year is therefore a landmine,
+# not a disambiguator, and it is a red wherever it appears.
+assert_aunique() { # $1 = destination list  $2 = committed expected tree
+  local dest="$1" exp="$2" ev="$OUT/assert.aunique.txt" nid=0 nmiss=0 nextra=0
+  ASSERT_WHY=""; ASSERT_EVIDENCE="$ev"
+  if [ ! -r "$dest" ] || [ ! -r "$exp" ]; then
+    ASSERT_WHY="the destination list or the committed tree is missing or unreadable"
+    return 2
+  fi
+  LC_ALL=C awk -F/ 'NF >= 2 { a = $(NF-1); if (a ~ / \[.*\]$/) print a }' "$dest" \
+    | LC_ALL=C sort -u > "$OUT/.aunique.got"
+  LC_ALL=C grep -v '^#' "$exp" \
+    | LC_ALL=C awk -F/ 'NF >= 2 { a = $(NF-1); if (a ~ / \[.*\]$/) print a }' \
+    | LC_ALL=C sort -u > "$OUT/.aunique.want"
+  : > "$ev"
+  LC_ALL=C comm -13 "$OUT/.aunique.got" "$OUT/.aunique.want" | sed 's/^/PREDICTED-BUT-ABSENT\t/' >> "$ev"
+  LC_ALL=C comm -23 "$OUT/.aunique.got" "$OUT/.aunique.want" | sed 's/^/PRESENT-BUT-UNPREDICTED\t/' >> "$ev"
+  LC_ALL=C sed 's/^/FIRED\t/' "$OUT/.aunique.got" >> "$ev"
+  LC_ALL=C awk -F'\t' '$1 == "FIRED" {
+      v = $2; sub(/^.* \[/, "", v); sub(/\]$/, "", v)
+      if (v ~ /^[0-9]+$/ && !(length(v) == 4 && v + 0 >= 1900 && v + 0 <= 2099))
+        printf "NUMERIC-DATABASE-ID\t%s\n", $2
+    }' "$ev" > "$OUT/.aunique.id"
+  cat "$OUT/.aunique.id" >> "$ev"
+  nid="$(wc -l < "$OUT/.aunique.id" | tr -d ' ')"
+  nmiss="$(LC_ALL=C grep -c '^PREDICTED-BUT-ABSENT' "$ev" || true)"
+  nextra="$(LC_ALL=C grep -c '^PRESENT-BUT-UNPREDICTED' "$ev" || true)"
+  if [ "$nid" -ne 0 ]; then
+    ASSERT_WHY="$nid firing(s) rendered a bare integer that is not a four-digit year - that is the
+    NUMERIC DATABASE ID fallback, which is not reproducible across libraries"
+    return 1
+  fi
+  if [ "$nmiss" -ne 0 ] || [ "$nextra" -ne 0 ]; then
+    ASSERT_WHY="%aunique{} firings disagree with the fixture: $nmiss predicted-but-absent,
+    $nextra present-but-unpredicted"
+    return 1
+  fi
+  ASSERT_WHY="%aunique{} fired $(wc -l < "$OUT/.aunique.got" | tr -d ' ') time(s), exactly the set the fixture predicts"
+  return 0
+}
+
+# --- D-19b: every singleton resolution is LISTED; the list is the deliverable -------------------
+# Phase 3 measured rc6 turning ONE 20-track release into twenty single-track albums when `album`
+# was empty - no error, no prompt, no UI signal. So a folder landing in Singles/ is usually an
+# album beets failed to group, not a genuine single. An unexpected singleton is a red; an expected
+# one is a listed pass, and it is still listed.
+assert_singletons() { # $1 = destination list  $2 = committed expected tree  $3 = pairs TSV
+  local dest="$1" exp="$2" pairs="$3" ev="$OUT/assert.singles.txt" nmiss=0 nextra=0
+  ASSERT_WHY=""; ASSERT_EVIDENCE="$ev"
+  if [ ! -r "$dest" ] || [ ! -r "$exp" ] || [ ! -r "$pairs" ]; then
+    ASSERT_WHY="the destination list, the committed tree or the pairs file is unreadable"
+    return 2
+  fi
+  LC_ALL=C grep -F "$LIB_ROOT/Singles/" "$dest" | LC_ALL=C sort -u > "$OUT/.singles.got" || true
+  LC_ALL=C grep -v '^#' "$exp" | LC_ALL=C grep -F "$LIB_ROOT/Singles/" | LC_ALL=C sort -u > "$OUT/.singles.want" || true
+  : > "$ev"
+  # The source FOLDER is what a reader needs in order to go and look, so it is carried alongside.
+  LC_ALL=C awk -F'\t' -v root="$LIB_ROOT/Singles/" '
+    NR == FNR { src[$2] = $1; next }
+    index($0, root) == 1 {
+      s = src[$0]; sub(/\/[^\/]*$/, "", s)
+      printf "SINGLETON\t%s\tfrom %s\n", $0, (s == "" ? "<no source row>" : s)
+    }' "$pairs" "$OUT/.singles.got" >> "$ev"
+  LC_ALL=C comm -13 "$OUT/.singles.got" "$OUT/.singles.want" | sed 's/^/EXPECTED-BUT-ABSENT\t/' >> "$ev"
+  LC_ALL=C comm -23 "$OUT/.singles.got" "$OUT/.singles.want" | sed 's/^/UNEXPECTED-SINGLETON\t/' >> "$ev"
+  nmiss="$(LC_ALL=C grep -c '^EXPECTED-BUT-ABSENT' "$ev" || true)"
+  nextra="$(LC_ALL=C grep -c '^UNEXPECTED-SINGLETON' "$ev" || true)"
+  if [ "$nmiss" -ne 0 ] || [ "$nextra" -ne 0 ]; then
+    ASSERT_WHY="singleton resolutions disagree with the fixture: $nmiss expected-but-absent,
+    $nextra UNEXPECTED - and an unexpected singleton is usually an album beets failed to group"
+    return 1
+  fi
+  ASSERT_WHY="$(wc -l < "$OUT/.singles.got" | tr -d ' ') singleton resolution(s), all of them expected and all listed"
+  return 0
+}
+
+# --- D-19a, BLOCKING: no album directory whose basename equals its parent artist directory ------
+# THIS ASSERTION IS THE ONLY GUARD THERE IS, and that is a structural fact rather than a choice:
+# beets' query language has NO FIELD-TO-FIELD COMPARISON, so there is no path-template expression
+# for "album equals albumartist" and the rule cannot be made to refuse the shape by itself. The
+# existing live defect - `Def Leppard/Def Leppard (2015)/`, which derives an EMPTY album artist in
+# Music Assistant and hard-errors one FLAC - is scheduled for repair in Phase 7. Phase 6's job is
+# to stop anything NEW landing in that shape, so this is blocking.
+# The `<parent> (` prefix shape is REPORTED and not failed: it is the shape of the live defect,
+# and seeing it in a dry run is worth knowing without being worth blocking on.
+assert_album_ne_artist() { # $1 = destination list
+  local dest="$1" ev="$OUT/assert.albumartist.txt" neq=0 nrep=0
+  ASSERT_WHY=""; ASSERT_EVIDENCE="$ev"
+  [ -r "$dest" ] || { ASSERT_WHY="the destination list is missing or unreadable"; return 2; }
+  LC_ALL=C awk -F/ 'NF >= 3 {
+      a = $(NF-1); p = $(NF-2)
+      la = tolower(a); lp = tolower(p)
+      if (la == lp) { printf "ALBUM-EQUALS-ARTIST\t%s\n", $0; next }
+      if (index(la, lp " (") == 1) printf "REPORT-SAME-PREFIX\t%s\n", $0
+    }' "$dest" | LC_ALL=C sort -u > "$ev"
+  neq="$(LC_ALL=C grep -c '^ALBUM-EQUALS-ARTIST' "$ev" || true)"
+  nrep="$(LC_ALL=C grep -c '^REPORT-SAME-PREFIX' "$ev" || true)"
+  if [ "$neq" -ne 0 ]; then
+    ASSERT_WHY="$neq destination(s) have an album directory equal to their artist directory
+    (case-folded). BLOCKING - there is no beets query that can express this, so this check is it."
+    return 1
+  fi
+  ASSERT_WHY="zero album directories equal their artist directory; $nrep reported with the
+    '<artist> (' prefix shape, which is the live Def Leppard defect's shape and is NOT failed here"
+  return 0
+}
+
+# --- The `-1 - ` shape: the previous tagger's signature failure ---------------------------------
+# wrtag v0.20.0 hard-set `Track.Position = -1`, so this repo's path format named every file
+# `-1 - Title.ext`. wrtag is retired, but the grep costs nothing and a number that renders as -1
+# is a template defect in any engine.
+assert_no_minus_one() { # $1 = destination list
+  local dest="$1" ev="$OUT/assert.minusone.txt" n=0
+  ASSERT_WHY=""; ASSERT_EVIDENCE="$ev"
+  [ -r "$dest" ] || { ASSERT_WHY="the destination list is missing or unreadable"; return 2; }
+  LC_ALL=C awk -F/ '{ b = $NF; if (index(b, "-1 - ") == 1) printf "MINUS-ONE\t%s\n", $0 }' "$dest" > "$ev"
+  n="$(wc -l < "$ev" | tr -d ' ')"
+  if [ "$n" -ne 0 ]; then
+    ASSERT_WHY="$n destination filename(s) begin with '-1 - '"
+    return 1
+  fi
+  ASSERT_WHY="zero destination filenames begin with '-1 - '"
+  return 0
+}
+
+# --- The `.N` collision suffix shape ------------------------------------------------------------
+# beets appends `.1`, `.2` ... before the extension when a destination already exists. Phase 7's
+# criterion 7 sweep exists to hunt these; catching one in a dry run is cheaper than catching it
+# in the library. The predicate is `<name>.<digits>.<ext>` on the BASENAME.
+assert_no_collision_suffix() { # $1 = destination list
+  local dest="$1" ev="$OUT/assert.collision.txt" n=0
+  ASSERT_WHY=""; ASSERT_EVIDENCE="$ev"
+  [ -r "$dest" ] || { ASSERT_WHY="the destination list is missing or unreadable"; return 2; }
+  LC_ALL=C awk -F/ '{ b = $NF; if (b ~ /\.[0-9]+\.[^.\/]+$/) printf "COLLISION-SUFFIX\t%s\n", $0 }' "$dest" > "$ev"
+  n="$(wc -l < "$ev" | tr -d ' ')"
+  if [ "$n" -ne 0 ]; then
+    ASSERT_WHY="$n destination(s) carry a .N disambiguation suffix, which means beets found the
+    destination already taken"
+    return 1
+  fi
+  ASSERT_WHY="zero destinations carry a .N collision suffix"
+  return 0
+}
+
+# --- D-18: the protected DJ fields, as an NDJSON ledger ------------------------------------------
+# The ledger itself is generated inside the container (see ledger_payload below). THIS function
+# judges it, and it judges structurally rather than by parsing values, because the generator emits
+# canonical compact JSON with a fixed key order and a value-parser in awk would be a second place
+# for a bug to hide.
+#   * exactly FIVE records per sampled file - bpm, initial_key, genres, comments, EnergyLevel -
+#     so a file that was skipped is a count failure, not an invisible absence.
+#   * A REFUSAL IS A RECORD, NEVER A SKIP: a file that cannot be read produces five `failed`
+#     records carrying the exception, in the scripts/normalise-dj-tags.py:1316-1339 shape.
+#   * every record must carry `"noop":true`. Phase 6 writes nothing, so any record proposing a
+#     different value for a protected field is a red and is printed in full.
+assert_protected_fields() { # $1 = NDJSON ledger  $2 = expected sampled file count
+  local led="$1" files="$2" ev="$OUT/assert.protected.txt" want=0 got=0 nfail=0 nchg=0
+  ASSERT_WHY=""; ASSERT_EVIDENCE="$ev"
+  [ -r "$led" ] || { ASSERT_WHY="the D-18 ledger '$led' is missing or unreadable"; return 2; }
+  want=$((files * 5))
+  got="$(wc -l < "$led" | tr -d ' ')"
+  : > "$ev"
+  LC_ALL=C grep -F '"failed":' "$led" | sed 's/^/LEDGER-FAILED\t/' >> "$ev" || true
+  LC_ALL=C grep -v -F '"noop":true' "$led" | sed 's/^/PROPOSED-CHANGE\t/' >> "$ev" || true
+  nfail="$(LC_ALL=C grep -c '^LEDGER-FAILED' "$ev" || true)"
+  nchg="$(LC_ALL=C grep -c '^PROPOSED-CHANGE' "$ev" || true)"
+  if [ "$got" -ne "$want" ]; then
+    printf 'LEDGER-COUNT\t%s records, expected %s (5 protected fields x %s sampled files)\n' \
+      "$got" "$want" "$files" >> "$ev"
+    ASSERT_WHY="the ledger holds $got records against an expected $want - a file was not covered,
+    and an absence is exactly what a skip looks like"
+    return 2
+  fi
+  if [ "$nfail" -ne 0 ]; then
+    ASSERT_WHY="$nfail ledger record(s) are refusals - a protected field could not be read at all"
+    return 2
+  fi
+  if [ "$nchg" -ne 0 ]; then
+    ASSERT_WHY="$nchg ledger record(s) propose a CHANGE to a protected DJ field. MusicBrainz
+    carries none of bpm / key / energy / operator comments, so an import is the specific thing
+    that strips exactly what makes a track playable (D-18)."
+    return 1
+  fi
+  ASSERT_WHY="$got ledger records, five per sampled file, every one a noop - no protected DJ
+    field is proposed for change"
+  return 0
+}
+
+# --- CONF-04's write side (D-23 as amended by D-34), REPORTED ------------------------------------
+# Always returns 0: this is the dry run SHOWING what an import would write, which is what D-23
+# asked for, corrected by D-34. beets CANNOT be configured to emit `;` inside ARTIST - no
+# delimiter or join key exists in config_default.yaml at either version - so the multi-artist
+# information lands in ARTISTS (TXXX / Vorbis), and `artist` carries MusicBrainz's own join
+# phrases concatenated. That is why D-34 enables PreferNonstandardArtistsTag on Jellyfin's Music
+# library: it makes the two consumers agree by construction rather than by coincidence.
+report_multi_artist() { # $1 = fields TSV
+  local fields="$1" ev="$OUT/report.multiartist.txt"
+  ASSERT_WHY=""; ASSERT_EVIDENCE="$ev"
+  if [ ! -r "$fields" ]; then
+    ASSERT_WHY="the fields TSV is missing or unreadable, so the write side could not be shown"
+    return 0
+  fi
+  # `artists` is MULTI_VALUE_DSV and renders joined with a literal backslash + U+2400 in a
+  # template, so it is translated to '; ' for display only. The FILE is not touched.
+  LC_ALL=C awk -F'\t' '
+    NF >= 6 && $6 != "" {
+      v = $6; gsub(/\\\342\220\200/, "; ", v)
+      printf "WRITE-SIDE\t%s\tartist=<%s>\tartists=<%s>\n", $1, $5, v
+    }' "$fields" > "$ev"
+  ASSERT_WHY="$(wc -l < "$ev" | tr -d ' ') item(s) carry a multi-valued artists field; beets cannot
+    emit ';' inside ARTIST, so the multi-artist information lands in ARTISTS (D-23 amended by D-34)"
+  return 0
+}
+
+# --- The reporting wrapper the real run uses (the self-test compares return codes instead) -------
+run_assert() { # $1 = label  $2.. = assertion and its arguments
+  local label="$1" rc=0
+  shift
+  "$@" || rc=$?
+  case "$rc" in
+    0) ok "$label: $ASSERT_WHY" ;;
+    1)
+      bad "$label: $ASSERT_WHY"
+      [ ! -s "$ASSERT_EVIDENCE" ] || head -n 20 "$ASSERT_EVIDENCE" | sed 's/^/         /' || true
+      ;;
+    *)
+      unknown "$label: $ASSERT_WHY"
+      [ ! -s "$ASSERT_EVIDENCE" ] || head -n 20 "$ASSERT_EVIDENCE" | sed 's/^/         /' || true
+      ;;
+  esac
+  return 0
+}
+
+# ==============================================================================================
 # THE REMOTE LAYER - it PRODUCES files; it never decides anything
 # ==============================================================================================
 RSH_OUT=""
@@ -577,6 +943,12 @@ rsh_to() { # $1 = command string  $2 = local output file
 rsh_from() { # $1 = command string  $2 = local file fed to the remote command's stdin
   RSH_RC=0
   ssh -o BatchMode=yes -o ConnectTimeout="$SSH_CONNECT_TIMEOUT" "root@$LXC_HOST" "$1" < "$2" > /dev/null || RSH_RC=$?
+  return 0
+}
+
+rsh_from_to() { # $1 = command string  $2 = local stdin file  $3 = local stdout file
+  RSH_RC=0
+  ssh -o BatchMode=yes -o ConnectTimeout="$SSH_CONNECT_TIMEOUT" "root@$LXC_HOST" "$1" < "$2" > "$3" 2> "${3}.err" || RSH_RC=$?
   return 0
 }
 
@@ -640,6 +1012,167 @@ capture_manifests() { # $1 = when (before|after)  $2 = folders TSV
   LC_ALL=C sort -o "$OUT/src.$when.meta" "$OUT/src.$when.meta"
   LC_ALL=C sort -o "$OUT/src.$when.sha" "$OUT/src.$when.sha"
   return 0
+}
+
+# --- The D-18 ledger generator, run by the container's own interpreter --------------------------
+# Written to a local file and fed to `docker exec -i ... python -` on stdin, so it is an auditable
+# artefact rather than a string buried in a quoted remote command. It runs INSIDE the container
+# because that is where beets 2.12.0, mediafile and mutagen live, and using any other copy would
+# measure a different reader from the one the pipeline uses.
+write_ledger_payload() { # $1 = local output path
+  cat > "$1" <<'LEDGER_PY'
+"""Emit the D-18 protected-field ledger as NDJSON, one record per (file, field).
+
+Record shape follows scripts/normalise-dj-tags.py:1177-1212 so the two ledgers join cleanly:
+path, field, rule, old, new, then `noop: true` when old == new, or `failed` when the file could
+not be read. A REFUSAL IS A RECORD, NEVER A SKIP - an absence is exactly what a skip looks like.
+
+Two mechanisms, deliberately different:
+
+  bpm / initial_key / genres / comments ARE beets fields, so the library's item value is
+  compared against the value read fresh off the file through mediafile. Note `genres` and not
+  the singular: `Item._field_names` has no singular entry in beets 2.x, a query using the
+  singular silently matches nothing, and MULTI_VALUE_DSV joins with a literal backslash + U+2400
+  in the database.
+
+  EnergyLevel is NOT a beets field and NOT a mediafile field. beets never reads it and never
+  writes it, so A BEETS QUERY FOR IT RETURNS EMPTY AND READS AS CLEAN - indistinguishable from
+  "gone". The only sound instrument is a RAW frame-set read, and it needs the right offset:
+    * MP3  - the ID3 tag starts at file offset 0;
+    * WAV  - it starts at the DATA OFFSET OF THE RIFF `id3 ` CHUNK. Without that offset the read
+             sees `RIFF` at offset 0 for every WAV and returns silently: a vacuous pass. This is
+             the exact defect scripts/normalise-dj-tags.py:866-883 documents;
+    * FLAC - there is no ID3 tag; the convention key is a Vorbis comment. Vorbis keys are
+             case-insensitive by spec and THIS CORPUS IS INCONSISTENT about it, so every key is
+             folded to lower case before lookup.
+  No WAV in this estate carries bpm, key or energy at all, so the WAV branch will have nothing to
+  report on those three - and HAVING NOTHING TO REPORT IS DIFFERENT FROM NOT HAVING LOOKED, which
+  is why the records are emitted either way.
+"""
+import json
+import sys
+
+from beets.library import Library
+import mediafile
+import mutagen
+import mutagen.id3
+
+BEETS_FIELDS = ["bpm", "initial_key", "genres", "comments"]
+RULE = "D-18 protected DJ field"
+
+
+def out(rec):
+    # COMPACT separators on purpose: the judging half of this oracle matches `"noop":true` and
+    # `"failed":` structurally rather than parsing values, so the spacing is load bearing.
+    sys.stdout.write(json.dumps(rec, ensure_ascii=False, separators=(",", ":")) + "\n")
+
+
+def norm(v):
+    if v is None:
+        return None
+    if isinstance(v, (list, tuple)):
+        return [str(x) for x in v]
+    return str(v)
+
+
+def wave_id3_offset(path):
+    """Data offset of the WAV's RIFF `id3 ` chunk, or None. Raises if there are two: which one a
+    reader honours is then undefined, and the frame-set read would be checking the wrong chunk."""
+    import struct
+    offsets = []
+    with open(path, "rb") as fh:
+        if fh.read(4) != b"RIFF":
+            return None
+        fh.read(8)
+        while True:
+            hdr = fh.read(8)
+            if len(hdr) < 8:
+                break
+            cid, size = struct.unpack("<4sI", hdr)
+            if cid in (b"id3 ", b"ID3 "):
+                offsets.append(fh.tell())
+            fh.seek(size + (size & 1), 1)
+    if len(offsets) > 1:
+        raise ValueError("%d ID3 chunks in one WAV; refusing to guess" % len(offsets))
+    return offsets[0] if offsets else None
+
+
+def raw_id3(path, low):
+    """The ID3 frame set and a statement of WHERE it was read from. (tag_or_None, how)."""
+    if low.endswith(".wav"):
+        offset = wave_id3_offset(path)
+        if offset is None:
+            return None, "raw ID3 frame set: this WAV carries no id3 chunk"
+        handler = mutagen.File(path)
+        return (getattr(handler, "tags", None),
+                "raw ID3 frame set inside the RIFF id3 chunk, data offset %d" % offset)
+    try:
+        return mutagen.id3.ID3(path), "raw ID3 frame set at file offset 0"
+    except mutagen.id3.ID3NoHeaderError:
+        return None, "raw ID3 frame set at file offset 0 (no ID3 tag)"
+
+
+def energy_level(path):
+    """The raw read. Returns (value_or_None, how_it_was_read)."""
+    low = path.lower()
+    if low.endswith(".flac"):
+        handler = mutagen.File(path)
+        folded = {}
+        if handler is not None and handler.tags is not None:
+            for key, value in handler.tags:
+                folded.setdefault(key.lower(), []).append(value)
+        got = folded.get("energylevel")
+        return (got[0] if got else None,
+                "raw Vorbis comment, keys folded to lower case - this corpus is inconsistent")
+    tag, how = raw_id3(path, low)
+    if tag is None:
+        return None, how
+    for frame in tag.getall("TXXX"):
+        if frame.desc == "EnergyLevel":
+            return (str(frame.text[0]) if frame.text else "", how)
+    return None, how
+
+
+def main():
+    lib = Library(sys.argv[1])
+    for item in lib.items():
+        path = item.path.decode("utf-8", "surrogateescape")
+        try:
+            mf = mediafile.MediaFile(path)
+        except Exception as exc:
+            why = "%s: %s" % (type(exc).__name__, str(exc)[:200])
+            for field in BEETS_FIELDS + ["EnergyLevel"]:
+                out({"path": path, "field": field, "rule": RULE,
+                     "old": None, "new": None, "failed": why})
+            continue
+        for field in BEETS_FIELDS:
+            try:
+                old = norm(getattr(mf, field, None))
+                new = norm(item.get(field, None))
+            except Exception as exc:
+                out({"path": path, "field": field, "rule": RULE, "old": None, "new": None,
+                     "failed": "%s: %s" % (type(exc).__name__, str(exc)[:200])})
+                continue
+            rec = {"path": path, "field": field, "rule": RULE, "old": old, "new": new}
+            if old == new:
+                rec["noop"] = True
+            out(rec)
+        try:
+            value, how = energy_level(path)
+        except Exception as exc:
+            out({"path": path, "field": "EnergyLevel", "rule": RULE + " (raw frame set)",
+                 "old": None, "new": None,
+                 "failed": "%s: %s" % (type(exc).__name__, str(exc)[:200])})
+        else:
+            # beets cannot propose a change to a field it does not model, so new == old by
+            # construction. The VALUE is what matters: it is recorded so a later phase can prove
+            # it survived, which a beets query could never do.
+            out({"path": path, "field": "EnergyLevel", "rule": RULE + " (" + how + ")",
+                 "old": value, "new": value, "noop": True})
+
+
+main()
+LEDGER_PY
 }
 
 # ==============================================================================================
@@ -810,6 +1343,179 @@ self_test_core() {
   st_case 2 "$rc" "a missing sample document is a refusal, never an empty folder list."
 }
 
+# --- The class assertions' red branches --------------------------------------------------------
+# Ten reds and then one clean list. A control that can only pass is uninformative, and every one
+# of the bugs this wave hit was a predicate that could never have matched in the first place -
+# so each of these fixtures is built to MAKE the predicate fire, and the clean case afterwards
+# proves the same predicate can also stay quiet.
+st_assert() { # $1 = expected rc  $2 = description  $3.. = assertion and its arguments
+  local want="$1" desc="$2" rc=0
+  shift 2
+  "$@" || rc=$?
+  st_case "$want" "$rc" "$desc"
+}
+
+st_write_clean() { # $1 = directory to build the clean fixture in
+  local d="$1"
+  {
+    printf '%s/Benson Boone/American Heart [Night Street Records]/01 Sorry.mp3\n' "$LIB_ROOT"
+    printf '%s/DJ/Mastermix/Issue 420/01 Club Cuts.mp3\n' "$LIB_ROOT"
+    printf '%s/DJ/Mastermix/Issue 420/02 Party On Fire.mp3\n' "$LIB_ROOT"
+    printf '%s/Singles/Cyril/Stumblin In.mp3\n' "$LIB_ROOT"
+    printf "%s/Various Artists/NOW 121/01 Manchild.mp3\n" "$LIB_ROOT"
+  } | LC_ALL=C sort > "$d/dest.txt"
+  # The fixture stands in for the committed tree in these cases, and it is written by hand so the
+  # assertions are compared against a KNOWN set rather than against the real 174-line file - a
+  # self-test that needs the production fixture to be correct is testing two things at once.
+  {
+    printf '# a synthetic stand-in for 06-EXPECTED-TREE.txt; the ^# strip must apply here too\n'
+    cat "$d/dest.txt"
+  } > "$d/expected.txt"
+  {
+    printf '/src/a.mp3\t%s/Benson Boone/American Heart [Night Street Records]/01 Sorry.mp3\n' "$LIB_ROOT"
+    printf '/src/dj/1.mp3\t%s/DJ/Mastermix/Issue 420/01 Club Cuts.mp3\n' "$LIB_ROOT"
+    printf '/src/dj/2.mp3\t%s/DJ/Mastermix/Issue 420/02 Party On Fire.mp3\n' "$LIB_ROOT"
+    printf '/src/s/1.mp3\t%s/Singles/Cyril/Stumblin In.mp3\n' "$LIB_ROOT"
+    printf '/src/va/1.mp3\t%s/Various Artists/NOW 121/01 Manchild.mp3\n' "$LIB_ROOT"
+  } > "$d/pairs.tsv"
+  {
+    printf '/src/a.mp3\tBenson Boone\tAmerican Heart\t\tBenson Boone\t\n'
+    printf '/src/dj/1.mp3\tMastermix\tIssue 420\tdj\tMastermix\t\n'
+    printf '/src/dj/2.mp3\tMastermix\tIssue 420\tdj\tMastermix\t\n'
+    printf '/src/s/1.mp3\t\tStumblin In\t\tCyril\t\n'
+    printf '/src/va/1.mp3\tVarious Artists\tNOW 121\t\tSabrina Carpenter\tSabrina Carpenter; Dua Lipa\n'
+  } > "$d/fields.tsv"
+}
+
+self_test_classes() {
+  local d="$OUT/st-classes" rc=0
+  rm -rf "$d"; mkdir -p "$d"
+  st_write_clean "$d"
+
+  say ""
+  say "== --self-test: the class assertions, red branch first (D-27) =="
+  rule
+
+  # (1) CONF-03 - a capitalisation-only top level. NOT case-folded on purpose: this is what
+  #     renders a duplicate artist page in Jellyfin.
+  sed 's|/Benson Boone/|/benson boone/|' "$d/pairs.tsv" > "$d/pairs.case.tsv"
+  st_assert 1 "CONF-03: a capitalisation-only top-level mismatch is a RED, never a tolerance." \
+    assert_top_level "$d/pairs.case.tsv" "$d/fields.tsv"
+  # ... and the blind case: a destination with no library row behind it.
+  printf '/src/orphan.mp3\t%s/Nobody/Album/01 x.mp3\n' "$LIB_ROOT" >> "$d/pairs.case.tsv"
+  st_assert 2 "CONF-03: a destination with no library field row is COULD NOT LOOK, not a pass." \
+    assert_top_level "$d/pairs.case.tsv" "$d/fields.tsv"
+
+  # (2) D-15 - a Compilations/ path, which is what returns the moment the comp: override is lost.
+  sed 's|/Various Artists/|/Compilations/Various Artists/|' "$d/dest.txt" > "$d/dest.comp.txt"
+  st_assert 1 "D-15: a Compilations/ component is a RED." \
+    assert_no_compilations "$d/dest.comp.txt"
+  # ... and the vacuous case: no Compilations/, but no Various Artists either, so nothing was tested.
+  LC_ALL=C grep -v '/Various Artists/' "$d/dest.txt" > "$d/dest.nova.txt"
+  st_assert 1 "D-15: zero Compilations/ with zero Various Artists is VACUOUS, so it is a RED." \
+    assert_no_compilations "$d/dest.nova.txt"
+
+  # (3) D-13 - the DJ count one short. The clean fixture has two DJ rows.
+  st_assert 1 "D-13: a DJ count of 2 against an expected 3 is a RED - it is an equality." \
+    assert_dj_count "$d/dest.txt" 3
+  st_assert 0 "D-13: the same list against its true count of 2 is clean." \
+    assert_dj_count "$d/dest.txt" 2
+
+  # (4) D-16 - an unpredicted %aunique{} firing.
+  sed 's|American Heart \[Night Street Records\]|American Heart|' "$d/expected.txt" > "$d/expected.noau.txt"
+  st_assert 1 "D-16: a firing present in the run but absent from the fixture is a RED." \
+    assert_aunique "$d/dest.txt" "$d/expected.noau.txt"
+  # (5) D-16's hard guard - a bracketed bare integer is the NUMERIC DATABASE ID fallback.
+  sed 's|American Heart \[Night Street Records\]|American Heart [1234567]|' "$d/dest.txt" > "$d/dest.id.txt"
+  sed 's|American Heart \[Night Street Records\]|American Heart [1234567]|' "$d/expected.txt" > "$d/expected.id.txt"
+  st_assert 1 "D-16 guard: a bracketed non-year integer is the numeric database id - a RED even
+    when it matches the fixture, because such a fixture is a landmine." \
+    assert_aunique "$d/dest.id.txt" "$d/expected.id.txt"
+  # ... and a four-digit year must NOT trip the guard, or the guard is unusable.
+  sed 's|American Heart \[Night Street Records\]|American Heart [2025]|' "$d/dest.txt" > "$d/dest.yr.txt"
+  sed 's|American Heart \[Night Street Records\]|American Heart [2025]|' "$d/expected.txt" > "$d/expected.yr.txt"
+  st_assert 0 "D-16 guard: a bracketed four-digit year is a legitimate disambiguator, not an id." \
+    assert_aunique "$d/dest.yr.txt" "$d/expected.yr.txt"
+
+  # (6) D-19b - an unexpected Singles/ resolution: usually an album beets failed to group.
+  printf '%s/Singles/Cyril/Another One.mp3\n' "$LIB_ROOT" >> "$d/dest.txt"
+  LC_ALL=C sort -o "$d/dest.txt" "$d/dest.txt"
+  st_assert 1 "D-19b: a singleton the fixture does not predict is a RED." \
+    assert_singletons "$d/dest.txt" "$d/expected.txt" "$d/pairs.tsv"
+  LC_ALL=C grep -v 'Another One' "$d/dest.txt" > "$d/dest.clean.txt"
+  mv "$d/dest.clean.txt" "$d/dest.txt"
+
+  # (7) D-19a - an album directory equal to its artist directory. BLOCKING.
+  printf '%s/Def Leppard/Def Leppard/01 x.flac\n' "$LIB_ROOT" > "$d/dest.eq.txt"
+  st_assert 1 "D-19a: album dir == artist dir is BLOCKING - no beets query can express it." \
+    assert_album_ne_artist "$d/dest.eq.txt"
+  # ... and the live defect's shape is REPORTED, not failed.
+  printf '%s/Def Leppard/Def Leppard (2015)/01 x.flac\n' "$LIB_ROOT" > "$d/dest.pref.txt"
+  st_assert 0 "D-19a: the '<artist> (' prefix shape is reported and NOT failed." \
+    assert_album_ne_artist "$d/dest.pref.txt"
+
+  # (8) the -1 - shape.
+  printf '%s/A/Al/-1 - Title.mp3\n' "$LIB_ROOT" > "$d/dest.m1.txt"
+  st_assert 1 "the '-1 - ' filename shape is a RED." assert_no_minus_one "$d/dest.m1.txt"
+  st_assert 0 "a clean list has no '-1 - ' filename." assert_no_minus_one "$d/dest.txt"
+
+  # (9) the .N collision suffix.
+  printf '%s/A/Al/01 Title.1.mp3\n' "$LIB_ROOT" > "$d/dest.sfx.txt"
+  st_assert 1 "a .N collision suffix is a RED." assert_no_collision_suffix "$d/dest.sfx.txt"
+  st_assert 0 "a clean list carries no .N suffix." assert_no_collision_suffix "$d/dest.txt"
+
+  # (10) D-18 - a proposed change to a protected field, a refusal, and a short ledger.
+  {
+    printf '{"path":"/src/a.mp3","field":"bpm","rule":"D-18","old":128,"new":128,"noop":true}\n'
+    printf '{"path":"/src/a.mp3","field":"initial_key","rule":"D-18","old":null,"new":null,"noop":true}\n'
+    printf '{"path":"/src/a.mp3","field":"genres","rule":"D-18","old":["House"],"new":["Pop"]}\n'
+    printf '{"path":"/src/a.mp3","field":"comments","rule":"D-18","old":"","new":"","noop":true}\n'
+    printf '{"path":"/src/a.mp3","field":"EnergyLevel","rule":"D-18","old":"7","new":"7","noop":true}\n'
+  } > "$d/ledger.changed.ndjson"
+  st_assert 1 "D-18: a record proposing a different value for a protected field is a RED." \
+    assert_protected_fields "$d/ledger.changed.ndjson" 1
+  sed 's|"old":\["House"\],"new":\["Pop"\]|"old":["House"],"new":["House"],"noop":true|' \
+    "$d/ledger.changed.ndjson" > "$d/ledger.clean.ndjson"
+  st_assert 0 "D-18: five noop records for one file is the clean case." \
+    assert_protected_fields "$d/ledger.clean.ndjson" 1
+  LC_ALL=C grep -v '"field":"EnergyLevel"' "$d/ledger.clean.ndjson" > "$d/ledger.short.ndjson"
+  st_assert 2 "D-18: four records where five are due is COULD NOT LOOK - an absence is exactly
+    what a skip looks like." \
+    assert_protected_fields "$d/ledger.short.ndjson" 1
+  sed 's|"noop":true|"failed":"OSError: nope"|' "$d/ledger.clean.ndjson" > "$d/ledger.failed.ndjson"
+  st_assert 2 "D-18: a refusal is a RECORD and it is COULD NOT LOOK, never an 'unchanged'." \
+    assert_protected_fields "$d/ledger.failed.ndjson" 1
+
+  say ""
+  say "== --self-test: the clean list must produce ZERO reds across every assertion =="
+  rule
+  st_assert 0 "CONF-03 clean" assert_top_level "$d/pairs.tsv" "$d/fields.tsv"
+  st_assert 0 "D-15 clean" assert_no_compilations "$d/dest.txt"
+  st_assert 0 "D-13 clean" assert_dj_count "$d/dest.txt" 2
+  st_assert 0 "D-16 clean" assert_aunique "$d/dest.txt" "$d/expected.txt"
+  st_assert 0 "D-19b clean" assert_singletons "$d/dest.txt" "$d/expected.txt" "$d/pairs.tsv"
+  st_assert 0 "D-19a clean" assert_album_ne_artist "$d/dest.txt"
+  st_assert 0 "-1 -  clean" assert_no_minus_one "$d/dest.txt"
+  st_assert 0 ".N clean" assert_no_collision_suffix "$d/dest.txt"
+  st_assert 0 "D-18 clean" assert_protected_fields "$d/ledger.clean.ndjson" 1
+  rc=0; report_multi_artist "$d/fields.tsv" || rc=$?
+  st_case 0 "$rc" "CONF-04 write side is a REPORT and always returns 0."
+  rc="$(LC_ALL=C grep -c '^WRITE-SIDE' "$OUT/report.multiartist.txt" || true)"
+  st_case 1 "$rc" "the one multi-artist row in the fixture is shown, not silently dropped."
+
+  # The payload the container runs is emitted here too, so a syntax error in it is caught by
+  # --self-test rather than at minute forty of a live run.
+  write_ledger_payload "$d/ledger.py"
+  rc=0
+  if command -v python3 >/dev/null 2>&1; then
+    python3 -c "import ast,sys; ast.parse(open(sys.argv[1]).read())" "$d/ledger.py" || rc=1
+    st_case 0 "$rc" "the D-18 ledger payload parses as Python."
+  else
+    warn "SKIPPED: no python3 on this workstation, so the ledger payload could not be parsed."
+    info "Reported rather than silently counted as a pass. The payload runs in the container."
+  fi
+}
+
 # --- The CR-02 could-not-look preflight, shared by the -newer sweep and the manifests ----------
 PREFLIGHT_WHY=""
 preflight_readable() { # $1 = local directory that must exist and be searchable
@@ -834,6 +1540,7 @@ if [ "$MODE" = "self-test" ]; then
   ST_FAIL=0
   REDS=0
   self_test_core
+  self_test_classes
   say ""
   if [ "$ST_FAIL" -ne 0 ] || [ "$REDS" -ne 0 ]; then
     printf '  \342\234\227 self-test: %s case(s) FAILED\n' "$((ST_FAIL))"
@@ -1100,7 +1807,70 @@ case "$TD_RC" in
   *) unknown "the diff could not be evaluated: $TREE_DIFF_WHY" ;;
 esac
 
-# --- Step 11: cleanup ----------------------------------------------------------------------------
+# --- Step 11: the class assertions ---------------------------------------------------------------
+# These run over the SAME measurement the diff just judged, and they run whether or not the diff
+# was clean: a zero-diff tells you the paths match the fixture, and it tells you nothing at all
+# about a failure class nobody wrote an expected line for.
+say ""
+say "== the class assertions (D-27) =="
+rule
+
+# A real tab, built locally and single-quoted into the remote string. beets' -f does NOT process
+# backslash escapes, so `\t` in the format would be a literal backslash-t and every row would
+# collapse into one field - which reads as a parse failure only if something checks the field
+# count, and this does.
+TAB="$(printf '\t')"
+LS_FMT="\$path${TAB}\$albumartist${TAB}\$album${TAB}\$albumtype${TAB}\$artist${TAB}\$artists"
+rsh_to "$(dex_cmd "$BEET_BIN" -c "$SCRATCH/overlay.yaml" ls -f "'$LS_FMT'")" "$OUT/fields.tsv"
+if [ "$RSH_RC" -ne 0 ]; then
+  unknown "the throwaway library's field view could not be read (ssh exit $RSH_RC)"
+else
+  BADCOLS="$(LC_ALL=C awk -F'\t' 'NF != 6 {n++} END {print n + 0}' "$OUT/fields.tsv")"
+  if [ "$BADCOLS" -ne 0 ]; then
+    unknown "$BADCOLS row(s) of the field view do not have six tab-separated columns - a path
+    containing a tab would do this, and the join behind CONF-03 cannot be trusted."
+  else
+    ok "field view read: $(wc -l < "$OUT/fields.tsv" | tr -d ' ') items, six columns each"
+  fi
+fi
+
+write_ledger_payload "$OUT/ledger.py"
+rsh_from_to "timeout $REMOTE_TIMEOUT docker exec -i -u $CONTAINER_USER $CONTAINER $PY_BIN - $SCRATCH/lib.db" \
+  "$OUT/ledger.py" "$OUT/ledger.ndjson"
+if [ "$RSH_RC" -ne 0 ]; then
+  unknown "the D-18 ledger generator exited $RSH_RC; stderr is at $OUT/ledger.ndjson.err"
+fi
+
+# The expected DJ file count comes from 06-SAMPLE.md's own S5 rows - READ, never re-typed - and is
+# cross-checked against the committed fixture. If those two ever disagree the equality below would
+# be testing a number nobody wrote down.
+DJ_SAMPLE="$(LC_ALL=C awk -F'\t' '$2 == "S5" {s += $3} END {print s + 0}' "$OUT/sample.tsv")"
+DJ_FIXTURE="$(LC_ALL=C grep -v '^#' "$EXPECTED_TREE" | LC_ALL=C grep -c "^$LIB_ROOT/DJ/" || true)"
+if [ "$DJ_SAMPLE" -ne "$DJ_FIXTURE" ]; then
+  bad "the sample's S5 strata hold $DJ_SAMPLE files but the fixture carries $DJ_FIXTURE DJ/ lines.
+    The D-13 equality below would be measured against a number the two sources disagree on."
+fi
+
+run_assert "CONF-03 top level"       assert_top_level "$OUT/oracle.pairs.tsv" "$OUT/fields.tsv"
+run_assert "D-15 no Compilations/"   assert_no_compilations "$OUT/oracle.destinations.txt"
+run_assert "D-13 DJ count equality"  assert_dj_count "$OUT/oracle.destinations.txt" "$DJ_SAMPLE"
+run_assert "D-16 %aunique{} firings" assert_aunique "$OUT/oracle.destinations.txt" "$EXPECTED_TREE"
+run_assert "D-19b singletons"        assert_singletons "$OUT/oracle.destinations.txt" "$EXPECTED_TREE" "$OUT/oracle.pairs.tsv"
+run_assert "D-19a album != artist"   assert_album_ne_artist "$OUT/oracle.destinations.txt"
+run_assert "the '-1 - ' shape"       assert_no_minus_one "$OUT/oracle.destinations.txt"
+run_assert "the .N collision shape"  assert_no_collision_suffix "$OUT/oracle.destinations.txt"
+run_assert "D-18 protected fields"   assert_protected_fields "$OUT/ledger.ndjson" "$SAMPLE_FILES"
+
+say ""
+say "== CONF-04's write side, REPORTED (D-23 as amended by D-34) =="
+rule
+run_assert "CONF-04 write side" report_multi_artist "$OUT/fields.tsv"
+say "  beets CANNOT be configured to emit ';' inside ARTIST - no delimiter or join key exists in"
+say "  config_default.yaml at either version. 'artist' carries MusicBrainz's own join phrases"
+say "  concatenated, and the multi-artist information lands in ARTISTS (TXXX / Vorbis). That is"
+say "  what D-34 aligns Jellyfin to by enabling PreferNonstandardArtistsTag on the Music library."
+
+# --- Step 12: cleanup ----------------------------------------------------------------------------
 say ""
 rsh "$(dex_cmd sh -c "'rm -rf $SCRATCH; [ -e $SCRATCH ] && echo present || echo gone'")"
 if [ "$RSH_RC" -eq 0 ] && [ "$RSH_OUT" = "gone" ]; then
