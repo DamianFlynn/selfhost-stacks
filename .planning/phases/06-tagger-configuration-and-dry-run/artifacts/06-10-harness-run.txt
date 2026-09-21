@@ -1,0 +1,616 @@
+================================================================================
+06-10 — HARNESS RUN AND PERTURBATION CONTROLS
+Recorded 2026-09-21 by plan 06-10 (D-03, D-04, D-11)
+Workstation: macOS, worktree agent-a40ca582e9e752485 at commit cd0f0c6
+Estate: LXC 100 (172.16.1.159), 97 containers running
+================================================================================
+
+READ EACH BLOCK'S OWN VERDICT LINE, NOT THE TOP-LEVEL EXIT CODE.
+Both scripts exit 1 in every run below, and in every run the cause is named.
+Neither exit code is discriminating for this plan:
+
+  * scripts/check-music-freeze.sh exits 1 on the PRE-EXISTING Phase 5 gate
+    `interpolated-host-path inventory MOVED: expected=12, found=13`. It is the
+    ONLY failed assertion in the run. Verified NOT caused by Phase 6: the 13
+    interpolated lines are listenarr (3), node-exporter, prometheus, grafana,
+    immich (2), audiobookshelf (4) and n8n-postgres. None of them is in
+    stacks/selfhosted/arrs/beets/. Nothing in this plan touches any of them.
+
+  * scripts/quick-health-check.sh exits 1 on that same gate propagating through
+    the freeze fold-in, PLUS one genuinely new red described immediately below.
+
+--------------------------------------------------------------------------------
+THE ONE NEW RED, AND WHY IT IS CORRECT
+--------------------------------------------------------------------------------
+  Vendored-file drift:
+  fatal: path 'stacks/selfhosted/arrs/beets/flask-config.yaml' does not exist in 'HEAD'
+    UNKNOWN — could not look (ssh exit 4 ...)
+    Nothing was compared. This is NOT 'the vendored files match'.
+
+The fourth drift pair reads the REPO half host-side, with `git show HEAD:<path>`
+inside /mnt/fast/stacks. That checkout is at c67d497 — Phase 6 is merged locally
+and UNPUSHED — so the path is genuinely absent from the host's HEAD and `git show`
+exits 4. The block reports UNKNOWN rather than a match, which is the fail-closed
+behaviour and the block's own stated doctrine ("the host runs what the host has").
+
+  CLEARS ON: push the Phase 6 merge, then `git pull --ff-only` on LXC 100.
+  DOES NOT CLEAR BY: narrowing the pair, or by removing it.
+
+It is named in the tenth EXIT-CODE notice in quick-health-check.sh so the next
+reader meets the reason rather than the symptom.
+
+The vendored FILE ITSELF IS NOT DRIFTED. Proven below against a scratch checkout
+that does carry the path at HEAD:
+  flask-config.yaml repo=949bd1f3b13501d448865ce2d19195db209050279f8a0022e97cd7e54d835db8
+                    host=949bd1f3b13501d448865ce2d19195db209050279f8a0022e97cd7e54d835db8
+
+--------------------------------------------------------------------------------
+HOW THE REVISED check-music-freeze.sh WAS RUN AGAINST THE LIVE ESTATE
+--------------------------------------------------------------------------------
+The fold-in and the host both run /mnt/fast/stacks/scripts/check-music-freeze.sh,
+which is the OLD script at c67d497 — so a host-side run cannot exercise the D-11
+revision, and neither can the workstation (macOS `xargs` has no `-d`, so the
+census pipeline yields 0 files and the assertion goes red for a platform reason).
+
+The revised script was therefore run from a SCRATCH GIT CHECKOUT on LXC 100 at
+/mnt/fast/tmp/gsd-06-10, built with `git archive HEAD scripts stacks` piped into
+`tar -x`, then `git init && git add -A && git commit`. Hash confirmed on both
+sides before any run:
+
+  worktree  31905d4f296ee6872cf7799db7c96c3d75b1aedc3bf890c0151ff5d71679d9a6  scripts/check-music-freeze.sh
+  scratch   31905d4f296ee6872cf7799db7c96c3d75b1aedc3bf890c0151ff5d71679d9a6  scripts/check-music-freeze.sh
+
+The scratch checkout was DELETED after the controls, and
+`cd /mnt/fast/stacks && git status --porcelain` on LXC 100 carries exactly the
+four untracked entries it carried before this plan ran (flask.yaml,
+karakeep/.env.pre-pocket, prometheus.yaml.bak, monitoring.app.yaml.disabled).
+Nothing in the deployed checkout was created, modified or removed.
+
+================================================================================
+TRANSCRIPT 1 — scripts/check-music-freeze.sh (revised), live, exit 1
+================================================================================
+TRANSCRIPT-1-BEGIN
+🎵 Music Freeze Harness Audit
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  library:   /mnt/tank/media/Music
+  fence:     /mnt/fast/safety/music-pre-project
+  stacks:    /mnt/fast/tmp/gsd-06-10/stacks/selfhosted
+  host:      selfhost
+  date:      2026-09-21T03:23:36Z
+  mode:      assert (exits non-zero on any failed check)
+
+🧰 0. Toolchain preconditions (CONS-04)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✅ ffprobe /usr/bin/ffprobe — ffprobe version 7.1.5-0+deb13u1 Copyright (c) 2007-2026 the FFmpeg developers
+  ✅ ffmpeg /usr/bin/ffmpeg — ffmpeg version 7.1.5-0+deb13u1 Copyright (c) 2000-2026 the FFmpeg developers
+  ✅ jq /usr/bin/jq — jq-1.7
+  ✅ gzip /usr/bin/gzip — gzip 1.13
+  ✅ sha256sum /usr/bin/sha256sum — sha256sum (GNU coreutils) 9.7
+  ✅ zfs delegated to root@172.16.1.158 (LXC 100 is unprivileged; the pool lives on the Proxmox host)
+
+🐳 1. Running-container rw holders on the library (WRIT-01, D-26)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  97 running containers, 158 mounts enumerated
+
+  tagger-class writers: 0
+  consumer-class writers: 1 (documented exception, D-21)
+      jellyfin (/mnt/tank/media:/media:rw)
+  unclassified writers: 0
+
+  Note: a bare total is deliberately NOT asserted. Jellyfin is expected to remain the
+  sole rw holder (D-21), so 'total == 1' would read as a pass for the wrong reason.
+  ✅ no tagger-class container holds rw on the library
+  ✅ no unclassified rw holders
+
+📄 2. Declared rw mounts across stack YAML (false-pass guard)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Why this is a separate class from section 1: arrs/beets/beets.yaml is commented out of
+  arrs/compose.yaml, so no running container exists for it and section 1 cannot see it —
+  while its YAML still declares a path into the library. A running-container-only audit
+  reports a false pass here. (arrs/soulbeet.yaml was the second such file until plan 04-03
+  deleted it; the class it illustrated is unchanged.)
+
+  14 declared /mnt/tank/media volume lines
+
+  FILE                                           LINE  SUFFIX     MAPPING
+  stacks/selfhosted/arrs/beets/beets.yaml        116   ro         /mnt/tank/media:/media:ro
+  stacks/selfhosted/arrs/beets/flask.yaml        161   ro         /mnt/tank/media:/media:ro
+  stacks/selfhosted/arrs/lidarr.yaml             71    ro         /mnt/tank/media:/media:ro
+  stacks/selfhosted/arrs/sonarr.yaml             48    rw         /mnt/tank/media/TV:/media/TV:rw
+  stacks/selfhosted/arrs/readarr.yaml            46    rw         /mnt/tank/media/Books:/media/Books:rw
+  stacks/selfhosted/arrs/radarr.yaml             46    rw         /mnt/tank/media/Movies:/media/Movies:rw
+  stacks/selfhosted/arrs/bazarr.yaml             47    rw         /mnt/tank/media/Movies:/media/Movies:rw
+  stacks/selfhosted/arrs/bazarr.yaml             48    rw         /mnt/tank/media/TV:/media/TV:rw
+  stacks/selfhosted/arrs/janitorr.yaml           53    rw         /mnt/tank/media/Movies:/data/Movies:rw
+  stacks/selfhosted/arrs/janitorr.yaml           54    rw         /mnt/tank/media/TV:/data/TV:rw
+  stacks/selfhosted/media/dispatcharr.yaml       73    rw         /mnt/tank/media/Recordings:/data/recordings:rw
+  stacks/selfhosted/media/seerr.yaml             42    ro         /mnt/tank/media:/data:ro
+  stacks/selfhosted/media/jellyfin.yaml          133   ro         /mnt/tank/media/Recordings:/recordings:ro
+  stacks/selfhosted/media/jellyfin.yaml          184   rw         /mnt/tank/media:/media:rw
+
+  NO-SUFFIX means neither :ro nor :rw was written, and docker defaults that to rw.
+
+  ✅ no long-form 'type: bind' mounts — every volume line in the tree is a form this parser can read
+  ❌ interpolated-host-path inventory MOVED: expected=12, found=13. These lines are invisible to §2's driving grep and cannot be resolved statically, so §2 is UNKNOWN until each new one is read by hand and DECLARED_INTERP_EXPECTED is moved in the same commit:
+         /mnt/fast/tmp/gsd-06-10/stacks/selfhosted/arrs/listenarr.yaml:17:      - ${APPDATA}/listenarr:/config
+         /mnt/fast/tmp/gsd-06-10/stacks/selfhosted/arrs/listenarr.yaml:18:      - ${MEDIA}/audiobooks:/audiobooks
+         /mnt/fast/tmp/gsd-06-10/stacks/selfhosted/arrs/listenarr.yaml:19:      - ${DOWNLOADS}:/downloads
+         /mnt/fast/tmp/gsd-06-10/stacks/selfhosted/monitoring/node-exporter.yaml:20:      - ${APPDATA_DIR}/monitoring/node-exporter-textfile:/var/lib/node_exporter/textfile_collector:ro
+         /mnt/fast/tmp/gsd-06-10/stacks/selfhosted/monitoring/prometheus.yaml:13:      - ${APPDATA_DIR}/monitoring/prometheus:/prometheus
+         /mnt/fast/tmp/gsd-06-10/stacks/selfhosted/monitoring/grafana.yaml:14:      - ${APPDATA_DIR}/monitoring/grafana:/var/lib/grafana
+         /mnt/fast/tmp/gsd-06-10/stacks/selfhosted/immich/compose.yaml:52:      - ${UPLOAD_LOCATION}:/data
+         /mnt/fast/tmp/gsd-06-10/stacks/selfhosted/immich/compose.yaml:148:      - ${DB_DATA_LOCATION}:/var/lib/postgresql/data
+         /mnt/fast/tmp/gsd-06-10/stacks/selfhosted/media/audiobookshelf.yaml:15:      - ${APPDATA}/audiobookshelf:/config
+         /mnt/fast/tmp/gsd-06-10/stacks/selfhosted/media/audiobookshelf.yaml:16:      - ${APPDATA}/audiobookshelf/metadata:/metadata
+         /mnt/fast/tmp/gsd-06-10/stacks/selfhosted/media/audiobookshelf.yaml:17:      - ${MEDIA}/audiobooks:/audiobooks
+         /mnt/fast/tmp/gsd-06-10/stacks/selfhosted/media/audiobookshelf.yaml:18:      - ${MEDIA}/podcasts:/podcasts
+         /mnt/fast/tmp/gsd-06-10/stacks/selfhosted/automation/n8n-postgres.yaml:28:      - ${APPDATA_DIR}/automation/n8n-postgres:/var/lib/postgresql
+
+  ✅ no file other than media/jellyfin.yaml declares a rw or unsuffixed host path reaching the library
+
+🗂  3. /mnt/tank/media layout (D-19 precondition)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      directory /mnt/tank/media/Books
+      directory /mnt/tank/media/Movies
+      directory /mnt/tank/media/Music
+      directory /mnt/tank/media/Photos
+      directory /mnt/tank/media/Recordings
+      directory /mnt/tank/media/TV
+
+  D-19 mount sources must be chosen only from the names above.
+  (A docker bind mount whose source does not exist is silently created as an empty
+   directory rather than erroring, so a typo here breaks an arr without any signal.)
+
+🔐 4. Ownership census (WRIT-04, D-11/D-12) — target 568:568, dirs 755, files 644
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      568:568 777 /mnt/tank/media/Music   <- library root
+
+  Immediate children (artist folders, plus any stray top-level file):
+      568:568 777 /mnt/tank/media/Music/.DS_Store   <- STRAY top-level file, not an artist folder
+      568:568 777 /mnt/tank/media/Music/BLACKPINK
+      568:568 777 /mnt/tank/media/Music/Benson Boone
+      568:568 777 /mnt/tank/media/Music/Chris Norman
+      568:568 777 /mnt/tank/media/Music/Def Leppard
+      568:568 777 /mnt/tank/media/Music/Ed Sheeran
+      568:568 777 /mnt/tank/media/Music/Garth Brooks
+      568:568 777 /mnt/tank/media/Music/Hawthorne Heights
+      568:568 777 /mnt/tank/media/Music/Katy Perry
+      568:568 777 /mnt/tank/media/Music/Lady Gaga
+      568:568 777 /mnt/tank/media/Music/P!nk
+      568:568 777 /mnt/tank/media/Music/Sabrina Carpenter
+      568:568 777 /mnt/tank/media/Music/Taylor Swift
+      568:568 777 /mnt/tank/media/Music/Vengaboys
+
+  13 artist folders, 1 stray top-level files, 2674 entries including the library root
+      (of which 2673 are below the root, 0 mis-owned — the -mindepth 1
+       figures this section used to report, kept for comparability with the 01-01 baseline)
+  Distinct uid:gid present:
+         2674 568:568
+  Distinct modes present (mode type count):
+           88 777 d
+         2586 777 f
+
+  ✅ ownership: 0 entries differ from 568:568
+  ⚠️  directory mode: 88 differ from 755 — REPORTED not asserted (D-12 scoped out, chmod impossible on tank)
+  ⚠️  file mode: 2586 differ from 644 — REPORTED not asserted (D-12 scoped out, chmod impossible on tank)
+
+🖼  5. Sidecar inventory (SAFE-05, D-18, widened by 01-06)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  1341 sidecars found (widened set)
+      .nfo: 91
+      .jpg: 88
+      .lrc: 944
+      .png: 43   <- added by 01-06; Jellyfin writes .png for logo/clearart/disc
+      .txt: 175   <- added by 01-06
+
+      narrow D-18 subtotal (.nfo/.jpg/.lrc only): 1123
+      widened total (what the SAFE-05 watch measures): 1341
+      .DS_Store files under the library: 1   <- macOS client, an uncounted writer
+         /mnt/tank/media/Music/.DS_Store
+
+  D-18: these are inventoried and left in place. This inventory is the baseline the
+  SAFE-05 one-hour watched-folder test diffs against — without it a pre-existing .nfo is
+  indistinguishable from a newly written one. Re-run with --sidecars to emit the paths.
+
+🧱 6. Fence presence and spot-check (SAFE-02/03/04, D-06/D-08/D-10)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✅ fence exists: /mnt/fast/safety/music-pre-project (568:568 755)
+  ✅ snapshot present: tank/media/Music@pre-project (via ssh:172.16.1.158)
+  ✅ snapshot present: tank/downloads@pre-project (via ssh:172.16.1.158)
+  ✅ fence subdirectory non-empty: library-db/ (54 files)
+  ✅ fence subdirectory non-empty: dj-mixes-ffprobe/ (764 files)
+  ✅ fence subdirectory non-empty: cover-scans/ (54 files)
+  ✅ fence subdirectory non-empty: tags/ (30 files)
+  ✅ no running container mounts any path under /mnt/fast/safety (D-08, proven not asserted)
+
+🧮 6b. Tagger census (D-21, D-25)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✅ tagger definitions: expected=2 — found exactly the named pair:
+         stacks/selfhosted/arrs/beets/flask.yaml — ACTIVE front end — metasauce/beets-flask:v2.0.0-rc6, engine beets 2.12.0
+         stacks/selfhosted/arrs/beets/beets.yaml — DORMANT agent-driven CLI arm — lscr.io/linuxserver/beets:2.13.1-ls349
+  ✅ beets databases: expected=1 at /mnt/fast/appdata/arrs/beets/config/library.db — found exactly that
+  other SQLite files matched by the candidate names (REPORTED, not failed — another app's database, and the Jellyfin positive control):
+         /mnt/fast/appdata/media/jellyfin/data/jellyfin.db
+  ✅ retired paths: 0 of the retired tagger paths still exist
+  rw on Music, D-21 consumer exception: jellyfin [running] /mnt/tank/media:/media
+  ✅ no container in any state holds rw reaching Music, apart from the D-21 consumer exception
+
+  Tagger-capable inventory (mounts a beets/wrtag/soulbeet config or database — REPORTED):
+      beets-flask [running] — mode on Music: ro
+      lidarr [running] — mode on Music: ro
+      sabnzbd [running] — mode on Music: none
+
+📊 7. Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  tagger-class writers:        0   (target 0)
+  consumer-class writers:      1   (Jellyfin, documented exception D-21)
+  unclassified writers:        0   (target 0)
+  declared /mnt/tank/media:    14 volume lines
+  declared rw reaching Music:  0   (target 0, jellyfin.yaml excluded)
+  media subtrees found:        6
+  artist folders:              13   (directories only)
+  stray top-level files:       1
+  ownership mismatches:        0   (target 0, want 568:568)
+  dir-mode mismatches:         88   (REPORTED not asserted — D-12 scoped out)
+  file-mode mismatches:        2586   (REPORTED not asserted — D-12 scoped out)
+  sidecars found (widened):    1341   (nfo 91 / jpg 88 / lrc 944 / png 43 / txt 175)
+  sidecars found (narrow D-18):1123   (nfo/jpg/lrc only — comparable to the 01-01 baseline)
+  .DS_Store under the library: 1   (macOS client — an uncounted writer)
+  tagger definitions:          2   (target 2 — the NAMED pair, not a count; D-11)
+  tagger definitions, active:  stacks/selfhosted/arrs/beets/flask.yaml   (ACTIVE front end — metasauce/beets-flask:v2.0.0-rc6, engine beets 2.12.0)
+  tagger definitions, dormant: stacks/selfhosted/arrs/beets/beets.yaml   (DORMANT agent-driven CLI arm — lscr.io/linuxserver/beets:2.13.1-ls349)
+  beets databases:             1   (target 1 = SURVIVOR_DB)
+  tagger databases:            0   (target 0 — wrtag.db*/soulbeet.db*)
+  retired paths present:       0   (target 0)
+  rw on Music, non-tagger:     0   (target 0, excluding the D-21 consumer exception)
+  rw on Music, tagger-capable: 0   (target 0 — Phase 1 D-20, any container state)
+  rw on Music, Jellyfin D-21:  1   (documented consumer exception, printed separately)
+  tagger-capable containers:   3   (mounts a beets/wrtag/soulbeet config or DB; reported)
+  fence assertions failed:     0
+  toolchain missing:           0
+  FAILURES total:              1
+
+❌ 1 failed checks
+TRANSCRIPT-1-END
+
+================================================================================
+TRANSCRIPT 2 — scripts/quick-health-check.sh (revised), from the workstation, exit 1
+================================================================================
+Note: its "Music freeze harness" fold-in runs the HOST's copy of
+check-music-freeze.sh (the old one at c67d497), so the census line inside that
+fold-in is the OLD expectation. Transcript 1 above is the revised census.
+
+TRANSCRIPT-2-BEGIN
+=== Quick Server Health Check ===
+Traefik: ✅ Running
+  Health: 
+no healthcheck
+Authelia: ✅ Running
+Containers running: 97
+✅ No unhealthy containers
+Traefik dashboard: ✅ Protected (HTTP 302 → Authelia)
+Vendored-file drift:
+fatal: path 'stacks/selfhosted/arrs/beets/flask-config.yaml' does not exist in 'HEAD'
+  ⚠️  UNKNOWN — could not look (ssh exit 4; 3 = no /mnt/fast/stacks checkout,
+  4 = 'git show HEAD:<path>' failed, 5 = the appdata copy could not be hashed).
+  Nothing was compared. This is NOT 'the vendored files match'.
+D-03 — one vendored beets config into both containers:
+  ✅ one config, both containers: /mnt/fast/appdata/arrs/beets/config/config.yaml -> /config/config.yaml :ro
+     runtime  (beets-flask, inspected): config :ro, /mnt/tank/media :ro
+     declared (dormant CLI arm, rendered):       config :ro, /mnt/tank/media :ro
+D-04 — throwaway -l plus -c overlay on every beet invocation:
+  counts: raw=37  comment-stripped=17  invocation-shaped=2  (executable 0, documentation 2)
+  ✅ no executable beet invocation opens the real library (0 invocation-shaped lines outside *.md)
+     documentation hits at the pinned baseline (2) — historic quotations, see the block comment
+extended.conf destructive switches:
+  ✅ extended.conf switches disarmed (2): requireBeetsMatch=false, ConversionFormat in {FLAC,OPUS}
+Music freeze harness: ❌ BROKEN (check-music-freeze.sh exit 1)
+  Failed assertions:
+    ❌ interpolated-host-path inventory MOVED: expected=12, found=13. These lines are invisible to §2's driving grep and cannot be resolved statically, so §2 is UNKNOWN until each new one is read by hand and DECLARED_INTERP_EXPECTED is moved in the same commit:
+    ❌ 1 failed checks
+  Summary:
+  📊 7. Summary
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    tagger-class writers:        0   (target 0)
+    consumer-class writers:      1   (Jellyfin, documented exception D-21)
+    unclassified writers:        0   (target 0)
+    declared /mnt/tank/media:    14 volume lines
+    declared rw reaching Music:  0   (target 0, jellyfin.yaml excluded)
+    media subtrees found:        6
+    artist folders:              13   (directories only)
+    stray top-level files:       1
+    ownership mismatches:        0   (target 0, want 568:568)
+    dir-mode mismatches:         88   (REPORTED not asserted — D-12 scoped out)
+    file-mode mismatches:        2586   (REPORTED not asserted — D-12 scoped out)
+    sidecars found (widened):    1341   (nfo 91 / jpg 88 / lrc 944 / png 43 / txt 175)
+    sidecars found (narrow D-18):1123   (nfo/jpg/lrc only — comparable to the 01-01 baseline)
+    .DS_Store under the library: 1   (macOS client — an uncounted writer)
+    tagger definitions:          1   (target 1)
+    beets databases:             1   (target 1 = SURVIVOR_DB)
+    tagger databases:            0   (target 0 — wrtag.db*/soulbeet.db*)
+    retired paths present:       0   (target 0)
+    rw on Music, non-tagger:     0   (target 0, excluding the D-21 consumer exception)
+    rw on Music, tagger-capable: 0   (target 0 — Phase 1 D-20, any container state)
+    rw on Music, Jellyfin D-21:  1   (documented consumer exception, printed separately)
+    tagger-capable containers:   3   (mounts a beets/wrtag/soulbeet config or DB; reported)
+    fence assertions failed:     0
+    toolchain missing:           0
+    FAILURES total:              1
+  
+  ❌ 1 failed checks
+Music consumers audit: ✅ Both consumers see the library
+    MA version (live):           2.11.0b2   (assertions proven at 2.11.0b0)
+    albums matched in MA:        2   (target 2, exact name+albumartist, provider-attributed)
+    albums matched in Jellyfin:  2   (target 2, exact name+albumartist)
+    FAILURES total:              0
+Library underscore-dir guard: ✅ No '_'-prefixed directories under /mnt/tank/media/Music
+Jellyfin transcode retention: ✅ Transcode retention intact
+    / headroom:              26218254336 bytes (24.42 GiB)  (target ≥ 21474836480)
+    volume mounts:           0  (target 0)
+    transcode quota:         53687091200 bytes  (target 53687091200)
+    transcode mounted:       zfs=yes devid=46 parent=64518  (target yes, and devid ≠ parent)
+    transcode target:        /cache/transcodes  (target /cache/transcodes)
+    encoding values:         5 asserted, 0 drifted; 2 amdgpu values REPORTED (see section 5)
+    unreachable:             0  (could-not-look, counted apart from bound violations — VALIDATION row 38)
+    toolchain missing:       0
+    FAILURES total:          0
+Container image drift: ✅ Measured — 10 drifted (REPORTED, not asserted: v1 is alert-only, D-01)
+    image drift:        10  (REPORTED, not asserted — v1 is ALERT-ONLY, D-01)
+    unresolvable:       2  (ASSERTED; expected 2)
+    unhealthy:          0
+    created:            0
+    commits behind:     0  (LOWER BOUND — DRIFT_GIT_FETCH=0)
+    could-not-look:     0
+    FAILURES total:     0  (fatal findings only — image drift is NOT in this total)
+
+❌ Health check FAILED. The failing block is whichever one above carries a ❌ or a ⚠️ —
+   that is any of: the Traefik or Authelia container probes, the Traefik dashboard
+   probe, the container counts, the music freeze harness, the consumers audit, the
+   library underscore-dir guard, the Jellyfin transcode retention audit, the
+   vendored-file drift block, the extended.conf destructive-switch block, or the
+   container image-drift block.
+   ⚠️ The image-drift block CANNOT fail on the drift count itself — if it is red, it is
+      a could-not-look or the unresolvable set moved. Do not go looking for a tag.
+TRANSCRIPT-2-END
+
+================================================================================
+PERTURBATION CONTROLS — driven to red, restored, re-run green
+================================================================================
+Pre-test sha256 of every file this plan touches:
+  31905d4f296ee6872cf7799db7c96c3d75b1aedc3bf890c0151ff5d71679d9a6  scripts/check-music-freeze.sh
+  292b525ea4eaea2ff5e6067c8b1de27b51a03a829c7bb224b2b563f8297dcb0c  scripts/quick-health-check.sh
+  a060d321cf1e1513a802d07756932f88ca813363c123d72d448da90b4606cb12  stacks/selfhosted/arrs/beets.md
+
+Post-control sha256:
+  31905d4f296ee6872cf7799db7c96c3d75b1aedc3bf890c0151ff5d71679d9a6  scripts/check-music-freeze.sh   <- hash matches, restored identical
+  1b4893984e7252d9395f2c147f8684447ba45114c916d9f1b0063e58768530f1  scripts/quick-health-check.sh   <- CHANGED BY AN INTENTIONAL COMMIT (cd0f0c6), not by a control
+  a060d321cf1e1513a802d07756932f88ca813363c123d72d448da90b4606cb12  stacks/selfhosted/arrs/beets.md <- hash matches, restored identical
+
+`git diff HEAD --stat` is EMPTY and `git status --porcelain` is EMPTY: the
+working tree matches HEAD exactly, so no control left debris behind.
+
+EVERY CONTROL WAS DRIVEN THROUGH THE REAL SCRIPT, not by hand-running its logic.
+NO CONTROL TOUCHED A REAL FILE ON THE ESTATE: the ones that needed a mutated
+repository used the scratch checkout, and the rest used additive overrides that
+force EXIT_CODE=1 on their own and therefore cannot manufacture success.
+
+--------------------------------------------------------------------------------
+CONTROL A — the fourth drift pair actually produces a fourth comparison line
+--------------------------------------------------------------------------------
+  DRIFT_REPO_ROOT=/mnt/fast/tmp/gsd-06-10 bash scripts/quick-health-check.sh
+
+  Vendored-file drift:
+    DRIFT_REPO_ROOT override in effect — this run cannot report the vendored files green
+
+VERDICT: no red, no UNKNOWN. The hard-coded `DRIFT_LINES -ne 4` short-answer
+branch did NOT fire, which is only possible if four `repo=` lines came back — so
+the fourth pair is live and comparing. The green line is correctly suppressed
+because the override forces a non-green run.
+
+--------------------------------------------------------------------------------
+CONTROL B — DRIFT_EXPECT_FLASK_CONFIG, wrong-but-plausible hash
+--------------------------------------------------------------------------------
+  DRIFT_REPO_ROOT=/mnt/fast/tmp/gsd-06-10 \
+  DRIFT_EXPECT_FLASK_CONFIG=0000...0000 bash scripts/quick-health-check.sh
+
+  Vendored-file drift:
+    DRIFT_REPO_ROOT override in effect — this run cannot report the vendored files green
+    flask-config.yaml DRIFTED — repo=949bd1f3... host=949bd1f3... expected-override=0000...0000
+
+VERDICT: EXACTLY ONE red, and it NAMES flask-config.yaml. The other three pairs
+reported nothing, i.e. they stayed green. The label `case` arm resolves, the
+additive expectation is honoured, and the override can only turn a green file
+red — repo and host agree with each other and disagree only with the override.
+
+RESTORED: override unset. Re-run = CONTROL A's output (no red).
+
+--------------------------------------------------------------------------------
+CONTROL C — the D-03 mount assertion, expected source pointed at a path that is
+            not mounted
+--------------------------------------------------------------------------------
+  D03_BEETS_CONFIG_SOURCE=/mnt/fast/appdata/arrs/beets/config/NOT-MOUNTED.yaml \
+    bash scripts/quick-health-check.sh
+
+  D-03 — one vendored beets config into both containers:
+    a D03_* override is in effect — this run cannot report the mounts green
+    beets-flask: /config/config.yaml comes from '/mnt/fast/appdata/arrs/beets/config/config.yaml', expected '/mnt/fast/appdata/arrs/beets/config/NOT-MOUNTED.yaml'
+    dormant CLI arm: /config/config.yaml comes from '/mnt/fast/appdata/arrs/beets/config/config.yaml', expected '/mnt/fast/appdata/arrs/beets/config/NOT-MOUNTED.yaml'
+
+VERDICT: BOTH halves went red and BOTH named the mount, the destination and the
+actual source. Not a silent pass, and not one half passing for the other.
+
+RESTORED: override unset. Re-run green, quoted from transcript 2:
+    one config, both containers: /mnt/fast/appdata/arrs/beets/config/config.yaml -> /config/config.yaml :ro
+       runtime  (beets-flask, inspected): config :ro, /mnt/tank/media :ro
+       declared (dormant CLI arm, rendered):       config :ro, /mnt/tank/media :ro
+
+--------------------------------------------------------------------------------
+CONTROL D — an empty `docker inspect` must be UNKNOWN, never "no bad mounts"
+--------------------------------------------------------------------------------
+  D03_FLASK_CONTAINER=gsd-no-such-container bash scripts/quick-health-check.sh
+
+  D-03 — one vendored beets config into both containers:
+    a D03_* override is in effect — this run cannot report the mounts green
+  error: no such object: gsd-no-such-container
+    UNKNOWN — 'docker inspect gsd-no-such-container' returned no mount lines (ssh exit 1).
+    Nothing was asserted. This is NOT 'no bad mounts' — an empty inspect must never satisfy a zero-test.
+
+VERDICT: fail-closed. This is check-music-freeze.sh's row-22 shape refused again
+in a new costume (T-06-51).
+
+RESTORED: override unset. Re-run green (transcript 2).
+
+--------------------------------------------------------------------------------
+CONTROL E — D-04 goes red on a bare `beet` invocation and NAMES THE LINE
+--------------------------------------------------------------------------------
+Injected into the SCRATCH checkout only (never /mnt/fast/stacks):
+  scripts/gsd-d04-control.sh:2:  beet import /downloads/complete/nzb/unsorted/control
+
+  D04_REPO_ROOT=/mnt/fast/tmp/gsd-06-10 bash scripts/quick-health-check.sh
+
+  D-04 — throwaway -l plus -c overlay on every beet invocation:
+    D04_REPO_ROOT override in effect — this run cannot report D-04 green
+    counts: raw=64  comment-stripped=27  invocation-shaped=3  (executable 1, documentation 2)
+    beet invocation without a throwaway -l AND a -c overlay (statefile: is NOT redirected by -l alone):
+         HEAD:scripts/gsd-d04-control.sh:2:beet import /downloads/complete/nzb/unsorted/control
+
+VERDICT: red, with the file, the line number and the offending text.
+
+--------------------------------------------------------------------------------
+CONTROL F — D-04 ACCEPTS the compliant form, so it is not "any beet line is red"
+--------------------------------------------------------------------------------
+Same scratch file, rewritten to:
+  beet -l /tmp/throwaway.db -c /tmp/overlay.yaml import /downloads/complete/nzb/unsorted/control
+
+  D-04 — throwaway -l plus -c overlay on every beet invocation:
+    D04_REPO_ROOT override in effect — this run cannot report D-04 green
+    counts: raw=64  comment-stripped=27  invocation-shaped=3  (executable 1, documentation 2)
+
+VERDICT: the executable invocation count is still 1, and there is NO red. The
+assertion discriminates on the FLAGS, not on the presence of the word.
+
+This run stalled later, at the "Music freeze harness" fold-in, and was killed
+after ~10 min. THAT STALL IS PRE-EXISTING AND UNRELATED: the fold-in wraps the
+remote script in `timeout 120`, but check-music-freeze.sh itself opens an inner
+`ssh root@172.16.1.158` for its zfs queries, and `timeout` kills only its direct
+child — the inner ssh survives holding the pipe, so the outer ssh never returns.
+The same fold-in returned normally in transcript 2 minutes earlier. Logged to
+deferred-items.md; NOT fixed here (out of this plan's scope, and it is a
+different file's bound).
+
+RESTORED: scratch checkout deleted. /mnt/fast/stacks never carried either line —
+`git status --porcelain` there is unchanged (four pre-existing untracked entries).
+
+--------------------------------------------------------------------------------
+CONTROL G — the census fails on a THIRD, unnamed definition
+--------------------------------------------------------------------------------
+Injected into the SCRATCH checkout only:
+  stacks/selfhosted/arrs/gsd-third-tagger.yaml   ->   image: mikenye/picard:latest
+
+  ssh root@172.16.1.159 'bash /mnt/fast/tmp/gsd-06-10/scripts/check-music-freeze.sh'
+
+  tagger definitions: expected=2, exactly this named pair — found 3:
+         expected: stacks/selfhosted/arrs/beets/flask.yaml — ACTIVE front end — metasauce/beets-flask:v2.0.0-rc6, engine beets 2.12.0
+         expected: stacks/selfhosted/arrs/beets/beets.yaml — DORMANT agent-driven CLI arm — lscr.io/linuxserver/beets:2.13.1-ls349
+         found:
+           stacks/selfhosted/arrs/beets/beets.yaml
+           stacks/selfhosted/arrs/beets/flask.yaml
+           stacks/selfhosted/arrs/gsd-third-tagger.yaml
+
+VERDICT: red. Note the pattern also caught a REGISTRY-NAMESPACED, non-beets
+tagger (`mikenye/picard:latest`) — the WR-03/WR-04 widening still holds after
+the D-11 revision, which is the half that would have been lost by narrowing.
+
+--------------------------------------------------------------------------------
+CONTROL H — the census fails on TWO definitions whose MEMBERS are wrong
+--------------------------------------------------------------------------------
+This is the control that proves D-11 is a membership test and not a count test,
+and it is the reason the pair is named rather than counted. In the scratch
+checkout the third definition was removed and flask.yaml was renamed:
+
+  git mv stacks/selfhosted/arrs/beets/flask.yaml stacks/selfhosted/arrs/beets/flask-renamed.yaml
+
+  tagger definitions: expected=2, exactly this named pair — found 2:
+         expected: stacks/selfhosted/arrs/beets/flask.yaml — ACTIVE front end — metasauce/beets-flask:v2.0.0-rc6, engine beets 2.12.0
+         expected: stacks/selfhosted/arrs/beets/beets.yaml — DORMANT agent-driven CLI arm — lscr.io/linuxserver/beets:2.13.1-ls349
+         found:
+           stacks/selfhosted/arrs/beets/beets.yaml
+           stacks/selfhosted/arrs/beets/flask-renamed.yaml
+
+VERDICT: red on a count of exactly two. A bare `-eq 2` would have reported this
+as a pass.
+
+NOTE ON THE PLAN'S EXPECTATION: 06-10-PLAN.md task 3 said the census half could
+not be driven and should be recorded as "discharged BY CONSTRUCTION, not by a
+firing observation", in the register beets.md uses for the Renovate rule that has
+never been observed refusing anything. THAT IS NO LONGER THE CASE AND IS RECORDED
+AS THE STRONGER RESULT: controls G and H are firing observations, driven through
+the real script against a real estate, mutating nothing outside a scratch
+checkout. The plan was right that SURVIVOR_DB/APPDATA_ROOT-style constants cannot
+be overridden; it did not anticipate that the TREE could be varied instead.
+
+--------------------------------------------------------------------------------
+CONTROL I — restored, re-run green
+--------------------------------------------------------------------------------
+  cd /mnt/fast/tmp/gsd-06-10 && git reset --hard HEAD~2
+  sha256sum scripts/check-music-freeze.sh
+    31905d4f296ee6872cf7799db7c96c3d75b1aedc3bf890c0151ff5d71679d9a6   <- hash matches the worktree
+  git ls-files stacks/selfhosted/arrs/beets
+    stacks/selfhosted/arrs/beets/beets.yaml
+    stacks/selfhosted/arrs/beets/config.yaml
+    stacks/selfhosted/arrs/beets/flask-config.yaml
+    stacks/selfhosted/arrs/beets/flask.yaml
+
+  ssh root@172.16.1.159 'bash /mnt/fast/tmp/gsd-06-10/scripts/check-music-freeze.sh'
+
+  tagger definitions: expected=2 — found exactly the named pair:
+         stacks/selfhosted/arrs/beets/flask.yaml — ACTIVE front end — metasauce/beets-flask:v2.0.0-rc6, engine beets 2.12.0
+         stacks/selfhosted/arrs/beets/beets.yaml — DORMANT agent-driven CLI arm — lscr.io/linuxserver/beets:2.13.1-ls349
+  beets databases: expected=1 at /mnt/fast/appdata/arrs/beets/config/library.db — found exactly that
+
+Exit 1, and the only remaining failure is the pre-existing interpolated-host-path
+gate (2 lines carrying a red glyph: that assertion and the "1 failed checks"
+footer). The census half is GREEN.
+
+Scratch checkout then deleted.
+
+================================================================================
+WHICH REDS ARE PRE-EXISTING AND WHICH ARE NEW — the summary this artifact exists
+for, so neither exit code is read as discriminating
+================================================================================
+PRE-EXISTING, not this phase's, not this plan's:
+  1. `interpolated-host-path inventory MOVED: expected=12, found=13`
+     (check-music-freeze.sh §2, Phase 5 open item, STATE.md). Propagates into
+     quick-health-check.sh via the freeze fold-in. None of the 13 lines is under
+     stacks/selfhosted/arrs/beets/.
+  2. The freeze fold-in's occasional stall (control F): `timeout 120` on the
+     outer command does not bound the inner ssh to atlantis. Pre-dates this plan.
+
+NEW, caused by this plan, correct, and clearable:
+  3. The vendored-file drift block reports UNKNOWN because the host's HEAD does
+     not yet carry stacks/selfhosted/arrs/beets/flask-config.yaml. Clears on
+     push + `git pull --ff-only`. The file itself is NOT drifted (control B's
+     matching repo/host hashes).
+
+NEW AND GREEN:
+  4. D-03: one vendored beets config into both containers, :ro on both, and
+     /mnt/tank/media :ro on both — asserted from `docker inspect .Mounts` for the
+     running front end and from `docker compose --profile manual config` for the
+     dormant arm.
+  5. D-04: zero executable `beet` invocations open the real library;
+     documentation hits at the pinned baseline of 2.
+  6. D-11: two definitions, named and classed, pattern unnarrowed.
+
+MEASURED SIDE-NOTES WORTH CARRYING:
+  * `tagger-capable containers` moved 2 -> 3 (beets-flask joins sabnzbd and
+    lidarr). REPORTED, not asserted, exactly as beets.md § Phase 4 describes.
+    `rw on Music, tagger-capable` is still 0.
+  * `docker compose -f stacks/selfhosted/arrs/beets/beets.yaml config` WITHOUT
+    `--profile manual` prints `name: beets` / `services: {}` on this estate.
+    Measured, not assumed. A matcher that read that as "no bad mounts" would
+    report green on nothing at all — which is why the D-03 block passes the
+    profile and treats a render with zero bind mounts as UNKNOWN.
+  * `read_only:` appears in the rendered long form ONLY when true, so its absence
+    means read-write. The D-03 normaliser therefore defaults a mount to `rw`,
+    which is the fail-closed direction.
+================================================================================

@@ -175,6 +175,12 @@
 #          below and whose non-zero exit this script already propagates:
 #            - tagger definitions != 1, or the one found is not
 #              stacks/selfhosted/arrs/beets/beets.yaml
+#              (REVISED 2026-09-21 by plan 06-10, D-11 — the 2026-09-13 wording above is kept
+#              visible because it is the record of a guard that fired on purpose. The expectation
+#              is now TWO definitions, asserted BY NAME AND BY CLASS: flask.yaml as the ACTIVE
+#              front end and beets/beets.yaml as the DORMANT CLI arm. A count of two whose members
+#              are different files is a red, and a third unnamed definition still fails. The match
+#              PATTERN was not narrowed — narrowing it is what would have disarmed the guard.)
 #            - beets databases != 1, or the one found is not SURVIVOR_DB
 #              (/mnt/fast/appdata/arrs/beets/config/library.db)
 #            - any wrtag/soulbeet tagger database present
@@ -189,8 +195,12 @@
 #          rather than 0 and increments FAILURES.
 #       C. A VENDORED FILE HAVING DRIFTED — repo-vs-host sha256 mismatch on any of audio.bash,
 #          sabnzbd beets-config.yaml or the survivor config.yaml.
+#          (WIDENED 2026-09-21 by plan 06-10, D-03: a FOURTH pair, the vendored beets-flask config
+#          stacks/selfhosted/arrs/beets/flask-config.yaml against
+#          /mnt/fast/appdata/arrs/beets/config/beets-flask/config.yaml.)
 #       D. THE DRIFT BLOCK BEING BLIND — no output, RC 124, any other non-zero, a short answer
-#          (fewer than 3 comparison lines), or an unrecognised label. All UNKNOWN, all exit 1.
+#          (fewer than 3 comparison lines — FOUR since 2026-09-21, see C), or an unrecognised
+#          label. All UNKNOWN, all exit 1.
 #       E. THE DRIFT BLOCK BEING RUN WITH A NON-DEFAULT DRIFT_APPDATA_ROOT. That override exists
 #          ONLY to drive the could-not-look branch, so any non-default value forces red whatever
 #          the comparison finds — it can never be used to make a red run report green.
@@ -415,6 +425,63 @@
 #     phase 02.1's CR-01 spent four gap-closure plans repairing in the other direction, and the
 #     same 01-09 trap that got the mode-bit assertions removed from check-music-freeze.sh.
 #
+# ⚠️  EXIT-CODE BEHAVIOUR CHANGED AGAIN — AN EIGHTH AND A NINTH FATAL BLOCK (THE D-03 MOUNT
+#     ASSERTION AND THE D-04 THROWAWAY-`-l` ASSERTION) WERE ADDED 2026-09-21 (plan 06-10,
+#     phase 6 D-03/D-04/D-11).
+#
+#     THIS IS THE TENTH SUCH NOTICE. Counts measured before and after this edit, not assumed —
+#     using the two greps the eighth notice quotes (this notice does NOT write the shared phrase
+#     out a second time in its own body, so it adds exactly one match to each):
+#         headers    9 -> 10
+#         raw       12 -> 13
+#     The raw count therefore still runs THREE ahead of the header count, unchanged by this edit.
+#
+#     BLOCK ordinal goes seven -> NINE, because this one notice covers TWO new blocks. They are
+#     kept as two blocks rather than one because they are DIFFERENT CLAIMS MEASURED BY DIFFERENT
+#     INSTRUMENTS — a runtime mount table versus the content of the tracked tree — and folding them
+#     together would blur what a red in either means.
+#
+#     WHAT NOW EXITS THIS SCRIPT 1 THAT DID NOT BEFORE:
+#       F. THE FOURTH VENDORED PAIR. The existing drift block was widened from three pairs to four
+#          (see C above). The hard-coded comparison count, the label `case` arm, the
+#          DRIFT_EXPECT_FLASK_CONFIG variable and the green line all moved in the same edit; three
+#          of four reporting is a short answer, which is a could-not-look, which is a red.
+#          ⚠️ EXPECT THIS RED UNTIL PHASE 6 IS PUSHED AND THE HOST HAS PULLED. The comparison runs
+#          host-side against /mnt/fast/stacks at ITS HEAD, and flask-config.yaml only entered git
+#          in phase 6. `git show HEAD:<path>` on a host that does not yet carry the path exits 4,
+#          which this block correctly reports as UNKNOWN rather than as a match. That is the block
+#          working — the host runs what the host has — and it clears on `git pull --ff-only`.
+#       G. THE D-03 MOUNT ASSERTION. One vendored beets config must be mounted into BOTH the active
+#          front end and the dormant CLI arm, at the same source, at the same destination, `:ro` on
+#          both; and /mnt/tank/media must be read-only on both (D-05, asserted from the runtime
+#          rather than read from the file). A missing mount, a different source, or an rw flag is a
+#          red. AN EMPTY `docker inspect` RESULT IS UNKNOWN, never "no bad mounts". A
+#          `docker compose config` that renders `services: {}` — which is what a MISSING
+#          `--profile manual` looks like on this estate, measured — is likewise UNKNOWN.
+#       H. THE D-04 THROWAWAY-`-l` ASSERTION. No invocation-shaped `beet` line in an executable
+#          file tracked under scripts/ or stacks/ may run without BOTH a `-l` outside
+#          /config/library.db AND a `-c` overlay, because `-l` alone does not redirect
+#          `statefile:`. Documentation (`*.md`) is scoped OUT of the assertion — two of this repo's
+#          `.md` hits are historic quotations — but is COUNTED against a pinned baseline, so a new
+#          copy-pasteable bare invocation in the runbook is its own red.
+#       I. EITHER NEW BLOCK BEING BLIND, kept distinct from a genuine zero: 172.16.1.159
+#          unreachable, the remote command exceeding REMOTE_TIMEOUT (124), any other non-zero
+#          status, an empty inspect, a render with no bind mounts, a `git grep` status above 1, the
+#          D-04 sentinel absent, a raw scan matching NOTHING (which means the pattern is wrong, not
+#          that the tree is clean), or the comment strip removing nothing (which means it is not
+#          stripping, so the narrowed count cannot be trusted). All UNKNOWN, all exit 1.
+#       J. EITHER NEW BLOCK BEING RUN WITH A NON-DEFAULT OVERRIDE. Same contract as DASH_HOST and
+#          EXTCONF_HOST: every D03_* knob, D04_DOC_BASELINE, D04_REPO_ROOT and DRIFT_REPO_ROOT
+#          forces a non-green run when it is non-default, so none of them can launder a red run
+#          into a green one. There is no success-producing override and no sentinel that skips
+#          either block; do not add one.
+#          ⚠️ DRIFT_REPO_ROOT AND D04_REPO_ROOT EXIST ONLY BECAUSE AN UNDRIVEABLE BRANCH IS AN
+#          UNPROVEN BRANCH. Both blocks read a host-side git checkout, and both were hard-coded to
+#          /mnt/fast/stacks, which meant their violation branches could only be driven by
+#          committing a deliberate footgun — or a file that is not there yet — to the DEPLOYED
+#          tree. Pointing them at a scratch checkout is how plan 06-10 drove those branches to red
+#          and back to green without touching the estate. Neither can produce a pass.
+#
 # ⚠️  KNOWN LIMIT, AND IT APPLIES TO THIS WHOLE FILE: THIS SCRIPT IS MANUAL. IT ONLY EVER FIRES
 #     WHEN SOMEBODY TYPES IT (D-22, phase 02.1).
 #     There is no cron entry, no systemd timer and no notification path. Nothing here will tell
@@ -570,9 +637,48 @@ IMAGE_DRIFT_PROMOTED=0
 #                        AND the override. Setting one can only turn a green file red; unsetting it
 #                        restores the plain repo-vs-host assertion, never a skip.
 DRIFT_APPDATA_ROOT="${DRIFT_APPDATA_ROOT:-/mnt/fast/appdata}"
+#   DRIFT_REPO_ROOT      the host-side checkout the `git show HEAD:<path>` half reads. Added
+#                        2026-09-21 by plan 06-10 for one reason and one reason only: WITHOUT IT
+#                        THE FOURTH PAIR'S RED BRANCHES CANNOT BE DRIVEN. The repo half was
+#                        hard-coded, so a pair whose file is not yet in the host's HEAD can only
+#                        ever produce the exit-4 could-not-look branch — the comparison, the label
+#                        arm and the DRIFT_EXPECT_* arm are all unreachable, and an undriveable
+#                        branch is an unproven branch. Same contract as DRIFT_APPDATA_ROOT: ANY
+#                        non-default value forces EXIT_CODE=1 whatever the comparison then finds,
+#                        so pointing it at a convenient checkout can never report green.
+DRIFT_REPO_ROOT="${DRIFT_REPO_ROOT:-/mnt/fast/stacks}"
 DRIFT_EXPECT_AUDIO_BASH="${DRIFT_EXPECT_AUDIO_BASH:-}"
 DRIFT_EXPECT_SABNZBD_BEETS_CONFIG="${DRIFT_EXPECT_SABNZBD_BEETS_CONFIG:-}"
 DRIFT_EXPECT_SURVIVOR_BEETS_CONFIG="${DRIFT_EXPECT_SURVIVOR_BEETS_CONFIG:-}"
+# FOURTH PAIR, added 2026-09-21 by plan 06-10 (D-03). Same ADDITIVE contract as the three above,
+# stated again rather than cross-referenced because that is the only reason it is safe to exist:
+# when set, the host hash must equal the repo hash AND this value, so setting it can only turn a
+# green file red. Unsetting it restores the plain repo-vs-host assertion, never a skip.
+DRIFT_EXPECT_FLASK_CONFIG="${DRIFT_EXPECT_FLASK_CONFIG:-}"
+
+# ENV OVERRIDES for the D-03 MOUNT ASSERTION, added 2026-09-21 by plan 06-10. Same contract as
+# DASH_HOST / EXTCONF_HOST: EVERY ONE OF THESE BEING NON-DEFAULT FORCES EXIT_CODE=1, whatever the
+# assertion then measures. They exist ONLY to drive the block's red and could-not-look branches —
+# pointing the expected source at a path that is not mounted must produce a RED that NAMES the
+# mount, and it must never be usable to point the assertion at something convenient and call it
+# healthy. There is deliberately NO success-producing override and NO sentinel that skips the
+# block; do not add one.
+D03_FLASK_CONTAINER="${D03_FLASK_CONTAINER:-beets-flask}"
+D03_BEETS_CONFIG_SOURCE="${D03_BEETS_CONFIG_SOURCE:-/mnt/fast/appdata/arrs/beets/config/config.yaml}"
+D03_BEETS_CONFIG_DEST="${D03_BEETS_CONFIG_DEST:-/config/config.yaml}"
+D03_MEDIA_SOURCE="${D03_MEDIA_SOURCE:-/mnt/tank/media}"
+D03_CLI_COMPOSE="${D03_CLI_COMPOSE:-stacks/selfhosted/arrs/beets/beets.yaml}"
+D03_CLI_PROFILE="${D03_CLI_PROFILE:-manual}"
+
+# ENV OVERRIDES for the D-04 THROWAWAY-`-l` ASSERTION, added 2026-09-21 by plan 06-10. Same
+# contract: any non-default value forces EXIT_CODE=1. D04_DOC_BASELINE is the PINNED count of
+# invocation-shaped lines in DOCUMENTATION (see the block for why documentation is scoped out of
+# the assertion but still counted), so the count cannot grow unseen.
+D04_DOC_BASELINE="${D04_DOC_BASELINE:-2}"
+# D04_REPO_ROOT exists for the same single reason as DRIFT_REPO_ROOT above — the scan reads the
+# host's HEAD, so without it the violation branch cannot be driven without committing a deliberate
+# footgun to the deployed checkout. Any non-default value forces EXIT_CODE=1.
+D04_REPO_ROOT="${D04_REPO_ROOT:-/mnt/fast/stacks}"
 
 # ENV OVERRIDES for the "extended.conf destructive switches" block (CR-01/WR-01), added 2026-09-14.
 # Same contract as DRIFT_APPDATA_ROOT above, and the precedent is stated explicitly because it is
@@ -1043,13 +1149,23 @@ else
     EXIT_CODE=1
 fi
 
-# Vendored-file drift (D-13). THREE files in this repo are vendored copies of files that a
-# container reads at runtime from /mnt/fast/appdata, and for all three the APPDATA COPY IS
-# AUTHORITATIVE while the repo copy exists for review, history and exactly this comparison:
+# Vendored-file drift (D-13, widened to FOUR pairs 2026-09-21 by plan 06-10 / D-03). FOUR files in
+# this repo are vendored copies of files that a container reads at runtime from /mnt/fast/appdata,
+# and for all four the APPDATA COPY IS AUTHORITATIVE while the repo copy exists for review, history
+# and exactly this comparison:
 #
 #   stacks/selfhosted/arrs/sabnzbd/audio.bash          -> .../arrs/sabnzbd/config/scripts/audio.bash
 #   stacks/selfhosted/arrs/sabnzbd/beets-config.yaml   -> .../arrs/sabnzbd/config/scripts/beets-config.yaml
 #   stacks/selfhosted/arrs/beets/config.yaml           -> .../arrs/beets/config/config.yaml
+#   stacks/selfhosted/arrs/beets/flask-config.yaml     -> .../arrs/beets/config/beets-flask/config.yaml
+#
+# THE FOURTH PAIR IS NOT THE CASE (c) BELOW ARGUES AGAINST. That argument (`:1183` at the time it
+# was written) is about answering a MOUNT question with a HASH, and about vendoring a file carrying
+# five *ArrApiKey fields into a public repository. flask-config.yaml is neither: it is a genuinely
+# vendored file, already in git, that beets-flask reads at runtime from appdata at
+# $BEETSFLASKDIR/config.yaml, and it carries no credential. The mount half of D-03 is asserted
+# separately, from `docker inspect .Mounts`, in the block immediately after this one — because a
+# hash cannot tell you WHICH CONTAINERS read the file it hashed.
 #
 # WHY THIS BLOCK EXISTS (D-08). Upstream arr-scripts' setup.bash re-downloads audio.bash and
 # beets-config.yaml from GitHub on container start. That revert path is real and measured, it is
@@ -1094,7 +1210,12 @@ else
         echo "  ⚠️  DRIFT_APPDATA_ROOT override in effect — this run cannot report the vendored files green"
         EXIT_CODE=1
     fi
-    DRIFT_CMD="set -o pipefail; cd /mnt/fast/stacks || exit 3
+    if [ "$DRIFT_REPO_ROOT" != "/mnt/fast/stacks" ]; then
+        DRIFT_ROOT_OVERRIDDEN=1
+        echo "  ⚠️  DRIFT_REPO_ROOT override in effect — this run cannot report the vendored files green"
+        EXIT_CODE=1
+    fi
+    DRIFT_CMD="set -o pipefail; cd $DRIFT_REPO_ROOT || exit 3
 _drift_pair() {
   r=\$(timeout $REMOTE_TIMEOUT git show \"HEAD:\$2\" | sha256sum | cut -d' ' -f1) || exit 4
   h=\$(timeout $REMOTE_TIMEOUT sha256sum \"\$3\" | cut -d' ' -f1) || exit 5
@@ -1102,7 +1223,8 @@ _drift_pair() {
 }
 _drift_pair audio.bash stacks/selfhosted/arrs/sabnzbd/audio.bash \"$DRIFT_APPDATA_ROOT/arrs/sabnzbd/config/scripts/audio.bash\"
 _drift_pair sabnzbd-beets-config.yaml stacks/selfhosted/arrs/sabnzbd/beets-config.yaml \"$DRIFT_APPDATA_ROOT/arrs/sabnzbd/config/scripts/beets-config.yaml\"
-_drift_pair survivor-config.yaml stacks/selfhosted/arrs/beets/config.yaml \"$DRIFT_APPDATA_ROOT/arrs/beets/config/config.yaml\""
+_drift_pair survivor-config.yaml stacks/selfhosted/arrs/beets/config.yaml \"$DRIFT_APPDATA_ROOT/arrs/beets/config/config.yaml\"
+_drift_pair flask-config.yaml stacks/selfhosted/arrs/beets/flask-config.yaml \"$DRIFT_APPDATA_ROOT/arrs/beets/config/beets-flask/config.yaml\""
     DRIFT_OUT=$(ssh -n $SSH_OPTS root@172.16.1.159 "$DRIFT_CMD")
     DRIFT_RC=$?   # ssh propagates the remote status — NO local pipe above, see the note above
     if [ -z "$DRIFT_OUT" ] && [ "$DRIFT_RC" -ne 124 ]; then
@@ -1114,14 +1236,17 @@ _drift_pair survivor-config.yaml stacks/selfhosted/arrs/beets/config.yaml \"$DRI
         echo "  Nothing was compared. This is NOT 'the vendored files match'."
         EXIT_CODE=1
     elif [ "$DRIFT_RC" -ne 0 ]; then
-        echo "  ⚠️  UNKNOWN — could not look (ssh exit $DRIFT_RC; 3 = no /mnt/fast/stacks checkout,"
+        echo "  ⚠️  UNKNOWN — could not look (ssh exit $DRIFT_RC; 3 = no $DRIFT_REPO_ROOT checkout,"
         echo "  4 = 'git show HEAD:<path>' failed, 5 = the appdata copy could not be hashed)."
         echo "  Nothing was compared. This is NOT 'the vendored files match'."
         EXIT_CODE=1
     else
         DRIFT_LINES=$(printf '%s\n' "$DRIFT_OUT" | grep -c 'repo=')
-        if [ "$DRIFT_LINES" -ne 3 ]; then
-            echo "  ⚠️  UNKNOWN — expected 3 comparison lines, got $DRIFT_LINES. Nothing is asserted."
+        # HARD-CODED, and moved from 3 to 4 in the same edit as the fourth _drift_pair, the label
+        # `case` arm, the DRIFT_EXPECT_FLASK_CONFIG variable and the green line. All five move
+        # together or this block reports three of four and reads green.
+        if [ "$DRIFT_LINES" -ne 4 ]; then
+            echo "  ⚠️  UNKNOWN — expected 4 comparison lines, got $DRIFT_LINES. Nothing is asserted."
             echo "  A short answer is 'could not look', NOT 'the files that did report are fine'."
             EXIT_CODE=1
         else
@@ -1134,6 +1259,7 @@ _drift_pair survivor-config.yaml stacks/selfhosted/arrs/beets/config.yaml \"$DRI
                     audio.bash)                d_exp="$DRIFT_EXPECT_AUDIO_BASH" ;;
                     sabnzbd-beets-config.yaml) d_exp="$DRIFT_EXPECT_SABNZBD_BEETS_CONFIG" ;;
                     survivor-config.yaml)      d_exp="$DRIFT_EXPECT_SURVIVOR_BEETS_CONFIG" ;;
+                    flask-config.yaml)         d_exp="$DRIFT_EXPECT_FLASK_CONFIG" ;;
                     *)
                         echo "  ⚠️  UNKNOWN — unrecognised comparison label '$d_label'; nothing asserted for it."
                         EXIT_CODE=1
@@ -1152,8 +1278,317 @@ _drift_pair survivor-config.yaml stacks/selfhosted/arrs/beets/config.yaml \"$DRI
                 fi
             done <<< "$DRIFT_OUT"
             if [ "$DRIFT_BAD" -eq 0 ] && [ "$DRIFT_ROOT_OVERRIDDEN" -eq 0 ]; then
-                echo "  ✅ vendored files match (3): audio.bash, sabnzbd beets-config.yaml, survivor config.yaml"
+                echo "  ✅ vendored files match (4): audio.bash, sabnzbd beets-config.yaml, survivor config.yaml, flask-config.yaml"
             fi
+        fi
+    fi
+fi
+
+# D-03 — ONE VENDORED BEETS CONFIG, MOUNTED INTO BOTH CONTAINERS. Added 2026-09-21 (plan 06-10).
+# See the TENTH EXIT-CODE notice at the top of this file for what this added to the fatal path.
+#
+# WHY THIS IS NOT A HASH. The block above asserts that the repo copy and the appdata copy of
+# `beets/config.yaml` are byte-identical. That says nothing about WHO READS IT, and D-03's claim is
+# about exactly that: ONE vendored beets config and ONE library.db are mounted into BOTH the active
+# front end (beets-flask) and the dormant CLI arm (beets), which is the only thing that makes
+# `BEETSDIR=/config` in flask.yaml and `library: /config/library.db` in the config resolve to the
+# same file on both sides. A hash cannot answer a mount question. `docker inspect .Mounts` can.
+#
+# TWO DIFFERENT INSTRUMENTS FOR TWO DIFFERENT CONTAINER STATES, and that asymmetry is the point:
+#   * beets-flask is RUNNING, so it is read from the RUNTIME — `docker inspect`. This is the WR-02
+#     lesson: what a compose file declares and what the daemon actually attached are different
+#     claims, and the one that matters is the daemon's.
+#   * beets is DORMANT by design (`restart: "no"`, `profiles: ["manual"]`, commented out of
+#     ../compose.yaml's include list), so there is nothing to inspect. It is RENDERED with
+#     `docker compose config` instead — declared, not attached, and labelled as such below.
+#     ⚠️ THE `--profile manual` FLAG IS LOAD-BEARING AND WAS MEASURED, NOT ASSUMED. Without it,
+#     `docker compose -f beets/beets.yaml config` prints `services: {}` on this estate — a
+#     perfectly valid YAML document with nothing in it, which a naive matcher reads as "no bad
+#     mounts" and reports green. That is the row-22 shape again in a new costume.
+#
+# D-05 IS ASSERTED HERE TOO, FROM THE RUNTIME RATHER THAN FROM THE FILE. /mnt/tank/media must be
+# read-only on BOTH containers for the whole of Phase 6. beets.yaml and flask.yaml both say so in
+# comments; this block is the half that checks the daemon agrees.
+#
+# FAIL-CLOSED ON EVERY BRANCH, house S1 order (empty output first, deferring when the status is
+# 124; then 124; then any other non-zero; and only then is anything asserted). AN EMPTY
+# `docker inspect` RESULT IS `UNKNOWN`, NEVER "no bad mounts" — check-music-freeze.sh's row-22
+# control already proved on this estate that an empty inspect must not satisfy a zero-test.
+# NEITHER REMOTE STRING CONTAINS A PIPE, deliberately: with no pipe there is nothing for the bound
+# to fail to bind through, the ssh status is the remote status, and the matching is done LOCALLY —
+# which is the shape WR-09 arrived at after `grep -q` laundered a 124 into a 1.
+echo "D-03 — one vendored beets config into both containers:"
+D03_OVERRIDDEN=0
+if [ "$D03_FLASK_CONTAINER" != "beets-flask" ] \
+   || [ "$D03_BEETS_CONFIG_SOURCE" != "/mnt/fast/appdata/arrs/beets/config/config.yaml" ] \
+   || [ "$D03_BEETS_CONFIG_DEST" != "/config/config.yaml" ] \
+   || [ "$D03_MEDIA_SOURCE" != "/mnt/tank/media" ] \
+   || [ "$D03_CLI_COMPOSE" != "stacks/selfhosted/arrs/beets/beets.yaml" ] \
+   || [ "$D03_CLI_PROFILE" != "manual" ]; then
+    D03_OVERRIDDEN=1
+    echo "  ⚠️  a D03_* override is in effect — this run cannot report the mounts green"
+    EXIT_CODE=1
+fi
+D03_BAD=0
+D03_LOOKED=0
+
+# --- (i) the ACTIVE front end, read from the runtime --------------------------------------------
+D03_FLASK_OUT=$(ssh -n $SSH_OPTS root@172.16.1.159 "timeout $REMOTE_TIMEOUT docker inspect $D03_FLASK_CONTAINER --format '{{range .Mounts}}{{.Source}} {{.Destination}} {{.RW}}
+{{end}}'")
+D03_FLASK_RC=$?   # ssh propagates the remote status — NO local pipe above
+D03_FLASK_LINES=$(printf '%s\n' "$D03_FLASK_OUT" | grep -c '^/')
+if [ "$D03_FLASK_LINES" -eq 0 ] && [ "$D03_FLASK_RC" -ne 124 ]; then
+    echo "  ⚠️  UNKNOWN — 'docker inspect $D03_FLASK_CONTAINER' returned no mount lines (ssh exit $D03_FLASK_RC)."
+    echo "  Nothing was asserted. This is NOT 'no bad mounts' — an empty inspect must never satisfy a zero-test."
+    EXIT_CODE=1
+elif [ "$D03_FLASK_RC" -eq 124 ]; then
+    echo "  ⚠️  UNKNOWN — 'docker inspect $D03_FLASK_CONTAINER' exceeded its ${REMOTE_TIMEOUT}s bound and was killed."
+    echo "  Nothing was asserted. This is NOT 'no bad mounts'."
+    EXIT_CODE=1
+elif [ "$D03_FLASK_RC" -ne 0 ]; then
+    echo "  ⚠️  UNKNOWN — could not inspect $D03_FLASK_CONTAINER (ssh exit $D03_FLASK_RC)."
+    echo "  Nothing was asserted. This is NOT 'no bad mounts'."
+    EXIT_CODE=1
+else
+    D03_LOOKED=1
+    D03_F_CFG=$(printf '%s\n' "$D03_FLASK_OUT" | awk -v d="$D03_BEETS_CONFIG_DEST" '$2==d {print $1" "$3}')
+    if [ -z "$D03_F_CFG" ]; then
+        echo "  ❌ $D03_FLASK_CONTAINER has NO mount at $D03_BEETS_CONFIG_DEST — the vendored beets config is not mounted"
+        EXIT_CODE=1
+        D03_BAD=$((D03_BAD + 1))
+    else
+        D03_F_CFG_SRC=${D03_F_CFG% *}
+        D03_F_CFG_RW=${D03_F_CFG#* }
+        if [ "$D03_F_CFG_SRC" != "$D03_BEETS_CONFIG_SOURCE" ]; then
+            echo "  ❌ $D03_FLASK_CONTAINER: $D03_BEETS_CONFIG_DEST comes from '$D03_F_CFG_SRC', expected '$D03_BEETS_CONFIG_SOURCE'"
+            EXIT_CODE=1
+            D03_BAD=$((D03_BAD + 1))
+        fi
+        if [ "$D03_F_CFG_RW" != "false" ]; then
+            echo "  ❌ $D03_FLASK_CONTAINER: $D03_BEETS_CONFIG_DEST is RW=$D03_F_CFG_RW, expected RW=false (:ro)"
+            EXIT_CODE=1
+            D03_BAD=$((D03_BAD + 1))
+        fi
+    fi
+    D03_F_MEDIA=$(printf '%s\n' "$D03_FLASK_OUT" | awk -v s="$D03_MEDIA_SOURCE" '$1==s {print $3}')
+    if [ -z "$D03_F_MEDIA" ]; then
+        echo "  ❌ $D03_FLASK_CONTAINER has NO mount from $D03_MEDIA_SOURCE — D-05 cannot be asserted from this runtime"
+        EXIT_CODE=1
+        D03_BAD=$((D03_BAD + 1))
+    elif [ "$D03_F_MEDIA" != "false" ]; then
+        echo "  ❌ D-05 VIOLATED — $D03_FLASK_CONTAINER holds $D03_MEDIA_SOURCE at RW=$D03_F_MEDIA, expected RW=false"
+        EXIT_CODE=1
+        D03_BAD=$((D03_BAD + 1))
+    fi
+fi
+
+# --- (ii) the DORMANT CLI arm, rendered rather than inspected -----------------------------------
+D03_CLI_OUT=$(ssh -n $SSH_OPTS root@172.16.1.159 "cd /mnt/fast/stacks || exit 3; timeout $REMOTE_TIMEOUT docker compose --profile $D03_CLI_PROFILE -f $D03_CLI_COMPOSE config 2>/dev/null")
+D03_CLI_RC=$?   # ssh propagates the remote status — NO local pipe above
+# Normalise the long-form `volumes:` the renderer emits into `source target ro|rw`, LOCALLY.
+# `read_only:` is EMITTED ONLY WHEN TRUE, so its ABSENCE means read-write — the default here is
+# therefore `rw`, which is the fail-closed direction: a missing key can only make a row redder.
+D03_CLI_MOUNTS=$(printf '%s\n' "$D03_CLI_OUT" | awk '
+  /^[[:space:]]*-[[:space:]]*type:[[:space:]]*bind/ { if (s != "") print s, t, ro; s=""; t=""; ro="rw"; next }
+  /^[[:space:]]*source:[[:space:]]/               { s=$2; next }
+  /^[[:space:]]*target:[[:space:]]/               { t=$2; next }
+  /^[[:space:]]*read_only:[[:space:]]*true/       { ro="ro"; next }
+  END { if (s != "") print s, t, ro }
+')
+D03_CLI_LINES=$(printf '%s\n' "$D03_CLI_MOUNTS" | grep -c '^/')
+if [ "$D03_CLI_LINES" -eq 0 ] && [ "$D03_CLI_RC" -ne 124 ]; then
+    echo "  ⚠️  UNKNOWN — rendering $D03_CLI_COMPOSE yielded no bind mounts (ssh exit $D03_CLI_RC;"
+    echo "  3 = no /mnt/fast/stacks checkout). Nothing was asserted, and 'services: {}' is what a"
+    echo "  MISSING --profile $D03_CLI_PROFILE looks like — it is NOT 'no bad mounts'."
+    EXIT_CODE=1
+elif [ "$D03_CLI_RC" -eq 124 ]; then
+    echo "  ⚠️  UNKNOWN — rendering $D03_CLI_COMPOSE exceeded its ${REMOTE_TIMEOUT}s bound and was killed."
+    echo "  Nothing was asserted. This is NOT 'no bad mounts'."
+    EXIT_CODE=1
+elif [ "$D03_CLI_RC" -ne 0 ]; then
+    echo "  ⚠️  UNKNOWN — could not render $D03_CLI_COMPOSE (ssh exit $D03_CLI_RC)."
+    echo "  Nothing was asserted. This is NOT 'no bad mounts'."
+    EXIT_CODE=1
+else
+    D03_C_CFG=$(printf '%s\n' "$D03_CLI_MOUNTS" | awk -v d="$D03_BEETS_CONFIG_DEST" '$2==d {print $1" "$3}')
+    if [ -z "$D03_C_CFG" ]; then
+        echo "  ❌ the dormant CLI arm declares NO mount at $D03_BEETS_CONFIG_DEST — the two containers do not share one config"
+        EXIT_CODE=1
+        D03_BAD=$((D03_BAD + 1))
+    else
+        D03_C_CFG_SRC=${D03_C_CFG% *}
+        D03_C_CFG_RO=${D03_C_CFG#* }
+        if [ "$D03_C_CFG_SRC" != "$D03_BEETS_CONFIG_SOURCE" ]; then
+            echo "  ❌ dormant CLI arm: $D03_BEETS_CONFIG_DEST comes from '$D03_C_CFG_SRC', expected '$D03_BEETS_CONFIG_SOURCE'"
+            EXIT_CODE=1
+            D03_BAD=$((D03_BAD + 1))
+        fi
+        if [ "$D03_C_CFG_RO" != "ro" ]; then
+            echo "  ❌ dormant CLI arm: $D03_BEETS_CONFIG_DEST is declared $D03_C_CFG_RO, expected ro"
+            EXIT_CODE=1
+            D03_BAD=$((D03_BAD + 1))
+        fi
+    fi
+    D03_C_MEDIA=$(printf '%s\n' "$D03_CLI_MOUNTS" | awk -v s="$D03_MEDIA_SOURCE" '$1==s {print $3}')
+    if [ -z "$D03_C_MEDIA" ]; then
+        echo "  ❌ the dormant CLI arm declares NO mount from $D03_MEDIA_SOURCE — D-05 cannot be asserted for it"
+        EXIT_CODE=1
+        D03_BAD=$((D03_BAD + 1))
+    elif [ "$D03_C_MEDIA" != "ro" ]; then
+        echo "  ❌ D-05 VIOLATED — the dormant CLI arm declares $D03_MEDIA_SOURCE as $D03_C_MEDIA, expected ro"
+        EXIT_CODE=1
+        D03_BAD=$((D03_BAD + 1))
+    fi
+    if [ "$D03_LOOKED" -eq 1 ] && [ "$D03_BAD" -eq 0 ] && [ "$D03_OVERRIDDEN" -eq 0 ]; then
+        echo "  ✅ one config, both containers: $D03_BEETS_CONFIG_SOURCE -> $D03_BEETS_CONFIG_DEST :ro"
+        echo "     runtime  ($D03_FLASK_CONTAINER, inspected): config :ro, $D03_MEDIA_SOURCE :ro"
+        echo "     declared (dormant CLI arm, rendered):       config :ro, $D03_MEDIA_SOURCE :ro"
+    fi
+fi
+
+# D-04 — NO `beet` INVOCATION MAY OPEN THE REAL LIBRARY. Added 2026-09-21 (plan 06-10).
+# See the TENTH EXIT-CODE notice at the top of this file for what this added to the fatal path.
+#
+# WHAT IT ASSERTS, AND WHY BOTH FLAGS ARE REQUIRED RATHER THAN ONE. One library.db is mounted into
+# two different beets versions (D-03 above): the LSIO image is 2.13.1 and beets-flask executes
+# 2.12.0. A bare `beet` in the CLI arm would OPEN that database and MIGRATE ITS SCHEMA under
+# 2.12.0's feet — Phase 1 measured a bare `beet config` running 11 migrations unasked. So every
+# invocation intended for the CLI arm must carry BOTH:
+#   * `-l <throwaway>`, pointing anywhere except /config/library.db; AND
+#   * `-c <overlay>`, because `-l` ALONE DOES NOT REDIRECT `statefile:`. The statefile is a
+#     SEPARATE pickle holding the incremental-import marks, it is not covered by `-l` at all, and
+#     a throwaway import on a throwaway `-l` still writes the shared state.pickle. The overlay is
+#     the only thing that redirects `library`, `statefile` AND `directory` together.
+# `-l` alone is the plausible-looking half-fix, which is exactly why the assertion names statefile.
+#
+# SCOPE, AND THE ONE EXCLUSION, STATED RATHER THAN SILENT. The asserted set is every text file
+# tracked under scripts/ and stacks/ at the host's HEAD, MINUS `*.md`. Documentation is excluded
+# because two of this repo's `.md` lines are HISTORIC QUOTATIONS — beets.md records "the documented
+# flow" as it was in Nov 2025, and rewriting a quotation to satisfy a grep falsifies the record
+# this repo keeps deliberately. The exclusion is not a free pass: documentation hits are COUNTED
+# against a pinned baseline (D04_DOC_BASELINE) and a change in that count is its own red, so a new
+# copy-pasteable bare invocation cannot arrive in the runbook unseen.
+#
+# THE STRIP IS PROVEN TO BE DOING WORK, WHICH IS THE WHOLE REASON THREE COUNTS ARE PRINTED. This
+# repository has been bitten four separate times by a grep satisfied by prose ABOUT a thing rather
+# than by the thing. A single number cannot distinguish "nothing matched" from "the pattern was
+# wrong", so the raw hit count, the comment-stripped count and the invocation-shaped count are all
+# reported. If raw and stripped are equal, the strip is not stripping and the result is suspect.
+#
+# WHY IT READS THE HOST'S HEAD RATHER THAN THE WORKSTATION'S WORKING TREE. Same reason the drift
+# block does: a dirty or stale checkout on the workstation must not be able to produce a false
+# green or a false red, and the host runs what the host has. The consequence is stated plainly —
+# a fix committed here is not asserted until it is pushed and pulled, which surfaces as a red
+# naming the offending line, not as a silence.
+#
+# THE REMOTE PATTERN IS `git grep -w beet` AND CARRIES NO `|` ON PURPOSE. The obvious form,
+# an anchored alternation, puts a literal pipe in the command string — and this file's greppable
+# `timeout $REMOTE_TIMEOUT.*|` invariant matches on the LINE, so a pipe inside a regex reads to
+# that grep exactly like an unguarded shell pipeline. Three pre-existing lines already trip it
+# that way (two `sha256sum` stages inside a `pipefail`-headed string, and one `|| echo`); adding a
+# fourth false positive would erode an invariant that is only worth having while it is clean.
+# `-w` is also MEASURED-equivalent, not assumed: on the host's HEAD it returns 37 raw hits against
+# the alternation's 30, and the invocation-shaped set is IDENTICAL (the same two lines).
+#
+# AND THIS PARAGRAPH ITSELF MOVES THAT GREP'S COUNT, WHICH IS STATED RATHER THAN ROUNDED, the same
+# convention the EXIT-CODE notices use: `grep -c 'timeout $REMOTE_TIMEOUT.*|'` goes 6 -> 8, because
+# this block quotes the pattern literally TWICE — once in the paragraph above and once in this
+# one. Measured before and after, not assumed. The real COMMAND lines are
+# unchanged at 6, of which three are false positives that pre-date this edit (`:889`'s `|| echo`,
+# and `:1194`/`:1195`, whose pipes sit inside a command string already headed by `set -o pipefail`).
+# Do not reword this paragraph to flatter the grep, and do not "fix" the offset by deleting the
+# quotes — count the command lines, not the matches.
+#
+# NO PIPE IN THE REMOTE STRING, and the matching is LOCAL. `git grep` exits 1 when it matches
+# nothing, which is a legitimate PASS, so the status is captured and only >1 is a failure — and a
+# `D04-BEGIN` sentinel is emitted FIRST so that "looked and found nothing" is distinguishable from
+# "never ran". Without the sentinel those two produce identical empty output.
+echo "D-04 — throwaway -l plus -c overlay on every beet invocation:"
+D04_OVERRIDDEN=0
+if [ "$D04_DOC_BASELINE" != "2" ]; then
+    D04_OVERRIDDEN=1
+    echo "  ⚠️  D04_DOC_BASELINE override in effect — this run cannot report D-04 green"
+    EXIT_CODE=1
+fi
+if [ "$D04_REPO_ROOT" != "/mnt/fast/stacks" ]; then
+    D04_OVERRIDDEN=1
+    echo "  ⚠️  D04_REPO_ROOT override in effect — this run cannot report D-04 green"
+    EXIT_CODE=1
+fi
+D04_CMD="cd $D04_REPO_ROOT || exit 3
+echo D04-BEGIN
+timeout $REMOTE_TIMEOUT git grep -n -I -w -E 'beet' HEAD -- scripts stacks
+D04_RC=\$?
+if [ \$D04_RC -gt 1 ]; then exit 4; fi
+exit 0"
+D04_OUT=$(ssh -n $SSH_OPTS root@172.16.1.159 "$D04_CMD")
+D04_RC=$?   # ssh propagates the remote status — NO local pipe above
+D04_SENTINEL=$(printf '%s\n' "$D04_OUT" | grep -c '^D04-BEGIN')
+if [ "$D04_SENTINEL" -eq 0 ] && [ "$D04_RC" -ne 124 ]; then
+    echo "  ⚠️  UNKNOWN — the D-04 scan produced no sentinel (ssh exit $D04_RC; 3 = no"
+    echo "  /mnt/fast/stacks checkout, 4 = 'git grep' failed). Nothing was scanned. This is NOT"
+    echo "  'no bare beet invocations'."
+    EXIT_CODE=1
+elif [ "$D04_RC" -eq 124 ]; then
+    echo "  ⚠️  UNKNOWN — the D-04 scan exceeded its ${REMOTE_TIMEOUT}s bound and was killed."
+    echo "  Nothing was scanned. This is NOT 'no bare beet invocations'."
+    EXIT_CODE=1
+elif [ "$D04_RC" -ne 0 ]; then
+    echo "  ⚠️  UNKNOWN — could not run the D-04 scan (ssh exit $D04_RC)."
+    echo "  Nothing was scanned. This is NOT 'no bare beet invocations'."
+    EXIT_CODE=1
+else
+    D04_HITS=$(printf '%s\n' "$D04_OUT" | grep '^HEAD:')
+    D04_RAW=$(printf '%s\n' "$D04_HITS" | grep -c '^HEAD:')
+    # Comment strip: `#` for shell and YAML, `//` for anything C-like. Applied to the CONTENT, so
+    # the `HEAD:<path>:<line>:` prefix that git grep prepends cannot be mistaken for content.
+    D04_KEPT=$(printf '%s\n' "$D04_HITS" | grep -vE '^HEAD:[^:]*:[0-9]*:[[:space:]]*(#|//)')
+    D04_STRIPPED=$(printf '%s\n' "$D04_KEPT" | grep -c '^HEAD:')
+    # Invocation shape, on the content only: at the start of the content, after a shell separator,
+    # or after a `docker` prefix (`docker exec … beet …`). A back-ticked mention in prose or a
+    # quoted mention inside a Python string does NOT match, which is the narrowing that makes the
+    # stripped count meaningful rather than alarming.
+    D04_INV_RE='^HEAD:[^:]*:[0-9]*:[[:space:]]*(sudo[[:space:]]+)?beet[[:space:]]|[[:space:]](&&|;)[[:space:]]*beet[[:space:]]|docker[[:space:]][^`]*[[:space:]]beet[[:space:]]'
+    D04_INVOKE_ALL=$(printf '%s\n' "$D04_KEPT" | grep -E "$D04_INV_RE")
+    D04_INVOKE_DOC=$(printf '%s\n' "$D04_INVOKE_ALL" | grep '\.md:')
+    D04_INVOKE_EXE=$(printf '%s\n' "$D04_INVOKE_ALL" | grep -v '\.md:' | grep '^HEAD:')
+    D04_N_ALL=$(printf '%s\n' "$D04_INVOKE_ALL" | grep -c '^HEAD:')
+    D04_N_DOC=$(printf '%s\n' "$D04_INVOKE_DOC" | grep -c '^HEAD:')
+    D04_N_EXE=$(printf '%s\n' "$D04_INVOKE_EXE" | grep -c '^HEAD:')
+    echo "  counts: raw=$D04_RAW  comment-stripped=$D04_STRIPPED  invocation-shaped=$D04_N_ALL  (executable $D04_N_EXE, documentation $D04_N_DOC)"
+    if [ "$D04_RAW" -eq 0 ]; then
+        echo "  ⚠️  UNKNOWN — the raw scan matched NOTHING at all. This repository is known to"
+        echo "  mention beets in many files, so a zero here means the pattern is wrong, not that"
+        echo "  the tree is clean. Nothing is asserted."
+        EXIT_CODE=1
+    elif [ "$D04_RAW" -eq "$D04_STRIPPED" ]; then
+        echo "  ⚠️  UNKNOWN — the comment strip removed NOTHING ($D04_RAW = $D04_STRIPPED), so it"
+        echo "  is not doing its job and the narrowed count below cannot be trusted."
+        EXIT_CODE=1
+    else
+        D04_BAD=0
+        while IFS= read -r d04_line; do
+            [ -z "$d04_line" ] && continue
+            d04_l=0; d04_c=0; d04_real=0
+            case "$d04_line" in *" -l "*) d04_l=1 ;; esac
+            case "$d04_line" in *" -c "*) d04_c=1 ;; esac
+            case "$d04_line" in *" -l /config/library.db"*) d04_real=1 ;; esac
+            if [ "$d04_l" -eq 0 ] || [ "$d04_c" -eq 0 ] || [ "$d04_real" -eq 1 ]; then
+                echo "  ❌ beet invocation without a throwaway -l AND a -c overlay (statefile: is NOT redirected by -l alone):"
+                echo "       $d04_line"
+                EXIT_CODE=1
+                D04_BAD=$((D04_BAD + 1))
+            fi
+        done <<< "$D04_INVOKE_EXE"
+        if [ "$D04_N_DOC" -ne "$D04_DOC_BASELINE" ]; then
+            echo "  ❌ documentation invocation count moved: $D04_N_DOC, pinned baseline $D04_DOC_BASELINE."
+            echo "  A new copy-pasteable bare invocation in the runbook is a real footgun. Lines:"
+            printf '%s\n' "$D04_INVOKE_DOC" | sed 's/^/       /'
+            EXIT_CODE=1
+        fi
+        if [ "$D04_BAD" -eq 0 ] && [ "$D04_N_DOC" -eq "$D04_DOC_BASELINE" ] && [ "$D04_OVERRIDDEN" -eq 0 ]; then
+            echo "  ✅ no executable beet invocation opens the real library ($D04_N_EXE invocation-shaped lines outside *.md)"
+            echo "     documentation hits at the pinned baseline ($D04_N_DOC) — historic quotations, see the block comment"
         fi
     fi
 fi
