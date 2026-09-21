@@ -174,3 +174,9 @@ Pre/post sha256: `check-music-freeze.sh` and `beets.md` **identical**. `quick-he
 ## Threat Flags
 
 None. No new network endpoint, auth path, file-access pattern or schema change. Both new blocks are read-only: `docker inspect`, `docker compose config`, `git grep` and `sha256sum`. Nothing was installed. Every new override can only make a block redder.
+
+## Self-Check: PASSED
+
+All six claimed files exist on disk. All five claimed commits exist in this branch's history:
+`40e7d7b`, `e9a7a52`, `cd0f0c6`, `2560971`, `cd688e3` (the last being this summary's own commit,
+amended into the history by the follow-up commit that added this section).
