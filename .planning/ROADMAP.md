@@ -874,15 +874,43 @@ the last cheap moment before a path-format error can be applied at scale.
   3. A `--pretend` run on a bucket-A sample prints top-level folders equal to `ALBUMARTIST` exactly,
      case included — `Various Artists/` appears and `Compilations/` does not, because a
      capitalisation-only mismatch renders a duplicate artist page in Jellyfin.
+     *Instrument corrected 2026-09-20 by plan 06-02 (D-33); the criterion text above is deliberately
+     NOT rewritten. `beet import --pretend` CANNOT produce the intended tree — its pipeline is
+     `read_tasks → log_files`, `lookup_candidates` never runs and no destination path is ever
+     computed, so every line it prints is a SOURCE path and it exits 0 anyway. The destination-path
+     oracle is **`beet move -p`**, which evaluates the full `paths:` stanza through
+     `item.destination()`. `--pretend` is kept for what it genuinely proves — which folders are
+     offered as tasks — which is why it still serves criterion 2. Measured TRUE 2026-09-21 by plan
+     06-11: exit 0, zero-diff over 174 destinations against a fixture committed before the run.*
 
   4. A multi-artist track separated with `;` shows its artists parsed correctly in **both** Jellyfin
      and Music Assistant — the one delimiter both consumers handle.
+     *Amended 2026-09-20 by plan 06-02 (D-34); the criterion text above is deliberately NOT
+     rewritten. The WRITE side is the multi-valued **`ARTISTS`** tag, not `;` inside `ARTIST` —
+     beets has no write-delimiter or join key at 2.12.0 or 2.13.1 and so cannot be configured to
+     emit one; the `;` named above is a property of the existing twelve library files. Both
+     consumers now read `ARTISTS` by construction. **OPEN at Phase 6 close on its JELLYFIN half
+     only**, and recorded as two verdicts that are never summed: MA discharged 2026-09-21 (3/4,
+     2/2, 2/2 on 2.11.0b2), Jellyfin still at baseline (0/4, 1/2, 1/2) because the option is
+     probe-time and 0 of 1,244 rows have been re-probed. It discharges on Phase 7's first write.*
 
   5. Match disambiguation is demonstrated, not merely set: `preferred.countries` carrying `GB` (the
      code MusicBrainz actually stores; `UK` alone silently matches nothing, and entries are
      regexes), `preferred.original_year`, and `musicbrainz.extra_tags` — shown by a *Now!* volume
      preferring the UK release over the US one under `--pretend`, with the run confirmed to have
      written nothing (source and library file counts unchanged).
+     *Two corrections 2026-09-21 (plans 06-11 and 06-12); the criterion text above is deliberately
+     NOT rewritten. (a) **"Source and library file counts unchanged" is WEAKER than what was done**
+     — a count passes while content changes underneath, which Phase 1 measured happening — so
+     "wrote nothing" is discharged by the three-layer D-29 proof: `/media` at `RW=false` from
+     `docker inspect`, `meta` AND `sha256` manifests over all 190 sampled files identical either
+     side and re-verified with `cmp`, and `library.db` / `state.pickle` byte-identical with mtimes
+     recorded as well as hashes. (b) **The *Now!* volume could not demonstrate the preference** —
+     its GB release beats its rival by 0.53 while the whole country term is worth ≤0.0075, so the
+     A/B/C controls came out identical and a second *Now!* row was identical too. The plan's escape
+     clause fired and the demonstration was relocated to a genuine one-key rank-0 flip on another
+     drawn row (`Benson Boone / American Heart`: `['XW','US']` → XW, `['US','XW']` → US, both
+     10 tracks, distance 0.0). `GB`-works-and-`UK`-is-silently-inert was proven separately.*
 **Plans**: 14 plans in 5 waves
 
 | Plan | Objective |
@@ -907,7 +935,7 @@ Plans:
 
 - [x] 06-01-PLAN.md — write the full Phase 6 tagger configuration into the vendored `config.yaml`, offline-validated and credential-screened
 - [x] 06-02-PLAN.md — CONF-06's D-33 addendum (`beet move -p` is the oracle), CONF-04's D-34 addendum (`ARTISTS`, not `;` in `ARTIST`), and PROJECT.md's D-32 correction
-- [x] 06-03-PLAN.md — enable `PreferNonstandardArtistsTag`, targeted-scan via `/Library/Media/Updated`, prove N distinct artist entities, extend `check-music-consumers.sh`
+- [x] 06-03-PLAN.md — enable `PreferNonstandardArtistsTag`, targeted-scan via `/Library/Media/Updated`, prove N distinct artist entities, extend `check-music-consumers.sh` *(amended in band: the option is **probe-time**, so the targeted Default-mode refresh — driven twice, at album scope and at file scope — moved **0 of 1,244** census rows. The aggressive per-item refresh that would re-probe is forbidden in this estate and was not issued, so the option is set and asserted while criterion 4's Jellyfin half stays OPEN.)*
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -920,17 +948,22 @@ Plans:
 - [x] 06-07-PLAN.md — `scripts/check-beets-config.sh` with a `--self-test`, then both D-30 arms run and their disagreements named
 - [x] 06-08-PLAN.md — `scripts/phase06-incremental-control.sh` with a `--self-test`, then both arms run to opposite outcomes
 - [x] 06-09-PLAN.md — `scripts/phase06-oracle.sh`: the oracle core plus nine class assertions, every red branch driven by `--self-test`
-- [x] 06-10-PLAN.md — revise the tagger census to two named-and-classed definitions, widen the drift block to four pairs, add the D-03 mount and D-04 throwaway assertions
+- [x] 06-10-PLAN.md — revise the tagger census to two named-and-classed definitions, widen the drift block to four pairs, add the D-03 mount and D-04 throwaway assertions *(amended in band: `tagger-capable containers` moved 2 → 3 as `beets-flask` joined `sabnzbd` and `lidarr` — reported, not asserted, and none of the three holds `rw` on Music. `beets.md` § Phase 4 still states 2 as "the expected value"; that sentence is now dated and left standing. One deferral: DEF-06-10-01, the freeze fold-in's `timeout 120` does not bound the INNER ssh to atlantis.)*
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [x] 06-11-PLAN.md — run the oracle: zero-diff, the class-assertion reports, and the three-layer wrote-nothing proof
-- [x] 06-12-PLAN.md — the driven country-preference proof with its negative control, and D-30 arm 2's preview cross-check
-- [x] 06-13-PLAN.md — **`autonomous: false`** — operator gate on Music Assistant being back online, then the MA artist-entity read-back or an explicit CONF-04 OPEN
+- [x] 06-11-PLAN.md — run the oracle: zero-diff, the class-assertion reports, and the three-layer wrote-nothing proof *(amended in band: the zero-diff tree grows BOTH `Various Artists/` (44 files) and `Various/` (30 files) — CONF-03 passes on each, because each equals its own `ALBUMARTIST` byte-exactly, but two spellings of one idea is two artist pages in both consumers, arriving through the TAGS. No path rule fixes it; deferred as DEF-06-11-01 to Phase 7.)*
+- [x] 06-12-PLAN.md — the driven country-preference proof with its negative control, and D-30 arm 2's preview cross-check *(amended in band: the plan's own A/B/C controls on the *Now!* row came out **IDENTICAL** — the GB release wins by 0.53 where the whole country term is worth ≤0.0075 — so the escape clause fired and the proof was relocated to a genuine one-key rank-0 flip on another drawn row. Two deferrals: DEF-06-12-01 (path rule 2 unexercised) and DEF-06-12-02 (`musicbrainz.search_limit` is 5).)*
+- [x] 06-13-PLAN.md — **`autonomous: false`** — operator gate on Music Assistant being back online, then the MA artist-entity read-back or an explicit CONF-04 OPEN *(amended in band: the D-36 gate was answered **"run the check"**, MA answered on 2.11.0b2, and CONF-04's MA half CLOSED — A1 and A2 both resolved against the running build first, `MA_VERSION_PROVEN` moved in the same commit as the re-proof. CONF-04 as a whole stays OPEN on its Jellyfin half; the two halves are never summed.)*
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 06-14-PLAN.md — re-measure all five criteria from live state, write the Phase 6 closure, and hand the carried-forward items to Phases 7 and 9
+- [x] 06-14-PLAN.md — re-measure all five criteria from live state, write the Phase 6 closure, and hand the carried-forward items to Phases 7 and 9 *(amended in band: re-measurement at close on 2026-09-21 22:04–22:07Z re-ran `check-beets-config.sh` (exit 0, `FAILURES total: 0`) and both `--self-test`s (exit 0), and re-read both consumers directly through their own APIs; the oracle and the two-arm incremental control were NOT re-driven live, because doing so would import, and their results are cited to their committed artifacts instead.)*
+
+**Phase 6 disposition:** **CLOSED WITH ONE OPEN REQUIREMENT — CONF-04**, named, on its Jellyfin half
+only. Criteria 1, 2, 3 and 5 are TRUE and were re-measured from live state at close. Criterion 4
+carries two verdicts that must never be summed. `tank/downloads@pre-phase5` is **NOT** released —
+see Phase 7's entry criteria.
 
 **Research**: not needed — the specific traps are already captured with citations in the research.
 
@@ -992,6 +1025,83 @@ phase cannot meet its own gate.
 
   8. The source folders still exist afterwards — the run copied rather than moved, so it was
      reversible the whole time.
+
+**Entry criteria inherited from Phase 6** *(added 2026-09-21 by plan 06-14 — each of these is a
+named item Phase 7 must handle before or during its pilot, not a note. They are written here rather
+than only in a Phase 6 artifact because an item recorded where the next phase does not read is an
+item nobody owns.)*:
+
+  E1. **The DJ-routing MECHANISM does not exist (OQ-2 / C-6).** Phase 6 proved the DJ *path rule* —
+      `DJ/$albumartist/$album%aunique{}/…`, 20 destinations, rule 3 — but it supplied `albumtype=dj`
+      **by hand from a shell**, and that may not be cited as evidence for the mechanism.
+      `--set albumtype=dj` is a `beet import` CLI flag backed by `import.set_fields`; beets-flask
+      rc6's `InboxFolderSchema` carries only `path`, `name`, `auto_threshold` and `autotag`, so
+      **there is no per-inbox field-setting mechanism at all**. Three candidate routes, named so
+      Phase 7 does not restart from zero: (a) a **global `import.set_fields`** — wrong, it hits
+      every import including bucket A; (b) a **post-import `beet modify albumtype=dj` followed by
+      `beet move`** — two steps, works today, and `beet move` is already the proven instrument;
+      (c) a **hook plugin** keyed on the source path. Pick one and prove it before routing DJ
+      content through flask.
+      **Attached to the same item: path rule 2 (`albumtype:=dj disctotal:2..`) has been evaluated by
+      NO instrument** (DEF-06-12-01). It is the only rule in the committed `paths:` stanza in that
+      state. Seven `dj-mixes` folders carry `disctotal = 2`. A rule that has never been evaluated
+      is exactly where a `-1 - ` / `00-01` rendering defect hides — Phase 3 found one of those in
+      the tagger this project retired. Deferred here **by explicit operator decision**, because
+      reaching outside the drawn sample for a folder chosen *because* it carries the attribute
+      under test is the hand-picking D-26 exists to prevent.
+
+  E2. **Never route a folder to `bootleg` without first asserting `album` is populated and distinct
+      across the intended groups.** The same button produced Phase 3's best and worst results purely
+      on that condition, **with no UI signal either way**. `03-asis` is registered as an inbox but
+      nothing was staged into it in Phase 6 (measured empty), so this gate is **untested** and its
+      first real exercise is Phase 7's.
+
+  E3. **The `rw` grant on the library is Phase 7's FIRST act (D-05)**, done deliberately and with
+      the snapshot fence already in place — not discovered halfway through an import. Phase 6 held
+      `/media` at `RW=false` for its entire duration and D-21's fenced write never fired.
+
+  E4. **`tank/downloads@pre-phase5` is NOT released until Phase 7's pilot passes (D-32).** Phase 6
+      wrote nothing, so it produced **no evidence that Phase 5's changes were correct**; only a real
+      import exercises them. It is the only undo for Phase 5's 4,750 renames, 751 in-place tag
+      writes and 26,005 chowns, and it is **not a clean undo** — a rollback discards everything
+      every service has written to `tank/downloads` since 2026-09-18 15:42, which makes it an
+      estate-wide decision rather than a music-project one.
+
+  E5. **Repair `Def Leppard/Def Leppard (2015)/` (D-19a)**, plus any album directory plan 06-11
+      reported in that shape. Related and separate: 30 of Jellyfin's 1,244 items carry a non-empty
+      `Artists` string list and **zero** `ArtistItems` entities (all of `Lady Gaga/ARTPOP (2013)`,
+      all of `Lady Gaga/Joanne (2016)`, and one Def Leppard track).
+
+  E6. **CONF-04's Jellyfin half is OPEN and discharges here.** The option is set and asserted; the
+      three pinned rows read 0/4, 1/2, 1/2 because `PreferNonstandardArtistsTag` is probe-time and
+      nothing has re-probed them. Phase 7's first write or import of a multi-artist release is the
+      discharge. **Two measurements to take at that moment**, both named rather than left as notes:
+      whether Jellyfin's re-probe produces 4/2/2 entities, and whether a **second ≥4-artist track**
+      yields four artists in Music Assistant or three — the only measurement that separates "MA caps
+      the list at 3" from "`Twista` specifically failed to map", which a sample of one cannot.
+
+  E7. **DUPE-01 / DUPE-02 need a roadmap decision BEFORE this phase runs.** Phase 1 measured 828
+      duplicate groups / 19.4 % duplication; Phase 3 re-confirmed `dj-mixes` is a byte-for-byte
+      duplicate subset of `unsorted`, which makes Phase 7's diff join **last-wins** — a silent
+      behaviour rather than a chosen one. It is not Phase 6's to fix, and it is the nearest unowned
+      blocker to this phase, which is why it is named here.
+
+  E8. **Every `%aunique{}` firing on plan 06-11's list is a known MA risk to verify (D-16).** MA's
+      `missing_album_artist_action: folder_name` fires only when the album **folder** and the album
+      **tag** agree and **silently falls back to `Various Artists`** when they do not — while
+      `config/providers/get` still reads back `folder_name`, so the setting looks correct either
+      way. An `%aunique{}` firing makes folder and tag differ **by construction**. Dropping the
+      disambiguator is not the answer: that trades a *detectable* MA fallback for *silent* path
+      collisions across 828 duplicate groups.
+
+  E9. **Match-check ORDER, measured in plan 06-12: gate on `recommendation` → then track count →
+      then per-track distance.** A track count matching exactly is **not** sufficient — `Vol 002`'s
+      top candidate is a Finnish release with 30 tracks against 30 files and beets still refuses it
+      at `recommendation: none`. Related: the library will grow both `Various Artists/` and
+      `Various/` from the tags themselves (DEF-06-11-01), and `musicbrainz.search_limit` is the
+      default **5** (DEF-06-12-02) — measure, per folder, whether the accepted candidate was in the
+      first five, rather than raising it on one row's evidence.
+
 **Plans**: TBD
 **Research**: not needed — the diff is a comparison over two `ffprobe` datasets, and the undo path
 is ZFS rollback plus a documented `incremental` state reset. The compilation and multi-disc cases
@@ -1046,6 +1156,25 @@ pipeline; this is the only phase that is purely throughput.
 
   4. A standing leak check shows no bucket-A content sitting in the library that the tagger's
      database does not know about.
+
+**Entry criteria inherited from Phase 6** *(added 2026-09-21 by plan 06-14)*:
+
+  E1. **beets-flask's inbox view is expected to go laggy past roughly a hundred folders, and batch
+      cadence is the only mitigation (D-08).** Answered in Phase 6 as a **read, not a measurement**:
+      rc6's schema exposes **no pagination, no page-size and no inbox-item-limit knob at all**, so
+      the only levers are `gui.inbox.ignore` and how many folders are staged at once. **Phase 3's
+      friction 5 therefore stays `NOT EXERCISED`** — nothing in Phase 6 put a hundred folders in
+      front of the UI, so nothing in Phase 6 retired the risk. This phase's batch cadence is the
+      first thing that makes it operationally real; size batches against it rather than discovering
+      it mid-run.
+
+  E2. **Every track in the *Now!* collection carries a per-file
+      `LOCATION=https://www.discogs.com/…/release/NNNNNN` tag — a direct Discogs release id
+      (D-28).** Discogs is the source Phase 3 chose. It is a potentially large disambiguation
+      shortcut at batch scale and is **recorded, not acted on**: Phase 5's D-10 scoped its tag write
+      to `album` alone, and Phase 6 neither used nor validated it. Validate it on a batch before
+      trusting it.
+
 **Plans**: TBD
 **Research**: not needed — batch import is extensively documented and the traps are already captured.
 
@@ -1076,7 +1205,7 @@ Phase 7. Plans within a phase run sequentially.
 | 3. Tagger Spike | 11/11 | Complete    | 2026-09-04 |
 | 4. Collapse to One Tagger | 16/16 | In Progress| All 16 plans executed (gap-closure 04-14/15/16 included); phase-level verification pending. Criterion 3 remains OPEN: across windows 1 and 2, five real music jobs all returned UNPROVEN `no-attributed-pre` — no PRE-HOOK snapshot is publishable while `direct_unpack` drains the tree — while every side-effect condition held for the third window running. 04-16 recorded `window 2: OPEN` under an interim-status heading in `beets.md`. Closing criterion 3 is now a decision, not a measurement |
 | 5. Inbox Structure and the Junk Gate | 11/11 | Complete    | 2026-09-19 |
-| 6. Tagger Configuration and Dry Run | 13/14 | In Progress|  |
+| 6. Tagger Configuration and Dry Run | 14/14 | Closed — 1 open requirement | 2026-09-21. **Deliberately not marked Complete: CONF-04 is OPEN on its Jellyfin half** and is a named Phase 7 entry criterion (E6). Criteria 1, 2, 3 and 5 are TRUE and were all re-measured from live state at close, not carried forward from plan summaries. Criterion 4 carries two verdicts — Music Assistant discharged, Jellyfin pending a re-probe — which are recorded separately and **must never be summed**. `tank/downloads@pre-phase5` is NOT released (D-32, Phase 7 entry criterion E4). Closure: `stacks/selfhosted/arrs/beets.md` § *Phase 6 closed 2026-09-21* |
 | 7. Pilot — 12 Albums End to End | 0/TBD | Not started | - |
 | 8. Close the Inflow | 0/TBD | Not started | - |
 | 9. Bucket A in Batches | 0/TBD | Not started | - |
