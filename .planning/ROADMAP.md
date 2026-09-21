@@ -916,11 +916,11 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 06-06-PLAN.md — drive a throwaway folder through `02-review` past the 30 s debounce, and assert D-07's exposure from `docker inspect`, DNS and HTTP
-- [ ] 06-07-PLAN.md — `scripts/check-beets-config.sh` with a `--self-test`, then both D-30 arms run and their disagreements named
-- [ ] 06-08-PLAN.md — `scripts/phase06-incremental-control.sh` with a `--self-test`, then both arms run to opposite outcomes
-- [ ] 06-09-PLAN.md — `scripts/phase06-oracle.sh`: the oracle core plus nine class assertions, every red branch driven by `--self-test`
-- [ ] 06-10-PLAN.md — revise the tagger census to two named-and-classed definitions, widen the drift block to four pairs, add the D-03 mount and D-04 throwaway assertions
+- [x] 06-06-PLAN.md — drive a throwaway folder through `02-review` past the 30 s debounce, and assert D-07's exposure from `docker inspect`, DNS and HTTP
+- [x] 06-07-PLAN.md — `scripts/check-beets-config.sh` with a `--self-test`, then both D-30 arms run and their disagreements named
+- [x] 06-08-PLAN.md — `scripts/phase06-incremental-control.sh` with a `--self-test`, then both arms run to opposite outcomes
+- [x] 06-09-PLAN.md — `scripts/phase06-oracle.sh`: the oracle core plus nine class assertions, every red branch driven by `--self-test`
+- [x] 06-10-PLAN.md — revise the tagger census to two named-and-classed definitions, widen the drift block to four pairs, add the D-03 mount and D-04 throwaway assertions
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -1076,7 +1076,7 @@ Phase 7. Plans within a phase run sequentially.
 | 3. Tagger Spike | 11/11 | Complete    | 2026-09-04 |
 | 4. Collapse to One Tagger | 16/16 | In Progress| All 16 plans executed (gap-closure 04-14/15/16 included); phase-level verification pending. Criterion 3 remains OPEN: across windows 1 and 2, five real music jobs all returned UNPROVEN `no-attributed-pre` — no PRE-HOOK snapshot is publishable while `direct_unpack` drains the tree — while every side-effect condition held for the third window running. 04-16 recorded `window 2: OPEN` under an interim-status heading in `beets.md`. Closing criterion 3 is now a decision, not a measurement |
 | 5. Inbox Structure and the Junk Gate | 11/11 | Complete    | 2026-09-19 |
-| 6. Tagger Configuration and Dry Run | 5/14 | In Progress|  |
+| 6. Tagger Configuration and Dry Run | 10/14 | In Progress|  |
 | 7. Pilot — 12 Albums End to End | 0/TBD | Not started | - |
 | 8. Close the Inflow | 0/TBD | Not started | - |
 | 9. Bucket A in Batches | 0/TBD | Not started | - |
