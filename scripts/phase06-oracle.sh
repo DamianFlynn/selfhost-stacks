@@ -355,18 +355,49 @@ diff_manifest() { # $1 = label  $2 = kind (meta|sha)   returns 0 clean, 1 red
 # the library's own field view) AND a plain LC_ALL=C-sorted destination list (for the diff). The
 # RAW transcript is kept beside them on purpose - it is what a reader checks the normalisation
 # against, and a normaliser nobody can audit is just a second place for the bug to hide.
+#
+# TWO SANITISATIONS, both MEASURED against beets 2.12.0 rather than assumed, and both applied to a
+# SEPARATE `.clean` file so the raw transcript stays the auditable record:
+#
+#   1. SGR (colour) sequences. `show_path_changes` calls `colordiff(source, dest)`
+#      [beets/ui/commands/move.py@v2.12.0:57], which interleaves ESC[…m runs THROUGH BOTH PATHS -
+#      `/m<ESC>[1;32media/M<ESC>[39;49;00music/`. Note where that lands: not only does a coloured
+#      destination never equal a fixture line, `grep -q '/media/Music/'` over a coloured transcript
+#      RETURNS NOTHING, so positive control 4 would have fired for a reason that is not a defect.
+#   2. The trailing space on the source line of the narrow form. It is LITERAL and unconditional:
+#      `ui.print_(f"{color_source} \n  -> {color_dest}")` [ibid.:50]. Left in place it rides into
+#      the pairs file's source column and the CONF-03 join against `beet ls -f` misses every row.
+#
+# The overlay also sets `ui.color: no`, so on a correct run neither sanitisation has anything to
+# do. They run anyway - a transcript that arrives coloured through some other route must normalise
+# to the same answer, not to a silent COULD NOT LOOK.
 NORM_WHY=""
 NORM_PAIRS=0
 NORM_INPLACE=0
 NORM_INPLACE_SEEN=0
 NORM_UNPARSED=0
+NORM_CLEAN=""
+NORM_SGR=0
 normalise_transcript() { # $1 = raw transcript  $2 = pairs out  $3 = destinations out
-  local raw="$1" pairs="$2" dests="$3"
+  local raw="$1" pairs="$2" dests="$3" clean=""
   NORM_WHY=""; NORM_PAIRS=0; NORM_INPLACE=0; NORM_INPLACE_SEEN=0; NORM_UNPARSED=0
+  NORM_CLEAN=""; NORM_SGR=0
   if [ ! -f "$raw" ] || [ ! -r "$raw" ]; then
     NORM_WHY="the raw transcript '$raw' is missing or unreadable"
     return 2
   fi
+  clean="${raw}.clean"
+  # $'\033' and NOT \x1b: \x1b is a GNU sed extension and this script runs on macOS.
+  # The trailing-space strip is ADDRESSED to lines that carry no ' -> ', i.e. the source half of
+  # the narrow form. A destination whose last component really does end in a space is a path-rule
+  # FINDING, and blanket-stripping it here would erase the evidence for it.
+  LC_ALL=C sed -e $'s/\033\\[[0-9;]*[A-Za-z]//g' -e '/ -> /!s/[[:space:]][[:space:]]*$//' "$raw" > "$clean" || {
+    NORM_WHY="could not sanitise '$raw' into '$clean'"
+    return 2
+  }
+  NORM_SGR="$(LC_ALL=C grep -c $'\033' "$raw" || true)"
+  NORM_CLEAN="$clean"
+  raw="$clean"
   : > "$pairs"
   : > "$OUT/.unparsed"
   local prev="" line="" src="" dst=""
@@ -419,6 +450,60 @@ normalise_transcript() { # $1 = raw transcript  $2 = pairs out  $3 = destination
   return 0
 }
 
+# --- Where `(N already in place)` ACTUALLY comes from ------------------------------------------
+# MEASURED 2026-09-21 (plan 06-11, first live run). The count is NOT a standalone stdout line.
+# `move_items` builds it as a fragment and hands it to the LOGGER:
+#
+#     unmoved_msg = f" ({num_unmoved} already in place)"
+#     log.info("{} {} {}{}{}.", action, len(objs), entity, "s" if ..., unmoved_msg)
+#     [SOURCE: beets/ui/commands/move.py@v2.12.0:94-107]
+#
+# So the real shape is `Moving 164 items (3 already in place).` on STDERR, one line, embedded.
+# The standalone-line branch in normalise_transcript therefore CANNOT MATCH REAL OUTPUT: it
+# returned "line ABSENT" and N=0, and a control whose predicate cannot fire is not a control.
+# That branch is kept - a future beets could print it to stdout, and --self-test drives it - but
+# THIS is the instrument, and its absence is a COULD NOT LOOK, never a zero.
+#
+# It also yields a fifth control for free: the N in `Moving N items` must equal the number of
+# pairs actually printed. A transcript truncated in transit satisfies every other control.
+MOVING_N=-1
+UNMOVED_WHY=""
+read_unmoved() { # $1 = the stderr file from `beet move -p`
+  local err="$1" line=""
+  UNMOVED_WHY=""; MOVING_N=-1
+  if [ ! -f "$err" ] || [ ! -r "$err" ]; then
+    UNMOVED_WHY="the move stderr '$err' is missing or unreadable, so '(N already in place)' was
+    never read at all. That is COULD NOT LOOK, not N=0."
+    return 2
+  fi
+  # Sanitised the same way the transcript is: the logger goes through ui and can colour too.
+  line="$(LC_ALL=C sed $'s/\033\\[[0-9;]*[A-Za-z]//g' "$err" \
+          | LC_ALL=C grep -E '^(Moving|Copying) [0-9]+ (item|album)s?( \([0-9]+ already in place\))?\.$' \
+          | tail -n 1)" || true
+  if [ -z "$line" ]; then
+    UNMOVED_WHY="no 'Moving N items[ (M already in place)].' line was found in '$err'. beets emits
+    it unconditionally through log.info, so its absence means the command did not reach that point
+    - the unmoved count is UNKNOWN, not zero."
+    return 2
+  fi
+  MOVING_N="$(printf '%s' "$line" | LC_ALL=C sed -E 's/^[A-Za-z]+ ([0-9]+) .*$/\1/')"
+  case "$line" in
+    *"already in place)."*)
+      NORM_INPLACE_SEEN=1
+      NORM_INPLACE="$(printf '%s' "$line" | LC_ALL=C sed -E 's/^.*\(([0-9]+) already in place\)\.$/\1/')"
+      ;;
+    *)
+      # beets appends the fragment ONLY when num_unmoved > 0, so a line with no parenthetical is a
+      # POSITIVE statement of zero from the same code path - not an absence of evidence.
+      NORM_INPLACE_SEEN=1
+      NORM_INPLACE=0
+      ;;
+  esac
+  case "$NORM_INPLACE" in ''|*[!0-9]*) NORM_INPLACE=-1 ;; esac
+  case "$MOVING_N" in ''|*[!0-9]*) MOVING_N=-1 ;; esac
+  return 0
+}
+
 # --- The positive control, INSIDE the measurement ---------------------------------------------
 PC_WHY=""
 positive_control() { # $1 = raw transcript  $2 = pairs  $3 = expected pair count
@@ -447,8 +532,21 @@ $(head -n 5 "$OUT/.unparsed" | sed 's/^/      /')"
     move: no) nothing can be in place - so a non-zero N means the run measured something else."
     return 3
   fi
-  if ! LC_ALL=C grep -q "$LIB_ROOT/" "$raw"; then
-    PC_WHY="the raw transcript contains no '$LIB_ROOT/' substring at all, so whatever was
+  # Control 5, added by plan 06-11 after the first live run: `move_items` states how many objects
+  # it is about to print. If that number disagrees with the number of pairs parsed, the transcript
+  # was truncated in transit - and a truncated transcript satisfies every control above.
+  if [ "$MOVING_N" -ge 0 ] && [ "$MOVING_N" -ne "$NORM_PAIRS" ]; then
+    PC_WHY="beets logged 'Moving $MOVING_N items' but only $NORM_PAIRS pair(s) were parsed out of
+    the transcript. The two come from the same loop, so a disagreement means the stdout was
+    truncated between the container and here."
+    return 3
+  fi
+  # The SANITISED text, not the raw: colordiff interleaves SGR runs through the path itself, so
+  # `grep -q '/media/Music/'` over a coloured transcript returns nothing and this control would
+  # fire for a reason that is not a defect. NORM_CLEAN is set by normalise_transcript, which every
+  # caller runs first; the fallback keeps the function total rather than silently grepping nothing.
+  if ! LC_ALL=C grep -q "$LIB_ROOT/" "${NORM_CLEAN:-$raw}"; then
+    PC_WHY="the transcript contains no '$LIB_ROOT/' substring at all, so whatever was
     measured, it was not this library's destinations."
     return 3
   fi
@@ -845,7 +943,7 @@ assert_no_collision_suffix() { # $1 = destination list
 #   * every record must carry `"noop":true`. Phase 6 writes nothing, so any record proposing a
 #     different value for a protected field is a red and is printed in full.
 assert_protected_fields() { # $1 = NDJSON ledger  $2 = expected sampled file count
-  local led="$1" files="$2" ev="$OUT/assert.protected.txt" want=0 got=0 nfail=0 nchg=0
+  local led="$1" files="$2" ev="$OUT/assert.protected.txt" want=0 got=0 nfail=0 nchg=0 nnull=0
   ASSERT_WHY=""; ASSERT_EVIDENCE="$ev"
   [ -r "$led" ] || { ASSERT_WHY="the D-18 ledger '$led' is missing or unreadable"; return 2; }
   want=$((files * 5))
@@ -855,6 +953,11 @@ assert_protected_fields() { # $1 = NDJSON ledger  $2 = expected sampled file cou
   LC_ALL=C grep -v -F '"noop":true' "$led" | sed 's/^/PROPOSED-CHANGE\t/' >> "$ev" || true
   nfail="$(LC_ALL=C grep -c '^LEDGER-FAILED' "$ev" || true)"
   nchg="$(LC_ALL=C grep -c '^PROPOSED-CHANGE' "$ev" || true)"
+  # Counted and REPORTED, never merely swallowed into the noop total. These are records where
+  # both sides are absent and only the spelling of "absent" differs (mediafile's None against
+  # beets' typed null). They are listed in the evidence file so the class is auditable.
+  nnull="$(LC_ALL=C grep -c -F '"null_equivalent":true' "$led" || true)"
+  LC_ALL=C grep -F '"null_equivalent":true' "$led" | sed 's/^/NULL-EQUIVALENT\t/' >> "$ev" || true
   if [ "$got" -ne "$want" ]; then
     printf 'LEDGER-COUNT\t%s records, expected %s (5 protected fields x %s sampled files)\n' \
       "$got" "$want" "$files" >> "$ev"
@@ -873,7 +976,7 @@ assert_protected_fields() { # $1 = NDJSON ledger  $2 = expected sampled file cou
     return 1
   fi
   ASSERT_WHY="$got ledger records, five per sampled file, every one a noop - no protected DJ
-    field is proposed for change"
+    field is proposed for change ($nnull of them absent on both sides, listed as NULL-EQUIVALENT)"
   return 0
 }
 
@@ -898,8 +1001,15 @@ report_multi_artist() { # $1 = fields TSV
       v = $6; gsub(/\\\342\220\200/, "; ", v)
       printf "WRITE-SIDE\t%s\tartist=<%s>\tartists=<%s>\n", $1, $5, v
     }' "$fields" > "$ev"
-  ASSERT_WHY="$(wc -l < "$ev" | tr -d ' ') item(s) carry a multi-valued artists field; beets cannot
-    emit ';' inside ARTIST, so the multi-artist information lands in ARTISTS (D-23 amended by D-34)"
+  # Two different numbers, and conflating them is how a report starts overstating itself: the
+  # predicate above is "carries a NON-EMPTY artists field", which is not the same as "carries
+  # MORE THAN ONE artist". Both are stated. The second is the one D-23/D-34 is about.
+  local nrows=0 nmulti=0
+  nrows="$(wc -l < "$ev" | tr -d ' ')"
+  nmulti="$(LC_ALL=C grep -c 'artists=<[^>]*; ' "$ev" || true)"
+  ASSERT_WHY="$nrows item(s) carry a non-empty artists field, $nmulti of them with MORE THAN ONE
+    artist; beets cannot emit ';' inside ARTIST, so the multi-artist information lands in ARTISTS
+    (D-23 amended by D-34)"
   return 0
 }
 
@@ -1052,13 +1162,41 @@ Two mechanisms, deliberately different:
 import json
 import sys
 
-from beets.library import Library
+from beets.library import Item, Library
 import mediafile
 import mutagen
 import mutagen.id3
 
 BEETS_FIELDS = ["bpm", "initial_key", "genres", "comments"]
 RULE = "D-18 protected DJ field"
+
+# ABSENT ON BOTH SIDES IS NOT A PROPOSED CHANGE, and telling the two apart needs beets' OWN nulls.
+# MEASURED 2026-09-21 (plan 06-11, third live run) straight off the engine:
+#     bpm  Integer          null 0
+#     comments  String      null ''
+#     genres  DelimitedString  null []
+#     initial_key  MusicalKey  null None
+# mediafile reports an absent tag as None; beets' typed model reports the same absence as that
+# field's null. A naive `old != new` therefore called 327 of 870 records a PROPOSED CHANGE when
+# every one of them was None -> the field's own null, i.e. nothing lost. Not one record in that
+# set had a non-empty `old`. The read is taken from Item._fields at RUNTIME rather than
+# hard-coded, so a beets that changes a null cannot leave a stale constant behind here.
+# The raw `old` and `new` stay in the record either way - nothing is laundered, the record just
+# stops claiming a change that is not one.
+_MISSING = object()
+NULLS = {f: getattr(Item._fields.get(f), "null", _MISSING) for f in BEETS_FIELDS}
+
+
+def is_null_for(field, value):
+    """True when `value` is 'this field carries nothing', on either side of the comparison."""
+    if value is None:
+        return True
+    null = NULLS.get(field, _MISSING)
+    if null is _MISSING:
+        return False
+    if isinstance(null, (list, tuple)):
+        return isinstance(value, (list, tuple)) and len(value) == 0
+    return value == null
 
 
 def out(rec):
@@ -1134,7 +1272,18 @@ def energy_level(path):
 
 
 def main():
-    lib = Library(sys.argv[1])
+    # `directory` IS LOAD BEARING AND IT IS NOT A DEFAULT WORTH TAKING.
+    # MEASURED 2026-09-21 (plan 06-11, second live run): beets 2.12.0 stores an item path
+    # RELATIVE TO THE LIBRARY DIRECTORY whenever it sits underneath it, and re-absolutises it
+    # against `lib.directory` on read [beets/library/models.py@v2.12.0:130 "strip the library
+    # prefix to match the stored relative path"; Library._migrations carries a
+    # RelativePathMigration]. `Library(db)` alone falls back to platformdirs' user music path,
+    # so the twelve S6 items - the ones drawn FROM the library, i.e. exactly the files Phase 7
+    # will re-tag - came back as /home/beetle/Music/... and every one of their five fields was a
+    # `failed` record. Items under /downloads are outside the directory, are stored absolute, and
+    # read correctly either way, which is why only the in-library stratum was affected.
+    # `set_music_dir` is left at its default so path conversion binds to the same directory.
+    lib = Library(sys.argv[1], directory=sys.argv[2])
     for item in lib.items():
         path = item.path.decode("utf-8", "surrogateescape")
         try:
@@ -1147,8 +1296,10 @@ def main():
             continue
         for field in BEETS_FIELDS:
             try:
-                old = norm(getattr(mf, field, None))
-                new = norm(item.get(field, None))
+                old_raw = getattr(mf, field, None)
+                new_raw = item.get(field, None)
+                old = norm(old_raw)
+                new = norm(new_raw)
             except Exception as exc:
                 out({"path": path, "field": field, "rule": RULE, "old": None, "new": None,
                      "failed": "%s: %s" % (type(exc).__name__, str(exc)[:200])})
@@ -1156,6 +1307,18 @@ def main():
             rec = {"path": path, "field": field, "rule": RULE, "old": old, "new": new}
             if old == new:
                 rec["noop"] = True
+            elif is_null_for(field, old_raw) and is_null_for(field, new_raw):
+                # Both sides carry nothing; only their spellings of "nothing" differ. Marked
+                # noop AND flagged, so a reader can count this class rather than take it on
+                # trust - and so that a non-empty `old` becoming null stays a RED, which is the
+                # thing D-18 actually guards.
+                rec["noop"] = True
+                rec["null_equivalent"] = True
+                rec["rule"] = (
+                    RULE
+                    + " (absent on both sides: mediafile reports an absent tag as None and beets'"
+                    + " Item._fields['%s'].null is %r - no value is lost)" % (field, NULLS[field])
+                )
             out(rec)
         try:
             value, how = energy_level(path)
@@ -1199,6 +1362,9 @@ st_mc() { # $1 = expected outcome  $2 = before  $3 = after  $4 = description
 # the control is only meaningful over a transcript the normaliser has already classified.
 st_control() { # $1 = expected (ok|unknown)  $2 = transcript file  $3 = want count  $4 = desc
   local rc=0 got="ok"
+  # MOVING_N is a global set by read_unmoved. Reset it here so one case cannot leak control 5's
+  # state into the next - the self-test's fixtures are stdout only and have no stderr companion.
+  MOVING_N=-1
   normalise_transcript "$2" "$OUT/st.pairs" "$OUT/st.dests" || rc=$?
   if [ "$rc" -ne 0 ]; then
     got="unknown"
@@ -1212,7 +1378,7 @@ st_control() { # $1 = expected (ok|unknown)  $2 = transcript file  $3 = want cou
 }
 
 self_test_core() {
-  local td=""
+  local td="" rc=0
   say ""
   say "== --self-test: the transcript normaliser and the positive control (T-06-41/42) =="
   rule
@@ -1271,6 +1437,57 @@ self_test_core() {
   } > "$td/st.good.txt"
   st_control ok "$td/st.good.txt" 2 "a well-formed two-pair transcript, count matching."
 
+  # (7) THE REAL SHAPE, measured 2026-09-21: the narrow two-line form, SGR-coloured through both
+  #     paths by colordiff, with the literal trailing space on the source half. Untreated this
+  #     produces zero fixture matches AND a failed '/media/Music/' grep - a green-looking instrument
+  #     measuring nothing. It must normalise to EXACTLY what the plain form produces.
+  {
+    printf '/src/\033[1;31ma\033[39;49;00m.mp3 \n'
+    printf '  -> \033[1;32m%s/A/Al\033[39;49;00m/01 a.mp3\n' "$LIB_ROOT"
+    printf '/src/\033[1;31mb\033[39;49;00m.mp3 \n'
+    printf '  -> \033[1;32m%s/A/Al\033[39;49;00m/02 b.mp3\n' "$LIB_ROOT"
+  } > "$td/st.ansi.txt"
+  st_control ok "$td/st.ansi.txt" 2 "an SGR-coloured narrow transcript parses as two pairs."
+  cp "$td/st.pairs" "$td/st.ansi.pairs"
+  st_control ok "$td/st.narrow.txt" 2 "(re-parsed the plain narrow form for the comparison below)"
+  rc=0
+  cmp -s "$td/st.ansi.pairs" "$td/st.pairs" || rc=$?
+  st_case 0 "$rc" "coloured and plain transcripts normalise to BYTE-IDENTICAL pairs - colour, and"
+  info "the literal trailing space on the source half, change nothing about the verdict."
+  rc=0; LC_ALL=C grep -q $'\033' "$td/st.ansi.pairs" && rc=1 || true
+  st_case 0 "$rc" "no ESC byte survives into the pairs file, so the CONF-03 join can still match."
+
+  say ""
+  say "== --self-test: (N already in place) is read from the LOG LINE, not from stdout =="
+  rule
+  printf 'Moving 2 items.\n' > "$td/st.err.zero"
+  rc=0; read_unmoved "$td/st.err.zero" || rc=$?
+  st_case 0 "$rc" "'Moving 2 items.' parses."
+  st_case 0 "$NORM_INPLACE" "no parenthetical means a POSITIVE zero - beets appends it only when N>0."
+  st_case 1 "$NORM_INPLACE_SEEN" "and it is recorded as READ, not as absent."
+  st_case 2 "$MOVING_N" "the object count is taken off the same line for control 5."
+  printf 'Moving 164 items (3 already in place).\n' > "$td/st.err.some"
+  rc=0; read_unmoved "$td/st.err.some" || rc=$?
+  st_case 3 "$NORM_INPLACE" "the embedded '(3 already in place)' is extracted, not missed."
+  printf '\033[1;33mMoving 2 items (4 already in place).\033[39;49;00m\n' > "$td/st.err.ansi"
+  rc=0; read_unmoved "$td/st.err.ansi" || rc=$?
+  st_case 4 "$NORM_INPLACE" "the log line is sanitised too - ui colours stderr as readily as stdout."
+  rc=0; read_unmoved "$td/st.err.nosuchfile" || rc=$?
+  st_case 2 "$rc" "a missing stderr file is COULD NOT LOOK, never N=0."
+  [ "$rc" -ne 2 ] || info "reason: $(printf '%s' "$UNMOVED_WHY" | head -n 1)"
+  printf 'Traceback (most recent call last):\n' > "$td/st.err.junk"
+  rc=0; read_unmoved "$td/st.err.junk" || rc=$?
+  st_case 2 "$rc" "stderr with no 'Moving N items' line at all is COULD NOT LOOK."
+  # Control 5 itself: the log says one number, the transcript carries another.
+  MOVING_N=-1
+  normalise_transcript "$td/st.good.txt" "$OUT/st.pairs" "$OUT/st.dests" || true
+  printf 'Moving 9 items.\n' > "$td/st.err.mismatch"
+  read_unmoved "$td/st.err.mismatch" || true
+  rc=0; positive_control "$td/st.good.txt" "$OUT/st.pairs" 2 || rc=$?
+  st_case 3 "$rc" "'Moving 9 items' against 2 parsed pairs - a truncated transcript passes every"
+  info "other control, which is why control 5 exists."
+  MOVING_N=-1
+
   say ""
   say "== --self-test: layer 2's three outcomes (D-29; WR-13) =="
   rule
@@ -1303,7 +1520,7 @@ self_test_core() {
   say ""
   say "== --self-test: the blind preflight, layer 1 and the host->container mapper =="
   rule
-  local rc=0 got=""
+  local got=""
   # A blind source directory. This is the CR-02 case: `find ... 2>/dev/null || true` feeding a
   # count turned every failure mode into a zero and a green tick.
   rc=0; got="ok"
@@ -1486,6 +1703,33 @@ self_test_classes() {
   st_assert 2 "D-18: a refusal is a RECORD and it is COULD NOT LOOK, never an 'unchanged'." \
     assert_protected_fields "$d/ledger.failed.ndjson" 1
 
+  # (10b) The null-equivalent class, added by plan 06-11 after the third live run. `old` and `new`
+  #       DIFFER textually on all four of these - None against beets' own typed null - and the
+  #       generator marks them noop. The judge must accept them, and it must STILL go red on a
+  #       real strip, which is the pair of cases below.
+  {
+    printf '{"path":"/src/a.mp3","field":"bpm","rule":"D-18 (absent both sides)","old":null,"new":"0","noop":true,"null_equivalent":true}\n'
+    printf '{"path":"/src/a.mp3","field":"initial_key","rule":"D-18","old":null,"new":null,"noop":true}\n'
+    printf '{"path":"/src/a.mp3","field":"genres","rule":"D-18 (absent both sides)","old":null,"new":[],"noop":true,"null_equivalent":true}\n'
+    printf '{"path":"/src/a.mp3","field":"comments","rule":"D-18 (absent both sides)","old":null,"new":"","noop":true,"null_equivalent":true}\n'
+    printf '{"path":"/src/a.mp3","field":"EnergyLevel","rule":"D-18","old":null,"new":null,"noop":true}\n'
+  } > "$d/ledger.nulleq.ndjson"
+  st_assert 0 "D-18: absent-on-both-sides records are noops, not 327 phantom proposed changes." \
+    assert_protected_fields "$d/ledger.nulleq.ndjson" 1
+  rc="$(LC_ALL=C grep -c '^NULL-EQUIVALENT' "$OUT/assert.protected.txt" || true)"
+  st_case 3 "$rc" "and they are LISTED as NULL-EQUIVALENT rather than vanishing into the total."
+  # The one that must still fire: a real value on the old side, beets' null on the new side. That
+  # is a STRIP, it is what D-18 exists to catch, and no null-equivalence may excuse it.
+  {
+    printf '{"path":"/src/a.mp3","field":"bpm","rule":"D-18","old":"128","new":"0"}\n'
+    printf '{"path":"/src/a.mp3","field":"initial_key","rule":"D-18","old":null,"new":null,"noop":true}\n'
+    printf '{"path":"/src/a.mp3","field":"genres","rule":"D-18","old":null,"new":[],"noop":true,"null_equivalent":true}\n'
+    printf '{"path":"/src/a.mp3","field":"comments","rule":"D-18","old":null,"new":"","noop":true,"null_equivalent":true}\n'
+    printf '{"path":"/src/a.mp3","field":"EnergyLevel","rule":"D-18","old":"7","new":"7","noop":true}\n'
+  } > "$d/ledger.strip.ndjson"
+  st_assert 1 "D-18: a real BPM becoming beets' null is a STRIP and stays a RED." \
+    assert_protected_fields "$d/ledger.strip.ndjson" 1
+
   say ""
   say "== --self-test: the clean list must produce ZERO reds across every assertion =="
   rule
@@ -1510,6 +1754,22 @@ self_test_classes() {
   if command -v python3 >/dev/null 2>&1; then
     python3 -c "import ast,sys; ast.parse(open(sys.argv[1]).read())" "$d/ledger.py" || rc=1
     st_case 0 "$rc" "the D-18 ledger payload parses as Python."
+    # Structural, not textual: walk the AST and require that the Library() call passes a
+    # `directory=` keyword. Defaulting it silently re-absolutises every in-library item against
+    # ~/Music, which turned all twelve S6 files into `failed` records on the second live run.
+    rc=0
+    python3 - "$d/ledger.py" <<'ST_AST' || rc=1
+import ast, sys
+tree = ast.parse(open(sys.argv[1], encoding="utf-8").read())
+calls = [n for n in ast.walk(tree)
+         if isinstance(n, ast.Call) and getattr(n.func, "id", None) == "Library"]
+assert calls, "the payload never constructs a Library at all"
+for c in calls:
+    kw = {k.arg for k in c.keywords}
+    assert "directory" in kw, "Library() called without directory=; in-library items would resolve against ~/Music"
+ST_AST
+    st_case 0 "$rc" "the ledger's Library() is opened with an explicit directory= - the in-library"
+    info "stratum resolves against /media/Music and not against platformdirs' user music path."
   else
     warn "SKIPPED: no python3 on this workstation, so the ledger payload could not be parsed."
     info "Reported rather than silently counted as a pass. The payload runs in the container."
@@ -1672,7 +1932,22 @@ ok "copied $REAL_LIB_DB -> $SCRATCH/lib.db (the ORIGINAL is never opened by this
   printf '    autotag: no\n'
   printf '    resume: no\n'
   printf '    incremental: no\n'
-  printf '    duplicate_action: skip\n'
+  # MEASURED 2026-09-21 (plan 06-11, first live run): `skip` DROPPED THE SECOND American Heart
+  # rip entirely - 164 pairs against 174 sampled files - and with it the ONE %aunique{} firing
+  # 06-EXPECTED-TREE.txt predicts. The S1 stratum deliberately drew two rips of one album, so a
+  # duplicate action that removes one of them from the library removes the collision the fixture
+  # exists to test. `keep` imports both and deletes nothing, which is the only value that is both
+  # safe AND faithful to the fixture: `remove` deletes source files with no prompt (Pitfall 3),
+  # `merge` rewrites the album, and `ask` under -q silently falls back to skipping.
+  printf '    duplicate_action: keep\n'
+  # MEASURED 2026-09-21: `beet move -p` calls beets.util.diff.colordiff, which wraps BOTH the
+  # source and the destination in SGR sequences - `/m<ESC>[1;32media/M<ESC>[39;49;00music/`. A
+  # coloured destination can never equal a fixture line, and a coloured SOURCE cannot join to the
+  # `beet ls -f` field view either, so CONF-03 would have read COULD NOT LOOK on all 174 rows.
+  # Turned off at the source here; normalise_transcript ALSO strips SGR defensively, because a
+  # future beets that colours through a different key must not be able to fail this silently.
+  printf 'ui:\n'
+  printf '    color: no\n'
 } > "$OUT/overlay.yaml"
 rsh_from "timeout $REMOTE_TIMEOUT docker exec -i -u $CONTAINER_USER $CONTAINER sh -c 'cat > $SCRATCH/overlay.yaml'" "$OUT/overlay.yaml"
 [ "$RSH_RC" -eq 0 ] || { unknown "could not place the overlay inside the container (ssh exit $RSH_RC)"; exit 3; }
@@ -1712,13 +1987,16 @@ if [ "$RSH_RC" -ne 0 ]; then
 fi
 normalise_transcript "$OUT/oracle.raw.txt" "$OUT/oracle.pairs.tsv" "$OUT/oracle.destinations.txt" \
   || { unknown "$NORM_WHY"; exit 3; }
+# `rsh_to` puts the command's stderr beside its stdout, and the unmoved count lives there.
+read_unmoved "$OUT/oracle.raw.txt.err" || { unknown "$UNMOVED_WHY"; exit 3; }
 say "  pairs parsed:            $NORM_PAIRS"
 say "  unparsed payload lines:  $NORM_UNPARSED"
+say "  SGR-coloured raw lines:  $NORM_SGR   [sanitised into $OUT/oracle.raw.txt.clean]"
+say "  'Moving N items':        $MOVING_N   [read from stderr, the same loop that printed the pairs]"
 if [ "$NORM_INPLACE_SEEN" -eq 1 ]; then
-  say "  (N already in place):    $NORM_INPLACE   [line present]"
+  say "  (N already in place):    $NORM_INPLACE   [READ from the 'Moving N items…' log line]"
 else
-  say "  (N already in place):    0   [line ABSENT - beets prints it only when N > 0, so absence"
-  say "                                is informative but weaker than a printed zero]"
+  say "  (N already in place):    UNREAD"
 fi
 
 # --- Step 8: the positive control, BEFORE the diff is evaluated ---------------------------------
@@ -1835,7 +2113,8 @@ else
 fi
 
 write_ledger_payload "$OUT/ledger.py"
-rsh_from_to "timeout $REMOTE_TIMEOUT docker exec -i -u $CONTAINER_USER $CONTAINER $PY_BIN - $SCRATCH/lib.db" \
+# argv[2] is the library directory, and it is not optional - see the payload's own main().
+rsh_from_to "timeout $REMOTE_TIMEOUT docker exec -i -u $CONTAINER_USER $CONTAINER $PY_BIN - $SCRATCH/lib.db $LIB_ROOT" \
   "$OUT/ledger.py" "$OUT/ledger.ndjson"
 if [ "$RSH_RC" -ne 0 ]; then
   unknown "the D-18 ledger generator exited $RSH_RC; stderr is at $OUT/ledger.ndjson.err"
