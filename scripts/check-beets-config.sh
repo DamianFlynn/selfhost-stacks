@@ -6,12 +6,21 @@
 #   ON THE WORKSTATION, from the repo root. It is ssh-delegating, like
 #   scripts/quick-health-check.sh and scripts/check-music-consumers.sh, because everything it
 #   reads lives inside a container on LXC 100 (root@172.16.1.159) and each read is expressible
-#   as one bounded remote command. Nothing is installed anywhere and nothing is written.
+#   as one bounded remote command. Nothing is installed anywhere, and the ONE write this script
+#   makes is named below rather than denied.
 #
-# READ-ONLY BY CONTRACT. Every remote invocation is a read: a `docker logs` fetch, a `docker
-# exec` that dumps configuration, and a `sha256sum`. No import runs, no library is modified, and
-# the two pieces of beets state that CAN move under a careless read - /config/library.db and
-# /config/state.pickle - are hashed before and after and asserted unchanged (D-29 layer 3).
+# READ-ONLY BY CONTRACT, WITH ONE NAMED EXCEPTION. Every remote invocation is a read - a `docker
+# logs` fetch, a `docker exec` that dumps configuration, and a `sha256sum` - with exactly one
+# exception: arm 2 TRUNCATES a zero-byte no-op overlay at a fixed path inside the container's
+# /tmp (${OVERLAY}, below). It is truncated rather than created-if-absent, its emptiness is
+# MEASURED before it is used rather than assumed, and nothing removes it afterwards. That single
+# zero-byte file is the whole of what this script writes anywhere.
+#
+# No import runs and no library is modified. Stronger than that: every `beet` invocation here
+# carries `-l ${THROWAWAY_DB}`, so the real /config/library.db is never OPENED either (D-04). The
+# two pieces of beets state that CAN move under a careless read - /config/library.db and
+# /config/state.pickle - are still hashed before and after and asserted unchanged (D-29 layer 3),
+# which now CORROBORATES that redirect instead of carrying the whole claim on its own.
 #
 # --------------------------------------------------------------------------------------------
 # WHY THIS SCRIPT EXISTS: "the effective config" is ambiguous, and the ambiguity deletes files
@@ -70,11 +79,13 @@
 #   manufacture a pass, and THERE IS NO SENTINEL THAT SKIPS A CHECK - not in this file and not
 #   anywhere in this repository. Do not add one, however convenient one looks while debugging.
 #
-#   LXC_HOST, CONTAINER, BEET_BIN, PY_BIN, EXEC_USER and the two timeouts are deliberately PLAIN
-#   CONSTANTS for the reason check-music-freeze.sh:85-89 gives about SURVIVOR_DB: an override on
-#   any of them could produce a PASS by pointing the read at a different container, a different
-#   interpreter or a different host. Changing one is a one-line edit here, in the commit that
-#   changes the policy.
+#   LXC_HOST, CONTAINER, BEET_BIN, PY_BIN, EXEC_USER_FLAG, OVERLAY, THROWAWAY_DB and the two
+#   timeouts are deliberately PLAIN CONSTANTS for the reason check-music-freeze.sh:85-89 gives
+#   about SURVIVOR_DB: an override on any of them could produce a PASS by pointing the read at a
+#   different container, a different interpreter or a different host - and an override on
+#   THROWAWAY_DB specifically could point `-l` back at the real library, which is the one thing
+#   D-04 exists to forbid. Changing one is a one-line edit here, in the commit that changes the
+#   policy.
 #
 # THE READINESS GATE IS A LOG LINE, NOT A CONTAINER STATE FIELD. The docker state field that
 # reports a container is up flips the moment the process is exec'd, before rc6's entrypoint has
@@ -110,6 +121,9 @@ EXEC_USER_FLAG="-u beetle"
 BEET_BIN="/venv/bin/beet"
 PY_BIN="/venv/bin/python"
 OVERLAY="/tmp/phase06-check-beets-config-noop.yaml"
+# The throwaway library that every `beet` invocation in this file is pointed at (D-04). `.blb` is
+# beets' own library extension, and this path is INSIDE THE CONTAINER, not on the LXC.
+THROWAWAY_DB="/tmp/p6-cbc-throwaway.blb"
 LIBRARY_DB="/config/library.db"
 STATEFILE="/config/state.pickle"
 REMOTE_TIMEOUT=120
@@ -174,6 +188,7 @@ ARM1_FAILS=0
 TOOLS_MISSING=0
 LIB_HASH_BEFORE="UNKNOWN"
 LIB_HASH_AFTER="UNKNOWN"
+OVERLAY_SIZE="UNKNOWN"          # arm 2's no-op overlay, MEASURED - never assumed empty
 REDACTION_VERDICT="UNKNOWN"
 DIFF_ROWS=0
 
@@ -762,11 +777,38 @@ else
   # A no-op overlay: an empty file. The -c overlay sits ABOVE the vendored config, so anything
   # written into it would win; empty is the only value that leaves arm 2 an honest reading of
   # what the container actually assembles.
-  beet_exec "touch ${OVERLAY}"
-  if [[ $BEET_EXEC_RC -ne 0 ]]; then
-    fail "ARM 2: UNKNOWN, not green — could not create the no-op overlay (rc=$BEET_EXEC_RC)"
+  #
+  # WR-04: the create TRUNCATES, and the result is then MEASURED. `touch` guarantees existence,
+  # not emptiness, and this path is a fixed, predictable name inside a world-writable /tmp - so a
+  # file left by an aborted run, or written by anything else in the container, would outrank the
+  # vendored config and silently rewrite arm 2's answer. An overlay that is merely PRESENT is not
+  # an overlay that is EMPTY, and only the second of those is a no-op.
+  OVERLAY_TRUNC_RC=0
+  beet_exec "sh -c ': > ${OVERLAY}'"
+  OVERLAY_TRUNC_RC=$BEET_EXEC_RC
+  if [[ $OVERLAY_TRUNC_RC -eq 0 ]]; then
+    beet_exec "sh -c 'wc -c < ${OVERLAY}'"
+    if [[ $BEET_EXEC_RC -eq 0 ]]; then
+      OVERLAY_SIZE="$(tr -d '[:space:]' <"$WORKDIR/exec.out")"
+      [[ -z "$OVERLAY_SIZE" ]] && OVERLAY_SIZE="UNKNOWN"
+    fi
+  fi
+
+  if [[ $OVERLAY_TRUNC_RC -ne 0 ]]; then
+    fail "ARM 2: UNKNOWN, not green — could not truncate the no-op overlay ${OVERLAY} (rc=$OVERLAY_TRUNC_RC). No 'config' call was issued."
+  elif [[ "$OVERLAY_SIZE" != "0" ]]; then
+    fail "ARM 2: UNKNOWN, not green — the no-op overlay ${OVERLAY} measured '${OVERLAY_SIZE}' bytes, not 0. A non-empty overlay outranks the vendored config, so arm 2 would report something other than what the container assembles. No 'config' call was issued."
   else
-    beet_exec "${BEET_BIN} -c ${OVERLAY} config -d"
+    pass "ARM 2 no-op overlay ${OVERLAY}: truncated, then MEASURED at ${OVERLAY_SIZE} bytes — nothing in it can outrank the vendored config"
+    # D-04: `-l ${THROWAWAY_DB}` on every one of the three invocations below, and `-l` FIRST so
+    # the flag order matches the rule as quick-health-check.sh states it. WHY, in three parts.
+    # `beet` opens the library for EVERY subcommand including `config` - Phase 1 measured a bare
+    # `beet config` running 11 migrations unasked (stacks/selfhosted/arrs/beets/beets.yaml:71-78).
+    # With `-l` the real /config/library.db is never opened at all, which upgrades the D-29
+    # layer-3 comparison below from proving nothing CHANGED to corroborating that nothing was
+    # OPENED. And the overlay is still required alongside it, because `-l` alone does not redirect
+    # `statefile:` - that is a separate pickle which `-l` does not cover.
+    beet_exec "${BEET_BIN} -l ${THROWAWAY_DB} -c ${OVERLAY} config -d"
     if [[ $BEET_EXEC_RC -eq 124 ]]; then
       fail "ARM 2: UNKNOWN, not green — 'config -d' exceeded its ${REMOTE_TIMEOUT}s bound (rc=124)"
     elif [[ $BEET_EXEC_RC -ne 0 ]]; then
@@ -782,7 +824,7 @@ else
     fi
 
     # The source-file list: which files confuse actually assembled this from.
-    beet_exec "${BEET_BIN} -c ${OVERLAY} config -p -d"
+    beet_exec "${BEET_BIN} -l ${THROWAWAY_DB} -c ${OVERLAY} config -p -d"
     if [[ $BEET_EXEC_RC -ne 0 || ! -s "$WORKDIR/exec.out" ]]; then
       fail "ARM 2 source list: UNKNOWN, not green — 'config -p -d' exited $BEET_EXEC_RC"
     else
@@ -793,7 +835,7 @@ else
 
     # T-06-33: the redaction no-op, asserted.
     if [[ "$CONFIG_ROUTE_CLI" == "confuse" ]]; then
-      beet_exec "${BEET_BIN} -c ${OVERLAY} config -d -c"
+      beet_exec "${BEET_BIN} -l ${THROWAWAY_DB} -c ${OVERLAY} config -d -c"
       if [[ $BEET_EXEC_RC -ne 0 || ! -s "$WORKDIR/exec.out" ]]; then
         fail "T-06-33 redaction no-op: UNKNOWN, not green — the unredacted dump could not be read (rc=$BEET_EXEC_RC)"
       elif cmp -s "$WORKDIR/arm2.dump" "$WORKDIR/exec.out"; then
@@ -806,8 +848,11 @@ else
     fi
   fi
 
-  # D-29 layer 3, after. `beet` opens the library for every subcommand, so this is the direct
-  # evidence that reading a config moved neither the library nor the incremental statefile.
+  # D-29 layer 3, after. `beet` opens the library for every subcommand, which is why this hash
+  # pair was the original evidence that reading a config moved neither the library nor the
+  # incremental statefile. With `-l ${THROWAWAY_DB}` now on all three invocations it is no longer
+  # carrying that claim alone: the real library should never have been OPENED, and an equal pair
+  # here corroborates the redirect. An UNEQUAL pair is still the harder finding of the two.
   LIB_HASH_AFTER="$(hash_beets_state | tr '\n' ' ' | tr -s ' ')"
   [[ -z "$LIB_HASH_AFTER" ]] && LIB_HASH_AFTER="UNKNOWN"
   info "D-29 layer 3, after:  ${LIB_HASH_AFTER}"
@@ -891,6 +936,7 @@ echo "  arm 1 blind:                 $ARM1_BLIND   (1 = nothing below section 4 
 echo "  arm 2 blind:                 $ARM2_BLIND"
 echo "  inter-arm differences:       $DIFF_ROWS of ${#COMPARE_KEYS[@]} compared keys (reported, not asserted)"
 echo "  redaction no-op (T-06-33):   $REDACTION_VERDICT"
+echo "  no-op overlay size (WR-04):  $OVERLAY_SIZE   (bytes; anything but 0 refuses arm 2)"
 echo "  D-29 before:                 $LIB_HASH_BEFORE"
 echo "  D-29 after:                  $LIB_HASH_AFTER"
 echo "  toolchain missing:           $TOOLS_MISSING"
