@@ -1,0 +1,532 @@
+================================================================================
+06-11-wrote-nothing.txt — THE THREE-LAYER D-29 PROOF FOR THE PLAN 06-11 DRY RUN
+Phase 6 plan 06-11, 2026-09-21.  Instrument: scripts/phase06-oracle.sh --run
+================================================================================
+
+VERDICT: the dry run WROTE NOTHING, on all three layers, with no layer reporting
+"could not look".
+
+  This plan writes nothing into /mnt/tank/media and nothing into
+  /mnt/tank/downloads.  Both are PROVEN below, not assumed.
+
+  The vocabulary throughout is THREE-OUTCOME and never two:
+      identical  /  CHANGED  /  COULD NOT COMPARE
+  "could not look" is kept distinct from "nothing is wrong" (CLAUDE.md § Health
+  Checks).  A `diff` that exits >= 2 writes to stderr and leaves STDOUT EMPTY;
+  read as `d="$(diff …)"; [ -z "$d" ]`, that empty stdout reports as "identical
+  before and after".  manifest_compare() refuses to make that mistake.
+
+================================================================================
+LAYER 1 — LIBRARY, STRUCTURAL.  /media IS MOUNTED RW=false.
+================================================================================
+Read from the RUNTIME (`docker inspect`), NEVER from the compose file.  The
+compose file is the intent; the inspect output is the fact, and only one of them
+is what the kernel enforces while the run happens.
+
+  docker inspect --format '{{range .Mounts}}{{.Source}}|{{.Destination}}|{{if .RW}}rw{{else}}ro{{end}}{{"\n"}}{{end}}' beets-flask
+
+  /mnt/fast/appdata/arrs/beets/config/beets-flask/config.yaml|/config/beets-flask/config.yaml|ro
+  /mnt/fast/appdata/arrs/beets/logs|/logs|rw
+  /mnt/tank/downloads|/downloads|rw
+  /mnt/tank/media|/media|ro
+  /mnt/fast/appdata/arrs/beets/config|/config|rw
+  /mnt/fast/appdata/arrs/beets/config/config.yaml|/config/config.yaml|ro
+
+  ASSERTION: the mount whose Destination is `/media` carries RW=false.
+  RESULT: HELD.  RW=false.  (D-05.)
+
+  This is the only control in this document that CANNOT FAIL OPEN.  Note also
+  what the assertion does when no /media mount is enumerated at all: that is a
+  COULD NOT LOOK and exits 3 — it is NOT "/media is read-only", because nothing
+  was inspected and so nothing is known.
+
+  ⚠ /mnt/tank/downloads is mounted rw, which is why layers 2 and the -newer
+  sweep exist.  The 174 sampled audio files across ten folders are 162 under
+  /downloads (writable) and 12 under /media (read-only).  Only `write: no`,
+  `copy: no`, `move: no` and the checksum manifests separate a dry run from a
+  real one on the writable side.
+
+================================================================================
+LAYER 2 — SOURCE.  A CHECKSUM MANIFEST, NOT A COUNT.
+================================================================================
+Taken over EVERY sampled source folder, BEFORE the throwaway import and AFTER the
+whole run.  `%p %s %T@` catches path, size and mtime; a sha256 of every file
+catches content; together they also catch ADDITIONS and DELETIONS, because a
+vanished or a new path changes both listings.  A count would catch none of that.
+
+  folders covered .................................... 10  (all of them)
+  files in the manifest, before ...................... 190
+  files in the manifest, after ....................... 190
+    (174 audio files plus 16 sidecars — .sfv, .nfo, .jpg and similar.  The
+     manifest deliberately covers the WHOLE folder, not only the audio, because
+     a dry run that dropped a .nfo would be just as much a write.)
+
+  src.before.meta  vs  src.after.meta  ............... identical
+  src.before.sha   vs  src.after.sha   ............... identical
+
+  Neither comparison reported CHANGED and neither reported COULD NOT COMPARE.
+  Byte-for-byte re-verified outside the script: `cmp` on both pairs returns 0.
+
+THE -newer SWEEP, AND ITS COULD-NOT-LOOK PREFLIGHT
+
+  The stamp is taken OUTSIDE both mounts — /mnt/fast/safety/phase06/oracle.stamp,
+  on LXC 100's own root filesystem — so taking it cannot itself perturb what it
+  measures.  Nothing under /mnt/tank is touched by it.
+
+  PREFLIGHT RESULT: READY.
+  Recorded explicitly, because it is the whole point of the CR-02 fix.  The
+  preflight tests every sampled folder for -d, -r and -x and the stamp for -f,
+  and answers READY or BLIND:<what>.  This sweep used to be
+  `find ... 2>/dev/null || true` feeding a count, and every failure mode of find
+  then produced an empty result, a zero count and a GREEN TICK CLAIMING THE DRY
+  RUN WROTE NOTHING.  A BLIND answer is a red here, not a zero.
+
+  SWEEP RESULT: 0 files newer than the stamp across all 10 sampled folders.
+  The ssh exit status was read on the very next line, and a non-zero status is
+  reported as "COULD NOT LOOK", explicitly NOT as "0 files newer".
+
+================================================================================
+LAYER 3 — BEETS STATE.  library.db AND state.pickle, BOTH NAMED.
+================================================================================
+BOTH are named because `-l` does NOT redirect `statefile:`: `ImportState.__init__`
+reads `config["statefile"].as_filename()` and there is no CLI flag for it, so a
+throwaway `-l` import still writes the SHARED pickle.  The `-c` overlay is what
+redirects it, and layer 3 is what proves the redirect worked.
+
+  BEFORE (taken before the library copy and before any import):
+    fbbdde0c416e72b9884e56c562fd88eaa4da447926e1cb6cc17c3e04aee7da1a  /config/library.db
+    f6a9a1ad7aa553e42e53a8056fa80724785111180a5e2122be4f8732d1e4bc7c  /config/state.pickle
+
+  AFTER (taken after `beet move -p` and after the class assertions):
+    fbbdde0c416e72b9884e56c562fd88eaa4da447926e1cb6cc17c3e04aee7da1a  /config/library.db
+    f6a9a1ad7aa553e42e53a8056fa80724785111180a5e2122be4f8732d1e4bc7c  /config/state.pickle
+
+  /config/library.db     BYTE-IDENTICAL before and after.
+  /config/state.pickle   BYTE-IDENTICAL before and after.
+
+  MTIMES, recorded as well as hashes, because state.pickle's mtime MOVING during
+  a run that was supposed to write nothing is the warning sign — a rewrite with
+  identical content would leave the hash alone and move the mtime:
+
+    /config/library.db     mtime 2026-09-12 00:42:52.275462096 +0100   size 53248
+    /config/state.pickle   mtime 2025-11-18 13:50:21.434412138 +0000   size 47
+
+  Both mtimes predate this plan by days and by months respectively.  Neither
+  moved.
+
+  THE LIBRARY IDENTITY, asserted rather than assumed:
+    library.db sha256 fbbdde0c… IS the value 06-EXPECTED-TREE.txt's header names,
+    and the script asserts the equality rather than leaving it to a reader.  That
+    assertion is what makes the %aunique{} count in 06-11-oracle-run.txt § 7.5
+    comparable with the fixture's prediction at all: a different library is a
+    DIFFERENT COLLISION SET.
+    state.pickle sha256 f6a9a1ad… is an EMPTY-STATE pickle (47 bytes).  The real
+    library has never recorded incremental history, so ANY OTHER VALUE on that
+    file would be positive evidence that a real import ran at some point.  It is
+    at its recorded baseline.
+
+  THE ORACLE NEVER OPENED THE ORIGINAL.  It copied /config/library.db to
+  /tmp/p6/lib.db inside the container and opened the COPY with flask's own beets
+  2.12.0 — it must be 2.12.0, because beets 2.13.1 opening a 2.12.0 database
+  migrates the schema under 2.12.0's feet (D-04; Phase 1 measured a bare
+  `beet config` running 11 migrations unasked).
+
+  CLEANUP: /tmp/p6 was removed and ITS ABSENCE ASSERTED (`[ -e /tmp/p6 ] && echo
+  present || echo gone` -> gone).  The stamp was removed too.  Note /tmp inside
+  the container is the docker overlay on LXC 100's 126 G ext4 root, NOT LXC 100's
+  tmpfs — but it is cleaned regardless.
+
+================================================================================
+WHY THE DRY RUN COULD HAVE WRITTEN, AND WHAT STOPPED IT
+================================================================================
+Three trust boundaries, from the plan's threat model, and what held each:
+
+  dry run -> /mnt/tank/downloads (rw)
+      Only `write: no` / `copy: no` / `move: no` in the `-c` overlay and a
+      checksum manifest separate a dry run from a real one.  All three keys are
+      stated explicitly — `copy: no` does NOT imply `move: no`, they are
+      independent keys and copy=no with move=yes is a MOVE.  Layer 2 is what
+      proves it rather than trusting it.  Note the vendored /config/config.yaml
+      sets `import.write: yes` as PHASE 7 behaviour, so EVERY Phase 6 invocation
+      must override it; this one did.
+
+  throwaway library -> real library.db / state.pickle
+      `-l` does not redirect `statefile:`.  The overlay names both.  Layer 3 is
+      what proves the redirect worked.
+
+  a duplicate album -> deletion
+      rc6's own default for `import.duplicate_action` is `remove`, which deletes
+      duplicates with NO PROMPT, and the sample deliberately contains two rips of
+      the same album.  The overlay sets `keep`, which imports both and deletes
+      nothing.  Layer 2's sha manifest over both folders is the proof that
+      nothing was removed: 190 files before, 190 after, identical content.
+      (This plan changed that key from `skip` to `keep`; see 06-11-oracle-run.txt
+      § 6.1.  `skip` was also non-deleting, but it dropped ten files from the
+      measurement.)
+
+================================================================================
+THE FOUR EARLIER RUNS WROTE NOTHING EITHER
+================================================================================
+The instrument failed four times before it passed (06-11-oracle-run.txt § 6).
+Each of those runs performed the same import into the same throwaway library, so
+each is an additional exposure of the source tree.  Re-verified after the two
+runs that aborted before their own cleanup could run:
+
+  after run 1 (exit 3, aborted at the positive control, before layer-2 AFTER):
+    /config/library.db     fbbdde0c…  UNCHANGED
+    /config/state.pickle   f6a9a1ad…  UNCHANGED
+    /tmp/p6 contained only lib.db and overlay.yaml; removed by hand, absence
+    asserted.
+
+  runs 2 and 3 completed their own layer-2 and layer-3 checks and reported
+  "identical before and after" on every one, then cleaned up /tmp/p6 themselves.
+
+  run 4 and run 5 (this one) are both fully GREEN.
+
+  The estate is therefore in the same state it was in before this plan started,
+  on every file this plan could have touched.
+
+================================================================================
+END OF 06-11-wrote-nothing.txt
+The oracle transcript and every class-assertion verdict: artifacts/06-11-oracle-run.txt
+================================================================================
+
+================================================================================
+APPENDIX — THE LAYER-2 MANIFESTS THEMSELVES
+================================================================================
+
+DIGESTS OF THE FOUR MANIFEST FILES.  Before and after are byte-identical on both
+kinds, so each pair shares one digest.  This is a second, independent statement
+of the same fact as the `diff` in layer 2 — computed by a different tool, over
+the whole file at once rather than line by line.
+
+  d709b6eb11f2454686251a4f73b9a4cd500507e889ce9e23131c3282baea8e06  src.before.meta
+  d709b6eb11f2454686251a4f73b9a4cd500507e889ce9e23131c3282baea8e06  src.after.meta
+  3d248f60f3e9338f79547fe9a419e11df7feea86374d0b4e697b4a4964decf98  src.before.sha
+  3d248f60f3e9338f79547fe9a419e11df7feea86374d0b4e697b4a4964decf98  src.after.sha
+
+THE CONTENT MANIFEST, IN FULL — 190 lines, `sha256sum` over every file in every
+sampled source folder, LC_ALL=C sorted.  The AFTER manifest is byte-identical to
+this one (digest above, plus `cmp` returns 0), so it is not reproduced a second
+time; printing the same 190 lines twice would add bulk and no evidence.
+
+The METADATA manifest (`%p<TAB>%s<TAB>%T@` — path, size, mtime) is not reproduced
+here: its digest is above, it is also byte-identical before and after, and it
+catches a rewrite that preserved content, which the sha manifest alone would
+miss.  It lives beside the run output at the fence.
+
+--------------------------------------------------------------------------------
+00b3e5e21083f2c3483a22b69076f5961d1e4ccce7bf447cf5b952416eb0e94b  /mnt/tank/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-03 Katy Perry - California Gurls.lrc
+0195a9c9bc0f024311ffbcd9ee91b12d14076e5b20cbd0e801359321e2e0567c  /mnt/tank/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001/05. Heaven 17 - Temptation.mp3
+02ca14f2d824bebbc0a1477d7c3361fc361cd3fdfe8cef98d91c265a39aec6e0  /mnt/tank/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/07. - The Giver.mp3
+04271b9fc4d70a6ba4ca1ff19cb45eab705ed7b0d1ad2d343e8caf1e77a0b905  /mnt/tank/downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost/115.-.The.Girl.Is.Mine.(with.Paul.McCartney).flac
+076a720658d634dbfce0f12f623ccc1dac7aad12f4342657dafebdd59eadae0e  /mnt/tank/downloads/complete/nzb/music/Benson Boone-American Heart-24BIT-44KHZ-WEB-FLAC-2025-OBZEN-xpost/05-benson_boone-reminds_me_of_you.flac
+085d1e779d2a60cc50ce6925bbff2f5343a13e0f62fab1c6982711997ddbfd52  /mnt/tank/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001/09. Culture Club - Karma Chameleon.mp3
+0b74321c271a940c3c097c020173d5d2853e7967e868ea763db3cb31f51b619e  /mnt/tank/downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost/206.-.Dirty.Diana.flac
+0d6fb6e3ea374b076ce5dc40ef5e6b4c7814b45af8acdcd442d7f6eef0dbec17  /mnt/tank/downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost/202.-.I.Just.Can't.Stop.Loving.You.(feat..Siedah.Garrett).flac
+0f4daba2a968e73f4c21e61d825c9185decf8b3b018ef987cf0fdd9d0ff9abd0  /mnt/tank/downloads/complete/nzb/dj-mixes/Mastermix.Issue.420.2021/4200103 - Mastermix - Reggae Fusion.mp3
+10deb35e3248ed0bcc84bd1a41d61fdd7c0dfe10bb651a2c98d14fc849cd2ef0  /mnt/tank/downloads/complete/nzb/music/Benson_Boone_-_American_Heart-WEB-2025-BENSONBOONE/08_benson_boone_-_wanted_man.mp3
+113739765e533a19314c882dfa9ee7f01798e9c431756a2264ea8c6a5ddbbaa8  /mnt/tank/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/01. - Busy Woman.mp3
+121862757fb1b97ea2e9699f8d985dd38ba1e8a44f6d5e4902b5de330957cf77  /mnt/tank/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/09. - Headphones On.mp3
+12eba3536fa22fee32fc0fd24fa0d3c867953c2a8a1fd7312a4055cd1776f4c9  /mnt/tank/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/04. - Sports Car.mp3
+136579c7f536341d60bfba51ced75be857fa02a266cdef2d4e015c6b88d6761f  /mnt/tank/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001/04. The Human League - (Keep Feeling) Fascination.mp3
+14786b5091099693873fc55c1fd02b831d31a1cbeb4036b943a978217604014d  /mnt/tank/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/17. - Make It On Your Own.mp3
+1543daf6b1ee443cb22fb8c8b1d495e0859fcc9001591a7b9d8d4a96a9413433  /mnt/tank/downloads/complete/nzb/dj-mixes/Mastermix.Issue.420.2021/4200202 - Mastermix - Party On Fire.mp3
+17e2c5e3ea7ff65ae8a35653dfae5e54819170566c5ccd2e9ff5a6f1784aeab3  /mnt/tank/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-08 Katy Perry - E.T.lrc
+184c3edfaf50ede19e289717ba155e8472f6a618cade777505b05cedd8ec8312  /mnt/tank/downloads/complete/nzb/dj-mixes/Mastermix.Issue.420.2021/4200205 - Mastermix - Summer Slam 00s Club Classics.mp3
+1857a79f00077f80e55aa3fa16d257bd13e6824edcbacd8fae5e5afa2c619a79  /mnt/tank/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001/08. Tracey Ullman - They Don't Know.mp3
+1d4cb45700d08250a3d10e07ef9abd237fb18d572dac1f28677a4ae2755bfabc  /mnt/tank/downloads/complete/nzb/music/Benson_Boone_-_American_Heart-WEB-2025-BENSONBOONE/06_benson_boone_-_momma_song.mp3
+1deb3732007ec3633a0e25f8ef9d5750290329718d01bb43a9dd950ac34a9342  /mnt/tank/downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost/109.-.Shake.Your.Body.(Down.to.the.Ground).(Single.Edit).flac
+1e4eeaf968aaf566d4d77744d699f9f6459cb74a22445abe8525a71b90d3e80e  /mnt/tank/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/07. - Cry For Me.mp3
+1f7f91600c1e9483d41be9cc8ac0c16d7af853a57fbf414763fb6a7f133ed02b  /mnt/tank/downloads/complete/nzb/dj-mixes/Mastermix.Issue.421.2021/05. Mastermix - Cool Summer Dance Triple Tracker.mp3
+2456e15f294405402f30898272f09dd560c00635aa3bd7fe288da01b9c665dd5  /mnt/tank/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001/06. KC & The Sunshine Band - Give It Up.mp3
+24e1e19ae247364af208ea5e088eefacc222856b08ffe126f10937b298292fcd  /mnt/tank/downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost/204.-.The.Way.You.Make.Me.Feel.(Single.Version).flac
+2563b1304c1e65fe018e4fae9828368998e5ffe26d03167bf772502b787a661b  /mnt/tank/downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost/215.-.Dangerous.flac
+259674201fcb118c57a05b432e1b78203befdb35c2c54c264e230bf652ec0d7a  /mnt/tank/downloads/complete/nzb/music/Benson Boone-American Heart-24BIT-44KHZ-WEB-FLAC-2025-OBZEN-xpost/06-benson_boone-momma_song.flac
+272e87087d9076e5923cf415f87ad8aba971ac2b9823a38dbbdd3932050a5f9c  /mnt/tank/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001/06. UB40 - Please Don't Make Me Cry.mp3
+27f880ff97bb93c65244e5ad885bcd4390281200ff7dc1d81a5107289da2c71b  /mnt/tank/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/14. - I'm The Problem.mp3
+28f048f48d1a1b3533b4e288500d10877107ff6c3e0bd6647b514778605276a4  /mnt/tank/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/06. - Back To Friends.mp3
+2cb9f5cb52b5a07c212abac05c101ee5122281382cf496cca94a11df4fb38cdb  /mnt/tank/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/17. - Party 4 U.mp3
+2db8407619e294e6feee084aace87df70f80b8c9ca36641f9a97285620d24c63  /mnt/tank/downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost/113.-.She's.Out.of.My.Life.flac
+2e2d2a90f06531de0fc4b6ffac1131251b43bb588efac26802c28ecb43e30387  /mnt/tank/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001/12. Simple Minds - Waterfront.mp3
+2efe118547ab200f3ac7bff53796bf5c17cf8a35017b7197dfc4f621961ce92c  /mnt/tank/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-07 Katy Perry - The One That Got Away.lrc
+2f07150b436395109af41d3de95ccd9670f13298b51efe04b3f7a4ab1d2890bd  /mnt/tank/downloads/complete/nzb/dj-mixes/Mastermix.Issue.421.2021/03. Mastermix - Where The Rap Party At.mp3
+382277b7c15daec20b78cd5565dbc22dfc7d3875c2adfaa35c30bb35f0059b70  /mnt/tank/downloads/complete/nzb/music/Benson.Boone.-.Fireworks.&.Rollerblades.(2024).[16Bit-44.1kHz].FLAC.[PMEDIA].⭐️-xpost/02..Be.Someone.flac
+3841854555741b9e054dae3c0829e344a0b9f774ace4d7e215bd79b07876fb7e  /mnt/tank/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/16. - Henry, Come On.mp3
+38494735116bc97eed7df20853765f126647d8a515bbb1039a54be064c9c50d6  /mnt/tank/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001/15. Rod Stewart - Baby Jane.mp3
+38997b17dbbee5c559f233bf593f5c23c61dbd12ca04228942ae7e57ad7ea747  /mnt/tank/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-02 Katy Perry - Last Friday Night (T.G.I.F.).flac
+39bbde039169751ef7403e22a8ce73df0dedbe01ed867032e19ae69dbf8f1095  /mnt/tank/downloads/complete/nzb/dj-mixes/Mastermix.Issue.421.2021/02. Mastermix - Deep House Covers 2021.mp3
+3a8671bca8f7d82dcd286a84be83e5274aecabfa2fa1d8138f4e658f59c78654  /mnt/tank/downloads/complete/nzb/dj-mixes/Mastermix.Issue.420.2021/album.nfo
+3b25b1dfaec9cf863d9a78623abf0e9ede098d6d7972ceb4baa9da464abaa966  /mnt/tank/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001/11. Kajagoogoo - Too Shy.mp3
+3b4e8592dd68db18278982aa20b2e2bc4680b3d61c0995455f0fee2728a8c303  /mnt/tank/downloads/complete/nzb/music/Benson_Boone_-_American_Heart-WEB-2025-BENSONBOONE/07_benson_boone_-_i_wanna_be_the_one_you_call.mp3
+3bcaad5eb8bd1f9a763565c33fecbd49859338d0eb9bb77c14581dd1bfcc5bb2  /mnt/tank/downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost/209.-.Black.or.White.(Single.Version).flac
+3d2ec6817c4c871dda138b9b3110c2733f1d3d855290fc7e00fa50b1c0aa0109  /mnt/tank/downloads/complete/nzb/dj-mixes/Mastermix.Issue.421.2021/04. Mastermix - Lounge & Bar Grooves.mp3
+3d84ebbdfb6baf6481f70ead2ca58c837c01cb35e2515465a4f2d1a3628da2ed  /mnt/tank/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/02. - Gold.mp3
+3de60f2319b49defa8be6fc30b4a9d4102c878b8ec286b0a8356cd09dc5e7fca  /mnt/tank/downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost/212.-.In.the.Closet.(Single.Version).flac
+3edb2a4e4fccc647cc60c1504f3c8025c6d7589ff06e1a4054149e7e5b418c71  /mnt/tank/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/12. - Fufn.mp3
+3f350999adf856980a303a59660350c79caf017c18dc9f8e8f87ebea4c78f8fb  /mnt/tank/downloads/complete/nzb/music/Benson Boone-American Heart-24BIT-44KHZ-WEB-FLAC-2025-OBZEN-xpost/02-benson_boone-mr_electric_blue.flac
+3f59fa60d6f791f5d6e5d3323dbef679228bbbf4af312b75e679aa1e02ec357f  /mnt/tank/downloads/complete/nzb/dj-mixes/Mastermix.Issue.420.2021/4200102 - Mastermix - Mastermixed 5.mp3
+4098700f2bd773afa6db87a7e2826c3cc1fb9cf2fdf5c6a16210a6fcd44b38ec  /mnt/tank/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-01 Katy Perry - Teenage Dream.flac
+41464394a5ae54d6c6b2a257e846ab093b26dff24d419653fb73dfdd554518da  /mnt/tank/downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost/107.-.Enjoy.Yourself.flac
+452a65cd9f6cf5a27cbb33385cb8ab16754aac01f0d6b55126335ba62b6270db  /mnt/tank/media/Music/Katy Perry/Teenage Dream (2010)/album.nfo
+476a11b8d0e950cb5b4fe19ec97e544dad095c539c4b672d5a78566f3b80017b  /mnt/tank/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-06 Katy Perry - Circle the Drain.lrc
+47ab9c4cd9ce884171562622b7346ce88fc32757d4276468a97f7f9897bb2849  /mnt/tank/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/11. - Twilight Zone.mp3
+47fb6d2f07bd2862b29d45cf65e7f9170fd86df1c20caa10a0d1110bcbdab416  /mnt/tank/downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost/108.-.Blame.It.on.the.Boogie.flac
+49c6ecfcc0cf6b9dcb7892be70c3cb722bac91da20b70f4c3e3c875d3f88bcb9  /mnt/tank/media/Music/Katy Perry/Teenage Dream (2010)/folder.jpg
+4c01c8a738b2ab63f437cbfa95541379d84971050168022c0a3bc4cd295a65cb  /mnt/tank/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-04 Katy Perry - Firework.lrc
+4de76a4b28bb63a9d358d5a42506d183ff82f6adc02b3947e7984404166d7a19  /mnt/tank/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001/02. Duran Duran - Is There Something I Should Know.mp3
+4ef185f958eb31cbf664e8577eaf115fb6fe397b7f8d22ff7501065b3863d067  /mnt/tank/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/18. - Relationships.mp3
+4f53cc01a3f9bdcc9b51eb85e12383ca1a2e000a1870b9deb5d5f458dcec02f2  /mnt/tank/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/08. - Mutt.mp3
+4fa690e8d038047e3a6ed4ec7813bf8cd24d10ca991efc91f28a0bbe05a62815  /mnt/tank/downloads/complete/nzb/dj-mixes/Mastermix.Issue.420.2021/4200203 - Mastermix - Classic Disco vs. Nu Disco.mp3
+506ad513e3618c02cafdf00a1755c287741bbaf3189e8ffd9bb9cc9be9d6ee34  /mnt/tank/downloads/complete/nzb/music/Benson.Boone.-.Fireworks.&.Rollerblades.(2024).[16Bit-44.1kHz].FLAC.[PMEDIA].⭐️-xpost/06..Forever.and.a.Day.flac
+5175fa60e4374489ff9177244812dfd8523baa48bcb1960b86b8d24455aa0b1f  /mnt/tank/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-09 Katy Perry - Who Am I Living For.lrc
+522439cfd04932033d7028869bea8cf42aad1d538d83eaf21139c91c22ac4545  /mnt/tank/downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost/201.-.Bad.flac
+546b81e59375b8bbb3b2843ac4361a654c9a02b268a1ef3ec432c5a19c5b0dcc  /mnt/tank/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-04 Katy Perry - Firework.flac
+55b6efbd1f5b152df50400162da7f1adc0b6c7788018ea72cc9a4d66ae9cd803  /mnt/tank/downloads/complete/nzb/music/Benson.Boone.-.Fireworks.&.Rollerblades.(2024).[16Bit-44.1kHz].FLAC.[PMEDIA].⭐️-xpost/04..Beautiful.Things.flac
+568d604ab05d3acafb0223f1242998db7879b684ae74721b488843162289f1b4  /mnt/tank/downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost/112.-.Off.the.Wall.flac
+5a3da3f88c4ad37e3e386f3cbaae75c1f0500e744908912699843e40a69be094  /mnt/tank/downloads/complete/nzb/dj-mixes/Mastermix.Issue.421.2021/02. Mastermix - Pride (The Mix 2021).mp3
+5a95ea430268c62a85045fb13834a689da8f986bff06b2a0bae37ed56d4e90ee  /mnt/tank/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/13. - Me & You.mp3
+5b407a15f1445205a842cd75612536842e301ef6904684853f4645efef386b5d  /mnt/tank/downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost/214.-.Will.You.Be.There.(Single.Version).flac
+5c0dc3f3310c2e59e1a353be26f5011b501fcf98899ca43d3ec8e150a0cc542d  /mnt/tank/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001/09. Will Powers - Kissing With Confidence.mp3
+5ec37438bbbb97d3aba551d47821342b3afddeb65a2eb47e079e1746b02590de  /mnt/tank/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001/03. UB40 - Red Red Wine.mp3
+5fccd0a398876278336094a9d5e3c338ca23da6a9baa68aa2cb39ffe2e5fe4a1  /mnt/tank/downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost/207.-.Another.Part.of.Me.(Single.Version).flac
+60e294afdd9e11678bb494e45813162fa31afe6064de344ee5123f763286fa22  /mnt/tank/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/03. - Azizam.mp3
+6238df0d7769ec5eee01a2ad0c9cfcbe2fddabdeba964bda121177e3b39f187e  /mnt/tank/downloads/complete/nzb/music/Benson.Boone.-.Fireworks.&.Rollerblades.(2024).[16Bit-44.1kHz].FLAC.[PMEDIA].⭐️-xpost/13..Love.Of.Mine.flac
+6249bee266a49399aa06331e54d76cf6d4f9e87c763653e47a3bce7c4fa787d5  /mnt/tank/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-07 Katy Perry - The One That Got Away.flac
+628e490ac85db4b09200f66da469c0f3048217afa1905f8dcca6887fe094cb0d  /mnt/tank/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/16. - A Little Love.mp3
+62dec83960aa9f88b80e5bcd90c8841a0823d9d658752a0d541c6e87de1f8f7a  /mnt/tank/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001/08. Bonnie Tyler - Total Eclipse Of The Heart.mp3
+646552c47762d0cbc115e0faa27edae57a574ee3a59f68d069b4a03ccc0526e2  /mnt/tank/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-09 Katy Perry - Who Am I Living For.flac
+65796823bb21332dd7cca9653c2b9a5be76970f2e575e53490549d886f3618cd  /mnt/tank/downloads/complete/nzb/music/Benson Boone-American Heart-24BIT-44KHZ-WEB-FLAC-2025-OBZEN-xpost/07-benson_boone-i_wanna_be_the_one_you_call.flac
+6658b4f02007bc3342ea6f66d450232117986b41ca8c373028a188c5d8654880  /mnt/tank/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/05. - Sorry I'm Here For Someone Else.mp3
+66a88b754971b00ff308b8228285012d192009ed1f5c86d2b565b40ab3d6563e  /mnt/tank/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001/02. Kajagoogoo - Big Apple.mp3
+6991d27012d0abd08d16ade0a716d2a2fe6571e879f8513d27529b7f1d1cdf95  /mnt/tank/downloads/complete/nzb/dj-mixes/Mastermix.Issue.421.2021/03. Mastermix - Electro Swing Party.mp3
+6ab70145b126b0ff77612d6d8da84817142b606b679c52a676795ede9b4d066a  /mnt/tank/downloads/complete/nzb/music/Benson.Boone.-.Fireworks.&.Rollerblades.(2024).[16Bit-44.1kHz].FLAC.[PMEDIA].⭐️-xpost/15..What.Do.You.Want.flac
+6b83ec01970258c06ba22c13368a3896244f425ff08ade48aa8a70818b2030e3  /mnt/tank/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001/13. Men At Work - Down Under.mp3
+71aa82d3439a19e6132c069d77d721e28ca162b6502cc7b244790f582e7f7efb  /mnt/tank/downloads/complete/nzb/dj-mixes/Mastermix.Issue.420.2021/4200105 - Mastermix - Triple Tracker Crazibiza.mp3
+72de123b9114bbf3089eaa00c985d76c120cc0f3b938f12aa2ccc5c9a8deb6da  /mnt/tank/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/19. - Rocket.mp3
+72fd81bb592f50668443b6ca3ba499f2a3ba254c6a21819d9a081801624e412a  /mnt/tank/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-02 Katy Perry - Last Friday Night (T.G.I.F.).lrc
+74ca10cabb5ef6b26d5ce139ed423dadbafb5ca2b93060ace31dbf2711fd2b26  /mnt/tank/downloads/complete/nzb/dj-mixes/Mastermix.Issue.421.2021/05. Mastermix - The Secret Garden.mp3
+77d3aaa67f2b38a3849bd9be1b1298de9aa614e3c0fa70c2fd9d46acc2fd9dc6  /mnt/tank/downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost/121.-.Thriller.(Single.Version).flac
+78203709950016e7272cbe27f1bf8d591e519cecbc5519637a4ad6cd11f52893  /mnt/tank/downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost/203.-.Leave.Me.Alone.flac
+793bbdc0795744e9df8c9ce9fbcd25d606d2694501142b47af1a2fd0a8c964d9  /mnt/tank/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/22. - The Glen (Levi Heron Edit).mp3
+7a69d70e6afab2198e7843218b2a76ae426c757477b211defda790db485237ce  /mnt/tank/downloads/complete/nzb/music/Benson_Boone_-_American_Heart-WEB-2025-BENSONBOONE/10_benson_boone_-_young_american_heart.mp3
+7a94ba84d8072e0a7ce0932fc8d636013b06984d75e1ef157c4acbbf106a6e03  /mnt/tank/downloads/complete/nzb/music/Benson_Boone_-_American_Heart-WEB-2025-BENSONBOONE/03_benson_boone_-_man_in_me.mp3
+7c29c48a8c89f22096f6c1b3a615cd40729757218a9275334a78b9c298062d17  /mnt/tank/downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost/111.-.Rock.with.You.(Single.Version).flac
+7cb650502d0ddd0feb8c685e6fd84f0885583eddb90e7bf610f93e00aacf2223  /mnt/tank/downloads/complete/nzb/music/Benson.Boone.-.Fireworks.&.Rollerblades.(2024).[16Bit-44.1kHz].FLAC.[PMEDIA].⭐️-xpost/01..Intro.flac
+7d4ad3d52207c83214ecfdfce2c6294d13b72b99f59710ea0175ef1c1a7bc8c3  /mnt/tank/downloads/complete/nzb/music/Benson Boone-American Heart-24BIT-44KHZ-WEB-FLAC-2025-OBZEN-xpost/03-benson_boone-man_in_me.flac
+7f5f5988ef25cc4f8568738000a9e0018790aa468d64a8128bcd36ddfdd5dd2d  /mnt/tank/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/20. - Taste.mp3
+84d70008d50ab5cc5e200e66d24510f50670e90e23b7b210919ec7836e1342b8  /mnt/tank/downloads/complete/nzb/music/Cyril - Stumblin In (LUNAX Remix) (Extended Mix)-(5021732254740)-SINGLE-WEB-2024-ZzZz [9c1feafc0] [2af13ead9]-xpost/01-cyril_-_stumblin_in_(lunax_remix)_(extended_mix)-zzzz.mp3
+862e6e9fc68c9796c04e7052f066e42ef3e68d3179ccf1cf4b083d45f64dff55  /mnt/tank/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001/10. Genesis - That's All.mp3
+88ae8c391538e3ad028f14908c95282549b67b976585b7524f438374517bb468  /mnt/tank/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/10. - Burning Down.mp3
+890987b6000d93f511ff223061966c95153da760f4ef1e9d658360f04eac9d7e  /mnt/tank/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001/12. Mike Oldfield - Moonlight Shadow.mp3
+8922a28726eb4d43091f9a46a57ac6a5d9e6d36943d2b31d5d32762490680678  /mnt/tank/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001/13. Madness - The Sun And The Rain.mp3
+89cf87fbb91aeff8780a3c23beb6e2bea40265a6a31aaaabbb41e0984c61bd63  /mnt/tank/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/04. - Plastic Box.mp3
+8a8d8ac918f03886ee1a347e6d7b4c347bf541bbb397092f8a5d8c708498dbe3  /mnt/tank/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/11. - Cliché.mp3
+8a95b619e298eca5e88a1cb8d9cae25183b0b5764e6672b64f07e43cdbccc37d  /mnt/tank/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001/01. New Edition - Candy Girl.mp3
+8bba319a2d429b8ca9a0aa7cf38202cdb8d6c1d783fa6f32004099ec00ca7467  /mnt/tank/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-06 Katy Perry - Circle the Drain.flac
+8ce55a797891f37f7e59321d24581ebe1ff405d0c8b64c8502d05feaeb0f2f87  /mnt/tank/downloads/complete/nzb/dj-mixes/Mastermix.Issue.420.2021/4200101 - Mastermix - Club Cuts.mp3
+8d4f3dc8c4d929550155741acece638e746081ec0813733b590481b365907116  /mnt/tank/downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost/205.-.Man.in.the.Mirror.flac
+8e6da0ee90b597b14dc1a26c3583e23e3428fad6eda39c0cb1cdf82f8fb0840c  /mnt/tank/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/18. - Little Richard's Bible.mp3
+8f1b114919c72701c0d21c9471f428c691d50e90555b67be6cc1fe55e14d1a0f  /mnt/tank/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001/07 - Peabo Bryson & Roberta Flack - Tonight I Celebrate My Love.mp3
+8f3b23207fdc57775ea685d89e3a59a439bf74f03d84892d2dbf8696bfa7df28  /mnt/tank/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/09. - Undressed.mp3
+8f4caecf794e30bcb8f1bc657a2551f01534c61067e3a12fb75069785c0710db  /mnt/tank/downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost/210.-.Heal.the.World.flac
+914ab416f2a5f215596c59ec26c98fecadd981aa86a30a031cda3d06de8e6118  /mnt/tank/downloads/complete/nzb/music/Benson_Boone_-_American_Heart-WEB-2025-BENSONBOONE/05_benson_boone_-_reminds_me_of_you.mp3
+93f0b1866a4544966acb643dcb1a40422cbd396bff6ce0350ec76d435348dc36  /mnt/tank/downloads/complete/nzb/music/Benson.Boone.-.Fireworks.&.Rollerblades.(2024).[16Bit-44.1kHz].FLAC.[PMEDIA].⭐️-xpost/12..Ghost.Town.flac
+94529a602f74b57d26709bf4c8931b655f0c33607e2ed993af62378bdc685d57  /mnt/tank/downloads/complete/nzb/music/Benson Boone-American Heart-24BIT-44KHZ-WEB-FLAC-2025-OBZEN-xpost/01-benson_boone-sorry_im_here_for_someone_else.flac
+9781fad81b20ef627f6110b1471a1fd544e24bb291e7ca2ec806ff6703b1ddcd  /mnt/tank/downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost/119.-.Human.Nature.7.flac
+98782f64abe39f7648fd0beff3b770f52b26054df432491e07b8f228a34cac64  /mnt/tank/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001/14 - Rock Steady Crew - (Hey You) The Rock Steady Crew.mp3
+997792bc878b28f85d2dc377e48f8b1a940090ea8b2be61aab2f964501017ef2  /mnt/tank/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001/03. Tina Turner - Let's Stay Together.mp3
+9ba7192efa0f605972b5b1c33ca1cf9e8e46572cda3b7beb9bd24639c4c66d43  /mnt/tank/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-10 Katy Perry - Pearl.lrc
+9d0b9cdb871b45ad6749c89ad63a2419ed4e541936153428a229576837219231  /mnt/tank/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-12 Katy Perry - Not Like the Movies.lrc
+9d340edff1c63960c6046f403ac20d8d492c852e208b33331181e6e8a556cec8  /mnt/tank/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/06. - Mystical Magical.mp3
+9f4eb4c1922403feb239938b3e918308d0d189f8f2df8262c56744033ae4abc1  /mnt/tank/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001/10. Men Without Hats - The Safety Dance.mp3
+a1ccd63e3d25a392a9bedff50ebbb692a61fb6172471a58a4ea21dc351da442f  /mnt/tank/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001/11. The Cure - The Lovecats.mp3
+a4ab2d9de208ae8019da924e26def6802bedff2859d9d47d2d02e728727c2563  /mnt/tank/downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost/208.-.Smooth.Criminal.(Radio.Edit).flac
+a4b3d8958a8d59a85f389a639a47acab6705a02669019e63ff89305d441319cf  /mnt/tank/downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost/114.-.Can.You.Feel.It.(7.Version).flac
+a74e50f3600bb67b3a62511e12ce4a0708e2e4180cf42635b9b99ed303577255  /mnt/tank/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-08 Katy Perry - E.T.flac
+a76066aea9851f36201276ad73fa669966838f4644fbc86063c8901d5e89e3f1  /mnt/tank/downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost/110.-.Don't.Stop.'Til.You.Get.Enough.flac
+a85d4d235fde1fadf7fae39c7e36b7b80f4e2eee22ada5f105633edb9bfa0f48  /mnt/tank/downloads/complete/nzb/music/Benson.Boone.-.Fireworks.&.Rollerblades.(2024).[16Bit-44.1kHz].FLAC.[PMEDIA].⭐️-xpost/03..Slow.It.Down.flac
+a8743405da303ce01b56c565225b00a9cb898cc2a8d414d5931f459b4794640b  /mnt/tank/downloads/complete/nzb/music/Benson_Boone_-_American_Heart-WEB-2025-BENSONBOONE/09_benson_boone_-_take_me_home.mp3
+a9465147a08bb072cfdd71ccfe2981392c0d178cc94d09ea189d7b6eca958baf  /mnt/tank/downloads/complete/nzb/dj-mixes/Mastermix.Issue.421.2021/album.nfo
+a9ed73990f5ef1e4aadd056fbf92e666281fd8daeb6345aef8a1872ac410a7b7  /mnt/tank/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-10 Katy Perry - Pearl.flac
+aa914b49713dd9a6803f38217a76de261cf58afd1af5434d5b98bcbef4ba652b  /mnt/tank/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001/04. Limahl - Only For Love.mp3
+aacd4189de8a2f38c2f8330acdedfa579075f8a20cd15eed56d934ebce9c7ec5  /mnt/tank/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-05 Katy Perry - Peacock.lrc
+b302a0e566721242d8cc0b53547e0de49b98f3f2c775c75bea782b491b5d3332  /mnt/tank/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-12 Katy Perry - Not Like the Movies.flac
+b31d8d6e81f7def80a4794f4db3ed1900f1f599973a82a6767f13f1dd3b5333e  /mnt/tank/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001/05. Howard Jones - New Song.mp3
+b8404ce05305724122a60057dee27fc31dcce051b0dadedd2f007e978265d350  /mnt/tank/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/05. - Abracadabra.mp3
+b883923ed8bad3b30d29edef409241cdf360d60f15d21f63a659ffd0c39f1216  /mnt/tank/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-11 Katy Perry - Hummingbird Heartbeat.flac
+b8a6a5c1c194d20dcb2e87d33d38f7551963c6f9d04c0be820ec8feb2bdcff8a  /mnt/tank/downloads/complete/nzb/dj-mixes/Mastermix.Issue.421.2021/04. Mastermix - Jackin' House Floorfillers.mp3
+baa25567e31ebe39493c54a40cb2d86f0dc43e52ab29f705e5bc462d1705a93e  /mnt/tank/downloads/complete/nzb/music/Benson_Boone_-_American_Heart-WEB-2025-BENSONBOONE/04_benson_boone_-_mystical_magical.mp3
+bb35c79b7389e037d9c3ea5a270e6b3a840b64d0ca7ef2568ee53640c6f1f8e6  /mnt/tank/downloads/complete/nzb/music/Benson.Boone.-.Fireworks.&.Rollerblades.(2024).[16Bit-44.1kHz].FLAC.[PMEDIA].⭐️-xpost/09..My.Greatest.Fear.flac
+bb97efe527bbfeb4450bf498532758a5e402b0260a3674adc9a8f8ef2e12f2cf  /mnt/tank/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/19. - Beautiful People.mp3
+bbd877b831f6435ff604b067f005c2814690bac02c1cd4e98c0cffeaade78dc0  /mnt/tank/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/14. - One Thing.mp3
+bbfd610672ecca2daabb1001f78c965638dc776d47940142d9be8778f78dc8a7  /mnt/tank/downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost/118.-.Wanna.Be.Startin'.Somethin'.(Single.Version).flac
+bc4a3059656a9e3ffdd6f0d2f607a8c2435ca73f848f286baf0ee93c96362f2b  /mnt/tank/downloads/complete/nzb/dj-mixes/Mastermix.Issue.421.2021/01. Mastermix - The Ibiza Sessions (Balearic Beats).mp3
+c1017530dc754bb68d4482de2104e10b5f2868d6a1332236566434adc12cd8ed  /mnt/tank/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/08. - Love Me Not.mp3
+c2122a6dcae0eb4e419d0fd777b976f1c4dab9b28100cc464e47fe906db732db  /mnt/tank/downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost/213.-.Who.Is.It.(7.Edit).flac
+c2dd5e9b61ab6aea16519158cfc935422cf381b75f8adb7fb046222bc8127e32  /mnt/tank/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001/01. Phil Collins - You Can't Hurry Love.mp3
+c5ac9f4dd1a7f81f64d84233f328806d26ce436cd1e3b5b3ba19536b5233779b  /mnt/tank/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/15. - Nice To Each Other (Radio Edit).mp3
+c7fd06fa08f66c36a541b080b579ef6da3e885b15220e47f2b60940f86bc14eb  /mnt/tank/downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost/216.-.You.Are.Not.Alone.(Single.Version).flac
+c8b04ab29fb172eff23a5bf96ca456e134f7b19caf337c3dd5096d5280868fe5  /mnt/tank/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001/14. Culture Club - Victims.mp3
+ca43568584312c313af4ec3a013ae94ab259eb0b592ecfb70a567b56ab73ddb0  /mnt/tank/downloads/complete/nzb/dj-mixes/Mastermix.Issue.421.2021/01. Mastermix - Club Cuts.mp3
+cc6f7e82a2f2170d825d6c3c8ebeceb1b5686744096715c940d47bb72fe72743  /mnt/tank/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001/07. Malcolm McLaren - Double Dutch.mp3
+cd720f4706bc46425fd0f4320aff10ebc16ac660e7ed4ce30662964be6614391  /mnt/tank/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-03 Katy Perry - California Gurls.flac
+cdafecaa30c472cd452f37517649ceda9cf770a61e24fef55c4d4bb79d63abeb  /mnt/tank/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-05 Katy Perry - Peacock.flac
+cfc2f6c0fd5a85a97e82a9cd963971928177caafccb412d9bb79ec02a0fc7521  /mnt/tank/downloads/complete/nzb/music/Benson Boone-American Heart-24BIT-44KHZ-WEB-FLAC-2025-OBZEN-xpost/10-benson_boone-young_american_heart.flac
+d15d678e98abf30648875024839cd663d9d8ad62b60a21b2a004b21d320eddd5  /mnt/tank/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/13. - Hairdresser.mp3
+d1b8d540f7c75c46d7924510db3b88041666e21c16687ee338dbb21a987bb9cc  /mnt/tank/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/10. - Living My Best Life.mp3
+d8360128b4af360f69a2158d80c000662ad91b51a45a50092107d110996c9f9b  /mnt/tank/downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost/211.-.Remember.the.Time.flac
+d8b5505239bc5edc4facef3cc1d0c49f94cf5d5a8d04d7b87c73a35a9200ed3f  /mnt/tank/downloads/complete/nzb/dj-mixes/Mastermix.Issue.420.2021/4200204 - Mastermix - Hit The Dancefloor Latin Pop.mp3
+d8d92efb602b29975067efbf138da6a867dd070a2aa9884d2e40adfc4bbf1f3e  /mnt/tank/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/21. - Tell Me.mp3
+dca347301a1a20b4ec08252cf43446d4e57ee7ffc8a7d4752e96f5fae0d7edbe  /mnt/tank/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/15. - Little Bit Closer.mp3
+dd5f997e769d1962c790d31da9f62f114f729d7dce87713cb3cde1f5d02892e8  /mnt/tank/downloads/complete/nzb/music/Benson Boone-American Heart-24BIT-44KHZ-WEB-FLAC-2025-OBZEN-xpost/04-benson_boone-mystical_magical.flac
+de01f6c549286fa40b4298a77c0b56a381e4d5eda0f1ed13bb5f7fa30aceb476  /mnt/tank/downloads/complete/nzb/music/Benson.Boone.-.Fireworks.&.Rollerblades.(2024).[16Bit-44.1kHz].FLAC.[PMEDIA].⭐️-xpost/11..Hello.Love.flac
+e0fe21ef2958be33b0b0e928a629ef50a4f684008b91feca44f2ec7dfabc5819  /mnt/tank/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/03. - Bloodline.mp3
+e1648fbb225484d194c9116285ec45d40d8a9c05f8f39ba1aed52bad8adb7693  /mnt/tank/downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost/217.-.You.Rock.My.World.flac
+e588b9ac7d46c203cb5e44aed27010a8c9416bba821ea21fc150517d8452eb36  /mnt/tank/downloads/complete/nzb/dj-mixes/Mastermix.Issue.420.2021/4200104 - Mastermix - Into The 80s.mp3
+e6757774eb08ba55a75cbafccdae528c39a80d8a1293a55f019c123e82324055  /mnt/tank/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/22. - Wasted Love.mp3
+e71db89fdaa45c129e2a287cb520eaee2485be63fadcf73a854a7c864cbcb6c1  /mnt/tank/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/20. - Can't Decide.mp3
+e8fa869b18df0dfeb1b41466b4a5a1eef412188708f553087ae49e5cb4c61fa3  /mnt/tank/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001/16 - Paul Young - Wherever I Lay My Hat (That's My Home).mp3
+ead0317e6b70a6b7f3444e97eaaba2f0c367765134354e89c71bffedda7afe71  /mnt/tank/downloads/complete/nzb/music/Benson.Boone.-.Fireworks.&.Rollerblades.(2024).[16Bit-44.1kHz].FLAC.[PMEDIA].⭐️-xpost/10..There.She.Goes.flac
+eb6c74c89a9a392fe4fedda840a2e3b39966e8d2805ce6d8e1a6d2e9cfba21e6  /mnt/tank/downloads/complete/nzb/music/Benson.Boone.-.Fireworks.&.Rollerblades.(2024).[16Bit-44.1kHz].FLAC.[PMEDIA].⭐️-xpost/08..Drunk.In.My.Mind.flac
+ebb209b01e81ea8dd0c54ba2b159987418acc7a513bea0560c0310a4fa27396c  /mnt/tank/downloads/complete/nzb/music/Benson.Boone.-.Fireworks.&.Rollerblades.(2024).[16Bit-44.1kHz].FLAC.[PMEDIA].⭐️-xpost/14..Friend.flac
+ec4477e36a56533be5ac31d69f529f2713275bc42c1c733a29ef022687830682  /mnt/tank/downloads/complete/nzb/music/Benson_Boone_-_American_Heart-WEB-2025-BENSONBOONE/02_benson_boone_-_mr_electric_blue.mp3
+ed56cb11f6d1d9587e1923591197172424900ec3ed483dab3cb17b1a8f1ee13c  /mnt/tank/downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost/116.-.Billie.Jean.flac
+ee0487a0a4749fdc4644d4954d3394006db2a53d65604fbf71623c6cc4477f36  /mnt/tank/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/21. - What The Hell Just Happened_.mp3
+f0624cd5d56069469c50874bb31e512f03aebaa807b60da31d4c87d8b6df0207  /mnt/tank/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-01 Katy Perry - Teenage Dream.lrc
+f17837113710427c142cb9523d9863b8143fa2b4b2a7142c8ab04da5a8509b5a  /mnt/tank/downloads/complete/nzb/music/Benson Boone-American Heart-24BIT-44KHZ-WEB-FLAC-2025-OBZEN-xpost/09-benson_boone-take_me_home.flac
+f1adcf86d2699eaddc222eb635b8464a0bb9ee67c4857fb7fcff06dcf3d9bb21  /mnt/tank/downloads/complete/nzb/music/Benson Boone-American Heart-24BIT-44KHZ-WEB-FLAC-2025-OBZEN-xpost/08-benson_boone-wanted_man.flac
+f1c1d8e02216aa6e44cb5ae7f50d50729b3c04c4bcb58b5052242c6813faf896  /mnt/tank/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/01. - Blessings.mp3
+f22bc9ed8514999472710121517e6242901352d1a8d30ea2c8f949fdfd3e53a4  /mnt/tank/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/02. - Manchild.mp3
+f27ae2baffea7d4cc77bed62ca5e7eb6286a166268237e6d637f35186b273a08  /mnt/tank/downloads/complete/nzb/music/Benson.Boone.-.Fireworks.&.Rollerblades.(2024).[16Bit-44.1kHz].FLAC.[PMEDIA].⭐️-xpost/05..Cry.flac
+f2dd7d0081cab49d926c4a3959fd537cd50ef03edce3f526292e929f36368af7  /mnt/tank/downloads/complete/nzb/music/Benson_Boone_-_American_Heart-WEB-2025-BENSONBOONE/01_benson_boone_-_sorry_im_here_for_someone_else.mp3
+f320761d6dcd5a7a273de000715ad7f3ff424d5d68cbf7e9b4a6589a9d1af0eb  /mnt/tank/downloads/complete/nzb/music/Benson.Boone.-.Fireworks.&.Rollerblades.(2024).[16Bit-44.1kHz].FLAC.[PMEDIA].⭐️-xpost/07..In.The.Stars.flac
+f524f44ce06b25d6de797f2d2ebf558a0a9581d5cb029e9d1626bc1462561c89  /mnt/tank/downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost/120.-.P.Y.T..(Pretty.Young.Thing).flac
+f59543b781bc760b687ab618427330f8ed327850e3f344866d46daea50536d7f  /mnt/tank/downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost/117.-.Beat.It.flac
+fad4f62e61bf5ee8069917df8c455a95746d38132bee31081c7e4a036e3d5f28  /mnt/tank/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/12. - Heart By Heart.mp3
+fbb25058c0ebab8a7326af11bb10b244f9ca2e0e8eee8738a4fbaea576584f5e  /mnt/tank/downloads/complete/nzb/dj-mixes/Mastermix.Issue.420.2021/4200201 - Mastermix - The Ibiza Sessions Jackin' House.mp3
+fbded2b3af12ca7a3e890d253727beeef712aa07c7cc8192e0c8a2f0b4bfb687  /mnt/tank/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-11 Katy Perry - Hummingbird Heartbeat.lrc
+--------------------------------------------------------------------------------
+
+================================================================================
+END OF APPENDIX
+================================================================================
+
+================================================================================
+APPENDIX — THE FULL CONSOLE OUTPUT OF THE PASSING RUN
+================================================================================
+Verbatim, in the order the script emitted it.  It carries all three D-29 layers
+AND every class-assertion verdict from 06-11-oracle-run.txt, so the two documents
+can be checked against each other.
+
+It is filed here rather than in 06-11-oracle-run.txt because plan 06-11's task-1
+verify greps THAT file for the literal `Compilations` + `/` and treats any
+occurrence as a failure — a predicate that cannot distinguish a destination path
+from the oracle's own D-15 SUCCESS message, which reads "zero Compilations/
+components".  Relocating the log keeps the check strict on the file that carries
+the destination list, rather than weakening it.  Recorded rather than worked
+around silently.
+
+--------------------------------------------------------------------------------
+
+== phase06-oracle.sh: run ==
+  ----------------------------------------------------------------
+  host       root@172.16.1.159   container beets-flask   engine /venv/bin/beet
+  expected   .planning/phases/06-tagger-configuration-and-dry-run/06-EXPECTED-TREE.txt   (CONSTANT - not overridable)
+  sample     .planning/phases/06-tagger-configuration-and-dry-run/06-SAMPLE.md      (CONSTANT - not overridable)
+  out        /private/tmp/claude-501/-Users-damian-Development-damianflynn-selfhost-stacks/b0622099-1b60-4050-8912-180c2f06b9c3/scratchpad/p6final
+
+  ✓ sampled folders read from 06-SAMPLE.md: 10 folders, 174 audio files
+  ✓ fixture and sample agree on the denominator: 174 lines / 174 files
+  ✓ container beets-flask is running
+  ✓ container scratch '/tmp/p6' is absent or empty
+  ✓ layer 1 (structural): /media is mounted RW=false on beets-flask
+  library.db    before: fbbdde0c416e72b9884e56c562fd88eaa4da447926e1cb6cc17c3e04aee7da1a
+  state.pickle  before: f6a9a1ad7aa553e42e53a8056fa80724785111180a5e2122be4f8732d1e4bc7c
+  ✓ the library this run opens IS the one 06-EXPECTED-TREE.txt's header names
+
+== layer 2: BEFORE manifests over every sampled source folder ==
+  ----------------------------------------------------------------
+  ✓ before-manifests captured: 190 files across 10 folders
+  ✓ stamp taken outside both mounts: /mnt/fast/safety/phase06/oracle.stamp
+
+== the throwaway library and the -c overlay ==
+  ----------------------------------------------------------------
+  ✓ copied /config/library.db -> /tmp/p6/lib.db (the ORIGINAL is never opened by this run)
+  ✓ overlay placed: library, statefile AND directory all redirected (-l alone redirects none but the first)
+
+== the as-is import into the throwaway library ==
+  ----------------------------------------------------------------
+  S1  10 files  /downloads/complete/nzb/music/Benson Boone-American Heart-24BIT-44KHZ-WEB-FLAC-2025-OBZEN-xpost 
+/downloads/complete/nzb/music/Benson Boone-American Heart-24BIT-44KHZ-WEB-FLAC-2025-OBZEN-xpost
+  S1  15 files  /downloads/complete/nzb/music/Benson.Boone.-.Fireworks.&.Rollerblades.(2024).[16Bit-44.1kHz].FLAC.[PMEDIA].⭐️-xpost 
+/downloads/complete/nzb/music/Benson.Boone.-.Fireworks.&.Rollerblades.(2024).[16Bit-44.1kHz].FLAC.[PMEDIA].⭐️-xpost
+  S1  10 files  /downloads/complete/nzb/music/Benson_Boone_-_American_Heart-WEB-2025-BENSONBOONE 
+/downloads/complete/nzb/music/Benson_Boone_-_American_Heart-WEB-2025-BENSONBOONE
+  S2  32 files  /downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost 
+/downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost
+  S3  44 files  /downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY 
+/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY
+  S4  30 files  /downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001 
+/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001
+  S5  10 files  /downloads/complete/nzb/dj-mixes/Mastermix.Issue.420.2021 [--set albumtype=dj]
+/downloads/complete/nzb/dj-mixes/Mastermix.Issue.420.2021
+  S5  10 files  /downloads/complete/nzb/dj-mixes/Mastermix.Issue.421.2021 [--set albumtype=dj]
+/downloads/complete/nzb/dj-mixes/Mastermix.Issue.421.2021
+  S6  12 files  /media/Music/Katy Perry/Teenage Dream (2010) 
+/media/Music/Katy Perry/Teenage Dream (2010)
+  S7  1 files  /downloads/complete/nzb/music/Cyril - Stumblin In (LUNAX Remix) (Extended Mix)-(5021732254740)-SINGLE-WEB-2024-ZzZz [9c1feafc0] [2af13ead9]-xpost [-s]
+/downloads/complete/nzb/music/Cyril - Stumblin In (LUNAX Remix) (Extended Mix)-(5021732254740)-SINGLE-WEB-2024-ZzZz [9c1feafc0] [2af13ead9]-xpost/01-cyril_-_stumblin_in_(lunax_remix)_(extended_mix)-zzzz.mp3
+  ✓ all 10 sampled folders imported as-is into the throwaway
+
+== the oracle: beet move -p ==
+  ----------------------------------------------------------------
+  pairs parsed:            174
+  unparsed payload lines:  0
+  SGR-coloured raw lines:  0   [sanitised into /private/tmp/claude-501/-Users-damian-Development-damianflynn-selfhost-stacks/b0622099-1b60-4050-8912-180c2f06b9c3/scratchpad/p6final/oracle.raw.txt.clean]
+  'Moving N items':        174   [read from stderr, the same loop that printed the pairs]
+  (N already in place):    0   [READ from the 'Moving N items…' log line]
+  ✓ positive control: every line is a ' -> ' pair, 174 == 174, N in place = 0,
+    and '/media/Music/' appears in the raw transcript. The measurement can be trusted to have looked.
+
+== the three-layer wrote-nothing verdict ==
+  ----------------------------------------------------------------
+  ✓ layer 2 (src.meta manifest): identical before and after
+  ✓ layer 2 (src.sha manifest): identical before and after
+  ✓ layer 3: the real library.db is byte-identical before and after
+  ✓ layer 3: the real state.pickle is byte-identical before and after
+  ✓ -newer sweep: 0 files newer than the stamp across all 10 sampled folders
+
+== the diff against 06-EXPECTED-TREE.txt ==
+  ----------------------------------------------------------------
+  ✓ ZERO LINES OF DIFFERENCE against the committed expected tree. This is the pass.
+
+== the class assertions (D-27) ==
+  ----------------------------------------------------------------
+  ✓ field view read: 174 items, six columns each
+  ✓ CONF-03 top level: every destination's top level is its item's own album artist, byte-exact
+  ✓ D-15 no Compilations/: zero Compilations/ components, and 44 destination(s) under the literal Various Artists
+  ✓ D-13 DJ count equality: DJ/ destinations = 20, exactly the sampled DJ file count
+  ✓ D-16 %aunique{} firings: %aunique{} fired 1 time(s), exactly the set the fixture predicts
+  ✓ D-19b singletons: 1 singleton resolution(s), all of them expected and all listed
+  ✓ D-19a album != artist: zero album directories equal their artist directory; 0 reported with the
+    '<artist> (' prefix shape, which is the live Def Leppard defect's shape and is NOT failed here
+  ✓ the '-1 - ' shape: zero destination filenames begin with '-1 - '
+  ✓ the .N collision shape: zero destinations carry a .N collision suffix
+  ✓ D-18 protected fields: 870 ledger records, five per sampled file, every one a noop - no protected DJ
+    field is proposed for change (327 of them absent on both sides, listed as NULL-EQUIVALENT)
+
+== CONF-04's write side, REPORTED (D-23 as amended by D-34) ==
+  ----------------------------------------------------------------
+  ✓ CONF-04 write side: 12 item(s) carry a non-empty artists field, 1 of them with MORE THAN ONE
+    artist; beets cannot emit ';' inside ARTIST, so the multi-artist information lands in ARTISTS
+    (D-23 amended by D-34)
+  beets CANNOT be configured to emit ';' inside ARTIST - no delimiter or join key exists in
+  config_default.yaml at either version. 'artist' carries MusicBrainz's own join phrases
+  concatenated, and the multi-artist information lands in ARTISTS (TXXX / Vorbis). That is
+  what D-34 aligns Jellyfin to by enabling PreferNonstandardArtistsTag on the Music library.
+
+  ✓ container scratch '/tmp/p6' removed and its absence asserted
+
+  ----------------------------------------------------------------
+  ✓ VERDICT: GREEN - zero-diff against the committed tree, and nothing was written.

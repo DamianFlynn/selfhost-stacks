@@ -1,0 +1,791 @@
+================================================================================
+06-11-oracle-run.txt — THE DRY-RUN ORACLE, RUN AGAINST THE COMMITTED SAMPLE
+Phase 6 plan 06-11, 2026-09-21.  Instrument: scripts/phase06-oracle.sh --run
+================================================================================
+
+VERDICT: GREEN — exit 0.
+  ZERO LINES OF DIFFERENCE against 06-EXPECTED-TREE.txt, a fixture committed in
+  wave 2 (plan 06-05) before this script existed in runnable form; the positive
+  control was evaluated FIRST and passed, so the diff was permitted to run; and
+  all nine class assertions plus the CONF-04 report came back clean.
+
+  CONF-06 is discharged.  CONF-03 is discharged.
+
+WHAT THE ZERO-DIFF IS AND IS NOT
+  It is: `beet move -p` — which calls `item.destination()`, the same call a real
+  import makes — evaluated over 174 files imported as-is into a copy of the real
+  library, compared against a path list written down before the run.
+  It is NOT a match-driven tree.  The import is `-A` (as-is), which isolates the
+  path-template variable from the matcher.  CONF-05's *Now!* proof is a separate
+  class assertion in plan 06-12 and is deliberately not a row in the fixture.
+  It is NOT evidence about the flask-driven import MECHANISM — see § 9 (OQ-2).
+
+================================================================================
+§ 1  PROVENANCE, AND THE FOUR PRECONDITIONS THE FIXTURE NAMES
+================================================================================
+
+  host                root@172.16.1.159 (LXC 100)
+  container           beets-flask, State.Status = running
+  engine              /venv/bin/beet, beets 2.12.0 (NOT 2.13.1 — D-04: 2.13.1
+                      opening a 2.12.0 database migrates the schema underneath it)
+  expected tree       .planning/phases/06-.../06-EXPECTED-TREE.txt   (CONSTANT)
+  sample              .planning/phases/06-.../06-SAMPLE.md           (CONSTANT)
+  sampled folders     10, read out of 06-SAMPLE.md's table, never re-typed
+  sampled audio files 174  ==  the fixture's 174 path lines  (checked, not assumed)
+  files in those ten folders in total   190  (174 audio + 16 sidecars)
+
+THE LIBRARY THE ORACLE OPENED — named, because the %aunique{} count is
+meaningless without it:
+
+  /config/library.db   sha256 fbbdde0c416e72b9884e56c562fd88eaa4da447926e1cb6cc17c3e04aee7da1a
+  This IS the library 06-EXPECTED-TREE.txt's header names, asserted equal by the
+  script and not by a reader.  It holds 0 items and 0 albums, so the real
+  collision set is EMPTY today — which is why one firing is the correct
+  expectation and not a suspiciously low one.  That equivalence is dated: it
+  stops being true the moment Phase 7 imports anything.
+  The oracle opened a COPY at /tmp/p6/lib.db.  The original was never opened.
+
+  P1  ALL TEN folders imported into ONE library.          HELD — one throwaway
+      library, ten `beet import` invocations against it, 174 items in the field
+      view afterwards.
+  P2  `--set albumtype=dj` on the two S5 folders.         HELD — the field view
+      carries albumtype=dj on exactly 20 items, `album` on 12 (the S6 stratum,
+      which already carried it), and empty on the remaining 142.
+  P3  `-s` on the S7 folder.                              HELD — the S7 row has
+      an empty albumtype and resolved through the `singleton:` rule (§ 7.5).
+  P4  `-A` with import.write overridden to `no`.          HELD — the `-c` overlay
+      is reproduced below and `write: no` is in it.
+
+THE `-c` OVERLAY, VERBATIM.  `docker exec` inherits the CONTAINER's resolved
+environment, so BEETSDIR=/config applies and the vendored /config/config.yaml
+loads UNDERNEATH this; every key here therefore has to be stated to win.
+
+    library: /tmp/p6/lib.db
+    statefile: /tmp/p6/state.pickle
+    directory: /media/Music
+    import:
+        copy: no
+        move: no
+        write: no
+        autotag: no
+        resume: no
+        incremental: no
+        duplicate_action: keep
+    ui:
+        color: no
+
+  `copy: no` does NOT imply `move: no` — they are independent keys and copy=no
+  with move=yes is a MOVE.  Both are named.
+  `statefile:` is named because `-l` does NOT redirect it (the shared
+  state.pickle would otherwise be written by a throwaway import).
+  `duplicate_action` and `ui.color` are both plan-06-11 corrections; see § 6.
+
+================================================================================
+§ 2  THE POSITIVE CONTROL — EVALUATED BEFORE THE DIFF, AND GATING IT
+================================================================================
+
+A transcript that proves nothing can still read as a pass by printing many lines
+and exiting 0 (T-06-55).  Five conditions were evaluated BEFORE the diff.  Had
+any failed, the verdict would be "UNKNOWN, not green", exit 3, and the diff would
+NOT have been evaluated at all.  That is not hypothetical: it is what happened on
+run 1 of 5 (§ 6.1).
+
+  1. every payload line parses as a ' -> ' pair (or the two-line narrow form)
+     unparsed payload lines ........................... 0        PASS
+     A `--pretend` transcript fails this trivially and that is the mechanical
+     discriminator: its lines are SOURCE paths, `lookup_candidates` never runs,
+     and no destination is ever computed (D-33).
+
+  2. the pair count EQUALS the sampled audio-file count — not "at least"
+     pairs parsed ..................................... 174
+     06-SAMPLE.md Files column sum ..................... 174     PASS
+
+  3. `(N already in place)` is 0, READ EXPLICITLY
+     beets logs it as `Moving 174 items.` on STDERR — the count is embedded in a
+     log.info fragment, not printed as a standalone stdout line
+     [beets/ui/commands/move.py@v2.12.0:94-107].  Read from there:
+     Moving N items ................................... 174
+     (N already in place) ............................. 0       PASS
+     No parenthetical is present, and beets appends the fragment ONLY when
+     num_unmoved > 0, so this is a POSITIVE zero from the same code path — not an
+     absence of evidence.  On an in-place import nothing can be in place, so any
+     other value would mean the run measured something other than what it claims.
+
+  4. the transcript contains the substring '/media/Music/'
+     .................................................. present  PASS
+
+  5. the N in `Moving N items` equals the pairs parsed  174 == 174  PASS
+     Added by this plan.  A transcript truncated in transit satisfies all four of
+     the controls above.
+
+  SGR-coloured lines in the raw transcript ............ 0
+     `ui.color: no` is set, so none arrived coloured.  The normaliser strips SGR
+     anyway (§ 6.2) and reported 0, which is the strip finding nothing to do
+     rather than the strip not having run.
+
+================================================================================
+§ 3  THE RAW `beet move -p` TRANSCRIPT, VERBATIM
+================================================================================
+Two lines per pair (the narrow-terminal form: source, then `  -> destination`).
+348 lines for 174 pairs.  This is what a reader checks the normalisation in § 4
+against — a normaliser nobody can audit is just a second place for the bug.
+
+--------------------------------------------------------------------------------
+/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/09. - Headphones On.mp3 
+  -> /media/Music/Various Artists/NOW That's What I Call Music! 121/09 Headphones On.mp3
+/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/03. - Bloodline.mp3 
+  -> /media/Music/Various Artists/NOW That's What I Call Music! 121/03 Bloodline.mp3
+/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/10. - Burning Down.mp3 
+  -> /media/Music/Various Artists/NOW That's What I Call Music! 121/10 Burning Down.mp3
+/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/11. - Twilight Zone.mp3 
+  -> /media/Music/Various Artists/NOW That's What I Call Music! 121/11 Twilight Zone.mp3
+/downloads/complete/nzb/music/Benson Boone-American Heart-24BIT-44KHZ-WEB-FLAC-2025-OBZEN-xpost/01-benson_boone-sorry_im_here_for_someone_else.flac 
+  -> /media/Music/Benson Boone/American Heart/01 Sorry I'm Here For Someone Else.flac
+/downloads/complete/nzb/music/Benson_Boone_-_American_Heart-WEB-2025-BENSONBOONE/01_benson_boone_-_sorry_im_here_for_someone_else.mp3 
+  -> /media/Music/Benson Boone/American Heart [Night Street Records, Inc. - Warner Records Inc.]/01 Sorry I'm Here For Someone Else.mp3
+/downloads/complete/nzb/music/Benson Boone-American Heart-24BIT-44KHZ-WEB-FLAC-2025-OBZEN-xpost/02-benson_boone-mr_electric_blue.flac 
+  -> /media/Music/Benson Boone/American Heart/02 Mr Electric Blue.flac
+/downloads/complete/nzb/music/Benson_Boone_-_American_Heart-WEB-2025-BENSONBOONE/02_benson_boone_-_mr_electric_blue.mp3 
+  -> /media/Music/Benson Boone/American Heart [Night Street Records, Inc. - Warner Records Inc.]/02 Mr Electric Blue.mp3
+/downloads/complete/nzb/music/Benson Boone-American Heart-24BIT-44KHZ-WEB-FLAC-2025-OBZEN-xpost/03-benson_boone-man_in_me.flac 
+  -> /media/Music/Benson Boone/American Heart/03 Man In Me.flac
+/downloads/complete/nzb/music/Benson_Boone_-_American_Heart-WEB-2025-BENSONBOONE/03_benson_boone_-_man_in_me.mp3 
+  -> /media/Music/Benson Boone/American Heart [Night Street Records, Inc. - Warner Records Inc.]/03 Man In Me.mp3
+/downloads/complete/nzb/music/Benson Boone-American Heart-24BIT-44KHZ-WEB-FLAC-2025-OBZEN-xpost/04-benson_boone-mystical_magical.flac 
+  -> /media/Music/Benson Boone/American Heart/04 Mystical Magical.flac
+/downloads/complete/nzb/music/Benson_Boone_-_American_Heart-WEB-2025-BENSONBOONE/04_benson_boone_-_mystical_magical.mp3 
+  -> /media/Music/Benson Boone/American Heart [Night Street Records, Inc. - Warner Records Inc.]/04 Mystical Magical.mp3
+/downloads/complete/nzb/music/Benson Boone-American Heart-24BIT-44KHZ-WEB-FLAC-2025-OBZEN-xpost/05-benson_boone-reminds_me_of_you.flac 
+  -> /media/Music/Benson Boone/American Heart/05 Reminds Me Of You.flac
+/downloads/complete/nzb/music/Benson_Boone_-_American_Heart-WEB-2025-BENSONBOONE/05_benson_boone_-_reminds_me_of_you.mp3 
+  -> /media/Music/Benson Boone/American Heart [Night Street Records, Inc. - Warner Records Inc.]/05 Reminds Me Of You.mp3
+/downloads/complete/nzb/music/Benson Boone-American Heart-24BIT-44KHZ-WEB-FLAC-2025-OBZEN-xpost/06-benson_boone-momma_song.flac 
+  -> /media/Music/Benson Boone/American Heart/06 Momma Song.flac
+/downloads/complete/nzb/music/Benson_Boone_-_American_Heart-WEB-2025-BENSONBOONE/06_benson_boone_-_momma_song.mp3 
+  -> /media/Music/Benson Boone/American Heart [Night Street Records, Inc. - Warner Records Inc.]/06 Momma Song.mp3
+/downloads/complete/nzb/music/Benson Boone-American Heart-24BIT-44KHZ-WEB-FLAC-2025-OBZEN-xpost/07-benson_boone-i_wanna_be_the_one_you_call.flac 
+  -> /media/Music/Benson Boone/American Heart/07 I Wanna Be The One You Call.flac
+/downloads/complete/nzb/music/Benson_Boone_-_American_Heart-WEB-2025-BENSONBOONE/07_benson_boone_-_i_wanna_be_the_one_you_call.mp3 
+  -> /media/Music/Benson Boone/American Heart [Night Street Records, Inc. - Warner Records Inc.]/07 I Wanna Be The One You Call.mp3
+/downloads/complete/nzb/music/Benson Boone-American Heart-24BIT-44KHZ-WEB-FLAC-2025-OBZEN-xpost/08-benson_boone-wanted_man.flac 
+  -> /media/Music/Benson Boone/American Heart/08 Wanted Man.flac
+/downloads/complete/nzb/music/Benson_Boone_-_American_Heart-WEB-2025-BENSONBOONE/08_benson_boone_-_wanted_man.mp3 
+  -> /media/Music/Benson Boone/American Heart [Night Street Records, Inc. - Warner Records Inc.]/08 Wanted Man.mp3
+/downloads/complete/nzb/music/Benson Boone-American Heart-24BIT-44KHZ-WEB-FLAC-2025-OBZEN-xpost/09-benson_boone-take_me_home.flac 
+  -> /media/Music/Benson Boone/American Heart/09 Take Me Home.flac
+/downloads/complete/nzb/music/Benson_Boone_-_American_Heart-WEB-2025-BENSONBOONE/09_benson_boone_-_take_me_home.mp3 
+  -> /media/Music/Benson Boone/American Heart [Night Street Records, Inc. - Warner Records Inc.]/09 Take Me Home.mp3
+/downloads/complete/nzb/music/Benson Boone-American Heart-24BIT-44KHZ-WEB-FLAC-2025-OBZEN-xpost/10-benson_boone-young_american_heart.flac 
+  -> /media/Music/Benson Boone/American Heart/10 Young American Heart.flac
+/downloads/complete/nzb/music/Benson_Boone_-_American_Heart-WEB-2025-BENSONBOONE/10_benson_boone_-_young_american_heart.mp3 
+  -> /media/Music/Benson Boone/American Heart [Night Street Records, Inc. - Warner Records Inc.]/10 Young American Heart.mp3
+/downloads/complete/nzb/music/Benson.Boone.-.Fireworks.&.Rollerblades.(2024).[16Bit-44.1kHz].FLAC.[PMEDIA].⭐️-xpost/01..Intro.flac 
+  -> /media/Music/Benson Boone/Fireworks & Rollerblades/01 Intro.flac
+/downloads/complete/nzb/music/Benson.Boone.-.Fireworks.&.Rollerblades.(2024).[16Bit-44.1kHz].FLAC.[PMEDIA].⭐️-xpost/02..Be.Someone.flac 
+  -> /media/Music/Benson Boone/Fireworks & Rollerblades/02 Be Someone.flac
+/downloads/complete/nzb/music/Benson.Boone.-.Fireworks.&.Rollerblades.(2024).[16Bit-44.1kHz].FLAC.[PMEDIA].⭐️-xpost/03..Slow.It.Down.flac 
+  -> /media/Music/Benson Boone/Fireworks & Rollerblades/03 Slow It Down.flac
+/downloads/complete/nzb/music/Benson.Boone.-.Fireworks.&.Rollerblades.(2024).[16Bit-44.1kHz].FLAC.[PMEDIA].⭐️-xpost/04..Beautiful.Things.flac 
+  -> /media/Music/Benson Boone/Fireworks & Rollerblades/04 Beautiful Things.flac
+/downloads/complete/nzb/music/Benson.Boone.-.Fireworks.&.Rollerblades.(2024).[16Bit-44.1kHz].FLAC.[PMEDIA].⭐️-xpost/05..Cry.flac 
+  -> /media/Music/Benson Boone/Fireworks & Rollerblades/05 Cry.flac
+/downloads/complete/nzb/music/Benson.Boone.-.Fireworks.&.Rollerblades.(2024).[16Bit-44.1kHz].FLAC.[PMEDIA].⭐️-xpost/06..Forever.and.a.Day.flac 
+  -> /media/Music/Benson Boone/Fireworks & Rollerblades/06 Forever and a Day.flac
+/downloads/complete/nzb/music/Benson.Boone.-.Fireworks.&.Rollerblades.(2024).[16Bit-44.1kHz].FLAC.[PMEDIA].⭐️-xpost/07..In.The.Stars.flac 
+  -> /media/Music/Benson Boone/Fireworks & Rollerblades/07 In The Stars.flac
+/downloads/complete/nzb/music/Benson.Boone.-.Fireworks.&.Rollerblades.(2024).[16Bit-44.1kHz].FLAC.[PMEDIA].⭐️-xpost/08..Drunk.In.My.Mind.flac 
+  -> /media/Music/Benson Boone/Fireworks & Rollerblades/08 Drunk In My Mind.flac
+/downloads/complete/nzb/music/Benson.Boone.-.Fireworks.&.Rollerblades.(2024).[16Bit-44.1kHz].FLAC.[PMEDIA].⭐️-xpost/09..My.Greatest.Fear.flac 
+  -> /media/Music/Benson Boone/Fireworks & Rollerblades/09 My Greatest Fear.flac
+/downloads/complete/nzb/music/Benson.Boone.-.Fireworks.&.Rollerblades.(2024).[16Bit-44.1kHz].FLAC.[PMEDIA].⭐️-xpost/10..There.She.Goes.flac 
+  -> /media/Music/Benson Boone/Fireworks & Rollerblades/10 There She Goes.flac
+/downloads/complete/nzb/music/Benson.Boone.-.Fireworks.&.Rollerblades.(2024).[16Bit-44.1kHz].FLAC.[PMEDIA].⭐️-xpost/11..Hello.Love.flac 
+  -> /media/Music/Benson Boone/Fireworks & Rollerblades/11 Hello Love.flac
+/downloads/complete/nzb/music/Benson.Boone.-.Fireworks.&.Rollerblades.(2024).[16Bit-44.1kHz].FLAC.[PMEDIA].⭐️-xpost/12..Ghost.Town.flac 
+  -> /media/Music/Benson Boone/Fireworks & Rollerblades/12 Ghost Town.flac
+/downloads/complete/nzb/music/Benson.Boone.-.Fireworks.&.Rollerblades.(2024).[16Bit-44.1kHz].FLAC.[PMEDIA].⭐️-xpost/13..Love.Of.Mine.flac 
+  -> /media/Music/Benson Boone/Fireworks & Rollerblades/13 Love Of Mine.flac
+/downloads/complete/nzb/music/Benson.Boone.-.Fireworks.&.Rollerblades.(2024).[16Bit-44.1kHz].FLAC.[PMEDIA].⭐️-xpost/14..Friend.flac 
+  -> /media/Music/Benson Boone/Fireworks & Rollerblades/14 Friend.flac
+/downloads/complete/nzb/music/Benson.Boone.-.Fireworks.&.Rollerblades.(2024).[16Bit-44.1kHz].FLAC.[PMEDIA].⭐️-xpost/15..What.Do.You.Want.flac 
+  -> /media/Music/Benson Boone/Fireworks & Rollerblades/15 What Do You Want.flac
+/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/05. - Sorry I'm Here For Someone Else.mp3 
+  -> /media/Music/Various Artists/NOW That's What I Call Music! 121/05 Sorry I'm Here For Someone Else.mp3
+/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/06. - Mystical Magical.mp3 
+  -> /media/Music/Various Artists/NOW That's What I Call Music! 121/06 Mystical Magical.mp3
+/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/16. - A Little Love.mp3 
+  -> /media/Music/Various Artists/NOW That's What I Call Music! 121/16 A Little Love.mp3
+/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001/08. Bonnie Tyler - Total Eclipse Of The Heart.mp3 
+  -> /media/Music/Various/Now That's What I Call Music! 1/01-08 Total Eclipse Of The Heart.mp3
+/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/01. - Blessings.mp3 
+  -> /media/Music/Various Artists/NOW That's What I Call Music! 121/01 Blessings.mp3
+/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/07. - The Giver.mp3 
+  -> /media/Music/Various Artists/NOW That's What I Call Music! 121/07 The Giver.mp3
+/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/17. - Party 4 U.mp3 
+  -> /media/Music/Various Artists/NOW That's What I Call Music! 121/17 Party 4 U.mp3
+/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001/09. Culture Club - Karma Chameleon.mp3 
+  -> /media/Music/Various/Now That's What I Call Music! 1/01-09 Karma Chameleon.mp3
+/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001/14. Culture Club - Victims.mp3 
+  -> /media/Music/Various/Now That's What I Call Music! 1/02-14 Victims.mp3
+/downloads/complete/nzb/music/Cyril - Stumblin In (LUNAX Remix) (Extended Mix)-(5021732254740)-SINGLE-WEB-2024-ZzZz [9c1feafc0] [2af13ead9]-xpost/01-cyril_-_stumblin_in_(lunax_remix)_(extended_mix)-zzzz.mp3 
+  -> /media/Music/Singles/Cyril/Stumblin' In (LUNAX Remix) (Extended Mix).mp3
+/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/19. - Beautiful People.mp3 
+  -> /media/Music/Various Artists/NOW That's What I Call Music! 121/19 Beautiful People.mp3
+/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001/02. Duran Duran - Is There Something I Should Know.mp3 
+  -> /media/Music/Various/Now That's What I Call Music! 1/01-02 Is There Something I Should Know.mp3
+/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/03. - Azizam.mp3 
+  -> /media/Music/Various Artists/NOW That's What I Call Music! 121/03 Azizam.mp3
+/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/13. - Me & You.mp3 
+  -> /media/Music/Various Artists/NOW That's What I Call Music! 121/13 Me & You.mp3
+/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/18. - Little Richard's Bible.mp3 
+  -> /media/Music/Various Artists/NOW That's What I Call Music! 121/18 Little Richard's Bible.mp3
+/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001/10. Genesis - That's All.mp3 
+  -> /media/Music/Various/Now That's What I Call Music! 1/02-10 That's All.mp3
+/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/18. - Relationships.mp3 
+  -> /media/Music/Various Artists/NOW That's What I Call Music! 121/18 Relationships.mp3
+/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001/05. Heaven 17 - Temptation.mp3 
+  -> /media/Music/Various/Now That's What I Call Music! 1/01-05 Temptation.mp3
+/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001/05. Howard Jones - New Song.mp3 
+  -> /media/Music/Various/Now That's What I Call Music! 1/02-05 New Song.mp3
+/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/04. - Plastic Box.mp3 
+  -> /media/Music/Various Artists/NOW That's What I Call Music! 121/04 Plastic Box.mp3
+/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/12. - Fufn.mp3 
+  -> /media/Music/Various Artists/NOW That's What I Call Music! 121/12 Fufn.mp3
+/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/10. - Living My Best Life.mp3 
+  -> /media/Music/Various Artists/NOW That's What I Call Music! 121/10 Living My Best Life.mp3
+/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/22. - Wasted Love.mp3 
+  -> /media/Music/Various Artists/NOW That's What I Call Music! 121/22 Wasted Love.mp3
+/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/12. - Heart By Heart.mp3 
+  -> /media/Music/Various Artists/NOW That's What I Call Music! 121/12 Heart By Heart.mp3
+/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001/11. Kajagoogoo - Too Shy.mp3 
+  -> /media/Music/Various/Now That's What I Call Music! 1/01-11 Too Shy.mp3
+/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001/02. Kajagoogoo - Big Apple.mp3 
+  -> /media/Music/Various/Now That's What I Call Music! 1/02-02 Big Apple.mp3
+/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001/06. KC & The Sunshine Band - Give It Up.mp3 
+  -> /media/Music/Various/Now That's What I Call Music! 1/01-06 Give It Up.mp3
+/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/05. - Abracadabra.mp3 
+  -> /media/Music/Various Artists/NOW That's What I Call Music! 121/05 Abracadabra.mp3
+/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/16. - Henry, Come On.mp3 
+  -> /media/Music/Various Artists/NOW That's What I Call Music! 121/16 Henry, Come On.mp3
+/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/08. - Mutt.mp3 
+  -> /media/Music/Various Artists/NOW That's What I Call Music! 121/08 Mutt.mp3
+/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/22. - The Glen (Levi Heron Edit).mp3 
+  -> /media/Music/Various Artists/NOW That's What I Call Music! 121/22 The Glen (Levi Heron Edit).mp3
+/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001/04. Limahl - Only For Love.mp3 
+  -> /media/Music/Various/Now That's What I Call Music! 1/01-04 Only For Love.mp3
+/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/14. - One Thing.mp3 
+  -> /media/Music/Various Artists/NOW That's What I Call Music! 121/14 One Thing.mp3
+/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001/13. Madness - The Sun And The Rain.mp3 
+  -> /media/Music/Various/Now That's What I Call Music! 1/02-13 The Sun And The Rain.mp3
+/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001/07. Malcolm McLaren - Double Dutch.mp3 
+  -> /media/Music/Various/Now That's What I Call Music! 1/01-07 Double Dutch.mp3
+/downloads/complete/nzb/dj-mixes/Mastermix.Issue.420.2021/4200101 - Mastermix - Club Cuts.mp3 
+  -> /media/Music/DJ/Mastermix/Issue 420/01 Club Cuts.mp3
+/downloads/complete/nzb/dj-mixes/Mastermix.Issue.420.2021/4200102 - Mastermix - Mastermixed 5.mp3 
+  -> /media/Music/DJ/Mastermix/Issue 420/02 Mastermixed 5.mp3
+/downloads/complete/nzb/dj-mixes/Mastermix.Issue.420.2021/4200103 - Mastermix - Reggae Fusion.mp3 
+  -> /media/Music/DJ/Mastermix/Issue 420/03 Reggae Fusion.mp3
+/downloads/complete/nzb/dj-mixes/Mastermix.Issue.420.2021/4200104 - Mastermix - Into The 80s.mp3 
+  -> /media/Music/DJ/Mastermix/Issue 420/04 Into The 80s.mp3
+/downloads/complete/nzb/dj-mixes/Mastermix.Issue.420.2021/4200105 - Mastermix - Triple Tracker Crazibiza.mp3 
+  -> /media/Music/DJ/Mastermix/Issue 420/05 Triple Tracker_ Crazibiza.mp3
+/downloads/complete/nzb/dj-mixes/Mastermix.Issue.420.2021/4200201 - Mastermix - The Ibiza Sessions Jackin' House.mp3 
+  -> /media/Music/DJ/Mastermix/Issue 420/01 The Ibiza Sessions_ Jackin' House.mp3
+/downloads/complete/nzb/dj-mixes/Mastermix.Issue.420.2021/4200202 - Mastermix - Party On Fire.mp3 
+  -> /media/Music/DJ/Mastermix/Issue 420/02 Party On Fire.mp3
+/downloads/complete/nzb/dj-mixes/Mastermix.Issue.420.2021/4200203 - Mastermix - Classic Disco vs. Nu Disco.mp3 
+  -> /media/Music/DJ/Mastermix/Issue 420/03 Classic Disco vs. Nu Disco.mp3
+/downloads/complete/nzb/dj-mixes/Mastermix.Issue.420.2021/4200204 - Mastermix - Hit The Dancefloor Latin Pop.mp3 
+  -> /media/Music/DJ/Mastermix/Issue 420/04 Hit The Dancefloor_ Latin Pop.mp3
+/downloads/complete/nzb/dj-mixes/Mastermix.Issue.420.2021/4200205 - Mastermix - Summer Slam 00s Club Classics.mp3 
+  -> /media/Music/DJ/Mastermix/Issue 420/05 Summer Slam_ 00s Club Classics.mp3
+/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/20. - Can't Decide.mp3 
+  -> /media/Music/Various Artists/NOW That's What I Call Music! 121/20 Can't Decide.mp3
+/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001/13. Men At Work - Down Under.mp3 
+  -> /media/Music/Various/Now That's What I Call Music! 1/01-13 Down Under.mp3
+/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001/10. Men Without Hats - The Safety Dance.mp3 
+  -> /media/Music/Various/Now That's What I Call Music! 1/01-10 The Safety Dance.mp3
+/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/11. - Cliché.mp3 
+  -> /media/Music/Various Artists/NOW That's What I Call Music! 121/11 Cliché.mp3
+/downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost/110.-.Don't.Stop.'Til.You.Get.Enough.flac 
+  -> /media/Music/Michael Jackson/The Essential Michael Jackson/01-10 Don't Stop 'Til You Get Enough.flac
+/downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost/111.-.Rock.with.You.(Single.Version).flac 
+  -> /media/Music/Michael Jackson/The Essential Michael Jackson/01-11 Rock with You (Single Version).flac
+/downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost/112.-.Off.the.Wall.flac 
+  -> /media/Music/Michael Jackson/The Essential Michael Jackson/01-12 Off the Wall.flac
+/downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost/113.-.She's.Out.of.My.Life.flac 
+  -> /media/Music/Michael Jackson/The Essential Michael Jackson/01-13 She's Out of My Life.flac
+/downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost/116.-.Billie.Jean.flac 
+  -> /media/Music/Michael Jackson/The Essential Michael Jackson/01-16 Billie Jean.flac
+/downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost/117.-.Beat.It.flac 
+  -> /media/Music/Michael Jackson/The Essential Michael Jackson/01-17 Beat It.flac
+/downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost/118.-.Wanna.Be.Startin'.Somethin'.(Single.Version).flac 
+  -> /media/Music/Michael Jackson/The Essential Michael Jackson/01-18 Wanna Be Startin' Somethin' (Single Version).flac
+/downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost/119.-.Human.Nature.7.flac 
+  -> /media/Music/Michael Jackson/The Essential Michael Jackson/01-19 Human Nature 7_.flac
+/downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost/120.-.P.Y.T..(Pretty.Young.Thing).flac 
+  -> /media/Music/Michael Jackson/The Essential Michael Jackson/01-20 P.Y.T. (Pretty Young Thing).flac
+/downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost/121.-.Thriller.(Single.Version).flac 
+  -> /media/Music/Michael Jackson/The Essential Michael Jackson/01-21 Thriller (Single Version).flac
+/downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost/201.-.Bad.flac 
+  -> /media/Music/Michael Jackson/The Essential Michael Jackson/02-01 Bad.flac
+/downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost/203.-.Leave.Me.Alone.flac 
+  -> /media/Music/Michael Jackson/The Essential Michael Jackson/02-03 Leave Me Alone.flac
+/downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost/204.-.The.Way.You.Make.Me.Feel.(Single.Version).flac 
+  -> /media/Music/Michael Jackson/The Essential Michael Jackson/02-04 The Way You Make Me Feel (Single Version).flac
+/downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost/205.-.Man.in.the.Mirror.flac 
+  -> /media/Music/Michael Jackson/The Essential Michael Jackson/02-05 Man in the Mirror.flac
+/downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost/206.-.Dirty.Diana.flac 
+  -> /media/Music/Michael Jackson/The Essential Michael Jackson/02-06 Dirty Diana.flac
+/downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost/207.-.Another.Part.of.Me.(Single.Version).flac 
+  -> /media/Music/Michael Jackson/The Essential Michael Jackson/02-07 Another Part of Me (Single Version).flac
+/downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost/208.-.Smooth.Criminal.(Radio.Edit).flac 
+  -> /media/Music/Michael Jackson/The Essential Michael Jackson/02-08 Smooth Criminal (Radio Edit).flac
+/downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost/209.-.Black.or.White.(Single.Version).flac 
+  -> /media/Music/Michael Jackson/The Essential Michael Jackson/02-09 Black or White (Single Version).flac
+/downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost/210.-.Heal.the.World.flac 
+  -> /media/Music/Michael Jackson/The Essential Michael Jackson/02-10 Heal the World.flac
+/downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost/211.-.Remember.the.Time.flac 
+  -> /media/Music/Michael Jackson/The Essential Michael Jackson/02-11 Remember the Time.flac
+/downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost/212.-.In.the.Closet.(Single.Version).flac 
+  -> /media/Music/Michael Jackson/The Essential Michael Jackson/02-12 In the Closet (Single Version).flac
+/downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost/213.-.Who.Is.It.(7.Edit).flac 
+  -> /media/Music/Michael Jackson/The Essential Michael Jackson/02-13 Who Is It (7_ Edit).flac
+/downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost/214.-.Will.You.Be.There.(Single.Version).flac 
+  -> /media/Music/Michael Jackson/The Essential Michael Jackson/02-14 Will You Be There (Single Version).flac
+/downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost/215.-.Dangerous.flac 
+  -> /media/Music/Michael Jackson/The Essential Michael Jackson/02-15 Dangerous.flac
+/downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost/216.-.You.Are.Not.Alone.(Single.Version).flac 
+  -> /media/Music/Michael Jackson/The Essential Michael Jackson/02-16 You Are Not Alone (Single Version).flac
+/downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost/217.-.You.Rock.My.World.flac 
+  -> /media/Music/Michael Jackson/The Essential Michael Jackson/02-17 You Rock My World.flac
+/downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost/115.-.The.Girl.Is.Mine.(with.Paul.McCartney).flac 
+  -> /media/Music/Michael Jackson/The Essential Michael Jackson/01-15 The Girl Is Mine (with Paul McCartney).flac
+/downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost/202.-.I.Just.Can't.Stop.Loving.You.(feat..Siedah.Garrett).flac 
+  -> /media/Music/Michael Jackson/The Essential Michael Jackson/02-02 I Just Can't Stop Loving You (feat. Siedah Garrett).flac
+/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001/12. Mike Oldfield - Moonlight Shadow.mp3 
+  -> /media/Music/Various/Now That's What I Call Music! 1/01-12 Moonlight Shadow.mp3
+/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/14. - I'm The Problem.mp3 
+  -> /media/Music/Various Artists/NOW That's What I Call Music! 121/14 I'm The Problem.mp3
+/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/02. - Gold.mp3 
+  -> /media/Music/Various Artists/NOW That's What I Call Music! 121/02 Gold.mp3
+/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001/01. New Edition - Candy Girl.mp3 
+  -> /media/Music/Various/Now That's What I Call Music! 1/02-01 Candy Girl.mp3
+/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/15. - Nice To Each Other (Radio Edit).mp3 
+  -> /media/Music/Various Artists/NOW That's What I Call Music! 121/15 Nice To Each Other (Radio Edit).mp3
+/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001/16 - Paul Young - Wherever I Lay My Hat (That's My Home).mp3 
+  -> /media/Music/Various/Now That's What I Call Music! 1/01-16 Wherever I Lay My Hat (That's My Home).mp3
+/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001/07 - Peabo Bryson & Roberta Flack - Tonight I Celebrate My Love.mp3 
+  -> /media/Music/Various/Now That's What I Call Music! 1/02-07 Tonight I Celebrate My Love.mp3
+/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-01 Katy Perry - Teenage Dream.flac 
+  -> /media/Music/Katy Perry/Teenage Dream/01 teenage dream.flac
+/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-02 Katy Perry - Last Friday Night (T.G.I.F.).flac 
+  -> /media/Music/Katy Perry/Teenage Dream/02 last friday night (T.G.I.F.).flac
+/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-04 Katy Perry - Firework.flac 
+  -> /media/Music/Katy Perry/Teenage Dream/04 firework.flac
+/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-05 Katy Perry - Peacock.flac 
+  -> /media/Music/Katy Perry/Teenage Dream/05 peacock.flac
+/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-06 Katy Perry - Circle the Drain.flac 
+  -> /media/Music/Katy Perry/Teenage Dream/06 circle the drain.flac
+/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-07 Katy Perry - The One That Got Away.flac 
+  -> /media/Music/Katy Perry/Teenage Dream/07 the one that got away.flac
+/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-08 Katy Perry - E.T.flac 
+  -> /media/Music/Katy Perry/Teenage Dream/08 et.flac
+/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-09 Katy Perry - Who Am I Living For.flac 
+  -> /media/Music/Katy Perry/Teenage Dream/09 who am i living for_.flac
+/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-10 Katy Perry - Pearl.flac 
+  -> /media/Music/Katy Perry/Teenage Dream/10 pearl.flac
+/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-11 Katy Perry - Hummingbird Heartbeat.flac 
+  -> /media/Music/Katy Perry/Teenage Dream/11 hummingbird heartbeat.flac
+/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-12 Katy Perry - Not Like the Movies.flac 
+  -> /media/Music/Katy Perry/Teenage Dream/12 not like the movies.flac
+/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-03 Katy Perry - California Gurls.flac 
+  -> /media/Music/Katy Perry/Teenage Dream/03 california gurls.flac
+/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001/01. Phil Collins - You Can't Hurry Love.mp3 
+  -> /media/Music/Various/Now That's What I Call Music! 1/01-01 You Can't Hurry Love.mp3
+/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/08. - Love Me Not.mp3 
+  -> /media/Music/Various Artists/NOW That's What I Call Music! 121/08 Love Me Not.mp3
+/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/21. - What The Hell Just Happened_.mp3 
+  -> /media/Music/Various Artists/NOW That's What I Call Music! 121/21 What The Hell Just Happened_.mp3
+/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/19. - Rocket.mp3 
+  -> /media/Music/Various Artists/NOW That's What I Call Music! 121/19 Rocket.mp3
+/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001/14 - Rock Steady Crew - (Hey You) The Rock Steady Crew.mp3 
+  -> /media/Music/Various/Now That's What I Call Music! 1/01-14 (Hey You) The Rock Steady Crew.mp3
+/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001/15. Rod Stewart - Baby Jane.mp3 
+  -> /media/Music/Various/Now That's What I Call Music! 1/01-15 Baby Jane.mp3
+/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/01. - Busy Woman.mp3 
+  -> /media/Music/Various Artists/NOW That's What I Call Music! 121/01 Busy Woman.mp3
+/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/02. - Manchild.mp3 
+  -> /media/Music/Various Artists/NOW That's What I Call Music! 121/02 Manchild.mp3
+/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/15. - Little Bit Closer.mp3 
+  -> /media/Music/Various Artists/NOW That's What I Call Music! 121/15 Little Bit Closer.mp3
+/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001/12. Simple Minds - Waterfront.mp3 
+  -> /media/Music/Various/Now That's What I Call Music! 1/02-12 Waterfront.mp3
+/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/13. - Hairdresser.mp3 
+  -> /media/Music/Various Artists/NOW That's What I Call Music! 121/13 Hairdresser.mp3
+/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/06. - Back To Friends.mp3 
+  -> /media/Music/Various Artists/NOW That's What I Call Music! 121/06 Back To Friends.mp3
+/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/09. - Undressed.mp3 
+  -> /media/Music/Various Artists/NOW That's What I Call Music! 121/09 Undressed.mp3
+/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/21. - Tell Me.mp3 
+  -> /media/Music/Various Artists/NOW That's What I Call Music! 121/21 Tell Me.mp3
+/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/20. - Taste.mp3 
+  -> /media/Music/Various Artists/NOW That's What I Call Music! 121/20 Taste.mp3
+/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/17. - Make It On Your Own.mp3 
+  -> /media/Music/Various Artists/NOW That's What I Call Music! 121/17 Make It On Your Own.mp3
+/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/04. - Sports Car.mp3 
+  -> /media/Music/Various Artists/NOW That's What I Call Music! 121/04 Sports Car.mp3
+/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001/11. The Cure - The Lovecats.mp3 
+  -> /media/Music/Various/Now That's What I Call Music! 1/02-11 The Lovecats.mp3
+/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001/04. The Human League - (Keep Feeling) Fascination.mp3 
+  -> /media/Music/Various/Now That's What I Call Music! 1/02-04 (Keep Feeling) Fascination.mp3
+/downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost/107.-.Enjoy.Yourself.flac 
+  -> /media/Music/Michael Jackson/The Essential Michael Jackson/01-07 Enjoy Yourself.flac
+/downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost/108.-.Blame.It.on.the.Boogie.flac 
+  -> /media/Music/Michael Jackson/The Essential Michael Jackson/01-08 Blame It on the Boogie.flac
+/downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost/109.-.Shake.Your.Body.(Down.to.the.Ground).(Single.Edit).flac 
+  -> /media/Music/Michael Jackson/The Essential Michael Jackson/01-09 Shake Your Body (Down to the Ground) (Single Edit).flac
+/downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost/114.-.Can.You.Feel.It.(7.Version).flac 
+  -> /media/Music/Michael Jackson/The Essential Michael Jackson/01-14 Can You Feel It (7_ Version).flac
+/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001/03. Tina Turner - Let's Stay Together.mp3 
+  -> /media/Music/Various/Now That's What I Call Music! 1/02-03 Let's Stay Together.mp3
+/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001/08. Tracey Ullman - They Don't Know.mp3 
+  -> /media/Music/Various/Now That's What I Call Music! 1/02-08 They Don't Know.mp3
+/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001/03. UB40 - Red Red Wine.mp3 
+  -> /media/Music/Various/Now That's What I Call Music! 1/01-03 Red Red Wine.mp3
+/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001/06. UB40 - Please Don't Make Me Cry.mp3 
+  -> /media/Music/Various/Now That's What I Call Music! 1/02-06 Please Don't Make Me Cry.mp3
+/downloads/complete/nzb/dj-mixes/Mastermix.Issue.421.2021/01. Mastermix - Club Cuts.mp3 
+  -> /media/Music/DJ/Various Artists/Mastermix Issue 421/01 Club Cuts.mp3
+/downloads/complete/nzb/dj-mixes/Mastermix.Issue.421.2021/01. Mastermix - The Ibiza Sessions (Balearic Beats).mp3 
+  -> /media/Music/DJ/Various Artists/Mastermix Issue 421/01 The Ibiza Sessions (Balearic Beats).mp3
+/downloads/complete/nzb/dj-mixes/Mastermix.Issue.421.2021/02. Mastermix - Deep House Covers 2021.mp3 
+  -> /media/Music/DJ/Various Artists/Mastermix Issue 421/02 Deep House Covers 2021.mp3
+/downloads/complete/nzb/dj-mixes/Mastermix.Issue.421.2021/02. Mastermix - Pride (The Mix 2021).mp3 
+  -> /media/Music/DJ/Various Artists/Mastermix Issue 421/02 Pride (The Mix 2021).mp3
+/downloads/complete/nzb/dj-mixes/Mastermix.Issue.421.2021/03. Mastermix - Electro Swing Party.mp3 
+  -> /media/Music/DJ/Various Artists/Mastermix Issue 421/03 Electro Swing Party.mp3
+/downloads/complete/nzb/dj-mixes/Mastermix.Issue.421.2021/03. Mastermix - Where The Rap Party At.mp3 
+  -> /media/Music/DJ/Various Artists/Mastermix Issue 421/03 Where The Rap Party At.mp3
+/downloads/complete/nzb/dj-mixes/Mastermix.Issue.421.2021/04. Mastermix - Jackin' House Floorfillers.mp3 
+  -> /media/Music/DJ/Various Artists/Mastermix Issue 421/04 Jackin' House Floorfillers.mp3
+/downloads/complete/nzb/dj-mixes/Mastermix.Issue.421.2021/04. Mastermix - Lounge & Bar Grooves.mp3 
+  -> /media/Music/DJ/Various Artists/Mastermix Issue 421/04 Lounge & Bar Grooves.mp3
+/downloads/complete/nzb/dj-mixes/Mastermix.Issue.421.2021/05. Mastermix - Cool Summer Dance Triple Tracker.mp3 
+  -> /media/Music/DJ/Various Artists/Mastermix Issue 421/05 Cool Summer Dance Triple Tracker.mp3
+/downloads/complete/nzb/dj-mixes/Mastermix.Issue.421.2021/05. Mastermix - The Secret Garden.mp3 
+  -> /media/Music/DJ/Various Artists/Mastermix Issue 421/05 The Secret Garden.mp3
+/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY/07. - Cry For Me.mp3 
+  -> /media/Music/Various Artists/NOW That's What I Call Music! 121/07 Cry For Me.mp3
+/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001/09. Will Powers - Kissing With Confidence.mp3 
+  -> /media/Music/Various/Now That's What I Call Music! 1/02-09 Kissing With Confidence.mp3
+--------------------------------------------------------------------------------
+
+================================================================================
+§ 4  THE NORMALISED, LC_ALL=C-SORTED DESTINATION LIST — 174 LINES
+================================================================================
+The `cut -f2` of the pairs above, LC_ALL=C sorted.  This is the left-hand side of
+the diff in § 5.
+
+--------------------------------------------------------------------------------
+/media/Music/Benson Boone/American Heart [Night Street Records, Inc. - Warner Records Inc.]/01 Sorry I'm Here For Someone Else.mp3
+/media/Music/Benson Boone/American Heart [Night Street Records, Inc. - Warner Records Inc.]/02 Mr Electric Blue.mp3
+/media/Music/Benson Boone/American Heart [Night Street Records, Inc. - Warner Records Inc.]/03 Man In Me.mp3
+/media/Music/Benson Boone/American Heart [Night Street Records, Inc. - Warner Records Inc.]/04 Mystical Magical.mp3
+/media/Music/Benson Boone/American Heart [Night Street Records, Inc. - Warner Records Inc.]/05 Reminds Me Of You.mp3
+/media/Music/Benson Boone/American Heart [Night Street Records, Inc. - Warner Records Inc.]/06 Momma Song.mp3
+/media/Music/Benson Boone/American Heart [Night Street Records, Inc. - Warner Records Inc.]/07 I Wanna Be The One You Call.mp3
+/media/Music/Benson Boone/American Heart [Night Street Records, Inc. - Warner Records Inc.]/08 Wanted Man.mp3
+/media/Music/Benson Boone/American Heart [Night Street Records, Inc. - Warner Records Inc.]/09 Take Me Home.mp3
+/media/Music/Benson Boone/American Heart [Night Street Records, Inc. - Warner Records Inc.]/10 Young American Heart.mp3
+/media/Music/Benson Boone/American Heart/01 Sorry I'm Here For Someone Else.flac
+/media/Music/Benson Boone/American Heart/02 Mr Electric Blue.flac
+/media/Music/Benson Boone/American Heart/03 Man In Me.flac
+/media/Music/Benson Boone/American Heart/04 Mystical Magical.flac
+/media/Music/Benson Boone/American Heart/05 Reminds Me Of You.flac
+/media/Music/Benson Boone/American Heart/06 Momma Song.flac
+/media/Music/Benson Boone/American Heart/07 I Wanna Be The One You Call.flac
+/media/Music/Benson Boone/American Heart/08 Wanted Man.flac
+/media/Music/Benson Boone/American Heart/09 Take Me Home.flac
+/media/Music/Benson Boone/American Heart/10 Young American Heart.flac
+/media/Music/Benson Boone/Fireworks & Rollerblades/01 Intro.flac
+/media/Music/Benson Boone/Fireworks & Rollerblades/02 Be Someone.flac
+/media/Music/Benson Boone/Fireworks & Rollerblades/03 Slow It Down.flac
+/media/Music/Benson Boone/Fireworks & Rollerblades/04 Beautiful Things.flac
+/media/Music/Benson Boone/Fireworks & Rollerblades/05 Cry.flac
+/media/Music/Benson Boone/Fireworks & Rollerblades/06 Forever and a Day.flac
+/media/Music/Benson Boone/Fireworks & Rollerblades/07 In The Stars.flac
+/media/Music/Benson Boone/Fireworks & Rollerblades/08 Drunk In My Mind.flac
+/media/Music/Benson Boone/Fireworks & Rollerblades/09 My Greatest Fear.flac
+/media/Music/Benson Boone/Fireworks & Rollerblades/10 There She Goes.flac
+/media/Music/Benson Boone/Fireworks & Rollerblades/11 Hello Love.flac
+/media/Music/Benson Boone/Fireworks & Rollerblades/12 Ghost Town.flac
+/media/Music/Benson Boone/Fireworks & Rollerblades/13 Love Of Mine.flac
+/media/Music/Benson Boone/Fireworks & Rollerblades/14 Friend.flac
+/media/Music/Benson Boone/Fireworks & Rollerblades/15 What Do You Want.flac
+/media/Music/DJ/Mastermix/Issue 420/01 Club Cuts.mp3
+/media/Music/DJ/Mastermix/Issue 420/01 The Ibiza Sessions_ Jackin' House.mp3
+/media/Music/DJ/Mastermix/Issue 420/02 Mastermixed 5.mp3
+/media/Music/DJ/Mastermix/Issue 420/02 Party On Fire.mp3
+/media/Music/DJ/Mastermix/Issue 420/03 Classic Disco vs. Nu Disco.mp3
+/media/Music/DJ/Mastermix/Issue 420/03 Reggae Fusion.mp3
+/media/Music/DJ/Mastermix/Issue 420/04 Hit The Dancefloor_ Latin Pop.mp3
+/media/Music/DJ/Mastermix/Issue 420/04 Into The 80s.mp3
+/media/Music/DJ/Mastermix/Issue 420/05 Summer Slam_ 00s Club Classics.mp3
+/media/Music/DJ/Mastermix/Issue 420/05 Triple Tracker_ Crazibiza.mp3
+/media/Music/DJ/Various Artists/Mastermix Issue 421/01 Club Cuts.mp3
+/media/Music/DJ/Various Artists/Mastermix Issue 421/01 The Ibiza Sessions (Balearic Beats).mp3
+/media/Music/DJ/Various Artists/Mastermix Issue 421/02 Deep House Covers 2021.mp3
+/media/Music/DJ/Various Artists/Mastermix Issue 421/02 Pride (The Mix 2021).mp3
+/media/Music/DJ/Various Artists/Mastermix Issue 421/03 Electro Swing Party.mp3
+/media/Music/DJ/Various Artists/Mastermix Issue 421/03 Where The Rap Party At.mp3
+/media/Music/DJ/Various Artists/Mastermix Issue 421/04 Jackin' House Floorfillers.mp3
+/media/Music/DJ/Various Artists/Mastermix Issue 421/04 Lounge & Bar Grooves.mp3
+/media/Music/DJ/Various Artists/Mastermix Issue 421/05 Cool Summer Dance Triple Tracker.mp3
+/media/Music/DJ/Various Artists/Mastermix Issue 421/05 The Secret Garden.mp3
+/media/Music/Katy Perry/Teenage Dream/01 teenage dream.flac
+/media/Music/Katy Perry/Teenage Dream/02 last friday night (T.G.I.F.).flac
+/media/Music/Katy Perry/Teenage Dream/03 california gurls.flac
+/media/Music/Katy Perry/Teenage Dream/04 firework.flac
+/media/Music/Katy Perry/Teenage Dream/05 peacock.flac
+/media/Music/Katy Perry/Teenage Dream/06 circle the drain.flac
+/media/Music/Katy Perry/Teenage Dream/07 the one that got away.flac
+/media/Music/Katy Perry/Teenage Dream/08 et.flac
+/media/Music/Katy Perry/Teenage Dream/09 who am i living for_.flac
+/media/Music/Katy Perry/Teenage Dream/10 pearl.flac
+/media/Music/Katy Perry/Teenage Dream/11 hummingbird heartbeat.flac
+/media/Music/Katy Perry/Teenage Dream/12 not like the movies.flac
+/media/Music/Michael Jackson/The Essential Michael Jackson/01-07 Enjoy Yourself.flac
+/media/Music/Michael Jackson/The Essential Michael Jackson/01-08 Blame It on the Boogie.flac
+/media/Music/Michael Jackson/The Essential Michael Jackson/01-09 Shake Your Body (Down to the Ground) (Single Edit).flac
+/media/Music/Michael Jackson/The Essential Michael Jackson/01-10 Don't Stop 'Til You Get Enough.flac
+/media/Music/Michael Jackson/The Essential Michael Jackson/01-11 Rock with You (Single Version).flac
+/media/Music/Michael Jackson/The Essential Michael Jackson/01-12 Off the Wall.flac
+/media/Music/Michael Jackson/The Essential Michael Jackson/01-13 She's Out of My Life.flac
+/media/Music/Michael Jackson/The Essential Michael Jackson/01-14 Can You Feel It (7_ Version).flac
+/media/Music/Michael Jackson/The Essential Michael Jackson/01-15 The Girl Is Mine (with Paul McCartney).flac
+/media/Music/Michael Jackson/The Essential Michael Jackson/01-16 Billie Jean.flac
+/media/Music/Michael Jackson/The Essential Michael Jackson/01-17 Beat It.flac
+/media/Music/Michael Jackson/The Essential Michael Jackson/01-18 Wanna Be Startin' Somethin' (Single Version).flac
+/media/Music/Michael Jackson/The Essential Michael Jackson/01-19 Human Nature 7_.flac
+/media/Music/Michael Jackson/The Essential Michael Jackson/01-20 P.Y.T. (Pretty Young Thing).flac
+/media/Music/Michael Jackson/The Essential Michael Jackson/01-21 Thriller (Single Version).flac
+/media/Music/Michael Jackson/The Essential Michael Jackson/02-01 Bad.flac
+/media/Music/Michael Jackson/The Essential Michael Jackson/02-02 I Just Can't Stop Loving You (feat. Siedah Garrett).flac
+/media/Music/Michael Jackson/The Essential Michael Jackson/02-03 Leave Me Alone.flac
+/media/Music/Michael Jackson/The Essential Michael Jackson/02-04 The Way You Make Me Feel (Single Version).flac
+/media/Music/Michael Jackson/The Essential Michael Jackson/02-05 Man in the Mirror.flac
+/media/Music/Michael Jackson/The Essential Michael Jackson/02-06 Dirty Diana.flac
+/media/Music/Michael Jackson/The Essential Michael Jackson/02-07 Another Part of Me (Single Version).flac
+/media/Music/Michael Jackson/The Essential Michael Jackson/02-08 Smooth Criminal (Radio Edit).flac
+/media/Music/Michael Jackson/The Essential Michael Jackson/02-09 Black or White (Single Version).flac
+/media/Music/Michael Jackson/The Essential Michael Jackson/02-10 Heal the World.flac
+/media/Music/Michael Jackson/The Essential Michael Jackson/02-11 Remember the Time.flac
+/media/Music/Michael Jackson/The Essential Michael Jackson/02-12 In the Closet (Single Version).flac
+/media/Music/Michael Jackson/The Essential Michael Jackson/02-13 Who Is It (7_ Edit).flac
+/media/Music/Michael Jackson/The Essential Michael Jackson/02-14 Will You Be There (Single Version).flac
+/media/Music/Michael Jackson/The Essential Michael Jackson/02-15 Dangerous.flac
+/media/Music/Michael Jackson/The Essential Michael Jackson/02-16 You Are Not Alone (Single Version).flac
+/media/Music/Michael Jackson/The Essential Michael Jackson/02-17 You Rock My World.flac
+/media/Music/Singles/Cyril/Stumblin' In (LUNAX Remix) (Extended Mix).mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/01 Blessings.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/01 Busy Woman.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/02 Gold.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/02 Manchild.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/03 Azizam.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/03 Bloodline.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/04 Plastic Box.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/04 Sports Car.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/05 Abracadabra.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/05 Sorry I'm Here For Someone Else.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/06 Back To Friends.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/06 Mystical Magical.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/07 Cry For Me.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/07 The Giver.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/08 Love Me Not.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/08 Mutt.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/09 Headphones On.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/09 Undressed.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/10 Burning Down.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/10 Living My Best Life.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/11 Cliché.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/11 Twilight Zone.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/12 Fufn.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/12 Heart By Heart.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/13 Hairdresser.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/13 Me & You.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/14 I'm The Problem.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/14 One Thing.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/15 Little Bit Closer.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/15 Nice To Each Other (Radio Edit).mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/16 A Little Love.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/16 Henry, Come On.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/17 Make It On Your Own.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/17 Party 4 U.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/18 Little Richard's Bible.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/18 Relationships.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/19 Beautiful People.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/19 Rocket.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/20 Can't Decide.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/20 Taste.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/21 Tell Me.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/21 What The Hell Just Happened_.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/22 The Glen (Levi Heron Edit).mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/22 Wasted Love.mp3
+/media/Music/Various/Now That's What I Call Music! 1/01-01 You Can't Hurry Love.mp3
+/media/Music/Various/Now That's What I Call Music! 1/01-02 Is There Something I Should Know.mp3
+/media/Music/Various/Now That's What I Call Music! 1/01-03 Red Red Wine.mp3
+/media/Music/Various/Now That's What I Call Music! 1/01-04 Only For Love.mp3
+/media/Music/Various/Now That's What I Call Music! 1/01-05 Temptation.mp3
+/media/Music/Various/Now That's What I Call Music! 1/01-06 Give It Up.mp3
+/media/Music/Various/Now That's What I Call Music! 1/01-07 Double Dutch.mp3
+/media/Music/Various/Now That's What I Call Music! 1/01-08 Total Eclipse Of The Heart.mp3
+/media/Music/Various/Now That's What I Call Music! 1/01-09 Karma Chameleon.mp3
+/media/Music/Various/Now That's What I Call Music! 1/01-10 The Safety Dance.mp3
+/media/Music/Various/Now That's What I Call Music! 1/01-11 Too Shy.mp3
+/media/Music/Various/Now That's What I Call Music! 1/01-12 Moonlight Shadow.mp3
+/media/Music/Various/Now That's What I Call Music! 1/01-13 Down Under.mp3
+/media/Music/Various/Now That's What I Call Music! 1/01-14 (Hey You) The Rock Steady Crew.mp3
+/media/Music/Various/Now That's What I Call Music! 1/01-15 Baby Jane.mp3
+/media/Music/Various/Now That's What I Call Music! 1/01-16 Wherever I Lay My Hat (That's My Home).mp3
+/media/Music/Various/Now That's What I Call Music! 1/02-01 Candy Girl.mp3
+/media/Music/Various/Now That's What I Call Music! 1/02-02 Big Apple.mp3
+/media/Music/Various/Now That's What I Call Music! 1/02-03 Let's Stay Together.mp3
+/media/Music/Various/Now That's What I Call Music! 1/02-04 (Keep Feeling) Fascination.mp3
+/media/Music/Various/Now That's What I Call Music! 1/02-05 New Song.mp3
+/media/Music/Various/Now That's What I Call Music! 1/02-06 Please Don't Make Me Cry.mp3
+/media/Music/Various/Now That's What I Call Music! 1/02-07 Tonight I Celebrate My Love.mp3
+/media/Music/Various/Now That's What I Call Music! 1/02-08 They Don't Know.mp3
+/media/Music/Various/Now That's What I Call Music! 1/02-09 Kissing With Confidence.mp3
+/media/Music/Various/Now That's What I Call Music! 1/02-10 That's All.mp3
+/media/Music/Various/Now That's What I Call Music! 1/02-11 The Lovecats.mp3
+/media/Music/Various/Now That's What I Call Music! 1/02-12 Waterfront.mp3
+/media/Music/Various/Now That's What I Call Music! 1/02-13 The Sun And The Rain.mp3
+/media/Music/Various/Now That's What I Call Music! 1/02-14 Victims.mp3
+--------------------------------------------------------------------------------
+
+================================================================================
+§ 5  THE DIFF AGAINST 06-EXPECTED-TREE.txt
+================================================================================
+
+    diff <(grep -v '^#' 06-EXPECTED-TREE.txt) <oracle destinations, LC_ALL=C sorted>
+
+  RESULT: ZERO LINES OF DIFFERENCE.  ZERO-DIFF.  No differences in either
+  direction — no expected-but-absent line, no present-but-unexpected line.
+
+  The comparison is made through manifest_compare(), which treats diff's exit
+  status >= 2 as COULD NOT COMPARE and never as "identical": `diff` writes to
+  stderr and leaves STDOUT EMPTY on trouble, and `d="$(diff ...)"; [ -z "$d" ]`
+  reads that empty stdout as a pass.  Three outcomes, never two.
+
+  06-EXPECTED-TREE.txt WAS NOT TOUCHED BY THIS PLAN (T-06-54).  The fixture is
+  committed in wave 2; this plan is wave 4; `git log --follow` on that file shows
+  no commit from 06-11.  A tree edited to match its own output is not an oracle.
+  Four runs of this instrument failed before this one, and NOT ONE of those
+  failures was in the tree or in the config under test — all four were in the
+  instrument, and all four are recorded in § 6 rather than quietly fixed.
+
+  Distribution of the 174 destinations by top-level component:
+
+      44   Various Artists/        (S3, rule 5 `comp`)
+      35   Benson Boone/           (S1, rule 6 `default`)
+      32   Michael Jackson/        (S2, rule 4 `disctotal:2..`)
+      30   Various/                (S4, rule 4 `disctotal:2..`)
+      20   DJ/                     (S5, rule 3 `albumtype:=dj`)
+      12   Katy Perry/             (S6, rule 6 `default`)
+       1   Singles/                (S7, rule 1 `singleton`)
+
+  …across exactly 10 album directories, one per sampled folder:
+
+      10  /media/Music/Benson Boone/American Heart
+      10  /media/Music/Benson Boone/American Heart [Night Street Records, Inc. - Warner Records Inc.]
+      15  /media/Music/Benson Boone/Fireworks & Rollerblades
+      10  /media/Music/DJ/Mastermix/Issue 420
+      10  /media/Music/DJ/Various Artists/Mastermix Issue 421
+      12  /media/Music/Katy Perry/Teenage Dream
+      32  /media/Music/Michael Jackson/The Essential Michael Jackson
+       1  /media/Music/Singles/Cyril
+      44  /media/Music/Various Artists/NOW That's What I Call Music! 121
+      30  /media/Music/Various/Now That's What I Call Music! 1
+
+================================================================================
+§ 6  THE FOUR FIRST-RUN FAILURES OF THE INSTRUMENT, AND WHAT WAS CHANGED
+================================================================================
+Recorded here because T-06-54 requires that a run which did not pass first time
+says so, and because all four share one property: EACH PRODUCED A CONFIDENT,
+GREEN-LOOKING ANSWER WHILE MEASURING THE WRONG THING OR NOTHING AT ALL.  None of
+them was a defect in the `paths:` stanza or in 06-EXPECTED-TREE.txt.  The fix in
+every case is in scripts/phase06-oracle.sh, commit c0b7123.
+
+§ 6.1  RUN 1 — `import.duplicate_action: skip` DROPPED A WHOLE SAMPLED FOLDER.
+  Symptom: 164 destination pairs against 174 sampled files.  Exit 3, UNKNOWN, and
+  THE DIFF WAS NOT EVALUATED — the control did exactly its job.
+  Cause: the S1 stratum deliberately drew TWO rips of Benson Boone / American
+  Heart (24-bit FLAC and MP3).  That is the whole reason the stratum exists: it
+  is the one predicted %aunique{} firing.  `skip` refused the second album, so
+  the collision the fixture exists to test was removed from the library.
+  Fix: `duplicate_action: keep` — imports both, deletes nothing.  The three
+  alternatives are all wrong here: `remove` deletes source files with no prompt
+  (rc6's own default, Pitfall 3), `merge` rewrites the album, and `ask` under
+  `-q` falls back to skipping.
+  Note this cuts both ways: `skip` was itself added in 06-09 as a Rule-2 safety
+  deviation against `remove`.  Safe and faithful are different properties, and
+  `keep` is the only value that is both.
+
+§ 6.2  RUN 1 — `beet move -p` COLOURS ITS OUTPUT, SO NOTHING COULD EVER MATCH.
+  Symptom: `/m<ESC>[1;32media/M<ESC>[39;49;00music/` — SGR runs interleaved
+  THROUGH both paths by `colordiff` [beets/ui/commands/move.py@v2.12.0:57].
+  Consequences, all three of which read as something other than what they were:
+    * a coloured destination never equals a fixture line — 174 diff failures that
+      would have looked like 174 path-template defects;
+    * a coloured SOURCE never joins to the `beet ls -f` field view — CONF-03
+      would have returned COULD NOT LOOK on all 174 rows;
+    * `grep -q '/media/Music/'` returns NOTHING over a coloured transcript, so
+      positive control 4 would have fired for a reason that is not a defect.
+  Fix: `ui.color: no` in the overlay (at the source), AND normalise_transcript
+  strips SGR into a `.clean` file regardless, so a transcript that arrives
+  coloured by some other route still normalises to the same verdict.  The literal
+  trailing space on the source half of the narrow form — `f"{color_source} \n
+  -> {color_dest}"`, unconditional — is stripped with it, address-restricted to
+  lines carrying no ' -> ' so that a DESTINATION really ending in a space would
+  stay visible as the path-rule finding it would be.
+
+§ 6.3  RUN 1 — THE `(N already in place)` CONTROL COULD NEVER FIRE.
+  Symptom: the script reported "(N already in place): 0 [line ABSENT]".
+  Cause: `move_items` builds the count as a fragment and hands it to log.info —
+  `Moving 164 items (3 already in place).` on STDERR, embedded in one line.  The
+  old predicate looked for a standalone `(N already in place)` line on stdout.
+  That predicate CANNOT MATCH REAL OUTPUT.  It returned 0 and passed vacuously.
+  This is the fifth instance in Phase 6 of a predicate that cannot match reading
+  as a clean negative.
+  Fix: read_unmoved() parses the log line; its ABSENCE is a COULD NOT LOOK, never
+  a zero.  That also yields control 5 for free (§ 2.5).
+
+§ 6.4  RUN 2 AND RUN 3 — TWO DEFECTS IN THE D-18 LEDGER.
+  (a) Run 2: 60 `failed` records, all twelve S6 files, all five fields:
+      "No such file or directory: '/home/beetle/Music/Katy Perry/…'".
+      Cause: beets 2.12.0 stores an item path RELATIVE to the library directory
+      when it sits underneath it, and re-absolutises it against `lib.directory`
+      on read [beets/library/models.py@v2.12.0:130; Library._migrations carries a
+      RelativePathMigration].  `Library(db)` alone falls back to platformdirs'
+      user music path.  The affected stratum is exactly the one drawn FROM the
+      library — i.e. exactly the files Phase 7 will re-tag.  Items under
+      /downloads are outside the directory, stored absolute, and read correctly
+      either way, which is why only S6 broke.
+      Fix: `Library(db, directory=/media/Music)`, plus a self-test case that
+      walks the payload's AST and requires the `directory=` keyword.
+  (b) Run 3: 327 of 870 records reported as PROPOSED CHANGES, exit 1, RED.
+      Cause: mediafile reports an absent tag as None, while beets' typed model
+      reports the SAME absence as that field's own null.  Read off the engine:
+        bpm Integer null 0 · comments String null '' · genres DelimitedString
+        null [] · initial_key MusicalKey null None
+      All 327 were None -> the field's null.  Not one had a non-empty `old`.
+      Fix: both-sides-absent is marked `noop` AND flagged `null_equivalent`, the
+      nulls are read off Item._fields at RUNTIME rather than hard-coded, the raw
+      `old` and `new` stay in every record, and a real value becoming null stays
+      a RED (driven by its own self-test case).
+
+  --self-test grew 56 -> 73 cases across these fixes.  Every new branch is driven,
+  and every new predicate was confirmed able to FAIL against a planted positive
+  before its clean result was believed.
+
