@@ -101,10 +101,20 @@ services:
       MEMORY_LEGACY_BRIDGE_USER_ID: ${MEMORY_LEGACY_BRIDGE_USER_ID:-}
 
       # --- authentication ------------------------------------------------------------------
-      # <users.id>:<capability>:<sha256 of the token>, comma-separated. The server refuses to
-      # start if this is empty. Only the HASH lives here; the token itself is printed once by
-      # `memory-admin mint-token` and written to each client's token file.
-      MEMORY_API_TOKENS: ${MEMORY_API_TOKENS:?set in .env - see README step 6, mint-token}
+      # <users.id>:<capability>:<sha256 of the token>, comma-separated. Only the HASH lives here;
+      # the token itself is printed once by `memory-admin mint-token` and written to each client's
+      # token file.
+      #
+      # DELIBERATELY `:-` AND NOT `:?`. It was `:?` briefly on 2026-09-22 and that broke the
+      # bootstrap: compose interpolates the WHOLE file before it selects a service, so a required-
+      # variable guard on `api` also blocks `docker compose run --rm deps` and every `admin`
+      # command -- which are exactly the steps that must run BEFORE a token can exist. The guard
+      # made the documented sequence impossible to execute.
+      #
+      # The real guard is server-side and unaffected: memory-api refuses to start on an empty
+      # token map, which is what TODO-315's acceptance asserts. An empty value here means the
+      # container starts and exits with that refusal, which is the intended behaviour.
+      MEMORY_API_TOKENS: ${MEMORY_API_TOKENS:-}
     volumes:
       # The code: a PINNED COMMIT of the platform repo, read-only. Never `main`.
       - /mnt/fast/stacks-private/neocortex-platform:/app:ro
