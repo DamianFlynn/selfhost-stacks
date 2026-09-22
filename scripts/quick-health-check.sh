@@ -714,6 +714,17 @@ D03_BEETS_CONFIG_DEST="${D03_BEETS_CONFIG_DEST:-/config/config.yaml}"
 D03_MEDIA_SOURCE="${D03_MEDIA_SOURCE:-/mnt/tank/media}"
 D03_CLI_COMPOSE="${D03_CLI_COMPOSE:-stacks/selfhosted/arrs/beets/beets.yaml}"
 D03_CLI_PROFILE="${D03_CLI_PROFILE:-manual}"
+# D03_REPO_ROOT, added 2026-09-22 by plan 06-16 (IN-13). The CLI-render half `cd`s into the host
+# checkout before `docker compose config`, and that `cd` was HARD-CODED while the two blocks either
+# side of it grew overridable roots in the same 2026-09-21 commit, for the stated reason that an
+# undriveable branch is an unproven branch. Its `exit 3` could therefore only be reached by
+# breaking the deployed checkout. Same ADDITIVE contract as every other knob here: any non-default
+# value forces EXIT_CODE=1, so it can only make the block redder.
+#   ⛔ DO NOT REUSE DRIFT_REPO_ROOT OR D04_REPO_ROOT FOR THIS. The drift comparison, the D-04 scan
+#   and the D-03 render are three DIFFERENT CLAIMS that merely happen to share a default path.
+#   Sharing one knob would mean an override taken to drive one block's red branch silently moves
+#   another block's verdict, and the run would report on a tree nobody asked it to look at.
+D03_REPO_ROOT="${D03_REPO_ROOT:-/mnt/fast/stacks}"
 
 # ENV OVERRIDES for the D-04 THROWAWAY-`-l` ASSERTION, added 2026-09-21 by plan 06-10. Same
 # contract: any non-default value forces EXIT_CODE=1. D04_DOC_BASELINE is the PINNED count of
@@ -1378,6 +1389,7 @@ if [ "$D03_FLASK_CONTAINER" != "beets-flask" ] \
    || [ "$D03_BEETS_CONFIG_DEST" != "/config/config.yaml" ] \
    || [ "$D03_MEDIA_SOURCE" != "/mnt/tank/media" ] \
    || [ "$D03_CLI_COMPOSE" != "stacks/selfhosted/arrs/beets/beets.yaml" ] \
+   || [ "$D03_REPO_ROOT" != "/mnt/fast/stacks" ] \
    || [ "$D03_CLI_PROFILE" != "manual" ]; then
     D03_OVERRIDDEN=1
     echo "  ⚠️  a D03_* override is in effect — this run cannot report the mounts green"
@@ -1437,7 +1449,7 @@ else
 fi
 
 # --- (ii) the DORMANT CLI arm, rendered rather than inspected -----------------------------------
-D03_CLI_OUT=$(ssh -n $SSH_OPTS root@172.16.1.159 "cd /mnt/fast/stacks || exit 3; timeout $REMOTE_TIMEOUT docker compose --profile $D03_CLI_PROFILE -f $D03_CLI_COMPOSE config 2>/dev/null")
+D03_CLI_OUT=$(ssh -n $SSH_OPTS root@172.16.1.159 "cd $D03_REPO_ROOT || exit 3; timeout $REMOTE_TIMEOUT docker compose --profile $D03_CLI_PROFILE -f $D03_CLI_COMPOSE config 2>/dev/null")
 D03_CLI_RC=$?   # ssh propagates the remote status — NO local pipe above
 # Normalise the long-form `volumes:` the renderer emits into `source target ro|rw`, LOCALLY.
 # `read_only:` is EMITTED ONLY WHEN TRUE, so its ABSENCE means read-write — the default here is
@@ -1452,7 +1464,7 @@ D03_CLI_MOUNTS=$(printf '%s\n' "$D03_CLI_OUT" | awk '
 D03_CLI_LINES=$(printf '%s\n' "$D03_CLI_MOUNTS" | grep -c '^/')
 if [ "$D03_CLI_LINES" -eq 0 ] && [ "$D03_CLI_RC" -ne 124 ]; then
     echo "  ⚠️  UNKNOWN — rendering $D03_CLI_COMPOSE yielded no bind mounts (ssh exit $D03_CLI_RC;"
-    echo "  3 = no /mnt/fast/stacks checkout). Nothing was asserted, and 'services: {}' is what a"
+    echo "  3 = no $D03_REPO_ROOT checkout). Nothing was asserted, and 'services: {}' is what a"
     echo "  MISSING --profile $D03_CLI_PROFILE looks like — it is NOT 'no bad mounts'."
     EXIT_CODE=1
 elif [ "$D03_CLI_RC" -eq 124 ]; then
