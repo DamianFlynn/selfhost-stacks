@@ -38,10 +38,18 @@ Damian chose the interim fix over a reboot, and it is complete:
   `/mnt/fast/appdata/agentic-os` **no longer exists**, so nothing can silently start on the stale
   directory if someone reverts the compose path later.
 
-**Still to reclaim:** that superseded copy is 754 MB, still on ext4, kept deliberately as a
-rollback. Delete it once you are happy:
+**Still to reclaim, with an owner and a trigger.** That superseded copy is 754 MB on ext4, kept
+deliberately as a rollback. Damian's decision (2026-09-22): **it goes at the close of neocortex v2
+Phase 3**, *"as we should be confident it's not needed"* — by then the store will have served the
+API, the legacy bridge and the indexer for a whole phase. It is a checklist item in **TODO-324**
+so it has a trigger rather than a good intention.
+
+Before deleting, confirm the live store is still the `automation` copy — if anything repointed
+`compose.yaml` back, this directory **is** the live store:
 
 ```sh
+ssh root@172.16.1.159 "docker inspect agentic-os-db --format '{{json .HostConfig.Binds}}'"
+# must show /mnt/fast/appdata/automation/agentic-os/postgres
 ssh root@172.16.1.159 'rm -rf /root/agentic-os-postgres-ext4-SUPERSEDED-20260922; df -h /'
 ```
 
@@ -80,8 +88,10 @@ container has; it is not what puts it there.
 
 **⚠ And an apply would do harm.** The same plan showed unrelated pre-existing drift: container
 **102 (`mpe`) plans `memory.dedicated 8192 -> 3072`**. Anyone running `terraform apply` to "add
-the mount" would not add it *and* would cut that container's RAM from 8 GB to 3 GB. Resolve that
-drift separately, on purpose.
+the mount" would not add it *and* would cut that container's RAM from 8 GB to 3 GB.
+
+**Owner: the self-hosted agent**, told 2026-09-22. Re-check the plan is clean before any apply
+here; do not assume it has been reconciled just because it was reported.
 
 ## The trap this runbook exists to avoid
 
