@@ -335,6 +335,12 @@ that can present as `172.16.1.31` can read the library. 2049 is not port-forward
 Standing check: `bash scripts/check-music-consumers.sh` on LXC 100, which also runs on every
 `scripts/quick-health-check.sh` from the workstation.
 
+### Records that deliberately do NOT exist in Cloudflare
+
+| Name | Where it lives instead | Why |
+|---|---|---|
+| `cortex.deercrest.info` | **UniFi (internal DNS)** | The neocortex memory API (`stacks/selfhosted/neocortex-memory`). Internal-only: LAN and tailnet clients reach it, nothing outside does. A public record — even a grey one pointing at `172.16.1.159` — publishes the name and the internal address for no benefit, so there is nothing in Cloudflare at all. **Damian's call, 2026-09-22**, correcting a grey A record that had been added here first (and which was briefly `88.81.97.90`, i.e. public, before that). **Certificates are unaffected:** Traefik uses the `dns-cloudflare` resolver, which is a DNS-01 challenge over a temporary `_acme-challenge` TXT record — it never needs an A record to exist. |
+
 ### Cloudflare DNS records that are not the default
 
 Most `*.deercrest.info` hosts need no record of their own. Records created explicitly, so a zone
@@ -345,7 +351,6 @@ rebuild can recreate them:
 | `livesync.deercrest.info` | CNAME → `deercrest.info` | proxied (orange, same as `keeper`) | CouchDB for Obsidian LiveSync (`stacks/selfhosted/couchdb`, neocortex v2 TODO-214). If continuous replication misbehaves through the proxy, switch this one record to DNS-only | 2026-09-17, via the Cloudflare API with Traefik's zone DNS token |
 | `pocket.deercrest.info` | CNAME → `deercrest.info` | proxied | Karakeep (`stacks/selfhosted/karakeep`, own login, no Authelia, public sign-up disabled once the admin exists). Renamed from `karakeep.` on 2026-09-17 (no users yet, so nothing to keep). That record was missing, which is why the running stack was unreachable (neocortex v2 TODO-218) | 2026-09-17 |
 | `tv.deercrest.info` | — | **DNS-only** (grey) | see "TV / tuner chain" below | — |
-| `cortex.deercrest.info` | A → `172.16.1.159` | **DNS-only** (grey) | The neocortex memory API (`stacks/selfhosted/neocortex-memory`, neocortex v2 TODO-315). Grey on purpose: this is a **private-only** service and the record resolving to an RFC1918 address off-LAN is the point — an outside connection must time out rather than be proxied. Its acceptance criterion asserts exactly that (`dig` returns the private address, an off-tailnet connection times out, and an inside response carries no `cf-ray`). Orange-clouding it would put a bearer-token API behind Cloudflare's edge and break that test. Hostname chosen by Damian 2026-09-22 (`memory.` → `cortex.`; the zone is unchanged, so Traefik's existing Cloudflare token already covers it) | 2026-09-22 |
 
 ### Services by Host
 - **selfhost (159):** Traefik, Authelia, Sonarr, Radarr, Lidarr, Prowlarr, qBittorrent, Grafana, Dawarich, Open WebUI, Ollama, Immich, FreshRSS, and 60+ others — plus host-level Pulse (above)
@@ -430,14 +435,9 @@ returns valid HDHomeRun JSON. `http://dispatcharr:9191` also works (shared `t3_p
 `tv.deercrest.info` is a **second Traefik router with no authelia**, allow-listing only the XC
 paths (`/player_api.php`, `/panel_api.php`, `/get.php`, `/xmltv.php`, `/live/`, `/timeshift/`,
 `/streaming/`, `/api/channels/logos/`) plus a 30/min rate limit. Everything else on that host
-404s. It is grey-clouded because Cloudflare's proxy breaks long-lived MPEG-TS — so it publishes
-the origin IP. It exists only as a fallback; the TV normally reaches dispatcharr over Tailscale
-and this route can be retired.
-
-> **No longer the only grey-cloud record** (amended 2026-09-22). `cortex.deercrest.info` joined it
-> for the opposite reason: that one is grey because the service is private-only and an outside
-> connection is *meant* to time out, whereas this one is grey to publish a reachable origin. The
-> retirement note below still applies to `tv.` alone.
+404s. It is the **one grey-cloud record** in the estate — Cloudflare's proxy breaks long-lived
+MPEG-TS — so it publishes the origin IP. It exists only as a fallback; the TV normally reaches
+dispatcharr over Tailscale and this route can be retired.
 
 dispatcharr's own `network_access` ACLs are the second layer, and they are effective because
 `get_client_ip` trusts `X-Forwarded-For` from private-range proxies (Traefik), so the **real**
@@ -555,11 +555,8 @@ lighting) near the run. Do **not** reposition the aerial or add amplification.
       aerial channel *only*, capture it at 1–2s polling first — `SymbolQualityPercent` < 100 is the
       smoking gun — and only then consider a 6–10 dB attenuator (less gain, never more).
 - [ ] **Retire `tv.deercrest.info`** — built as a fallback before Tailscale worked; now redundant
-      since TiviMate reaches dispatcharr over the tailnet. It publishes the origin IP, which is the
-      reason to retire it. (It stopped being the estate's *only* grey-cloud record on 2026-09-22,
-      when `cortex.deercrest.info` was added — but that one is grey precisely so it stays
-      unreachable from outside, so it is not a counter-example to this item.) Delete the A record,
-      drop the `dispatcharr-tv` router
+      since TiviMate reaches dispatcharr over the tailnet. It is the estate's only grey-cloud
+      record, so it publishes the origin IP. Delete the A record, drop the `dispatcharr-tv` router
       labels, and return `XC_API`/`STREAMS` to private ranges **plus `100.64.0.0/10`** (omitting the
       Tailscale range would cut off the TV).
 - [ ] **Fix `deinterlace_vaapi` on the Radeon 890M** — ffmpeg exits 251 whenever a Jellyfin client
