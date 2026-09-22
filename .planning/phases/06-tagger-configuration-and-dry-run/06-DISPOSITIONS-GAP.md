@@ -71,8 +71,14 @@ four rows. It holds none here for a structural reason: every round-2 plan's `<ve
 a passing partner in the same transcript. That is a property of how the round was planned, **not**
 a claim that nothing is outstanding. What is outstanding is residue attached to rows that are
 themselves FIXED, and it is carried by name in `deferred-items.md` as `DEF-06-29-01` …
-`DEF-06-29-07`. Reading a zero in that column as "nothing left to drive" would be exactly the
+`DEF-06-29-11`. Reading a zero in that column as "nothing left to drive" would be exactly the
 inversion this register exists to prevent.
+
+Four of those eleven entries are **not** residue of a GC finding at all — they are items round 2
+surfaced that belong to nobody else: a live-secrets exposure on the host, two path-safety
+violations that actually occurred, deployed-host staleness that *looks* like phase fallout, and
+the D-04 no-sentinel arm's misleading path. They are carried here because this is the last plan
+of the round and an item recorded nowhere is an item nobody owns.
 
 **`ACCEPTED` and `CARRIED` are also zero.** No round-2 finding was judged not worth changing, and
 none was deferred instead of fixed. Every one of the seventeen has a commit. (Round 1's single

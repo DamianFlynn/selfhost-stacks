@@ -1022,12 +1022,35 @@ target stops moving is a citation that is stale again by the time the round clos
 
 **Wave 13 — GAP CLOSURE — ROUND 2** *(blocked on Waves 10-12)*
 
-- [ ] 06-29-PLAN.md — the 17-row round-2 disposition register, `06-REVIEW-GAP.md` wired to it, `DEF-06-29-*` entries, and the roadmap and state files told the truth
+- [x] 06-29-PLAN.md — the 17-row round-2 disposition register, `06-REVIEW-GAP.md` wired to it, `DEF-06-29-*` entries, and the roadmap and state files told the truth
 
 **Phase 6 disposition:** **CLOSED WITH ONE OPEN REQUIREMENT — CONF-04**, named, on its Jellyfin half
 only. Criteria 1, 2, 3 and 5 are TRUE and were re-measured from live state at close. Criterion 4
 carries two verdicts that must never be summed. `tank/downloads@pre-phase5` is **NOT** released —
 see Phase 7's entry criteria.
+**Amended 2026-09-22 by plan 06-29 — a second gap-closure round, `ROUND 2`, ran against
+`06-REVIEW-GAP.md`.** That review read round 1's *own* gap-closure changes and found **1 BLOCKER
+and 7 Warnings inside them**; a cross-family adjudication (`gemini-3.1-pro-preview`; `codex` was
+first choice and failed on billing) added two more, for **GC-01 … GC-17**. Plans **06-22 through
+06-28** closed all seventeen — every one `FIXED`, every one with a commit and a driven artifact —
+and plan **06-29** dispositioned them in
+`.planning/phases/06-tagger-configuration-and-dry-run/06-DISPOSITIONS-GAP.md` (**17 FIXED, 0 FIXED
+(undriven), 0 ACCEPTED, 0 CARRIED — 17 total**, reconciling three ways), wiring `06-REVIEW-GAP.md`
+to it. The two that mattered most: **GC-01**, a latent BLOCKER in the script that gates config
+correctness, where `printf | grep -q` under `pipefail` reported a *present* forbidden substring as
+absent above 64 KiB; and **GC-03**, which is **CR-01 reproduced one nesting level in** — the D-04
+vacuity guard tested the count the block *prints* while the block iterated a different set, so a
+green tick over an empty **asserted** set survived the plan written to abolish exactly that. Both
+are closed and driven in both directions. Round 2's residue is carried by name as `DEF-06-29-01`
+… `DEF-06-29-11`, and the part that closes only on the live pilot is owned by Phase 7 entry
+criterion **E12**.
+**This is a record, not a re-close, and no re-verification was performed.** Plan 06-29 did not run
+`/gsd-verify` and claims no verification result. **CONF-04 is not closed** — `REQUIREMENTS.md` is
+untouched, `- [ ] **CONF-04**` stands, its Jellyfin half is still OPEN and entry criterion **E6**
+still owns the discharge. No requirement checkbox moved and **the phase is not declared complete**:
+that is the verifier's call, on a re-verification this plan does not perform. **Recommended before
+the phase closes:** `/gsd-verify 06`, and a fresh code review of **round 2's own changes** — round
+2 exists because round 1 was not re-reviewed until after it was declared closed.
 
 **Research**: not needed — the specific traps are already captured with citations in the research.
 
@@ -1208,6 +1231,36 @@ item nobody owns.)*:
       conflict with committed evidence, recorded in full as `DEF-06-21-01`. E3 is where every other
       Phase-7 behaviour flag is already scheduled to move; move this one with them.
 
+  E12. **Four round-2 hardenings are FIXED but have never run for real, and the pilot is the first
+      thing that exercises them** *(added 2026-09-22 by plan 06-29, carrying gap-closure round 2's
+      residue; recorded in full as `DEF-06-29-05`)*. Round 2 closed all seventeen `GC-NN` findings
+      in `06-REVIEW-GAP.md` — every one with a commit and a driven transcript — but four of those
+      drives are over **synthetic fixtures or local shells**, because the only thing that would
+      drive them for real is a `phase06-oracle.sh --run`, and a run **imports**. (a) The oracle's
+      three destructive programs were **never executed, deliberately** — the fence *text* was
+      driven 23 ways with a bare-glob mutant going red on 11 of 134 cases, and each program is
+      asserted to begin with that exact text, but no `rm` has been observed declining to run. The
+      reason not to drive it is the finding itself: if the fence regressed, the case would become
+      `rm -rf /tmp/p6-x/../../../home`. (b) The fence predicate has **never run under the
+      container's `dash`** — every case used the macOS `/bin/sh`. (c) GC-15's two `dex_cmd
+      sha256sum` sites were driven **as constructed**, by capturing the command string and the argv
+      a bash far side builds; the container never saw them, and a space-bearing `REAL_LIB_DB` is
+      **predicted** (UNKNOWN + exit 3, because `awk`'s `$2` cannot key a whitespace path) rather
+      than measured. (d) GC-05's verdict change — a vacuous D-15 or D-13 now exits **3 UNKNOWN**
+      instead of **1 RED** — was driven through `run_assert` over synthetic fixtures; no real
+      DJ-less or compilation-less sample has been through a live run. **What Phase 7 must do:** on
+      the pilot's first `--run`, confirm both `layer3.before`/`layer3.after` parse and both `awk`
+      keys match, that the fence refuses end to end under the container's dash, and that no
+      `/tmp/p6-mf.*` or `/tmp/p6-taghist.*` survives. **All four fail CLOSED** — a wrong
+      construction refuses a run that would otherwise proceed, never passes one that should fail —
+      which is why they are residue rather than blockers. **Also riding here:** the live arm-1
+      config dump has never been sized (`DEF-06-29-04`), so record `wc -c` of
+      `$WORKDIR/arm1.dump` on the next live `check-beets-config.sh`; that number is the margin GC-01
+      was measured against and it has never been written down. The full finding set and what
+      happened to each of the seventeen are in
+      `.planning/phases/06-tagger-configuration-and-dry-run/06-REVIEW-GAP.md` and
+      `.planning/phases/06-tagger-configuration-and-dry-run/06-DISPOSITIONS-GAP.md`.
+
 **Plans**: TBD
 **Research**: not needed — the diff is a comparison over two `ffprobe` datasets, and the undo path
 is ZFS rollback plus a documented `incremental` state reset. The compilation and multi-disc cases
@@ -1311,7 +1364,7 @@ Phase 7. Plans within a phase run sequentially.
 | 3. Tagger Spike | 11/11 | Complete    | 2026-09-04 |
 | 4. Collapse to One Tagger | 16/16 | In Progress| All 16 plans executed (gap-closure 04-14/15/16 included); phase-level verification pending. Criterion 3 remains OPEN: across windows 1 and 2, five real music jobs all returned UNPROVEN `no-attributed-pre` — no PRE-HOOK snapshot is publishable while `direct_unpack` drains the tree — while every side-effect condition held for the third window running. 04-16 recorded `window 2: OPEN` under an interim-status heading in `beets.md`. Closing criterion 3 is now a decision, not a measurement |
 | 5. Inbox Structure and the Junk Gate | 11/11 | Complete    | 2026-09-19 |
-| 6. Tagger Configuration and Dry Run | 28/29 | In Progress| Original 14/14 closed 2026-09-21 with **1 open requirement: CONF-04 is OPEN on its Jellyfin half**, a named Phase 7 entry criterion (E6). Criteria 1, 2, 3 and 5 are TRUE and were all re-measured from live state at close, not carried forward from plan summaries. Criterion 4 carries two verdicts — Music Assistant discharged, Jellyfin pending a re-probe — which are recorded separately and **must never be summed**. `tank/downloads@pre-phase5` is NOT released (D-32, Phase 7 entry criterion E4). Closure: `stacks/selfhosted/arrs/beets.md` § *Phase 6 closed 2026-09-21*. **Gap closure 06-15..06-21 in flight since 2026-09-22** for verification gap CR-01; waves 6, 7 and 8 merged (06-15/06-18/06-20, 06-16/06-19, 06-17). **Two deferred operator consequences, both intended:** the D-04 block reports UNKNOWN on the live estate, and once this phase is pushed and the host pulls, `quick-health-check.sh` exits non-zero on the consumers block until E6 discharges CONF-04. Both clear on the same `git push` + host `git pull --ff-only` the vendored-drift block is already waiting on — operator's call; see 06-16-SUMMARY.md and 06-17-SUMMARY.md. **Gap closure dispositioned 2026-09-22 (plan 06-21):** `06-VERIFICATION.md` scored **5/6 must-haves**, the one failure being D-04's vacuous "no bare `beet` invocation" assertion; plans **06-15 through 06-21** closed it, and **all 24 findings** in `06-REVIEW.md` now carry an explicit disposition in `06-DISPOSITIONS.md` (**19 FIXED, 4 FIXED (undriven), 0 ACCEPTED, 1 CARRIED**). CR-01's residue and WR-09 are carried into Phase 7 entry criteria **E10** and **E11**. **This is a record, not a re-close:** no CONF-04 verdict, no requirement checkbox and no status wording changed — CONF-04's Jellyfin half is still OPEN and **E6** still owns the discharge **Gap closure ROUND 2 in flight since 2026-09-22** against `06-REVIEW-GAP.md` (GC-01..GC-17): waves 1-3 merged — 06-22 GC-01/GC-13, 06-23 GC-03/GC-16, 06-24 GC-02/GC-06, 06-25 GC-08, 06-26 GC-17/GC-14/GC-09, 06-27 GC-05/GC-15/GC-12/GC-07/GC-11, 06-28 GC-04/GC-10. GC-01 (the BLOCKER) and GC-03 are both closed and driven in both directions. Wave 4 (06-29 dispositions) outstanding; phase remains NOT complete. |
+| 6. Tagger Configuration and Dry Run | 29/29 | In Progress| Original 14/14 closed 2026-09-21 with **1 open requirement: CONF-04 is OPEN on its Jellyfin half**, a named Phase 7 entry criterion (E6). Criteria 1, 2, 3 and 5 are TRUE and were all re-measured from live state at close, not carried forward from plan summaries. Criterion 4 carries two verdicts — Music Assistant discharged, Jellyfin pending a re-probe — which are recorded separately and **must never be summed**. `tank/downloads@pre-phase5` is NOT released (D-32, Phase 7 entry criterion E4). Closure: `stacks/selfhosted/arrs/beets.md` § *Phase 6 closed 2026-09-21*. **Gap closure 06-15..06-21 in flight since 2026-09-22** for verification gap CR-01; waves 6, 7 and 8 merged (06-15/06-18/06-20, 06-16/06-19, 06-17). **Two deferred operator consequences, both intended:** the D-04 block reports UNKNOWN on the live estate, and once this phase is pushed and the host pulls, `quick-health-check.sh` exits non-zero on the consumers block until E6 discharges CONF-04. Both clear on the same `git push` + host `git pull --ff-only` the vendored-drift block is already waiting on — operator's call; see 06-16-SUMMARY.md and 06-17-SUMMARY.md. **Gap closure dispositioned 2026-09-22 (plan 06-21):** `06-VERIFICATION.md` scored **5/6 must-haves**, the one failure being D-04's vacuous "no bare `beet` invocation" assertion; plans **06-15 through 06-21** closed it, and **all 24 findings** in `06-REVIEW.md` now carry an explicit disposition in `06-DISPOSITIONS.md` (**19 FIXED, 4 FIXED (undriven), 0 ACCEPTED, 1 CARRIED**). CR-01's residue and WR-09 are carried into Phase 7 entry criteria **E10** and **E11**. **This is a record, not a re-close:** no CONF-04 verdict, no requirement checkbox and no status wording changed — CONF-04's Jellyfin half is still OPEN and **E6** still owns the discharge **Gap closure ROUND 2 in flight since 2026-09-22** against `06-REVIEW-GAP.md` (GC-01..GC-17): waves 1-3 merged — 06-22 GC-01/GC-13, 06-23 GC-03/GC-16, 06-24 GC-02/GC-06, 06-25 GC-08, 06-26 GC-17/GC-14/GC-09, 06-27 GC-05/GC-15/GC-12/GC-07/GC-11, 06-28 GC-04/GC-10. GC-01 (the BLOCKER) and GC-03 are both closed and driven in both directions. **Round 2 COMPLETE 2026-09-22 (plan 06-29):** all four waves merged and **all 17 findings GC-01..GC-17 carry an explicit disposition** in `06-DISPOSITIONS-GAP.md` (**17 FIXED, 0 FIXED (undriven), 0 ACCEPTED, 0 CARRIED**, reconciling three ways to 17), with `06-REVIEW-GAP.md` wired to it, residue carried as `DEF-06-29-01`..`DEF-06-29-11`, and the undriven-until-the-pilot part owned by new Phase 7 entry criterion **E12**. Three corrections recorded rather than absorbed: the adjudication crossed **GC-15's label with GC-17's** (a reader following its summary line looks in the wrong file); **GC-16's BLOCKER justification was FALSE over a TRUE defect** (regraded WARNING); and the five UNVERIFIABLE rows are **not FALSE** — the evidence was never supplied to the reviewer, all five were later verified, and three proved *wider* than described. **Still a record, not a re-close:** 06-29 ran no `/gsd-verify` and claims no verification result; no requirement checkbox moved; CONF-04's Jellyfin half is still OPEN with **E6** owning it; phase remains NOT complete pending re-verification. |
 | 7. Pilot — 12 Albums End to End | 0/TBD | Not started | - |
 | 8. Close the Inflow | 0/TBD | Not started | - |
 | 9. Bucket A in Batches | 0/TBD | Not started | - |

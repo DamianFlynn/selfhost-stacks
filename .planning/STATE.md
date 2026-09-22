@@ -28,9 +28,9 @@ pipeline that someone owns.
 
 ## Current Position
 
-Phase: 06 (tagger-configuration-and-dry-run) — gap-closure round 2 EXECUTING
-Plan: 21 of 29 executed; round 2 (06-22..06-29, waves 1-4) is running now. Round 1
-(06-15..06-21, waves 6-9, 2026-09-22) closed CR-01 and
+Phase: 06 (tagger-configuration-and-dry-run) — gap-closure round 2 EXECUTED; **RE-VERIFICATION
+OUTSTANDING**
+Plan: 29 of 29 executed. Round 1 (06-15..06-21, waves 6-9, 2026-09-22) closed CR-01 and
 dispositioned all 24 findings of `06-REVIEW.md`; re-verification is **6/6, status passed**
 (`06-VERIFICATION.md`, gaps_remaining: [], regressions: []).
 **The phase is NOT complete.** A code review of the round-1 changes themselves
@@ -45,8 +45,40 @@ defect class round 1 existed to remove. Two confirmed independently by the orche
 - **GC-03** `quick-health-check.sh:1791` — the vacuity guard tests `D04_N_EXE` but the loop
   iterates `D04_INVOKE_ASSERT` and the tick prints `$D04_N_ASSERT of $D04_N_EXE`, so an empty
   ASSERTED set still prints a green tick. **CR-01 reproduced one nesting level in.**
-Round 2 is being planned against `06-REVIEW-GAP.md`. Operator asked for a non-Anthropic
-reviewer on it — `codex`, `gemini`, `opencode` are installed; `gh copilot` extension is NOT.
+A cross-family adjudication (`gemini-3.1-pro-preview`; `codex` failed on billing, `opencode`
+installed, `gh copilot` extension NOT) added GC-16 and GC-17, for **GC-01..GC-17**.
+
+**ROUND 2 IS DONE — 2026-09-22. Plans 06-22..06-28 closed all seventeen findings and plan 06-29
+dispositioned them in `06-DISPOSITIONS-GAP.md`: 17 FIXED, 0 FIXED (undriven), 0 ACCEPTED,
+0 CARRIED, reconciling three ways to 17.** `06-REVIEW-GAP.md` is WIRED to that register. Both
+headline findings are closed **and driven in both directions**: GC-01's self-test now carries a
+71,013-byte case proven to MISS against the pre-fix code and CATCH against the fix, and GC-03's
+condition P was driven pre-fix (`✅ … 0 of 5`, exit 0) and post-fix (`⚠️ UNKNOWN … (5 of 5)`,
+exit 1). Instruments at HEAD: `phase06-oracle.sh --self-test` exit 0 / **134 cases**,
+`check-beets-config.sh --self-test` exit 0 / **7 cases**, `phase06-incremental-control.sh
+--self-test` exit 0, `bash -n` clean on all four. D-04's **pinned** vector is unmoved at
+**10 / 8 / 3 / 5 / 2**; raw/comment-stripped read **202 / 101** at HEAD and are deliberately
+**not pinned anywhere** — writing them moves them, which is GC-10.
+**⚠ RE-VERIFICATION HAS NOT BEEN PERFORMED.** Plan 06-29 records dispositions; it did **not** run
+`/gsd-verify` and claims **no** verification result. **Do not read "round 2 complete" as "phase
+complete"** — that is the verifier's call. **Run `/gsd-verify 06` next**, and consider a fresh
+code review of **round 2's own changes** before the phase closes: round 2 exists *because* round 1
+was declared closed and verified 6/6 before anyone read its own diff, and it still carried a
+BLOCKER. Verification asks whether the must-haves were met; review asks whether the code that
+meets them is correct.
+**Still open, unchanged by round 2:** CONF-04's Jellyfin half (Phase 7 entry criterion **E6**),
+CR-01's residue (**E10**), WR-09 (**E11**), and now round 2's undriven-until-the-pilot residue
+(**E12**, `DEF-06-29-05`). `REQUIREMENTS.md` was **not** touched and no checkbox moved.
+Round 2's residue is carried by name as `DEF-06-29-01`..`DEF-06-29-11` in the phase's
+`deferred-items.md`; `DEF-06-21-07` was **driven and PASSES** (closed by 06-26).
+**⚠ Three items that are NOT this phase's and must not be lost:** `DEF-06-29-09` — three LIVE
+secrets (`MEILI_MASTER_KEY`, `NEXTAUTH_SECRET`, `OPENAI_API_KEY`) sit un-rotated on LXC 100 in
+`stacks/selfhosted/karakeep/.env.pre-pocket`; the repo-side hole is closed (`456ad06` widened the
+ignore to `**/.env.*`) but **the keys are not rotated**. `DEF-06-29-01` — 23 lines / 24 pipelines
+of the `| grep -q`-under-`pipefail` shape remain estate-wide, **five inverted**, and anyone adding
+`set -euo pipefail` to `quick-health-check.sh` arms six more at once. `DEF-06-29-11` — the host is
+at pre-Phase-6 `c67d497`, **nothing in this phase has been pushed**, and three live reds are that
+staleness rather than round-2 fallout.
 
 Previous: Phase 05 (inbox-structure-and-the-junk-gate) — **COMPLETE, closed 2026-09-19 at 4/4
 criteria TRUE**, 11 of 11 plans (fence taken, `_inbox` created, D-21 inode
@@ -111,11 +143,15 @@ it now matches a real song the split moved into `Vol 066`; assert the named path
 before Phase 6 signs off** — it is the only undo for 4,750 renames, 751 tag writes and 26,005
 chowns, and it is **not** a clean undo.
 
-Status: Phase 06 gap-closure round 1 executed and verified 6/6 (2026-09-22); round 2 EXECUTING
-against `06-REVIEW-GAP.md` (GC-01 blocker + 7 warnings in round 1's own code). Still 1 open
+Status: Phase 06 gap-closure round 1 executed and verified 6/6 (2026-09-22); round 2 **EXECUTED**
+against `06-REVIEW-GAP.md` (GC-01 blocker + 7 warnings in round 1's own code, plus GC-16/GC-17
+from the cross-family adjudication) — all 17 closed and dispositioned in `06-DISPOSITIONS-GAP.md`
+by plan 06-29. Still 1 open
 requirement (CONF-04, Jellyfin half — owned by Phase 7 entry criterion E6, NOT closed here).
-**Do NOT mark Phase 06 complete until round 2 lands** — GC-03 is CR-01 one nesting level in,
-so closing on "CR-01 fixed" would be a false close
+**Round 2 has landed, and that is still NOT a completion** — GC-03 was CR-01 one nesting level in,
+so closing on "CR-01 fixed" would have been a false close; closing on "round 2 fixed it" without
+re-verifying is the same shape one level further out. **`/gsd-verify 06` has NOT been run since
+round 2.**
 Do NOT run with `--auto`/`--chain` — four
 gates are `checkpoint:decision`, which auto-selects the first option under auto-mode.
 

@@ -655,3 +655,42 @@ attached to a true defect. Grep-verify every citation before planning against it
 that four consecutive plans in this phase already had to learn about stale citations.
 
 _Adjudicated: 2026-09-22. Reviewer: `gemini-3.1-pro-preview`. Codex unavailable (no credits)._
+
+---
+
+## Dispositioned 2026-09-22 — this file is now WIRED
+
+*Appended by plan 06-29. **Nothing above this line was edited.** Every finding's text, every
+`file:line` reference, the `findings:` frontmatter counts and the adjudication with its two
+in-band corrections are the record of what was found on 2026-09-22, and that record stands —
+including where a later measurement refined it.*
+
+**All seventeen findings carry an explicit disposition**, recorded in:
+
+> **`.planning/phases/06-tagger-configuration-and-dry-run/06-DISPOSITIONS-GAP.md`**
+
+with one row per finding ID (`GC-01` … `GC-17`) in ID order, each citing the plan, the commit and
+the artifact holding the driven transcript, and each carrying a **provenance clause** naming who
+confirmed the finding and how. Summary: **17 FIXED, 0 FIXED (undriven), 0 ACCEPTED, 0 CARRIED —
+17 total.** The counts reconcile three ways: this file's frontmatter 1 + 7 + 7 = 15, plus GC-16
+and GC-17 = **17**; the adjudicated classes 1 + 9 + 7 = **17**; the dispositions 17 + 0 + 0 + 0 =
+**17**.
+
+The fixes were made by gap-closure plans **06-22, 06-23, 06-24, 06-25, 06-26, 06-27 and 06-28**;
+plan **06-29** wrote the register and wired it. Round 2's residue is carried by name as
+`DEF-06-29-01` … `DEF-06-29-11` in `deferred-items.md`, and ROADMAP Phase 7 entry criterion
+**E12** carries the part that closes only on the live pilot.
+
+**Read the register, not the summary line above it, for GC-15.** The adjudication's original
+summary paragraph crossed GC-15's label with GC-17's; the `> CORRECTION` block above records that,
+and the register restates it, because a reader following the uncorrected line looks for GC-15 in
+the wrong file. **GC-16's BLOCKER justification was false and its defect is true** — both halves
+are recorded rather than only the grade. And the **five UNVERIFIABLE rows are not FALSE**: the
+evidence was never supplied to the reviewer, all five were subsequently verified, three turned out
+to be *wider* than described, and this file's own verdict table records **zero** false findings.
+
+**This is a record, not a re-close.** No `/gsd-verify` was run by plan 06-29 and no verification
+result is claimed. **CONF-04 is not closed**, `REQUIREMENTS.md` is untouched, and ROADMAP entry
+criterion **E6** still owns the Jellyfin half.
+
+_Dispositioned: 2026-09-22 by plan 06-29_

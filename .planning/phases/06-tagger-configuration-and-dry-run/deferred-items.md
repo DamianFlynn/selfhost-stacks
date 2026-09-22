@@ -215,6 +215,26 @@ back to back do not collide on them.
 **Urgency:** hygiene on a single-tenant container. The risk it closes is a stale root-owned
 leftover turning a read into a BLIND, which fails closed.
 
+**⚠ DESCRIPTION CORRECTED 2026-09-22 (round 2, plan 06-27; recorded here by plan 06-29). The
+substance, the disposition and the driving condition above are UNCHANGED — only what the run tag
+is *said to buy* was wrong.** Two corrections:
+
+1. **The PID is a label, not a namespace, and it is the wrong process's.** `$$` is the *macOS
+   workstation's* bash PID, not anything inside the container whose `/tmp` is world-writable; PIDs
+   are small, sequential and enumerable, and they recycle. The property that actually protects an
+   in-container scratch name is `mktemp`'s **O_EXCL creation**, not the name being unguessable —
+   the single threat-model decision plan 06-25 recorded for both sibling instruments
+   (`artifacts/06-25-incremental-tempnames.txt` § 4). The oracle's comment now credits the step-1
+   probe, which is what genuinely refuses a pre-placed name; the run tag narrows only the TOCTOU
+   window between that probe and the step-5 `mkdir`. That was round-2 finding **GC-07**.
+2. **The reason the leaf names were not minted here is SCOPE, not a dependency conflict.** An
+   earlier reading held that renaming them would invalidate committed proof artifacts. That is
+   true of the **directory** `/tmp/p6` — pinned by the WR-07 fence allow-list, the precheck, the
+   cleanup assertion and the committed 06-11 artifacts — and **false of the leaves**:
+   `artifacts/06-11-oracle-run.txt` still quotes the *pre-06-18* names `/tmp/p6/lib.db` and
+   `/tmp/p6/state.pickle`, so plan 06-18 already renamed them once and invalidated nothing.
+   Recorded so a future plan that mints them does not inherit a fabricated obstacle.
+
 ---
 
 ## DEF-06-21-03 — the oracle's dirty-destination cleanup text has never been printed
@@ -317,7 +337,7 @@ protects the fix for the phase's only Critical finding.
 
 ---
 
-## DEF-06-21-07 — the new `quick-health-check.sh` exit-3 arm's heading anchor guard is undriven
+## DEF-06-21-07 — ✅ DRIVEN AND PASSING 2026-09-22 (closed) — the `quick-health-check.sh` exit-3 arm's heading anchor guard
 
 **Found during:** plan 06-21, task 2, reading plan 06-17's NOT-DRIVEN register (item N-3).
 **Disposition:** residue of `WR-03`, which is `FIXED`. Plan 06-17 nominated this itself as *"the
@@ -338,6 +358,26 @@ rather than printed counts.
 
 **Urgency:** it needs no estate contact — `CONSUMERS_SCRIPT` exists precisely so this is driveable
 from a scratch copy.
+
+**✅ DRIVEN 2026-09-22 by plan 06-26, task 2, commit `33ed08b` — and it PASSES.** The stated
+condition was executed exactly as written: a stub whose `📊 6. Summary` heading is renumbered to
+`📊 7.`, reached through `CONSUMERS_SCRIPT`, with no estate contact beyond a `/tmp` stub. The arm
+reported
+
+```
+⚠️ UNKNOWN — the audit exited 3 but its '📊 6. Summary' block was not found
+```
+
+and printed **no counts** — a refusal where a wrong number would belong. **Not a new finding:** it
+behaves as plan 06-17 designed it. Residue of `WR-03`, which is `FIXED`; this entry is **closed**.
+Evidence: `artifacts/06-26-qhc-knobs-and-tail.txt`. Recorded by plan 06-29, which owns this file
+for round 2.
+
+**Note for the register:** GC-17's fourth site mattered here. Before plan 06-26 quoted
+`bash $CONSUMERS_SCRIPT`, a `CONSUMERS_SCRIPT` value containing a space exited **127** and landed
+in the generic ❌ BROKEN arm — so the exit-3 arm, the branch this knob exists to make driveable,
+**could not be reached at all**. A knob whose only purpose is to make a branch driveable is
+worthless if the knob's own value cannot survive the transport.
 
 ---
 
@@ -383,3 +423,435 @@ what it asserts, never by relaxing it.
 
 **Why it is recorded rather than fixed:** there is no artifact in this repository to change — the
 defect is in how plans are written. It belongs in front of whoever plans the next phase.
+
+**⚠ CONFIRMED FOUR MORE TIMES IN ROUND 2**, with new shapes. See `DEF-06-29-07`, which extends
+this entry rather than restating it.
+
+---
+
+# Round 2 (2026-09-22) — `DEF-06-29-*`
+
+*Written by plan 06-29, the last plan of gap-closure round 2. Entries 01–07 are residue of rows
+that are themselves `FIXED` in `06-DISPOSITIONS-GAP.md`. Entries 08–11 are items round 2 surfaced
+that belong to no GC finding and to no other plan; they are here because an item recorded nowhere
+is an item nobody owns.*
+
+## DEF-06-29-01 — 23 lines / 24 pipelines of `… | grep -q` under `pipefail` remain across the estate's scripts, FIVE of them inverted
+
+**Found during:** plan 06-22, task 3, inventorying the GC-01 shape repo-wide rather than fixing
+two sites and forgetting the rest (2026-09-22).
+**Disposition:** residue of `GC-01`, which is `FIXED`. **Inventoried, not swept.**
+**Inventory:** `artifacts/06-22-pipefail-141.txt`, with file, line, provenance, size class and
+failure direction recorded per site.
+
+**How this differs from `DEF-06-21-08`, which must not be confused with it.** `DEF-06-21-08`
+records this shape as a **planner-side** defect in plan `<verify>` blocks — text that is executed
+once and thrown away. **This entry is about SHIPPED CODE** in the estate's health scripts, which
+runs unattended and whose verdicts an operator acts on. Same mechanism, different blast radius,
+different owner.
+
+**The mechanism, measured twice independently on darwin 27.0.0** (plan 06-22 in
+`check-beets-config.sh`, plan 06-24 in `phase06-oracle.sh`, different needles and haystacks):
+`grep -q` exits on first match, the upstream `printf` takes SIGPIPE and exits **141**, `pipefail`
+hands 141 to the pipeline, and the `if` evaluates **false**. Clean at 8/16/32/48/56 KiB;
+**141 at 64/96/128 KiB**. It is **position-dependent** — a match near the top is missed, one near
+the bottom is found.
+
+**25 of 29 scripts under `scripts/` set `pipefail` for their own shell.** 28 lines / 29 pipelines
+carried the shape; 5 were closed by this round (2 by 06-22, 3 by 06-24). **The remainder is 23
+lines / 24 pipelines.**
+
+**The five that fail in the DANGEROUS direction** — toward a false green, or toward the
+destructive answer. A *positive* assertion failing to 141 is a false RED: noisy and safe. An
+**inverted** one — where a grep *match* is the failure case — is a false GREEN:
+
+| site | why it matters |
+|---|---|
+| `check-jellyfin-transcode.sh:490` | match → `fail`; a 141 reports `/data/transcode` gone when it is present |
+| `check-jellyfin-transcode.sh:513` | match → `fail`; **the only remaining site whose input is unbounded** (`docker volume ls -q`, ~1,008 volumes to the ceiling) |
+| `check-music-consumers.sh:939` | match → `export_fail`; a 141 reports `fsid=` absent when it is set |
+| `spike03-image-headroom.sh:316` / `:317` | match → PROTECT; **a 141 drops a *referenced* image into the reap list** |
+| `spike03-image-headroom.sh:408` | match → `fail` |
+
+**Why a sweep was not done inside a gap-closure round.** Three of the affected scripts
+(`check-jellyfin-transcode.sh`, `check-music-consumers.sh`, `check-music-freeze.sh`) are folded
+into `scripts/quick-health-check.sh`, the estate's single health entry point. Editing the health
+path's semantics inside a round whose mandate is *"close these seventeen findings and change
+nothing else"* is the wrong trade — it would ship unreviewed changes to the instrument that
+reports whether everything else is working. The shape was inventoried with its failure direction
+per site so the sweep can be planned rather than improvised.
+
+**Condition that would drive it:** feed each site an input above the 64 KiB pipe buffer with the
+needle on the **first** line, and confirm the assertion still fires. `check-jellyfin-transcode.sh:513`
+is the one to do first: it is inverted **and** its input is unbounded, so it is the only site where
+the threshold can be crossed by the estate growing rather than by a deliberate fixture.
+
+**⚠ HAZARD WORTH NAMING EXPLICITLY, because it is a trap for the next person tidying this file:
+`scripts/quick-health-check.sh` carries SIX instances of the shape and they are correct today
+ONLY because that file has no local `set` line at all** — measured, `grep -cE '^[[:space:]]*set '`
+returns **0**. **Anyone "tightening" it by adding `set -euo pipefail` arms all six at once.** That
+correctness is a property of an absent line, not of a control, which is exactly why it is written
+down.
+
+**Urgency:** latent and size-dependent. Not urgent today; it becomes urgent silently, which is the
+worst property a defect can have. The two most dangerous sites are in the image-reaper, where the
+failure direction is *delete something that is in use*.
+
+---
+
+## DEF-06-29-02 — a ninth stale `file:line` citation survives in `quick-health-check.sh`
+
+**Found during:** plan 06-28, task 1, enumerating cross-file references (2026-09-22). Recorded in
+that plan's SUMMARY as **NEW-06-28-01**; independently confirmed at HEAD by the orchestrator and
+again by plan 06-29.
+**Disposition:** residue of `GC-04`, which is `FIXED`.
+
+`scripts/quick-health-check.sh` cites `scripts/check-music-freeze.sh:144` for
+`TAGGER_CENSUS_PROMOTED=1`. **Line 144 is an unrelated comment about the criterion-1 row; the
+assignment is at `:160`.** Re-measured at HEAD `23b2b82` with `/usr/bin/grep`: the citation sits at
+`quick-health-check.sh:27`, and `TAGGER_CENSUS_PROMOTED=1` is at `check-music-freeze.sh:160`.
+
+**Why it was reported rather than fixed.** `quick-health-check.sh` is not in plan 06-28's
+`files_modified`; plan 06-26 owned it in the same round, and **three** round-2 plans landed in it
+(06-23, 06-26 and, at the tail, 06-26 again). Editing a fourth agent's file to repair a comment is
+how a round produces a merge conflict over a non-functional change. Consistent with how 06-26 and
+06-27 handled their own out-of-scope discoveries.
+
+**No functional impact:** nothing asserts on the citation.
+
+**Condition that would drive it — and it is cheap:** the replacement anchor is **already
+verified**. `TAGGER_CENSUS_PROMOTED=1` returns exactly **1** hit in the target, so the assignment
+is its own unique, single-line anchor. Replace `check-music-freeze.sh:144` with a grep instruction
+for that token, and re-run `grep -c` in the target to confirm it still resolves.
+
+**Urgency:** cosmetic in isolation, and this project's known plan-failure mode in aggregate —
+`DEF-06-21-08` records citations going stale in four consecutive plans, and 06-28 had to re-anchor
+nine of them. Fold it into whatever next edits that file.
+
+---
+
+## DEF-06-29-03 — the oracle's three fence copies are protected by a check that FORBIDS the DRY fix
+
+**Found during:** plan 06-24, running its own verification (2026-09-22).
+**Disposition:** residue of `GC-02`, which is `FIXED`. **A latent conflict in a committed
+acceptance check, not a defect in shipped code.**
+
+Plan 06-24's verification asserts that the narrow `[!A-Za-z0-9._-]*` fence predicate appears at
+**five or more** sites, while the plan's own comment beside it says *"four sites"* —
+self-contradicting on its face. The shipped resolution is **three literal fence copies** (two
+outer + three inner = 5 sites), with the drift risk closed by an **executed byte-equality case**
+asserting the two stamp copies identical and each destructive program asserted to begin with the
+fence text the self-test drove.
+
+**The trap:** sharing one fence text between the two stamp programs — which would make drift
+**structurally impossible**, strictly stronger than testing for it — yields **four** sites and
+**fails that check**. So a future plan that legitimately de-duplicates these fences will trip an
+acceptance criterion written to protect them.
+
+**Why it is recorded rather than fixed:** the count is a *proxy* for "the narrow class is
+everywhere it needs to be". Rewriting a committed plan's verification after the fact is not this
+plan's to do, and silently relaxing the number would remove the only thing standing between a
+future edit and a bare glob adjacent to an `rm -rf`.
+
+**Condition that would drive it:** any plan that aliases `STAMP_RM_FENCE_SH` to
+`STAMP_WRITE_FENCE_SH` (or otherwise shares the text). It must replace the site-count check with a
+predicate over the property actually wanted — *every* `rm`-adjacent fence resolves to the narrow
+class — rather than over the number of textual copies.
+
+**Urgency:** none today; it fires only when someone does the right thing. That is precisely the
+kind of trap worth writing down, because it punishes an improvement and the punishment looks like
+a regression.
+
+---
+
+## DEF-06-29-04 — the LIVE arm-1 config dump has never been sized, so whether GC-01 was firing against the estate is unknown
+
+**Found during:** plan 06-22, task 1, and named in that plan's NOT-DRIVEN register (2026-09-22).
+**Disposition:** residue of `GC-01`, which is `FIXED`. **The mechanism is gone either way** — this
+is about the historical record, not about current exposure.
+
+`GC-01` states the mechanism is proven but that *"whether it fires against the live estate today
+is unconfirmed and is size-dependent"*. `$raw` is the whole arm-1 server-committed config dump — a
+multi-line YAML/JSON dump that grows with every beets release and every plugin enabled. Plan 06-22
+**removed the pipeline**, so no size can now produce a false negative. It did **not** measure the
+dump, because the plan made no estate contact by design: reaching it needs ssh to LXC 100 and a
+`docker exec` into `beets-flask`.
+
+**Why this is worth a line at all:** the review's brief recorded one instance of this shape
+measured at **~17 % below the 64 KiB ceiling**. If the live dump is in that band, GC-01 was a
+BLOCKER about to start firing rather than a latent one — and that is a different sentence to write
+in the phase's history than the one currently written.
+
+**Condition that would drive it:** on the next live run of `scripts/check-beets-config.sh`, record
+`wc -c` of `$WORKDIR/arm1.dump`. **That number is the margin, and it has never been written down.**
+
+**Urgency:** none operationally — the fix does not depend on the answer. Record it the next time
+someone is in there, and do not make a trip for it.
+
+---
+
+## DEF-06-29-05 — round 2's undriven residue closes on Phase 7's live pilot and on nothing else
+
+**Found during:** plans 06-24, 06-25, 06-27, reading their own NOT-DRIVEN registers (2026-09-22).
+**Disposition:** residue of `GC-02`, `GC-05`, `GC-08` and `GC-15`, all of which are `FIXED`.
+**Also carried by ROADMAP Phase 7 entry criterion E12.**
+
+Four items, grouped because they share one driving condition — a real `--run`, which **imports**,
+and importing is out of scope for a paper phase:
+
+1. **The oracle's three destructive programs were never executed — deliberately.** What was driven
+   is the fence *text* (23 self-test cases, refusals and accepting partners, with a bare-glob
+   mutant build going red on 11 of 134), plus an assertion that each program literally *begins
+   with* that text. The step from "the fence refuses" to "the program refuses" is sound but
+   **structural**; no `rm` has been observed declining to run. **The reason for not driving it is
+   the finding itself:** if the fence regressed, a case driving `SCRATCH=/tmp/p6-x/../etc` against
+   `CLEANUP_PROG` would become `rm -rf /tmp/p6-x/../../../home`. A self-test must not be able to
+   destroy the machine it is proving safe.
+2. **The fence predicate has never run under the container's `dash`.** All cases were driven with
+   the macOS `/bin/sh` (bash in sh-compat mode). The text is deliberately POSIX and uses no
+   bash-only construct, and `phase06-incremental-control.sh` has carried the same shape against
+   that dash for several plans — **corroboration, not proof**.
+3. **GC-15's two `dex_cmd sha256sum` sites as SENT.** What was driven is the constructed command
+   string and the argv a bash far side builds from it; the container never saw it. A `REAL_LIB_DB`
+   carrying a space is **predicted** — UNKNOWN + exit 3 at `[ -n "$LIB_SHA_BEFORE" ]`, because
+   `awk`'s `$2` cannot key a whitespace path — and predicted is not measured.
+4. **GC-05's live vacuity arms.** The verdict change (vacuous D-15 / D-13 now exit **3 UNKNOWN**
+   rather than **1 RED**) was driven through `run_assert` over synthetic fixtures including the
+   counters. A real DJ-less or compilation-less **sample** has not been through a live run.
+
+**Condition that would drive all four:** the next real `phase06-oracle.sh --run`, which Phase 7's
+pilot import is the first thing to perform. Confirm: both `layer3.before`/`layer3.after` parse and
+both `awk` keys match; the fence refuses end to end under the container's dash; and no
+`/tmp/p6-mf.*` or `/tmp/p6-taghist.*` survives the run.
+
+**Urgency:** every one of these fails **closed** — a wrong construction refuses a run that would
+otherwise proceed. None can produce a false green. That is why they are residue rather than
+findings, and why they wait for the pilot rather than justifying a run of their own.
+
+---
+
+## DEF-06-29-06 — thirteen cross-file `file:line` citations resolve TODAY, which is the property that expires
+
+**Found during:** plan 06-28, task 1 (2026-09-22).
+**Disposition:** residue of `GC-04`, which is `FIXED`. **Recorded deliberately rather than
+silently passed over.**
+
+Of the 23 cross-file references plan 06-28 enumerated, **9 were stale and repaired with proven
+anchors; 13 resolve correctly and were left alone**, each judgement recorded in
+`artifacts/06-28-citations-and-counts.txt`. They are line numbers. They **will** rot again — this
+round alone moved the oracle's cited positions by ~300 lines beyond what the plan predicted, and
+moved one `beets.md` register row from *correct at planning* to *rotted at execution*.
+
+**The shape that makes this survive review:** one of the repaired nine was a cited **pair**
+(`CLAUDE.md:152` and `PROJECT.md:187`) where **one half still worked**. A spot-check of either
+citation had a 50 % chance of clearing a half-rotted reference. **Checking one of a cited pair does
+not clear the pair.**
+
+**Condition that would drive it:** re-resolve all thirteen at any later commit and count how many
+still land on their claimed content. Better: convert them to greppable anchors using 06-28's
+method — `grep -c` the candidate anchor **in the target** for uniqueness and the single-line
+property **before** writing it into the citing file.
+
+**Urgency:** low individually, systemic in aggregate. The argument for anchoring is that a stale
+citation is checked once and then trusted, and this phase has now produced that failure five
+separate times (`DEF-06-21-08`, GC-04, `DEF-06-29-02`, and both halves of the pair above).
+
+---
+
+## DEF-06-29-07 — SEVEN wrong-premise `<verify>` checks across eight plans, plus a template defect five agents hit independently
+
+**Found during:** every plan of round 2 (2026-09-22).
+**Disposition:** recorded. This is a **planner-side** finding with no code to change. It
+**extends** `DEF-06-21-08` rather than restating it — that entry catalogued round 1's six shapes;
+these are seven **new** shapes, from plans written after round 1's lesson was recorded.
+
+**That is the finding: the shapes keep being new.** Round 1 concluded with a catalogue and a cure;
+round 2's plans were written with that catalogue available and produced seven fresh instances
+anyway. A catalogue of known shapes does not generalise to the class.
+
+**The seven, each reported by its executing plan rather than absorbed:**
+
+1. **A wrong grep method** (06-22) — the plan's comment filter classified `quick-health-check.sh`
+   as a `pipefail` setter, because three of its mentions sit on **executable** lines inside remote
+   command strings. Fixed by anchoring to `^[[:space:]]*set `. *Method wrong, conclusion right.*
+2. **A wrong "next free letter"** (06-23) — the plan said "the next free letter after L"; measured,
+   **A–O are all taken**, because an earlier notice used M, N and O out of alphabetical order.
+   Following the plan literally would have produced a second condition M. Used **P**, and recorded
+   the grep that finds the next free letter.
+3. **A non-existent anchor section** (06-24) — the plan said to put new cases "beside the existing
+   WR-07 fence cases". **There were none.** 111 self-test cases and not one touched either fence
+   layer; the 06-18 fence shipped with zero executed coverage. **That is why GC-02 survived** —
+   nothing could have caught it.
+4. **A self-contradicting threshold** (06-24) — comment says "four sites", test says "5 or more",
+   and the DRY fix yields four. See `DEF-06-29-03`.
+5. **An expected count its own fix invalidates** (06-23) — condition P's plan-required message is
+   an `echo` carrying a literal `beet`-invocation token, so it survives the comment strip and lands
+   in both the raw and the comment-stripped count the plan pinned. **Reported as a deviation, not
+   absorbed**, with containment measured (35 → 36 matches, the +1 being that echo alone) and both
+   pins shown unmoved.
+6. **A `-F` absence test that substring-matches its own correct fix** (06-26) —
+   `grep -cF 'cd $D04_REPO_ROOT'` expects 0, but `-F` matches a **substring** and that token is a
+   **prefix** of the corrected `cd $D04_REPO_ROOT_Q`. Measured on the correctly fixed file, the
+   plan's own method returns **1 for all four sites**. **The correct fix fails the check.** Fixed
+   by testing the token with its trailing separator.
+7. **Twice: a check that cannot distinguish a claim from its retraction** (06-27, 06-28) —
+   `grep -ci 'removes the predictability'` must be 0, and `grep -cF '2166, 2179, 2313'` must be 0.
+   In both cases the correct prose **quotes the old claim in order to disown it**, which fails the
+   check. Both were satisfied **honestly** — the sentence reworded to describe the old claim
+   without quoting it; the stale positions moved into the audit artifact — never worked around.
+
+**And the template defect, which is separate and is not the executors' fault.** Every round-2
+plan's `<verify>` block opens with:
+
+```
+cd /Users/damian/Development/damianflynn/selfhost-stacks
+```
+
+That is the **MAIN CHECKOUT**, which does not carry a worktree agent's edits. Obeying it literally
+measures the **unmodified** file and reports a green describing nothing — a false GREEN generated
+by the plan template itself. **Five agents hit this independently** (06-24, 06-25, 06-26, 06-27,
+06-28) and all five correctly refused, resolving the repo root from
+`git rev-parse --show-toplevel` instead. **The template is the defect, not the executors.**
+
+**Condition that would drive it — for the template half, which is the fixable one:** emit
+`cd "$(git rev-parse --show-toplevel)"` in generated `<verify>` blocks instead of a hard-coded
+absolute path, and confirm a worktree-executed plan measures its own edits. That single change
+removes the defect for every future plan; the seven shapes above cannot be fixed that way, which
+is why they are catalogued rather than repaired.
+
+**Urgency:** planner-side, and in front of whoever plans Phase 7. The cure that worked in both
+rounds is unchanged: materialise text into a **file** and grep the file, never let a pipeline carry
+a verdict; **drive the assertion red** before trusting it; confirm an unmutated control still
+passes; and fix a verify by **strengthening** what it asserts, never by relaxing it.
+
+---
+
+## DEF-06-29-08 — the D-04 no-sentinel arm names a path the block may never have visited
+
+**Found during:** plan 06-26, task 1, driving the GC-17 quoting fix (2026-09-22). Recorded in that
+plan's SUMMARY as **NEW-06-26-01**; re-confirmed at HEAD by plan 06-29.
+**Disposition:** not a GC finding. **Diagnosis defect; verdict unaffected.**
+
+`scripts/quick-health-check.sh`'s D-04 no-sentinel arm prints:
+
+```
+⚠️  UNKNOWN — the D-04 scan produced no sentinel (ssh exit $D04_RC; 3 = no
+/mnt/fast/stacks checkout, 4 = 'git grep' failed).
+```
+
+while the `cd` above it uses **`$D04_REPO_ROOT`**. Under an override the operator is told a path
+that was **never visited** — and is sent to look for a directory that is right there. Confirmed at
+HEAD `23b2b82` with `/usr/bin/grep`: the message hard-codes the literal at `:1852`, the `cd` uses
+`$D04_REPO_ROOT_Q` at `:1840`.
+
+**Its two siblings get this right** — the drift arm (`:1471`, `$DRIFT_REPO_ROOT`) and the D-03
+render arm (`:1638`, `$D03_REPO_ROOT`) each interpolate their own knob. So this is the **same
+three-of-four-siblings shape as GC-17** and the **same wrong-diagnosis class as GC-14**, one block
+across, in a file where round 2 has just closed both.
+
+**Verdict is unaffected:** the arm sets `EXIT_CODE=1` regardless, so no override can produce green.
+It is what the operator is told, not what the script concludes. Visible in
+`artifacts/06-26-qhc-knobs-and-tail.txt`'s BEFORE transcript, where the message says
+`/mnt/fast/stacks` while the run was pointed at `/tmp/qhc-06-26/probe root with space`.
+
+**Why it was not fixed:** out of scope for 06-26, which was closing three named findings in a file
+three plans landed in that round.
+
+**Condition that would drive it:** run with `D04_REPO_ROOT` set to a path that does not exist, and
+read the message — it must name the overridden path, not `/mnt/fast/stacks`. Anchor for the fix:
+`grep -n "4 = 'git grep' failed"` (1 hit).
+
+**Urgency:** low and cheap. It is a one-token change of the same kind GC-17 and GC-14 just made
+four and six times respectively, and leaving it is how a class gets fixed at three of four sites —
+which is the defect this round's own subject.
+
+---
+
+## DEF-06-29-09 — three LIVE secrets sit on LXC 100 in an un-rotated file the repo would have committed
+
+**Found during:** round 2, while widening `.gitignore` (2026-09-22). Commit `456ad06`.
+**Disposition:** **NOT CLOSED.** The repo-side hole is closed; the secrets are not.
+**Outside Phase 6 entirely.** The operator has been told; recorded here so it is not lost.
+
+`stacks/selfhosted/karakeep/.env.pre-pocket` on LXC 100 holds **`MEILI_MASTER_KEY`**,
+**`NEXTAUTH_SECRET`** and **`OPENAI_API_KEY`**, and matched **neither** `**/.env` **nor**
+`*.env.backup`. **This repository is PUBLIC.** A `git add -A` would have committed three live
+secrets.
+
+**What is closed:** commit `456ad06` widened the ignore to `**/.env.*` with `.env.sample` and
+`.env.example` re-admitted, and verified that **no tracked file becomes ignored** by the change.
+The repo can no longer pick the file up.
+
+**What is NOT closed:** **the file is still on the host and the three keys are not rotated.** An
+ignore rule prevents a future accident; it does nothing about a key that may already be
+compromised and nothing about the file's continued existence.
+
+**Condition that would close it:** rotate all three keys, then remove or relocate the file. Rotation
+is the load-bearing half — if the value ever left the host, ignoring it changes nothing.
+Independently: confirm no other `.env.<suffix>` on the estate holds live credentials, since this one
+was found by accident rather than by a sweep.
+
+**Urgency:** the highest in this file, and it is **not a Phase 6 item** — which is exactly how an
+item like this gets lost between two phases that each correctly decline it. It needs an owner
+outside this project's phase sequence.
+
+---
+
+## DEF-06-29-10 — two path-safety violations actually occurred, both of the "hard-coded absolute repo path" class
+
+**Found during:** round 2 waves 1 and 2, by the orchestrator merging them (2026-09-22).
+**Disposition:** recorded. Both were repaired at merge time; the **class** is what is carried.
+
+Two agents wrote outside their own worktree:
+
+1. **Plan 06-22 wrote its SUMMARY into the main checkout as well as its worktree**, which
+   **blocked the wave-1 merge** until it was cleared.
+2. **An unrelated `.gitignore` edit was left in the main checkout** by a wave-2 agent.
+
+Both are the same class: **resolving an output path from a hard-coded absolute repo path instead
+of `git rev-parse --show-toplevel`.** It is the mirror image of `DEF-06-29-07`'s template defect —
+there, a hard-coded path made an agent *read* the wrong file and report a false green; here it
+made an agent *write* to the wrong tree. **One root cause, two failure directions, and the write
+direction is the one that costs a merge.**
+
+**Condition that would drive it:** none needed — it has fired twice. The preventive check is
+mechanical: before any `Write`/`Edit` to an absolute path inside a worktree, assert the path is
+contained in `git rev-parse --show-toplevel` (with a boundary check, not a glob prefix — a prefix
+match admits a sibling worktree whose name extends the root's).
+
+**Urgency:** it costs wall-clock at merge time and, in the worse case, silently splits a plan's
+output across two trees so that neither is complete. It should be fixed in the same place as
+`DEF-06-29-07`'s template half, because it is the same variable.
+
+---
+
+## DEF-06-29-11 — the deployed host is at a pre-Phase-6 commit, and its symptoms LOOK like phase fallout
+
+**Found during:** plans 06-23 and 06-26, running live checks (2026-09-22).
+**Disposition:** recorded as a **deliberate non-finding**, restated here because it will be
+misread. Also `06-DISPOSITIONS-GAP.md` § Deliberate non-findings items 2 and 8.
+
+`/mnt/fast/stacks` on LXC 100 is at **`c67d497`**, pre-Phase-6. **Nothing in this phase has been
+pushed.** Three consequences that present as defects and are not:
+
+1. **The D-04 block reports UNKNOWN on the live estate.** The executable count there is genuinely
+   0, so the vacuity guard correctly refuses.
+2. **The live consumers exit-3 arm cannot be reached**, because the host's
+   `check-music-consumers.sh` is a pre-Phase-6 copy with **zero** `exit 3` occurrences. That is
+   why the live consumers arm is green **while the new tail correctly says CONF-04 is open** — the
+   two are not in conflict, and `CONSUMERS_SCRIPT` exists precisely so the arm is driveable from a
+   scratch copy without waiting for a deploy.
+3. **`check-music-freeze.sh` is ❌ in every run** —
+   `interpolated-host-path inventory MOVED: expected=12, found=13`. The host's own deployed copy,
+   untouched by any plan in this phase.
+
+**All three clear on the same act and on nothing else:** the operator's `git push` plus a host
+`git pull --ff-only` — which the vendored-drift block has been waiting on since round 1.
+
+**Condition that would drive it:** push and pull, then re-run `scripts/quick-health-check.sh` and
+confirm items 1 and 3 clear while item 2 is *replaced* by the intended CONF-04-pending ⚠️, which
+stays until Phase 7 entry criterion **E6** discharges CONF-04. **Do not tune that one out.**
+
+**Urgency:** operator's call, and it is a decision rather than a task — pushing makes the health
+entry point exit non-zero on the consumers block by design. Recorded so that a future reader
+seeing three reds after a deploy does not attribute them to round 2's changes.
