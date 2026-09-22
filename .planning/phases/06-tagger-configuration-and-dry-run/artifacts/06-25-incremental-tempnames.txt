@@ -1,0 +1,327 @@
+================================================================================
+06-25 — GC-08: the incremental control's in-container temp names, and the ONE
+        threat-model answer that GC-07 (plan 06-27) inherits
+================================================================================
+Plan:        06-25 (gap-closure round 2, wave 1)
+Date:        2026-09-22
+Finding:     GC-08 — "the IN-06 fix was applied to one of two sibling instruments"
+Sibling:     GC-07 — "RUN_TAG=\"$$\" does not provide the unpredictability its
+             comment claims" (scripts/phase06-oracle.sh:357-370), owned by plan
+             06-27, wave 2.
+Files:       scripts/phase06-incremental-control.sh
+Baseline:    the pre-fix file is commit bf509f4 (git show bf509f4:scripts/phase06-incremental-control.sh)
+
+GC-08 was recorded as UNVERIFIABLE from the diff supplied to the cross-family
+reviewer — the evidence was not supplied, the finding was not disputed. It was
+verified during planning and re-verified here: THE FACTUAL PREMISE HOLDS.
+
+--------------------------------------------------------------------------------
+1. THE SEVEN SITES — pre-fix line numbers, with a greppable anchor for each
+--------------------------------------------------------------------------------
+Line numbers are the ones GC-08 quotes, and they are correct against the pre-fix
+file. They are recorded WITH an anchor because this round edits lines above them
+(a 30-line header paragraph was added), so a bare line number is stale on
+arrival. Grep the anchor, not the number.
+
+  # | pre-fix | anchor to grep in the PRE-FIX file                                  | shape
+ ---+---------+----------------------------------------------------------------------+---------------------------
+  1 |   436   | LC_ALL=C find "$SRC" -type f -printf '%p\t%s\t%T@\n' > /tmp/p6-man.meta | `>` write, fixed name
+  2 |   438   | LC_ALL=C sort /tmp/p6-man.meta                                         | read back of #1
+  3 |   442   | LC_ALL=C find "$SRC" -type f -print0 > /tmp/p6-man.z                   | `>` write, fixed name
+  4 |   444   | LC_ALL=C sort -z < /tmp/p6-man.z > /tmp/p6-man.zs                      | read #3, `>` write #4
+  5 |   446   | xargs -0 -r sha256sum < /tmp/p6-man.zs                                 | read back of #4
+  6 |   449   | rm -f /tmp/p6-man.meta /tmp/p6-man.z /tmp/p6-man.zs                    | cleanup, SUCCESS PATH ONLY
+  7 |   474   | printf '%s\n' "$PROG" > /tmp/p6-taghist.py                             | `>` write, fixed name
+    |   475   | "$PY" /tmp/p6-taghist.py "$ROOT/state.pickle"                          | ...then EXECUTED
+    |   480   | rm -f /tmp/p6-taghist.py                                               | cleanup, success path only
+
+All seven sit inside remote programs delivered on stdin to
+`docker exec -i -u beetle beets-flask sh -s`, i.e. they run as dash inside the
+container, not on the workstation.
+
+Site 7 is the worse one, exactly as GC-08 says: the file is written with `>` and
+then EXECUTED by "$PY" on the very next line. A symlink pre-placed at that name
+redirects the write. A regular file the redirect cannot truncate leaves the
+PREVIOUS contents to be executed.
+
+Site 6 also records a second, quieter defect the finding did not name: the
+cleanup sat ONLY on the success path. Every `MANIFEST BLIND ... exit 2` above it
+left all three files behind.
+
+--------------------------------------------------------------------------------
+2. DO BOTH INSTRUMENTS TARGET THE SAME CONTAINER AND THE SAME USER? — MEASURED
+--------------------------------------------------------------------------------
+Measured from the two files' own constants, quoted verbatim, not assumed.
+
+  scripts/phase06-incremental-control.sh:119   CONTAINER="beets-flask"
+  scripts/phase06-incremental-control.sh:369   ssh $SSH_OPTS "$LXC_HOST" "timeout $REMOTE_TIMEOUT docker exec -i -u beetle $CONTAINER sh -s$qargs"
+        (the incremental control has no CONTAINER_USER constant; the user is the
+         literal `-u beetle` on its remote_exec line and on its overlay-delivery line)
+
+  scripts/phase06-oracle.sh:238                CONTAINER="${CONTAINER:-beets-flask}"
+  scripts/phase06-oracle.sh:241                CONTAINER_USER="${CONTAINER_USER:-beetle}"
+
+ANSWER: YES. Same container (`beets-flask`), same user (`beetle`). The sibling
+relationship GC-08 asserts is real, and it is measured, not inferred.
+
+--------------------------------------------------------------------------------
+3. WHO ELSE CAN WRITE THAT CONTAINER'S /tmp TODAY? — MEASURED 2026-09-22
+--------------------------------------------------------------------------------
+LXC 100 WAS reachable, so this section is measurement, not UNKNOWN. Every query
+below is read-only.
+
+  ssh root@172.16.1.159 'docker exec -u beetle beets-flask sh -c "id; ls -ld /tmp"'
+    uid=568(beetle) gid=568(beetle) groups=568(beetle)
+    drwxrwxrwt 1 root root 4096 Sep 22 00:41 /tmp
+
+  ssh root@172.16.1.159 'docker exec -u beetle beets-flask sh -c "ls -la /tmp"'
+    drwxrwxrwt 1 root   root    4096  .
+    drwxr-xr-x 1 root   root    4096  ..
+    -rw-r--r-- 1 beetle beetle 53248  p6-cbc-throwaway.blb
+    -rw-r--r-- 1 beetle beetle     0  phase06-check-beets-config-noop.yaml
+    (both are this phase's own leftovers, owned by 568)
+
+  ssh root@172.16.1.159 'docker top beets-flask -eo user,pid,args'
+    root  2969877  su beetle -c /repo/entrypoint.sh      <- PID 1 only
+    apps  2969955  bash -c /repo/entrypoint.sh
+    apps  2970153  redis-server *:6379
+    apps  2970170..2970176  /venv/bin/rq worker preview   (x4)
+    apps  2970178  /venv/bin/rq worker import
+    apps  2970187  python ./launch_watchdog_worker.py
+    apps  2970303  python ./launch_server.py
+    apps  2970345..2970349  multiprocessing workers       (x5)
+    ("apps" is the HOST's name for uid 568; "beetle" is the CONTAINER's name for
+     the same uid. Every process except PID 1 runs as uid 568.)
+
+  ssh root@172.16.1.159 'sysctl fs.protected_symlinks fs.protected_regular'
+    fs.protected_symlinks = 1
+    fs.protected_regular  = 2
+
+WHAT THIS MEASURES:
+  * /tmp is mode 1777 (world-writable, sticky). The sticky bit stops a
+    non-owner UNLINKING or RENAMING an existing entry; it does NOT stop anyone
+    CREATING a new entry — including a symlink — at an unused name.
+  * The kernel's symlink/regular-file protections ARE on. But they only refuse
+    a follow when the pre-placed name is owned by a uid that is neither the
+    directory's owner nor the following process. Here the whole application —
+    a redis, an HTTP server, five rq workers and their multiprocessing
+    children — runs as uid 568, THE SAME UID the instrument's `docker exec -u
+    beetle` uses. So the kernel mitigation does not cover this case.
+
+WHAT COULD NOT BE MEASURED, stated rather than inferred:
+  * `ps` is not installed inside the container (the in-container `ps -eo ...`
+    returned nothing); the process picture above is `docker top` from the host
+    and is therefore the host's view, which is sufficient for uid but not for
+    anything requiring the container's own /proc.
+  * Nothing here establishes whether beets-flask has ever been compromised, and
+    no such claim is made. The measurement is about REACHABILITY of the name,
+    not about a live adversary.
+
+--------------------------------------------------------------------------------
+4. THE DECISION — one answer, two files. Plan 06-27 may quote this section
+   verbatim for the oracle's RUN_TAG comment.
+--------------------------------------------------------------------------------
+
+  THE THREAT IS REAL ENOUGH TO TREAT, AND THE TREATMENT IS MINTING THE NAME
+  INSIDE THE CONTAINER. But the property being relied on is CREATION, NOT
+  SECRECY, and the difference is the whole of GC-07's objection. `mktemp`
+  creates with O_EXCL: it FAILS rather than opening a name that already
+  exists, and it will not follow a symlink into being. The template prefix
+  stays greppable in the source and is not claimed to be a secret.
+  Unpredictability is not the mitigation; refusing to open what is already
+  there is. This is why `RUN_TAG="$$"` was the wrong mechanism for the right
+  threat: a PID is small, sequential and enumerable, it is the WORKSTATION's
+  bash PID and has no relationship to the container's namespace, and it is a
+  LABEL chosen by the writer rather than a name minted by the kernel — so it
+  narrows a window instead of closing a door. Both findings therefore resolve
+  the same way: the threat is real, `$$` overstated what it bought, and the
+  correct remedy in BOTH instruments is a container-minted name whose failure
+  to mint is a REFUSAL and never a fallback.
+
+Two supporting points, so the decision is not reopened from scratch:
+
+  (a) GC-07's three objections are objections to `$$` AS A MECHANISM, not to
+      the existence of the threat. Its own suggested fix names the same remedy
+      chosen here ("make it true by having the container mint the name —
+      SCRATCH_LIB=\"$(… mktemp \"$SCRATCH/lib.XXXXXX\")\"").
+  (b) GC-07's third objection — that the oracle's step-1 probe, which refuses
+      any non-empty $SCRATCH, is what actually refuses a pre-placed name — is
+      true of the ORACLE and false of this file. The incremental control has no
+      step-1 probe over these names at all. It did not even have the guard the
+      oracle leans on, which is why it is the sibling that needed the code
+      change rather than only a corrected comment.
+
+DOES NOT CONTRADICT, AND EXTENDS, THE EXISTING RECORD:
+  06-DISPOSITIONS.md IN-06 (row: "FIXED (undriven)", plan 06-18, commit
+  89a349b) and deferred-items.md DEF-06-21-02 stand unedited. What this plan
+  adds is (i) the sibling file, which they do not cover, and (ii) a DRIVEN
+  fail-closed branch, where IN-06's own treatment remains undriven pending the
+  next real `--run`. DEF-06-21-02's stated driving condition is unchanged.
+
+WHAT THIS PLAN LEAVES OPEN, deliberately:
+  * The ORACLE's `$$`-tagged names and their comment are NOT touched here.
+    That is plan 06-27's half of the same question, and it applies the decision
+    above. This plan states the answer; it does not edit the other file.
+  * $SCRATCH itself (`/tmp/p6` in the oracle) is out of scope for the same
+    reason 06-18 gave: the precheck, the cleanup assertion, the 06-18 fence
+    allow-list and the committed 06-11 artifacts all quote that path by name.
+
+--------------------------------------------------------------------------------
+5. THE CHANGE — post-fix anchors
+--------------------------------------------------------------------------------
+  write_prog_manifest   (one minted DIRECTORY for all three files)
+    :466  MANDIR="$(mktemp -d /tmp/p6-mf.XXXXXXXX 2>/dev/null)" || MANDIR=""
+    :468  echo "MANIFEST BLIND could not mint a scratch directory with mktemp ..."; exit 2
+    :475  trap 'case "${MANDIR:-}" in /tmp/p6-mf.*) rm -rf "$MANDIR" ;; esac' EXIT
+    :477  ... > "$MANDIR/meta"      :483  ... > "$MANDIR/z"
+    :485  ... < "$MANDIR/z" > "$MANDIR/zs"    :487  xargs -0 -r sha256sum < "$MANDIR/zs"
+
+  write_prog_taghistory (one minted FILE, written then executed)
+    :520  THPROG="$(mktemp /tmp/p6-taghist.XXXXXXXX 2>/dev/null)" || THPROG=""
+    :522  echo "TAGHIST BLIND could not mint a program path with mktemp ..."; exit 2
+    :525  trap 'case "${THPROG:-}" in /tmp/p6-taghist.*) rm -f "$THPROG" ;; esac' EXIT
+    :526  printf '%s\n' "$PROG" > "$THPROG"
+    :527  "$PY" "$THPROG" "$ROOT/state.pickle" 2>&1
+
+CLEANUP: a TRAP, not a per-exit-path `rm`. Chosen because every `MANIFEST BLIND`
+in that program exits early and the old `rm -f` sat only after the last of them,
+so any could-not-look leaked all three files — and a MINTED leftover is worse
+litter than a fixed one, because nobody knows its name. The trap re-tests the
+variable against the template prefix with a `case`, so it can never remove
+anything else, and `${MANDIR:-}` keeps it safe under `set -u`.
+
+EXIT CODES ARE UNTOUCHED. A failed mint is a COULD-NOT-LOOK, so it takes 2
+(UNKNOWN), joining the same `... BLIND ...; exit 2` ladder as every other blind
+case in those programs. No code was renumbered; the numbering difference against
+the oracle is a recorded deliberate non-finding and stays as it is.
+
+CONTRACT PRESERVED: `PROBE-RC` and `STATEFILE-SHA` are emitted in the same order
+by the same two lines, and the manifest sentinels MANIFEST-META-BEGIN /
+MANIFEST-META-END / MANIFEST-SHA-BEGIN / MANIFEST-SHA-END / MANIFEST OK are
+unchanged and in the same order.
+
+--------------------------------------------------------------------------------
+6. IS mktemp ACTUALLY PRESENT? — MEASURED, not assumed
+--------------------------------------------------------------------------------
+The plan required this to be measured rather than assumed, because `mktemp` is
+coreutils and not POSIX shell, and this phase's convention (WR-04's `: >` over
+`touch`) is to prefer what is guaranteed.
+
+  ssh root@172.16.1.159 'docker exec -u beetle beets-flask sh -c "command -v mktemp; ..."'
+    /usr/bin/mktemp
+    MKTEMP_RC=0
+    mktemp (GNU coreutils) 9.7
+    sh=/usr/bin/dash
+
+PRESENT. So the `set -C` + retry POSIX fallback was NOT needed and was not
+written; the `mktemp` form ships, with its fail-closed branch, and that branch is
+driven in § 7 rather than left as an unexercised claim.
+
+--------------------------------------------------------------------------------
+7. THE FAIL-CLOSED DRIVE — both directions, both interpreters
+--------------------------------------------------------------------------------
+Provenance of the measuring tools, because a measurement is only as good as the
+tool that answered:
+  workstation:  Darwin 27.0.0; /bin/sh; grep = /usr/bin/grep, "grep (BSD grep,
+                GNU compatible) 2.6.0-FreeBSD"  (the operator's interactive zsh
+                aliases grep to ugrep, but a script's `command -v grep` is
+                /usr/bin/grep — recorded so a re-run knows which grep answered)
+  container:    /bin/sh -> /usr/bin/dash; mktemp (GNU coreutils) 9.7
+
+Nothing was installed and nothing was removed from any system. The "absent"
+condition is produced by pointing PATH at an EMPTY stub directory.
+
+D1 — manifest program, LOCAL /bin/sh, PATH=<empty stub>            [fail-closed]
+     exit = 2   (UNKNOWN / could-not-look)
+     stdout: MANIFEST BLIND could not mint a scratch directory with mktemp -
+             refusing to fall back to fixed names in a world-writable /tmp
+     MANIFEST-META-BEGIN: 0   MANIFEST-SHA-BEGIN: 0   MANIFEST OK: 0
+     -> the BLIND line is emitted and NO manifest sentinel is produced.
+
+D2 — taghistory program, LOCAL /bin/sh, PATH=<empty stub>          [fail-closed]
+     exit = 2
+     stdout: TAGHIST BLIND could not mint a program path with mktemp - refusing
+             to write-then-execute a fixed name in a world-writable /tmp
+     PROBE-RC: 0 lines   STATEFILE-SHA: 0 lines
+     -> nothing was written, nothing was executed, no parsed line was emitted.
+
+D3 — manifest program, IN THE CONTAINER (dash), mktemp present   [the passing
+     partner]                                                     ------------
+     `docker exec -i -u beetle beets-flask sh -s "<SRC_FOLDER>"`
+     exit = 0
+       MANIFEST-META-BEGIN
+       /downloads/.../01-cyril_-_stumblin_in_(lunax_remix)_(extended_mix)-zzzz.mp3	9814077	1788648776.3934479050
+       MANIFEST-META-END
+       MANIFEST-SHA-BEGIN
+       84d70008d50ab5cc5e200e66d24510f50670e90e23b7b210919ec7836e1342b8  /downloads/.../01-cyril_...mp3
+       MANIFEST-SHA-END
+       MANIFEST OK
+     sentinels 1/1/1/1, MANIFEST OK 1, BLIND 0.
+
+D4 — taghistory program, IN THE CONTAINER (dash), mktemp present [the passing
+     partner: mint, write, EXECUTE, clean up]                     ------------
+     exit = 0
+       TAGHISTORY ABSENT /tmp/p6-does-not-exist/state.pickle
+       PROBE-RC 0
+       STATEFILE-SHA (state file absent or unhashable)
+     -> the minted path was written and executed by /venv/bin/python, and both
+        parsed lines are present in their original order. Pointed at a
+        deliberately non-existent root so that no state file anywhere was
+        created, read or modified.
+
+D5 — BOTH programs, IN THE CONTAINER (dash), `-e PATH=/nonexistent-stub`
+                                                                  [fail-closed]
+     manifest   exit = 2, "MANIFEST BLIND could not mint a scratch directory ..."
+     taghistory exit = 2, "TAGHIST BLIND could not mint a program path ..."
+     -> the same refusal in the REAL interpreter, not only in the local one.
+
+D6/D7 — the EARLY-EXIT cleanup (the reason the cleanup is on a trap).
+     LOCAL /bin/sh, PATH = a stub holding `mktemp` only, so the mint SUCCEEDS
+     and the very next step fails:
+       D6: exit = 2, "MANIFEST BLIND find -printf rc=127", and the minted
+           directory /tmp/p6-mf.WVXGCuLP WAS LEFT BEHIND — because the stub PATH
+           had no `rm` for the trap to call. Recorded rather than hidden: it is
+           an artefact of the stub, not of the program, and it is also the honest
+           limit of the trap (it depends on `rm` being resolvable; in the
+           container /bin/rm is present, measured in § 6's image).
+       D7: same drive with `rm` added to the stub: exit = 2, same BLIND line,
+           and `ls -d /tmp/p6-mf.*` afterwards returns NOTHING. The trap cleans
+           up on the EARLY exit, which the old success-path-only `rm -f` did not.
+
+CONTAINER CLEANUP ASSERTION, after all container drives:
+  docker exec -u beetle beets-flask sh -c 'ls -la /tmp; ls -d /tmp/p6-mf.*; ls -d /tmp/p6-taghist.*'
+    -> NONE-p6-mf
+    -> NONE-p6-taghist
+    -> /tmp holds only the two pre-existing phase-06 leftovers named in § 3.
+  The only writes this artifact's drives made inside the container were the
+  programs' own minted scratch files, and they are gone.
+
+--------------------------------------------------------------------------------
+8. THE TWO-ARM PROOF IS UNTOUCHED
+--------------------------------------------------------------------------------
+  bash scripts/phase06-incremental-control.sh --self-test   -> exit 0,
+  "--self-test: all branches behaved as expected (including every refusal and
+  every blind case)" (1 occurrence).
+
+  Arm A's expected outcome (taghistory POPULATED / folder NOT re-offered) and
+  arm B's (taghistory EMPTY / folder re-offered) are produced by
+  classify_taghistory and classify_reoffer, neither of which was edited, over
+  the same probe text and the same sentinels, neither of which was edited. The
+  CONF-02 proof is carried by those outcomes and is unchanged by this plan.
+
+  NOT DRIVEN, deliberately: the live two-arm control (`--arm a` / `--arm b`).
+  It IMPORTS, and importing is out of scope for a hardening round. Condition
+  that would drive it: the next real `--arm a` / `--arm b` pair. At that point
+  also confirm no `/tmp/p6-mf.*` or `/tmp/p6-taghist.*` survives the run.
+
+--------------------------------------------------------------------------------
+9. METHOD NOTE — where these commands were run from
+--------------------------------------------------------------------------------
+This plan's `<verify>` blocks open with
+`cd /Users/damian/Development/damianflynn/selfhost-stacks`, which is the MAIN
+CHECKOUT. This plan executed in a git worktree, and the main checkout does not
+carry these edits. Obeying that line literally would have measured the
+UNMODIFIED file and reported a green describing nothing. Every command recorded
+above was therefore run from the worktree root instead. Same defect, same
+correction, as plan 06-24 recorded in the same round.
+================================================================================

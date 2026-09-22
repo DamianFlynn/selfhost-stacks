@@ -111,6 +111,33 @@
 #   unchanged-state assertion becomes vacuous. Changing one of these is a one-line edit here, in
 #   the commit that changes the policy. There is no sentinel that skips a check, however
 #   convenient one looks while debugging - do not add one.
+#
+# IN-CONTAINER TEMP NAMES ARE MINTED BY THE CONTAINER, NOT CHOSEN BY THE WORKSTATION
+#   [GC-08; the sibling half of the same question is GC-07 against scripts/phase06-oracle.sh.
+#    Evidence, measurements and the one decision both files share:
+#    .planning/phases/06-tagger-configuration-and-dry-run/artifacts/06-25-incremental-tempnames.txt]
+#
+#   The remote programs below used to write to FIXED names in the container's /tmp - three
+#   /tmp/p6-man.* manifest files, and /tmp/p6-taghist.py, which was written with `>` and then
+#   EXECUTED by the interpreter on the very next line. MEASURED 2026-09-22 inside `beets-flask`:
+#   /tmp is mode 1777, and every process in that container other than PID 1 runs as uid 568 -
+#   the SAME uid this script's `docker exec -u beetle` uses. So the kernel's own
+#   fs.protected_symlinks=1 / fs.protected_regular=2 (both measured on LXC 100) do NOT help here:
+#   they only refuse a follow when the pre-placed name is owned by a DIFFERENT uid.
+#
+#   THE PROPERTY THIS NOW RELIES ON IS CREATION, NOT SECRECY. `mktemp` creates with O_EXCL, so it
+#   FAILS rather than opening a name that already exists, and it will not follow a symlink into
+#   being. The X's are not a secret and are not claimed to be one - a template prefix is still
+#   greppable in this file. Unpredictability is not the mitigation; refusing-to-open-what-is-
+#   already-there is. This is stated deliberately, because the claim it replaces ("suffixing with
+#   the run's PID removes the predictability") was a claim the code could not keep: $$ there is
+#   the WORKSTATION's bash PID, a label with no relationship to the container's namespace.
+#
+#   A MINT THAT FAILS IS A REFUSAL, NEVER A FALLBACK. Both programs print a BLIND line in the
+#   local vocabulary and exit 2 (UNKNOWN - could-not-look, which is never a pass). There is
+#   deliberately no fallback to the fixed name: a fallback is the original defect wearing a
+#   mitigation's label, and it would fire precisely when the environment is least trustworthy.
+#   Driven in both directions - see § "the fail-closed drive" in the artifact named above.
 
 set -euo pipefail
 
@@ -432,21 +459,34 @@ write_prog_manifest() { cat > "$1" <<'REOF'
 set -u
 SRC="$1"
 if [ ! -d "$SRC" ]; then echo "MANIFEST BLIND '$SRC' is not a directory"; exit 2; fi
+# GC-08: ONE minted directory for all three scratch files, rather than three fixed names in a
+# world-writable /tmp. The property is mktemp's O_EXCL creation, not the secrecy of the prefix.
+# The minting failure joins the SAME `MANIFEST BLIND ... exit 2` ladder as every other
+# could-not-look below it; it is NOT a fallback to the fixed names.
+MANDIR="$(mktemp -d /tmp/p6-mf.XXXXXXXX 2>/dev/null)" || MANDIR=""
+if [ -z "$MANDIR" ]; then
+  echo "MANIFEST BLIND could not mint a scratch directory with mktemp - refusing to fall back to fixed names in a world-writable /tmp"
+  exit 2
+fi
+# CLEANUP IS ON A TRAP, not on the success path. Chosen because every BLIND below exits early and
+# the old `rm -f` sat only after the last one, so any could-not-look left all three files behind -
+# and a MINTED leftover is worse litter than a fixed one, because nobody knows its name. The trap
+# re-checks the name against the template prefix so it can never remove anything else.
+trap 'case "${MANDIR:-}" in /tmp/p6-mf.*) rm -rf "$MANDIR" ;; esac' EXIT
 echo "MANIFEST-META-BEGIN"
-LC_ALL=C find "$SRC" -type f -printf '%p\t%s\t%T@\n' > /tmp/p6-man.meta; MRC=$?
+LC_ALL=C find "$SRC" -type f -printf '%p\t%s\t%T@\n' > "$MANDIR/meta"; MRC=$?
 if [ "$MRC" -ne 0 ]; then echo "MANIFEST BLIND find -printf rc=$MRC"; exit 2; fi
-LC_ALL=C sort /tmp/p6-man.meta; SRC2=$?
+LC_ALL=C sort "$MANDIR/meta"; SRC2=$?
 if [ "$SRC2" -ne 0 ]; then echo "MANIFEST BLIND sort rc=$SRC2"; exit 2; fi
 echo "MANIFEST-META-END"
 echo "MANIFEST-SHA-BEGIN"
-LC_ALL=C find "$SRC" -type f -print0 > /tmp/p6-man.z; ZRC=$?
+LC_ALL=C find "$SRC" -type f -print0 > "$MANDIR/z"; ZRC=$?
 if [ "$ZRC" -ne 0 ]; then echo "MANIFEST BLIND find -print0 rc=$ZRC"; exit 2; fi
-LC_ALL=C sort -z < /tmp/p6-man.z > /tmp/p6-man.zs; ZSRC=$?
+LC_ALL=C sort -z < "$MANDIR/z" > "$MANDIR/zs"; ZSRC=$?
 if [ "$ZSRC" -ne 0 ]; then echo "MANIFEST BLIND sort -z rc=$ZSRC"; exit 2; fi
-xargs -0 -r sha256sum < /tmp/p6-man.zs; XRC=$?
+xargs -0 -r sha256sum < "$MANDIR/zs"; XRC=$?
 if [ "$XRC" -ne 0 ]; then echo "MANIFEST BLIND sha256sum rc=$XRC"; exit 2; fi
 echo "MANIFEST-SHA-END"
-rm -f /tmp/p6-man.meta /tmp/p6-man.z /tmp/p6-man.zs
 echo "MANIFEST OK"
 REOF
 }
@@ -471,13 +511,24 @@ write_prog_taghistory() { cat > "$1" <<'REOF'
 # $1 = arm root  $2 = python path  $3 = the probe program text
 set -u
 ROOT="$1"; PY="$2"; PROG="$3"
-printf '%s\n' "$PROG" > /tmp/p6-taghist.py
-"$PY" /tmp/p6-taghist.py "$ROOT/state.pickle" 2>&1
+# GC-08, and this is the worse of the two sites: the program is written with `>` and then
+# EXECUTED on the next line, so the name it is written to is inside the trust boundary. A
+# pre-placed symlink at a fixed name redirects the write; a pre-placed regular file the redirect
+# cannot truncate leaves the PREVIOUS contents to be executed. The path is therefore minted by
+# the container with mktemp (O_EXCL), and a mint that fails is a refusal - exit 2 is UNKNOWN,
+# which the caller already treats as could-not-look and never as a pass. NO FALLBACK.
+THPROG="$(mktemp /tmp/p6-taghist.XXXXXXXX 2>/dev/null)" || THPROG=""
+if [ -z "$THPROG" ]; then
+  echo "TAGHIST BLIND could not mint a program path with mktemp - refusing to write-then-execute a fixed name in a world-writable /tmp"
+  exit 2
+fi
+trap 'case "${THPROG:-}" in /tmp/p6-taghist.*) rm -f "$THPROG" ;; esac' EXIT
+printf '%s\n' "$PROG" > "$THPROG"
+"$PY" "$THPROG" "$ROOT/state.pickle" 2>&1
 PRC=$?
 echo "PROBE-RC $PRC"
 SH="$(sha256sum "$ROOT/state.pickle" 2>/dev/null)" || SH="(state file absent or unhashable)"
 echo "STATEFILE-SHA $SH"
-rm -f /tmp/p6-taghist.py
 REOF
 }
 
