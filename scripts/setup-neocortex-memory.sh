@@ -89,6 +89,14 @@ cmd_prepare() {
 
   [ -d "$CHECKOUT/.git" ] \
     || die "no platform checkout at $CHECKOUT — clone it at the pinned SHA first (README step 2)"
+
+  # The mountpoint for the production node_modules must ALREADY EXIST inside the checkout.
+  # compose bind-mounts /app read-only, and Docker cannot create a mountpoint inside a read-only
+  # bind -- it fails with "create mountpoint ...: read-only file system" and the container never
+  # starts. memory/node_modules is gitignored (**/node_modules/), so an empty directory here is
+  # invisible to git and does not dirty the pinned checkout.
+  install -d -o 568 -g 568 -m 0755 "$CHECKOUT/memory/node_modules"
+  ok "mountpoint $CHECKOUT/memory/node_modules exists (gitignored, empty until mounted over)"
   note "checkout at $(git -C "$CHECKOUT" rev-parse --short HEAD) ($(git -C "$CHECKOUT" rev-parse --abbrev-ref HEAD))"
   git -C "$CHECKOUT" symbolic-ref -q HEAD >/dev/null \
     && echo "  ⚠ the checkout is on a BRANCH, not a detached pinned commit — README step 2" >&2
