@@ -1,0 +1,157 @@
+================================================================================================
+06-22 — GC-01 / GC-13 driven evidence, and the repo-wide inventory of the `| grep -q` shape
+================================================================================================
+
+Plan:        .planning/phases/06-tagger-configuration-and-dry-run/06-22-PLAN.md
+Findings:    GC-01 (BLOCKER), GC-13 (INFO)
+Date:        2026-09-22
+Workstation: macOS 27.0, bash 5.3.15(1)-release
+             grep as resolved by a `bash` script on this box: /usr/bin/grep
+             "grep (BSD grep, GNU compatible) 2.6.0-FreeBSD"
+
+             NOTE, recorded because it nearly contaminated this measurement: the operator's
+             INTERACTIVE zsh resolves `grep` to ugrep 7.8.4 via a shell alias. Every sweep below
+             was run inside a `bash` script, where `command -v grep` is /usr/bin/grep — the same
+             BSD grep 2.6.0 GC-01 was measured against, and the same one
+             `scripts/check-beets-config.sh` gets. If a future re-run reports a different ceiling,
+             check which grep answered before concluding the defect moved.
+
+No estate contact anywhere in this artifact: `--self-test` returns before the live path, so no
+ssh, no docker, no container, no `git push`/`git pull`.
+
+================================================================================================
+PART 1 — GC-01: the size sweep that establishes the ceiling
+================================================================================================
+
+The shipped shape was, at scripts/check-beets-config.sh:554 and :567 (pre-fix line numbers):
+
+    if printf '%s' "$raw" | grep -qF -- "$forb"; then
+
+under this file's `set -euo pipefail` (:111). `grep -q` exits the instant it matches; `printf` is
+still writing; `printf` takes SIGPIPE and exits 141; `pipefail` hands 141 to the PIPELINE; the
+`if` therefore evaluates FALSE. Direction: a substring that IS present is reported ABSENT — a
+false GREEN over a live condition, not a false red.
+
+Driven at increasing input sizes with the forbidden substring on LINE 1, both forms, both grep
+paths reachable from a bash script on this workstation (both resolve to /usr/bin/grep):
+
+    bash:        5.3.15(1)-release
+    grep(PATH):  /usr/bin/grep — grep (BSD grep, GNU compatible) 2.6.0-FreeBSD
+    grep(/usr):  /usr/bin/grep — grep (BSD grep, GNU compatible) 2.6.0-FreeBSD
+    macOS:       27.0
+
+    === /usr/bin/grep — PRE-FIX form:  printf '%s' "$raw" | grep -qF -- "$forb"  (pipeline rc) ===
+    size_KiB  bytes      rc           verdict
+    8         8205       0            FOUND (correct)
+    16        16397      0            FOUND (correct)
+    32        32781      0            FOUND (correct)
+    48        49165      0            FOUND (correct)
+    56        57357      0            FOUND (correct)
+    64        65549      141          MISSED (false GREEN)
+    72        73741      141          MISSED (false GREEN)
+    96        98317      141          MISSED (false GREEN)
+    128       131085     141          MISSED (false GREEN)
+
+    === /usr/bin/grep — POST-FIX form: grep -qF -- "$forb" <<<"$raw"  (grep's own rc) ===
+    size_KiB  bytes      rc           verdict
+    8         8205       0            FOUND (correct)
+    16        16397      0            FOUND (correct)
+    32        32781      0            FOUND (correct)
+    48        49165      0            FOUND (correct)
+    56        57357      0            FOUND (correct)
+    64        65549      0            FOUND (correct)
+    72        73741      0            FOUND (correct)
+    96        98317      0            FOUND (correct)
+    128       131085     0            FOUND (correct)
+
+This reproduces GC-01's table exactly: correct at and below 56 KiB, missed at and above 64 KiB.
+The ceiling is the 64 KiB pipe buffer, not a grep property — both forms were driven through the
+same binary and only the piped one fails.
+
+------------------------------------------------------------------------------------------------
+PART 1b — the defect is POSITION-DEPENDENT, which is why case 7 anchors at the TOP
+------------------------------------------------------------------------------------------------
+
+Same 128 KiB input, pre-fix form, substring moved:
+
+    match at TOP     bytes=131085   pipeline_rc=141  MISSED (false GREEN)
+    match at BOTTOM  bytes=131085   pipeline_rc=0    FOUND (correct)
+
+A bottom-anchored regression case would have ticked GREEN against the broken code and proved
+nothing. Case 7 puts the substring in the first 25 bytes of the raw text for this reason.
+
+================================================================================================
+PART 2 — GC-01: the fix, and the self-test case that discriminates it
+================================================================================================
+
+Fix, at both sites (scripts/check-beets-config.sh):
+
+    if grep -qF -- "$forb" <<<"$raw"; then
+
+A here-string feeds grep from a temporary file. There is no writer to take SIGPIPE, no pipeline
+for `pipefail` to propagate from, and the `if` reads grep's own status. `-F` is kept (the
+substrings are literals) and the `--` end-of-options guard is kept (a substring beginning with `-`
+must not be read as a flag). `LC_ALL=C` was deliberately NOT added: multibyte behaviour is
+unchanged by this fix and changing two things at once would have destroyed the measurement.
+
+`set +o pipefail` around the test was rejected: turning the option off weakens every other
+statement in the same scope to buy one test.
+
+New self-test case 7: `synthetic_correct_dump` prefixed by one top-level key whose double-quoted
+scalar opens with the literal `Compilations` and is padded with `x` past the ceiling. Measured
+raw size, asserted in band rather than assumed:
+
+    case 7 precondition: raw dump is 71013 bytes, above the 65536-byte pipe-buffer ceiling
+
+An under-65536 result is a self-test FAILURE, not a silent skip — a case that quietly shrinks
+below the ceiling is a case that has stopped testing anything.
+
+------------------------------------------------------------------------------------------------
+PART 2a — DRIVE, PRE-FIX. A copy of the FIXED script with ONLY the two here-strings reverted to
+the pipeline form. Nothing else differs: case 7, the counters and the banners are all present.
+------------------------------------------------------------------------------------------------
+
+    $ bash <scratch>/mutant-gc01/scripts/check-beets-config.sh --self-test ; echo RC=$?
+    ...
+    case 7 precondition: raw dump is 71013 bytes, above the 65536-byte pipe-buffer ceiling
+    case: a forbidden substring at the TOP of a >64 KiB dump (GC-01 regression)  (expect 1 red)
+    ...
+    ❌ case 'a forbidden substring at the TOP of a >64 KiB dump (GC-01 regression)': 0 red, expected 1
+    ❌ --self-test: 1 of 7 cases did not behave as expected
+    RC=1
+
+    ^ THE MISS. The forbidden substring is present, at the top, in a 71,013-byte dump, and the
+      pre-fix code reports ZERO reds. This is the defect, reproduced inside the checker's own
+      self-test rather than only in a standalone sweep.
+
+------------------------------------------------------------------------------------------------
+PART 2b — DRIVE, POST-FIX. The tracked file, unmodified.
+------------------------------------------------------------------------------------------------
+
+    $ bash scripts/check-beets-config.sh --self-test ; echo RC=$?
+    ...
+    case 7 precondition: raw dump is 71013 bytes, above the 65536-byte pipe-buffer ceiling
+    case: a forbidden substring at the TOP of a >64 KiB dump (GC-01 regression)  (expect 1 red)
+    ...
+    · forbidden substring present in the server-committed dump: 'Compilations'
+    ✅ case 'a forbidden substring at the TOP of a >64 KiB dump (GC-01 regression)': 1 red, as expected
+    ✅ --self-test: all 7 cases behaved as expected (6 of them red)
+    RC=0
+
+    ^ THE CATCH, and exactly one red: the forbidden-substring finding and nothing else, which is
+      what proves the 70 KB pad did not perturb any other assertion.
+
+The mutant copy was deleted after the run. `git diff --name-only -- scripts/` lists only
+`scripts/check-beets-config.sh`.
+
+================================================================================================
+PART 3 — GC-13: case 6's two outcomes, counted independently
+================================================================================================
+
+(appended by task 2 — see below)
+
+================================================================================================
+PART 4 — repo-wide inventory of the `… | grep -q` shape in `pipefail`-setting scripts
+================================================================================================
+
+(appended by task 3 — see below)
