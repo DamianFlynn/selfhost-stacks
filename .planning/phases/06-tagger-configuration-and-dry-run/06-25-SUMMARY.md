@@ -201,4 +201,16 @@ measurement in this plan, so the round's `pipefail`/SIGPIPE-141 trap did not ari
 |--------|-------|
 | `871a531` | Task 1 — taghistory mint + refusal + trap; the artifact with the seven sites, the measurements and the shared decision |
 | `c908c09` | Task 2 — manifest mint + one BLIND rung + trap; the header contract paragraph |
-| (this file) | SUMMARY |
+| `9f0891a` | SUMMARY |
+
+## Self-Check: PASSED
+
+- `scripts/phase06-incremental-control.sh` — present and modified.
+- `.planning/phases/06-tagger-configuration-and-dry-run/artifacts/06-25-incremental-tempnames.txt`
+  — present (19,742 bytes).
+- `.planning/phases/06-tagger-configuration-and-dry-run/06-25-SUMMARY.md` — present.
+- Commits `871a531`, `c908c09`, `9f0891a` all present in `git log`.
+- `git diff --diff-filter=D --name-only bf509f4 HEAD` is empty — no file was deleted.
+- `git status --short` is clean.
+- STATE.md and ROADMAP.md deliberately **not** touched: this plan ran as a parallel worktree
+  executor and the orchestrator owns those writes after the wave.
