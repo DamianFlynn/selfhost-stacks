@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-21T23:24:49.136Z"
-last_activity: 2026-09-21 -- Phase 06 execution started
+last_updated: "2026-09-22T13:39:04.751Z"
+last_activity: 2026-09-22 -- Phase 06 execution started
 progress:
   total_phases: 10
   completed_phases: 5
-  total_plans: 95
-  completed_plans: 86
+  total_plans: 103
+  completed_plans: 93
   percent: 50
 ---
 
@@ -28,17 +28,20 @@ pipeline that someone owns.
 
 ## Current Position
 
-Phase: 06 (tagger-configuration-and-dry-run) — gap-closure round 1 COMPLETE, round 2 PLANNING
-Plan: 21 of 21 executed. Round 1 (06-15..06-21, waves 6-9, 2026-09-22) closed CR-01 and
+Phase: 06 (tagger-configuration-and-dry-run) — gap-closure round 2 EXECUTING
+Plan: 21 of 29 executed; round 2 (06-22..06-29, waves 1-4) is running now. Round 1
+(06-15..06-21, waves 6-9, 2026-09-22) closed CR-01 and
 dispositioned all 24 findings of `06-REVIEW.md`; re-verification is **6/6, status passed**
 (`06-VERIFICATION.md`, gaps_remaining: [], regressions: []).
 **The phase is NOT complete.** A code review of the round-1 changes themselves
 (`06-REVIEW-GAP.md`, GC-01..GC-15) found 1 BLOCKER + 7 WARNING in the new code — the same
 defect class round 1 existed to remove. Two confirmed independently by the orchestrator:
+
 - **GC-01** `check-beets-config.sh:554,:567` — `printf | grep -qF` under `pipefail` returns 141
   at >=64 KiB input, so a forbidden substring that IS present reports as absent. Reproduced
   locally: FOUND at 8-56 KiB, MISSED at 64/96/128 KiB. Position-dependent; `--self-test` cannot
   catch it (synthetic dumps are tiny). Fix is `grep -qF -- "$forb" <<<"$raw"`.
+
 - **GC-03** `quick-health-check.sh:1791` — the vacuity guard tests `D04_N_EXE` but the loop
   iterates `D04_INVOKE_ASSERT` and the tick prints `$D04_N_ASSERT of $D04_N_EXE`, so an empty
   ASSERTED set still prints a green tick. **CR-01 reproduced one nesting level in.**
@@ -108,7 +111,7 @@ it now matches a real song the split moved into `Vol 066`; assert the named path
 before Phase 6 signs off** — it is the only undo for 4,750 renames, 751 tag writes and 26,005
 chowns, and it is **not** a clean undo.
 
-Status: Phase 06 gap-closure round 1 executed and verified 6/6 (2026-09-22); round 2 PLANNING
+Status: Phase 06 gap-closure round 1 executed and verified 6/6 (2026-09-22); round 2 EXECUTING
 against `06-REVIEW-GAP.md` (GC-01 blocker + 7 warnings in round 1's own code). Still 1 open
 requirement (CONF-04, Jellyfin half — owned by Phase 7 entry criterion E6, NOT closed here).
 **Do NOT mark Phase 06 complete until round 2 lands** — GC-03 is CR-01 one nesting level in,
@@ -674,7 +677,7 @@ it asked for: the operator browsed MA's Filesystem (local disk) provider, spot-c
 **played tracks to confirm the audio matches the metadata**. No assertion in this phase could do
 that — every automated check verifies MA's *database* says the right thing, never that the *bytes*
 are the right song, and the documented stale state is precisely "entries exist, playback fails".
-Last activity: 2026-09-21 -- Phase 06 execution started
+Last activity: 2026-09-22 -- Phase 06 execution started
 deletion and throttling proven from Jellyfin's own Debug log across two driven playback sessions, the
 ZFS quota proven to refuse a write while `/` moved by 0 bytes, the anonymous volume deleted by name
 after the observation it would have made vacuous, **12.95 GiB reclaimed**, and the standing check
