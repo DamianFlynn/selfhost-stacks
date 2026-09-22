@@ -2349,6 +2349,25 @@ CONSUMERS_RC=$?   # ssh propagates the remote exit status — do NOT pipe before
 # ESC is spelled with bash's $'...' quoting instead.
 CONSUMERS_OUT=$(printf '%s\n' "$CONSUMERS_OUT" | LC_ALL=C sed $'s/\033\\[[0-9;]*m//g')
 
+# ── GC-14, 2026-09-22 (round-2 gap closure, plan 06-26) ─────────────────────────────────────────
+# WHY THE OVERRIDE NOTICE NOW APPEARS ON EVERY ARM AND NOT ONLY ON THE ONE THAT CAN GO GREEN.
+# `CONSUMERS_OVERRIDDEN` used to be consulted in exactly ONE place — inside the `-eq 0` arm, where
+# its job is to stop a TICK. Every other arm is non-green already, so it looked like there was
+# nothing left to stop. There was: on those arms the override does not change the VERDICT, it
+# changes what the verdict is ABOUT.
+#   * the `-eq 0` arm needs the notice to stop a GREEN TICK over an arbitrary file;
+#   * the `-eq 3` arm and the generic `else` need it to stop a WRONG DIAGNOSIS — the operator is
+#     told "the estate is off target" / "the audit is broken" when what was actually measured is
+#     an arbitrary file;
+#   * the empty-output and 124 arms need it most bluntly of all, because their text NAMES THE
+#     DEPLOYED PATH in its re-run advice, which under an override is a path nobody just ran.
+# That is exactly the shape of WR-10 and WR-03, which this same wave fixed elsewhere in this file.
+# THE VERDICTS ARE UNTOUCHED: every arm below already set EXIT_CODE=1 and still does, and the
+# ADDITIVE CONTRACT is unchanged — an override may drive any arm and can never produce the tick.
+# This is a DIAGNOSIS change only. Keep the notice a pure `echo`; the moment one of these guards
+# touches EXIT_CODE or a count, "pending" and "measured red" start to collapse into each other,
+# which is the distinction 06-DISPOSITIONS.md's WR-03 row exists to protect.
+#
 # Empty-output test first, deferring only to the bound — see the full argument on the freeze block
 # above. The ordering and the one qualification are identical in all three blocks on purpose.
 if [ -z "$CONSUMERS_OUT" ] && [ "$CONSUMERS_RC" -ne 124 ]; then
@@ -2357,6 +2376,11 @@ if [ -z "$CONSUMERS_OUT" ] && [ "$CONSUMERS_RC" -ne 124 ]; then
     echo "⚠️  UNKNOWN — 172.16.1.159 unreachable or the audit produced no output"
     echo "  The consumers state is unknown, NOT green. Check the host, then re-run:"
     echo "  ssh root@172.16.1.159 'cd /mnt/fast/stacks && git pull --ff-only && bash scripts/check-music-consumers.sh'"
+    if [ "$CONSUMERS_OVERRIDDEN" -eq 1 ]; then   # GC-14
+        echo "  ⚠️  CONSUMERS_SCRIPT override in effect — ran: $CONSUMERS_SCRIPT (not the deployed"
+        echo "  path). Read the re-run line above as the DEPLOYED audit, which is not what just"
+        echo "  produced no output. This says nothing about 172.16.1.159 being unreachable."
+    fi
     EXIT_CODE=1
 elif [ "$CONSUMERS_RC" -eq 124 ]; then
     # `timeout` expiry, not a failed assertion. See the freeze block above for why these two are
@@ -2369,6 +2393,11 @@ elif [ "$CONSUMERS_RC" -eq 124 ]; then
     echo "  100% with an IDLE CPU, read on atlantis 172.16.1.158), or Music Assistant is slow to"
     echo "  answer. Re-run with a larger budget before concluding anything:"
     echo "    REMOTE_TIMEOUT=300 bash scripts/quick-health-check.sh"
+    if [ "$CONSUMERS_OVERRIDDEN" -eq 1 ]; then   # GC-14
+        echo "  ⚠️  CONSUMERS_SCRIPT override in effect — ran: $CONSUMERS_SCRIPT (not the deployed"
+        echo "  path). What exceeded the bound was THAT file. Neither dockerd nor Music Assistant"
+        echo "  has been implicated by this run."
+    fi
     EXIT_CODE=1
 elif [ "$CONSUMERS_RC" -eq 0 ]; then
     # WR-09, same defect as the freeze block above. check-music-consumers.sh says
@@ -2384,6 +2413,11 @@ elif [ "$CONSUMERS_RC" -eq 0 ]; then
         echo "⚠️  UNKNOWN — the audit exited 0 but its '📊 6. Summary' block was not found."
         echo "  The section heading this fold-in anchors on has changed, so nothing here was"
         echo "  actually read. State is UNKNOWN, not green. See check-music-consumers.sh's summary."
+        if [ "$CONSUMERS_OVERRIDDEN" -eq 1 ]; then   # GC-14
+            echo "  ⚠️  CONSUMERS_SCRIPT override in effect — ran: $CONSUMERS_SCRIPT (not the"
+            echo "  deployed path). The heading that could not be found is THAT file's, so this is"
+            echo "  not evidence that the deployed audit's cross-file contract has moved."
+        fi
         EXIT_CODE=1
     elif [ "$CONSUMERS_OVERRIDDEN" -eq 1 ]; then
         # ADDITIVE CONTRACT. An overridden CONSUMERS_SCRIPT may drive any arm of this fold-in, but
@@ -2426,6 +2460,11 @@ elif [ "$CONSUMERS_RC" -eq 3 ]; then
         echo "⚠️  UNKNOWN — the audit exited 3 but its '📊 6. Summary' block was not found."
         echo "  The section heading this fold-in anchors on has changed, so the pending counts"
         echo "  were not actually read. State is UNKNOWN, not merely pending, and not green."
+        if [ "$CONSUMERS_OVERRIDDEN" -eq 1 ]; then   # GC-14
+            echo "  ⚠️  CONSUMERS_SCRIPT override in effect — ran: $CONSUMERS_SCRIPT (not the"
+            echo "  deployed path). The heading that could not be found is THAT file's, so this is"
+            echo "  not evidence that the deployed audit's cross-file contract has moved."
+        fi
         EXIT_CODE=1
     else
         echo "⚠️  CONF-04 MEASURED AND OPEN — artist rows at baseline, not at target (exit 3)"
@@ -2439,6 +2478,11 @@ elif [ "$CONSUMERS_RC" -eq 3 ]; then
             | sed -n '1,8p' | sed 's/^ */    /'
         echo "  Summary:"
         echo "$SUMMARY" | sed 's/^/    /'
+        if [ "$CONSUMERS_OVERRIDDEN" -eq 1 ]; then   # GC-14
+            echo "  ⚠️  CONSUMERS_SCRIPT override in effect — ran: $CONSUMERS_SCRIPT (not the"
+            echo "  deployed path). Exit 3 from an overridden audit is evidence about THAT file,"
+            echo "  not about the estate. CONF-04's state has NOT been measured by this run."
+        fi
         EXIT_CODE=1
     fi
 else
@@ -2447,6 +2491,11 @@ else
     echo "$CONSUMERS_OUT" | grep '❌' | sed 's/^ */    /'
     echo "  Summary:"
     echo "$CONSUMERS_OUT" | sed -n '/^📊 6\. Summary/,$p' | sed 's/^/  /'
+    if [ "$CONSUMERS_OVERRIDDEN" -eq 1 ]; then   # GC-14
+        echo "  ⚠️  CONSUMERS_SCRIPT override in effect — ran: $CONSUMERS_SCRIPT (not the deployed"
+        echo "  path). A non-zero exit from an overridden audit is evidence about THAT file, not"
+        echo "  about the estate. Nothing here says the deployed audit is broken."
+    fi
     EXIT_CODE=1
 fi
 

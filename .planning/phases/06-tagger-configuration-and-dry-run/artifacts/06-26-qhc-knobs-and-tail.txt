@@ -334,10 +334,194 @@ measured is an arbitrary file. The additive contract still held — the arm sets
 defect. Same shape as WR-10 and WR-03, which this same wave fixed elsewhere.
 
 --------------------------------------------------------------------------------
-2.2 THE FIX, AND 2.3 THE DRIVES
+2.2 THE FIX — AND WHY IT LANDED ON SIX ARMS, NOT THE TWO THE PLAN NAMED
 --------------------------------------------------------------------------------
 
-(written by task 2)
+The plan's action (a) names two arms: the exit-3 arm and the generic `else`. The
+plan's own must-have truth #3 is stricter — *"visible on every arm that can
+report it, not only on the arm that can report green"* — and the ladder has SIX
+arms that can report while overridden, of which exactly ONE already carried the
+notice. Closing two of six inside one block, in the round whose subject is
+siblings that drifted apart, is the same mistake GC-17's fourth site was about.
+So all six carry it now:
+
+    arm                                   before        after
+    empty output (host unreachable)       no notice     notice
+    124 bound expiry                      no notice     notice
+    exit 0, summary anchor NOT found      no notice     notice
+    exit 0, summary found                 NOTICE        NOTICE  (unchanged)
+    exit 3, summary anchor NOT found      no notice     notice
+    exit 3, CONF-04 pending               no notice     notice
+    generic else (any other status)       no notice     notice
+
+The empty-output and 124 arms deserve it most bluntly: their existing text names
+the DEPLOYED path in its re-run advice ("ssh … bash scripts/check-music-
+consumers.sh", "REMOTE_TIMEOUT=300 …"), which under an override is a path nobody
+just ran. The empty-output arm additionally says *"172.16.1.159 unreachable"* —
+a confident wrong diagnosis when the real cause is a stub that printed nothing.
+
+(b) WHY THE ARMS DIFFER IS STATED IN BAND, naming GC-14, in a paragraph directly
+above the ladder: the `-eq 0` arm needs the notice to stop a GREEN TICK; every
+other arm needs it to stop a WRONG DIAGNOSIS — the operator is told the estate is
+off target, or unreachable, or that the audit is broken, when what was measured
+is an arbitrary file. That is the shape of WR-10 and WR-03, which this same wave
+fixed elsewhere in this file. The paragraph also states the boundary for the next
+editor: KEEP EACH GUARD A PURE `echo`; the moment one touches `EXIT_CODE` or a
+count, "pending" and "measured red" start collapsing into each other, which is
+the distinction 06-DISPOSITIONS.md's WR-03 row exists to protect.
+
+WHAT WAS NOT TOUCHED, checked rather than asserted:
+
+  $ /usr/bin/grep -cF 'CONF-04 MEASURED AND OPEN' scripts/quick-health-check.sh
+  1            (exactly one occurrence, as before — the verdict text is untouched)
+  $ /usr/bin/grep -cF '📊 6\. Summary' scripts/quick-health-check.sh
+  5            (5 before, 5 after — every anchor guard intact, none added/removed)
+  $ /usr/bin/grep -v '^[[:space:]]*#' … | /usr/bin/grep -cF 'CONSUMERS_OVERRIDDEN'
+  9            (was 3 executable occurrences; the plan's floor is 5)
+  $ /usr/bin/grep -c '^# ⚠️  EXIT-CODE BEHAVIOUR CHANGED' scripts/quick-health-check.sh
+  13           (unchanged — this task creates no new fatal condition)
+
+No `warn()` call site was promoted into `FAILURES`. No verdict, no count, no exit
+code and no CONF-04 sentence changed. §2.3's per-arm table is the proof, not the
+claim.
+
+--------------------------------------------------------------------------------
+2.3 THE DRIVES — LIVE, FIVE SCENARIOS, PLUS AN ISOLATED PER-ARM EXIT_CODE PROOF
+--------------------------------------------------------------------------------
+
+Every stub lives on LXC 100 under /tmp/qhc-06-26 WITH A SPACE IN ITS FILENAME, so
+each of these also re-exercises GC-17's fourth site. Only `CONSUMERS_SCRIPT` was
+overridden for these runs; the three `*_REPO_ROOT` knobs were left at their
+defaults, so the rest of each run is the real estate.
+
+>>> (1) BEFORE — base-commit file, exit-3 stub
+
+    Music consumers audit: ❌ BROKEN (check-music-consumers.sh exit 127)
+      Failed assertions:
+      Summary:
+
+    Two defects in one line. The space word-split (GC-17) turned the run into a
+    command-not-found, so the exit-3 arm was never reached; and nothing anywhere
+    names the file that answered (GC-14).
+
+>>> (2) AFTER — exit-3 stub with a well-formed `📊 6. Summary`
+
+    Music consumers audit: ⚠️  CONF-04 MEASURED AND OPEN — artist rows at baseline, not at target (exit 3)
+      This is NOT an audit failure and NOT a pass. The audit's own words:
+        CONF-04 IS NOT CLOSED
+        artist rows sit at the recorded baseline, not at target.
+        Discharges on ROADMAP entry criterion E6.
+      Summary:
+          MA version: 2.11.0-SCRATCH-STUB
+          artist rows: 3 at baseline (target 0)
+          FAILURES total: 0
+      ⚠️  CONSUMERS_SCRIPT override in effect — ran: /tmp/qhc-06-26/consumers stub exit3.sh (not the
+      deployed path). Exit 3 from an overridden audit is evidence about THAT file,
+      not about the estate. CONF-04's state has NOT been measured by this run.
+
+    The CONF-04 verdict text is byte-identical to before. The override line is
+    additional. That is the whole of GC-14's fix.
+
+>>> (3) AFTER — exit-5 stub, the generic `else`
+
+    Music consumers audit: ❌ BROKEN (check-music-consumers.sh exit 5)
+      Failed assertions:
+        ❌ scratch stub failure line
+      Summary:
+      📊 6. Summary
+        FAILURES total: 1
+      ⚠️  CONSUMERS_SCRIPT override in effect — ran: /tmp/qhc-06-26/consumers stub exit5.sh (not the deployed
+      path). A non-zero exit from an overridden audit is evidence about THAT file, not
+      about the estate. Nothing here says the deployed audit is broken.
+
+>>> (4) AFTER — DEF-06-21-07: exit-3 stub whose `📊 6. Summary` is RENUMBERED to `📊 7.`
+
+    Music consumers audit: ⚠️  UNKNOWN — the audit exited 3 but its '📊 6. Summary' block was not found.
+      The section heading this fold-in anchors on has changed, so the pending counts
+      were not actually read. State is UNKNOWN, not merely pending, and not green.
+      ⚠️  CONSUMERS_SCRIPT override in effect — ran: /tmp/qhc-06-26/consumers stub exit3 renumbered.sh (not the
+      deployed path). The heading that could not be found is THAT file's, so this is
+      not evidence that the deployed audit's cross-file contract has moved.
+
+    ✅ DEF-06-21-07 IS NOW DRIVEN, AND IT PASSES. The exit-3 arm's heading-anchor
+    guard fires: the block reports UNKNOWN and prints NO counts, rather than
+    scraping numbers out of the wrong region. That was the exact condition the
+    deferred item specified ("renumber the heading in a scratch copy, point
+    CONSUMERS_SCRIPT at it, confirm the arm reports UNKNOWN rather than printed
+    counts"). It needed no estate contact beyond a /tmp stub, as the item
+    predicted. NOT a new finding — it behaves as plan 06-17 designed it to.
+    It is a residue of WR-03 and can be closed.
+
+>>> (5) AFTER — control: exit-0 stub, the arm that ALREADY carried the notice
+
+    Music consumers audit: ⚠️  CONSUMERS_SCRIPT override in effect — this run cannot report the consumers green
+      ran: /tmp/qhc-06-26/consumers stub exit0.sh (not the deployed path). Exit 0 from an overridden audit is
+      evidence about THAT file, not about the estate.
+        MA version: 2.11.0-SCRATCH-STUB
+        albums matched in MA: 1
+        ...
+
+    Unchanged, as intended. It is the model the other five were written from.
+
+>>> (6) ISOLATED PER-ARM EXIT_CODE PROOF
+
+WHY IT IS NEEDED. All five live runs above report WHOLE-SCRIPT exit 1 — but that
+is NOT discriminating, because the estate's music-freeze harness is independently
+❌ (§1.6b), so the script exits 1 whatever the consumers arm does. To make the
+claim "no verdict changed" checkable, the consumers ladder was EXTRACTED FROM THE
+SHIPPING FILE (not transcribed — a hand-copied ladder proves nothing about the
+ladder that ships) and run over synthetic fixtures with EXIT_CODE starting at 0.
+
+    awk '/^if \[ -z "\$CONSUMERS_OUT" \] && \[ "\$CONSUMERS_RC" -ne 124 \]; then$/{f=1} f; f && /^fi$/{exit}'
+
+    ⚠️ `f && /^fi$/{exit}`, NOT `/^fi$/{exit}` — a bare terminator matches many
+       times earlier in the file and silently extracts ZERO lines, producing a
+       harness that "passes" by doing nothing (06-23, deviation 3). The harness
+       asserts the extraction returned ≥40 lines before it will report:
+         pre-fix ladder  98 lines
+         post-fix ladder 128 lines
+
+    ⚠️ A SECOND SILENT-PASS TRAP WAS HIT WHILE BUILDING THIS AND IS RECORDED
+       BECAUSE IT IS THE SAME CLASS. The first version captured the arm's output
+       with `OUT=$(eval "$LADDER")`. A command substitution runs in a SUBSHELL, so
+       the ladder's `EXIT_CODE=1` was discarded and EVERY row reported 0 —
+       including rows that demonstrably set it. It was caught only because the
+       one row that SHOULD read 0 read the same as the other eight. Fixed by
+       redirecting to a file in the current shell.
+
+    arm (fixture)                               EXIT_CODE      override line
+                                              pre / post      pre / post
+    exit 3, overridden      (GC-14 target)      1  /  1        0  /  1   <-- FIXED
+    exit 3, NOT overridden                      1  /  1        0  /  0
+    exit 5, overridden      (generic else)      1  /  1        0  /  1   <-- FIXED
+    exit 5, NOT overridden                      1  /  1        0  /  0
+    exit 3, RENUMBERED heading, overridden      1  /  1        0  /  1   <-- FIXED
+    exit 0, overridden      (pre-existing)      1  /  1        1  /  1
+    exit 0, NOT overridden  (ONLY green arm)    0  /  0        0  /  0
+    empty output, overridden                    1  /  1        0  /  1   <-- FIXED
+    bound expiry 124, overridden                1  /  1        0  /  1   <-- FIXED
+
+    READ THE EXIT_CODE COLUMN FIRST: it is IDENTICAL pre and post in all NINE
+    rows. Not one verdict moved. The override column is the entire delta, and it
+    moves only from 0 to 1 — additive, never subtractive. The single green arm
+    (exit 0, not overridden) is still the single green arm.
+
+    (Harness artifact, stated so it is not read as a defect: the harness pins
+    CONSUMERS_SCRIPT to the exit3 stub's name for all rows, so the `ran:` path it
+    echoes is that one regardless of the fixture. The LIVE runs in (1)-(5) show
+    each arm echoing its own real path.)
+
+--------------------------------------------------------------------------------
+2.4 D-04 SELF-SCAN PERTURBATION CHECK FOR TASK 2
+--------------------------------------------------------------------------------
+
+    base commit 9b28021 : raw 200   comment-stripped 99
+    after task 1        : raw 200   comment-stripped 99
+    after task 2        : raw 200   comment-stripped 99
+
+NO MOVEMENT. Task 2's prose was written to avoid naming an invocation-shaped
+token at all, following 06-23's convention of pointing at the artifact rather
+than spelling the shape out in band.
 
 
 ================================================================================
