@@ -151,3 +151,13 @@ hardening round. No estate contact, no ssh, no docker, no `--run`, no `git push`
   edit changes no treatment); the *description* of what the run tag buys is now corrected in band,
   and updating the entry is plan 06-29's job. Stated here and in the artifact instead of edited.
 - `STATE.md`, `ROADMAP.md` — the orchestrator owns those writes after the wave.
+
+## Self-Check: PASSED
+
+Files claimed created/modified, all FOUND on disk:
+`06-27-SUMMARY.md`, `artifacts/06-27-oracle-vacuity-and-claims.txt`, `scripts/phase06-oracle.sh`.
+
+Commits claimed, all FOUND in `git log 9b28021..HEAD`:
+`613ace8`, `38fd534`, `525ef7c`, `1f0a8a1` (plus this amendment).
+
+`git status --short` is empty — nothing left uncommitted in the worktree.
