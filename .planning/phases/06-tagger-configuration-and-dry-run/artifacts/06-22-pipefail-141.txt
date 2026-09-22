@@ -239,7 +239,186 @@ change, so every phase artifact quoting it stays valid. All four mutant copies w
 the run.
 
 ================================================================================================
-PART 4 — repo-wide inventory of the `… | grep -q` shape in `pipefail`-setting scripts
+PART 4 — repo-wide INVENTORY of the `… | grep -q` shape in `pipefail`-setting scripts
 ================================================================================================
 
-(appended by task 3 — see below)
+This is an INVENTORY, not a sweep. No file outside `scripts/check-beets-config.sh` was edited by
+plan 06-22. `DEF-06-21-08` item 1 already names this shape as a systemic **planner-side** defect
+in plan `<verify>` blocks; this section establishes its extent in **shipped code**, which
+`DEF-06-21-08` does not cover.
+
+------------------------------------------------------------------------------------------------
+GREP 1 — which scripts are in scope
+------------------------------------------------------------------------------------------------
+
+    $ grep -nE "^[[:space:]]*set [-a-z]+ pipefail" scripts/*.sh
+
+      scripts/check-beets-config.sh              113:set -euo pipefail
+      scripts/check-drift.sh                     236:set -euo pipefail
+      scripts/check-jellyfin-transcode.sh        146:set -euo pipefail
+      scripts/check-music-consumers.sh           268:set -euo pipefail
+      scripts/check-music-freeze.sh              115:set -euo pipefail
+      scripts/check-renovate.sh                  5:set -euo pipefail
+      scripts/diff-music-tags.sh                 53:set -euo pipefail
+      scripts/disable-jellyfin-hwaccel.sh        121:set -uo pipefail
+      scripts/freeze-music-apply.sh              67:set -euo pipefail
+      scripts/neocortex-backup-lxc.sh            20:set -euo pipefail
+      scripts/pg-migrate.sh                      15:set -euo pipefail
+      scripts/phase05-downloads-chown.sh         195:set -euo pipefail
+      scripts/phase05-junk-sweep.sh              134:set -euo pipefail
+      scripts/phase05-now-split.sh               181:set -euo pipefail
+      scripts/phase05-now-tag-inventory.sh       104:set -euo pipefail
+      scripts/phase06-incremental-control.sh     115:set -euo pipefail
+      scripts/phase06-oracle.sh                  223:set -euo pipefail
+      scripts/setup-couchdb.sh                   20:set -euo pipefail
+      scripts/setup-mpe-cloudflare.sh            24:set -euo pipefail
+      scripts/setup-mpe.sh                       9:set -euo pipefail
+      scripts/snapshot-music-tags.sh             74:set -euo pipefail
+      scripts/spike03-gen-import-config.sh       39:set -euo pipefail
+      scripts/spike03-image-headroom.sh          100:set -euo pipefail
+      scripts/spike03-variant-survey.sh          99:set -euo pipefail
+      scripts/spike03-wrtag-arms.sh              174:set -euo pipefail
+
+      -> 25 of 29 scripts under scripts/.
+
+    MENTIONS pipefail but does NOT set it for its own shell — deliberately OUT of scope:
+
+      scripts/quick-health-check.sh   24 mentions, 19 of them in comments; and
+                                      `grep -cE "^[[:space:]]*set " scripts/quick-health-check.sh`
+                                      returns 0 — it carries NO local `set` line at all.
+
+    >>> A CORRECTION TO THIS PLAN'S OWN PREMISE, recorded because the trap is one level deeper
+        than the plan stated. 06-22-PLAN.md says to "filter comment lines before matching —
+        `quick-health-check.sh` mentions it repeatedly and does not set it". Filtering comments
+        is NECESSARY AND NOT SUFFICIENT. A comment filter alone still classifies
+        `quick-health-check.sh` as a setter, because five of its mentions are on EXECUTABLE lines
+        — inside REMOTE command strings:
+
+            1105: RUNNING=$(ssh … "set -o pipefail; timeout $REMOTE_TIMEOUT docker ps -q | wc -l")
+            1132: UNHEALTHY=$(ssh … "set -o pipefail; timeout $REMOTE_TIMEOUT docker ps … | wc -l")
+            1346: DRIFT_CMD="set -o pipefail; cd $DRIFT_REPO_ROOT || exit 3 …"
+
+        Those set pipefail on the REMOTE shell, on the far side of an ssh, and have no bearing on
+        the local `| grep -q` sites in the same file. `phase06-oracle.sh:1355`/`:1359` carry the
+        same construct (and that file IS in scope, on its own line 223). The grep above is
+        therefore anchored to `^[[:space:]]*set …`, which admits only a line whose FIRST word is
+        `set` — a local shell-option change and nothing else.
+
+    quick-health-check.sh's own six `| grep -q` sites — listed so their absence from the table
+    below is a stated decision rather than an omission:
+
+      1035, 1063, 1112, 1141, 1271, 2373
+
+    They are correct TODAY only because that file never sets pipefail: `grep -q`'s own status is
+    what the `if` reads. That is a property of an absent line, not of a control — adding
+    `set -euo pipefail` to that file would arm all six at once. This is worth knowing before
+    anyone "tightens" the estate's single health-check entry point.
+
+------------------------------------------------------------------------------------------------
+GREP 2 — every instance in that set, with provenance, size class and failure direction
+------------------------------------------------------------------------------------------------
+
+    $ grep -nE "\|[[:space:]]*(LC_ALL=[^ ]+[[:space:]]+)?grep[[:space:]]+-q" <each setter> \
+        | grep -v "^[0-9]*:[[:space:]]*#"
+
+SIZE CLASS
+  bounded    — the input cannot approach 64 KiB by construction (a single value, one command
+               string, one mount-option list)
+  unbounded  — it grows with the estate, so today's margin is not a control
+
+FAILURE DIRECTION — the thing a reader needs and will not otherwise get. It depends entirely on
+the SENSE of the test:
+  POSITIVE assertion (`… || fail`, or match -> pass) — a 141 fires the failure branch when the
+      file is CORRECT. A false RED. Noisy, self-announcing, not dangerous.
+  INVERTED assertion (`if … ; then fail`) — a match IS the failure, so a 141 makes the `if` false
+      and the assertion reports PASS at the precise moment it should have failed. A false GREEN.
+      THIS is the dangerous half, and it is the defect class this whole gap closure exists to
+      remove.
+  CLASSIFY  — no verdict either way; a 141 mislabels or duplicates rather than passing or failing.
+
+  file:line                                  provenance                                    size       direction
+  -----------------------------------------  --------------------------------------------  ---------  ----------------------------
+  check-jellyfin-transcode.sh:476            one container's mount list for one dest        bounded    POSITIVE (match -> pass)
+  check-jellyfin-transcode.sh:490            jellyfin's mount DESTINATIONS                  bounded    ** INVERTED (match -> fail)
+  check-jellyfin-transcode.sh:513            `docker volume ls -q` (64-char ids)            unbounded  ** INVERTED (match -> fail)
+  check-music-consumers.sh:911               NFS mount-option string ",$OPTS,"              bounded    POSITIVE (match -> pass)
+  check-music-consumers.sh:929               NFS mount-option string ",$OPTS,"              bounded    POSITIVE (match -> pass)
+  check-music-consumers.sh:939               NFS mount-option string ",$OPTS,"              bounded    ** INVERTED (fsid= must be ABSENT)
+  check-music-freeze.sh:366                  accumulated container-name list                bounded    CLASSIFY (dedupe `continue`)
+  check-music-freeze.sh:380                  accumulated container-name list                bounded    CLASSIFY (writer bucketing)
+  check-music-freeze.sh:989                  EVERY container's mount rows, via awk          unbounded  POSITIVE (inverted `!`, fails to UNKNOWN)
+  check-music-freeze.sh:1003                 accumulated container-name list                bounded    CLASSIFY (dedupe `continue`)
+  check-music-freeze.sh:1024                 accumulated container-name list                bounded    CLASSIFY (both arms `fail`; mislabels only)
+  check-renovate.sh:184                      one Renovate branch name                       bounded    CLASSIFY (cosmetic PR labelling)
+  check-renovate.sh:188                      one commit message                             bounded    CLASSIFY (cosmetic PR labelling)
+  disable-jellyfin-hwaccel.sh:198            one PSI io-pressure number                     bounded    POSITIVE (inverted `!`, fails to REFUSE)
+  neocortex-backup-lxc.sh:81                 one `findmnt -o SOURCE` line                   bounded    POSITIVE (`&& ok=yes`; 141 -> not ok)
+  neocortex-backup-lxc.sh:82                 one `docker inspect` boolean                   bounded    POSITIVE (`&& ok=yes`; 141 -> not ok)
+  neocortex-backup-lxc.sh:83                 one `docker inspect` boolean                   bounded    POSITIVE (`&& ok=yes`; 141 -> not ok)
+  neocortex-backup-lxc.sh:133                CouchDB `/_up` JSON body                       bounded    POSITIVE (`until`; 141 -> keeps waiting, dies at 60 s)
+  pg-migrate.sh:44                           `docker ps --format '{{.Names}}'`              unbounded  POSITIVE (inverted `!`, fails to SKIP)
+  phase05-downloads-chown.sh:1155            one `zfs diff | wc -l` count string            bounded    POSITIVE (inverted `!`, fails to UNKNOWN)
+  phase06-oracle.sh:1809                     one command's stdout, one line                 bounded    POSITIVE (`|| rc=1`)
+  phase06-oracle.sh:1828                     one remote command STRING                      bounded    POSITIVE (`|| rc=1`)
+  phase06-oracle.sh:1831                     one remote command STRING                      bounded    ** INVERTED (match -> rc=1)  [GC-06]
+  spike03-image-headroom.sh:316              container-referenced image refs                bounded    ** PROTECTIVE-INVERTED (see note)
+  spike03-image-headroom.sh:317              container-referenced image refs                bounded    ** PROTECTIVE-INVERTED (see note)
+  spike03-image-headroom.sh:408              container-referenced image refs (x2 on one line) bounded   ** INVERTED (match -> fail)
+
+  ** = fails toward a false GREEN, or (316/317) toward the destructive answer. These are the ones
+       that matter.
+
+  NOTE on spike03-image-headroom.sh:316-317. This is the one site whose danger is not "a checker
+  says green". The match means "this image IS referenced by a running container, therefore
+  PROTECT it (`kept_count++; continue`)". A 141 makes the protective branch NOT taken, so a
+  referenced image falls through into the reap list. The failure direction is toward DELETING
+  something that is in use. Direction matters more than severity class here, which is exactly
+  why this column exists.
+
+------------------------------------------------------------------------------------------------
+TOTALS — stated as numbers, not as "several"
+------------------------------------------------------------------------------------------------
+
+  Total instances of the shape in pipefail-setting scripts, before this round:
+      28 LINES / 29 PIPELINES
+      (26 lines remaining in the grep above + the 2 in check-beets-config.sh closed by this plan;
+       spike03-image-headroom.sh:408 carries TWO pipelines on one line, hence 29 > 28)
+
+  Closed by this gap-closure round:            5
+      - 2 here, scripts/check-beets-config.sh:554 and :567 (plan 06-22, GC-01) — DONE, driven
+      - 3 in scripts/phase06-oracle.sh:1809, :1828, :1831 (plan 06-24, GC-06) — NOT this plan's
+        to touch; recorded only
+
+  REMAINDER, explicitly:                       23 LINES / 24 PIPELINES
+      across check-jellyfin-transcode.sh (3), check-music-consumers.sh (3),
+      check-music-freeze.sh (5), check-renovate.sh (2), disable-jellyfin-hwaccel.sh (1),
+      neocortex-backup-lxc.sh (4), pg-migrate.sh (1), phase05-downloads-chown.sh (1),
+      spike03-image-headroom.sh (3 lines / 4 pipelines).
+
+  Of that remainder, the INVERTED ones — the ones that fail toward a false green or toward the
+  destructive answer — are FIVE:
+      check-jellyfin-transcode.sh:490
+      check-jellyfin-transcode.sh:513
+      check-music-consumers.sh:939
+      spike03-image-headroom.sh:316 / :317   (protective-inverted; fails toward reaping a live image)
+      spike03-image-headroom.sh:408
+  Every one of them has a BOUNDED input except check-jellyfin-transcode.sh:513, whose input is
+  `docker volume ls -q` — 64-char ids plus a newline, so the 64 KiB ceiling is ~1,008 volumes.
+  That is the only remaining instance where growth of the estate alone can arm the defect.
+
+------------------------------------------------------------------------------------------------
+WHY THE REMAINDER IS NOT FIXED HERE
+------------------------------------------------------------------------------------------------
+
+It spans scripts this phase does not own — `check-music-freeze.sh`,
+`check-jellyfin-transcode.sh`, `check-music-consumers.sh`, `neocortex-backup-lxc.sh`,
+`pg-migrate.sh`, `phase05-downloads-chown.sh`, `check-renovate.sh`,
+`disable-jellyfin-hwaccel.sh` and `spike03-image-headroom.sh` — each with its own controls and
+its own driven evidence. Three of them are in the estate's health path
+(`scripts/quick-health-check.sh` folds in `check-music-freeze.sh`, `check-music-consumers.sh` and
+`check-jellyfin-transcode.sh`), and a sweep across them inside a gap-closure round would put
+unreviewed edits into exactly the code that answers "is the estate healthy". Plan 06-29 carries
+the remainder as a named deferred item citing this artifact.
+
+    $ git diff --name-only -- scripts/
+    scripts/check-beets-config.sh        <- and nothing else
