@@ -192,20 +192,44 @@ stat -f '%Lp' ~/.config/neocortex/memory-api.token   # expect 600   (macOS; Linu
 ```
 
 **And prove it against the live API.** This works before the DNS record exists, and keeps the
-token out of `ps` by passing it through a curl config on a file descriptor rather than argv:
+token out of `ps` by passing it through a curl config on a file descriptor rather than argv.
+
+Use **`/v1/team/whoami`** to test the token: it is a `GET`, it takes no body, and every
+capability may call it — so the only thing it can fail on is authentication.
 
 ```sh
-curl -sS --resolve cortex.deercrest.info:443:172.16.1.159 \
+curl -sS -k --resolve cortex.deercrest.info:443:172.16.1.159 \
+  -K <(printf 'header = "Authorization: Bearer %s"\n' \
+       "$(cat ~/.config/neocortex/memory-api.token)") \
+  https://cortex.deercrest.info/v1/team/whoami
+```
+
+Read the codes carefully, because they say different things:
+
+| code | meaning |
+|---|---|
+| **200** | the token is good; the body names the identity and capability |
+| **401** | the file does not hold the token the server hashed |
+| **403** | the token is good but that capability may not call this route |
+| **400** | the token is good and the **request** is wrong — auth already passed |
+
+A **400 is not a token failure.** That is worth stating because it happened: a search probe with
+`{"query":"hello","topK":1}` returned 400 and looked like a broken token. It was a wrong body —
+without `serverEmbedding: true` the server takes the client-embedding path and requires
+`embeddingModel`, so the request is rejected long after the bearer token was accepted.
+
+The functional test, once `whoami` is green:
+
+```sh
+curl -sS -k --resolve cortex.deercrest.info:443:172.16.1.159 \
   -K <(printf 'header = "Authorization: Bearer %s"\n' \
        "$(cat ~/.config/neocortex/memory-api.token)") \
   -X POST https://cortex.deercrest.info/v1/memory/search \
-  -H 'content-type: application/json' -d '{"query":"hello","topK":1}' \
-  -o /dev/null -w 'HTTP %{http_code}\n'
+  -H 'content-type: application/json' \
+  -d '{"query":"hello","serverEmbedding":true,"scope":{"include":["system","private"]},"topK":1}'
 ```
 
-`200` means the whole chain works. `401` means the file does not hold the token the server
-hashed. Add `-k` only if the certificate is not issued yet — and if you need it, say so, because
-that is a separate thing to fix.
+Do not pipe the body to `/dev/null` while diagnosing — the JSON error names the field.
 
 ---
 
