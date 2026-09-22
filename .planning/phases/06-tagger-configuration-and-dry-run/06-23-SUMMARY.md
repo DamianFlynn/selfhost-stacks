@@ -225,3 +225,13 @@ is the **nested** instance inside the D-04 ladder, and the branch-asymmetric bli
 |---|---|
 | `8605b0e` | Task 1 — condition P, the strengthened green condition, the thirteenth notice, the driven artifact |
 | `58e4aaf` | Task 2 — branch 4's widened anchor set, the forward-brought comment, the additivity proof and controls |
+| `dad5e96` | this SUMMARY |
+
+## Self-Check: PASSED
+
+- `scripts/quick-health-check.sh` — FOUND
+- `.planning/phases/06-tagger-configuration-and-dry-run/artifacts/06-23-d04-assert-vacuity.txt` — FOUND
+- `.planning/phases/06-tagger-configuration-and-dry-run/06-23-SUMMARY.md` — FOUND
+- commits `8605b0e`, `58e4aaf`, `dad5e96` — all present in `git log`
+- `git diff --name-only bf509f4 HEAD -- scripts` returns **only** `scripts/quick-health-check.sh`
+- working tree clean; no shared orchestrator artifacts (STATE.md, ROADMAP.md) touched
