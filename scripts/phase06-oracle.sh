@@ -40,6 +40,19 @@
 #   Implemented at the two lines that read `UNKNOWNS" -ne 0` and `REDS" -ne 0` at the foot of
 #   this file, in that order.
 #
+#   A VERDICT CHANGE, RECORDED RATHER THAN LEFT AS A SILENT CONSEQUENCE OF A `return` EDIT (GC-05).
+#   A VACUOUS D-15 or D-13 now exits 3 (UNKNOWN) where it used to exit 1 (RED). Reason, in one
+#   sentence: a rule the run never exercised cannot have measurably failed, so "zero Compilations/
+#   over a sample holding no compilation" and "a DJ count of zero against an expected zero" are
+#   could-not-looks, and this file's rule is that a could-not-look is never folded into another
+#   verdict. NOTHING WAS RENUMBERED - 3 is still UNKNOWN and 1 is still RED; two assertions moved
+#   between them. Cross-reference the precedence paragraph above, because the practical effect is
+#   the reverse of what it looks like: as a RED, a vacuity was ERASED by any unrelated blindness in
+#   the same run (3 outranks 1); as an UNKNOWN it now PARTICIPATES in that precedence and reaches
+#   the operator. The two guards are assert_no_compilations and assert_dj_count; their
+#   measured-failure arms - a real `Compilations/` component, a wrong NON-ZERO DJ count - are
+#   untouched and still exit 1.
+#
 # ==============================================================================================
 # WHY `beet import --pretend` IS NOT THE INSTRUMENT, AND `beet move -p` IS  (D-33)
 # ==============================================================================================
@@ -353,17 +366,56 @@ esac
     fenced to the literal prefix '/mnt/fast/safety/phase06/' followed by one or more characters
     drawn from [A-Za-z0-9._-]. Nothing else is accepted, and nothing was sent."
 
-# --- IN-06 (T-06-94): the files BENEATH $SCRATCH are per-run unique -----------------------------
+# --- IN-06 (T-06-94): the files BENEATH $SCRATCH carry a per-run tag ----------------------------
 # The container's /tmp is world-writable and these names used to be fixed. A stale root-owned
 # leftover turns a read into a BLIND; a pre-placed SYMLINK at a predictable name is followed by
 # the `>` redirections below, so the instrument writes or reads something other than what it
-# believes. Suffixing with the run's PID removes the predictability.
+# believes. THE THREAT IS REAL. WHAT THE RUN TAG BUYS IS NOT.
 #
-# SCRATCH ITSELF IS DELIBERATELY NOT UNIQUIFIED. The dirty-destination precheck, the cleanup
-# assertion, the DESTRUCTIVE-KNOB FENCE's allow-list and the committed 06-11 artifacts all quote
-# '/tmp/p6' by name; moving it would falsify all four at once. The directory stays fixed and
-# fenced, and only its contents carry the run tag - which keeps every generated path inside the
-# allow-list by construction.
+# GC-07, corrected. This comment used to credit the PID suffix with making these names unguessable.
+# That is three claims the code does not support: a PID is small, sequential and exhaustively
+# enumerable (`kernel.pid_max` is 32768 by default), so pre-creating one symlink per candidate is
+# entirely feasible; `$$` is the MACOS WORKSTATION's bash PID, with no relationship to the
+# container whose /tmp is the directory in question, and PIDs recycle, so even "per-run unique" is
+# not guaranteed; and a label chosen by the writer is not a name minted by the kernel.
+#
+# WHAT ACTUALLY REFUSES A PRE-PLACED NAME HERE IS THE STEP-1 PROBE. SCRATCH_PROBE_PROG refuses ANY
+# non-empty $SCRATCH before a single byte is written into it, at any name, predictable or not. The
+# run tag narrows only the TOCTOU window between that probe and the step-5 `mkdir`. Credit the
+# probe, not the tag.
+#
+# THE DECISION BEHIND THIS IS PLAN 06-25'S, NOT A SECOND ONE MADE HERE. It is recorded in
+# .planning/phases/06-tagger-configuration-and-dry-run/artifacts/06-25-incremental-tempnames.txt
+# § 4, which this file quotes rather than paraphrases:
+#
+#     "THE THREAT IS REAL ENOUGH TO TREAT, AND THE TREATMENT IS MINTING THE NAME INSIDE THE
+#      CONTAINER. But the property being relied on is CREATION, NOT SECRECY ... `mktemp` creates
+#      with O_EXCL: it FAILS rather than opening a name that already exists, and it will not follow
+#      a symlink into being. The template prefix stays greppable in the source and is not claimed
+#      to be a secret. Unpredictability is not the mitigation; refusing to open what is already
+#      there is."
+#
+# SO THIS FILE CARRIES THE WEAKER TREATMENT, KNOWINGLY. The sibling instrument
+# scripts/phase06-incremental-control.sh was given the stronger one - container-minted `mktemp`
+# names with a fail-closed refusal - because it has NO probe over those names at all. This file
+# leans on the probe instead. The difference is one of mechanism: there, a name the kernel refuses
+# to reuse; here, a directory proven empty immediately before use, plus a tag that shortens the
+# window after that proof.
+#
+# SCRATCH ITSELF IS DELIBERATELY NOT UNIQUIFIED, and this is the constraint that is real. The
+# dirty-destination precheck, the cleanup assertion, the DESTRUCTIVE-KNOB FENCE's allow-list and
+# the committed 06-11 artifacts all quote '/tmp/p6' BY NAME; moving the DIRECTORY would falsify all
+# four at once. It stays fixed and fenced, and every generated path stays inside the allow-list by
+# construction.
+#
+# ONE CORRECTION TO THE RECORD, so the next reader does not inherit a reason that is not true: that
+# constraint binds the DIRECTORY, not these three LEAF names. artifacts/06-11-oracle-run.txt quotes
+# '/tmp/p6/lib.db' and '/tmp/p6/state.pickle' - the PRE-06-18 leaves - so plan 06-18 already
+# renamed them once and invalidated nothing. Minting the leaves here is therefore a scope decision,
+# not a dependency conflict, and the plan that does it should say so. deferred-items.md
+# DEF-06-21-02 is unaffected in substance: the treatment is unchanged by this comment edit and its
+# stated driving condition still stands; what changes is the DESCRIPTION of what the tag buys.
+# Updating that entry is plan 06-29's job, not this one's.
 RUN_TAG="$$"
 SCRATCH_LIB="$SCRATCH/lib.$RUN_TAG.db"
 SCRATCH_OVERLAY="$SCRATCH/overlay.$RUN_TAG.yaml"
@@ -854,11 +906,17 @@ assert_no_compilations() { # $1 = destination list
     ASSERT_WHY="$nc destination(s) contain a Compilations/ component - the comp: override is gone"
     return 1
   fi
+  # GC-05. This arm returns 2, which run_assert's `*)` routes to unknown() and UNKNOWNS++, NOT 1.
+  # A sample holding no compilation at all is a COULD-NOT-LOOK about the comp: rule - the run never
+  # evaluated it - and this file's own EXIT CODES block says could not look is never folded into
+  # another verdict. Returning 1 asserted a measured failure of a rule nothing exercised, and it
+  # also made that verdict outrank nothing, because UNKNOWN outranks RED four lines below. Its
+  # neighbour assert_dj_count's zero arm moved in the same commit; the two are one vocabulary.
   if [ "$nva" -eq 0 ]; then
     printf 'NO-VARIOUS-ARTISTS\tnot one destination has the literal `Various Artists` at its top level\n' > "$ev"
     ASSERT_WHY="zero Compilations/ - but ALSO zero destinations under the literal Various Artists,
     so the compilation stratum never reached the comp: rule and the result is VACUOUS"
-    return 1
+    return 2
   fi
   ASSERT_WHY="zero Compilations/ components, and $nva destination(s) under the literal Various Artists"
   return 0
@@ -877,6 +935,12 @@ assert_dj_count() { # $1 = destination list  $2 = expected DJ file count
   # Without it a sample whose S5 rows sum to zero compares `0 -ne 0`, which is false, and the
   # equality ticks green having tested nothing. The cross-check at step 11 does not save it: that
   # one only fires when the sample and the fixture DISAGREE, and zero against zero agrees.
+  #
+  # GC-05. THE CODE IS 2, NOT 1, and it moved together with the neighbour's. IN-09's reasoning -
+  # match the neighbour - was right; the neighbour's code was the wrong one, and copying it
+  # propagated a misclassification rather than fixing it. run_assert routes 2 to unknown(), so a
+  # DJ-less sample now says "could not look at the albumtype:=dj rule" instead of asserting that
+  # rule measurably failed. The wrong-non-zero-count arm below is a MEASURED failure and stays 1.
   if [ "$want" -eq 0 ]; then
     printf 'NO-S5-STRATUM\tthe expected DJ file count is zero, so the albumtype rule was never reached\n' > "$ev"
     ASSERT_WHY="the sample holds NO S5 files, so the albumtype:=dj path rule was never exercised
@@ -884,7 +948,7 @@ assert_dj_count() { # $1 = destination list  $2 = expected DJ file count
     DEF-06-12-01 - path rule 2 (albumtype:=dj disctotal:2..), the one paths: rule no Phase 6
     instrument has ever evaluated, deferred and unowned - from a SILENCE into something the next
     run over a DJ-less sample says out loud."
-    return 1
+    return 2
   fi
   LC_ALL=C awk -v root="$LIB_ROOT/" '
     index($0, root) == 1 {
@@ -1286,6 +1350,17 @@ dex_cmd() { # $1.. = argv inside the container; echoes the remote command string
 # remote `sh -c` and referenced as "$1", "$2" … inside it. `%q` is still used - but on the
 # ARGUMENTS, where the result lands in a bash WORD, which is the one context `%q` is correct for.
 # The literal `sh` after the program text is $0; without it the first real argument is eaten.
+#
+# GC-11 - AND THE PROGRAM TEXT IS `%q`-RENDERED TOO, which is a different use with a different
+# dependency, and the paragraph above is silent about it. For a MULTI-LINE program `%q` produces
+# bash ANSI-C quoting, `$'…\n…'`, so the four multi-line programs in this file (SCRATCH_PROBE_PROG,
+# PREFLIGHT_PROG, STAMP_WRITE_PROG, CLEANUP_PROG, STAMP_RM_PROG) arrive as `sh -c $'…' sh <path>`.
+# That requires root's LOGIN SHELL on $LXC_HOST - and, on the dex_cmd paths, the shell that parses
+# the `docker exec` line - to understand `$'…'`, i.e. to be bash. IT IS: rsh()'s own comment
+# records the transport as "run by bash on LXC 100"; this sentence states the dependency at the
+# site that creates it. AND THE FAILURE IS LOUD: measured, a dash transport gives
+# `syntax error near unexpected token ')'` and a non-zero status, which rsh() records in RSH_RC and
+# every call site refuses on - not a quietly mangled `rm`.
 #
 # This is also the helper the DESTRUCTIVE-KNOB FENCE's second layer goes through: the remote
 # programs that run `rm -rf` / `rm -f` re-test their path against the same literal allow-list
@@ -2037,7 +2112,10 @@ self_test_classes() {
     assert_no_compilations "$d/dest.comp.txt"
   # ... and the vacuous case: no Compilations/, but no Various Artists either, so nothing was tested.
   LC_ALL=C grep -v '/Various Artists/' "$d/dest.txt" > "$d/dest.nova.txt"
-  st_assert 1 "D-15: zero Compilations/ with zero Various Artists is VACUOUS, so it is a RED." \
+  # GC-05: the expectation is 2, not 1. The case is unchanged and correct - what was wrong was the
+  # code it expected. A vacuity is COULD NOT LOOK, in the same vocabulary as the three sibling
+  # guards' cases above and below, and run_assert routes it to unknown() rather than to bad().
+  st_assert 2 "D-15: zero Compilations/ with zero Various Artists is VACUOUS - COULD NOT LOOK, not a RED." \
     assert_no_compilations "$d/dest.nova.txt"
 
   # (3) D-13 - the DJ count one short. The clean fixture has two DJ rows.
@@ -2256,7 +2334,11 @@ self_test_vacuity() {
   rc=0; LC_ALL=C grep -q $'\342\234\223' "$d/ra.good.txt" || rc=1
   st_case 0 "$rc" "THE PAIR: over a real field view the same label DOES tick, so the routing"
   info "discriminates rather than having been turned off."
-  UNKNOWNS=0
+  # GC-12(a): a reset of the UNKNOWN counter stood here and was DEAD - the self-test gate in MAIN
+  # consults ST_FAIL and REDS only, never UNKNOWNS, so nothing ever read what it wrote. Deleted
+  # rather than left, because a counter written and never read was the SUBJECT of the section it
+  # sat in. Do not helpfully add it back: the run_assert drives above deliberately leave UNKNOWNS
+  # non-zero, and that is harmless precisely because the gate does not look at it.
 
   say ""
   say "== --self-test: IN-12 an empty field view is not 'six columns each' =="
@@ -2277,7 +2359,9 @@ self_test_vacuity() {
   say "== --self-test: IN-09 a DJ stratum that was never exercised is VACUOUS =="
   rule
   rc=0; assert_dj_count "$OUT/st-classes/dest.txt" 0 || rc=$?
-  st_case 1 "$rc" "a wanted count of ZERO is refused - 0 against 0 tests nothing."
+  # GC-05: expectation moved 1 -> 2 with the guard. Same could-not-look vocabulary as the IN-12 and
+  # WR-06 cases above, which have always expected 2 for the same class of input.
+  st_case 2 "$rc" "a wanted count of ZERO is COULD NOT LOOK - 0 against 0 tests nothing."
   st_grep_why 0 "$ASSERT_WHY" "VACUOUS" \
     "in its neighbour's own vocabulary, so the two read the same on the same question."
   st_grep_why 0 "$ASSERT_WHY" "DEF-06-12-01" \
@@ -2474,8 +2558,15 @@ if [ "$MODE" = "self-test" ]; then
   self_test_vacuity
   self_test_fences
   say ""
+  # GC-12(b). The gate fires on EITHER counter, so the banner must name BOTH - it used to print
+  # ST_FAIL alone, and a run that failed only because a stray bad() moved REDS printed
+  # "0 of N case(s) FAILED" and exited 1: a failure banner asserting nothing failed. REDS is NOT
+  # folded into ST_FAIL, because the two count different things - a case that BEHAVED unexpectedly
+  # versus an assertion that went RED inside a case - and collapsing them loses the distinction
+  # the self-test exists to keep.
   if [ "$ST_FAIL" -ne 0 ] || [ "$REDS" -ne 0 ]; then
-    printf '  \342\234\227 self-test: %s of %s case(s) FAILED\n' "$((ST_FAIL))" "$((ST_RUN))"
+    printf '  \342\234\227 self-test: %s of %s case(s) FAILED, and %s assertion(s) went RED inside a case\n' \
+      "$((ST_FAIL))" "$((ST_RUN))" "$((REDS))"
     exit 1
   fi
   ok "self-test: $ST_RUN case(s), every fail-closed branch behaved exactly as expected"
@@ -2570,7 +2661,17 @@ case "$RC" in
 esac
 
 # --- Step 3: the layer-3 baselines, and the library identity the fixture assumes ---------------
-rsh "$(dex_cmd sha256sum "$REAL_LIB_DB" "$REAL_STATE_PICKLE")"
+# GC-15. `dex_cmd` renders its arguments with "$*" - no %q, no remote_sh_c - and both values here
+# are ${VAR:-default} knobs, so before this change a REAL_LIB_DB carrying a space word-split on the
+# far side. Measured: `/config/my library.db` arrived as argv `/config/my` + `library.db`, argc 3
+# rather than 2. This is a bash WORD context, so %q is exactly the right tool, and it is applied at
+# the CALL SITES rather than inside `dex_cmd` - doing it inside would double-quote the eighteen
+# sites in this file that already pass %q output through it. The consuming `awk -v p=…` keys below
+# stay RAW on purpose: the remote shell REMOVES the %q quoting before sha256sum is exec'd, so
+# sha256sum receives, and prints, the unquoted value. Confirmed by argv capture, not assumed; the
+# drive is in artifacts/06-27-oracle-vacuity-and-claims.txt § 2. The same two lines appear at
+# step 9; both carry the fix and the reason is stated only here.
+rsh "$(dex_cmd sha256sum "$(printf '%q' "$REAL_LIB_DB")" "$(printf '%q' "$REAL_STATE_PICKLE")")"
 rsh_classify "the layer-3 baseline hashes" || exit 3
 printf '%s\n' "$RSH_OUT" > "$OUT/layer3.before"
 LIB_SHA_BEFORE="$(LC_ALL=C awk -v p="$REAL_LIB_DB" '$2 == p {print $1}' "$OUT/layer3.before")"
@@ -2729,7 +2830,9 @@ capture_manifests after "$OUT/sample.tsv" || exit 3
 diff_manifest src meta || true
 diff_manifest src sha  || true
 
-rsh "$(dex_cmd sha256sum "$REAL_LIB_DB" "$REAL_STATE_PICKLE")"
+# GC-15, second of the two sites. Same fix, same reason; the account is at step 3 and is not
+# repeated. The awk keys below are RAW for the reason stated there.
+rsh "$(dex_cmd sha256sum "$(printf '%q' "$REAL_LIB_DB")" "$(printf '%q' "$REAL_STATE_PICKLE")")"
 rsh_classify "the layer-3 hashes after the run" || exit 3
 printf '%s\n' "$RSH_OUT" > "$OUT/layer3.after"
 LIB_SHA_AFTER="$(LC_ALL=C awk -v p="$REAL_LIB_DB" '$2 == p {print $1}' "$OUT/layer3.after")"

@@ -1,0 +1,372 @@
+================================================================================
+06-27 — the oracle's vacuity verdicts, its last two unquoted interpolations, its
+        self-test bookkeeping, and two comments that did not describe the code
+================================================================================
+Plan:        06-27 (gap-closure round 2, wave 2)
+Date:        2026-09-22
+Findings:    GC-05, GC-15, GC-12, GC-07, GC-11
+File:        scripts/phase06-oracle.sh
+Baseline:    commit 9b28021 (the wave-1 merge; 06-24's changes to this file are IN it)
+
+PROVENANCE OF THE MEASURING TOOLS, because a measurement is only as good as the
+tool that answered:
+  workstation: Darwin 27.0.0; bash 3.2.57(1)-release (/bin/bash); grep called as
+               /usr/bin/grep EXPLICITLY = "grep (BSD grep, GNU compatible)
+               2.6.0-FreeBSD". The operator's interactive zsh aliases grep to
+               ugrep 7.8.4; every count below was taken with /usr/bin/grep, which
+               is what the shipping scripts resolve.
+  No estate contact. No ssh, no docker, no `--run`, no import, no `git push`.
+
+METHOD NOTE — WHERE THESE COMMANDS WERE RUN FROM.
+This plan's <verify> blocks open with
+`cd /Users/damian/Development/damianflynn/selfhost-stacks`, which is the MAIN
+CHECKOUT. This plan executed in a git worktree, and the main checkout does not
+carry these edits. Obeying that line literally would have measured the
+UNMODIFIED file and reported a green describing nothing. Every command recorded
+here was run from the worktree root instead
+(`git rev-parse --show-toplevel` = .../.claude/worktrees/agent-a68557b5423f6bf88).
+Same defect, same correction, as plans 06-24 and 06-25 recorded in this round.
+That is now four agents in one round; the <verify> template is the defect.
+
+--------------------------------------------------------------------------------
+0. HOW THE GUARDS WERE DRIVEN, AND A DEFECT IN THE FIRST HARNESS
+--------------------------------------------------------------------------------
+The judging layer is pure-local by construction, so the guards can be driven with
+no docker and no ssh. The harness extracts the file's pre-MAIN function library:
+
+    LC_ALL=C awk '/^# MAIN$/{exit} {print}' scripts/phase06-oracle.sh > lib.sh
+
+EXTRACTION ASSERTED, not assumed (this round has already been bitten by an awk
+range that silently extracted zero lines):
+  * `/usr/bin/grep -c '^# MAIN$'` = 1 — the cut point is unique.
+  * lib.before.sh = 2463 lines, lib.after1.sh = 2493 lines — non-empty, and the
+    +30 is this plan's own added comment lines.
+The library is then `source`d with `--self-test` as $1, so MODE is set and the
+DESTRUCTIVE-KNOB FENCE passes; the file ends before MAIN, so nothing runs.
+
+THE FIRST HARNESS WAS WRONG AND IS RECORDED RATHER THAN QUIETLY FIXED. It called
+`out="$(run_assert …)"`. `$(…)` is a SUBSHELL, so REDS and UNKNOWNS were
+incremented in a child and discarded: the first run reported `REDS=0 UNKNOWNS=0`
+for EVERY case, including the ones that had just printed a red tick. The counter
+is the half GC-05 is about, so that harness measured nothing. Corrected by
+sending run_assert's output to a FILE and reading it back, leaving the counters
+to move in the harness's own shell. Same defect class as the `OUT=$(eval …)` trap
+this round recorded twice already.
+
+--------------------------------------------------------------------------------
+1. GC-05 — THE VERDICT CHANGE, DRIVEN BOTH WAYS
+--------------------------------------------------------------------------------
+Two arms moved from `return 1` to `return 2`, in one commit:
+  assert_no_compilations  — the zero-`Various Artists` arm (the sample holds no
+                            compilation at all, so the comp: rule was not reached)
+  assert_dj_count         — the zero-wanted arm (the sample holds no S5 file, so
+                            the albumtype:=dj rule was not reached)
+Every other `return` in both functions is unchanged. Both ASSERT_WHY texts are
+byte-for-byte what they were, DEF-06-12-01's naming included — neither text ever
+called the outcome a RED, which is the whole of the finding: the right words were
+already attached to the wrong code.
+
+BEFORE (lib.before.sh, from commit 9b28021):
+
+  RAW   D-15 vacuous (no Various Artists)    rc=1
+  ROUTE D-15 vacuous (no Various Artists)    REDS=1 UNKNOWNS=0
+        ✗ D-15 vacuous …: zero Compilations/ - but ALSO zero destinations …
+  RAW   D-13 vacuous (wanted count 0)        rc=1
+  ROUTE D-13 vacuous (wanted count 0)        REDS=1 UNKNOWNS=0
+        ✗ D-13 vacuous …: the sample holds NO S5 files, so the albumtype:=dj …
+
+AFTER (lib.after1.sh):
+
+  RAW   D-15 vacuous (no Various Artists)    rc=2
+  ROUTE D-15 vacuous (no Various Artists)    REDS=0 UNKNOWNS=1
+        ⚠ UNKNOWN, not green: D-15 vacuous …: zero Compilations/ - but ALSO …
+  RAW   D-13 vacuous (wanted count 0)        rc=2
+  ROUTE D-13 vacuous (wanted count 0)        REDS=0 UNKNOWNS=1
+        ⚠ UNKNOWN, not green: D-13 vacuous …: the sample holds NO S5 files …
+
+THE COUNTER IS THE HALF THAT MATTERS, and it moved: REDS 1 -> 0 and UNKNOWNS
+0 -> 1 on both arms, through the same `run_assert` wrapper the live run uses.
+At the foot of the script `UNKNOWNS != 0` is consulted BEFORE `REDS != 0`, so
+the live exit status for a vacuous D-15 or D-13 goes 1 (RED) -> 3 (UNKNOWN).
+
+THE PASSING PARTNERS, UNCHANGED — a guard change that converted a genuine red
+into an UNKNOWN would be a regression wearing this fix's clothes:
+
+  case                                   before          after
+  D-15 real Compilations/ component      rc=1 REDS=1     rc=1 REDS=1
+  D-13 wrong non-zero count (3 vs 2)     rc=1 REDS=1     rc=1 REDS=1
+  D-15 clean (1 Various Artists row)     rc=0            rc=0
+  D-13 clean (true count 2)              rc=0            rc=0
+
+SELF-TEST EXPECTATIONS MOVED WITH THE RETURNS (the two cases 06-19 drove; neither
+deleted, none added):
+  :2040  st_assert 1 "D-15: zero Compilations/ … so it is a RED."
+      -> st_assert 2 "D-15: zero Compilations/ … is VACUOUS - COULD NOT LOOK, not a RED."
+  :2280  st_case   1 "$rc" "a wanted count of ZERO is refused …"
+      -> st_case   2 "$rc" "a wanted count of ZERO is COULD NOT LOOK …"
+
+  bash scripts/phase06-oracle.sh --self-test  ->  exit 0,
+  "✓ self-test: 134 case(s), every fail-closed branch behaved exactly as expected"
+  (134 is the count 06-24 left; this plan added no case and removed none.)
+
+RECORDED IN THE FILE, not left as a silent consequence of a `return` edit: the
+EXIT CODES block now states the 1 -> 3 change, its one-sentence reason, that
+NOTHING WAS RENUMBERED, and the cross-reference to the precedence paragraph. The
+practical effect is the reverse of how it reads: as a RED a vacuity was ERASED by
+any unrelated blindness in the same run (3 outranks 1); as an UNKNOWN it now
+PARTICIPATES in that precedence and reaches the operator.
+
+06-DISPOSITIONS.md § Deliberate non-findings §1 is respected: exit 3 is still
+UNKNOWN and exit 1 is still RED in this file, and the numbering difference against
+phase06-incremental-control.sh is untouched. Two assertions moved BETWEEN existing
+codes; no code was redefined.
+
+TASK 1 CHECKS, /usr/bin/grep, worktree root:
+  st_assert 1 "D-15: zero Compilations                     0  (want 0)   PASS
+  st_assert 2 "D-15: zero Compilations                     1  (want 1)   PASS
+  st_case   1 "$rc" "a wanted count of ZERO                0  (want 0)   PASS
+  st_case   2 "$rc" "a wanted count of ZERO                1  (want 1)   PASS
+  DEF-06-12-01                                             2  (want >=1) PASS
+  st_assert 1 "D-15: a Compilations/ component is a RED    1  (want 1)   PASS
+  st_assert 1 "D-13: a DJ count of 2 against an expected 3 1  (want 1)   PASS
+  GC-05 named in band                                      5  (want >=1) PASS
+  bash -n scripts/phase06-oracle.sh                        clean
+
+--------------------------------------------------------------------------------
+2. GC-15 — THE LAST TWO UNQUOTED PATH INTERPOLATIONS, DRIVEN BY CAPTURING THE
+   COMMAND STRING RATHER THAN BY RUNNING IT
+--------------------------------------------------------------------------------
+A CITATION CORRECTION INHERITED, NOT REDISCOVERED. The cross-family adjudication
+says GC-15's three sites are at quick-health-check.sh:1515/:1728/:2196. Those are
+GC-17's sites, in a different file, owned by plan 06-26. The labels were crossed.
+GC-15's sites are the two `dex_cmd sha256sum` calls in THIS file. Nothing was
+looked for in quick-health-check.sh, and that file is untouched by this plan.
+
+WHERE THE FIX WENT, AND WHY NOT INSIDE `dex_cmd`. GC-15 recommends the call
+sites; that recommendation was taken. `dex_cmd` renders with "$*", and eighteen
+other call sites in this file already hand it `printf '%q'` output - quoting
+inside `dex_cmd` would double-quote every one of them. Two call sites is also the
+reviewable change: `git diff` shows exactly which two paths moved.
+
+THE DRIVE. REAL_LIB_DB set to `/config/my library.db` - a value with a space,
+which is what the finding is about. The command string is ECHOED and then PARSED
+by bash (LXC 100's shell, per rsh()'s own comment) with an argv DUMPER standing in
+for the `timeout … docker exec -u … ` prefix. NOTHING WAS RUN: no ssh, no docker,
+no sha256sum, no estate contact. The prefix strip asserts it matched, and refuses
+to report a result if it did not.
+
+  BEFORE
+    timeout 300 docker exec -u beetle beets-flask sha256sum /config/my library.db /config/state.pickle
+      argv[1] = </config/my>
+      argv[2] = <library.db>
+      argv[3] = </config/state.pickle>
+      argc = 3                      <- ONE path arrived as TWO arguments
+
+  AFTER
+    timeout 300 docker exec -u beetle beets-flask sha256sum /config/my\ library.db /config/state.pickle
+      argv[1] = </config/my library.db>
+      argv[2] = </config/state.pickle>
+      argc = 2                      <- the space survives as one word
+
+THE CONSUMER, CONFIRMED RATHER THAN ASSUMED. Two `awk -v p="$REAL_LIB_DB" '$2 == p'`
+extractions read the output, and they key on the RAW value. The question the plan
+required answering is whether the key still matches now that the COMMAND carries a
+quoted form. It does, and the argv capture above is the proof: the remote shell
+REMOVES the `\ ` quoting during word expansion, so sha256sum is exec'd with the
+raw path in argv and prints that raw path. Quoted on the wire, raw in argv, raw in
+the output, raw in the key - the two agree. The keys were therefore left alone;
+changing them to a quoted form would have BROKEN the match.
+
+STATED HONESTLY, the one thing quoting does NOT fix: `sha256sum` prints
+`<hash>  <path>`, and awk's default field splitting makes `$2` the first
+whitespace-delimited token, so a path containing a space still cannot be keyed by
+`$2 == p`. That is a PRE-EXISTING limit of the consumer, not something this change
+introduced, and it fails CLOSED - the very next lines are
+`[ -n "$LIB_SHA_BEFORE" ] || { unknown "no sha256 line for …"; exit 3; }`, so such
+a value produces UNKNOWN and exit 3. Before this fix the same value instead
+word-split into a THIRD argument on the far side, where sha256sum would have
+hashed two paths that were never asked for. Refusing beats mis-hashing. Both
+defaults are fixed container paths with no whitespace, which is why GC-15 is INFO.
+NOT DRIVEN: the space-carrying value against a REAL container - that needs a live
+`--run`, and no live run happened. What is driven is the command string and the
+argv it produces, which is where the finding lives.
+
+--------------------------------------------------------------------------------
+3. GC-12 — A DEAD COUNTER AND A BANNER THAT ASSERTED NOTHING FAILED
+--------------------------------------------------------------------------------
+(a) THE DEAD RESET. `UNKNOWNS=0` stood at the end of self_test_vacuity's WR-06
+section. The self-test gate consults ST_FAIL and REDS only, so nothing ever read
+it. Deleted, with a comment at the site recording why it must not be added back.
+Verified: the file now holds exactly ONE non-comment `UNKNOWNS=0`, at :268, which
+is the script-level initialisation and must stay.
+
+    /usr/bin/grep -n 'UNKNOWNS=0' scripts/phase06-oracle.sh   ->   268:UNKNOWNS=0
+
+(b) THE BANNER, DRIVEN BOTH WAYS. Two scratch copies of the script, differing ONLY
+in the banner, each with a single stray `bad()` injected OUTSIDE any case so that
+REDS becomes 1 while ST_FAIL stays 0 - the exact condition the finding describes.
+The copies were built by a script that asserts each substitution matched EXACTLY
+ONCE and exits rather than reporting on a silent zero-match.
+
+  copy A, the PRE-FIX banner:
+      ✗ GC-12 DRIVE: a stray red injected outside any case - ST_FAIL stays 0
+      ✗ self-test: 0 of 134 case(s) FAILED                       exit 1
+                   ^^^^ a failure banner asserting nothing failed
+
+  copy B, the SHIPPED banner:
+      ✗ GC-12 DRIVE: a stray red injected outside any case - ST_FAIL stays 0
+      ✗ self-test: 0 of 134 case(s) FAILED, and 1 assertion(s) went RED inside
+        a case                                                   exit 1
+
+Both scratch copies were deleted after the drive; only their transcripts remain.
+REDS was NOT folded into ST_FAIL: they count different things - a case that
+BEHAVED unexpectedly versus an assertion that went RED inside a case - and the
+self-test exists to keep that distinction. The printf keeps the file's octal-escape
+rendering (`\342\234\227`).
+
+TASK 2 CHECKS, /usr/bin/grep, worktree root:
+  dex_cmd sha256sum "$REAL_LIB_DB" "$REAL_STATE_PICKLE"    0  (want 0)   PASS
+  dex_cmd sha256sum                                        2  (want 2)   PASS
+  non-comment UNKNOWNS=0                                   1  (want 1)   PASS
+  case(s) FAILED                                           2  (want >=1) PASS
+  REDS                                                    11  (want >=3) PASS
+  bash scripts/phase06-oracle.sh --self-test               exit 0, 134 case(s)
+  bash -n scripts/phase06-oracle.sh                        clean
+
+--------------------------------------------------------------------------------
+4. GC-07 — THE RUN_TAG COMMENT NOW STATES ONLY PROPERTIES THE CODE HAS
+--------------------------------------------------------------------------------
+THE DECISION IS PLAN 06-25'S AND IS APPLIED, NOT REMADE. The comment quotes
+artifacts/06-25-incremental-tempnames.txt § 4 verbatim and cites it by path, so
+the two files cannot drift apart again: the threat is real, the property relied on
+is CREATION (mktemp's O_EXCL) and NOT secrecy, and `$$` was the wrong mechanism
+for the right threat.
+
+WHAT THE COMMENT USED TO CLAIM, AND WHY EACH CLAIM IS GONE:
+  * that a PID suffix makes these names unguessable - PIDs are small, sequential
+    and exhaustively enumerable (kernel.pid_max 32768 by default);
+  * that `$$` is the relevant process - it is the MACOS WORKSTATION's bash PID,
+    with no relationship to the container's namespace, and PIDs recycle, so even
+    "per-run unique" is not guaranteed;
+  * that the tag is the mitigation - it is a LABEL chosen by the writer, not a
+    name minted by the kernel.
+WHAT THE COMMENT NOW CREDITS: the step-1 probe. SCRATCH_PROBE_PROG refuses ANY
+non-empty $SCRATCH before a byte is written into it, at any name, predictable or
+not. The run tag narrows only the TOCTOU window between that probe and the step-5
+`mkdir`. This is GC-07's own third objection, and 06-25 § 4(b) confirms it is TRUE
+OF THE ORACLE and FALSE of the sibling - which is exactly why the sibling needed a
+code change and this file needs only a corrected comment.
+
+THE WEAKER TREATMENT IS NAMED AS SUCH. The comment states that
+phase06-incremental-control.sh got container-minted `mktemp` names with a
+fail-closed refusal, that this file leans on the probe instead, and what the
+difference in mechanism is.
+
+>>> A DISCREPANCY WITH THE PLAN'S OWN SUGGESTED WORDING, REPORTED RATHER THAN
+>>> ABSORBED. The plan asked this comment to give, as the reason the leaf names
+>>> were not minted here, that "$SCRATCH AND THE PER-RUN NAMES are quoted by the
+>>> WR-07 fence, the precheck and the committed 06-11 artifacts, so renaming them
+>>> would invalidate committed proof". That is TRUE OF THE DIRECTORY AND FALSE OF
+>>> THE LEAF NAMES, and it is checkable:
+>>>
+>>>   /usr/bin/grep -n 'lib\.db\|state\.pickle' \
+>>>     .planning/.../artifacts/06-11-oracle-run.txt
+>>>     46:  The oracle opened a COPY at /tmp/p6/lib.db. ...
+>>>     63:    library: /tmp/p6/lib.db
+>>>     64:    statefile: /tmp/p6/state.pickle
+>>>
+>>> The committed artifact quotes the PRE-06-18 leaf names. Plan 06-18 renamed
+>>> those leaves to lib.$$.db / overlay.$$.yaml / state.$$.pickle and invalidated
+>>> nothing, which demonstrates the leaves are not pinned by that artifact. The
+>>> DIRECTORY '/tmp/p6' genuinely is pinned - by the DESTRUCTIVE-KNOB FENCE
+>>> allow-list, the dirty-destination precheck, the cleanup assertion and the
+>>> artifacts - and that half of the reason is kept. The comment therefore records
+>>> that minting the leaves here is a SCOPE decision (this plan changes no
+>>> behaviour), not a dependency conflict, so that the plan which does mint them
+>>> does not inherit a false obstacle.
+
+DEF-06-21-02: unaffected in substance. The treatment is unchanged by a comment
+edit, so its stated driving condition still stands; what changes is the
+DESCRIPTION of what the tag buys. Updating the entry is plan 06-29's job, and the
+comment says so. deferred-items.md was NOT edited by this plan - a sibling wave-2
+agent would collide on it.
+
+--------------------------------------------------------------------------------
+5. GC-11 — remote_sh_c's COMMENT NOW SEPARATES THE PROGRAM TEXT FROM ITS ARGUMENTS
+--------------------------------------------------------------------------------
+The existing paragraph justifies `%q` because "the result lands in a bash WORD,
+which is the one context %q is correct for" - the argument for the ARGUMENTS. The
+added sentence states that the PROGRAM TEXT is `%q`-rendered too; that for a
+multi-line program that yields bash ANSI-C quoting `$'…\n…'`; that this requires
+root's login shell on $LXC_HOST (and, on the dex_cmd paths, the shell parsing the
+`docker exec` line) to be bash; that it is, per rsh()'s own recorded
+"run by bash on LXC 100"; and that a non-bash transport fails LOUDLY with a syntax
+error and a non-zero status that rsh() records in RSH_RC, not quietly with a
+mangled `rm`. remote_sh_c's CODE is untouched.
+
+--------------------------------------------------------------------------------
+6. THE COMMENT-ONLY CLAIM, EVIDENCED
+--------------------------------------------------------------------------------
+DIFF: 64 changed lines (added + removed) in scripts/phase06-oracle.sh for task 3.
+Filtering them for anything that is not a comment line:
+
+  git diff -U0 -- scripts/phase06-oracle.sh | grep -E '^[+-]' \
+    | grep -vE '^(\+\+\+|---)' | grep -cvE '^[+-][[:space:]]*#'   ->   0
+
+ZERO non-comment lines changed. (One near-miss, recorded because it was caught by
+this check and not by review: the first draft of the RUN_TAG edit accidentally
+introduced a new `RUN_TAG_WHY=` ASSIGNMENT - a behaviour change in a task that
+must not have one. It was removed before the check was run to completion.)
+
+SELF-TEST OUTPUT, BYTE-IDENTICAL BEFORE AND AFTER - no normalisation of any kind
+was needed, so none was applied; there is no timestamp or varying path in the
+transcript:
+  before  sha256 400f7183a2d52bb7427fd0acf6592e08e09319da8961bdc7644b3d833fd75743
+  after   sha256 400f7183a2d52bb7427fd0acf6592e08e09319da8961bdc7644b3d833fd75743
+  both exit 0, "134 case(s), every fail-closed branch behaved exactly as expected"
+
+>>> ONE PLAN CHECK WAS WRONG-PREMISE AND THE TEXT WAS CHANGED TO SATISFY IT
+>>> HONESTLY, not worked around. The plan asserts
+>>> `grep -ci 'removes the predictability' $O` -eq 0, meaning "no longer claims
+>>> unpredictability outright". The first draft QUOTED the old phrase in order to
+>>> disown it ("this comment used to say ... which is three claims the code does
+>>> not support"), which is the correct prose and a failing check - a grep for the
+>>> ABSENCE of a token cannot tell a claim from its retraction. The sentence was
+>>> reworded to describe the old claim without quoting it, so the check now passes
+>>> for the reason it intends. Fifth wrong-premise check found in this round.
+
+TASK 3 CHECKS, /usr/bin/grep, worktree root:
+  GC-07 named in band                                      1  (want >=1) PASS
+  GC-11 named in band                                      1  (want >=1) PASS
+  'removes the predictability'                             0  (want 0)   PASS
+  '06-25-incremental-tempnames' cited by path              1  (want >=1) PASS
+  "printf '%q'" still present (remote_sh_c unchanged)     14  (want >=1) PASS
+  bash scripts/phase06-oracle.sh --self-test               exit 0, 134 case(s)
+  bash -n scripts/phase06-oracle.sh                        clean
+
+--------------------------------------------------------------------------------
+7. NOT DRIVEN, DELIBERATELY
+--------------------------------------------------------------------------------
+Everything below is reachable only from a LIVE `--run`, which IMPORTS, and
+importing is out of scope for a hardening round. No estate contact happened.
+
+  * The two `dex_cmd sha256sum` sites AS SENT. What is driven is the command
+    string and the argv a bash far side builds from it; the container never saw
+    it. Driving condition: the next real `--run`, where layer3.before /
+    layer3.after should both parse and the two awk keys should both match.
+  * A REAL_LIB_DB carrying a space against a real container. Predicted from the
+    code path: UNKNOWN + exit 3 at `[ -n "$LIB_SHA_BEFORE" ]`, because awk's `$2`
+    cannot key a path with whitespace. Predicted, not measured.
+  * The RUN_TAG names themselves - `--self-test` never reaches step 5, which is
+    the only place SCRATCH_LIB / SCRATCH_OVERLAY / SCRATCH_STATE are used. This is
+    DEF-06-21-02's standing condition and is unchanged by this plan.
+  * The step-1 probe INSIDE THE CONTAINER. Its program text is driven against
+    local /bin/sh by the existing WR-01 cases; the container's dash, docker exec's
+    status propagation, and a directory unreadable by `beetle` specifically remain
+    undriven, as artifacts/06-19-oracle-vacuity-driven.txt already records.
+  * The live vacuity arms. The verdict change is driven through `run_assert` over
+    synthetic fixtures; a real DJ-less or compilation-less SAMPLE has not been put
+    through a live run.
+  * A non-bash transport to LXC 100 (GC-11's dependency). The dash failure mode is
+    quoted from GC-11's own reproduction, not re-measured here.
+================================================================================
