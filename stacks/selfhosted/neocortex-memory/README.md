@@ -165,6 +165,50 @@ docker compose run --rm admin memory-admin mint-token damian --capability admin
 `memory/local-memory-identity.committed.json`. It must match exactly, or years of `private` rows
 end up owned by an id nothing asks for.
 
+#### Putting the token on a client
+
+**Do not use `read -rs` inside a pasted block.** It was suggested once and it failed on the M5
+(2026-09-22): the shell had the rest of the paste sitting in the tty buffer, `read` consumed that
+instead of the token, and the file ended up containing the text of the command itself — silently,
+with the right permissions, looking correct.
+
+`readMemoryApiToken` calls `.trim()`, so a trailing newline is fine. Use `cat`, which shows you
+what you are doing:
+
+```sh
+umask 077
+mkdir -p ~/.config/neocortex
+cat > ~/.config/neocortex/memory-api.token
+# paste the token, press Enter, then Ctrl-D
+chmod 600 ~/.config/neocortex/memory-api.token
+```
+
+**Then check it, without printing it.** A minted token is 32 random bytes base64url — 43
+characters, so 43 or 44 bytes with the newline. Anything much longer is a pasted command:
+
+```sh
+wc -c < ~/.config/neocortex/memory-api.token     # expect 43 or 44
+stat -f '%Lp' ~/.config/neocortex/memory-api.token   # expect 600   (macOS; Linux: stat -c '%a')
+```
+
+**And prove it against the live API.** This works before the DNS record exists, and keeps the
+token out of `ps` by passing it through a curl config on a file descriptor rather than argv:
+
+```sh
+curl -sS --resolve cortex.deercrest.info:443:172.16.1.159 \
+  -K <(printf 'header = "Authorization: Bearer %s"\n' \
+       "$(cat ~/.config/neocortex/memory-api.token)") \
+  -X POST https://cortex.deercrest.info/v1/memory/search \
+  -H 'content-type: application/json' -d '{"query":"hello","topK":1}' \
+  -o /dev/null -w 'HTTP %{http_code}\n'
+```
+
+`200` means the whole chain works. `401` means the file does not hold the token the server
+hashed. Add `-k` only if the certificate is not issued yet — and if you need it, say so, because
+that is a separate thing to fix.
+
+---
+
 `mint-token` prints two things:
 
 1. the **bearer token** — goes only to each client's token file (`NEOCORTEX_MEMORY_TOKEN_FILE`,
