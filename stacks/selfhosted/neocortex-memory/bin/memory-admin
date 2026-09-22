@@ -1,0 +1,4 @@
+#!/bin/sh
+# Control-plane shim: identities, tokens and grants, written straight to neocortex_memory.
+# Exists so the documented command reads `memory-admin mint-token ...` rather than a node path.
+exec node /app/memory/memory-admin.cjs "$@"

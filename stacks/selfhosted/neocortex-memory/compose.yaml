@@ -1,0 +1,222 @@
+# neocortex-memory - The memory service for the neocortex platform (neocortex v2 Phase 3, TODO-315)
+#
+# Purpose:
+#   Serves database `neocortex_memory` over HTTP so that every client - Pi on the M5, the indexer
+#   on the mini, the CLIs - reaches memory through ONE authenticated API instead of each holding a
+#   Postgres DSN. Scope filtering, grants and audit happen server-side, where they cannot be
+#   bypassed by a client that forgets to pass a flag.
+#
+# Workflow:
+#   Pi / CLIs / indexer -> Traefik (websecure, dns-cloudflare) -> api:8787
+#   api -> agentic-os-db:5432 / neocortex_memory   (read-write, its own database)
+#   api -> agentic-os-db:5432 / agentic_os         (READ-ONLY, the legacy bridge, TODO-311)
+#
+#   The bridge is how v1 recall keeps working before Phase 4 moves the content. It is one
+#   identity, ranked last, and it never writes: role `memory_legacy_ro` holds SELECT on exactly
+#   the tables the search reads and nothing else. See README "The two roles".
+#
+# Access:
+#   URL: https://cortex.deercrest.info   (hostname chosen by Damian 2026-09-22)
+#   Middleware: NONE, deliberately - the same reasoning as couchdb.
+#     - chain-authelia@file -> forwardAuth bounces API clients to a login page; these are
+#                              non-interactive clients holding bearer tokens, not browsers.
+#     - chain-no-auth@file  -> its secure-headers middleware caps accessControlAllowMethods,
+#                              and this API is POST-heavy (/v1/memory/search, /v1/memory/ingest).
+#   The boundary is MEMORY_API_TOKENS: the server REFUSES TO START with an empty token map, so
+#   there is no window in which it is reachable and unauthenticated.
+#
+# Storage:
+#   Everything under /mnt/fast/appdata/automation/neocortex-memory, on the mounted
+#   fast/appdata/automation ZFS dataset (infra/lxc-selfhost.tf). NOT /mnt/fast/appdata/neocortex-memory:
+#   /mnt/fast/appdata is not a mountpoint, so that would land on LXC 100's ext4 root - which was at
+#   80% when this stack was written. node_modules and the embedding model are the two big items and
+#   both live here by design. `node:22-bookworm-slim` declares no VOLUME (verified with
+#   `docker image inspect --format '{{json .Config.Volumes}}'` -> null), so no anonymous volume.
+#
+# The code is the platform checkout, bind-mounted READ-ONLY from /mnt/fast/stacks-private. There is
+# no image build: this is the stock Node image running a pinned commit of the repo. A rebuilt LXC
+# gets the code back with a git clone and the data back from the dataset.
+
+name: neocortex-memory
+
+
+########################### NETWORKS
+networks:
+  # Traefik.
+  t3_proxy:
+    external: true
+  # agentic-os declares no named network, so compose gave its stack the default name. Joining it
+  # is what lets `agentic-os-db` resolve by container name; the published 172.16.1.159:5433 is the
+  # fallback, not the path used here.
+  agentic-os_default:
+    external: true
+
+
+services:
+  ########################### THE SERVER
+  api:
+    container_name: neocortex-memory-api
+    hostname: neocortex-memory-api
+    # renovate: datasource=docker depName=node
+    # EXCLUDED FROM ALL AUTOMERGE in renovate.json5. A Node bump rebuilds nothing by itself, but it
+    # does change the runtime under an ONNX native binary that was installed against the previous
+    # ABI - `deps` must be re-run after any bump. Merging deploys nothing; see README
+    # "Renovate deploy drift".
+    image: node:22.23.2-bookworm-slim@sha256:48e4b67d85f87bd551df43704e24d252f56cc5f8e9718841aace50f19948f0f9
+    restart: unless-stopped
+    # apps:apps on TrueNAS SCALE, the estate default. setup-neocortex-memory.sh prepare creates
+    # every directory below owned 568:568.
+    user: "${PUID:-568}:${PGID:-568}"
+    working_dir: /app
+    # PROVISIONAL - must be replaced by a measured value. The embedding model is loaded in-process
+    # (MEMORY_API_SERVER_EMBEDDINGS=1), so steady state is dominated by the ONNX session, not by
+    # request concurrency. TODO-315's acceptance records the p50 of 20 server-side-embedded
+    # searches and the container's peak RSS; set this from that number and delete this note.
+    mem_limit: 2g
+    mem_reservation: 512m
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m,mode=1777
+    environment:
+      TZ: ${TZ:-Europe/Dublin}
+
+      # --- what this server IS -------------------------------------------------------------
+      # No vault on this host. MEMORY_API_ROOT is resolved FIRST and makes the server vaultless:
+      # it refuses to start if NEOCORTEX_VAULT or AGENTIC_OS_DIR is also set, so a stray value
+      # cannot quietly point it at a directory that does not exist here.
+      MEMORY_API_ROOT: /data/root
+      MEMORY_MODEL_CACHE_DIR: /data/models
+      NEOCORTEX_MEMORY_CONFIG: /app/memory/config/memory-config.json
+      MEMORY_API_PORT: "8787"
+      MEMORY_STORE_BACKEND: postgres
+      # Embeddings are computed HERE, not by the client. That is what lets a client hold nothing
+      # but a bearer token - no model, no DSN, no 400 MB download on a phone.
+      MEMORY_API_SERVER_EMBEDDINGS: "1"
+
+      # --- the two stores ------------------------------------------------------------------
+      MEMORY_DATABASE_URL: ${MEMORY_DATABASE_URL:?set in .env - the memory_api role on neocortex_memory}
+      # Leave BOTH of these empty to turn the bridge off; setting only one is a start-up error
+      # that names which half is missing.
+      MEMORY_LEGACY_DATABASE_URL: ${MEMORY_LEGACY_DATABASE_URL:-}
+      MEMORY_LEGACY_BRIDGE_USER_ID: ${MEMORY_LEGACY_BRIDGE_USER_ID:-}
+
+      # --- authentication ------------------------------------------------------------------
+      # <users.id>:<capability>:<sha256 of the token>, comma-separated. The server refuses to
+      # start if this is empty. Only the HASH lives here; the token itself is printed once by
+      # `memory-admin mint-token` and written to each client's token file.
+      MEMORY_API_TOKENS: ${MEMORY_API_TOKENS:?set in .env - see README step 6, mint-token}
+    volumes:
+      # The code: a PINNED COMMIT of the platform repo, read-only. Never `main`.
+      - /mnt/fast/stacks-private/neocortex-platform:/app:ro
+      # Production dependencies, built by the `deps` service below. Read-only here: the server has
+      # no business writing to its own node_modules.
+      - /mnt/fast/appdata/automation/neocortex-memory/deps/node_modules:/app/node_modules:ro
+      # The only two writable paths.
+      - /mnt/fast/appdata/automation/neocortex-memory/root:/data/root
+      - /mnt/fast/appdata/automation/neocortex-memory/models:/data/models
+    command: ["node", "/app/memory/memory-api.cjs"]
+    # No host port. Traefik on t3_proxy, and `docker exec` on LXC 100.
+    networks:
+      - t3_proxy
+      - agentic-os_default
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      # The slim image ships no curl or wget. Node is right there, and /v1/health needs no auth.
+      test:
+        - CMD
+        - node
+        - -e
+        - >-
+          require('http').get('http://127.0.0.1:8787/v1/health',r=>process.exit(r.statusCode===200?0:1))
+          .on('error',()=>process.exit(1))
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      # The embedding model loads at start-up. Cold, that is tens of seconds; the cache on
+      # /data/models makes every later start fast, but the first one after a model change is slow.
+      start_period: 180s
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=t3_proxy
+      - traefik.http.routers.neocortex-memory-rtr.entrypoints=websecure
+      - traefik.http.routers.neocortex-memory-rtr.rule=Host(`cortex.${DOMAINNAME}`)
+      - traefik.http.routers.neocortex-memory-rtr.tls=true
+      - traefik.http.routers.neocortex-memory-rtr.tls.certresolver=dns-cloudflare
+      - traefik.http.routers.neocortex-memory-rtr.service=neocortex-memory-svc
+      - traefik.http.services.neocortex-memory-svc.loadbalancer.server.port=8787
+
+  ########################### ONE-SHOT: PRODUCTION DEPENDENCIES
+  # `docker compose run --rm deps`
+  #
+  # Why this is not just `npm ci` in the api container: /app is mounted READ-ONLY, and `npm ci`
+  # begins by deleting node_modules - which, as a bind mount, cannot be deleted. So the install
+  # happens in a plain directory (/deps), against a COPY of the manifests, and the api service
+  # mounts the resulting node_modules back over /app/node_modules.
+  #
+  # This needs outbound npm AND the ONNX runtime's native binary download. If LXC 100 cannot reach
+  # them, build /deps in this same image on another machine and stream the directory in.
+  deps:
+    profiles: ["setup"]
+    image: node:22.23.2-bookworm-slim@sha256:48e4b67d85f87bd551df43704e24d252f56cc5f8e9718841aace50f19948f0f9
+    user: "${PUID:-568}:${PGID:-568}"
+    working_dir: /deps
+    environment:
+      npm_config_cache: /deps/.npm-cache
+    volumes:
+      - /mnt/fast/stacks-private/neocortex-platform:/src:ro
+      - /mnt/fast/appdata/automation/neocortex-memory/deps:/deps
+    command:
+      - bash
+      - -euo
+      - pipefail
+      - -c
+      - >-
+        cp /src/package.json /src/package-lock.json /deps/ &&
+        npm ci --omit=dev &&
+        echo "deps: $(ls /deps/node_modules | wc -l) packages"
+    networks:
+      - agentic-os_default
+    security_opt:
+      - no-new-privileges:true
+
+  ########################### ONE-SHOT: CONTROL PLANE
+  # `docker compose run --rm admin memory-admin <subcommand> ...`
+  #
+  # Identities, tokens and grants are written STRAIGHT TO THE DATABASE over a DSN, with no API in
+  # the path - which is the only way the first token can exist at all, since the server refuses to
+  # start with an empty token map.
+  #
+  # It must run HERE and nowhere else. On a Mac the same command resolves a local PGLite store
+  # instead and creates identities in a database this API never reads - printing a perfectly
+  # valid-looking token that authenticates nothing. `memory-admin` is a shim on PATH (bin/), so
+  # the documented command reads the way the README writes it.
+  admin:
+    profiles: ["setup"]
+    image: node:22.23.2-bookworm-slim@sha256:48e4b67d85f87bd551df43704e24d252f56cc5f8e9718841aace50f19948f0f9
+    user: "${PUID:-568}:${PGID:-568}"
+    working_dir: /app
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    environment:
+      TZ: ${TZ:-Europe/Dublin}
+      MEMORY_API_ROOT: /data/root
+      MEMORY_MODEL_CACHE_DIR: /data/models
+      NEOCORTEX_MEMORY_CONFIG: /app/memory/config/memory-config.json
+      MEMORY_STORE_BACKEND: postgres
+      MEMORY_DATABASE_URL: ${MEMORY_DATABASE_URL:?set in .env}
+      # Every command after the first admin exists needs an explicit actor. Exported in the shell
+      # before `docker compose run`, per README step 5.
+      MEMORY_ADMIN_ACTOR_USER_ID: ${MEMORY_ADMIN_ACTOR_USER_ID:-}
+    volumes:
+      - /mnt/fast/stacks-private/neocortex-platform:/app:ro
+      - /mnt/fast/appdata/automation/neocortex-memory/deps/node_modules:/app/node_modules:ro
+      - /mnt/fast/appdata/automation/neocortex-memory/root:/data/root
+      - /mnt/fast/appdata/automation/neocortex-memory/models:/data/models
+      - ./bin/memory-admin:/usr/local/bin/memory-admin:ro
+      - ./bin/memory-migrate:/usr/local/bin/memory-migrate:ro
+    networks:
+      - agentic-os_default
+    security_opt:
+      - no-new-privileges:true

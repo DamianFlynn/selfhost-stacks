@@ -1,0 +1,4 @@
+#!/bin/sh
+# Schema shim. The engine owns its own migrations; this runs them INSIDE the container, against
+# the DSN in the environment, so the schema is never applied from a laptop.
+exec node /app/memory/memory-migrate.cjs "$@"

@@ -485,6 +485,23 @@
         "stack:couchdb",
         "manual-review-required"
       ]
+    },
+    {
+      "description": "neocortex-memory (the memory API): excluded from ALL automerge -- patch, minor and digest as well as major. Added 2026-09-22 (neocortex v2 TODO-315). This stack runs the stock Node image over a read-only checkout of the platform repo, with node_modules built SEPARATELY on the automation dataset by the one-shot `deps` service. A Node bump therefore changes the runtime out from under a native ONNX binary that was compiled against the previous ABI, and the failure shows up as the embedder dying at start-up, not as a pull error. Any merge here must be followed by `docker compose run --rm deps` and a /v1/health check. Scoped by matchFileNames as well as package name so that a future stack using a node image is not silently caught by this rule. Merging deploys nothing: see the README 'Renovate deploy drift' check. Must stay after the two 'Default: Auto-merge' rules so that automerge:false wins. Same KNOWN COSMETIC WART as the CouchDB, Jellyfin and beets rules: a patch/minor PR still carries 'automerge' and 'safe' labels from the default rules while NOT automerging. Filter on 'manual-review-required'.",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchFileNames": [
+        "stacks/selfhosted/neocortex-memory/compose.yaml"
+      ],
+      "matchPackageNames": [
+        "node"
+      ],
+      "automerge": false,
+      "addLabels": [
+        "stack:neocortex-memory",
+        "manual-review-required"
+      ]
     }
   ],
   // prConcurrentLimit:
