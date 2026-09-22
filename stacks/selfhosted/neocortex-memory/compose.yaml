@@ -99,6 +99,24 @@ services:
       # but a bearer token - no model, no DSN, no 400 MB download on a phone.
       MEMORY_API_SERVER_EMBEDDINGS: "1"
 
+      # --- the server principal -------------------------------------------------------------
+      # REQUIRED in hosted mode; the server refuses to start without it. This is the identity the
+      # SERVER resolves token auth against - not the caller's identity, which comes from the
+      # bearer token.
+      #
+      # The ID form on purpose, not TEAM_SLUG + USER_EMAIL. Both work, but the id pair cannot be
+      # invalidated by editing a display field: the email on this user was changed within an hour
+      # of it being created (2026-09-22), and a principal keyed on email would have started
+      # failing at the next restart with no obvious connection to the edit.
+      #
+      # NOT the BOOTSTRAP_* pair either - those CREATE a team and owner before serving, and both
+      # already exist here from `init-team` / `add-user`.
+      #
+      # Values come from those two commands and are recorded in .env by README step 7. They are
+      # ids, not secrets.
+      MEMORY_API_TEAM_ID: ${MEMORY_API_TEAM_ID:?set in .env - the id printed by `memory-admin init-team`}
+      MEMORY_API_USER_ID: ${MEMORY_API_USER_ID:?set in .env - the users.id printed by `memory-admin add-user`}
+
       # --- the two stores ------------------------------------------------------------------
       MEMORY_DATABASE_URL: ${MEMORY_DATABASE_URL:?set in .env - the memory_api role on neocortex_memory}
       # Leave BOTH of these empty to turn the bridge off; setting only one is a start-up error
