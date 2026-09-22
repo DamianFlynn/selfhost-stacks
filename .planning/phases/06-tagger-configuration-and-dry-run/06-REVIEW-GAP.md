@@ -600,8 +600,22 @@ unreachable from the evidence supplied.
 | UNVERIFIABLE from the supplied diff (evidence not supplied — not disputed) | GC-04, GC-08, GC-09, GC-10, GC-15 |
 | FALSE | *none* |
 
-No finding was overturned. GC-15 was separately confirmed by the orchestrator while checking
-GC-17 (see below) — the three sites are real, at `quick-health-check.sh:1515`, `:1728`, `:2196`.
+No finding was overturned.
+
+> **CORRECTION 2026-09-22 — this paragraph was wrong when first written.** It originally read:
+> *"GC-15 was separately confirmed by the orchestrator while checking GC-17 — the three sites are
+> real, at `quick-health-check.sh:1515`, `:1728`, `:2196`."* **Those three sites are GC-17's, not
+> GC-15's.** The orchestrator crossed the two findings' labels. Caught by the round-2 planner and
+> re-verified by grep:
+> - **GC-15** is `scripts/phase06-oracle.sh:2369` and `:2530` — two
+>   `rsh "$(dex_cmd sha256sum "$REAL_LIB_DB" "$REAL_STATE_PICKLE")"` calls, where `dex_cmd`
+>   renders with `"$*"` and neither knob is quoted. Confirmed present at both lines.
+> - **GC-17** is `scripts/quick-health-check.sh:1515`, `:1728`, `:2196` (plus a **fourth site the
+>   review missed**, `DRIFT_CMD="set -o pipefail; cd $DRIFT_REPO_ROOT …"`, found by the planner).
+>
+> Both findings are real, in different files. Kept visible rather than silently repaired, because
+> an executor following the crossed citation would have "fixed" the wrong file and reported
+> success.
 
 ### Two findings the first review missed
 
