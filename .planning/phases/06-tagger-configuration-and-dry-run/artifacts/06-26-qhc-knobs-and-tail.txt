@@ -691,6 +691,49 @@ whole-word token the scan keys on — 06-23's convention of pointing at the
 artifact rather than spelling the shape out in band.
 
 
+--------------------------------------------------------------------------------
+3.6 THE UNOVERRIDDEN CONTROL RUN, AND ONE THING IT LOOKS LIKE BUT IS NOT
+--------------------------------------------------------------------------------
+
+A final live run of the fixed file with NO knob overridden at all, to show the
+normal path is unchanged. Whole-script exit 1, and:
+
+    D-03 — one vendored beets config into both containers:
+      ✅ one config, both containers: /mnt/fast/appdata/arrs/beets/config/config.yaml -> /config/config.yaml :ro
+         runtime  (beets-flask, inspected): config :ro, /mnt/tank/media :ro
+         declared (dormant CLI arm, rendered):       config :ro, /mnt/tank/media :ro
+    Music consumers audit: ✅ Both consumers see the library
+        MA version (live):           2.11.0b2   (assertions proven at 2.11.0b0)
+        albums matched in MA:        2   (target 2, ...)
+        albums matched in Jellyfin:  2   (target 2, ...)
+        FAILURES total:              0
+
+D-03 goes GREEN on the default path, which is the strongest single check on the
+GC-17 fix: the same `cd` that the override drove now renders the dormant CLI arm
+from the deployed checkout exactly as it did before. And the rebuilt tail renders
+correctly, naming D-03 and D-04.
+
+⚠️ READ THIS BEFORE FILING A CONTRADICTION. The consumers audit is GREEN here,
+   while the tail's new clause says it carries a ⚠️ by design while CONF-04 is
+   open. Both are correct, and the reason is the HOST'S COMMIT:
+
+     $ ssh root@172.16.1.159 "grep -c 'exit 3' /mnt/fast/stacks/scripts/check-music-consumers.sh"
+     0
+     $ ssh root@172.16.1.159 "git -C /mnt/fast/stacks log --oneline -1"
+     c67d497 fix(immich): raise server mem_limit 3g -> 6g ...
+
+   The deployed audit is a PRE-PHASE-6 copy and has NO exit-3 path at all — the
+   status plan 06-17 added does not exist in it yet, so it exits 0 and this
+   fold-in takes its green arm. The tail's clause describes the state the block
+   WILL report once this phase is merged and the host pulls, which is exactly
+   what the twelfth exit-code notice already says in band. It is not a claim
+   about today's transcript, and it was not written from one.
+
+   This also bounds the GC-14 drives honestly: the exit-3 arm CANNOT currently be
+   reached by the deployed audit on this estate at all. It is reachable only
+   through `CONSUMERS_SCRIPT`, which is precisely the reason that knob exists,
+   and precisely why GC-17's fourth site mattered rather than being cosmetic.
+
 ================================================================================
 4. CLOSING POSITION
 ================================================================================
