@@ -1,0 +1,477 @@
+================================================================================
+06-16 — THE D-04 ASSERTION, DRIVEN
+Plan 06-16 (CR-01 detector half, WR-10, IN-13)
+Run 2026-09-22 from the workstation (macOS) against LXC 100 root@172.16.1.159
+================================================================================
+
+WHAT THIS ARTIFACT IS FOR
+-------------------------
+`06-VERIFICATION.md` reported that the D-04 block prints a green tick over an
+empty set. This artifact reproduces that live, shows the fix, and drives every
+branch the fix adds. Section A is the whole finding in six lines; everything
+after it is the supporting work.
+
+READ SECTION I BEFORE READING ANY EXIT CODE. Every run below exits 1 because of
+a PRE-EXISTING Phase 5 red that has nothing to do with this plan. The top-level
+exit code is non-discriminating here. The evidence is the D-04 block TEXT.
+
+
+================================================================================
+0. HOW THE SCANNED TREE WAS BROUGHT INTO STEP — AND WHY IT IS NOT A `git pull`
+================================================================================
+
+The D-04 block reads the HOST'S `git HEAD`, not the workstation's working tree.
+So the counts depend entirely on what tree the host is asked to look at.
+
+MEASURED FIRST, BEFORE ANYTHING ELSE:
+
+    host /mnt/fast/stacks HEAD   = c67d497
+    phase06 scripts at that HEAD = 0   (`git ls-tree -r --name-only HEAD -- scripts | grep -c phase06`)
+
+The deployed checkout is PRE-PHASE-6. It carries neither the two instrument
+scripts this plan exempts nor plan 06-15's now-compliant `check-beets-config.sh`.
+The plan's task-3 instruction was "push and pull first". THAT WAS NOT DONE, AND
+DELIBERATELY SO:
+
+  * This executor runs on a worktree branch (`worktree-agent-ac101fcd14e20cef5`)
+    that the orchestrator merges after the wave. Pushing it to `main` would
+    bypass that merge.
+  * `git pull` on the host would DEPLOY THE WHOLE OF UNMERGED PHASE 6 — waves 1
+    through 7, every plan, reviewed by nobody — to the live estate, in order to
+    make a health-check count line up. That is an estate change far outside this
+    plan's scope, and it is not a decision an executor gets to take.
+
+WHAT WAS DONE INSTEAD — and it is the documented purpose of the knob:
+
+    D04_REPO_ROOT ... "Pointing them at a scratch checkout is how plan 06-10
+    drove those branches to red and back to green without touching the estate."
+      — quick-health-check.sh, the TENTH exit-code notice, condition J
+
+A scratch checkout was built at `/tmp/p6-16-scratch` on the host from this
+plan's tree, used for every control, and then DELETED.
+
+    workstation:  git archive --format=tar HEAD scripts stacks  ->  p6-16-tree.tar
+    host:         tar x into /tmp/p6-16-scratch; git init; git add; git commit
+    scratch HEAD: 80a7604   (203 files)
+
+THE COST OF THIS CHOICE IS STATED RATHER THAN HIDDEN. `D04_REPO_ROOT` carries
+the additive contract — any non-default value warns and forces EXIT_CODE=1 — so
+EVERY scratch-backed run below is incapable of printing the green tick. That is
+the contract working, not a defect. The consequence for this artifact:
+
+    ⚠️  THE ✅ GREEN LINE IS NOT DEMONSTRATED AND CANNOT BE UNTIL PHASE 6 IS
+        DEPLOYED. It is not demonstrable by ANY route today: against the real
+        tree the executable count is 0 (so the new vacuity guard correctly
+        refuses), and against a scratch tree the override correctly refuses.
+        What IS measured is that all four conditions the green line requires
+        are satisfied on this plan's tree — D04_BAD=0 (no ❌ compliance line in
+        section B), exempt 5 = baseline 5, documentation 2 = baseline 2 — with
+        only D04_OVERRIDDEN blocking it. Structurally, `D04_OVERRIDDEN` is
+        assigned 1 in exactly three places (`:1651`, `:1656`, `:1661`), each of
+        which also sets EXIT_CODE=1, and is assigned 0 exactly once at `:1649`
+        before any of them. There is no path that clears it.
+
+Estate state after all work, measured:
+
+    host /mnt/fast/stacks HEAD   = c67d497   (UNCHANGED)
+    host /mnt/fast/stacks dirty  = 4 entries, all pre-existing and unrelated:
+        ?? stacks/selfhosted/arrs/beets/flask.yaml
+        ?? stacks/selfhosted/karakeep/.env.pre-pocket
+        ?? stacks/selfhosted/monitoring/prometheus.yaml.bak
+        ?? stacks/selfhosted/wrappers/monitoring.app.yaml.disabled
+    /tmp/p6-16*  on the host     = removed (ls returns nothing)
+
+
+================================================================================
+1. THE COUNTS, REPRODUCED BY HAND
+================================================================================
+
+Run independently of the block: the raw `git grep` was executed on the host and
+its output matched LOCALLY using the two regexes EXTRACTED FROM
+`scripts/quick-health-check.sh` itself. Same rules, different route — so an
+agreement is two instruments agreeing, not the script agreeing with itself.
+
+HAND COUNT (host /tmp/p6-16-scratch — this plan's tree)
+  raw=191  comment-stripped=90  invocation-shaped=10  executable=8  exempt=5  asserted=3  documentation=2
+  --- exempt lines (5):
+      HEAD:scripts/phase06-incremental-control.sh:462:  "$BEET" -c "$ROOT/overlay.yaml" import --pretend "$ROOT/src" 2>&1 || IRC=$?
+      HEAD:scripts/phase06-incremental-control.sh:464:  "$BEET" -c "$ROOT/overlay.yaml" import "$ROOT/src" 2>&1 || IRC=$?
+      HEAD:scripts/phase06-oracle.sh:2166:  rsh "$(dex_cmd "$BEET_BIN" -c "$(printf '%q' "$SCRATCH_OVERLAY")" import -A -q $EXTRA "$(printf '%q' "$CPATH")")"
+      HEAD:scripts/phase06-oracle.sh:2179:rsh_to "$(dex_cmd "$BEET_BIN" -c "$(printf '%q' "$SCRATCH_OVERLAY")" move -p)" "$OUT/oracle.raw.txt"
+      HEAD:scripts/phase06-oracle.sh:2313:rsh_to "$(dex_cmd "$BEET_BIN" -c "$(printf '%q' "$SCRATCH_OVERLAY")" ls -f "'$LS_FMT'")" "$OUT/fields.tsv"
+  --- asserted lines (3), all COMPLIANT (each carries -l and -c):
+      HEAD:scripts/check-beets-config.sh:892:    beet_exec "${BEET_BIN} -l ${THROWAWAY_DB} -c ${OVERLAY} config -d"
+      HEAD:scripts/check-beets-config.sh:908:    beet_exec "${BEET_BIN} -l ${THROWAWAY_DB} -c ${OVERLAY} config -p -d"
+      HEAD:scripts/check-beets-config.sh:919:      beet_exec "${BEET_BIN} -l ${THROWAWAY_DB} -c ${OVERLAY} config -d -c"
+  --- documentation lines (2):
+      HEAD:stacks/selfhosted/arrs/beets.md:106:docker exec -it beets beet import "/downloads/complete/nzb/unsorted/<album folder>"
+      HEAD:stacks/selfhosted/arrs/beets.md:170:beet import -A --flat "/downloads/complete/nzb/dj-mixes/<folder>"
+
+HAND COUNT (host /mnt/fast/stacks REAL deployed tree)
+  raw=46  comment-stripped=26  invocation-shaped=2  executable=0  exempt=0  asserted=0  documentation=2
+  --- exempt lines: (none)
+  --- asserted lines: (none)
+  --- documentation lines:
+      HEAD:stacks/selfhosted/arrs/beets.md:106:docker exec -it beets beet import "/downloads/complete/nzb/unsorted/<album folder>"
+      HEAD:stacks/selfhosted/arrs/beets.md:160:beet import -A --flat "/downloads/complete/nzb/dj-mixes/<folder>"
+
+AGREEMENT WITH THE BLOCK'S OWN PRINTED FIGURES — every number, both trees:
+
+  tree              count              hand   block   agree?
+  ----------------  -----------------  -----  -----  ------
+  scratch           raw                 191    191     yes
+  scratch           comment-stripped     90     90     yes
+  scratch           invocation-shaped    10     10     yes
+  scratch           executable            8      8     yes
+  scratch           asserted              3      3     yes
+  scratch           exempt                5      5     yes
+  scratch           documentation         2      2     yes
+  real tree         raw                  46     46     yes
+  real tree         comment-stripped     26     26     yes
+  real tree         invocation-shaped     2      2     yes
+  real tree         executable            0      0     yes
+  real tree         documentation         2      2     yes
+
+  No disagreement at any position on either tree.
+
+ONE NUMBER THAT MOVED AND IS NOT A DISAGREEMENT: the documentation hit in
+`beets.md` is at line 160 on the real tree and line 170 on this plan's tree.
+Phase 6 added ten lines above it. Same two lines, same content, count still 2 —
+which is exactly why D04_DOC_BASELINE pins the COUNT and not the line numbers.
+
+AND THE MEASUREMENT THAT MAKES THE WHOLE FIX NECESSARY — the OLD remote pattern,
+run by hand on this plan's tree:
+
+    git grep -n -I -w -E 'beet'                      HEAD -- scripts stacks   ->  110 lines
+    git grep -n -I -w -E -e 'beet' -e 'BEET[A-Z_]*'  HEAD -- scripts stacks   ->  191 lines
+
+    Of the 8 executable invocation-shaped lines, the OLD pattern returns ZERO of
+    them, because `git grep -w -E 'beet'` IS CASE SENSITIVE and every invocation
+    in this repo is built from `$BEET` / `$BEET_BIN`. Widening only the LOCAL
+    regex — which is what the plan specified — would therefore have left the
+    executable count at 0 and pinned the new vacuity guard to a permanent
+    UNKNOWN. The remote pattern had to widen too. It does so with a SECOND `-e`
+    rather than an alternation, so no `|` enters the command string.
+
+
+================================================================================
+2. THE FIVE DRIVEN CONTROLS
+================================================================================
+
+Each control: sha256 of every file touched, perturb, capture, restore, re-assert
+the sha256, return to baseline.
+
+--------------------------------------------------------------------------------
+CONTROL 1 — a real variable-built violation goes RED
+--------------------------------------------------------------------------------
+HOW IT REACHED THE SCANNED HEAD, AND HOW IT LEFT (T-06-74):
+  The block reads the scanned root's `git HEAD`, so a working-tree edit is
+  invisible to it. The line was therefore COMMITTED — to the host's
+  `/tmp/p6-16-scratch` scratch repo, never to `/mnt/fast/stacks` and never to
+  this repository's tree.
+
+  The line (carries no credential, no real path — T-06-75):
+      "$BEET_BIN" -c /tmp/p6-16-probe-overlay.yaml import /tmp/p6-16-probe-src
+  appended to scripts/check-music-freeze.sh — a file NOT covered by
+  D04_EXEMPT_RE, so it could not inherit an exemption.
+
+  scratch scripts/check-music-freeze.sh sha256 BEFORE: 31905d4f296ee6872cf7799db7c96c3d75b1aedc3bf890c0151ff5d71679d9a6
+  scratch HEAD BEFORE:                                 80a7604
+  scratch scripts/check-music-freeze.sh sha256 AFTER:  5c2074429164b2631667fbbb3c88258822fc3a5c8f7a5f90c8022906d5499459
+  scratch HEAD AFTER:                                  009815f
+  planted line, as it sat at the scanned HEAD:
+      HEAD:scripts/check-music-freeze.sh:1118:"$BEET_BIN" -c /tmp/p6-16-probe-overlay.yaml import /tmp/p6-16-probe-src
+
+  REMOVAL, then re-measured:
+  scratch sha256 RESTORED:  31905d4f296ee6872cf7799db7c96c3d75b1aedc3bf890c0151ff5d71679d9a6   (== BEFORE)
+  scratch HEAD  RESTORED:   80a7604                                                             (== BEFORE)
+  line present at HEAD after removal?        no
+  line present in the worktree after removal? no
+  scratch `git status --porcelain`:          0 lines
+  ...and the scratch repo itself was then deleted outright.
+
+RESULT: exactly ONE red, naming exactly that line. Counts moved exactly as they
+should — executable 8 -> 9, asserted 3 -> 4, exempt UNCHANGED at 5,
+documentation UNCHANGED at 2. See section C below.
+
+--------------------------------------------------------------------------------
+CONTROL 2 — the vacuity guard fires
+--------------------------------------------------------------------------------
+There is deliberately no override that empties the asserted set, so the guard was
+driven by a controlled perturbation of `D04_INV_RE` to a pattern that cannot
+match anything (`^ZZZ_THIS_PATTERN_CANNOT_MATCH_ANYTHING`).
+
+The perturbation was applied to a COPY, following plan 06-15's precedent, so the
+repository file was never modified at all rather than modified-and-restored:
+
+  scripts/quick-health-check.sh sha256 BEFORE: 7e6f6ff4787acda051b6b98b8f895278a7e121cf105b4dfdf87580355f55f505
+  scripts/quick-health-check.sh sha256 AFTER:  7e6f6ff4787acda051b6b98b8f895278a7e121cf105b4dfdf87580355f55f505
+  equal? YES   (and `git status --porcelain` empty throughout)
+
+  The mutation was CONFIRMED APPLIED before the run that depends on it — 06-15's
+  lesson, where a drive that silently failed to perturb anything looked exactly
+  like a guard that works:
+      mutant line 1703: D04_INV_RE='^ZZZ_THIS_PATTERN_CANNOT_MATCH_ANYTHING'
+      original pattern gone from the D04_INV_RE line? yes
+      mutant parses (`bash -n`)?                      yes
+
+RESULT: ⚠️ UNKNOWN naming the zero executable count, and raw/comment-stripped
+UNCHANGED at 191/90 — which is the point of printing four counts. The scan ran,
+the strip worked, and only the shape test went blind. That is precisely the
+signature the block printed for the whole of Phase 6 while showing a ✅.
+
+--------------------------------------------------------------------------------
+CONTROL 3 — the exemption pin fires, and the override cannot pass
+--------------------------------------------------------------------------------
+Run with D04_EXEMPT_BASELINE=4.
+RESULT: the override warning AND a red naming ALL FIVE exempt lines, and NO ✅.
+See section E.
+
+THE ADDITIVE CONTRACT, PROVEN RATHER THAN ASSERTED: a wrong pin produces a red;
+a "right" pin is indistinguishable from the default and produces nothing; and the
+knob's only other effect is to set D04_OVERRIDDEN=1, which gates the ✅. There is
+no value of D04_EXEMPT_BASELINE that converts a red run into a green one.
+
+--------------------------------------------------------------------------------
+CONTROL 4 — the 124 branch (WR-10): DRIVEN
+--------------------------------------------------------------------------------
+Bound used: REMOTE_TIMEOUT=0.002 (GNU coreutils timeout 9.7 on the host accepts
+fractional seconds; a direct probe confirmed `rc=124` before the control was run,
+so the control was not a guess). Note REMOTE_TIMEOUT=0 could NOT have been used —
+GNU `timeout 0` means NO limit.
+
+RESULT: DRIVEN. Message received:
+    ⚠️  UNKNOWN — the D-04 scan exceeded its 0.002s bound and was killed.
+and the `4 = 'git grep' failed` diagnosis was NOT produced.
+
+NEGATIVE CONTROL, which is what makes this a finding rather than a claim: the
+PRE-FIX script, same bound, same scratch checkout, same minute, produced
+    ⚠️  UNKNOWN — could not run the D-04 scan (ssh exit 4).
+An operator reading `ssh exit 4` is sent to the legend three lines above it in
+the same block — "4 = 'git grep' failed" — and goes to debug a working tool while
+the host is wedged. Verdict identical, diagnosis wrong. Both transcripts in
+section F.
+
+--------------------------------------------------------------------------------
+CONTROL 5 — IN-13, the D-03 render `exit 3`: DRIVEN
+--------------------------------------------------------------------------------
+Run with D03_REPO_ROOT=/tmp/p6-16-no-such-checkout.
+RESULT: the D03_* override warning, the remote `cd` failing, `ssh exit 3`
+reported as ⚠️ UNKNOWN rather than as a pass, and the message now NAMING the root
+that was actually looked at rather than repeating the hard-coded default. See
+section G.
+
+
+================================================================================
+3. FILE HASHES — BEFORE ALL CONTROLS AND AFTER ALL CONTROLS
+================================================================================
+
+                                          before == after
+scripts/quick-health-check.sh             7e6f6ff4787acda051b6b98b8f895278a7e121cf105b4dfdf87580355f55f505   YES
+scripts/check-beets-config.sh             fc8c6c91c2b014a6b615f620e166e898b4a03500ae50c7b02648882245311f68   YES
+scripts/phase06-oracle.sh                 fd956ad045d8712f73e7d3bb100f20d7f189c30030e7fdc4263d790ded6e29f4   YES
+scripts/phase06-incremental-control.sh    ab0746a697c4763a3b2120dc52a2e1625be16b7015135059ce368ff7b00301d0   YES
+
+`git status --porcelain` in the repository: EMPTY at every checkpoint, and every
+perturbation ran against either the host scratch repo or a scratchpad copy. No
+test debris entered the tree at any point.
+
+(stacks/selfhosted/arrs/beets.md is modified in this plan's task-3 COMMIT, not by
+any control; its pre-edit hash was ed0ddf6497402c5e735e302536702e820e47161b67a85dc2fda41b19a1524987.)
+
+
+================================================================================
+4. TRANSCRIPTS — every line below is PARSED from a captured run, never typed
+================================================================================
+
+A. THE DEFECT, REPRODUCED LIVE ON THE DEPLOYED ESTATE (no overrides, host /mnt/fast/stacks)
+-------------------------------------------------------------------------------------------
+  pre-fix script (base commit ce9bb5d), real tree:
+    D-04 — throwaway -l plus -c overlay on every beet invocation:
+      counts: raw=37  comment-stripped=17  invocation-shaped=2  (executable 0, documentation 2)
+      ✅ no executable beet invocation opens the real library (0 invocation-shaped lines outside *.md)
+         documentation hits at the pinned baseline (2) — historic quotations, see the block comment
+  post-fix script (this plan), same tree, same moment:
+    D-04 — throwaway -l plus -c overlay on every beet invocation:
+      counts: raw=46  comment-stripped=26  invocation-shaped=2  (executable 0 = asserted 0 + exempt 0, documentation 2)
+      ⚠️  UNKNOWN — the invocation pattern matched NO executable line (0). Every
+      beet call this repo makes is built from a variable, so a zero here means the pattern
+      cannot SEE the invocations, not that none exist. This is NOT 'no bare beet
+      invocations'. Nothing is asserted.
+
+B. BASELINE, D-04 POINTED AT THE SCRATCH CHECKOUT CARRYING THIS PLAN'S TREE
+---------------------------------------------------------------------------
+    D-04 — throwaway -l plus -c overlay on every beet invocation:
+      ⚠️  D04_REPO_ROOT override in effect — this run cannot report D-04 green
+      counts: raw=191  comment-stripped=90  invocation-shaped=10  (executable 8 = asserted 3 + exempt 5, documentation 2)
+
+C. CONTROL 1 — A REAL VARIABLE-BUILT VIOLATION GOES RED
+-------------------------------------------------------
+    D-04 — throwaway -l plus -c overlay on every beet invocation:
+      ⚠️  D04_REPO_ROOT override in effect — this run cannot report D-04 green
+      counts: raw=192  comment-stripped=91  invocation-shaped=11  (executable 9 = asserted 4 + exempt 5, documentation 2)
+      ❌ beet invocation without a throwaway -l AND a -c overlay (statefile: is NOT redirected by -l alone):
+           HEAD:scripts/check-music-freeze.sh:1118:"$BEET_BIN" -c /tmp/p6-16-probe-overlay.yaml import /tmp/p6-16-probe-src
+
+D. CONTROL 2 — THE VACUITY GUARD FIRES (D04_INV_RE perturbed to match nothing)
+------------------------------------------------------------------------------
+    D-04 — throwaway -l plus -c overlay on every beet invocation:
+      ⚠️  D04_REPO_ROOT override in effect — this run cannot report D-04 green
+      counts: raw=191  comment-stripped=90  invocation-shaped=0  (executable 0 = asserted 0 + exempt 0, documentation 0)
+      ⚠️  UNKNOWN — the invocation pattern matched NO executable line (0). Every
+      beet call this repo makes is built from a variable, so a zero here means the pattern
+      cannot SEE the invocations, not that none exist. This is NOT 'no bare beet
+      invocations'. Nothing is asserted.
+
+E. CONTROL 3 — THE EXEMPTION PIN FIRES (D04_EXEMPT_BASELINE=4)
+--------------------------------------------------------------
+    D-04 — throwaway -l plus -c overlay on every beet invocation:
+      ⚠️  D04_REPO_ROOT override in effect — this run cannot report D-04 green
+      ⚠️  D04_EXEMPT_BASELINE override in effect — this run cannot report D-04 green
+      counts: raw=191  comment-stripped=90  invocation-shaped=10  (executable 8 = asserted 3 + exempt 5, documentation 2)
+      ❌ exempt invocation count moved: 5, pinned baseline 4.
+      An exemption that grows unseen is how a real violation gets waved through. Lines:
+           HEAD:scripts/phase06-incremental-control.sh:462:  "$BEET" -c "$ROOT/overlay.yaml" import --pretend "$ROOT/src" 2>&1 || IRC=$?
+           HEAD:scripts/phase06-incremental-control.sh:464:  "$BEET" -c "$ROOT/overlay.yaml" import "$ROOT/src" 2>&1 || IRC=$?
+           HEAD:scripts/phase06-oracle.sh:2166:  rsh "$(dex_cmd "$BEET_BIN" -c "$(printf '%q' "$SCRATCH_OVERLAY")" import -A -q $EXTRA "$(printf '%q' "$CPATH")")"
+           HEAD:scripts/phase06-oracle.sh:2179:rsh_to "$(dex_cmd "$BEET_BIN" -c "$(printf '%q' "$SCRATCH_OVERLAY")" move -p)" "$OUT/oracle.raw.txt"
+           HEAD:scripts/phase06-oracle.sh:2313:rsh_to "$(dex_cmd "$BEET_BIN" -c "$(printf '%q' "$SCRATCH_OVERLAY")" ls -f "'$LS_FMT'")" "$OUT/fields.tsv"
+
+F. CONTROL 4 — THE 124 BRANCH (WR-10), WITH ITS NEGATIVE CONTROL
+----------------------------------------------------------------
+  post-fix, REMOTE_TIMEOUT=0.002:
+    D-04 — throwaway -l plus -c overlay on every beet invocation:
+      ⚠️  D04_REPO_ROOT override in effect — this run cannot report D-04 green
+      ⚠️  UNKNOWN — the D-04 scan exceeded its 0.002s bound and was killed.
+      Nothing was scanned. This is NOT 'no bare beet invocations'.
+  pre-fix script, IDENTICAL bound, same scratch checkout — the wrong diagnosis:
+    D-04 — throwaway -l plus -c overlay on every beet invocation:
+      ⚠️  D04_REPO_ROOT override in effect — this run cannot report D-04 green
+      ⚠️  UNKNOWN — could not run the D-04 scan (ssh exit 4).
+      Nothing was scanned. This is NOT 'no bare beet invocations'.
+
+G. CONTROL 5 — IN-13, THE D-03 RENDER exit 3 (D03_REPO_ROOT=/tmp/p6-16-no-such-checkout)
+----------------------------------------------------------------------------------------
+    D-03 — one vendored beets config into both containers:
+      ⚠️  a D03_* override is in effect — this run cannot report the mounts green
+    bash: line 1: cd: /tmp/p6-16-no-such-checkout: No such file or directory
+      ⚠️  UNKNOWN — rendering stacks/selfhosted/arrs/beets/beets.yaml yielded no bind mounts (ssh exit 3;
+      3 = no /tmp/p6-16-no-such-checkout checkout). Nothing was asserted, and 'services: {}' is what a
+      MISSING --profile manual looks like — it is NOT 'no bad mounts'.
+
+H. RESTORED RUN
+---------------
+    D-04 — throwaway -l plus -c overlay on every beet invocation:
+      ⚠️  D04_REPO_ROOT override in effect — this run cannot report D-04 green
+      counts: raw=191  comment-stripped=90  invocation-shaped=10  (executable 8 = asserted 3 + exempt 5, documentation 2)
+  identical to baseline B? YES
+
+I. THE PRE-EXISTING RED — WHY THE TOP-LEVEL EXIT CODE IS NON-DISCRIMINATING
+---------------------------------------------------------------------------
+        ❌ interpolated-host-path inventory MOVED: expected=12, found=13. These lines are invisible to §2's driving grep and cannot be resolved statically, so §2 is UNKNOWN until each new one is read by hand and DECLARED_INTERP_EXPECTED is moved in the same commit:
+    Present in EVERY run above, including the baseline and the restored run. It is the
+    standing Phase 5 red recorded in STATE.md, NOT this plan's. Every run in this artifact
+    exits 1 because of it, so the exit code proves nothing here — read the D-04 block text.
+
+
+================================================================================
+5. AN UNPLANNED SIXTH DRIVE — THE DETECTOR CAUGHT THE DOCUMENT DESCRIBING IT
+================================================================================
+
+While writing the `beets.md` note for this very plan, the explanatory sentence
+
+    > a **bare** `"$BEET" config`, so it cannot be accused of only matching …
+
+was added to the runbook. It is prose. It is also, character for character, an
+invocation shape under the branch this plan just wrote: a quote, a BEET-prefixed
+variable, a closing quote, whitespace, a lowercase subcommand word. The widened
+pattern saw it immediately:
+
+    before the sentence:  raw=191  stripped=90  shaped=10  doc=2  exe=8
+    with the sentence:    raw=200  stripped=99  shaped=11  doc=3  exe=8
+                                                           ^^^^^
+    the new documentation hit:
+      HEAD:stacks/selfhosted/arrs/beets.md:2204:> a **bare** `"$BEET" config`, so it cannot be accused of only matching invocations that were
+    after rephrasing:     raw=199  stripped=98  shaped=10  doc=2  exe=8
+
+`D04_DOC_BASELINE` is pinned at 2, so `doc=3` is a RED. The sentence would have
+turned the runbook red the moment the tree reached the host.
+
+TWO THINGS THIS IS EVIDENCE OF, and they are worth more than a planned control:
+
+  1. THE DETECTOR WORKS ON UNPLANNED INPUT. Nobody wrote this line to be caught.
+     It was ordinary prose describing the fix, and the fix caught it. The
+     equivalent sentence would have sailed past the 2026-09-21 pattern without a
+     flicker, because that pattern could not see a `$BEET` variable at all.
+  2. THE DOCUMENTATION PIN IS NOT DECORATION. Its stated purpose — "a new
+     copy-pasteable bare invocation in the runbook is a real footgun" — is
+     exactly what fired. The line WAS copy-pasteable and WAS bare.
+
+WHAT WAS DONE, AND WHY IT IS NOT THE SAME AS REWRITING EVIDENCE. The sentence was
+REPHRASED and `D04_DOC_BASELINE` was LEFT AT 2. Raising the pin to 3 would have
+been laundering: the pin exists to catch precisely this, and moving it to
+accommodate the first thing it caught would retire the check on its first use.
+The distinction from the two historic quotations at `beets.md:106` and `:170`,
+which ARE kept verbatim, is that those are the Nov-2025 RECORD of what the
+runbook said — rewriting them would falsify history. This sentence was written
+today, by this plan, and is not a record of anything. Quoting is not free; a
+quotation earns its baseline slot by being evidence.
+
+HONEST LIMIT ON THIS DRIVE: the count movement (2 -> 3 -> 2) was observed through
+the probe that extracts `D04_INV_RE` and `D04_EXEMPT_RE` FROM the script and
+applies them to a real `git grep`, not through a captured live run of
+`quick-health-check.sh` with the offending line at a scanned HEAD. The CONDITION
+is measured; the block's own `❌ documentation invocation count moved` output was
+not captured for this instance. The doc-pin branch itself is pre-existing (plan
+06-10) and untouched by this plan.
+
+
+================================================================================
+6. NOT DRIVEN — asserted by construction, never observed firing
+================================================================================
+
+For plan 06-21's disposition register. Everything in section 2 was OBSERVED. The
+following was not, and is recorded as reasoning rather than as evidence.
+
+  N-1  THE ✅ GREEN LINE.
+       Asserted by construction. Not demonstrable by any route today — see
+       section 0. All four conditions it requires were MEASURED satisfied on this
+       plan's tree (no ❌ compliance line, exempt 5 = pin 5, doc 2 = pin 2), and
+       `D04_OVERRIDDEN` is the only remaining gate. Its assignments are
+       enumerated in section 0. Becomes observable the moment Phase 6 is on the
+       host's HEAD; until then the block correctly reports UNKNOWN.
+
+  N-2  THE EXIT_CODE=1 CONTRIBUTION OF THE TWO NEW FATAL CONDITIONS.
+       The vacuity guard's MESSAGE and the exemption pin's MESSAGE were both
+       observed firing live (sections D and E). Their effect on the process exit
+       status was NOT isolated, because the standing Phase 5
+       `interpolated-host-path` red already forces exit 1 in every run — see
+       section I. `EXIT_CODE=1` is present in both branches and is asserted
+       structurally by the task-1 verify (within 6 lines of each guard), not by
+       observing the exit code change.
+
+  N-3  THE `-l /config/library.db` SUB-CONDITION OF THE COMPLIANCE LOOP.
+       `d04_real=1` — an invocation that carries a `-l` pointing AT the real
+       library — was not driven. Control 1 drove the missing-`-l` half of the
+       same `if`. The two share one branch and one message, so the message was
+       observed; this specific route into it was not. Pre-existing logic (plan
+       06-10), unchanged by this plan.
+
+  N-4  THE OVERLAY-KEY HALF OF `D04_EXEMPT_RE`.
+       The claim that a DIFFERENT invocation added to `phase06-oracle.sh` or
+       `phase06-incremental-control.sh` does NOT inherit the exemption rests on
+       reading the regex — it is keyed on path AND overlay variable — not on a
+       planted line. Control 1's planted violation went into a THIRD file
+       (`check-music-freeze.sh`), which proves the register does not swallow
+       arbitrary files but does not prove the per-line keying inside the two
+       exempt files. This is the weakest link in the exemption register and the
+       obvious next drive.
+
+  N-5  THE SENTINEL BRANCH (`D04-BEGIN` absent) AND THE `exit 3` BRANCH OF THE
+       D-04 SCAN. Pre-existing, untouched, not re-driven here. Note the sentinel
+       branch's `-ne 124` special case only became meaningful with WR-10: before
+       this plan, 124 could never reach it.
+
+  N-6  THE DOCUMENTATION-PIN RED AS A CAPTURED BLOCK OUTPUT. See the honest limit
+       at the end of section 5 — the condition was measured, the block's own red
+       line was not captured for that instance.

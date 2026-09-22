@@ -2160,13 +2160,102 @@ is non-discriminating, so these are the BLOCK verdicts**:
 | Containers | ✅ 97 running, no unhealthy, none in `created` |
 | Vendored-file drift | ⚠️ **UNKNOWN — could not look** (`ssh exit 4`), cause quoted above. Not a green |
 | D-03 one vendored config into both containers | ✅ one config, both containers, `config :ro`, `/mnt/tank/media :ro` |
-| D-04 throwaway `-l` on every `beet` invocation | ✅ 0 executable invocations open the real library (documentation hits at the pinned baseline of 2) |
+| D-04 throwaway `-l` on every `beet` invocation | ✅ 0 executable invocations open the real library (documentation hits at the pinned baseline of 2) — **✳ SUPERSEDED, see the dated note below the table** |
 | `extended.conf` destructive switches | ✅ disarmed — `requireBeetsMatch=false`, `ConversionFormat` in `{FLAC,OPUS}` |
 | Music freeze harness | ❌ **exit 1 on the Phase 5 `interpolated-host-path` gate alone** (`expected=12, found=13`). Every music counter inside it is at target: tagger-class writers 0, unclassified writers 0, declared `rw` reaching Music 0, ownership mismatches 0, retired paths 0, `rw` on Music tagger-capable 0, fence assertions failed 0 |
 | Music consumers audit | ✅ both consumers see the library; 2 of 2 albums matched in each, `FAILURES total: 0` |
 | Library underscore-dir guard | ✅ no `_`-prefixed directories under `/mnt/tank/media/Music` |
 | Jellyfin transcode retention | ✅ intact — 5 encoding values asserted, 0 drifted; `/` headroom 24.33 GiB; quota 50 G; `volume mounts: 0` |
 | Container image drift | ✅ measured — 10 drifted, **reported not asserted** (v1 is alert-only, D-01); unresolvable 2 as expected; could-not-look 0 |
+
+> **✳ THE D-04 ROW ABOVE IS SUPERSEDED. That green tick meant nothing** *(note added 2026-09-22,
+> plan 06-16, CR-01; the row is kept verbatim rather than deleted, because what the instrument
+> reported on 2026-09-21 is the record)*. The block asserted over an **empty set** for the whole of
+> Phase 6. Its own green line says so out loud — *"0 invocation-shaped lines outside `*.md`"* — and
+> it called that a pass. Reproduced live on the deployed tree on 2026-09-22: raw 46,
+> comment-stripped 26, invocation-shaped 2, **executable 0**.
+>
+> **The cause, so it is not repeated.** `git grep -w -E 'beet'` is **case sensitive**, and *every*
+> `beet` call this repo makes from a script is assembled from a variable — `"$BEET"`,
+> `"$BEET_BIN"`, `"${BEET_BIN}"` — never from the literal token `beet`. The scan could not see a
+> single one of them. Widening only the local shape test would not have helped: the lines were
+> never returned by the remote grep in the first place.
+>
+> **What the block runs now** — quoted from `scripts/quick-health-check.sh` byte for byte, so this
+> page cannot drift from the instrument. The remote scan:
+>
+> ```
+> timeout $REMOTE_TIMEOUT git grep -n -I -w -E -e 'beet' -e 'BEET[A-Z_]*' HEAD -- scripts stacks
+> ```
+>
+> A **second `-e`** rather than an alternation, because an alternation puts a literal `|` in the
+> command string and this file's greppable `timeout $REMOTE_TIMEOUT.*|` invariant matches on the
+> line. The local shape test:
+>
+> ```
+> D04_INV_RE='^HEAD:[^:]*:[0-9]*:[[:space:]]*(sudo[[:space:]]+)?beet[[:space:]]|[[:space:]](&&|;)[[:space:]]*beet[[:space:]]|docker[[:space:]][^`]*[[:space:]]beet[[:space:]]|(^HEAD:[^:]*:[0-9]*:[[:space:]]*(sudo[[:space:]]+)?|")\$\{?BEET[A-Z_]*\}?"?[[:space:]]+(-|[a-z])'
+> ```
+>
+> The fourth branch is the new one: a `BEET`-prefixed variable **in command position** (content
+> start, or immediately inside an opening quote) **followed by a flag or a subcommand word**. Both
+> halves are load-bearing and both were measured — the naive "preceded by whitespace or a quote"
+> form matched **26** lines of which **18 run nothing** (`[[ $BEET_EXEC_RC -eq 0 ]]`,
+> `"$BEETS_DB_COUNT"`, and `remote_exec … "$BEET" "$PY"` argument passing). It deliberately admits
+> a **bare** invocation — the binary variable followed by a `config` subcommand and no flags at
+> all — so it cannot be accused of only matching invocations that were already compliant.
+>
+> *(That sentence originally spelled the bare invocation out literally. It is written this way
+> because the literal form **is** an invocation shape, so it landed in the documentation set and
+> took `D04_N_DOC` to 3 against the pinned baseline of 2 — a red, correctly. The pin was **not**
+> raised to accommodate it: a new copy-pasteable bare invocation in the runbook is exactly the
+> footgun the pin exists to catch, and the two historic quotations above are kept verbatim only
+> because they are the Nov-2025 record, not because quoting is free.)*
+>
+> **Measured counts on this plan's tree** (hand-reproduced from the host and compared against the
+> block's own printed figures — agreement at every position, both trees):
+>
+> | count | value |
+> |---|---|
+> | raw | 191 |
+> | comment-stripped | 90 |
+> | invocation-shaped | 10 |
+> | **executable** | **8** = asserted **3** + exempt **5** |
+> | documentation | 2 (at the pinned `D04_DOC_BASELINE`) |
+>
+> **THE EXEMPTION REGISTER — `D04_EXEMPT_RE` and `D04_EXEMPT_BASELINE` (pinned at 5).** Five
+> invocation-shaped executable lines are **named, counted and pinned** rather than asserted. The
+> register is keyed on the file path **and** the distinguishing overlay variable, so a *different*
+> invocation added to either file does **not** inherit the exemption; a move off the pin is a red
+> that prints every exempt line. A green D-04 now always **states how many lines it did not assert
+> over**, so 3 asserted can never be mistaken for 8.
+>
+> | file | lines | key |
+> |---|---|---|
+> | `scripts/phase06-oracle.sh` | 2166, 2179, 2313 | `$SCRATCH_OVERLAY` |
+> | `scripts/phase06-incremental-control.sh` | 462, 464 | `$ROOT/overlay.yaml` |
+>
+> **Why — all three reasons hold, and an unexplained exemption would be worse than none.**
+> 1. Each passes a `-c` overlay redirecting `library`, `statefile` **and** `directory` together
+>    into a throwaway root. That is the **stronger** half of D-04's rule and the half `-l` cannot
+>    achieve — `-l` redirects `library` and nothing else. These are not a weaker compliance.
+> 2. Adding a `-l` would make them **worse**: naming a different path than the overlay's `library:`
+>    splits the throwaway state across two files; naming the same path is a second source of truth
+>    for one value, and the two drift on the first edit.
+> 3. Both are **closed instruments** whose proof runs are already committed and cannot be re-driven
+>    inside this phase — `artifacts/06-11-oracle-run.txt`, `artifacts/06-11-wrote-nothing.txt` and
+>    `artifacts/06-20-incremental-driven.txt`. Changing their flags would invalidate that evidence.
+>
+> **The block can now fail, and was made to.** Five branches driven live and recorded with
+> before/after `sha256` in `artifacts/06-16-d04-driven.txt`: a real variable-built violation going
+> **red** and removed; the new vacuity guard firing **UNKNOWN** on a zero executable count; the
+> exemption pin firing under `D04_EXEMPT_BASELINE=4` and proven unable to pass; the **124**
+> bound-expiry branch driven (WR-10 — a `timeout` kill used to report as *"'git grep' failed"*,
+> because `124 > 1`); and the D-03 render `exit 3` driven via the new `D03_REPO_ROOT` (IN-13).
+>
+> **⚠️ What the block reports on the deployed estate today is `UNKNOWN`, not `✅`** — the host's
+> `/mnt/fast/stacks` is still at `c67d497`, pre-Phase-6, so the executable count there is genuinely
+> 0 and the vacuity guard correctly refuses to call that a pass. It clears on the same
+> `git push` + `git pull --ff-only` the drift block is waiting on, **and on nothing else**.
 
 **Two reds, neither caused by Phase 6.** The freeze harness fails on a Phase 5 human-review gate —
 **verified**, not assumed: none of the 13 interpolated-host-path lines is under
