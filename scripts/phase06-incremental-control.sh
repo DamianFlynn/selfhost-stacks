@@ -31,8 +31,22 @@
 #   2  UNKNOWN   an instrument COULD NOT LOOK - remote timeout (124), unreadable pickle, a
 #                vanished tree. "Could not look" is a distinct outcome from "nothing is wrong"
 #                and it is NEVER a pass.
-#   3  REFUSED   a preflight refused to run: dirty destination, source outside the fence, or the
-#                two overlays not exactly one key apart. Nothing was measured.
+#   3  REFUSED   a preflight refused to run: dirty destination, source outside the fence, the
+#                two overlays not exactly one key apart, or a USAGE error (a missing or illegal
+#                `--arm` value). Nothing was measured.
+#
+#   PRECEDENCE, when one run BOTH measured a failure AND had an instrument that could not look:
+#   2 (UNKNOWN) OUTRANKS 1 (FAIL). The two conditions are not mutually exclusive, so this is a
+#   decision, not an accident of ordering. Reason: this estate's standing rule (CLAUDE.md and
+#   README § Health Checks) is that "could not look" is kept distinct from "nothing is wrong"
+#   and is never folded into another verdict - reporting a measured red while an instrument was
+#   blind asserts a cause the run did not establish. THE SIBLING INSTRUMENT WRITTEN IN THIS SAME
+#   PHASE, scripts/phase06-oracle.sh, IMPLEMENTS THE IDENTICAL CONVENTION: it consults its
+#   UNKNOWN counter before its RED counter. (Its numbering differs - there UNKNOWN is 3 and
+#   usage/refusal is 2 - but the precedence is the same, and each header names the other.)
+#   Driven by `--self-test` section 7/7, which asserts the blind verdict wins when both hold,
+#   and by section 6/7 for the re-offer classifier the same run depends on.
+# ==============================================================================================
 #
 # WHAT THIS MEASURES (D-31, CONF-02)
 #   `ImportTask.finalize()` calls `save_history()` on a SKIPPED task unless
@@ -320,6 +334,30 @@ classify_taghistory() { # $1 = the probe's captured stdout
   return 0
 }
 
+# --- The step-4 re-offer classifier -----------------------------------------------------------
+# Factored out of run_arm so `--self-test` and an offline drive can feed it a synthetic
+# transcript. A classifier that is only reasoned about is an assumption, not a control.
+#
+# THREE OUTCOMES, unchanged: `not-offered` (beets reports the paths skipped), `offered` (an
+# `Album: ` line is present), and the `indeterminate` fall-through - which the caller treats as
+# BLIND, never as green - for anything else, including the `contradictory` case where both
+# markers appear at once.
+#
+# THE PATH COUNT IS NOT PINNED. [IN-10, plan 06-20] This used to match the literal
+# `Skipped 1 paths.`, but SRC_FOLDER is an OFFERED override (see the header's override contract)
+# and a source folder yielding two albums prints a count of 2 - which fell through to
+# `indeterminate`, i.e. BLIND, so the negative control silently stopped discriminating while
+# still appearing to run, for exactly the case the override invites. Only the COUNT is widened:
+# every other unrecognised transcript still reaches `indeterminate`.
+classify_reoffer() { # $1 = a file holding the --pretend transcript; echoes the mode
+  local f="$1" mode="indeterminate"
+  if grep -qE 'Skipped [0-9]+ paths\.' "$f"; then mode="not-offered"; fi
+  if grep -q '^Album: ' "$f"; then
+    if [ "$mode" = "not-offered" ]; then mode="contradictory"; else mode="offered"; fi
+  fi
+  printf '%s\n' "$mode"
+}
+
 # --- Remote plumbing --------------------------------------------------------------------------
 RE_OUT=""; RE_ERR=""; RE_RC=0
 remote_exec() { # $1 = local program file; rest = positional args for the remote `sh -s`
@@ -332,9 +370,14 @@ remote_exec() { # $1 = local program file; rest = positional args for the remote
   return 0
 }
 
-remote_is_blind() { # true when the remote call could not look
-  [ "$RE_RC" -eq 124 ] || [ "$RE_RC" -eq 2 ] || [ "$RE_RC" -eq 255 ]
-}
+# THERE IS DELIBERATELY NO NARROW BLINDNESS CLASSIFIER HERE. [IN-02, plan 06-20]
+# A named helper used to sit at this point testing only `RE_RC` in {124, 2, 255}, and NOTHING
+# CALLED IT - every caller instead tests `[ "$RE_RC" -ne 0 ]`, which is strictly WIDER: it also
+# catches 1, 125 (docker could not run), 126 (not executable) and 127 (command not found). A
+# named classification that a reader assumes is in force while a different, wider test actually
+# decides is a repudiation hazard, and routing the callers through the narrow one would have
+# been a regression dressed as a cleanup. So the wider inline test stays and the dead name is
+# gone. Any future blindness helper MUST be at least as wide as `-ne 0` and MUST be called.
 
 # --- Remote programs (quoted heredocs: nothing local expands into them) ----------------------
 write_prog_prepare() { cat > "$1" <<'REOF'
@@ -526,6 +569,33 @@ assert_real_state() { # $1 = label; 0 = unchanged, 1 = MOVED, 2 = could not look
 }
 
 # --- One arm ----------------------------------------------------------------------------------
+# --- The arm verdict, and the RED-vs-UNKNOWN precedence ---------------------------------------
+# THE TWO CONDITIONS ARE NOT MUTUALLY EXCLUSIVE. A single arm can both measure a failure and
+# have an instrument that could not look, so which one is consulted first is a DECISION, not an
+# accident of ordering - which is why it is factored out here, stated in the EXIT CODES block
+# and driven by `--self-test` rather than left implicit in run_arm's tail.
+#
+# THE DECISION: a blind instrument OUTRANKS a measured red. [IN-08, plan 06-20] Reason: this
+# estate's standing rule is that "could not look" is kept distinct from "nothing is wrong" and
+# is never folded into another verdict; reporting a measured red while an instrument was blind
+# asserts a cause the run did not establish. The sibling instrument written in this same phase,
+# scripts/phase06-oracle.sh, consults its UNKNOWN counter first for the same reason. Before this
+# plan the two disagreed, so no reader could infer the convention from either.
+#
+# Neither condition's MEANING nor its exit code changed here - only which is consulted first.
+arm_verdict() { # $1 = failed (0/1)  $2 = unknown (0/1)  $3 = arm label; returns 2 / 1 / 0
+  local failed="$1" unknown="$2" arm="${3:-?}"
+  if [ "$unknown" -ne 0 ]; then
+    say "  ARM $arm: UNKNOWN (an instrument could not look - not a pass; this OUTRANKS a measured red in the same run)"
+    return 2
+  fi
+  if [ "$failed" -ne 0 ]; then
+    say "  ARM $arm: FAIL (a measured negative - record it, do not retune)"
+    return 1
+  fi
+  return 0
+}
+
 run_arm() { # $1 = a|b
   local arm="$1" root="" want_hist="" want_offer="" prog="" rc=0 failed=0 unknown=0
   local sha_local="" sha_remote="" mode=""
@@ -654,11 +724,7 @@ run_arm() { # $1 = a|b
     blind "step 4's remote call failed (rc=$RE_RC). UNKNOWN, not green."
     unknown=1
   else
-    mode="indeterminate"
-    if grep -q 'Skipped 1 paths\.' "$RE_OUT"; then mode="not-offered"; fi
-    if grep -q '^Album: ' "$RE_OUT"; then
-      if [ "$mode" = "not-offered" ]; then mode="contradictory"; else mode="offered"; fi
-    fi
+    mode="$(classify_reoffer "$RE_OUT")"
     say "  classified: $mode"
     case "$want_offer:$mode" in
       no:not-offered)
@@ -666,7 +732,7 @@ run_arm() { # $1 = a|b
       yes:offered)
         ok "step 4: the folder IS re-offered - the trap is DEFEATED by incremental_skip_later" ;;
       *:indeterminate|*:contradictory)
-        blind "step 4: the transcript is $mode - neither 'Skipped 1 paths.' alone nor an 'Album: ' line alone"
+        blind "step 4: the transcript is $mode - neither a 'Skipped N paths.' line alone nor an 'Album: ' line alone"
         bad "  This is UNKNOWN, not green."
         unknown=1 ;;
       *)
@@ -716,8 +782,8 @@ run_arm() { # $1 = a|b
 
   say ""
   rule
-  if [ "$failed" -ne 0 ]; then say "  ARM $arm: FAIL (a measured negative - record it, do not retune)"; return 1; fi
-  if [ "$unknown" -ne 0 ]; then say "  ARM $arm: UNKNOWN (an instrument could not look - not a pass)"; return 2; fi
+  rc=0; arm_verdict "$failed" "$unknown" "$arm" || rc=$?
+  if [ "$rc" -ne 0 ]; then return "$rc"; fi
   say "  ARM $arm: PASS - taghistory $want_hist, re-offer $want_offer, source untouched, real state unmoved"
   return 0
 }
@@ -752,11 +818,11 @@ st_expect() { # $1 = label  $2 = expected  $3 = got
 }
 
 self_test() {
-  local td="" py="" got="" rc=0 f=""
+  local td="" py="" got="" rc=0 f="" verdict="" vf="" vu="" expect="" desc=""
   td="$(mktemp -d "${TMPDIR:-/tmp}/p6-08-selftest-XXXXXX")"
 
   say ""
-  say "== --self-test 1/5: the taghistory classifier, over REAL pickles =="
+  say "== --self-test 1/7: the taghistory classifier, over REAL pickles =="
   rule
   py=""
   for f in /venv/bin/python python3 python; do
@@ -801,7 +867,7 @@ PYEOF
   classify_taghistory "beets said nothing at all"; st_expect "no marker line at all (python missing, truncated transport)" "unreadable" "$TAGHIST_CLASS"
 
   say ""
-  say "== --self-test 2/5: the one-key overlay refusal =="
+  say "== --self-test 2/7: the one-key overlay refusal =="
   rule
   emit_overlay "$ARM_A_ROOT" no  > "$td/ok.a.yaml"
   emit_overlay "$ARM_B_ROOT" yes > "$td/ok.b.yaml"
@@ -836,7 +902,7 @@ PYEOF
   st_expect "a missing overlay file is could-not-look, not accept" "couldnotlook" "$got"
 
   say ""
-  say "== --self-test 3/5: the dirty-destination and root refusals, driven locally =="
+  say "== --self-test 3/7: the dirty-destination and root refusals, driven locally =="
   rule
   # The refusal lives in the remote program, so drive that program's text with the local sh.
   write_prog_prepare "$td/prep.sh"
@@ -875,7 +941,7 @@ PYEOF
   fi
 
   say ""
-  say "== --self-test 4/5: the three-outcome manifest comparison =="
+  say "== --self-test 4/7: the three-outcome manifest comparison =="
   rule
   printf 'a\tb\tc\n' > "$td/m1"; printf 'a\tb\tc\n' > "$td/m2"; printf 'a\tb\tX\n' > "$td/m3"; : > "$td/m4"
   rc=0; manifest_compare "$td/m1" "$td/m2" || rc=$?
@@ -892,7 +958,7 @@ PYEOF
   st_expect "two EMPTY manifests (must not pass vacuously)" "couldnotlook" "$got"
 
   say ""
-  say "== --self-test 5/5: the source fence =="
+  say "== --self-test 5/7: the source fence =="
   rule
   while IFS='|' read -r expect given desc; do
     case "${expect:-}" in ""|"#"*) continue ;; esac
@@ -908,6 +974,47 @@ refuse|relative/path|a relative path
 refuse|/downloads/incomplete/music|inside /downloads but outside the allow-prefix
 CASES
 
+  say ""
+  say "== --self-test 6/7: the step-4 re-offer classifier, over synthetic transcripts =="
+  rule
+  # IN-10. The PAIR is the point: widening the path count must classify the multi-album case
+  # WITHOUT changing the single-album answer. A widening proven on only the new case is how a
+  # widening becomes a regression.
+  # The counts are printf ARGUMENTS, never spelled into the fixture text, so the guard that
+  # forbids a pinned count anywhere in this file keeps its teeth: the only place a count can be
+  # written literally is a match pattern, which is precisely what IN-10 forbids.
+  for f in 1 2 17; do
+    printf 'Skipped %s paths.\n' "$f" > "$td/reoffer.skip.$f"
+    st_expect "a skipped-path count of $f" "not-offered" "$(classify_reoffer "$td/reoffer.skip.$f")"
+  done
+  printf 'Album: /tmp/p6b/src\n  01.mp3\n'        > "$td/reoffer.album"
+  printf 'Skipped %s paths.\nAlbum: /tmp/p6b/src\n' 2 > "$td/reoffer.both"
+  printf 'beets said something else entirely\n'   > "$td/reoffer.junk"
+  : > "$td/reoffer.empty"
+  st_expect "an Album: line and no skip"                           "offered"       "$(classify_reoffer "$td/reoffer.album")"
+  st_expect "BOTH markers at once (must not resolve to either)"    "contradictory" "$(classify_reoffer "$td/reoffer.both")"
+  st_expect "an unrecognised transcript (still falls through)"     "indeterminate" "$(classify_reoffer "$td/reoffer.junk")"
+  st_expect "an EMPTY transcript (must not pass vacuously)"        "indeterminate" "$(classify_reoffer "$td/reoffer.empty")"
+
+  say ""
+  say "== --self-test 7/7: the RED-vs-UNKNOWN precedence (a blind instrument outranks a measured red) =="
+  rule
+  # IN-08. Two cases at minimum, because one proves only that a branch exists; the full 2x2 is
+  # cheap and shows the ordering is a decision over two non-exclusive conditions.
+  # $1 = failed  $2 = unknown
+  while IFS='|' read -r vf vu expect desc; do
+    case "${vf:-}" in ""|"#"*) continue ;; esac
+    rc=0; got="$(arm_verdict "$vf" "$vu" "precedence-case" 2>&1)" || rc=$?
+    case "$rc" in 0) verdict="pass" ;; 1) verdict="fail" ;; 2) verdict="unknown" ;; *) verdict="rc$rc" ;; esac
+    st_expect "$desc" "$expect" "$verdict"
+    if [ -n "$got" ]; then say "        verdict line:$got"; else say "        (silent - a pass prints its own line in run_arm)"; fi
+  done <<'PRECEDENCE'
+1|1|unknown|a measured failure AND a blind read in the same run - the BLIND verdict must win
+1|0|fail|a measured failure with NO blind read - the red must stand
+0|1|unknown|a blind read with no measured failure
+0|0|pass|neither - the arm passes
+PRECEDENCE
+
   rm -rf "$td"
   say ""
   rule
@@ -917,11 +1024,31 @@ CASES
 }
 
 # --- Argument parsing -------------------------------------------------------------------------
+# A USAGE ERROR IS NOT A MEASUREMENT. [IN-05, plan 06-20] `--arm` used to be
+# `ARM="${2:-}"; shift 2`, and with one argument left `shift 2` returns non-zero, so `set -e`
+# terminated the script with status 1 - THE CODE RESERVED FOR "the arm produced the OPPOSITE
+# outcome" - and printed nothing at all. A mis-typed invocation then read as a measured negative.
+# The defect is in the `shift 2` IDIOM, so no flag in this dispatch uses it: each shifts ONCE
+# unconditionally and takes a value only if one is actually present. Usage errors exit 3, loudly.
+usage_error() { # $1 = what was wrong; exits 3 (REFUSED/usage) per the EXIT CODES block
+  printf 'phase06-incremental-control.sh: %s\n\n' "$1" >&2
+  print_header >&2
+  exit 3
+}
+
 MODE=""
 ARM=""
 while [ $# -gt 0 ]; do
   case "$1" in
-    --arm) MODE="arm"; ARM="${2:-}"; shift 2 ;;
+    --arm)
+      MODE="arm"; shift
+      if [ $# -gt 0 ]; then ARM="$1"; shift; else ARM=""; fi
+      case "$ARM" in
+        a|b) : ;;
+        "") usage_error "--arm requires a value; the legal values are 'a' and 'b'" ;;
+        *)  usage_error "--arm: '$ARM' is not a legal arm; the legal values are 'a' and 'b'" ;;
+      esac
+      ;;
     --baseline) MODE="baseline"; shift ;;
     --cleanup) MODE="cleanup"; shift ;;
     --self-test) MODE="selftest"; shift ;;

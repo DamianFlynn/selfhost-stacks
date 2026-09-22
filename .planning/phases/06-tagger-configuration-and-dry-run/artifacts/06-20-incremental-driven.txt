@@ -1,0 +1,411 @@
+06-20 — scripts/phase06-incremental-control.sh: the driven evidence
+====================================================================================================
+Plan:      .planning/phases/06-tagger-configuration-and-dry-run/06-20-PLAN.md
+Findings:  IN-02, IN-05, IN-10, and the incremental half of IN-08
+Captured:  2026-09-22, from the repo root on the workstation (macOS 27.0.0, bash 3.2 / GNU bash
+           via /opt/homebrew, shellcheck 0.11.0)
+
+NO ARM WAS RUN AGAINST THE LIVE ESTATE.
+  `--arm a` and `--arm b` each perform a real `beet import` inside the `beets-flask` container on
+  LXC 100. Neither was executed. CONF-02's committed proof (06-VERIFICATION.md, and the arm
+  captures already in this phase's artifacts) stands unchanged and was not re-taken. Every drive
+  below is local: `bash -n`, `shellcheck`, `--self-test`, and argument parsing that exits before
+  the first remote call.
+
+  BELT AND BRACES: every `--arm` drive below ran with a PATH shim whose `ssh` and `docker` refuse
+  and exit 97 with a marker on stderr. The marker appears in none of the transcripts, so the
+  "refused before any remote call" reading is not merely reasoned about — it is instrumented.
+
+
+====================================================================================================
+1. THE FOUR ARGUMENT-PARSING DRIVES
+====================================================================================================
+
+== D1: --arm with NO value (IN-05) ==
+--- --arm, value missing
+    argv : scripts/phase06-incremental-control.sh --arm
+    env  : -
+    exit : 3
+    stdout: 0 byte(s)
+    stderr: 7909 byte(s)
+      | phase06-incremental-control.sh: --arm requires a value; the legal values are 'a' and 'b'
+      |
+      | phase06-incremental-control.sh - Phase 6 / D-31: prove the `incremental` trap FIRES, and prove
+      |                                 the configured key DEFEATS it. Two arms, one config key apart.
+      |
+      | Where it runs:
+    ssh/docker shim: NOT reached (no remote call was attempted)
+
+== D2: --arm with an ILLEGAL value (IN-05) ==
+--- --arm zzz
+    argv : scripts/phase06-incremental-control.sh --arm zzz
+    env  : -
+    exit : 3
+    stdout: 0 byte(s)
+    stderr: 7918 byte(s)
+      | phase06-incremental-control.sh: --arm: 'zzz' is not a legal arm; the legal values are 'a' and 'b'
+      |
+      | phase06-incremental-control.sh - Phase 6 / D-31: prove the `incremental` trap FIRES, and prove
+      |                                 the configured key DEFEATS it. Two arms, one config key apart.
+      |
+      | Where it runs:
+    ssh/docker shim: NOT reached (no remote call was attempted)
+
+== D3: --arm a, refused locally before the first remote call ==
+--- --arm a with SRC_FOLDER outside the fence
+    argv : scripts/phase06-incremental-control.sh --arm a
+    env  : SRC_FOLDER=/mnt/tank/media/Music/Abba OUT_DIR=<tmp>/out
+    exit : 3
+    stdout: 488 byte(s)
+      | captures: <tmp>/out
+      |
+      | == phase06-incremental-control.sh --arm a ==
+      | ----------------------------------------------------------------------
+      |   root                     /tmp/p6a
+      |   source folder            /mnt/tank/media/Music/Abba
+      |   expected taghistory      populated
+      |   expected re-offer        no
+    stderr: 0 byte(s)
+    ssh/docker shim: NOT reached (no remote call was attempted)
+
+    NOTE ON THE PLAN'S WORDING. The plan asked for "--arm a with a deliberately impossible host or
+    container override". NO SUCH OVERRIDE EXISTS, and that is deliberate, not an oversight: the
+    header's override contract states that LXC_HOST, CONTAINER and the real library/state paths
+    are PLAIN CONSTANTS precisely because an override on any of them could MANUFACTURE A PASS.
+    So the branch was driven the other legitimate way the plan allows for — through a refusal that
+    is strictly earlier than the first remote call. `run_arm`'s preflight 1 is the local source
+    fence (`fence_eval`), which returns 3 before `remote_exec` is ever reached. The transcript
+    proves the dispatch accepted `a`, entered `run_arm`, printed the arm banner, and then refused.
+    The shim confirms no ssh or docker was invoked.
+
+== D4: --self-test, the legal invocation, for contrast ==
+--- --self-test
+    argv : scripts/phase06-incremental-control.sh --self-test
+    env  : -
+    exit : 0
+    stdout: 5436 byte(s)
+    stderr: 0 byte(s)
+    ssh/docker shim: NOT reached (no remote call was attempted)
+
+
+== IN-05: the before/after, measured on the two shapes ==
+    pre-fix shape (`ARM="${2:-}"; shift 2` under `set -e`):  exit=1   output=[]
+    post-fix                                              :  exit=3   stdout=[]
+        stderr line 1 = [phase06-incremental-control.sh: --arm requires a value; the legal values
+                         are 'a' and 'b']
+
+    1 is the code the EXIT CODES block reserves for "the arm produced the OPPOSITE outcome" — a
+    MEASUREMENT. A mis-typed invocation therefore read as a measured negative, in silence. The
+    table was already right; the behaviour was wrong, and the behaviour is what changed.
+
+
+====================================================================================================
+2. THE FULL --self-test TRANSCRIPT  (exit status 0)
+====================================================================================================
+
+== --self-test 1/7: the taghistory classifier, over REAL pickles ==
+----------------------------------------------------------------------
+  driving the SAME probe source the container runs, with python3
+  [ ok ] populated (expected): a populated taghistory
+  [ ok ] empty (expected): a readable EMPTY taghistory
+  [ ok ] absent (expected): an ABSENT state file
+  [ ok ] unreadable (expected): an unpicklable state file
+  [ ok ] unreadable (expected): a pickle that is not a dict
+  [ ok ] unreadable (expected): a dict with no taghistory key
+  [ ok ] unreadable (expected): no marker line at all (python missing, truncated transport)
+
+== --self-test 2/7: the one-key overlay refusal ==
+----------------------------------------------------------------------
+  [ ok ] accept (expected): the real overlay pair (one key apart)
+  [ ok ] refuse (expected): a pair differing in TWO keys (write flipped as well)
+        reason: the overlays differ in 4 line(s), of which 2 name incremental_skip_later - expected 2 and 2. The arms would be measuring the difference rather than the key.
+  [ ok ] refuse (expected): a pair with a stray trailing-whitespace change
+        reason: the overlays differ in 4 line(s), of which 2 name incremental_skip_later - expected 2 and 2. The arms would be measuring the difference rather than the key.
+  [ ok ] refuse (expected): a pair with NO differing key (identical once canonicalised)
+        reason: the overlays are IDENTICAL once the roots are canonicalised - there is no variable, so there is no control
+  [ ok ] couldnotlook (expected): a missing overlay file is could-not-look, not accept
+
+== --self-test 3/7: the dirty-destination and root refusals, driven locally ==
+----------------------------------------------------------------------
+  [ ok ] refuse (expected): a root outside the two throwaway roots
+        PREP REFUSED root '/tmp/not-a-throwaway-root' is not one of the two throwaway roots
+  [ ok ] refuse (expected): a DIRTY destination (root holds a leftover entry)
+        PREP REFUSED dirty-destination '/tmp/p6a' holds 1 entries - a wrote-nothing assertion against a dirty destination proves nothing
+  [ ok ] couldnotlook (expected): a clean destination with an unreachable source
+        PREP DEST clean /tmp/p6b
+        PREP BLIND source '/downloads/complete/nzb/music/Cyril - Stumblin In (LUNAX Remix) (Extended Mix)-(5021732254740)-SINGLE-WEB-2024-ZzZz [9c1feafc0] [2af13ead9]-xpost' is not a directory
+
+== --self-test 4/7: the three-outcome manifest comparison ==
+----------------------------------------------------------------------
+  [ ok ] identical (expected): two identical manifests
+  [ ok ] differs (expected): two differing manifests
+  [ ok ] couldnotlook (expected): a manifest that was never captured
+  [ ok ] couldnotlook (expected): two EMPTY manifests (must not pass vacuously)
+
+== --self-test 5/7: the source fence ==
+----------------------------------------------------------------------
+  [ ok ] accept (expected): the legitimate shape of SRC_FOLDER
+  [ ok ] refuse (expected): a `..` walk out of the allow-prefix
+        reason: '/downloads/complete/nzb/../../../etc' contains a '..' component, which escapes the prefix check
+  [ ok ] refuse (expected): the library itself - never a source for a throwaway import
+        reason: '/mnt/tank/media/Music/Abba' is not under the allow-prefix '/downloads/complete/nzb/'
+  [ ok ] refuse (expected): a relative path
+        reason: 'relative/path' is not absolute
+  [ ok ] refuse (expected): inside /downloads but outside the allow-prefix
+        reason: '/downloads/incomplete/music' is not under the allow-prefix '/downloads/complete/nzb/'
+
+== --self-test 6/7: the step-4 re-offer classifier, over synthetic transcripts ==   [NEW, IN-10]
+----------------------------------------------------------------------
+  [ ok ] not-offered (expected): a skipped-path count of 1     <- the ORIGINAL case, unchanged
+  [ ok ] not-offered (expected): a skipped-path count of 2     <- the case SRC_FOLDER invites
+  [ ok ] not-offered (expected): a skipped-path count of 17    <- a two-digit count
+  [ ok ] offered (expected): an Album: line and no skip
+  [ ok ] contradictory (expected): BOTH markers at once (must not resolve to either)
+  [ ok ] indeterminate (expected): an unrecognised transcript (still falls through)
+  [ ok ] indeterminate (expected): an EMPTY transcript (must not pass vacuously)
+
+== --self-test 7/7: the RED-vs-UNKNOWN precedence (a blind instrument outranks a measured red) ==   [NEW, IN-08]
+----------------------------------------------------------------------
+  [ ok ] unknown (expected): a measured failure AND a blind read in the same run - the BLIND verdict must win
+        verdict line:  ARM precedence-case: UNKNOWN (an instrument could not look - not a pass; this OUTRANKS a measured red in the same run)
+  [ ok ] fail (expected): a measured failure with NO blind read - the red must stand
+        verdict line:  ARM precedence-case: FAIL (a measured negative - record it, do not retune)
+  [ ok ] unknown (expected): a blind read with no measured failure
+        verdict line:  ARM precedence-case: UNKNOWN (an instrument could not look - not a pass; this OUTRANKS a measured red in the same run)
+  [ ok ] pass (expected): neither - the arm passes
+        (silent - a pass prints its own line in run_arm)
+
+----------------------------------------------------------------------
+  --self-test: all branches behaved as expected (including every refusal and every blind case)
+
+  exit status: 0     sections: 7 (was 5; the banner count was updated in the same edit)
+
+
+====================================================================================================
+3. IN-10 — THE WIDENED PATH COUNT, DRIVEN AS A PAIR
+====================================================================================================
+The PAIR is the point. Widening a pattern and only proving the NEW case is how a widening becomes
+a regression, so the old single-album case is driven alongside and must be unchanged.
+
+The two classifiers were run over identical synthetic transcripts. OLD is the pinned form this
+plan removed (`grep -q 'Skipped 1 paths\.'`); NEW is what `classify_reoffer()` now does
+(`grep -qE 'Skipped [0-9]+ paths\.'`):
+
+transcript              OLD (pinned to 1)  NEW (any count)   effect
+----------------------  ----------------  ----------------  ------
+Skipped 1 paths.        not-offered       not-offered       unchanged (no regression)
+Skipped 2 paths.        indeterminate     not-offered       FIXED: was indeterminate -> now not-offered
+Skipped 17 paths.       indeterminate     not-offered       FIXED: was indeterminate -> now not-offered
+
+WHY THAT MATTERED. `indeterminate` is routed to BLIND by the caller, so before this change a
+multi-album SRC_FOLDER did not make the control fail — it made the control stop discriminating
+while still appearing to run, for exactly the case the offered SRC_FOLDER override invites. That
+is the worst shape a negative control can take.
+
+WHAT WAS NOT WIDENED. Only the COUNT. Section 6/7 above drives the three outcomes that must not
+move: an `Album: ` line still means `offered`, both markers at once still means `contradictory`,
+and an unrecognised or EMPTY transcript still falls through to `indeterminate`. An empty
+transcript classifying as `not-offered` would have been a vacuous pass; it does not.
+
+STRUCTURAL CHANGE. The classifier was lifted out of `run_arm` into `classify_reoffer()`. This was
+not cosmetic: while it was inline it could only be reasoned about, never fed an input. The drive
+above and section 6/7 both call the real function in the shipped file.
+
+A COLLISION WORTH RECORDING. Putting the pair into `--self-test` (rather than only into this
+artifact, which is all the plan asked for) initially tripped the plan's own IN-10 guard — "no
+`Skipped 1 paths` literal remains anywhere in the file" — because the FIXTURE spelled the count.
+Caught by running the guard, not by reading it:
+
+    IN-10: the hard-coded path count survives
+
+The guard was right to fire and was not relaxed. The fixture now passes its count as a `printf`
+ARGUMENT (`printf 'Skipped %s paths.\n' "$f"`, in a loop over 1, 2 and 17), so the only place a
+count can still be written literally in this file is a MATCH PATTERN — which is exactly what
+IN-10 forbids. The self-test coverage is kept and the guard keeps its teeth.
+
+The user-facing `blind` message in `run_arm` was reworded from "neither 'Skipped 1 paths.' alone"
+to "neither a 'Skipped N paths.' line alone" for the same reason: it is a message a reader will
+take as the rule, and it must not describe a rule the code no longer applies.
+
+
+====================================================================================================
+4. IN-08 — THE RED-vs-UNKNOWN PRECEDENCE
+====================================================================================================
+DECISION (house convention, decided in plan 06-19): A BLIND INSTRUMENT OUTRANKS A MEASURED RED.
+
+Reason: this estate's standing rule — CLAUDE.md and README § Health Checks — is that "could not
+look" is kept distinct from "nothing is wrong" and is never folded into any other verdict.
+Reporting a measured red while an instrument was blind asserts a cause the run did not establish.
+
+Before: this script consulted `failed` first; `scripts/phase06-oracle.sh` consulted `UNKNOWNS`
+first. Two instruments written in one phase, disagreeing, so no reader could infer the convention.
+
+After — the two now agree, and the condition ordering is identical:
+
+  scripts/phase06-incremental-control.sh:588   if [ "$unknown" -ne 0 ]; then   -> exit 2 (UNKNOWN)
+  scripts/phase06-incremental-control.sh:592   if [ "$failed"  -ne 0 ]; then   -> exit 1 (FAIL)
+
+  scripts/phase06-oracle.sh:2394               if [ "$UNKNOWNS" -ne 0 ]; then  -> exit 3 (UNKNOWN)
+  scripts/phase06-oracle.sh:2398               if [ "$REDS"     -ne 0 ]; then  -> exit 1 (RED)
+
+The NUMBERING still differs between the two scripts (here UNKNOWN is 2 and usage/refusal is 3;
+in the oracle UNKNOWN is 3 and usage/refusal is 2). That is pre-existing, is documented in both
+headers, and was deliberately NOT changed by this plan — renumbering an instrument whose exit
+codes are already cited in committed evidence would invalidate that evidence to fix a cosmetic
+inconsistency. What IN-08 reports is the PRECEDENCE disagreement, and the precedence now matches.
+
+Neither condition's meaning nor its exit code changed. Only which is consulted first.
+
+The convention is now WRITTEN DOWN in this script's EXIT CODES block (23 lines, bounded by a
+`# ====` delimiter), naming `scripts/phase06-oracle.sh` as the sibling. The oracle half — stating
+it there and naming this script back — belongs to plan 06-19 (wave 7), which owns
+`scripts/phase06-oracle.sh`; this plan does not touch that file. Until 06-19 lands, the
+convention is implemented in both and stated in one.
+
+
+====================================================================================================
+5. IN-02 — THE DEAD CLASSIFIER: DECISION AND REASON
+====================================================================================================
+DECISION: DELETED.
+
+`remote_is_blind()` tested `RE_RC` in {124, 2, 255} and NOTHING CALLED IT. Every caller instead
+tests `[ "$RE_RC" -ne 0 ]`, which is strictly WIDER — it also catches 1, 125 (docker could not
+run), 126 (not executable) and 127 (command not found).
+
+Routing the callers through the function was the other option the plan allowed, and it was
+rejected: adopting the narrow test would have stopped four non-zero statuses from being classified
+as blind. That is a REGRESSION DRESSED AS A CLEANUP, on an instrument whose whole value is failing
+closed. Adding an explicit "non-blind non-zero" arm at every call site to preserve today's
+behaviour would have been more code expressing exactly what `-ne 0` already expresses.
+
+So the wider inline test stays and the dead NAME is gone, with a comment at the old site recording
+why there is no helper and the rule for any future one: it must be at least as wide as `-ne 0`,
+and it must be called.
+
+  occurrences of the identifier, before: 1   (the finding's signature: defined once, never called)
+  occurrences of the identifier, after : 0
+
+Note the comment left behind deliberately does NOT spell the identifier, so the `grep -c` guard
+keeps reading 0 rather than drifting back to the 1 that names the defect.
+
+
+====================================================================================================
+6. bash -n AND shellcheck
+====================================================================================================
+$ bash -n scripts/phase06-incremental-control.sh
+(no output; exit 0)
+
+$ shellcheck -S warning scripts/phase06-incremental-control.sh
+(no output; exit 0)
+
+  shellcheck 0.11.0. Note that deleting the uncalled function also cleared the SC2329
+  ("this function is never invoked") class for this file.
+
+
+====================================================================================================
+7. DRIVEN RED — every assertion in this plan was made to FAIL before it was trusted
+====================================================================================================
+A verify that has never been seen to fail is an assumption. Each assertion was re-run against a
+MUTATED COPY of the script; the shipped file was never modified by these drives.
+
+  control: the real script                                -> all static assertions PASSED
+  control: the real script's --self-test                  -> rc=0
+
+  mutation 1 (IN-10) restore the `Skipped 1 paths.` literal
+      -> IN-10 assertion FIRED: the hard-coded path count survives
+  mutation 2 (IN-10) delete the widened pattern line entirely
+      -> IN-10 assertion FIRED: no widened path-count pattern found
+  mutation 3 (IN-02) reinstate the dead classifier (occurrences: 1)
+      -> IN-02 assertion FIRED: defined exactly once and never called
+  mutation 4 (IN-05) reinstate a `shift 2` in the dispatch
+      -> IN-05 assertion FIRED: a shift 2 survives: 752:      ARM="${2:-}"; shift 2
+  mutation 5 (IN-05) the pre-fix dispatch shape, run directly
+      -> exit=1, output=[]  (silent, and coded as a measurement)
+  mutation A (IN-08) restore the PRE-FIX order (failed consulted before unknown)
+      -> --self-test rc=1
+      -> [FAIL] REGRESSION: expected 'unknown', got 'fail': a measured failure AND a blind read in
+         the same run - the BLIND verdict must win
+      -> --self-test: 1 regression(s)
+  mutation B (IN-08) strip the precedence wording from the EXIT CODES block
+      -> IN-08 assertion FIRED: the precedence convention is not stated
+  mutation C (IN-08) remove the sibling pointer from the EXIT CODES block
+      -> IN-08 assertion FIRED: the sibling is not named
+
+  real script, same extraction: block is 23 line(s) — BOUNDED (an unbounded range would be ~950)
+      outranks|wins matches: 2      phase06-oracle matches: 1
+
+
+====================================================================================================
+8. A DEFECT IN THIS PLAN'S OWN VERIFY COMMAND, FOUND AND FIXED  [Rule 1 deviation]
+====================================================================================================
+06-20's task-2 verify contained a FALSE-RED GENERATOR and would have failed against a correct
+file. The shape is the one 06-15 and 06-18 each hit earlier in this wave:
+
+    awk "/EXIT CODES/,/^# =/" "$f" | grep -qiE "outranks|wins" || { echo "...not stated"; exit 1; }
+
+under `set -o pipefail`. `grep -q` exits on its first match, `awk` takes SIGPIPE, and pipefail
+propagates 141 — so the `||` branch fires exactly when the convention IS stated. Measured, on the
+shipped file, with the convention present:
+
+    $ grep -ciE 'outranks|wins' <extracted block>     -> 5 matches   (the text IS there)
+    $ grep -c 'phase06-oracle' <extracted block>      -> 2 matches   (the sibling IS named)
+    $ set -o pipefail; awk ... | grep -qiE "outranks|wins"; echo $?   -> 141   (reported as ABSENT)
+
+Running the plan's verify verbatim against the finished file printed:
+    IN-08: the precedence convention is not stated     VERIFY2-RC=1
+
+A SECOND defect compounded it: the range `/EXIT CODES/,/^# =/` was unbounded, because the script
+had no `^# =` line at all, so awk emitted 933 lines — guaranteeing the SIGPIPE. And because the
+phrase "EXIT CODES" is also referenced from two body comments, a plain awk range restarts at each
+mention, so simply adding one delimiter is not sufficient on its own.
+
+FIXED BY STRENGTHENING, NOT WEAKENING — three changes, all of which make the assertion sharper:
+  a) a `# ====` delimiter now closes the EXIT CODES block in the script, so the block is a real,
+     bounded object (23 lines) rather than "everything to EOF";
+  b) the extraction takes only the FIRST block and stops, so later cross-references cannot reopen
+     the range;
+  c) the extracted block is written to a file and grepped there, so no pipeline carries a verdict.
+     This is the same rule the script itself already follows for its remote commands (CLAUDE.md,
+     README § Health Checks: a pipeline must never carry the verdict).
+  d) an added assertion that the block is non-empty and under 60 lines, so a future removal of the
+     delimiter is caught instead of silently restoring the unbounded range.
+
+The corrected command is recorded in 06-20-SUMMARY.md and was driven red by mutations B and C
+above. Task 1's verify was left semantically identical but hardened the same way (it greps a
+comment-stripped temp file rather than piping); it passed both as written and as hardened.
+
+
+====================================================================================================
+9. NOT DRIVEN — what this plan did not and could not exercise
+====================================================================================================
+These branches remain UNDRIVEN. Listing them is the point: an instrument whose untested branches
+are unnamed reads as fully tested.
+
+  1. `--arm a` and `--arm b` past preflight 1. Every remote step — prepare, the two imports, the
+     taghistory probe, the manifest and `-newer` instruments, `assert_real_state` — is UNDRIVEN by
+     this plan, by the plan's own constraint. Both arms perform a real `beet import` on LXC 100.
+     CONF-02's committed proof already covers them and was not re-taken.
+     WHAT WOULD DRIVE IT: a deliberate re-run of both arms, which is a measurement decision, not a
+     verification step, and belongs to whoever next needs CONF-02 re-proven.
+
+  2. The `contradictory` and `indeterminate` outcomes AS REACHED FROM A REAL beets transcript.
+     They are driven here over synthetic transcripts (section 6/7) — which is the honest level of
+     proof available offline, and is said so. No real `--pretend` output was re-captured.
+
+  3. `remote_exec`'s blindness statuses 124 / 255 / 125 / 126 / 127 as produced by a real remote
+     call. The `-ne 0` test that classifies them is unchanged by this plan and was already in
+     force; only the unused narrow helper was removed. The precedence they feed IS driven, at the
+     `arm_verdict` level (section 7/7), with `unknown=1` supplied directly.
+
+  4. `--baseline` and `--cleanup`. Both reach the network on their first statement and neither was
+     touched by this plan.
+
+  5. The oracle half of IN-08 — stating the convention in `scripts/phase06-oracle.sh` and naming
+     this script back. That file belongs to plan 06-19 (wave 7) and was deliberately not modified
+     here; touching a sibling plan's file from a parallel worktree is how a wave produces a merge
+     conflict. Until 06-19 lands, `phase06-oracle.sh` IMPLEMENTS the convention (verified above at
+     :2394/:2398) but does not STATE it.
+
+  6. The exit-code NUMBERING difference between the two scripts (2/3 swapped). Not a finding, not
+     addressed, and recorded here so the next reader does not mistake it for one. Renumbering
+     would invalidate committed evidence that cites these codes.
