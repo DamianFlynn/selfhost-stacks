@@ -173,6 +173,37 @@ resource "proxmox_virtual_environment_container" "selfhost" {
   }
 
   # fast/appdata child datasets — one mount_point per ZFS dataset
+
+  # STAGED, NOT YET CUT OVER — added 2026-09-22 (neocortex v2 TODO-315 follow-up).
+  #
+  # The dataset fast/appdata/agentic-os EXISTS on the host (created 2026-09-22, owned 568:568 to
+  # match the idmap's identity-mapped apps uid) and is EMPTY. The agentic-os Postgres data —
+  # Damian's live v1 memory store, 754 MB, 17,225 memory_chunks — is still at this same path
+  # INSIDE the container, on the ext4 root disk, because agentic-os predates the rule that every
+  # appdata path must be a named dataset.
+  #
+  # THIS BLOCK IS RECONCILIATION ONLY — Terraform will never apply it. `mount_point` is in this
+  # resource's ignore_changes (see the lifecycle block below and its TRADE-OFF note), so adding a
+  # bind mount here plans clean and does nothing. Confirmed by `terraform plan` on 2026-09-22:
+  # zero diff for container 100.
+  #
+  # The mount is therefore added BY HAND, as that note instructs:
+  #   pct set 100 -mp32 /mnt/fast/appdata/agentic-os,mp=/mnt/fast/appdata/agentic-os
+  #   pct reboot 100
+  # (mp0..mp31 are taken; 32 is the next free index.)
+  #
+  # And mounting the empty dataset over the live directory HIDES the data rather than moving it,
+  # so the mount and the copy are one operation, in this order:
+  #   stacks/selfhosted/agentic-os/MIGRATION-to-zfs.md
+  #
+  # ⚠ DO NOT run `terraform apply` to do this. It would not add the mount, and as of 2026-09-22
+  # there is unrelated drift in state — container 102 (mpe) plans `memory.dedicated 8192 -> 3072`
+  # — so an apply would silently cut that container's RAM while achieving nothing here.
+  mount_point {
+    volume = "/mnt/fast/appdata/agentic-os"
+    path   = "/mnt/fast/appdata/agentic-os"
+  }
+
   mount_point {
     volume = "/mnt/fast/appdata/arrs"
     path   = "/mnt/fast/appdata/arrs"
