@@ -40,6 +40,19 @@
 #   Implemented at the two lines that read `UNKNOWNS" -ne 0` and `REDS" -ne 0` at the foot of
 #   this file, in that order.
 #
+#   A VERDICT CHANGE, RECORDED RATHER THAN LEFT AS A SILENT CONSEQUENCE OF A `return` EDIT (GC-05).
+#   A VACUOUS D-15 or D-13 now exits 3 (UNKNOWN) where it used to exit 1 (RED). Reason, in one
+#   sentence: a rule the run never exercised cannot have measurably failed, so "zero Compilations/
+#   over a sample holding no compilation" and "a DJ count of zero against an expected zero" are
+#   could-not-looks, and this file's rule is that a could-not-look is never folded into another
+#   verdict. NOTHING WAS RENUMBERED - 3 is still UNKNOWN and 1 is still RED; two assertions moved
+#   between them. Cross-reference the precedence paragraph above, because the practical effect is
+#   the reverse of what it looks like: as a RED, a vacuity was ERASED by any unrelated blindness in
+#   the same run (3 outranks 1); as an UNKNOWN it now PARTICIPATES in that precedence and reaches
+#   the operator. The two guards are assert_no_compilations and assert_dj_count; their
+#   measured-failure arms - a real `Compilations/` component, a wrong NON-ZERO DJ count - are
+#   untouched and still exit 1.
+#
 # ==============================================================================================
 # WHY `beet import --pretend` IS NOT THE INSTRUMENT, AND `beet move -p` IS  (D-33)
 # ==============================================================================================
@@ -854,11 +867,17 @@ assert_no_compilations() { # $1 = destination list
     ASSERT_WHY="$nc destination(s) contain a Compilations/ component - the comp: override is gone"
     return 1
   fi
+  # GC-05. This arm returns 2, which run_assert's `*)` routes to unknown() and UNKNOWNS++, NOT 1.
+  # A sample holding no compilation at all is a COULD-NOT-LOOK about the comp: rule - the run never
+  # evaluated it - and this file's own EXIT CODES block says could not look is never folded into
+  # another verdict. Returning 1 asserted a measured failure of a rule nothing exercised, and it
+  # also made that verdict outrank nothing, because UNKNOWN outranks RED four lines below. Its
+  # neighbour assert_dj_count's zero arm moved in the same commit; the two are one vocabulary.
   if [ "$nva" -eq 0 ]; then
     printf 'NO-VARIOUS-ARTISTS\tnot one destination has the literal `Various Artists` at its top level\n' > "$ev"
     ASSERT_WHY="zero Compilations/ - but ALSO zero destinations under the literal Various Artists,
     so the compilation stratum never reached the comp: rule and the result is VACUOUS"
-    return 1
+    return 2
   fi
   ASSERT_WHY="zero Compilations/ components, and $nva destination(s) under the literal Various Artists"
   return 0
@@ -877,6 +896,12 @@ assert_dj_count() { # $1 = destination list  $2 = expected DJ file count
   # Without it a sample whose S5 rows sum to zero compares `0 -ne 0`, which is false, and the
   # equality ticks green having tested nothing. The cross-check at step 11 does not save it: that
   # one only fires when the sample and the fixture DISAGREE, and zero against zero agrees.
+  #
+  # GC-05. THE CODE IS 2, NOT 1, and it moved together with the neighbour's. IN-09's reasoning -
+  # match the neighbour - was right; the neighbour's code was the wrong one, and copying it
+  # propagated a misclassification rather than fixing it. run_assert routes 2 to unknown(), so a
+  # DJ-less sample now says "could not look at the albumtype:=dj rule" instead of asserting that
+  # rule measurably failed. The wrong-non-zero-count arm below is a MEASURED failure and stays 1.
   if [ "$want" -eq 0 ]; then
     printf 'NO-S5-STRATUM\tthe expected DJ file count is zero, so the albumtype rule was never reached\n' > "$ev"
     ASSERT_WHY="the sample holds NO S5 files, so the albumtype:=dj path rule was never exercised
@@ -884,7 +909,7 @@ assert_dj_count() { # $1 = destination list  $2 = expected DJ file count
     DEF-06-12-01 - path rule 2 (albumtype:=dj disctotal:2..), the one paths: rule no Phase 6
     instrument has ever evaluated, deferred and unowned - from a SILENCE into something the next
     run over a DJ-less sample says out loud."
-    return 1
+    return 2
   fi
   LC_ALL=C awk -v root="$LIB_ROOT/" '
     index($0, root) == 1 {
@@ -2037,7 +2062,10 @@ self_test_classes() {
     assert_no_compilations "$d/dest.comp.txt"
   # ... and the vacuous case: no Compilations/, but no Various Artists either, so nothing was tested.
   LC_ALL=C grep -v '/Various Artists/' "$d/dest.txt" > "$d/dest.nova.txt"
-  st_assert 1 "D-15: zero Compilations/ with zero Various Artists is VACUOUS, so it is a RED." \
+  # GC-05: the expectation is 2, not 1. The case is unchanged and correct - what was wrong was the
+  # code it expected. A vacuity is COULD NOT LOOK, in the same vocabulary as the three sibling
+  # guards' cases above and below, and run_assert routes it to unknown() rather than to bad().
+  st_assert 2 "D-15: zero Compilations/ with zero Various Artists is VACUOUS - COULD NOT LOOK, not a RED." \
     assert_no_compilations "$d/dest.nova.txt"
 
   # (3) D-13 - the DJ count one short. The clean fixture has two DJ rows.
@@ -2277,7 +2305,9 @@ self_test_vacuity() {
   say "== --self-test: IN-09 a DJ stratum that was never exercised is VACUOUS =="
   rule
   rc=0; assert_dj_count "$OUT/st-classes/dest.txt" 0 || rc=$?
-  st_case 1 "$rc" "a wanted count of ZERO is refused - 0 against 0 tests nothing."
+  # GC-05: expectation moved 1 -> 2 with the guard. Same could-not-look vocabulary as the IN-12 and
+  # WR-06 cases above, which have always expected 2 for the same class of input.
+  st_case 2 "$rc" "a wanted count of ZERO is COULD NOT LOOK - 0 against 0 tests nothing."
   st_grep_why 0 "$ASSERT_WHY" "VACUOUS" \
     "in its neighbour's own vocabulary, so the two read the same on the same question."
   st_grep_why 0 "$ASSERT_WHY" "DEF-06-12-01" \

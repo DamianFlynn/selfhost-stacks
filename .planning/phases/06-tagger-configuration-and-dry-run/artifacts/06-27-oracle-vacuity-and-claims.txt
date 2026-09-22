@@ -1,0 +1,133 @@
+================================================================================
+06-27 — the oracle's vacuity verdicts, its last two unquoted interpolations, its
+        self-test bookkeeping, and two comments that did not describe the code
+================================================================================
+Plan:        06-27 (gap-closure round 2, wave 2)
+Date:        2026-09-22
+Findings:    GC-05, GC-15, GC-12, GC-07, GC-11
+File:        scripts/phase06-oracle.sh
+Baseline:    commit 9b28021 (the wave-1 merge; 06-24's changes to this file are IN it)
+
+PROVENANCE OF THE MEASURING TOOLS, because a measurement is only as good as the
+tool that answered:
+  workstation: Darwin 27.0.0; bash 3.2.57(1)-release (/bin/bash); grep called as
+               /usr/bin/grep EXPLICITLY = "grep (BSD grep, GNU compatible)
+               2.6.0-FreeBSD". The operator's interactive zsh aliases grep to
+               ugrep 7.8.4; every count below was taken with /usr/bin/grep, which
+               is what the shipping scripts resolve.
+  No estate contact. No ssh, no docker, no `--run`, no import, no `git push`.
+
+METHOD NOTE — WHERE THESE COMMANDS WERE RUN FROM.
+This plan's <verify> blocks open with
+`cd /Users/damian/Development/damianflynn/selfhost-stacks`, which is the MAIN
+CHECKOUT. This plan executed in a git worktree, and the main checkout does not
+carry these edits. Obeying that line literally would have measured the
+UNMODIFIED file and reported a green describing nothing. Every command recorded
+here was run from the worktree root instead
+(`git rev-parse --show-toplevel` = .../.claude/worktrees/agent-a68557b5423f6bf88).
+Same defect, same correction, as plans 06-24 and 06-25 recorded in this round.
+That is now four agents in one round; the <verify> template is the defect.
+
+--------------------------------------------------------------------------------
+0. HOW THE GUARDS WERE DRIVEN, AND A DEFECT IN THE FIRST HARNESS
+--------------------------------------------------------------------------------
+The judging layer is pure-local by construction, so the guards can be driven with
+no docker and no ssh. The harness extracts the file's pre-MAIN function library:
+
+    LC_ALL=C awk '/^# MAIN$/{exit} {print}' scripts/phase06-oracle.sh > lib.sh
+
+EXTRACTION ASSERTED, not assumed (this round has already been bitten by an awk
+range that silently extracted zero lines):
+  * `/usr/bin/grep -c '^# MAIN$'` = 1 — the cut point is unique.
+  * lib.before.sh = 2463 lines, lib.after1.sh = 2493 lines — non-empty, and the
+    +30 is this plan's own added comment lines.
+The library is then `source`d with `--self-test` as $1, so MODE is set and the
+DESTRUCTIVE-KNOB FENCE passes; the file ends before MAIN, so nothing runs.
+
+THE FIRST HARNESS WAS WRONG AND IS RECORDED RATHER THAN QUIETLY FIXED. It called
+`out="$(run_assert …)"`. `$(…)` is a SUBSHELL, so REDS and UNKNOWNS were
+incremented in a child and discarded: the first run reported `REDS=0 UNKNOWNS=0`
+for EVERY case, including the ones that had just printed a red tick. The counter
+is the half GC-05 is about, so that harness measured nothing. Corrected by
+sending run_assert's output to a FILE and reading it back, leaving the counters
+to move in the harness's own shell. Same defect class as the `OUT=$(eval …)` trap
+this round recorded twice already.
+
+--------------------------------------------------------------------------------
+1. GC-05 — THE VERDICT CHANGE, DRIVEN BOTH WAYS
+--------------------------------------------------------------------------------
+Two arms moved from `return 1` to `return 2`, in one commit:
+  assert_no_compilations  — the zero-`Various Artists` arm (the sample holds no
+                            compilation at all, so the comp: rule was not reached)
+  assert_dj_count         — the zero-wanted arm (the sample holds no S5 file, so
+                            the albumtype:=dj rule was not reached)
+Every other `return` in both functions is unchanged. Both ASSERT_WHY texts are
+byte-for-byte what they were, DEF-06-12-01's naming included — neither text ever
+called the outcome a RED, which is the whole of the finding: the right words were
+already attached to the wrong code.
+
+BEFORE (lib.before.sh, from commit 9b28021):
+
+  RAW   D-15 vacuous (no Various Artists)    rc=1
+  ROUTE D-15 vacuous (no Various Artists)    REDS=1 UNKNOWNS=0
+        ✗ D-15 vacuous …: zero Compilations/ - but ALSO zero destinations …
+  RAW   D-13 vacuous (wanted count 0)        rc=1
+  ROUTE D-13 vacuous (wanted count 0)        REDS=1 UNKNOWNS=0
+        ✗ D-13 vacuous …: the sample holds NO S5 files, so the albumtype:=dj …
+
+AFTER (lib.after1.sh):
+
+  RAW   D-15 vacuous (no Various Artists)    rc=2
+  ROUTE D-15 vacuous (no Various Artists)    REDS=0 UNKNOWNS=1
+        ⚠ UNKNOWN, not green: D-15 vacuous …: zero Compilations/ - but ALSO …
+  RAW   D-13 vacuous (wanted count 0)        rc=2
+  ROUTE D-13 vacuous (wanted count 0)        REDS=0 UNKNOWNS=1
+        ⚠ UNKNOWN, not green: D-13 vacuous …: the sample holds NO S5 files …
+
+THE COUNTER IS THE HALF THAT MATTERS, and it moved: REDS 1 -> 0 and UNKNOWNS
+0 -> 1 on both arms, through the same `run_assert` wrapper the live run uses.
+At the foot of the script `UNKNOWNS != 0` is consulted BEFORE `REDS != 0`, so
+the live exit status for a vacuous D-15 or D-13 goes 1 (RED) -> 3 (UNKNOWN).
+
+THE PASSING PARTNERS, UNCHANGED — a guard change that converted a genuine red
+into an UNKNOWN would be a regression wearing this fix's clothes:
+
+  case                                   before          after
+  D-15 real Compilations/ component      rc=1 REDS=1     rc=1 REDS=1
+  D-13 wrong non-zero count (3 vs 2)     rc=1 REDS=1     rc=1 REDS=1
+  D-15 clean (1 Various Artists row)     rc=0            rc=0
+  D-13 clean (true count 2)              rc=0            rc=0
+
+SELF-TEST EXPECTATIONS MOVED WITH THE RETURNS (the two cases 06-19 drove; neither
+deleted, none added):
+  :2040  st_assert 1 "D-15: zero Compilations/ … so it is a RED."
+      -> st_assert 2 "D-15: zero Compilations/ … is VACUOUS - COULD NOT LOOK, not a RED."
+  :2280  st_case   1 "$rc" "a wanted count of ZERO is refused …"
+      -> st_case   2 "$rc" "a wanted count of ZERO is COULD NOT LOOK …"
+
+  bash scripts/phase06-oracle.sh --self-test  ->  exit 0,
+  "✓ self-test: 134 case(s), every fail-closed branch behaved exactly as expected"
+  (134 is the count 06-24 left; this plan added no case and removed none.)
+
+RECORDED IN THE FILE, not left as a silent consequence of a `return` edit: the
+EXIT CODES block now states the 1 -> 3 change, its one-sentence reason, that
+NOTHING WAS RENUMBERED, and the cross-reference to the precedence paragraph. The
+practical effect is the reverse of how it reads: as a RED a vacuity was ERASED by
+any unrelated blindness in the same run (3 outranks 1); as an UNKNOWN it now
+PARTICIPATES in that precedence and reaches the operator.
+
+06-DISPOSITIONS.md § Deliberate non-findings §1 is respected: exit 3 is still
+UNKNOWN and exit 1 is still RED in this file, and the numbering difference against
+phase06-incremental-control.sh is untouched. Two assertions moved BETWEEN existing
+codes; no code was redefined.
+
+TASK 1 CHECKS, /usr/bin/grep, worktree root:
+  st_assert 1 "D-15: zero Compilations                     0  (want 0)   PASS
+  st_assert 2 "D-15: zero Compilations                     1  (want 1)   PASS
+  st_case   1 "$rc" "a wanted count of ZERO                0  (want 0)   PASS
+  st_case   2 "$rc" "a wanted count of ZERO                1  (want 1)   PASS
+  DEF-06-12-01                                             2  (want >=1) PASS
+  st_assert 1 "D-15: a Compilations/ component is a RED    1  (want 1)   PASS
+  st_assert 1 "D-13: a DJ count of 2 against an expected 3 1  (want 1)   PASS
+  GC-05 named in band                                      5  (want >=1) PASS
+  bash -n scripts/phase06-oracle.sh                        clean
