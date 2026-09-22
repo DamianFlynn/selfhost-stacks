@@ -1,0 +1,319 @@
+================================================================================
+06-23 — D-04 ASSERTED-SET VACUITY (GC-03) AND THE FOURTH-BRANCH BLIND SPOT (GC-16)
+Driven 2026-09-22. Plan 06-23, phase 06-tagger-configuration-and-dry-run.
+================================================================================
+
+WHAT THIS ARTIFACT IS
+---------------------
+Two things, in one file because the two findings share one block:
+
+  1. A DRIVEN reproduction of GC-03 — the D-04 verdict ladder printing a green tick
+     over an EMPTY asserted set — followed by the same ladder refusing it after the
+     fix, plus the passing partner over the real tree.
+  2. The additivity proof for GC-16's regex widening: the block's whole pipeline run
+     with the OLD fourth branch and with the NEW one over identical input, side by
+     side, plus positive and negative controls.
+
+NOTHING HERE TOUCHED THE ESTATE. No `git push` was issued and the host was not asked
+to `git pull`. Every measurement below is local, against this repository's HEAD.
+
+HOW THE LADDER WAS DRIVEN — no hand transcription
+-------------------------------------------------
+The D-04 verdict ladder is pure local shell once the ssh returns, so it was extracted
+VERBATIM out of `scripts/quick-health-check.sh` and run over a fixture supplied in
+place of the ssh output. Extraction:
+
+    awk '/D04_HITS=\$\(printf/{f=1} f && /^fi$/{exit} f' <copy-of-the-script>
+
+(The `f &&` guard is load-bearing: `^fi$` occurs 17 times earlier in the file, so a
+bare `/^fi$/{exit}` extracts nothing. Measured, not assumed — the first attempt
+returned 0 lines.)
+
+The harness then sets only the knobs the block reads, at their DEFAULT values
+(D04_EXEMPT_BASELINE=5, D04_DOC_BASELINE=2, D04_OVERRIDDEN=0, EXIT_CODE=0), assigns
+the fixture to D04_OUT, and sources the extracted ladder. The code under test is the
+real code, byte for byte; only its input is synthetic.
+
+    pre-fix  ladder: 79 lines, extracted from the file at base commit bf509f4
+    post-fix ladder: 93 lines, extracted from the same file after this plan's edit
+
+
+================================================================================
+PART 1 — GC-03: THE ASSERTED SET CAN BE EMPTY, AND THE BLOCK TICKED GREEN OVER IT
+================================================================================
+
+THE COUNTER SUBTLETY, MEASURED RATHER THAN REASONED
+---------------------------------------------------
+All five D-04 counts are produced by `printf '%s\n' "$SET" | grep -c '^HEAD:'`, and
+`printf '%s\n' ""` emits a single BLANK line, not nothing. The plan flagged this as a
+place where a guard could be written against a condition that is never true. Measured:
+
+    $ EMPTY=""
+    $ printf '%s\n' "$EMPTY" | grep -c '^HEAD:'      ->  0
+    $ printf '\n'            | grep -c '^HEAD:'      ->  0
+    $ CNT=0; while IFS= read -r l; do [ -z "$l" ] && continue; CNT=$((CNT+1));
+      done <<< "$EMPTY"; echo $CNT                   ->  0
+
+So `D04_N_ASSERT` IS genuinely 0 on an empty asserted set — the blank line does not
+survive the `^HEAD:` anchor — and `-eq 0` is the correct condition to guard on. The
+`while … <<< "$EMPTY"` loop confirmed at ZERO iterations, which is why `D04_BAD`
+stays 0 and the ladder falls through to its green condition.
+
+THE FIXTURE
+-----------
+GC-03's own scenario, built mechanically rather than by hand: take the REAL scan of
+this repository's HEAD (199 lines) and remove the three asserted invocations, exactly
+as deleting or reshaping them would:
+
+    $ grep -vF 'beet_exec "${BEET_BIN}' raw.txt > fixture-allexempt.txt
+
+    removed:
+      HEAD:scripts/check-beets-config.sh:892:    beet_exec "${BEET_BIN} -l ${THROWAWAY_DB} -c ${OVERLAY} config -d"
+      HEAD:scripts/check-beets-config.sh:908:    beet_exec "${BEET_BIN} -l ${THROWAWAY_DB} -c ${OVERLAY} config -p -d"
+      HEAD:scripts/check-beets-config.sh:919:      beet_exec "${BEET_BIN} -l ${THROWAWAY_DB} -c ${OVERLAY} config -d -c"
+
+    fixture: 196 lines -> executable 5, exempt 5, asserted 0.
+
+Note what this fixture does NOT trip: raw is 196 (not 0, so guard 1 passes), raw 196 ≠
+stripped 95 (so guard 2 passes), executable is 5 (not 0, so CONDITION K passes), the
+exempt count is 5 = its pin, and the doc count is 2 = its pin. Every existing guard is
+satisfied. That is the whole finding.
+
+--------------------------------------------------------------------------------
+RED — PRE-FIX LADDER, ALL-EXEMPT FIXTURE.  THE DEFECT, REPRODUCED.
+--------------------------------------------------------------------------------
+$ run-harness ladder-prefix.sh fixture-allexempt.txt
+  counts: raw=196  comment-stripped=95  invocation-shaped=7  (executable 5 = asserted 0 + exempt 5, documentation 2)
+  ✅ no ASSERTED beet invocation opens the real library (0 of 5 invocation-shaped lines outside *.md)
+     5 lines were NOT asserted over — the named exemption register at the pinned baseline (5), see the block comment
+     documentation hits at the pinned baseline (2) — historic quotations, see the block comment
+  [harness] EXIT_CODE=0
+
+A GREEN TICK WHOSE OWN PARENTHESIS READS `0 of 5`, AND AN EXIT CODE OF ZERO. This is
+CR-01 — the Critical this phase's gap closure exists to close — reproduced one nesting
+level in, against the very ladder that plan 06-16 added condition K to.
+
+--------------------------------------------------------------------------------
+GREEN — POST-FIX LADDER, SAME FIXTURE.  THE REFUSAL.
+--------------------------------------------------------------------------------
+$ run-harness ladder-postfix.sh fixture-allexempt.txt
+  counts: raw=196  comment-stripped=95  invocation-shaped=7  (executable 5 = asserted 0 + exempt 5, documentation 2)
+  ⚠️  UNKNOWN — every invocation-shaped executable line is EXEMPT (5 of
+  5). Nothing was asserted over, so the -l-and-c rule below was applied to an
+  EMPTY set and could not have failed. This is NOT 'no bare beet invocations'.
+  Nothing is asserted.
+  [harness] EXIT_CODE=1
+
+⚠️  UNKNOWN, not ❌. This file keeps "could not look" distinct from "measured failure",
+and its three sibling guards (raw zero, comment-strip no-op, executable zero) all use
+the same prefix. An empty asserted set is a could-not-look.
+
+--------------------------------------------------------------------------------
+THE PASSING PARTNER — POST-FIX LADDER, THE REAL 8/5/3 SET.  STILL GREEN.
+--------------------------------------------------------------------------------
+$ run-harness ladder-postfix.sh raw.txt          # the unmodified HEAD scan
+  counts: raw=199  comment-stripped=98  invocation-shaped=10  (executable 8 = asserted 3 + exempt 5, documentation 2)
+  ✅ no ASSERTED beet invocation opens the real library (3 of 8 invocation-shaped lines outside *.md)
+     5 lines were NOT asserted over — the named exemption register at the pinned baseline (5), see the block comment
+     documentation hits at the pinned baseline (2) — historic quotations, see the block comment
+  [harness] EXIT_CODE=0
+
+A guard that refuses everything invites its own removal. This phase's convention
+(06-19) is that every new guard ships with a passing partner in the same transcript;
+this is it. For completeness, the pre-fix ladder over the same real set was also run
+and printed the identical green line with EXIT_CODE=0 — so the fix changed the verdict
+on the vacuous set and NOT on the real one, which is the whole claim.
+
+--------------------------------------------------------------------------------
+THE BELT-AND-BRACES HALF, DRIVEN SEPARATELY
+--------------------------------------------------------------------------------
+Condition P's arm and the `-gt 0` requirement inside the green condition are two
+independent guards. To show the second is load-bearing on its own, the arm was deleted
+from the post-fix ladder (mutant, 83 lines) and the all-exempt fixture re-run:
+
+$ run-harness ladder-mutant-no-arm.sh fixture-allexempt.txt
+  counts: raw=196  comment-stripped=95  invocation-shaped=7  (executable 5 = asserted 0 + exempt 5, documentation 2)
+  [harness] EXIT_CODE=0
+
+THE TICK IS WITHHELD — no ✅ line at all — even with the new arm removed. Read the exit
+code honestly, though: it is 0, because the green condition can only withhold a tick,
+it cannot raise a red. That is exactly why the ARM is the primary fix and the green
+condition is belt and braces, not the other way round.
+
+WHAT THIS DOES NOT CLAIM
+------------------------
+This closes the NESTED instance of CR-01 inside the D-04 ladder. It does NOT discharge
+ROADMAP entry criterion E10 and it does NOT close CONF-04. CR-01's carried residue
+stays carried — see the CR-01 row in 06-DISPOSITIONS.md.
+
+
+================================================================================
+PART 2 — GC-16: THE FOURTH REGEX BRANCH'S MISSING ANCHORS
+================================================================================
+
+THE FINDING, AND THE CORRECTION THAT TRAVELS WITH IT
+-----------------------------------------------------
+`D04_INV_RE` has four alternatives. The three LITERAL-token branches each anchor in
+three places: content start (with optional `sudo`), after a shell separator
+(`[[:space:]](&&|;)[[:space:]]*`), and after a `docker` prefix. The FOURTH branch —
+the variable-expansion branch added by plan 06-16 — anchored only on content start or
+immediately inside an opening quote.
+
+Recorded so the correction is not lost: the cross-family reviewer graded GC-16 BLOCKER
+and justified it by claiming the block comment PROMISED separator anchoring. THAT
+JUSTIFICATION IS FALSE. The comment said "content start, or immediately inside an
+opening quote", which is exactly what the code did. There was no documentation
+mismatch to fix. The substantive gap is real and is graded WARNING: a latent blind
+spot with NO CURRENT INSTANCE IN THE TREE. Widening the code is therefore a behaviour
+change, and the comment had to be brought FORWARD to the new behaviour — a different
+edit from the one the reviewer asked for.
+
+Why it ships alongside GC-03: GC-03's own text names this asymmetry as the silent
+route by which the asserted set drops to zero without any counter leaving its pin.
+
+THE EDIT
+--------
+Leading alternation of branch 4 only. The TRAILING requirement — a flag or a lowercase
+subcommand word — is untouched, because that half is what holds the executable count at
+8 rather than 26.
+
+  OLD: (^HEAD:[^:]*:[0-9]*:[[:space:]]*(sudo[[:space:]]+)?|")
+  NEW: (^HEAD:[^:]*:[0-9]*:[[:space:]]*(sudo[[:space:]]+)?|"|[[:space:]](&&|;)[[:space:]]*|docker[[:space:]][^`]*[[:space:]])
+
+--------------------------------------------------------------------------------
+ADDITIVITY — THE FULL PIPELINE, OLD REGEX vs NEW REGEX, IDENTICAL INPUT
+--------------------------------------------------------------------------------
+Pipeline reproduced exactly as the block runs it:
+
+    git grep -n -I -w -E -e 'beet' -e 'BEET[A-Z_]*' HEAD -- scripts stacks
+      | ^HEAD:                                   -> raw
+      | strip ^HEAD:path:line:<space>(#|//)      -> comment-stripped
+      | D04_INV_RE                               -> invocation-shaped
+      | split on \.md:                           -> documentation / executable
+      | D04_EXEMPT_RE                            -> exempt / asserted
+
+Input for both columns is the SAME scan of base commit bf509f4 (199 raw lines), so the
+only variable is the regex.
+
+    OLD  raw=199 stripped=98 inv=10 exe=8 assert=3 exempt=5 doc=2
+    NEW  raw=199 stripped=98 inv=10 exe=8 assert=3 exempt=5 doc=2
+    $ diff inv-OLD.txt inv-NEW.txt   ->  (identical)
+
+| count             | OLD fourth branch | NEW fourth branch |
+|-------------------|-------------------|-------------------|
+| raw               | 199               | 199               |
+| comment-stripped  |  98               |  98               |
+| invocation-shaped |  10               |  10               |
+| executable        |   8               |   8               |
+| asserted          |   3               |   3               |
+| exempt            |   5               |   5               |
+| documentation     |   2               |   2               |
+
+IDENTICAL, and not merely in the counts — the matched LINE SETS are byte-identical
+under `diff`, which is the stronger statement and the one worth recording. No pin
+moved; neither D04_EXEMPT_BASELINE (5) nor D04_DOC_BASELINE (2) was touched. This is
+the vector plan 06-28 needs for GC-10, quoted in that form deliberately:
+199 / 98 / 10 / 8 / 3 / 5 / 2.
+
+⚠️  ONE FIGURE MOVES, FOR A REASON THAT IS NOT THE WIDENING, AND IT IS REPORTED RATHER
+    THAN ABSORBED — THIS IS A DEVIATION FROM THIS PLAN'S OWN VERIFY BLOCK.
+    `scripts/quick-health-check.sh` is itself inside D-04's scan scope (`scripts/`), so
+    once this plan's commits are in HEAD the raw and comment-stripped counts read
+    200 and 99, NOT 199 and 98. Measured after the task-1 commit:
+
+        HEAD(after task 1)  raw=200 stripped=99 inv=10 exe=8 assert=3 exempt=5 doc=2
+
+    The cause is exactly one line — condition P's own message, at
+    `scripts/quick-health-check.sh:1882`:
+
+        echo "  EMPTY set and could not have failed. This is NOT 'no bare beet invocations'."
+
+    That sentence carries the literal token BY REQUIREMENT (plan 06-23 task 1(a): the
+    message "must say … this is NOT 'no bare beet invocations'"), and it is an `echo`,
+    so it survives the comment strip and lands in both the raw and the stripped count.
+    The FOUR EXISTING sibling guards each contribute the same line for the same reason
+    and are already inside the 199 — this is the fifth.
+
+    WHAT DID NOT MOVE, checked rather than assumed: the line is not invocation-shaped
+    under any of the four branches (`grep -cE "$D04_INV_RE"` over it returns 0), so
+    invocation-shaped / executable / asserted / exempt / documentation all stay at
+    10 / 8 / 3 / 5 / 2 and NO PIN MOVED. Nothing was raised to absorb anything, and
+    neither of the block's two relational guards is affected: raw is still non-zero and
+    raw (200) is still ≠ stripped (99).
+
+    The new exit-code notice and the rewritten block comment were both written to add
+    ZERO further matches. Measured, not assumed: `grep -c -w -E` with the block's own
+    two `-e` patterns over this file reads 35 at base commit bf509f4 and 36 after both
+    of this plan's commits — the +1 being the echo line above and nothing else. Where
+    the notice or the comment needed to name a shape, it points at this artifact
+    instead of spelling it out, and that decision is recorded in the notice itself so
+    it can be checked rather than trusted.
+
+--------------------------------------------------------------------------------
+POSITIVE CONTROLS — the two shapes the old regex could not see
+--------------------------------------------------------------------------------
+  fixture:
+    HEAD:scripts/x.sh:10:    cd /tmp && $BEET_BIN config -d
+    HEAD:scripts/x.sh:11:    docker exec -u beetle c $BEET_BIN config -d
+
+  OLD regex: 0 of 2 matched      <- the blind spot
+  NEW regex: 2 of 2 matched      <- closed (grep listed both lines back)
+
+--------------------------------------------------------------------------------
+UNCHANGED CONTROLS — matched by both, before and after
+--------------------------------------------------------------------------------
+  fixture:
+    HEAD:scripts/x.sh:12:$BEET_BIN config -d                 (content start, variable)
+    HEAD:scripts/x.sh:13:    cd /tmp && beet config -d       (separator, literal token)
+
+  OLD regex: 2 of 2 matched
+  NEW regex: 2 of 2 matched
+
+--------------------------------------------------------------------------------
+NEGATIVE CONTROLS — the narrowing that makes the stripped count meaningful is INTACT
+--------------------------------------------------------------------------------
+  fixture (mentions and argument passing, with no invocation anywhere on the line):
+    HEAD:scripts/x.sh:14:    echo "see `$BEET_BIN` in the runbook"
+    HEAD:scripts/x.sh:15:    remote_exec "$prog" "$root" "$BEET" "$PY"
+    HEAD:scripts/x.sh:16:    if [[ $BEET_EXEC_RC -eq 0 ]]; then
+    HEAD:scripts/x.sh:17:    printf %s "$BEETS_DB_COUNT"
+
+  OLD regex: 0 of 4 matched
+  NEW regex: 0 of 4 matched
+
+Line 16 is the one worth naming, because it is where the NEWLY ADDED separator anchor
+could plausibly have over-matched: the line contains a `;`. It does not match, and the
+reason is that the ANCHOR half does the refusing here while the FOLLOWER half would
+have admitted it — ` -eq` satisfies `[[:space:]]+(-|[a-z])` perfectly well. The
+separator anchor requires WHITESPACE immediately before the `&&` or `;`, and this line
+reads `]];`. That is the clearest single demonstration that both halves earn their
+place: neither alone would hold this line out.
+
+The follower requirement is what keeps the executable count at 8 rather than 26 — the
+measurement the block comment records. Widening the ANCHOR set while dropping the
+FOLLOWER test is how this edit would have become a regression, and the controls above
+are what prove it did not.
+
+================================================================================
+NOT DRIVEN — stated rather than implied
+================================================================================
+* THE LIVE BLOCK WAS NOT RUN AGAINST THE ESTATE. `scripts/quick-health-check.sh`
+  reads the HOST's HEAD at /mnt/fast/stacks, and the host sits at a pre-Phase-6
+  commit. Deploying unmerged Phase 6 to the live estate to make a check line up is out
+  of bounds; the block correctly reports against whatever the host has until the
+  operator deploys. This is a recorded deliberate non-finding (06-DISPOSITIONS.md,
+  deliberate non-findings §2), not something this plan cleared.
+* THE ssh / SENTINEL / TIMEOUT ARMS ABOVE THE LADDER were not re-driven. This plan did
+  not touch them; plan 06-16 owns them.
+* CONDITION P WAS NOT OBSERVED FIRING AGAINST A REAL TREE, because no real tree has an
+  empty asserted set — that is the point of GC-16 shipping alongside it. It was driven
+  against a synthetic fixture built by deleting three real lines out of a real scan.
+* THE TWO WIDENED ANCHORS WERE NOT OBSERVED MATCHING A REAL LINE, for the same reason:
+  GC-16 is a LATENT blind spot with no current instance in the tree. Both shapes were
+  driven against synthetic fixtures (positive controls above) and the widening is
+  proven additive against the real tree, which is the pair of statements this closure
+  can honestly make. If a real `&&`- or `docker`-anchored variable invocation ever
+  lands, the executable count moves and the exempt pin reports it.
+* THE `D04_EXEMPT_BASELINE` / `D04_DOC_BASELINE` / `D04_REPO_ROOT` OVERRIDE ARMS were
+  not re-driven. This plan did not touch them; they are unchanged and plan 06-16 owns
+  their proof.
