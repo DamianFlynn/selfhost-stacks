@@ -202,5 +202,145 @@ The mutant copy was deleted after the run. It was never tracked, never staged, a
 under scripts/.
 
 ================================================================================================
-PART 2 - GC-06: the three `printf | grep -q` pipelines (appended by task 2)
+PART 2 - GC-06: the three `printf | grep -q` pipelines, one of them INVERTED
 ================================================================================================
+
+THE DEFECT, AND WHY ONE OF THE THREE IS NOT LIKE THE OTHER TWO
+----------------------------------------------------------------------------------------------
+Plan 06-19 added `st_grep_why` specifically to avoid `printf | grep -q`, with a comment saying
+"that shape has produced a false red in three plans of this phase already". The WR-08 self-test
+section, 300 lines above it, used the shape that comment warns about, in three places:
+
+    :1888  printf '%s\n' "$qout" | LC_ALL=C grep -qF "01 It's \$o.mp3" || rc=1
+    :1907  printf '%s' "$qcmd" | LC_ALL=C grep -qF " sh $(printf '%q' "$qdir")" || rc=1
+    :1910  if printf '%s' "$qcmd" | LC_ALL=C grep -qF "find $(printf '%q' "$qdir")"; then rc=1; fi
+
+`:1888` and `:1907` are POSITIVE assertions - the needle must be present. A 141 there makes the
+assertion fail, i.e. a FALSE RED. Loud, investigated, survivable.
+
+`:1910` is INVERTED - the old interpolated shape must NOT be present, so a grep MATCH is the
+FAILURE case. `grep -q` exits on its first match, which is precisely when the assertion is meant
+to fire; `set -o pipefail` (:223) then propagates the dead `printf`'s SIGPIPE as 141; the `if`
+reads FALSE; `rc` stays 0; and `st_case 0 0` reports the case PASSED at the exact moment it
+should have failed. That is GC-01's mechanism pointed the dangerous way round: an assertion that
+can silently not fire, which is this phase's dominant defect class.
+
+THE FIX
+----------------------------------------------------------------------------------------------
+All three are now here-strings. `LC_ALL=C` is kept, `-F` is kept, and each needle is byte-for-byte
+what it was - these assertions check exact rendered command text, and a changed needle is a
+changed assertion, not a reformatted one.
+
+    $ grep -v '^[[:space:]]*#' scripts/phase06-oracle.sh \
+        | grep -cE '\|[[:space:]]*(LC_ALL=C[[:space:]]+)?grep[[:space:]]+-q'
+    before: 3        after: 0
+    $ grep -v '^[[:space:]]*#' scripts/phase06-oracle.sh | grep -cF 'grep -qF'
+    before: 3        after: 4     (the three sites, plus st_grep_why's own file-based grep)
+
+NOTHING WAS WEAKENED - the WR-08 section's pass/fail vector, before and after
+----------------------------------------------------------------------------------------------
+A shape change that quietly drops an assertion is worse than the shape it replaces, so the
+section's transcript was diffed either side of the edit rather than eyeballed.
+
+    == --self-test: remote paths cross the quoting boundary as PARAMETERS (WR-08; T-06-93) ==
+      OK 0 (expected): the apostrophe-and-$ fixture reads CLEAN through the positional-parameter shape.
+      OK 0 (expected): and the listing carries the file's REAL name - apostrophe and $ both intact.
+      OK 0 (expected): DRIVEN RED: the OLD interpolated shape FAILS on the same apostrophe fixture.
+         old-shape exit 2: bash: -c: line 1: unexpected EOF while looking for matching `''
+      OK 0 (expected): a manifest builder passes the path as sh -c's POSITIONAL PARAMETER.
+      OK 0 (expected): and never interpolates it after 'find' - the old shape is gone, not hidden.
+      OK 0 (expected): a manifest builder passes the path as sh -c's POSITIONAL PARAMETER.
+      OK 0 (expected): and never interpolates it after 'find' - the old shape is gone, not hidden.
+
+    $ diff wr08-BEFORE-task2.txt wr08-AFTER-task2.txt
+    (no output - byte-identical, 7 cases, all passing, in the same order)
+
+    Whole self-test: 134 case(s), exit 0, both before and after task 2. Task 1 raised the count
+    from 111 to 134; task 2 changed no count at all, which is the correct signature for a shape
+    change.
+
+DRIVEN - the inverted assertion, on the failure input it exists to catch
+----------------------------------------------------------------------------------------------
+A `qcmd` was constructed that DOES carry the old interpolated `find <path>` shape. A correct
+assertion must report FAILED on it.
+
+    == 1. the real failure input, at its REAL size ==
+       haystack bytes: 75
+        PIPELINE form       rc=1  -> st_case sees 0 vs 1 -> case reports FAILED   (CORRECT)
+        HERE-STRING form    rc=1  -> st_case sees 0 vs 1 -> case reports FAILED   (CORRECT)
+
+MEASURED FACT, RECORDED EXPLICITLY RATHER THAN GLOSSED: at today's input size the pipeline form
+is CORRECT. The haystack is a 75-byte one-line command string, grep reads all of it before
+exiting, `printf` has already finished writing, and there is no reader to disappear. The danger
+is real but unreachable at this size - which is precisely why it survived review, and precisely
+why leaving it in place would be wrong: the input is the self-test's own fixture, and nothing
+guarantees it stays 75 bytes.
+
+So the mechanism is demonstrated separately, with the needle placed at the TOP of a padded
+haystack (the position that makes grep exit earliest, so the worst case for the pipeline):
+
+    == 2. the same two shapes, padded past the pipe buffer ==
+           8 KiB   pipeline grep-stage rc=0     here-string rc=0
+          32 KiB   pipeline grep-stage rc=0     here-string rc=0
+          56 KiB   pipeline grep-stage rc=0     here-string rc=0
+          64 KiB   pipeline grep-stage rc=141   here-string rc=0
+          96 KiB   pipeline grep-stage rc=141   here-string rc=0
+         128 KiB   pipeline grep-stage rc=141   here-string rc=0
+
+    == 3. the assertion's verdict at 128 KiB, which is what actually matters ==
+        PIPELINE form (pipefail on)   rc=0  -> st_case sees 0 vs 0 -> case reports PASSED (WRONG)
+        HERE-STRING form              rc=1  -> st_case sees 0 vs 1 -> case reports FAILED (CORRECT)
+
+That is the finding, executed: on an input the assertion is SUPPOSED to reject, the pipeline form
+reports the case PASSED. The here-string form reports FAILED, which is correct, at every size.
+
+CROSS-CHECK AGAINST THE SIBLING PLAN, ARRIVED AT INDEPENDENTLY
+----------------------------------------------------------------------------------------------
+Plan 06-22 measured the same threshold on the same workstation while closing GC-01 in
+scripts/check-beets-config.sh: rc 0 at 8-56 KiB, rc 141 at 64/72/96/128 KiB, and position
+dependence on otherwise identical input. This plan reproduces that boundary exactly - 56 KiB
+clean, 64 KiB the first 141 - having measured it from a different script, a different needle and
+a different haystack. Two independent reproductions of a 64 KiB pipe buffer on darwin 27.0.0.
+
+Also inherited from 06-22 and worth repeating: the operator's interactive zsh aliases `grep` to
+ugrep 7.8.4, but inside a bash script `command -v grep` resolves to /usr/bin/grep (BSD grep
+2.6.0-FreeBSD). Every measurement above was answered by BSD grep. A reader reproducing this from
+an interactive zsh prompt will be running different software.
+
+================================================================================================
+NOT DRIVEN - what this artifact does NOT establish
+================================================================================================
+Recorded so the register is a register and not a summary of the good news.
+
+1. THE CONTAINER'S dash. Every fence case was driven with the macOS /bin/sh, which is bash in
+   sh-compatibility mode. The fence text is deliberately POSIX - nested `case`, `${1#prefix}`,
+   `""` as an empty pattern - and uses no bash-only construct, but "parses and behaves identically
+   under dash" is an argument here, not a measurement. The estate's own `scripts/
+   phase06-incremental-control.sh:473` has carried this shape against the same dash for several
+   plans, which is corroboration, not proof.
+
+2. THE FULL DESTRUCTIVE PROGRAMS. CLEANUP_PROG, STAMP_WRITE_PROG and STAMP_RM_PROG were never
+   executed - deliberately, as set out in Part 1. What is proven is (a) the fence text refuses
+   and accepts correctly, and (b) each program BEGINS with that exact text. The step from those
+   two to "the program refuses" is sound but structural; no `rm` was observed declining to run.
+
+3. `docker exec` STATUS PROPAGATION of the fence's exit 3. The refusal's exit code is driven
+   locally; its journey back through `docker exec`, `rsh` and `RSH_RC` is unchanged by this plan
+   and was not re-measured.
+
+4. THE 141 REACHING A REAL SELF-TEST CASE. Part 2 demonstrates the mechanism with a padded
+   haystack, not with the oracle's own fixture, which is 75 bytes. No run of this script has been
+   observed reporting a false PASS. The change is a removal of a latent hazard, and the honest
+   claim is that it was latent.
+
+5. WHETHER ANY OTHER FILE IN THE ESTATE CARRIES THE SHAPE. Only scripts/phase06-oracle.sh was
+   inspected here. Plan 06-22 did the repo-wide inventory for GC-01; anything it found outside
+   this file is that plan's scope, not this one's.
+
+OBSERVED BUT OUT OF SCOPE
+----------------------------------------------------------------------------------------------
+The three pipelines closed above are exactly the three that plan 06-22's repo-wide inventory
+attributed to this file. Nothing further of that shape was found in scripts/phase06-oracle.sh:
+after the change, `grep -cE '\|[[:space:]]*(LC_ALL=C[[:space:]]+)?grep[[:space:]]+-q'` over the
+non-comment lines returns 0.
+

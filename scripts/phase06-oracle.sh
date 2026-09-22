@@ -1885,7 +1885,9 @@ self_test_core() {
   qout="$(bash -c "$qcmd" 2>&1)" || qrc=$?
   st_case 0 "$qrc" "the apostrophe-and-\$ fixture reads CLEAN through the positional-parameter shape."
   rc=0
-  printf '%s\n' "$qout" | LC_ALL=C grep -qF "01 It's \$o.mp3" || rc=1
+  # HERE-STRING, NOT A PIPELINE (GC-06). See the paragraph at the inverted assertion below for the
+  # mechanism; this is one of the two sites where a 141 would have produced a false RED.
+  LC_ALL=C grep -qF "01 It's \$o.mp3" <<<"$qout" || rc=1
   st_case 0 "$rc" "and the listing carries the file's REAL name - apostrophe and \$ both intact."
 
   # DRIVEN RED. The OLD construction - `printf '%q'` interpolated into the TEXT of a
@@ -1904,10 +1906,21 @@ self_test_core() {
   # program text entirely and arrive as `sh -c '<prog>' sh <path>`.
   for qcmd in "$(remote_manifest_meta "$qdir")" "$(remote_manifest_sha "$qdir")"; do
     rc=0
-    printf '%s' "$qcmd" | LC_ALL=C grep -qF " sh $(printf '%q' "$qdir")" || rc=1
+    # HERE-STRING, NOT A PIPELINE (GC-06). Positive assertion: a 141 would have been a false RED.
+    LC_ALL=C grep -qF " sh $(printf '%q' "$qdir")" <<<"$qcmd" || rc=1
     st_case 0 "$rc" "a manifest builder passes the path as sh -c's POSITIONAL PARAMETER."
     rc=0
-    if printf '%s' "$qcmd" | LC_ALL=C grep -qF "find $(printf '%q' "$qdir")"; then rc=1; fi
+    # GC-06, AND THIS ONE IS THE DANGEROUS SHAPE - stated here because it is not the same bug as
+    # its two neighbours. This assertion is INVERTED: a grep MATCH is its FAILURE case. So
+    # `grep -q`'s early exit on first match is reached at precisely the moment the assertion is
+    # supposed to fire. Under `set -o pipefail` (:223) the dead `printf` takes SIGPIPE, the
+    # pipeline's status becomes 141, the `if` reads FALSE, `rc` stays 0, and `st_case 0 0` reports
+    # the case PASSED at the exact moment it should have failed. The two positive assertions above
+    # invert that: a 141 there produces a false RED - loud, investigated, survivable. An assertion
+    # that can silently not fire is this phase's dominant defect class, and this is GC-01's
+    # mechanism pointed the dangerous way round. The here-string removes the pipeline, so there is
+    # no second process to signal and no status to launder.
+    if LC_ALL=C grep -qF "find $(printf '%q' "$qdir")" <<<"$qcmd"; then rc=1; fi
     st_case 0 "$rc" "and never interpolates it after 'find' - the old shape is gone, not hidden."
   done
   rm -rf "$td/st.quote"
