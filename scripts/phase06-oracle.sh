@@ -25,6 +25,21 @@
 #      and THE DIFF WAS NOT EVALUATED. This is a distinct outcome from 1 and it is never a pass.
 #      CLAUDE.md § Health Checks: "could not look" is kept distinct from "nothing is wrong".
 #
+#   PRECEDENCE, when one run BOTH measured a failure AND had an instrument that could not look:
+#   3 (UNKNOWN) OUTRANKS 1 (RED). A BLIND INSTRUMENT WINS OVER A MEASURED RED. The two counters
+#   are not mutually exclusive, so the order below is a DECISION and not an accident of how the
+#   tail happens to be written. Reason, in one sentence: this estate's standing rule (CLAUDE.md
+#   and README § Health Checks) is that "could not look" is never folded into another verdict,
+#   and reporting a red while an instrument was blind asserts a cause the run did not establish.
+#   THE SIBLING INSTRUMENT WRITTEN IN THIS SAME PHASE, scripts/phase06-incremental-control.sh,
+#   FOLLOWS THE IDENTICAL CONVENTION - it consults its UNKNOWN counter before its FAIL counter,
+#   and its own EXIT CODES block names this file back (IN-08; plan 06-20 aligned it, plan 06-19
+#   wrote it down here). Its NUMBERING differs - there UNKNOWN is 2 and usage/refusal is 3 - and
+#   that difference is deliberate and NOT a finding: committed evidence in this phase cites those
+#   codes, so renumbering either script would invalidate it. Only the precedence is shared.
+#   Implemented at the two lines that read `UNKNOWNS" -ne 0` and `REDS" -ne 0` at the foot of
+#   this file, in that order.
+#
 # ==============================================================================================
 # WHY `beet import --pretend` IS NOT THE INSTRUMENT, AND `beet move -p` IS  (D-33)
 # ==============================================================================================
@@ -857,6 +872,20 @@ assert_dj_count() { # $1 = destination list  $2 = expected DJ file count
   local dest="$1" want="$2" ev="$OUT/assert.dj.txt" got=0
   ASSERT_WHY=""; ASSERT_EVIDENCE="$ev"
   [ -r "$dest" ] || { ASSERT_WHY="the destination list is missing or unreadable"; return 2; }
+  # IN-09. The guard its immediate neighbour assert_no_compilations has had from the start, in the
+  # same vocabulary and returning the same code: an unexercised stratum is VACUOUS, not a pass.
+  # Without it a sample whose S5 rows sum to zero compares `0 -ne 0`, which is false, and the
+  # equality ticks green having tested nothing. The cross-check at step 11 does not save it: that
+  # one only fires when the sample and the fixture DISAGREE, and zero against zero agrees.
+  if [ "$want" -eq 0 ]; then
+    printf 'NO-S5-STRATUM\tthe expected DJ file count is zero, so the albumtype rule was never reached\n' > "$ev"
+    ASSERT_WHY="the sample holds NO S5 files, so the albumtype:=dj path rule was never exercised
+    and comparing zero against zero is VACUOUS, not a pass. This is also the refusal that turns
+    DEF-06-12-01 - path rule 2 (albumtype:=dj disctotal:2..), the one paths: rule no Phase 6
+    instrument has ever evaluated, deferred and unowned - from a SILENCE into something the next
+    run over a DJ-less sample says out loud."
+    return 1
+  fi
   LC_ALL=C awk -v root="$LIB_ROOT/" '
     index($0, root) == 1 {
       rel = substr($0, length(root) + 1); split(rel, c, "/")
@@ -1574,7 +1603,11 @@ LEDGER_PY
 # --self-test : drive every fail-closed branch, without docker and without ssh
 # ==============================================================================================
 ST_FAIL=0
+# The case total in the closing banner is COUNTED HERE, never typed into the banner. A typed
+# total drifts the moment a case is added and then reads as authority; a derived one cannot.
+ST_RUN=0
 st_case() { # $1 = expectation  $2 = observed  $3 = description
+  ST_RUN=$((ST_RUN + 1))
   if [ "$1" = "$2" ]; then
     ok "$2 (expected): $3"
   else
@@ -2026,7 +2059,8 @@ self_test_classes() {
   st_assert 0 ".N clean" assert_no_collision_suffix "$d/dest.txt"
   st_assert 0 "D-18 clean" assert_protected_fields "$d/ledger.clean.ndjson" 1
   rc=0; report_multi_artist "$d/fields.tsv" || rc=$?
-  st_case 0 "$rc" "CONF-04 write side is a REPORT and always returns 0."
+  st_case 0 "$rc" "CONF-04 write side is a REPORT: it returns 0 whenever it COULD LOOK. (WR-06:
+    it no longer returns 0 when it could not - that pair is driven in the vacuity section.)"
   rc="$(LC_ALL=C grep -c '^WRITE-SIDE' "$OUT/report.multiartist.txt" || true)"
   st_case 1 "$rc" "the one multi-artist row in the fixture is shown, not silently dropped."
 
@@ -2059,6 +2093,155 @@ ST_AST
   fi
 }
 
+# --- The vacuity and could-not-look guards this file grew in plan 06-19 -------------------------
+# EVERY case below is a PAIR. A guard that refuses everything is exactly as useless as one that
+# refuses nothing, and three of the four findings this section drives were guards that could never
+# fire - so proving a refusal fires is only half of it; the other half is proving the same
+# predicate still lets a correct input through.
+#
+# Nothing here reaches ssh or docker. `st_grep_why` writes the message to a FILE and greps the
+# file rather than piping it: `printf ... | grep -q` under `set -o pipefail` propagates SIGPIPE's
+# 141 when grep exits on its first match, which fires the failure branch precisely when the text
+# IS correct. That shape has produced a false red in three plans of this phase already.
+st_grep_why() { # $1 = expected 0/1  $2 = text  $3 = fixed string wanted  $4 = description
+  local hit=0
+  printf '%s\n' "$2" > "$OUT/st.why.txt"
+  LC_ALL=C grep -qF -- "$3" "$OUT/st.why.txt" || hit=1
+  st_case "$1" "$hit" "$4"
+}
+
+self_test_vacuity() {
+  local d="$OUT/st-vacuity" rc=0 out="" probe="" pdir=""
+  rm -rf "$d"; mkdir -p "$d"
+
+  say ""
+  say "== --self-test: WR-02 an EMPTY manifest cannot compare equal to another empty one =="
+  rule
+  : > "$d/m.empty.a"
+  : > "$d/m.empty.b"
+  printf 'a/one.mp3\t1\t1.0\n' > "$d/m.full.a"
+  cp "$d/m.full.a" "$d/m.full.b"
+  # THE DEFECT ITSELF: before this plan, two empty listings diffed clean and layer 2 of the
+  # three-layer wrote-nothing proof was satisfied by having measured nothing.
+  st_mc couldnotcompare "$d/m.empty.a" "$d/m.empty.b" \
+    "TWO EMPTY manifests are COULD NOT COMPARE, not 'identical before and after'."
+  st_grep_why 0 "$DIFF_WHY" "pass vacuously" \
+    "and the reason is the sibling's own words, carried over rather than paraphrased."
+  st_mc couldnotcompare "$d/m.empty.a" "$d/m.full.b" \
+    "an empty BEFORE against a populated AFTER is also COULD NOT COMPARE."
+  st_mc couldnotcompare "$d/m.full.a" "$d/m.empty.b" \
+    "and so is a populated BEFORE against an empty AFTER - the guard runs over both inputs."
+  # THE POSITIVE PAIR. A guard that refuses every manifest would make the instrument useless and
+  # invite its removal, which is how a fail-closed check gets deleted rather than fixed.
+  st_mc identical "$d/m.full.a" "$d/m.full.b" \
+    "two NON-EMPTY identical manifests are still identical - the guard discriminates."
+  printf 'a/one.mp3\t1\t9.9\n' > "$d/m.full.b"
+  st_mc differs "$d/m.full.a" "$d/m.full.b" \
+    "and a real difference is still a RED - the guard did not swallow layer 2's red arm."
+
+  say ""
+  say "== --self-test: WR-06 the write-side report cannot tick over a blind read =="
+  rule
+  cp "$OUT/st-classes/fields.tsv" "$d/fields.good.tsv"
+  : > "$d/fields.empty.tsv"
+  rc=0; report_multi_artist "$d/nosuchfile.tsv" || rc=$?
+  st_case 2 "$rc" "an UNREADABLE fields TSV returns the code run_assert routes to unknown()."
+  rc=0; report_multi_artist "$d/fields.empty.tsv" || rc=$?
+  st_case 2 "$rc" "an EMPTY-but-readable fields TSV is the same could-not-look, not zero rows."
+  rc=0; report_multi_artist "$d/fields.good.tsv" || rc=$?
+  st_case 0 "$rc" "a real field view still returns 0 - it is a REPORT and must not block a run."
+  st_grep_why 0 "$ASSERT_WHY" "field-view row(s) READ" \
+    "and its message states the denominator, so a zero there is empty-BY-MEASUREMENT."
+  # The routing itself, through the same wrapper the live run uses. run_assert PRINTS, so it is
+  # driven in a subshell and its output inspected: the point of WR-06 was never the return code,
+  # it was the tick that reached the operator's terminal.
+  run_assert "CONF-04 write side" report_multi_artist "$d/nosuchfile.tsv" > "$d/ra.blind.txt" 2>&1
+  rc=0; LC_ALL=C grep -q 'UNKNOWN, not green' "$d/ra.blind.txt" || rc=1
+  st_case 0 "$rc" "run_assert routes the blind read to UNKNOWN, not green."
+  rc=0; LC_ALL=C grep -q $'\342\234\223' "$d/ra.blind.txt" && rc=1 || true
+  st_case 0 "$rc" "and NO GREEN TICK is printed for that label - the whole of WR-06."
+  run_assert "CONF-04 write side" report_multi_artist "$d/fields.good.tsv" > "$d/ra.good.txt" 2>&1
+  rc=0; LC_ALL=C grep -q $'\342\234\223' "$d/ra.good.txt" || rc=1
+  st_case 0 "$rc" "THE PAIR: over a real field view the same label DOES tick, so the routing"
+  info "discriminates rather than having been turned off."
+  UNKNOWNS=0
+
+  say ""
+  say "== --self-test: IN-12 an empty field view is not 'six columns each' =="
+  rule
+  rc=0; assert_field_view "$d/fields.empty.tsv" || rc=$?
+  st_case 2 "$rc" "an EMPTY fields.tsv is COULD NOT LOOK - zero items is not a column count."
+  st_grep_why 0 "$ASSERT_WHY" "NOT PRODUCED" \
+    "and the message says the view was not produced, not that every item had six columns."
+  rc=0; assert_field_view "$d/nosuchfile.tsv" || rc=$?
+  st_case 2 "$rc" "a missing fields.tsv is COULD NOT LOOK too."
+  printf 'a\tb\tc\td\te\n' > "$d/fields.five.tsv"
+  rc=0; assert_field_view "$d/fields.five.tsv" || rc=$?
+  st_case 2 "$rc" "a five-column row is still COULD NOT LOOK - the old guard was not lost."
+  rc=0; assert_field_view "$d/fields.good.tsv" || rc=$?
+  st_case 0 "$rc" "THE PAIR: a well-formed six-column view still passes."
+
+  say ""
+  say "== --self-test: IN-09 a DJ stratum that was never exercised is VACUOUS =="
+  rule
+  rc=0; assert_dj_count "$OUT/st-classes/dest.txt" 0 || rc=$?
+  st_case 1 "$rc" "a wanted count of ZERO is refused - 0 against 0 tests nothing."
+  st_grep_why 0 "$ASSERT_WHY" "VACUOUS" \
+    "in its neighbour's own vocabulary, so the two read the same on the same question."
+  st_grep_why 0 "$ASSERT_WHY" "DEF-06-12-01" \
+    "and it names the deferral it converts from a silence into a refusal."
+  rc=0; assert_dj_count "$OUT/st-classes/dest.txt" 2 || rc=$?
+  st_case 0 "$rc" "THE PAIR: the true count of 2 still passes - the guard is not a blanket no."
+  rc=0; assert_dj_count "$OUT/st-classes/dest.txt" 3 || rc=$?
+  st_case 1 "$rc" "and a WRONG non-zero count is still the equality's RED, unchanged."
+
+  say ""
+  say "== --self-test: WR-01 the scratch probe, and the old pipeline it replaces =="
+  rule
+  # The remote program text is driven HERE, with local /bin/sh, exactly as the WR-08 case above
+  # drives remote_sh_c's output with local bash. What is NOT driven is the container: its dash,
+  # docker exec's status propagation, and a directory unreadable by `beetle` specifically. Those
+  # are recorded as NOT DRIVEN in artifacts/06-19-oracle-vacuity-driven.txt.
+  pdir="$d/probe"
+  mkdir -p "$pdir/emptydir" "$pdir/full" "$pdir/noread"
+  : > "$pdir/full/lib.db"
+  : > "$pdir/afile"
+  : > "$pdir/noread/x"
+  for probe in "nosuch:absent" "emptydir:empty" "afile:notadir"; do
+    rc=0
+    out="$(/bin/sh -c "$SCRATCH_PROBE_PROG" sh "$pdir/${probe%%:*}" 2>/dev/null)" || rc=$?
+    st_case "${probe#*:}" "$out" "the probe answers '${probe#*:}' for $pdir/${probe%%:*}."
+  done
+  rc=0
+  out="$(/bin/sh -c "$SCRATCH_PROBE_PROG" sh "$pdir/full" 2>/dev/null)" || rc=$?
+  case "$out" in 'nonempty '*) rc=0 ;; *) rc=1 ;; esac
+  st_case 0 "$rc" "a POPULATED scratch answers 'nonempty <entry>', which the case arm refuses on."
+  if [ "$(id -u)" = "0" ]; then
+    warn "SKIPPED as root: the PRESENT-BUT-UNREADABLE case. root bypasses the read bit, so it"
+    info "cannot be constructed here - reported, never silently counted as a pass."
+  else
+    chmod 000 "$pdir/noread"
+    rc=0
+    out="$(/bin/sh -c "$SCRATCH_PROBE_PROG" sh "$pdir/noread" 2>/dev/null)" || rc=$?
+    st_case 4 "$rc" "a PRESENT-BUT-UNREADABLE scratch exits 4 - find's status is read, not lost."
+    st_case "" "$out" "and prints nothing, so no word can be mistaken for 'absent' or 'empty'."
+    # DRIVEN RED: the OLD shape, same fixture. It returns 0 and an empty stdout - BYTE-IDENTICAL
+    # to what it returns for a genuinely empty directory, which is why the precheck ticked green
+    # over a could-not-look. A case that only proves the new shape works does not prove the old
+    # one was broken, and "broken in a way nothing noticed" is the whole of WR-01.
+    rc=0
+    out="$(/bin/sh -c '[ ! -e "$1" ] && echo absent || ls -A "$1" | head -n 1' sh "$pdir/noread" 2>/dev/null)" || rc=$?
+    st_case 0 "$rc" "DRIVEN RED: the OLD pipeline exits 0 on the SAME unreadable directory."
+    st_case "" "$out" "DRIVEN RED: and prints nothing - indistinguishable from an empty scratch."
+    chmod 755 "$pdir/noread"
+  fi
+  rc=0
+  out="$(/bin/sh -c '[ ! -e "$1" ] && echo absent || ls -A "$1" | head -n 1' sh "$pdir/emptydir" 2>/dev/null)" || rc=$?
+  st_case "" "$out" "THE PAIR for the driven red: the old shape prints the SAME empty answer for a"
+  info "genuinely empty directory, so the two states were not distinguishable at all."
+  rm -rf "$pdir"
+}
+
 # --- The CR-02 could-not-look preflight, shared by the -newer sweep and the manifests ----------
 PREFLIGHT_WHY=""
 preflight_readable() { # $1 = local directory that must exist and be searchable
@@ -2081,15 +2264,17 @@ mkdir -p "$OUT"
 
 if [ "$MODE" = "self-test" ]; then
   ST_FAIL=0
+  ST_RUN=0
   REDS=0
   self_test_core
   self_test_classes
+  self_test_vacuity
   say ""
   if [ "$ST_FAIL" -ne 0 ] || [ "$REDS" -ne 0 ]; then
-    printf '  \342\234\227 self-test: %s case(s) FAILED\n' "$((ST_FAIL))"
+    printf '  \342\234\227 self-test: %s of %s case(s) FAILED\n' "$((ST_FAIL))" "$((ST_RUN))"
     exit 1
   fi
-  ok "self-test: every fail-closed branch behaved exactly as expected"
+  ok "self-test: $ST_RUN case(s), every fail-closed branch behaved exactly as expected"
   exit 0
 fi
 
@@ -2519,6 +2704,9 @@ rsh "timeout $REMOTE_TIMEOUT $(remote_sh_c "$STAMP_RM_PROG" "$STAMP_REMOTE")"
 
 say ""
 rule
+# The ORDER of these two is the house convention stated in the EXIT CODES block at the top of this
+# file: a BLIND INSTRUMENT OUTRANKS A MEASURED RED. Both counters can be non-zero at once, so this
+# is a decision. scripts/phase06-incremental-control.sh consults its counters in the same order.
 if [ "$UNKNOWNS" -ne 0 ]; then
   say "  VERDICT: UNKNOWN, not green - $UNKNOWNS instrument(s) could not look."
   exit 3
