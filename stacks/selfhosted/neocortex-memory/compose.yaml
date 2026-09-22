@@ -89,6 +89,12 @@ services:
       NEOCORTEX_MEMORY_CONFIG: /app/memory/config/memory-config.json
       MEMORY_API_PORT: "8787"
       MEMORY_STORE_BACKEND: postgres
+      # agentic-os-db runs without TLS, so node-postgres must not negotiate it. Without this the
+      # very first connection dies with "The server does not support SSL connections" -- which is
+      # how it was found on 2026-09-22. Every Mac already carries PGSSLMODE=disable in
+      # ~/.config/neocortex/memory.env against this same server; the stack simply has to agree.
+      # The link is container-to-container on a private bridge network, not over the LAN.
+      PGSSLMODE: ${PGSSLMODE:-disable}
       # Embeddings are computed HERE, not by the client. That is what lets a client hold nothing
       # but a bearer token - no model, no DSN, no 400 MB download on a phone.
       MEMORY_API_SERVER_EMBEDDINGS: "1"
@@ -227,6 +233,12 @@ services:
       MEMORY_MODEL_CACHE_DIR: /data/models
       NEOCORTEX_MEMORY_CONFIG: /app/memory/config/memory-config.json
       MEMORY_STORE_BACKEND: postgres
+      # agentic-os-db runs without TLS, so node-postgres must not negotiate it. Without this the
+      # very first connection dies with "The server does not support SSL connections" -- which is
+      # how it was found on 2026-09-22. Every Mac already carries PGSSLMODE=disable in
+      # ~/.config/neocortex/memory.env against this same server; the stack simply has to agree.
+      # The link is container-to-container on a private bridge network, not over the LAN.
+      PGSSLMODE: ${PGSSLMODE:-disable}
       MEMORY_DATABASE_URL: ${MEMORY_DATABASE_URL:?set in .env}
       # Every command after the first admin exists needs an explicit actor. Exported in the shell
       # before `docker compose run`, per README step 5.
