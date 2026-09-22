@@ -147,7 +147,152 @@ ROADMAP entry criterion E10 and it does NOT close CONF-04. CR-01's carried resid
 stays carried — see the CR-01 row in 06-DISPOSITIONS.md.
 
 
-PART 2 — GC-16: the fourth regex branch's missing anchors. APPENDED BY TASK 2 BELOW.
+================================================================================
+PART 2 — GC-16: THE FOURTH REGEX BRANCH'S MISSING ANCHORS
+================================================================================
+
+THE FINDING, AND THE CORRECTION THAT TRAVELS WITH IT
+-----------------------------------------------------
+`D04_INV_RE` has four alternatives. The three LITERAL-token branches each anchor in
+three places: content start (with optional `sudo`), after a shell separator
+(`[[:space:]](&&|;)[[:space:]]*`), and after a `docker` prefix. The FOURTH branch —
+the variable-expansion branch added by plan 06-16 — anchored only on content start or
+immediately inside an opening quote.
+
+Recorded so the correction is not lost: the cross-family reviewer graded GC-16 BLOCKER
+and justified it by claiming the block comment PROMISED separator anchoring. THAT
+JUSTIFICATION IS FALSE. The comment said "content start, or immediately inside an
+opening quote", which is exactly what the code did. There was no documentation
+mismatch to fix. The substantive gap is real and is graded WARNING: a latent blind
+spot with NO CURRENT INSTANCE IN THE TREE. Widening the code is therefore a behaviour
+change, and the comment had to be brought FORWARD to the new behaviour — a different
+edit from the one the reviewer asked for.
+
+Why it ships alongside GC-03: GC-03's own text names this asymmetry as the silent
+route by which the asserted set drops to zero without any counter leaving its pin.
+
+THE EDIT
+--------
+Leading alternation of branch 4 only. The TRAILING requirement — a flag or a lowercase
+subcommand word — is untouched, because that half is what holds the executable count at
+8 rather than 26.
+
+  OLD: (^HEAD:[^:]*:[0-9]*:[[:space:]]*(sudo[[:space:]]+)?|")
+  NEW: (^HEAD:[^:]*:[0-9]*:[[:space:]]*(sudo[[:space:]]+)?|"|[[:space:]](&&|;)[[:space:]]*|docker[[:space:]][^`]*[[:space:]])
+
+--------------------------------------------------------------------------------
+ADDITIVITY — THE FULL PIPELINE, OLD REGEX vs NEW REGEX, IDENTICAL INPUT
+--------------------------------------------------------------------------------
+Pipeline reproduced exactly as the block runs it:
+
+    git grep -n -I -w -E -e 'beet' -e 'BEET[A-Z_]*' HEAD -- scripts stacks
+      | ^HEAD:                                   -> raw
+      | strip ^HEAD:path:line:<space>(#|//)      -> comment-stripped
+      | D04_INV_RE                               -> invocation-shaped
+      | split on \.md:                           -> documentation / executable
+      | D04_EXEMPT_RE                            -> exempt / asserted
+
+Input for both columns is the SAME scan of base commit bf509f4 (199 raw lines), so the
+only variable is the regex.
+
+    OLD  raw=199 stripped=98 inv=10 exe=8 assert=3 exempt=5 doc=2
+    NEW  raw=199 stripped=98 inv=10 exe=8 assert=3 exempt=5 doc=2
+    $ diff inv-OLD.txt inv-NEW.txt   ->  (identical)
+
+| count             | OLD fourth branch | NEW fourth branch |
+|-------------------|-------------------|-------------------|
+| raw               | 199               | 199               |
+| comment-stripped  |  98               |  98               |
+| invocation-shaped |  10               |  10               |
+| executable        |   8               |   8               |
+| asserted          |   3               |   3               |
+| exempt            |   5               |   5               |
+| documentation     |   2               |   2               |
+
+IDENTICAL, and not merely in the counts — the matched LINE SETS are byte-identical
+under `diff`, which is the stronger statement and the one worth recording. No pin
+moved; neither D04_EXEMPT_BASELINE (5) nor D04_DOC_BASELINE (2) was touched. This is
+the vector plan 06-28 needs for GC-10, quoted in that form deliberately:
+199 / 98 / 10 / 8 / 3 / 5 / 2.
+
+⚠️  ONE FIGURE MOVES, FOR A REASON THAT IS NOT THE WIDENING, AND IT IS REPORTED RATHER
+    THAN ABSORBED — THIS IS A DEVIATION FROM THIS PLAN'S OWN VERIFY BLOCK.
+    `scripts/quick-health-check.sh` is itself inside D-04's scan scope (`scripts/`), so
+    once this plan's commits are in HEAD the raw and comment-stripped counts read
+    200 and 99, NOT 199 and 98. Measured after the task-1 commit:
+
+        HEAD(after task 1)  raw=200 stripped=99 inv=10 exe=8 assert=3 exempt=5 doc=2
+
+    The cause is exactly one line — condition P's own message, at
+    `scripts/quick-health-check.sh:1882`:
+
+        echo "  EMPTY set and could not have failed. This is NOT 'no bare beet invocations'."
+
+    That sentence carries the literal token BY REQUIREMENT (plan 06-23 task 1(a): the
+    message "must say … this is NOT 'no bare beet invocations'"), and it is an `echo`,
+    so it survives the comment strip and lands in both the raw and the stripped count.
+    The FOUR EXISTING sibling guards each contribute the same line for the same reason
+    and are already inside the 199 — this is the fifth.
+
+    WHAT DID NOT MOVE, checked rather than assumed: the line is not invocation-shaped
+    under any of the four branches (`grep -cE "$D04_INV_RE"` over it returns 0), so
+    invocation-shaped / executable / asserted / exempt / documentation all stay at
+    10 / 8 / 3 / 5 / 2 and NO PIN MOVED. Nothing was raised to absorb anything, and
+    neither of the block's two relational guards is affected: raw is still non-zero and
+    raw (200) is still ≠ stripped (99).
+
+    The new exit-code notice and the rewritten block comment were both written to add
+    ZERO further matches. Measured, not assumed: `grep -c -w -E` with the block's own
+    two `-e` patterns over this file reads 35 at base commit bf509f4 and 36 after both
+    of this plan's commits — the +1 being the echo line above and nothing else. Where
+    the notice or the comment needed to name a shape, it points at this artifact
+    instead of spelling it out, and that decision is recorded in the notice itself so
+    it can be checked rather than trusted.
+
+--------------------------------------------------------------------------------
+POSITIVE CONTROLS — the two shapes the old regex could not see
+--------------------------------------------------------------------------------
+  fixture:
+    HEAD:scripts/x.sh:10:    cd /tmp && $BEET_BIN config -d
+    HEAD:scripts/x.sh:11:    docker exec -u beetle c $BEET_BIN config -d
+
+  OLD regex: 0 of 2 matched      <- the blind spot
+  NEW regex: 2 of 2 matched      <- closed (grep listed both lines back)
+
+--------------------------------------------------------------------------------
+UNCHANGED CONTROLS — matched by both, before and after
+--------------------------------------------------------------------------------
+  fixture:
+    HEAD:scripts/x.sh:12:$BEET_BIN config -d                 (content start, variable)
+    HEAD:scripts/x.sh:13:    cd /tmp && beet config -d       (separator, literal token)
+
+  OLD regex: 2 of 2 matched
+  NEW regex: 2 of 2 matched
+
+--------------------------------------------------------------------------------
+NEGATIVE CONTROLS — the narrowing that makes the stripped count meaningful is INTACT
+--------------------------------------------------------------------------------
+  fixture (mentions and argument passing, with no invocation anywhere on the line):
+    HEAD:scripts/x.sh:14:    echo "see `$BEET_BIN` in the runbook"
+    HEAD:scripts/x.sh:15:    remote_exec "$prog" "$root" "$BEET" "$PY"
+    HEAD:scripts/x.sh:16:    if [[ $BEET_EXEC_RC -eq 0 ]]; then
+    HEAD:scripts/x.sh:17:    printf %s "$BEETS_DB_COUNT"
+
+  OLD regex: 0 of 4 matched
+  NEW regex: 0 of 4 matched
+
+Line 16 is the one worth naming, because it is where the NEWLY ADDED separator anchor
+could plausibly have over-matched: the line contains a `;`. It does not match, and the
+reason is that the ANCHOR half does the refusing here while the FOLLOWER half would
+have admitted it — ` -eq` satisfies `[[:space:]]+(-|[a-z])` perfectly well. The
+separator anchor requires WHITESPACE immediately before the `&&` or `;`, and this line
+reads `]];`. That is the clearest single demonstration that both halves earn their
+place: neither alone would hold this line out.
+
+The follower requirement is what keeps the executable count at 8 rather than 26 — the
+measurement the block comment records. Widening the ANCHOR set while dropping the
+FOLLOWER test is how this edit would have become a regression, and the controls above
+are what prove it did not.
 
 ================================================================================
 NOT DRIVEN — stated rather than implied
@@ -163,3 +308,12 @@ NOT DRIVEN — stated rather than implied
 * CONDITION P WAS NOT OBSERVED FIRING AGAINST A REAL TREE, because no real tree has an
   empty asserted set — that is the point of GC-16 shipping alongside it. It was driven
   against a synthetic fixture built by deleting three real lines out of a real scan.
+* THE TWO WIDENED ANCHORS WERE NOT OBSERVED MATCHING A REAL LINE, for the same reason:
+  GC-16 is a LATENT blind spot with no current instance in the tree. Both shapes were
+  driven against synthetic fixtures (positive controls above) and the widening is
+  proven additive against the real tree, which is the pair of statements this closure
+  can honestly make. If a real `&&`- or `docker`-anchored variable invocation ever
+  lands, the executable count moves and the exempt pin reports it.
+* THE `D04_EXEMPT_BASELINE` / `D04_DOC_BASELINE` / `D04_REPO_ROOT` OVERRIDE ARMS were
+  not re-driven. This plan did not touch them; they are unchanged and plan 06-16 owns
+  their proof.

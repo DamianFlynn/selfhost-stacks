@@ -1837,11 +1837,30 @@ else
     # or after a `docker` prefix (`docker exec … beet …`). A back-ticked mention in prose or a
     # quoted mention inside a Python string does NOT match, which is the narrowing that makes the
     # stripped count meaningful rather than alarming.
-    # FOURTH BRANCH added 2026-09-22 (plan 06-16): a BEET-prefixed variable expansion in COMMAND
-    # POSITION — content start, or immediately inside an opening quote — FOLLOWED BY a flag or a
-    # lowercase subcommand word. Both halves are required; see the WIDENED paragraph in the block
-    # comment for the 26-vs-8 measurement that shows why neither alone is honest.
-    D04_INV_RE='^HEAD:[^:]*:[0-9]*:[[:space:]]*(sudo[[:space:]]+)?beet[[:space:]]|[[:space:]](&&|;)[[:space:]]*beet[[:space:]]|docker[[:space:]][^`]*[[:space:]]beet[[:space:]]|(^HEAD:[^:]*:[0-9]*:[[:space:]]*(sudo[[:space:]]+)?|")\$\{?BEET[A-Z_]*\}?"?[[:space:]]+(-|[a-z])'
+    # FOURTH BRANCH added 2026-09-22 (plan 06-16), ITS ANCHOR SET WIDENED 2026-09-22 (plan 06-23,
+    # GC-16): a BEET-prefixed variable expansion in COMMAND POSITION — content start, immediately
+    # inside an opening quote, after a shell separator, or after a `docker` prefix — FOLLOWED BY a
+    # flag or a lowercase subcommand word. Both halves are STILL required; see the WIDENED
+    # paragraph in the block comment for the 26-vs-8 measurement that shows why neither alone is
+    # honest. If you ever touch the anchors again, KEEP THE FOLLOWER TEST: dropping it while
+    # widening the anchor set is exactly how the executable count goes back to 26.
+    #   ⚠️ WHY THE ASYMMETRY MATTERED, AND WHY IT SHIPPED WITH GC-03. The three literal-token
+    #   branches above already anchored on separators and on `docker`; this one did not. So the
+    #   same expansion after `&&`, or inside a `docker exec` line, was invocation-shaped and
+    #   INVISIBLE to the scan — and GC-03 names precisely that as the silent route by which the
+    #   ASSERTED set drops to zero without any counter leaving its pin. Fixing either alone leaves
+    #   the route open. There was NO CURRENT INSTANCE of either shape in the tree, so this closed a
+    #   latent blind spot rather than an active miss, and the widening is proven ADDITIVE by an
+    #   unchanged count vector (invocation-shaped 10, executable 8, asserted 3, exempt 5,
+    #   documentation 2) recorded in
+    #   .planning/phases/06-tagger-configuration-and-dry-run/artifacts/06-23-d04-assert-vacuity.txt
+    #   ⚠️ AND THE REVIEWER'S JUSTIFICATION FOR THIS FINDING WAS FALSE, kept here so it is not
+    #   re-argued: it claimed the paragraph above promised separator anchoring and that the code
+    #   did not deliver it. The paragraph said "content start, or immediately inside an opening
+    #   quote", which is what the code did. There was no documentation mismatch — the gap was
+    #   substantive, graded WARNING not BLOCKER, and these lines are the comment being brought
+    #   FORWARD to the widened behaviour, not corrected backwards to the old one.
+    D04_INV_RE='^HEAD:[^:]*:[0-9]*:[[:space:]]*(sudo[[:space:]]+)?beet[[:space:]]|[[:space:]](&&|;)[[:space:]]*beet[[:space:]]|docker[[:space:]][^`]*[[:space:]]beet[[:space:]]|(^HEAD:[^:]*:[0-9]*:[[:space:]]*(sudo[[:space:]]+)?|"|[[:space:]](&&|;)[[:space:]]*|docker[[:space:]][^`]*[[:space:]])\$\{?BEET[A-Z_]*\}?"?[[:space:]]+(-|[a-z])'
     # The NAMED exemption register. Keyed on the file path AND the distinguishing overlay variable,
     # so a different invocation added to either file does NOT inherit the exemption. Reason in full
     # in the block comment above; count pinned by D04_EXEMPT_BASELINE.
