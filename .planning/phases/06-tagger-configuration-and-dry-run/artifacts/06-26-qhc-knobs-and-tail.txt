@@ -528,4 +528,209 @@ than spelling the shape out in band.
 3. GC-09 — THE FAILING-BLOCK TAIL
 ================================================================================
 
-(placeholder — filled in by task 3)
+--------------------------------------------------------------------------------
+3.1 THE ENUMERATION — WHERE THE NEW LIST CAME FROM
+--------------------------------------------------------------------------------
+
+The review names two missing blocks. The list was NOT built from that. A tail
+that is right about two blocks and wrong about a third is the same defect, so it
+was rebuilt from a MECHANICAL ENUMERATION of every executable `EXIT_CODE=1` site,
+each attributed to its owning block by finding the greatest block-start ANCHOR at
+or before it. Anchors are grep'd, never hard-coded line numbers — four plans in
+this phase have already had to learn that lesson about stale citations.
+
+    $ /usr/bin/grep -n 'EXIT_CODE=1' scripts/quick-health-check.sh \
+        | /usr/bin/grep -v '^[0-9]*:[[:space:]]*#'
+    executable EXIT_CODE=1 sites found: 98
+
+    sites   from  owning block
+    -------------------------------------------------------------------------
+    1       1060  STARTUP GATE: coreutils timeout probe   [exits immediately]
+    4       1104  the Traefik container probe
+    4       1132  the Authelia container probe
+    4       1189  the container counts
+    9       1301  the Traefik dashboard probe
+    10      1410  the vendored-file drift block
+    17      1563  the D-03 vendored-config mount block          <-- NOT IN THE TAIL
+    13      1824  the D-04 throwaway -l scan                    <-- NOT IN THE TAIL
+    9       2074  the extended.conf destructive-switch block
+    4       2261  the music freeze harness
+    7       2384  the consumers audit
+    5       2556  the library underscore-dir guard
+    4       2643  the Jellyfin transcode retention audit
+    7       2766  the container image-drift block
+
+FOURTEEN blocks hold a site; THIRTEEN can reach the tail. The coreutils gate is
+excluded because it `exit 1`s on the spot, so the tail is never printed — that is
+a real distinction and it is stated rather than quietly dropped.
+
+The enumeration found EXACTLY the two blocks the review named and no others, so
+the review's list was right. It is still the enumeration that is load-bearing:
+the two missing blocks hold **30 of the 98 sites**, second and third largest
+after the dashboard probe, which is the measurement that makes GC-09 more than
+cosmetic.
+
+--------------------------------------------------------------------------------
+3.2 THE TAIL, BEFORE AND AFTER
+--------------------------------------------------------------------------------
+
+BEFORE (base commit 9b28021), rendered:
+
+    ❌ Health check FAILED. The failing block is whichever one above carries a ❌ or a ⚠️ —
+       that is any of: the Traefik or Authelia container probes, the Traefik dashboard
+       probe, the container counts, the music freeze harness, the consumers audit, the
+       library underscore-dir guard, the Jellyfin transcode retention audit, the
+       vendored-file drift block, the extended.conf destructive-switch block, or the
+       container image-drift block.
+       ⚠️ The image-drift block CANNOT fail on the drift count itself — if it is red, it is
+          a could-not-look or the unresolvable set moved. Do not go looking for a tag.
+
+AFTER:
+
+    ❌ Health check FAILED. The failing block is whichever one above carries a ❌ or a ⚠️ —
+       that is any of: the Traefik or Authelia container probes, the Traefik dashboard
+       probe, the container counts, the music freeze harness, the consumers audit, the
+       library underscore-dir guard, the Jellyfin transcode retention audit, the
+       vendored-file drift block, the D-03 vendored-config mount block, the D-04
+       throwaway -l scan, the extended.conf destructive-switch block, or the
+       container image-drift block.
+       ⚠️ The image-drift block CANNOT fail on the drift count itself — if it is red, it is
+          a could-not-look or the unresolvable set moved. Do not go looking for a tag.
+       ⚠️ The consumers audit carries a ⚠️ BY DESIGN for as long as CONF-04 is open: its
+          exit 3 means the D-22 artist rows were read successfully and are sitting at their
+          RECORDED BASELINE. That is the state this project has written down, not a new
+          fault — but it is also NOT a pass, and CONF-04 is NOT closed. It clears when
+          ROADMAP entry criterion E6 discharges CONF-04's Jellyfin half, and on nothing
+          else. Do not tune it out: the non-zero exit is what makes a later regression back
+          to the baseline detectable by tooling instead of only by a human reading yellow.
+
+ADDITION, NOT REWRITE: the existing wording is intact and the image-drift caveat
+sentence is untouched and still appears exactly once.
+
+ON (b), THE EXPECTED NON-GREEN STATE. The clause is deliberately NOT phrased as a
+reason to ignore the block. It says the ⚠️ is the recorded state, that it is still
+NOT a pass, that CONF-04 is NOT closed, that E6 owns the discharge, and that the
+non-zero exit is load-bearing because it is what makes a later regression
+detectable by tooling. That last sentence is lifted from the twelfth notice's own
+argument at the exit-3 arm, so the tail and the arm cannot drift apart.
+
+--------------------------------------------------------------------------------
+3.3 THE MECHANICAL COVERAGE CHECK — PROVEN, NOT EYEBALLED
+--------------------------------------------------------------------------------
+
+Every block name from §3.1 is checked against the tail's RENDERED text.
+
+⚠️ AN INSTRUMENT ERROR WAS HIT HERE AND IS RECORDED BECAUSE IT WOULD HAVE PRODUCED
+   A FALSE FAILURE. The first version of this checker flattened the tail's SOURCE
+   lines. That interleaves the `echo "` / `"` delimiters into the prose, so any
+   phrase that wraps across two echo lines — "the Traefik dashboard" + "probe," —
+   is split by ` " echo " ` and does not match. It reported FAIL for the dashboard
+   probe and for D-04, both of which ARE named. The fix is to EXECUTE the tail's
+   echo lines in a subshell and match what an operator actually reads.
+
+    BEFORE — base commit 9b28021 (checker exit 1):
+      PASS  the Traefik container probe
+      PASS  the Authelia container probe
+      PASS  the container counts
+      PASS  the Traefik dashboard probe
+      PASS  the vendored-file drift block
+      FAIL  the D-03 vendored-config mount block     <- NOT IN TAIL
+      FAIL  the D-04 throwaway -l scan               <- NOT IN TAIL
+      PASS  the extended.conf destructive-switch block
+      PASS  the music freeze harness
+      PASS  the consumers audit
+      PASS  the library underscore-dir guard
+      PASS  the Jellyfin transcode retention audit
+      PASS  the container image-drift block
+      FAIL  E6 not named
+      PASS  tail does NOT claim CONF-04 is closed
+      PASS  image-drift caveat count = 1
+      PASS  exit-code notice headers = 13
+      TAIL COVERAGE: INCOMPLETE          (11 of 13 blocks)
+
+    AFTER (checker exit 0):
+      PASS  ... all thirteen blocks ...
+      PASS  E6 named as the clearing condition
+      PASS  tail does NOT claim CONF-04 is closed
+      PASS  tail says explicitly that CONF-04 is NOT closed
+      PASS  image-drift caveat count = 1
+      PASS  exit-code notice headers = 13
+      TAIL COVERAGE: COMPLETE            (13 of 13 blocks)
+
+--------------------------------------------------------------------------------
+3.4 (c) THE SIXTH COMMENT PARAGRAPH, AND WHAT IT WAS NOT
+--------------------------------------------------------------------------------
+
+The five paragraphs above the tail each record a previous extension with its
+date, its plan and the same-commit reason. A sixth was added in that style —
+NOT a new numbered `EXIT-CODE BEHAVIOUR CHANGED` notice, because this task
+creates no new fatal condition; it only names conditions that already existed.
+06-23 added the one new notice this round is entitled to (the thirteenth, for
+condition P). Header count measured at 13 before and 13 after.
+
+The new paragraph says, in band, that the tail fell behind THREE plans (06-16,
+06-17, 06-23) despite FOUR in-band restatements of the discipline, and why that
+keeps happening: the rule is remembered while you are editing the tail and
+forgotten while you are editing a block, and it is only ever needed in the second
+case. So it stops relying on recollection — it points at §3.1's enumeration and
+tells the next author to RE-RUN IT rather than eyeball the list.
+
+--------------------------------------------------------------------------------
+3.5 D-04 SELF-SCAN PERTURBATION CHECK FOR TASK 3
+--------------------------------------------------------------------------------
+
+    base commit 9b28021 : raw 200   comment-stripped 99
+    after task 1        : raw 200   comment-stripped 99
+    after task 2        : raw 200   comment-stripped 99
+    after task 3        : raw 200   comment-stripped 99
+
+NO MOVEMENT ACROSS THE WHOLE PLAN. Both pins and every downstream count are
+untouched. Where the new tail text had to name the D-04 block it names it as
+"the D-04 throwaway -l scan", which is not invocation-shaped and carries no
+whole-word token the scan keys on — 06-23's convention of pointing at the
+artifact rather than spelling the shape out in band.
+
+
+================================================================================
+4. CLOSING POSITION
+================================================================================
+
+WHAT THIS PLAN CLAIMS
+  * GC-17 closed at FOUR sites (the review's three plus the one found while
+    planning); the additive override contract intact at all four; a space-bearing
+    override drives its intended branch instead of erroring — driven live.
+  * GC-14 closed on SIX arms, not the two the plan named, because must-have truth
+    #3 is "every arm that can report it". No verdict changed on any of nine
+    driven arms.
+  * GC-09 closed: the tail names all 13 blocks that can reach it, rebuilt from an
+    enumeration and checked mechanically, and names the consumers block's
+    expected ⚠️ with E6 as its clearing condition.
+  * DEF-06-21-07 driven, and it PASSES.
+
+WHAT THIS PLAN DOES NOT CLAIM
+  * It does NOT discharge ROADMAP entry criterion E6 and it does NOT close
+    CONF-04. The tail now SAYS CONF-04 is open; saying so is not closing it.
+  * It does NOT touch scripts/phase06-oracle.sh. GC-15 lives there and belongs to
+    plan 06-27.
+  * It does NOT claim the estate is healthy. The live runs show the music freeze
+    harness ❌ on a pre-existing condition (§1.6b) that this plan did not cause
+    and deliberately did not fix.
+
+NOT DRIVEN
+  * The three `*_REPO_ROOT` knobs pointed at a value containing a QUOTE or a `$`
+    rather than a space. `printf '%q'` handles all three identically and the
+    space case is the one the finding is about; the quote/`$` cases were argued,
+    not measured.
+  * A value containing a NEWLINE, which is the only case that reaches bash
+    ANSI-C `$'…'` quoting and therefore the only case that exercises the stated
+    bash dependency. Argued from GC-11's reproduction in the sibling file, and
+    fail-closed either way.
+  * The consumers 124 and empty-output arms against the LIVE script. Their new
+    override notices were driven in the extracted-ladder harness (§2.3 (6)) but
+    not end to end, because producing a real bound expiry or a real empty answer
+    on a healthy estate needs either a wedged host or a contrived stub sleep.
+  * The D-03 and D-04 blocks actually PRINTING the tail's new text on a run where
+    only they are red. The tail is a single unconditional message, so its content
+    does not vary by which block failed; the coverage check in §3.3 is the proof
+    that applies.
+

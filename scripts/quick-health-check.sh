@@ -2878,13 +2878,46 @@ if [ "$EXIT_CODE" -ne 0 ]; then
     # Extended again 2026-09-18 (plan 05-02) when the library underscore-dir guard was added. Same
     # discipline, same commit, fourth statement of it. Note this one can fail on a host the rest of
     # the tail never mentions: atlantis, 172.16.1.158.
+    #
+    # Extended again 2026-09-22 (plan 06-26, GC-09) — AND THIS TIME AS A REPAIR, NOT AN ADDITION.
+    # THE DISCIPLINE THE FOUR PARAGRAPHS ABOVE STATE HAD ALREADY FAILED, THREE PLANS RUNNING:
+    #   * 06-16 gave the D-04 scan two new fatal conditions (K and L) and made the D-03 CLI
+    #     render's `exit 3` reachable;
+    #   * 06-17 added the consumers exit-3 arm;
+    #   * 06-23 added a third D-04 fatal condition (P, the vacuous asserted set);
+    # and the tail was not touched by any of them. Worse, THE D-03 AND D-04 BLOCKS WERE NEVER IN
+    # THE LIST AT ALL — that predates this phase, so the three plans above each widened a block
+    # the tail had never mentioned. Between them they hold 30 of the 98 executable `EXIT_CODE=1`
+    # sites in this file, second and third largest after the dashboard probe. Four in-band
+    # restatements of "update the tail in the SAME COMMIT" did not prevent it, WHICH IS EXACTLY
+    # WHY IT KEEPS BEING RESTATED: the rule is remembered when you are editing the tail and
+    # forgotten when you are editing a block, and it is only ever needed in the second case.
+    # So the list below is no longer maintained by recollection. It was REBUILT FROM A MECHANICAL
+    # ENUMERATION of every executable `EXIT_CODE=1` site attributed to its owning block, and that
+    # enumeration is recorded in
+    # .planning/phases/06-tagger-configuration-and-dry-run/artifacts/06-26-qhc-knobs-and-tail.txt.
+    # IF YOU ADD A BLOCK, RE-RUN THE ENUMERATION RATHER THAN EYEBALLING THIS LIST. A tail that is
+    # right about twelve blocks and silent about the thirteenth is the same defect as one that is
+    # right about none: it sends the reader to the green ones and costs them exactly the time this
+    # message exists to save.
+    # NOT ADDED HERE, deliberately: a new `EXIT-CODE BEHAVIOUR CHANGED` notice. This edit creates
+    # no new fatal condition — it only names conditions that already existed. 06-23 added the one
+    # new notice this round is entitled to (the thirteenth, for condition P).
     echo "❌ Health check FAILED. The failing block is whichever one above carries a ❌ or a ⚠️ —"
     echo "   that is any of: the Traefik or Authelia container probes, the Traefik dashboard"
     echo "   probe, the container counts, the music freeze harness, the consumers audit, the"
     echo "   library underscore-dir guard, the Jellyfin transcode retention audit, the"
-    echo "   vendored-file drift block, the extended.conf destructive-switch block, or the"
+    echo "   vendored-file drift block, the D-03 vendored-config mount block, the D-04"
+    echo "   throwaway -l scan, the extended.conf destructive-switch block, or the"
     echo "   container image-drift block."
     echo "   ⚠️ The image-drift block CANNOT fail on the drift count itself — if it is red, it is"
     echo "      a could-not-look or the unresolvable set moved. Do not go looking for a tag."
+    echo "   ⚠️ The consumers audit carries a ⚠️ BY DESIGN for as long as CONF-04 is open: its"
+    echo "      exit 3 means the D-22 artist rows were read successfully and are sitting at their"
+    echo "      RECORDED BASELINE. That is the state this project has written down, not a new"
+    echo "      fault — but it is also NOT a pass, and CONF-04 is NOT closed. It clears when"
+    echo "      ROADMAP entry criterion E6 discharges CONF-04's Jellyfin half, and on nothing"
+    echo "      else. Do not tune it out: the non-zero exit is what makes a later regression back"
+    echo "      to the baseline detectable by tooling instead of only by a human reading yellow."
     exit 1
 fi
