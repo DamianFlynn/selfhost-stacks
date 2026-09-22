@@ -1,7 +1,14 @@
-# Moving the agentic-os Postgres off the ext4 root
+# Adopting a dedicated ZFS dataset for the agentic-os Postgres
 
-**Status: STAGED, not executed.** The dataset exists and the Terraform block is committed.
-Nothing has moved. Run this in a maintenance window.
+**Status: OPTIONAL TIDY-UP. The urgent problem is already fixed.**
+
+On 2026-09-22 the data was moved off the ext4 root onto the **`automation`** dataset, with no
+reboot and no new mount point — see "What was already done". It now lives at
+`/mnt/fast/appdata/automation/agentic-os/postgres` on ZFS with 1.3 T free.
+
+What remains is cosmetic-plus: giving the database **its own** dataset, so it gets independent
+quota and snapshots instead of sharing `automation` with CouchDB and the memory stack. Worth
+doing at the next reboot you were having anyway. **Not worth a reboot of its own.**
 
 **What it costs:** a reboot of LXC 100, so **every container on that host stops** — Traefik,
 Authelia, Immich, the \*arrs, Ollama, ~97 of them. Budget for the reboot, not for the 754 MB copy.
@@ -11,25 +18,52 @@ the mount, and it would silently shrink another container's RAM.
 
 ---
 
-## Why
+## What was already done (2026-09-22) — the part that mattered
 
-`/mnt/fast/appdata/agentic-os/postgres` is on `/dev/mapper/pve-vm--100--disk--0` — the container's
-**ext4 root**, not ZFS. `agentic-os` predates the rule that every `appdata` path must be a named
-dataset, and nothing asserted it. `immich` already does this correctly with its own
-`immich/postgres` child dataset.
+`/mnt/fast/appdata/agentic-os/postgres` was on `/dev/mapper/pve-vm--100--disk--0`, the container's
+**ext4 root**, holding the live v1 memory store: **17,225 `memory_chunks` from 1,185 sources,
+754 MB**. `agentic-os` predated the rule that every `appdata` path must be a named dataset, and
+nothing asserted it.
 
-It holds **17,225 `memory_chunks` from 1,185 sources, 754 MB** — the live v1 memory store, which
-the neocortex memory API reads through a read-only bridge. Phase 4 will roughly double the
-footprint on that disk, which is why this wants doing first.
+Damian chose the interim fix over a reboot, and it is complete:
+
+- `pg_dump -Fc` taken first — 134 M, on the `automation` dataset.
+- Copied with `tar` (**there is no `rsync` on LXC 100**) to
+  `/mnt/fast/appdata/automation/agentic-os/postgres`. Verified before starting: **790,042,734
+  bytes and 1,890 files on both sides**, ownership preserved (`568:568` parent, `0:0` for `18/`),
+  destination confirmed `zfs` by `findmnt`.
+- `compose.yaml` repointed, database restarted **healthy**, and the counts re-read as
+  **17,225 / 1,185 / 139** — identical to the baseline — plus a real `source_path` read.
+- The old copy was moved to `/root/agentic-os-postgres-ext4-SUPERSEDED-20260922` and
+  `/mnt/fast/appdata/agentic-os` **no longer exists**, so nothing can silently start on the stale
+  directory if someone reverts the compose path later.
+
+**Still to reclaim:** that superseded copy is 754 MB, still on ext4, kept deliberately as a
+rollback. Delete it once you are happy:
+
+```sh
+ssh root@172.16.1.159 'rm -rf /root/agentic-os-postgres-ext4-SUPERSEDED-20260922; df -h /'
+```
+
+Root is at **66 % with 41 G free** (it was 80 % / 25 G before the image prune), so there is no
+pressure to hurry.
+
+## Why you might still want the dedicated dataset
+
+Sharing `automation` means the database has no quota or snapshot boundary of its own — it sits
+alongside CouchDB's data and the memory stack's `node_modules` and model cache. `immich` models
+the alternative with its own `immich/postgres` child dataset. This is a real but modest benefit.
 
 Full finding: `neocortex-platform` →
 `planning/neocortex-v2/findings/2026-09-22_the-v1-memory-store-is-on-lxc-100s-root-disk.md`
 
-## Already done (2026-09-22)
+## What is already staged for it
 
 - `zfs create fast/appdata/agentic-os` on **atlantis** (172.16.1.158), `chown 568:568`, `chmod 0755`.
-  Empty, lz4, no quota — matching `automation`, `immich` and `hoarder`.
+  Empty, lz4, no quota — matching `automation`, `immich` and `hoarder`. **Not mounted.**
 - A `mount_point` block is committed in `infra/lxc-selfhost.tf` — as **documentation**, see below.
+- Because the data already moved, **every step below starts from the `automation` path**, not
+  from ext4.
 
 ## Why this is a manual act, not `terraform apply`
 
@@ -51,11 +85,12 @@ drift separately, on purpose.
 
 ## The trap this runbook exists to avoid
 
-Mounting the **empty** dataset over the directory that currently holds the live data **hides** it
-rather than moving it — and it still occupies the 754 MB on ext4, invisibly. Postgres comes back
-to an empty data directory and initialises a new one.
+Mounting the **empty** dataset at `/mnt/fast/appdata/agentic-os` gives you a second, empty home
+while the real data sits at `/mnt/fast/appdata/automation/agentic-os/postgres`. If `compose.yaml`
+is repointed at the new path before the data is copied there, **Postgres initialises a fresh empty
+cluster** and the store looks wiped.
 
-**So the mount and the copy are one operation, and the copy goes first.**
+**So the copy happens first, and `compose.yaml` is repointed last** — step 7, not step 4.
 
 ---
 
@@ -94,15 +129,15 @@ Staging goes on `automation`, which is **already** a mounted dataset, so it surv
 
 ```sh
 docker stop agentic-os-db
-mkdir -p /mnt/fast/appdata/automation/_agentic-os-migration
-rsync -aHAX --numeric-ids --info=progress2 \
-  /mnt/fast/appdata/agentic-os/postgres/ \
-  /mnt/fast/appdata/automation/_agentic-os-migration/postgres/
-du -sh /mnt/fast/appdata/agentic-os/postgres \
+# NOTE: there is no rsync on LXC 100 — use tar.
+mkdir -p /mnt/fast/appdata/automation/_agentic-os-migration/postgres
+tar -C /mnt/fast/appdata/automation/agentic-os/postgres -cpf - . \
+  | tar -C /mnt/fast/appdata/automation/_agentic-os-migration/postgres -xpf -
+du -sb /mnt/fast/appdata/automation/agentic-os/postgres \
        /mnt/fast/appdata/automation/_agentic-os-migration/postgres   # must match
 ```
 
-`--numeric-ids` matters: run inside the container, uids are container-native, and the idmap
+`tar -p` preserves ownership: run inside the container, uids are container-native, and the idmap
 (`u 568 568 1`, container root → host 100000) is handled by Proxmox on the way out.
 
 ### 3. Move the original aside — do NOT delete it yet
@@ -111,11 +146,11 @@ Out of the mount path, so the new mount lands on a clean directory *and* the ori
 until the new copy is proven.
 
 ```sh
-mv /mnt/fast/appdata/agentic-os/postgres /root/agentic-os-postgres-ext4-preserve
-ls -ld /root/agentic-os-postgres-ext4-preserve
+mv /mnt/fast/appdata/automation/agentic-os/postgres /mnt/fast/appdata/automation/agentic-os/postgres-PREVIOUS
+ls -ld /mnt/fast/appdata/automation/agentic-os/postgres-PREVIOUS
 ```
 
-Still on ext4, still 754 MB. Step 7 reclaims it.
+Still on ZFS, so this costs no root-disk space. Step 7 removes it.
 
 ### 4. Add the mount and reboot — this is the outage
 
@@ -140,9 +175,9 @@ ssh root@172.16.1.159 'findmnt -T /mnt/fast/appdata/agentic-os -o TARGET,SOURCE,
 ### 5. Restore from staging
 
 ```sh
-rsync -aHAX --numeric-ids --info=progress2 \
-  /mnt/fast/appdata/automation/_agentic-os-migration/postgres/ \
-  /mnt/fast/appdata/agentic-os/postgres/
+mkdir -p /mnt/fast/appdata/agentic-os/postgres
+tar -C /mnt/fast/appdata/automation/_agentic-os-migration/postgres -cpf - . \
+  | tar -C /mnt/fast/appdata/agentic-os/postgres -xpf -
 ls -ldn /mnt/fast/appdata/agentic-os/postgres        # 568:568
 ls -ldn /mnt/fast/appdata/agentic-os/postgres/18     # 0:0 (container root)
 ```
@@ -163,10 +198,13 @@ curl -s https://cortex.deercrest.info/v1/health | jq '.legacy_bridge'
 
 ### 7. Reclaim the space — only once step 6 passed
 
+Remember to repoint `compose.yaml` back to `/mnt/fast/appdata/agentic-os/postgres` and commit it,
+**before** starting in step 6 — otherwise the container keeps using the `automation` copy and this
+whole exercise changes nothing.
+
 ```sh
-rm -rf /root/agentic-os-postgres-ext4-preserve
+rm -rf /mnt/fast/appdata/automation/agentic-os/postgres-PREVIOUS
 rm -rf /mnt/fast/appdata/automation/_agentic-os-migration
-df -h /       # ~754 MB lower
 ```
 
 ---
@@ -184,7 +222,8 @@ pct set 100 -delete mp32
 pct reboot 100
 
 # inside LXC 100, once it is back: the ext4 copy is visible again at its old path
-mv /root/agentic-os-postgres-ext4-preserve /mnt/fast/appdata/agentic-os/postgres
+mv /mnt/fast/appdata/automation/agentic-os/postgres-PREVIOUS /mnt/fast/appdata/automation/agentic-os/postgres
+# revert compose.yaml to the automation path
 cd /mnt/fast/stacks/stacks/selfhosted/agentic-os && docker compose up -d
 ```
 
