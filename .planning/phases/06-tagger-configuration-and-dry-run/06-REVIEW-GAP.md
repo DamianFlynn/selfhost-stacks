@@ -570,3 +570,74 @@ Recorded so a later reader does not re-spend the time:
 _Reviewed: 2026-09-22_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Scope: gap-closure only (`7d1092b..HEAD`); does not supersede `06-REVIEW.md`_
+
+---
+
+## Cross-family adjudication — 2026-09-22
+
+*Appended by the execute-phase orchestrator. **Nothing above this line was edited.** The operator
+asked for a reviewer from a different model family, on the grounds that an Anthropic model wrote
+both this code and the review above, and same-family reviewers share blind spots.*
+
+**Reviewer availability, measured:** `codex` and `gemini` and `opencode` are installed;
+`cursor-agent`, `qwen`, `coderabbit` are not, and the `gh copilot` extension is not installed.
+**`codex exec` failed: "You have no credits remaining"** (OpenAI API billing) — so the intended
+first-choice reviewer did not run. Adjudication below is **`gemini-3.1-pro-preview`**, a single
+non-Anthropic reviewer rather than two. Note its output file must be size-checked, not
+exit-code-checked: it exits 0 on an empty file.
+
+**Scope limit that is this orchestrator's fault, not the reviewer's:** the prompt carried only
+`git diff 7d1092b..HEAD -- scripts/`. `beets.md`, `beets.yaml` and full file bodies were absent,
+which is why five findings came back UNVERIFIABLE. Those five are *not* disputed — they were
+unreachable from the evidence supplied.
+
+### Verdicts on GC-01..GC-15
+
+| Verdict | Findings |
+|---|---|
+| CONFIRMED by the cross-family reviewer | GC-02, GC-05, GC-06, GC-07, GC-11, GC-12, GC-13, GC-14 |
+| CONFIRMED independently by the orchestrator, with a local reproduction | GC-01, GC-03 |
+| UNVERIFIABLE from the supplied diff (evidence not supplied — not disputed) | GC-04, GC-08, GC-09, GC-10, GC-15 |
+| FALSE | *none* |
+
+No finding was overturned. GC-15 was separately confirmed by the orchestrator while checking
+GC-17 (see below) — the three sites are real, at `quick-health-check.sh:1515`, `:1728`, `:2196`.
+
+### Two findings the first review missed
+
+**GC-16 — the D-04 variable-expansion branch does not anchor on shell separators or `docker`.**
+`scripts/quick-health-check.sh:1765`. The fourth branch of `D04_INV_RE` anchors only on content
+start (`^HEAD:…`) or immediately inside an opening quote (`"`). The three *literal* `beet`
+branches in the same regex also anchor on `[[:space:]](&&|;)[[:space:]]*` and on
+`docker[[:space:]][^`]*[[:space:]]`. So `&& $BEET_BIN config` or
+`docker exec -u beetle … $BEET_BIN config` is invocation-shaped and **invisible to the scan**.
+This is a latent blind spot in the very detector CR-01 was raised against, one branch across.
+
+*Orchestrator correction, recorded so the plan does not inherit a wrong premise:* the reviewer
+graded this **BLOCKER** and justified it by claiming the block comment promises separator
+anchoring. **That justification is FALSE** — the comment at `:1762-1764` says "content start, or
+immediately inside an opening quote", which is exactly what the code does. There is no
+documentation mismatch. The *substantive* gap is real and worth fixing, but it is a latent
+blind spot with no current instance in the tree (executable count 8, all found), so it is graded
+**WARNING**, not BLOCKER. Verified by reading the regex and the comment.
+
+**GC-17 — three overridable paths reach remote command strings unquoted.**
+`scripts/quick-health-check.sh:1515` (`cd $D03_REPO_ROOT`), `:1728` (`D04_CMD="cd $D04_REPO_ROOT`)
+and `:2196` (`bash $CONSUMERS_SCRIPT`). An override containing a space word-splits on the remote
+shell, so the branch the override exists to drive fails with a shell error instead of being
+driven. Severity **WARNING**: all three are additive knobs that cannot produce a green tick, and
+the default values contain no spaces. This is `phase06-oracle.sh`'s WR-08 defect, reproduced in
+the sibling file that WR-08's plan did not own.
+
+*Orchestrator correction:* the reviewer cited `:1515`, `:1720`, `:2193`. Two of those are an
+`echo` and an assignment — its line numbers drifted because it numbered the diff, not the file.
+Corrected citations above are grep-verified. The finding itself stands at all three sites.
+
+### Standing note for the next planner
+
+The cross-family reviewer's **claims were sound and its line numbers were not**. Both of its new
+findings needed citation repair before they could be used, and one carried a false justification
+attached to a true defect. Grep-verify every citation before planning against it — the same rule
+that four consecutive plans in this phase already had to learn about stale citations.
+
+_Adjudicated: 2026-09-22. Reviewer: `gemini-3.1-pro-preview`. Codex unavailable (no credits)._
