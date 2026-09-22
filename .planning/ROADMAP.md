@@ -911,7 +911,7 @@ the last cheap moment before a path-format error can be applied at scale.
      clause fired and the demonstration was relocated to a genuine one-key rank-0 flip on another
      drawn row (`Benson Boone / American Heart`: `['XW','US']` → XW, `['US','XW']` → US, both
      10 tracks, distance 0.0). `GB`-works-and-`UK`-is-silently-inert was proven separately.*
-**Plans**: 21 plans in 9 waves *(14 executed 2026-09-20/21; plans 06-15 … 06-21 added 2026-09-22 as GAP CLOSURE after `06-VERIFICATION.md` scored 5/6 — the D-04 "no bare `beet` invocation" assertion was vacuous (CR-01) — and to disposition all 24 findings in `06-REVIEW.md`, which the same verification marked NOT WIRED.)*
+**Plans**: 29 plans in 13 waves *(14 executed 2026-09-20/21; plans 06-15 … 06-21 added 2026-09-22 as GAP CLOSURE after `06-VERIFICATION.md` scored 5/6 — the D-04 "no bare `beet` invocation" assertion was vacuous (CR-01) — and to disposition all 24 findings in `06-REVIEW.md`, which the same verification marked NOT WIRED. Plans 06-22 … 06-29 added 2026-09-22 as **GAP CLOSURE ROUND 2**, planned against `06-REVIEW-GAP.md` — a code review of round 1's own changes that found 1 BLOCKER and 7 Warnings in the new code, plus two further findings from a cross-family adjudication. GC-03 is CR-01 reproduced one nesting level in, so the phase must not close on "CR-01 fixed" until round 2 lands.)*
 
 | Plan | Objective |
 |------|-----------|
@@ -936,6 +936,14 @@ the last cheap moment before a path-format error can be applied at scale.
 | 06-19 | The oracle's fail-closed assertions: no green tick over a could-not-look, an empty-manifest guard, and a DJ-stratum vacuity guard |
 | 06-20 | The incremental control aligned with its sibling: a loud `exit 3` on a usage error, an unpinned path count, and the stated RED-vs-UNKNOWN convention |
 | 06-21 | The 24-finding disposition register, `06-REVIEW.md` wired, and CR-01's residue plus WR-09 carried into Phase 7's entry criteria |
+| 06-22 | GC-01, the round-2 BLOCKER: the forbidden-substring scan's `printf \| grep -q` pipeline removed, a >64 KiB self-test case added to catch its return, and case 6's two outcomes counted independently (GC-13) |
+| 06-23 | GC-03 — CR-01 one nesting level in: a guard refusing a vacuous ASSERTED set, a green condition that cannot contradict its own count, and the D-04 regex branch given its siblings' anchors (GC-16) |
+| 06-24 | The oracle's receiving-side fences made the same predicate as the sending-side ones (GC-02), and the three `printf \| grep -q` pipelines removed including the inverted one (GC-06) |
+| 06-25 | The incremental control's fixed container temp names minted per run, fail-closed, and the IN-06 threat-model question answered once for both siblings (GC-08) |
+| 06-26 | Four overridable paths quoted before they reach a remote command string (GC-17), the `CONSUMERS_SCRIPT` override made visible on every arm (GC-14), and the failing-block tail completed (GC-09) |
+| 06-27 | The oracle's vacuity verdicts made symmetric (GC-05), the last two path interpolations quoted (GC-15), the self-test banner made honest (GC-12), and two overstated comments corrected (GC-07, GC-11) |
+| 06-28 | Every stale cross-file citation replaced by a proven anchor (GC-04) and `beets.md`'s counts table re-measured (GC-10) — run last, after the line numbers stop moving |
+| 06-29 | The 17-row round-2 disposition register, `06-REVIEW-GAP.md` wired to it, `DEF-06-29-*` entries, and the roadmap and state files told the truth |
 
 Plans:
 **Wave 1**
@@ -989,6 +997,32 @@ and printed a green tick — with a real violation of that same rule sitting unc
 **Wave 9 — GAP CLOSURE** *(blocked on Waves 6–8 completion)*
 
 - [x] 06-21-PLAN.md — the 24-row disposition register, `06-REVIEW.md` wired to it, `DEF-06-21-*` entries, and two new Phase 7 entry criteria carrying CR-01's residue and WR-09
+
+**Wave 10 — GAP CLOSURE — ROUND 2** *(added 2026-09-22; planned against `06-REVIEW-GAP.md`, a code
+review of round 1's own gap-closure changes. These four plans own four different files and run in
+parallel. GC-01 and GC-03 are sequenced here deliberately: GC-01 is a live latent BLOCKER in the
+script that gates config correctness, and GC-03 means the phase's headline "CR-01 closed" is not
+yet true.)*
+
+- [ ] 06-22-PLAN.md — remove the `printf | grep -q` pipeline from both forbidden-substring tests, add the >64 KiB self-test case that would have caught it, and count case 6's two outcomes independently; closes GC-01 and GC-13
+- [ ] 06-23-PLAN.md — refuse a vacuous ASSERTED set in the D-04 ladder, require a non-zero asserted count in the green condition, and give the BEET-variable regex branch its siblings' anchors; closes GC-03 and GC-16
+- [ ] 06-24-PLAN.md — make the oracle's three receiving-side fences the sending side's predicate and remove the three self-test pipelines including the inverted assertion; closes GC-02 and GC-06
+- [ ] 06-25-PLAN.md — mint the incremental control's container temp names per run with a fail-closed branch, and answer the IN-06 threat-model question once for both siblings; closes GC-08
+
+**Wave 11 — GAP CLOSURE — ROUND 2** *(blocked on Wave 10 — 06-26 shares `quick-health-check.sh`
+with 06-23, and 06-27 shares `phase06-oracle.sh` with 06-24 and inherits 06-25's decision)*
+
+- [ ] 06-26-PLAN.md — quote all four overridable paths that reach a remote command string, make the `CONSUMERS_SCRIPT` override visible on every arm, and complete the failing-block tail; closes GC-17, GC-14 and GC-09
+- [ ] 06-27-PLAN.md — make the oracle's vacuity verdicts symmetric, quote the last two path interpolations, make the self-test banner name its counter, and correct two overstated comments; closes GC-05, GC-15, GC-12, GC-07 and GC-11
+
+**Wave 12 — GAP CLOSURE — ROUND 2** *(blocked on Waves 10-11 — a citation repaired before its
+target stops moving is a citation that is stale again by the time the round closes)*
+
+- [ ] 06-28-PLAN.md — replace every stale cross-file citation with a proven anchor and re-measure `beets.md`'s counts table; closes GC-04 and GC-10
+
+**Wave 13 — GAP CLOSURE — ROUND 2** *(blocked on Waves 10-12)*
+
+- [ ] 06-29-PLAN.md — the 17-row round-2 disposition register, `06-REVIEW-GAP.md` wired to it, `DEF-06-29-*` entries, and the roadmap and state files told the truth
 
 **Phase 6 disposition:** **CLOSED WITH ONE OPEN REQUIREMENT — CONF-04**, named, on its Jellyfin half
 only. Criteria 1, 2, 3 and 5 are TRUE and were re-measured from live state at close. Criterion 4
