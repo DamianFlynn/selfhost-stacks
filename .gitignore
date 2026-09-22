@@ -8,7 +8,19 @@
 backups/
 temp.md
 # Local .env backups (contain secrets - DO NOT COMMIT)
+#
+# `*.env.backup` alone was too narrow: it did not match `.env.pre-pocket`, found
+# untracked on the host holding MEILI_MASTER_KEY, NEXTAUTH_SECRET and OPENAI_API_KEY.
+# This repo is PUBLIC and a gateway password once sat in it for six months, so the
+# rule is now "ignore every .env.<suffix>" with the shareable ones allowed back in.
 *.env.backup
+**/.env.*
+!**/.env.sample
+!**/.env.example
+
+# Claude Code working state -- settings plus GSD agent worktrees, which are
+# full duplicate checkouts of this repo (461 files when this was added).
+.claude/
 
 # ===================================================================
 # Oracle Platform Archive — Migrated to agent-os vault (2026-06-09)
