@@ -2236,16 +2236,35 @@ is non-discriminating, so these are the BLOCK verdicts**:
 > footgun the pin exists to catch, and the two historic quotations above are kept verbatim only
 > because they are the Nov-2025 record, not because quoting is free.)*
 >
-> **Measured counts on this plan's tree** (hand-reproduced from the host and compared against the
-> block's own printed figures — agreement at every position, both trees):
+> **Measured counts.** Re-measured 2026-09-22 by plan 06-28 (**GC-10**) at commit `ab5ff32`, on
+> this repository's tree, by reproducing the D-04 block's own pipeline with `D04_INV_RE` and
+> `D04_EXEMPT_RE` **extracted from `scripts/quick-health-check.sh` rather than retyped** — plan
+> 06-23 widened `D04_INV_RE` in the same round, so any transcribed copy is already old. Commands
+> and full transcript in `artifacts/06-28-citations-and-counts.txt`.
 >
-> | count | value |
-> |---|---|
-> | raw | 191 |
-> | comment-stripped | 90 |
-> | invocation-shaped | 10 |
-> | **executable** | **8** = asserted **3** + exempt **5** |
-> | documentation | 2 (at the pinned `D04_DOC_BASELINE`) |
+> | count | value | pinned by |
+> |---|---|---|
+> | invocation-shaped | 10 | — (the input to the two pins) |
+> | **executable** | **8** = asserted **3** + exempt **5** | — |
+> | exempt | 5 | `D04_EXEMPT_BASELINE` |
+> | documentation | 2 | `D04_DOC_BASELINE` |
+>
+> **The `raw` and `comment-stripped` counts are deliberately NOT recorded here.** Neither is
+> pinned and nothing asserts on either: they count every `beet`/`BEET*` mention across `scripts`
+> and `stacks`, so they move with **every commit to either tree — including the commit that writes
+> them down**, and this page is itself inside the scan scope. That is not hypothetical. This table
+> previously carried two such figures together with the claim that they had been *"compared against
+> the block's own printed figures — agreement at every position"*; that claim asserted a
+> verification its own presence invalidated, because the surrounding note quotes `D04_INV_RE` and
+> `BEET[A-Z_]*` and so adds matching lines to the very counts it claimed agreement on. Both figures
+> were false within a day of being written, and were still wrong by nine and nine when GC-10 found
+> them. The four rows above are pinned or derived from pinned ones and do not move when prose is
+> added anywhere in the repo.
+>
+> *(Where a self-referential count genuinely must be stated, this repo's convention is to state it
+> as a **transition measured before and after** the edit that changes it — as the eleventh and
+> twelfth `EXIT-CODE BEHAVIOUR CHANGED` notices in `quick-health-check.sh` do with `headers 10 -> 11`.
+> That convention existed when this table was written and was not applied to it.)*
 >
 > **THE EXEMPTION REGISTER — `D04_EXEMPT_RE` and `D04_EXEMPT_BASELINE` (pinned at 5).** Five
 > invocation-shaped executable lines are **named, counted and pinned** rather than asserted. The
