@@ -28,8 +28,8 @@ pipeline that someone owns.
 
 ## Current Position
 
-Phase: 06 (tagger-configuration-and-dry-run) — gap-closure round 2 EXECUTED; **RE-VERIFICATION
-OUTSTANDING**
+Phase: 06 (tagger-configuration-and-dry-run) — gap-closure round 2 EXECUTED; **ROUND 3 PLANNING**
+(re-verification deliberately NOT run — see the round-3 review block at the end of this section)
 Plan: 29 of 29 executed. Round 1 (06-15..06-21, waves 6-9, 2026-09-22) closed CR-01 and
 dispositioned all 24 findings of `06-REVIEW.md`; re-verification is **6/6, status passed**
 (`06-VERIFICATION.md`, gaps_remaining: [], regressions: []).
@@ -142,6 +142,37 @@ it now matches a real song the split moved into `Vol 066`; assert the named path
 `dropbox/` inside nine `rw` binds. **The fence `tank/downloads@pre-phase5` MUST NOT be destroyed
 before Phase 6 signs off** — it is the only undo for 4,750 renames, 751 tag writes and 26,005
 chowns, and it is **not** a clean undo.
+
+**ROUND 3 REVIEW IS IN, AND THE PHASE WAS DELIBERATELY NOT VERIFIED ON IT — 2026-09-22.**
+`06-REVIEW-GAP2.md` (commit `766b2d0`, findings `R3-01..R3-10`) reviewed round 2's OWN changes to
+the four scripts: **0 Critical, 5 Warning, 5 Info, status `issues_found`**. No reproducible false
+green was found, and round 2's substantive fixes were confirmed correct (GC-01 here-strings,
+GC-13 counter split, GC-02 fence narrowing, GC-03 condition P), with a *Verified-and-clean*
+section recording nine adversarial checks that passed so round 4 cannot re-litigate them.
+**The pattern it did find: round 2 closed several defect classes PARTIALLY and then wrote in-band
+comments claiming they were closed COMPLETELY** — the same drift the round existed to remove.
+Three confirmed independently by the orchestrator:
+- **R3-01** `quick-health-check.sh` — the new GC-17 comment at `:1426` asserts "There are FOUR
+  such sites in this file"; more survive, and `:2118`
+  (`docker exec sabnzbd sh -c 'cat \"$EXTCONF_PATH\"'`) is the hand-escaped-quote construction the
+  SAME comment forbids sixty lines earlier. That site reads the `requireBeetsMatch` guard — the one
+  value standing between `audio.bash` and `rm -rf "$1"/*`. Warning, not Critical: operator-set knob,
+  safe default, injection consequence is static reasoning.
+- **R3-02** `phase06-oracle.sh` — `ST_RUN` is never compared against an expected constant, so the
+  self-test banner goes green over an unenumerated set. `check-beets-config.sh` added exactly this
+  guard (`ST_PLANNED_CASES`, gated at `:788`) in the SAME round; the oracle — the file whose harness
+  certifies the `rm -rf`/`rm -f` receiving-side fences — did not get it. Strongest candidate for
+  promotion to Critical.
+- **R3-05** `quick-health-check.sh` — `grep -c 'EXIT-CODE BEHAVIOUR CHANGED'` returns **17** against
+  **13** notice headers; plan 06-26's GC-09 tail repair added a raw match, so the file's own drift
+  detector now carries a false baseline.
+R3-03 and R3-04 are the mirrors of corrections made in the same round (GC-15 fixed the sending side
+only — the local `awk '$2 == p'` consumer still cannot key a whitespace path; and the layer-3 AFTER
+block asserts a measured RED over a could-not-look, the inverse of GC-05).
+**Verification was NOT run on purpose.** Round 2 exists because round 1 was verified 6/6 *before
+anyone read its own diff* and still carried a BLOCKER; verifying now, with five confirmed Warnings
+in the file, would repeat that mistake one level deeper. Operator chose **gap-closure round 3**
+(2026-09-22). Plan it against `06-REVIEW-GAP2.md`.
 
 Status: Phase 06 gap-closure round 1 executed and verified 6/6 (2026-09-22); round 2 **EXECUTED**
 against `06-REVIEW-GAP.md` (GC-01 blocker + 7 warnings in round 1's own code, plus GC-16/GC-17
