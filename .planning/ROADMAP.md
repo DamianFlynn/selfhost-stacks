@@ -973,9 +973,9 @@ invocation this phase's own scripts make is built from a variable, so it asserte
 and printed a green tick — with a real violation of that same rule sitting uncaught in
 `check-beets-config.sh`. These three plans own different files and run in parallel.)*
 
-- [ ] 06-15-PLAN.md — add a throwaway `-l` to the three `check-beets-config.sh` invocations, truncate-and-assert the no-op overlay, and close WR-04/WR-05/IN-01/IN-03/IN-04/IN-07
-- [ ] 06-18-PLAN.md — fence `SCRATCH` and `STAMP_REMOTE` to literal allow-lists at both layers, pass remote paths as positional parameters, and close WR-07/WR-08/IN-06/IN-11
-- [ ] 06-20-PLAN.md — a loud `exit 3` on a usage error, a path count that is not pinned to 1, and the RED-vs-UNKNOWN convention stated; closes IN-02/IN-05/IN-10 and IN-08's incremental half
+- [x] 06-15-PLAN.md — add a throwaway `-l` to the three `check-beets-config.sh` invocations, truncate-and-assert the no-op overlay, and close WR-04/WR-05/IN-01/IN-03/IN-04/IN-07
+- [x] 06-18-PLAN.md — fence `SCRATCH` and `STAMP_REMOTE` to literal allow-lists at both layers, pass remote paths as positional parameters, and close WR-07/WR-08/IN-06/IN-11
+- [x] 06-20-PLAN.md — a loud `exit 3` on a usage error, a path count that is not pinned to 1, and the RED-vs-UNKNOWN convention stated; closes IN-02/IN-05/IN-10 and IN-08's incremental half
 
 **Wave 7 — GAP CLOSURE** *(blocked on Wave 6 completion)*
 
@@ -1235,7 +1235,7 @@ Phase 7. Plans within a phase run sequentially.
 | 3. Tagger Spike | 11/11 | Complete    | 2026-09-04 |
 | 4. Collapse to One Tagger | 16/16 | In Progress| All 16 plans executed (gap-closure 04-14/15/16 included); phase-level verification pending. Criterion 3 remains OPEN: across windows 1 and 2, five real music jobs all returned UNPROVEN `no-attributed-pre` — no PRE-HOOK snapshot is publishable while `direct_unpack` drains the tree — while every side-effect condition held for the third window running. 04-16 recorded `window 2: OPEN` under an interim-status heading in `beets.md`. Closing criterion 3 is now a decision, not a measurement |
 | 5. Inbox Structure and the Junk Gate | 11/11 | Complete    | 2026-09-19 |
-| 6. Tagger Configuration and Dry Run | 14/14 | Closed — 1 open requirement | 2026-09-21. **Deliberately not marked Complete: CONF-04 is OPEN on its Jellyfin half** and is a named Phase 7 entry criterion (E6). Criteria 1, 2, 3 and 5 are TRUE and were all re-measured from live state at close, not carried forward from plan summaries. Criterion 4 carries two verdicts — Music Assistant discharged, Jellyfin pending a re-probe — which are recorded separately and **must never be summed**. `tank/downloads@pre-phase5` is NOT released (D-32, Phase 7 entry criterion E4). Closure: `stacks/selfhosted/arrs/beets.md` § *Phase 6 closed 2026-09-21* |
+| 6. Tagger Configuration and Dry Run | 17/21 | In Progress| Original 14/14 closed 2026-09-21 with **1 open requirement: CONF-04 is OPEN on its Jellyfin half**, a named Phase 7 entry criterion (E6). Criteria 1, 2, 3 and 5 are TRUE and were all re-measured from live state at close, not carried forward from plan summaries. Criterion 4 carries two verdicts — Music Assistant discharged, Jellyfin pending a re-probe — which are recorded separately and **must never be summed**. `tank/downloads@pre-phase5` is NOT released (D-32, Phase 7 entry criterion E4). Closure: `stacks/selfhosted/arrs/beets.md` § *Phase 6 closed 2026-09-21*. **Gap closure 06-15..06-21 in flight since 2026-09-22** for verification gap CR-01; wave 6 (06-15/06-18/06-20) merged |
 | 7. Pilot — 12 Albums End to End | 0/TBD | Not started | - |
 | 8. Close the Inflow | 0/TBD | Not started | - |
 | 9. Bucket A in Batches | 0/TBD | Not started | - |
