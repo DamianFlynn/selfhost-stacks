@@ -191,6 +191,12 @@ ARM2_BLIND=1
 ARM1_JSON=""
 ARM2_JSON=""
 ARM1_FAILS=0
+# GC-13: the two halves of the D-04 source contract, reported separately so that a real violation
+# and a blind checker cannot sum to the expected total and cancel into a pass. -1 is an UNKNOWN
+# sentinel in the S3(a) style: neither value satisfies its own gate, so a case-6 gate reached
+# without assert_beet_invocation_contract having run FAILS rather than passing on a zero.
+ARM1_REAL_VIOLATIONS=-1
+ARM1_SYNTH_REJECTED=-1
 TOOLS_MISSING=0
 LIB_HASH_BEFORE="UNKNOWN"
 LIB_HASH_AFTER="UNKNOWN"
@@ -404,13 +410,23 @@ beet_invocation_violations() {  # stdin: shell source -> stdout: one line per no
   done
 }
 
+# GC-13: this function reports THREE outcomes but used to report them through ONE counter. Two of
+# them increment ARM1_FAILS (a real source violation, and the correctly-rejected synthetic) and
+# the third — the synthetic NOT rejected, i.e. the checker is blind — increments nothing. Summed,
+# "one real violation" + "a blind checker" equals the expected total of 1. The two are therefore
+# ALSO reported separately below, and case 6 gates on both independently. ARM1_FAILS keeps exactly
+# the value it always had, because the live arm-1 summary line is a second consumer of it.
 assert_beet_invocation_contract() {
   local d='$' real synth synth_bad n
   ARM1_FAILS=0
+  # Re-initialised per call, so a second call cannot inherit the first call's state.
+  ARM1_REAL_VIOLATIONS=0
+  ARM1_SYNTH_REJECTED=0
 
   real="$(beet_invocation_violations <"${BASH_SOURCE[0]}")"
   if [[ -n "$real" ]]; then
     n="$(printf '%s\n' "$real" | wc -l | tr -d ' ')"
+    ARM1_REAL_VIOLATIONS="$n"
     cfg_fail "D-04 contract: $n beet invocation(s) in this script's own source do NOT carry both -l and -c — $(printf '%s' "$real" | tr -s ' ')"
   else
     cfg_pass "D-04 contract: every beet invocation in this script's own source carries -l ${d}{THROWAWAY_DB} AND -c ${d}{OVERLAY}"
@@ -422,6 +438,7 @@ assert_beet_invocation_contract() {
   synth_bad="    beet_exec \"${d}{BEET_BIN} -c ${d}{OVERLAY} config -d\""
   synth="$(printf '%s\n' "$synth_bad" | beet_invocation_violations)"
   if [[ -n "$synth" ]]; then
+    ARM1_SYNTH_REJECTED=1
     cfg_fail "D-04 contract, driven: the synthetic -c-only invocation was REJECTED, as it must be — $(printf '%s' "$synth" | tr -s ' ')"
   else
     echo -e "    ${RED}· D-04 contract: the synthetic -c-only invocation was NOT rejected — the checker is BLIND${NC}"
@@ -708,17 +725,30 @@ run_self_test() {
   # 6. NOT a dump case. The five above drive a pure function over synthetic TEXT and therefore
   #    cannot see an invocation flag; this one reads this script's own SOURCE and requires the
   #    D-04 `-l` + `-c` contract of every `beet` call in it. Its red is a driven negative: a
-  #    synthetic -c-only line that the checker must reject. Strip `-l` from the three real
-  #    invocations and this case goes to 2 red and --self-test exits non-zero.
+  #    synthetic -c-only line that the checker must reject. Strip `-l` from any of the three real
+  #    invocations and ARM1_REAL_VIOLATIONS goes non-zero; make the synthetic compliant and
+  #    ARM1_SYNTH_REJECTED goes to 0. Either alone, or both together, fails this case and takes
+  #    --self-test non-zero — "both together" being the GC-13 cancellation the old gate passed.
   case_name="the -l + -c contract over this script's own source"; expect_reds=1
   echo -e "  ${BLUE}case: $case_name  (expect $expect_reds red)${NC}"
   assert_beet_invocation_contract
   st_cases=$((st_cases + 1))
   st_red_cases=$((st_red_cases + 1))
-  if [[ $ARM1_FAILS -eq $expect_reds ]]; then
+  # GC-13. This gate used to compare ARM1_FAILS against the single expected total 1, and
+  # assert_beet_invocation_contract funnels two DISTINCT outcomes into that one counter — so
+  # "one real violation in this file's source" plus "the checker is blind" summed to 1 and the
+  # case reported `1 red, as expected`. Two faults cancelled into a pass. The two are now gated
+  # independently, and a failure names WHICH half is wrong: "1 red, expected 1" is exactly what
+  # made the defect invisible.
+  if [[ $ARM1_REAL_VIOLATIONS -eq 0 && $ARM1_SYNTH_REJECTED -eq 1 ]]; then
     echo -e "  ${GREEN}✅ case '$case_name': $ARM1_FAILS red, as expected${NC}"
   else
-    echo -e "  ${RED}❌ case '$case_name': $ARM1_FAILS red, expected $expect_reds${NC}"
+    if [[ $ARM1_REAL_VIOLATIONS -ne 0 ]]; then
+      echo -e "  ${RED}❌ case '$case_name': real D-04 violations in this script's own source = $ARM1_REAL_VIOLATIONS, want 0${NC}"
+    fi
+    if [[ $ARM1_SYNTH_REJECTED -ne 1 ]]; then
+      echo -e "  ${RED}❌ case '$case_name': synthetic-negative rejected = $ARM1_SYNTH_REJECTED, want 1 — the checker did NOT reject a line it must reject, so it has not been shown to detect anything${NC}"
+    fi
     st_failures=$((st_failures + 1))
   fi
   echo ""

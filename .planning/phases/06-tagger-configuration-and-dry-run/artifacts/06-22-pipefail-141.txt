@@ -148,7 +148,95 @@ The mutant copy was deleted after the run. `git diff --name-only -- scripts/` li
 PART 3 — GC-13: case 6's two outcomes, counted independently
 ================================================================================================
 
-(appended by task 2 — see below)
+`assert_beet_invocation_contract` reports THREE outcomes through ONE counter:
+
+    real source violation                  -> cfg_fail -> ARM1_FAILS++
+    synthetic negative CORRECTLY rejected   -> cfg_fail -> ARM1_FAILS++
+    synthetic negative NOT rejected (BLIND) -> bare echo -> no increment
+
+Case 6 compared that sum against the single expected total `1`. So "one real violation" plus
+"the checker is blind" summed to 1 and the case reported `1 red, as expected`. Two faults
+cancelled into a pass.
+
+The fix counts them separately — ARM1_REAL_VIOLATIONS and ARM1_SYNTH_REJECTED, both re-initialised
+per call, both carrying an UNKNOWN sentinel of -1 at script level so a gate reached without the
+function having run FAILS rather than passing on a zero — and case 6 requires
+`ARM1_REAL_VIOLATIONS == 0 AND ARM1_SYNTH_REJECTED == 1`. `run_case`'s identical-looking
+`ARM1_FAILS -eq $expect_reds` comparison is deliberately LEFT ALONE: every red it counts comes
+from the same pure function over one synthetic dump, so there the total is the whole outcome.
+ARM1_FAILS keeps exactly the value it always had, because the live arm-1 summary line
+(`arm-1 assertion failures:`) is a second consumer of it.
+
+------------------------------------------------------------------------------------------------
+PART 3a — DRIVE. Four mutant copies in a scratch directory; nothing under the repo touched.
+------------------------------------------------------------------------------------------------
+
+Fault A ("real violation"):  strip `-l ${THROWAWAY_DB}` from exactly ONE of the three real
+                             `beet_exec` invocations.
+Fault B ("blind checker"):   add `-l ${d}{THROWAWAY_DB}` to `synth_bad`, making the synthetic
+                             negative COMPLIANT so the checker has nothing to reject.
+
+    ============================================================================================
+    M1-both-NEWgate  (MUST FAIL — the GC-13 cancellation)
+      faults: real-violation=True  synthetic-made-compliant=True   gate=NEW (independent)
+    --------------------------------------------------------------------------------------------
+        · D-04 contract: 1 beet invocation(s) in this script's own source do NOT carry both -l and -c —  beet_exec "${BEET_BIN} -c ${OVERLAY} config -d"
+        · D-04 contract: the synthetic -c-only invocation was NOT rejected — the checker is BLIND
+        ❌ case 'the -l + -c contract over this script's own source': real D-04 violations in this script's own source = 1, want 0
+        ❌ case 'the -l + -c contract over this script's own source': synthetic-negative rejected = 0, want 1 — the checker did NOT reject a line it must reject, so it has not been shown to detect anything
+        ❌ --self-test: 1 of 7 cases did not behave as expected
+        RC=1
+
+    ============================================================================================
+    M0-both-OLDgate  (passes — THE DEFECT, REPRODUCED)
+      faults: real-violation=True  synthetic-made-compliant=True   gate=OLD (sum)
+    --------------------------------------------------------------------------------------------
+        · D-04 contract: 1 beet invocation(s) in this script's own source do NOT carry both -l and -c —  beet_exec "${BEET_BIN} -c ${OVERLAY} config -d"
+        · D-04 contract: the synthetic -c-only invocation was NOT rejected — the checker is BLIND
+        [OLD GATE] case 'the -l + -c contract over this script's own source': 1 red, as expected
+        ✅ --self-test: all 7 cases behaved as expected (6 of them red)
+        RC=0
+
+      ^ Two things are wrong ON THE SAME RUN — a live D-04 violation in the file's own source AND
+        a checker that rejects nothing — and the old gate ticks GREEN and the self-test exits 0.
+        That is GC-13, driven rather than argued.
+
+    ============================================================================================
+    M2-realonly  (MUST FAIL — single fault, real violation)
+      faults: real-violation=True  synthetic-made-compliant=False   gate=NEW (independent)
+    --------------------------------------------------------------------------------------------
+        · D-04 contract: 1 beet invocation(s) in this script's own source do NOT carry both -l and -c —  beet_exec "${BEET_BIN} -c ${OVERLAY} config -d"
+        · D-04 contract, driven: the synthetic -c-only invocation was REJECTED, as it must be
+        ❌ case 'the -l + -c contract over this script's own source': real D-04 violations in this script's own source = 1, want 0
+        ❌ --self-test: 1 of 7 cases did not behave as expected
+        RC=1
+
+    ============================================================================================
+    M3-blindonly  (MUST FAIL — single fault, blind checker)
+      faults: real-violation=False  synthetic-made-compliant=True   gate=NEW (independent)
+    --------------------------------------------------------------------------------------------
+        · D-04 contract: every beet invocation in this script's own source carries -l ${THROWAWAY_DB} AND -c ${OVERLAY}
+        · D-04 contract: the synthetic -c-only invocation was NOT rejected — the checker is BLIND
+        ❌ case 'the -l + -c contract over this script's own source': synthetic-negative rejected = 0, want 1 — the checker did NOT reject a line it must reject, so it has not been shown to detect anything
+        ❌ --self-test: 1 of 7 cases did not behave as expected
+        RC=1
+
+M2 and M3 are recorded because a gate proven only against the COMBINED fault has not been shown
+to still catch the two single faults it already caught. It does, and it names which half is wrong
+in each — which "1 red, expected 1" never did.
+
+------------------------------------------------------------------------------------------------
+PART 3b — the unmutated tracked file
+------------------------------------------------------------------------------------------------
+
+    case: the -l + -c contract over this script's own source  (expect 1 red)
+    ✅ case 'the -l + -c contract over this script's own source': 1 red, as expected
+    ✅ --self-test: all 7 cases behaved as expected (6 of them red)
+    RC=0
+
+The transcript line for the passing case is byte-identical to the one it produced before this
+change, so every phase artifact quoting it stays valid. All four mutant copies were deleted after
+the run.
 
 ================================================================================================
 PART 4 — repo-wide inventory of the `… | grep -q` shape in `pipefail`-setting scripts
