@@ -482,6 +482,51 @@
 #          tree. Pointing them at a scratch checkout is how plan 06-10 drove those branches to red
 #          and back to green without touching the estate. Neither can produce a pass.
 #
+# ⚠️  EXIT-CODE BEHAVIOUR CHANGED AGAIN — THE D-04 BLOCK GAINED TWO NEW FATAL CONDITIONS AND A
+#     CORRECTED DIAGNOSIS, 2026-09-22 (plan 06-16, phase 6 CR-01 / WR-10 / IN-13).
+#
+#     THIS IS THE ELEVENTH SUCH NOTICE. Counts measured before and after this edit, not assumed —
+#     using the two greps the eighth notice quotes (this notice does NOT write the shared phrase
+#     out a second time in its own body, so it adds exactly one match to each):
+#         headers   10 -> 11
+#         raw       13 -> 14
+#     The raw count therefore still runs THREE ahead of the header count, unchanged by this edit.
+#
+#     BLOCK ordinal does NOT move: nine blocks remain. This notice adds no block. It exists
+#     because the D-04 block AS SHIPPED ON 2026-09-21 ASSERTED OVER AN EMPTY SET — measured on the
+#     host's HEAD as raw 91, comment-stripped 35, invocation-shaped outside `*.md` ZERO — so the
+#     green tick it printed for the whole of Phase 6 meant nothing. That is recorded here rather
+#     than quietly corrected, because "the check was green" is the sentence this repo has to be
+#     able to trust, and the previous ten notices are the only reason anyone would look.
+#
+#     WHAT NOW EXITS THIS SCRIPT 1 THAT DID NOT BEFORE:
+#       K. A VACUOUS D-04 SCAN. If the invocation pattern matches NO executable line, that is now
+#          UNKNOWN and fatal. Every `beet` call this repo makes from a script is built from a
+#          variable, so a zero executable count means the pattern cannot SEE the invocations — it
+#          does NOT mean there are none. The two sibling guards one screen above already refuse
+#          exactly this reasoning for the raw count and the comment-stripped count; this is the
+#          third, and it is the one that was missing when the defect landed.
+#       L. THE EXEMPT INVOCATION COUNT LEAVING ITS PIN. Five invocation-shaped executable lines
+#          are NAMED exemptions (three in phase06-oracle.sh, two in phase06-incremental-control.sh)
+#          rather than assertions, for the three reasons set out in full in the D-04 block comment.
+#          The count is pinned by D04_EXEMPT_BASELINE and a move is a red that prints every exempt
+#          line, so a new non-compliant invocation cannot join that set in silence. The green line
+#          also NAMES the exempt count, so a green D-04 always states how many lines it did not
+#          assert over.
+#          ⚠️ D04_EXEMPT_BASELINE CARRIES THE SAME ADDITIVE CONTRACT AS EVERY OTHER KNOB IN THIS
+#          FILE: any non-default value prints a warning and forces EXIT_CODE=1, so setting the pin
+#          to whatever the tree currently holds CANNOT produce a pass. There is still no
+#          success-producing override anywhere in this file; do not add one.
+#
+#     WHAT CHANGED MEANING WITHOUT CHANGING THE VERDICT (WR-10 and IN-13, both diagnosis bugs):
+#       * The D-04 remote program now tests for status 124 BEFORE collapsing everything above 1
+#         into exit 4. `timeout` reports a kill as 124 and 124 > 1, so a wedged host was reported
+#         as "'git grep' failed" and the block's own dedicated 124 branch was unreachable. The
+#         verdict was right and the operator was sent to the wrong place.
+#       * The D-03 CLI-render `cd` is now D03_REPO_ROOT rather than a hard-coded path, for the
+#         same single reason DRIFT_REPO_ROOT and D04_REPO_ROOT exist: its `exit 3` branch could
+#         not be driven, and an undriveable branch is an unproven branch. Same additive contract.
+#
 # ⚠️  KNOWN LIMIT, AND IT APPLIES TO THIS WHOLE FILE: THIS SCRIPT IS MANUAL. IT ONLY EVER FIRES
 #     WHEN SOMEBODY TYPES IT (D-22, phase 02.1).
 #     There is no cron entry, no systemd timer and no notification path. Nothing here will tell
@@ -679,6 +724,15 @@ D04_DOC_BASELINE="${D04_DOC_BASELINE:-2}"
 # host's HEAD, so without it the violation branch cannot be driven without committing a deliberate
 # footgun to the deployed checkout. Any non-default value forces EXIT_CODE=1.
 D04_REPO_ROOT="${D04_REPO_ROOT:-/mnt/fast/stacks}"
+# D04_EXEMPT_BASELINE is the PINNED count of invocation-shaped executable lines that are NAMED
+# exemptions rather than assertions, added 2026-09-22 by plan 06-16. It is the exact precedent of
+# D04_DOC_BASELINE above, applied to the other set the block does not assert over: an exemption
+# that is not counted is an exemption that can grow. Same ADDITIVE contract — any non-default
+# value prints a warning and forces EXIT_CODE=1, so the pin can only ever make the block redder
+# and can never be used to make a moved count report green. The reason the five lines are exempt
+# is stated IN FULL in the D-04 block comment, not here; do not raise this number without reading
+# it, because raising it is how a real violation gets waved through.
+D04_EXEMPT_BASELINE="${D04_EXEMPT_BASELINE:-5}"
 
 # ENV OVERRIDES for the "extended.conf destructive switches" block (CR-01/WR-01), added 2026-09-14.
 # Same contract as DRIFT_APPDATA_ROOT above, and the precedent is stated explicitly because it is
@@ -1461,19 +1515,51 @@ fi
 #     the only thing that redirects `library`, `statefile` AND `directory` together.
 # `-l` alone is the plausible-looking half-fix, which is exactly why the assertion names statefile.
 #
-# SCOPE, AND THE ONE EXCLUSION, STATED RATHER THAN SILENT. The asserted set is every text file
-# tracked under scripts/ and stacks/ at the host's HEAD, MINUS `*.md`. Documentation is excluded
+# ⚠️  WIDENED 2026-09-22 BY PLAN 06-16 (CR-01), AND THE REASON IS THE WHOLE POINT OF THE BLOCK.
+# As shipped on 2026-09-21 this assertion MATCHED NOTHING AT ALL and printed a green tick over the
+# empty set for the whole of Phase 6. Measured on the host's HEAD: raw 91, comment-stripped 35,
+# invocation-shaped outside `*.md` ZERO. The cause is not subtle and is stated so it is not
+# repeated — EVERY `beet` call this repository makes from a script is assembled from a VARIABLE
+# (`"$BEET"`, `"$BEET_BIN"`, `"${BEET_BIN}"`), never from the literal token `beet`, so a scan
+# looking for a literal `beet` word had no way to see a single one of them. Two things were wrong
+# and fixing either alone would have been worse than useless:
+#   * THE REMOTE PATTERN. `git grep -w -E 'beet'` is CASE SENSITIVE, so `$BEET_BIN` was never even
+#     returned to be matched against. Widening the LOCAL regex alone would therefore have left the
+#     executable count at zero and turned the new vacuity guard below into a permanent UNKNOWN.
+#     A SECOND `-e` pattern is used rather than an alternation for the reason the next paragraph
+#     gives: `-e 'x' -e 'y'` carries no `|` into the remote command string.
+#   * THE LOCAL SHAPE TEST. A variable expansion in COMMAND POSITION is now an invocation shape.
+#     It is anchored exactly like the literal branches — content start, after a shell separator,
+#     or immediately inside an opening quote — AND it must be followed by a flag or a subcommand
+#     word. Both halves are load-bearing: without the anchor, `[[ $BEET_EXEC_RC -eq 0 ]]` and
+#     `"$BEETS_DB_COUNT"` are "invocations"; without the follower test, argument passing such as
+#     `remote_exec "$prog" "$root" "$BEET" "$PY"` is an "invocation". Measured: the naive
+#     whitespace-or-quote form matched 26 lines of which 18 run nothing. The follower test admits
+#     a BARE `"$BEET" config` — it deliberately does NOT require a flag — so it cannot be accused
+#     of only matching invocations that were already compliant.
+# The literal-`beet` branches are KEPT, not replaced. They are what still catches a hand-written
+# `beet import …` pasted out of the runbook, and they are what keeps the `*.md` baseline meaningful.
+#
+# SCOPE, AND THE TWO EXCLUSIONS, STATED RATHER THAN SILENT. The asserted set is every text file
+# tracked under scripts/ and stacks/ at the host's HEAD, MINUS `*.md` and MINUS a NAMED, COUNTED
+# and PINNED exemption register (see THE EXEMPTION REGISTER below). Documentation is excluded
 # because two of this repo's `.md` lines are HISTORIC QUOTATIONS — beets.md records "the documented
 # flow" as it was in Nov 2025, and rewriting a quotation to satisfy a grep falsifies the record
 # this repo keeps deliberately. The exclusion is not a free pass: documentation hits are COUNTED
 # against a pinned baseline (D04_DOC_BASELINE) and a change in that count is its own red, so a new
 # copy-pasteable bare invocation cannot arrive in the runbook unseen.
 #
-# THE STRIP IS PROVEN TO BE DOING WORK, WHICH IS THE WHOLE REASON THREE COUNTS ARE PRINTED. This
+# THE STRIP IS PROVEN TO BE DOING WORK, WHICH IS THE WHOLE REASON FOUR COUNTS ARE PRINTED. This
 # repository has been bitten four separate times by a grep satisfied by prose ABOUT a thing rather
 # than by the thing. A single number cannot distinguish "nothing matched" from "the pattern was
-# wrong", so the raw hit count, the comment-stripped count and the invocation-shaped count are all
-# reported. If raw and stripped are equal, the strip is not stripping and the result is suspect.
+# wrong", so the raw hit count, the comment-stripped count, the invocation-shaped count and the
+# exempt count are all reported. If raw and stripped are equal, the strip is not stripping and the
+# result is suspect. AND — added 2026-09-22 by plan 06-16, because this is the failure that
+# actually happened — if the EXECUTABLE invocation count is zero, that is UNKNOWN and fatal, not
+# a pass. The 2026-09-21 block reported the executable count and then never tested it, which is
+# how it printed a tick over an empty set for a month. A number that is printed but not asserted
+# is not an assertion; it is a decoration. Every count printed on the `counts:` line below is now
+# either asserted directly or pinned to a baseline whose movement is its own red.
 #
 # WHY IT READS THE HOST'S HEAD RATHER THAN THE WORKSTATION'S WORKING TREE. Same reason the drift
 # block does: a dirty or stale checkout on the workstation must not be able to produce a false
@@ -1489,6 +1575,40 @@ fi
 # fourth false positive would erode an invariant that is only worth having while it is clean.
 # `-w` is also MEASURED-equivalent, not assumed: on the host's HEAD it returns 37 raw hits against
 # the alternation's 30, and the invocation-shaped set is IDENTICAL (the same two lines).
+#   ⚠️  2026-09-22 (plan 06-16): the `|`-free requirement is WHY the case-sensitivity fix is a
+#   SECOND `-e` flag rather than `-E 'beet|BEET…'`. `git grep -e X -e Y` ORs its patterns with no
+#   pipe character anywhere in the command string, so the invariant above is preserved untouched —
+#   measured, not assumed: the count of lines matching that invariant is unchanged by this edit.
+#   `-i` was considered and REJECTED: it would also fold `Beet`/`BeetS` prose in stacks/*.yaml
+#   comments into the raw count for no gain, and `-w -E 'BEET[A-Z_]*'` is the narrower statement
+#   of what is actually being looked for — a shell variable holding the beets binary.
+#
+# THE EXEMPTION REGISTER, AND ITS REASON IN FULL, BECAUSE AN UNEXPLAINED EXEMPTION IS WORSE THAN
+# NONE. Five invocation-shaped executable lines are NOT asserted against the literal `-l`-and-`-c`
+# rule. They are NAMED by `D04_EXEMPT_RE` (keyed on the file path AND the distinguishing overlay
+# variable, so a DIFFERENT invocation added to either file does not inherit the exemption) and
+# COUNTED against `D04_EXEMPT_BASELINE`; a move in that count is its own red that prints every
+# exempt line. The five are the three `phase06-oracle.sh` lines carrying `$SCRATCH_OVERLAY` and
+# the two `phase06-incremental-control.sh` lines carrying `$ROOT/overlay.yaml`. Three reasons,
+# all of which have to hold:
+#   1. EACH ONE PASSES A `-c` OVERLAY THAT REDIRECTS `library`, `statefile` AND `directory`
+#      TOGETHER into a throwaway root. That is the STRONGER half of D-04's rule and the half `-l`
+#      cannot achieve at all — `-l` redirects `library` and nothing else, which is exactly why the
+#      contract paragraph at the top of this block names `statefile:` rather than assuming it.
+#      These lines are not a weaker form of compliance; they satisfy the part that matters most.
+#   2. ADDING A `-l` WOULD MAKE THEM WORSE, NOT BETTER. A `-l` naming a path OTHER than the
+#      overlay's `library:` splits the throwaway state across two files, so the run's own state
+#      stops being readable in one place; a `-l` naming the SAME path is a second source of truth
+#      for one value, and the two drift the first time either is edited.
+#   3. BOTH SCRIPTS ARE CLOSED INSTRUMENTS WHOSE PROOF RUNS ARE ALREADY RECORDED. Changing their
+#      invocation flags would invalidate committed evidence that cannot be re-driven inside this
+#      phase. The artifacts are named so the reason is checkable rather than asserted:
+#      `.planning/phases/06-tagger-configuration-and-dry-run/artifacts/06-11-oracle-run.txt` and
+#      `.../artifacts/06-11-wrote-nothing.txt` for the oracle, and `.../06-20-incremental-driven.txt`
+#      for the incremental control.
+#   ⛔ THE EXEMPTION IS NOT A SKIP. The green line below NAMES the exempt count, so a green D-04
+#   always states how many lines it did not assert over. A reader who never opens this comment
+#   still cannot mistake 3 asserted lines for 8.
 #
 # AND THIS PARAGRAPH ITSELF MOVES THAT GREP'S COUNT, WHICH IS STATED RATHER THAN ROUNDED, the same
 # convention the EXIT-CODE notices use: `grep -c 'timeout $REMOTE_TIMEOUT.*|'` goes 6 -> 8, because
@@ -1503,6 +1623,16 @@ fi
 # nothing, which is a legitimate PASS, so the status is captured and only >1 is a failure — and a
 # `D04-BEGIN` sentinel is emitted FIRST so that "looked and found nothing" is distinguishable from
 # "never ran". Without the sentinel those two produce identical empty output.
+#   ⚠️  THE ORDER OF THE TWO STATUS TESTS IN THE REMOTE PROGRAM IS LOAD-BEARING (WR-10, fixed
+#   2026-09-22 by plan 06-16). `timeout` reports a kill as 124, and 124 IS GREATER THAN 1, so
+#   while `-gt 1 -> exit 4` was the only test a bound expiry arrived here as 4 and the operator was
+#   told "'git grep' failed" — sent to debug a working tool instead of a wedged host. The block's
+#   own dedicated 124 branch below was unreachable for this block, and the sentinel branch's
+#   `-ne 124` special case was testing for something that could never happen. This file treats
+#   "the bound expired" and "the tool failed" as DISTINCT conditions in nine places, and the TENTH
+#   exit-code notice's condition I enumerates both by name, so collapsing them here made the
+#   diagnosis wrong while the verdict stayed right — the worst shape a health check can take.
+#   Test 124 FIRST, then `-gt 1`. `git grep` exiting 1 on no match remains a legitimate pass.
 echo "D-04 — throwaway -l plus -c overlay on every beet invocation:"
 D04_OVERRIDDEN=0
 if [ "$D04_DOC_BASELINE" != "2" ]; then
@@ -1515,10 +1645,16 @@ if [ "$D04_REPO_ROOT" != "/mnt/fast/stacks" ]; then
     echo "  ⚠️  D04_REPO_ROOT override in effect — this run cannot report D-04 green"
     EXIT_CODE=1
 fi
+if [ "$D04_EXEMPT_BASELINE" != "5" ]; then
+    D04_OVERRIDDEN=1
+    echo "  ⚠️  D04_EXEMPT_BASELINE override in effect — this run cannot report D-04 green"
+    EXIT_CODE=1
+fi
 D04_CMD="cd $D04_REPO_ROOT || exit 3
 echo D04-BEGIN
-timeout $REMOTE_TIMEOUT git grep -n -I -w -E 'beet' HEAD -- scripts stacks
+timeout $REMOTE_TIMEOUT git grep -n -I -w -E -e 'beet' -e 'BEET[A-Z_]*' HEAD -- scripts stacks
 D04_RC=\$?
+if [ \$D04_RC -eq 124 ]; then exit 124; fi
 if [ \$D04_RC -gt 1 ]; then exit 4; fi
 exit 0"
 D04_OUT=$(ssh -n $SSH_OPTS root@172.16.1.159 "$D04_CMD")
@@ -1548,14 +1684,26 @@ else
     # or after a `docker` prefix (`docker exec … beet …`). A back-ticked mention in prose or a
     # quoted mention inside a Python string does NOT match, which is the narrowing that makes the
     # stripped count meaningful rather than alarming.
-    D04_INV_RE='^HEAD:[^:]*:[0-9]*:[[:space:]]*(sudo[[:space:]]+)?beet[[:space:]]|[[:space:]](&&|;)[[:space:]]*beet[[:space:]]|docker[[:space:]][^`]*[[:space:]]beet[[:space:]]'
+    # FOURTH BRANCH added 2026-09-22 (plan 06-16): a BEET-prefixed variable expansion in COMMAND
+    # POSITION — content start, or immediately inside an opening quote — FOLLOWED BY a flag or a
+    # lowercase subcommand word. Both halves are required; see the WIDENED paragraph in the block
+    # comment for the 26-vs-8 measurement that shows why neither alone is honest.
+    D04_INV_RE='^HEAD:[^:]*:[0-9]*:[[:space:]]*(sudo[[:space:]]+)?beet[[:space:]]|[[:space:]](&&|;)[[:space:]]*beet[[:space:]]|docker[[:space:]][^`]*[[:space:]]beet[[:space:]]|(^HEAD:[^:]*:[0-9]*:[[:space:]]*(sudo[[:space:]]+)?|")\$\{?BEET[A-Z_]*\}?"?[[:space:]]+(-|[a-z])'
+    # The NAMED exemption register. Keyed on the file path AND the distinguishing overlay variable,
+    # so a different invocation added to either file does NOT inherit the exemption. Reason in full
+    # in the block comment above; count pinned by D04_EXEMPT_BASELINE.
+    D04_EXEMPT_RE='^HEAD:scripts/phase06-oracle\.sh:[0-9]*:.*\$SCRATCH_OVERLAY|^HEAD:scripts/phase06-incremental-control\.sh:[0-9]*:.*\$ROOT/overlay\.yaml'
     D04_INVOKE_ALL=$(printf '%s\n' "$D04_KEPT" | grep -E "$D04_INV_RE")
     D04_INVOKE_DOC=$(printf '%s\n' "$D04_INVOKE_ALL" | grep '\.md:')
     D04_INVOKE_EXE=$(printf '%s\n' "$D04_INVOKE_ALL" | grep -v '\.md:' | grep '^HEAD:')
+    D04_INVOKE_EXEMPT=$(printf '%s\n' "$D04_INVOKE_EXE" | grep -E "$D04_EXEMPT_RE")
+    D04_INVOKE_ASSERT=$(printf '%s\n' "$D04_INVOKE_EXE" | grep -vE "$D04_EXEMPT_RE" | grep '^HEAD:')
     D04_N_ALL=$(printf '%s\n' "$D04_INVOKE_ALL" | grep -c '^HEAD:')
     D04_N_DOC=$(printf '%s\n' "$D04_INVOKE_DOC" | grep -c '^HEAD:')
     D04_N_EXE=$(printf '%s\n' "$D04_INVOKE_EXE" | grep -c '^HEAD:')
-    echo "  counts: raw=$D04_RAW  comment-stripped=$D04_STRIPPED  invocation-shaped=$D04_N_ALL  (executable $D04_N_EXE, documentation $D04_N_DOC)"
+    D04_N_EXEMPT=$(printf '%s\n' "$D04_INVOKE_EXEMPT" | grep -c '^HEAD:')
+    D04_N_ASSERT=$(printf '%s\n' "$D04_INVOKE_ASSERT" | grep -c '^HEAD:')
+    echo "  counts: raw=$D04_RAW  comment-stripped=$D04_STRIPPED  invocation-shaped=$D04_N_ALL  (executable $D04_N_EXE = asserted $D04_N_ASSERT + exempt $D04_N_EXEMPT, documentation $D04_N_DOC)"
     if [ "$D04_RAW" -eq 0 ]; then
         echo "  ⚠️  UNKNOWN — the raw scan matched NOTHING at all. This repository is known to"
         echo "  mention beets in many files, so a zero here means the pattern is wrong, not that"
@@ -1564,6 +1712,12 @@ else
     elif [ "$D04_RAW" -eq "$D04_STRIPPED" ]; then
         echo "  ⚠️  UNKNOWN — the comment strip removed NOTHING ($D04_RAW = $D04_STRIPPED), so it"
         echo "  is not doing its job and the narrowed count below cannot be trusted."
+        EXIT_CODE=1
+    elif [ "$D04_N_EXE" -eq 0 ]; then
+        echo "  ⚠️  UNKNOWN — the invocation pattern matched NO executable line ($D04_N_EXE). Every"
+        echo "  beet call this repo makes is built from a variable, so a zero here means the pattern"
+        echo "  cannot SEE the invocations, not that none exist. This is NOT 'no bare beet"
+        echo "  invocations'. Nothing is asserted."
         EXIT_CODE=1
     else
         D04_BAD=0
@@ -1579,15 +1733,23 @@ else
                 EXIT_CODE=1
                 D04_BAD=$((D04_BAD + 1))
             fi
-        done <<< "$D04_INVOKE_EXE"
+        done <<< "$D04_INVOKE_ASSERT"
+        if [ "$D04_N_EXEMPT" -ne "$D04_EXEMPT_BASELINE" ]; then
+            echo "  ❌ exempt invocation count moved: $D04_N_EXEMPT, pinned baseline $D04_EXEMPT_BASELINE."
+            echo "  An exemption that grows unseen is how a real violation gets waved through. Lines:"
+            printf '%s\n' "$D04_INVOKE_EXEMPT" | sed 's/^/       /'
+            EXIT_CODE=1
+        fi
         if [ "$D04_N_DOC" -ne "$D04_DOC_BASELINE" ]; then
             echo "  ❌ documentation invocation count moved: $D04_N_DOC, pinned baseline $D04_DOC_BASELINE."
             echo "  A new copy-pasteable bare invocation in the runbook is a real footgun. Lines:"
             printf '%s\n' "$D04_INVOKE_DOC" | sed 's/^/       /'
             EXIT_CODE=1
         fi
-        if [ "$D04_BAD" -eq 0 ] && [ "$D04_N_DOC" -eq "$D04_DOC_BASELINE" ] && [ "$D04_OVERRIDDEN" -eq 0 ]; then
-            echo "  ✅ no executable beet invocation opens the real library ($D04_N_EXE invocation-shaped lines outside *.md)"
+        if [ "$D04_BAD" -eq 0 ] && [ "$D04_N_DOC" -eq "$D04_DOC_BASELINE" ] \
+           && [ "$D04_N_EXEMPT" -eq "$D04_EXEMPT_BASELINE" ] && [ "$D04_OVERRIDDEN" -eq 0 ]; then
+            echo "  ✅ no ASSERTED beet invocation opens the real library ($D04_N_ASSERT of $D04_N_EXE invocation-shaped lines outside *.md)"
+            echo "     $D04_N_EXEMPT lines were NOT asserted over — the named exemption register at the pinned baseline ($D04_EXEMPT_BASELINE), see the block comment"
             echo "     documentation hits at the pinned baseline ($D04_N_DOC) — historic quotations, see the block comment"
         fi
     fi
