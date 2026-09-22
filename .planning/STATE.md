@@ -28,9 +28,22 @@ pipeline that someone owns.
 
 ## Current Position
 
-Phase: 06 (tagger-configuration-and-dry-run) — EXECUTING gap closure (CR-01)
-Plan: 15 of 21 — 14/14 original plans executed (VERIFIED 5/6, gaps_found); plans 06-15..06-21 are
-the gap-closure wave and are the only incomplete work.
+Phase: 06 (tagger-configuration-and-dry-run) — gap-closure round 1 COMPLETE, round 2 PLANNING
+Plan: 21 of 21 executed. Round 1 (06-15..06-21, waves 6-9, 2026-09-22) closed CR-01 and
+dispositioned all 24 findings of `06-REVIEW.md`; re-verification is **6/6, status passed**
+(`06-VERIFICATION.md`, gaps_remaining: [], regressions: []).
+**The phase is NOT complete.** A code review of the round-1 changes themselves
+(`06-REVIEW-GAP.md`, GC-01..GC-15) found 1 BLOCKER + 7 WARNING in the new code — the same
+defect class round 1 existed to remove. Two confirmed independently by the orchestrator:
+- **GC-01** `check-beets-config.sh:554,:567` — `printf | grep -qF` under `pipefail` returns 141
+  at >=64 KiB input, so a forbidden substring that IS present reports as absent. Reproduced
+  locally: FOUND at 8-56 KiB, MISSED at 64/96/128 KiB. Position-dependent; `--self-test` cannot
+  catch it (synthetic dumps are tiny). Fix is `grep -qF -- "$forb" <<<"$raw"`.
+- **GC-03** `quick-health-check.sh:1791` — the vacuity guard tests `D04_N_EXE` but the loop
+  iterates `D04_INVOKE_ASSERT` and the tick prints `$D04_N_ASSERT of $D04_N_EXE`, so an empty
+  ASSERTED set still prints a green tick. **CR-01 reproduced one nesting level in.**
+Round 2 is being planned against `06-REVIEW-GAP.md`. Operator asked for a non-Anthropic
+reviewer on it — `codex`, `gemini`, `opencode` are installed; `gh copilot` extension is NOT.
 
 Previous: Phase 05 (inbox-structure-and-the-junk-gate) — **COMPLETE, closed 2026-09-19 at 4/4
 criteria TRUE**, 11 of 11 plans (fence taken, `_inbox` created, D-21 inode
@@ -95,8 +108,11 @@ it now matches a real song the split moved into `Vol 066`; assert the named path
 before Phase 6 signs off** — it is the only undo for 4,750 renames, 751 tag writes and 26,005
 chowns, and it is **not** a clean undo.
 
-Status: Executing Phase 06 gap closure — 1 open requirement (CONF-04, Jellyfin half) + 1
-verification gap (CR-01); plans 06-15..06-21 planned 2026-09-22, execution started 2026-09-22
+Status: Phase 06 gap-closure round 1 executed and verified 6/6 (2026-09-22); round 2 PLANNING
+against `06-REVIEW-GAP.md` (GC-01 blocker + 7 warnings in round 1's own code). Still 1 open
+requirement (CONF-04, Jellyfin half — owned by Phase 7 entry criterion E6, NOT closed here).
+**Do NOT mark Phase 06 complete until round 2 lands** — GC-03 is CR-01 one nesting level in,
+so closing on "CR-01 fixed" would be a false close
 Do NOT run with `--auto`/`--chain` — four
 gates are `checkpoint:decision`, which auto-selects the first option under auto-mode.
 
