@@ -68,7 +68,7 @@ completed: 2026-09-22
 - **IN-06 closed.** The in-container temp files beneath `$SCRATCH` carry the run's PID; `$SCRATCH` itself is unchanged so every path the fence, the precheck and the committed artifacts name stays true.
 - **IN-11 closed.** The dirty-destination refusal now prints the exact cleanup command and states that `--baseline` always leaves the host stamp by design.
 - **"Before any ssh" is measured, not asserted.** `ssh` was replaced on PATH by a poisoned stub that records and never connects; the log is empty across all four fence refusals including under `--baseline`, and the counter is itself controlled by an allowed value that does reach ssh (1 invocation, to TEST-NET-1).
-- **The new self-test cases are proven able to fail.** Reverting `remote_sh_c` to the old shape in a copy of the script turns six of them red and takes `--self-test` to exit 1.
+- **The new self-test cases are proven able to fail.** Reverting `remote_sh_c` to the old shape in a copy of the script turns six of the seven red and takes `--self-test` to exit 1. The seventh is the DRIVEN RED itself, which correctly stays green because it exercises the old construction directly rather than through `remote_sh_c`.
 
 ## Task Commits
 
@@ -78,7 +78,7 @@ completed: 2026-09-22
 
 ## Files Created/Modified
 
-- `scripts/phase06-oracle.sh` — the fence, `remote_sh_c`, the seven re-quoted/re-parameterised remote-command sites, the run-tagged scratch names, the amended override-contract paragraph, the IN-11 refusal text, and six new `--self-test` cases (80 cases total, all green).
+- `scripts/phase06-oracle.sh` — the fence, `remote_sh_c`, the seven re-quoted/re-parameterised remote-command sites, the run-tagged scratch names, the amended override-contract paragraph, the IN-11 refusal text, and seven new `--self-test` cases (73 → 80, all green).
 - `.planning/phases/06-tagger-configuration-and-dry-run/artifacts/06-18-oracle-fence-driven.txt` — four fence drives, the poisoned-stub "before any ssh" proof, the byte-identity proof for `-printf`, the mutation proof for the new self-test cases, the shellcheck note triage, an explicit NOT-DRIVEN register, and the full 121-line clean self-test transcript.
 
 ## Decisions Made
@@ -136,7 +136,7 @@ completed: 2026-09-22
 ## Issues Encountered
 
 - **The plan's verify blocks were unrunnable as written** (deviations 1 and 2). Resolved by rewriting the verification method and recording the measurement that proves the original could not pass. Worth carrying forward: `set -o pipefail` plus `printf | grep -q` is a false-red generator, and it is the mirror image of the false-green shapes 06-15 found.
-- **No other problems.** `shellcheck -S warning` was clean before the change and is clean after; `--self-test` went 74 → 80 cases with no regressions.
+- **No other problems.** `shellcheck -S warning` was clean before the change and is clean after; `--self-test` went 73 → 80 cases with no regressions (measured by re-running the task-1 commit's copy of the script, not counted by eye).
 
 ## NOT-DRIVEN register (for plan 06-21)
 
@@ -158,6 +158,28 @@ None.
 - **WR-01 remains open and is plan 06-19's.** The in-container `ls -A "$1" | head -n 1` pipeline at the dirty-destination precheck still runs under the container's `pipefail`-less dash. It was deliberately not fixed here; the only change at that site is that the path is now a positional parameter, which does not affect 06-19's fix.
 - **CONF-03 / CONF-06 evidence is untouched.** `artifacts/06-11-oracle-run.txt` and `06-11-wrote-nothing.txt` stand as the phase's proof. The one change that could have affected their comparability — the `-printf` format — is proven byte-identical.
 - **No estate contact.** No `--run`, and the only `--baseline` invocations went to a poisoned `ssh` stub and to TEST-NET-1 (192.0.2.1). LXC 100 was not touched by this plan.
+
+## Self-Check: PASSED
+
+Every claim above re-measured after the fact, not restated:
+
+| Claim | Check | Result |
+|-------|-------|--------|
+| `scripts/phase06-oracle.sh` modified | `[ -f … ]` | FOUND |
+| `artifacts/06-18-oracle-fence-driven.txt` created | `[ -f … ]` | FOUND |
+| `06-18-SUMMARY.md` created | `[ -f … ]` | FOUND |
+| Commits `7c2e349`, `89a349b`, `219153e`, `546bc55` | `git log --oneline --all` | all FOUND |
+| `--self-test` exits 0, 80 green / 0 red | re-run | rc=0, 80 / 0 |
+| `bash -n` clean | re-run | rc=0 |
+| `shellcheck -S warning` clean | re-run | rc=0 |
+| `:2053`'s bare-word `find $NEWER_ARGS` untouched | `git diff 3c155b5 HEAD` over the file | no diff line touches it |
+| 73 → 80 cases | re-ran the task-1 commit's copy of the script | 73 before, 80 after |
+
+One claim was **corrected by this check rather than confirmed**: the first draft of
+this summary said "six new cases, 74 → 80". The real figures are seven new cases and
+73 → 80 — six of the seven go red under the mutant, and the seventh is the DRIVEN RED,
+which correctly stays green. Both numbers had been counted by eye off the transcript
+instead of measured; they are now measured.
 
 ---
 *Phase: 06-tagger-configuration-and-dry-run*
