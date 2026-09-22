@@ -1,0 +1,452 @@
+================================================================================
+06-19-oracle-vacuity-driven.txt — THE VACUITY AND COULD-NOT-LOOK GUARDS, DRIVEN
+Phase 6 plan 06-19, 2026-09-22.  Instrument: scripts/phase06-oracle.sh
+Findings closed: WR-01, WR-02, WR-06, IN-09, IN-12, and the oracle half of IN-08.
+Commits: bc81d5d (task 1), cfec2ec (task 2).
+================================================================================
+
+WHAT THIS FILE IS, AND WHAT IT IS NOT.
+
+  It is the record of driving every branch plan 06-19 changed in
+  `scripts/phase06-oracle.sh`, offline, with no ssh and no docker, plus the
+  before/after each change produces — MEASURED off the real file at both
+  commits, not quoted from 06-REVIEW.md.
+
+  NO ORACLE `--run` WAS PERFORMED.  NO ORACLE `--baseline` WAS PERFORMED.
+  Neither was needed and both were forbidden by the plan's own constraint:
+  every change in this plan is to a REFUSAL BRANCH.  A refusal that fires more
+  often can only make a future run REDDER, never falsely greener, so the
+  committed evidence's conclusions are untouched by construction and not by
+  assertion.  Re-driving the oracle to "prove" the changes would have performed
+  an import during a paper phase — which is threat T-06-106 in the plan's own
+  register.
+
+  `artifacts/06-11-oracle-run.txt` and `artifacts/06-11-wrote-nothing.txt`
+  STAND UNCHANGED as Phase 6's CONF-03 / CONF-06 evidence: 174 destinations,
+  zero lines of difference against the committed expected tree, and the
+  three-layer wrote-nothing proof.  Nothing here replaces any part of either.
+  This plan continues `artifacts/06-18-oracle-fence-driven.txt` rather than
+  duplicating it; 06-18's four NOT-DRIVEN items are not restated here.
+
+  The rule all six findings violate is README § Health Checks rule 1:
+  "fail closed with 'could not look' kept distinct from 'nothing is wrong'".
+  Five of the six printed a GREEN answer over a blind or unexercised read.
+
+
+================================================================================
+1.  BEFORE / AFTER, ONE LINE PER FINDING
+================================================================================
+
+  WR-01  two empty listings -> the same answer as an unreadable directory
+         BEFORE: an unreadable $SCRATCH printed `✓ container scratch '/tmp/p6'
+                 is absent or empty` — rc 0, stdout empty.
+         AFTER:  the probe exits 4 and the precheck refuses with "the path IS
+                 there and could NOT BE READ".
+
+  WR-02  BEFORE: `✓ layer 2 (src.meta manifest): identical before and after`
+                 over two EMPTY manifests.
+         AFTER:  `COULD NOT COMPARE: manifest '…' is EMPTY - an empty listing
+                 compares equal to any other empty listing, which would pass
+                 vacuously`.
+
+  WR-06  BEFORE: `✓ CONF-04 write side: the fields TSV is missing or unreadable,
+                 so the write side could not be shown`
+         AFTER:  `⚠ UNKNOWN, not green: CONF-04 write side: the fields TSV is
+                 missing or unreadable, so the write side could not be shown`
+
+  IN-08  BEFORE: the precedence was IMPLEMENTED in both sibling scripts and
+                 STATED in one (06-20 aligned and stated the control's half).
+         AFTER:  stated in both; each EXIT CODES block names the other file.
+
+  IN-09  BEFORE: `✓ D-13 DJ count equality: DJ/ destinations = 0, exactly the
+                 sampled DJ file count` — zero against zero.
+         AFTER:  refused as VACUOUS, naming DEF-06-12-01.
+
+  IN-12  BEFORE: `✓ field view read: 0 items, six columns each` over an empty
+                 fields.tsv.
+         AFTER:  `⚠ UNKNOWN, not green: field view read: the field view is
+                 EMPTY. ZERO ITEMS DOES NOT MEAN EVERY ITEM HAD SIX COLUMNS…`
+
+
+================================================================================
+2.  WR-06 — THE VERBATIM OLD GREEN TICK, MEASURED
+================================================================================
+
+  This one is preserved word for word because a green tick whose own text says
+  the instrument did not look is the single clearest specimen of this phase's
+  dominant defect class, and it should stay recognisable to whoever reads the
+  register next.
+
+  Both halves below lift the SAME definitions — ok / bad / warn / unknown /
+  run_assert / report_multi_artist — out of the real file (the pre-plan commit
+  92512d5 for BEFORE, the working tree for AFTER) and call `run_assert` over a
+  fields TSV that does not exist.  Nothing was retyped.
+  Harness: scratchpad `wr06-repro.sh`.
+
+    BEFORE (commit 92512d5, the pre-plan file):
+      ✓ CONF-04 write side: the fields TSV is missing or unreadable, so the write side could not be shown
+       [UNKNOWNS=0  REDS=0]
+
+    AFTER (the working tree):
+      ⚠ UNKNOWN, not green: CONF-04 write side: the fields TSV is missing or unreadable, so the write side could not be shown
+        This is NOT a pass and it is NOT a failure of the thing measured. The measurement
+        could not be trusted, so the diff was NOT evaluated.
+       [UNKNOWNS=1  REDS=0]
+
+  The counter is the half that matters: UNKNOWNS 0 -> 1 is what forces exit 3.
+  Before the change this branch could not affect the verdict at all.
+
+  THE DOUBLE-REPORT QUESTION (plan task 1, edit 2), DECIDED: keep both, and say
+  in band that the second is a restatement.
+
+    The two sites report DIFFERENT conditions.  Step 11's block fires on
+    `RSH_RC -ne 0` (the ssh/docker call failed); report_multi_artist's fires on
+    the FILE being unreadable or empty.  They can only co-occur for an EMPTY
+    fields.tsv, and that case IS reachable: `rsh_to` creates its output file by
+    redirection before ssh runs, so after any remote failure the file exists,
+    is readable, and is empty.  Measured, not assumed:
+      rsh_to() { …; ssh … "$1" > "$2" 2> "${2}.err" || RSH_RC=$?; }
+    Suppressing the second report would make the label "CONF-04 write side"
+    vanish from the transcript on exactly the input it cannot judge.  A doubled
+    UNKNOWN is noise; a label that goes silent is the defect class returning
+    under a different name.  The message therefore carries "(Restated: the
+    field-view read above reports the same condition…)".
+
+
+================================================================================
+3.  WR-02, IN-12, IN-09 — BEFORE / AFTER, MEASURED
+================================================================================
+
+  Same method: the function body is lifted out of the real file at both
+  commits and fed the fixture.  Harness: scratchpad `wr02-in12-in09-repro.sh`.
+
+  WR-02  two EMPTY manifests, manifest_compare:
+    BEFORE (92512d5):
+      -> rc=0 IDENTICAL BEFORE AND AFTER  (layer 2 green)
+    AFTER  (working tree):
+      -> rc=2 COULD NOT COMPARE: manifest '…/m.empty.a' is EMPTY - an empty
+         listing compares equal to any other empty listing, which would pass
+         vacuously
+
+    Why the empty case is REACHABLE WITH A CLEAN ssh STATUS, which is what makes
+    this a real defect rather than a stylistic one: `capture_manifests` builds
+    each manifest with `: > file` followed by appends, and
+    `remote_manifest_meta`'s `find <dir> -type f -printf …` returns rc 0 AND NO
+    OUTPUT on an existing but empty directory.
+
+  IN-12  an EMPTY fields.tsv, the field-view read:
+    BEFORE (92512d5) — the inline three lines, lifted verbatim:
+      -> ✓ field view read: 0 items, six columns each
+    AFTER  (working tree) — assert_field_view:
+      -> rc=2  the field view is EMPTY. ZERO ITEMS DOES NOT MEAN EVERY ITEM HAD
+         SIX COLUMNS - it means the view was NOT PRODUCED, and the CONF-03 join
+         has nothing to join against.
+
+  IN-09  a destination list with ZERO DJ rows against a wanted count of ZERO:
+    BEFORE (92512d5):
+      -> rc=0 PASS: DJ/ destinations = 0, exactly the sampled DJ file count
+    AFTER  (working tree):
+      -> rc=1 REFUSED: the sample holds NO S5 files, so the albumtype:=dj path
+         rule was never exercised and comparing zero against zero is VACUOUS,
+         not a pass. This is also the refusal that turns DEF-06-12-01 - path
+         rule 2 (albumtype:=dj disctotal:2..), the one paths: rule no Phase 6
+         instrument has ever evaluated, deferred and unowned - from a SILENCE
+         into something the next run over a DJ-less sample says out loud.
+
+
+================================================================================
+4.  WR-01 — THE PROBE, AND THE PIPELINE IT REPLACES
+================================================================================
+
+  The old shape, and the one line in the file that broke the file's own house
+  rule at :201-202 ("THE CONTAINER'S /bin/sh IS dash AND HAS NO `pipefail`. So
+  no command sent INTO the container carries a pipeline at all"):
+
+      [ ! -e "$1" ] && echo absent || ls -A "$1" | head -n 1
+
+  The new shape, SCRATCH_PROBE_PROG, defined with the remote layer so the
+  self-test can drive it:
+
+      if [ ! -e "$1" ]; then echo absent; exit 0; fi
+      if [ ! -d "$1" ]; then echo notadir; exit 0; fi
+      out=$(find "$1" -mindepth 1 -maxdepth 1) || exit 4
+      if [ -z "$out" ]; then echo empty; exit 0; fi
+      nl="
+      "
+      printf "nonempty %s\n" "${out%%$nl*}"
+
+  WHY IT CANNOT SILENTLY EXIT 0 ON AN UNREADABLE DIRECTORY (the comment the
+  plan asked for is at the definition in the script):
+
+    * There is NO PIPELINE, so there is nothing that can launder a status.
+    * `find` on a directory it cannot read writes a diagnostic to stderr and
+      returns NON-ZERO.  That non-zero is exactly the status `| head` threw
+      away.
+    * It is read by `||` ON THE SAME LINE, because the only command in that
+      assignment is the command substitution and POSIX specifies such an
+      assignment's exit status IS the substitution's.
+    * The probe exits 4, `docker exec` propagates it, `rsh` records it in
+      RSH_RC, and the call site's first guard refuses on it.
+    * THE ANSWER IS ALWAYS A WORD — absent / empty / notadir / "nonempty
+      <entry>".  Emptiness of stdout is no longer evidence of anything, and an
+      unrecognised word falls to a `*)` arm that REFUSES rather than guessing.
+    * stderr is deliberately NOT redirected, so find's own diagnostic reaches
+      the operator and explains the exit 4.
+
+  DRIVEN, five states, local /bin/sh, no container (scratchpad `probe-test.sh`,
+  and the same five cases live in `--self-test` § WR-01):
+
+      nosuch     rc=0 out=<absent>
+      emptydir   rc=0 out=<empty>
+      full       rc=0 out=<nonempty …/full/overlay.yaml>
+      afile      rc=0 out=<notadir>
+      noread     rc=4 out=<>
+
+  THE DRIVEN RED — the OLD shape over the SAME fixtures.  This is the finding
+  itself, measured rather than argued:
+
+      nosuch     rc=0 out=<absent>
+      emptydir   rc=0 out=<>
+      full       rc=0 out=<lib.db>
+      noread     rc=0 out=<>            <-- IDENTICAL to emptydir
+
+  `noread` and `emptydir` are byte-identical in both status and output under
+  the old shape.  The precheck had no way to tell them apart, which is why it
+  printed the green line for both.
+
+
+================================================================================
+5.  THE IN-08 DECISION, RECORDED AS A DECISION
+================================================================================
+
+  THE HOUSE CONVENTION IS: A BLIND INSTRUMENT OUTRANKS A MEASURED RED.
+
+  Reason, in one sentence: this estate's standing rule (CLAUDE.md and
+  README § Health Checks) is that "could not look" is never folded into another
+  verdict, and reporting a red while an instrument was blind asserts a cause the
+  run did not establish.
+
+  It is discoverable from EITHER file, which was the whole of the finding:
+
+    scripts/phase06-oracle.sh                — header EXIT CODES block; the
+      verdict tail consults UNKNOWNS (exit 3) before REDS (exit 1).  Stated by
+      THIS plan; the logic was already correct and was not changed.
+    scripts/phase06-incremental-control.sh   — header EXIT CODES block; the
+      verdict tail consults unknown (exit 2) before failed (exit 1).  Aligned
+      and stated by plan 06-20.
+
+  Each block now names the other file.  Until this commit the convention was
+  implemented in both and stated in one, which 06-20 explicitly asked not be
+  marked satisfied before 06-19 landed.
+
+  THE EXIT-CODE NUMBERING DIFFERENCE IS DELIBERATE AND IS NOT A FINDING.
+  The oracle numbers UNKNOWN 3 and usage/precheck 2; the incremental control
+  numbers UNKNOWN 2 and usage/refusal 3.  IN-08 reports the PRECEDENCE
+  disagreement, which is what was fixed.  Renumbering either would invalidate
+  committed evidence in this phase that cites those codes.  Recorded here, as
+  06-20 recorded it, so the next reader does not mistake it for a new finding.
+
+
+================================================================================
+6.  bash -n AND shellcheck
+================================================================================
+
+    $ bash -n scripts/phase06-oracle.sh
+    (no output, rc 0)
+
+    $ shellcheck -S warning scripts/phase06-oracle.sh
+    (no output, rc 0)
+
+  At the default severity shellcheck emits 21 informational/style notes, all of
+  them PRE-EXISTING and KNOWN — they are not re-reported here as findings:
+
+      10 x SC2016 (info)   "expressions don't expand in single quotes" — every
+                           one is an awk/python program or a remote `sh -c`
+                           program where single quotes are the point.
+       8 x SC2329 (info)   "this function is never invoked" — the class
+                           assertions, which are invoked INDIRECTLY through
+                           `run_assert "$@"` and `st_assert "$@"`.  06-18
+                           triaged these the same way.
+       2 x SC2129 (style)  consecutive appends to one file.
+       1 x SC2086 (info)   word splitting at the deliberately bare-word
+                           `find $NEWER_ARGS` site, which is `%q`-quoted.
+
+  None of the functions added by this plan (assert_field_view, st_grep_why,
+  self_test_vacuity) is among the SC2329 notes — checked, not assumed.
+
+
+================================================================================
+7.  THE FULL --self-test TRANSCRIPT, NEW SECTIONS
+================================================================================
+
+  $ bash scripts/phase06-oracle.sh --self-test ; echo rc=$?
+  rc=0        111 cases, 0 failures.   (79 before this plan; +32.)
+
+  The case total in the closing banner is COUNTED by the harness, never typed:
+  a typed total drifts the moment a case is added and then reads as authority.
+
+  Every new case below is a PAIR.  A guard that refuses everything is exactly
+  as useless as one that refuses nothing, and three of the four findings driven
+  here were guards that could never fire — so proving a refusal fires is only
+  half of it.
+
+--------------------------------------------------------------------------------
+== --self-test: WR-02 an EMPTY manifest cannot compare equal to another empty one ==
+  ----------------------------------------------------------------
+  ✓ couldnotcompare (expected): TWO EMPTY manifests are COULD NOT COMPARE, not 'identical before and after'.
+  ✓ 0 (expected): and the reason is the sibling's own words, carried over rather than paraphrased.
+  ✓ couldnotcompare (expected): an empty BEFORE against a populated AFTER is also COULD NOT COMPARE.
+  ✓ couldnotcompare (expected): and so is a populated BEFORE against an empty AFTER - the guard runs over both inputs.
+  ✓ identical (expected): two NON-EMPTY identical manifests are still identical - the guard discriminates.
+  ✓ differs (expected): and a real difference is still a RED - the guard did not swallow layer 2's red arm.
+
+== --self-test: WR-06 the write-side report cannot tick over a blind read ==
+  ----------------------------------------------------------------
+  ✓ 2 (expected): an UNREADABLE fields TSV returns the code run_assert routes to unknown().
+  ✓ 2 (expected): an EMPTY-but-readable fields TSV is the same could-not-look, not zero rows.
+  ✓ 0 (expected): a real field view still returns 0 - it is a REPORT and must not block a run.
+  ✓ 0 (expected): and its message states the denominator, so a zero there is empty-BY-MEASUREMENT.
+  ✓ 0 (expected): run_assert routes the blind read to UNKNOWN, not green.
+  ✓ 0 (expected): and NO GREEN TICK is printed for that label - the whole of WR-06.
+  ✓ 0 (expected): THE PAIR: over a real field view the same label DOES tick, so the routing
+    discriminates rather than having been turned off.
+
+== --self-test: IN-12 an empty field view is not 'six columns each' ==
+  ----------------------------------------------------------------
+  ✓ 2 (expected): an EMPTY fields.tsv is COULD NOT LOOK - zero items is not a column count.
+  ✓ 0 (expected): and the message says the view was not produced, not that every item had six columns.
+  ✓ 2 (expected): a missing fields.tsv is COULD NOT LOOK too.
+  ✓ 2 (expected): a five-column row is still COULD NOT LOOK - the old guard was not lost.
+  ✓ 0 (expected): THE PAIR: a well-formed six-column view still passes.
+
+== --self-test: IN-09 a DJ stratum that was never exercised is VACUOUS ==
+  ----------------------------------------------------------------
+  ✓ 1 (expected): a wanted count of ZERO is refused - 0 against 0 tests nothing.
+  ✓ 0 (expected): in its neighbour's own vocabulary, so the two read the same on the same question.
+  ✓ 0 (expected): and it names the deferral it converts from a silence into a refusal.
+  ✓ 0 (expected): THE PAIR: the true count of 2 still passes - the guard is not a blanket no.
+  ✓ 1 (expected): and a WRONG non-zero count is still the equality's RED, unchanged.
+
+== --self-test: WR-01 the scratch probe, and the old pipeline it replaces ==
+  ----------------------------------------------------------------
+  ✓ absent (expected): the probe answers 'absent' for …/st-vacuity/probe/nosuch.
+  ✓ empty (expected): the probe answers 'empty' for …/st-vacuity/probe/emptydir.
+  ✓ notadir (expected): the probe answers 'notadir' for …/st-vacuity/probe/afile.
+  ✓ 0 (expected): a POPULATED scratch answers 'nonempty <entry>', which the case arm refuses on.
+  ✓ 4 (expected): a PRESENT-BUT-UNREADABLE scratch exits 4 - find's status is read, not lost.
+  ✓  (expected): and prints nothing, so no word can be mistaken for 'absent' or 'empty'.
+  ✓ 0 (expected): DRIVEN RED: the OLD pipeline exits 0 on the SAME unreadable directory.
+  ✓  (expected): DRIVEN RED: and prints nothing - indistinguishable from an empty scratch.
+  ✓  (expected): THE PAIR for the driven red: the old shape prints the SAME empty answer for a
+    genuinely empty directory, so the two states were not distinguishable at all.
+
+  ✓ self-test: 111 case(s), every fail-closed branch behaved exactly as expected
+--------------------------------------------------------------------------------
+
+  THE PRE-EXISTING 79 CASES ARE ALL STILL GREEN and are not reproduced here;
+  the full 171-line transcript is what `--self-test` prints.  The sections that
+  matter for regression are:
+    layer 2's three outcomes (D-29; WR-13)  — 6/6 green, so the new `-s` guard
+      did not swallow layer 2's identical, differs or could-not-compare arms;
+    the class assertions, red branch first (D-27) — 23/23 green, including
+      `D-13: a DJ count of 2 against an expected 3 is a RED` and `D-13: the
+      same list against its true count of 2 is clean`, so the IN-09 guard did
+      not disturb the equality it was added beside;
+    the clean list must produce ZERO reds — 13/13 green.
+
+
+================================================================================
+8.  THE VERIFY WAS ITSELF DRIVEN RED
+================================================================================
+
+  Nine mutations, each reverting exactly one of this plan's changes in a COPY of
+  the script, with the corrected verify required to name that finding before the
+  assertion was trusted.  Harness: scratchpad `mutate-06-19.sh` + `m4-run.sh`.
+
+    M1  drop the WR-02 -s guard        FAIL: WR-02: the -s guard is not inside manifest_compare
+    M2  WR-06 back to `return 0`       FAIL: WR-06: the unreadable branch still returns 0
+    M3  drop the IN-12 -s guard        FAIL: IN-12: no -s guard on the field view
+    M4  restore the WR-01 pipeline     FAIL: WR-01: the in-container probe program still carries a pipeline
+    M5  drop the IN-09 vacuity guard   FAIL: IN-09: the guard does not name the deferral it exposes
+    M6  strip the IN-08 wording        FAIL: IN-08: the precedence convention is not stated
+    M7  remove the IN-08 sibling ptr   FAIL: IN-08: the sibling is not named
+    M8  hard-code the banner total     FAIL: the banner says 99 case(s) but 111 were printed
+    CONTROL  unmutated                 06-19 tasks 1 and 2 OK  (self-test: 111 cases)
+
+  The control matters as much as the mutations: a verify that fails on
+  everything proves nothing about the file it is run against.
+
+
+================================================================================
+9.  NOT DRIVEN
+================================================================================
+
+  Asserted by construction — review-by-reading plus `bash -n` and `shellcheck` —
+  and NOT by a firing observation.  Carried into plan 06-21's disposition
+  register.  06-18's four items are not restated here.
+
+  1.  WR-01 INSIDE THE CONTAINER.  The probe's program TEXT is driven, locally,
+      by `--self-test` over all five states including the unreadable one, and
+      the old shape is driven red beside it.  What is NOT driven:
+        (a) the container's /bin/sh, which is dash — the self-test runs the
+            program under macOS `/bin/sh` (bash in POSIX mode).  The construct
+            relied on (`out=$(cmd) || …` taking the substitution's status) is
+            POSIX-specified, not a bashism, but that is an argument and not a
+            measurement;
+        (b) `docker exec`'s propagation of the probe's exit 4 into RSH_RC;
+        (c) a $SCRATCH unreadable BY `beetle` SPECIFICALLY inside the container.
+      CONDITION THAT WOULD DRIVE IT: a container with `/tmp/p6` present and
+      root-owned 0700 — i.e. the state an aborted run between step 5 and step 12
+      actually leaves, reached by `docker exec -u root beets-flask mkdir -m 700
+      /tmp/p6` before a `--run`.  It is a REFUSAL PATH, so if the construction
+      is wrong it can only refuse a run that would otherwise have proceeded —
+      redder, never greener.
+
+  2.  THE FOUR NEW REFUSALS FROM A REAL ORACLE RUN.  WR-02's empty manifest,
+      WR-06's blind report, IN-12's empty field view and IN-09's zero DJ count
+      are all driven over synthetic fixtures, which is the honest level
+      available offline.  CONDITION THAT WOULD DRIVE THEM live: respectively an
+      empty sampled source folder; a `beet ls` that produces no output; the
+      same; and a 06-SAMPLE.md whose S5 rows sum to zero.  None is a state this
+      phase's committed sample can reach — which is precisely why all four sat
+      undetected.
+
+  3.  THE DOUBLED UNKNOWN FOR AN EMPTY fields.tsv.  The decision in § 2 is
+      driven at the FUNCTION level (report_multi_artist returns 2 on an empty
+      file; the field-view read returns 2 on the same file), but the two
+      messages have never been seen adjacent in one run's transcript, because
+      that needs a live run whose `beet ls` returns nothing.
+
+  4.  `assert_field_view`'s BAD-COLUMN arm FROM A REAL PATH CONTAINING A TAB.
+      Driven synthetically with a five-column row.  The behaviour is unchanged
+      from the inline code it replaces; only the empty-input arm is new.
+
+  5.  THE `notadir` ARM at the dirty-destination precheck.  Driven at the
+      program level (a regular file answers `notadir`); the CALL SITE's
+      precheck_fail for it has never fired.  CONDITION: `$SCRATCH` existing as
+      a regular file inside the container.
+
+  6.  THE `*)` UNRECOGNISED-ANSWER ARM.  Unreachable while the probe and the
+      call site agree, which is the point of having it: it exists to catch a
+      FUTURE edit that makes them disagree.  Recorded as undriveable-by-design
+      rather than as untested.
+
+  7.  THE EXIT-CODE NUMBERING DIFFERENCE between the two sibling scripts.  Not
+      a finding, not addressed, recorded in § 5 so it is not mistaken for one.
+
+
+================================================================================
+10. SCOPE
+================================================================================
+
+  Files changed by this plan:
+      scripts/phase06-oracle.sh                                  (commits bc81d5d, cfec2ec)
+      .planning/phases/06-.../artifacts/06-19-oracle-vacuity-driven.txt  (this file)
+      .planning/phases/06-.../06-19-SUMMARY.md
+
+  `STATE.md` and `ROADMAP.md` were deliberately NOT modified: the orchestrator
+  owns those writes after the wave merges.
+
+  No estate contact of any kind.  No ssh, no docker, no `--run`, no
+  `--baseline`.  LXC 100 was not touched by this plan.
+================================================================================
