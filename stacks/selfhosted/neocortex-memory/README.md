@@ -115,7 +115,15 @@ them, build `/deps` in the same image on another machine and stream the director
 
 `npm ci` runs against a *copy* of the manifests in a plain directory, not in `/app` — `/app` is
 mounted read-only, and `npm ci` starts by deleting `node_modules`, which cannot be done to a bind
-mount.
+mount. The result is mounted back at **`/app/memory/node_modules`**.
+
+**The manifests come from `memory/`, not the repo root.** The root `package.json` declares zero
+dependencies and says so: *"Dependencies live in `memory/package.json`; install them with
+`npm ci --prefix memory`."* Node resolves `require("pg")` from `memory/memory-api.cjs` by walking
+up from `memory/`, so that is the first directory it checks — the same layout the Macs use.
+
+Expect roughly **1 GB**: `@huggingface/transformers` brings the ONNX runtime with it. That is why
+this lives on the `automation` dataset and not on LXC 100's root.
 
 ### 6. Schema
 

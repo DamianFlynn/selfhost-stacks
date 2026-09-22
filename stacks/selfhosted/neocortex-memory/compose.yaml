@@ -120,7 +120,13 @@ services:
       - /mnt/fast/stacks-private/neocortex-platform:/app:ro
       # Production dependencies, built by the `deps` service below. Read-only here: the server has
       # no business writing to its own node_modules.
-      - /mnt/fast/appdata/automation/neocortex-memory/deps/node_modules:/app/node_modules:ro
+      #
+      # /app/memory/node_modules, NOT /app/node_modules. The root package.json declares no
+      # dependencies at all and says so: "Dependencies live in memory/package.json; install them
+      # with `npm ci --prefix memory`." Node resolves `require("pg")` from memory/memory-api.cjs by
+      # walking up from memory/, so this is the first directory it checks -- the same layout the
+      # Macs use.
+      - /mnt/fast/appdata/automation/neocortex-memory/deps/node_modules:/app/memory/node_modules:ro
       # The only two writable paths.
       - /mnt/fast/appdata/automation/neocortex-memory/root:/data/root
       - /mnt/fast/appdata/automation/neocortex-memory/models:/data/models
@@ -164,8 +170,14 @@ services:
   # happens in a plain directory (/deps), against a COPY of the manifests, and the api service
   # mounts the resulting node_modules back over /app/node_modules.
   #
-  # This needs outbound npm AND the ONNX runtime's native binary download. If LXC 100 cannot reach
-  # them, build /deps in this same image on another machine and stream the directory in.
+  # The manifests come from memory/, not the repo root: the root package.json declares zero
+  # dependencies and points at memory/package.json. Getting this wrong fails loudly (`cp: cannot
+  # stat /src/package-lock.json`), which is how it was found on 2026-09-22.
+  #
+  # This needs outbound npm AND the ONNX runtime's native binary download -- @huggingface/transformers
+  # makes this large: ~961 MB installed, which is exactly why it lives on the automation dataset and
+  # not on LXC 100's root. If LXC 100 cannot reach them, build /deps in this same image on another
+  # machine and stream the directory in.
   deps:
     profiles: ["setup"]
     image: node:22.23.2-bookworm-slim@sha256:48e4b67d85f87bd551df43704e24d252f56cc5f8e9718841aace50f19948f0f9
@@ -182,7 +194,7 @@ services:
       - pipefail
       - -c
       - >-
-        cp /src/package.json /src/package-lock.json /deps/ &&
+        cp /src/memory/package.json /src/memory/package-lock.json /deps/ &&
         npm ci --omit=dev &&
         echo "deps: $(ls /deps/node_modules | wc -l) packages"
     networks:
@@ -221,7 +233,7 @@ services:
       MEMORY_ADMIN_ACTOR_USER_ID: ${MEMORY_ADMIN_ACTOR_USER_ID:-}
     volumes:
       - /mnt/fast/stacks-private/neocortex-platform:/app:ro
-      - /mnt/fast/appdata/automation/neocortex-memory/deps/node_modules:/app/node_modules:ro
+      - /mnt/fast/appdata/automation/neocortex-memory/deps/node_modules:/app/memory/node_modules:ro
       - /mnt/fast/appdata/automation/neocortex-memory/root:/data/root
       - /mnt/fast/appdata/automation/neocortex-memory/models:/data/models
       - ./bin/memory-admin:/usr/local/bin/memory-admin:ro
