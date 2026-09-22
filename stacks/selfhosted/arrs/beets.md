@@ -1352,7 +1352,11 @@ Real, out of Phase 4's scope, and written down rather than silently carried:
 - **The "beets has no `undo` command" constraint is narrower than it reads, and two files still
   state it unqualified.** It remains true of the beets **CLI**, but beets-flask rc6 has a working
   `UNDO IMPORT`, verified by use (see § *One correction to this page's own § The recovery fence*).
-  `CLAUDE.md:152` and `.planning/PROJECT.md:187` both still carry the bare claim. Phase 4 was
+  `CLAUDE.md` and `.planning/PROJECT.md` both still carry the bare claim — grep either for
+  ``beets has no `undo` command``, one hit each. *(This pair was cited by line number until plan
+  06-28 replaced it with the anchor under GC-04. One of the two had already rotted and the other
+  had not, which is exactly why spot-checking one of a pair does not clear the pair; see
+  `artifacts/06-28-citations-and-counts.txt`.)* Phase 4 was
   expected to amend them and **no plan in it did**; neither file is in this plan's mandate. Deferred
   in writing as **DEF-04-01**, in
   `.planning/phases/04-collapse-to-one-tagger/deferred-items.md`, to **Phase 7**, which owns the
@@ -2250,10 +2254,20 @@ is non-discriminating, so these are the BLOCK verdicts**:
 > that prints every exempt line. A green D-04 now always **states how many lines it did not assert
 > over**, so 3 asserted can never be mistaken for 8.
 >
-> | file | lines | key |
+> | file | how many | how to find them — grep for the key, do **not** trust a line number |
 > |---|---|---|
-> | `scripts/phase06-oracle.sh` | 2166, 2179, 2313 | `$SCRATCH_OVERLAY` |
-> | `scripts/phase06-incremental-control.sh` | 462, 464 | `$ROOT/overlay.yaml` |
+> | `scripts/phase06-oracle.sh` | 3 | `$SCRATCH_OVERLAY` — the `-c` overlay argument on each |
+> | `scripts/phase06-incremental-control.sh` | 2 | `$ROOT/overlay.yaml` — the `-c` overlay argument on each |
+>
+> *(Both rows carried **line numbers** until 2026-09-22, when plan 06-28 replaced them with the
+> keys under **GC-04**. Both had rotted — the oracle's row by roughly six hundred lines, the
+> sibling's by forty — and the per-row before/after positions are recorded in
+> `artifacts/06-28-citations-and-counts.txt` rather than reproduced here, because a stale number
+> quoted in the page that replaced it is still a stale number a reader can copy. The keys above are
+> not a second description of the exemption — they are **literally the two alternations of
+> `D04_EXEMPT_RE`**, so the register and the regex cannot drift apart, and the grep that finds the
+> lines is the same test the check applies. A count is given instead of positions because the
+> count is what `D04_EXEMPT_BASELINE` pins; the positions never were.)*
 >
 > **Why — all three reasons hold, and an unexplained exemption would be worse than none.**
 > 1. Each passes a `-c` overlay redirecting `library`, `statefile` **and** `directory` together
