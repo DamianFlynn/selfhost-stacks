@@ -1421,7 +1421,33 @@ else
         echo "  ⚠️  DRIFT_REPO_ROOT override in effect — this run cannot report the vendored files green"
         EXIT_CODE=1
     fi
-    DRIFT_CMD="set -o pipefail; cd $DRIFT_REPO_ROOT || exit 3
+    # ── GC-17, 2026-09-22 (round-2 gap closure, plan 06-26) ─────────────────────────────────────
+    # EVERY OVERRIDABLE PATH THAT CROSSES INTO A REMOTE COMMAND STRING IS RENDERED ONCE WITH
+    # `printf '%q'`, AND ONLY THE RENDERED FORM IS INTERPOLATED. There are FOUR such sites in this
+    # file and they were all raw: this one, the D-03 CLI render, the D-04 scan and the consumers
+    # fold-in. A raw value word-splits on the REMOTE shell, so an override naming a path that
+    # contains a space failed with a shell error instead of driving the branch the knob exists to
+    # drive — and "an undriveable branch is an unproven branch" is the ONLY reason any of these
+    # knobs exist. The bound is worth stating rather than dramatising: all four are ADDITIVE knobs
+    # that cannot produce a green tick, and every default value contains no spaces. This is
+    # scripts/phase06-oracle.sh's WR-08 defect reproduced in the sibling file WR-08's plan did not
+    # own — three of the four sites were named by the cross-family review, the fourth (this one)
+    # was found while planning 06-26 and is fixed with them, because closing three of four
+    # instances of a class inside one file is the drift this whole round is about.
+    #
+    # ⚠️ THE BASH DEPENDENCY, STATED ONCE HERE AND CROSS-REFERENCED FROM THE OTHER THREE (GC-11).
+    #   `printf '%q'` renders for BASH. A single-line path containing a space renders as a
+    #   backslash escape that any POSIX shell accepts. A value containing a NEWLINE renders as
+    #   bash ANSI-C `$'…'` quoting, which requires root's login shell on 172.16.1.159 to be bash.
+    #   It is — bash 5.2, the same fact the `set -o pipefail` note above already relies on. And if
+    #   it ever were not, the failure is LOUD: a syntax error and a non-zero ssh status, landing in
+    #   this block's could-not-look arm. Not a quietly mangled command. Fail-closed, which is the
+    #   same grading GC-11 gave the identical dependency in phase06-oracle.sh's remote_sh_c().
+    # ⛔ DO NOT "fix" a future site of this shape by hand-escaping quotes inside the command string
+    #   instead. A `\"` wrapper survives a space but not a quote and not a `$`, and a half-measure
+    #   that LOOKS like a fix is worse here than the raw interpolation it replaces.
+    DRIFT_REPO_ROOT_Q=$(printf '%q' "$DRIFT_REPO_ROOT")
+    DRIFT_CMD="set -o pipefail; cd $DRIFT_REPO_ROOT_Q || exit 3
 _drift_pair() {
   r=\$(timeout $REMOTE_TIMEOUT git show \"HEAD:\$2\" | sha256sum | cut -d' ' -f1) || exit 4
   h=\$(timeout $REMOTE_TIMEOUT sha256sum \"\$3\" | cut -d' ' -f1) || exit 5
@@ -1536,6 +1562,10 @@ if [ "$D03_FLASK_CONTAINER" != "beets-flask" ] \
     echo "  ⚠️  a D03_* override is in effect — this run cannot report the mounts green"
     EXIT_CODE=1
 fi
+# GC-17, 2026-09-22 (plan 06-26). Rendered once, quoted, and it is the RENDERED form that is
+# interpolated into the (ii) CLI-render command string below. See the full note at the vendored-file
+# drift block above for why, and for the bash dependency `printf '%q'` carries (GC-11).
+D03_REPO_ROOT_Q=$(printf '%q' "$D03_REPO_ROOT")
 D03_BAD=0
 D03_LOOKED=0
 
@@ -1590,7 +1620,7 @@ else
 fi
 
 # --- (ii) the DORMANT CLI arm, rendered rather than inspected -----------------------------------
-D03_CLI_OUT=$(ssh -n $SSH_OPTS root@172.16.1.159 "cd $D03_REPO_ROOT || exit 3; timeout $REMOTE_TIMEOUT docker compose --profile $D03_CLI_PROFILE -f $D03_CLI_COMPOSE config 2>/dev/null")
+D03_CLI_OUT=$(ssh -n $SSH_OPTS root@172.16.1.159 "cd $D03_REPO_ROOT_Q || exit 3; timeout $REMOTE_TIMEOUT docker compose --profile $D03_CLI_PROFILE -f $D03_CLI_COMPOSE config 2>/dev/null")
 D03_CLI_RC=$?   # ssh propagates the remote status — NO local pipe above
 # Normalise the long-form `volumes:` the renderer emits into `source target ro|rw`, LOCALLY.
 # `read_only:` is EMITTED ONLY WHEN TRUE, so its ABSENCE means read-write — the default here is
@@ -1803,7 +1833,11 @@ if [ "$D04_EXEMPT_BASELINE" != "5" ]; then
     echo "  ⚠️  D04_EXEMPT_BASELINE override in effect — this run cannot report D-04 green"
     EXIT_CODE=1
 fi
-D04_CMD="cd $D04_REPO_ROOT || exit 3
+# GC-17, 2026-09-22 (plan 06-26). Rendered once, quoted, and it is the RENDERED form that is
+# interpolated into the scan's command string below. See the full note at the vendored-file drift
+# block above for why, and for the bash dependency `printf '%q'` carries (GC-11).
+D04_REPO_ROOT_Q=$(printf '%q' "$D04_REPO_ROOT")
+D04_CMD="cd $D04_REPO_ROOT_Q || exit 3
 echo D04-BEGIN
 timeout $REMOTE_TIMEOUT git grep -n -I -w -E -e 'beet' -e 'BEET[A-Z_]*' HEAD -- scripts stacks
 D04_RC=\$?
@@ -2303,13 +2337,37 @@ CONSUMERS_OVERRIDDEN=0
 if [ "$CONSUMERS_SCRIPT" != "/mnt/fast/stacks/scripts/check-music-consumers.sh" ]; then
     CONSUMERS_OVERRIDDEN=1
 fi
+# GC-17, 2026-09-22 (plan 06-26). Rendered once, quoted, and it is the RENDERED form that is
+# interpolated into the remote command string below. This knob names a FILE rather than a root, but
+# the boundary and the defect are identical. See the full note at the vendored-file drift block
+# above for why, and for the bash dependency `printf '%q'` carries (GC-11).
+CONSUMERS_SCRIPT_Q=$(printf '%q' "$CONSUMERS_SCRIPT")
 CONSUMERS_OUT=$(ssh -n $SSH_OPTS root@172.16.1.159 \
-    "timeout $REMOTE_TIMEOUT bash $CONSUMERS_SCRIPT 2>&1")
+    "timeout $REMOTE_TIMEOUT bash $CONSUMERS_SCRIPT_Q 2>&1")
 CONSUMERS_RC=$?   # ssh propagates the remote exit status — do NOT pipe before capturing this
 # Strip ANSI colour separately. \x1b is a GNU sed extension and this script runs on macOS, so the
 # ESC is spelled with bash's $'...' quoting instead.
 CONSUMERS_OUT=$(printf '%s\n' "$CONSUMERS_OUT" | LC_ALL=C sed $'s/\033\\[[0-9;]*m//g')
 
+# ── GC-14, 2026-09-22 (round-2 gap closure, plan 06-26) ─────────────────────────────────────────
+# WHY THE OVERRIDE NOTICE NOW APPEARS ON EVERY ARM AND NOT ONLY ON THE ONE THAT CAN GO GREEN.
+# `CONSUMERS_OVERRIDDEN` used to be consulted in exactly ONE place — inside the `-eq 0` arm, where
+# its job is to stop a TICK. Every other arm is non-green already, so it looked like there was
+# nothing left to stop. There was: on those arms the override does not change the VERDICT, it
+# changes what the verdict is ABOUT.
+#   * the `-eq 0` arm needs the notice to stop a GREEN TICK over an arbitrary file;
+#   * the `-eq 3` arm and the generic `else` need it to stop a WRONG DIAGNOSIS — the operator is
+#     told "the estate is off target" / "the audit is broken" when what was actually measured is
+#     an arbitrary file;
+#   * the empty-output and 124 arms need it most bluntly of all, because their text NAMES THE
+#     DEPLOYED PATH in its re-run advice, which under an override is a path nobody just ran.
+# That is exactly the shape of WR-10 and WR-03, which this same wave fixed elsewhere in this file.
+# THE VERDICTS ARE UNTOUCHED: every arm below already set EXIT_CODE=1 and still does, and the
+# ADDITIVE CONTRACT is unchanged — an override may drive any arm and can never produce the tick.
+# This is a DIAGNOSIS change only. Keep the notice a pure `echo`; the moment one of these guards
+# touches EXIT_CODE or a count, "pending" and "measured red" start to collapse into each other,
+# which is the distinction 06-DISPOSITIONS.md's WR-03 row exists to protect.
+#
 # Empty-output test first, deferring only to the bound — see the full argument on the freeze block
 # above. The ordering and the one qualification are identical in all three blocks on purpose.
 if [ -z "$CONSUMERS_OUT" ] && [ "$CONSUMERS_RC" -ne 124 ]; then
@@ -2318,6 +2376,11 @@ if [ -z "$CONSUMERS_OUT" ] && [ "$CONSUMERS_RC" -ne 124 ]; then
     echo "⚠️  UNKNOWN — 172.16.1.159 unreachable or the audit produced no output"
     echo "  The consumers state is unknown, NOT green. Check the host, then re-run:"
     echo "  ssh root@172.16.1.159 'cd /mnt/fast/stacks && git pull --ff-only && bash scripts/check-music-consumers.sh'"
+    if [ "$CONSUMERS_OVERRIDDEN" -eq 1 ]; then   # GC-14
+        echo "  ⚠️  CONSUMERS_SCRIPT override in effect — ran: $CONSUMERS_SCRIPT (not the deployed"
+        echo "  path). Read the re-run line above as the DEPLOYED audit, which is not what just"
+        echo "  produced no output. This says nothing about 172.16.1.159 being unreachable."
+    fi
     EXIT_CODE=1
 elif [ "$CONSUMERS_RC" -eq 124 ]; then
     # `timeout` expiry, not a failed assertion. See the freeze block above for why these two are
@@ -2330,6 +2393,11 @@ elif [ "$CONSUMERS_RC" -eq 124 ]; then
     echo "  100% with an IDLE CPU, read on atlantis 172.16.1.158), or Music Assistant is slow to"
     echo "  answer. Re-run with a larger budget before concluding anything:"
     echo "    REMOTE_TIMEOUT=300 bash scripts/quick-health-check.sh"
+    if [ "$CONSUMERS_OVERRIDDEN" -eq 1 ]; then   # GC-14
+        echo "  ⚠️  CONSUMERS_SCRIPT override in effect — ran: $CONSUMERS_SCRIPT (not the deployed"
+        echo "  path). What exceeded the bound was THAT file. Neither dockerd nor Music Assistant"
+        echo "  has been implicated by this run."
+    fi
     EXIT_CODE=1
 elif [ "$CONSUMERS_RC" -eq 0 ]; then
     # WR-09, same defect as the freeze block above. check-music-consumers.sh says
@@ -2345,6 +2413,11 @@ elif [ "$CONSUMERS_RC" -eq 0 ]; then
         echo "⚠️  UNKNOWN — the audit exited 0 but its '📊 6. Summary' block was not found."
         echo "  The section heading this fold-in anchors on has changed, so nothing here was"
         echo "  actually read. State is UNKNOWN, not green. See check-music-consumers.sh's summary."
+        if [ "$CONSUMERS_OVERRIDDEN" -eq 1 ]; then   # GC-14
+            echo "  ⚠️  CONSUMERS_SCRIPT override in effect — ran: $CONSUMERS_SCRIPT (not the"
+            echo "  deployed path). The heading that could not be found is THAT file's, so this is"
+            echo "  not evidence that the deployed audit's cross-file contract has moved."
+        fi
         EXIT_CODE=1
     elif [ "$CONSUMERS_OVERRIDDEN" -eq 1 ]; then
         # ADDITIVE CONTRACT. An overridden CONSUMERS_SCRIPT may drive any arm of this fold-in, but
@@ -2387,6 +2460,11 @@ elif [ "$CONSUMERS_RC" -eq 3 ]; then
         echo "⚠️  UNKNOWN — the audit exited 3 but its '📊 6. Summary' block was not found."
         echo "  The section heading this fold-in anchors on has changed, so the pending counts"
         echo "  were not actually read. State is UNKNOWN, not merely pending, and not green."
+        if [ "$CONSUMERS_OVERRIDDEN" -eq 1 ]; then   # GC-14
+            echo "  ⚠️  CONSUMERS_SCRIPT override in effect — ran: $CONSUMERS_SCRIPT (not the"
+            echo "  deployed path). The heading that could not be found is THAT file's, so this is"
+            echo "  not evidence that the deployed audit's cross-file contract has moved."
+        fi
         EXIT_CODE=1
     else
         echo "⚠️  CONF-04 MEASURED AND OPEN — artist rows at baseline, not at target (exit 3)"
@@ -2400,6 +2478,11 @@ elif [ "$CONSUMERS_RC" -eq 3 ]; then
             | sed -n '1,8p' | sed 's/^ */    /'
         echo "  Summary:"
         echo "$SUMMARY" | sed 's/^/    /'
+        if [ "$CONSUMERS_OVERRIDDEN" -eq 1 ]; then   # GC-14
+            echo "  ⚠️  CONSUMERS_SCRIPT override in effect — ran: $CONSUMERS_SCRIPT (not the"
+            echo "  deployed path). Exit 3 from an overridden audit is evidence about THAT file,"
+            echo "  not about the estate. CONF-04's state has NOT been measured by this run."
+        fi
         EXIT_CODE=1
     fi
 else
@@ -2408,6 +2491,11 @@ else
     echo "$CONSUMERS_OUT" | grep '❌' | sed 's/^ */    /'
     echo "  Summary:"
     echo "$CONSUMERS_OUT" | sed -n '/^📊 6\. Summary/,$p' | sed 's/^/  /'
+    if [ "$CONSUMERS_OVERRIDDEN" -eq 1 ]; then   # GC-14
+        echo "  ⚠️  CONSUMERS_SCRIPT override in effect — ran: $CONSUMERS_SCRIPT (not the deployed"
+        echo "  path). A non-zero exit from an overridden audit is evidence about THAT file, not"
+        echo "  about the estate. Nothing here says the deployed audit is broken."
+    fi
     EXIT_CODE=1
 fi
 
@@ -2790,13 +2878,46 @@ if [ "$EXIT_CODE" -ne 0 ]; then
     # Extended again 2026-09-18 (plan 05-02) when the library underscore-dir guard was added. Same
     # discipline, same commit, fourth statement of it. Note this one can fail on a host the rest of
     # the tail never mentions: atlantis, 172.16.1.158.
+    #
+    # Extended again 2026-09-22 (plan 06-26, GC-09) — AND THIS TIME AS A REPAIR, NOT AN ADDITION.
+    # THE DISCIPLINE THE FOUR PARAGRAPHS ABOVE STATE HAD ALREADY FAILED, THREE PLANS RUNNING:
+    #   * 06-16 gave the D-04 scan two new fatal conditions (K and L) and made the D-03 CLI
+    #     render's `exit 3` reachable;
+    #   * 06-17 added the consumers exit-3 arm;
+    #   * 06-23 added a third D-04 fatal condition (P, the vacuous asserted set);
+    # and the tail was not touched by any of them. Worse, THE D-03 AND D-04 BLOCKS WERE NEVER IN
+    # THE LIST AT ALL — that predates this phase, so the three plans above each widened a block
+    # the tail had never mentioned. Between them they hold 30 of the 98 executable `EXIT_CODE=1`
+    # sites in this file, second and third largest after the dashboard probe. Four in-band
+    # restatements of "update the tail in the SAME COMMIT" did not prevent it, WHICH IS EXACTLY
+    # WHY IT KEEPS BEING RESTATED: the rule is remembered when you are editing the tail and
+    # forgotten when you are editing a block, and it is only ever needed in the second case.
+    # So the list below is no longer maintained by recollection. It was REBUILT FROM A MECHANICAL
+    # ENUMERATION of every executable `EXIT_CODE=1` site attributed to its owning block, and that
+    # enumeration is recorded in
+    # .planning/phases/06-tagger-configuration-and-dry-run/artifacts/06-26-qhc-knobs-and-tail.txt.
+    # IF YOU ADD A BLOCK, RE-RUN THE ENUMERATION RATHER THAN EYEBALLING THIS LIST. A tail that is
+    # right about twelve blocks and silent about the thirteenth is the same defect as one that is
+    # right about none: it sends the reader to the green ones and costs them exactly the time this
+    # message exists to save.
+    # NOT ADDED HERE, deliberately: a new `EXIT-CODE BEHAVIOUR CHANGED` notice. This edit creates
+    # no new fatal condition — it only names conditions that already existed. 06-23 added the one
+    # new notice this round is entitled to (the thirteenth, for condition P).
     echo "❌ Health check FAILED. The failing block is whichever one above carries a ❌ or a ⚠️ —"
     echo "   that is any of: the Traefik or Authelia container probes, the Traefik dashboard"
     echo "   probe, the container counts, the music freeze harness, the consumers audit, the"
     echo "   library underscore-dir guard, the Jellyfin transcode retention audit, the"
-    echo "   vendored-file drift block, the extended.conf destructive-switch block, or the"
+    echo "   vendored-file drift block, the D-03 vendored-config mount block, the D-04"
+    echo "   throwaway -l scan, the extended.conf destructive-switch block, or the"
     echo "   container image-drift block."
     echo "   ⚠️ The image-drift block CANNOT fail on the drift count itself — if it is red, it is"
     echo "      a could-not-look or the unresolvable set moved. Do not go looking for a tag."
+    echo "   ⚠️ The consumers audit carries a ⚠️ BY DESIGN for as long as CONF-04 is open: its"
+    echo "      exit 3 means the D-22 artist rows were read successfully and are sitting at their"
+    echo "      RECORDED BASELINE. That is the state this project has written down, not a new"
+    echo "      fault — but it is also NOT a pass, and CONF-04 is NOT closed. It clears when"
+    echo "      ROADMAP entry criterion E6 discharges CONF-04's Jellyfin half, and on nothing"
+    echo "      else. Do not tune it out: the non-zero exit is what makes a later regression back"
+    echo "      to the baseline detectable by tooling instead of only by a human reading yellow."
     exit 1
 fi

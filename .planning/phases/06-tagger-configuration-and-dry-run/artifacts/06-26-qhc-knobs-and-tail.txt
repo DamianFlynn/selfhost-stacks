@@ -1,0 +1,779 @@
+================================================================================
+PLAN 06-26 — DRIVEN ARTIFACT
+GC-17 (four unquoted knob interpolations), GC-14 (an override invisible on the
+non-green consumers arms), GC-09 (a failing-block tail that names neither block
+it most needs to name).
+File under change: scripts/quick-health-check.sh
+Base commit: 9b28021 (wave 1 merged: 06-22, 06-23, 06-24, 06-25)
+Date: 2026-09-22
+================================================================================
+
+--------------------------------------------------------------------------------
+0. PROVENANCE — WHICH TOOLS ANSWERED, AND FROM WHERE
+--------------------------------------------------------------------------------
+
+WHERE THE MEASUREMENTS WERE TAKEN. Every check in this artifact was run from the
+EXECUTION WORKTREE, not from the main checkout:
+
+    /Users/damian/Development/damianflynn/selfhost-stacks/.claude/worktrees/agent-a0c86f2b1cf204a94
+
+⚠️ THE PLAN'S <verify> BLOCKS ALL OPEN WITH
+   `cd /Users/damian/Development/damianflynn/selfhost-stacks`.
+   That is the MAIN CHECKOUT. It does NOT carry this plan's edits. Obeying that
+   line literally measures the unmodified file and reports a green that describes
+   nothing. Two agents in wave 1 hit this independently. It was NOT obeyed here;
+   every command below was run from the worktree root, resolved with
+   `git rev-parse --show-toplevel` rather than from a hard-coded path.
+
+WHICH grep ANSWERED. The operator's interactive shell aliases `grep` to
+**ugrep 7.8.4**. The Bash tool inherits that alias, so a bare `grep` here is NOT
+the grep the shipping script uses. Every measurement below therefore calls
+**/usr/bin/grep** explicitly:
+
+    $ command -v grep ; grep --version | head -1
+    grep
+    ugrep 7.8.4 aarch64-apple-macosx +neon/AArch64; -P:pcre2jit; ...
+
+    $ /usr/bin/grep --version | head -1
+    grep (BSD grep, GNU compatible) 2.6.0-FreeBSD
+
+Platform: darwin 27.0.0. Remote host for the drives: LXC 100, 172.16.1.159
+(`uname -n` = selfhost), root's login shell bash — which is the dependency
+`printf '%q'` carries and which is stated in band at the first `_Q` assignment.
+
+
+================================================================================
+1. GC-17 — FOUR OVERRIDABLE PATHS REACHED A REMOTE COMMAND STRING UNQUOTED
+================================================================================
+
+--------------------------------------------------------------------------------
+1.1 THE SITES, LOCATED BY ANCHOR RATHER THAN BY LINE NUMBER
+--------------------------------------------------------------------------------
+
+The cross-family review cited `:1515`, `:1720`, `:2193`; the adjudication
+corrected those to `:1515`, `:1728`, `:2196`; and BOTH were numbered against a
+file that wave 1 has since moved. Line numbers were not used. Anchors were:
+
+    $ /usr/bin/grep -n 'cd \$DRIFT_REPO_ROOT\|cd \$D03_REPO_ROOT\|cd \$D04_REPO_ROOT\|bash \$CONSUMERS_SCRIPT' \
+        scripts/quick-health-check.sh
+    1424:    DRIFT_CMD="set -o pipefail; cd $DRIFT_REPO_ROOT || exit 3
+    1593:D03_CLI_OUT=$(ssh -n $SSH_OPTS root@172.16.1.159 "cd $D03_REPO_ROOT || exit 3; ...
+    1806:D04_CMD="cd $D04_REPO_ROOT || exit 3
+    2307:    "timeout $REMOTE_TIMEOUT bash $CONSUMERS_SCRIPT 2>&1")
+
+FOUR, not three. `DRIFT_CMD` is not in the review; it was found by the 06-26
+planner and is closed here with the other three. Fixing three of four instances
+of a class inside one file, in the round whose entire subject is siblings that
+drifted apart, would have been GC-08 committed deliberately.
+
+TWO CITATION CORRECTIONS INHERITED RATHER THAN REDISCOVERED (both re-checked):
+  (1) the reviewer numbered the diff, not the file — two of its three citations
+      landed on an `echo` and an assignment;
+  (2) the adjudication's summary line says "GC-15 was separately confirmed …
+      the three sites are real, at `quick-health-check.sh:1515`, `:1728`,
+      `:2196`". That sentence CONFLATES GC-15 WITH GC-17. GC-15 is two
+      `dex_cmd sha256sum` sites in scripts/phase06-oracle.sh and belongs to plan
+      06-27. Both findings are real; only the label was crossed.
+  ⇒ scripts/phase06-oracle.sh WAS NOT OPENED OR EDITED BY THIS PLAN. Verified:
+      $ git diff --name-only -- scripts/
+      scripts/quick-health-check.sh
+
+--------------------------------------------------------------------------------
+1.2 THE FIX
+--------------------------------------------------------------------------------
+
+Each knob is rendered ONCE with `printf '%q'` beside its own override-contract
+block, and it is the RENDERED form that is interpolated:
+
+    1449:    DRIFT_REPO_ROOT_Q=$(printf '%q' "$DRIFT_REPO_ROOT")
+    1450:    DRIFT_CMD="set -o pipefail; cd $DRIFT_REPO_ROOT_Q || exit 3
+    1568:D03_REPO_ROOT_Q=$(printf '%q' "$D03_REPO_ROOT")
+    1623:D03_CLI_OUT=$(ssh -n $SSH_OPTS root@172.16.1.159 "cd $D03_REPO_ROOT_Q || exit 3; ...
+    1839:D04_REPO_ROOT_Q=$(printf '%q' "$D04_REPO_ROOT")
+    1840:D04_CMD="cd $D04_REPO_ROOT_Q || exit 3
+    2344:CONSUMERS_SCRIPT_Q=$(printf '%q' "$CONSUMERS_SCRIPT")
+    2346:    "timeout $REMOTE_TIMEOUT bash $CONSUMERS_SCRIPT_Q 2>&1")
+
+NOT DONE, deliberately: no quote was hand-escaped inside any command string. A
+`\"` wrapper survives a space but not a quote and not a `$`, and a half-measure
+that looks like a fix is worse than the raw interpolation it replaces.
+
+UNCHANGED, deliberately: the shape of every `ssh` call, every `RC=$?` line
+directly beneath it (the "no local pipe before capturing the status" discipline),
+and the semantics of every remote command.
+
+THE BASH DEPENDENCY IS STATED IN BAND, ONCE, AND CROSS-REFERENCED FROM THE OTHER
+THREE SITES — naming GC-17 and GC-11. `printf '%q'` renders for bash: a
+single-line path with a space becomes a backslash escape any POSIX shell accepts;
+a value containing a NEWLINE becomes bash ANSI-C `$'…'` quoting, which requires
+root's login shell on 172.16.1.159 to be bash. It is. And a non-bash shell fails
+LOUDLY with a syntax error and a non-zero status — landing in each block's
+could-not-look arm — not quietly with a mangled command. Fail-closed; the same
+grading GC-11 gave the identical dependency in phase06-oracle.sh's remote_sh_c().
+
+--------------------------------------------------------------------------------
+1.3 THE DRIVE — ROUTE TAKEN: LIVE, ALL FOUR KNOBS AT ONCE, BEFORE AND AFTER
+--------------------------------------------------------------------------------
+
+LXC 100 WAS REACHABLE, so the live route was taken rather than the echo-the-
+constructed-string fallback the plan allows.
+
+    $ ssh -o ConnectTimeout=6 -o BatchMode=yes -n root@172.16.1.159 'echo REACHABLE; uname -n'
+    REACHABLE
+    selfhost
+
+NO `git push`, AND THE HOST WAS NOT ASKED TO `git pull`. A SCRATCH CHECKOUT was
+created under /tmp on LXC 100 instead, exactly as the plan requires. Two round-1
+plans instructed a push-and-pull and two executors correctly refused; that was
+not reintroduced. The scratch tree touches nothing outside /tmp/qhc-06-26:
+
+    /tmp/qhc-06-26/probe root with space/     <- a real git checkout, SPACES in the path
+    /tmp/qhc-06-26/consumers stub exit3.sh    <- SPACES in the filename
+    /tmp/qhc-06-26/consumers stub exit5.sh
+    /tmp/qhc-06-26/consumers stub exit3 renumbered.sh
+    /tmp/qhc-06-26/consumers stub exit0.sh
+
+It was built by `tar`-ing `stacks/selfhosted/arrs` and `scripts` out of the
+deployed checkout, `git init`, one commit (`9ca7a27`). NOTE: the host is at a
+PRE-Phase-6 commit, so `stacks/selfhosted/arrs/beets/flask-config.yaml` does not
+exist there — which is why the drift block's post-fix answer is exit 4 rather
+than a comparison. That is the correct branch for a tree missing that file, and
+it is a fact about the host's commit, not about the fix.
+
+Both runs set ALL FOUR knobs to space-bearing values simultaneously:
+
+    DRIFT_REPO_ROOT="/tmp/qhc-06-26/probe root with space"
+    D03_REPO_ROOT="/tmp/qhc-06-26/probe root with space"
+    D04_REPO_ROOT="/tmp/qhc-06-26/probe root with space"
+    CONSUMERS_SCRIPT="/tmp/qhc-06-26/consumers stub exit3.sh"
+
+BEFORE — `git show HEAD:scripts/quick-health-check.sh` (the base commit's file),
+run verbatim. Elapsed 9 s, script exit 1:
+
+    Vendored-file drift:
+      ⚠️  DRIFT_REPO_ROOT override in effect — this run cannot report the vendored files green
+    bash: line 1: cd: too many arguments                         <-- THE DEFECT
+      ⚠️  UNKNOWN — could not look: the drift comparison produced no output (ssh exit 3).
+      Nothing was compared. This is NOT 'the vendored files match'.
+    D-03 — one vendored beets config into both containers:
+      ⚠️  a D03_* override is in effect — this run cannot report the mounts green
+    bash: line 1: cd: too many arguments                         <-- THE DEFECT
+      ⚠️  UNKNOWN — rendering stacks/selfhosted/arrs/beets/beets.yaml yielded no bind mounts (ssh exit 3;
+      3 = no /tmp/qhc-06-26/probe root with space checkout). Nothing was asserted, ...
+    D-04 — throwaway -l plus -c overlay on every beet invocation:
+      ⚠️  D04_REPO_ROOT override in effect — this run cannot report D-04 green
+    bash: line 1: cd: too many arguments                         <-- THE DEFECT
+      ⚠️  UNKNOWN — the D-04 scan produced no sentinel (ssh exit 3; 3 = no
+      /mnt/fast/stacks checkout, 4 = 'git grep' failed). Nothing was scanned. ...
+    Music consumers audit: ❌ BROKEN (check-music-consumers.sh exit 127)   <-- THE DEFECT
+      Failed assertions:
+      Summary:
+
+READ WHAT THOSE FOUR LINES ACTUALLY SAY. This is worse than a plain error:
+
+  * The three `cd` sites report **exit 3 = "no <path> checkout"**. THE CHECKOUT
+    EXISTS. The remote shell split `cd /tmp/qhc-06-26/probe root with space` into
+    `cd` plus four arguments, bash refused with "too many arguments", the
+    non-zero status fired `|| exit 3`, and the block then printed a CONFIDENT
+    WRONG DIAGNOSIS naming the very path it had just been handed. The operator is
+    sent to look for a missing directory that is right there.
+  * The consumers site is worse again: exit **127**, command-not-found, because
+    `bash /tmp/qhc-06-26/consumers stub exit3.sh` ran `/tmp/qhc-06-26/consumers`.
+    It landed in the GENERIC `else` and was labelled ❌ BROKEN. So the exit-3 arm
+    — the branch `CONSUMERS_SCRIPT` exists to make driveable — WAS NOT REACHABLE
+    AT ALL through a space-bearing override. An undriveable branch is an unproven
+    branch, which is the stated reason the knob exists.
+
+AFTER — the same two runs against the fixed file. Elapsed 7 s, script exit 1:
+
+    Vendored-file drift:
+      ⚠️  DRIFT_REPO_ROOT override in effect — this run cannot report the vendored files green
+    fatal: path 'stacks/selfhosted/arrs/beets/flask-config.yaml' does not exist in 'HEAD'
+      ⚠️  UNKNOWN — could not look (ssh exit 4; 3 = no /tmp/qhc-06-26/probe root with space checkout,
+      4 = 'git show HEAD:<path>' failed, 5 = the appdata copy could not be hashed).
+    D-03 — one vendored beets config into both containers:
+      ⚠️  a D03_* override is in effect — this run cannot report the mounts green
+    D-04 — throwaway -l plus -c overlay on every beet invocation:
+      ⚠️  D04_REPO_ROOT override in effect — this run cannot report D-04 green
+      counts: raw=57  comment-stripped=27  invocation-shaped=2  (executable 0 = asserted 0 + exempt 0, documentation 2)
+      ⚠️  UNKNOWN — the invocation pattern matched NO executable line (0). ...
+    Music consumers audit: ⚠️  CONF-04 MEASURED AND OPEN — artist rows at baseline, not at target (exit 3)
+      This is NOT an audit failure and NOT a pass. The audit's own words:
+        CONF-04 IS NOT CLOSED
+        artist rows sit at the recorded baseline, not at target.
+        Discharges on ROADMAP entry criterion E6.
+      Summary:
+          MA version: 2.11.0-SCRATCH-STUB
+          artist rows: 3 at baseline (target 0)
+          FAILURES total: 0
+
+  * ZERO `cd: too many arguments` lines. The space survived as one word.
+  * DRIFT reached its `git show HEAD:<path>` half (exit 4) — the branch beyond
+    the `cd`, which pre-fix was unreachable.
+  * D-03 printed NO could-not-look at all: the render `cd`'d in, `docker compose
+    --profile manual -f … config` rendered from the SCRATCH tree, and the block
+    fell through to its normal comparison path.
+  * D-04 `cd`'d in and SCANNED THE SCRATCH TREE — `raw=57`, against 200 on the
+    real tree — then drove condition K's `executable == 0` UNKNOWN arm. A real
+    branch of the ladder, reached for the first time through this knob.
+  * CONSUMERS reached the **exit-3 arm**, which is the arm that could not be
+    reached at all before. This is simultaneously the GC-17 fix and the fixture
+    that GC-14 needed (§2).
+
+THE ADDITIVE CONTRACT IS INTACT AND WAS RE-CONFIRMED, WHICH IS THE POINT THAT
+BOUNDS THIS FINDING. In the AFTER run every one of the four knobs printed its
+override warning and forced `EXIT_CODE=1`; the whole script exited 1; and NOT ONE
+of the four blocks printed a green tick. The exit 1 comes from the OVERRIDE
+CONTRACT, not from a shell error. There is still no success-producing override
+anywhere in this file.
+
+    $ /usr/bin/grep -v '^[[:space:]]*#' scripts/quick-health-check.sh | /usr/bin/grep -c 'OVERRIDDEN=1'
+    9
+
+--------------------------------------------------------------------------------
+1.4 ⚠️ THE PLAN'S OWN TASK-1 VERIFY METHOD IS WRONG. REPORTED, NOT ABSORBED.
+--------------------------------------------------------------------------------
+
+The plan asserts, for each of the four tokens:
+
+    test "$(grep -v '^[[:space:]]*#' … | grep -cF 'cd $D04_REPO_ROOT')" -eq 0
+
+`grep -F` matches a SUBSTRING. `cd $D04_REPO_ROOT` is a PREFIX of the fixed
+line's `cd $D04_REPO_ROOT_Q`. So the plan's own verify reports 1 — i.e. FAILS —
+on a CORRECTLY fixed file. Measured on the fixed file:
+
+    the plan's method, verbatim (it expects 0):
+      cd $DRIFT_REPO_ROOT        -> 1
+      cd $D03_REPO_ROOT          -> 1
+      cd $D04_REPO_ROOT          -> 1
+      bash $CONSUMERS_SCRIPT     -> 1
+
+    corrected method — require the token NOT to be followed by `_Q`, i.e. add the
+    trailing separator that makes it a whole token:
+      'cd $DRIFT_REPO_ROOT '     -> 0
+      'cd $D03_REPO_ROOT '       -> 0
+      'cd $D04_REPO_ROOT '       -> 0
+      'bash $CONSUMERS_SCRIPT '  -> 0
+
+METHOD WRONG, CONCLUSION RIGHT. The fix is what the plan asked for; the
+instrument could not see it. The corrected method is the one recorded here and in
+the SUMMARY's verification table. This is the fifth plan in this round whose
+verify carried a wrong premise, which is itself the finding worth keeping.
+
+--------------------------------------------------------------------------------
+1.5 D-04 SELF-SCAN PERTURBATION CHECK FOR TASK 1
+--------------------------------------------------------------------------------
+
+scripts/quick-health-check.sh is itself inside D-04's scan scope, so prose added
+to it can move D-04's own counts. 06-23 moved raw/stripped 199/98 -> 200/99 and
+asked that the delta be stated rather than absorbed. Task 1's prose was written
+to add ZERO further matches, and that was measured, not assumed:
+
+    $ git grep -n -I -w -E -e 'beet' -e 'BEET[A-Z_]*' 9b28021 -- scripts stacks
+        raw 200   comment-stripped 99          (base commit)
+    $ git grep -n -I -w -E -e 'beet' -e 'BEET[A-Z_]*'      -- scripts stacks
+        raw 200   comment-stripped 99          (worktree, after Task 1)
+
+NO MOVEMENT. Also note this INDEPENDENTLY CONFIRMS 06-23's correction: the base
+commit reads 200/99, so any plan still quoting 199/98 is quoting the pre-merge
+numbers. The 06-26 plan does not pin these, but plan 06-28's GC-10 evidence
+should use 200/99 for a post-merge HEAD reading.
+
+--------------------------------------------------------------------------------
+1.6 OUT-OF-SCOPE OBSERVATIONS FROM THE DRIVE — NOT FIXED HERE
+--------------------------------------------------------------------------------
+
+Recorded because the drive surfaced them, NOT fixed, because neither is GC-17,
+GC-14 or GC-09 and this plan's scope boundary is those three.
+
+  (a) NEW FINDING, for plan 06-29 to disposition — THE D-04 COULD-NOT-LOOK
+      MESSAGE HARD-CODES A PATH THE BLOCK IS NOT NECESSARILY LOOKING AT.
+      The no-sentinel arm prints:
+          "(ssh exit 3; 3 = no /mnt/fast/stacks checkout, 4 = 'git grep' failed)"
+      but the `cd` above it uses `$D04_REPO_ROOT`. Under an override the operator
+      is told a path that was never visited. Its two siblings get this right —
+      the drift arm and the D-03 render arm both interpolate their own knob. So
+      this is the same "diagnosis names the wrong thing" class as GC-14, one
+      block across, and the same three-of-four-siblings shape as GC-17 itself.
+      Verdict is unaffected (the arm sets EXIT_CODE=1 regardless).
+      Visible in the BEFORE transcript above: the message says /mnt/fast/stacks
+      while the run was pointed at /tmp/qhc-06-26/probe root with space.
+
+  (b) PRE-EXISTING, UNRELATED TO THIS PLAN — the music freeze harness is ❌ on
+      the live estate in BOTH runs:
+          ❌ interpolated-host-path inventory MOVED: expected=12, found=13
+      That is check-music-freeze.sh running from the host's own deployed
+      checkout at /mnt/fast/stacks, which is at a pre-Phase-6 commit. Nothing in
+      this plan touches that file or that host path. Recorded so it is not
+      mistaken for fallout, and deliberately NOT fixed: out of scope.
+
+
+================================================================================
+2. GC-14 — THE CONSUMERS OVERRIDE WAS INVISIBLE ON EVERY NON-GREEN ARM
+================================================================================
+
+--------------------------------------------------------------------------------
+2.1 THE DEFECT, AS DRIVEN IN §1.3
+--------------------------------------------------------------------------------
+
+`CONSUMERS_OVERRIDDEN` was consulted in exactly one place: inside the
+`CONSUMERS_RC -eq 0` arm, where it stops a green tick. On the exit-3 arm and on
+the generic `else` it was never read. The §1.3 AFTER transcript is the proof —
+that run was pointed at
+
+    /tmp/qhc-06-26/consumers stub exit3.sh
+
+a four-line stub, and the health check reported:
+
+    Music consumers audit: ⚠️  CONF-04 MEASURED AND OPEN — artist rows at baseline, not at target (exit 3)
+
+with NOTHING anywhere in the block naming the file that answered. An operator
+reading that transcript is told THE ESTATE IS OFF TARGET. What was actually
+measured is an arbitrary file. The additive contract still held — the arm sets
+`EXIT_CODE=1` unconditionally — so this is a DIAGNOSIS defect, not a verdict
+defect. Same shape as WR-10 and WR-03, which this same wave fixed elsewhere.
+
+--------------------------------------------------------------------------------
+2.2 THE FIX — AND WHY IT LANDED ON SIX ARMS, NOT THE TWO THE PLAN NAMED
+--------------------------------------------------------------------------------
+
+The plan's action (a) names two arms: the exit-3 arm and the generic `else`. The
+plan's own must-have truth #3 is stricter — *"visible on every arm that can
+report it, not only on the arm that can report green"* — and the ladder has SIX
+arms that can report while overridden, of which exactly ONE already carried the
+notice. Closing two of six inside one block, in the round whose subject is
+siblings that drifted apart, is the same mistake GC-17's fourth site was about.
+So all six carry it now:
+
+    arm                                   before        after
+    empty output (host unreachable)       no notice     notice
+    124 bound expiry                      no notice     notice
+    exit 0, summary anchor NOT found      no notice     notice
+    exit 0, summary found                 NOTICE        NOTICE  (unchanged)
+    exit 3, summary anchor NOT found      no notice     notice
+    exit 3, CONF-04 pending               no notice     notice
+    generic else (any other status)       no notice     notice
+
+The empty-output and 124 arms deserve it most bluntly: their existing text names
+the DEPLOYED path in its re-run advice ("ssh … bash scripts/check-music-
+consumers.sh", "REMOTE_TIMEOUT=300 …"), which under an override is a path nobody
+just ran. The empty-output arm additionally says *"172.16.1.159 unreachable"* —
+a confident wrong diagnosis when the real cause is a stub that printed nothing.
+
+(b) WHY THE ARMS DIFFER IS STATED IN BAND, naming GC-14, in a paragraph directly
+above the ladder: the `-eq 0` arm needs the notice to stop a GREEN TICK; every
+other arm needs it to stop a WRONG DIAGNOSIS — the operator is told the estate is
+off target, or unreachable, or that the audit is broken, when what was measured
+is an arbitrary file. That is the shape of WR-10 and WR-03, which this same wave
+fixed elsewhere in this file. The paragraph also states the boundary for the next
+editor: KEEP EACH GUARD A PURE `echo`; the moment one touches `EXIT_CODE` or a
+count, "pending" and "measured red" start collapsing into each other, which is
+the distinction 06-DISPOSITIONS.md's WR-03 row exists to protect.
+
+WHAT WAS NOT TOUCHED, checked rather than asserted:
+
+  $ /usr/bin/grep -cF 'CONF-04 MEASURED AND OPEN' scripts/quick-health-check.sh
+  1            (exactly one occurrence, as before — the verdict text is untouched)
+  $ /usr/bin/grep -cF '📊 6\. Summary' scripts/quick-health-check.sh
+  5            (5 before, 5 after — every anchor guard intact, none added/removed)
+  $ /usr/bin/grep -v '^[[:space:]]*#' … | /usr/bin/grep -cF 'CONSUMERS_OVERRIDDEN'
+  9            (was 3 executable occurrences; the plan's floor is 5)
+  $ /usr/bin/grep -c '^# ⚠️  EXIT-CODE BEHAVIOUR CHANGED' scripts/quick-health-check.sh
+  13           (unchanged — this task creates no new fatal condition)
+
+No `warn()` call site was promoted into `FAILURES`. No verdict, no count, no exit
+code and no CONF-04 sentence changed. §2.3's per-arm table is the proof, not the
+claim.
+
+--------------------------------------------------------------------------------
+2.3 THE DRIVES — LIVE, FIVE SCENARIOS, PLUS AN ISOLATED PER-ARM EXIT_CODE PROOF
+--------------------------------------------------------------------------------
+
+Every stub lives on LXC 100 under /tmp/qhc-06-26 WITH A SPACE IN ITS FILENAME, so
+each of these also re-exercises GC-17's fourth site. Only `CONSUMERS_SCRIPT` was
+overridden for these runs; the three `*_REPO_ROOT` knobs were left at their
+defaults, so the rest of each run is the real estate.
+
+>>> (1) BEFORE — base-commit file, exit-3 stub
+
+    Music consumers audit: ❌ BROKEN (check-music-consumers.sh exit 127)
+      Failed assertions:
+      Summary:
+
+    Two defects in one line. The space word-split (GC-17) turned the run into a
+    command-not-found, so the exit-3 arm was never reached; and nothing anywhere
+    names the file that answered (GC-14).
+
+>>> (2) AFTER — exit-3 stub with a well-formed `📊 6. Summary`
+
+    Music consumers audit: ⚠️  CONF-04 MEASURED AND OPEN — artist rows at baseline, not at target (exit 3)
+      This is NOT an audit failure and NOT a pass. The audit's own words:
+        CONF-04 IS NOT CLOSED
+        artist rows sit at the recorded baseline, not at target.
+        Discharges on ROADMAP entry criterion E6.
+      Summary:
+          MA version: 2.11.0-SCRATCH-STUB
+          artist rows: 3 at baseline (target 0)
+          FAILURES total: 0
+      ⚠️  CONSUMERS_SCRIPT override in effect — ran: /tmp/qhc-06-26/consumers stub exit3.sh (not the
+      deployed path). Exit 3 from an overridden audit is evidence about THAT file,
+      not about the estate. CONF-04's state has NOT been measured by this run.
+
+    The CONF-04 verdict text is byte-identical to before. The override line is
+    additional. That is the whole of GC-14's fix.
+
+>>> (3) AFTER — exit-5 stub, the generic `else`
+
+    Music consumers audit: ❌ BROKEN (check-music-consumers.sh exit 5)
+      Failed assertions:
+        ❌ scratch stub failure line
+      Summary:
+      📊 6. Summary
+        FAILURES total: 1
+      ⚠️  CONSUMERS_SCRIPT override in effect — ran: /tmp/qhc-06-26/consumers stub exit5.sh (not the deployed
+      path). A non-zero exit from an overridden audit is evidence about THAT file, not
+      about the estate. Nothing here says the deployed audit is broken.
+
+>>> (4) AFTER — DEF-06-21-07: exit-3 stub whose `📊 6. Summary` is RENUMBERED to `📊 7.`
+
+    Music consumers audit: ⚠️  UNKNOWN — the audit exited 3 but its '📊 6. Summary' block was not found.
+      The section heading this fold-in anchors on has changed, so the pending counts
+      were not actually read. State is UNKNOWN, not merely pending, and not green.
+      ⚠️  CONSUMERS_SCRIPT override in effect — ran: /tmp/qhc-06-26/consumers stub exit3 renumbered.sh (not the
+      deployed path). The heading that could not be found is THAT file's, so this is
+      not evidence that the deployed audit's cross-file contract has moved.
+
+    ✅ DEF-06-21-07 IS NOW DRIVEN, AND IT PASSES. The exit-3 arm's heading-anchor
+    guard fires: the block reports UNKNOWN and prints NO counts, rather than
+    scraping numbers out of the wrong region. That was the exact condition the
+    deferred item specified ("renumber the heading in a scratch copy, point
+    CONSUMERS_SCRIPT at it, confirm the arm reports UNKNOWN rather than printed
+    counts"). It needed no estate contact beyond a /tmp stub, as the item
+    predicted. NOT a new finding — it behaves as plan 06-17 designed it to.
+    It is a residue of WR-03 and can be closed.
+
+>>> (5) AFTER — control: exit-0 stub, the arm that ALREADY carried the notice
+
+    Music consumers audit: ⚠️  CONSUMERS_SCRIPT override in effect — this run cannot report the consumers green
+      ran: /tmp/qhc-06-26/consumers stub exit0.sh (not the deployed path). Exit 0 from an overridden audit is
+      evidence about THAT file, not about the estate.
+        MA version: 2.11.0-SCRATCH-STUB
+        albums matched in MA: 1
+        ...
+
+    Unchanged, as intended. It is the model the other five were written from.
+
+>>> (6) ISOLATED PER-ARM EXIT_CODE PROOF
+
+WHY IT IS NEEDED. All five live runs above report WHOLE-SCRIPT exit 1 — but that
+is NOT discriminating, because the estate's music-freeze harness is independently
+❌ (§1.6b), so the script exits 1 whatever the consumers arm does. To make the
+claim "no verdict changed" checkable, the consumers ladder was EXTRACTED FROM THE
+SHIPPING FILE (not transcribed — a hand-copied ladder proves nothing about the
+ladder that ships) and run over synthetic fixtures with EXIT_CODE starting at 0.
+
+    awk '/^if \[ -z "\$CONSUMERS_OUT" \] && \[ "\$CONSUMERS_RC" -ne 124 \]; then$/{f=1} f; f && /^fi$/{exit}'
+
+    ⚠️ `f && /^fi$/{exit}`, NOT `/^fi$/{exit}` — a bare terminator matches many
+       times earlier in the file and silently extracts ZERO lines, producing a
+       harness that "passes" by doing nothing (06-23, deviation 3). The harness
+       asserts the extraction returned ≥40 lines before it will report:
+         pre-fix ladder  98 lines
+         post-fix ladder 128 lines
+
+    ⚠️ A SECOND SILENT-PASS TRAP WAS HIT WHILE BUILDING THIS AND IS RECORDED
+       BECAUSE IT IS THE SAME CLASS. The first version captured the arm's output
+       with `OUT=$(eval "$LADDER")`. A command substitution runs in a SUBSHELL, so
+       the ladder's `EXIT_CODE=1` was discarded and EVERY row reported 0 —
+       including rows that demonstrably set it. It was caught only because the
+       one row that SHOULD read 0 read the same as the other eight. Fixed by
+       redirecting to a file in the current shell.
+
+    arm (fixture)                               EXIT_CODE      override line
+                                              pre / post      pre / post
+    exit 3, overridden      (GC-14 target)      1  /  1        0  /  1   <-- FIXED
+    exit 3, NOT overridden                      1  /  1        0  /  0
+    exit 5, overridden      (generic else)      1  /  1        0  /  1   <-- FIXED
+    exit 5, NOT overridden                      1  /  1        0  /  0
+    exit 3, RENUMBERED heading, overridden      1  /  1        0  /  1   <-- FIXED
+    exit 0, overridden      (pre-existing)      1  /  1        1  /  1
+    exit 0, NOT overridden  (ONLY green arm)    0  /  0        0  /  0
+    empty output, overridden                    1  /  1        0  /  1   <-- FIXED
+    bound expiry 124, overridden                1  /  1        0  /  1   <-- FIXED
+
+    READ THE EXIT_CODE COLUMN FIRST: it is IDENTICAL pre and post in all NINE
+    rows. Not one verdict moved. The override column is the entire delta, and it
+    moves only from 0 to 1 — additive, never subtractive. The single green arm
+    (exit 0, not overridden) is still the single green arm.
+
+    (Harness artifact, stated so it is not read as a defect: the harness pins
+    CONSUMERS_SCRIPT to the exit3 stub's name for all rows, so the `ran:` path it
+    echoes is that one regardless of the fixture. The LIVE runs in (1)-(5) show
+    each arm echoing its own real path.)
+
+--------------------------------------------------------------------------------
+2.4 D-04 SELF-SCAN PERTURBATION CHECK FOR TASK 2
+--------------------------------------------------------------------------------
+
+    base commit 9b28021 : raw 200   comment-stripped 99
+    after task 1        : raw 200   comment-stripped 99
+    after task 2        : raw 200   comment-stripped 99
+
+NO MOVEMENT. Task 2's prose was written to avoid naming an invocation-shaped
+token at all, following 06-23's convention of pointing at the artifact rather
+than spelling the shape out in band.
+
+
+================================================================================
+3. GC-09 — THE FAILING-BLOCK TAIL
+================================================================================
+
+--------------------------------------------------------------------------------
+3.1 THE ENUMERATION — WHERE THE NEW LIST CAME FROM
+--------------------------------------------------------------------------------
+
+The review names two missing blocks. The list was NOT built from that. A tail
+that is right about two blocks and wrong about a third is the same defect, so it
+was rebuilt from a MECHANICAL ENUMERATION of every executable `EXIT_CODE=1` site,
+each attributed to its owning block by finding the greatest block-start ANCHOR at
+or before it. Anchors are grep'd, never hard-coded line numbers — four plans in
+this phase have already had to learn that lesson about stale citations.
+
+    $ /usr/bin/grep -n 'EXIT_CODE=1' scripts/quick-health-check.sh \
+        | /usr/bin/grep -v '^[0-9]*:[[:space:]]*#'
+    executable EXIT_CODE=1 sites found: 98
+
+    sites   from  owning block
+    -------------------------------------------------------------------------
+    1       1060  STARTUP GATE: coreutils timeout probe   [exits immediately]
+    4       1104  the Traefik container probe
+    4       1132  the Authelia container probe
+    4       1189  the container counts
+    9       1301  the Traefik dashboard probe
+    10      1410  the vendored-file drift block
+    17      1563  the D-03 vendored-config mount block          <-- NOT IN THE TAIL
+    13      1824  the D-04 throwaway -l scan                    <-- NOT IN THE TAIL
+    9       2074  the extended.conf destructive-switch block
+    4       2261  the music freeze harness
+    7       2384  the consumers audit
+    5       2556  the library underscore-dir guard
+    4       2643  the Jellyfin transcode retention audit
+    7       2766  the container image-drift block
+
+FOURTEEN blocks hold a site; THIRTEEN can reach the tail. The coreutils gate is
+excluded because it `exit 1`s on the spot, so the tail is never printed — that is
+a real distinction and it is stated rather than quietly dropped.
+
+The enumeration found EXACTLY the two blocks the review named and no others, so
+the review's list was right. It is still the enumeration that is load-bearing:
+the two missing blocks hold **30 of the 98 sites**, second and third largest
+after the dashboard probe, which is the measurement that makes GC-09 more than
+cosmetic.
+
+--------------------------------------------------------------------------------
+3.2 THE TAIL, BEFORE AND AFTER
+--------------------------------------------------------------------------------
+
+BEFORE (base commit 9b28021), rendered:
+
+    ❌ Health check FAILED. The failing block is whichever one above carries a ❌ or a ⚠️ —
+       that is any of: the Traefik or Authelia container probes, the Traefik dashboard
+       probe, the container counts, the music freeze harness, the consumers audit, the
+       library underscore-dir guard, the Jellyfin transcode retention audit, the
+       vendored-file drift block, the extended.conf destructive-switch block, or the
+       container image-drift block.
+       ⚠️ The image-drift block CANNOT fail on the drift count itself — if it is red, it is
+          a could-not-look or the unresolvable set moved. Do not go looking for a tag.
+
+AFTER:
+
+    ❌ Health check FAILED. The failing block is whichever one above carries a ❌ or a ⚠️ —
+       that is any of: the Traefik or Authelia container probes, the Traefik dashboard
+       probe, the container counts, the music freeze harness, the consumers audit, the
+       library underscore-dir guard, the Jellyfin transcode retention audit, the
+       vendored-file drift block, the D-03 vendored-config mount block, the D-04
+       throwaway -l scan, the extended.conf destructive-switch block, or the
+       container image-drift block.
+       ⚠️ The image-drift block CANNOT fail on the drift count itself — if it is red, it is
+          a could-not-look or the unresolvable set moved. Do not go looking for a tag.
+       ⚠️ The consumers audit carries a ⚠️ BY DESIGN for as long as CONF-04 is open: its
+          exit 3 means the D-22 artist rows were read successfully and are sitting at their
+          RECORDED BASELINE. That is the state this project has written down, not a new
+          fault — but it is also NOT a pass, and CONF-04 is NOT closed. It clears when
+          ROADMAP entry criterion E6 discharges CONF-04's Jellyfin half, and on nothing
+          else. Do not tune it out: the non-zero exit is what makes a later regression back
+          to the baseline detectable by tooling instead of only by a human reading yellow.
+
+ADDITION, NOT REWRITE: the existing wording is intact and the image-drift caveat
+sentence is untouched and still appears exactly once.
+
+ON (b), THE EXPECTED NON-GREEN STATE. The clause is deliberately NOT phrased as a
+reason to ignore the block. It says the ⚠️ is the recorded state, that it is still
+NOT a pass, that CONF-04 is NOT closed, that E6 owns the discharge, and that the
+non-zero exit is load-bearing because it is what makes a later regression
+detectable by tooling. That last sentence is lifted from the twelfth notice's own
+argument at the exit-3 arm, so the tail and the arm cannot drift apart.
+
+--------------------------------------------------------------------------------
+3.3 THE MECHANICAL COVERAGE CHECK — PROVEN, NOT EYEBALLED
+--------------------------------------------------------------------------------
+
+Every block name from §3.1 is checked against the tail's RENDERED text.
+
+⚠️ AN INSTRUMENT ERROR WAS HIT HERE AND IS RECORDED BECAUSE IT WOULD HAVE PRODUCED
+   A FALSE FAILURE. The first version of this checker flattened the tail's SOURCE
+   lines. That interleaves the `echo "` / `"` delimiters into the prose, so any
+   phrase that wraps across two echo lines — "the Traefik dashboard" + "probe," —
+   is split by ` " echo " ` and does not match. It reported FAIL for the dashboard
+   probe and for D-04, both of which ARE named. The fix is to EXECUTE the tail's
+   echo lines in a subshell and match what an operator actually reads.
+
+    BEFORE — base commit 9b28021 (checker exit 1):
+      PASS  the Traefik container probe
+      PASS  the Authelia container probe
+      PASS  the container counts
+      PASS  the Traefik dashboard probe
+      PASS  the vendored-file drift block
+      FAIL  the D-03 vendored-config mount block     <- NOT IN TAIL
+      FAIL  the D-04 throwaway -l scan               <- NOT IN TAIL
+      PASS  the extended.conf destructive-switch block
+      PASS  the music freeze harness
+      PASS  the consumers audit
+      PASS  the library underscore-dir guard
+      PASS  the Jellyfin transcode retention audit
+      PASS  the container image-drift block
+      FAIL  E6 not named
+      PASS  tail does NOT claim CONF-04 is closed
+      PASS  image-drift caveat count = 1
+      PASS  exit-code notice headers = 13
+      TAIL COVERAGE: INCOMPLETE          (11 of 13 blocks)
+
+    AFTER (checker exit 0):
+      PASS  ... all thirteen blocks ...
+      PASS  E6 named as the clearing condition
+      PASS  tail does NOT claim CONF-04 is closed
+      PASS  tail says explicitly that CONF-04 is NOT closed
+      PASS  image-drift caveat count = 1
+      PASS  exit-code notice headers = 13
+      TAIL COVERAGE: COMPLETE            (13 of 13 blocks)
+
+--------------------------------------------------------------------------------
+3.4 (c) THE SIXTH COMMENT PARAGRAPH, AND WHAT IT WAS NOT
+--------------------------------------------------------------------------------
+
+The five paragraphs above the tail each record a previous extension with its
+date, its plan and the same-commit reason. A sixth was added in that style —
+NOT a new numbered `EXIT-CODE BEHAVIOUR CHANGED` notice, because this task
+creates no new fatal condition; it only names conditions that already existed.
+06-23 added the one new notice this round is entitled to (the thirteenth, for
+condition P). Header count measured at 13 before and 13 after.
+
+The new paragraph says, in band, that the tail fell behind THREE plans (06-16,
+06-17, 06-23) despite FOUR in-band restatements of the discipline, and why that
+keeps happening: the rule is remembered while you are editing the tail and
+forgotten while you are editing a block, and it is only ever needed in the second
+case. So it stops relying on recollection — it points at §3.1's enumeration and
+tells the next author to RE-RUN IT rather than eyeball the list.
+
+--------------------------------------------------------------------------------
+3.5 D-04 SELF-SCAN PERTURBATION CHECK FOR TASK 3
+--------------------------------------------------------------------------------
+
+    base commit 9b28021 : raw 200   comment-stripped 99
+    after task 1        : raw 200   comment-stripped 99
+    after task 2        : raw 200   comment-stripped 99
+    after task 3        : raw 200   comment-stripped 99
+
+NO MOVEMENT ACROSS THE WHOLE PLAN. Both pins and every downstream count are
+untouched. Where the new tail text had to name the D-04 block it names it as
+"the D-04 throwaway -l scan", which is not invocation-shaped and carries no
+whole-word token the scan keys on — 06-23's convention of pointing at the
+artifact rather than spelling the shape out in band.
+
+
+--------------------------------------------------------------------------------
+3.6 THE UNOVERRIDDEN CONTROL RUN, AND ONE THING IT LOOKS LIKE BUT IS NOT
+--------------------------------------------------------------------------------
+
+A final live run of the fixed file with NO knob overridden at all, to show the
+normal path is unchanged. Whole-script exit 1, and:
+
+    D-03 — one vendored beets config into both containers:
+      ✅ one config, both containers: /mnt/fast/appdata/arrs/beets/config/config.yaml -> /config/config.yaml :ro
+         runtime  (beets-flask, inspected): config :ro, /mnt/tank/media :ro
+         declared (dormant CLI arm, rendered):       config :ro, /mnt/tank/media :ro
+    Music consumers audit: ✅ Both consumers see the library
+        MA version (live):           2.11.0b2   (assertions proven at 2.11.0b0)
+        albums matched in MA:        2   (target 2, ...)
+        albums matched in Jellyfin:  2   (target 2, ...)
+        FAILURES total:              0
+
+D-03 goes GREEN on the default path, which is the strongest single check on the
+GC-17 fix: the same `cd` that the override drove now renders the dormant CLI arm
+from the deployed checkout exactly as it did before. And the rebuilt tail renders
+correctly, naming D-03 and D-04.
+
+⚠️ READ THIS BEFORE FILING A CONTRADICTION. The consumers audit is GREEN here,
+   while the tail's new clause says it carries a ⚠️ by design while CONF-04 is
+   open. Both are correct, and the reason is the HOST'S COMMIT:
+
+     $ ssh root@172.16.1.159 "grep -c 'exit 3' /mnt/fast/stacks/scripts/check-music-consumers.sh"
+     0
+     $ ssh root@172.16.1.159 "git -C /mnt/fast/stacks log --oneline -1"
+     c67d497 fix(immich): raise server mem_limit 3g -> 6g ...
+
+   The deployed audit is a PRE-PHASE-6 copy and has NO exit-3 path at all — the
+   status plan 06-17 added does not exist in it yet, so it exits 0 and this
+   fold-in takes its green arm. The tail's clause describes the state the block
+   WILL report once this phase is merged and the host pulls, which is exactly
+   what the twelfth exit-code notice already says in band. It is not a claim
+   about today's transcript, and it was not written from one.
+
+   This also bounds the GC-14 drives honestly: the exit-3 arm CANNOT currently be
+   reached by the deployed audit on this estate at all. It is reachable only
+   through `CONSUMERS_SCRIPT`, which is precisely the reason that knob exists,
+   and precisely why GC-17's fourth site mattered rather than being cosmetic.
+
+================================================================================
+4. CLOSING POSITION
+================================================================================
+
+WHAT THIS PLAN CLAIMS
+  * GC-17 closed at FOUR sites (the review's three plus the one found while
+    planning); the additive override contract intact at all four; a space-bearing
+    override drives its intended branch instead of erroring — driven live.
+  * GC-14 closed on SIX arms, not the two the plan named, because must-have truth
+    #3 is "every arm that can report it". No verdict changed on any of nine
+    driven arms.
+  * GC-09 closed: the tail names all 13 blocks that can reach it, rebuilt from an
+    enumeration and checked mechanically, and names the consumers block's
+    expected ⚠️ with E6 as its clearing condition.
+  * DEF-06-21-07 driven, and it PASSES.
+
+WHAT THIS PLAN DOES NOT CLAIM
+  * It does NOT discharge ROADMAP entry criterion E6 and it does NOT close
+    CONF-04. The tail now SAYS CONF-04 is open; saying so is not closing it.
+  * It does NOT touch scripts/phase06-oracle.sh. GC-15 lives there and belongs to
+    plan 06-27.
+  * It does NOT claim the estate is healthy. The live runs show the music freeze
+    harness ❌ on a pre-existing condition (§1.6b) that this plan did not cause
+    and deliberately did not fix.
+
+NOT DRIVEN
+  * The three `*_REPO_ROOT` knobs pointed at a value containing a QUOTE or a `$`
+    rather than a space. `printf '%q'` handles all three identically and the
+    space case is the one the finding is about; the quote/`$` cases were argued,
+    not measured.
+  * A value containing a NEWLINE, which is the only case that reaches bash
+    ANSI-C `$'…'` quoting and therefore the only case that exercises the stated
+    bash dependency. Argued from GC-11's reproduction in the sibling file, and
+    fail-closed either way.
+  * The consumers 124 and empty-output arms against the LIVE script. Their new
+    override notices were driven in the extracted-ladder harness (§2.3 (6)) but
+    not end to end, because producing a real bound expiry or a real empty answer
+    on a healthy estate needs either a wedged host or a contrived stub sleep.
+  * The D-03 and D-04 blocks actually PRINTING the tail's new text on a run where
+    only they are red. The tail is a single unconditional message, so its content
+    does not vary by which block failed; the coverage check in §3.3 is the proof
+    that applies.
+
