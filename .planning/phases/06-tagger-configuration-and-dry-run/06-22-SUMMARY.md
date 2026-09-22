@@ -253,3 +253,21 @@ None.
 - **Anyone tightening `scripts/quick-health-check.sh`**: its six `| grep -q` sites are correct
   today *only* because that file carries no local `set` line. Adding `set -euo pipefail` to it
   arms all six at once.
+
+## Self-Check: PASSED
+
+Files claimed created/modified, checked on disk:
+
+| Path | Result |
+|---|---|
+| `scripts/check-beets-config.sh` | FOUND (59,229 bytes) |
+| `.planning/phases/06-tagger-configuration-and-dry-run/artifacts/06-22-pipefail-141.txt` | FOUND (28,536 bytes) |
+| `.planning/phases/06-tagger-configuration-and-dry-run/06-22-SUMMARY.md` | FOUND |
+
+Commits claimed, checked in `git log`:
+
+| Hash | Result |
+|---|---|
+| `b153c3b` | FOUND — `fix(06-22): remove the pipefail-141 pipeline …` |
+| `ad5a854` | FOUND — `fix(06-22): count case 6's two outcomes independently …` |
+| `76d1575` | FOUND — `docs(06-22): inventory the \| grep -q shape repo-wide …` |
