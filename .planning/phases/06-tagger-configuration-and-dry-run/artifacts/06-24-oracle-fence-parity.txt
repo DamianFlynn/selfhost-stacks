@@ -1,0 +1,206 @@
+================================================================================================
+06-24  ORACLE FENCE PARITY (GC-02) AND THE PIPELINE-SHAPE REMOVAL (GC-06)
+================================================================================================
+Plan:      .planning/phases/06-tagger-configuration-and-dry-run/06-24-PLAN.md
+Subject:   scripts/phase06-oracle.sh
+Driven on: 2026-09-22, macOS (darwin 27.0.0), local /bin/sh and bash. No ssh, no docker, no
+           estate contact of any kind - `--self-test` reaches neither.
+
+WHICH TOOLS ANSWERED, recorded because plan 06-22 found the answer changes the measurement:
+  $ command -v grep bash sh python3
+  /usr/bin/grep      (BSD grep 2.6.0-FreeBSD - NOT the operator's interactive ugrep alias,
+                      which only applies in zsh; inside a bash script /usr/bin/grep answers)
+  /bin/bash          (3.2.57(1)-release)
+  /bin/sh            (bash in sh-compatibility mode on macOS; the ESTATE's remote shell is dash
+                      inside the container - see NOT DRIVEN below)
+  /usr/bin/python3   (used only to build the mutant copy, never by the shipped script)
+
+================================================================================================
+PART 1 - GC-02: the receiving-side fences now carry the sending side's predicate
+================================================================================================
+
+THE DEFECT, RESTATED FROM THE CODE
+----------------------------------------------------------------------------------------------
+The sending-side fence (`:327`, `:342`) narrows the path suffix to the character class
+[A-Za-z0-9._-]. The three receiving-side fences - the copies that run in the very shell about to
+`rm -rf` / `rm -f` - were the BARE GLOBS `/tmp/p6|/tmp/p6-*` and `/mnt/fast/safety/phase06/*`.
+`[A-Za-z0-9._-]` excludes `/`; a glob does not. The inner layer therefore accepted `..` traversal
+while three comments beside it claimed it was "the one that cannot be bypassed by a future edit
+that forgets the first".
+
+Nothing was exploitable as shipped. The outer fence runs before the first ssh of every mode,
+`remote_sh_c` passes the path as a positional parameter, and `"$1"` is quoted at the `rm`. What
+was false was the CLAIM - and the claim is what a future reader would rely on when deleting the
+outer fence as "duplicated".
+
+SIDE BY SIDE - the outer fence and the inner fence, after this change
+----------------------------------------------------------------------------------------------
+OUTER (sending side, bash, scripts/phase06-oracle.sh:327-336):
+
+    SCRATCH_FENCE_OK=1
+    case "$SCRATCH" in
+      /tmp/p6) : ;;
+      /tmp/p6-*)
+        case "${SCRATCH#/tmp/p6-}" in
+          ''|*[!A-Za-z0-9._-]*) SCRATCH_FENCE_OK=0 ;;
+        esac
+        ;;
+      *) SCRATCH_FENCE_OK=0 ;;
+    esac
+
+INNER (receiving side, POSIX sh program text, SCRATCH_FENCE_SH at :1371):
+
+    case "$1" in
+      /tmp/p6) : ;;
+      /tmp/p6-*)
+        case "${1#/tmp/p6-}" in
+          ""|*[!A-Za-z0-9._-]*)
+            echo "REFUSED: the scratch path is not a throwaway root under /tmp/p6" >&2; exit 3 ;;
+        esac
+        ;;
+      *) echo "REFUSED: the scratch path is not a throwaway root under /tmp/p6" >&2; exit 3 ;;
+    esac
+
+The three differences are all forced, and none of them is the predicate:
+  1. `"$SCRATCH"` vs `"$1"`  - the path arrives as a positional parameter on the remote side.
+  2. `''` vs `""`           - the inner text is a single-quoted BASH string, so it cannot contain
+                              an apostrophe. dash treats the two case patterns identically.
+  3. a flag vs echo+exit 3  - the outer fence sets a variable the next line tests; the inner one
+                              is the last word before `rm`, so it refuses in place.
+The ALLOW-LIST ITSELF - `/tmp/p6` exactly, or `/tmp/p6-` plus one-or-more [A-Za-z0-9._-] - is now
+character for character the same at both layers. The stamp pair is the same story against
+`/mnt/fast/safety/phase06/`.
+
+BEFORE / AFTER, by count
+----------------------------------------------------------------------------------------------
+    $ grep -cF '/tmp/p6|/tmp/p6-*) : ;;' scripts/phase06-oracle.sh
+    before: 1        after: 0
+    $ grep -cF '/mnt/fast/safety/phase06/*) : ;;' scripts/phase06-oracle.sh
+    before: 2        after: 0
+    $ grep -cF '[!A-Za-z0-9._-]*' scripts/phase06-oracle.sh
+    before: 2  (both outer)        after: 5  (2 outer + 3 inner)
+
+THREE LITERAL COPIES RATHER THAN ONE SHARED STRING - the trade, stated
+----------------------------------------------------------------------------------------------
+`STAMP_WRITE_FENCE_SH` and `STAMP_RM_FENCE_SH` are byte-identical literals. Aliasing one to the
+other would make drift structurally impossible, which is stronger than testing for it. It was not
+done, for two reasons, and the second is the honest one:
+  (a) each destructive site keeps a fence it owns, so no site inherits another's correctness and
+      each can be driven on its own - which is what the cases below do; and
+  (b) the plan's own verification asserts the narrow character class appears at five or more
+      sites, and an alias yields four. The count is a proxy for "the class is everywhere it needs
+      to be"; satisfying it literally was preferred over arguing with it mid-execution.
+The residual risk that leaves - two copies that could drift again - is closed by an EXECUTED
+equality case rather than by a comment. That is the direct lesson of GC-02, whose root cause was
+not duplication but duplication that drifted in silence.
+
+DRIVEN - the inner fence ALONE, with the outer fence absent
+----------------------------------------------------------------------------------------------
+Each case executes a FENCE TEXT with the local /bin/sh and a hostile `$1`. The outer fence is not
+in the picture at all, which is the whole point: `:327` refused every one of these paths long
+before the first ssh, and the inner layer's documented purpose is to hold when a future edit
+removes that.
+
+WHY NONE OF THESE CASES CAN DELETE ANYTHING: the text executed is the fence only - a bare `case`
+that either falls through or prints and exits 3. It contains no `rm`, no `touch` and no
+redirection into a path, and three self-test cases assert that by inspecting the strings. The
+full programs (CLEANUP_PROG, STAMP_WRITE_PROG, STAMP_RM_PROG) are NEVER executed here, not even
+on paths the fence should refuse: were the fence to regress, driving the full program would turn
+this self-test into `rm -rf /tmp/p6-x/../../../home`. What carries the result from the fence text
+to the shipped program is structural instead - three cases assert each PROG literally BEGINS with
+the fence text that was driven, which is true by construction because the programs are built by
+concatenation at their definition.
+
+    $ bash scripts/phase06-oracle.sh --self-test      # exit 0
+
+    == --self-test: GC-02 the RECEIVING-side fences refuse traversal, with the outer one gone ==
+      ----------------------------------------------------------------
+      OK 3 (expected): the inner scratch fence REFUSES /tmp/p6-x/../etc - a glob admits '/', the class does not.
+      OK 3 (expected): and refuses /tmp/p6-x/../../../home, which the bare glob would have handed to rm -rf.
+      OK 3 (expected): and refuses the WR-07 word-splitting shape /tmp/p6-x /config at the inner layer too.
+      OK 3 (expected): an EMPTY suffix after /tmp/p6- is refused - '' is the first arm of the nested case.
+      OK 3 (expected): and a path sharing no prefix at all is still refused by the outer arm.
+      OK 3 (expected): the stamp WRITE fence refuses /mnt/fast/safety/phase06/../../../../etc/shadow.
+      OK 3 (expected): and so does the stamp RM fence - the copy adjacent to 'rm -f', driven separately.
+      OK 3 (expected): a bare prefix with no basename is refused: it would make dirname/rm -f act on the directory.
+      OK 0 (expected): THE PAIR: the literal /tmp/p6 is still ACCEPTED - the fence discriminates.
+      OK 0 (expected): THE PAIR: /tmp/p6-scratch01 is still accepted - a real suffix inside the class.
+      OK 0 (expected): THE PAIR: the real stamp path is still accepted by the write fence.
+      OK 0 (expected): THE PAIR: and by the rm fence - both copies accept the path the run actually uses.
+      OK 3 (expected): (re-driven to read the scratch refusal text)
+      OK 0 (expected): the scratch refusal names the SCRATCH path, so the operator knows which fence fired.
+      OK 3 (expected): (re-driven to read the stamp refusal text)
+      OK 0 (expected): and the stamp refusal names the STAMP path - the two wordings are deliberately distinct.
+
+    == --self-test: GC-02 the driven fence text IS the shipped program's first statement ==
+      ----------------------------------------------------------------
+      OK 0 (expected): CLEANUP_PROG BEGINS with the scratch fence text the cases above drove.
+      OK 0 (expected): STAMP_WRITE_PROG begins with the stamp write fence text.
+      OK 0 (expected): STAMP_RM_PROG begins with the stamp rm fence text.
+      OK 0 (expected): the scratch FENCE TEXT contains no 'rm' - the case above cannot delete anything.
+      OK 0 (expected): nor does the stamp write fence text.
+      OK 0 (expected): nor the stamp rm fence text.
+      OK 0 (expected): the two stamp fence copies are BYTE-IDENTICAL - drift is now a red case, not a review request.
+
+      OK self-test: 134 case(s), every fail-closed branch behaved exactly as expected
+
+    Case count: 111 before this plan -> 134 after. No pre-existing case was removed or weakened.
+
+THE REGRESSION, DRIVEN AGAINST A BARE-GLOB MUTANT
+----------------------------------------------------------------------------------------------
+A case that only proves the new predicate refuses does not prove the old one accepted. Every other
+guard in this self-test carries its driven red INLINE, holding the old shape as a literal beside
+the new one. That was deliberately NOT done here: embedding `/tmp/p6|/tmp/p6-*) : ;;` would leave
+a grep for the weak fence still returning a hit in the file, and that grep is precisely the
+detector a future reviewer will use to check GC-02 stayed closed. A permanently-hit grep is a
+broken detector.
+
+So the regression is driven against a MUTANT COPY of the whole script instead. The mutant reverts
+the three fences to their bare-glob text and changes nothing else; the builder asserts each of its
+three substitutions matched EXACTLY ONCE and aborts otherwise, so a silently-empty mutation cannot
+masquerade as a passing run.
+
+    $ python3 mutate.py scripts/phase06-oracle.sh mutant-oracle.sh
+    mutant written: 3 fences reverted to the bare-glob form
+
+    $ bash mutant-oracle.sh --self-test                # exit 1
+
+    == --self-test: GC-02 the RECEIVING-side fences refuse traversal, with the outer one gone ==
+      ----------------------------------------------------------------
+      FAIL SELF-TEST REGRESSION: expected '3', got '0': the inner scratch fence REFUSES /tmp/p6-x/../etc ...
+      FAIL SELF-TEST REGRESSION: expected '3', got '0': and refuses /tmp/p6-x/../../../home ...
+      FAIL SELF-TEST REGRESSION: expected '3', got '0': and refuses the WR-07 word-splitting shape /tmp/p6-x /config ...
+      FAIL SELF-TEST REGRESSION: expected '3', got '0': an EMPTY suffix after /tmp/p6- is refused ...
+      OK   3 (expected): and a path sharing no prefix at all is still refused by the outer arm.
+      FAIL SELF-TEST REGRESSION: expected '3', got '0': the stamp WRITE fence refuses .../../../../etc/shadow.
+      FAIL SELF-TEST REGRESSION: expected '3', got '0': and so does the stamp RM fence ...
+      FAIL SELF-TEST REGRESSION: expected '3', got '0': a bare prefix with no basename is refused ...
+      OK   0 (expected): THE PAIR: the literal /tmp/p6 is still ACCEPTED - the fence discriminates.
+      OK   0 (expected): THE PAIR: /tmp/p6-scratch01 is still accepted ...
+      OK   0 (expected): THE PAIR: the real stamp path is still accepted by the write fence.
+      OK   0 (expected): THE PAIR: and by the rm fence ...
+      FAIL SELF-TEST REGRESSION: expected '3', got '0': (re-driven to read the scratch refusal text)
+      FAIL SELF-TEST REGRESSION: expected '0', got '1': the scratch refusal names the SCRATCH path ...
+      FAIL SELF-TEST REGRESSION: expected '3', got '0': (re-driven to read the stamp refusal text)
+      FAIL SELF-TEST REGRESSION: expected '0', got '1': and the stamp refusal names the STAMP path ...
+
+      FAIL self-test: 11 of 134 case(s) FAILED
+
+READ THE SHAPE OF THAT RESULT, not just its colour:
+  * `got '0'` on every traversal case is the finding itself, executed. The bare glob did not merely
+    fail to complain - it RETURNED SUCCESS, which in the shipped program is the fall-through to
+    `rm -rf "$1"` on `/tmp/p6-x/../../../home` and `rm -f` on `/mnt/fast/safety/phase06/../../../../etc/shadow`.
+  * The four PASSING PARTNERS stay green under the mutant. The new cases therefore discriminate;
+    they are not a blanket "refuse everything" that would pass against any predicate.
+  * `/etc` stays refused under the mutant too - the bare glob was never wrong about paths sharing
+    no prefix. The hole was specific to `..` inside an otherwise-matching prefix, and the cases
+    localise it to exactly that.
+  * 11 of 134 failed and 123 passed: the mutation is confined to the fences. No unrelated section
+    moved, so the red is attributable.
+
+The mutant copy was deleted after the run. It was never tracked, never staged, and never lived
+under scripts/.
+
+================================================================================================
+PART 2 - GC-06: the three `printf | grep -q` pipelines (appended by task 2)
+================================================================================================

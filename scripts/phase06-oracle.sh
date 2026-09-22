@@ -1337,6 +1337,85 @@ nl="
 "
 printf "nonempty %s\n" "${out%%$nl*}"'
 
+# ==============================================================================================
+# THE RECEIVING-SIDE (SECOND-LAYER) FENCES, AND THE THREE DESTRUCTIVE PROGRAMS THEY GUARD
+# (WR-07; GC-02; T-06-90 / T-06-91 / T-06-92)
+# ==============================================================================================
+# These live HERE, beside the rest of the remote layer, for exactly the reason SCRATCH_PROBE_PROG
+# does: `--self-test` must be able to execute the fence TEXT - and the programs' own text - against
+# local fixtures, with no docker and no ssh. Their call sites are step 4 (the stamp write) and
+# step 12 (cleanup), both far below; both carry a pointer back here.
+#
+# GC-02, AND WHAT WAS ACTUALLY WRONG - stated once, here, and cross-referenced at the other two
+# sites rather than repeated. Until this change the three receiving-side fences were the BARE GLOBS
+# `/tmp/p6|/tmp/p6-*` and `/mnt/fast/safety/phase06/*`, while the sending-side fence at :327 has
+# always narrowed the suffix to [A-Za-z0-9._-]. That class EXCLUDES `/` and a glob does not, so the
+# inner layer accepted `/tmp/p6-x/../../../home` and `/mnt/fast/safety/phase06/../../../../etc/shadow`
+# and would have run `rm -rf` / `rm -f` on them - while the comment beside it claimed this was the
+# layer that could not be bypassed. The two copies WR-07 asked to be watched for drift had already
+# drifted, at birth, in the direction that matters. Nothing was exploitable as shipped, because the
+# sending fence runs before the first ssh of every mode; what was false was the CLAIM, and a false
+# claim about a fence is how the real fence eventually gets deleted as "duplicated".
+#
+# The predicate below is now the sending side's, in POSIX form: an outer `case` on the literal root,
+# a nested `case` on the suffix refusing the empty string and anything carrying a byte outside
+# [A-Za-z0-9._-]. `""` rather than `''` for the empty pattern only because these are single-quoted
+# bash strings; dash treats the two patterns identically.
+#
+# THREE LITERAL COPIES, ON PURPOSE, one per destructive site - so no site inherits another's
+# correctness by aliasing, and each can be driven on its own. The trade is deliberate and is the
+# lesson of GC-02: the defect was never the duplication, it was that the duplication drifted in
+# SILENCE. So drift is now an EXECUTED assertion rather than a request in a review brief -
+# `self_test_fences` drives each fence separately, compares the two stamp copies byte for byte, and
+# asserts each program actually BEGINS with the fence text the self-test drove.
+SCRATCH_FENCE_SH='case "$1" in
+  /tmp/p6) : ;;
+  /tmp/p6-*)
+    case "${1#/tmp/p6-}" in
+      ""|*[!A-Za-z0-9._-]*)
+        echo "REFUSED: the scratch path is not a throwaway root under /tmp/p6" >&2; exit 3 ;;
+    esac
+    ;;
+  *) echo "REFUSED: the scratch path is not a throwaway root under /tmp/p6" >&2; exit 3 ;;
+esac'
+
+STAMP_WRITE_FENCE_SH='case "$1" in
+  /mnt/fast/safety/phase06/*)
+    case "${1#/mnt/fast/safety/phase06/}" in
+      ""|*[!A-Za-z0-9._-]*)
+        echo "REFUSED: the stamp path is outside /mnt/fast/safety/phase06/" >&2; exit 3 ;;
+    esac
+    ;;
+  *) echo "REFUSED: the stamp path is outside /mnt/fast/safety/phase06/" >&2; exit 3 ;;
+esac'
+
+STAMP_RM_FENCE_SH='case "$1" in
+  /mnt/fast/safety/phase06/*)
+    case "${1#/mnt/fast/safety/phase06/}" in
+      ""|*[!A-Za-z0-9._-]*)
+        echo "REFUSED: the stamp path is outside /mnt/fast/safety/phase06/" >&2; exit 3 ;;
+    esac
+    ;;
+  *) echo "REFUSED: the stamp path is outside /mnt/fast/safety/phase06/" >&2; exit 3 ;;
+esac'
+
+# The two REFUSED wordings are deliberately DIFFERENT between the scratch path and the stamp path.
+# A shared message would cost the reader the site: `rm -rf` inside the container and `rm -f` on
+# LXC 100 are different blast radii, and the operator reading a refusal needs to know which fired.
+#
+# Each program is the fence text followed by its destructive command. The concatenation is what
+# makes the self-test meaningful: the text driven by `self_test_fences` is byte-for-byte the text
+# that runs on the far side, not a restatement of it.
+CLEANUP_PROG="$SCRATCH_FENCE_SH"'
+rm -rf "$1"
+[ -e "$1" ] && echo present || echo gone'
+
+STAMP_WRITE_PROG="$STAMP_WRITE_FENCE_SH"'
+mkdir -p "$(dirname "$1")" && rm -f "$1" && touch "$1" && echo stamped'
+
+STAMP_RM_PROG="$STAMP_RM_FENCE_SH"'
+rm -f "$1"'
+
 # The remote manifest. `%p %s %T@` catches path, size and mtime; the sha catches content;
 # together they catch additions and deletions too. GNU find's -printf is why this runs on LXC 100
 # and not on the macOS workstation.
@@ -2242,6 +2321,117 @@ self_test_vacuity() {
   rm -rf "$pdir"
 }
 
+# --- GC-02: the receiving-side fences, driven at the inner layer ALONE --------------------------
+# WHY THESE CASES CANNOT DELETE ANYTHING, stated in band because the claim has to be checkable by
+# the next reader without running it. Every behavioural case below executes a FENCE TEXT -
+# SCRATCH_FENCE_SH / STAMP_WRITE_FENCE_SH / STAMP_RM_FENCE_SH - and never CLEANUP_PROG,
+# STAMP_WRITE_PROG or STAMP_RM_PROG. A fence text is a bare `case` that either falls through or
+# prints and exits 3; it contains NO `rm`, NO `touch` and NO redirection into a path, and three
+# cases below assert exactly that by inspecting the strings. Driving the full programs instead -
+# even on paths the fence should refuse - would mean that a REGRESSION in the fence turns this
+# self-test into `rm -rf /tmp/p6-x/../../../home`. A self-test case that can destroy a real path
+# under a mistake is a worse defect than the traversal hole it is checking for, so the destructive
+# half is never executed here at all.
+#
+# What carries the result from the fence text to the shipped program is STRUCTURAL, not behavioural:
+# three cases assert that each PROG literally BEGINS with the fence text that was driven. The
+# programs are built by concatenation at their definition, so that prefix relation is the whole
+# link, and it breaks loudly if someone hand-edits a fence back into a program body.
+#
+# THE OUTER FENCE IS ABSENT FROM ALL OF THIS, which is the point. :327 refused every one of these
+# paths long before the first ssh; the inner layer's entire documented purpose is to hold when a
+# future edit removes that. These cases are the first thing in this file that tests the inner layer
+# on its own terms.
+ST_FENCE_ERR=""
+st_fence() { # $1 = expected exit  $2 = fence text  $3 = the path to drive  $4 = description
+  local frc=0
+  ST_FENCE_ERR=""
+  /bin/sh -c "$2" sh "$3" > "$OUT/st.fence.out" 2> "$OUT/st.fence.err" || frc=$?
+  ST_FENCE_ERR="$(cat "$OUT/st.fence.err")"
+  st_case "$1" "$frc" "$4"
+}
+
+# WHERE THE DRIVEN RED FOR THIS SECTION LIVES, AND WHY IT IS NOT IN THIS FILE. Every other guard in
+# this self-test carries its driven red inline, holding the OLD shape as a literal beside the new
+# one. That is deliberately NOT done here. The old shape was the bare glob
+# `/tmp/p6|/tmp/p6-*` (and its stamp twin), and embedding either literal would leave a grep for the
+# weak fence still returning a hit in this file - which is precisely the signal a future reviewer
+# will use to check that GC-02 stayed closed. A permanently-hit grep is a broken detector.
+# So the regression is driven against a MUTANT COPY of this whole script instead, built in a scratch
+# directory with the three fences reverted, and both transcripts are recorded in
+# .planning/phases/06-tagger-configuration-and-dry-run/artifacts/06-24-oracle-fence-parity.txt.
+# That form is also the stronger one: it shows these very cases going RED against a bare-glob build,
+# rather than showing a detached string behaving badly.
+self_test_fences() {
+  local rc=0
+
+  say ""
+  say "== --self-test: GC-02 the RECEIVING-side fences refuse traversal, with the outer one gone =="
+  rule
+  st_fence 3 "$SCRATCH_FENCE_SH" '/tmp/p6-x/../etc' \
+    "the inner scratch fence REFUSES /tmp/p6-x/../etc - a glob admits '/', the class does not."
+  st_fence 3 "$SCRATCH_FENCE_SH" '/tmp/p6-x/../../../home' \
+    "and refuses /tmp/p6-x/../../../home, which the bare glob would have handed to rm -rf."
+  st_fence 3 "$SCRATCH_FENCE_SH" '/tmp/p6-x /config' \
+    "and refuses the WR-07 word-splitting shape /tmp/p6-x /config at the inner layer too."
+  st_fence 3 "$SCRATCH_FENCE_SH" '/tmp/p6-' \
+    "an EMPTY suffix after /tmp/p6- is refused - '' is the first arm of the nested case."
+  st_fence 3 "$SCRATCH_FENCE_SH" '/etc' \
+    "and a path sharing no prefix at all is still refused by the outer arm."
+  st_fence 3 "$STAMP_WRITE_FENCE_SH" '/mnt/fast/safety/phase06/../../../../etc/shadow' \
+    "the stamp WRITE fence refuses /mnt/fast/safety/phase06/../../../../etc/shadow."
+  st_fence 3 "$STAMP_RM_FENCE_SH" '/mnt/fast/safety/phase06/../../../../etc/shadow' \
+    "and so does the stamp RM fence - the copy adjacent to 'rm -f', driven separately."
+  st_fence 3 "$STAMP_WRITE_FENCE_SH" '/mnt/fast/safety/phase06/' \
+    "a bare prefix with no basename is refused: it would make dirname/rm -f act on the directory."
+
+  # THE PASSING PARTNERS. Without these the cases above prove only that the fence refuses
+  # everything, which is exactly as useless as one that refuses nothing - the rule this file's
+  # vacuity section already states for every other guard.
+  st_fence 0 "$SCRATCH_FENCE_SH" '/tmp/p6' \
+    "THE PAIR: the literal /tmp/p6 is still ACCEPTED - the fence discriminates."
+  st_fence 0 "$SCRATCH_FENCE_SH" '/tmp/p6-scratch01' \
+    "THE PAIR: /tmp/p6-scratch01 is still accepted - a real suffix inside the class."
+  st_fence 0 "$STAMP_WRITE_FENCE_SH" '/mnt/fast/safety/phase06/oracle.stamp' \
+    "THE PAIR: the real stamp path is still accepted by the write fence."
+  st_fence 0 "$STAMP_RM_FENCE_SH" '/mnt/fast/safety/phase06/oracle.stamp' \
+    "THE PAIR: and by the rm fence - both copies accept the path the run actually uses."
+
+  # The refusal has to be LEGIBLE, and it has to name WHICH path was refused. `rm -rf` inside the
+  # container and `rm -f` on LXC 100 are different blast radii.
+  st_fence 3 "$SCRATCH_FENCE_SH" '/tmp/p6-x/../etc' "(re-driven to read the scratch refusal text)"
+  st_grep_why 0 "$ST_FENCE_ERR" "the scratch path is not a throwaway root under /tmp/p6" \
+    "the scratch refusal names the SCRATCH path, so the operator knows which fence fired."
+  st_fence 3 "$STAMP_RM_FENCE_SH" '/mnt/fast/safety/phase06/../../../../etc/shadow' \
+    "(re-driven to read the stamp refusal text)"
+  st_grep_why 0 "$ST_FENCE_ERR" "the stamp path is outside /mnt/fast/safety/phase06/" \
+    "and the stamp refusal names the STAMP path - the two wordings are deliberately distinct."
+
+  say ""
+  say "== --self-test: GC-02 the driven fence text IS the shipped program's first statement =="
+  rule
+  rc=1; case "$CLEANUP_PROG"     in "$SCRATCH_FENCE_SH"*)     rc=0 ;; esac
+  st_case 0 "$rc" "CLEANUP_PROG BEGINS with the scratch fence text the cases above drove."
+  rc=1; case "$STAMP_WRITE_PROG" in "$STAMP_WRITE_FENCE_SH"*) rc=0 ;; esac
+  st_case 0 "$rc" "STAMP_WRITE_PROG begins with the stamp write fence text."
+  rc=1; case "$STAMP_RM_PROG"    in "$STAMP_RM_FENCE_SH"*)    rc=0 ;; esac
+  st_case 0 "$rc" "STAMP_RM_PROG begins with the stamp rm fence text."
+  # The safety claim in the comment above, made executable rather than asserted.
+  rc=0; case "$SCRATCH_FENCE_SH"     in *"rm "*) rc=1 ;; esac
+  st_case 0 "$rc" "the scratch FENCE TEXT contains no 'rm' - the case above cannot delete anything."
+  rc=0; case "$STAMP_WRITE_FENCE_SH" in *"rm "*) rc=1 ;; esac
+  st_case 0 "$rc" "nor does the stamp write fence text."
+  rc=0; case "$STAMP_RM_FENCE_SH"    in *"rm "*) rc=1 ;; esac
+  st_case 0 "$rc" "nor the stamp rm fence text."
+  # GC-02's root cause was two copies that drifted in SILENCE. This is that drift check, executed.
+  # The comparison is reduced to 0/1 rather than passed to st_case directly: st_case ECHOES the
+  # observed value, and a multi-line fence text printed into the transcript on every run buries the
+  # surrounding cases and makes the banner unreadable.
+  rc=0; [ "$STAMP_WRITE_FENCE_SH" = "$STAMP_RM_FENCE_SH" ] || rc=1
+  st_case 0 "$rc" \
+    "the two stamp fence copies are BYTE-IDENTICAL - drift is now a red case, not a review request."
+}
+
 # --- The CR-02 could-not-look preflight, shared by the -newer sweep and the manifests ----------
 PREFLIGHT_WHY=""
 preflight_readable() { # $1 = local directory that must exist and be searchable
@@ -2269,6 +2459,7 @@ if [ "$MODE" = "self-test" ]; then
   self_test_core
   self_test_classes
   self_test_vacuity
+  self_test_fences
   say ""
   if [ "$ST_FAIL" -ne 0 ] || [ "$REDS" -ne 0 ]; then
     printf '  \342\234\227 self-test: %s of %s case(s) FAILED\n' "$((ST_FAIL))" "$((ST_RUN))"
@@ -2399,15 +2590,13 @@ ok "before-manifests captured: $(wc -l < "$OUT/src.before.meta" | tr -d ' ') fil
 
 # The stamp is created OUTSIDE both mounts, so taking it cannot itself perturb what it measures.
 # SECOND FENCE LAYER, deliberately duplicated. The sending-side DESTRUCTIVE-KNOB FENCE has already
-# refused anything outside /mnt/fast/safety/phase06/; this `case` runs in the very shell that is
-# about to `rm -f`, which is the layer that is actually adjacent to the destructive command. The
-# sending layer stops the common case; this one is the one that cannot be bypassed by a future
-# edit that forgets the first. scripts/phase06-incremental-control.sh:473 has the same shape.
-STAMP_WRITE_PROG='case "$1" in
-  /mnt/fast/safety/phase06/*) : ;;
-  *) echo "REFUSED: the stamp path is outside /mnt/fast/safety/phase06/" >&2; exit 3 ;;
-esac
-mkdir -p "$(dirname "$1")" && rm -f "$1" && touch "$1" && echo stamped'
+# refused anything outside /mnt/fast/safety/phase06/; STAMP_WRITE_FENCE_SH runs in the very shell
+# that is about to `rm -f`, which is the layer that is actually adjacent to the destructive command.
+# The sending layer stops the common case; this one is the one that cannot be bypassed by a future
+# edit that forgets the first - and as of GC-02 that sentence is TRUE, which it was not before. The
+# text, the reason the two copies are literal rather than aliased, and the account of how they
+# drifted at birth are all at THE RECEIVING-SIDE FENCES block beside remote_sh_c; it is not repeated
+# here. scripts/phase06-incremental-control.sh:473 has the same shape.
 rsh "timeout $REMOTE_TIMEOUT $(remote_sh_c "$STAMP_WRITE_PROG" "$STAMP_REMOTE")"
 rsh_classify "the -newer stamp" || exit 3
 ok "stamp taken outside both mounts: $STAMP_REMOTE"
@@ -2675,31 +2864,24 @@ say "  what D-34 aligns Jellyfin to by enabling PreferNonstandardArtistsTag on t
 
 # --- Step 12: cleanup ----------------------------------------------------------------------------
 say ""
-# SECOND FENCE LAYER, deliberately duplicated (WR-07; T-06-90). The DESTRUCTIVE-KNOB FENCE at the
-# top of this file has already refused any SCRATCH outside the allow-list, and remote_sh_c passes
-# the path as a parameter so nothing can re-split it in transit. This `case` is nevertheless
-# repeated INSIDE the remote program, because that is the shell that is about to run `rm -rf` and
-# it is the only layer actually adjacent to the destructive command: the sending layer stops the
+# SECOND FENCE LAYER, deliberately duplicated (WR-07; T-06-90; GC-02). The DESTRUCTIVE-KNOB FENCE
+# at the top of this file has already refused any SCRATCH outside the allow-list, and remote_sh_c
+# passes the path as a parameter so nothing can re-split it in transit. SCRATCH_FENCE_SH is
+# nevertheless repeated INSIDE the remote program, because that is the shell about to run `rm -rf`
+# and it is the only layer actually adjacent to the destructive command: the sending layer stops the
 # common case, the receiving layer is the one a future edit cannot quietly remove the protection
-# from. scripts/phase06-incremental-control.sh:473 fences its cleanup the same way.
-CLEANUP_PROG='case "$1" in
-  /tmp/p6|/tmp/p6-*) : ;;
-  *) echo "REFUSED: the scratch path is not a throwaway root under /tmp/p6" >&2; exit 3 ;;
-esac
-rm -rf "$1"
-[ -e "$1" ] && echo present || echo gone'
+# from. GC-02 is why that last clause is only true as of this change - see THE RECEIVING-SIDE
+# FENCES block beside remote_sh_c for the text and the account; it is not repeated here.
+# scripts/phase06-incremental-control.sh:473 fences its cleanup the same way.
 rsh "$(dex_cmd "$(remote_sh_c "$CLEANUP_PROG" "$SCRATCH")")"
 if [ "$RSH_RC" -eq 0 ] && [ "$RSH_OUT" = "gone" ]; then
   ok "container scratch '$SCRATCH' removed and its absence asserted"
 else
   bad "container scratch '$SCRATCH' is still present (or its removal could not be confirmed)"
 fi
-# Same duplication, same reason, for the host-side stamp.
-STAMP_RM_PROG='case "$1" in
-  /mnt/fast/safety/phase06/*) : ;;
-  *) echo "REFUSED: the stamp path is outside /mnt/fast/safety/phase06/" >&2; exit 3 ;;
-esac
-rm -f "$1"'
+# Same duplication, same reason, same GC-02 correction, for the host-side stamp: STAMP_RM_FENCE_SH,
+# cross-referenced rather than restated. self_test_fences asserts it is byte-identical to the write
+# side's copy, so the two cannot drift apart again without a case going red.
 rsh "timeout $REMOTE_TIMEOUT $(remote_sh_c "$STAMP_RM_PROG" "$STAMP_REMOTE")"
 
 say ""
