@@ -95,6 +95,8 @@
 #   --baseline    - every finding is printed and the script always ends zero, so the before-state
 #                   can be recorded while the mount and the provider do not yet exist.
 #   usage error   - exit 2, distinct from exit 1 for a failed assertion.
+#   pending       - exit 3. MEASURED, BUT NOT AT TARGET; NEVER GREEN. Added 2026-09-22 by plan
+#                   06-17 (WR-03). Read the EXIT 3 paragraph below before touching it.
 #   Why this is stated rather than inherited: check-renovate.sh exits zero on every finding except
 #   a missing renovate.json, and quick-health-check.sh used to never exit non-zero at all.
 #   Inheriting that silence is what let the docker `created`-state blind spot hide two down
@@ -102,6 +104,49 @@
 #
 #   --baseline exits 0 AFTER printing the summary, not before. The counts are still emitted.
 #   `exit $(( FAILURES > 0 ? 1 : 0 ))` is deliberately NOT used - it cannot express --baseline.
+#   It cannot express exit 3 either, which is a second reason it stays gone.
+#
+# EXIT 3 - THE PENDING STATE, MADE MACHINE-READABLE (WR-03, plan 06-17, 2026-09-22):
+#
+#   Sections 4b and 4c carry a deliberate THIRD state: a D-22 artist row sitting at its RECORDED
+#   BASELINE rather than at its target is PENDING - reported, counted in the summary, never ticked.
+#   The design is right and is argued at length at the ARTIST_PROOF_ROWS table. The DEFECT this
+#   exit code fixes is that the third state was invisible to the only machine-readable output this
+#   script has. `warn()` prints and touches no counter, so until 2026-09-22 the script printed the
+#   yellow CONF-04-is-not-closed block, then printed the GREEN BANNER directly underneath it, and
+#   exited 0 - while CONF-04 was measurably open.
+#
+#   That matters because quick-health-check.sh folds this script in and PROPAGATES ITS STATUS. A
+#   regression in which `PreferNonstandardArtistsTag` reverts to `false` AFTER Phase 7 discharges
+#   it would land the rows back on their baseline and exit 0 again: a regression detector
+#   reporting the regression in yellow text that nothing downstream reads. Section 4a's D-34
+#   option read already does this correctly, with `jellyfin_fail`; exit 3 makes the artist rows
+#   consistent with it WITHOUT collapsing pending into red.
+#
+#   Three things about exit 3, stated explicitly because the next reader will otherwise collapse
+#   the very distinction this file exists to preserve:
+#
+#     (a) 3 IS NOT A FAILURE. The rows were read successfully and hold exactly the value they were
+#         recorded holding. Nothing is broken and nothing needs debugging. `FAILURES` is 0 on every
+#         exit-3 run by construction, because the `FAILURES -gt 0 -> exit 1` gate is ABOVE the
+#         pending gate: a measured failure outranks a pending row and the run is red, not pending.
+#
+#     (b) 3 IS NOT GREEN, and no tooling may treat it as success. It is not "a pass with a note".
+#         The green banner sits BELOW the exit-3 gate in source order and is therefore UNREACHABLE
+#         while the pending count is non-zero. That ordering is the fix; the yellow text above it
+#         was always there and was never enough.
+#
+#     (c) THE JELLYFIN AND THE MA VERDICT ARE STILL SEPARATE AND ARE NEVER SUMMED INTO ONE CONF-04
+#         ANSWER. `JELLYFIN_ARTIST_PENDING` and `MA_ARTIST_PENDING` are added together for exactly
+#         one purpose - deciding whether ANY row is off target - and that is a different question
+#         from whether CONF-04 is closed. CONF-04 closes when BOTH halves read at target, and the
+#         two halves are at different points for different reasons: 4b is a probe-time option
+#         awaiting Phase 7's first write, 4c is a measured MA artist-ENTITY-stage discrepancy. Do
+#         not publish "N of M pending" as a CONF-04 completion figure, and never let a green MA
+#         half offset a pending Jellyfin one.
+#
+#   --baseline still exits 0 and is checked FIRST, above both gates. It exists to record a
+#   before-state; neither exit 1 nor exit 3 may fire in baseline mode.
 #
 # MUSIC ASSISTANT VERSION (D-21 as amended 2026-08-31, and D-56):
 #   Every assertion in this file was proven against Music Assistant **2.11.0b0 (BETA)**.
@@ -1300,6 +1345,12 @@ else
       pass "CONF-04 (D-22): [$ATAGPOS] $A_N distinct artist entities with distinct Ids — $A_NAMES"
       JELLYFIN_ARTIST_OK=$((JELLYFIN_ARTIST_OK + 1))
     elif [[ "$A_N" -eq "$ABASE" ]]; then
+      # ⚠ THIS BRANCH NOW DETERMINES THE PROCESS EXIT STATUS. JELLYFIN_ARTIST_PENDING is summed with
+      #   MA_ARTIST_PENDING at the exit path and a non-zero total terminates the script with exit 3
+      #   (WR-03, plan 06-17 — see the EXIT 3 paragraph in the header). `warn` alone no longer
+      #   describes what happens here: changing this branch changes the exit code of every consumer
+      #   of this script, quick-health-check.sh included. Same cross-file contract as the
+      #   `📊 6. Summary` heading, stated explicitly rather than left implicit.
       JELLYFIN_ARTIST_PENDING=$((JELLYFIN_ARTIST_PENDING + 1))
       warn "CONF-04 (D-22): [$ATAGPOS] $A_N entities, target $ATARGET — PENDING A RE-PROBE, not green."
       echo "      '$APATH_I'"
@@ -1404,6 +1455,11 @@ else
         pass "CONF-04 (D-22): [$ATAGPOS] MA reports $MA_N distinct artists for '$ASEARCH' — $MA_NAMES"
         MA_ARTIST_OK=$((MA_ARTIST_OK + 1))
       elif [[ "$MA_N" -eq "$AMABASE" ]]; then
+        # ⚠ THIS BRANCH NOW DETERMINES THE PROCESS EXIT STATUS. MA_ARTIST_PENDING is summed with
+        #   JELLYFIN_ARTIST_PENDING at the exit path and a non-zero total terminates the script with
+        #   exit 3 (WR-03, plan 06-17 — see the EXIT 3 paragraph in the header). The sum answers ONE
+        #   question, "is any row off target"; it is NOT a combined CONF-04 verdict and the two
+        #   consumers' verdicts are never merged. Changing this branch changes the exit code.
         MA_ARTIST_PENDING=$((MA_ARTIST_PENDING + 1))
         warn "CONF-04 (D-22): MA reports $MA_N artists for '$ASEARCH', the tag holds $ATARGET —"
         echo "      REPORTED at its 2026-09-20 baseline, NOT green. names: $MA_NAMES"
@@ -1579,6 +1635,17 @@ echo "  Jellyfin assertions failed:  $JELLYFIN_FAILURES"
 echo "  FAILURES total:              $FAILURES"
 echo ""
 
+# THE EXIT PATH RUNS IN THIS ORDER AND THE ORDER IS LOAD-BEARING:
+#   --baseline  -> 0   (always, by contract — the before-state must be recordable)
+#   FAILURES>0  -> 1   (a measured failure outranks a pending row)
+#   PENDING>0   -> 3   (measured, but not at target; never green)
+#   otherwise   -> the green banner
+# See the EXIT 3 paragraph in the header. Moving the green banner above the pending gate, or
+# deleting the gate, restores WR-03 exactly.
+
+# --baseline ALWAYS exits 0, by contract. It is checked FIRST, above both gates, because it exists
+# so a before-state can be recorded while the mount and the provider do not yet exist — neither
+# exit 1 nor exit 3 may fire in baseline mode.
 if [[ $BASELINE_MODE -eq 1 ]]; then
   echo -e "${YELLOW}--baseline: $FAILURES findings recorded, exiting 0. This is the before-state.${NC}"
   exit 0
@@ -1593,9 +1660,20 @@ fi
 # at a baseline rather than at its target, say so on the line ABOVE it — a green banner standing
 # alone over a summary with a non-zero pending count is exactly how a reader concludes CONF-04
 # passed. It has not: CONF-04 stays OPEN until both halves read at target.
+#
+# WR-03 (plan 06-17, 2026-09-22): THIS BRANCH NOW TERMINATES. Saying it in yellow was never enough,
+# because `warn()` touches no counter and the exit status is the only output anything downstream
+# reads. The sum is taken to answer ONE question — is any row off target — and is NEVER a combined
+# CONF-04 verdict; the two halves stay separate everywhere else in this file and in the summary.
 if [[ $(( JELLYFIN_ARTIST_PENDING + MA_ARTIST_PENDING )) -gt 0 ]]; then
   echo -e "${YELLOW}⚠️  CONF-04 IS NOT CLOSED: $JELLYFIN_ARTIST_PENDING Jellyfin and $MA_ARTIST_PENDING MA artist"
   echo -e "   row(s) are at a recorded baseline, not at target. Reported, not asserted — see 4b/4c"
   echo -e "   and stacks/selfhosted/arrs/beets.md § 'Phase 6 — tagger configuration and dry run'.${NC}"
+  echo -e "${YELLOW}   Exiting 3: measured, but not at target. NOT a failure (FAILURES is $FAILURES) and NOT"
+  echo -e "   green. Discharges on ROADMAP entry criterion E6, not here.${NC}"
+  exit 3
 fi
+
+# Reachable ONLY when FAILURES is 0 AND no artist row is pending. Text is byte-frozen: the
+# quick-health-check.sh fold-in and committed transcripts both read it.
 echo -e "${GREEN}✅ Both music consumers see the pinned albums through the NFS export${NC}"
