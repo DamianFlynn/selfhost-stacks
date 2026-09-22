@@ -1,0 +1,525 @@
+================================================================================
+06-18-oracle-fence-driven.txt — THE DESTRUCTIVE-KNOB FENCE, DRIVEN
+Phase 6 plan 06-18, 2026-09-22.  Instrument: scripts/phase06-oracle.sh
+Findings closed: WR-07, WR-08, IN-06, IN-11.
+================================================================================
+
+WHAT THIS FILE IS, AND WHAT IT IS NOT.
+
+  It is the record of driving `scripts/phase06-oracle.sh`'s two destructive
+  knobs — SCRATCH and STAMP_REMOTE — with hostile values and with an allowed
+  one, plus the full `--self-test` transcript that includes the new WR-08
+  apostrophe case and its driven red.
+
+  NO ORACLE `--run` WAS PERFORMED.  NO ORACLE `--baseline` WAS PERFORMED
+  AGAINST THE ESTATE.  This plan changed the instrument's REMOTE-COMMAND
+  CONSTRUCTION and its REFUSAL PATHS.  It did not change what the instrument
+  measures, and re-driving the oracle to "prove" that would have performed an
+  import during a paper phase.
+
+  `artifacts/06-11-oracle-run.txt` and `artifacts/06-11-wrote-nothing.txt`
+  remain Phase 6's CONF-03 / CONF-06 evidence, UNCHANGED and UNSUPERSEDED:
+  174 destinations, zero lines of difference against the committed expected
+  tree, and the three-layer wrote-nothing proof.  Nothing below replaces any
+  part of either.  The one thing this plan touched that could affect their
+  comparability — the `find -printf` format string behind layer 2's manifests —
+  is proven byte-identical in § 6.
+
+  The vocabulary is the house three-outcome one throughout, and "could not
+  look" stays distinct from "nothing is wrong" (CLAUDE.md § Health Checks).
+
+================================================================================
+§ 0 — WHAT WAS WRONG
+================================================================================
+The file's own header claimed, of every `${VAR:-default}` knob:
+
+    "every one of them can only make the verdict REDDER: a wrong host, a wrong
+     container or a wrong output directory produces a refusal or an UNKNOWN,
+     never a pass."
+
+That was FALSE AS WRITTEN for two of the knobs, and the falsity was structural
+rather than cosmetic.  SCRATCH and STAMP_REMOTE are not knobs on the verdict at
+all — they are ARGUMENTS TO DESTRUCTIVE REMOTE COMMANDS:
+
+    step 12   rm -rf $SCRATCH          inside the beets-flask container
+    step 12   rm -f  $STAMP_REMOTE     on LXC 100
+
+Both were interpolated unquoted.  `SCRATCH='/tmp/p6 /config'` word-split inside
+the container into `rm -rf /tmp/p6 /config`, which deletes the real
+`library.db`, the real `state.pickle` and the vendored config.  The
+dirty-destination precheck could not stop it: with two words, `[ ! -e … ]` is an
+ARGUMENT ERROR, not a refusal.
+
+This needs a deliberately hostile environment variable, so it is HARDENING and
+not an exploitable path.  But the sibling script written in the same phase,
+`scripts/phase06-incremental-control.sh`, already had the right shape — a
+literal `case` allow-list INSIDE the remote program (`:343`, `:473`) — and is
+not vulnerable.  The oracle now has that shape too, at both layers.
+
+================================================================================
+§ 1 — CONTROL 1: THE WORD-SPLITTING HOSTILE VALUE  (T-06-90)
+================================================================================
+  $ SCRATCH='/tmp/p6 /config' bash scripts/phase06-oracle.sh --self-test
+
+  ✗ REFUSED: SCRATCH='/tmp/p6 /config'.
+    SCRATCH is an argument to an 'rm -rf' run inside the container, not a knob on the verdict, so
+    it is fenced to a literal allow-list: exactly '/tmp/p6', or '/tmp/p6-' followed by one or more
+    characters drawn from [A-Za-z0-9._-]. Nothing else is accepted, and nothing was sent.
+
+  exit status: 2        (the house "precheck refusal" code)
+
+The refusal names the KNOB, the VALUE RECEIVED and the ALLOWED SHAPE.  All three
+are required: a refusal that only says "bad value" sends the operator back into
+the script to find out what a good one looks like.
+
+================================================================================
+§ 2 — CONTROL 2: THE PLAUSIBLE WRONG PREFIX
+================================================================================
+A fence that only catches the obviously hostile case is a fence against a
+strawman.  `/var/tmp/p6` is the value someone would actually type by accident.
+
+  $ SCRATCH=/var/tmp/p6 bash scripts/phase06-oracle.sh --self-test
+
+  ✗ REFUSED: SCRATCH='/var/tmp/p6'.
+    SCRATCH is an argument to an 'rm -rf' run inside the container, not a knob on the verdict, so
+    it is fenced to a literal allow-list: exactly '/tmp/p6', or '/tmp/p6-' followed by one or more
+    characters drawn from [A-Za-z0-9._-]. Nothing else is accepted, and nothing was sent.
+
+  exit status: 2
+
+Note also what the allow-list is NOT.  A bare `case "$SCRATCH" in /tmp/p6-*)`
+would still admit `/tmp/p6-x /config` — the very shape control 1 exists to
+refuse.  So the SUFFIX is separately constrained to `[A-Za-z0-9._-]`, which is
+narrower than the glob and is what makes the glob safe.
+
+================================================================================
+§ 3 — CONTROL 3: STAMP_REMOTE POINTED AT A REAL HOST PATH  (T-06-91)
+================================================================================
+  $ STAMP_REMOTE=/mnt/fast/stacks/oracle.stamp bash scripts/phase06-oracle.sh --self-test
+
+  ✗ REFUSED: STAMP_REMOTE='/mnt/fast/stacks/oracle.stamp'.
+    STAMP_REMOTE is an argument to an 'rm -f' run on LXC 100, not a knob on the verdict, so it is
+    fenced to the literal prefix '/mnt/fast/safety/phase06/' followed by one or more characters
+    drawn from [A-Za-z0-9._-]. Nothing else is accepted, and nothing was sent.
+
+  exit status: 2
+
+`/mnt/fast/stacks` is the repo checkout on LXC 100.  The value is chosen to be
+one where an `rm -f` would have mattered.
+
+================================================================================
+§ 4 — CONTROL 4: AN ALLOWED VALUE MUST PASS  (T-06-92, the discrimination control)
+================================================================================
+A fence that refuses everything is not a fence — it is an outage, and it invites
+the next person to delete it.  So the allowed case is driven too.
+
+  $ SCRATCH=/tmp/p6-gapclose bash scripts/phase06-oracle.sh --self-test
+
+  … the full self-test runs, 80 cases, every one green …
+  ✓ self-test: every fail-closed branch behaved exactly as expected
+
+  exit status: 0
+
+================================================================================
+§ 5 — "BEFORE ANY SSH": PROVEN BY OBSERVATION, NOT ASSERTED
+================================================================================
+The claim that the refusals happen before any remote call is the load-bearing
+one — it is what makes driving them safe, and it is exactly the kind of claim
+that is usually asserted rather than measured.  It is measured here.
+
+METHOD.  `ssh` was replaced on PATH by a POISONED STUB that appends its own argv
+to a log and exits 255.  It never execs the real client, so it CANNOT reach the
+estate.  Before any control ran, `command -v ssh` was asserted to resolve to the
+stub, and the run aborts if it does not (fail closed: "could not install the
+stub" must not read as "nothing called ssh").
+
+  ssh resolves to: <scratch>/bin/ssh   [poisoned stub: records, never connects]
+
+RESULT ACROSS CONTROLS 1–4:
+
+  Total ssh invocations recorded: 0
+  --- contents of ssh-invocations.log ---
+  --- end ---                                (the file is empty)
+
+THE SAME HOSTILE VALUE AGAINST A MODE THAT DOES SSH.  `--self-test` is offline
+by construction, so a zero on it alone would be weak evidence.  `--baseline`
+reaches step 1 and issues a `docker inspect` over ssh, so it is the mode that
+can discriminate:
+
+  $ SCRATCH='/tmp/p6 /config' bash scripts/phase06-oracle.sh --baseline
+      (poisoned stub on PATH)
+
+  ✗ REFUSED: SCRATCH='/tmp/p6 /config'.
+    … same refusal text …
+  exit status: 2
+  ssh invocations recorded: 0
+
+AND THE COUNTER ITSELF IS CONTROLLED.  A zero proves nothing if the counter is
+broken.  The same mode with an ALLOWED SCRATCH, pointed at TEST-NET-1
+(192.0.2.1, RFC 5737, which is not this estate and is not routable):
+
+  $ SCRATCH=/tmp/p6-gapclose LXC_HOST=192.0.2.1 bash scripts/phase06-oracle.sh --baseline
+
+  ✓ sampled folders read from 06-SAMPLE.md: 10 folders, 174 audio files
+  ✓ fixture and sample agree on the denominator: 174 lines / 174 files
+  ⚠ UNKNOWN, not green: the container status of beets-flask came back empty (ssh exit 255). Nothing was read.
+  exit status: 3
+  ssh invocations recorded: 1
+  --- contents of ssh-invocations.log ---
+  SSH CALLED: -n -o BatchMode=yes -o ConnectTimeout=5 root@192.0.2.1 timeout 300 docker inspect -f '{{.State.Status}}' beets-flask
+  --- end ---
+
+So: the counter increments when the fence passes, and stays at zero when the
+fence refuses.  The refusal precedes the first remote call, observed rather than
+argued.  Note also the shape of the failure when ssh cannot connect — UNKNOWN
+and exit 3, "could not look", never a pass.
+
+  (Both `--baseline` invocations above ran ONLY against the poisoned stub and
+   TEST-NET-1.  Neither reached LXC 100.  No stamp was written on the estate and
+   no container was touched.  This is not the `--baseline` the plan's constraint
+   forbids, which is the one that talks to 172.16.1.159.)
+
+================================================================================
+§ 6 — WR-08: THE APOSTROPHE, AND THE -printf FORMAT'S BYTE IDENTITY
+================================================================================
+THE DEFECT.  Three sites built `sh -c 'find <printf %q path> …'`.  `%q` quotes
+for BASH, and bash quotes an apostrophe as `\'` — which TERMINATES the
+single-quoted program the result was embedded in.  A folder named
+`Guns N' Roses - Greatest Hits`, an entirely ordinary shape for this corpus,
+produced a remote SYNTAX ERROR that reads as an infrastructure fault.  Measured:
+
+  $ sh -c 'LC_ALL=C find /…/Guns\ N\'\ Roses\ -\ \$Greatest -type f'
+  bash: -c: line 1: unexpected EOF while looking for matching `''
+  exit 2
+
+THE FIX.  The program text now carries NO PATH AT ALL.  Paths are passed as
+POSITIONAL PARAMETERS of the remote `sh -c` and referenced as "$1" inside it.
+`%q` is still used — on the ARGUMENTS, where the result lands in a bash WORD,
+which is the one context `%q` is correct for.  Helper: `remote_sh_c`.
+
+  sh -c $'LC_ALL=C find "$1" -type f -printf "%p\t%s\t%T@\n"' sh /…/Guns\ N\'\ …
+
+THE ONE SITE DELIBERATELY LEFT ALONE.  `find $NEWER_ARGS -newer $STAMP_REMOTE
+-type f` lands in a BASH WORD, not inside an `sh -c` program.  `%q` is correct
+there and changing it would have broken a working site.  Verified unchanged.
+
+THE -printf FORMAT IS BYTE-IDENTICAL.  `manifest_compare` and
+`normalise_transcript` both key on the field layout, and the committed
+174-destination artifact's comparability depends on it.  Proven, not assumed, by
+stubbing `find` with a program that prints its own argv and running the OLD and
+the NEW command through the same shell:
+
+  find argv, OLD:
+    0000040    /   m   u   s   i   c   /   p   l   a   i   n  \n   -   t   y
+    0000060    p   e  \n   f  \n   -   p   r   i   n   t   f  \n   %   p  \t
+    0000100    %   s  \t   %   T   @  \n  \n
+  find argv, NEW:
+    0000040    /   m   u   s   i   c   /   p   l   a   i   n  \n   -   t   y
+    0000060    p   e  \n   f  \n   -   p   r   i   n   t   f  \n   %   p  \t
+    0000100    %   s  \t   %   T   @  \n  \n
+  RESULT: find argv is BYTE-IDENTICAL before and after
+
+  (Worth recording because it is counter-intuitive: the format has ALWAYS
+   carried a REAL tab and a REAL newline, not the two-character sequences `\t`
+   and `\n` — `printf` resolved those escapes while building the string.  The
+   new code spells them as `$'\t'` / `$'\n'` for exactly that reason.)
+
+================================================================================
+§ 7 — IN-06: THE IN-CONTAINER TEMP PATHS
+================================================================================
+The container's `/tmp` is world-writable and the names beneath `$SCRATCH` were
+fixed (`lib.db`, `overlay.yaml`, `state.pickle`).  A stale root-owned leftover
+turns a read into a BLIND; a pre-placed SYMLINK at a predictable name is
+followed by the `>` redirections, so the instrument writes or reads something
+other than what it believes (T-06-94).
+
+They now carry the run's PID: `lib.$$.db`, `overlay.$$.yaml`, `state.$$.pickle`.
+
+`SCRATCH` ITSELF IS DELIBERATELY UNCHANGED and still defaults to `/tmp/p6`.
+The dirty-destination precheck, the cleanup assertion, the fence's own
+allow-list and the committed 06-11 artifacts all quote `/tmp/p6` by name;
+uniquifying the directory would have falsified all four at once.  Uniquifying
+only its CONTENTS also keeps every generated path inside the allow-list by
+construction — a `mktemp` that wandered outside `/tmp/p6*` would trip the fence
+this plan just installed.
+
+================================================================================
+§ 8 — THE FULL --self-test TRANSCRIPT, CLEAN
+================================================================================
+  $ bash scripts/phase06-oracle.sh --self-test
+  exit status: 0
+  cases: 80 green, 0 red
+
+The WR-08 block, including the DRIVEN RED, in full:
+
+  == --self-test: remote paths cross the quoting boundary as PARAMETERS (WR-08; T-06-93) ==
+    ----------------------------------------------------------------
+    ✓ 0 (expected): the apostrophe-and-$ fixture reads CLEAN through the positional-parameter shape.
+    ✓ 0 (expected): and the listing carries the file's REAL name - apostrophe and $ both intact.
+    ✓ 0 (expected): DRIVEN RED: the OLD interpolated shape FAILS on the same apostrophe fixture.
+      old-shape exit 2: bash: -c: line 1: unexpected EOF while looking for matching `''
+    ✓ 0 (expected): a manifest builder passes the path as sh -c's POSITIONAL PARAMETER.
+    ✓ 0 (expected): and never interpolates it after 'find' - the old shape is gone, not hidden.
+    ✓ 0 (expected): a manifest builder passes the path as sh -c's POSITIONAL PARAMETER.
+    ✓ 0 (expected): and never interpolates it after 'find' - the old shape is gone, not hidden.
+
+The fixture directory is named `Guns N' Roses - $Greatest` and contains a file
+named `01 It's $o.mp3` — both characters that break the old shape, in one case.
+The case runs entirely locally: `remote_sh_c` emits a command STRING, and the
+test runs it with bash here rather than over ssh.  The probe uses plain
+`find "$1" -type f` and NOT GNU `-printf`, because this is a macOS workstation
+and the thing under test is the QUOTING, not find.
+
+AND THE NEW CASES CAN FAIL.  A case that only passes is uninformative.
+`remote_sh_c` was reverted to the pre-WR-08 interpolated shape in a COPY of the
+script, and the self-test was re-run against the mutant:
+
+  ✗ SELF-TEST REGRESSION: expected '0', got '2': the apostrophe-and-$ fixture reads CLEAN through the positional-parameter shape.
+  ✗ SELF-TEST REGRESSION: expected '0', got '1': and the listing carries the file's REAL name - apostrophe and $ both intact.
+  ✗ SELF-TEST REGRESSION: expected '0', got '1': a manifest builder passes the path as sh -c's POSITIONAL PARAMETER.
+  ✗ SELF-TEST REGRESSION: expected '0', got '1': and never interpolates it after 'find' - the old shape is gone, not hidden.
+  ✗ SELF-TEST REGRESSION: expected '0', got '1': a manifest builder passes the path as sh -c's POSITIONAL PARAMETER.
+  ✗ SELF-TEST REGRESSION: expected '0', got '1': and never interpolates it after 'find' - the old shape is gone, not hidden.
+  ✗ self-test: 6 case(s) FAILED
+  mutant --self-test rc=1
+
+The one case that stays GREEN under the mutant is the DRIVEN RED itself, and
+that is correct: it exercises the OLD construction directly, not `remote_sh_c`.
+
+The complete 121-line transcript of the clean run is reproduced in § 12.
+
+================================================================================
+§ 9 — bash -n AND shellcheck
+================================================================================
+  $ bash -n scripts/phase06-oracle.sh
+  (no output)                                       rc=0
+
+  $ shellcheck -S warning scripts/phase06-oracle.sh
+  (no output)                                       rc=0
+
+At the DEFAULT severity the file emits notes only, in these classes:
+
+  10 × SC2016   "Expressions don't expand in single quotes"
+   9 × SC2329   "This function is never invoked"
+   2 × SC2129   "Consider { cmd1; cmd2; } >> file"
+   1 × SC2086   "Double quote to prevent globbing and word splitting"
+
+None is a warning and none is new breakage:
+
+  * SC2329 — KNOWN FALSE POSITIVE, and NOT re-reported here as a new finding.
+    The assertion functions are dispatched indirectly through `run_assert "$@"`,
+    which shellcheck cannot follow.  Already recorded in `06-REVIEW.md`
+    § "Notes on things checked and found sound", and the self-test exercises
+    every one of them.
+  * SC2016 — THE DESIGN, not a defect.  The remote programs `remote_sh_c` sends
+    contain `"$1"`, which must NOT expand locally: that is the entire point of
+    WR-08's fix.  A "fix" for this note would reintroduce the finding.
+  * SC2086 at `:2166` — `$EXTRA` is a deliberately unquoted FLAG LIST
+    (`--set albumtype=dj`, or `-s`, or empty).  Pre-existing; unchanged by this
+    plan.
+  * SC2129 — style, pre-existing.
+
+================================================================================
+§ 10 — WHAT WAS **NOT** DRIVEN, AND WHY
+================================================================================
+This is the honest half.  Each item below is asserted BY CONSTRUCTION —
+`bash -n`, `shellcheck` and review-by-reading — and NOT by a firing observation.
+Plan 06-21 should carry them as such, with the stated condition beside each.
+
+  (a) WR-07 (a) — THE DUPLICATED FENCE INSIDE THE REMOTE PROGRAMS.  Task 1
+      edit 3 added the literal `case` allow-list a second time, inside the two
+      remote programs that run `rm -rf` and `rm -f`, adjacent to the destructive
+      command.  That branch cannot fire without issuing a remote command, so it
+      was NOT DRIVEN.
+      CONDITION THAT WOULD DRIVE IT: a remote call with a path that passes the
+      sending-side fence and fails the receiving-side one — which, by
+      construction, is only reachable if the two allow-lists ever drift apart.
+      That is exactly the drift the duplication exists to survive, and it is the
+      reason the duplication is not redundant.
+      Proven here: `bash -n` clean, `shellcheck -S warning` clean, and the
+      program text reviewed against `phase06-incremental-control.sh:343` /
+      `:473`, which is the shape it copies.
+
+  (b) IN-11 — THE DIRTY-DESTINATION REFUSAL TEXT.  The refusal now names a
+      runnable cleanup command and states that `--baseline` ALWAYS leaves the
+      host stamp by design.  Reaching that message needs a `$SCRATCH` that
+      exists and is non-empty INSIDE the live container, i.e. a run aborted
+      between step 5 and step 12.  Not constructible without touching the
+      estate, so NOT DRIVEN.
+      CONDITION THAT WOULD DRIVE IT: `docker exec -u beetle beets-flask sh -c
+      'mkdir -p /tmp/p6 && touch /tmp/p6/lib.db'` on LXC 100, then `--run`.
+      Proven here: the message text is asserted present by grep, and the command
+      it prints was read for runnability.
+
+  (c) WR-08 (b) — AGAINST THE LIVE `find`.  The positional-parameter
+      construction is driven locally against a real apostrophe-and-`$` fixture
+      (§ 8), and the emitted `find` argv is proven byte-identical to the
+      pre-change one (§ 6).  It has NOT been driven through ssh → `docker exec`
+      → the container's dash against a real backlog folder, because that needs
+      the estate.
+      CONDITION THAT WOULD DRIVE IT: the next real `--run`, whose layer-2
+      manifests exercise all three sites.
+
+  (d) IN-06 — THE UNIQUIFIED PATHS.  `lib.$$.db` / `overlay.$$.yaml` /
+      `state.$$.pickle` are only exercised on a live `--run`; `--self-test`
+      never reaches step 5.  Asserted by construction and by the fence (every
+      generated path is inside the allow-list by shape).  NOT DRIVEN.
+      CONDITION THAT WOULD DRIVE IT: the next real `--run`.
+
+================================================================================
+§ 11 — WHAT THIS PLAN STRENGTHENED, AND WHAT WAS ALREADY TRUE
+================================================================================
+From `06-REVIEW.md` § "Notes on things checked and found sound":
+
+  ALREADY TRUE, UNCHANGED — "No destructive path reaches /mnt/tank/media or
+  /mnt/tank/downloads."  Still true.  The only `rm -rf` in the phase still
+  targets `/tmp/p6*` inside a container; `/media` is still `:ro` on both
+  containers in both compose files and still asserted so from `docker inspect`
+  in two independent places; the only `mv` is still over a self-test fixture
+  under `$OUT`.  This plan neither added nor removed a destructive path.
+
+  STRENGTHENED — the same note said the `rm -rf` was "twice fenced by a literal
+  `case` allow-list in phase06-incremental-control.sh".  That was a statement
+  about the SIBLING script.  The ORACLE's `rm -rf` was fenced NEITHER time.  It
+  now is, at both layers, in the same shape.
+
+  ALREADY TRUE, UNCHANGED — remote bounding.  Every ssh is still bounded
+  Linux-side with `timeout $REMOTE_TIMEOUT`, the status is still read on the
+  next line, and every remote string carrying a pipe still carries
+  `set -o pipefail`.
+
+  UNCHANGED AND STILL OPEN — WR-01, the single in-container pipeline
+  (`ls -A "$1" | head -n 1` in the dirty-destination precheck).  The container's
+  `/bin/sh` is dash and has no `pipefail`, so that pipeline can still launder a
+  failure.  It belongs to plan 06-19 and was deliberately NOT fixed here; what
+  changed at that site is only that the path is now a positional parameter.
+
+  ALREADY TRUE, UNCHANGED — credential handling.  This plan introduced no
+  credential, no token and no host password into the script or into this file.
+
+================================================================================
+§ 12 — THE COMPLETE CLEAN --self-test TRANSCRIPT
+================================================================================
+  $ bash scripts/phase06-oracle.sh --self-test    →  exit 0
+
+
+== --self-test: the transcript normaliser and the positive control (T-06-41/42) ==
+  ----------------------------------------------------------------
+  ✓ unknown (expected): a --pretend transcript: no ' -> ' in any form, so no destination was ever computed.
+    reason: 3 transcript line(s) are not a ' -> ' pair in either form. A
+    `--pretend` transcript taken from the importer fails here trivially, which is the point:
+  ✓ unknown (expected): right shape, two pairs against an expected three.
+    reason: the transcript yielded 2 destination pairs but the sample holds 3 audio
+    files. This is an EQUALITY, not a floor: a partial import produces a valid-looking subset.
+  ✓ unknown (expected): '(4 already in place)' - move_items filtered items out, so the census is not the sample.
+    reason: the '(N already in place)' line reports N=4. `move_items` filters out
+    items whose path already equals their destination, and on an in-place import (copy: no,
+  ✓ ok (expected): the narrow-terminal two-line form parses as two pairs.
+  ✓ unknown (expected): no '/media/Music/' anywhere: whatever was measured, it was not this library.
+    reason: the transcript contains no '/media/Music/' substring at all, so whatever was
+    measured, it was not this library's destinations.
+  ✓ ok (expected): a well-formed two-pair transcript, count matching.
+  ✓ ok (expected): an SGR-coloured narrow transcript parses as two pairs.
+  ✓ ok (expected): (re-parsed the plain narrow form for the comparison below)
+  ✓ 0 (expected): coloured and plain transcripts normalise to BYTE-IDENTICAL pairs - colour, and
+    the literal trailing space on the source half, change nothing about the verdict.
+  ✓ 0 (expected): no ESC byte survives into the pairs file, so the CONF-03 join can still match.
+
+== --self-test: (N already in place) is read from the LOG LINE, not from stdout ==
+  ----------------------------------------------------------------
+  ✓ 0 (expected): 'Moving 2 items.' parses.
+  ✓ 0 (expected): no parenthetical means a POSITIVE zero - beets appends it only when N>0.
+  ✓ 1 (expected): and it is recorded as READ, not as absent.
+  ✓ 2 (expected): the object count is taken off the same line for control 5.
+  ✓ 3 (expected): the embedded '(3 already in place)' is extracted, not missed.
+  ✓ 4 (expected): the log line is sanitised too - ui colours stderr as readily as stdout.
+  ✓ 2 (expected): a missing stderr file is COULD NOT LOOK, never N=0.
+    reason: the move stderr '/var/folders/bg/kkhtkflx485bdl5r3d_36llr0000gn/T//phase06-oracle/st.err.nosuchfile' is missing or unreadable, so '(N already in place)' was
+  ✓ 2 (expected): stderr with no 'Moving N items' line at all is COULD NOT LOOK.
+  ✓ 3 (expected): 'Moving 9 items' against 2 parsed pairs - a truncated transcript passes every
+    other control, which is why control 5 exists.
+
+== --self-test: layer 2's three outcomes (D-29; WR-13) ==
+  ----------------------------------------------------------------
+  ✓ identical (expected): IDENTICAL manifests - the green case, which must still be green.
+  ✓ differs (expected): a CHANGED mtime - the dry run was not dry.
+  ✓ differs (expected): a CHANGED sha256 - content moved while path, size and mtime could all have held.
+  ✓ couldnotcompare (expected): a MISSING before-manifest: diff exits 2, writes to stderr and leaves stdout EMPTY.
+  ✓ couldnotcompare (expected): a DIRECTORY where a manifest should be - constructible as root, unlike mode 000.
+  ✓ couldnotcompare (expected): an UNREADABLE manifest.
+
+== --self-test: remote paths cross the quoting boundary as PARAMETERS (WR-08; T-06-93) ==
+  ----------------------------------------------------------------
+  ✓ 0 (expected): the apostrophe-and-$ fixture reads CLEAN through the positional-parameter shape.
+  ✓ 0 (expected): and the listing carries the file's REAL name - apostrophe and $ both intact.
+  ✓ 0 (expected): DRIVEN RED: the OLD interpolated shape FAILS on the same apostrophe fixture.
+    old-shape exit 2: bash: -c: line 1: unexpected EOF while looking for matching `''
+  ✓ 0 (expected): a manifest builder passes the path as sh -c's POSITIONAL PARAMETER.
+  ✓ 0 (expected): and never interpolates it after 'find' - the old shape is gone, not hidden.
+  ✓ 0 (expected): a manifest builder passes the path as sh -c's POSITIONAL PARAMETER.
+  ✓ 0 (expected): and never interpolates it after 'find' - the old shape is gone, not hidden.
+
+== --self-test: the blind preflight, layer 1 and the host->container mapper ==
+  ----------------------------------------------------------------
+  ✓ blind (expected): a source directory that does not exist is a refusal, not '0 files newer'.
+    reason: '/var/folders/bg/kkhtkflx485bdl5r3d_36llr0000gn/T//phase06-oracle/st.nosuchdir' is not a directory (vanished, or a stale bind mount)
+  ✓ ok (expected): a real, readable directory must still be accepted.
+  ✓ 0 (expected): /media enumerated as ro - layer 1 holds.
+  ✓ 1 (expected): /media enumerated as rw - D-05 violated, and this must be a RED not a warning.
+  ✓ 2 (expected): no /media mount enumerated at all - UNKNOWN, never 'it is read-only'.
+  ✓ /media/Music/Katy (expected): longest-prefix mapping picks /mnt/tank/media over /mnt/tank.
+  ✓ 2 (expected): a host path under no mount is a refusal, not a silently unmapped path.
+
+== --self-test: the sampled-folder table is READ, never re-typed ==
+  ----------------------------------------------------------------
+  ✓ 0 (expected): 06-SAMPLE.md's ten-folder table parses.
+  ✓ 10 (expected): ten rows, one per drawn folder.
+  ✓ 174 (expected): the Files column sums to 174, the fixture's own line count.
+  ✓ 2 (expected): a missing sample document is a refusal, never an empty folder list.
+
+== --self-test: the class assertions, red branch first (D-27) ==
+  ----------------------------------------------------------------
+  ✓ 1 (expected): CONF-03: a capitalisation-only top-level mismatch is a RED, never a tolerance.
+  ✓ 2 (expected): CONF-03: a destination with no library field row is COULD NOT LOOK, not a pass.
+  ✓ 1 (expected): D-15: a Compilations/ component is a RED.
+  ✓ 1 (expected): D-15: zero Compilations/ with zero Various Artists is VACUOUS, so it is a RED.
+  ✓ 1 (expected): D-13: a DJ count of 2 against an expected 3 is a RED - it is an equality.
+  ✓ 0 (expected): D-13: the same list against its true count of 2 is clean.
+  ✓ 1 (expected): D-16: a firing present in the run but absent from the fixture is a RED.
+  ✓ 1 (expected): D-16 guard: a bracketed non-year integer is the numeric database id - a RED even
+    when it matches the fixture, because such a fixture is a landmine.
+  ✓ 0 (expected): D-16 guard: a bracketed four-digit year is a legitimate disambiguator, not an id.
+  ✓ 1 (expected): D-19b: a singleton the fixture does not predict is a RED.
+  ✓ 1 (expected): D-19a: album dir == artist dir is BLOCKING - no beets query can express it.
+  ✓ 0 (expected): D-19a: the '<artist> (' prefix shape is reported and NOT failed.
+  ✓ 1 (expected): the '-1 - ' filename shape is a RED.
+  ✓ 0 (expected): a clean list has no '-1 - ' filename.
+  ✓ 1 (expected): a .N collision suffix is a RED.
+  ✓ 0 (expected): a clean list carries no .N suffix.
+  ✓ 1 (expected): D-18: a record proposing a different value for a protected field is a RED.
+  ✓ 0 (expected): D-18: five noop records for one file is the clean case.
+  ✓ 2 (expected): D-18: four records where five are due is COULD NOT LOOK - an absence is exactly
+    what a skip looks like.
+  ✓ 2 (expected): D-18: a refusal is a RECORD and it is COULD NOT LOOK, never an 'unchanged'.
+  ✓ 0 (expected): D-18: absent-on-both-sides records are noops, not 327 phantom proposed changes.
+  ✓ 3 (expected): and they are LISTED as NULL-EQUIVALENT rather than vanishing into the total.
+  ✓ 1 (expected): D-18: a real BPM becoming beets' null is a STRIP and stays a RED.
+
+== --self-test: the clean list must produce ZERO reds across every assertion ==
+  ----------------------------------------------------------------
+  ✓ 0 (expected): CONF-03 clean
+  ✓ 0 (expected): D-15 clean
+  ✓ 0 (expected): D-13 clean
+  ✓ 0 (expected): D-16 clean
+  ✓ 0 (expected): D-19b clean
+  ✓ 0 (expected): D-19a clean
+  ✓ 0 (expected): -1 -  clean
+  ✓ 0 (expected): .N clean
+  ✓ 0 (expected): D-18 clean
+  ✓ 0 (expected): CONF-04 write side is a REPORT and always returns 0.
+  ✓ 1 (expected): the one multi-artist row in the fixture is shown, not silently dropped.
+  ✓ 0 (expected): the D-18 ledger payload parses as Python.
+  ✓ 0 (expected): the ledger's Library() is opened with an explicit directory= - the in-library
+    stratum resolves against /media/Music and not against platformdirs' user music path.
+
+  ✓ self-test: every fail-closed branch behaved exactly as expected
