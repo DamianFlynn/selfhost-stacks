@@ -148,3 +148,238 @@ one row's evidence.
 
 **Do not read this as a recommendation to raise it.** It is a recommendation to *measure* it
 during Phase 7's pilot: count, per folder, whether the accepted candidate was in the first 5.
+
+---
+
+## DEF-06-21-01 — `import.write: yes` over a `:rw` `/downloads` with an `autotag: auto` inbox, covered by none of the three named controls
+
+**Found during:** plan 06-21, task 2, dispositioning review finding **WR-09** (2026-09-22).
+**Disposition:** `CARRIED`. Also ROADMAP Phase 7 entry criterion **E11**, and stated in the
+runbook at `stacks/selfhosted/arrs/beets.md` § *Still open at Phase 6 close*.
+
+`stacks/selfhosted/arrs/beets/config.yaml` sets `write: yes` and names three controls that make it
+safe during Phase 6: the `-c` overlay, the `:ro` mount (D-05) and the statefile sha256 (D-29).
+**All three protect `/media` or beets' own state. None of them protects `/downloads`** — which is
+mounted **`:rw`** (`flask.yaml:146`) and is where all three registered inboxes live. The
+beets-flask watchdog is the **active** runtime (`restart: unless-stopped`) and `01-auto` is
+registered with **`autotag: auto`** (`flask-config.yaml:80-83`), so any folder that appears under
+`/downloads/complete/nzb/_inbox/01-auto` is imported without a prompt, by a config whose
+`import.write` is `yes`. The overlay control reaches only invocations *this phase's scripts* make;
+the watchdog reads the vendored config directly and the overlay never touches it.
+
+**What actually bounds the exposure today**, stated plainly because the config does not state it:
+nothing automatic stages into `_inbox/` (SABnzbd lands in `complete/nzb/music/`, and plan 06-04
+moved the two real folders to the **unregistered** `04-hold`), and `tank/downloads@pre-phase5` is
+**un-released** (D-32, entry criterion **E4**). **"Nobody has put a file there" is not one of the
+three controls the file claims**, and it is not a control at all.
+
+**Why it is deferred, not fixed here — a dependency conflict, not a difficulty judgement.** The
+review's stronger option is to set `import.write: no` in the vendored `config.yaml` for the
+remainder of Phase 6. Any edit to that file changes its **sha256** — and that digest is the exact
+object every CONF-01, CONF-02 and CONF-05 assertion in this phase was measured against, as well as
+the appdata copy the `quick-health-check.sh` vendored-drift block compares repo-side against
+host-side. Editing it to close a latent finding would invalidate committed proof artifacts for
+three requirements in order to harden a path nothing currently writes to. That trade is wrong in
+this direction and right in the other, which is why the change belongs where the proofs are being
+re-taken anyway.
+
+**Scheduled, not open-ended:** Phase 7's **first act is the `rw` grant (E3)**, which is where every
+other Phase-7 behaviour flag is already scheduled to move. `import.write` moves with them, as a
+decision recorded in that commit rather than a default nobody chose.
+
+**Urgency:** latent, not active — but it is the one finding in `06-REVIEW.md` that describes a path
+by which files could be **written** rather than an instrument that could **report** wrongly. It
+must not be discovered by an operator dropping a folder into `01-auto` to see what happens.
+
+---
+
+## DEF-06-21-02 — the oracle's run-tagged in-container temp names are written but never exercised
+
+**Found during:** plan 06-21, task 2, dispositioning review finding **IN-06** (2026-09-22).
+**Disposition:** `FIXED (undriven)` — plan 06-18, commit `89a349b`,
+`artifacts/06-18-oracle-fence-driven.txt` § 10. Recorded as undriven by plan 06-18 itself.
+
+`scripts/phase06-oracle.sh`'s in-container temp files beneath `$SCRATCH` now carry the run's PID
+(`lib.$$.db`, `overlay.$$.yaml`, `state.$$.pickle`) instead of fixed names in a world-writable
+directory. `$SCRATCH` itself was deliberately left as `/tmp/p6`, because the precheck, the cleanup
+assertion, the 06-18 fence allow-list and the committed 06-11 artifacts all quote that path by
+name.
+
+**Why undriven:** `--self-test` never reaches step 5, which is the only place those names are used.
+No `--run` was performed by 06-18, 06-19 or 06-21.
+
+**Condition that would drive it:** the next real `phase06-oracle.sh --run`. Confirm the three
+files appear inside `beets-flask` under `/tmp/p6/` carrying the invoking PID, and that two runs
+back to back do not collide on them.
+
+**Urgency:** hygiene on a single-tenant container. The risk it closes is a stale root-owned
+leftover turning a read into a BLIND, which fails closed.
+
+---
+
+## DEF-06-21-03 — the oracle's dirty-destination cleanup text has never been printed
+
+**Found during:** plan 06-21, task 2, dispositioning review finding **IN-11** (2026-09-22).
+**Disposition:** `FIXED (undriven)` — plan 06-18, commit `7c2e349`,
+`artifacts/06-18-oracle-fence-driven.txt` § 10. Recorded as undriven by plan 06-18 itself.
+
+Every `exit 3` path between the oracle's step 5 and step 12 leaves `/tmp/p6/lib.db` — a byte copy
+of the real library — inside the container, and `/mnt/fast/safety/phase06/oracle.stamp` on LXC 100.
+The next run's dirty-destination precheck then refuses, which is **correct** but used to present as
+an unexplained refusal. The refusal now prints the exact cleanup command and states that
+`--baseline` always leaves the host stamp **by design**.
+
+**Why undriven:** reaching it needs a genuinely dirty `$SCRATCH` inside the live container, and no
+run was aborted mid-flight during the gap closure.
+
+**Condition that would drive it:** abort a `--run` between step 5 and step 12 (or plant
+`/tmp/p6/lib.db` as `beetle`), then invoke the oracle again and read the refusal — confirming the
+printed command is the one that actually clears the state.
+
+**Urgency:** it makes a correct refusal legible. It cannot produce a wrong verdict in either
+direction.
+
+---
+
+## DEF-06-21-04 — `check-beets-config.sh`'s corrected readiness-timeout message has never been printed
+
+**Found during:** plan 06-21, task 1, dispositioning review finding **IN-03** (2026-09-22).
+**Disposition:** `FIXED (undriven)` — plan 06-15, commit `4aaf79a`,
+`artifacts/06-15-check-beets-config-rerun.txt`.
+
+The readiness-gate failure message rendered `READY_ATTEMPTS * READY_SLEEP` (30 s) when the loop
+sleeps only *between* attempts (5 × 5 s = 25 s). Corrected to
+`$(( (READY_ATTEMPTS - 1) * READY_SLEEP ))`.
+
+**Why undriven, and note this classification is plan 06-21's, not 06-15's.** 06-15 recorded IN-03
+as retired and did not call it undriven; the register applies its own vocabulary test — the
+corrected text lives inside the readiness-gate **failure** branch, and every run in this phase
+reached ready, so the branch has never been observed firing. Calling it `FIXED` would assert a
+drive that did not happen.
+
+**Condition that would drive it:** run `scripts/check-beets-config.sh` with the `beets-flask`
+container stopped, so five consecutive readiness probes fail, and read the elapsed figure in the
+message.
+
+**Urgency:** the defect is a wrong number in a diagnostic message. It misleads a reader about how
+long the tool waited; it changes no verdict.
+
+---
+
+## DEF-06-21-05 — the glob-free forbidden-substring loop is behind a knob nothing sets
+
+**Found during:** plan 06-21, task 1, dispositioning review finding **IN-07** (2026-09-22).
+**Disposition:** `FIXED (undriven)` — plan 06-15, commit `4aaf79a`,
+`artifacts/06-15-check-beets-config-rerun.txt`.
+
+`EXTRA_FORBIDDEN_SUBSTRINGS` was expanded as `local IFS=':'; for forb in $EXTRA_...`, so a value
+containing `*` or `?` underwent **pathname expansion** against the repo root as well as the
+intended field splitting. Replaced with `IFS=':' read -r -a forb_arr <<<"$EXTRA_..."`.
+
+**Why undriven, and this classification is also plan 06-21's rather than 06-15's.** The whole loop
+sits behind `if [[ -n "$EXTRA_FORBIDDEN_SUBSTRINGS" ]]` (`scripts/check-beets-config.sh:558`) and
+the knob's default is empty, so no run in this phase entered it. The original defect was
+additive-only — it could add spurious failures, never suppress real ones — which is precisely why
+it was never observed.
+
+**Condition that would drive it:** run the script from a directory holding matching filenames with
+`EXTRA_FORBIDDEN_SUBSTRINGS='*'` (or a value containing `?`), and confirm the forbidden list is
+the one literal string rather than the expanded directory listing.
+
+**Urgency:** an override-only path whose failure mode is a spurious red, on a knob nothing in the
+estate sets today.
+
+---
+
+## DEF-06-21-06 — the overlay-key half of `D04_EXEMPT_RE` is the exemption register's weakest link
+
+**Found during:** plan 06-21, task 2, reading plan 06-16's NOT-DRIVEN register (item N-4).
+**Disposition:** residue of `CR-01`, which is `FIXED`. Also named in ROADMAP entry criterion
+**E10**. Plan 06-16 nominated this itself as *"the obvious next drive"*.
+
+The D-04 exemption register partitions invocation-shaped lines into **asserted** (3) and
+**exempt** (5), keyed per line on the overlay substring `$SCRATCH_OVERLAY` / `$ROOT/overlay.yaml`.
+06-16's control 1 planted a non-compliant invocation in a **third** file, proving the register does
+not swallow arbitrary files — but it did **not** exercise the per-line keying *inside* the two
+exempt files. So "an exempt file's non-exempt lines still get asserted" is reasoned, not measured.
+
+**Why it matters:** if the keying is wrong in the permissive direction, a future non-compliant
+invocation added to `phase06-oracle.sh` or `phase06-incremental-control.sh` lands in the exempt
+set and is never asserted over — silently restoring the CR-01 failure mode inside the two files
+most likely to gain new `beet` calls.
+
+**Condition that would drive it:** plant an invocation inside `scripts/phase06-oracle.sh` that does
+**not** carry the overlay substring, run the D-04 block against that tree, and confirm it lands in
+the **asserted** set (and goes red) rather than the exempt set — with the exempt count still 5.
+
+**Urgency:** this is the highest-value single drive left from the whole gap closure, because it
+protects the fix for the phase's only Critical finding.
+
+---
+
+## DEF-06-21-07 — the new `quick-health-check.sh` exit-3 arm's heading anchor guard is undriven
+
+**Found during:** plan 06-21, task 2, reading plan 06-17's NOT-DRIVEN register (item N-3).
+**Disposition:** residue of `WR-03`, which is `FIXED`. Plan 06-17 nominated this itself as *"the
+weakest link in this plan's change and the obvious next drive"*.
+
+The `CONSUMERS_RC -eq 3` arm echoes the audit's CONF-04 lines through a bounded `sed` range and
+applies the `📊 6. Summary` anchor guard. The guard was written to the same shape as the `-eq 0`
+arm's, which is **pre-existing and was not re-driven** — so it is the only branch protecting a
+**cross-file heading contract** on a code path that did not exist before 2026-09-22.
+
+**Why it matters:** if the guard does not fire, renaming or renumbering `📊 6. Summary` in
+`check-music-consumers.sh` makes the health entry point print counts scraped from the wrong region
+instead of reporting UNKNOWN — a wrong number where a refusal belongs.
+
+**Condition that would drive it:** renumber the heading in a scratch copy of
+`check-music-consumers.sh`, point `CONSUMERS_SCRIPT` at it, and confirm the arm reports UNKNOWN
+rather than printed counts.
+
+**Urgency:** it needs no estate contact — `CONSUMERS_SCRIPT` exists precisely so this is driveable
+from a scratch copy.
+
+---
+
+## DEF-06-21-08 — plan `<verify>` blocks are a systemic defect class in this phase, not incidental
+
+**Found during:** plan 06-21, closing the gap-closure wave (2026-09-22).
+**Disposition:** recorded. This is a **planner-side** finding with no code to change.
+
+**All six gap-closure plans found defects in their own plan's `<verify>` blocks — every one.**
+06-19 found three distinct shapes in two blocks simultaneously. Two plans introduced a fresh
+instance of the class *while fixing it*. Plan 06-21 found two more (see `06-21-SUMMARY.md`),
+including an acceptance criterion asserting a string that has never existed in the target file.
+
+The recurring shapes, which is the reusable part:
+
+1. **`grep -q` downstream of a pipe under `set -o pipefail`** — `grep -q` exits on first match,
+   the writer takes SIGPIPE, pipefail propagates **141**, and the failure branch fires precisely
+   when the file is **correct**. A false-RED generator. 06-17 measured one sitting ~17 % below the
+   64 KiB macOS pipe ceiling: it passes today and starts failing as the file grows.
+2. **`\$\{…\}` inside a double-quoted bash string** — bash collapses `\$` to `$` and BSD grep reads
+   it as an end-of-line anchor mid-alternative. Vacuous on macOS, fine on GNU: a silent platform
+   split. A false-GREEN generator; 06-16 found an acceptance criterion never satisfiable on any
+   commit because of it.
+3. **A bare `'` inside a `bash -c '…'` body** — closes the body, and as a regex alternative matches
+   almost anything.
+4. **Unbounded `awk` ranges** — check the end delimiter exists *and* that the **start** pattern is
+   unique; a recurring start is what makes a range run away.
+5. **Case-sensitive greps against FULL-CAPS emphasis** — 06-17 fired a false RED searching for
+   `NEVER summed` in a file whose register is `ARE NEVER SUMMED`.
+6. **Verifies that grep for a string the script cannot emit** — prefer a derived verdict line.
+7. **Unsatisfiable acceptance criteria** — if a criterion names an artifact or a literal string,
+   check it exists *before* trying to satisfy it. The trap is that the obvious repair is to write
+   the string in, which can silently change content the criterion existed to protect.
+
+**Related, and the same root cause:** plan line citations went stale in **four consecutive plans**
+as siblings edited the same files — 06-17's by ~175 lines, 06-19's by 200–300. `grep -n` on anchor
+text is the reliable route; a cited line number is not.
+
+**The cure that worked, applied by every plan that hit this:** materialise the text into a **file**
+and grep the file, never let a pipeline carry a verdict; then **drive the assertion red** before
+trusting it, and confirm an unmutated control still passes. Fix the verify by **strengthening**
+what it asserts, never by relaxing it.
+
+**Why it is recorded rather than fixed:** there is no artifact in this repository to change — the
+defect is in how plans are written. It belongs in front of whoever plans the next phase.

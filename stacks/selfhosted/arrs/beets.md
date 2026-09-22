@@ -2127,6 +2127,27 @@ Phase 6's own:
   where 25 offered seven. **This is not a recommendation to raise it** — a longer list also means
   more round-trips and more chances to pick the wrong one. It is a recommendation to *measure* it
   during Phase 7's pilot: per folder, was the accepted candidate in the first 5?
+- **`import.write: yes` is live, `/downloads` is `:rw`, and `01-auto` autotags — and NONE of the
+  three controls the config names reaches that path** *(added 2026-09-22 by plan 06-21, carrying
+  code-review finding WR-09; `06-REVIEW.md` § WR-09, `06-DISPOSITIONS.md`, `DEF-06-21-01`,
+  ROADMAP Phase 7 entry criterion **E11**)*. **Read this before you drop a folder into an inbox.**
+  `config.yaml` sets `write: yes` and names three independent controls — the `-c` **overlay**, the
+  **`:ro` mount** (D-05) and the **statefile sha256** (D-29). The first two protect `/media`, the
+  third protects beets' own state. **`/downloads` is protected by none of them**, and `/downloads`
+  is where all three registered inboxes live: it is mounted **`:rw`** (`beets/flask.yaml:146`),
+  the beets-flask watchdog is the **active** runtime (`restart: unless-stopped`), and **`01-auto`
+  is registered with `autotag: auto`** (`beets/flask-config.yaml:80-83`). So **anything that
+  appears under `/downloads/complete/nzb/_inbox/01-auto` is imported with no prompt**, by a config
+  whose `import.write` is `yes`. The overlay does not save you here: it applies only to invocations
+  *the Phase 6 scripts* make, and the watchdog reads the vendored config directly.
+  **What actually keeps this safe today is two things, and neither is a control:** nothing
+  automatic stages into `_inbox/` (SABnzbd lands in `complete/nzb/music/`, and plan 06-04 moved the
+  two real folders to the **unregistered** `04-hold`), and **`tank/downloads@pre-phase5` is
+  un-released** (D-32 / E4), so there is still an undo. **"Nobody has put a file there" is not one
+  of the three controls the file claims.** Not changed in Phase 6 on purpose: editing `config.yaml`
+  changes its sha256, which is the exact object every CONF-01 / CONF-02 / CONF-05 proof was
+  measured against and the one the vendored-drift block compares repo-side to appdata-side.
+  **Phase 7 decides `import.write` deliberately, in the same commit as the `rw` grant (E3).**
 - **The D-34 Jellyfin library option is live-service state that git does not capture.** It lives in
   Jellyfin's configuration database on LXC 100 and nowhere in this repository. Its **only**
   protection is the by-name assertion in `scripts/check-music-consumers.sh` § 4. Narrow or remove

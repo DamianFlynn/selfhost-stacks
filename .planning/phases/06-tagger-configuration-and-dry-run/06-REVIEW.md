@@ -587,3 +587,35 @@ Recorded so a later reader knows these were exercised rather than skipped:
 _Reviewed: 2026-09-21T22:33:04Z_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
+
+---
+
+## Dispositioned 2026-09-22 — this file is now WIRED
+
+*Appended by plan 06-21. **Nothing above this line was edited.** Every finding's text, every
+file:line reference and the `findings:` frontmatter counts are the record of what was found on
+2026-09-21, and that record stands — including where a later measurement refined it.*
+
+`06-VERIFICATION.md` § Required Artifacts marked this file **NOT WIRED** — *"The Critical finding
+(CR-01) and all 10 Warnings remain unaddressed; no fix commit, no override, no carry-forward
+reference."* That gap is now closed.
+
+**All 24 findings carry an explicit disposition**, recorded in:
+
+> **`.planning/phases/06-tagger-configuration-and-dry-run/06-DISPOSITIONS.md`**
+
+with one row per finding ID (CR-01, WR-01…WR-10, IN-01…IN-13) in this file's own order, each
+citing the plan, the commit and the artifact holding the driven transcript. Summary: **19 FIXED,
+4 FIXED (undriven), 0 ACCEPTED, 1 CARRIED — 24 total.**
+
+The fixes were made by gap-closure plans **06-15, 06-16, 06-17, 06-18, 06-19 and 06-20**; plan
+**06-21** wrote the register and wired it. The register is reachable from ROADMAP Phase 7 entry
+criteria **E10** (CR-01's residue — the D-04 exemption register and its pinned baseline) and
+**E11** (WR-09), so the finding set is carried into the next phase rather than left here.
+
+**The one finding not fixed is WR-09**, dispositioned CARRIED: setting `import.write: no` would
+change the sha256 of the very `config.yaml` every CONF-01 / CONF-02 / CONF-05 proof in this phase
+was measured against. It is owned by `DEF-06-21-01` and ROADMAP entry criterion **E11**, and is
+stated in the runbook at `stacks/selfhosted/arrs/beets.md`.
+
+_Dispositioned: 2026-09-22 by plan 06-21_

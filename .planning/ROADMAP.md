@@ -1132,6 +1132,48 @@ item nobody owns.)*:
       default **5** (DEF-06-12-02) — measure, per folder, whether the accepted candidate was in the
       first five, rather than raising it on one row's evidence.
 
+  E10. **The D-04 exemption register is a PINNED BASELINE Phase 7 must revisit, not inherit**
+      *(added 2026-09-22 by plan 06-21, carrying CR-01's residue)*. For the whole of Phase 6 the
+      D-04 "no bare `beet` invocation" assertion **asserted over an empty set** and printed a green
+      tick saying so — every invocation in this repo is built from a variable (`$BEET` /
+      `$BEET_BIN`), so the literal-token pattern matched none of them, and the remote `git grep` was
+      case-sensitive besides. Repaired by gap-closure plans **06-15** (the three real violations in
+      `check-beets-config.sh` made compliant) and **06-16** (the pattern widened, executable count
+      **0 → 8**, a vacuity guard so a zero count is UNKNOWN and fatal rather than a pass, and a
+      **named** exemption register `D04_EXEMPT_RE` pinned at `D04_EXEMPT_BASELINE=5` covering the
+      oracle's and the incremental control's overlay-only invocations). **What Phase 7 must do:**
+      any new `beet` invocation it adds is either compliant (`-l` outside `/config/library.db`
+      **and** `-c` overlay) or is added to the exemption register **deliberately, with its reason**.
+      The pinned count moving is a **red by design** — do not raise the pin to make a run green;
+      `D04_DOC_BASELINE` is at 2 and earned it, and 06-16 rephrased its own runbook prose rather
+      than raise it. Two further residues ride with this: the block's **✅ green line is asserted by
+      construction and has never been observed** (06-16 N-1), and the **overlay-key half** of the
+      exemption regex is the register's weakest link and is undriven (06-16 N-4, `DEF-06-21-06`).
+      Note also that the block reports **UNKNOWN on the live estate** until the operator pushes and
+      the host pulls — correct, not a defect. The full finding set and what happened to each of the
+      24 findings are in
+      `.planning/phases/06-tagger-configuration-and-dry-run/06-REVIEW.md` and
+      `.planning/phases/06-tagger-configuration-and-dry-run/06-DISPOSITIONS.md`.
+
+  E11. **Decide `import.write` deliberately, in the same commit as the `rw` grant (E3)**
+      *(added 2026-09-22 by plan 06-21, carrying review finding WR-09)*. `import.write: yes` is
+      live in the vendored `config.yaml` while `/downloads` is mounted **`:rw`** and the `01-auto`
+      inbox is registered with **`autotag: auto`** under the beets-flask watchdog, which runs
+      `restart: unless-stopped`. So any folder appearing under
+      `/downloads/complete/nzb/_inbox/01-auto` is imported **without a prompt** by a config whose
+      `import.write` is `yes`. The config names three controls — the `-c` overlay, the `:ro` mount
+      (D-05) and the statefile sha256 (D-29) — and **none of the three protects `/downloads`**: the
+      first two protect `/media`, the third protects beets' own state, and the overlay reaches only
+      invocations *this phase's scripts* make, never the watchdog, which reads the vendored config
+      directly. **What actually bounds it today** is that nothing automatic stages into `_inbox/`
+      (SABnzbd lands in `complete/nzb/music/`, and plan 06-04 moved the two real folders to the
+      unregistered `04-hold`) and that **`tank/downloads@pre-phase5` is un-released (E4)** —
+      **"nobody has put a file there" is not a control.** Not fixed in Phase 6 because editing
+      `config.yaml` changes the sha256 of the exact object every CONF-01 / CONF-02 / CONF-05 proof
+      was measured against, plus the appdata copy the vendored-drift block compares — a dependency
+      conflict with committed evidence, recorded in full as `DEF-06-21-01`. E3 is where every other
+      Phase-7 behaviour flag is already scheduled to move; move this one with them.
+
 **Plans**: TBD
 **Research**: not needed — the diff is a comparison over two `ffprobe` datasets, and the undo path
 is ZFS rollback plus a documented `incremental` state reset. The compilation and multi-disc cases
@@ -1235,7 +1277,7 @@ Phase 7. Plans within a phase run sequentially.
 | 3. Tagger Spike | 11/11 | Complete    | 2026-09-04 |
 | 4. Collapse to One Tagger | 16/16 | In Progress| All 16 plans executed (gap-closure 04-14/15/16 included); phase-level verification pending. Criterion 3 remains OPEN: across windows 1 and 2, five real music jobs all returned UNPROVEN `no-attributed-pre` — no PRE-HOOK snapshot is publishable while `direct_unpack` drains the tree — while every side-effect condition held for the third window running. 04-16 recorded `window 2: OPEN` under an interim-status heading in `beets.md`. Closing criterion 3 is now a decision, not a measurement |
 | 5. Inbox Structure and the Junk Gate | 11/11 | Complete    | 2026-09-19 |
-| 6. Tagger Configuration and Dry Run | 20/21 | In Progress| Original 14/14 closed 2026-09-21 with **1 open requirement: CONF-04 is OPEN on its Jellyfin half**, a named Phase 7 entry criterion (E6). Criteria 1, 2, 3 and 5 are TRUE and were all re-measured from live state at close, not carried forward from plan summaries. Criterion 4 carries two verdicts — Music Assistant discharged, Jellyfin pending a re-probe — which are recorded separately and **must never be summed**. `tank/downloads@pre-phase5` is NOT released (D-32, Phase 7 entry criterion E4). Closure: `stacks/selfhosted/arrs/beets.md` § *Phase 6 closed 2026-09-21*. **Gap closure 06-15..06-21 in flight since 2026-09-22** for verification gap CR-01; waves 6, 7 and 8 merged (06-15/06-18/06-20, 06-16/06-19, 06-17). **Two deferred operator consequences, both intended:** the D-04 block reports UNKNOWN on the live estate, and once this phase is pushed and the host pulls, `quick-health-check.sh` exits non-zero on the consumers block until E6 discharges CONF-04. Both clear on the same `git push` + host `git pull --ff-only` the vendored-drift block is already waiting on — operator's call; see 06-16-SUMMARY.md and 06-17-SUMMARY.md |
+| 6. Tagger Configuration and Dry Run | 20/21 | In Progress| Original 14/14 closed 2026-09-21 with **1 open requirement: CONF-04 is OPEN on its Jellyfin half**, a named Phase 7 entry criterion (E6). Criteria 1, 2, 3 and 5 are TRUE and were all re-measured from live state at close, not carried forward from plan summaries. Criterion 4 carries two verdicts — Music Assistant discharged, Jellyfin pending a re-probe — which are recorded separately and **must never be summed**. `tank/downloads@pre-phase5` is NOT released (D-32, Phase 7 entry criterion E4). Closure: `stacks/selfhosted/arrs/beets.md` § *Phase 6 closed 2026-09-21*. **Gap closure 06-15..06-21 in flight since 2026-09-22** for verification gap CR-01; waves 6, 7 and 8 merged (06-15/06-18/06-20, 06-16/06-19, 06-17). **Two deferred operator consequences, both intended:** the D-04 block reports UNKNOWN on the live estate, and once this phase is pushed and the host pulls, `quick-health-check.sh` exits non-zero on the consumers block until E6 discharges CONF-04. Both clear on the same `git push` + host `git pull --ff-only` the vendored-drift block is already waiting on — operator's call; see 06-16-SUMMARY.md and 06-17-SUMMARY.md. **Gap closure dispositioned 2026-09-22 (plan 06-21):** `06-VERIFICATION.md` scored **5/6 must-haves**, the one failure being D-04's vacuous "no bare `beet` invocation" assertion; plans **06-15 through 06-21** closed it, and **all 24 findings** in `06-REVIEW.md` now carry an explicit disposition in `06-DISPOSITIONS.md` (**19 FIXED, 4 FIXED (undriven), 0 ACCEPTED, 1 CARRIED**). CR-01's residue and WR-09 are carried into Phase 7 entry criteria **E10** and **E11**. **This is a record, not a re-close:** no CONF-04 verdict, no requirement checkbox and no status wording changed — CONF-04's Jellyfin half is still OPEN and **E6** still owns the discharge |
 | 7. Pilot — 12 Albums End to End | 0/TBD | Not started | - |
 | 8. Close the Inflow | 0/TBD | Not started | - |
 | 9. Bucket A in Batches | 0/TBD | Not started | - |
