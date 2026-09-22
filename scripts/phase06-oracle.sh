@@ -2284,7 +2284,11 @@ self_test_vacuity() {
   rc=0; LC_ALL=C grep -q $'\342\234\223' "$d/ra.good.txt" || rc=1
   st_case 0 "$rc" "THE PAIR: over a real field view the same label DOES tick, so the routing"
   info "discriminates rather than having been turned off."
-  UNKNOWNS=0
+  # GC-12(a): a reset of the UNKNOWN counter stood here and was DEAD - the self-test gate in MAIN
+  # consults ST_FAIL and REDS only, never UNKNOWNS, so nothing ever read what it wrote. Deleted
+  # rather than left, because a counter written and never read was the SUBJECT of the section it
+  # sat in. Do not helpfully add it back: the run_assert drives above deliberately leave UNKNOWNS
+  # non-zero, and that is harmless precisely because the gate does not look at it.
 
   say ""
   say "== --self-test: IN-12 an empty field view is not 'six columns each' =="
@@ -2504,8 +2508,15 @@ if [ "$MODE" = "self-test" ]; then
   self_test_vacuity
   self_test_fences
   say ""
+  # GC-12(b). The gate fires on EITHER counter, so the banner must name BOTH - it used to print
+  # ST_FAIL alone, and a run that failed only because a stray bad() moved REDS printed
+  # "0 of N case(s) FAILED" and exited 1: a failure banner asserting nothing failed. REDS is NOT
+  # folded into ST_FAIL, because the two count different things - a case that BEHAVED unexpectedly
+  # versus an assertion that went RED inside a case - and collapsing them loses the distinction
+  # the self-test exists to keep.
   if [ "$ST_FAIL" -ne 0 ] || [ "$REDS" -ne 0 ]; then
-    printf '  \342\234\227 self-test: %s of %s case(s) FAILED\n' "$((ST_FAIL))" "$((ST_RUN))"
+    printf '  \342\234\227 self-test: %s of %s case(s) FAILED, and %s assertion(s) went RED inside a case\n' \
+      "$((ST_FAIL))" "$((ST_RUN))" "$((REDS))"
     exit 1
   fi
   ok "self-test: $ST_RUN case(s), every fail-closed branch behaved exactly as expected"
@@ -2600,7 +2611,17 @@ case "$RC" in
 esac
 
 # --- Step 3: the layer-3 baselines, and the library identity the fixture assumes ---------------
-rsh "$(dex_cmd sha256sum "$REAL_LIB_DB" "$REAL_STATE_PICKLE")"
+# GC-15. `dex_cmd` renders its arguments with "$*" - no %q, no remote_sh_c - and both values here
+# are ${VAR:-default} knobs, so before this change a REAL_LIB_DB carrying a space word-split on the
+# far side. Measured: `/config/my library.db` arrived as argv `/config/my` + `library.db`, argc 3
+# rather than 2. This is a bash WORD context, so %q is exactly the right tool, and it is applied at
+# the CALL SITES rather than inside `dex_cmd` - doing it inside would double-quote the eighteen
+# sites in this file that already pass %q output through it. The consuming `awk -v p=…` keys below
+# stay RAW on purpose: the remote shell REMOVES the %q quoting before sha256sum is exec'd, so
+# sha256sum receives, and prints, the unquoted value. Confirmed by argv capture, not assumed; the
+# drive is in artifacts/06-27-oracle-vacuity-and-claims.txt § 2. The same two lines appear at
+# step 9; both carry the fix and the reason is stated only here.
+rsh "$(dex_cmd sha256sum "$(printf '%q' "$REAL_LIB_DB")" "$(printf '%q' "$REAL_STATE_PICKLE")")"
 rsh_classify "the layer-3 baseline hashes" || exit 3
 printf '%s\n' "$RSH_OUT" > "$OUT/layer3.before"
 LIB_SHA_BEFORE="$(LC_ALL=C awk -v p="$REAL_LIB_DB" '$2 == p {print $1}' "$OUT/layer3.before")"
@@ -2759,7 +2780,9 @@ capture_manifests after "$OUT/sample.tsv" || exit 3
 diff_manifest src meta || true
 diff_manifest src sha  || true
 
-rsh "$(dex_cmd sha256sum "$REAL_LIB_DB" "$REAL_STATE_PICKLE")"
+# GC-15, second of the two sites. Same fix, same reason; the account is at step 3 and is not
+# repeated. The awk keys below are RAW for the reason stated there.
+rsh "$(dex_cmd sha256sum "$(printf '%q' "$REAL_LIB_DB")" "$(printf '%q' "$REAL_STATE_PICKLE")")"
 rsh_classify "the layer-3 hashes after the run" || exit 3
 printf '%s\n' "$RSH_OUT" > "$OUT/layer3.after"
 LIB_SHA_AFTER="$(LC_ALL=C awk -v p="$REAL_LIB_DB" '$2 == p {print $1}' "$OUT/layer3.after")"
