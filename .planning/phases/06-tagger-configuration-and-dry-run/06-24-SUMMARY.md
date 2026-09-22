@@ -191,6 +191,16 @@ None. No new network endpoint, auth path, file-access pattern or schema change. 
 - `scripts/phase06-oracle.sh` parses clean, self-tests green at 134 cases, and both round-2 findings against it are closed. Nothing here blocks the phase's remaining gap-closure plans.
 - **Carried forward, unresolved:** items 1 and 2 of the NOT-DRIVEN register. The fence predicate has never been executed under the container's dash, and the destructive programs have never been observed refusing end to end. Both would be closed by a single `--run` against the live estate, which this paper phase does not perform. Phase 7's pilot import is the first thing that exercises them for real.
 
+## Self-Check: PASSED
+
+- `scripts/phase06-oracle.sh` — FOUND
+- `.planning/phases/06-tagger-configuration-and-dry-run/06-24-SUMMARY.md` — FOUND
+- `.planning/phases/06-tagger-configuration-and-dry-run/artifacts/06-24-oracle-fence-parity.txt` — FOUND
+- commit `76f5ba9` (task 1) — FOUND in `git log`
+- commit `3019c0c` (task 2) — FOUND in `git log`
+- working tree clean; no untracked leftovers (both throwaway harnesses deleted, neither staged)
+- STATE.md and ROADMAP.md deliberately untouched — worktree mode, orchestrator owns those writes
+
 ---
 *Phase: 06-tagger-configuration-and-dry-run*
 *Completed: 2026-09-22*
