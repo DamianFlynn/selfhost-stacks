@@ -232,3 +232,141 @@ TASK 2 CHECKS, /usr/bin/grep, worktree root:
   REDS                                                    11  (want >=3) PASS
   bash scripts/phase06-oracle.sh --self-test               exit 0, 134 case(s)
   bash -n scripts/phase06-oracle.sh                        clean
+
+--------------------------------------------------------------------------------
+4. GC-07 — THE RUN_TAG COMMENT NOW STATES ONLY PROPERTIES THE CODE HAS
+--------------------------------------------------------------------------------
+THE DECISION IS PLAN 06-25'S AND IS APPLIED, NOT REMADE. The comment quotes
+artifacts/06-25-incremental-tempnames.txt § 4 verbatim and cites it by path, so
+the two files cannot drift apart again: the threat is real, the property relied on
+is CREATION (mktemp's O_EXCL) and NOT secrecy, and `$$` was the wrong mechanism
+for the right threat.
+
+WHAT THE COMMENT USED TO CLAIM, AND WHY EACH CLAIM IS GONE:
+  * that a PID suffix makes these names unguessable - PIDs are small, sequential
+    and exhaustively enumerable (kernel.pid_max 32768 by default);
+  * that `$$` is the relevant process - it is the MACOS WORKSTATION's bash PID,
+    with no relationship to the container's namespace, and PIDs recycle, so even
+    "per-run unique" is not guaranteed;
+  * that the tag is the mitigation - it is a LABEL chosen by the writer, not a
+    name minted by the kernel.
+WHAT THE COMMENT NOW CREDITS: the step-1 probe. SCRATCH_PROBE_PROG refuses ANY
+non-empty $SCRATCH before a byte is written into it, at any name, predictable or
+not. The run tag narrows only the TOCTOU window between that probe and the step-5
+`mkdir`. This is GC-07's own third objection, and 06-25 § 4(b) confirms it is TRUE
+OF THE ORACLE and FALSE of the sibling - which is exactly why the sibling needed a
+code change and this file needs only a corrected comment.
+
+THE WEAKER TREATMENT IS NAMED AS SUCH. The comment states that
+phase06-incremental-control.sh got container-minted `mktemp` names with a
+fail-closed refusal, that this file leans on the probe instead, and what the
+difference in mechanism is.
+
+>>> A DISCREPANCY WITH THE PLAN'S OWN SUGGESTED WORDING, REPORTED RATHER THAN
+>>> ABSORBED. The plan asked this comment to give, as the reason the leaf names
+>>> were not minted here, that "$SCRATCH AND THE PER-RUN NAMES are quoted by the
+>>> WR-07 fence, the precheck and the committed 06-11 artifacts, so renaming them
+>>> would invalidate committed proof". That is TRUE OF THE DIRECTORY AND FALSE OF
+>>> THE LEAF NAMES, and it is checkable:
+>>>
+>>>   /usr/bin/grep -n 'lib\.db\|state\.pickle' \
+>>>     .planning/.../artifacts/06-11-oracle-run.txt
+>>>     46:  The oracle opened a COPY at /tmp/p6/lib.db. ...
+>>>     63:    library: /tmp/p6/lib.db
+>>>     64:    statefile: /tmp/p6/state.pickle
+>>>
+>>> The committed artifact quotes the PRE-06-18 leaf names. Plan 06-18 renamed
+>>> those leaves to lib.$$.db / overlay.$$.yaml / state.$$.pickle and invalidated
+>>> nothing, which demonstrates the leaves are not pinned by that artifact. The
+>>> DIRECTORY '/tmp/p6' genuinely is pinned - by the DESTRUCTIVE-KNOB FENCE
+>>> allow-list, the dirty-destination precheck, the cleanup assertion and the
+>>> artifacts - and that half of the reason is kept. The comment therefore records
+>>> that minting the leaves here is a SCOPE decision (this plan changes no
+>>> behaviour), not a dependency conflict, so that the plan which does mint them
+>>> does not inherit a false obstacle.
+
+DEF-06-21-02: unaffected in substance. The treatment is unchanged by a comment
+edit, so its stated driving condition still stands; what changes is the
+DESCRIPTION of what the tag buys. Updating the entry is plan 06-29's job, and the
+comment says so. deferred-items.md was NOT edited by this plan - a sibling wave-2
+agent would collide on it.
+
+--------------------------------------------------------------------------------
+5. GC-11 — remote_sh_c's COMMENT NOW SEPARATES THE PROGRAM TEXT FROM ITS ARGUMENTS
+--------------------------------------------------------------------------------
+The existing paragraph justifies `%q` because "the result lands in a bash WORD,
+which is the one context %q is correct for" - the argument for the ARGUMENTS. The
+added sentence states that the PROGRAM TEXT is `%q`-rendered too; that for a
+multi-line program that yields bash ANSI-C quoting `$'…\n…'`; that this requires
+root's login shell on $LXC_HOST (and, on the dex_cmd paths, the shell parsing the
+`docker exec` line) to be bash; that it is, per rsh()'s own recorded
+"run by bash on LXC 100"; and that a non-bash transport fails LOUDLY with a syntax
+error and a non-zero status that rsh() records in RSH_RC, not quietly with a
+mangled `rm`. remote_sh_c's CODE is untouched.
+
+--------------------------------------------------------------------------------
+6. THE COMMENT-ONLY CLAIM, EVIDENCED
+--------------------------------------------------------------------------------
+DIFF: 64 changed lines (added + removed) in scripts/phase06-oracle.sh for task 3.
+Filtering them for anything that is not a comment line:
+
+  git diff -U0 -- scripts/phase06-oracle.sh | grep -E '^[+-]' \
+    | grep -vE '^(\+\+\+|---)' | grep -cvE '^[+-][[:space:]]*#'   ->   0
+
+ZERO non-comment lines changed. (One near-miss, recorded because it was caught by
+this check and not by review: the first draft of the RUN_TAG edit accidentally
+introduced a new `RUN_TAG_WHY=` ASSIGNMENT - a behaviour change in a task that
+must not have one. It was removed before the check was run to completion.)
+
+SELF-TEST OUTPUT, BYTE-IDENTICAL BEFORE AND AFTER - no normalisation of any kind
+was needed, so none was applied; there is no timestamp or varying path in the
+transcript:
+  before  sha256 400f7183a2d52bb7427fd0acf6592e08e09319da8961bdc7644b3d833fd75743
+  after   sha256 400f7183a2d52bb7427fd0acf6592e08e09319da8961bdc7644b3d833fd75743
+  both exit 0, "134 case(s), every fail-closed branch behaved exactly as expected"
+
+>>> ONE PLAN CHECK WAS WRONG-PREMISE AND THE TEXT WAS CHANGED TO SATISFY IT
+>>> HONESTLY, not worked around. The plan asserts
+>>> `grep -ci 'removes the predictability' $O` -eq 0, meaning "no longer claims
+>>> unpredictability outright". The first draft QUOTED the old phrase in order to
+>>> disown it ("this comment used to say ... which is three claims the code does
+>>> not support"), which is the correct prose and a failing check - a grep for the
+>>> ABSENCE of a token cannot tell a claim from its retraction. The sentence was
+>>> reworded to describe the old claim without quoting it, so the check now passes
+>>> for the reason it intends. Fifth wrong-premise check found in this round.
+
+TASK 3 CHECKS, /usr/bin/grep, worktree root:
+  GC-07 named in band                                      1  (want >=1) PASS
+  GC-11 named in band                                      1  (want >=1) PASS
+  'removes the predictability'                             0  (want 0)   PASS
+  '06-25-incremental-tempnames' cited by path              1  (want >=1) PASS
+  "printf '%q'" still present (remote_sh_c unchanged)     14  (want >=1) PASS
+  bash scripts/phase06-oracle.sh --self-test               exit 0, 134 case(s)
+  bash -n scripts/phase06-oracle.sh                        clean
+
+--------------------------------------------------------------------------------
+7. NOT DRIVEN, DELIBERATELY
+--------------------------------------------------------------------------------
+Everything below is reachable only from a LIVE `--run`, which IMPORTS, and
+importing is out of scope for a hardening round. No estate contact happened.
+
+  * The two `dex_cmd sha256sum` sites AS SENT. What is driven is the command
+    string and the argv a bash far side builds from it; the container never saw
+    it. Driving condition: the next real `--run`, where layer3.before /
+    layer3.after should both parse and the two awk keys should both match.
+  * A REAL_LIB_DB carrying a space against a real container. Predicted from the
+    code path: UNKNOWN + exit 3 at `[ -n "$LIB_SHA_BEFORE" ]`, because awk's `$2`
+    cannot key a path with whitespace. Predicted, not measured.
+  * The RUN_TAG names themselves - `--self-test` never reaches step 5, which is
+    the only place SCRATCH_LIB / SCRATCH_OVERLAY / SCRATCH_STATE are used. This is
+    DEF-06-21-02's standing condition and is unchanged by this plan.
+  * The step-1 probe INSIDE THE CONTAINER. Its program text is driven against
+    local /bin/sh by the existing WR-01 cases; the container's dash, docker exec's
+    status propagation, and a directory unreadable by `beetle` specifically remain
+    undriven, as artifacts/06-19-oracle-vacuity-driven.txt already records.
+  * The live vacuity arms. The verdict change is driven through `run_assert` over
+    synthetic fixtures; a real DJ-less or compilation-less SAMPLE has not been put
+    through a live run.
+  * A non-bash transport to LXC 100 (GC-11's dependency). The dash failure mode is
+    quoted from GC-11's own reproduction, not re-measured here.
+================================================================================

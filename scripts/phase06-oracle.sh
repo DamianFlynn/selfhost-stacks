@@ -366,17 +366,56 @@ esac
     fenced to the literal prefix '/mnt/fast/safety/phase06/' followed by one or more characters
     drawn from [A-Za-z0-9._-]. Nothing else is accepted, and nothing was sent."
 
-# --- IN-06 (T-06-94): the files BENEATH $SCRATCH are per-run unique -----------------------------
+# --- IN-06 (T-06-94): the files BENEATH $SCRATCH carry a per-run tag ----------------------------
 # The container's /tmp is world-writable and these names used to be fixed. A stale root-owned
 # leftover turns a read into a BLIND; a pre-placed SYMLINK at a predictable name is followed by
 # the `>` redirections below, so the instrument writes or reads something other than what it
-# believes. Suffixing with the run's PID removes the predictability.
+# believes. THE THREAT IS REAL. WHAT THE RUN TAG BUYS IS NOT.
 #
-# SCRATCH ITSELF IS DELIBERATELY NOT UNIQUIFIED. The dirty-destination precheck, the cleanup
-# assertion, the DESTRUCTIVE-KNOB FENCE's allow-list and the committed 06-11 artifacts all quote
-# '/tmp/p6' by name; moving it would falsify all four at once. The directory stays fixed and
-# fenced, and only its contents carry the run tag - which keeps every generated path inside the
-# allow-list by construction.
+# GC-07, corrected. This comment used to credit the PID suffix with making these names unguessable.
+# That is three claims the code does not support: a PID is small, sequential and exhaustively
+# enumerable (`kernel.pid_max` is 32768 by default), so pre-creating one symlink per candidate is
+# entirely feasible; `$$` is the MACOS WORKSTATION's bash PID, with no relationship to the
+# container whose /tmp is the directory in question, and PIDs recycle, so even "per-run unique" is
+# not guaranteed; and a label chosen by the writer is not a name minted by the kernel.
+#
+# WHAT ACTUALLY REFUSES A PRE-PLACED NAME HERE IS THE STEP-1 PROBE. SCRATCH_PROBE_PROG refuses ANY
+# non-empty $SCRATCH before a single byte is written into it, at any name, predictable or not. The
+# run tag narrows only the TOCTOU window between that probe and the step-5 `mkdir`. Credit the
+# probe, not the tag.
+#
+# THE DECISION BEHIND THIS IS PLAN 06-25'S, NOT A SECOND ONE MADE HERE. It is recorded in
+# .planning/phases/06-tagger-configuration-and-dry-run/artifacts/06-25-incremental-tempnames.txt
+# § 4, which this file quotes rather than paraphrases:
+#
+#     "THE THREAT IS REAL ENOUGH TO TREAT, AND THE TREATMENT IS MINTING THE NAME INSIDE THE
+#      CONTAINER. But the property being relied on is CREATION, NOT SECRECY ... `mktemp` creates
+#      with O_EXCL: it FAILS rather than opening a name that already exists, and it will not follow
+#      a symlink into being. The template prefix stays greppable in the source and is not claimed
+#      to be a secret. Unpredictability is not the mitigation; refusing to open what is already
+#      there is."
+#
+# SO THIS FILE CARRIES THE WEAKER TREATMENT, KNOWINGLY. The sibling instrument
+# scripts/phase06-incremental-control.sh was given the stronger one - container-minted `mktemp`
+# names with a fail-closed refusal - because it has NO probe over those names at all. This file
+# leans on the probe instead. The difference is one of mechanism: there, a name the kernel refuses
+# to reuse; here, a directory proven empty immediately before use, plus a tag that shortens the
+# window after that proof.
+#
+# SCRATCH ITSELF IS DELIBERATELY NOT UNIQUIFIED, and this is the constraint that is real. The
+# dirty-destination precheck, the cleanup assertion, the DESTRUCTIVE-KNOB FENCE's allow-list and
+# the committed 06-11 artifacts all quote '/tmp/p6' BY NAME; moving the DIRECTORY would falsify all
+# four at once. It stays fixed and fenced, and every generated path stays inside the allow-list by
+# construction.
+#
+# ONE CORRECTION TO THE RECORD, so the next reader does not inherit a reason that is not true: that
+# constraint binds the DIRECTORY, not these three LEAF names. artifacts/06-11-oracle-run.txt quotes
+# '/tmp/p6/lib.db' and '/tmp/p6/state.pickle' - the PRE-06-18 leaves - so plan 06-18 already
+# renamed them once and invalidated nothing. Minting the leaves here is therefore a scope decision,
+# not a dependency conflict, and the plan that does it should say so. deferred-items.md
+# DEF-06-21-02 is unaffected in substance: the treatment is unchanged by this comment edit and its
+# stated driving condition still stands; what changes is the DESCRIPTION of what the tag buys.
+# Updating that entry is plan 06-29's job, not this one's.
 RUN_TAG="$$"
 SCRATCH_LIB="$SCRATCH/lib.$RUN_TAG.db"
 SCRATCH_OVERLAY="$SCRATCH/overlay.$RUN_TAG.yaml"
@@ -1311,6 +1350,17 @@ dex_cmd() { # $1.. = argv inside the container; echoes the remote command string
 # remote `sh -c` and referenced as "$1", "$2" … inside it. `%q` is still used - but on the
 # ARGUMENTS, where the result lands in a bash WORD, which is the one context `%q` is correct for.
 # The literal `sh` after the program text is $0; without it the first real argument is eaten.
+#
+# GC-11 - AND THE PROGRAM TEXT IS `%q`-RENDERED TOO, which is a different use with a different
+# dependency, and the paragraph above is silent about it. For a MULTI-LINE program `%q` produces
+# bash ANSI-C quoting, `$'…\n…'`, so the four multi-line programs in this file (SCRATCH_PROBE_PROG,
+# PREFLIGHT_PROG, STAMP_WRITE_PROG, CLEANUP_PROG, STAMP_RM_PROG) arrive as `sh -c $'…' sh <path>`.
+# That requires root's LOGIN SHELL on $LXC_HOST - and, on the dex_cmd paths, the shell that parses
+# the `docker exec` line - to understand `$'…'`, i.e. to be bash. IT IS: rsh()'s own comment
+# records the transport as "run by bash on LXC 100"; this sentence states the dependency at the
+# site that creates it. AND THE FAILURE IS LOUD: measured, a dash transport gives
+# `syntax error near unexpected token ')'` and a non-zero status, which rsh() records in RSH_RC and
+# every call site refuses on - not a quietly mangled `rm`.
 #
 # This is also the helper the DESTRUCTIVE-KNOB FENCE's second layer goes through: the remote
 # programs that run `rm -rf` / `rm -f` re-test their path against the same literal allow-list
