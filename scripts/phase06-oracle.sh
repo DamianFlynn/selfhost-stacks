@@ -386,6 +386,17 @@ manifest_compare() { # $1 = before file  $2 = after file
       DIFF_WHY="manifest '$f' is not readable"
       return 2
     fi
+    # WR-02. Copied VERBATIM from the sibling instrument written in this same phase,
+    # scripts/phase06-incremental-control.sh, which has carried this guard from the start - the
+    # two scripts should read the same on the same question, so the reason text is not
+    # paraphrased. Reachable with a CLEAN ssh status: `capture_manifests` builds each manifest
+    # with `: > file` and appends, and `remote_manifest_meta`'s `find <dir> -type f -printf ...`
+    # returns rc 0 AND NO OUTPUT on an existing but empty directory. Without this line, layer 2
+    # of the three-layer wrote-nothing proof is satisfied by having measured nothing.
+    if [ ! -s "$f" ]; then
+      DIFF_WHY="manifest '$f' is EMPTY - an empty listing compares equal to any other empty listing, which would pass vacuously"
+      return 2
+    fi
   done
   errf="$(mktemp "${TMPDIR:-/tmp}/p6-diff-XXXXXX")" || {
     DIFF_WHY="could not create a temp file to capture diff's stderr"
@@ -1064,9 +1075,57 @@ assert_protected_fields() { # $1 = NDJSON ledger  $2 = expected sampled file cou
   return 0
 }
 
+# --- IN-12: the field view must have been PRODUCED before its column count means anything -------
+# This used to be three inline lines at step 11, and inline it could only be reasoned about, never
+# fed an input. `awk -F'\t' 'NF != 6 {n++} END {print n + 0}'` over an EMPTY fields.tsv yields 0,
+# and the script printed `field view read: 0 items, six columns each` - a tick asserting that every
+# one of zero items had six columns. Zero items does not mean the columns were right; it means the
+# view was never produced. `assert_top_level` does catch it downstream (every pair becomes
+# NO-LIBRARY-ROW -> rc 2 -> unknown), so the run VERDICT was already right - the tick was not, and
+# a tick that the verdict has to be rescued from is the defect this plan closes.
+#
+# Returns 0 clean / 2 COULD NOT LOOK. There is no red arm: a malformed field view is never a
+# statement about the tree, only about the instrument.
+assert_field_view() { # $1 = fields TSV
+  local fields="$1" nbad=0 nrows=0
+  ASSERT_WHY=""; ASSERT_EVIDENCE=""
+  if [ ! -r "$fields" ]; then
+    ASSERT_WHY="the field view '$fields' is missing or unreadable, so nothing was read"
+    return 2
+  fi
+  if [ ! -s "$fields" ]; then
+    ASSERT_WHY="the field view is EMPTY. ZERO ITEMS DOES NOT MEAN EVERY ITEM HAD SIX COLUMNS - it
+    means the view was NOT PRODUCED, and the CONF-03 join has nothing to join against."
+    return 2
+  fi
+  nbad="$(LC_ALL=C awk -F'\t' 'NF != 6 {n++} END {print n + 0}' "$fields")"
+  if [ "$nbad" -ne 0 ]; then
+    ASSERT_WHY="$nbad row(s) of the field view do not have six tab-separated columns - a path
+    containing a tab would do this, and the join behind CONF-03 cannot be trusted."
+    return 2
+  fi
+  nrows="$(wc -l < "$fields" | tr -d ' ')"
+  ASSERT_WHY="$nrows items, six columns each"
+  return 0
+}
+
 # --- CONF-04's write side (D-23 as amended by D-34), REPORTED ------------------------------------
-# Always returns 0: this is the dry run SHOWING what an import would write, which is what D-23
-# asked for, corrected by D-34. beets CANNOT be configured to emit `;` inside ARTIST - no
+# Returns 0 WHENEVER IT COULD LOOK: this is the dry run SHOWING what an import would write, which
+# is what D-23 asked for, corrected by D-34. It is a report, so zero qualifying rows is a finding
+# and not a failure - but ONLY when the rows were actually counted.
+#
+# WR-06. It used to return 0 on an UNREADABLE input too, and `run_assert` maps 0 to `ok`, so the
+# console printed a GREEN TICK followed by, verbatim:
+#
+#     CONF-04 write side: the fields TSV is missing or unreadable, so the write side could not be shown
+#
+# A green tick whose own text says the instrument did not look - the exact shape CLAUDE.md
+# Health Checks exists to outlaw. "A report may never block the run" is a real intent, but it is
+# not preserved by ticking over a blind read; it is preserved by keeping `return 0` for the case
+# where the file WAS read and simply held no qualifying row. Both could-not-look branches now
+# return 2, which `run_assert`'s `*)` arm routes to `unknown()`.
+#
+# beets CANNOT be configured to emit `;` inside ARTIST - no
 # delimiter or join key exists in config_default.yaml at either version - so the multi-artist
 # information lands in ARTISTS (TXXX / Vorbis), and `artist` carries MusicBrainz's own join
 # phrases concatenated. That is why D-34 enables PreferNonstandardArtistsTag on Jellyfin's Music
@@ -1076,7 +1135,19 @@ report_multi_artist() { # $1 = fields TSV
   ASSERT_WHY=""; ASSERT_EVIDENCE="$ev"
   if [ ! -r "$fields" ]; then
     ASSERT_WHY="the fields TSV is missing or unreadable, so the write side could not be shown"
-    return 0
+    return 2
+  fi
+  # An EXISTING but EMPTY field view is the same could-not-look wearing a different hat: the awk
+  # below would count zero qualifying rows and the message would read as a measurement. The
+  # field-view read at step 11 reports this condition first; this is a DELIBERATE RESTATEMENT and
+  # the message says so, because the alternative is that the "CONF-04 write side" label goes
+  # SILENT on exactly the input it cannot handle, and a label that vanishes from the transcript is
+  # worse than a label that appears twice.
+  if [ ! -s "$fields" ]; then
+    ASSERT_WHY="the fields TSV is EMPTY, so nothing could be shown and zero rows is not a
+    measurement. (Restated: the field-view read above reports the same condition. It is repeated
+    here so this label is not silent on the one input it cannot judge.)"
+    return 2
   fi
   # `artists` is MULTI_VALUE_DSV and renders joined with a literal backslash + U+2400 in a
   # template, so it is translated to '; ' for display only. The FILE is not touched.
@@ -1088,12 +1159,15 @@ report_multi_artist() { # $1 = fields TSV
   # Two different numbers, and conflating them is how a report starts overstating itself: the
   # predicate above is "carries a NON-EMPTY artists field", which is not the same as "carries
   # MORE THAN ONE artist". Both are stated. The second is the one D-23/D-34 is about.
-  local nrows=0 nmulti=0
+  local nrows=0 nmulti=0 nread=0
   nrows="$(wc -l < "$ev" | tr -d ' ')"
   nmulti="$(LC_ALL=C grep -c 'artists=<[^>]*; ' "$ev" || true)"
-  ASSERT_WHY="$nrows item(s) carry a non-empty artists field, $nmulti of them with MORE THAN ONE
-    artist; beets cannot emit ';' inside ARTIST, so the multi-artist information lands in ARTISTS
-    (D-23 amended by D-34)"
+  # The denominator is stated so a zero above is EMPTY-BY-MEASUREMENT and cannot be confused with
+  # the empty-input refusal a dozen lines up. This is the only branch that returns 0.
+  nread="$(wc -l < "$fields" | tr -d ' ')"
+  ASSERT_WHY="$nread field-view row(s) READ; of them $nrows item(s) carry a non-empty artists
+    field, $nmulti with MORE THAN ONE artist; beets cannot emit ';' inside ARTIST, so the
+    multi-artist information lands in ARTISTS (D-23 amended by D-34)"
   return 0
 }
 
@@ -1196,6 +1270,43 @@ remote_sh_c() { # $1 = program text (run by the remote /bin/sh)  $2.. = its posi
   done
   printf '%s' "$out"
 }
+
+# --- The dirty-destination probe, sent into the container at step 1 (WR-01) ---------------------
+# It lives HERE, with the remote layer, rather than inline at its one call site, so that
+# `--self-test` can execute the program text against local fixtures with no docker and no ssh.
+#
+# The old shape was ONE PIPELINE sent into the container:
+#
+#     [ ! -e "$1" ] && echo absent || ls -A "$1" | head -n 1
+#
+# and it was the single line in this file that broke the house rule at the top: the container's
+# /bin/sh IS dash and has NO `pipefail`, so a pipeline's status is `head`'s status, and `head`
+# exits 0 whatever `ls` did. A $SCRATCH left root-owned 0700 by an aborted run therefore gave
+# `ls: cannot open directory: Permission denied` on stderr, an EMPTY stdout and a ZERO status -
+# so neither the RSH_RC guard nor the `[ -n "$RSH_OUT" ]` guard fired, and the precheck whose
+# entire job is to refuse printed the green line "absent or empty". A could-not-look reported as
+# the good answer. Measured: `/bin/sh -c 'ls -A /nonexistent | head -n 1; echo rc=$?'` -> rc=0.
+#
+# WHY THIS CONSTRUCTION CANNOT SILENTLY EXIT 0 ON AN UNREADABLE DIRECTORY: there is no pipeline,
+# so there is nothing that can launder a status. `find` on a directory it cannot read writes a
+# diagnostic to stderr and returns NON-ZERO (GNU find and busybox find alike) - that non-zero is
+# precisely the status `| head` used to throw away. It is read by `||` on the very same line,
+# because the ONLY command in that assignment is the command substitution, and POSIX specifies
+# that such an assignment's exit status IS the substitution's. The probe then exits 4, which
+# `docker exec` propagates, which `rsh` records in RSH_RC, which the call site refuses on.
+#
+# And THE ANSWER IS ALWAYS A WORD, never an absence: `absent`, `empty`, `notadir`, or
+# `nonempty <first entry>`. Emptiness of stdout is no longer evidence of anything, so an
+# unanticipated outcome falls to the call site's `*)` arm and REFUSES instead of being read as
+# "nothing there". stderr is deliberately NOT redirected: find's own diagnostic reaches the
+# operator's terminal, where it explains the exit 4.
+SCRATCH_PROBE_PROG='if [ ! -e "$1" ]; then echo absent; exit 0; fi
+if [ ! -d "$1" ]; then echo notadir; exit 0; fi
+out=$(find "$1" -mindepth 1 -maxdepth 1) || exit 4
+if [ -z "$out" ]; then echo empty; exit 0; fi
+nl="
+"
+printf "nonempty %s\n" "${out%%$nl*}"'
 
 # The remote manifest. `%p %s %T@` catches path, size and mtime; the sha catches content;
 # together they catch additions and deletions too. GNU find's -printf is why this runs on LXC 100
@@ -2012,28 +2123,44 @@ rsh_classify "the container status of $CONTAINER" || exit 3
 [ "$RSH_OUT" = "running" ] || precheck_fail "$CONTAINER is '$RSH_OUT', not running"
 ok "container $CONTAINER is running"
 
-# The `| head -n 1` pipeline inside the container's pipefail-less dash is WR-01 and belongs to
-# plan 06-19; it is deliberately left as it is here. What changed is that the path is a
-# POSITIONAL PARAMETER of the remote program rather than text inside it (WR-08).
-rsh "$(dex_cmd "$(remote_sh_c '[ ! -e "$1" ] && echo absent || ls -A "$1" | head -n 1' "$SCRATCH")")"
+# WR-01. The program text is SCRATCH_PROBE_PROG, defined up with the remote layer so that
+# `--self-test` can drive it; the reasoning is written out at its definition.
+rsh "$(dex_cmd "$(remote_sh_c "$SCRATCH_PROBE_PROG" "$SCRATCH")")"
 if [ "$RSH_RC" -ne 0 ]; then
-  precheck_fail "could not inspect '$SCRATCH' inside the container (ssh exit $RSH_RC)"
+  precheck_fail "could not inspect '$SCRATCH' inside the container (exit $RSH_RC). Exit 4 is the
+    probe's own status for 'the path IS there and could NOT BE READ' - most often a scratch
+    directory left root-owned 0700 by an aborted run, which $CONTAINER_USER cannot list. That is a
+    could-not-look, and it is NOT the same as 'absent or empty'. find's own diagnostic is on this
+    terminal, above this line."
 fi
-if [ "$RSH_OUT" != "absent" ] && [ -n "$RSH_OUT" ]; then
-  # IN-11: name the cleanup in the refusal. A run that aborted between step 5 and step 12 leaves
-  # a copy of the real library.db here, and without the command below this reads as an
-  # unexplained refusal that the operator has to go and read the script to resolve.
-  precheck_fail "'$SCRATCH' already exists inside the container and is not empty (first entry:
-    $RSH_OUT). A wrote-nothing assertion against a dirty destination proves nothing - refusing.
-    This is what a run aborted between step 5 and step 12 leaves behind. Clear it with:
+case "$RSH_OUT" in
+  absent|empty) : ;;
+  notadir)
+    precheck_fail "'$SCRATCH' exists inside the container but is NOT A DIRECTORY. The run would
+    put the throwaway library, the overlay and the statefile underneath it - refusing."
+    ;;
+  'nonempty '*)
+    # IN-11: name the cleanup in the refusal. A run that aborted between step 5 and step 12 leaves
+    # a copy of the real library.db here, and without the command below this reads as an
+    # unexplained refusal that the operator has to go and read the script to resolve.
+    precheck_fail "'$SCRATCH' already exists inside the container and is not empty (first entry:
+    ${RSH_OUT#nonempty }). A wrote-nothing assertion against a dirty destination proves nothing -
+    refusing. This is what a run aborted between step 5 and step 12 leaves behind. Clear it with:
 
       ssh root@$LXC_HOST \"docker exec -u $CONTAINER_USER $CONTAINER rm -rf -- '$SCRATCH'\"
 
     The HOST stamp is a different matter and is NOT what this refusal is about: '--baseline'
     ALWAYS leaves '$STAMP_REMOTE' behind by design, because it is the -newer reference a later
     '--run' needs. Its presence is expected, and nothing here refuses on account of it."
-fi
-ok "container scratch '$SCRATCH' is absent or empty"
+    ;;
+  *)
+    precheck_fail "the scratch probe answered '$RSH_OUT', which is not one of the four words it
+    can emit (absent / empty / notadir / 'nonempty <entry>'). Refusing rather than guessing: an
+    unrecognised answer is a could-not-look, and this precheck no longer treats silence as good
+    news."
+    ;;
+esac
+ok "container scratch '$SCRATCH' is absent or empty (probed with find, whose status is READ)"
 
 # --- Step 2: layer 1, structural, read from docker inspect and never from the compose file ----
 # The `|` characters below are Go TEMPLATE separators, not shell pipes - but the house greppable
@@ -2314,13 +2441,14 @@ rsh_to "$(dex_cmd "$BEET_BIN" -c "$(printf '%q' "$SCRATCH_OVERLAY")" ls -f "'$LS
 if [ "$RSH_RC" -ne 0 ]; then
   unknown "the throwaway library's field view could not be read (ssh exit $RSH_RC)"
 else
-  BADCOLS="$(LC_ALL=C awk -F'\t' 'NF != 6 {n++} END {print n + 0}' "$OUT/fields.tsv")"
-  if [ "$BADCOLS" -ne 0 ]; then
-    unknown "$BADCOLS row(s) of the field view do not have six tab-separated columns - a path
-    containing a tab would do this, and the join behind CONF-03 cannot be trusted."
-  else
-    ok "field view read: $(wc -l < "$OUT/fields.tsv" | tr -d ' ') items, six columns each"
-  fi
+  # IN-12. The judging is in assert_field_view so --self-test can feed it an empty file; this
+  # site only prints. Every non-zero return is a could-not-look: there is no red arm.
+  FV_RC=0
+  assert_field_view "$OUT/fields.tsv" || FV_RC=$?
+  case "$FV_RC" in
+    0) ok "field view read: $ASSERT_WHY" ;;
+    *) unknown "field view read: $ASSERT_WHY" ;;
+  esac
 fi
 
 write_ledger_payload "$OUT/ledger.py"
