@@ -320,6 +320,30 @@ classify_taghistory() { # $1 = the probe's captured stdout
   return 0
 }
 
+# --- The step-4 re-offer classifier -----------------------------------------------------------
+# Factored out of run_arm so `--self-test` and an offline drive can feed it a synthetic
+# transcript. A classifier that is only reasoned about is an assumption, not a control.
+#
+# THREE OUTCOMES, unchanged: `not-offered` (beets reports the paths skipped), `offered` (an
+# `Album: ` line is present), and the `indeterminate` fall-through - which the caller treats as
+# BLIND, never as green - for anything else, including the `contradictory` case where both
+# markers appear at once.
+#
+# THE PATH COUNT IS NOT PINNED. [IN-10, plan 06-20] This used to match the literal
+# `Skipped 1 paths.`, but SRC_FOLDER is an OFFERED override (see the header's override contract)
+# and a source folder yielding two albums prints a count of 2 - which fell through to
+# `indeterminate`, i.e. BLIND, so the negative control silently stopped discriminating while
+# still appearing to run, for exactly the case the override invites. Only the COUNT is widened:
+# every other unrecognised transcript still reaches `indeterminate`.
+classify_reoffer() { # $1 = a file holding the --pretend transcript; echoes the mode
+  local f="$1" mode="indeterminate"
+  if grep -qE 'Skipped [0-9]+ paths\.' "$f"; then mode="not-offered"; fi
+  if grep -q '^Album: ' "$f"; then
+    if [ "$mode" = "not-offered" ]; then mode="contradictory"; else mode="offered"; fi
+  fi
+  printf '%s\n' "$mode"
+}
+
 # --- Remote plumbing --------------------------------------------------------------------------
 RE_OUT=""; RE_ERR=""; RE_RC=0
 remote_exec() { # $1 = local program file; rest = positional args for the remote `sh -s`
@@ -332,9 +356,14 @@ remote_exec() { # $1 = local program file; rest = positional args for the remote
   return 0
 }
 
-remote_is_blind() { # true when the remote call could not look
-  [ "$RE_RC" -eq 124 ] || [ "$RE_RC" -eq 2 ] || [ "$RE_RC" -eq 255 ]
-}
+# THERE IS DELIBERATELY NO NARROW BLINDNESS CLASSIFIER HERE. [IN-02, plan 06-20]
+# A named helper used to sit at this point testing only `RE_RC` in {124, 2, 255}, and NOTHING
+# CALLED IT - every caller instead tests `[ "$RE_RC" -ne 0 ]`, which is strictly WIDER: it also
+# catches 1, 125 (docker could not run), 126 (not executable) and 127 (command not found). A
+# named classification that a reader assumes is in force while a different, wider test actually
+# decides is a repudiation hazard, and routing the callers through the narrow one would have
+# been a regression dressed as a cleanup. So the wider inline test stays and the dead name is
+# gone. Any future blindness helper MUST be at least as wide as `-ne 0` and MUST be called.
 
 # --- Remote programs (quoted heredocs: nothing local expands into them) ----------------------
 write_prog_prepare() { cat > "$1" <<'REOF'
@@ -654,11 +683,7 @@ run_arm() { # $1 = a|b
     blind "step 4's remote call failed (rc=$RE_RC). UNKNOWN, not green."
     unknown=1
   else
-    mode="indeterminate"
-    if grep -q 'Skipped 1 paths\.' "$RE_OUT"; then mode="not-offered"; fi
-    if grep -q '^Album: ' "$RE_OUT"; then
-      if [ "$mode" = "not-offered" ]; then mode="contradictory"; else mode="offered"; fi
-    fi
+    mode="$(classify_reoffer "$RE_OUT")"
     say "  classified: $mode"
     case "$want_offer:$mode" in
       no:not-offered)
@@ -666,7 +691,7 @@ run_arm() { # $1 = a|b
       yes:offered)
         ok "step 4: the folder IS re-offered - the trap is DEFEATED by incremental_skip_later" ;;
       *:indeterminate|*:contradictory)
-        blind "step 4: the transcript is $mode - neither 'Skipped 1 paths.' alone nor an 'Album: ' line alone"
+        blind "step 4: the transcript is $mode - neither a 'Skipped N paths.' line alone nor an 'Album: ' line alone"
         bad "  This is UNKNOWN, not green."
         unknown=1 ;;
       *)
@@ -917,11 +942,31 @@ CASES
 }
 
 # --- Argument parsing -------------------------------------------------------------------------
+# A USAGE ERROR IS NOT A MEASUREMENT. [IN-05, plan 06-20] `--arm` used to be
+# `ARM="${2:-}"; shift 2`, and with one argument left `shift 2` returns non-zero, so `set -e`
+# terminated the script with status 1 - THE CODE RESERVED FOR "the arm produced the OPPOSITE
+# outcome" - and printed nothing at all. A mis-typed invocation then read as a measured negative.
+# The defect is in the `shift 2` IDIOM, so no flag in this dispatch uses it: each shifts ONCE
+# unconditionally and takes a value only if one is actually present. Usage errors exit 3, loudly.
+usage_error() { # $1 = what was wrong; exits 3 (REFUSED/usage) per the EXIT CODES block
+  printf 'phase06-incremental-control.sh: %s\n\n' "$1" >&2
+  print_header >&2
+  exit 3
+}
+
 MODE=""
 ARM=""
 while [ $# -gt 0 ]; do
   case "$1" in
-    --arm) MODE="arm"; ARM="${2:-}"; shift 2 ;;
+    --arm)
+      MODE="arm"; shift
+      if [ $# -gt 0 ]; then ARM="$1"; shift; else ARM=""; fi
+      case "$ARM" in
+        a|b) : ;;
+        "") usage_error "--arm requires a value; the legal values are 'a' and 'b'" ;;
+        *)  usage_error "--arm: '$ARM' is not a legal arm; the legal values are 'a' and 'b'" ;;
+      esac
+      ;;
     --baseline) MODE="baseline"; shift ;;
     --cleanup) MODE="cleanup"; shift ;;
     --self-test) MODE="selftest"; shift ;;
