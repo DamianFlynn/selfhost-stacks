@@ -1421,7 +1421,33 @@ else
         echo "  ⚠️  DRIFT_REPO_ROOT override in effect — this run cannot report the vendored files green"
         EXIT_CODE=1
     fi
-    DRIFT_CMD="set -o pipefail; cd $DRIFT_REPO_ROOT || exit 3
+    # ── GC-17, 2026-09-22 (round-2 gap closure, plan 06-26) ─────────────────────────────────────
+    # EVERY OVERRIDABLE PATH THAT CROSSES INTO A REMOTE COMMAND STRING IS RENDERED ONCE WITH
+    # `printf '%q'`, AND ONLY THE RENDERED FORM IS INTERPOLATED. There are FOUR such sites in this
+    # file and they were all raw: this one, the D-03 CLI render, the D-04 scan and the consumers
+    # fold-in. A raw value word-splits on the REMOTE shell, so an override naming a path that
+    # contains a space failed with a shell error instead of driving the branch the knob exists to
+    # drive — and "an undriveable branch is an unproven branch" is the ONLY reason any of these
+    # knobs exist. The bound is worth stating rather than dramatising: all four are ADDITIVE knobs
+    # that cannot produce a green tick, and every default value contains no spaces. This is
+    # scripts/phase06-oracle.sh's WR-08 defect reproduced in the sibling file WR-08's plan did not
+    # own — three of the four sites were named by the cross-family review, the fourth (this one)
+    # was found while planning 06-26 and is fixed with them, because closing three of four
+    # instances of a class inside one file is the drift this whole round is about.
+    #
+    # ⚠️ THE BASH DEPENDENCY, STATED ONCE HERE AND CROSS-REFERENCED FROM THE OTHER THREE (GC-11).
+    #   `printf '%q'` renders for BASH. A single-line path containing a space renders as a
+    #   backslash escape that any POSIX shell accepts. A value containing a NEWLINE renders as
+    #   bash ANSI-C `$'…'` quoting, which requires root's login shell on 172.16.1.159 to be bash.
+    #   It is — bash 5.2, the same fact the `set -o pipefail` note above already relies on. And if
+    #   it ever were not, the failure is LOUD: a syntax error and a non-zero ssh status, landing in
+    #   this block's could-not-look arm. Not a quietly mangled command. Fail-closed, which is the
+    #   same grading GC-11 gave the identical dependency in phase06-oracle.sh's remote_sh_c().
+    # ⛔ DO NOT "fix" a future site of this shape by hand-escaping quotes inside the command string
+    #   instead. A `\"` wrapper survives a space but not a quote and not a `$`, and a half-measure
+    #   that LOOKS like a fix is worse here than the raw interpolation it replaces.
+    DRIFT_REPO_ROOT_Q=$(printf '%q' "$DRIFT_REPO_ROOT")
+    DRIFT_CMD="set -o pipefail; cd $DRIFT_REPO_ROOT_Q || exit 3
 _drift_pair() {
   r=\$(timeout $REMOTE_TIMEOUT git show \"HEAD:\$2\" | sha256sum | cut -d' ' -f1) || exit 4
   h=\$(timeout $REMOTE_TIMEOUT sha256sum \"\$3\" | cut -d' ' -f1) || exit 5
@@ -1536,6 +1562,10 @@ if [ "$D03_FLASK_CONTAINER" != "beets-flask" ] \
     echo "  ⚠️  a D03_* override is in effect — this run cannot report the mounts green"
     EXIT_CODE=1
 fi
+# GC-17, 2026-09-22 (plan 06-26). Rendered once, quoted, and it is the RENDERED form that is
+# interpolated into the (ii) CLI-render command string below. See the full note at the vendored-file
+# drift block above for why, and for the bash dependency `printf '%q'` carries (GC-11).
+D03_REPO_ROOT_Q=$(printf '%q' "$D03_REPO_ROOT")
 D03_BAD=0
 D03_LOOKED=0
 
@@ -1590,7 +1620,7 @@ else
 fi
 
 # --- (ii) the DORMANT CLI arm, rendered rather than inspected -----------------------------------
-D03_CLI_OUT=$(ssh -n $SSH_OPTS root@172.16.1.159 "cd $D03_REPO_ROOT || exit 3; timeout $REMOTE_TIMEOUT docker compose --profile $D03_CLI_PROFILE -f $D03_CLI_COMPOSE config 2>/dev/null")
+D03_CLI_OUT=$(ssh -n $SSH_OPTS root@172.16.1.159 "cd $D03_REPO_ROOT_Q || exit 3; timeout $REMOTE_TIMEOUT docker compose --profile $D03_CLI_PROFILE -f $D03_CLI_COMPOSE config 2>/dev/null")
 D03_CLI_RC=$?   # ssh propagates the remote status — NO local pipe above
 # Normalise the long-form `volumes:` the renderer emits into `source target ro|rw`, LOCALLY.
 # `read_only:` is EMITTED ONLY WHEN TRUE, so its ABSENCE means read-write — the default here is
@@ -1803,7 +1833,11 @@ if [ "$D04_EXEMPT_BASELINE" != "5" ]; then
     echo "  ⚠️  D04_EXEMPT_BASELINE override in effect — this run cannot report D-04 green"
     EXIT_CODE=1
 fi
-D04_CMD="cd $D04_REPO_ROOT || exit 3
+# GC-17, 2026-09-22 (plan 06-26). Rendered once, quoted, and it is the RENDERED form that is
+# interpolated into the scan's command string below. See the full note at the vendored-file drift
+# block above for why, and for the bash dependency `printf '%q'` carries (GC-11).
+D04_REPO_ROOT_Q=$(printf '%q' "$D04_REPO_ROOT")
+D04_CMD="cd $D04_REPO_ROOT_Q || exit 3
 echo D04-BEGIN
 timeout $REMOTE_TIMEOUT git grep -n -I -w -E -e 'beet' -e 'BEET[A-Z_]*' HEAD -- scripts stacks
 D04_RC=\$?
@@ -2303,8 +2337,13 @@ CONSUMERS_OVERRIDDEN=0
 if [ "$CONSUMERS_SCRIPT" != "/mnt/fast/stacks/scripts/check-music-consumers.sh" ]; then
     CONSUMERS_OVERRIDDEN=1
 fi
+# GC-17, 2026-09-22 (plan 06-26). Rendered once, quoted, and it is the RENDERED form that is
+# interpolated into the remote command string below. This knob names a FILE rather than a root, but
+# the boundary and the defect are identical. See the full note at the vendored-file drift block
+# above for why, and for the bash dependency `printf '%q'` carries (GC-11).
+CONSUMERS_SCRIPT_Q=$(printf '%q' "$CONSUMERS_SCRIPT")
 CONSUMERS_OUT=$(ssh -n $SSH_OPTS root@172.16.1.159 \
-    "timeout $REMOTE_TIMEOUT bash $CONSUMERS_SCRIPT 2>&1")
+    "timeout $REMOTE_TIMEOUT bash $CONSUMERS_SCRIPT_Q 2>&1")
 CONSUMERS_RC=$?   # ssh propagates the remote exit status — do NOT pipe before capturing this
 # Strip ANSI colour separately. \x1b is a GNU sed extension and this script runs on macOS, so the
 # ESC is spelled with bash's $'...' quoting instead.
