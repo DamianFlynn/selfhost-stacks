@@ -575,6 +575,84 @@
 #     closed by plan 06-17 and its two consumer verdicts are still recorded separately and never
 #     summed — see the EXIT 3 paragraph in scripts/check-music-consumers.sh's header.
 #
+# ⚠️  EXIT-CODE BEHAVIOUR CHANGED AGAIN — NO NEW BLOCK, A NEW FATAL CONDITION AT AN EXISTING SITE,
+#     2026-09-22 (plan 06-23, phase 6 GC-03 / GC-16).
+#
+#     THIS IS THE THIRTEENTH SUCH NOTICE. Counts measured before and after this edit, not assumed,
+#     using the two greps the eighth notice quotes. This notice does NOT write the shared phrase
+#     out a second time in its own body, so it adds exactly one match to each:
+#         headers   12 -> 13
+#         raw       15 -> 16
+#     The raw count therefore still runs THREE ahead of the header count, unchanged by this edit.
+#
+#     BLOCK ordinal does NOT move: nine blocks remain. Nothing new runs here. This is one more arm
+#     in the D-04 verdict ladder the eleventh notice describes, plus one widened regex branch in
+#     the same block.
+#
+#     ⚠️ THE CONDITION LETTER IS P, NOT M. The eleventh notice stopped at L and the twelfth notice
+#     then used M, N and O — out of alphabetical order, because its "what actually changed" section
+#     was written below its "what now exits 1" section. M, N and O are therefore TAKEN. Measured by
+#     `grep -nE '^#[[:space:]]+[A-Z]\.[[:space:]]' scripts/quick-health-check.sh`, which is the only
+#     honest way to find the next free letter in this file; do not count forward from the last
+#     notice's highest letter.
+#
+#     WHAT NOW EXITS THIS SCRIPT 1 THAT DID NOT BEFORE:
+#       P. A VACUOUS D-04 **ASSERTED** SET, WHICH IS CONDITION K ONE NESTING LEVEL IN. Condition K
+#          refuses a zero EXECUTABLE count. But the set the block actually iterates is
+#          D04_INVOKE_ASSERT = executable MINUS exempt, and until this edit nothing guarded THAT
+#          being zero. Delete or reshape the three scripts/check-beets-config.sh invocations and
+#          the executable count falls to 5 while the exempt count stays 5: K does not fire (5 ≠ 0),
+#          the exempt pin does not fire (5 = 5), the doc pin does not fire, and
+#          `while … <<< "$D04_INVOKE_ASSERT"` over the empty string runs its body ZERO times, so
+#          D04_BAD stays 0 and the block prints its ✅ line with `0 of 5` inside its own
+#          parenthesis.
+#          A GREEN TICK WHOSE OWN PARENTHESIS SAYS IT ASSERTED OVER NOTHING — verbatim the CR-01
+#          defect the eleventh notice exists to record, reproduced one level down. That is not a
+#          theory: it was DRIVEN, pre-fix and post-fix, over a synthetic all-exempt fixture, in
+#          `.planning/phases/06-tagger-configuration-and-dry-run/artifacts/06-23-d04-assert-vacuity.txt`.
+#          Reported as ⚠️ UNKNOWN, not ❌, for the same reason K and its two siblings are: this file
+#          keeps "could not look" distinct from "measured failure", and an empty asserted set is
+#          the former.
+#          ⚠️ THE GREEN CONDITION ITSELF ALSO NOW REQUIRES A NON-ZERO ASSERTED COUNT. Belt and
+#          braces over the arm above, and it is worth the line because the tick's own text quotes
+#          `$D04_N_ASSERT of $D04_N_EXE`: with this in place the tick and the number it prints
+#          cannot disagree, whatever future edit is made to the ladder above it.
+#
+#     WHAT CHANGED MEANING WITHOUT CHANGING THE VERDICT (GC-16, a latent blind spot with NO current
+#     instance in the tree):
+#       * D04_INV_RE's FOURTH branch — the beets-binary variable-expansion branch added by plan
+#         06-16 — anchored only on content start or immediately inside an opening quote, while its
+#         three literal-token siblings in the same regex also anchored on a shell separator and on
+#         a `docker` prefix. So that variable expansion after `&&`, and the same expansion inside a
+#         `docker exec` line, were invocation-shaped and INVISIBLE to the scan. (Both shapes are
+#         written out literally in the artifact named below, not here — see the paragraph at the
+#         end of this notice for why.)
+#         That asymmetry is the silent route by which the asserted set above can drop to
+#         zero without any counter leaving its pin, which is why the two ship together. The anchor
+#         set is now symmetric; the trailing flag-or-subcommand requirement is UNCHANGED, because
+#         that half is what keeps the executable count at 8 rather than 26.
+#         Proven ADDITIVE by measurement rather than argument: raw / comment-stripped /
+#         invocation-shaped / executable / asserted / exempt / documentation are 199 / 98 / 10 / 8 /
+#         3 / 5 / 2 with the old regex and with the new one. No pin moved.
+#
+#     ⚠️ THIS NOTICE DELIBERATELY ADDS **NO** NEW D-04 RAW MATCH, AND THAT IS STATED RATHER THAN
+#     SILENT — the same convention the eleventh and twelfth notices use for the EXIT-CODE grep.
+#     This file is itself inside D-04's scan scope (`scripts/`), so prose here that spells out the
+#     literal token, or a variable name beginning with those four capitals, would move the raw
+#     count that the additivity proof above is stated against. Every such shape is therefore
+#     written out in the artifact instead. Measured, not assumed: running THIS FILE through the two
+#     `-e` patterns the D-04 remote scan itself uses (read them off the D04_CMD assignment below —
+#     they are deliberately not quoted again here, for the reason this paragraph is about) with
+#     `grep -c -w -E` reads 35 before this notice and 35 after it, so the block's raw count is
+#     untouched at 199. This is NOT "rewording to flatter a grep" in the sense the eighth
+#     notice forbids — nothing here is reworded to change a number that is being reported; the
+#     prose is placed where it does not perturb the instrument it is describing, and the choice is
+#     recorded so the next reader can check it.
+#
+#     WHAT THIS NOTICE DOES **NOT** CLAIM. It does not discharge ROADMAP entry criterion E10, and it
+#     does not close CONF-04. CR-01's carried residue stays carried — see the CR-01 row in
+#     06-DISPOSITIONS.md. What closed here is the NESTED instance, and the blind spot next to it.
+#
 # ⚠️  KNOWN LIMIT, AND IT APPLIES TO THIS WHOLE FILE: THIS SCRIPT IS MANUAL. IT ONLY EVER FIRES
 #     WHEN SOMEBODY TYPES IT (D-22, phase 02.1).
 #     There is no cron entry, no systemd timer and no notification path. Nothing here will tell
@@ -1794,6 +1872,16 @@ else
         echo "  cannot SEE the invocations, not that none exist. This is NOT 'no bare beet"
         echo "  invocations'. Nothing is asserted."
         EXIT_CODE=1
+    elif [ "$D04_N_ASSERT" -eq 0 ]; then
+        # CONDITION P (plan 06-23, GC-03). Condition K one nesting level in: K refuses a zero
+        # EXECUTABLE count, but the set the loop below actually iterates is executable MINUS
+        # exempt. With every executable line exempt, K passes, both pins hold, the loop runs zero
+        # times and the green line below would print `0 of N`. See the THIRTEENTH exit-code notice.
+        echo "  ⚠️  UNKNOWN — every invocation-shaped executable line is EXEMPT ($D04_N_EXEMPT of"
+        echo "  $D04_N_EXE). Nothing was asserted over, so the -l-and-c rule below was applied to an"
+        echo "  EMPTY set and could not have failed. This is NOT 'no bare beet invocations'."
+        echo "  Nothing is asserted."
+        EXIT_CODE=1
     else
         D04_BAD=0
         while IFS= read -r d04_line; do
@@ -1821,7 +1909,11 @@ else
             printf '%s\n' "$D04_INVOKE_DOC" | sed 's/^/       /'
             EXIT_CODE=1
         fi
-        if [ "$D04_BAD" -eq 0 ] && [ "$D04_N_DOC" -eq "$D04_DOC_BASELINE" ] \
+        # `D04_N_ASSERT" -gt 0` is belt and braces over condition P's arm above (plan 06-23,
+        # GC-03) and is kept because the tick's own text quotes `$D04_N_ASSERT of $D04_N_EXE`:
+        # with it here, the tick and the number it prints cannot disagree, whatever future edit
+        # is made to the ladder above.
+        if [ "$D04_BAD" -eq 0 ] && [ "$D04_N_ASSERT" -gt 0 ] && [ "$D04_N_DOC" -eq "$D04_DOC_BASELINE" ] \
            && [ "$D04_N_EXEMPT" -eq "$D04_EXEMPT_BASELINE" ] && [ "$D04_OVERRIDDEN" -eq 0 ]; then
             echo "  ✅ no ASSERTED beet invocation opens the real library ($D04_N_ASSERT of $D04_N_EXE invocation-shaped lines outside *.md)"
             echo "     $D04_N_EXEMPT lines were NOT asserted over — the named exemption register at the pinned baseline ($D04_EXEMPT_BASELINE), see the block comment"
