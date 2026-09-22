@@ -68,9 +68,11 @@
 #   default mode  - every red finding increments FAILURES and the script ends non-zero.
 #   --baseline    - every finding is printed and the script always ends zero, so a before-state
 #                   can be recorded while a config is still being brought to its target.
-#   --self-test   - no ssh, no docker. SIX cases, FIVE of which MUST go red, exiting non-zero
-#                   unless every expectation is met. Five drive the assertion function over
-#                   synthetic dumps; the sixth is a SOURCE assertion, because the assertion
+#   --self-test   - no ssh, no docker. SEVEN cases, SIX of which MUST go red, exiting non-zero
+#                   unless every expectation is met. Six drive the assertion function over
+#                   synthetic dumps; the sixth of those (case 7) is deliberately larger than the
+#                   64 KiB pipe buffer, because the GC-01 defect was invisible to every smaller
+#                   case. The remaining one is a SOURCE assertion, because the assertion
 #                   function is pure over a dump and cannot see an invocation flag - it requires
 #                   the D-04 `-l` + `-c` contract of every `beet` call in this file and proves
 #                   itself against a synthetic -c-only line. A control that can only pass is
@@ -189,6 +191,12 @@ ARM2_BLIND=1
 ARM1_JSON=""
 ARM2_JSON=""
 ARM1_FAILS=0
+# GC-13: the two halves of the D-04 source contract, reported separately so that a real violation
+# and a blind checker cannot sum to the expected total and cancel into a pass. -1 is an UNKNOWN
+# sentinel in the S3(a) style: neither value satisfies its own gate, so a case-6 gate reached
+# without assert_beet_invocation_contract having run FAILS rather than passing on a zero.
+ARM1_REAL_VIOLATIONS=-1
+ARM1_SYNTH_REJECTED=-1
 TOOLS_MISSING=0
 LIB_HASH_BEFORE="UNKNOWN"
 LIB_HASH_AFTER="UNKNOWN"
@@ -402,13 +410,23 @@ beet_invocation_violations() {  # stdin: shell source -> stdout: one line per no
   done
 }
 
+# GC-13: this function reports THREE outcomes but used to report them through ONE counter. Two of
+# them increment ARM1_FAILS (a real source violation, and the correctly-rejected synthetic) and
+# the third — the synthetic NOT rejected, i.e. the checker is blind — increments nothing. Summed,
+# "one real violation" + "a blind checker" equals the expected total of 1. The two are therefore
+# ALSO reported separately below, and case 6 gates on both independently. ARM1_FAILS keeps exactly
+# the value it always had, because the live arm-1 summary line is a second consumer of it.
 assert_beet_invocation_contract() {
   local d='$' real synth synth_bad n
   ARM1_FAILS=0
+  # Re-initialised per call, so a second call cannot inherit the first call's state.
+  ARM1_REAL_VIOLATIONS=0
+  ARM1_SYNTH_REJECTED=0
 
   real="$(beet_invocation_violations <"${BASH_SOURCE[0]}")"
   if [[ -n "$real" ]]; then
     n="$(printf '%s\n' "$real" | wc -l | tr -d ' ')"
+    ARM1_REAL_VIOLATIONS="$n"
     cfg_fail "D-04 contract: $n beet invocation(s) in this script's own source do NOT carry both -l and -c — $(printf '%s' "$real" | tr -s ' ')"
   else
     cfg_pass "D-04 contract: every beet invocation in this script's own source carries -l ${d}{THROWAWAY_DB} AND -c ${d}{OVERLAY}"
@@ -420,6 +438,7 @@ assert_beet_invocation_contract() {
   synth_bad="    beet_exec \"${d}{BEET_BIN} -c ${d}{OVERLAY} config -d\""
   synth="$(printf '%s\n' "$synth_bad" | beet_invocation_violations)"
   if [[ -n "$synth" ]]; then
+    ARM1_SYNTH_REJECTED=1
     cfg_fail "D-04 contract, driven: the synthetic -c-only invocation was REJECTED, as it must be — $(printf '%s' "$synth" | tr -s ' ')"
   else
     echo -e "    ${RED}· D-04 contract: the synthetic -c-only invocation was NOT rejected — the checker is BLIND${NC}"
@@ -549,9 +568,25 @@ assert_effective_config() {
   fi
 
   # ---- Forbidden substrings over the RAW dump text, built-ins plus the additive override.
+  #
+  # GC-01. THE HERE-STRING IS LOAD-BEARING. Both tests below used to read
+  #   printf '%s' "$raw" | grep -qF -- "$forb"
+  # under this file's `set -euo pipefail`. `grep -q` exits the instant it matches, `printf` is
+  # still writing, takes SIGPIPE and exits 141, `pipefail` hands 141 to the PIPELINE, and the
+  # `if` therefore evaluated FALSE. Direction of the failure: a substring that IS present was
+  # reported ABSENT - a false GREEN over a live condition, not a false red. Measured on this
+  # workstation with the match on line 1: FOUND at 8/16/32/48/56 KiB, MISSED at 64/72/96/128 KiB,
+  # so the ceiling is the 64 KiB pipe buffer and the defect is POSITION-DEPENDENT (a match near
+  # the bottom of a large dump is caught even by the broken form). `$raw` is the whole arm-1
+  # server-committed dump, which grows with every beets release and every plugin enabled.
+  # A here-string feeds grep from a temporary file: there is no writer to take SIGPIPE, no
+  # pipeline for `pipefail` to propagate from, and the `if` reads grep's own status. `set +o
+  # pipefail` around the test is NOT the fix - turning the option off weakens every other
+  # statement in the same scope to buy one test. Self-test case 7 crosses the ceiling and is
+  # driven both ways; see artifacts/06-22-pipefail-141.txt.
   local forb
   for forb in "${FORBIDDEN_BUILTIN[@]}"; do
-    if printf '%s' "$raw" | grep -qF -- "$forb"; then
+    if grep -qF -- "$forb" <<<"$raw"; then
       cfg_fail "forbidden substring present in the server-committed dump: '$forb'"
     fi
   done
@@ -564,7 +599,8 @@ assert_effective_config() {
     IFS=':' read -r -a forb_arr <<<"$EXTRA_FORBIDDEN_SUBSTRINGS"
     for forb in "${forb_arr[@]}"; do
       [[ -z "$forb" ]] && continue
-      if printf '%s' "$raw" | grep -qF -- "$forb"; then
+      # GC-01: here-string, same reason as the built-in loop above. One explanation, not two.
+      if grep -qF -- "$forb" <<<"$raw"; then
         cfg_fail "forbidden substring present (EXTRA_FORBIDDEN_SUBSTRINGS): '$forb'"
       fi
     done
@@ -572,9 +608,13 @@ assert_effective_config() {
 }
 
 # =============================================================================================
-# --self-test. SIX cases, FIVE of which MUST go red: 5 synthetic dumps plus one assertion over
+# --self-test. SEVEN cases, SIX of which MUST go red: 6 synthetic dumps plus one assertion over
 # this file's own source. Same device as scripts/spike03-wrtag-arms.sh:23-27: drive the
 # fail-closed branches without touching the estate. A control that can only pass is uninformative.
+#
+# Case 7 exists because of GC-01: every dump the other cases feed is a few hundred bytes, so this
+# self-test STRUCTURALLY could not see a defect whose threshold is the 64 KiB pipe buffer. Case 7
+# crosses that threshold on purpose and asserts that it still does.
 # =============================================================================================
 synthetic_correct_dump() {
   cat <<'DUMPEOF'
@@ -625,11 +665,16 @@ DUMPEOF
 }
 
 run_self_test() {
-  echo "🧪 --self-test — 6 cases: 5 synthetic dumps, plus the D-04 contract over this file's own source"
+  # ST_PLANNED_CASES is the ANNOUNCED count; st_cases is what actually ran, and the two are
+  # compared at the end. A banner that says one number while another number of cases ran is the
+  # self-invalidating-prose defect this phase has already hit twice - so the closing banners are
+  # DERIVED, and a mismatch between the announcement and reality is itself a self-test failure.
+  local ST_PLANNED_CASES=7
+  echo "🧪 --self-test — $ST_PLANNED_CASES cases: 6 synthetic dumps, plus the D-04 contract over this file's own source"
   rule
   echo ""
 
-  local st_failures=0
+  local st_failures=0 st_cases=0 st_red_cases=0
   local case_name expect_reds raw json
 
   # The mutated value is built from a variable rather than written inline, so no transcript of
@@ -642,6 +687,11 @@ run_self_test() {
     json="$(printf '%s' "$raw" | dump_to_json)"
     echo -e "  ${BLUE}case: $case_name  (expect $expect_reds red)${NC}"
     assert_effective_config "$json" "$raw"
+    st_cases=$((st_cases + 1))
+    if [[ $expect_reds -gt 0 ]]; then st_red_cases=$((st_red_cases + 1)); fi
+    # GC-13 note: this comparison is a SUM, and it is correct HERE - every red it counts comes
+    # from the same pure function over one synthetic dump, so the total is the whole outcome.
+    # Case 6 below is the one that must NOT compare a sum; see its own note.
     if [[ $ARM1_FAILS -eq $expect_reds ]]; then
       echo -e "  ${GREEN}✅ case '$case_name': $ARM1_FAILS red, as expected${NC}"
     else
@@ -675,25 +725,74 @@ run_self_test() {
   # 6. NOT a dump case. The five above drive a pure function over synthetic TEXT and therefore
   #    cannot see an invocation flag; this one reads this script's own SOURCE and requires the
   #    D-04 `-l` + `-c` contract of every `beet` call in it. Its red is a driven negative: a
-  #    synthetic -c-only line that the checker must reject. Strip `-l` from the three real
-  #    invocations and this case goes to 2 red and --self-test exits non-zero.
+  #    synthetic -c-only line that the checker must reject. Strip `-l` from any of the three real
+  #    invocations and ARM1_REAL_VIOLATIONS goes non-zero; make the synthetic compliant and
+  #    ARM1_SYNTH_REJECTED goes to 0. Either alone, or both together, fails this case and takes
+  #    --self-test non-zero — "both together" being the GC-13 cancellation the old gate passed.
   case_name="the -l + -c contract over this script's own source"; expect_reds=1
   echo -e "  ${BLUE}case: $case_name  (expect $expect_reds red)${NC}"
   assert_beet_invocation_contract
-  if [[ $ARM1_FAILS -eq $expect_reds ]]; then
+  st_cases=$((st_cases + 1))
+  st_red_cases=$((st_red_cases + 1))
+  # GC-13. This gate used to compare ARM1_FAILS against the single expected total 1, and
+  # assert_beet_invocation_contract funnels two DISTINCT outcomes into that one counter — so
+  # "one real violation in this file's source" plus "the checker is blind" summed to 1 and the
+  # case reported `1 red, as expected`. Two faults cancelled into a pass. The two are now gated
+  # independently, and a failure names WHICH half is wrong: "1 red, expected 1" is exactly what
+  # made the defect invisible.
+  if [[ $ARM1_REAL_VIOLATIONS -eq 0 && $ARM1_SYNTH_REJECTED -eq 1 ]]; then
     echo -e "  ${GREEN}✅ case '$case_name': $ARM1_FAILS red, as expected${NC}"
   else
-    echo -e "  ${RED}❌ case '$case_name': $ARM1_FAILS red, expected $expect_reds${NC}"
+    if [[ $ARM1_REAL_VIOLATIONS -ne 0 ]]; then
+      echo -e "  ${RED}❌ case '$case_name': real D-04 violations in this script's own source = $ARM1_REAL_VIOLATIONS, want 0${NC}"
+    fi
+    if [[ $ARM1_SYNTH_REJECTED -ne 1 ]]; then
+      echo -e "  ${RED}❌ case '$case_name': synthetic-negative rejected = $ARM1_SYNTH_REJECTED, want 1 — the checker did NOT reject a line it must reject, so it has not been shown to detect anything${NC}"
+    fi
     st_failures=$((st_failures + 1))
   fi
   echo ""
 
+  # 7. GC-01's REGRESSION case, and the only case in this file whose input is estate-sized.
+  #    Every case above feeds a few hundred bytes, which is why --self-test structurally could
+  #    not see a defect whose threshold is the 64 KiB pipe buffer. This one prefixes the correct
+  #    dump with a single top-level key whose double-quoted scalar opens with the forbidden
+  #    substring and is then padded past 65536 bytes.
+  #      - the substring sits at the TOP because the defect is POSITION-DEPENDENT: under the old
+  #        `printf | grep -q` form a match near the bottom is still caught, so a bottom-anchored
+  #        case would tick green against the broken code and prove nothing;
+  #      - the pad is `x`, which cannot terminate a YAML double-quoted scalar and does not
+  #        contain `/music/imported`, so dump_to_json returns the same keys it returns for the
+  #        unpadded dump and the expected red count is EXACTLY 1 - the forbidden-substring red
+  #        and nothing else;
+  #      - the size is MEASURED, not assumed. A case that quietly shrinks below the ceiling is a
+  #        case that has stopped testing anything, so an under-65536 result is a FAILURE here,
+  #        never a silent skip.
+  local pad7 raw7 bytes7
+  pad7="$(printf '%*s' 70000 '' | tr ' ' 'x')"
+  raw7="_pad_gc01: \"Compilations${pad7}\"
+$(synthetic_correct_dump)"
+  bytes7="$(printf '%s' "$raw7" | wc -c | tr -d ' ')"
+  if [[ $bytes7 -le 65536 ]]; then
+    echo -e "  ${RED}❌ case 7 PRECONDITION FAILED: raw dump is $bytes7 bytes, at or below the 65536-byte pipe-buffer ceiling — this case has stopped testing what it exists to test${NC}"
+    st_failures=$((st_failures + 1))
+  else
+    echo -e "  ${BLUE}case 7 precondition: raw dump is $bytes7 bytes, above the 65536-byte pipe-buffer ceiling${NC}"
+  fi
+  run_case "a forbidden substring at the TOP of a >64 KiB dump (GC-01 regression)" 1 "$raw7"
+
   rule
-  if [[ $st_failures -gt 0 ]]; then
-    echo -e "${RED}❌ --self-test: $st_failures of 6 cases did not behave as expected${NC}"
+  # The announced count and the count that actually ran must agree, or the banner below is prose
+  # that invalidates itself.
+  if [[ $st_cases -ne $ST_PLANNED_CASES ]]; then
+    echo -e "${RED}❌ --self-test: $st_cases cases ran but $ST_PLANNED_CASES were announced — the banner and the body disagree${NC}"
     return 1
   fi
-  echo -e "${GREEN}✅ --self-test: all 6 cases behaved as expected (5 of them red)${NC}"
+  if [[ $st_failures -gt 0 ]]; then
+    echo -e "${RED}❌ --self-test: $st_failures of $st_cases cases did not behave as expected${NC}"
+    return 1
+  fi
+  echo -e "${GREEN}✅ --self-test: all $st_cases cases behaved as expected ($st_red_cases of them red)${NC}"
   return 0
 }
 
