@@ -295,3 +295,20 @@ cause and deliberately did not fix.
 | `96bf5ff` | Task 1 — four `printf '%q'` renderings, the bash dependency note, the live before/after drive |
 | `33ed08b` | Task 2 — the override notice on six arms, five live drives, the per-arm EXIT_CODE proof, DEF-06-21-07 |
 | `5ffbc3d` | Task 3 — the tail rebuilt from the enumeration, the E6 clause, the sixth comment paragraph |
+| `d630bc8` | this SUMMARY and the artifact's control-run addendum |
+
+## Self-Check: PASSED
+
+- `scripts/quick-health-check.sh` — FOUND
+- `.planning/phases/06-tagger-configuration-and-dry-run/artifacts/06-26-qhc-knobs-and-tail.txt` — FOUND
+- `.planning/phases/06-tagger-configuration-and-dry-run/06-26-SUMMARY.md` — FOUND
+- commits `96bf5ff`, `33ed08b`, `5ffbc3d`, `d630bc8` — all present in `git log`
+- `git diff --name-only 9b28021 HEAD` returns only `scripts/quick-health-check.sh`
+  and the artifact (plus this SUMMARY)
+- `git diff --diff-filter=D --name-only 9b28021 HEAD` returns **nothing** — no file
+  was deleted by any commit in this plan
+- working tree clean; no shared orchestrator artifacts (STATE.md, ROADMAP.md,
+  deferred-items.md) touched — NEW-06-26-01 is recorded in this SUMMARY and the
+  artifact rather than in the shared `deferred-items.md`, deliberately, because
+  three other wave-2 agents are running against the same file
+- the LXC 100 scratch tree `/tmp/qhc-06-26` was removed after the drives
