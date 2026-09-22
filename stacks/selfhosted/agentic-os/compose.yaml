@@ -8,7 +8,16 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
     volumes:
-      - /mnt/fast/appdata/agentic-os/postgres:/var/lib/postgresql
+      # Moved 2026-09-22 off /mnt/fast/appdata/agentic-os, which was NOT a bind-mounted dataset
+      # and therefore sat on LXC 100's ext4 ROOT disk (80% full at the time) with 754 MB of live
+      # memory data on it. /mnt/fast/appdata/automation IS a mounted ZFS dataset (1.3T free), so
+      # this is a plain directory on it -- no new mount point, no LXC reboot.
+      #
+      # INTERIM BY CHOICE. A dedicated fast/appdata/agentic-os dataset exists on atlantis and is
+      # staged in infra/lxc-selfhost.tf; adopting it needs `pct set 100 -mp32 ...` plus a reboot of
+      # LXC 100 and all ~97 containers. Runbook: MIGRATION-to-zfs.md. Until then this path is the
+      # real one -- change both together or Postgres starts on an empty directory.
+      - /mnt/fast/appdata/automation/agentic-os/postgres:/var/lib/postgresql
     ports:
       - "5433:5432"
     healthcheck:
