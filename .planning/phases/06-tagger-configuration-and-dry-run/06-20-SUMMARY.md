@@ -292,3 +292,25 @@ unchanged and still driven by `--self-test`.
 |---|---|---|
 | 1 | `18b25e0` | usage error exits 3 loudly; classifier reads any path count; dead classifier deleted |
 | 2 | `1bcf229` | blind outranks measured red, stated in EXIT CODES and driven by two new self-test sections; artifact |
+| — | `b86b570` | this summary |
+
+## Self-Check: PASSED
+
+Every file and commit this summary claims was checked on disk and in the log, not asserted.
+
+- `scripts/phase06-incremental-control.sh` — FOUND
+- `.planning/phases/06-tagger-configuration-and-dry-run/artifacts/06-20-incremental-driven.txt` — FOUND
+- `.planning/phases/06-tagger-configuration-and-dry-run/06-20-SUMMARY.md` — FOUND
+- commit `18b25e0` — FOUND
+- commit `1bcf229` — FOUND
+- commit `b86b570` — FOUND
+
+`git diff --diff-filter=D 015f5c1..HEAD` lists **no deletions** — nothing was removed from the
+tree by this plan. `git status --porcelain` is empty: no debris, no uncommitted work.
+
+The corrected verify for both tasks was re-run against the committed state: `06-20 task 1 OK`,
+`06-20 task 2 OK`, rc 0.
+
+No file outside `scripts/phase06-incremental-control.sh` and this phase's `.planning/` directory
+was touched. `STATE.md` and `ROADMAP.md` were deliberately not modified — the orchestrator owns
+those writes after the wave merges.
