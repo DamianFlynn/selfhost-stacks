@@ -471,13 +471,24 @@ write_prog_taghistory() { cat > "$1" <<'REOF'
 # $1 = arm root  $2 = python path  $3 = the probe program text
 set -u
 ROOT="$1"; PY="$2"; PROG="$3"
-printf '%s\n' "$PROG" > /tmp/p6-taghist.py
-"$PY" /tmp/p6-taghist.py "$ROOT/state.pickle" 2>&1
+# GC-08, and this is the worse of the two sites: the program is written with `>` and then
+# EXECUTED on the next line, so the name it is written to is inside the trust boundary. A
+# pre-placed symlink at a fixed name redirects the write; a pre-placed regular file the redirect
+# cannot truncate leaves the PREVIOUS contents to be executed. The path is therefore minted by
+# the container with mktemp (O_EXCL), and a mint that fails is a refusal - exit 2 is UNKNOWN,
+# which the caller already treats as could-not-look and never as a pass. NO FALLBACK.
+THPROG="$(mktemp /tmp/p6-taghist.XXXXXXXX 2>/dev/null)" || THPROG=""
+if [ -z "$THPROG" ]; then
+  echo "TAGHIST BLIND could not mint a program path with mktemp - refusing to write-then-execute a fixed name in a world-writable /tmp"
+  exit 2
+fi
+trap 'case "${THPROG:-}" in /tmp/p6-taghist.*) rm -f "$THPROG" ;; esac' EXIT
+printf '%s\n' "$PROG" > "$THPROG"
+"$PY" "$THPROG" "$ROOT/state.pickle" 2>&1
 PRC=$?
 echo "PROBE-RC $PRC"
 SH="$(sha256sum "$ROOT/state.pickle" 2>/dev/null)" || SH="(state file absent or unhashable)"
 echo "STATEFILE-SHA $SH"
-rm -f /tmp/p6-taghist.py
 REOF
 }
 
