@@ -207,9 +207,9 @@ None. No credential was needed and none was used: every drive is local.
 | `bash -n` | exit 0, no output |
 | `shellcheck -S warning` | exit 0, no output (0.11.0) |
 | `--self-test` | exit 0, **111 / 111**, zero regressions (79 before) |
-| `grep -c VACUOUS` (comment-stripped) | **2** — `assert_no_compilations` and `assert_dj_count` |
+| `grep -c VACUOUS` (comment-stripped) | **5**, against the plan's floor of 2. Two are the refusals themselves (`assert_no_compilations`, `assert_dj_count`); three are the self-test cases and section banner that drive them |
 | EXIT CODES block | bounded at 24 lines; states the precedence, gives the reason, names the sibling |
-| stated order matches implementation | `UNKNOWNS" -ne 0` at `:2708` precedes `REDS" -ne 0` at `:2712` |
+| stated order matches implementation | `UNKNOWNS" -ne 0` at `:2710` precedes `REDS" -ne 0` at `:2714` |
 | in-container pipelines | none — the probe carries `||` only; the two `ls -A … \| head` occurrences are the self-test's DRIVEN RED, run with local `/bin/sh` |
 | corrected verify, tasks 1+2 and task 3 | both OK, rc 0 |
 | verify driven red | 8 mutations fire, unmutated control passes |
@@ -237,6 +237,17 @@ Every claim re-measured after the fact, not restated.
 | `bash -n`, `shellcheck -S warning` clean | re-run | rc 0, rc 0 |
 | no file deleted by any of the three commits | `git diff --diff-filter=D` per commit | none |
 | nothing outside `scripts/phase06-oracle.sh` and this phase's `.planning/` | `git status` + `git show --stat` | confirmed |
+
+Two claims were **corrected by this check rather than confirmed**, both of them figures written
+from memory instead of measured — the same failure 06-18's self-check caught in itself:
+
+- `grep -c VACUOUS` was written as **2**; it is **5**. The plan's criterion is a floor of 2, so
+  it was always satisfied, but the stated number was wrong. Two occurrences are the refusals;
+  three are the `--self-test` cases and section banner that drive them.
+- The verdict-tail line numbers were written as `:2708` / `:2712`; they are `:2710` / `:2714`.
+  The property asserted — blind before measured-red — holds either way, and the corrected verify
+  derives both numbers with `grep -n` rather than trusting a citation, which is why the
+  assertion passed while the prose was wrong.
 
 `STATE.md` and `ROADMAP.md` were deliberately **not** modified — the orchestrator owns those writes after the wave merges.
 
