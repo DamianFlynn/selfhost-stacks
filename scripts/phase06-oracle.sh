@@ -61,9 +61,25 @@
 # ==============================================================================================
 # THE OVERRIDE CONTRACT
 # ==============================================================================================
-# Every knob below is `${VAR:-default}` and every one of them can only make the verdict REDDER:
-# a wrong host, a wrong container or a wrong output directory produces a refusal or an UNKNOWN,
-# never a pass. TWO PATHS ARE PLAIN CONSTANTS AND ARE DELIBERATELY NOT OVERRIDABLE:
+# Every knob below is `${VAR:-default}` and every one of them can only make the verdict REDDER
+# OR REFUSE THE RUN: a wrong host, a wrong container or a wrong output directory produces a
+# refusal or an UNKNOWN, never a pass.
+#
+# The "or refuse the run" half is not a softening, it is the correction of a claim that used to
+# be FALSE AS WRITTEN. Two of the knobs are not knobs on the verdict at all - `SCRATCH` and
+# `STAMP_REMOTE` are ARGUMENTS TO DESTRUCTIVE REMOTE COMMANDS (`rm -rf` inside the container and
+# `rm -f` on LXC 100), and a hostile value for either was not made redder by anything: it was
+# passed through. `SCRATCH='/tmp/p6 /config'` word-split INSIDE the container into
+# `rm -rf /tmp/p6 /config`. Both are now fenced to a LITERAL ALLOW-LIST at BOTH layers - once on
+# the sending side before the first ssh of any mode, and once inside the remote program itself,
+# adjacent to the `rm`. Grep for:
+#
+#     DESTRUCTIVE-KNOB FENCE      the sending-side allow-list, reached by --run, --baseline
+#                                 and --self-test alike
+#     remote_sh_c                 the helper every remote path goes through as a POSITIONAL
+#                                 PARAMETER rather than as program text
+#
+# TWO PATHS ARE PLAIN CONSTANTS AND ARE DELIBERATELY NOT OVERRIDABLE:
 #
 #     EXPECTED_TREE   .planning/phases/06-tagger-configuration-and-dry-run/06-EXPECTED-TREE.txt
 #     SAMPLE_DOC      .planning/phases/06-tagger-configuration-and-dry-run/06-SAMPLE.md
@@ -269,6 +285,74 @@ while [ $# -gt 0 ]; do
   esac
 done
 [ -n "$MODE" ] || usage
+
+# ==============================================================================================
+# DESTRUCTIVE-KNOB FENCE  (WR-07; T-06-90 / T-06-91 / T-06-92)
+# ==============================================================================================
+# Two of the knobs above are not knobs on the VERDICT at all - they are ARGUMENTS TO DESTRUCTIVE
+# REMOTE COMMANDS. `$SCRATCH` is `rm -rf`'d inside the container at step 12; `$STAMP_REMOTE` is
+# `rm -f`'d on LXC 100 immediately after. `SCRATCH='/tmp/p6 /config'` word-split inside the
+# container into `rm -rf /tmp/p6 /config` - deleting the real library.db, the real state.pickle
+# and the vendored config - and the dirty-destination precheck could NOT stop it, because with
+# two words `[ ! -e … ]` is an ARGUMENT ERROR rather than a refusal.
+#
+# So both are validated HERE, against literal allow-lists, before the script issues its first
+# remote command. This line is reached by every mode the script supports - `--run`, `--baseline`
+# and `--self-test` all pass through it, and the first ssh is well over a thousand lines below.
+# A fence that only guarded `--run` would leave `--baseline`'s stamp write unfenced, and
+# `--baseline` ALWAYS writes the stamp.
+#
+# The suffix character class is deliberately narrower than the glob: `/tmp/p6-*` on its own would
+# still admit `/tmp/p6-x /config`, which is the very shape the fence exists to refuse.
+#
+# scripts/phase06-incremental-control.sh fences its two throwaway roots with the same literal
+# `case` shape (`:343` and `:473`), and that script is not vulnerable to this. This is that shape
+# applied here - and it is repeated INSIDE the remote programs too; see `remote_sh_c` and the
+# cleanup step for why the duplication is deliberate.
+SCRATCH_FENCE_OK=1
+case "$SCRATCH" in
+  /tmp/p6) : ;;
+  /tmp/p6-*)
+    case "${SCRATCH#/tmp/p6-}" in
+      ''|*[!A-Za-z0-9._-]*) SCRATCH_FENCE_OK=0 ;;
+    esac
+    ;;
+  *) SCRATCH_FENCE_OK=0 ;;
+esac
+[ "$SCRATCH_FENCE_OK" -eq 1 ] || precheck_fail "REFUSED: SCRATCH='$SCRATCH'.
+    SCRATCH is an argument to an 'rm -rf' run inside the container, not a knob on the verdict, so
+    it is fenced to a literal allow-list: exactly '/tmp/p6', or '/tmp/p6-' followed by one or more
+    characters drawn from [A-Za-z0-9._-]. Nothing else is accepted, and nothing was sent."
+
+STAMP_FENCE_OK=1
+case "$STAMP_REMOTE" in
+  /mnt/fast/safety/phase06/*)
+    case "${STAMP_REMOTE#/mnt/fast/safety/phase06/}" in
+      ''|*[!A-Za-z0-9._-]*) STAMP_FENCE_OK=0 ;;
+    esac
+    ;;
+  *) STAMP_FENCE_OK=0 ;;
+esac
+[ "$STAMP_FENCE_OK" -eq 1 ] || precheck_fail "REFUSED: STAMP_REMOTE='$STAMP_REMOTE'.
+    STAMP_REMOTE is an argument to an 'rm -f' run on LXC 100, not a knob on the verdict, so it is
+    fenced to the literal prefix '/mnt/fast/safety/phase06/' followed by one or more characters
+    drawn from [A-Za-z0-9._-]. Nothing else is accepted, and nothing was sent."
+
+# --- IN-06 (T-06-94): the files BENEATH $SCRATCH are per-run unique -----------------------------
+# The container's /tmp is world-writable and these names used to be fixed. A stale root-owned
+# leftover turns a read into a BLIND; a pre-placed SYMLINK at a predictable name is followed by
+# the `>` redirections below, so the instrument writes or reads something other than what it
+# believes. Suffixing with the run's PID removes the predictability.
+#
+# SCRATCH ITSELF IS DELIBERATELY NOT UNIQUIFIED. The dirty-destination precheck, the cleanup
+# assertion, the DESTRUCTIVE-KNOB FENCE's allow-list and the committed 06-11 artifacts all quote
+# '/tmp/p6' by name; moving it would falsify all four at once. The directory stays fixed and
+# fenced, and only its contents carry the run tag - which keeps every generated path inside the
+# allow-list by construction.
+RUN_TAG="$$"
+SCRATCH_LIB="$SCRATCH/lib.$RUN_TAG.db"
+SCRATCH_OVERLAY="$SCRATCH/overlay.$RUN_TAG.yaml"
+SCRATCH_STATE="$SCRATCH/state.$RUN_TAG.pickle"
 
 # ==============================================================================================
 # THE PURE-LOCAL JUDGING LAYER
@@ -1087,16 +1171,53 @@ dex_cmd() { # $1.. = argv inside the container; echoes the remote command string
   printf 'timeout %s docker exec -u %s %s %s' "$REMOTE_TIMEOUT" "$CONTAINER_USER" "$CONTAINER" "$*"
 }
 
+# --- remote_sh_c: every remote path crosses the boundary as a PARAMETER  (WR-08; T-06-93) ------
+# A path must NEVER be interpolated into the TEXT of a remote `sh -c '…'` program. `printf '%q'`
+# quotes for BASH, and bash quotes an apostrophe as `\'` - which TERMINATES the single-quoted
+# program the result was embedded in. `Guns N' Roses - Greatest Hits`, an entirely ordinary shape
+# for this corpus, then produces `unexpected EOF while looking for matching '` on the far side,
+# which reads as an infrastructure fault rather than as a quoting bug in this file. A `$` in a
+# folder name is the same defect with a quieter symptom: it expands instead of erroring.
+#
+# So the program text carries NO PATH AT ALL. Paths are passed as POSITIONAL PARAMETERS of the
+# remote `sh -c` and referenced as "$1", "$2" … inside it. `%q` is still used - but on the
+# ARGUMENTS, where the result lands in a bash WORD, which is the one context `%q` is correct for.
+# The literal `sh` after the program text is $0; without it the first real argument is eaten.
+#
+# This is also the helper the DESTRUCTIVE-KNOB FENCE's second layer goes through: the remote
+# programs that run `rm -rf` / `rm -f` re-test their path against the same literal allow-list
+# before running it. The duplication is deliberate and is explained at those two call sites.
+remote_sh_c() { # $1 = program text (run by the remote /bin/sh)  $2.. = its positional parameters
+  local prog="$1" out="" a=""
+  shift
+  out="sh -c $(printf '%q' "$prog") sh"
+  for a in "$@"; do
+    out="$out $(printf '%q' "$a")"
+  done
+  printf '%s' "$out"
+}
+
 # The remote manifest. `%p %s %T@` catches path, size and mtime; the sha catches content;
 # together they catch additions and deletions too. GNU find's -printf is why this runs on LXC 100
 # and not on the macOS workstation.
+#
+# The -printf FORMAT IS BYTE-FOR-BYTE WHAT IT WAS before the WR-08 change. It has always carried a
+# REAL tab and a REAL newline, not the two-character sequences `\t` and `\n` - `printf` resolves
+# those escapes while it builds the string - so the tab and the newline are spelled out here as
+# `$'\t'` / `$'\n'` rather than being smuggled through a format string. manifest_compare and
+# normalise_transcript both key on that field layout, and the committed 174-destination artifact's
+# comparability depends on it, so it must not drift.
+MANIFEST_TAB=$'\t'
+MANIFEST_NL=$'\n'
 remote_manifest_meta() { # $1 = subtree
-  printf "set -o pipefail; timeout %s sh -c 'LC_ALL=C find %s -type f -printf \"%%p\\t%%s\\t%%T@\\n\"' | LC_ALL=C sort" \
-    "$REMOTE_TIMEOUT" "$(printf '%q' "$1")"
+  local prog=""
+  prog="LC_ALL=C find \"\$1\" -type f -printf \"%p${MANIFEST_TAB}%s${MANIFEST_TAB}%T@${MANIFEST_NL}\""
+  printf 'set -o pipefail; timeout %s %s | LC_ALL=C sort' \
+    "$REMOTE_TIMEOUT" "$(remote_sh_c "$prog" "$1")"
 }
 remote_manifest_sha() { # $1 = subtree
-  printf "set -o pipefail; timeout %s sh -c 'LC_ALL=C find %s -type f -print0' | LC_ALL=C sort -z | xargs -0 -r sha256sum" \
-    "$REMOTE_TIMEOUT" "$(printf '%q' "$1")"
+  printf 'set -o pipefail; timeout %s %s | LC_ALL=C sort -z | xargs -0 -r sha256sum' \
+    "$REMOTE_TIMEOUT" "$(remote_sh_c 'LC_ALL=C find "$1" -type f -print0' "$1")"
 }
 
 capture_manifests() { # $1 = when (before|after)  $2 = folders TSV
@@ -1518,6 +1639,57 @@ self_test_core() {
   fi
 
   say ""
+  say "== --self-test: remote paths cross the quoting boundary as PARAMETERS (WR-08; T-06-93) =="
+  rule
+  # The fixture's directory name carries BOTH characters that break the old construction: an
+  # APOSTROPHE, which terminates the single-quoted remote program it was interpolated into, and a
+  # `$`, which the receiving shell expands. `Guns N' Roses - …` is an entirely ordinary shape for
+  # this corpus, and under the old shape it produced a remote SYNTAX ERROR that reads as an
+  # infrastructure fault.
+  #
+  # Entirely local: `remote_sh_c` emits a command STRING, and this runs it with bash here rather
+  # than over ssh. The probe deliberately uses plain `find "$1" -type f` and NOT GNU `-printf`,
+  # because this is a macOS workstation and the thing under test is the QUOTING, not find.
+  local qdir="" qrc=0 qout="" qcmd=""
+  rm -rf "$td/st.quote"
+  qdir="$td/st.quote/Guns N' Roses - \$Greatest"
+  mkdir -p "$qdir"
+  : > "$qdir/01 It's \$o.mp3"
+  : > "$qdir/02 plain.mp3"
+
+  qcmd="$(remote_sh_c 'LC_ALL=C find "$1" -type f' "$qdir")"
+  qrc=0
+  qout="$(bash -c "$qcmd" 2>&1)" || qrc=$?
+  st_case 0 "$qrc" "the apostrophe-and-\$ fixture reads CLEAN through the positional-parameter shape."
+  rc=0
+  printf '%s\n' "$qout" | LC_ALL=C grep -qF "01 It's \$o.mp3" || rc=1
+  st_case 0 "$rc" "and the listing carries the file's REAL name - apostrophe and \$ both intact."
+
+  # DRIVEN RED. The OLD construction - `printf '%q'` interpolated into the TEXT of a
+  # single-quoted remote program - against the same fixture. A case that only proves the new
+  # shape works does not prove the old one was broken, and "broken in a way nothing noticed" is
+  # the whole of WR-08.
+  qcmd="sh -c 'LC_ALL=C find $(printf '%q' "$qdir") -type f'"
+  qrc=0
+  qout="$(bash -c "$qcmd" 2>&1)" || qrc=$?
+  rc=0
+  [ "$qrc" -ne 0 ] || rc=1
+  st_case 0 "$rc" "DRIVEN RED: the OLD interpolated shape FAILS on the same apostrophe fixture."
+  info "old-shape exit $qrc: $(printf '%s' "$qout" | head -n 1)"
+
+  # And the two manifest builders must actually go through the helper: the path has to leave the
+  # program text entirely and arrive as `sh -c '<prog>' sh <path>`.
+  for qcmd in "$(remote_manifest_meta "$qdir")" "$(remote_manifest_sha "$qdir")"; do
+    rc=0
+    printf '%s' "$qcmd" | LC_ALL=C grep -qF " sh $(printf '%q' "$qdir")" || rc=1
+    st_case 0 "$rc" "a manifest builder passes the path as sh -c's POSITIONAL PARAMETER."
+    rc=0
+    if printf '%s' "$qcmd" | LC_ALL=C grep -qF "find $(printf '%q' "$qdir")"; then rc=1; fi
+    st_case 0 "$rc" "and never interpolates it after 'find' - the old shape is gone, not hidden."
+  done
+  rm -rf "$td/st.quote"
+
+  say ""
   say "== --self-test: the blind preflight, layer 1 and the host->container mapper =="
   rule
   local got=""
@@ -1840,13 +2012,26 @@ rsh_classify "the container status of $CONTAINER" || exit 3
 [ "$RSH_OUT" = "running" ] || precheck_fail "$CONTAINER is '$RSH_OUT', not running"
 ok "container $CONTAINER is running"
 
-rsh "$(dex_cmd sh -c "'[ ! -e $SCRATCH ] && echo absent || ls -A $SCRATCH | head -n 1'")"
+# The `| head -n 1` pipeline inside the container's pipefail-less dash is WR-01 and belongs to
+# plan 06-19; it is deliberately left as it is here. What changed is that the path is a
+# POSITIONAL PARAMETER of the remote program rather than text inside it (WR-08).
+rsh "$(dex_cmd "$(remote_sh_c '[ ! -e "$1" ] && echo absent || ls -A "$1" | head -n 1' "$SCRATCH")")"
 if [ "$RSH_RC" -ne 0 ]; then
   precheck_fail "could not inspect '$SCRATCH' inside the container (ssh exit $RSH_RC)"
 fi
 if [ "$RSH_OUT" != "absent" ] && [ -n "$RSH_OUT" ]; then
+  # IN-11: name the cleanup in the refusal. A run that aborted between step 5 and step 12 leaves
+  # a copy of the real library.db here, and without the command below this reads as an
+  # unexplained refusal that the operator has to go and read the script to resolve.
   precheck_fail "'$SCRATCH' already exists inside the container and is not empty (first entry:
-    $RSH_OUT). A wrote-nothing assertion against a dirty destination proves nothing - refusing."
+    $RSH_OUT). A wrote-nothing assertion against a dirty destination proves nothing - refusing.
+    This is what a run aborted between step 5 and step 12 leaves behind. Clear it with:
+
+      ssh root@$LXC_HOST \"docker exec -u $CONTAINER_USER $CONTAINER rm -rf -- '$SCRATCH'\"
+
+    The HOST stamp is a different matter and is NOT what this refusal is about: '--baseline'
+    ALWAYS leaves '$STAMP_REMOTE' behind by design, because it is the -newer reference a later
+    '--run' needs. Its presence is expected, and nothing here refuses on account of it."
 fi
 ok "container scratch '$SCRATCH' is absent or empty"
 
@@ -1901,7 +2086,17 @@ capture_manifests before "$OUT/sample.tsv" || exit 3
 ok "before-manifests captured: $(wc -l < "$OUT/src.before.meta" | tr -d ' ') files across $SAMPLE_ROWS folders"
 
 # The stamp is created OUTSIDE both mounts, so taking it cannot itself perturb what it measures.
-rsh "timeout $REMOTE_TIMEOUT sh -c 'mkdir -p $(dirname "$STAMP_REMOTE") && rm -f $STAMP_REMOTE && touch $STAMP_REMOTE && echo stamped'"
+# SECOND FENCE LAYER, deliberately duplicated. The sending-side DESTRUCTIVE-KNOB FENCE has already
+# refused anything outside /mnt/fast/safety/phase06/; this `case` runs in the very shell that is
+# about to `rm -f`, which is the layer that is actually adjacent to the destructive command. The
+# sending layer stops the common case; this one is the one that cannot be bypassed by a future
+# edit that forgets the first. scripts/phase06-incremental-control.sh:473 has the same shape.
+STAMP_WRITE_PROG='case "$1" in
+  /mnt/fast/safety/phase06/*) : ;;
+  *) echo "REFUSED: the stamp path is outside /mnt/fast/safety/phase06/" >&2; exit 3 ;;
+esac
+mkdir -p "$(dirname "$1")" && rm -f "$1" && touch "$1" && echo stamped'
+rsh "timeout $REMOTE_TIMEOUT $(remote_sh_c "$STAMP_WRITE_PROG" "$STAMP_REMOTE")"
 rsh_classify "the -newer stamp" || exit 3
 ok "stamp taken outside both mounts: $STAMP_REMOTE"
 sleep 1
@@ -1917,13 +2112,14 @@ fi
 say ""
 say "== the throwaway library and the -c overlay =="
 rule
-rsh "$(dex_cmd sh -c "'mkdir -p $SCRATCH && cp $REAL_LIB_DB $SCRATCH/lib.db && echo copied'")"
+rsh "$(dex_cmd "$(remote_sh_c 'mkdir -p "$1" && cp "$2" "$3" && echo copied' \
+  "$SCRATCH" "$REAL_LIB_DB" "$SCRATCH_LIB")")"
 rsh_classify "the library copy into $SCRATCH" || exit 3
-ok "copied $REAL_LIB_DB -> $SCRATCH/lib.db (the ORIGINAL is never opened by this run)"
+ok "copied $REAL_LIB_DB -> $SCRATCH_LIB (the ORIGINAL is never opened by this run)"
 
 {
-  printf 'library: %s/lib.db\n' "$SCRATCH"
-  printf 'statefile: %s/state.pickle\n' "$SCRATCH"
+  printf 'library: %s\n' "$SCRATCH_LIB"
+  printf 'statefile: %s\n' "$SCRATCH_STATE"
   printf 'directory: %s\n' "$LIB_ROOT"
   printf 'import:\n'
   printf '    copy: no\n'
@@ -1949,7 +2145,7 @@ ok "copied $REAL_LIB_DB -> $SCRATCH/lib.db (the ORIGINAL is never opened by this
   printf 'ui:\n'
   printf '    color: no\n'
 } > "$OUT/overlay.yaml"
-rsh_from "timeout $REMOTE_TIMEOUT docker exec -i -u $CONTAINER_USER $CONTAINER sh -c 'cat > $SCRATCH/overlay.yaml'" "$OUT/overlay.yaml"
+rsh_from "timeout $REMOTE_TIMEOUT docker exec -i -u $CONTAINER_USER $CONTAINER $(remote_sh_c 'cat > "$1"' "$SCRATCH_OVERLAY")" "$OUT/overlay.yaml"
 [ "$RSH_RC" -eq 0 ] || { unknown "could not place the overlay inside the container (ssh exit $RSH_RC)"; exit 3; }
 ok "overlay placed: library, statefile AND directory all redirected (-l alone redirects none but the first)"
 
@@ -1967,7 +2163,7 @@ while IFS="$(printf '\t')" read -r folder stratum files; do
     S7) EXTRA="-s" ;;
   esac
   say "  $stratum  $files files  $CPATH ${EXTRA:+[$EXTRA]}"
-  rsh "$(dex_cmd "$BEET_BIN" -c "$SCRATCH/overlay.yaml" import -A -q $EXTRA "$(printf '%q' "$CPATH")")"
+  rsh "$(dex_cmd "$BEET_BIN" -c "$(printf '%q' "$SCRATCH_OVERLAY")" import -A -q $EXTRA "$(printf '%q' "$CPATH")")"
   if [ "$RSH_RC" -ne 0 ]; then
     unknown "the as-is import of '$CPATH' exited $RSH_RC. A partial library would make the
     line-count control fire anyway, but the cause belongs here, not there."
@@ -1980,7 +2176,7 @@ ok "all $SAMPLE_ROWS sampled folders imported as-is into the throwaway"
 say ""
 say "== the oracle: beet move -p =="
 rule
-rsh_to "$(dex_cmd "$BEET_BIN" -c "$SCRATCH/overlay.yaml" move -p)" "$OUT/oracle.raw.txt"
+rsh_to "$(dex_cmd "$BEET_BIN" -c "$(printf '%q' "$SCRATCH_OVERLAY")" move -p)" "$OUT/oracle.raw.txt"
 if [ "$RSH_RC" -ne 0 ]; then
   unknown "beet move -p exited $RSH_RC; the transcript is at $OUT/oracle.raw.txt"
   exit 3
@@ -2039,12 +2235,27 @@ fi
 # The -newer sweep, with its could-not-look preflight. `find ... 2>/dev/null || true` feeding a
 # count is exactly how a failed find produced an empty result, a zero count and a green tick.
 NEWER_ARGS=""
+NEWER_LIST=()
 BLIND=""
 while IFS="$(printf '\t')" read -r folder _ _; do
   [ -n "$folder" ] || continue
+  # NEWER_ARGS feeds the bare-word `find` below, where the result lands in a BASH WORD and `%q`
+  # is the correct tool. NEWER_LIST feeds the preflight, where the paths must cross into a remote
+  # `sh -c` program and must therefore be PARAMETERS (WR-08). Two shapes, two contexts.
   NEWER_ARGS="$NEWER_ARGS $(printf '%q' "$folder")"
+  NEWER_LIST+=("$folder")
 done < "$OUT/sample.tsv"
-rsh "set -o pipefail; timeout $REMOTE_TIMEOUT sh -c 'for d in $NEWER_ARGS; do [ -d \"\$d\" ] && [ -r \"\$d\" ] && [ -x \"\$d\" ] || { echo BLIND:\$d; exit 0; }; done; [ -f $STAMP_REMOTE ] || { echo BLIND:stamp; exit 0; }; echo READY'"
+# $1 is the stamp; everything after it is a sampled folder. The `[ -d ] && [ -r ] && [ -x ]` test
+# and the BLIND: vocabulary are unchanged - what changed is that a folder named `Guns N' Roses -
+# Greatest Hits` no longer terminates the program it was interpolated into.
+PREFLIGHT_PROG='S="$1"
+shift
+for d in "$@"; do
+  [ -d "$d" ] && [ -r "$d" ] && [ -x "$d" ] || { echo "BLIND:$d"; exit 0; }
+done
+[ -f "$S" ] || { echo "BLIND:stamp"; exit 0; }
+echo READY'
+rsh "set -o pipefail; timeout $REMOTE_TIMEOUT $(remote_sh_c "$PREFLIGHT_PROG" "$STAMP_REMOTE" ${NEWER_LIST[@]+"${NEWER_LIST[@]}"})"
 if [ "$RSH_RC" -ne 0 ]; then
   unknown "the -newer preflight could not run (ssh exit $RSH_RC)"
 else
@@ -2099,7 +2310,7 @@ rule
 # count, and this does.
 TAB="$(printf '\t')"
 LS_FMT="\$path${TAB}\$albumartist${TAB}\$album${TAB}\$albumtype${TAB}\$artist${TAB}\$artists"
-rsh_to "$(dex_cmd "$BEET_BIN" -c "$SCRATCH/overlay.yaml" ls -f "'$LS_FMT'")" "$OUT/fields.tsv"
+rsh_to "$(dex_cmd "$BEET_BIN" -c "$(printf '%q' "$SCRATCH_OVERLAY")" ls -f "'$LS_FMT'")" "$OUT/fields.tsv"
 if [ "$RSH_RC" -ne 0 ]; then
   unknown "the throwaway library's field view could not be read (ssh exit $RSH_RC)"
 else
@@ -2114,7 +2325,7 @@ fi
 
 write_ledger_payload "$OUT/ledger.py"
 # argv[2] is the library directory, and it is not optional - see the payload's own main().
-rsh_from_to "timeout $REMOTE_TIMEOUT docker exec -i -u $CONTAINER_USER $CONTAINER $PY_BIN - $SCRATCH/lib.db $LIB_ROOT" \
+rsh_from_to "timeout $REMOTE_TIMEOUT docker exec -i -u $CONTAINER_USER $CONTAINER $PY_BIN - $(printf '%q' "$SCRATCH_LIB") $(printf '%q' "$LIB_ROOT")" \
   "$OUT/ledger.py" "$OUT/ledger.ndjson"
 if [ "$RSH_RC" -ne 0 ]; then
   unknown "the D-18 ledger generator exited $RSH_RC; stderr is at $OUT/ledger.ndjson.err"
@@ -2151,13 +2362,32 @@ say "  what D-34 aligns Jellyfin to by enabling PreferNonstandardArtistsTag on t
 
 # --- Step 12: cleanup ----------------------------------------------------------------------------
 say ""
-rsh "$(dex_cmd sh -c "'rm -rf $SCRATCH; [ -e $SCRATCH ] && echo present || echo gone'")"
+# SECOND FENCE LAYER, deliberately duplicated (WR-07; T-06-90). The DESTRUCTIVE-KNOB FENCE at the
+# top of this file has already refused any SCRATCH outside the allow-list, and remote_sh_c passes
+# the path as a parameter so nothing can re-split it in transit. This `case` is nevertheless
+# repeated INSIDE the remote program, because that is the shell that is about to run `rm -rf` and
+# it is the only layer actually adjacent to the destructive command: the sending layer stops the
+# common case, the receiving layer is the one a future edit cannot quietly remove the protection
+# from. scripts/phase06-incremental-control.sh:473 fences its cleanup the same way.
+CLEANUP_PROG='case "$1" in
+  /tmp/p6|/tmp/p6-*) : ;;
+  *) echo "REFUSED: the scratch path is not a throwaway root under /tmp/p6" >&2; exit 3 ;;
+esac
+rm -rf "$1"
+[ -e "$1" ] && echo present || echo gone'
+rsh "$(dex_cmd "$(remote_sh_c "$CLEANUP_PROG" "$SCRATCH")")"
 if [ "$RSH_RC" -eq 0 ] && [ "$RSH_OUT" = "gone" ]; then
   ok "container scratch '$SCRATCH' removed and its absence asserted"
 else
   bad "container scratch '$SCRATCH' is still present (or its removal could not be confirmed)"
 fi
-rsh "timeout $REMOTE_TIMEOUT rm -f $STAMP_REMOTE"
+# Same duplication, same reason, for the host-side stamp.
+STAMP_RM_PROG='case "$1" in
+  /mnt/fast/safety/phase06/*) : ;;
+  *) echo "REFUSED: the stamp path is outside /mnt/fast/safety/phase06/" >&2; exit 3 ;;
+esac
+rm -f "$1"'
+rsh "timeout $REMOTE_TIMEOUT $(remote_sh_c "$STAMP_RM_PROG" "$STAMP_REMOTE")"
 
 say ""
 rule
