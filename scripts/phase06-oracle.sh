@@ -334,7 +334,8 @@ done
 # still admit `/tmp/p6-x /config`, which is the very shape the fence exists to refuse.
 #
 # scripts/phase06-incremental-control.sh fences its two throwaway roots with the same literal
-# `case` shape (`:343` and `:473`), and that script is not vulnerable to this. This is that shape
+# `case` shape - grep that file for `PREP REFUSED root` and for `CLEANUP REFUSED`, one hit each,
+# each on the fence line itself - and that script is not vulnerable to this. This is that shape
 # applied here - and it is repeated INSIDE the remote programs too; see `remote_sh_c` and the
 # cleanup step for why the duplication is deliberate.
 SCRATCH_FENCE_OK=1
@@ -2710,7 +2711,7 @@ ok "before-manifests captured: $(wc -l < "$OUT/src.before.meta" | tr -d ' ') fil
 # edit that forgets the first - and as of GC-02 that sentence is TRUE, which it was not before. The
 # text, the reason the two copies are literal rather than aliased, and the account of how they
 # drifted at birth are all at THE RECEIVING-SIDE FENCES block beside remote_sh_c; it is not repeated
-# here. scripts/phase06-incremental-control.sh:473 has the same shape.
+# here. scripts/phase06-incremental-control.sh has the same shape - grep it for `CLEANUP REFUSED`.
 rsh "timeout $REMOTE_TIMEOUT $(remote_sh_c "$STAMP_WRITE_PROG" "$STAMP_REMOTE")"
 rsh_classify "the -newer stamp" || exit 3
 ok "stamp taken outside both mounts: $STAMP_REMOTE"
@@ -2988,7 +2989,8 @@ say ""
 # common case, the receiving layer is the one a future edit cannot quietly remove the protection
 # from. GC-02 is why that last clause is only true as of this change - see THE RECEIVING-SIDE
 # FENCES block beside remote_sh_c for the text and the account; it is not repeated here.
-# scripts/phase06-incremental-control.sh:473 fences its cleanup the same way.
+# scripts/phase06-incremental-control.sh fences its cleanup the same way - grep it for
+# `CLEANUP REFUSED`, one hit, on the fence line itself.
 rsh "$(dex_cmd "$(remote_sh_c "$CLEANUP_PROG" "$SCRATCH")")"
 if [ "$RSH_RC" -eq 0 ] && [ "$RSH_OUT" = "gone" ]; then
   ok "container scratch '$SCRATCH' removed and its absence asserted"

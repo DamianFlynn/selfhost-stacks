@@ -1,0 +1,453 @@
+================================================================================
+06-28 — CITATION AUDIT (GC-04) AND D-04 COUNT RE-MEASUREMENT (GC-10)
+Phase 06, gap-closure round 2, wave 3. Executed 2026-09-22.
+================================================================================
+
+PROVENANCE OF EVERY MEASUREMENT IN THIS FILE
+--------------------------------------------
+  * All commands run from the WORKTREE ROOT
+    (/Users/damian/Development/damianflynn/selfhost-stacks/.claude/worktrees/
+     agent-acb1ac506e4abc4f3), resolved from `git rev-parse --show-toplevel`.
+    The plan's <verify> blocks open with
+    `cd /Users/damian/Development/damianflynn/selfhost-stacks` — the MAIN
+    CHECKOUT, which does not carry these edits. NOT OBEYED. Obeying it would
+    have measured the unmodified files and reported a green describing nothing.
+    This is the fourth plan this round to record the same correction (06-24,
+    06-25, 06-26, 06-27). The template is the defect, not the agent.
+  * grep is `/usr/bin/grep` (BSD grep 2.6.0-FreeBSD), called by absolute path.
+    The Bash tool inherits the operator's zsh `grep` -> ugrep 7.8.4 alias;
+    `which grep` confirms the function. The shipping scripts use /usr/bin/grep,
+    so the audit uses what ships.
+  * Base commit: 456ad06.
+
+
+================================================================================
+PART 1 — GC-04: THE CITATION AUDIT
+================================================================================
+
+METHOD
+------
+The plan's objective carries a four-row table of stale citations. It was NOT
+used as the starting point, by the plan's own instruction. Instead every
+cross-file `file:line` reference in the five files this round touched was
+enumerated, one file per grep so the counts are attributable:
+
+    /usr/bin/grep -nE '(\.sh|\.yaml|\.md):[0-9]+' <file>
+
+and, for beets.md's table-row form:
+
+    /usr/bin/grep -n '| [0-9]\{1,\}, [0-9]\{1,\}' stacks/selfhosted/arrs/beets.md
+
+Hits per file (before the edits):
+
+    scripts/phase06-oracle.sh .................. 3
+    scripts/check-beets-config.sh .............. 7
+    scripts/quick-health-check.sh .............. 6
+    scripts/phase06-incremental-control.sh ..... 0
+    stacks/selfhosted/arrs/beets.md ............ 5   (+2 register rows)
+                                                ---
+                                      TOTAL      23
+
+EVERY one was resolved by opening the cited line in its target file. The review
+named FOUR. The enumeration found **NINE** stale, of which four were the
+review's. Fixing only the four named would have been the same defect in a
+smaller coat.
+
+--------------------------------------------------------------------------------
+1.1  STALE — REPAIRED BY THIS PLAN  (7 of the 9)
+--------------------------------------------------------------------------------
+
+Citing sites are given by ANCHOR, not by line number, for the reason this plan
+exists.
+
+  #1  scripts/phase06-oracle.sh @ "fences its two throwaway roots"
+      CLAIMED  : phase06-incremental-control.sh `:343` and `:473` are the two
+                 literal `case` fences
+      ACTUALLY : :343 does not exist as a fence; the fences are at 414 and 571
+                 (the plan, written earlier, predicted 387/520 — they moved AGAIN
+                 during this round; plan 06-25 owns that file)
+      REPLACED : grep for `PREP REFUSED root` (1 hit, line 414) and
+                 `CLEANUP REFUSED` (1 hit, line 571)
+
+  #2  scripts/phase06-oracle.sh @ "has the same shape"
+      CLAIMED  : phase06-incremental-control.sh:473 is the cleanup fence
+      ACTUALLY : :473 is `ROOT="$1"; PY="$2"; PROG="$3"`-class code, not a fence.
+                 The cleanup fence is at 571.
+      REPLACED : grep for `CLEANUP REFUSED`
+
+  #3  scripts/phase06-oracle.sh @ "fences its cleanup the same way"
+      CLAIMED  : as #2
+      ACTUALLY : as #2
+      REPLACED : grep for `CLEANUP REFUSED`
+
+  #4  scripts/check-beets-config.sh @ "migrations unasked"
+      CLAIMED  : beets/beets.yaml:71-78 carries "Phase 1 measured a bare
+                 `beet config` running 11 migrations unasked"
+      ACTUALLY : 71-78 is the EBUSY/EROFS single-file-mount measurement — a
+                 DIFFERENT SUBJECT. The migrations claim is at beets.yaml:21.
+      REPLACED : grep for `MIGRATE ITS SCHEMA` (1 hit, line 21)
+      NOTE     : the claim sentence WRAPS across two lines, so
+                 `11 migrations unasked` is NOT a single-line anchor even though
+                 it reads like one. `MIGRATE ITS SCHEMA` is, and was confirmed
+                 unique at execution time, not inherited from the plan.
+
+  #5  scripts/check-beets-config.sh @ "The LSIO lesson"     [NOT NAMED BY REVIEW]
+      CLAIMED  : beets/beets.yaml:54-60 is the LSIO lesson, "its `lsiown` half"
+      ACTUALLY : 54-60 is the VENDORING RATIONALE (why the config is vendored,
+                 TAGR-05, the pasted compose SERVICE DEFINITION). The word
+                 `lsiown` does not appear in it. The lsiown lesson is at
+                 beets.yaml:73.
+      REPLACED : grep for `lsiown -R abc:abc` (1 hit, line 73)
+      WHY IT MATTERS: this citation and #4 are in the SAME FILE pointing at the
+                 SAME TARGET, and between them they straddle the passage each
+                 wanted. Also: the plan's own verify test #2 requires ZERO
+                 `beets\.yaml:[0-9]+` references to survive in this file, so
+                 repairing #4 alone would have FAILED the plan's own check.
+
+  #6  scripts/check-beets-config.sh @ "the shape of zfs_query()"  [NOT NAMED BY REVIEW]
+      CLAIMED  : check-music-freeze.sh:191-199 is zfs_query()
+      ACTUALLY : 191-199 is the `--sidecars` fd-3 redirection block.
+                 zfs_query() is DEFINED at line 209.
+      REPLACED : grep for `zfs_query() {` (1 hit, line 209)
+
+  #7  stacks/selfhosted/arrs/beets.md @ the EXEMPTION REGISTER table (2 rows)
+      CLAIMED  : phase06-oracle.sh lines `2166, 2179, 2313`;
+                 phase06-incremental-control.sh lines `462, 464`
+      ACTUALLY : oracle 2781, 2794, 2930  (off by ~615, not the ~310 the plan
+                 predicted — the round moved them further);
+                 sibling 502, 504  (off by 40; these DID resolve at planning
+                 time and rotted during this round, exactly as the plan warned)
+      REPLACED : both rows keyed on `$SCRATCH_OVERLAY` and `$ROOT/overlay.yaml`
+                 with a COUNT (3 and 2) instead of positions.
+      WHY THOSE KEYS: they are literally the two alternations of
+                 `D04_EXEMPT_RE` (quick-health-check.sh:1901). The register and
+                 the regex therefore cannot drift apart, and the grep that finds
+                 the lines IS the test the check applies. The count is what
+                 `D04_EXEMPT_BASELINE` pins; the positions never were.
+      BOTH rows replaced, not just the rotted one, so the table cannot half-rot.
+
+  #8  stacks/selfhosted/arrs/beets.md @ "both still carry the bare claim"  [NOT NAMED BY REVIEW]
+      CLAIMED  : CLAUDE.md:152 AND .planning/PROJECT.md:187 carry the
+                 "beets has no `undo` command" claim
+      ACTUALLY : CLAUDE.md:152 RESOLVES correctly. PROJECT.md:187 is about the
+                 LXC idmap / 65534 — the claim is at PROJECT.md:207.
+                 HALF-ROTTED: one of the pair still worked, which is precisely
+                 what makes this class dangerous to spot-check.
+      REPLACED : grep either file for ``beets has no `undo` command``
+                 (1 hit each, verified in both)
+
+  (#7 counts as two repairs — the two register rows — giving 9 stale references
+   across 8 citing sites.)
+
+--------------------------------------------------------------------------------
+1.2  STALE — FOUND, NOT REPAIRED, REPORTED TO PLAN 06-29
+--------------------------------------------------------------------------------
+
+  #9  scripts/quick-health-check.sh @ "TAGGER_CENSUS_PROMOTED=1"
+      CLAIMED  : check-music-freeze.sh:144
+      ACTUALLY : line 144 is a comment about the criterion-1 row. The assignment
+                 `TAGGER_CENSUS_PROMOTED=1` is at check-music-freeze.sh:160.
+      NOT FIXED: `scripts/quick-health-check.sh` is NOT in this plan's
+                 files_modified. Plan 06-26 owns that file this round and it is
+                 the one file three plans landed in. Recorded as NEW-06-28-01
+                 rather than edited, consistent with how 06-26 and 06-27 handled
+                 out-of-scope discoveries.
+      SUGGESTED ANCHOR (verified, not merely proposed):
+                 `TAGGER_CENSUS_PROMOTED=1` is itself 1 hit in
+                 check-music-freeze.sh — the assignment is its own anchor.
+
+--------------------------------------------------------------------------------
+1.3  RESOLVES CORRECTLY — DELIBERATELY LEFT ALONE  (13 references)
+--------------------------------------------------------------------------------
+
+Judged individually and left as line numbers. Recorded so that "left alone" is
+a stated judgement, not an omission. None was introduced by this phase's gap
+closure; all point at stable upstream material and all were confirmed to
+resolve TODAY.
+
+  scripts/phase06-oracle.sh
+    -> check-music-freeze.sh:869-874 ......... OK (the census-blind fail +
+                                                CENSUS_BLIND=1 — genuinely the
+                                                looked-vs-failed-to-look point)
+
+  scripts/check-beets-config.sh
+    -> check-music-freeze.sh:35-42 ........... OK (the EXIT-CODE CONVENTION block)
+    -> check-music-freeze.sh:85-89 ........... OK (the PLAIN CONSTANTS paragraph)
+    -> spike03-wrtag-arms.sh:23-27 ........... OK (the no-docker self-drive device)
+    -> check-music-consumers.sh:462-475 ...... OK (the report-rather-than-fail stance)
+
+  scripts/quick-health-check.sh   [audit only — not this plan's file]
+    -> 260914-a2y-SUMMARY.md:175-177 ......... OK (the Traefik red on a green run)
+    -> disable-jellyfin-hwaccel.sh:172 ....... OK (`timeout 15 ssh ...`)
+    -> traefik.yaml:48 ....................... OK (`--entrypoints.traefik.address=:8080`)
+    -> traefik.yaml:118-126 .................. OK (the dashboard router labels)
+    -> check-server-health.sh:8-11 ........... OK (the ssh-reachability exit 1)
+
+  stacks/selfhosted/arrs/beets.md
+    -> check-music-freeze.sh:824  (x2) ....... OK — and NOTE: this row already
+                                                carries its own drift record,
+                                                "(`:793` when this row was
+                                                written)". It is the one citation
+                                                in the set that documents its own
+                                                rot. It still needs a re-check
+                                                every round; the anchor form does
+                                                not.
+    -> beets/flask.yaml:146 .................. OK (`- /mnt/tank/downloads:/downloads:rw`)
+    -> beets/flask-config.yaml:80-83 ......... OK (the `01-auto` inbox, `autotag: auto`)
+    -> CLAUDE.md:152 ......................... OK (but its PAIR was stale — see #8)
+
+  scripts/phase06-incremental-control.sh ..... no cross-file file:line references
+                                                at all. The only file in the set
+                                                that cannot rot this way.
+
+--------------------------------------------------------------------------------
+1.4  ANCHOR RESOLUTION PROOF
+--------------------------------------------------------------------------------
+
+Each anchor was `grep -c`'d in its TARGET file BEFORE being written into the
+citing file, per the plan's requirement that uniqueness and the single-line
+property be confirmed first.
+
+  anchor                      target file                          hits  implied  verdict
+  --------------------------  -----------------------------------  ----  -------  -------
+  PREP REFUSED root           phase06-incremental-control.sh          1      >=1   OK, unique
+  CLEANUP REFUSED             phase06-incremental-control.sh          1      >=1   OK, unique
+  $ROOT/overlay.yaml          phase06-incremental-control.sh          3      >=2   OK
+  MIGRATE ITS SCHEMA          beets/beets.yaml                        1      ==1   OK, unique
+  lsiown -R abc:abc           beets/beets.yaml                        1      >=1   OK, unique
+  zfs_query() {               check-music-freeze.sh                   1      >=1   OK, unique
+  $SCRATCH_OVERLAY            phase06-oracle.sh                       5      >=3   OK
+  beets has no `undo` command CLAUDE.md                               1      >=1   OK, unique
+  beets has no `undo` command .planning/PROJECT.md                    1      >=1   OK, unique
+
+Note on `PREP REFUSED`: the bare token appears TWICE in the sibling (the fence
+at 414 and the dirty-destination message at 421). The anchor written in is
+`PREP REFUSED root`, which is unique and lands on the fence — the thing being
+pointed at. The plan's verify tests the shorter `PREP REFUSED`, which the
+longer anchor satisfies as a substring. Precision was chosen over the minimum
+that passes.
+
+Note on `$SCRATCH_OVERLAY` = 5, not 3: one is the assignment
+(`SCRATCH_OVERLAY="$SCRATCH/overlay.$RUN_TAG.yaml"`) and one is a `cat > "$1"`
+transfer, not an invocation. The three EXEMPT invocations are the remaining
+three. The register says "3" and the key finds a superset containing exactly
+those 3 — which is why the register states a count as well as a key.
+Same shape for `$ROOT/overlay.yaml` = 3: one is the `-s` existence check, two
+are the exempt invocations.
+
+
+================================================================================
+PART 2 — GC-10: THE D-04 COUNT RE-MEASUREMENT
+================================================================================
+
+METHOD — REGEXES EXTRACTED, NEVER RETYPED
+------------------------------------------
+Plan 06-23 widened `D04_INV_RE` during this same round, so any copy of the
+regex written into a plan is already old. Both regexes are extracted from the
+shipping file, and the extraction is asserted non-empty AND unique before use:
+
+    sed -n "s/^[[:space:]]*D04_INV_RE='\(.*\)'$/\1/p"    scripts/quick-health-check.sh
+    sed -n "s/^[[:space:]]*D04_EXEMPT_RE='\(.*\)'$/\1/p" scripts/quick-health-check.sh
+    # each must yield exactly 1 line; each must be non-empty
+
+Then the block's own pipeline, verbatim:
+
+    git grep -n -I -w -E -e 'beet' -e 'BEET[A-Z_]*' HEAD -- scripts stacks   > hits.txt
+    /usr/bin/grep '^HEAD:'                                     hits.txt      > raw.txt
+    /usr/bin/grep -vE '^HEAD:[^:]*:[0-9]*:[[:space:]]*(#|//)'  raw.txt       > kept.txt
+    /usr/bin/grep -E  -f inv_re.txt                            kept.txt      > inv.txt
+    /usr/bin/grep     '\.md:'                                  inv.txt       > doc.txt
+    /usr/bin/grep -v  '\.md:'                                  inv.txt       > exe.txt
+    /usr/bin/grep -E  -f ex_re.txt                             exe.txt       > exempt.txt
+    /usr/bin/grep -vE -f ex_re.txt                             exe.txt       > assert.txt
+    # count each with: /usr/bin/grep -c '^HEAD:' <file>
+
+(`-f <file>` is used rather than an inline `"$RE"` so the extracted regex is
+never re-quoted through a second shell expansion.)
+
+RESULTS
+-------
+                        06-23's       06-28 BASELINE    06-28 AFTER      pinned?
+                        old/new       (456ad06, this    (this plan's
+                        comparison    round's HEAD)     commits)
+  raw                   199 -> 199         200              200            no
+  comment-stripped       98 ->  98           99               99           no
+  invocation-shaped      10 ->  10           10               10           ADJACENT
+  executable              8 ->   8            8                8           no
+  asserted                3 ->   3            3                3           no
+  exempt                  5 ->   5            5                5           YES (D04_EXEMPT_BASELINE)
+  documentation           2 ->   2            2                2           YES (D04_DOC_BASELINE)
+
+**NO PINNED FIGURE MOVED.** The plan's stop-and-report condition did not fire.
+
+AGREEMENT WITH PLAN 06-23 — AND WHAT THE TWO NUMBERS EACH MEAN
+---------------------------------------------------------------
+06-23's artifact records TWO pairs and they are not in conflict:
+
+  * 199 / 98 is an OLD-REGEX vs NEW-REGEX comparison over IDENTICAL INPUT
+    (the scan of base commit bf509f4). It is the correct historical pair, and
+    the only pair that can prove the widening was additive, because there the
+    regex is the sole variable.
+  * 200 / 99 is a reading of HEAD after 06-23 landed. The +1 is exactly one
+    line: condition P's own message, which carries a literal `beet`-invocation
+    token BY PLAN REQUIREMENT and is an `echo`, so it survives the comment
+    strip and lands in both raw and comment-stripped.
+
+This plan's independent measurement at 456ad06 reads **200 / 99**, agreeing
+with 06-23's post-merge reading and with plan 06-26's independent confirmation
+at its own base and after all three of its tasks. Three agents, three
+measurements, same answer.
+
+The number this plan's OWN text quoted before execution — 191 / 90 in
+beets.md, and 199 / 98 inherited in the plan body — was stale on arrival. That
+is the finding, not a discrepancy to reconcile.
+
+WHY THE TWO UNPINNED ROWS WERE DROPPED RATHER THAN RESTATED
+------------------------------------------------------------
+The plan offered two shapes and recommended the second. The second was taken.
+
+`raw` and `comment-stripped` count the whole repository's `beet`/`BEET*`
+mentions across `scripts` and `stacks`. They therefore move with EVERY commit
+to either tree — including the commit that writes them down. beets.md is
+itself inside the scan scope (`stacks`), so any value written into that table
+is a value the act of writing it can change. Restating them as a transition
+(`raw 200 -> 201`) would be honest but would need re-measuring and re-editing
+on every future commit, and the failure mode when someone forgets is a page
+that states a checkable-looking falsehood — which is exactly the state GC-10
+found.
+
+Neither figure is pinned. Nothing asserts on either. Dropping them costs no
+coverage and removes the only two rows that could rot.
+
+The five surviving rows are all either pinned or derived from pinned ones, and
+none of them moves when prose is added anywhere in the repo.
+
+THE SENTENCE THAT WAS REMOVED, AND WHY IT WAS THE ACTUAL FINDING
+-----------------------------------------------------------------
+Old: "**Measured counts on this plan's tree** (hand-reproduced from the host
+      and compared against the block's own printed figures — agreement at every
+      position, both trees)"
+
+That parenthesis asserts a verification which the note's own presence
+invalidates: the note's body quotes `D04_INV_RE` and `BEET[A-Z_]*`, which adds
+`BEET`-matching lines to the raw and comment-stripped counts it claims
+agreement on. It is not a typo — it is a claim of agreement that could not have
+been true once the claim was written down.
+
+The replacement states which figures are pinned, which are not, what was
+measured, at which commit, on which tree, and names GC-10.
+
+This file's own convention, applied correctly by the eleventh and twelfth
+exit-code notices in quick-health-check.sh (`headers 10 -> 11`), is to state a
+self-referential count as a transition measured before AND after the edit that
+changes it. That convention was not applied here when the table was written.
+
+
+THE DROPPED-ROWS DECISION, DEMONSTRATED RATHER THAN ARGUED
+-----------------------------------------------------------
+The case for dropping `raw` and `comment-stripped` did not stay theoretical.
+Measured across this plan's own two commits:
+
+    measurement point                     raw   stripped   inv/exe/assert/exempt/doc
+    ------------------------------------  ---   --------   -------------------------
+    456ad06  (base, before any edit)      200       99         10 / 8 / 3 / 5 / 2
+    ab5ff32  (after Task 1, GC-04)        200       99         10 / 8 / 3 / 5 / 2
+    64886ab  (after Task 2, GC-10)        202      101         10 / 8 / 3 / 5 / 2
+
+The +2 at Task 2 was located by CONTENT comparison, not by diffing the
+line-numbered scan — the edits shifted line numbers in two files, so a naive
+`diff` of the raw scan reports ~60 spurious rows. Stripping the line number and
+`comm`-ing the sorted content gives the true delta:
+
+    ADDED    beets.md  "> pinned and nothing asserts on either: they count every
+                        `beet`/`BEET*` mention across `scripts`"
+    ADDED    beets.md  "> `BEET[A-Z_]*` and so adds matching lines to the very
+                        counts it claimed agreement on. Both figures"
+    ADDED    check-beets-config.sh  the reworded `migrations unasked` comment
+    REMOVED  check-beets-config.sh  the original `migrations unasked` comment
+                                    (net zero — same line, new anchor)
+
+So the two added lines are **the prose explaining why the counts are not
+recorded**. Writing the explanation moved `raw` 200 -> 202 and
+`comment-stripped` 99 -> 101, in the same commit that removed the figures.
+
+That is GC-10's defect reproduced live, one last time, by the fix for it — and
+it is the whole argument for the drop rather than the restate-as-a-transition
+option: a transition written into this page would have been stale the instant
+the sentence containing it was finished. Neither added line is
+invocation-shaped (no `$`-prefixed `BEET*` in command position), so
+`D04_N_DOC` stayed at its pinned 2 and no pin moved.
+
+NO PINNED FIGURE MOVED AT ANY POINT. The plan's stop-and-report condition did
+not fire.
+
+
+================================================================================
+PART 3 — VERIFICATION TRANSCRIPT
+================================================================================
+
+  check                                                        result
+  -----------------------------------------------------------  ------------------
+  bash -n scripts/phase06-oracle.sh                            PASS
+  bash -n scripts/check-beets-config.sh                        PASS
+  scripts/phase06-oracle.sh --self-test                        PASS exit 0, 134 cases
+  scripts/check-beets-config.sh --self-test                    PASS exit 0, 7 cases (6 red)
+  'incremental-control.sh:343' in oracle              == 0     PASS  0
+  'incremental-control.sh:473' in oracle              == 0     PASS  0
+  'beets.yaml:71-78' in check-beets-config            == 0     PASS  0
+  '2166, 2179, 2313' in beets.md                      == 0     PASS  0  (see note)
+  (sibling|beets.yaml):[0-9]+ in oracle               == 0     PASS  0
+  (sibling|beets.yaml):[0-9]+ in check-beets-config   == 0     PASS  0
+  'PREP REFUSED' present in oracle                    >= 1     PASS  1
+  'CLEANUP REFUSED' present in oracle                 >= 1     PASS  3
+  'MIGRATE ITS SCHEMA' present in check-beets-config  >= 1     PASS  1
+  'SCRATCH_OVERLAY' present in beets.md               >= 1     PASS  1
+  'PREP REFUSED' resolves in sibling                  >= 1     PASS  2
+  'CLEANUP REFUSED' resolves in sibling               >= 1     PASS  1
+  'MIGRATE ITS SCHEMA' resolves in beets.yaml         == 1     PASS  1
+  'SCRATCH_OVERLAY' resolves in oracle                >= 3     PASS  5
+  'ROOT/overlay.yaml' resolves in sibling             >= 2     PASS  3
+  'raw | 191' row gone from beets.md                  == 0     PASS  0
+  'comment-stripped | 90' row gone from beets.md      == 0     PASS  0
+  'agreement at every position, both trees' gone      == 0     PASS  0
+  'invocation-shaped' survives in beets.md            >= 1     PASS
+  'D04_DOC_BASELINE' survives in beets.md             >= 1     PASS
+  'GC-10' named in beets.md                           >= 1     PASS
+  artifact non-empty, names GC-04 / GC-10 / 06-23     -        PASS
+  pinned vector after every commit                    -        PASS 10/8/3/5/2
+  no file deleted by any commit                       -        PASS (empty)
+  no git push; no host pull; no estate contact        -        PASS
+
+NOTE on the `2166, 2179, 2313` check — THE SIXTH WRONG-PREMISE VERIFY THIS ROUND
+--------------------------------------------------------------------------------
+The first draft of the register replacement KEPT the old line numbers, quoting
+them in order to disown them ("the oracle's read `2166, 2179, 2313` against
+actual `2781, 2794, 2930`"). That is correct prose and a FAILING check: the
+plan's `grep -cF '2166, 2179, 2313' == 0` cannot tell a claim from its
+retraction. Measured at 1, not 0.
+
+This is the same trap plan 06-27 recorded for
+`grep -ci 'removes the predictability' == 0`, and the sixth wrong-premise
+verify check across the seven plans of this round.
+
+It was resolved HONESTLY, not worked around: the before/after positions were
+moved into THIS artifact (section 1.1 #7, which is the audit deliverable a
+reader checks) and beets.md now describes the rot by magnitude instead of
+reproducing the stale triple. The check passes for the reason it intends —
+the page no longer presents those numbers as a location anyone can copy. The
+same treatment was applied to the `undo`-claim pair for consistency, so the
+page carries no copyable stale line number anywhere.
+
+ESTATE CONTACT
+--------------
+NONE. No ssh, no docker, no `--run`, no `git push`, no host `git pull`. This
+plan is documentation and comments only; both self-tests run entirely locally.
+
+FINDINGS RAISED FOR PLAN 06-29
+-------------------------------
+  NEW-06-28-01  scripts/quick-health-check.sh cites check-music-freeze.sh:144
+                for `TAGGER_CENSUS_PROMOTED=1`; the assignment is at :160.
+                Line 144 is an unrelated comment. Same class as GC-04, in the
+                one file this plan does not own. Anchor already verified:
+                `TAGGER_CENSUS_PROMOTED=1` is 1 hit in the target.
+                No functional impact — nothing asserts on the citation.

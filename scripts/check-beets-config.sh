@@ -97,8 +97,9 @@
 # reports a container is up flips the moment the process is exec'd, before rc6's entrypoint has
 # migrated its database and started the server; a read taken in that window answers from an
 # incomplete process while `docker logs` is still empty. The gate here is the watchdog's
-# inbox-registration line, which cannot be printed before the server exists. The LSIO lesson at
-# stacks/selfhosted/arrs/beets/beets.yaml:54-60 is the same lesson from the other image - but
+# inbox-registration line, which cannot be printed before the server exists. The LSIO lesson in
+# stacks/selfhosted/arrs/beets/beets.yaml - grep it for `lsiown -R abc:abc`, one hit - is the same
+# lesson from the other image - but
 # note its `lsiown` half does NOT transfer: rc6's entrypoint_fix_permissions.sh chowns only
 # /home/beetle /logs /repo and never touches /config, so there is no boot-time chown race here
 # and reproducing that gate would record a hazard this image does not have.
@@ -873,7 +874,8 @@ echo ""
 
 # =============================================================================================
 # The `docker exec` wrapper. Named function, recorded route, read-only by contract - the shape
-# of zfs_query() at check-music-freeze.sh:191-199, applied to a container instead of a pool.
+# of zfs_query() in check-music-freeze.sh - grep it for `zfs_query() {`, one hit, the definition
+# itself - applied to a container instead of a pool.
 #
 # Absolute /venv paths and -u beetle are both load-bearing: `beet` is not on PATH for an exec,
 # and the exec runs as whatever uid is asked for. No credential is ever passed with -e on a
@@ -983,7 +985,8 @@ else
     # D-04: `-l ${THROWAWAY_DB}` on every one of the three invocations below, and `-l` FIRST so
     # the flag order matches the rule as quick-health-check.sh states it. WHY, in three parts.
     # `beet` opens the library for EVERY subcommand including `config` - Phase 1 measured a bare
-    # `beet config` running 11 migrations unasked (stacks/selfhosted/arrs/beets/beets.yaml:71-78).
+    # `beet config` running 11 migrations unasked - grep stacks/selfhosted/arrs/beets/beets.yaml
+    # for `MIGRATE ITS SCHEMA`, one hit, on the sentence making that claim.
     # With `-l` the real /config/library.db is never opened at all, which upgrades the D-29
     # layer-3 comparison below from proving nothing CHANGED to corroborating that nothing was
     # OPENED. And the overlay is still required alongside it, because `-l` alone does not redirect

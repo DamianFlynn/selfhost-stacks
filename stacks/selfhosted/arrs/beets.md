@@ -1352,7 +1352,11 @@ Real, out of Phase 4's scope, and written down rather than silently carried:
 - **The "beets has no `undo` command" constraint is narrower than it reads, and two files still
   state it unqualified.** It remains true of the beets **CLI**, but beets-flask rc6 has a working
   `UNDO IMPORT`, verified by use (see § *One correction to this page's own § The recovery fence*).
-  `CLAUDE.md:152` and `.planning/PROJECT.md:187` both still carry the bare claim. Phase 4 was
+  `CLAUDE.md` and `.planning/PROJECT.md` both still carry the bare claim — grep either for
+  ``beets has no `undo` command``, one hit each. *(This pair was cited by line number until plan
+  06-28 replaced it with the anchor under GC-04. One of the two had already rotted and the other
+  had not, which is exactly why spot-checking one of a pair does not clear the pair; see
+  `artifacts/06-28-citations-and-counts.txt`.)* Phase 4 was
   expected to amend them and **no plan in it did**; neither file is in this plan's mandate. Deferred
   in writing as **DEF-04-01**, in
   `.planning/phases/04-collapse-to-one-tagger/deferred-items.md`, to **Phase 7**, which owns the
@@ -2232,16 +2236,35 @@ is non-discriminating, so these are the BLOCK verdicts**:
 > footgun the pin exists to catch, and the two historic quotations above are kept verbatim only
 > because they are the Nov-2025 record, not because quoting is free.)*
 >
-> **Measured counts on this plan's tree** (hand-reproduced from the host and compared against the
-> block's own printed figures — agreement at every position, both trees):
+> **Measured counts.** Re-measured 2026-09-22 by plan 06-28 (**GC-10**) at commit `ab5ff32`, on
+> this repository's tree, by reproducing the D-04 block's own pipeline with `D04_INV_RE` and
+> `D04_EXEMPT_RE` **extracted from `scripts/quick-health-check.sh` rather than retyped** — plan
+> 06-23 widened `D04_INV_RE` in the same round, so any transcribed copy is already old. Commands
+> and full transcript in `artifacts/06-28-citations-and-counts.txt`.
 >
-> | count | value |
-> |---|---|
-> | raw | 191 |
-> | comment-stripped | 90 |
-> | invocation-shaped | 10 |
-> | **executable** | **8** = asserted **3** + exempt **5** |
-> | documentation | 2 (at the pinned `D04_DOC_BASELINE`) |
+> | count | value | pinned by |
+> |---|---|---|
+> | invocation-shaped | 10 | — (the input to the two pins) |
+> | **executable** | **8** = asserted **3** + exempt **5** | — |
+> | exempt | 5 | `D04_EXEMPT_BASELINE` |
+> | documentation | 2 | `D04_DOC_BASELINE` |
+>
+> **The `raw` and `comment-stripped` counts are deliberately NOT recorded here.** Neither is
+> pinned and nothing asserts on either: they count every `beet`/`BEET*` mention across `scripts`
+> and `stacks`, so they move with **every commit to either tree — including the commit that writes
+> them down**, and this page is itself inside the scan scope. That is not hypothetical. This table
+> previously carried two such figures together with the claim that they had been *"compared against
+> the block's own printed figures — agreement at every position"*; that claim asserted a
+> verification its own presence invalidated, because the surrounding note quotes `D04_INV_RE` and
+> `BEET[A-Z_]*` and so adds matching lines to the very counts it claimed agreement on. Both figures
+> were false within a day of being written, and were still wrong by nine and nine when GC-10 found
+> them. The four rows above are pinned or derived from pinned ones and do not move when prose is
+> added anywhere in the repo.
+>
+> *(Where a self-referential count genuinely must be stated, this repo's convention is to state it
+> as a **transition measured before and after** the edit that changes it — as the eleventh and
+> twelfth `EXIT-CODE BEHAVIOUR CHANGED` notices in `quick-health-check.sh` do with `headers 10 -> 11`.
+> That convention existed when this table was written and was not applied to it.)*
 >
 > **THE EXEMPTION REGISTER — `D04_EXEMPT_RE` and `D04_EXEMPT_BASELINE` (pinned at 5).** Five
 > invocation-shaped executable lines are **named, counted and pinned** rather than asserted. The
@@ -2250,10 +2273,20 @@ is non-discriminating, so these are the BLOCK verdicts**:
 > that prints every exempt line. A green D-04 now always **states how many lines it did not assert
 > over**, so 3 asserted can never be mistaken for 8.
 >
-> | file | lines | key |
+> | file | how many | how to find them — grep for the key, do **not** trust a line number |
 > |---|---|---|
-> | `scripts/phase06-oracle.sh` | 2166, 2179, 2313 | `$SCRATCH_OVERLAY` |
-> | `scripts/phase06-incremental-control.sh` | 462, 464 | `$ROOT/overlay.yaml` |
+> | `scripts/phase06-oracle.sh` | 3 | `$SCRATCH_OVERLAY` — the `-c` overlay argument on each |
+> | `scripts/phase06-incremental-control.sh` | 2 | `$ROOT/overlay.yaml` — the `-c` overlay argument on each |
+>
+> *(Both rows carried **line numbers** until 2026-09-22, when plan 06-28 replaced them with the
+> keys under **GC-04**. Both had rotted — the oracle's row by roughly six hundred lines, the
+> sibling's by forty — and the per-row before/after positions are recorded in
+> `artifacts/06-28-citations-and-counts.txt` rather than reproduced here, because a stale number
+> quoted in the page that replaced it is still a stale number a reader can copy. The keys above are
+> not a second description of the exemption — they are **literally the two alternations of
+> `D04_EXEMPT_RE`**, so the register and the regex cannot drift apart, and the grep that finds the
+> lines is the same test the check applies. A count is given instead of positions because the
+> count is what `D04_EXEMPT_BASELINE` pins; the positions never were.)*
 >
 > **Why — all three reasons hold, and an unexplained exemption would be worse than none.**
 > 1. Each passes a `-c` overlay redirecting `library`, `statefile` **and** `directory` together
