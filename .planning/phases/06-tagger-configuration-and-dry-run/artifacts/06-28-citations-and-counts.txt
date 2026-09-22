@@ -343,11 +343,105 @@ self-referential count as a transition measured before AND after the edit that
 changes it. That convention was not applied here when the table was written.
 
 
+THE DROPPED-ROWS DECISION, DEMONSTRATED RATHER THAN ARGUED
+-----------------------------------------------------------
+The case for dropping `raw` and `comment-stripped` did not stay theoretical.
+Measured across this plan's own two commits:
+
+    measurement point                     raw   stripped   inv/exe/assert/exempt/doc
+    ------------------------------------  ---   --------   -------------------------
+    456ad06  (base, before any edit)      200       99         10 / 8 / 3 / 5 / 2
+    ab5ff32  (after Task 1, GC-04)        200       99         10 / 8 / 3 / 5 / 2
+    64886ab  (after Task 2, GC-10)        202      101         10 / 8 / 3 / 5 / 2
+
+The +2 at Task 2 was located by CONTENT comparison, not by diffing the
+line-numbered scan — the edits shifted line numbers in two files, so a naive
+`diff` of the raw scan reports ~60 spurious rows. Stripping the line number and
+`comm`-ing the sorted content gives the true delta:
+
+    ADDED    beets.md  "> pinned and nothing asserts on either: they count every
+                        `beet`/`BEET*` mention across `scripts`"
+    ADDED    beets.md  "> `BEET[A-Z_]*` and so adds matching lines to the very
+                        counts it claimed agreement on. Both figures"
+    ADDED    check-beets-config.sh  the reworded `migrations unasked` comment
+    REMOVED  check-beets-config.sh  the original `migrations unasked` comment
+                                    (net zero — same line, new anchor)
+
+So the two added lines are **the prose explaining why the counts are not
+recorded**. Writing the explanation moved `raw` 200 -> 202 and
+`comment-stripped` 99 -> 101, in the same commit that removed the figures.
+
+That is GC-10's defect reproduced live, one last time, by the fix for it — and
+it is the whole argument for the drop rather than the restate-as-a-transition
+option: a transition written into this page would have been stale the instant
+the sentence containing it was finished. Neither added line is
+invocation-shaped (no `$`-prefixed `BEET*` in command position), so
+`D04_N_DOC` stayed at its pinned 2 and no pin moved.
+
+NO PINNED FIGURE MOVED AT ANY POINT. The plan's stop-and-report condition did
+not fire.
+
+
 ================================================================================
 PART 3 — VERIFICATION TRANSCRIPT
 ================================================================================
-(Filled in after the edits; see the SUMMARY's Verification Results table for
-the same figures. Both self-tests exit 0; both scripts pass `bash -n`.)
+
+  check                                                        result
+  -----------------------------------------------------------  ------------------
+  bash -n scripts/phase06-oracle.sh                            PASS
+  bash -n scripts/check-beets-config.sh                        PASS
+  scripts/phase06-oracle.sh --self-test                        PASS exit 0, 134 cases
+  scripts/check-beets-config.sh --self-test                    PASS exit 0, 7 cases (6 red)
+  'incremental-control.sh:343' in oracle              == 0     PASS  0
+  'incremental-control.sh:473' in oracle              == 0     PASS  0
+  'beets.yaml:71-78' in check-beets-config            == 0     PASS  0
+  '2166, 2179, 2313' in beets.md                      == 0     PASS  0  (see note)
+  (sibling|beets.yaml):[0-9]+ in oracle               == 0     PASS  0
+  (sibling|beets.yaml):[0-9]+ in check-beets-config   == 0     PASS  0
+  'PREP REFUSED' present in oracle                    >= 1     PASS  1
+  'CLEANUP REFUSED' present in oracle                 >= 1     PASS  3
+  'MIGRATE ITS SCHEMA' present in check-beets-config  >= 1     PASS  1
+  'SCRATCH_OVERLAY' present in beets.md               >= 1     PASS  1
+  'PREP REFUSED' resolves in sibling                  >= 1     PASS  2
+  'CLEANUP REFUSED' resolves in sibling               >= 1     PASS  1
+  'MIGRATE ITS SCHEMA' resolves in beets.yaml         == 1     PASS  1
+  'SCRATCH_OVERLAY' resolves in oracle                >= 3     PASS  5
+  'ROOT/overlay.yaml' resolves in sibling             >= 2     PASS  3
+  'raw | 191' row gone from beets.md                  == 0     PASS  0
+  'comment-stripped | 90' row gone from beets.md      == 0     PASS  0
+  'agreement at every position, both trees' gone      == 0     PASS  0
+  'invocation-shaped' survives in beets.md            >= 1     PASS
+  'D04_DOC_BASELINE' survives in beets.md             >= 1     PASS
+  'GC-10' named in beets.md                           >= 1     PASS
+  artifact non-empty, names GC-04 / GC-10 / 06-23     -        PASS
+  pinned vector after every commit                    -        PASS 10/8/3/5/2
+  no file deleted by any commit                       -        PASS (empty)
+  no git push; no host pull; no estate contact        -        PASS
+
+NOTE on the `2166, 2179, 2313` check — THE SIXTH WRONG-PREMISE VERIFY THIS ROUND
+--------------------------------------------------------------------------------
+The first draft of the register replacement KEPT the old line numbers, quoting
+them in order to disown them ("the oracle's read `2166, 2179, 2313` against
+actual `2781, 2794, 2930`"). That is correct prose and a FAILING check: the
+plan's `grep -cF '2166, 2179, 2313' == 0` cannot tell a claim from its
+retraction. Measured at 1, not 0.
+
+This is the same trap plan 06-27 recorded for
+`grep -ci 'removes the predictability' == 0`, and the sixth wrong-premise
+verify check across the seven plans of this round.
+
+It was resolved HONESTLY, not worked around: the before/after positions were
+moved into THIS artifact (section 1.1 #7, which is the audit deliverable a
+reader checks) and beets.md now describes the rot by magnitude instead of
+reproducing the stale triple. The check passes for the reason it intends —
+the page no longer presents those numbers as a location anyone can copy. The
+same treatment was applied to the `undo`-claim pair for consistency, so the
+page carries no copyable stale line number anywhere.
+
+ESTATE CONTACT
+--------------
+NONE. No ssh, no docker, no `--run`, no `git push`, no host `git pull`. This
+plan is documentation and comments only; both self-tests run entirely locally.
 
 FINDINGS RAISED FOR PLAN 06-29
 -------------------------------
