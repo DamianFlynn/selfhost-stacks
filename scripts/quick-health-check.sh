@@ -527,6 +527,54 @@
 #         same single reason DRIFT_REPO_ROOT and D04_REPO_ROOT exist: its `exit 3` branch could
 #         not be driven, and an undriveable branch is an unproven branch. Same additive contract.
 #
+# ⚠️  EXIT-CODE BEHAVIOUR CHANGED AGAIN — NO NEW BLOCK, A NEW FATAL CONDITION AT AN EXISTING SITE,
+#     2026-09-22 (plan 06-17, phase 6 WR-03).
+#
+#     THIS IS THE TWELFTH SUCH NOTICE. Counts measured before and after this edit, not assumed,
+#     using the two greps the eighth notice quotes. This notice does NOT write the shared phrase
+#     out a second time in its own body, so it adds exactly one match to each:
+#         headers   11 -> 12
+#         raw       14 -> 15
+#     The raw count therefore still runs THREE ahead of the header count, unchanged by this edit.
+#
+#     BLOCK ordinal does NOT move: nine blocks remain. No new script runs here — the music
+#     consumers audit was already folded in, and this changes how ONE of its exit statuses is
+#     classified.
+#
+#     WHAT NOW EXITS THIS SCRIPT 1 THAT DID NOT BEFORE:
+#       O. THE MUSIC-CONSUMERS FOLD-IN RUN WITH A NON-DEFAULT CONSUMERS_SCRIPT. Same additive
+#          contract as DASH_HOST, EXTCONF_HOST, every D03_* knob, D04_REPO_ROOT and
+#          DRIFT_REPO_ROOT: an overridden run cannot print `✅ Both consumers see the library`,
+#          because the audit that answered was not the deployed one. This is the ONLY genuinely
+#          new red in this notice, and it exists so the arm below can be driven at all — see the
+#          knob's own comment for why an undriveable branch is an unproven branch, and why it
+#          names a FILE rather than reusing one of the three *_REPO_ROOT knobs.
+#
+#     WHAT DID NOT CHANGE, stated because it is the substance of this notice: status 3 already
+#     forced EXIT_CODE=1. It fell into the generic `❌ BROKEN (check-music-consumers.sh exit
+#     $CONSUMERS_RC)` arm — same non-zero verdict, wrong label. The verdict was right and the
+#     operator was sent to the wrong place, exactly as WR-10 was for the D-04 scan. This is
+#     therefore mostly a RELABELLING notice, and it is written anyway because the eleventh notice
+#     exists for the opposite reason and the pair is only readable if both are here.
+#
+#     WHAT ACTUALLY CHANGED, AND WHY IT IS NOT COSMETIC:
+#       M. check-music-consumers.sh NOW HAS A THIRD EXIT CODE AT ALL. Before plan 06-17 it printed
+#          the yellow "CONF-04 IS NOT CLOSED" block and then printed its GREEN BANNER and exited
+#          ZERO, because `warn()` prints and touches no counter. This fold-in propagates that
+#          status, so a CONF-04 regression AFTER Phase 7 discharges it — PreferNonstandardArtistsTag
+#          reverting to `false`, one UI click, held nowhere in git — would have landed the artist
+#          rows back on their baseline and exited 0 here too. A regression detector reporting the
+#          regression in yellow text that nothing downstream reads. Exit 3 is what makes that
+#          reachable by tooling; this arm is what stops it being reported as an instrument failure.
+#       N. THE `📊 6. Summary` ANCHOR GUARD IS APPLIED ON THE NEW ARM TOO, reporting an absent
+#          anchor as UNKNOWN. A renumbered heading must not be able to hide behind a newly-added
+#          branch — WR-09's lesson, re-applied at the site WR-09 created.
+#
+#     HOW LONG IT STAYS NON-ZERO, stated so nobody tunes it out: for as long as CONF-04's Jellyfin
+#     half is open. It discharges on ROADMAP entry criterion E6 and on nothing else. CONF-04 is NOT
+#     closed by plan 06-17 and its two consumer verdicts are still recorded separately and never
+#     summed — see the EXIT 3 paragraph in scripts/check-music-consumers.sh's header.
+#
 # ⚠️  KNOWN LIMIT, AND IT APPLIES TO THIS WHOLE FILE: THIS SCRIPT IS MANUAL. IT ONLY EVER FIRES
 #     WHEN SOMEBODY TYPES IT (D-22, phase 02.1).
 #     There is no cron entry, no systemd timer and no notification path. Nothing here will tell
@@ -744,6 +792,21 @@ D04_REPO_ROOT="${D04_REPO_ROOT:-/mnt/fast/stacks}"
 # is stated IN FULL in the D-04 block comment, not here; do not raise this number without reading
 # it, because raising it is how a real violation gets waved through.
 D04_EXEMPT_BASELINE="${D04_EXEMPT_BASELINE:-5}"
+
+# CONSUMERS_SCRIPT, added 2026-09-22 by plan 06-17 (WR-03). The music-consumers fold-in runs the
+# audit from the host's DEPLOYED checkout, and that path was hard-coded. check-music-consumers.sh
+# gained a third exit status (3 = CONF-04 measured and open) in the same plan that added the arm
+# which classifies it — and that arm could not be driven without first deploying unmerged work to
+# the live estate to make a health-check line up, which is the one thing this repo's execution
+# notes forbid. Existing for the SAME SINGLE REASON as DRIFT_REPO_ROOT, D03_REPO_ROOT and
+# D04_REPO_ROOT, and stated in their own words: AN UNDRIVEABLE BRANCH IS AN UNPROVEN BRANCH.
+#   ⛔ DO NOT REUSE any of the three *_REPO_ROOT knobs for this, for the reason D03_REPO_ROOT gives
+#   in full: they are different claims that merely share a default path, and one knob moving two
+#   verdicts is how a run reports on a tree nobody asked it to look at. This one names a FILE, not
+#   a root, because that is what the fold-in invokes.
+#   Same ADDITIVE contract as every other knob in this file: a non-default value prints a warning
+#   and forces EXIT_CODE=1, so an override can drive the arms but can NEVER produce the green tick.
+CONSUMERS_SCRIPT="${CONSUMERS_SCRIPT:-/mnt/fast/stacks/scripts/check-music-consumers.sh}"
 
 # ENV OVERRIDES for the "extended.conf destructive switches" block (CR-01/WR-01), added 2026-09-14.
 # Same contract as DRIFT_APPDATA_ROOT above, and the precedent is stated explicitly because it is
@@ -2125,8 +2188,12 @@ fi
 # 2026-09-03; see the REACHABILITY note on the transcode block below, which points at the single
 # canonical statement in scripts/check-jellyfin-transcode.sh.
 echo -n "Music consumers audit: "
+CONSUMERS_OVERRIDDEN=0
+if [ "$CONSUMERS_SCRIPT" != "/mnt/fast/stacks/scripts/check-music-consumers.sh" ]; then
+    CONSUMERS_OVERRIDDEN=1
+fi
 CONSUMERS_OUT=$(ssh -n $SSH_OPTS root@172.16.1.159 \
-    "timeout $REMOTE_TIMEOUT bash /mnt/fast/stacks/scripts/check-music-consumers.sh 2>&1")
+    "timeout $REMOTE_TIMEOUT bash $CONSUMERS_SCRIPT 2>&1")
 CONSUMERS_RC=$?   # ssh propagates the remote exit status — do NOT pipe before capturing this
 # Strip ANSI colour separately. \x1b is a GNU sed extension and this script runs on macOS, so the
 # ESC is spelled with bash's $'...' quoting instead.
@@ -2168,9 +2235,61 @@ elif [ "$CONSUMERS_RC" -eq 0 ]; then
         echo "  The section heading this fold-in anchors on has changed, so nothing here was"
         echo "  actually read. State is UNKNOWN, not green. See check-music-consumers.sh's summary."
         EXIT_CODE=1
+    elif [ "$CONSUMERS_OVERRIDDEN" -eq 1 ]; then
+        # ADDITIVE CONTRACT. An overridden CONSUMERS_SCRIPT may drive any arm of this fold-in, but
+        # it may never produce the tick: the audit that answered was not the deployed one, so this
+        # run says nothing about the estate. Same shape as DRIFT_ROOT_OVERRIDDEN / D03_OVERRIDDEN /
+        # D04_OVERRIDDEN / EXTCONF_OVERRIDDEN. There is no success-producing override in this file.
+        echo "⚠️  CONSUMERS_SCRIPT override in effect — this run cannot report the consumers green"
+        echo "  ran: $CONSUMERS_SCRIPT (not the deployed path). Exit 0 from an overridden audit is"
+        echo "  evidence about THAT file, not about the estate."
+        echo "$SUMMARY" | sed 's/^/  /'
+        EXIT_CODE=1
     else
         echo "✅ Both consumers see the library"
         echo "$SUMMARY" | sed 's/^/  /'
+    fi
+elif [ "$CONSUMERS_RC" -eq 3 ]; then
+    # EXIT 3 = CONF-04 PENDING (WR-03, plan 06-17, 2026-09-22). NOT a broken audit and NOT green.
+    #
+    # check-music-consumers.sh reads the D-22 artist rows successfully and finds one or more of
+    # them sitting at a RECORDED BASELINE rather than at target. Until 2026-09-22 that state
+    # printed in yellow and exited 0, and this fold-in printed a tick over it. It then landed in
+    # the generic `else` below for a few minutes of this plan — non-green, which was right, but
+    # labelled `❌ BROKEN`, which was wrong: nothing is broken, the instrument worked, the estate
+    # is not where CONF-04 needs it to be. Same verdict, correct label.
+    #
+    # ⚠ EXIT_CODE=1 HERE IS THE LOAD-BEARING HALF, AND IT IS DELIBERATE. This script exits 0 when
+    #   healthy and non-zero on any violation; a REQUIREMENT that is measured and open is not
+    #   healthy. So CONF-04 pending makes the whole health check non-zero for as long as it is
+    #   open — that is not a bug to be tuned out, it is what makes a post-Phase-7 REGRESSION back
+    #   to the baseline detectable by tooling rather than only by a human reading yellow text.
+    #   It clears when ROADMAP entry criterion E6 discharges the Jellyfin half, and on nothing
+    #   else. Do not add an override: there is no success-producing knob anywhere in this file.
+    #
+    # The anchor guard is applied exactly as the `-eq 0` arm applies it. A renumbered `📊 6.`
+    # heading must not be able to hide behind this new arm — an audit whose summary cannot be
+    # read is UNKNOWN even when its exit status is one we understand.
+    SUMMARY=$(echo "$CONSUMERS_OUT" | sed -n '/^📊 6\. Summary/,$p' \
+              | grep -E 'MA version|artist rows|FAILURES total')
+    if [ -z "$SUMMARY" ]; then
+        echo "⚠️  UNKNOWN — the audit exited 3 but its '📊 6. Summary' block was not found."
+        echo "  The section heading this fold-in anchors on has changed, so the pending counts"
+        echo "  were not actually read. State is UNKNOWN, not merely pending, and not green."
+        EXIT_CODE=1
+    else
+        echo "⚠️  CONF-04 MEASURED AND OPEN — artist rows at baseline, not at target (exit 3)"
+        echo "  This is NOT an audit failure and NOT a pass. The audit's own words:"
+        # BOUNDED range. The end pattern is emitted by the same exit-3 block that produces status
+        # 3, so it exists whenever this arm is reached — but a sed range whose end never matches
+        # runs to EOF, so the `1,8p` cap is the guard rather than a trust in the end pattern.
+        # (`sed -n '1,8p'` is used rather than `head -8`: `head` closes the pipe and the upstream
+        # sed takes a SIGPIPE, which is the 141-propagation shape this phase has been bitten by.)
+        echo "$CONSUMERS_OUT" | sed -n '/CONF-04 IS NOT CLOSED/,/Discharges on ROADMAP/p' \
+            | sed -n '1,8p' | sed 's/^ */    /'
+        echo "  Summary:"
+        echo "$SUMMARY" | sed 's/^/    /'
+        EXIT_CODE=1
     fi
 else
     echo "❌ BROKEN (check-music-consumers.sh exit $CONSUMERS_RC)"
