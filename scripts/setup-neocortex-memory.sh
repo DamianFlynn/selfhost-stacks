@@ -203,6 +203,9 @@ SQL
       echo "PUID=568"
       echo "PGID=568"
       echo "TZ=Europe/Dublin"
+      # agentic-os-db has no TLS; node-postgres negotiates SSL by default and dies on the first
+      # connection without this. compose also defaults it, this keeps .env self-describing.
+      echo "PGSSLMODE=disable"
       echo "MEMORY_DATABASE_URL=postgres://$API_ROLE:$api_pw@$DB_CONTAINER:5432/$NEW_DB"
       echo "MEMORY_LEGACY_DATABASE_URL=postgres://$RO_ROLE:$ro_pw@$DB_CONTAINER:5432/$LEGACY_DB"
       echo "MEMORY_LEGACY_BRIDGE_USER_ID="
