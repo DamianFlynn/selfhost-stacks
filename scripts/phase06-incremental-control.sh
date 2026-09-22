@@ -31,8 +31,22 @@
 #   2  UNKNOWN   an instrument COULD NOT LOOK - remote timeout (124), unreadable pickle, a
 #                vanished tree. "Could not look" is a distinct outcome from "nothing is wrong"
 #                and it is NEVER a pass.
-#   3  REFUSED   a preflight refused to run: dirty destination, source outside the fence, or the
-#                two overlays not exactly one key apart. Nothing was measured.
+#   3  REFUSED   a preflight refused to run: dirty destination, source outside the fence, the
+#                two overlays not exactly one key apart, or a USAGE error (a missing or illegal
+#                `--arm` value). Nothing was measured.
+#
+#   PRECEDENCE, when one run BOTH measured a failure AND had an instrument that could not look:
+#   2 (UNKNOWN) OUTRANKS 1 (FAIL). The two conditions are not mutually exclusive, so this is a
+#   decision, not an accident of ordering. Reason: this estate's standing rule (CLAUDE.md and
+#   README § Health Checks) is that "could not look" is kept distinct from "nothing is wrong"
+#   and is never folded into another verdict - reporting a measured red while an instrument was
+#   blind asserts a cause the run did not establish. THE SIBLING INSTRUMENT WRITTEN IN THIS SAME
+#   PHASE, scripts/phase06-oracle.sh, IMPLEMENTS THE IDENTICAL CONVENTION: it consults its
+#   UNKNOWN counter before its RED counter. (Its numbering differs - there UNKNOWN is 3 and
+#   usage/refusal is 2 - but the precedence is the same, and each header names the other.)
+#   Driven by `--self-test` section 7/7, which asserts the blind verdict wins when both hold,
+#   and by section 6/7 for the re-offer classifier the same run depends on.
+# ==============================================================================================
 #
 # WHAT THIS MEASURES (D-31, CONF-02)
 #   `ImportTask.finalize()` calls `save_history()` on a SKIPPED task unless
@@ -555,6 +569,33 @@ assert_real_state() { # $1 = label; 0 = unchanged, 1 = MOVED, 2 = could not look
 }
 
 # --- One arm ----------------------------------------------------------------------------------
+# --- The arm verdict, and the RED-vs-UNKNOWN precedence ---------------------------------------
+# THE TWO CONDITIONS ARE NOT MUTUALLY EXCLUSIVE. A single arm can both measure a failure and
+# have an instrument that could not look, so which one is consulted first is a DECISION, not an
+# accident of ordering - which is why it is factored out here, stated in the EXIT CODES block
+# and driven by `--self-test` rather than left implicit in run_arm's tail.
+#
+# THE DECISION: a blind instrument OUTRANKS a measured red. [IN-08, plan 06-20] Reason: this
+# estate's standing rule is that "could not look" is kept distinct from "nothing is wrong" and
+# is never folded into another verdict; reporting a measured red while an instrument was blind
+# asserts a cause the run did not establish. The sibling instrument written in this same phase,
+# scripts/phase06-oracle.sh, consults its UNKNOWN counter first for the same reason. Before this
+# plan the two disagreed, so no reader could infer the convention from either.
+#
+# Neither condition's MEANING nor its exit code changed here - only which is consulted first.
+arm_verdict() { # $1 = failed (0/1)  $2 = unknown (0/1)  $3 = arm label; returns 2 / 1 / 0
+  local failed="$1" unknown="$2" arm="${3:-?}"
+  if [ "$unknown" -ne 0 ]; then
+    say "  ARM $arm: UNKNOWN (an instrument could not look - not a pass; this OUTRANKS a measured red in the same run)"
+    return 2
+  fi
+  if [ "$failed" -ne 0 ]; then
+    say "  ARM $arm: FAIL (a measured negative - record it, do not retune)"
+    return 1
+  fi
+  return 0
+}
+
 run_arm() { # $1 = a|b
   local arm="$1" root="" want_hist="" want_offer="" prog="" rc=0 failed=0 unknown=0
   local sha_local="" sha_remote="" mode=""
@@ -741,8 +782,8 @@ run_arm() { # $1 = a|b
 
   say ""
   rule
-  if [ "$failed" -ne 0 ]; then say "  ARM $arm: FAIL (a measured negative - record it, do not retune)"; return 1; fi
-  if [ "$unknown" -ne 0 ]; then say "  ARM $arm: UNKNOWN (an instrument could not look - not a pass)"; return 2; fi
+  rc=0; arm_verdict "$failed" "$unknown" "$arm" || rc=$?
+  if [ "$rc" -ne 0 ]; then return "$rc"; fi
   say "  ARM $arm: PASS - taghistory $want_hist, re-offer $want_offer, source untouched, real state unmoved"
   return 0
 }
@@ -777,11 +818,11 @@ st_expect() { # $1 = label  $2 = expected  $3 = got
 }
 
 self_test() {
-  local td="" py="" got="" rc=0 f=""
+  local td="" py="" got="" rc=0 f="" verdict="" vf="" vu="" expect="" desc=""
   td="$(mktemp -d "${TMPDIR:-/tmp}/p6-08-selftest-XXXXXX")"
 
   say ""
-  say "== --self-test 1/5: the taghistory classifier, over REAL pickles =="
+  say "== --self-test 1/7: the taghistory classifier, over REAL pickles =="
   rule
   py=""
   for f in /venv/bin/python python3 python; do
@@ -826,7 +867,7 @@ PYEOF
   classify_taghistory "beets said nothing at all"; st_expect "no marker line at all (python missing, truncated transport)" "unreadable" "$TAGHIST_CLASS"
 
   say ""
-  say "== --self-test 2/5: the one-key overlay refusal =="
+  say "== --self-test 2/7: the one-key overlay refusal =="
   rule
   emit_overlay "$ARM_A_ROOT" no  > "$td/ok.a.yaml"
   emit_overlay "$ARM_B_ROOT" yes > "$td/ok.b.yaml"
@@ -861,7 +902,7 @@ PYEOF
   st_expect "a missing overlay file is could-not-look, not accept" "couldnotlook" "$got"
 
   say ""
-  say "== --self-test 3/5: the dirty-destination and root refusals, driven locally =="
+  say "== --self-test 3/7: the dirty-destination and root refusals, driven locally =="
   rule
   # The refusal lives in the remote program, so drive that program's text with the local sh.
   write_prog_prepare "$td/prep.sh"
@@ -900,7 +941,7 @@ PYEOF
   fi
 
   say ""
-  say "== --self-test 4/5: the three-outcome manifest comparison =="
+  say "== --self-test 4/7: the three-outcome manifest comparison =="
   rule
   printf 'a\tb\tc\n' > "$td/m1"; printf 'a\tb\tc\n' > "$td/m2"; printf 'a\tb\tX\n' > "$td/m3"; : > "$td/m4"
   rc=0; manifest_compare "$td/m1" "$td/m2" || rc=$?
@@ -917,7 +958,7 @@ PYEOF
   st_expect "two EMPTY manifests (must not pass vacuously)" "couldnotlook" "$got"
 
   say ""
-  say "== --self-test 5/5: the source fence =="
+  say "== --self-test 5/7: the source fence =="
   rule
   while IFS='|' read -r expect given desc; do
     case "${expect:-}" in ""|"#"*) continue ;; esac
@@ -932,6 +973,47 @@ refuse|/mnt/tank/media/Music/Abba|the library itself - never a source for a thro
 refuse|relative/path|a relative path
 refuse|/downloads/incomplete/music|inside /downloads but outside the allow-prefix
 CASES
+
+  say ""
+  say "== --self-test 6/7: the step-4 re-offer classifier, over synthetic transcripts =="
+  rule
+  # IN-10. The PAIR is the point: widening the path count must classify the multi-album case
+  # WITHOUT changing the single-album answer. A widening proven on only the new case is how a
+  # widening becomes a regression.
+  # The counts are printf ARGUMENTS, never spelled into the fixture text, so the guard that
+  # forbids a pinned count anywhere in this file keeps its teeth: the only place a count can be
+  # written literally is a match pattern, which is precisely what IN-10 forbids.
+  for f in 1 2 17; do
+    printf 'Skipped %s paths.\n' "$f" > "$td/reoffer.skip.$f"
+    st_expect "a skipped-path count of $f" "not-offered" "$(classify_reoffer "$td/reoffer.skip.$f")"
+  done
+  printf 'Album: /tmp/p6b/src\n  01.mp3\n'        > "$td/reoffer.album"
+  printf 'Skipped %s paths.\nAlbum: /tmp/p6b/src\n' 2 > "$td/reoffer.both"
+  printf 'beets said something else entirely\n'   > "$td/reoffer.junk"
+  : > "$td/reoffer.empty"
+  st_expect "an Album: line and no skip"                           "offered"       "$(classify_reoffer "$td/reoffer.album")"
+  st_expect "BOTH markers at once (must not resolve to either)"    "contradictory" "$(classify_reoffer "$td/reoffer.both")"
+  st_expect "an unrecognised transcript (still falls through)"     "indeterminate" "$(classify_reoffer "$td/reoffer.junk")"
+  st_expect "an EMPTY transcript (must not pass vacuously)"        "indeterminate" "$(classify_reoffer "$td/reoffer.empty")"
+
+  say ""
+  say "== --self-test 7/7: the RED-vs-UNKNOWN precedence (a blind instrument outranks a measured red) =="
+  rule
+  # IN-08. Two cases at minimum, because one proves only that a branch exists; the full 2x2 is
+  # cheap and shows the ordering is a decision over two non-exclusive conditions.
+  # $1 = failed  $2 = unknown
+  while IFS='|' read -r vf vu expect desc; do
+    case "${vf:-}" in ""|"#"*) continue ;; esac
+    rc=0; got="$(arm_verdict "$vf" "$vu" "precedence-case" 2>&1)" || rc=$?
+    case "$rc" in 0) verdict="pass" ;; 1) verdict="fail" ;; 2) verdict="unknown" ;; *) verdict="rc$rc" ;; esac
+    st_expect "$desc" "$expect" "$verdict"
+    if [ -n "$got" ]; then say "        verdict line:$got"; else say "        (silent - a pass prints its own line in run_arm)"; fi
+  done <<'PRECEDENCE'
+1|1|unknown|a measured failure AND a blind read in the same run - the BLIND verdict must win
+1|0|fail|a measured failure with NO blind read - the red must stand
+0|1|unknown|a blind read with no measured failure
+0|0|pass|neither - the arm passes
+PRECEDENCE
 
   rm -rf "$td"
   say ""
