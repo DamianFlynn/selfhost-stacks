@@ -966,6 +966,20 @@ EXTCONF_PATH_Q=$(printf '%q' "$EXTCONF_PATH")
 #                     healthy — any non-default value is fatal on its own.
 DASH_HOST="${DASH_HOST:-root@172.16.1.159}"
 DASH_RESOLVE_IP="${DASH_RESOLVE_IP:-127.0.0.1}"
+# R4-07, 2026-09-23 (plan 06-35). BOTH HALVES: a code widening and a claim correction, in miniature.
+# DASH_RESOLVE_IP reaches the dashboard probe's `curl --resolve` REMOTE command string, so it meets
+# the GC-17 / R3-01 census criterion — which is "every knob that reaches a remote command string is
+# rendered once, and only the rendered form is interpolated", deliberately broader than "every
+# PATH" — and until this edit it crossed raw. The claim half is the half that mattered: no plan's
+# census line named it, so running the recipe in that block as written surfaced this site as an
+# un-rendered one that nothing owned.
+# THE BOUND, from the review and not inflated: a split word makes `curl` fail LOUDLY rather than
+# quietly, any non-default value already forces EXIT_CODE=1 at the override guard below, and the
+# default contains no space. Nothing was broken; the census was.
+# The rendered form is swapped into the REMOTE STRING ONLY. The override comparison and the
+# operator echo in the failure arm keep the RAW value deliberately — rendering those would print
+# backslashes at a human reading a diagnostic.
+DASH_RESOLVE_IP_Q=$(printf '%q' "$DASH_RESOLVE_IP")
 
 # WR-01: THE TWO PROBES BELOW USED TO BE UNBOUNDED, ON A JUSTIFICATION THAT WAS FALSE.
 # Corrected 2026-09-03 by plan 02.1-15. The withdrawn claim was that the only way these two can
@@ -1351,7 +1365,7 @@ if [ "$DASH_RESOLVE_IP" != "127.0.0.1" ]; then
     EXIT_CODE=1
 fi
 echo -n "Traefik dashboard: "
-DASH_OUT=$(ssh -n $SSH_OPTS "$DASH_HOST" "timeout $REMOTE_TIMEOUT curl -s -o /dev/null -w '%{http_code} %{redirect_url}' --resolve traefik.deercrest.info:443:$DASH_RESOLVE_IP https://traefik.deercrest.info/dashboard/")
+DASH_OUT=$(ssh -n $SSH_OPTS "$DASH_HOST" "timeout $REMOTE_TIMEOUT curl -s -o /dev/null -w '%{http_code} %{redirect_url}' --resolve traefik.deercrest.info:443:$DASH_RESOLVE_IP_Q https://traefik.deercrest.info/dashboard/")
 DASH_RC=$?   # ssh propagates the remote status — NO local pipe above, see the note above
 DASH_STATUS=$(printf '%s' "$DASH_OUT" | awk '{print $1}')
 DASH_REDIR=$(printf '%s' "$DASH_OUT" | awk '{print $2}')
@@ -1483,8 +1497,15 @@ else
     #   (CONSUMERS_SCRIPT). FIVE MORE WERE STILL RAW and the sentence did not know about them, so
     #   plan 06-30 rendered those too: D03_FLASK_CONTAINER, D03_CLI_COMPOSE, D03_CLI_PROFILE,
     #   MUSIC_UNDERSCORE_ROOT (TWO remote sites, one knob) and EXTCONF_PATH.
+    #   AND THE LIST WAS STILL SHORT. Plan 06-35 rendered what round 4 found that neither line above
+    #   covers: DRIFT_APPDATA_ROOT, which reaches the four `_drift_pair` call sites below as ONE
+    #   knob rendered PER PAIR into four whole paths (R4-01), and DASH_RESOLVE_IP at the dashboard
+    #   probe's `curl --resolve` string (R4-07).
+    #   The two lines above are left EXACTLY as they stood, on purpose. They are accurate records of
+    #   what those plans owned; rewriting them to match today's file would turn two true historical
+    #   statements into two claims about a file state neither of them describes.
     #
-    #   DO NOT TRUST THE LIST ABOVE AS A CURRENT TOTAL EITHER — it is a record of what two plans
+    #   DO NOT TRUST THE LIST ABOVE AS A CURRENT TOTAL EITHER — it is a record of what past plans
     #   owned, not a measurement of what the file holds today. To RE-DERIVE the census, cross-
     #   reference the knob definitions against the remote call sites:
     #       /usr/bin/grep -nE '^[A-Z0-9_]+="\$\{[A-Z0-9_]+:-' scripts/quick-health-check.sh
@@ -1499,9 +1520,20 @@ else
     #   full gap-closure round while this very sentence declared the class closed. A prohibition and
     #   a wrong census in the same comment block is how a reader concludes the work is done.
     #
-    #   THE BOUND, and it has not changed: all nine are ADDITIVE knobs that cannot produce a green
-    #   tick, every default value contains no spaces, and the EXTCONF_PATH injection consequence is
-    #   static reasoning that was NEVER EXECUTED. Four of the five sites 06-30 owned failed CLOSED
+    #   THE BOUND, and it has not changed: EVERY ONE of these is an ADDITIVE knob that cannot
+    #   produce a green tick, every default value contains no spaces, and the EXTCONF_PATH injection
+    #   consequence is static reasoning that was NEVER EXECUTED.
+    #
+    #   ⚠️ HOW MANY THERE ARE IS DELIBERATELY NOT STATED HERE — R4-05, corrected 2026-09-23 by plan
+    #   06-35. A count stood in the sentence above, and THIS VERY EDIT MOVED IT, which is the entire
+    #   argument: a number written into a file that greps itself is moved by the next edit without
+    #   touching the sentence that states it. If you need the figure, RUN THE RECIPE ABOVE — that is
+    #   what the recipe is for. This is the THIRD CONSECUTIVE ROUND in which that exact class
+    #   shipped — GC-10, then R3-05, then R4-05, the last of them in a sibling file in the very
+    #   round that corrected it here — which is why this block states lists and a recipe and carries
+    #   no total at all.
+    #
+    #   Four of the five sites 06-30 owned failed CLOSED
     #   on a space — `find`/`docker` exit non-zero, `pipefail` fires, the existing could-not-look
     #   arm catches it — so they degraded a knob from "drives the branch" to "cannot be driven".
     #   The one exception worth naming is MUSIC_UNDERSCORE_ROOT, where both split words naming real
@@ -1518,24 +1550,61 @@ else
     # ⛔ DO NOT "fix" a future site of this shape by hand-escaping quotes inside the command string
     #   instead. A `\"` wrapper survives a space but not a quote and not a `$`, and a half-measure
     #   that LOOKS like a fix is worse here than the raw interpolation it replaces.
-    #   THIS PARAGRAPH WAS RIGHT WHEN IT WAS WRITTEN AND IS UNCHANGED — it was simply never applied
-    #   to the EXTCONF_PATH site three hundred lines below it, which carried exactly the forbidden
-    #   shape through the whole of round 2 (R3-01, closed 2026-09-23 by plan 06-30). That a
-    #   documented-forbidden instance can survive a round inside the file documenting it is why the
-    #   census above is now a recipe and not a number: the prohibition was never the weak part.
+    #   THIS PARAGRAPH WAS RIGHT WHEN IT WAS WRITTEN AND IS UNCHANGED — AGAIN. What has now been
+    #   wrong TWICE RUNNING is the sentence that followed it claiming the class was closed.
+    #
+    #   WHAT ROUND 3 SAID, AND WHY IT IS WITHDRAWN (R4-01, plan 06-35). R3-01 (plan 06-30) found the
+    #   forbidden shape at the EXTCONF_PATH site three hundred lines below this paragraph and closed
+    #   it — then wrote here that the paragraph had merely gone unapplied AT THAT ONE SITE, wording
+    #   that implied the instance was singular and the class now closed. (Paraphrased, not quoted,
+    #   the same convention the other withdrawn claims in this file use: a false statement left
+    #   in-band verbatim is one that gets re-copied, and it is also one a mechanical grep can no
+    #   longer prove absent.) THAT SENTENCE WAS FALSE WHEN IT WAS WRITTEN.
+    #
+    #   FOUR MORE INSTANCES WERE LIVE AT THAT MOMENT, eight to eleven lines BELOW this paragraph,
+    #   inside the very DRIFT_CMD string the paragraph is embedded in: the four `_drift_pair` call
+    #   sites, each interpolating the overridable DRIFT_APPDATA_ROOT inside a hand-escaped quote
+    #   wrapper in the remote command string — precisely the shape forbidden three lines up. Round 4
+    #   found them; plan 06-35 rendered all four, ONE WHOLE PATH PER PAIR, immediately below.
+    #   So this is the SECOND CONSECUTIVE ROUND in which a documented-forbidden shape survived
+    #   inside the file that documents it, and the second in which the CLOSING SENTENCE was the
+    #   defect rather than the prohibition. The prohibition was never the weak part — which is also
+    #   why the census above is a recipe and not a number.
+    #
+    #   THE BOUND, carried over intact, and NOT to be dramatised: these are ADDITIVE operator knobs,
+    #   every default contains no space, a non-default DRIFT_APPDATA_ROOT ALREADY forces EXIT_CODE=1
+    #   at the override guard above, a broken remote command lands in the could-not-look arm below,
+    #   and there is NO PRIVILEGE CROSSING — the operator who can set the knob already has root on
+    #   LXC 100. THE DEFECT IS THE CLAIM, NOT THE EXPLOIT.
+    #
     #   Where a path must reach a remote `sh -c`, pass it as a POSITIONAL PARAMETER — the shape
-    #   scripts/phase06-oracle.sh's remote_sh_c() uses, and the shape EXTCONF_CMD now uses.
+    #   scripts/phase06-oracle.sh's remote_sh_c() uses, and the shape EXTCONF_CMD now uses. Where it
+    #   reaches a remote function that ALREADY quotes its own parameter — the `_drift_pair` case
+    #   below, whose body quotes "$3" — render the WHOLE word and interpolate it UNQUOTED.
     DRIFT_REPO_ROOT_Q=$(printf '%q' "$DRIFT_REPO_ROOT")
+    # R4-01, 2026-09-23 (plan 06-35). ONE RENDERING PER PAIR, AND EACH RENDERS THE WHOLE
+    # CONCATENATED PATH — not the root alone with a suffix bolted on afterwards. `printf '%q'`
+    # renders a complete WORD: a suffix appended to the rendered value sits OUTSIDE the escaping and
+    # reintroduces the split on the first space, which is the one way this fix ships broken while
+    # looking right. The call sites below interpolate $DRIFT_AUDIO_Q, $DRIFT_SABBEETS_Q,
+    # $DRIFT_SURVIVOR_Q and $DRIFT_FLASK_Q UNQUOTED, and that is correct rather than an oversight:
+    # _drift_pair's body already quotes "$3", so the remote-side quoting is supplied there and the
+    # call line must add none. See the ⛔ paragraph above for what was here before and why the
+    # sentence that said the class was closed is withdrawn.
+    DRIFT_AUDIO_Q=$(printf '%q' "$DRIFT_APPDATA_ROOT/arrs/sabnzbd/config/scripts/audio.bash")
+    DRIFT_SABBEETS_Q=$(printf '%q' "$DRIFT_APPDATA_ROOT/arrs/sabnzbd/config/scripts/beets-config.yaml")
+    DRIFT_SURVIVOR_Q=$(printf '%q' "$DRIFT_APPDATA_ROOT/arrs/beets/config/config.yaml")
+    DRIFT_FLASK_Q=$(printf '%q' "$DRIFT_APPDATA_ROOT/arrs/beets/config/beets-flask/config.yaml")
     DRIFT_CMD="set -o pipefail; cd $DRIFT_REPO_ROOT_Q || exit 3
 _drift_pair() {
   r=\$(timeout $REMOTE_TIMEOUT git show \"HEAD:\$2\" | sha256sum | cut -d' ' -f1) || exit 4
   h=\$(timeout $REMOTE_TIMEOUT sha256sum \"\$3\" | cut -d' ' -f1) || exit 5
   echo \"\$1 repo=\$r host=\$h\"
 }
-_drift_pair audio.bash stacks/selfhosted/arrs/sabnzbd/audio.bash \"$DRIFT_APPDATA_ROOT/arrs/sabnzbd/config/scripts/audio.bash\"
-_drift_pair sabnzbd-beets-config.yaml stacks/selfhosted/arrs/sabnzbd/beets-config.yaml \"$DRIFT_APPDATA_ROOT/arrs/sabnzbd/config/scripts/beets-config.yaml\"
-_drift_pair survivor-config.yaml stacks/selfhosted/arrs/beets/config.yaml \"$DRIFT_APPDATA_ROOT/arrs/beets/config/config.yaml\"
-_drift_pair flask-config.yaml stacks/selfhosted/arrs/beets/flask-config.yaml \"$DRIFT_APPDATA_ROOT/arrs/beets/config/beets-flask/config.yaml\""
+_drift_pair audio.bash stacks/selfhosted/arrs/sabnzbd/audio.bash $DRIFT_AUDIO_Q
+_drift_pair sabnzbd-beets-config.yaml stacks/selfhosted/arrs/sabnzbd/beets-config.yaml $DRIFT_SABBEETS_Q
+_drift_pair survivor-config.yaml stacks/selfhosted/arrs/beets/config.yaml $DRIFT_SURVIVOR_Q
+_drift_pair flask-config.yaml stacks/selfhosted/arrs/beets/flask-config.yaml $DRIFT_FLASK_Q"
     DRIFT_OUT=$(ssh -n $SSH_OPTS root@172.16.1.159 "$DRIFT_CMD")
     DRIFT_RC=$?   # ssh propagates the remote status — NO local pipe above, see the note above
     if [ -z "$DRIFT_OUT" ] && [ "$DRIFT_RC" -ne 124 ]; then
