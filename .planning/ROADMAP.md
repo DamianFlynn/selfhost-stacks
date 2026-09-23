@@ -911,7 +911,7 @@ the last cheap moment before a path-format error can be applied at scale.
      clause fired and the demonstration was relocated to a genuine one-key rank-0 flip on another
      drawn row (`Benson Boone / American Heart`: `['XW','US']` → XW, `['US','XW']` → US, both
      10 tracks, distance 0.0). `GB`-works-and-`UK`-is-silently-inert was proven separately.*
-**Plans**: 29 plans in 13 waves *(14 executed 2026-09-20/21; plans 06-15 … 06-21 added 2026-09-22 as GAP CLOSURE after `06-VERIFICATION.md` scored 5/6 — the D-04 "no bare `beet` invocation" assertion was vacuous (CR-01) — and to disposition all 24 findings in `06-REVIEW.md`, which the same verification marked NOT WIRED. Plans 06-22 … 06-29 added 2026-09-22 as **GAP CLOSURE ROUND 2**, planned against `06-REVIEW-GAP.md` — a code review of round 1's own changes that found 1 BLOCKER and 7 Warnings in the new code, plus two further findings from a cross-family adjudication. GC-03 is CR-01 reproduced one nesting level in, so the phase must not close on "CR-01 fixed" until round 2 lands.)*
+**Plans**: 34 plans in 15 waves *(14 executed 2026-09-20/21; plans 06-15 … 06-21 added 2026-09-22 as GAP CLOSURE after `06-VERIFICATION.md` scored 5/6 — the D-04 "no bare `beet` invocation" assertion was vacuous (CR-01) — and to disposition all 24 findings in `06-REVIEW.md`, which the same verification marked NOT WIRED. Plans 06-22 … 06-29 added 2026-09-22 as **GAP CLOSURE ROUND 2**, planned against `06-REVIEW-GAP.md` — a code review of round 1's own changes that found 1 BLOCKER and 7 Warnings in the new code, plus two further findings from a cross-family adjudication. GC-03 is CR-01 reproduced one nesting level in, so the phase must not close on "CR-01 fixed" until round 2 lands. Plans 06-30 … 06-34 added 2026-09-23 as **GAP CLOSURE ROUND 3**, planned against `06-REVIEW-GAP2.md` — a code review of **round 2's own** changes, which found **0 Critical, 5 Warning, 5 Info**. Round 3 is deliberately five plans against round 2's eight: half its findings are Info and several are comment corrections, and the goal is to stop the recursion rather than feed it.)*
 
 | Plan | Objective |
 |------|-----------|
@@ -1023,6 +1023,23 @@ target stops moving is a citation that is stale again by the time the round clos
 **Wave 13 — GAP CLOSURE — ROUND 2** *(blocked on Waves 10-12)*
 
 - [x] 06-29-PLAN.md — the 17-row round-2 disposition register, `06-REVIEW-GAP.md` wired to it, `DEF-06-29-*` entries, and the roadmap and state files told the truth
+
+**Wave 14 — GAP CLOSURE — ROUND 3** *(added 2026-09-23; planned against `06-REVIEW-GAP2.md`, a code
+review of round **2's** own gap-closure changes. It found **0 Critical, 5 Warning, 5 Info** — no
+BLOCKER and no reproducible false green — and its central charge is that round 2 closed several
+defect classes PARTIALLY and then wrote in-band comments claiming they were closed COMPLETELY. So
+several of these fixes are deliberately claim corrections rather than code widenings, and each
+plan states which it is doing per finding. These four plans own four different files and run in
+parallel.)*
+
+- [ ] 06-30-PLAN.md — finish GC-17's census: quote the five surviving overridable knobs, pass the sabnzbd `extended.conf` path positionally instead of in a hand-escaped wrapper the same comment forbids, and retract the thirteenth exit-code notice's stale delta; closes R3-01 and R3-05
+- [ ] 06-31-PLAN.md — pin and drive the oracle's self-test case count so a dropped section cannot pass under a green banner, make the layer-3 hashes measurable for a space-bearing path, give the AFTER side the BEFORE side's emptiness guards, and narrow the fence claim; closes R3-02, R3-03, R3-04 and R3-06
+- [ ] 06-32-PLAN.md — widen both in-container traps to the signals a bounded remote kill delivers and give both fences GC-02's character-class predicate instead of a bare glob that matches `/`; closes R3-09 and R3-10
+- [ ] 06-33-PLAN.md — make case 6 announce the gate it actually has rather than a red count nothing compares, and correct the GC-13 justification whose stated reason does not apply; closes R3-07 and R3-08
+
+**Wave 15 — GAP CLOSURE — ROUND 3** *(blocked on Wave 14)*
+
+- [ ] 06-34-PLAN.md — the 10-row round-3 disposition register, `06-REVIEW-GAP2.md` wired to it, `DEF-06-34-*` entries carrying the residue **and both of the round's deliberate refusals**, and the roadmap and state files told the truth by hand
 
 **Phase 6 disposition:** **CLOSED WITH ONE OPEN REQUIREMENT — CONF-04**, named, on its Jellyfin half
 only. Criteria 1, 2, 3 and 5 are TRUE and were re-measured from live state at close. Criterion 4
