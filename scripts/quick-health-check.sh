@@ -835,11 +835,18 @@ DRIFT_EXPECT_FLASK_CONFIG="${DRIFT_EXPECT_FLASK_CONFIG:-}"
 # healthy. There is deliberately NO success-producing override and NO sentinel that skips the
 # block; do not add one.
 D03_FLASK_CONTAINER="${D03_FLASK_CONTAINER:-beets-flask}"
+# R3-01, 2026-09-23 (round-3 gap closure, plan 06-30). Rendered HERE, beside the definition and not
+# at the use site, so a second future use cannot pick up the raw form. See the GC-17 census block at
+# the vendored-drift comparison for the full rule and its bash dependency.
+D03_FLASK_CONTAINER_Q=$(printf '%q' "$D03_FLASK_CONTAINER")
 D03_BEETS_CONFIG_SOURCE="${D03_BEETS_CONFIG_SOURCE:-/mnt/fast/appdata/arrs/beets/config/config.yaml}"
 D03_BEETS_CONFIG_DEST="${D03_BEETS_CONFIG_DEST:-/config/config.yaml}"
 D03_MEDIA_SOURCE="${D03_MEDIA_SOURCE:-/mnt/tank/media}"
 D03_CLI_COMPOSE="${D03_CLI_COMPOSE:-stacks/selfhosted/arrs/beets/beets.yaml}"
+# R3-01, 2026-09-23 (plan 06-30). Same rule, same siting reason as D03_FLASK_CONTAINER_Q above.
+D03_CLI_COMPOSE_Q=$(printf '%q' "$D03_CLI_COMPOSE")
 D03_CLI_PROFILE="${D03_CLI_PROFILE:-manual}"
+D03_CLI_PROFILE_Q=$(printf '%q' "$D03_CLI_PROFILE")
 # D03_REPO_ROOT, added 2026-09-22 by plan 06-16 (IN-13). The CLI-render half `cd`s into the host
 # checkout before `docker compose config`, and that `cd` was HARD-CODED while the two blocks either
 # side of it grew overridable roots in the same 2026-09-21 commit, for the stated reason that an
@@ -899,6 +906,13 @@ CONSUMERS_SCRIPT="${CONSUMERS_SCRIPT:-/mnt/fast/stacks/scripts/check-music-consu
 #                  mounted from the repo and it is not vendored — see (c) at the block itself.
 EXTCONF_HOST="${EXTCONF_HOST:-root@172.16.1.159}"
 EXTCONF_PATH="${EXTCONF_PATH:-/config/extended.conf}"
+# R3-01, 2026-09-23 (plan 06-30). This one is the sharp member of the set: the block it feeds reads
+# the `requireBeetsMatch` guard, and until this edit the value crossed into the remote command
+# string wrapped in hand-escaped double quotes inside a single-quoted remote `sh -c` — the exact
+# shape the GC-17 prohibition names. The rendered form below now reaches the remote shell as a
+# POSITIONAL PARAMETER of that `sh -c`, so it is never parsed as command text at all. See the
+# EXTCONF_CMD assignment and the GC-17 census block for why.
+EXTCONF_PATH_Q=$(printf '%q' "$EXTCONF_PATH")
 
 # ENV OVERRIDES for the TRAEFIK DASHBOARD PROBE, added 2026-09-15 (quick task 260915-k9p). Same
 # contract as the four above, stated again rather than cross-referenced because it is the only
@@ -1423,17 +1437,43 @@ else
     fi
     # ── GC-17, 2026-09-22 (round-2 gap closure, plan 06-26) ─────────────────────────────────────
     # EVERY OVERRIDABLE PATH THAT CROSSES INTO A REMOTE COMMAND STRING IS RENDERED ONCE WITH
-    # `printf '%q'`, AND ONLY THE RENDERED FORM IS INTERPOLATED. There are FOUR such sites in this
-    # file and they were all raw: this one, the D-03 CLI render, the D-04 scan and the consumers
-    # fold-in. A raw value word-splits on the REMOTE shell, so an override naming a path that
-    # contains a space failed with a shell error instead of driving the branch the knob exists to
-    # drive — and "an undriveable branch is an unproven branch" is the ONLY reason any of these
-    # knobs exist. The bound is worth stating rather than dramatising: all four are ADDITIVE knobs
-    # that cannot produce a green tick, and every default value contains no spaces. This is
+    # `printf '%q'`, AND ONLY THE RENDERED FORM IS INTERPOLATED. A raw value word-splits on the
+    # REMOTE shell, so an override naming a path that contains a space failed with a shell error
+    # instead of driving the branch the knob exists to drive — and "an undriveable branch is an
+    # unproven branch" is the ONLY reason any of these knobs exist. This is
     # scripts/phase06-oracle.sh's WR-08 defect reproduced in the sibling file WR-08's plan did not
-    # own — three of the four sites were named by the cross-family review, the fourth (this one)
-    # was found while planning 06-26 and is fixed with them, because closing three of four
-    # instances of a class inside one file is the drift this whole round is about.
+    # own.
+    #
+    # ⚠️ THE CENSUS IS A RECIPE, NOT A NUMBER — CORRECTED 2026-09-23 BY R3-01 (plan 06-30).
+    #   THE SENTENCE THAT STOOD HERE ASSERTED, AS A MEASURED FACT, A COUNT OF FOUR. GREP DISAGREED.
+    #   Plan 06-26 owned four sites and rendered them: this one (DRIFT_REPO_ROOT), the D-03 CLI
+    #   render's `cd` (D03_REPO_ROOT), the D-04 scan (D04_REPO_ROOT) and the consumers fold-in
+    #   (CONSUMERS_SCRIPT). FIVE MORE WERE STILL RAW and the sentence did not know about them, so
+    #   plan 06-30 rendered those too: D03_FLASK_CONTAINER, D03_CLI_COMPOSE, D03_CLI_PROFILE,
+    #   MUSIC_UNDERSCORE_ROOT (TWO remote sites, one knob) and EXTCONF_PATH.
+    #
+    #   DO NOT TRUST THE LIST ABOVE AS A CURRENT TOTAL EITHER — it is a record of what two plans
+    #   owned, not a measurement of what the file holds today. To RE-DERIVE the census, cross-
+    #   reference the knob definitions against the remote call sites:
+    #       /usr/bin/grep -nE '^[A-Z0-9_]+="\$\{[A-Z0-9_]+:-' scripts/quick-health-check.sh
+    #       /usr/bin/grep -n 'ssh -n \$SSH_OPTS'                scripts/quick-health-check.sh
+    #   and for each knob that reaches a remote command string, check that only its `_Q` form is
+    #   interpolated. A number written in this file is a number that the next edit moves without
+    #   touching the sentence that states it; a recipe is not.
+    #
+    #   WHY THE CENSUS IS NOW A RECIPE, stated so the change does not read as fussiness: the
+    #   EXTCONF_PATH site was not merely uncounted — it used the shape the ⛔ paragraph below
+    #   FORBIDS BY NAME, three hundred lines beneath that prohibition, and it survived there for a
+    #   full gap-closure round while this very sentence declared the class closed. A prohibition and
+    #   a wrong census in the same comment block is how a reader concludes the work is done.
+    #
+    #   THE BOUND, and it has not changed: all nine are ADDITIVE knobs that cannot produce a green
+    #   tick, every default value contains no spaces, and the EXTCONF_PATH injection consequence is
+    #   static reasoning that was NEVER EXECUTED. Four of the five sites 06-30 owned failed CLOSED
+    #   on a space — `find`/`docker` exit non-zero, `pipefail` fires, the existing could-not-look
+    #   arm catches it — so they degraded a knob from "drives the branch" to "cannot be driven".
+    #   The one exception worth naming is MUSIC_UNDERSCORE_ROOT, where both split words naming real
+    #   directories makes `find` exit 0 and the count a silent union of two scans.
     #
     # ⚠️ THE BASH DEPENDENCY, STATED ONCE HERE AND CROSS-REFERENCED FROM THE OTHER THREE (GC-11).
     #   `printf '%q'` renders for BASH. A single-line path containing a space renders as a
@@ -1446,6 +1486,13 @@ else
     # ⛔ DO NOT "fix" a future site of this shape by hand-escaping quotes inside the command string
     #   instead. A `\"` wrapper survives a space but not a quote and not a `$`, and a half-measure
     #   that LOOKS like a fix is worse here than the raw interpolation it replaces.
+    #   THIS PARAGRAPH WAS RIGHT WHEN IT WAS WRITTEN AND IS UNCHANGED — it was simply never applied
+    #   to the EXTCONF_PATH site three hundred lines below it, which carried exactly the forbidden
+    #   shape through the whole of round 2 (R3-01, closed 2026-09-23 by plan 06-30). That a
+    #   documented-forbidden instance can survive a round inside the file documenting it is why the
+    #   census above is now a recipe and not a number: the prohibition was never the weak part.
+    #   Where a path must reach a remote `sh -c`, pass it as a POSITIONAL PARAMETER — the shape
+    #   scripts/phase06-oracle.sh's remote_sh_c() uses, and the shape EXTCONF_CMD now uses.
     DRIFT_REPO_ROOT_Q=$(printf '%q' "$DRIFT_REPO_ROOT")
     DRIFT_CMD="set -o pipefail; cd $DRIFT_REPO_ROOT_Q || exit 3
 _drift_pair() {
@@ -1570,7 +1617,7 @@ D03_BAD=0
 D03_LOOKED=0
 
 # --- (i) the ACTIVE front end, read from the runtime --------------------------------------------
-D03_FLASK_OUT=$(ssh -n $SSH_OPTS root@172.16.1.159 "timeout $REMOTE_TIMEOUT docker inspect $D03_FLASK_CONTAINER --format '{{range .Mounts}}{{.Source}} {{.Destination}} {{.RW}}
+D03_FLASK_OUT=$(ssh -n $SSH_OPTS root@172.16.1.159 "timeout $REMOTE_TIMEOUT docker inspect $D03_FLASK_CONTAINER_Q --format '{{range .Mounts}}{{.Source}} {{.Destination}} {{.RW}}
 {{end}}'")
 D03_FLASK_RC=$?   # ssh propagates the remote status — NO local pipe above
 D03_FLASK_LINES=$(printf '%s\n' "$D03_FLASK_OUT" | grep -c '^/')
@@ -1620,7 +1667,7 @@ else
 fi
 
 # --- (ii) the DORMANT CLI arm, rendered rather than inspected -----------------------------------
-D03_CLI_OUT=$(ssh -n $SSH_OPTS root@172.16.1.159 "cd $D03_REPO_ROOT_Q || exit 3; timeout $REMOTE_TIMEOUT docker compose --profile $D03_CLI_PROFILE -f $D03_CLI_COMPOSE config 2>/dev/null")
+D03_CLI_OUT=$(ssh -n $SSH_OPTS root@172.16.1.159 "cd $D03_REPO_ROOT_Q || exit 3; timeout $REMOTE_TIMEOUT docker compose --profile $D03_CLI_PROFILE_Q -f $D03_CLI_COMPOSE_Q config 2>/dev/null")
 D03_CLI_RC=$?   # ssh propagates the remote status — NO local pipe above
 # Normalise the long-form `volumes:` the renderer emits into `source target ro|rw`, LOCALLY.
 # `read_only:` is EMITTED ONLY WHEN TRUE, so its ABSENCE means read-write — the default here is
@@ -2110,12 +2157,35 @@ printf "%s" "$_ec_x"
 # 4 = the cat failed (path missing or unreadable), 6 = the read succeeded but returned no bytes.
 # 124 is preserved explicitly at both probes rather than being collapsed into 3 or 4 — a bound
 # expiry and a missing container are different answers.
+#
+# ── R3-01, 2026-09-23 (round-3 gap closure, plan 06-30) ───────────────────────────────────────────
+# THE PATH CROSSES INTO THE CONTAINER AS A POSITIONAL PARAMETER, NOT AS COMMAND TEXT. The `sh -c`
+# program below names no path at all: it reads "$1", and the rendered value arrives after the
+# literal `sh` (which is $0 — without it the first real argument is eaten). This is the shape
+# scripts/phase06-oracle.sh's remote_sh_c() uses, and the reason is the same one stated there:
+# `printf '%q'` renders for a bash WORD, which is the one context it is correct for, and a value
+# landing inside the TEXT of a single-quoted program can terminate that program's quoting.
+#
+# WHAT WAS HERE BEFORE, described by shape rather than pasted: a hand-escaped `\"` wrapper around
+# the path variable, inside a single-quoted remote `sh -c`. That is the construction the GC-17
+# prohibition block names explicitly, and it survived three hundred lines below that prohibition for
+# a full gap-closure round while the same round's census sentence declared the class closed. The
+# literal is deliberately NOT reproduced anywhere in this file, not even to disown it: a claim and
+# its retraction are indistinguishable to grep, and a mechanical check for the retired shape has to
+# be able to return zero.
+#
+# THE BOUND, STATED RATHER THAN DRAMATISED. EXTCONF_PATH is an operator-set environment knob with a
+# safe default, not attacker-controlled input, and it is ADDITIVE — any non-default value already
+# forces EXIT_CODE=1 at the override check above, so it can never produce a green tick. The
+# injection consequence that motivated this edit is STATIC REASONING AND WAS NOT EXECUTED. What
+# makes it worth fixing is not the exploit; it is that a documented-forbidden shape survived a round
+# inside the file that documents it.
 EXTCONF_CMD="set -o pipefail
 timeout $REMOTE_TIMEOUT docker exec sabnzbd true >/dev/null 2>&1
 _ec_rc=\$?
 [ \$_ec_rc -eq 124 ] && exit 124
 [ \$_ec_rc -ne 0 ] && exit 3
-_ec=\$(timeout $REMOTE_TIMEOUT docker exec sabnzbd sh -c 'cat \"$EXTCONF_PATH\"' 2>/dev/null)
+_ec=\$(timeout $REMOTE_TIMEOUT docker exec sabnzbd sh -c 'cat \"\$1\"' sh $EXTCONF_PATH_Q 2>/dev/null)
 _ec_rc=\$?
 [ \$_ec_rc -eq 124 ] && exit 124
 [ \$_ec_rc -ne 0 ] && exit 4
@@ -2551,6 +2621,12 @@ fi
 # been observed passing has not been shown to distinguish anything.
 MUSIC_UNDERSCORE_HOST="${MUSIC_UNDERSCORE_HOST:-root@172.16.1.158}"
 MUSIC_UNDERSCORE_ROOT="${MUSIC_UNDERSCORE_ROOT:-/mnt/tank/media/Music}"
+# R3-01, 2026-09-23 (plan 06-30). TWO remote sites read this knob — the counting scan and the
+# offending-paths listing — which is precisely why the rendering is sited here and not at either of
+# them. Raw, an override containing a space word-split on the REMOTE shell; usually that failed
+# closed into the could-not-look arm below, but where both split words named real directories
+# `find` exited 0 and the count silently became a UNION OF TWO SCANS reported as one number.
+MUSIC_UNDERSCORE_ROOT_Q=$(printf '%q' "$MUSIC_UNDERSCORE_ROOT")
 if [ "$MUSIC_UNDERSCORE_HOST" != "root@172.16.1.158" ]; then
     echo "⚠️  MUSIC_UNDERSCORE_HOST override in effect — this run cannot report the library guard green"
     EXIT_CODE=1
@@ -2560,7 +2636,7 @@ if [ "$MUSIC_UNDERSCORE_ROOT" != "/mnt/tank/media/Music" ]; then
     EXIT_CODE=1
 fi
 echo -n "Library underscore-dir guard: "
-UNDERSCORE_OUT=$(ssh -n $SSH_OPTS "$MUSIC_UNDERSCORE_HOST" "set -o pipefail; timeout $REMOTE_TIMEOUT find $MUSIC_UNDERSCORE_ROOT -type d -name '_*' | wc -l")
+UNDERSCORE_OUT=$(ssh -n $SSH_OPTS "$MUSIC_UNDERSCORE_HOST" "set -o pipefail; timeout $REMOTE_TIMEOUT find $MUSIC_UNDERSCORE_ROOT_Q -type d -name '_*' | wc -l")
 UNDERSCORE_RC=$?   # ssh propagates the remote status — NO local pipe above, see the note above
 UNDERSCORE_COUNT=$(printf '%s' "$UNDERSCORE_OUT" | tr -d '[:space:]')
 if [ "$UNDERSCORE_RC" -eq 124 ]; then
@@ -2588,7 +2664,7 @@ elif [ "$UNDERSCORE_COUNT" -gt 0 ]; then
     # file is the house rule's own instrument (:444-453) and a line that needs a reader to work out
     # which side of the quotes the pipe is on costs more than the variable does. This runs only on
     # the already-red path, so its own failure cannot turn a green run red.
-    UNDERSCORE_PATHS=$(ssh -n $SSH_OPTS "$MUSIC_UNDERSCORE_HOST" "timeout $REMOTE_TIMEOUT find $MUSIC_UNDERSCORE_ROOT -type d -name '_*'")
+    UNDERSCORE_PATHS=$(ssh -n $SSH_OPTS "$MUSIC_UNDERSCORE_HOST" "timeout $REMOTE_TIMEOUT find $MUSIC_UNDERSCORE_ROOT_Q -type d -name '_*'")
     printf '%s\n' "$UNDERSCORE_PATHS" | sed 's/^/    /'
     EXIT_CODE=1
 else

@@ -1,0 +1,133 @@
+06-30-qhc-census-and-counts.txt
+Phase 06, plan 06-30 (gap-closure round 3). Findings R3-01 and R3-05.
+Captured 2026-09-23.
+
+WHAT THIS FILE IS, AND WHAT IT IS NOT
+=====================================
+This is a CAPTURE, not an execution record. Every remote command string below was produced by
+`echo`/`printf` in a throwaway harness and NEVER SENT ANYWHERE.
+
+  * scripts/quick-health-check.sh was NOT RUN by this plan. Not once.
+    It contacts LXC 100 (172.16.1.159) and the Proxmox host atlantis (172.16.1.158), and plan
+    06-30's brief forbids driving it against the live estate.
+  * No ssh, no docker, no find, no git pull, no git push ran against any host.
+  * The word-splitting shown below is done LOCALLY, by `set --` over the same text the remote
+    shell would parse. That is the whole point: it is the remote shell's parse, reproduced where
+    it costs nothing.
+
+THE FILE DOES NOT READ FROM HERE. Nothing in scripts/quick-health-check.sh parses this artifact.
+Every number in section 2 is a DATED OBSERVATION, not a pin.
+
+
+SECTION 1 — R3-01: the five surviving raw interpolations, before and after
+=========================================================================
+GC-17 (plan 06-26) rendered four overridable knobs through `printf '%q'` and stated in band that
+FOUR was the total. Grep disagreed: five more knobs still crossed into a string a remote shell
+parses. Four of the five failed CLOSED on a space; the fifth, EXTCONF_PATH, used a hand-escaped
+`"` wrapper around the path variable inside a single-quoted remote `sh -c` — the construction
+GC-17's own prohibition paragraph forbids by name, sixty lines above it in the same comment block
+and three hundred lines above the site.
+
+GRADING, kept as the review wrote it and not inflated: this is a WARNING, not a Critical.
+EXTCONF_PATH is an operator-set environment knob with a safe default, it is ADDITIVE (any
+non-default value already forces EXIT_CODE=1, so it can never produce a green tick), and the
+injection consequence is STATIC REASONING THAT WAS NOT EXECUTED. What makes it a finding is that
+round 2 declared the class closed while a documented-forbidden instance of it survived.
+
+Knobs and their remote sites:
+
+  D03_FLASK_CONTAINER    -> docker inspect … --format
+  D03_CLI_COMPOSE        -> docker compose … -f …  config
+  D03_CLI_PROFILE        -> docker compose --profile … config
+  MUSIC_UNDERSCORE_ROOT  -> find … -type d -name '_*'        (TWO sites: count, and path listing)
+  EXTCONF_PATH           -> docker exec sabnzbd sh -c …      (now POSITIONAL, not interpolated)
+
+Drive values: each knob set to a value containing a SPACE; EXTCONF_PATH additionally driven with a
+value containing a DOUBLE QUOTE, which is the case the retired wrapper does not survive.
+
+--- BEGIN CAPTURE ---------------------------------------------------------------------------
+
+------------------------------------------------------------------------
+KNOB 1/5: D03_FLASK_CONTAINER   (remote site: docker inspect … --format)
+  override value : [beets flask]
+  BEFORE (raw)   : timeout 120 docker inspect beets flask --format '{{range .Mounts}}…{{end}}'
+  AFTER  (_Q)    : timeout 120 docker inspect beets\ flask --format '{{range .Mounts}}…{{end}}'
+  remote word-split of the BEFORE form, by the shell that parses it:
+    argc=8 ; container argument reaches docker as: [beets] [flask]   <- TWO words, not one
+  remote word-split of the AFTER form:
+    argc=7 ; container argument reaches docker as: [beets flask]        <- ONE word, space intact
+------------------------------------------------------------------------
+KNOB 2/5 + 3/5: D03_CLI_PROFILE and D03_CLI_COMPOSE   (remote site: docker compose … config)
+  override values: compose=[stacks/selfhosted/arrs/beets/my beets.yaml]  profile=[manual profile]
+  BEFORE (raw)   : cd /mnt/fast/stacks || exit 3; timeout 120 docker compose --profile manual profile -f stacks/selfhosted/arrs/beets/my beets.yaml config 2>/dev/null
+  AFTER  (_Q)    : cd /mnt/fast/stacks || exit 3; timeout 120 docker compose --profile manual\ profile -f stacks/selfhosted/arrs/beets/my\ beets.yaml config 2>/dev/null
+  remote word-split of the BEFORE form (from '--profile' onward):
+    argc=7 : profile=[manual] then STRAY [profile]; -f receives [stacks/selfhosted/arrs/beets/my] then STRAY [beets.yaml]
+  remote word-split of the AFTER form:
+    argc=5 : profile=[manual profile]  -f=[stacks/selfhosted/arrs/beets/my beets.yaml]  subcommand=[config]   <- both spaces intact
+------------------------------------------------------------------------
+KNOB 4/5: MUSIC_UNDERSCORE_ROOT   (TWO remote sites: the counting scan and the path listing)
+  override value : [/mnt/tank/media/My Music]
+  site A BEFORE  : set -o pipefail; timeout 120 find /mnt/tank/media/My Music -type d -name '_*' | wc -l
+  site A AFTER   : set -o pipefail; timeout 120 find /mnt/tank/media/My\ Music -type d -name '_*' | wc -l
+  site B BEFORE  : timeout 120 find /mnt/tank/media/My Music -type d -name '_*'
+  site B AFTER   : timeout 120 find /mnt/tank/media/My\ Music -type d -name '_*'
+  remote word-split of the BEFORE form:
+    argc=5 : find receives TWO path operands [/mnt/tank/media/My] and [Music]
+    THIS is the union-of-two-scans case: if both name real directories, find exits 0 and the
+    count is the sum of two trees reported as one number. Otherwise it exits non-zero and
+    pipefail lands the run in the existing could-not-look arm.
+  remote word-split of the AFTER form:
+    argc=4 : find receives ONE path operand [/mnt/tank/media/My Music]   <- space intact
+------------------------------------------------------------------------
+KNOB 5/5: EXTCONF_PATH   (remote site: docker exec sabnzbd sh -c …)
+
+  The BEFORE shape is described, not pasted, in scripts/quick-health-check.sh itself: a
+  hand-escaped \" wrapper around the path variable, inside a single-quoted remote sh -c. The
+  literal is deliberately kept OUT of that file, not even quoted in a comment disowning it, so a
+  mechanical check for the retired shape can return zero — a claim and its retraction are
+  indistinguishable to grep. It is reconstructed HERE, in an artifact that is not the file under
+  test, because a fix nobody can see is not reviewable.
+
+  override value : [/config/my extended.conf]
+  BEFORE (remote command string, as the remote bash would see it):
+    timeout 120 docker exec sabnzbd sh -c 'cat "/config/my extended.conf"' 2>/dev/null
+  AFTER  (remote command string, as the remote bash would see it):
+    timeout 120 docker exec sabnzbd sh -c 'cat "$1"' sh /config/my\ extended.conf 2>/dev/null
+  what the CONTAINER's sh ends up executing:
+    BEFORE program text : cat "/config/my extended.conf"
+    AFTER  program text : cat "$1"    with $1 = [/config/my extended.conf]
+    AFTER: the program text contains NO path at all, so nothing in the value can be
+    re-parsed as command syntax. The value lands in a positional parameter.
+
+  override value : [/config/x";cat /etc/hostname;#]
+  BEFORE (remote command string, as the remote bash would see it):
+    timeout 120 docker exec sabnzbd sh -c 'cat "/config/x";cat /etc/hostname;#"' 2>/dev/null
+  AFTER  (remote command string, as the remote bash would see it):
+    timeout 120 docker exec sabnzbd sh -c 'cat "$1"' sh /config/x\"\;cat\ /etc/hostname\;# 2>/dev/null
+  what the CONTAINER's sh ends up executing:
+    BEFORE program text : cat "/config/x";cat /etc/hostname;#"
+    AFTER  program text : cat "$1"    with $1 = [/config/x";cat /etc/hostname;#]
+    AFTER: the program text contains NO path at all, so nothing in the value can be
+    re-parsed as command syntax. The value lands in a positional parameter.
+
+------------------------------------------------------------------------
+END OF CAPTURE. No ssh, no docker, no find ran. quick-health-check.sh was not executed.
+
+--- END CAPTURE -----------------------------------------------------------------------------
+
+READ THE SECOND EXTCONF_PATH BLOCK CLOSELY — it is the one that justifies changing the SHAPE of
+that site rather than just giving it a `_Q`. The BEFORE program text
+
+    cat "/config/x";cat /etc/hostname;#"
+
+is TWO commands to the container's /bin/sh, not one path. A `_Q` rendering alone would not have
+fixed this: `%q` renders for a bash WORD, and this value lands inside the TEXT of a single-quoted
+program, which is the one context `%q` is not correct for. Only the positional form removes the
+path from the program text entirely. This is the same reasoning scripts/phase06-oracle.sh's
+remote_sh_c() states at its own definition (WR-08 / GC-11).
+
+Reminder of the bound, so this artifact does not read as an incident report: the value above is
+one an OPERATOR would have to set deliberately. It was never set, the string above was never
+sent, and the default `/config/extended.conf` is unaffected by the change.
+
