@@ -486,23 +486,78 @@ fi
 # `""` and not `''` for the empty pattern: the trap body is a single-quoted string, so an inner
 # single quote would terminate it. dash treats the two patterns identically.
 #
-# R3-09: THE SIGNAL LIST IS NOT JUST THE EXIT PSEUDO-SIGNAL, and that is not decoration. A POSIX
-# shell runs an exit trap on normal termination and on `exit`, but NOT on an uncaught SIGTERM. This
-# program is delivered as `sh -s` through `timeout $REMOTE_TIMEOUT docker exec` (the bound defaults
-# to 120s), so a bound expiry is a ROUTINE outcome for a manifest over a large tree, not an exotic
-# one - and on the narrow list that expiry left behind exactly the minted leftover the CLEANUP
-# paragraph at the top of this block calls the worse litter, one directory per timed-out run, in a
-# /tmp this file's header records as mode 1777.
-# THE RESIDUAL, stated rather than claimed away: SIGKILL cannot be trapped, so a hard kill still
-# leaves the directory. Widening the list SHRINKS the window; it does not close it.
+# R3-09, AS CORRECTED BY R4-04 - CLAIM CORRECTION. THE SIGNAL LIST IS NOT JUST THE EXIT
+# PSEUDO-SIGNAL, and that much is right; what round 3 wrote UNDERNEATH it was a mechanism story
+# stronger than anything anyone measured, and this paragraph now separates three grades of claim by
+# name rather than presenting them as one account.
+#   1. ESTABLISHED. The transport is `timeout $REMOTE_TIMEOUT docker exec -i -u beetle $CONTAINER
+#      sh -s` (bound defaults to 120s) - grep-confirmable in this file, at remote_exec. And a POSIX
+#      shell runs an exit trap on normal termination and on `exit`, but NOT on an uncaught signal.
+#      Those two facts are why a signal list wider than EXIT is needed at all.
+#   2. NOT ESTABLISHED, and this is what round 3 asserted as routine: that `timeout` delivers
+#      SIGTERM to the IN-CONTAINER shell. It does not signal this program. `timeout` signals the
+#      `docker exec` CLIENT process on LXC 100, and `docker exec` is NOT KNOWN TO FORWARD signals
+#      to the exec'd process - killing the client leaves the exec'd process running and the daemon
+#      tears the attached streams down instead. If that holds here, the TERM arm never fires for
+#      this program at all. THE SIGTERM PATH IS UNCONFIRMED. It was not tested, and it was not
+#      tested because this phase makes NO ESTATE CONTACT - no ssh, no docker, no live arm.
+#   3. BELIEVED, on reasoning of exactly the same static grade as (2) and NOT an upgrade over it:
+#      when the client dies the exec's stdout stream closes, and this shell takes EPIPE/SIGPIPE on
+#      its next write. Both writers below are stdout writers. That is the whole reason `PIPE` is in
+#      the list. It is a candidate FIXED (undriven) row, exactly as R3-09 itself was.
+# THE RESIDUAL, restated because round 3's framing under-described the defect. Round 3 said
+# widening the list SHRINKS the window. Under R4-03 that was wrong in a second way: on the
+# non-terminal handlers the signal was ABSORBED, not narrowed - the trap deleted the scratch path
+# and the shell resumed. Most downstream paths do degrade closed (`sort`, `find` and `sort -z` all
+# fail once MANDIR is gone and route to `MANIFEST BLIND ... exit 2`), but TWO PATHS PRODUCED A
+# NORMAL-LOOKING TRANSCRIPT OVER AN INTERRUPTED RUN, and they are the reason R4-03 is a code fix:
+#   (i)  here, a signal after the last manifest write let this program print `MANIFEST OK` and
+#        exit 0;
+#   (ii) in write_prog_taghistory, a signal between the program write and its execution removed the
+#        program file, made the interpreter invocation fail, and the shell still reached its tail
+#        and exited 0.
+# SIGKILL remains untrappable and is still a genuine residual - a hard kill (`timeout -k`, a
+# container stop, an OOM kill) still leaves the directory. That is DEF-06-34-06 and it is unchanged.
+# NEITHER TRAP HAS EVER BEEN OBSERVED FIRING INSIDE THE CONTAINER. The condition that would drive
+# it is a live `--arm a` / `--arm b` pair under a deliberately short REMOTE_TIMEOUT, checking the
+# container's /tmp afterwards for surviving `/tmp/p6-mf.*` and `/tmp/p6-taghist.*` names. That
+# attaches to the EXISTING Phase 7 entry criterion E12, which already carries this class alongside
+# DEF-06-34-04 and DEF-06-34-06. No new criterion is invented here.
 # NOT DONE, deliberately: the best-effort sweep of other names carrying this template prefix that
 # the review floats as a second idea. Removing a name THIS RUN DID NOT MINT is a wider destructive
 # reach than the finding justifies on a shared container /tmp, in a round whose whole subject is
 # fences reaching further than their comments admit. Carried to the deferred register by plan
 # 06-34 rather than silently dropped.
-trap 'case "${MANDIR:-}" in
-        /tmp/p6-mf.*) case "${MANDIR#/tmp/p6-mf.}" in ""|*[!A-Za-z0-9._-]*) : ;; *) rm -rf "$MANDIR" ;; esac ;;
-      esac' EXIT INT TERM HUP
+# R4-03 - CODE. THE HANDLERS BELOW ARE TERMINAL, AND THAT IS THE WHOLE POINT OF THIS SHAPE.
+# The shape this replaces was ONE trap carrying `EXIT INT TERM HUP` with a bare `case` body: no
+# `exit`, no re-raise. POSIX runs a trapped signal's action and then RESUMES the shell, so that
+# widening did not make the program terminate on a signal - it made it delete its own scratch
+# directory and CARRY ON, exiting 0. Before that diff a SIGTERM killed this program; after it, it
+# did not. Each handler therefore cleans, REMOVES ITS OWN TRAP, and re-raises the same signal at
+# itself, so the program dies from the signal it was sent and the caller's rc says 128+signal.
+# Driven under dash in both directions, with a positive control, in
+# .planning/phases/06-tagger-configuration-and-dry-run/artifacts/06-37-incremental-terminal-traps.txt
+# THE EXIT TRAP STAYS SEPARATE AND MUST NOT BE FOLDED IN. The cleanup may therefore run twice on a
+# signalled exit in a shell that runs EXIT traps on signal death; that is harmless and intended,
+# because `rm -rf` / `rm -f` on an already-absent path succeeds. Deleting the EXIT trap as
+# "redundant" would re-open the normal-termination case, which is the common one.
+# R4-04 - CODE HALF: `PIPE` IS IN THE LIST, and the reason is a belief, not a measurement. A
+# `docker exec` client killed by `timeout` on LXC 100 does not signal the `sh -s` inside the
+# container; the daemon tears the exec's streams down instead, and this program then takes
+# EPIPE/SIGPIPE on its NEXT write to stdout - and both stdout writers below are inside the window.
+# A shell killed by an UNTRAPPED SIGPIPE runs no trap at all, so the leak survives even where the
+# `TERM` arm never fires. THIS IS THE SAME CLASS OF STATIC REASONING AS R3-09's AND IS NOT
+# CONFIRMED AGAINST THE CONTAINER - see the corrected mechanism paragraph above. The dash drive
+# proves the HANDLER SHAPE (pre-fix SIGPIPE leaves the minted directory behind; post-fix removes it
+# and dies 141); it proves nothing about what the container transport actually delivers.
+_p6_mf_clean() { case "${MANDIR:-}" in
+  /tmp/p6-mf.*) case "${MANDIR#/tmp/p6-mf.}" in ""|*[!A-Za-z0-9._-]*) : ;; *) rm -rf "$MANDIR" ;; esac ;;
+esac; }
+trap '_p6_mf_clean' EXIT
+trap '_p6_mf_clean; trap - INT;  kill -INT  $$' INT
+trap '_p6_mf_clean; trap - TERM; kill -TERM $$' TERM
+trap '_p6_mf_clean; trap - HUP;  kill -HUP  $$' HUP
+trap '_p6_mf_clean; trap - PIPE; kill -PIPE $$' PIPE
 echo "MANIFEST-META-BEGIN"
 LC_ALL=C find "$SRC" -type f -printf '%p\t%s\t%T@\n' > "$MANDIR/meta"; MRC=$?
 if [ "$MRC" -ne 0 ]; then echo "MANIFEST BLIND find -printf rc=$MRC"; exit 2; fi
@@ -552,17 +607,32 @@ if [ -z "$THPROG" ]; then
   echo "TAGHIST BLIND could not mint a program path with mktemp - refusing to write-then-execute a fixed name in a world-writable /tmp"
   exit 2
 fi
-# R3-09, same reasoning as the manifest trap above and stated once there: an exit trap does not run
-# on an uncaught SIGTERM, and both programs arrive through a `timeout`-bounded `docker exec`, so the
-# narrow list would have leaked a minted name on a routine bound expiry. The SIGKILL residual and
-# the refusal to sweep unminted names are recorded at that site.
+# R3-09 AS CORRECTED BY R4-04, same reasoning as the manifest trap above and stated once there: an
+# exit trap does not run on an uncaught signal, so a list of EXIT alone would have leaked a minted
+# name - but WHICH signal reaches this program through the `timeout`-bounded `docker exec` is
+# unconfirmed, and the corrected paragraph at that site grades the SIGTERM path, the SIGPIPE path,
+# the SIGKILL residual and the refusal to sweep unminted names.
 # R3-10, likewise the same predicate and stated once above: prefix, then a remainder that must be
 # non-empty and free of any byte outside [A-Za-z0-9._-] - a class that excludes `/`, which the
 # prefix-only shape it replaces did not. GC-02 carries the identical rule in
 # scripts/phase06-oracle.sh. Latent here too: THPROG is only ever mktemp output.
-trap 'case "${THPROG:-}" in
-        /tmp/p6-taghist.*) case "${THPROG#/tmp/p6-taghist.}" in ""|*[!A-Za-z0-9._-]*) : ;; *) rm -f "$THPROG" ;; esac ;;
-      esac' EXIT INT TERM HUP
+# R4-03 - CODE, and stated once at the manifest site above: the handlers are TERMINAL. A bare
+# `case` body under `EXIT INT TERM HUP` absorbed the signal rather than acting on it, and THIS
+# program is the sharper of the two sites for that: a signal landing between the `printf` that
+# writes the program file and the interpreter invocation that runs it removes the file, makes the
+# invocation fail, and the shell STILL reaches the `STATEFILE-SHA` line and exits 0 - a
+# normal-looking transcript over an interrupted run. Each handler cleans, un-traps and re-raises.
+# R4-04 - CODE HALF, likewise stated once above: `PIPE` is in the list because a dying
+# `docker exec` client tears the exec's streams down rather than forwarding a signal, and this
+# program writes to stdout. That mechanism is UNCONFIRMED against the container.
+_p6_th_clean() { case "${THPROG:-}" in
+  /tmp/p6-taghist.*) case "${THPROG#/tmp/p6-taghist.}" in ""|*[!A-Za-z0-9._-]*) : ;; *) rm -f "$THPROG" ;; esac ;;
+esac; }
+trap '_p6_th_clean' EXIT
+trap '_p6_th_clean; trap - INT;  kill -INT  $$' INT
+trap '_p6_th_clean; trap - TERM; kill -TERM $$' TERM
+trap '_p6_th_clean; trap - HUP;  kill -HUP  $$' HUP
+trap '_p6_th_clean; trap - PIPE; kill -PIPE $$' PIPE
 printf '%s\n' "$PROG" > "$THPROG"
 "$PY" "$THPROG" "$ROOT/state.pickle" 2>&1
 PRC=$?
