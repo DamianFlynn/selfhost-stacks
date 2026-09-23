@@ -260,6 +260,28 @@ Cloudflare token already covers it — no new token.
 
 ## Operating
 
+### The onnxruntime affinity warnings are noise
+
+Every cold start prints ~15 red lines:
+
+```
+[E:onnxruntime:onnxruntime-node, env.cc:234 ThreadMain] pthread_setaffinity_np failed for
+thread: N ... error code: 22 ... Specify the number of threads explicitly so the affinity is not set.
+```
+
+**They are harmless.** The line immediately after them is `embedder: server-side bge-m3 ready`.
+ONNX Runtime tries to pin its thread pool to specific cores and the container's cgroup does not
+permit it, so it falls back to unpinned threads — which is what you want in a container anyway.
+
+**`OMP_NUM_THREADS` does not silence them** — measured 2026-09-23, 15 warnings with and without.
+Despite what the message suggests, the knob is an ORT *session option*, and
+`memory/lib/memory/embedder.js:155` calls `transformers.pipeline()` without one. Fixing it is an
+engine change and therefore a re-pin of the deployed SHA, so it has been left alone deliberately.
+
+Worth knowing only because a real start-up error has to compete with these for attention, and on
+2026-09-22 one did: `Hosted mode requires a server principal` was the line *after* fifteen of
+them. When reading these logs, pipe through `grep -v pthread_setaffinity_np`.
+
 ### Health
 
 ```sh
