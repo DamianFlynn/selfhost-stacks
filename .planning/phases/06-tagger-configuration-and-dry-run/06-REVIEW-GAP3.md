@@ -440,3 +440,110 @@ _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: deep — round 4, scoped to `fff070a..HEAD`_
 _No source file was modified. No estate contact: no ssh, no docker, no `--run`, no `--arm`.
 `quick-health-check.sh` was not executed at all._
+
+---
+
+## Dispositioned 2026-09-23 — this file is now WIRED
+
+*Appended by plan 06-39. **Nothing above this line was edited.** Every finding's text, every anchor,
+the frontmatter counts and the *What I checked and found clean* section are the record of what was
+found on 2026-09-23, and that record stands — including where a later measurement refined it.*
+
+### ⚠ READ THIS FIRST IF YOU ARRIVED HERE FOLLOWING A `WR-` OR `IN-` CITATION
+
+**This report reuses round 1's `WR-*` / `IN-*` ID namespace, and round 1's IDs are already cited in
+band in all four reviewed scripts.** Round 4's fixes are therefore written in band as **`R4-01` …
+`R4-10`**. The mapping is:
+
+| Review ID (this file) | In-band ID (the scripts, the summaries, the register) |
+|---|---|
+| WR-01 | **R4-01** |
+| WR-02 | **R4-02** |
+| WR-03 | **R4-03** |
+| WR-04 | **R4-04** |
+| WR-05 | **R4-05** |
+| WR-06 | **R4-06** |
+| IN-01 | **R4-07** |
+| IN-02 | **R4-08** |
+| IN-03 | **R4-09** |
+| IN-04 | **R4-10** |
+
+**Round 4's `WR-02` is `R4-02` in band and is NOT round 1's `WR-02`.** A grep for `WR-02` in
+`scripts/phase06-oracle.sh` returns two hits about empty manifests — round 1's finding, nothing to do
+with this one. The full table, with the measured collision counts per file and the recipe to
+re-derive them, is in the register named below under **THE ID MAPPING TABLE**. The rule this
+establishes — *a review's ID namespace must be unique per round and chosen before the review is
+written, because these IDs become permanent in-band citations* — is carried as `DEF-06-39-01`.
+
+### The register
+
+**All ten findings carry an explicit disposition**, recorded in:
+
+> **`.planning/phases/06-tagger-configuration-and-dry-run/06-DISPOSITIONS-GAP3.md`**
+
+with one row per finding in ID order under **both** IDs, each citing the plan, the commit and the
+artifact holding the driven transcript, each carrying a **provenance clause** naming who confirmed
+the finding and how — distinguishing grep-verified from executed from statically reasoned — and each
+carrying a **fix-kind**: `CODE`, `CLAIM CORRECTION` or `BOTH`.
+
+Summary: **9 FIXED, 1 FIXED (undriven), 0 ACCEPTED, 0 CARRIED — 10 total.** The counts reconcile
+three ways: this file's frontmatter 0 + 6 + 4 = **10**; the dispositions 9 + 1 + 0 + 0 = **10**; the
+fix kinds 3 CODE + 3 CLAIM CORRECTION + 4 BOTH = **10**.
+
+The single `FIXED (undriven)` row is **WR-04 / R4-04**: the `PIPE` handler's *shape* was driven under
+`/bin/dash` in both directions with a positive control, but the *delivery* of SIGPIPE by the
+container transport has never been observed inside `beets-flask` — the same grade R3-09, this
+finding's direct ancestor, carried in round 3's register.
+
+The fixes were made by gap-closure plans **06-35, 06-36, 06-37 and 06-38**; plan **06-39** wrote the
+register and wired it. **There was no cross-family adjudication in round 4** — round 2 had one, rounds
+3 and 4 did not — so nothing is appended below the ten findings above; the register says so
+explicitly, because an absent adjudication that is not mentioned reads like a lost one.
+
+### Residue, refusals and the round's own clean list
+
+Round 4's residue — **including the round's deliberate refusals** — is carried by name as
+**`DEF-06-39-01` … `DEF-06-39-06`** in `deferred-items.md`: the ID namespace collision
+(`DEF-06-39-01`); the refusals, chief among them **no cleanup `trap` added to `phase06-oracle.sh`**
+and **`ST_PLANNED_CASES=7` excluded from the count audit by name** (`DEF-06-39-02`); the
+environment-dependent announced-case base and its named reference environment (`DEF-06-39-03`); the
+still-unobserved container-side signal behaviour, cross-referenced to `DEF-06-34-06` for the SIGKILL
+half and attached to the **existing** Phase 7 entry criterion **E12** (`DEF-06-39-04`);
+`quick-health-check.sh`'s zero executions in round 4 (`DEF-06-39-05`); and the migration of the
+self-referential-count hazard into the `<automated>` verify blocks themselves (`DEF-06-39-06`).
+Nothing already owned was duplicated: `DEF-06-29-01`, `DEF-06-29-09`, `DEF-06-29-11`, `DEF-06-34-04`,
+`DEF-06-34-06` and **E6** are referenced, not re-opened, and no existing entry was renumbered.
+
+**This file's own *What I checked and found clean* section is closed against a round 5.** Its items
+are reproduced in the register under a heading saying so; a round-5 finding that merely restates one
+of them is not a new finding. **Two were touched by round 4 and both remain clean:** R3-10's
+predicate was moved into a named cleanup function and the move was **proven verbatim** (extracted
+text byte-identical, indentation-normalised, with a second whitespace-sensitive comparison showing
+something really did move); and `ST_PLANNED_CASES=7` was excluded by name from the count audit and
+not touched.
+
+### Three corrections, in band
+
+1. **`ST_PLANNED_CASES=134` was already stale before round 4 touched it.** WR-02 reasons throughout
+   from 134; plan 06-36 **re-measured the base by ablation and got 140** — 134 plus the six cases
+   WR-06's fix added in the same round, with per-arm skip deltas 1 / 2 / 4 proven additive in a
+   **named reference environment** (non-root uid 501, `python3` present). **The finding's conclusion
+   is correct and entirely unaffected**: a fixed constant compared with `-ne` against a set with
+   environment-conditional members is not an invariant, whatever the constant is. Only the number
+   moved. `06-REVIEW-GAP2.md` and `06-DISPOSITIONS-GAP2.md` also record 134 and were deliberately
+   **not** edited — they are dated records.
+2. **The ID namespace collision above**, which is a defect in this report's *form*, not in its
+   findings. All ten stand exactly as written.
+3. **Two self-referential-measurement instances fired during round 4's own execution**, in the plans
+   closing that very class — plan 06-35's first draft of a census explanation matched the pattern it
+   was widening, and plan 06-38 mis-pinned raw counts three times inside its audit *of* the hazard.
+   Both were caught by measuring **after** the edit landed, never by an assertion.
+
+**This is a record, not a re-close.** No `/gsd-verify` was run by plan 06-39 and no verification
+result is claimed. **CONF-04 is not closed**, `REQUIREMENTS.md` is untouched, and ROADMAP entry
+criterion **E6** still owns the Jellyfin half. No requirement checkbox moved and the phase is **not**
+declared complete. **`06-VERIFICATION.md` is stale** — `status: passed`, `gaps_remaining: []`, dated
+2026-09-22 against round 1, written before rounds 2, 3 and 4 existed — and was deliberately not
+touched; `/gsd-verify 06` has not been run since round 2.
+
+_Dispositioned: 2026-09-23 by plan 06-39_

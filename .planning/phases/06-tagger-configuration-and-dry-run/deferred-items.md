@@ -1063,3 +1063,253 @@ names. Attaches to Phase 7 entry criterion **E12** alongside `DEF-06-34-04`.
 
 **Urgency:** low — it is litter in a container `/tmp`, not a correctness defect. Recorded so that
 "the traps were widened" is not read as "the leak is closed".
+
+---
+
+## DEF-06-39-01 — round 4's review reused round 1's `WR-*`/`IN-*` ID namespace; a round 5 must be given a fresh one BEFORE it is written
+
+**Found during:** plan 06-39, writing round 4's disposition register (2026-09-23), after all four fix
+plans had independently built the same alias table.
+**Disposition:** a **form defect in the review**, recorded in band rather than fixed silently — the
+findings themselves stand exactly as written. Not a downgrade of anything.
+
+`06-REVIEW-GAP3.md` numbers its findings `WR-01 … WR-06` and `IN-01 … IN-04`. **That is round 1's
+namespace**, and round 1's IDs are already cited **in band in all four reviewed scripts**. Measured
+at HEAD with `/usr/bin/grep -cF`, for the IDs round 4 reuses: `quick-health-check.sh` carries
+`WR-01` ×7, `WR-02` ×1, `WR-03` ×5, `WR-05` ×2; `phase06-oracle.sh` carries `WR-01` ×4, `WR-02` ×2,
+`WR-06` ×6; `check-beets-config.sh` carries `WR-04` ×2, `IN-01` ×1, `IN-03` ×1;
+`phase06-incremental-control.sh` carries `IN-02` ×1. At the review's own `diff_base` `fff070a` —
+i.e. before round 4 touched anything — `/usr/bin/grep -coE 'WR-0[1-9]|IN-0[1-9]'` returns
+**35 / 28 / 5 / 4** across the four files, **72** pre-existing citations in that namespace.
+
+None of them has anything to do with round 4. `WR-01` in `quick-health-check.sh` is the 2026-09-14
+`extended.conf` destructive-switches finding; `WR-06` in `phase06-oracle.sh` is the CONF-04
+write-side report finding. **A grep for a round-4 finding ID returns round 1's text, in exactly the
+files where the citation matters most.**
+
+**What was done instead of renaming the review:** all four fix plans wrote **`R4-01 … R4-10`** in
+band and in every verify block, each summary carries its slice of the alias table, and the full
+mapping — with these counts and the recipe to re-derive them — is in
+`06-DISPOSITIONS-GAP3.md` under **THE ID MAPPING TABLE**, with a pointer in
+`06-REVIEW-GAP3.md`'s wiring block so a reader following a `WR-` citation meets it first.
+
+**The rule this establishes:** *a review's ID namespace must be unique per round, and must be chosen
+before the review is written.* These IDs become permanent in-band citations in the reviewed files; a
+namespace collision makes every grep for a finding non-discriminating precisely where it is most
+needed. Round 3 got this right with `R3-*`.
+
+**Condition under which it should be revisited:** immediately, and only in one direction — **if a
+round 5 is commissioned, give it `R5-*` up front.** Do not retro-rename `06-REVIEW-GAP3.md`: it is a
+dated record, ten files in this phase cite round 1's `WR-*`, and renaming a shipped review is how
+round 2's GC-15/GC-17 label crossing happened.
+
+**Urgency:** low as a defect, **immediate as a precondition** on any future review in this phase.
+
+---
+
+## DEF-06-39-02 — REFUSED ×3: no cleanup `trap` on `phase06-oracle.sh` (R4-10), `ST_PLANNED_CASES=7` excluded from the count audit, and the four layer-3 copies not hoisted
+
+**Found during:** plans 06-36 and 06-38, closing R4-10, R4-05 and R4-06 (2026-09-23).
+**Disposition:** **three deliberate REFUSALS**, each recorded in band at its site and carried here so
+the next round does not re-open them as obvious gaps. A refusal nobody wrote down reads as an
+oversight.
+
+**(a) No cleanup `trap` was added to `scripts/phase06-oracle.sh` under R4-10.** The finding is that
+R3-04's two new `exit 3` arms skip step 12's `rm -rf` (container scratch) and `rm -f` (LXC stamp).
+The obvious fix is a cleanup trap. Plan 06-36 refused it and closed the finding as a **claim
+correction** instead — grading the class exactly as the review graded it: *pre-existing*, shared with
+the two `exit 3` arms two lines above, and *"leaving state behind on a could-not-look is arguably the
+right call for a forensic instrument."* **The file has no `trap` anywhere, by design** —
+`/usr/bin/grep -c '^[[:space:]]*trap '` returns **0** before and after — and a cleanup trap would fire
+on **every** forensic `exit 3` arm, destroying precisely the evidence those arms exist to preserve.
+What was done instead: an in-band note at the two guards naming both leftovers (`$SCRATCH`,
+`$STAMP_REMOTE`) and **citing the operator clean-up command by anchor** — the step-1 precheck's
+`'nonempty '*` refusal arm — rather than duplicating it, because two copies of a destructive command
+line in one file is how GC-02's fences drifted apart in this very file.
+
+**(b) `ST_PLANNED_CASES=7` in `scripts/check-beets-config.sh` was EXCLUDED BY NAME from plan 06-38's
+count audit and was not touched.** Round 4's own *What I checked and found clean* section verified it
+unconditional (six `run_case` calls plus the manual case 6), and it is **not a prose claim** — it is
+a gated pin over an unconditionally executed set, the one number in that file that is *supposed* to
+be a number. "Fixing" it in a sweep about self-referential counts would have broken a working guard.
+It is recorded as an EXCLUDED row in the audit with that reason.
+
+**(c) The four live layer-3 `awk` consumers in `phase06-oracle.sh` were NOT hoisted into one shared
+variable** when R4-06 pinned them and R4-09 changed them. Four copies of one parser is exactly the
+duplication a reader will want to DRY. It is refused under the standing `DEF-06-29-03`: the oracle's
+fence-copy protection **forbids** that fix, and R4-06's identity case now pins the driven text to the
+four shipped copies, so a divergence is caught rather than prevented.
+
+**Condition under which each should be revisited:** (a) if the oracle ever grows a cleanup path, it
+must be **arm-selective** — never a blanket `trap`, and never one that runs on an `exit 3`; (b) if a
+fourth case group is ever added to the checker, the pin moves with it, which is the maintenance it
+already advertises; (c) see `DEF-06-29-03`, which owns the question.
+
+**Urgency:** none for (a) and (c) — refused on principle. Low for (b) — it is a correct guard being
+left alone.
+
+---
+
+## DEF-06-39-03 — the oracle's announced-case base is ENVIRONMENT-DEPENDENT, and a re-measure is valid only in the named reference environment
+
+**Found during:** plan 06-36, closing R4-02 (2026-09-23).
+**Disposition:** a residual attached to a FIXED row. The gate is correct; the **procedure for
+re-measuring it** is the fragile part, and it is written down here as well as in band.
+
+R4-02's fix makes the base skip-aware: `ST_PLANNED_CASES` counts the **unconditional** cases, and
+each of the three environment-conditional arms **decrements it at its own site**, beside the `warn`
+that reports its skip. A deliberate skip therefore adjusts the announcement; a **dropped section**
+adjusts nothing and still fires the gate. Both directions were driven — dropping `self_test_fences`
+still exits 1 (117 vs 140), and deleting one `st_case` from an unconditional section still exits 1
+(139 vs 140).
+
+**The base is still a typed number, and it is only valid in one environment.** That environment is
+named in band beside the constant and is repeated here because a number in a file is read far more
+often than the paragraph beside it: **macOS 27.0 (darwin), non-root (uid 501), `python3` PRESENT,
+bash, BSD grep at `/usr/bin/grep`, BWK awk.** Re-measured by ablation in that environment, the base
+is **140** — not the **134** recorded in `06-REVIEW-GAP3.md`, the 06-36 plan,
+`06-DISPOSITIONS-GAP2.md` and `06-REVIEW-GAP2.md`, all of which predate the six cases R4-06 added.
+Per-arm deltas are **1** (root, mode-000 fixture), **2** (no `python3`), **4** (root,
+present-but-unreadable fixture), and they are **additive**, which is the property that makes three
+independent decrements correct.
+
+**The failure mode this prevents, stated because it already happened once:** re-pinning the base from
+a machine that is *not* the reference environment bakes that machine's skips into the constant, and
+the pin then fails on every machine that does not share them. An operator hitting round 3's false red
+on a `python3`-less box would have re-pinned to 132 and broken every box that has `python3`.
+
+**Two things are NOT proven and are named rather than left silent:** the root and `python3`-absent
+conditions were **ablated on scratch copies**, not genuinely entered — nothing ran as uid 0 and the
+interpreter was never removed, so *that the skip branch self-adjusts* is proven while *that a real
+root run has no other behavioural difference* is not. And **a fourth environment-conditional skip
+would not be detected**: if one is added and its author forgets the decrement, the gate fires with
+the corrected three-cause message — which points at the right question — but nothing detects the
+omission itself. The verify's `-ge 3` is a **floor, not a census**.
+
+**Condition under which it should be revisited:** whenever a case or a section is added or removed
+(the pin's own advertised maintenance), and immediately if a **fourth** environment-conditional skip
+is introduced — at which point the right shape is probably to count the announcement rather than type
+it.
+
+**Urgency:** low. The instrument is green and honest today; this entry exists so the next re-measure
+is taken in the right place.
+
+---
+
+## DEF-06-39-04 — the container-side signal behaviour is STILL UNOBSERVED inside `beets-flask`, on both the SIGTERM and the new SIGPIPE path
+
+**Found during:** plan 06-37, closing R4-03 and R4-04 (2026-09-23).
+**Disposition:** residue attached to one FIXED row (R4-03) and the register's single **FIXED
+(undriven)** row (R4-04). Recorded in band as a graded three-line register beside the traps, not
+claimed away.
+
+R4-03 is closed and **driven**: both in-container programs now carry a named cleanup function, a
+separate `EXIT` trap, and four handlers (`INT`, `TERM`, `HUP`, `PIPE`) that clean, `trap - SIG`, then
+`kill -SIG $$`. Under `/bin/dash`, pre-fix TERM/INT/HUP gave wait status **0** with the program
+running past the signal; post-fix they give **143 / 130 / 129** and it does not.
+
+**What is not observed is the DELIVERY, and it is graded rather than asserted:**
+
+| Path | Grade | Why |
+|---|---|---|
+| `timeout` → SIGTERM → the in-container `sh -s` | **NOT ESTABLISHED** | `timeout` signals the `docker exec` **client on LXC 100**; `docker exec` is not known to forward signals to the exec'd process. If that holds here the `TERM` arm never fires for these programs at all. Untested — this phase makes **no estate contact** |
+| client death → stream teardown → `EPIPE`/`SIGPIPE` on the next stdout write | **BELIEVED, at the same static grade — explicitly NOT an upgrade** | The reason `PIPE` is now in the list. Pre-fix PIPE left the scratch directory **PRESENT** (the leak); post-fix it is gone |
+| `SIGKILL` | **UNCLOSABLE RESIDUAL** | Untrappable. Owned by `DEF-06-34-06`; **not duplicated here** |
+
+**The local `dash` drive proves the HANDLER SHAPE, not the DELIVERY.** It shows that *if* a signal
+arrives, the pre-fix shape absorbs it and the post-fix shape dies from it. It says nothing about
+which signal the container transport actually delivers — which is the whole of R4-04, and why round 3
+naming the SIGTERM path as a "ROUTINE outcome" was withdrawn rather than re-stated.
+
+**Condition that would drive it:** a live `--arm a` / `--arm b` pair under a deliberately short
+`REMOTE_TIMEOUT`, checking the container's `/tmp` afterwards for surviving `/tmp/p6-mf.*` and
+`/tmp/p6-taghist.*` names. **Attaches to the EXISTING Phase 7 entry criterion `E12`**, alongside
+`DEF-06-34-04` and `DEF-06-34-06`. **No new criterion was invented.**
+
+**Urgency:** low. It is litter in a container `/tmp` plus an unverified mechanism claim, not a
+correctness defect — but "the handlers are terminal" must not be read as "the leak is closed".
+
+---
+
+## DEF-06-39-05 — `scripts/quick-health-check.sh` was executed ZERO times in round 4 either
+
+**Found during:** plan 06-35, closing R4-01, R4-07 and R4-08 (2026-09-23). Also true of the review
+itself, which states it in its own closing line.
+**Disposition:** an unchanged limit, restated because it now spans **two consecutive rounds** and a
+reader may assume a file with this much churn has been run.
+
+Neither `06-REVIEW-GAP3.md` nor plan 06-35 executed the script. It contacts LXC 100 (172.16.1.159)
+and atlantis (172.16.1.158), and this phase makes no estate contact. Round 3 carried the same limit.
+
+**Every assertion about its remote command strings is a capture or a grep.** The five `printf '%q'`
+renderings R4-01 and R4-07 installed were proven by generating the command string that *would* be
+sent with `echo`, never sending it, and re-parsing it locally with `set --` — the same word splitting
+the remote bash performs. That is a faithful **model**, and it is a model: it shows `_drift_pair`
+receives the right argument; it does **not** show the remote function then behaves as expected. The
+decisive capture row is the quote-bearing value, which moved from **argc 2 with `$3` EMPTY** to
+**argc 4 with the quote intact**. R4-08 changed nothing executable at all.
+
+**The block-level behaviour closes only on a live run.** Named rather than left as a silence, the
+undriven surfaces include: the vendored-drift block's match / drift / short-answer / could-not-look
+branches and its remote exit-3/4/5 arms; the `DRIFT_APPDATA_ROOT`, `DRIFT_REPO_ROOT` and
+`DASH_RESOLVE_IP` override guards firing at runtime; the dashboard probe's 124 / 255 /
+curl-non-zero / 302 / 401 / 200 arms; `bounded_ssh`'s watchdog and sentinel paths at both probe
+sites; and every other block in the file, none of which round 4 touched.
+
+**Related but distinct, and not duplicated here:** `DEF-06-29-11` records that the deployed host sits
+at a pre-Phase-6 commit, so a live run today would exercise a different file than the one in this
+repo. That is the reason a live run is not merely deferred but currently **uninformative** about
+round 4's changes.
+
+**Condition that would drive it:** the same `git push` + host `git pull --ff-only` the vendored-drift
+block is already waiting on, followed by a real `quick-health-check.sh` run. Operator's call.
+
+**Urgency:** low, and unchanged from round 3. Recorded so that four rounds of edits to this file are
+not mistaken for four rounds of testing it.
+
+---
+
+## DEF-06-39-06 — the self-referential-count hazard has migrated into the `<automated>` verify blocks, and nothing in the round's brief was looking there
+
+**Found during:** plan 06-38, task 2 (2026-09-23), logged by that plan as `F-06-38-01` and
+`F-06-38-02`.
+**Disposition:** a **new surface** for a class this phase has closed three times in the scripts
+(GC-10 → R3-05 → R4-05). Carried rather than fixed: it is a defect in how plans are *written*, not in
+any shipped file.
+
+**The instance.** Plan 06-38's own task-2 verify block asserted
+`/usr/bin/grep -cF '| grep -q' scripts/check-beets-config.sh` **== 0**. It answers **2** at the plan's
+own base commit and 2 after — *unchanged by the plan*. The two hits are **comments quoting the
+retired construction to explain why GC-01 replaced it**, i.e. the two comments explaining this
+phase's only BLOCKER. The assertion **could never have passed**, and satisfying it would have
+required deleting that documentation. This is `06-DISPOSITIONS-GAP2.md` § Lessons 4 verbatim: *a grep
+for a token's absence cannot distinguish a claim from its retraction.* Substituted with the
+comment-stripped form, which measures 0 at base and 0 now and still fails loudly on a real executable
+regression. **No code was changed to make a test pass** — the assertion was wrong about the tree and
+the tree was right.
+
+**The wider point.** Round 4 closed raw self-referential counts **in the scripts** while the blocks
+**checking** those scripts carried the same defect. Artifacts are subject to it too: plan 06-38's own
+artifact pinned a raw count at 4 (it was 6), corrected it to 6, and then had it moved again by the
+plan's own new comment — withdrawn at the third attempt. A separate figure in the same artifact was
+pinned at 18 and measured 22. Plan 06-35 hit the same shape from the other side: its first draft of
+an in-band explanation **quoted the call sites the widened recipe matches**, so the recipe counted its
+own documentation.
+
+**Every one of these was caught by measuring AFTER the edit landed. None was caught by an
+assertion.**
+
+**Mitigation, for any future plan in this phase:** any verify assertion counting a token in a file
+that *discusses* that token must use the **comment-stripped** recipe or an **inequality**, never a
+raw equality; and any count written into a file that greps itself must be **bracketed** so the recipe
+is not an occurrence of what it measures (`EXIT-CODE BEHAVIOUR CHANGE[D]`,
+`EXTRA_FORBIDDEN_SUBSTRINGS:[-]`), **verified after being written in band, not before**.
+
+**Condition under which it should be revisited:** at the planning stage of any round 5 — sweep the
+`<automated>` blocks for raw self-referential counts **before** executing. `DEF-06-21-08` and
+`DEF-06-29-07` already own the broader "plan `<verify>` blocks are a systemic defect class in this
+phase" finding; this entry is the specific self-referential sub-case and cross-references them rather
+than restating them.
+
+**Urgency:** low in consequence, high in recurrence — this is the fourth consecutive round in which
+the class has fired, and the first in which it fired in the verification rather than the code.
