@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-22T13:39:04.751Z"
-last_activity: 2026-09-22 -- Phase 06 execution started
+last_updated: "2026-09-23T07:26:46.786Z"
+last_activity: 2026-09-23 -- Phase 06 execution started
 progress:
   total_phases: 10
   completed_phases: 5
-  total_plans: 103
-  completed_plans: 93
+  total_plans: 108
+  completed_plans: 101
   percent: 50
 ---
 
@@ -28,9 +28,9 @@ pipeline that someone owns.
 
 ## Current Position
 
-Phase: 06 (tagger-configuration-and-dry-run) — gap-closure round 2 EXECUTED; **ROUND 3 PLANNING**
+Phase: 06 (tagger-configuration-and-dry-run) — gap-closure **ROUND 3 EXECUTING**
 (re-verification deliberately NOT run — see the round-3 review block at the end of this section)
-Plan: 29 of 29 executed. Round 1 (06-15..06-21, waves 6-9, 2026-09-22) closed CR-01 and
+Plan: 29 of 34 executed. Round 1 (06-15..06-21, waves 6-9, 2026-09-22) closed CR-01 and
 dispositioned all 24 findings of `06-REVIEW.md`; re-verification is **6/6, status passed**
 (`06-VERIFICATION.md`, gaps_remaining: [], regressions: []).
 **The phase is NOT complete.** A code review of the round-1 changes themselves
@@ -152,17 +152,20 @@ section recording nine adversarial checks that passed so round 4 cannot re-litig
 **The pattern it did find: round 2 closed several defect classes PARTIALLY and then wrote in-band
 comments claiming they were closed COMPLETELY** — the same drift the round existed to remove.
 Three confirmed independently by the orchestrator:
+
 - **R3-01** `quick-health-check.sh` — the new GC-17 comment at `:1426` asserts "There are FOUR
   such sites in this file"; more survive, and `:2118`
   (`docker exec sabnzbd sh -c 'cat \"$EXTCONF_PATH\"'`) is the hand-escaped-quote construction the
   SAME comment forbids sixty lines earlier. That site reads the `requireBeetsMatch` guard — the one
   value standing between `audio.bash` and `rm -rf "$1"/*`. Warning, not Critical: operator-set knob,
   safe default, injection consequence is static reasoning.
+
 - **R3-02** `phase06-oracle.sh` — `ST_RUN` is never compared against an expected constant, so the
   self-test banner goes green over an unenumerated set. `check-beets-config.sh` added exactly this
   guard (`ST_PLANNED_CASES`, gated at `:788`) in the SAME round; the oracle — the file whose harness
   certifies the `rm -rf`/`rm -f` receiving-side fences — did not get it. Strongest candidate for
   promotion to Critical.
+
 - **R3-05** `quick-health-check.sh` — `grep -c 'EXIT-CODE BEHAVIOUR CHANGED'` returns **17** against
   **13** notice headers; plan 06-26's GC-09 tail repair added a raw match, so the file's own drift
   detector now carries a false baseline.
@@ -744,7 +747,6 @@ it asked for: the operator browsed MA's Filesystem (local disk) provider, spot-c
 **played tracks to confirm the audio matches the metadata**. No assertion in this phase could do
 that — every automated check verifies MA's *database* says the right thing, never that the *bytes*
 are the right song, and the documented stale state is precisely "entries exist, playback fails".
-Last activity: 2026-09-22 -- Phase 06 execution started
 deletion and throttling proven from Jellyfin's own Debug log across two driven playback sessions, the
 ZFS quota proven to refuse a write while `/` moved by 0 bytes, the anonymous volume deleted by name
 after the observation it would have made vacuous, **12.95 GiB reclaimed**, and the standing check
