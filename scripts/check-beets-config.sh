@@ -416,7 +416,35 @@ beet_invocation_violations() {  # stdin: shell source -> stdout: one line per no
 # the third — the synthetic NOT rejected, i.e. the checker is blind — increments nothing. Summed,
 # "one real violation" + "a blind checker" equals the expected total of 1. The two are therefore
 # ALSO reported separately below, and case 6 gates on both independently. ARM1_FAILS keeps exactly
-# the value it always had, because the live arm-1 summary line is a second consumer of it.
+# the value it always had, and that is correct — but R3-07 found that the reason recorded here for
+# preserving it was not. The old wording said the live summary line was a second consumer of this
+# function's contribution to the counter. It is not: this function is called from exactly ONE
+# place, and that place is run_self_test, so it never executes on a live run at all. The live
+# summary line consumes the counter; it never sees anything this function put in it. The real
+# reason to preserve the value is narrower — the self-test's per-case bookkeeping and the live
+# summary share one counter, so changing it here would move a number in a path this change has no
+# business touching.
+#
+# The census, given as a RECIPE rather than a number you must take on trust, and comment-STRIPPED,
+# because a raw count also matches every comment that discusses the function, this one included:
+#   /usr/bin/grep -v '^[[:space:]]*#' scripts/check-beets-config.sh \
+#     | /usr/bin/grep -c 'assert_beet_invocation_contract'
+# The answer is 2 — the definition, and the one call inside run_self_test. Anything higher means
+# someone has wired it somewhere else, and the paragraph below applies. R3-07's own evidence line
+# printed that code-only figure as though it were a raw grep count (raw is 4, and rises with prose
+# like this); that is the same self-referential measurement error this round is closing, so it is
+# corrected here rather than inherited.
+#
+# IF THIS FUNCTION IS EVER CALLED LIVE, its two arms must be re-polarised in the same change.
+# Today the CORRECT outcome — the synthetic line was rejected — routes through cfg_fail, while the
+# DEFECTIVE outcome — the checker rejected nothing, so it is blind — is a bare echo. Under
+# --self-test that is fine: cfg_fail feeds a per-case counter rather than the script's exit code,
+# and case 6's ARM1_SYNTH_REJECTED gate catches the blind arm, so neither outcome is lost. Live it
+# is backwards with respect to FAILURES — a CORRECT run would increment it and a BLIND checker
+# would increment nothing. Wiring this live therefore requires routing the blind arm through
+# cfg_fail and the correctly-rejected-synthetic arm through a self-test-only echo, IN THE SAME
+# COMMIT AS THE WIRING. Expect the temptation: a live run currently never checks the -l + -c
+# source contract at all, which is exactly why this function is the obvious thing to reach for.
 assert_beet_invocation_contract() {
   local d='$' real synth synth_bad n
   ARM1_FAILS=0
@@ -730,8 +758,8 @@ run_self_test() {
   #    invocations and ARM1_REAL_VIOLATIONS goes non-zero; make the synthetic compliant and
   #    ARM1_SYNTH_REJECTED goes to 0. Either alone, or both together, fails this case and takes
   #    --self-test non-zero — "both together" being the GC-13 cancellation the old gate passed.
-  case_name="the -l + -c contract over this script's own source"; expect_reds=1
-  echo -e "  ${BLUE}case: $case_name  (expect $expect_reds red)${NC}"
+  case_name="the -l + -c contract over this script's own source"
+  echo -e "  ${BLUE}case: $case_name  (gate: real violations=0 AND synthetic rejected=1)${NC}"
   assert_beet_invocation_contract
   st_cases=$((st_cases + 1))
   st_red_cases=$((st_red_cases + 1))
@@ -741,8 +769,20 @@ run_self_test() {
   # case reported `1 red, as expected`. Two faults cancelled into a pass. The two are now gated
   # independently, and a failure names WHICH half is wrong: "1 red, expected 1" is exactly what
   # made the defect invisible.
+  #
+  # R3-08. GC-13 then left this case's expected-red count alive as a BANNER-ONLY value: nothing
+  # compared it any more, so the banner could announce one expected red over a run that produced
+  # none or two — a smaller instance of the very announced-vs-actual drift that ST_PLANNED_CASES
+  # was added twenty lines below to prevent. The announcement is gone; the banner now states the
+  # gate, and the success line prints the two values the gate actually read, so the two cannot
+  # disagree. The review's alternative — keep the count and add a third conjunct comparing it —
+  # was CONSIDERED AND REFUSED: when the two conjuncts below hold there are no real violations and
+  # the synthetic was rejected once, so the summed counter is necessarily one and the third
+  # conjunct is IMPLIED by the other two. It could never independently fail. That is the
+  # vacuous-assertion class CR-01, GC-03 and GC-05 each removed, and recording the refusal matters
+  # more than the removal — otherwise the next reader restores it as an obvious omission.
   if [[ $ARM1_REAL_VIOLATIONS -eq 0 && $ARM1_SYNTH_REJECTED -eq 1 ]]; then
-    echo -e "  ${GREEN}✅ case '$case_name': $ARM1_FAILS red, as expected${NC}"
+    echo -e "  ${GREEN}✅ case '$case_name': real violations=$ARM1_REAL_VIOLATIONS, synthetic rejected=$ARM1_SYNTH_REJECTED${NC}"
   else
     if [[ $ARM1_REAL_VIOLATIONS -ne 0 ]]; then
       echo -e "  ${RED}❌ case '$case_name': real D-04 violations in this script's own source = $ARM1_REAL_VIOLATIONS, want 0${NC}"
