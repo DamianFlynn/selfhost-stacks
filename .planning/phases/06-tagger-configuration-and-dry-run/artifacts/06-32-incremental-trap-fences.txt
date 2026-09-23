@@ -1,0 +1,195 @@
+================================================================================
+06-32 — R3-09 and R3-10: the two in-container trap fences in
+        scripts/phase06-incremental-control.sh
+================================================================================
+Plan:        06-32 (gap-closure round 3, wave 14)
+Date:        2026-09-23
+Findings:    R3-09 — "the minted scratch names are cleaned on EXIT only, and the
+                      remote programs run under timeout"           (INFO)
+             R3-10 — "the new in-container fences are bare globs — the property
+                      GC-02 just removed from the sibling file"    (INFO)
+Files:       scripts/phase06-incremental-control.sh
+Predecessor: 06-25 (GC-08) minted both names; this plan fixes the two fences
+             GC-08 shipped around them.
+Sibling:     GC-02 in scripts/phase06-oracle.sh — the rule copied here in shape.
+
+METHOD NOTE, first because it bounds everything below. This plan executed in a
+git worktree. Its <verify> blocks open with
+`cd "$(git rev-parse --show-toplevel)"`, which inside a worktree resolves to the
+WORKTREE root, and that is where every measurement in this artifact was taken.
+The main checkout does not carry these edits until the wave merges. Same
+correction plans 06-24 and 06-25 recorded in round 2, for the same reason.
+
+NO ESTATE CONTACT. No ssh, no docker exec, no --run, no --arm. Nothing in this
+artifact was executed inside the beets-flask container.
+
+This artifact is written in two passes, one per task, so that nothing is
+recorded before it was measured. § 1 is task 1 (R3-09, the signal list). § 2
+onward is task 2 (R3-10, the predicate and the sh -n proof).
+
+--------------------------------------------------------------------------------
+1. R3-09 — THE TWO TRAP LINES, BEFORE AND AFTER
+--------------------------------------------------------------------------------
+Anchors, not line numbers: grep `mktemp -d /tmp/p6-mf` and `mktemp /tmp/p6-taghist`
+and read down to the trap under each.
+
+  write_prog_manifest()   — BEFORE (as 06-25/GC-08 shipped it)
+    trap 'case "${MANDIR:-}" in /tmp/p6-mf.*) rm -rf "$MANDIR" ;; esac' EXIT
+
+  write_prog_manifest()   — AFTER TASK 1 (signal list widened; the fence itself
+                            is still the prefix-only one, and task 2 replaces it)
+    trap 'case "${MANDIR:-}" in /tmp/p6-mf.*) rm -rf "$MANDIR" ;; esac' EXIT INT TERM HUP
+
+  write_prog_manifest()   — AFTER TASK 2 (final; § 2 covers the fence change)
+    trap 'case "${MANDIR:-}" in
+            /tmp/p6-mf.*) case "${MANDIR#/tmp/p6-mf.}" in ""|*[!A-Za-z0-9._-]*) : ;; *) rm -rf "$MANDIR" ;; esac ;;
+          esac' EXIT INT TERM HUP
+
+  write_prog_taghistory() — BEFORE
+    trap 'case "${THPROG:-}" in /tmp/p6-taghist.*) rm -f "$THPROG" ;; esac' EXIT
+
+  write_prog_taghistory() — AFTER TASK 1
+    trap 'case "${THPROG:-}" in /tmp/p6-taghist.*) rm -f "$THPROG" ;; esac' EXIT INT TERM HUP
+
+  write_prog_taghistory() — AFTER TASK 2 (final)
+    trap 'case "${THPROG:-}" in
+            /tmp/p6-taghist.*) case "${THPROG#/tmp/p6-taghist.}" in ""|*[!A-Za-z0-9._-]*) : ;; *) rm -f "$THPROG" ;; esac ;;
+          esac' EXIT INT TERM HUP
+
+THE SIGNAL BEHAVIOUR IS STATIC REASONING ABOUT POSIX sh, NOT EXECUTED AGAINST
+THE CONTAINER. The review says the same of its own finding, and this phase does
+not contact the estate, so nothing here proves that a `timeout` expiry inside
+beets-flask now runs the trap. What IS established locally:
+
+  * both programs are delivered through the `timeout`-wrapped transport —
+    grep `docker exec -i -u beetle` returns the remote_exec line
+    `timeout $REMOTE_TIMEOUT docker exec -i -u beetle $CONTAINER sh -s$qargs`,
+    with the bound defaulting to 120 at `REMOTE_TIMEOUT="${REMOTE_TIMEOUT:-120}"`;
+  * `timeout` sends SIGTERM at expiry, which an exit-only trap does not catch;
+  * SIGKILL cannot be trapped at all, so the widening shrinks the window rather
+    than closing it. That limit is stated in band beside the manifest trap, not
+    only here.
+
+CONDITION THAT WOULD DRIVE IT: the next real `--arm a` / `--arm b` pair. At that
+point, after a deliberately short REMOTE_TIMEOUT, confirm that no p6-mf or
+p6-taghist name survives in the container's /tmp. That is the driving condition
+06-25 § 8 already records, extended by one case.
+
+REFUSED, AND WHY — the best-effort sweep. The review's second idea is a
+prefix-gated removal of OTHER names carrying the template prefix, older than a
+day. NOT IMPLEMENTED. It reaches destructively over names this run did not mint,
+in a /tmp shared with a redis, an HTTP server and five rq workers all running as
+the same uid 568 (measured in 06-25 § 3). That is a wider blast radius than an
+INFO finding about litter justifies, and this round exists because fences reached
+further than their comments admitted. The refusal is recorded in band at the
+manifest trap and is carried to the deferred register by plan 06-34.
+
+--------------------------------------------------------------------------------
+2. R3-10 — THE PREDICATE, DRIVEN OFFLINE, IN BOTH DIRECTIONS
+--------------------------------------------------------------------------------
+Driven as a standalone `sh` snippet, NOT as a trap, with NO rm, rmdir or unlink
+of any kind in the drive file: each case prints WOULD-REMOVE or REFUSED instead
+of removing anything. Interpreter /bin/sh on Darwin 27.0.0 (the workstation),
+from the scratch directory /tmp/p6-32-drive.T18Pzmx9 minted with `mktemp -d`.
+Nothing was written into the repo working tree.
+
+The OLD predicate driven is the prefix-only shape 06-25 shipped. The NEW
+predicate is the two-stage one: prefix match, then a remainder that must be
+non-empty and free of any byte outside the class [A-Za-z0-9._-] — a class that,
+unlike a glob, does not match `/`. Verbatim output:
+
+  == MANIFEST FENCE  prefix=/tmp/p6-mf. ==
+  old=WOULD-REMOVE  new=REFUSED       input=[/tmp/p6-mf.a/../../../home]
+  old=WOULD-REMOVE  new=WOULD-REMOVE  input=[/tmp/p6-mf.660lOc4t]
+  old=REFUSED       new=REFUSED       input=[]
+  old=WOULD-REMOVE  new=REFUSED       input=[/tmp/p6-mf.]
+
+  == TAGHISTORY FENCE  prefix=/tmp/p6-taghist. ==
+  old=WOULD-REMOVE  new=REFUSED       input=[/tmp/p6-taghist.a/../../../home]
+  old=WOULD-REMOVE  new=WOULD-REMOVE  input=[/tmp/p6-taghist.le9WmqTd]
+  old=REFUSED       new=REFUSED       input=[]
+  old=WOULD-REMOVE  new=REFUSED       input=[/tmp/p6-taghist.]
+
+Read row 1 and row 2 together, on both fences. Row 1 is the input the fence
+exists to refuse, and the OLD fence accepted it — a fence that was never driven
+against the input it exists to refuse is a fence nobody has tested. Row 2 is the
+positive control: a REAL name, minted here by `mktemp -d /tmp/p6-mf.XXXXXXXX`
+and `mktemp /tmp/p6-taghist.XXXXXXXX`, still removable — which is the failure
+mode a fence tightened without a positive control usually ships. Row 4 is the
+quieter one: the bare prefix with nothing after it was accepted by the old shape
+and is refused now, because the remainder is empty.
+
+Both minted names were removed after the drive, OUTSIDE it, with a plain
+`rmdir` and a plain `rm -f`, so the drive file itself stayed non-destructive.
+
+THE DEFECT WAS LATENT, NOT REACHABLE, and the record says so rather than
+dramatising it: MANDIR and THPROG are only ever `mktemp` output, and `mktemp`
+will not emit a traversal. What this closes is the INCONSISTENCY — two sibling
+files stating two different rules for the same job — and the OVERSTATED CLAIM
+beside the manifest trap, which read "so it can never remove anything else".
+That absolute is gone; the comment now states what the predicate actually gives
+and cites scripts/phase06-oracle.sh as the sibling carrying the same rule.
+
+`""` and not `''` for the empty pattern, for the reason GC-02's comment records
+in the sibling file: the trap body is a single-quoted string, and an inner
+single quote would terminate it. dash treats the two patterns identically.
+
+--------------------------------------------------------------------------------
+3. THE GATE `bash -n` CANNOT GIVE — sh -n OVER BOTH EXTRACTED HEREDOC BODIES
+--------------------------------------------------------------------------------
+Both traps live inside `<<'REOF'` heredocs that are written to a file and piped
+into a container shell. `bash -n` on the outer script parses the heredoc as
+DATA, so a malformed multi-line trap would pass `bash -n`, pass `--self-test`
+(which drives neither program), and fail only on the estate — the one place this
+phase is not allowed to go. Both bodies were therefore extracted with awk and
+parsed as POSIX sh:
+
+  awk '/^write_prog_manifest\(\)/{f=1;next}   f&&/^REOF$/{exit} f'  -> manifest.sh
+  awk '/^write_prog_taghistory\(\)/{f=1;next} f&&/^REOF$/{exit} f'  -> taghist.sh
+
+  file          lines   predicate occurrences   sh -n
+  ------------  ------  ----------------------  -----------
+  manifest.sh      65            1              PASS (rc 0)
+  taghist.sh       31            1              PASS (rc 0)
+
+The occurrence count matters as much as the parse: it asserts the predicate is
+in the IN-CONTAINER program text, not merely somewhere in the outer file. Both
+extractions are non-empty, which is itself an assertion — a silently empty
+extraction would make `sh -n` pass vacuously.
+
+Outer-file gates, for completeness: `bash -n` clean and `--self-test` exit 0
+after BOTH tasks, seven announced sections and no eighth.
+
+--------------------------------------------------------------------------------
+4. WHAT WAS NOT TOUCHED
+--------------------------------------------------------------------------------
+  * No eighth --self-test section was added, and neither in-container program is
+    driven by any existing one — they are heredoc text with no local harness,
+    which is exactly why § 3 exists. Adding a section would have meant editing
+    seven announcement strings for a proof that extraction plus `sh -n` gives
+    more directly.
+  * Exit codes, sentinels and the PROBE-RC / STATEFILE-SHA contract are
+    untouched, as 06-25 § 5 recorded them. The fences narrow; they do not change
+    what either program emits.
+  * The sibling scripts/phase06-oracle.sh was NOT edited. It already carries
+    GC-02's predicate; this plan copies the shape, it does not move the code.
+  * scripts/setup-neocortex-memory.sh, stacks/selfhosted/neocortex-memory/ and
+    stacks/selfhosted/agentic-os/ are out of scope and were not touched.
+  * No requirement checkbox moved. CONF-04 is not closed. The phase is not
+    declared complete.
+
+--------------------------------------------------------------------------------
+5. NOT-DRIVEN REGISTER
+--------------------------------------------------------------------------------
+  * BOTH TRAPS AS EXECUTED IN THE CONTAINER. No estate contact this phase. What
+    was proven locally is that the program text parses as POSIX sh and that the
+    predicate behaves as claimed; nothing here observed either trap firing
+    inside beets-flask. Driving condition: the next real `--arm a` / `--arm b`
+    pair, which should also confirm no p6-mf or p6-taghist name survives.
+  * THE SIGTERM BEHAVIOUR ITSELF. Static reasoning about POSIX sh and about what
+    `timeout` sends at expiry; not observed against the container. The review
+    records its own finding the same way.
+  * THE REFUSED SWEEP over names this run did not mint. Deliberately not
+    implemented, so there is nothing to drive. Flagged for plan 06-34's deferred
+    register with the reason above, not dropped.
+================================================================================
