@@ -855,3 +855,211 @@ stays until Phase 7 entry criterion **E6** discharges CONF-04. **Do not tune tha
 **Urgency:** operator's call, and it is a decision rather than a task — pushing makes the health
 entry point exit non-zero on the consumers block by design. Recorded so that a future reader
 seeing three reds after a deploy does not attribute them to round 2's changes.
+
+---
+
+## DEF-06-34-01 — REFUSED: the best-effort `/tmp/p6-mf.*` sweep the review floats under R3-09
+
+**Found during:** plan 06-32, closing R3-09 (2026-09-23).
+**Disposition:** **a deliberate REFUSAL, not an omission.** Recorded in band at the manifest trap
+and in `artifacts/06-32-incremental-trap-fences.txt`, and carried here so the next round does not
+re-open it as an obvious gap.
+
+`06-REVIEW-GAP2.md` § R3-09 closes with: *"and consider a best-effort sweep of `/tmp/p6-mf.*` older
+than a day in the same program, gated on the same prefix."* Plan 06-32 widened both traps — which
+is the finding's substantive half — and **declined the sweep**.
+
+**The reason, stated so it can be disagreed with rather than merely obeyed.** A prefix-gated
+`rm -rf` over names *the current run did not mint* is a materially wider destructive reach than an
+**INFO** litter finding justifies. The `/tmp` it would sweep is the `beets-flask` container's, which
+the file's own header records as mode **1777**, and on which — measured by plan 06-25 — a redis, an
+HTTP server and five rq workers all run as **uid 568, the same uid the instrument execs as**. A
+sweep would therefore be one instrument deleting paths belonging to processes it does not own, on
+an age heuristic, to tidy up after a timeout. The trap widening already shrinks the window that
+produces the litter; the litter itself is bounded, named by prefix, and removable by hand.
+
+**Condition under which it should be revisited:** evidence that the litter actually accumulates —
+i.e. a live `--arm a`/`--arm b` pair (or several) under a short `REMOTE_TIMEOUT` that leaves
+`/tmp/p6-mf.*` directories behind in numbers. If that happens, the right shape is almost certainly
+**not** a sweep inside the instrument but a cleanup the *operator* runs with the prefix in front of
+them. Do not implement it because a reader assumed R3-09 was closed only half way.
+
+**Urgency:** low. The finding's substantive half is FIXED (`928f9c2`); this is the discarded
+optional half.
+
+---
+
+## DEF-06-34-02 — REFUSED ×2: the vacuous third conjunct (R3-08) and wiring `assert_beet_invocation_contract` live (R3-07)
+
+**Found during:** plan 06-33, closing R3-08 and R3-07 (2026-09-23).
+**Disposition:** **two deliberate REFUSALS**, both recorded in band at their sites — the first at
+case 6's gate, the second immediately above the function under the greppable opening
+`IF THIS FUNCTION IS EVER CALLED LIVE`.
+
+**(a) R3-08's second option was refused.** The review offers two fixes: drop `expect_reds` from case
+6, or keep it and add `[[ $ARM1_FAILS -eq $expect_reds ]]` as a **third conjunct** so banner and
+gate cannot disagree. Plan 06-33 took the first. The second looks symmetric and is not: when the two
+existing conjuncts hold — real violations 0, synthetic rejected once — the summed counter is
+**necessarily 1**, so the third conjunct is *implied by the other two* and **could never
+independently fail**. Adding it to close a finding about honest announcements would have traded one
+defect class for the worse one this phase has removed three times (CR-01, GC-03, GC-05): a vacuous
+assertion that reads as coverage.
+
+**(b) R3-07's live wiring was refused, and so was re-polarising its arms.** The review notes that a
+live run currently never checks the `-l` + `-c` source contract at all, and that the function's arm
+polarity is inverted with respect to `FAILURES` — a *correct* run would increment it and a *blind*
+checker would increment nothing — the moment anyone wires it live. Plan 06-33 **did not wire it**.
+Wiring is a behaviour change to the live checker, outside a hardening round's brief, and doing it in
+the same breath as a claim correction would have buried it. What was done instead is to record the
+**precondition at the site**, naming what must change *in the same commit as any wiring*, why it is
+harmless under `--self-test`, and why someone will be tempted.
+
+**Condition under which each should be revisited:** (a) never as stated — if case 6's announcement
+drifts again, the answer is another gated value, not an implied conjunct. (b) when someone decides
+the live checker *should* assert the D-04 source contract, which is a real gap and a reasonable
+thing to want. That work must carry the arm re-polarisation in the same commit; the in-band note
+exists so it cannot be missed.
+
+**Urgency:** (a) none — refused on principle. (b) low, but genuine: this is the one place round 3
+identified a live check that does not exist and chose not to build.
+
+---
+
+## DEF-06-34-03 — the raw exit-code-notice count in `quick-health-check.sh` is deliberately UNPINNED
+
+**Found during:** plan 06-30, closing R3-05 (2026-09-23).
+**Disposition:** a deliberate omission with a recipe in its place. Recorded because the next author
+of a notice will look for a baseline and must find the reason, not a number.
+
+R3-05's subject is that the thirteenth notice's measured counts (`headers 12 -> 13`, `raw 15 -> 16`,
+"a constant delta of three") were **invalidated later in the same round** by plan 06-26's GC-09 tail
+repair — a line saying a notice was deliberately *not* added, which in saying so added a raw match.
+Measured at round 3's base: headers **13**, raw **17**, delta **four**. This was the **third** drift
+of these two numbers.
+
+**The review offered `raw 15 -> 17` and the drop was taken instead.** Re-pinning a number that has
+drifted three times sets up the fourth drift. The file now states that the **header count is the
+durable one** and the raw count is **deliberately unpinned**, and carries both recipes instead:
+
+```
+/usr/bin/grep -c '^# ⚠️  EXIT-CODE BEHAVIOUR CHANGE[D]' scripts/quick-health-check.sh   # headers
+/usr/bin/grep -c 'EXIT-CODE BEHAVIOUR CHANGE[D]'        scripts/quick-health-check.sh   # raw
+```
+
+**The bracketed final letter is load-bearing and must not be "simplified" away.** `CHANGE[D]` is a
+valid pattern that matches every real occurrence, while the recipe lines are **not themselves
+occurrences** of the string they measure. The proof it works: the raw count stayed **17 → 17** across
+the commit that added these two lines.
+
+**⚠️ Three earlier instances of the withdrawn delta sentence were deliberately LEFT UNTOUCHED**, and
+are labelled in band as dated historical records. Each was accurate as of its own edit and none was
+re-measured. **Do not "correct" them** — doing so would turn three accurate statements into three
+wrong ones, and is the single most likely way a future reader damages this file while trying to
+help.
+
+**Condition that would drive it:** none; there is nothing to drive. The item exists so the recipe is
+found instead of a stale baseline.
+
+**Urgency:** none. It is a standing instruction, not a task.
+
+---
+
+## DEF-06-34-04 — the oracle's layer-3 block is UNDRIVEN: R3-03 and R3-04 are proven offline only
+
+**Found during:** plan 06-31, closing R3-03 and R3-04 (2026-09-23). Also
+`06-DISPOSITIONS-GAP2.md` § What was driven and what was not, item 1.
+**Disposition:** residue attached to two rows that are themselves FIXED. It is **not** a downgrade
+of the disposition and must not be read as one.
+
+The layer-3 block in `scripts/phase06-oracle.sh` — the assertion whose whole job is to prove `-l`
+kept the real `library.db` closed — is reachable **only from a live `--run`**, which this phase does
+not perform. Both round-3 fixes to it are therefore proven by an **offline parse drive and static
+reading**, not by a live run:
+
+- **R3-03** (the whitespace-tolerant `sha256sum` parser): driven against synthetic `sha256sum`
+  output on the workstation's own `awk`, which *is* the real consumer — the awk reads local files.
+  Six probes, including the two properties the fix must not break. What has never happened is a real
+  `docker exec … sha256sum` returning a line this parser then keyed.
+- **R3-04** (the two AFTER emptiness guards): driven as detached copies of both shapes with both
+  controls. The guard changes the verdict on exactly one input. What has never happened is a live
+  run producing a short or absent second `sha256sum` line.
+
+Separately, **`scripts/quick-health-check.sh` was not executed at all** during round 3 — not by the
+review, not by plan 06-30. Its five reshaped remote sites (R3-01) are asserted by **capture** (a
+command string produced by `echo`, never sent) and by word-split trace. The defaults are unchanged
+in every case and all five knobs are additive and force `EXIT_CODE=1` when non-default, which bounds
+the exposure.
+
+**Condition that would drive it:** the live pilot. A real `--run` exercises the layer-3 block on
+both sides; a deploy plus a real `quick-health-check.sh` run exercises the five remote sites. This
+attaches to the **existing** Phase 7 entry criterion **E12**, which already carries round 2's
+undriven-until-the-pilot residue — no new criterion is added.
+
+**Urgency:** low, and it is the ordinary state of this instrument rather than a defect. Recorded so
+that "R3-03 and R3-04 are FIXED" is not read as "the layer-3 block has been exercised".
+
+---
+
+## DEF-06-34-05 — `self_test_fences`' `*"rm "*` token test is weaker than a destructive-program check, and the cases were deliberately not widened
+
+**Found during:** plan 06-31, closing R3-06 (2026-09-23).
+**Disposition:** a decision recorded, not a gap left open. The prose was narrowed; the cases were
+not widened, and **that choice is the item**.
+
+R3-06's substance is that the comment named three properties (no `rm`, no `touch`, no redirection
+into a path) while the three cases assert **one** — absence of the two-character token `rm ` — for
+three different fence strings. The prose is now narrowed to exactly what is executed, with the gap
+written out: `touch` unasserted; redirection unasserted, with the `>&2` point resolved under both
+readings.
+
+**The cases were deliberately not widened**, and the bound that makes that defensible is stated
+rather than assumed: the fence texts are **three short literals under version control**, and the
+byte-identity case between the two stamp fences turns silent drift in them into a red case. The
+residual weakness is real and narrow — a tab-separated or newline-terminated `rm` would slip past a
+`*"rm "*` test.
+
+**A wider reason the cases stay as they are, kept from round 2:** the oracle's three destructive
+programs are **never executed**, not even on paths the fence should refuse, because a fence
+regression would turn the self-test itself into `rm -rf /tmp/p6-x/../../../home`. That is
+`06-DISPOSITIONS-GAP.md` § Deliberate non-findings item 5, carried as `DEF-06-29-05`; this entry
+does not duplicate it, it records why the *token test* specifically was left alone.
+
+**Condition that would drive it:** widening the cases to `*rm*` / `*touch*` / redirection, with the
+`>&2` occurrences accounted for — worth doing only if the fence texts stop being three short
+literals.
+
+**Urgency:** low. **Do not read the narrower sentence as a weakening**; the code is unchanged and
+the assertion is exactly as strong as it always was.
+
+---
+
+## DEF-06-34-06 — the `SIGKILL` residual survives on both in-container traps
+
+**Found during:** plan 06-32, closing R3-09 (2026-09-23).
+**Disposition:** an acknowledged, unclosable residual. Stated in band beside both traps rather than
+claimed away.
+
+Both traps in `scripts/phase06-incremental-control.sh` now carry `INT TERM HUP` alongside `EXIT`,
+which covers the routine case: the programs are `sh -s` under `timeout $REMOTE_TIMEOUT docker exec`,
+and a bound expiry on a manifest over a large tree is expected rather than exotic. **The widening
+shrinks the window; it does not close it.** `SIGKILL` cannot be trapped, so a hard kill — `timeout
+-k`, a container stop, an OOM kill — still leaves the minted directory behind.
+
+That residue is what GC-08's own comment names as the worse case: *"a MINTED leftover is worse
+litter than a fixed one, because nobody knows its name."* The fixed names at least self-limited to
+three; minted ones accumulate one per killed run, in a `/tmp` the same header records as mode 1777.
+The refused sweep in `DEF-06-34-01` is the obvious response and was refused for reasons that stand.
+
+**Neither trap has been observed firing inside the container.** R3-09 is the register's single
+`FIXED (undriven)` row for exactly this reason: the `SIGTERM` behaviour is static reasoning about
+POSIX `sh` on both sides — the review says so of its finding, and plan 06-32 says so of its fix.
+What *was* proven locally is that both program texts parse as POSIX `sh` (`sh -n` rc 0 over both
+extracted heredoc bodies, 65 and 31 lines — the gate `bash -n` cannot give, since it parses
+heredocs as data).
+
+**Condition that would drive it:** a live `--arm a` / `--arm b` pair under a deliberately short
+`REMOTE_TIMEOUT`, checking the container's `/tmp` afterwards for surviving `p6-mf` and `p6-taghist`
+names. Attaches to Phase 7 entry criterion **E12** alongside `DEF-06-34-04`.
+
+**Urgency:** low — it is litter in a container `/tmp`, not a correctness defect. Recorded so that
+"the traps were widened" is not read as "the leak is closed".

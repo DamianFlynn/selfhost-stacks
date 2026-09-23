@@ -476,3 +476,63 @@ _Reviewed: 2026-09-22_
 _Reviewer: Claude (gsd-code-reviewer), round 3_
 _Depth: standard_
 _Scope: `git diff bf509f4..HEAD` over four scripts; no estate contact, no self-test re-runs_
+
+---
+
+## Dispositioned 2026-09-23 — this file is now WIRED
+
+*Appended by plan 06-34. **Nothing above this line was edited.** Every finding's text, every anchor,
+the `findings:` frontmatter counts and the Verified-and-clean section are the record of what was
+found on 2026-09-22, and that record stands — including where a later measurement refined it.*
+
+**All ten findings carry an explicit disposition**, recorded in:
+
+> **`.planning/phases/06-tagger-configuration-and-dry-run/06-DISPOSITIONS-GAP2.md`**
+
+with one row per finding ID (`R3-01` … `R3-10`) in ID order, each citing the plan, the commit and
+the artifact holding the driven transcript, each carrying a **provenance clause** naming who
+confirmed the finding and how, and each carrying a **fix-kind** — `CODE`, `CLAIM CORRECTION` or
+`BOTH`.
+
+Summary: **9 FIXED, 1 FIXED (undriven), 0 ACCEPTED, 0 CARRIED — 10 total.** The counts reconcile
+three ways: this file's frontmatter 0 + 5 + 5 = **10**; the dispositions 9 + 1 + 0 + 0 = **10**; the
+fix kinds 4 CODE + 3 CLAIM CORRECTION + 3 BOTH = **10**.
+
+**The fix-kind column is the point of this round.** The central charge above is that round 2 closed
+several classes partially and then claimed they were closed completely. A register of ten
+undifferentiated `FIXED` rows would reproduce that ambiguity one level up, so the register
+distinguishes a widened fence from a narrowed sentence, and records **per finding** what was not
+driven — the whole layer-3 block (R3-03, R3-04), the `SIGTERM` behaviour behind R3-09, and
+`quick-health-check.sh`, which was not executed at all by the review or by the fix.
+
+The fixes were made by gap-closure plans **06-30, 06-31, 06-32 and 06-33**; plan **06-34** wrote the
+register and wired it. Round 3's residue — **including the round's two deliberate refusals** — is
+carried by name as `DEF-06-34-01` … `DEF-06-34-06` in `deferred-items.md`. **There was no
+cross-family adjudication in round 3**, so nothing is appended below the review's own ten; the
+register says so explicitly, because an absent adjudication that is not mentioned reads like a lost
+one.
+
+**One correction, in band: R3-07's census sentence is wrong, and the finding is not.** Its
+**Verified** line reads *"`assert_beet_invocation_contract` has exactly two hits"*. Raw
+`/usr/bin/grep -cF` gives **4** at the tree under review and **5** after plan 06-33 — definition,
+one call, and comment mentions the round under review added. It gives 2 only at this review's own
+`diff_base` `bf509f4`. **The finding's conclusion is correct and entirely unaffected**: exactly two
+occurrences are *code*, the code call is inside `run_self_test`, and the function does not run live.
+Only the census is wrong. It is recorded here the way round 2 recorded the GC-15/GC-17 label
+crossing — **as a correction in band, not a silent fix and not a downgrade of the finding** — and
+the durable figure is the comment-stripped **2**, which is what the script and 06-33's verify now
+pin. Caught during round-3 planning, because a verification that pinned the review's number would
+have failed on arrival.
+
+**The Verified-and-clean section above is closed against round 4.** Its nine items are reproduced in
+the register under a heading saying so; a round-4 finding that merely restates one of them is not a
+new finding. Two were touched by round 3 and remain clean: the `-1` sentinels are unchanged, and
+R3-06 narrowed the prose beside the three `rm ` cases while deliberately **not** widening the cases
+themselves.
+
+**This is a record, not a re-close.** No `/gsd-verify` was run by plan 06-34 and no verification
+result is claimed. **CONF-04 is not closed**, `REQUIREMENTS.md` is untouched, and ROADMAP entry
+criterion **E6** still owns the Jellyfin half. No requirement checkbox moved and the phase is **not**
+declared complete.
+
+_Dispositioned: 2026-09-23 by plan 06-34_
