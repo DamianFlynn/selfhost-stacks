@@ -294,3 +294,40 @@ ways in STATE and in the ROADMAP disposition paragraph, as the operator's call a
 If one is commissioned: give it a fresh `R5-*` namespace **before** it is written (`DEF-06-39-01`),
 and sweep its `<automated>` blocks for raw self-referential counts **before** executing
 (`DEF-06-39-06`).
+
+## Self-Check: PASSED
+
+Verified after writing, not assumed. Every figure below was re-measured at HEAD.
+
+**Files claimed, checked on disk:** `06-DISPOSITIONS-GAP3.md`, `06-REVIEW-GAP3.md`,
+`deferred-items.md`, `06-39-SUMMARY.md`, `.planning/ROADMAP.md`, `.planning/STATE.md` — all FOUND.
+
+**Commits claimed, checked in `git log`:** `a4f42fd`, `2cded38`, `be1e8ac`, `a52ad7d` — all FOUND.
+**None of the four deleted a tracked file** (`git diff --diff-filter=D` empty for each).
+
+**Counts re-measured, against the figures this summary states:**
+
+| Claim | Measured | Expected |
+|---|---|---|
+| `06-NN-SUMMARY.md` files on disk | **39** | 39 |
+| `^## DEF-` entries | **36** | 36 (30 + 6) |
+| `^## DEF-06-39-` entries | **6** | 6 |
+| `DEF-06-21-*` / `DEF-06-29-*` / `DEF-06-34-*` | **8 / 11 / 6** | unchanged from HEAD |
+| `^### WR-` / `^### IN-` in the review | **6 / 4** | 6 / 4, unedited |
+| Phase 6 Notes cell | **8018 B**, one line | > 5177 B at HEAD |
+| `- [ ] **CONF-04**` in `REQUIREMENTS.md` | **1** | 1, untouched |
+| `PARTIALLY FIXED` in the register | **0** | 0 — no fifth word invented |
+
+**Scope re-measured:** `git diff --name-only 57f9bae..HEAD` lists **exactly six** files — the four
+record files plus ROADMAP and STATE. **No file under `scripts/` was touched.** `REQUIREMENTS.md` and
+`06-VERIFICATION.md` both show clean in `git status`. `06-REVIEW.md`, `06-REVIEW-GAP.md` and
+`06-REVIEW-GAP2.md` do not appear in the diff.
+
+**Append-only assertions:** `06-REVIEW-GAP3.md` 107 insertions / **0 deletions**;
+`deferred-items.md` 250 insertions / **0 deletions**.
+
+**Verify blocks:** all three tasks' `<automated>` blocks re-run against the committed tree and reach
+their end at exit 0 — task 3's with `-e` added to its five tick assertions, the one documented
+substitution, recorded as deviation 1 above.
+
+**Working tree clean; no untracked files left behind.**
