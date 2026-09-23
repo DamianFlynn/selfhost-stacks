@@ -1,0 +1,308 @@
+================================================================================
+06-35 — quick-health-check.sh: drift-pair quoting, DASH_RESOLVE_IP rendering,
+        and the census recipe widening
+Phase 06, gap-closure round 4. Findings R4-01, R4-07, R4-08.
+Captured 2026-09-23.
+================================================================================
+
+FINDING ID ALIASING — READ THIS FIRST.
+Round 4's report (06-REVIEW-GAP3.md) REUSES round 1's WR-*/IN-* namespace, and round 1's IDs are
+already cited in band in all four scripts. In band, and throughout this artifact, round 4's
+findings are written R4-01 … R4-10. The mapping this plan owns:
+
+    round-4 report ID   in-band ID   subject
+    WR-01               R4-01        the ⛔-forbidden hand-escaped wrapper is live four times,
+                                     eleven lines below its own prohibition, while R3-01's new
+                                     text says the class is closed
+    IN-01               R4-07        DASH_RESOLVE_IP reaches a remote command string raw, and the
+                                     census does not mention it
+    IN-02               R4-08        the census recipe's second grep misses the two bounded_ssh
+                                     remote call sites
+
+Per-finding disposition:
+    R4-01   BOTH          — code widening (four renderings) AND claim correction (two sentences)
+    R4-07   BOTH          — one rendering AND a census list entry
+    R4-08   CLAIM ONLY    — the recipe is a comment; widening it changes no behaviour
+
+================================================================================
+SECTION 0 — EXECUTION SAFETY. WHAT WAS AND WAS NOT RUN.
+================================================================================
+
+scripts/quick-health-check.sh WAS EXECUTED ZERO TIMES BY THIS PLAN.
+It contacts LXC 100 (172.16.1.159) and atlantis (172.16.1.158). Every "drive" in this artifact is
+either a grep over the file, or a command string produced by `echo`/`printf` in a standalone
+harness that contains no ssh, no curl and no network call of any kind.
+
+No --run, no --arm, no git push, no host git pull, no estate contact.
+
+ONE DOCUMENTED SUBSTITUTION IN THE VERIFY BLOCKS, stated rather than left silent.
+Both <automated> blocks open with `cd "$(git rev-parse --show-toplevel)"`. This executor runs
+inside a git worktree whose tool sandbox refuses to run a script file it cannot prove is git-free,
+so that one line was replaced with the literal worktree root before driving. Inside a worktree
+`git rev-parse --show-toplevel` returns the worktree root, so the substitution is semantically
+identical; every other line of both blocks was driven BYTE-FOR-BYTE AS WRITTEN.
+
+================================================================================
+SECTION 1 — PRE-FIX DRIVE OF BOTH VERIFY BLOCKS
+  (the anti-vacuity gate: a block that passes pre-fix is vacuous)
+================================================================================
+
+Both <automated> blocks were extracted to $TMPDIR, parsed with `bash -n`, and run AGAINST THE
+UNFIXED TREE BEFORE ANY EDIT WAS MADE.
+
+    $ bash -n verify-task1.sh        -> exit 0  (parses clean)
+    $ bash -n verify-task2.sh        -> exit 0  (parses clean)
+
+    $ bash verify-task1.sh           -> exit 1   DID NOT REACH ITS END
+    $ bash verify-task2.sh           -> exit 1   DID NOT REACH ITS END
+
+Neither printed its terminal marker, so neither ran to completion. To establish WHERE each first
+fails — `set -e` alone proves only that something failed — an instrumented copy of each was run
+with an echo before every assertion. The last marker printed identifies the first failing test.
+
+TASK 1, instrumented, pre-fix:
+
+    MARKER A1: about to test the forbidden-shape absence -- value is: 4
+    (exit 1)
+
+  The block fails at its FIRST fix-related assertion — `grep -cF '\"$DRIFT_APPDATA_ROOT/'`
+  returned 4, not 0 — and reaches no later marker. The four live instances R4-01 names are
+  confirmed present at the moment of the pre-fix drive.
+
+TASK 2, instrumented, pre-fix:
+
+    MARKER B1: widened recipe pattern present -- value is: 0
+    (exit 1)
+
+  The block fails at its FIRST fix-related assertion — the widened `-E` pattern is absent from the
+  file — and reaches no later marker.
+
+Both blocks are therefore non-vacuous: each discriminates the unfixed tree from the fixed one at
+its first fix-related test.
+
+================================================================================
+SECTION 2 — R4-01 / R4-07: BEFORE AND AFTER REMOTE COMMAND STRINGS
+  Five newly rendered values. Produced by echo. NEVER SENT.
+================================================================================
+
+The harness below reconstructs the BEFORE shape. That reconstruction lives HERE AND ONLY HERE —
+it is deliberately absent from quick-health-check.sh, including from any comment describing its
+removal, because a grep for a token's absence cannot distinguish a claim from its retraction
+(06-DISPOSITIONS-GAP2.md § Lessons 4; round 2 shipped that defect twice).
+
+The last sub-section of each drift case re-parses the generated call line with `set --` in a local
+shell. That is the SAME word splitting the remote bash performs, so it shows what the remote
+`_drift_pair` would actually receive as its third argument — without sending anything.
+
+--------------------------------------------------------------------------------
+### DRIFT_APPDATA_ROOT — four pairs, one rendering each (R4-01)
+
+==============================================================================
+KNOB VALUE (DEFAULT — the control):
+  DRIFT_APPDATA_ROOT=[/mnt/fast/appdata]
+
+--- BEFORE (raw knob inside a hand-escaped quote wrapper) — CALL LINES ONLY ---
+_drift_pair audio.bash stacks/selfhosted/arrs/sabnzbd/audio.bash "/mnt/fast/appdata/arrs/sabnzbd/config/scripts/audio.bash"
+_drift_pair sabnzbd-beets-config.yaml stacks/selfhosted/arrs/sabnzbd/beets-config.yaml "/mnt/fast/appdata/arrs/sabnzbd/config/scripts/beets-config.yaml"
+_drift_pair survivor-config.yaml stacks/selfhosted/arrs/beets/config.yaml "/mnt/fast/appdata/arrs/beets/config/config.yaml"
+_drift_pair flask-config.yaml stacks/selfhosted/arrs/beets/flask-config.yaml "/mnt/fast/appdata/arrs/beets/config/beets-flask/config.yaml"
+
+--- AFTER (rendered whole-word per pair, interpolated unquoted) — CALL LINES ONLY ---
+_drift_pair audio.bash stacks/selfhosted/arrs/sabnzbd/audio.bash /mnt/fast/appdata/arrs/sabnzbd/config/scripts/audio.bash
+_drift_pair sabnzbd-beets-config.yaml stacks/selfhosted/arrs/sabnzbd/beets-config.yaml /mnt/fast/appdata/arrs/sabnzbd/config/scripts/beets-config.yaml
+_drift_pair survivor-config.yaml stacks/selfhosted/arrs/beets/config.yaml /mnt/fast/appdata/arrs/beets/config/config.yaml
+_drift_pair flask-config.yaml stacks/selfhosted/arrs/beets/flask-config.yaml /mnt/fast/appdata/arrs/beets/config/beets-flask/config.yaml
+
+--- REMOTE-SIDE WORD SPLIT of the audio.bash call line (argument count and $3) ---
+  BEFORE: argc=4  $4(=the path arg)=[/mnt/fast/appdata/arrs/sabnzbd/config/scripts/audio.bash]
+  AFTER : argc=4  $4(=the path arg)=[/mnt/fast/appdata/arrs/sabnzbd/config/scripts/audio.bash]
+
+==============================================================================
+KNOB VALUE (CONTAINS A SPACE):
+  DRIFT_APPDATA_ROOT=[/mnt/fast/app data]
+
+--- BEFORE (raw knob inside a hand-escaped quote wrapper) — CALL LINES ONLY ---
+_drift_pair audio.bash stacks/selfhosted/arrs/sabnzbd/audio.bash "/mnt/fast/app data/arrs/sabnzbd/config/scripts/audio.bash"
+_drift_pair sabnzbd-beets-config.yaml stacks/selfhosted/arrs/sabnzbd/beets-config.yaml "/mnt/fast/app data/arrs/sabnzbd/config/scripts/beets-config.yaml"
+_drift_pair survivor-config.yaml stacks/selfhosted/arrs/beets/config.yaml "/mnt/fast/app data/arrs/beets/config/config.yaml"
+_drift_pair flask-config.yaml stacks/selfhosted/arrs/beets/flask-config.yaml "/mnt/fast/app data/arrs/beets/config/beets-flask/config.yaml"
+
+--- AFTER (rendered whole-word per pair, interpolated unquoted) — CALL LINES ONLY ---
+_drift_pair audio.bash stacks/selfhosted/arrs/sabnzbd/audio.bash /mnt/fast/app\ data/arrs/sabnzbd/config/scripts/audio.bash
+_drift_pair sabnzbd-beets-config.yaml stacks/selfhosted/arrs/sabnzbd/beets-config.yaml /mnt/fast/app\ data/arrs/sabnzbd/config/scripts/beets-config.yaml
+_drift_pair survivor-config.yaml stacks/selfhosted/arrs/beets/config.yaml /mnt/fast/app\ data/arrs/beets/config/config.yaml
+_drift_pair flask-config.yaml stacks/selfhosted/arrs/beets/flask-config.yaml /mnt/fast/app\ data/arrs/beets/config/beets-flask/config.yaml
+
+--- REMOTE-SIDE WORD SPLIT of the audio.bash call line (argument count and $3) ---
+  BEFORE: argc=4  $4(=the path arg)=[/mnt/fast/app data/arrs/sabnzbd/config/scripts/audio.bash]
+  AFTER : argc=4  $4(=the path arg)=[/mnt/fast/app data/arrs/sabnzbd/config/scripts/audio.bash]
+
+==============================================================================
+KNOB VALUE (CONTAINS A DOUBLE QUOTE):
+  DRIFT_APPDATA_ROOT=[/mnt/fast/app"data]
+
+--- BEFORE (raw knob inside a hand-escaped quote wrapper) — CALL LINES ONLY ---
+_drift_pair audio.bash stacks/selfhosted/arrs/sabnzbd/audio.bash "/mnt/fast/app"data/arrs/sabnzbd/config/scripts/audio.bash"
+_drift_pair sabnzbd-beets-config.yaml stacks/selfhosted/arrs/sabnzbd/beets-config.yaml "/mnt/fast/app"data/arrs/sabnzbd/config/scripts/beets-config.yaml"
+_drift_pair survivor-config.yaml stacks/selfhosted/arrs/beets/config.yaml "/mnt/fast/app"data/arrs/beets/config/config.yaml"
+_drift_pair flask-config.yaml stacks/selfhosted/arrs/beets/flask-config.yaml "/mnt/fast/app"data/arrs/beets/config/beets-flask/config.yaml"
+
+--- AFTER (rendered whole-word per pair, interpolated unquoted) — CALL LINES ONLY ---
+_drift_pair audio.bash stacks/selfhosted/arrs/sabnzbd/audio.bash /mnt/fast/app\"data/arrs/sabnzbd/config/scripts/audio.bash
+_drift_pair sabnzbd-beets-config.yaml stacks/selfhosted/arrs/sabnzbd/beets-config.yaml /mnt/fast/app\"data/arrs/sabnzbd/config/scripts/beets-config.yaml
+_drift_pair survivor-config.yaml stacks/selfhosted/arrs/beets/config.yaml /mnt/fast/app\"data/arrs/beets/config/config.yaml
+_drift_pair flask-config.yaml stacks/selfhosted/arrs/beets/flask-config.yaml /mnt/fast/app\"data/arrs/beets/config/beets-flask/config.yaml
+
+--- REMOTE-SIDE WORD SPLIT of the audio.bash call line (argument count and $3) ---
+  BEFORE: argc=2  $4(=the path arg)=[]
+  AFTER : argc=4  $4(=the path arg)=[/mnt/fast/app"data/arrs/sabnzbd/config/scripts/audio.bash]
+
+
+### DASH_RESOLVE_IP — one rendering (R4-07)
+
+==============================================================================
+KNOB VALUE (DEFAULT — the control):
+  DASH_RESOLVE_IP=[127.0.0.1]
+--- BEFORE (raw) ---
+timeout 120 curl -s -o /dev/null -w '%{http_code} %{redirect_url}' --resolve traefik.deercrest.info:443:127.0.0.1 https://traefik.deercrest.info/dashboard/
+--- AFTER (rendered) ---
+timeout 120 curl -s -o /dev/null -w '%{http_code} %{redirect_url}' --resolve traefik.deercrest.info:443:127.0.0.1 https://traefik.deercrest.info/dashboard/
+
+==============================================================================
+KNOB VALUE (CONTAINS A SPACE):
+  DASH_RESOLVE_IP=[127.0.0.1 evil.example]
+--- BEFORE (raw) ---
+timeout 120 curl -s -o /dev/null -w '%{http_code} %{redirect_url}' --resolve traefik.deercrest.info:443:127.0.0.1 evil.example https://traefik.deercrest.info/dashboard/
+--- AFTER (rendered) ---
+timeout 120 curl -s -o /dev/null -w '%{http_code} %{redirect_url}' --resolve traefik.deercrest.info:443:127.0.0.1\ evil.example https://traefik.deercrest.info/dashboard/
+
+==============================================================================
+KNOB VALUE (CONTAINS A DOUBLE QUOTE):
+  DASH_RESOLVE_IP=[127.0.0.1"x]
+--- BEFORE (raw) ---
+timeout 120 curl -s -o /dev/null -w '%{http_code} %{redirect_url}' --resolve traefik.deercrest.info:443:127.0.0.1"x https://traefik.deercrest.info/dashboard/
+--- AFTER (rendered) ---
+timeout 120 curl -s -o /dev/null -w '%{http_code} %{redirect_url}' --resolve traefik.deercrest.info:443:127.0.0.1\"x https://traefik.deercrest.info/dashboard/
+
+--------------------------------------------------------------------------------
+READING OF SECTION 2, stated so the capture is not over- or under-claimed.
+
+1. THE DEFAULT CASE IS BYTE-IDENTICAL BEFORE AND AFTER for DASH_RESOLVE_IP, and differs for the
+   drift pairs only by the now-unnecessary quote characters. `printf '%q'` leaves a word with no
+   metacharacters untouched. So this change is a no-op on every real run, which is exactly what a
+   correctness fix to an override path should be.
+
+2. THE SPACE CASE SURVIVES BOTH WAYS FOR THE DRIFT PAIRS — argc=4 before and after, same $3. That
+   is not a contradiction of R4-01: the ⛔ paragraph says in terms that a hand-escaped wrapper
+   "survives a space but not a quote and not a $". The space case is precisely the case the old
+   shape handles. It is captured anyway as the control that proves the harness is faithful.
+   For DASH_RESOLVE_IP the space case DOES split before the fix, adding a stray `evil.example`
+   argument to curl — which is why curl fails loudly there rather than quietly.
+
+3. THE QUOTE CASE IS THE ONE THAT MATTERS, and it is decisive:
+       BEFORE: argc=2, and the path argument is EMPTY.
+   The embedded `"` terminates the wrapper early, the remote shell re-parses the remainder as
+   command text, and `_drift_pair` is called with two arguments instead of four — so `$3` is unset
+   and the `sha256sum "$3"` inside the function body hashes nothing. AFTER: argc=4 and the full
+   path arrives intact, quote and all.
+
+4. THE BOUND, UNCHANGED AND NOT INFLATED. None of this can produce a green tick. Any non-default
+   DRIFT_APPDATA_ROOT already forces EXIT_CODE=1 at the override guard, and a broken remote command
+   lands in the could-not-look arm. There is no privilege crossing: the operator who can set the
+   knob already has root on LXC 100. THE DEFECT R4-01 REPORTS IS THE CLAIM — round 3's sentence
+   saying the forbidden-shape class was closed — NOT AN EXPLOIT.
+
+================================================================================
+SECTION 3 — R4-08: THE WIDENED CENSUS RECIPE
+================================================================================
+
+DISPOSITION: CLAIM CORRECTION ONLY. The recipe lives in a comment. No executable line changed in
+task 2, no call site moved, and no `_Q` rendering was added by it. Widening code to make the old
+recipe complete would have been the exact inversion this round exists to stop.
+
+THE CHANGE. The census block's SECOND grep went from requiring a literal `-n`:
+
+    OLD:  /usr/bin/grep -n  'ssh -n \$SSH_OPTS'         scripts/quick-health-check.sh
+    NEW:  /usr/bin/grep -nE 'ssh (-n )?\$SSH_OPTS'      scripts/quick-health-check.sh
+
+The FIRST grep (the knob-definition pattern) is byte-unchanged — the review does not fault it and
+re-deriving it would be scope creep.
+
+--------------------------------------------------------------------------------
+3a. WHAT THE WIDENING BOUGHT — hit counts, old pattern vs new
+
+    $ /usr/bin/grep -c  'ssh -n \$SSH_OPTS'        scripts/quick-health-check.sh
+    18
+    $ /usr/bin/grep -cE 'ssh (-n )?\$SSH_OPTS'     scripts/quick-health-check.sh
+    20
+
+Two more. Those two are exactly the sites IN-02 / R4-08 names:
+
+    $ /usr/bin/grep -nE 'ssh (-n )?\$SSH_OPTS' scripts/quick-health-check.sh | /usr/bin/grep -F 'bounded_ssh'
+    1084:if ! bounded_ssh "$PROBE_TIMEOUT" ssh $SSH_OPTS root@172.16.1.159 true 2>/dev/null; then
+    1106:if ! bounded_ssh "$PROBE_TIMEOUT" ssh $SSH_OPTS root@172.16.1.159 'command -v timeout >/dev/null 2>&1' 2>/dev/null; then
+
+THE BOUND, from the review and stated in band as well: NEITHER OF THOSE TWO SITES INTERPOLATES A
+KNOB TODAY. Both pass a literal host and a literal remote command. So nothing in the file was
+wrong. The RECIPE was wrong — it was offered as the durable replacement for a wrong number while
+under-counting its own haystack by two.
+
+--------------------------------------------------------------------------------
+3b. THE RECIPE IS STILL NOT AN OCCURRENCE OF WHAT IT MEASURES — CHECKED, NOT ASSUMED
+
+The recipe is a comment inside the file it greps, so it must not match itself. This was verified by
+RUNNING the widened pattern, because it carries more literal text than the one it replaced:
+
+    $ /usr/bin/grep -nE 'ssh (-n )?\$SSH_OPTS' scripts/quick-health-check.sh | /usr/bin/grep '^[0-9]*:[[:space:]]*#'
+    (no output)  exit 1
+
+Zero comment lines among the hits. All 20 are code. The recipe line itself does not match because
+the ERE requires `ssh ` followed by an optional literal `-n ` and then `$SSH_OPTS`, while the
+recipe line has `(` and a backslash in those positions.
+
+THIS CHECK CAUGHT A REAL SELF-MATCH DURING EXECUTION, recorded because the near-miss is the point.
+The first draft of the in-band explanatory paragraph QUOTED the two newly-covered call sites
+verbatim in order to describe them. That paragraph then matched the widened pattern, and the run
+above returned it as a comment-line hit — the recipe counting its own documentation, which is the
+CR-01 / GC-03 shape this phase has already shipped twice. The paragraph was rewritten to describe
+those two sites in PROSE instead, and the check was re-run clean. The prose now says so in band, so
+the next person to document a pattern inside the file it matches meets the warning.
+
+    VACUITY GUARD, run first and not optional: the hit set is 20, not empty. An empty hit set would
+    have satisfied the "zero comment lines" test trivially.
+
+--------------------------------------------------------------------------------
+3c. POST-FIX DRIVE OF BOTH VERIFY BLOCKS
+
+Both <automated> blocks, byte-for-byte as written in the plan (with the single documented
+`git rev-parse` substitution recorded in Section 0), were re-run after the edits:
+
+    $ bash verify-task1.sh   ->  TASK1 VERIFY BLOCK REACHED ITS END    exit 0
+    $ bash verify-task2.sh   ->  TASK2 VERIFY BLOCK REACHED ITS END    exit 0
+
+Both now reach their terminal marker, having failed pre-fix at their first fix-related assertion
+(Section 1). `bash -n scripts/quick-health-check.sh` exits 0, asserted inside both blocks.
+
+================================================================================
+SECTION 4 — NOT DRIVEN
+================================================================================
+
+quick-health-check.sh was EXECUTED ZERO TIMES, so EVERY runtime branch of it is undriven by this
+plan. Named explicitly rather than left as a silence:
+
+  - the vendored-drift block's four comparison branches (match, drift, short-answer, could-not-look)
+    and its exit-3/4/5 remote status arms — all require a live ssh to 172.16.1.159
+  - the DRIFT_APPDATA_ROOT override guard actually firing at runtime
+  - the dashboard probe's 124 / 255 / curl-non-zero / 302 / 401 / 200 arms — all require a live ssh
+    to 172.16.1.159 and a live Traefik
+  - the DASH_RESOLVE_IP override guard actually firing at runtime
+  - bounded_ssh's watchdog and sentinel paths at :1084 and :1106
+  - every other block in the file, none of which this plan touched
+
+WHAT WAS PROVEN INSTEAD, and its limit. The five renderings were proven by CAPTURE: the exact
+remote command string that WOULD be sent was generated by the same construction the script uses and
+echoed, then re-parsed locally with `set --` to show what the remote shell would receive. That is a
+faithful model of the remote word splitting — bash on both ends — but it is a MODEL. It does not
+prove the remote `_drift_pair` then behaves as expected, only that it receives the right argument.
+The claim corrections were proven by grep over the file. Neither class of proof requires, or
+substitutes for, a live run.
