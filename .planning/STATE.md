@@ -28,9 +28,9 @@ pipeline that someone owns.
 
 ## Current Position
 
-Phase: 06 (tagger-configuration-and-dry-run) — gap-closure **ROUND 3 DONE, PHASE NOT VERIFIED**
-(re-verification deliberately NOT run — see the round-3 block at the end of this section)
-Plan: 34 of 34 executed. Round 1 (06-15..06-21, waves 6-9, 2026-09-22) closed CR-01 and
+Phase: 06 (tagger-configuration-and-dry-run) — gap-closure **ROUND 4 DONE, PHASE NOT VERIFIED**
+(re-verification deliberately NOT run — see the round-4 block at the end of this section)
+Plan: 39 of 39 executed. Round 1 (06-15..06-21, waves 6-9, 2026-09-22) closed CR-01 and
 dispositioned all 24 findings of `06-REVIEW.md`; re-verification is **6/6, status passed**
 (`06-VERIFICATION.md`, gaps_remaining: [], regressions: []).
 **The phase is NOT complete.** A code review of the round-1 changes themselves
@@ -240,11 +240,96 @@ were re-verified independently by the orchestrator against the code, not taken f
 `06-REVIEW.md` was NOT overwritten — verified byte-identical (round 1's record is cited by ten
 files). Round 4's report took the `-GAP3` suffix, continuing the `-GAP`/`-GAP2` convention.
 
-**Operator decision 2026-09-23: GAP-CLOSURE ROUND 5**, planned against `06-REVIEW-GAP3.md`.
+**Operator decision 2026-09-23: the round against `06-REVIEW-GAP3.md` was authorised and planned as
+plans 06-35 … 06-39** (waves 16 and 17). *(That decision was recorded here at the time under the
+label "GAP-CLOSURE ROUND 5"; it is the phase's **fourth** gap-closure round and is called round 4
+throughout the register, the ROADMAP and the block below. The label is corrected rather than deleted,
+because the off-by-one is exactly the kind of thing a later reader reconstructs wrongly.)*
 Verification is deferred behind it — deliberately, for the reason round 2 exists: round 1 was
 verified 6/6 *before anyone read its diff*. **`/gsd-verify 06` has still NOT been run since round
 2**, and the phase is NOT complete. No requirement checkbox moved by round 3 or round 4; CONF-04's
 Jellyfin half remains OPEN under **E6**.
+
+**ROUND 4 IS DONE — 2026-09-23. Plans 06-35..06-38 closed all ten findings and plan 06-39
+dispositioned them in `06-DISPOSITIONS-GAP3.md`: 9 FIXED, 1 FIXED (undriven), 0 ACCEPTED,
+0 CARRIED, reconciling three ways to 10** — the review's frontmatter 0+6+4, the dispositions
+9+1+0+0, and the fix kinds **3 CODE + 3 CLAIM CORRECTION + 4 BOTH**. `06-REVIEW-GAP3.md` is
+**WIRED** to that register. Ownership: 06-35 R4-01/R4-07/R4-08, 06-36 R4-02/R4-06/R4-09/R4-10,
+06-37 R4-03/R4-04, 06-38 R4-05. **There was no cross-family adjudication this round either** — round
+2 had one, rounds 3 and 4 did not, and that is stated rather than left ambiguous.
+**⚠ THE ID ALIAS, FIRST BECAUSE EVERYTHING ELSE DEPENDS ON IT.** Round 4's report reuses round 1's
+`WR-*`/`IN-*` namespace, and round 1's IDs are **already cited in band in all four scripts** — 72
+pre-existing citations across them at the review's own diff base `fff070a`. The fixes are therefore
+written in band as **`R4-01` … `R4-10`**, and the mapping table lives in `06-DISPOSITIONS-GAP3.md`
+immediately after its Source table, with a pointer at the top of `06-REVIEW-GAP3.md`'s wiring block.
+**Round 4's `WR-02` is `R4-02` and is NOT round 1's `WR-02`**, which is a live citation in
+`phase06-oracle.sh` about empty manifests. The rule this establishes — a review's ID namespace must
+be unique per round and chosen *before* the review is written — is `DEF-06-39-01`.
+**The round's character, and it is uncomfortable: round 3's own centrepiece fix was round 4's
+largest finding.** `ST_PLANNED_CASES=134` is a fixed constant compared with `-ne` against a self-test
+carrying three *documented* environment-conditional skips, so it printed **"A SECTION DID NOT RUN"
+when every section ran** — a false red with a wrong stated cause, firing most readily on the machines
+least likely to be the operator's. And **a documented prohibition survived a second consecutive round
+inside the file documenting it**: the four live instances of the ⛔-forbidden hand-escaped-`\"` shape
+sat **eight to eleven lines below the prohibition paragraph itself**, under a sentence added in the
+same hunk declaring the class closed.
+**Instruments RE-MEASURED at HEAD after this round, not carried forward from any plan's text:**
+`phase06-oracle.sh --self-test` exit **0** at **140** announced cases — the base is now **skip-aware**
+(each of the three environment-conditional arms decrements it beside the `warn` that reports its own
+skip), so the figure is valid only in the **named reference environment**: macOS 27.0 (darwin),
+**non-root (uid 501)**, **`python3` PRESENT**, bash, BSD grep at `/usr/bin/grep`, BWK awk. ⚠ **134 is
+stale** — it is what `06-REVIEW-GAP3.md`, `06-REVIEW-GAP2.md` and `06-DISPOSITIONS-GAP2.md` all
+record, and the six cases R4-06 added moved it; the finding's conclusion is unaffected, only the
+number. `check-beets-config.sh --self-test` exit **0 / 7 cases** (6 of them red, `ST_PLANNED_CASES=7`
+untouched and excluded from the audit by name); `phase06-incremental-control.sh --self-test` exit
+**0**; `bash -n` clean on **all four** scripts; and `sh -n` **and** `/bin/dash -n` clean on **both
+extracted in-container programs** — the gate `bash -n` cannot give, since it parses heredocs as data.
+**Three refusals are recorded as loudly as the fixes** (`DEF-06-39-02`): **no cleanup `trap` was added
+to `phase06-oracle.sh`** under R4-10 — that file has none anywhere by design and one would fire on the
+forensic `exit 3` arms too, destroying the evidence they exist to preserve; **`ST_PLANNED_CASES=7` in
+`check-beets-config.sh` was excluded from the count audit by name**, because it is a gated pin over an
+unconditionally executed set and "fixing" it would have broken a working guard; and the four live
+layer-3 `awk` copies were deliberately **not** hoisted, per `DEF-06-29-03`.
+**What was NOT driven is recorded per finding:** `quick-health-check.sh` was executed **zero** times
+in round 4 either, by the review or by plan 06-35 — every R4-01/R4-07 assertion is a capture (`echo`,
+never sent) or a grep (`DEF-06-39-05`); the oracle's layer-3 block is still reachable only from a live
+`--run`, so R4-06's six new cases prove the **parser**, not the block (`DEF-06-34-04`); and the
+container-side signal behaviour is **still unobserved inside `beets-flask` on both paths** — the
+`timeout`→SIGTERM path graded **NOT ESTABLISHED**, the new SIGPIPE path **BELIEVED at the same static
+grade and explicitly not an upgrade**, with SIGKILL the unclosable residual (`DEF-06-39-04`,
+`DEF-06-34-06`). That residue attaches to the **existing** entry criterion **E12**; **no new criterion
+was added.** Round 4's residue is carried by name as `DEF-06-39-01`..`DEF-06-39-06`, and no existing
+`DEF-` entry was renumbered, reworded or removed (30 → 36 entries).
+**Three corrections to the source material are recorded in band:** `ST_PLANNED_CASES` was already
+stale at 134 before round 4 touched it; the **ID namespace collision**, which is a defect in the
+review's form and not in its findings; and **two self-referential-measurement instances that fired
+during round 4's own execution**, in the plans closing that very class — plan 06-35's first draft of a
+census explanation matched the pattern it was widening, and plan 06-38 mis-pinned raw counts three
+times inside its audit *of* the hazard. Both were caught by **measuring after the edit landed**,
+neither by an assertion. That is the fourth consecutive round for this hazard, and the first in which
+it also turned up **inside the `<automated>` verify blocks** rather than the code (`DEF-06-39-06`).
+**⚠ RE-VERIFICATION HAS NOT BEEN PERFORMED.** Plan 06-39 records dispositions; it did **not** run
+`/gsd-verify` and claims **no** verification result. **Do not read "round 4 complete" as "phase
+complete"** — that is the verifier's call. **`/gsd-verify 06` has still NOT been run since round 2.**
+`REQUIREMENTS.md` was **not** touched and no checkbox moved.
+**⚠ `06-VERIFICATION.md` IS STALE and was deliberately NOT touched.** It records round **1's**
+closure, dated 2026-09-22, with `status: passed` and `gaps_remaining: []` — written before rounds 2,
+3 and 4 existed. A passing verification sitting beside four gap-closure rounds is exactly the artifact
+a future reader closes a phase on. It is named as stale here, in `06-DISPOSITIONS-GAP3.md` and in the
+ROADMAP disposition paragraph — three places, because one is where a reader does not look.
+**Still open, unchanged by round 4:** CONF-04's Jellyfin half (Phase 7 entry criterion **E6**),
+CR-01's residue (**E10**), WR-09 — round 1's — (**E11**), and the undriven-until-the-pilot residue
+(**E12**, `DEF-06-29-05`), which round 3's and now round 4's undriven residue both attach to.
+**Is a round 5 warranted? Stated both ways, because it is the operator's call and not this plan's.**
+Against: round 4 found **zero Critical** and **no reproducible false green**; three of its ten fixes
+changed no executable line at all; and round 3's stated exit condition was *a review whose findings
+are Info-only and whose fixes are claim corrections* — round 4 is closer to that than round 3 was.
+The next step on that reading is **`/gsd-verify 06`**. For: a fifth review of round 4's own diff is
+**the same discipline that caught all three previous rounds**, and round 4 found four live instances
+of a forbidden shape that three previous rounds had walked past, eleven lines below the paragraph
+forbidding it. If a round 5 is commissioned, **give it a fresh `R5-*` ID namespace before it is
+written** (`DEF-06-39-01`) and **sweep its `<automated>` blocks for raw self-referential counts before
+executing** (`DEF-06-39-06`). It should be a **deliberate decision**, not an omission.
 
 Status: Phase 06 gap-closure round 1 executed and verified 6/6 (2026-09-22); round 2 **EXECUTED**
 against `06-REVIEW-GAP.md` (GC-01 blocker + 7 warnings in round 1's own code, plus GC-16/GC-17
