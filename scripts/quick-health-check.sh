@@ -580,10 +580,42 @@
 #
 #     THIS IS THE THIRTEENTH SUCH NOTICE. Counts measured before and after this edit, not assumed,
 #     using the two greps the eighth notice quotes. This notice does NOT write the shared phrase
-#     out a second time in its own body, so it adds exactly one match to each:
-#         headers   12 -> 13
-#         raw       15 -> 16
-#     The raw count therefore still runs THREE ahead of the header count, unchanged by this edit.
+#     out a second time in its own body, so it adds exactly one match to each.
+#
+#     ⚠️ THE TWO NUMBERS AND THE CONSTANT DELTA THAT STOOD HERE ARE WITHDRAWN — R3-05, corrected
+#     2026-09-23 by plan 06-30. They were measured honestly across THIS notice's own edit and were
+#     invalidated LATER IN THE SAME ROUND by plan 06-26's tail repair — the line at the failure tail
+#     stating that a new notice was deliberately not added, which in saying so added one raw match.
+#     The stated delta went from three to four without anyone touching the sentence stating it, and
+#     that was the THIRD drift of these counts. So the constant is gone rather than re-stated.
+#
+#     THE HEADER COUNT IS THE DURABLE ONE. A notice header is a deliberate, countable act; the raw
+#     count is a side effect of prose, and it is DELIBERATELY NOT PINNED ANYWHERE — for the same
+#     reason 06-DISPOSITIONS-GAP.md records for the D-04 raw counts: writing a number into a file
+#     that greps itself moves that number. If you need the number of notices, COUNT THE HEADERS.
+#
+#     THE TWO RECIPES, to run rather than to trust:
+#         headers  /usr/bin/grep -c '^# ⚠️  EXIT-CODE BEHAVIOUR CHANGE[D]' scripts/quick-health-check.sh
+#         raw      /usr/bin/grep -c 'EXIT-CODE BEHAVIOUR CHANGE[D]'        scripts/quick-health-check.sh
+#     ⚠️ THE FINAL LETTER IS BRACKETED ON PURPOSE AND MUST STAY THAT WAY. `CHANGE[D]` is a valid
+#     grep pattern that matches every real occurrence, while these two recipe lines are NOT
+#     themselves occurrences — so a recipe written in band does not perturb the number it asks you
+#     to measure. Unbracketing it would add two raw matches and re-create the exact defect this
+#     correction exists to retire. /usr/bin/grep by absolute path because the operator's zsh aliases
+#     grep to ugrep. Both figures for 2026-09-23 are recorded, as DATED OBSERVATIONS AND NOT PINS,
+#     in .planning/phases/06-tagger-configuration-and-dry-run/artifacts/06-30-qhc-census-and-counts.txt
+#     — and nothing in this file reads from that artifact.
+#
+#     NO FOURTEENTH NOTICE WAS ADDED FOR THIS CORRECTION, AND THAT IS A DECISION, NOT AN OVERSIGHT.
+#     Plan 06-30 changes no exit code, no block count and no condition; the notice series exists for
+#     BEHAVIOUR changes, not for corrections to its own arithmetic. The header count was 13 before
+#     that plan and is 13 after it.
+#
+#     ⚠️ THE THREE EARLIER INSTANCES OF THE WITHDRAWN SENTENCE ARE LEFT ALONE, DELIBERATELY. Each
+#     earlier notice states the delta AS OF ITS OWN EDIT, each was accurate when written, and none
+#     has been re-measured. Read them as DATED HISTORICAL RECORDS, never as claims about the file's
+#     present state. Re-measuring them would turn three accurate historical statements into three
+#     claims about a file state none of them describes.
 #
 #     BLOCK ordinal does NOT move: nine blocks remain. Nothing new runs here. This is one more arm
 #     in the D-04 verdict ladder the eleventh notice describes, plus one widened regex branch in

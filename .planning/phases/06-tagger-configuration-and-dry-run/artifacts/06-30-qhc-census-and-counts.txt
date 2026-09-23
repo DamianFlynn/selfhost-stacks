@@ -131,3 +131,69 @@ Reminder of the bound, so this artifact does not read as an incident report: the
 one an OPERATOR would have to set deliberately. It was never set, the string above was never
 sent, and the default `/config/extended.conf` is unaffected by the change.
 
+
+SECTION 2 — R3-05: the thirteenth notice's counts, re-measured
+==============================================================
+R3-05 is a CLAIM CORRECTION ONLY. No behaviour changed, no code moved, no fourteenth notice was
+added, and the header count did not move.
+
+Both greps run with /usr/bin/grep by ABSOLUTE PATH. The operator's zsh aliases grep to ugrep, and
+a bare `grep` in a script is BSD grep on this workstation; neither gives the same answer reliably.
+
+  HEADER COUNT  (the durable one — this is what "the Nth notice" means):
+      /usr/bin/grep -c '^# ⚠️  EXIT-CODE BEHAVIOUR CHANGE[D]' scripts/quick-health-check.sh
+
+  RAW COUNT     (every occurrence of the shared phrase anywhere in the file, including inside
+                 notices that quote it):
+      /usr/bin/grep -c 'EXIT-CODE BEHAVIOUR CHANGE[D]' scripts/quick-health-check.sh
+
+Both recipes are written with the final letter BRACKETED. `CHANGE[D]` is a valid grep pattern that
+matches the real occurrences, while the recipe text itself is not an occurrence — so a recipe
+written in band, or repeated here, does not perturb the number it asks you to measure. Do not
+"fix" the brackets.
+
+MEASUREMENTS (dated observations, 2026-09-23 — NOT pins):
+
+  before plan 06-30:   headers 13   raw 17   delta 4
+  after  plan 06-30:   headers 13   raw 17   delta 4
+
+The header count did NOT move, which is the assertion that matters: plan 06-30 added no fourteenth
+notice. The raw count did not move either, because the recipes written into the thirteenth notice
+use the bracketed form and are therefore not occurrences of the phrase they measure. That is the
+whole reason for the brackets, demonstrated rather than argued.
+
+One further count, recorded because it is what the correction actually did. The withdrawn sentence
+  'The raw count therefore still runs THREE ahead of the header count, unchanged by this edit.'
+measured, via /usr/bin/grep -cF:
+
+  before plan 06-30:   4 instances   (three earlier notices + the thirteenth)
+  after  plan 06-30:   3 instances   (the three earlier notices, untouched and dated)
+
+The in-scope instance is retracted. The other three are left exactly as they were.
+
+The thirteenth notice (plan 06-23) had stated, as a measurement taken across its own edit:
+  headers 12 -> 13, raw 15 -> 16, and a delta of THREE "unchanged by this edit".
+The header half was right. The raw half was invalidated LATER IN THE SAME ROUND by plan 06-26's
+GC-09 tail repair — the line stating that a new notice was deliberately not added, which in saying
+so added one raw match. The stated delta became four without anyone touching the sentence stating
+it. That is the third time these two counts have drifted, which is why plan 06-30 replaced the
+constant with the two recipes above rather than writing `raw 15 -> 17`.
+
+WHY THE RAW COUNT IS DELIBERATELY NOT PINNED ANYWHERE. The same reason 06-DISPOSITIONS-GAP.md
+records for the D-04 raw counts: writing a number into a file that greps itself MOVES that number.
+The header count is durable because a notice header is a deliberate, countable act; the raw count
+is a side effect of prose. Count the headers. Run the recipe for the raw figure when you need it.
+
+UNTOUCHED BY THIS PLAN, and stated so nobody re-opens them:
+
+  * The THREE EARLIER instances of the constant-delta sentence (in the notices before the
+    thirteenth). Each states the delta as of ITS OWN edit, each was accurate then, and none has
+    been re-measured. They are DATED HISTORICAL RECORDS, not claims about the file's present
+    state. Re-measuring them would turn three accurate statements into three claims about a file
+    state none of them describes.
+  * The CONDITION-LETTER paragraph in the thirteenth notice ("THE CONDITION LETTER IS P, NOT M").
+    The review re-verified it independently and found it CORRECT: A–L ascending, then O at the
+    twelfth notice, then M, then N, then P. It is byte-unchanged, and its warning against counting
+    forward from the last notice's highest letter is still the live hazard.
+  * Plan 06-26's GC-09 tail repair line itself. It is correct and it stays. It was merely the raw
+    match nobody counted.
