@@ -1930,6 +1930,11 @@ self_test_core() {
   if [ "$(id -u)" = "0" ]; then
     warn "SKIPPED as root: an UNREADABLE manifest (mode 000). root bypasses the read bit, so"
     info "the case cannot be constructed here - reported, never silently counted as a pass."
+    # R4-02. A DELIBERATE skip adjusts the announcement AT THE SITE THAT DECIDES TO SKIP. The
+    # number is MEASURED by ablation (force this arm, read ST_RUN off the gate, diff against an
+    # unforced run), never counted by eye: st_mc, st_assert and st_grep_why all funnel into
+    # st_case, so "how many lines look like cases" is the wrong question. Measured delta: 1.
+    ST_PLANNED_CASES=$((ST_PLANNED_CASES - 1))
   else
     cp "$td/st.before.meta" "$td/st.noread.meta"
     chmod 000 "$td/st.noread.meta"
@@ -2261,6 +2266,9 @@ ST_AST
   else
     warn "SKIPPED: no python3 on this workstation, so the ledger payload could not be parsed."
     info "Reported rather than silently counted as a pass. The payload runs in the container."
+    # R4-02, same shape and same reason as the root arm in self_test_core. Measured delta: 2 -
+    # the `parses as Python` case and the `Library() takes an explicit directory=` AST case.
+    ST_PLANNED_CASES=$((ST_PLANNED_CASES - 2))
   fi
 }
 
@@ -2271,9 +2279,16 @@ ST_AST
 # predicate still lets a correct input through.
 #
 # Nothing here reaches ssh or docker. `st_grep_why` writes the message to a FILE and greps the
-# file rather than piping it: `printf ... | grep -q` under `set -o pipefail` propagates SIGPIPE's
-# 141 when grep exits on its first match, which fires the failure branch precisely when the text
-# IS correct. That shape has produced a false red in three plans of this phase already.
+# file rather than piping it: a `printf` PIPED INTO a quiet grep, under `set -o pipefail`,
+# propagates SIGPIPE's 141 when grep exits on its first match, which fires the failure branch
+# precisely when the text IS correct. That shape has produced a false red in three plans of this
+# phase already, and it is GC-01, still live estate-wide as DEF-06-29-01.
+#   THE FORBIDDEN CONSTRUCTION IS DESCRIBED HERE IN WORDS AND NOT QUOTED AS A LITERAL, which is
+#   the same choice the GC-02 block below makes about the bare-glob fences and for the same
+#   reason: a grep for the retired shape is the signal a future reviewer uses to check the class
+#   stayed closed, and a detector that always returns a hit on the paragraph forbidding the shape
+#   is a broken detector. R4-06's verify counts `pipe-into-quiet-grep` occurrences in this file
+#   and requires ZERO; before this round that count was 1, and the one hit was this sentence.
 st_grep_why() { # $1 = expected 0/1  $2 = text  $3 = fixed string wanted  $4 = description
   local hit=0
   printf '%s\n' "$2" > "$OUT/st.why.txt"
@@ -2396,6 +2411,9 @@ self_test_vacuity() {
   if [ "$(id -u)" = "0" ]; then
     warn "SKIPPED as root: the PRESENT-BUT-UNREADABLE case. root bypasses the read bit, so it"
     info "cannot be constructed here - reported, never silently counted as a pass."
+    # R4-02, third and last of the environment-conditional arms. Measured delta: 4 - the exit-4
+    # case, its empty-stdout partner, and BOTH halves of the DRIVEN RED for the old pipeline.
+    ST_PLANNED_CASES=$((ST_PLANNED_CASES - 4))
   else
     chmod 000 "$pdir/noread"
     rc=0
@@ -2417,6 +2435,80 @@ self_test_vacuity() {
   st_case "" "$out" "THE PAIR for the driven red: the old shape prints the SAME empty answer for a"
   info "genuinely empty directory, so the two states were not distinguishable at all."
   rm -rf "$pdir"
+
+  say ""
+  say "== --self-test: R4-06 the layer-3 sha256 line parser, driven both directions =="
+  rule
+  # R4-06. R3-03 replaced `$2 == p` with this parser at all four live sites, and R3-04 then put it
+  # in front of "the one assertion whose whole job is to prove `-l` kept the real library.db
+  # closed" - while R3-02, IN THE SAME ROUND, pinned the case set on the premise that an unpinned
+  # set lets a guard silently stop being exercised. Nothing in that pinned set touched this parser.
+  # A future edit to the regex, to the TWO-SPACE separator, or to the `print $1` field index went
+  # green. These cases close that; the identity case at the end is what keeps them honest, because
+  # five cases over a COPY of the parser prove nothing about the shipped one.
+  #
+  # R4-09 IS DRIVEN HERE TOO: case 2's path carries a BACKSLASH, the character `awk -v` mangles
+  # and an ENVIRON lookup does not. The retired `-v` shape is deliberately NOT held as a literal
+  # beside the new one - a grep for it must keep returning zero hits in this file - so the
+  # both-directions pair lives in artifacts/06-36-oracle-pin-parser-and-cleanup.txt § 1 instead.
+  local l3prog='{ rest = $0; if (sub(/^[0-9a-f]+  /, "", rest) && rest == ENVIRON["p"]) print $1 }'
+  local l3got="" l3self="" l3n=0
+  local l3a=aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899
+  local l3b=1111111111111111111111111111111111111111111111111111111111111111
+  local l3c=2222222222222222222222222222222222222222222222222222222222222222
+  # ONE fixture, NON-EMPTY, carrying the positives and the negatives together. A refusal measured
+  # over an empty file is not a refusal at all - this section's own opening rule, applied to the
+  # section itself. Line 3 is GNU sha256sum's backslash-escaped form; line 4 is a path that ENDS
+  # WITH case 1's request; line 5 is a digest with no path.
+  {
+    printf '%s  /config/my library.db\n'     "$l3a"
+    printf '%s  /config/back\\slash.db\n'    "$l3b"
+    printf '\\%s  /config/nl\\npath.db\n'    "$l3c"
+    printf '%s  /srv/config/my library.db\n' "$l3b"
+    printf '%s\n'                            "$l3c"
+  } > "$d/l3.txt"
+  l3got="$(LC_ALL=C p='/config/my library.db' awk "$l3prog" "$d/l3.txt")"
+  st_case "$l3a" "$l3got" "a path containing a SPACE is matched EXACTLY - the case R3-03 exists for."
+  l3got="$(LC_ALL=C p='/config/back\slash.db' awk "$l3prog" "$d/l3.txt")"
+  st_case "$l3b" "$l3got" "a path containing a BACKSLASH is matched exactly - this is R4-09 driven."
+  l3got="$(LC_ALL=C p='/config/nl\npath.db' awk "$l3prog" "$d/l3.txt")"
+  st_case "" "$l3got" "a GNU backslash-ESCAPED output line is REFUSED - R3-03's DELIBERATE refusal,"
+  info "pinned here as intended behaviour so a future reader does not helpfully 'fix' it."
+  l3got="$(LC_ALL=C p='config/my library.db' awk "$l3prog" "$d/l3.txt")"
+  st_case "" "$l3got" "a SUFFIX-ONLY near-miss is refused: exact equality, never a suffix test."
+  l3got="$(LC_ALL=C p="$l3c" awk "$l3prog" "$d/l3.txt")"
+  st_case "" "$l3got" "a TRUNCATED line (digest, no path) yields EMPTY, so the guards still fire."
+  # THE POSITIVES ARE THE PAIR FOR THE THREE NEGATIVES, and they are over the SAME file: cases 3-5
+  # returned empty against a fixture whose first two lines cases 1-2 matched, so the parser
+  # discriminates rather than refusing everything. Case 4 also proves the exactness from the other
+  # side - the fixture's `/srv/config/my library.db` ends with case 1's request, and case 1
+  # returned l3a and never l3b, so the EQUAL line was chosen over the suffix-matching one.
+  #
+  # THE IDENTITY CASE. It asserts that the program text the five cases above drove is the text the
+  # LIVE consumers carry. Counted on the live-only marker `"$OUT/layer3.` AS WELL AS on the program
+  # text, deliberately: the self-test's own copy is in this same file, so a bare count of the
+  # program text would be SELF-REFERENTIAL and would have moved the moment this block was added -
+  # which is the defect GC-10, R3-05 and R4-05 each are. DEF-06-29-03 is why the four live copies
+  # are NOT hoisted into one shared variable instead: this file's fence copies are protected by a
+  # check that forbids exactly that refactor, and the house answer here is to PROVE identity, not
+  # to de-duplicate. `self_test_fences`' byte-equality case on the two stamp fence copies is the
+  # precedent; this is the same idiom pointed at a different pair of copies.
+  l3self="${BASH_SOURCE[0]:-$0}"
+  if [ -r "$l3self" ]; then
+    # Two greps over FILES, never a pipe into a quiet grep - GC-01 / DEF-06-29-01 is still live
+    # estate-wide and this section's own preamble is about that shape.
+    LC_ALL=C grep -F -- "$l3prog" "$l3self" > "$d/l3.idlines" 2>/dev/null || true
+    l3n="$(LC_ALL=C grep -cF -- '"$OUT/layer3.' "$d/l3.idlines" || true)"
+    st_case 4 "$l3n" "the driven parser text IS the text all FOUR live layer-3 consumers carry."
+  else
+    # FAIL CLOSED. An unreadable path makes the identity case UNEVALUABLE, and this file's founding
+    # lesson (CR-01, GC-03, GC-05) is that a could-not-look is never folded into a pass. The case
+    # is reported AND driven red, because a vacuous identity case would be the fourth instance.
+    warn "COULD NOT LOOK: this script's own path ('$l3self') is not readable, so the R4-06"
+    info "identity case could not be evaluated. It is driven RED below, never silently passed."
+    st_case 4 "COULD-NOT-LOOK" "the driven parser text IS the text all FOUR live layer-3 consumers carry."
+  fi
+  rm -f "$d/l3.txt" "$d/l3.idlines"
 }
 
 # --- GC-02: the receiving-side fences, driven at the inner layer ALONE --------------------------
@@ -2590,11 +2682,36 @@ if [ "$MODE" = "self-test" ]; then
   # closure becoming unguarded without a single case going red. ST_RUN was REPORTED and never
   # ASSERTED, and a universal claim needs a pinned set behind it.
   #
-  # THE NUMBER IS MEASURED, NOT GUESSED - read off a green run of this file - and it MUST BE
-  # RE-MEASURED whenever a section or a case is added. That maintenance burden is self-enforcing
-  # rather than a request left in a comment: adding a case without re-measuring turns the self-test
-  # RED on the very next run, instead of silently widening the set the banner speaks for.
-  ST_PLANNED_CASES=134
+  # R4-02 CORRECTS THE MAINTENANCE INSTRUCTION THAT STOOD HERE, and the correction matters more
+  # than the arithmetic below it. The old text said the figure "MUST BE RE-MEASURED whenever a
+  # section or a case is added", with no environment attached, and the gate's message told the
+  # operator to "Re-measure only after confirming every section still runs". Both are withdrawn.
+  # THE FAILURE MODE THEY CAUSED, stated so nobody simplifies it back: three case groups in this
+  # self-test are ENVIRONMENT-CONDITIONAL BY DESIGN - one skipped as root in self_test_core, four
+  # skipped as root in self_test_vacuity, two skipped when the workstation has no python3 - so a
+  # single typed figure is correct in ONE environment only. An operator who hit the gate on a
+  # python3-less box, confirmed every section ran (they all had), and followed the old instruction
+  # would re-pin the SHORTFALL figure, which then fails on every box that HAS python3. The pin was
+  # self-destabilising ACROSS environments, and it fired most readily on the machines least likely
+  # to be the operator's - so its first real use was likely to be a misdiagnosis.
+  #
+  # THE SHAPE NOW:
+  #   - the BASE below counts the UNCONDITIONAL cases: what runs when NO environment-conditional
+  #     arm takes its skip branch.
+  #   - each such arm DECREMENTS the announcement itself, beside the `warn` that reports the skip,
+  #     by a delta MEASURED BY ABLATION (force the arm, read ST_RUN off the gate, diff against an
+  #     unforced run) - never counted by eye, because st_mc, st_assert and st_grep_why all funnel
+  #     into st_case. Deltas as measured 2026-09-23: core/root 1, classes/no-python3 2,
+  #     vacuity/root 4; additive, and 140-1-2-4 = 133 with all three taken.
+  #   - THIS IS WHY THE GUARD IS NOT WEAKENED: a DELIBERATE skip adjusts the announcement, while a
+  #     DROPPED SECTION adjusts nothing - so the gate still fires for exactly the case it was built
+  #     for. That control is driven, not asserted: dropping `self_test_fences` from the dispatcher
+  #     below must still exit 1, and it is recorded doing so in
+  #     artifacts/06-36-oracle-pin-parser-and-cleanup.txt § 4.
+  #   - RE-MEASURING THE BASE IS VALID IN THE REFERENCE ENVIRONMENT ONLY: NON-ROOT, WITH `python3`
+  #     PRESENT. Read it off a green run there. A figure read anywhere else is a shortfall figure
+  #     wearing the base's name, which is the defect this paragraph replaces.
+  ST_PLANNED_CASES=140
   ST_FAIL=0
   ST_RUN=0
   REDS=0
@@ -2610,11 +2727,23 @@ if [ "$MODE" = "self-test" ]; then
   # failure. GC-12(b) below exists precisely because two different failures once shared one banner,
   # so this does not recreate that defect by making a third share it.
   if [ "$ST_RUN" -ne "$ST_PLANNED_CASES" ]; then
-    printf '  \342\234\227 self-test: %s case(s) ran but %s were announced - A SECTION DID NOT RUN\n' \
+    # R4-02. The message NO LONGER ASSERTS A SINGLE CAUSE. It used to end "- A SECTION DID NOT RUN",
+    # which was a specific diagnosis the gate has no evidence for; the review drove it printing that
+    # sentence on a box where every section ran. It keeps the virtue it always had - it WITHHOLDS
+    # the banner rather than printing an unbacked universal claim - and now says only what it knows.
+    printf '  \342\234\227 self-test: %s case(s) ran but %s were announced - THE SET IS NOT THE SET\n' \
       "$((ST_RUN))" "$((ST_PLANNED_CASES))"
     printf '      The banner this run would otherwise print claims every fail-closed branch behaved\n'
     printf '      as expected. Over a set whose size nothing pins that claim is unbacked, so it is\n'
-    printf '      withheld. Re-measure only after confirming every section still runs.\n'
+    printf '      withheld. This gate does NOT know which of these happened:\n'
+    printf '        - a section was dropped from the dispatcher, or a rebase lost the line calling it;\n'
+    printf '        - an early `return` fired inside a section, so it ran only partway;\n'
+    printf '        - a case was added or removed and the announced base was not re-measured.\n'
+    printf '      A DELIBERATE environment skip is NOT among the causes: the three environment-\n'
+    printf '      conditional arms (root x2, no-python3) each adjust the announcement at their own\n'
+    printf '      site, so a reported skip can no longer reach this gate. Re-measure the base ONLY\n'
+    printf '      in the reference environment - NON-ROOT, with python3 PRESENT - and only after\n'
+    printf '      reading it off a green run there.\n'
     exit 1
   fi
   # GC-12(b). The gate fires on EITHER counter, so the banner must name BOTH - it used to print
@@ -2748,11 +2877,26 @@ esac
 # guards still fire - including GNU sha256sum's backslash-escaped form for a path containing a
 # newline, which does not begin with hex and is therefore refused rather than mis-parsed. Driven,
 # with no estate contact, in artifacts/06-31-oracle-pin-and-layer3.txt § 1.
+#
+# R4-09 CHANGES HOW THE REQUESTED PATH ARRIVES, AND NOTHING ELSE. `awk -v p=value` runs the value
+# through awk's ESCAPE PROCESSING before the program ever sees it, so a REAL_LIB_DB or a
+# REAL_STATE_PICKLE containing a backslash was compared in a form the operator never typed. The
+# value now crosses as an ENVIRONMENT assignment on the same command and is read with ENVIRON["p"],
+# which awk passes through verbatim. Changed at all FOUR sites for R3-03's own reason: four
+# consumers of one output format must not carry two parsers.
+#   WHAT THIS BUYS, bounded rather than inflated: the old form already failed CLOSED - a mangled
+#   comparison yields an EMPTY hash, which the guards below route to `unknown` and exit 3, never to
+#   a green tick and never to a false RED - so this buys correctness for a backslash-bearing knob,
+#   not a new safety property. The round-4 review grades it a residual for exactly that reason.
+#   ENVIRON changes how the REQUESTED path arrives; it does NOT change how the PRINTED line is read,
+#   so the deliberate refusal of GNU sha256sum's backslash-escaped OUTPUT form stated above is
+#   untouched and stays a refusal. Driven both directions - under ENVIRON it matches, under the old
+#   `-v` form it does not - in artifacts/06-36-oracle-pin-parser-and-cleanup.txt § 1.
 rsh "$(dex_cmd sha256sum "$(printf '%q' "$REAL_LIB_DB")" "$(printf '%q' "$REAL_STATE_PICKLE")")"
 rsh_classify "the layer-3 baseline hashes" || exit 3
 printf '%s\n' "$RSH_OUT" > "$OUT/layer3.before"
-LIB_SHA_BEFORE="$(LC_ALL=C awk -v p="$REAL_LIB_DB" '{ rest = $0; if (sub(/^[0-9a-f]+  /, "", rest) && rest == p) print $1 }' "$OUT/layer3.before")"
-STATE_SHA_BEFORE="$(LC_ALL=C awk -v p="$REAL_STATE_PICKLE" '{ rest = $0; if (sub(/^[0-9a-f]+  /, "", rest) && rest == p) print $1 }' "$OUT/layer3.before")"
+LIB_SHA_BEFORE="$(LC_ALL=C p="$REAL_LIB_DB" awk '{ rest = $0; if (sub(/^[0-9a-f]+  /, "", rest) && rest == ENVIRON["p"]) print $1 }' "$OUT/layer3.before")"
+STATE_SHA_BEFORE="$(LC_ALL=C p="$REAL_STATE_PICKLE" awk '{ rest = $0; if (sub(/^[0-9a-f]+  /, "", rest) && rest == ENVIRON["p"]) print $1 }' "$OUT/layer3.before")"
 [ -n "$LIB_SHA_BEFORE" ] || { unknown "no sha256 line for $REAL_LIB_DB"; exit 3; }
 [ -n "$STATE_SHA_BEFORE" ] || { unknown "no sha256 line for $REAL_STATE_PICKLE"; exit 3; }
 say "  library.db    before: $LIB_SHA_BEFORE"
@@ -2912,8 +3056,8 @@ diff_manifest src sha  || true
 rsh "$(dex_cmd sha256sum "$(printf '%q' "$REAL_LIB_DB")" "$(printf '%q' "$REAL_STATE_PICKLE")")"
 rsh_classify "the layer-3 hashes after the run" || exit 3
 printf '%s\n' "$RSH_OUT" > "$OUT/layer3.after"
-LIB_SHA_AFTER="$(LC_ALL=C awk -v p="$REAL_LIB_DB" '{ rest = $0; if (sub(/^[0-9a-f]+  /, "", rest) && rest == p) print $1 }' "$OUT/layer3.after")"
-STATE_SHA_AFTER="$(LC_ALL=C awk -v p="$REAL_STATE_PICKLE" '{ rest = $0; if (sub(/^[0-9a-f]+  /, "", rest) && rest == p) print $1 }' "$OUT/layer3.after")"
+LIB_SHA_AFTER="$(LC_ALL=C p="$REAL_LIB_DB" awk '{ rest = $0; if (sub(/^[0-9a-f]+  /, "", rest) && rest == ENVIRON["p"]) print $1 }' "$OUT/layer3.after")"
+STATE_SHA_AFTER="$(LC_ALL=C p="$REAL_STATE_PICKLE" awk '{ rest = $0; if (sub(/^[0-9a-f]+  /, "", rest) && rest == ENVIRON["p"]) print $1 }' "$OUT/layer3.after")"
 # R3-04. These two guards are the BEFORE block's, mirrored, and they must sit ABOVE the comparisons
 # below. Without them an absent, unparseable or truncated second sha256sum line left the hash EMPTY,
 # the comparison was false, and the run took the `bad` arm below and printed its CHANGED verdict
@@ -2924,6 +3068,29 @@ STATE_SHA_AFTER="$(LC_ALL=C awk -v p="$REAL_STATE_PICKLE" '{ rest = $0; if (sub(
 # look is never folded into another verdict here; and because UNKNOWN outranks RED in this file's
 # precedence, folding it into RED also DEMOTED the verdict. The BEFORE side already routed this to
 # `unknown`/exit 3; this is the same correction GC-05 made in the opposite direction.
+#
+# R4-10, THE CLEANUP GAP AT THESE ARMS, STATED RATHER THAN LEFT FOR THE NEXT READER TO FIND.
+# Step 12 is what removes the container scratch ('$SCRATCH', `rm -rf`) and the LXC stamp
+# ('$STAMP_REMOTE', `rm -f`). NEITHER of the two `exit 3`s below reaches step 12, so a could-not-
+# look on the layer-3 hashes leaves BOTH behind. Graded honestly, in three parts:
+#   1. THIS IS A PRE-EXISTING CLASS, NOT A NEW ONE. The two arms immediately above these -
+#      `capture_manifests after ... || exit 3` and `rsh_classify "the layer-3 hashes after the run"
+#      ... || exit 3` - already exit the same way from the same place. R3-04 INCREASED THE COUNT of
+#      such exits; it did not introduce the behaviour, and saying otherwise would overstate it.
+#   2. LEAVING THE STATE BEHIND IS ARGUABLY THE RIGHT CALL HERE. This is a forensic instrument: the
+#      scratch IS the evidence of what the run saw, and a cleanup that fires on an unexplained exit
+#      destroys the only record of why the instrument went blind. The gap is recorded as a gap, not
+#      as a bug to be closed by reflex.
+#   3. WHAT IS LEFT BEHIND, NAMED: the container scratch at '$SCRATCH' and the host stamp at
+#      '$STAMP_REMOTE'. The operator command that clears the scratch is ALREADY PRINTED IN THIS
+#      FILE - it is in the step-1 precheck's `'nonempty '*` refusal arm, the one that begins
+#      "already exists inside the container and is not empty". It is CITED rather than duplicated
+#      on purpose: two copies of a destructive command line in one file is how they drift apart
+#      (GC-02, in this very file). The same arm also records that '--baseline' ALWAYS leaves the
+#      stamp behind by design, so a surviving stamp is not by itself evidence of an aborted run.
+# ⛔ NO `trap` WAS ADDED, AND NONE SHOULD BE. This file has no `trap` anywhere, deliberately: a
+# cleanup trap would fire on EVERY `exit 3`, including the forensic ones point 2 exists to protect,
+# which is a behaviour change to the live path smuggled in under a comment-accuracy fix.
 [ -n "$LIB_SHA_AFTER" ]   || { unknown "no sha256 line for $REAL_LIB_DB after the run"; exit 3; }
 [ -n "$STATE_SHA_AFTER" ] || { unknown "no sha256 line for $REAL_STATE_PICKLE after the run"; exit 3; }
 if [ "$LIB_SHA_AFTER" = "$LIB_SHA_BEFORE" ]; then

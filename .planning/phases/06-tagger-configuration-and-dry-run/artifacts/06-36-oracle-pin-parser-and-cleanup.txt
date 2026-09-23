@@ -1,0 +1,499 @@
+================================================================================================
+06-36 — phase06-oracle.sh: the announced-case pin, the layer-3 parser, and the cleanup gap
+Plan 06-36, gap-closure round 4. Findings R4-02, R4-06, R4-09, R4-10.
+Recorded 2026-09-23.
+================================================================================================
+
+FINDING IDs IN THIS ROUND ARE ALIASED, AND THE ALIAS IS NOT COSMETIC. Round 4's report
+(06-REVIEW-GAP3.md) reuses round 1's WR-* / IN-* namespace, and round 1's IDs are already cited
+in band in scripts/phase06-oracle.sh — `WR-02` and `WR-06` BOTH already mean something else in
+that file. Everything below, and everything written into the script, uses this round's IDs:
+
+    round-4 report ID | in-band ID | subject
+    ------------------+------------+-----------------------------------------------------------
+    WR-02             | R4-02      | ST_PLANNED_CASES=134 is not invariant over the self-test's
+                      |            | own documented environment-conditional skips
+    WR-06             | R4-06      | the sha256 line parser guards the layer-3 `-l` assertion
+                      |            | and had no case in the set R3-02 pinned in the same round
+    IN-03             | R4-09      | `awk -v p="$REAL_LIB_DB"` applies awk escape processing to
+                      |            | an overridable knob
+    IN-04             | R4-10      | R3-04's two new `exit 3` arms leave the container scratch
+                      |            | and the LXC stamp behind, and the gap is unstated in band
+
+NO ESTATE CONTACT ANYWHERE IN THIS FILE. Every transcript below is `--self-test`, `awk` over a
+`mktemp -d` fixture, or `grep` over the script. No ssh, no docker, no `--run`, no `--arm`.
+scripts/phase06-oracle.sh itself was never mutated in place: every ablation is a scratch copy.
+
+ENVIRONMENT. macOS 27.0 (darwin), bash 3.2 as /bin/bash with bash 5.x on PATH, BSD grep at
+/usr/bin/grep, BWK awk (onetrue awk) as /usr/bin/awk, non-root (uid 501), python3 PRESENT.
+That is the REFERENCE ENVIRONMENT the base case count in § 4 is measured in.
+
+
+================================================================================================
+§ 0  THE THREE VERIFY BLOCKS, RUN AGAINST THE UNFIXED TREE — proof they are not vacuous
+================================================================================================
+
+The plan requires each task's <automated> block to be extracted, parsed, and run BEFORE any edit,
+and to FAIL. A block that passes pre-fix asserts nothing. All three parsed clean under `bash -n`
+and all three failed at their first substantive test.
+
+ONE DEVIATION, recorded because it changes the transcript's first line. Each block opens with
+`cd "$(git rev-parse --show-toplevel)"`. The execution sandbox refuses to run a shell script it
+cannot statically prove does not invoke git outside its own worktree, so that line was resolved
+LITERALLY to the worktree root before running. The worktree root IS `git rev-parse --show-toplevel`
+in this checkout, so the substitution is semantically a no-op; it is recorded rather than passed
+over because the traces below show the literal path.
+
+--- task 1's block, pre-fix (expected to fail at the `awk -v p=` absence test) -----------------
++ cd /Users/damian/Development/damianflynn/selfhost-stacks/.claude/worktrees/agent-a5fdae0ea2f21bf74
++ set -eu
++ F=scripts/phase06-oracle.sh
++ G=/usr/bin/grep
+++ /usr/bin/grep -cF 'awk -v p="$REAL_LIB_DB"' scripts/phase06-oracle.sh
++ test 2 -eq 0
+rc=1
+
+Failed at the FIRST test, as predicted: two live sites still took the path through `awk -v`.
+
+--- task 2's block, pre-fix -------------------------------------------------------------------
++ cd /Users/damian/Development/damianflynn/selfhost-stacks/.claude/worktrees/agent-a5fdae0ea2f21bf74
++ set -eu
++ F=scripts/phase06-oracle.sh
++ G=/usr/bin/grep
+++ /usr/bin/grep -cF R4-06 scripts/phase06-oracle.sh
++ test 0 -ge 1
+rc=1
+
+NOTE, because the plan predicted a different stopping point. The plan says task 2's block "must
+fail at the `ENVIRON["p"] >= 5` test". It failed one test EARLIER, at the `R4-06` marker count,
+because that test is first in the block. Both are pre-fix-false and the block is non-vacuous
+either way; the prediction was off by one test, not wrong about the property.
+
+--- task 3's block, pre-fix (expected to fail at the ST_PLANNED_CASES decrement test) ----------
++ cd /Users/damian/Development/damianflynn/selfhost-stacks/.claude/worktrees/agent-a5fdae0ea2f21bf74
++ set -eu
++ F=scripts/phase06-oracle.sh
++ G=/usr/bin/grep
+++ /usr/bin/grep -cF 'ST_PLANNED_CASES=$((ST_PLANNED_CASES -' scripts/phase06-oracle.sh
++ test 0 -ge 3
+rc=1
+
+Failed at the FIRST test, as predicted.
+
+--- the pre-fix baseline of the file itself ---------------------------------------------------
+$ OUT=<mktemp -d> bash scripts/phase06-oracle.sh --self-test   ; rc=0
+  ✓ self-test: 134 case(s), every fail-closed branch behaved exactly as expected
+
+134 in the reference environment, confirming the round-4 review's own closing note. That figure
+is what § 4 re-measures after task 2's cases land.
+
+
+================================================================================================
+§ 1  R4-09 — the layer-3 parser, probed as a DETACHED COPY over synthetic sha256sum output
+================================================================================================
+
+DISPOSITION: R4-09 IS A CODE FIX. Four consumers changed from
+
+    LC_ALL=C awk -v p="$REAL_LIB_DB" '{ ... rest == p ... }'
+to
+    LC_ALL=C p="$REAL_LIB_DB" awk '{ ... rest == ENVIRON["p"] ... }'
+
+`awk -v var=value` runs *value* through awk's escape processing before the program sees it, so a
+knob containing a backslash was compared in a form the operator never typed. An environment
+assignment is passed through verbatim and read with ENVIRON.
+
+WHAT THIS BUYS, BOUNDED. The old form already failed CLOSED: a mangled comparison yields an EMPTY
+hash, which the `[ -n "$LIB_SHA_*" ] || { unknown ...; exit 3; }` guards route to could-not-look —
+never to a green tick and never to a false RED. This buys correctness for a backslash-bearing
+knob, not a new safety property, which is why the review graded it Info and not a Warning. It also
+does NOT disturb R3-03's deliberate refusal of GNU sha256sum's backslash-ESCAPED OUTPUT form:
+ENVIRON changes how the REQUESTED path arrives, not how the PRINTED line is read.
+
+--- the probe harness -------------------------------------------------------------------------
+Detached copies of both parser forms, over ONE non-empty fixture in a `mktemp -d` that carries
+every case. Writing the negatives into the same file as the positives is deliberate: a refusal
+over an EMPTY fixture proves nothing, which is `self_test_vacuity`'s own opening rule.
+
+    new_parse() { LC_ALL=C p="$1" awk '{ rest = $0; if (sub(/^[0-9a-f]+  /, "", rest) && rest == ENVIRON["p"]) print $1 }' "$2"; }
+    old_parse() { LC_ALL=C awk -v p="$1" '{ rest = $0; if (sub(/^[0-9a-f]+  /, "", rest) && rest == p) print $1 }' "$2"; }
+
+--- the fixture, shown with `sed -n l` so the escapes are unambiguous --------------------------
+aabbccddeeff00112233445566778899aabbccddeeff001122334455667\
+78899  /config/my library.db$
+11111111111111111111111111111111111111111111111111111111111\
+11111  /config/back\slash.db$
+\2222222222222222222222222222222222222222222222222222222222\
+222222  /config/nl\npath.db$
+11111111111111111111111111111111111111111111111111111111111\
+11111  /srv/config/my library.db$
+22222222222222222222222222222222222222222222222222222222222\
+22222$
+
+(The backslash-continuations are `sed -n l`'s 80-column wrapping, not part of the data. Line 3
+begins with a literal `\` — GNU sha256sum's escaped form. Line 5 is a digest with no path.)
+
+--- PROBES 1..4, the shipped ENVIRON parser ---------------------------------------------------
+1 POSITIVE  path with a SPACE          -> [aabb…8899]  expected [aabb…8899]  PASS
+2 POSITIVE  path with a BACKSLASH      -> [1111…1111]  expected [1111…1111]  PASS
+3 NEGATIVE  GNU backslash-ESCAPED line -> []           expected []           PASS
+4 NEGATIVE  suffix-only near-miss      -> []           expected []           PASS
+
+Probe 4 requests `config/my library.db` — the fixture's line 1 path ENDS WITH it, so a suffix
+test would return the digest. Exact equality returns empty.
+
+--- PROBE 5, the same property from the other side --------------------------------------------
+  requested /config/my library.db returned [aabb…8899]; the /srv/… line carries [1111…1111]
+
+The fixture also carries `/srv/config/my library.db`, whose path ends with the probe-1 request.
+The parser returned line 1's digest and never the /srv line's, so it picked the EQUAL line rather
+than the suffix-matching one. R3-03 refused a suffix test by name because it converts a false
+UNKNOWN into a false GREEN, which is strictly worse than the defect it was repairing.
+
+--- PROBE 6, a truncated line (digest with no path) -------------------------------------------
+  requested the bare digest as a path -> [] (empty: the emptiness guards still fire)
+
+--- PROBE 7, R4-09 DRIVEN IN BOTH DIRECTIONS on the backslash case ----------------------------
+  ENVIRON form : [1111111111111111111111111111111111111111111111111111111111111111]
+  old -v form  : []
+
+THIS PAIR IS THE WHOLE OF R4-09. The same requested path, the same fixture, the same program
+apart from how the value arrives. `awk -v` turned the two-character `\s` into `s` before the
+comparison and the line went unmatched; ENVIRON compared the path as written. The old form's
+empty answer is the fail-closed behaviour described above — it routes to `unknown` and exit 3,
+which is why this is a residual and not a false green.
+
+
+================================================================================================
+§ 2  R4-10 — the cleanup gap at R3-04's two `exit 3` arms
+================================================================================================
+
+DISPOSITION: R4-10 IS A CLAIM CORRECTION AND NOTHING ELSE. NO CODE CHANGED. NO `trap` ADDED.
+
+The review's own grading is that this is a PRE-EXISTING CLASS, not a new one, and that leaving
+state behind on a could-not-look is arguably the right call for a forensic instrument. The defect
+is that the gap was nowhere stated in band. It is now stated at the arms, in three graded parts:
+
+  1. the class is pre-existing and shared with the two `exit 3` arms immediately above
+     (`capture_manifests after … || exit 3` and `rsh_classify "the layer-3 hashes after the run"
+     … || exit 3`). R3-04 increased the COUNT of such exits; it did not introduce the behaviour.
+  2. the forensic rationale: the container scratch IS the evidence of what the run saw, and a
+     cleanup firing on an unexplained exit destroys the record of why the instrument went blind.
+  3. what is left behind, named: the container scratch at `$SCRATCH` and the host stamp at
+     `$STAMP_REMOTE`. The operator command that clears the scratch is CITED BY ANCHOR — the
+     step-1 precheck's `'nonempty '*` refusal arm, the one beginning "already exists inside the
+     container and is not empty" — rather than duplicated, because two copies of a destructive
+     command line in one file is exactly how GC-02's fences drifted apart in this very file.
+
+WHY NO TRAP. `scripts/phase06-oracle.sh` has no `trap` anywhere, deliberately. A cleanup trap
+would fire on EVERY `exit 3`, including the forensic ones point 2 exists to protect — a behaviour
+change to the live path smuggled in under a comment-accuracy fix, in a round whose entire subject
+is claims outrunning code. The verify block asserts the trap count is still zero:
+
+$ /usr/bin/grep -c '^[[:space:]]*trap ' scripts/phase06-oracle.sh
+0
+
+
+================================================================================================
+§ 3  R4-06 — the parser gets cases in the pinned set, and the identity case is driven to FAIL
+================================================================================================
+
+DISPOSITION: R4-06 IS A CODE FIX. R3-03's account of the parser was accurate; it simply had no
+case behind it. Six new `st_case` assertions in `self_test_vacuity` — the section whose stated
+subject is guards that can or cannot fire, which is exactly what the parser is.
+
+--- the six cases, from a green run of the shipped file ----------------------------------------
+== --self-test: R4-06 the layer-3 sha256 line parser, driven both directions ==
+  ✓ aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899 (expected): a path containing a SPACE is matched EXACTLY - the case R3-03 exists for.
+  ✓ 1111111111111111111111111111111111111111111111111111111111111111 (expected): a path containing a BACKSLASH is matched exactly - this is R4-09 driven.
+  ✓  (expected): a GNU backslash-ESCAPED output line is REFUSED - R3-03's DELIBERATE refusal,
+    pinned here as intended behaviour so a future reader does not helpfully 'fix' it.
+  ✓  (expected): a SUFFIX-ONLY near-miss is refused: exact equality, never a suffix test.
+  ✓  (expected): a TRUNCATED line (digest, no path) yields EMPTY, so the guards still fire.
+  ✓ 4 (expected): the driven parser text IS the text all FOUR live layer-3 consumers carry.
+
+All five behavioural cases run over ONE non-empty fixture, so every refusal is a refusal over a
+file whose other lines the positives matched. `self_test_vacuity`'s opening rule — "a guard that
+refuses everything is exactly as useless as one that refuses nothing" — applied to itself.
+
+--- how the identity case counts, and why not more simply ---------------------------------------
+It counts the lines of this script that carry BOTH the driven program text AND the live-only
+marker `"$OUT/layer3.`, and asserts 4. Counting the program text ALONE would be self-referential:
+the self-test's own copy lives in the same file, so the count would have moved the moment the
+block was added — the defect GC-10, R3-05 and R4-05 each are. The four live copies are NOT hoisted
+into one shared variable instead, because DEF-06-29-03 records that this file's fence copies are
+protected by a committed check that FORBIDS exactly that refactor; the house answer here is to
+prove identity, which `self_test_fences` already does for the two stamp fence copies.
+
+FAIL-CLOSED PATH RESOLUTION. `${BASH_SOURCE[0]:-$0}`; if it is not readable the case prints a
+`warn`/`info` pair naming the unreadable path AND is driven RED with the observed value
+`COULD-NOT-LOOK`. It never silently passes. That distinction is CR-01 / GC-03 / GC-05 and a
+vacuous identity case would have been its fourth instance.
+
+--- THE DRIVE: four mutants, each on a SCRATCH COPY from mktemp -d ------------------------------
+scripts/phase06-oracle.sh was never mutated in place.
+
+CONTROL FIRST, because it is a finding in its own right:
+  $ /usr/bin/sed '0,/print \$1 }/s//print $2 }/' scripts/phase06-oracle.sh > sedctl.sh
+    rc=0  IDENTICAL - the mutation was a SILENT NO-OP
+
+`0,/re/` is a GNU sed extension. BSD sed — /usr/bin/sed on this macOS workstation — accepts it
+without complaint and substitutes nothing. The plan's task-2 verify block uses exactly that sed
+and then asserts `! cmp -s` on the next line, so under `set -e` the block would abort there and
+the drive would never run. No gsed is installed (`command -v gsed` returns nothing). The executed
+block substitutes a first-match-only `awk` with the same semantics that EXITS 9 if it matches
+nothing. Recorded as a deviation rather than passed over, because a mutation that silently does
+nothing is the exact failure mode this whole round is about.
+
+MUTANT A — the first `print $1 }` in the file. NOTE: that is now the DRIVEN copy at
+self_test_vacuity, not a live consumer, because the self-test section precedes the live block.
+  2443c2443
+  <   local l3prog='… rest == ENVIRON["p"]) print $1 }'
+  >   local l3prog='… rest == ENVIRON["p"]) print $2 }'
+  rc=1, 3 SELF-TEST REGRESSION lines:
+  ✗ expected 'aabb…8899', got '/config/my': a path containing a SPACE is matched EXACTLY …
+  ✗ expected '1111…1111', got '/config/back\slash.db': a path containing a BACKSLASH …
+  ✗ expected '4', got '0': the driven parser text IS the text all FOUR live layer-3 consumers carry.
+
+MUTANT B — a LIVE consumer ONLY: the field index at the `layer3.before` site.
+  3011 unchanged; 2850 moved:
+  < LIB_SHA_BEFORE="$(… rest == ENVIRON["p"]) print $1 }' "$OUT/layer3.before")"
+  > LIB_SHA_BEFORE="$(… rest == ENVIRON["p"]) print $2 }' "$OUT/layer3.before")"
+  rc=1, 1 SELF-TEST REGRESSION line:
+  ✗ expected '4', got '3': the driven parser text IS the text all FOUR live layer-3 consumers carry.
+
+MUTANT C — a LIVE consumer ONLY: the TWO-SPACE separator at the `layer3.after` site.
+  < … sub(/^[0-9a-f]+  /, "", rest) … "$OUT/layer3.after")"
+  > … sub(/^[0-9a-f]+ /, "", rest) …  "$OUT/layer3.after")"
+  rc=1, 1 SELF-TEST REGRESSION line:
+  ✗ expected '4', got '3': the driven parser text IS the text all FOUR live layer-3 consumers carry.
+
+MUTANT D — a LIVE consumer ONLY: the hex character class at the `layer3.after` site.
+  < … sub(/^[0-9a-f]+  /, "", rest) …
+  > … sub(/^[0-9A-F]+  /, "", rest) …
+  rc=1, 1 SELF-TEST REGRESSION line:
+  ✗ expected '4', got '3': the driven parser text IS the text all FOUR live layer-3 consumers carry.
+
+B, C and D ARE THE FINDING CLOSED. Each changes exactly one of the three things the review named —
+the regex, the two-space separator, the field index — at ONE live site, and each is caught by the
+identity case ALONE (4 → 3). Before this round all three went green.
+
+--- one blocking issue fixed on the way, recorded because it changed a live line ---------------
+Task 2's verify requires `/usr/bin/grep -cF '| grep -q' scripts/phase06-oracle.sh` to be ZERO.
+Pre-fix it was ONE, and the single hit was a COMMENT — the `st_grep_why` preamble, whose subject
+is that this shape must not be used. A detector that always fires on the paragraph forbidding the
+shape is a broken detector, which is the reasoning this file already applies to the retired
+bare-glob fences ("A permanently-hit grep is a broken detector", GC-02 block). The sentence was
+reworded to describe the construction in words instead of quoting it, and it now says so and says
+why. No executable line changed; the count is now 0 and the detector discriminates again.
+
+--- the whole-file state at the end of task 2 ---------------------------------------------------
+$ OUT=<mktemp -d> bash scripts/phase06-oracle.sh --self-test
+  ✗ self-test: 140 case(s) ran but 134 were announced - A SECTION DID NOT RUN   ; rc=1
+
+EXPECTED, AND ASSERTED RATHER THAN TOLERATED. Task 3 owns the pin and runs last — task 2 must not
+touch ST_PLANNED_CASES, or the announcement would be re-measured while the count was still moving.
+`were announced` present, `SELF-TEST REGRESSION` absent: the gate fired and nothing else did.
+Six cases added, 134 → 140.
+
+
+================================================================================================
+§ 4  R4-02 — the announcement adjusts where the skip is decided, and the gate stops
+     asserting one cause.  THIS SECTION RAN LAST, after § 3 had stopped moving the count.
+================================================================================================
+
+DISPOSITION: R4-02 IS BOTH. The arithmetic is a CODE change; the gate's message and the
+maintenance instruction are CLAIM CORRECTIONS. Neither half is sufficient alone — fixing only the
+arithmetic would leave an operator a message asserting a cause the gate has no evidence for.
+
+--- THE BEFORE STATE, reproduced against the plan's own base commit -----------------------------
+`git show 24d6624:scripts/phase06-oracle.sh` — the file as the round-4 review read it.
+
+  BEFORE 1  the pre-plan file, this workstation
+    rc=0   ✓ self-test: 134 case(s), every fail-closed branch behaved exactly as expected
+
+  BEFORE 2  the pre-plan file with python3 ABSENT — THE FINDING
+    rc=1   ⚠ SKIPPED: no python3 on this workstation, so the ledger payload could not be parsed.
+           ✗ self-test: 132 case(s) ran but 134 were announced - A SECTION DID NOT RUN
+             withheld. Re-measure only after confirming every section still runs.
+
+  BEFORE 3  the pre-plan file as ROOT (both arms forced) — THE FINDING
+    rc=1   ⚠ SKIPPED as root: an UNREADABLE manifest (mode 000) …
+           ⚠ SKIPPED as root: the PRESENT-BUT-UNREADABLE case …
+           ✗ self-test: 129 case(s) ran but 134 were announced - A SECTION DID NOT RUN
+             withheld. Re-measure only after confirming every section still runs.
+
+  BEFORE 4  the pre-plan file with `self_test_fences` dropped (the control)
+    rc=1   ✗ self-test: 111 case(s) ran but 134 were announced - A SECTION DID NOT RUN
+
+132 and 129 exactly as the review measured. Note what BEFORE 2, 3 and 4 have in common: the SAME
+message, for two deliberate skips and one genuinely dropped section. The gate could not tell them
+apart and told the operator it could — and the remediation sentence on the next line would have
+walked the BEFORE-2 operator into re-pinning 132, which then fails on every box that has python3.
+
+--- THE THREE SKIP DELTAS, MEASURED BY ABLATION, NOT COUNTED BY EYE ----------------------------
+Counting `st_case`-looking lines is the wrong method here: `st_mc`, `st_assert` and `st_grep_why`
+all funnel into `st_case`, so lines and cases are not the same thing. Each arm was forced to take
+its skip branch on a scratch copy and ST_RUN read off the gate's own output.
+
+  arm                                            forced ST_RUN   delta from base
+  ---------------------------------------------- -------------   ---------------
+  (base: no arm forced)                                 140            —
+  self_test_core     — root, mode-000 manifest          139            1
+  self_test_classes  — no python3                       138            2
+  self_test_vacuity  — root, present-but-unreadable     136            4
+  both root arms together                               135            5   (= 1 + 4)
+  all three together                                    133            7   (= 1 + 2 + 4)
+
+ADDITIVE, which is the property that makes three independent decrements correct. 1 / 2 / 4 also
+matches the review's table, measured independently.
+
+--- THE RE-MEASURED BASE, AND THE ENVIRONMENT IT WAS MEASURED IN --------------------------------
+  ST_PLANNED_CASES = 140
+
+Read off a GREEN run, in the REFERENCE ENVIRONMENT, which is named in band beside the constant:
+NON-ROOT (uid 501) and `python3` PRESENT, macOS 27.0 / darwin, bash, BSD grep, BWK awk. It is NOT
+copied from the plan, from 06-REVIEW-GAP3.md or from 06-DISPOSITIONS-GAP2.md — all three record
+134, and § 3 moved it by six.
+
+--- THE TWO WITHDRAWN SENTENCES ----------------------------------------------------------------
+Both are gone as whole constructions, and the verify counts each at zero:
+  "Re-measure only after confirming every section still runs."
+  "it MUST BE RE-MEASURED whenever a section or a case is added"
+  "were announced - A SECTION DID NOT RUN"
+
+The replacement states the failure mode being prevented in one clause ("the pin was
+self-destabilising ACROSS environments"), says the base counts the UNCONDITIONAL cases, says each
+conditional arm adjusts at its own site, and names the reference environment explicitly.
+
+--- THE GATE'S NEW MESSAGE ---------------------------------------------------------------------
+It names three causes and rules one out, instead of asserting one:
+
+  ✗ self-test: 117 case(s) ran but 140 were announced - THE SET IS NOT THE SET
+      The banner this run would otherwise print claims every fail-closed branch behaved
+      as expected. Over a set whose size nothing pins that claim is unbacked, so it is
+      withheld. This gate does NOT know which of these happened:
+        - a section was dropped from the dispatcher, or a rebase lost the line calling it;
+        - an early `return` fired inside a section, so it ran only partway;
+        - a case was added or removed and the announced base was not re-measured.
+      A DELIBERATE environment skip is NOT among the causes: the three environment-
+      conditional arms (root x2, no-python3) each adjust the announcement at their own
+      site, so a reported skip can no longer reach this gate. Re-measure the base ONLY
+      in the reference environment - NON-ROOT, with python3 PRESENT - and only after
+      reading it off a green run there.
+
+It keeps the virtue it always had: it WITHHOLDS the banner rather than printing an unbacked
+universal claim. What it drops is the specific diagnosis it had no evidence for.
+
+--- THE FIVE DRIVES, AFTER ---------------------------------------------------------------------
+Every one is `--self-test` only: no ssh, no docker, no `--run`, no `--arm`. Every ablation is a
+scratch copy from `mktemp -d`; scripts/phase06-oracle.sh was never mutated in place. Every run
+sets OUT to a fresh `mktemp -d`, so no drive reads another's scratch.
+
+  DRIVE 1  the real file, this workstation
+    rc=0   ✓ self-test: 140 case(s), every fail-closed branch behaved exactly as expected
+
+  DRIVE 2  python3 ABSENT (one-token ablation of the `command -v python3` test)
+    rc=0   ⚠ SKIPPED: no python3 on this workstation, so the ledger payload could not be parsed.
+           ✓ self-test: 138 case(s), every fail-closed branch behaved exactly as expected
+    WAS rc=1 with the false "A SECTION DID NOT RUN". THIS IS THE FINDING CLOSED.
+
+  DRIVE 3a  root, arm #1 only (self_test_core)
+    rc=0   ⚠ SKIPPED as root: an UNREADABLE manifest (mode 000) …
+           ✓ self-test: 139 case(s), every fail-closed branch behaved exactly as expected
+
+  DRIVE 3b  root, arm #2 only (self_test_vacuity)
+    rc=0   ⚠ SKIPPED as root: the PRESENT-BUT-UNREADABLE case …
+           ✓ self-test: 136 case(s), every fail-closed branch behaved exactly as expected
+
+  DRIVE 3c  root, BOTH arms together — the real "as root" case
+    rc=0   ⚠ SKIPPED as root × 2
+           ✓ self-test: 135 case(s), every fail-closed branch behaved exactly as expected
+    WAS rc=1 at 129 vs 134.
+
+  DRIVE 3d  root (both) AND python3 absent — every skip at once, the worst case
+    rc=0   ⚠ SKIPPED × 3
+           ✓ self-test: 133 case(s), every fail-closed branch behaved exactly as expected
+
+  DRIVE 4  ****** THE NON-VACUITY CONTROL, AND THE MOST IMPORTANT DRIVE HERE ******
+           `self_test_fences` dropped from the dispatcher.
+    rc=1   ✗ self-test: 117 case(s) ran but 140 were announced - THE SET IS NOT THE SET
+    THE GATE STILL FIRES. If this had gone green the skip-awareness would have disabled the
+    guard it replaced, and drives 1-3d would all be satisfied by a gate that no longer gates
+    anything. A deliberate skip adjusts the announcement; a dropped section adjusts NOTHING.
+
+  DRIVE 5  one `st_case` deleted from an UNCONDITIONAL section (`self_test_fences`' two-line
+           stamp-fence byte-equality case, which no `if` guards)
+      2645,2646d2644
+      <   st_case 0 "$rc" \
+      <     "the two stamp fence copies are BYTE-IDENTICAL - drift is now a red case, …"
+    rc=1   ✗ self-test: 139 case(s) ran but 140 were announced - THE SET IS NOT THE SET
+    A single deleted case is still caught, off by exactly one.
+
+--- WHY THIS IS NOT ONE MAGIC CONSTANT REPLACED BY ANOTHER -------------------------------------
+The base is still a typed number, and that is deliberate rather than overlooked. What changed is
+that it is now typed for ONE named environment and adjusted mechanically for every departure from
+it, instead of being typed for an environment nobody wrote down. The verify asserts the decrement
+sites at `-ge 3` rather than `-eq 3` on purpose: an `-eq` would itself be a constant that a FOURTH
+conditional skip would move silently — this phase's signature defect wearing a different hat.
+
+
+================================================================================================
+§ 5  NOT DRIVEN — what this plan did not prove, named rather than implied
+================================================================================================
+
+- **THE LAYER-3 BLOCK ITSELF.** Steps 3 and 9 are reachable only from a live `--run`, which this
+  phase does not perform and which this plan made no estate contact to attempt. The six new cases
+  prove THE PARSER over synthetic `sha256sum` output; they do NOT prove the block, the remote
+  `sha256sum` invocation, `dex_cmd`'s rendering, or that the container's sha256sum prints the
+  `<hash><SP><SP><path>` form these fixtures assume. R3-03's own account of that form is
+  unchanged and remains untested against the container.
+- **THE `exit 3` ARMS, EXECUTED.** R4-10 is a claim correction: the two `exit 3` guards were read,
+  not run. Whether the container scratch and the LXC stamp actually survive such an exit is
+  REASONED from the fact that step 12 is below them in a straight-line script with no `trap`
+  anywhere — verified by grep, not by an interrupted live run.
+- **ROOT, GENUINELY.** The root drives force the `[ "$(id -u)" = "0" ]` test on scratch copies.
+  Nothing here ran as uid 0. What is proven is that the SKIP BRANCH self-adjusts; what is not
+  proven is that a real root run has no other behavioural difference.
+- **`python3` GENUINELY ABSENT.** Same shape: the `command -v python3` test was ablated, not the
+  interpreter removed. The review used a stripped PATH and got the same shortfall, which is the
+  closest thing to independent confirmation available without uninstalling anything.
+- **A FOURTH ENVIRONMENT-CONDITIONAL SKIP.** If one is ever added and its author forgets the
+  decrement, the gate fires with the corrected (three-cause) message — which now points at the
+  right question — but nothing detects the omission itself. The verify's `-ge 3` is a floor, not
+  a census.
+- **THE SIBLING.** `scripts/check-beets-config.sh` carries the same `ST_PLANNED_CASES` idiom with
+  an UNCONDITIONAL set of 7, and plan 06-38 owns it this round. It was NOT read, NOT run and NOT
+  touched by this plan.
+
+
+================================================================================================
+§ 6  THE THREE VERIFY BLOCKS AT THE FINAL STATE
+================================================================================================
+
+  task 1's block   rc=0
+  task 3's block   rc=0
+  task 2's block   rc=1 — BY DESIGN, and at one line only.
+
+TASK 2'S BLOCK IS TIME-ORDERED AND CANNOT PASS AFTER TASK 3. It asserts
+
+    rc=1 ; 'were announced' present ; 'SELF-TEST REGRESSION' absent
+
+because task 2 deliberately leaves the announcement stale by exactly the six cases it added, and
+the plan says so: "Task 3 has not run yet, so the announced total is stale … this run is therefore
+EXPECTED TO EXIT 1 AT THE ANNOUNCEMENT GATE and nowhere else." Task 3 then re-measured the pin, so
+the self-test exits 0 and that assertion inverts. It passed when it was task 2's turn — recorded
+at the end of § 3 — and the trace below shows it now stops at that one line and nowhere earlier:
+
+    + rc=0
+    + OUT=<mktemp -d> bash scripts/phase06-oracle.sh --self-test
+    + test 0 -eq 1                                   <-- the only failure
+
+Every STATIC test in task 2's block still passes at the final state, and so does its mutant drive.
+Shown by re-running the block with ONLY the two time-ordered lines inverted (`-eq 1` → `-eq 0`,
+`were announced` `-ge 1` → `-eq 0`) and nothing else touched:
+
+    v2-final rc=0
+
+That is the honest reading: the block is not broken, it is dated. The property it was written to
+pin — six cases added, gate fires, no regression — is recorded in § 3 as it was measured.
+
