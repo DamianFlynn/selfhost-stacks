@@ -277,3 +277,10 @@ nothing) and the form in which an already-fenced, already-`%q`-rendered path cro
 | `fa6204a` | 1 | layer-3 paths cross into awk via ENVIRON; the could-not-look cleanup gap stated (R4-09, R4-10) |
 | `5c7eac6` | 2 | drive the layer-3 sha256 parser in the pinned set; pin the driven text to the shipped text (R4-06) |
 | `ef8181f` | 3 | the announced case count adjusts where the skip is decided; the gate stops asserting one cause (R4-02) |
+| `003a317` | — | this SUMMARY |
+
+## Self-Check: PASSED
+
+All three claimed files exist on disk; all four claimed commits are in `git log`. Working tree is
+clean apart from this appended self-check. `STATE.md` and `ROADMAP.md` are **unmodified** — the
+orchestrator owns those writes after the wave merges.
