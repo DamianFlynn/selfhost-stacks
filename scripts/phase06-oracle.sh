@@ -2424,12 +2424,36 @@ self_test_vacuity() {
 # the next reader without running it. Every behavioural case below executes a FENCE TEXT -
 # SCRATCH_FENCE_SH / STAMP_WRITE_FENCE_SH / STAMP_RM_FENCE_SH - and never CLEANUP_PROG,
 # STAMP_WRITE_PROG or STAMP_RM_PROG. A fence text is a bare `case` that either falls through or
-# prints and exits 3; it contains NO `rm`, NO `touch` and NO redirection into a path, and three
-# cases below assert exactly that by inspecting the strings. Driving the full programs instead -
-# even on paths the fence should refuse - would mean that a REGRESSION in the fence turns this
-# self-test into `rm -rf /tmp/p6-x/../../../home`. A self-test case that can destroy a real path
-# under a mistake is a worse defect than the traversal hole it is checking for, so the destructive
-# half is never executed here at all.
+# prints and exits 3. Stated as exactly what is executed and no wider:
+#   no case below executes a destructive program, and three cases below assert that no fence
+#   text contains the token `rm `.
+# Those three cases do it by inspecting the strings.
+#
+# R3-06 NARROWED THAT SENTENCE TO THE CASES THAT BACK IT. It previously named three properties -
+# absence of `rm`, absence of `touch`, and absence of redirection into a path - and said the three
+# cases asserted precisely those. They assert ONE property, the absence of the token `rm `, over
+# three different fence strings. The gap is written out rather than left for the next reader to
+# discover, because this comment is the stated reason a reader may trust that these cases cannot
+# delete anything:
+#   - `touch` is NOT asserted. No case below inspects for it.
+#   - REDIRECTION is NOT asserted either, and a blanket no-redirection claim would be false as
+#     stated, because `>&2` appears in all three fence texts. The narrower intended reading - that
+#     nothing is redirected into a PATH - does hold, since `>&2` duplicates a file descriptor and
+#     opens nothing; but holding is not asserting, and nothing below checks it.
+#   - the token test is the TWO-CHARACTER `rm `, so a tab- or newline-separated `rm` would slip
+#     past it. That bound is acceptable HERE for a specific reason, not a general one: the fence
+#     texts are three short literals under version control, and the destructive half is never
+#     executed in this section at all - so the test is a drift tripwire over reviewed text, not a
+#     sanitiser over untrusted input.
+# THE CASES WERE DELIBERATELY NOT WIDENED to match the old wording. Read the narrower sentence as a
+# CORRECTION, not a weakening: the three cases are byte-unchanged and were already adequate for
+# their bound, and widening executable assertions in order to rescue the prose of a comment is the
+# scope-widening this round exists to stop.
+#
+# Driving the full programs instead - even on paths the fence should refuse - would mean that a
+# REGRESSION in the fence turns this self-test into `rm -rf /tmp/p6-x/../../../home`.
+# A self-test case that can destroy a real path under a mistake is a worse defect than the
+# traversal hole it is checking for, so the destructive half is never executed here at all.
 #
 # What carries the result from the fence text to the shipped program is STRUCTURAL, not behavioural:
 # three cases assert that each PROG literally BEGINS with the fence text that was driven. The

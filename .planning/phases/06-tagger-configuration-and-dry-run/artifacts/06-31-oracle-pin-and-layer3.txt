@@ -148,3 +148,51 @@ guards now — two BEFORE, two AFTER — where there were two.
 NO EXIT CODE WAS RENUMBERED. The new arms reuse the file's existing UNKNOWN=3. The numbering
 difference against phase06-incremental-control.sh is a recorded deliberate non-finding
 (06-DISPOSITIONS.md § Deliberate non-findings §1) and was left alone.
+
+
+================================================================================
+§ 3 — R3-06: self_test_fences's in-band safety claim, narrowed
+================================================================================
+
+DISPOSITION: CLAIM CORRECTION ONLY. No code changed in this section. The three cases and the
+three fence texts are byte-unchanged; `git diff` for this task touches comment lines only.
+
+THE DEFECT. The comment above `self_test_fences` named three properties — absence of `rm`,
+absence of `touch`, absence of redirection into a path — and said three cases asserted
+precisely those. Read against the cases, confirmed by grep on the shipped file:
+
+    /usr/bin/grep -c '\*"rm "\*' scripts/phase06-oracle.sh   ->  3
+
+Those three cases assert ONE property — the absence of the two-character token `rm ` — over
+three different fence strings (SCRATCH_FENCE_SH, STAMP_WRITE_FENCE_SH, STAMP_RM_FENCE_SH).
+`touch` is asserted nowhere. Redirection is asserted nowhere.
+
+THE `>&2` POINT, AND WHICH READING IS ADOPTED. The review notes every fence text contains
+`>&2`, which makes a blanket no-redirection claim false as stated. Read from the three fence
+texts at their definitions — each carries two `echo "REFUSED: ..." >&2; exit 3` arms, so the
+observation holds. The reading adopted in the corrected comment covers both senses, because
+the honest answer differs between them:
+
+  - a blanket "no redirection" claim is FALSE as stated — `>&2` is present three times over;
+  - the narrower intended sense, "nothing is redirected into a PATH", is TRUE — `>&2`
+    duplicates a file descriptor and opens nothing;
+  - but under EITHER reading the property is UNASSERTED, and that is the correction that
+    matters. Holding is not asserting.
+
+THE TOKEN BOUND, STATED RATHER THAN LEFT IMPLICIT. The test is `*"rm "*`, the two-character
+token, so a tab- or newline-separated `rm` would slip past. Acceptable here for a reason that
+is specific and not general, and the comment now says so: the fence texts are three short
+literals under version control, and the destructive half is never executed in this section at
+all — so the test is a drift tripwire over reviewed text, not a sanitiser over untrusted input.
+
+WHAT WAS DELIBERATELY NOT DONE. The cases were NOT widened to a broader `rm` glob, nor to a
+`touch` glob, nor to a redirection glob. The review's Verified-and-clean section had already
+checked this section adversarially and found it genuinely non-destructive — every behavioural
+case drives a `*_FENCE_SH` string and never a `*_PROG`, and the byte-identity check between
+the two stamp fences is a real executed drift check. The finding is about the sentence, not the
+cases. Widening executable assertions to rescue the wording of a comment is the scope-widening
+this round exists to stop, and the comment now records that decision in band so the next reader
+does not read the narrower sentence as a weakening.
+
+REGRESSION CHECK. `--self-test` still exits 0 and still runs the same number of cases after
+this task — see § 4, where the count is measured for the pin.
