@@ -2667,16 +2667,34 @@ esac
 # far side. Measured: `/config/my library.db` arrived as argv `/config/my` + `library.db`, argc 3
 # rather than 2. This is a bash WORD context, so %q is exactly the right tool, and it is applied at
 # the CALL SITES rather than inside `dex_cmd` - doing it inside would double-quote the eighteen
-# sites in this file that already pass %q output through it. The consuming `awk -v p=…` keys below
-# stay RAW on purpose: the remote shell REMOVES the %q quoting before sha256sum is exec'd, so
-# sha256sum receives, and prints, the unquoted value. Confirmed by argv capture, not assumed; the
-# drive is in artifacts/06-27-oracle-vacuity-and-claims.txt § 2. The same two lines appear at
-# step 9; both carry the fix and the reason is stated only here.
+# sites in this file that already pass %q output through it. Confirmed by argv capture, not assumed;
+# the drive is in artifacts/06-27-oracle-vacuity-and-claims.txt § 2. THAT HALF OF GC-15 WAS RIGHT
+# AND IS UNCHANGED - the SENDING side is correctly quoted.
+#
+# R3-03 CORRECTS THE OTHER HALF. GC-15 went on to say the consuming `awk -v p=…` keys could stay
+# RAW, because the remote shell REMOVES the %q quoting before sha256sum is exec'd so sha256sum
+# receives, and prints, the unquoted value. Both of those clauses are true and the conclusion did
+# not follow. sha256sum prints `<hash><SP><SP><path>` and does NOT escape a space in the path it
+# prints, so a key on awk's default-split field 2 saw `/config/my`, never matched
+# `/config/my library.db`, and the emptiness guard below fired and exited 3 UNKNOWN - fail-closed,
+# but permanently so, FOR EXACTLY THE INPUT GC-15 WAS WRITTEN TO SUPPORT. An undriveable branch is
+# an unproven branch, which is this file's own stated reason for having the knob at all.
+#
+# So the CONSUMERS changed too, at all FOUR sites (two here, two at step 9), to ONE parser: strip a
+# leading `<hex><SP><SP>` from a copy of the line and compare the REMAINDER to the knob for EXACT
+# equality, then take the digest as field 1 - safe, because a sha256 digest contains no whitespace.
+# Four consumers of one output format must not carry two parsers, so the same form is used at all
+# four. Exact equality rather than a suffix test ON PURPOSE: a suffix test can match a line it was
+# not asked about, and converting this false UNKNOWN into a false GREEN would be strictly worse
+# than the defect being repaired. A line that does not name the requested path yields EMPTY and the
+# guards still fire - including GNU sha256sum's backslash-escaped form for a path containing a
+# newline, which does not begin with hex and is therefore refused rather than mis-parsed. Driven,
+# with no estate contact, in artifacts/06-31-oracle-pin-and-layer3.txt § 1.
 rsh "$(dex_cmd sha256sum "$(printf '%q' "$REAL_LIB_DB")" "$(printf '%q' "$REAL_STATE_PICKLE")")"
 rsh_classify "the layer-3 baseline hashes" || exit 3
 printf '%s\n' "$RSH_OUT" > "$OUT/layer3.before"
-LIB_SHA_BEFORE="$(LC_ALL=C awk -v p="$REAL_LIB_DB" '$2 == p {print $1}' "$OUT/layer3.before")"
-STATE_SHA_BEFORE="$(LC_ALL=C awk -v p="$REAL_STATE_PICKLE" '$2 == p {print $1}' "$OUT/layer3.before")"
+LIB_SHA_BEFORE="$(LC_ALL=C awk -v p="$REAL_LIB_DB" '{ rest = $0; if (sub(/^[0-9a-f]+  /, "", rest) && rest == p) print $1 }' "$OUT/layer3.before")"
+STATE_SHA_BEFORE="$(LC_ALL=C awk -v p="$REAL_STATE_PICKLE" '{ rest = $0; if (sub(/^[0-9a-f]+  /, "", rest) && rest == p) print $1 }' "$OUT/layer3.before")"
 [ -n "$LIB_SHA_BEFORE" ] || { unknown "no sha256 line for $REAL_LIB_DB"; exit 3; }
 [ -n "$STATE_SHA_BEFORE" ] || { unknown "no sha256 line for $REAL_STATE_PICKLE"; exit 3; }
 say "  library.db    before: $LIB_SHA_BEFORE"
@@ -2831,13 +2849,25 @@ capture_manifests after "$OUT/sample.tsv" || exit 3
 diff_manifest src meta || true
 diff_manifest src sha  || true
 
-# GC-15, second of the two sites. Same fix, same reason; the account is at step 3 and is not
-# repeated. The awk keys below are RAW for the reason stated there.
+# GC-15, second of the two sites, as corrected by R3-03. Same sending-side fix and the same
+# whitespace-tolerant consumer as step 3; the account is there and is not repeated.
 rsh "$(dex_cmd sha256sum "$(printf '%q' "$REAL_LIB_DB")" "$(printf '%q' "$REAL_STATE_PICKLE")")"
 rsh_classify "the layer-3 hashes after the run" || exit 3
 printf '%s\n' "$RSH_OUT" > "$OUT/layer3.after"
-LIB_SHA_AFTER="$(LC_ALL=C awk -v p="$REAL_LIB_DB" '$2 == p {print $1}' "$OUT/layer3.after")"
-STATE_SHA_AFTER="$(LC_ALL=C awk -v p="$REAL_STATE_PICKLE" '$2 == p {print $1}' "$OUT/layer3.after")"
+LIB_SHA_AFTER="$(LC_ALL=C awk -v p="$REAL_LIB_DB" '{ rest = $0; if (sub(/^[0-9a-f]+  /, "", rest) && rest == p) print $1 }' "$OUT/layer3.after")"
+STATE_SHA_AFTER="$(LC_ALL=C awk -v p="$REAL_STATE_PICKLE" '{ rest = $0; if (sub(/^[0-9a-f]+  /, "", rest) && rest == p) print $1 }' "$OUT/layer3.after")"
+# R3-04. These two guards are the BEFORE block's, mirrored, and they must sit ABOVE the comparisons
+# below. Without them an absent, unparseable or truncated second sha256sum line left the hash EMPTY,
+# the comparison was false, and the run took the `bad` arm below and printed its CHANGED verdict
+# with `<64-hex> -> ` as the parenthesised pair - the old wording is NOT quoted here, because a
+# grep for that verdict must keep returning exactly one hit, the live one
+# - a MEASURED RED asserted over a COULD-NOT-LOOK, with the arrow pointing at an empty string, on
+# the one assertion whose whole job is to prove `-l` kept the real library.db closed. A could-not-
+# look is never folded into another verdict here; and because UNKNOWN outranks RED in this file's
+# precedence, folding it into RED also DEMOTED the verdict. The BEFORE side already routed this to
+# `unknown`/exit 3; this is the same correction GC-05 made in the opposite direction.
+[ -n "$LIB_SHA_AFTER" ]   || { unknown "no sha256 line for $REAL_LIB_DB after the run"; exit 3; }
+[ -n "$STATE_SHA_AFTER" ] || { unknown "no sha256 line for $REAL_STATE_PICKLE after the run"; exit 3; }
 if [ "$LIB_SHA_AFTER" = "$LIB_SHA_BEFORE" ]; then
   ok "layer 3: the real library.db is byte-identical before and after"
 else

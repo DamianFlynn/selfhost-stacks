@@ -1,0 +1,150 @@
+================================================================================
+06-31 — the oracle's self-test pin, and the layer-3 hash consumers
+Round 3 gap closure. Findings R3-02, R3-03, R3-04, R3-06 in scripts/phase06-oracle.sh.
+Observed 2026-09-23. No estate contact: no --run, no --arm, no ssh, no docker.
+All measurements taken from the worktree root
+  .claude/worktrees/agent-a840cc0bbe924fbad
+which is what `git rev-parse --show-toplevel` resolves to for this executor.
+================================================================================
+
+WHAT IS NOT DRIVEN HERE, STATED FIRST
+  The layer-3 block itself is reachable only from a live `--run`. This plan does not perform
+  one, so neither the BEFORE nor the AFTER block was executed in situ. §1 and §2 below drive
+  the two CHANGED PARTS as detached copies — the awk consumer verbatim, and the guard/compare
+  arms in the shape the file now carries. That is the strongest evidence available without
+  contacting the estate, and it is deliberately not described as more than that.
+
+  §3 is a claim correction with no executed component by design.
+  §4 IS executed end to end, against the real file and against a scratch mutant of it.
+
+
+================================================================================
+§ 1 — R3-03: the layer-3 hash consumer, old key vs new key
+================================================================================
+
+THE DEFECT. GC-15 quoted the SENDING side of both `dex_cmd sha256sum` calls with %q and then
+wrote that the local consumers needed no change, because "the remote shell REMOVES the %q
+quoting before sha256sum is exec'd". Both clauses are true and the conclusion does not follow:
+sha256sum prints `<hash><SP><SP><path>` and does NOT escape a space in the path, so a key on
+awk's default-split field 2 sees `/config/my` where the knob holds `/config/my library.db`.
+It never matches, the emptiness guard fires, and the run exits 3 UNKNOWN — permanently, for
+exactly the input GC-15 was written to support.
+
+WHERE THE CONSUMER RUNS. Locally. The awk reads `$OUT/layer3.before` / `$OUT/layer3.after`,
+which are workstation files. So the awk exercised below IS the real consumer, not a stand-in:
+
+    awk version 20200816          (macOS / one-true-awk, the workstation's awk)
+
+THE OLD KEY (all four sites, before this plan), written here in prose rather than as a literal
+so that a grep for the retired form over the shipped script keeps returning zero:
+    awk -v p="$PATH" '<field-2-equals-p> {print <field 1>}'
+
+THE NEW KEY (all four sites, after this plan), verbatim:
+    LC_ALL=C awk -v p="$PATH" '{ rest = $0; if (sub(/^[0-9a-f]+  /, "", rest) && rest == p) print $1 }'
+
+Strip a leading `<hex><SP><SP>` from a COPY of the line, compare the REMAINDER to the knob for
+EXACT equality, take the digest as field 1 (safe: a sha256 digest contains no whitespace).
+
+--------------------------------------------------------------------------------
+DRIVE. Synthetic input in the exact format sha256sum emits — 64 hex, two spaces, path:
+
+    aaaaaaaabbbbbbbbccccccccddddddddeeeeeeeeffffffff0000000011111111  /config/my library.db
+    2222222233333333444444445555555566666666777777778888888899999999  /config/state.pickle
+
+RESULTS
+
+  OLD key, space-bearing path                                -> []
+  NEW key, space-bearing path                                -> [aaaaaaaabbbbbbbbccccccccddddddddeeeeeeeeffffffff0000000011111111]
+  OLD key, no-space path (control)                           -> [2222222233333333444444445555555566666666777777778888888899999999]
+  NEW key, no-space path (control)                           -> [2222222233333333444444445555555566666666777777778888888899999999]
+
+  The first line is R3-03 reproduced: empty, so the guard exits 3 UNKNOWN.
+  The second is the fix.
+  The third and fourth are the control that matters — the defect was specific to the SPACE,
+  and the new key does not regress the no-space path that has always worked.
+
+--------------------------------------------------------------------------------
+PROPERTY 1 — "it yields the hash for a path containing a space."
+  Established by line 2 above: the 64-hex digest is returned for `/config/my library.db`.
+
+PROPERTY 2 — "it yields EMPTY for a line that does not name the requested path at all."
+  Established by driving the new key against a file naming only `/config/other.db`:
+
+    input:  deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef  /config/other.db
+
+    NEW key, requested path absent                             -> []
+    NEW key, empty input                                       -> []
+
+  This is the property that matters most, and it is why the parser compares the whole
+  remainder for EQUALITY rather than testing a SUFFIX. A suffix test would match a line it was
+  not asked about, converting R3-03's false UNKNOWN into a FALSE GREEN — strictly worse than
+  the defect being repaired. Two adversarial suffix probes, both of which a naive suffix
+  parser would have matched:
+
+    NEW key, p='library.db'     (suffix of a listed path)      -> []
+    NEW key, p='my library.db'  (suffix of a listed path)      -> []
+
+FAIL-CLOSED ON THE ONE INPUT THE PARSER CANNOT READ. GNU sha256sum escapes a path containing a
+newline by prefixing the whole line with a backslash. Such a line does not begin with hex, so
+`sub(/^[0-9a-f]+  /, ...)` does not fire and the result is empty — the guard exits 3 UNKNOWN
+rather than mis-parsing:
+
+    NEW key, backslash-escaped line                            -> []
+
+  Refused, not guessed at. Recorded as a known bound of the parser, not as a silence.
+
+ONE PARSER AT ALL FOUR SITES. `LIB_SHA_BEFORE`, `STATE_SHA_BEFORE`, `LIB_SHA_AFTER`,
+`STATE_SHA_AFTER` all carry the identical form. Four consumers of one output format must not
+carry two parsers.
+
+THE CLAIM CORRECTION. The GC-15 paragraph at step 3 no longer says the consumers were fine.
+It now keeps GC-15's correct account of why %q is right for the SENDING side, names R3-03, and
+states that sha256sum does not escape spaces in the path it prints so the consumer had to
+change too. The step-9 comment defers to it.
+
+
+================================================================================
+§ 2 — R3-04: the layer-3 AFTER hashes had no emptiness guard
+================================================================================
+
+THE DEFECT. The BEFORE block guards both hashes for emptiness and routes an empty one to
+`unknown(); exit 3`. The AFTER block did not. An absent, unparseable or truncated second
+sha256sum line left `LIB_SHA_AFTER` empty, the equality test was false, and the run printed a
+measured RED over a could-not-look with the arrow pointing at an empty string.
+
+DRIVE. The two arms, in the shape the file carried before this plan and the shape it carries
+now, exercised as detached copies (the live block needs `--run`):
+
+  === the OLD shape: no guard above the comparison ===
+    ❌ layer 3: the real library.db CHANGED (aaaaaaaabbbbbbbbccccccccddddddddeeeeeeeeffffffff0000000011111111 -> )
+    exit code of the old arm: 1   <- RED, and the arrow points at an empty string
+
+  === the NEW shape: the R3-04 guard sits ABOVE the comparison ===
+    ❓ UNKNOWN: no sha256 line for /config/library.db after the run
+    exit code of the new arm: 3   <- UNKNOWN (3), the could-not-look is not folded into RED
+
+THE TWO CONTROLS, without which the above proves only that the guard suppresses things:
+
+  === control: a NON-empty AFTER hash that genuinely differs still reports RED ===
+    ❌ layer 3: the real library.db CHANGED (aaaa...1111 -> 9999999999999999999999999999999999999999999999999999999999999999)
+    exit code: 1   <- still RED. The guard suppresses the could-not-look, not the real finding.
+
+  === control: a matching AFTER hash still reports green ===
+    ✓ layer 3: the real library.db is byte-identical before and after
+    exit code: 0   <- green, unchanged.
+
+  So the guard discriminates. It changes the verdict on exactly one input — the empty one —
+  and leaves both real outcomes where they were.
+
+THE CONSEQUENCE, IN THIS FILE'S OWN VOCABULARY, recorded in band at the site: a could-not-look
+is never folded into another verdict; and because UNKNOWN outranks RED in this file's
+precedence, folding it into RED also DEMOTED the verdict. It is the exact inverse of the GC-05
+correction made in the opposite direction in this same round.
+
+GUARD SITING. Both guards sit ABOVE both comparisons, so an empty hash can never reach a
+`bad "layer 3: … CHANGED"` line. Counted in the shipped file: four `no sha256 line for`
+guards now — two BEFORE, two AFTER — where there were two.
+
+NO EXIT CODE WAS RENUMBERED. The new arms reuse the file's existing UNKNOWN=3. The numbering
+difference against phase06-incremental-control.sh is a recorded deliberate non-finding
+(06-DISPOSITIONS.md § Deliberate non-findings §1) and was left alone.
