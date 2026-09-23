@@ -222,6 +222,30 @@ For: a fourth review of round 3's own diff is **the same discipline that caught 
 rounds**, and round 2 exists precisely because round 1 was verified 6/6 before anyone read its diff.
 It should be a **deliberate decision**, not an omission.
 
+**ANSWERED 2026-09-23 — the operator chose round 4, and it earned its keep.** Reviewed deep against
+`fff070a..HEAD` (round 3's own 320-line diff across the four scripts), written to
+`06-REVIEW-GAP3.md`: **0 Critical, 6 Warning, 4 Info**. The "For" case was right. Three Warnings
+were re-verified independently by the orchestrator against the code, not taken from the review:
+- **WR-02** — `ST_PLANNED_CASES=134`, round 3's **centrepiece** fix, is a fixed constant compared
+  with `-ne` against a self-test carrying documented env-conditional skips (root skips 1+4, no
+  python3 skips 2). As root it runs 129, without python3 132, and the gate then prints *"A SECTION
+  DID NOT RUN"* when every section ran. **A false red with a wrong stated cause** — the fix made
+  the instrument less trustworthy than it found it. Not a false green.
+- **WR-03** — both new `INT TERM HUP` handlers in `phase06-incremental-control.sh` carry no `exit`
+  and no re-raise, so POSIX resumes the shell: a SIGTERM deletes the scratch dir and the program
+  **keeps running and exits 0**. The in-band claim names only the SIGKILL residual.
+- **WR-05** — `check-beets-config.sh:434` says the raw count "is 4". It is **5**; it was 4 at
+  `fff070a` and the recipe line the *same hunk* added made it 5. The self-referential measurement
+  error, recurring inside the fix for it.
+`06-REVIEW.md` was NOT overwritten — verified byte-identical (round 1's record is cited by ten
+files). Round 4's report took the `-GAP3` suffix, continuing the `-GAP`/`-GAP2` convention.
+
+**Operator decision 2026-09-23: GAP-CLOSURE ROUND 5**, planned against `06-REVIEW-GAP3.md`.
+Verification is deferred behind it — deliberately, for the reason round 2 exists: round 1 was
+verified 6/6 *before anyone read its diff*. **`/gsd-verify 06` has still NOT been run since round
+2**, and the phase is NOT complete. No requirement checkbox moved by round 3 or round 4; CONF-04's
+Jellyfin half remains OPEN under **E6**.
+
 Status: Phase 06 gap-closure round 1 executed and verified 6/6 (2026-09-22); round 2 **EXECUTED**
 against `06-REVIEW-GAP.md` (GC-01 blocker + 7 warnings in round 1's own code, plus GC-16/GC-17
 from the cross-family adjudication) — all 17 closed and dispositioned in `06-DISPOSITIONS-GAP.md`
