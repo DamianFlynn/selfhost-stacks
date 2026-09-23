@@ -284,5 +284,75 @@ workstation-only. Every signal drive was a standalone script in a `mktemp -d`, n
 program against the real container. Every scratch path the drive minted was removed by name, and
 the remover refuses any path outside the two templates.
 
-(Task 2's transcript is appended below by task 2's own commit; it is deliberately not written
-here in advance of being measured.)
+
+================================================================================
+PART 6 — R4-04: THE CLAIM CORRECTION (comment-only)
+================================================================================
+R4-04's fix kind is BOTH. Its code half was task 1's `PIPE` arm. This half is a CLAIM CORRECTION,
+and the honest fix is to NARROW the sentence, not to widen anything further — this round's whole
+subject is claims outrunning their code, so replacing one confident mechanism story with another
+would have reproduced the defect in a new shape.
+
+WITHDRAWN, in full:
+    "so a bound expiry is a ROUTINE outcome for a manifest over a large tree, not an exotic
+     one - and on the narrow list that expiry left behind exactly the minted leftover …"
+
+REPLACED BY a paragraph that grades three claims by name:
+  1. ESTABLISHED — the transport (`timeout $REMOTE_TIMEOUT docker exec … sh -s`, grep-confirmable
+     at remote_exec) and POSIX's rule that an exit trap does not run on an uncaught signal.
+  2. NOT ESTABLISHED — that `timeout` delivers SIGTERM to the in-container shell. It signals the
+     `docker exec` CLIENT on LXC 100; `docker exec` is not known to forward signals inward. Said
+     in band to be UNCONFIRMED, said to be untested, and said WHY it is untested (no estate
+     contact in this phase).
+  3. BELIEVED, at the SAME static grade as (2) and explicitly not an upgrade over it — the exec's
+     stdout stream closes and the shell takes EPIPE/SIGPIPE on its next write.
+
+THE RESIDUAL PARAGRAPH, corrected. Round 3 framed the problem as a window of leakage ("widening
+the list SHRINKS the window"). Under R4-03 that was wrong in a second way: the signal was
+ABSORBED, not narrowed. The corrected paragraph names, in order:
+  * what R4-03 changed, and the TWO reachable normal-looking-transcript paths the old framing
+    under-described —
+      (i)  in write_prog_manifest, a signal after the last manifest write let the program print
+           `MANIFEST OK` and exit 0 (most other downstream paths DO degrade closed: `sort`, `find`
+           and `sort -z` all fail once MANDIR is gone and route to `MANIFEST BLIND … exit 2`);
+      (ii) in write_prog_taghistory, a signal between the program write and its execution removed
+           the program file, made the interpreter invocation fail, and the shell still reached its
+           tail and exited 0;
+  * that SIGKILL remains untrappable and is still a genuine residual, consistent with
+    DEF-06-34-06, which is unchanged;
+  * that NEITHER TRAP HAS EVER BEEN OBSERVED FIRING INSIDE THE CONTAINER, with the driving
+    condition attached to the EXISTING Phase 7 entry criterion E12 (no new criterion invented).
+
+CROSS-REFERENCE in write_prog_taghistory updated to point at the corrected paragraph rather than
+at the superseded account — one clause, per the file's "stated once there" convention.
+
+ROUND 3'S REFUSAL IS BYTE-INTACT. The `NOT DONE, deliberately` paragraph declining the
+`/tmp/p6-mf.*` sweep of names this run did not mint stays exactly as written. R4-04 does not
+reopen it and DEF-06-34-01 owns it.
+
+THIS TASK CHANGES NO EXECUTABLE LINE, proven mechanically rather than asserted, the way round 3
+proved its three comment-only fixes:
+
+  $ git diff -U0 -- scripts/phase06-incremental-control.sh | grep -c '^[+-][^+-]'
+  55
+  $ git diff -U0 -- scripts/phase06-incremental-control.sh | grep '^[+-][^+-]' \
+      | grep -cvE '^[+-][[:space:]]*#'
+  0
+
+  $ bash -n scripts/phase06-incremental-control.sh          -> exit 0
+  $ bash scripts/phase06-incremental-control.sh --self-test -> exit 0
+
+
+================================================================================
+PART 7 — POST-FIX RUNS OF BOTH VERIFY BLOCKS
+================================================================================
+  $ bash verify-task1.sh   -> EXIT=0   (every assertion, after task 1)
+  $ bash verify-task2.sh   -> EXIT=0   (every assertion, after task 2)
+
+Both blocks failed pre-fix at the test PART 0 records, and both pass post-fix. Neither is vacuous.
+
+  $ git diff --name-only -- scripts/
+  scripts/phase06-incremental-control.sh        (the only file under scripts/ this plan touched)
+
+No requirement checkbox was moved. CONF-04 is not closed and is not claimed. The phase is not
+declared complete. 06-VERIFICATION.md was not read as a gap source and was not touched.

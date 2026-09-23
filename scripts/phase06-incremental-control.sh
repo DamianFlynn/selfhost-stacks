@@ -486,15 +486,43 @@ fi
 # `""` and not `''` for the empty pattern: the trap body is a single-quoted string, so an inner
 # single quote would terminate it. dash treats the two patterns identically.
 #
-# R3-09: THE SIGNAL LIST IS NOT JUST THE EXIT PSEUDO-SIGNAL, and that is not decoration. A POSIX
-# shell runs an exit trap on normal termination and on `exit`, but NOT on an uncaught SIGTERM. This
-# program is delivered as `sh -s` through `timeout $REMOTE_TIMEOUT docker exec` (the bound defaults
-# to 120s), so a bound expiry is a ROUTINE outcome for a manifest over a large tree, not an exotic
-# one - and on the narrow list that expiry left behind exactly the minted leftover the CLEANUP
-# paragraph at the top of this block calls the worse litter, one directory per timed-out run, in a
-# /tmp this file's header records as mode 1777.
-# THE RESIDUAL, stated rather than claimed away: SIGKILL cannot be trapped, so a hard kill still
-# leaves the directory. Widening the list SHRINKS the window; it does not close it.
+# R3-09, AS CORRECTED BY R4-04 - CLAIM CORRECTION. THE SIGNAL LIST IS NOT JUST THE EXIT
+# PSEUDO-SIGNAL, and that much is right; what round 3 wrote UNDERNEATH it was a mechanism story
+# stronger than anything anyone measured, and this paragraph now separates three grades of claim by
+# name rather than presenting them as one account.
+#   1. ESTABLISHED. The transport is `timeout $REMOTE_TIMEOUT docker exec -i -u beetle $CONTAINER
+#      sh -s` (bound defaults to 120s) - grep-confirmable in this file, at remote_exec. And a POSIX
+#      shell runs an exit trap on normal termination and on `exit`, but NOT on an uncaught signal.
+#      Those two facts are why a signal list wider than EXIT is needed at all.
+#   2. NOT ESTABLISHED, and this is what round 3 asserted as routine: that `timeout` delivers
+#      SIGTERM to the IN-CONTAINER shell. It does not signal this program. `timeout` signals the
+#      `docker exec` CLIENT process on LXC 100, and `docker exec` is NOT KNOWN TO FORWARD signals
+#      to the exec'd process - killing the client leaves the exec'd process running and the daemon
+#      tears the attached streams down instead. If that holds here, the TERM arm never fires for
+#      this program at all. THE SIGTERM PATH IS UNCONFIRMED. It was not tested, and it was not
+#      tested because this phase makes NO ESTATE CONTACT - no ssh, no docker, no live arm.
+#   3. BELIEVED, on reasoning of exactly the same static grade as (2) and NOT an upgrade over it:
+#      when the client dies the exec's stdout stream closes, and this shell takes EPIPE/SIGPIPE on
+#      its next write. Both writers below are stdout writers. That is the whole reason `PIPE` is in
+#      the list. It is a candidate FIXED (undriven) row, exactly as R3-09 itself was.
+# THE RESIDUAL, restated because round 3's framing under-described the defect. Round 3 said
+# widening the list SHRINKS the window. Under R4-03 that was wrong in a second way: on the
+# non-terminal handlers the signal was ABSORBED, not narrowed - the trap deleted the scratch path
+# and the shell resumed. Most downstream paths do degrade closed (`sort`, `find` and `sort -z` all
+# fail once MANDIR is gone and route to `MANIFEST BLIND ... exit 2`), but TWO PATHS PRODUCED A
+# NORMAL-LOOKING TRANSCRIPT OVER AN INTERRUPTED RUN, and they are the reason R4-03 is a code fix:
+#   (i)  here, a signal after the last manifest write let this program print `MANIFEST OK` and
+#        exit 0;
+#   (ii) in write_prog_taghistory, a signal between the program write and its execution removed the
+#        program file, made the interpreter invocation fail, and the shell still reached its tail
+#        and exited 0.
+# SIGKILL remains untrappable and is still a genuine residual - a hard kill (`timeout -k`, a
+# container stop, an OOM kill) still leaves the directory. That is DEF-06-34-06 and it is unchanged.
+# NEITHER TRAP HAS EVER BEEN OBSERVED FIRING INSIDE THE CONTAINER. The condition that would drive
+# it is a live `--arm a` / `--arm b` pair under a deliberately short REMOTE_TIMEOUT, checking the
+# container's /tmp afterwards for surviving `/tmp/p6-mf.*` and `/tmp/p6-taghist.*` names. That
+# attaches to the EXISTING Phase 7 entry criterion E12, which already carries this class alongside
+# DEF-06-34-04 and DEF-06-34-06. No new criterion is invented here.
 # NOT DONE, deliberately: the best-effort sweep of other names carrying this template prefix that
 # the review floats as a second idea. Removing a name THIS RUN DID NOT MINT is a wider destructive
 # reach than the finding justifies on a shared container /tmp, in a round whose whole subject is
@@ -579,10 +607,11 @@ if [ -z "$THPROG" ]; then
   echo "TAGHIST BLIND could not mint a program path with mktemp - refusing to write-then-execute a fixed name in a world-writable /tmp"
   exit 2
 fi
-# R3-09, same reasoning as the manifest trap above and stated once there: an exit trap does not run
-# on an uncaught SIGTERM, and both programs arrive through a `timeout`-bounded `docker exec`, so the
-# narrow list would have leaked a minted name on a routine bound expiry. The SIGKILL residual and
-# the refusal to sweep unminted names are recorded at that site.
+# R3-09 AS CORRECTED BY R4-04, same reasoning as the manifest trap above and stated once there: an
+# exit trap does not run on an uncaught signal, so a list of EXIT alone would have leaked a minted
+# name - but WHICH signal reaches this program through the `timeout`-bounded `docker exec` is
+# unconfirmed, and the corrected paragraph at that site grades the SIGTERM path, the SIGPIPE path,
+# the SIGKILL residual and the refusal to sweep unminted names.
 # R3-10, likewise the same predicate and stated once above: prefix, then a remainder that must be
 # non-empty and free of any byte outside [A-Za-z0-9._-] - a class that excludes `/`, which the
 # prefix-only shape it replaces did not. GC-02 carries the identical rule in
