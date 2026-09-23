@@ -1,0 +1,70 @@
+06-33 — case 6's announcement vs its gate (R3-08), and the contract function's census (R3-07)
+=============================================================================================
+Date:       2026-09-23
+Script:     scripts/check-beets-config.sh
+Scratch:    a directory from `mktemp -d` (/tmp/p633.XXXXXX), deleted at the end of the drive.
+            Nothing in this drive was written inside the repository working tree.
+Estate:     none. `--self-test` is estate-free — no ssh, no docker, no live checker run.
+ANSI:       both transcripts below are the raw `--self-test` output with SGR escapes stripped
+            (`sed 's/\x1b\[[0-9;]*m//g'`). Nothing else was normalised; no field in the case-6
+            block varies between runs.
+
+
+R3-08 — THE DEFECT, DRIVEN AND MADE VISIBLE BEFORE IT WAS REMOVED
+=============================================================================================
+After GC-13, case 6's gate reads ARM1_REAL_VIOLATIONS and ARM1_SYNTH_REJECTED. The expected-red
+count survived only to print in the banner, and the success line still printed the summed counter
+— a number nothing compared. To show that the banner and the gate really could disagree while the
+run stayed green, the drive FORCES the summed counter to 2 at the end of
+assert_beet_invocation_contract, leaving both gated values correct:
+
+    (inserted immediately before the function's closing brace, on the scratch copy only)
+    ARM1_FAILS=2   # FORCED for the 06-33 drive: the two gated values stay correct
+
+-- BEFORE (pre-fix copy, forced counter) ----------------------------------------------------
+  case: the -l + -c contract over this script's own source  (expect 1 red)
+    · D-04 contract: every beet invocation in this script's own source carries -l ${THROWAWAY_DB} AND -c ${OVERLAY}
+    · D-04 contract, driven: the synthetic -c-only invocation was REJECTED, as it must be —  beet_exec "${BEET_BIN} -c ${OVERLAY} config -d"
+  ✅ case 'the -l + -c contract over this script's own source': 2 red, as expected
+...
+✅ --self-test: all 7 cases behaved as expected (6 of them red)
+  exit status: 0
+
+    The banner announces one expected red. The success line reports two. They contradict each
+    other in plain sight, the case is declared green, and the whole self-test exits 0. Exactly
+    the announced-vs-actual drift that ST_PLANNED_CASES was added twenty lines below to prevent,
+    in miniature.
+
+-- AFTER (post-fix copy, same forced counter) -----------------------------------------------
+  case: the -l + -c contract over this script's own source  (gate: real violations=0 AND synthetic rejected=1)
+    · D-04 contract: every beet invocation in this script's own source carries -l ${THROWAWAY_DB} AND -c ${OVERLAY}
+    · D-04 contract, driven: the synthetic -c-only invocation was REJECTED, as it must be —  beet_exec "${BEET_BIN} -c ${OVERLAY} config -d"
+  ✅ case 'the -l + -c contract over this script's own source': real violations=0, synthetic rejected=1
+...
+✅ --self-test: all 7 cases behaved as expected (6 of them red)
+  exit status: 0
+
+    There is no announced red count left to disagree with. The banner states the gate, and the
+    success line prints the two values the gate read. The forced counter is now invisible to this
+    case, which is the point: it was never what the case decided on.
+
+-- THE ALTERNATIVE THAT WAS REFUSED ---------------------------------------------------------
+The review offered a second fix: keep the announced count and add `ARM1_FAILS -eq $expect_reds`
+as a third conjunct. Refused, and the refusal is recorded in band at the gate. When the two
+existing conjuncts hold, real violations are 0 and the synthetic was rejected once, so the summed
+counter is necessarily 1 — the third conjunct is implied by the other two and could never
+independently fail. Adding a vacuous assertion to close a finding about honest announcements
+would be a poor trade, and vacuity is the exact class CR-01, GC-03 and GC-05 each removed.
+
+-- COUNTS, MEASURED FROM THE WORKTREE ROOT --------------------------------------------------
+                                                            before   after
+  grep -cF 'expect_reds=1'                                       1       0
+  grep -cF 'expect_reds="$2"'            (run_case, untouched)   1       1
+  grep -cF 'ARM1_FAILS -eq $expect_reds' (run_case, untouched)   1       1
+  grep -cF ': $ARM1_FAILS red, as expected'                      2       1
+  grep -cF 'ST_PLANNED_CASES=7'                                  1       1
+  bash scripts/check-beets-config.sh --self-test                rc 0    rc 0
+
+
+R3-07 — appended by task 2 of this plan, below, once its figures had been
+measured. Nothing about R3-07 is claimed by this task-1 half of the artifact.
