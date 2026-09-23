@@ -2748,11 +2748,26 @@ esac
 # guards still fire - including GNU sha256sum's backslash-escaped form for a path containing a
 # newline, which does not begin with hex and is therefore refused rather than mis-parsed. Driven,
 # with no estate contact, in artifacts/06-31-oracle-pin-and-layer3.txt § 1.
+#
+# R4-09 CHANGES HOW THE REQUESTED PATH ARRIVES, AND NOTHING ELSE. `awk -v p=value` runs the value
+# through awk's ESCAPE PROCESSING before the program ever sees it, so a REAL_LIB_DB or a
+# REAL_STATE_PICKLE containing a backslash was compared in a form the operator never typed. The
+# value now crosses as an ENVIRONMENT assignment on the same command and is read with ENVIRON["p"],
+# which awk passes through verbatim. Changed at all FOUR sites for R3-03's own reason: four
+# consumers of one output format must not carry two parsers.
+#   WHAT THIS BUYS, bounded rather than inflated: the old form already failed CLOSED - a mangled
+#   comparison yields an EMPTY hash, which the guards below route to `unknown` and exit 3, never to
+#   a green tick and never to a false RED - so this buys correctness for a backslash-bearing knob,
+#   not a new safety property. The round-4 review grades it a residual for exactly that reason.
+#   ENVIRON changes how the REQUESTED path arrives; it does NOT change how the PRINTED line is read,
+#   so the deliberate refusal of GNU sha256sum's backslash-escaped OUTPUT form stated above is
+#   untouched and stays a refusal. Driven both directions - under ENVIRON it matches, under the old
+#   `-v` form it does not - in artifacts/06-36-oracle-pin-parser-and-cleanup.txt § 1.
 rsh "$(dex_cmd sha256sum "$(printf '%q' "$REAL_LIB_DB")" "$(printf '%q' "$REAL_STATE_PICKLE")")"
 rsh_classify "the layer-3 baseline hashes" || exit 3
 printf '%s\n' "$RSH_OUT" > "$OUT/layer3.before"
-LIB_SHA_BEFORE="$(LC_ALL=C awk -v p="$REAL_LIB_DB" '{ rest = $0; if (sub(/^[0-9a-f]+  /, "", rest) && rest == p) print $1 }' "$OUT/layer3.before")"
-STATE_SHA_BEFORE="$(LC_ALL=C awk -v p="$REAL_STATE_PICKLE" '{ rest = $0; if (sub(/^[0-9a-f]+  /, "", rest) && rest == p) print $1 }' "$OUT/layer3.before")"
+LIB_SHA_BEFORE="$(LC_ALL=C p="$REAL_LIB_DB" awk '{ rest = $0; if (sub(/^[0-9a-f]+  /, "", rest) && rest == ENVIRON["p"]) print $1 }' "$OUT/layer3.before")"
+STATE_SHA_BEFORE="$(LC_ALL=C p="$REAL_STATE_PICKLE" awk '{ rest = $0; if (sub(/^[0-9a-f]+  /, "", rest) && rest == ENVIRON["p"]) print $1 }' "$OUT/layer3.before")"
 [ -n "$LIB_SHA_BEFORE" ] || { unknown "no sha256 line for $REAL_LIB_DB"; exit 3; }
 [ -n "$STATE_SHA_BEFORE" ] || { unknown "no sha256 line for $REAL_STATE_PICKLE"; exit 3; }
 say "  library.db    before: $LIB_SHA_BEFORE"
@@ -2912,8 +2927,8 @@ diff_manifest src sha  || true
 rsh "$(dex_cmd sha256sum "$(printf '%q' "$REAL_LIB_DB")" "$(printf '%q' "$REAL_STATE_PICKLE")")"
 rsh_classify "the layer-3 hashes after the run" || exit 3
 printf '%s\n' "$RSH_OUT" > "$OUT/layer3.after"
-LIB_SHA_AFTER="$(LC_ALL=C awk -v p="$REAL_LIB_DB" '{ rest = $0; if (sub(/^[0-9a-f]+  /, "", rest) && rest == p) print $1 }' "$OUT/layer3.after")"
-STATE_SHA_AFTER="$(LC_ALL=C awk -v p="$REAL_STATE_PICKLE" '{ rest = $0; if (sub(/^[0-9a-f]+  /, "", rest) && rest == p) print $1 }' "$OUT/layer3.after")"
+LIB_SHA_AFTER="$(LC_ALL=C p="$REAL_LIB_DB" awk '{ rest = $0; if (sub(/^[0-9a-f]+  /, "", rest) && rest == ENVIRON["p"]) print $1 }' "$OUT/layer3.after")"
+STATE_SHA_AFTER="$(LC_ALL=C p="$REAL_STATE_PICKLE" awk '{ rest = $0; if (sub(/^[0-9a-f]+  /, "", rest) && rest == ENVIRON["p"]) print $1 }' "$OUT/layer3.after")"
 # R3-04. These two guards are the BEFORE block's, mirrored, and they must sit ABOVE the comparisons
 # below. Without them an absent, unparseable or truncated second sha256sum line left the hash EMPTY,
 # the comparison was false, and the run took the `bad` arm below and printed its CHANGED verdict
@@ -2924,6 +2939,29 @@ STATE_SHA_AFTER="$(LC_ALL=C awk -v p="$REAL_STATE_PICKLE" '{ rest = $0; if (sub(
 # look is never folded into another verdict here; and because UNKNOWN outranks RED in this file's
 # precedence, folding it into RED also DEMOTED the verdict. The BEFORE side already routed this to
 # `unknown`/exit 3; this is the same correction GC-05 made in the opposite direction.
+#
+# R4-10, THE CLEANUP GAP AT THESE ARMS, STATED RATHER THAN LEFT FOR THE NEXT READER TO FIND.
+# Step 12 is what removes the container scratch ('$SCRATCH', `rm -rf`) and the LXC stamp
+# ('$STAMP_REMOTE', `rm -f`). NEITHER of the two `exit 3`s below reaches step 12, so a could-not-
+# look on the layer-3 hashes leaves BOTH behind. Graded honestly, in three parts:
+#   1. THIS IS A PRE-EXISTING CLASS, NOT A NEW ONE. The two arms immediately above these -
+#      `capture_manifests after ... || exit 3` and `rsh_classify "the layer-3 hashes after the run"
+#      ... || exit 3` - already exit the same way from the same place. R3-04 INCREASED THE COUNT of
+#      such exits; it did not introduce the behaviour, and saying otherwise would overstate it.
+#   2. LEAVING THE STATE BEHIND IS ARGUABLY THE RIGHT CALL HERE. This is a forensic instrument: the
+#      scratch IS the evidence of what the run saw, and a cleanup that fires on an unexplained exit
+#      destroys the only record of why the instrument went blind. The gap is recorded as a gap, not
+#      as a bug to be closed by reflex.
+#   3. WHAT IS LEFT BEHIND, NAMED: the container scratch at '$SCRATCH' and the host stamp at
+#      '$STAMP_REMOTE'. The operator command that clears the scratch is ALREADY PRINTED IN THIS
+#      FILE - it is in the step-1 precheck's `'nonempty '*` refusal arm, the one that begins
+#      "already exists inside the container and is not empty". It is CITED rather than duplicated
+#      on purpose: two copies of a destructive command line in one file is how they drift apart
+#      (GC-02, in this very file). The same arm also records that '--baseline' ALWAYS leaves the
+#      stamp behind by design, so a surviving stamp is not by itself evidence of an aborted run.
+# ⛔ NO `trap` WAS ADDED, AND NONE SHOULD BE. This file has no `trap` anywhere, deliberately: a
+# cleanup trap would fire on EVERY `exit 3`, including the forensic ones point 2 exists to protect,
+# which is a behaviour change to the live path smuggled in under a comment-accuracy fix.
 [ -n "$LIB_SHA_AFTER" ]   || { unknown "no sha256 line for $REAL_LIB_DB after the run"; exit 3; }
 [ -n "$STATE_SHA_AFTER" ] || { unknown "no sha256 line for $REAL_STATE_PICKLE after the run"; exit 3; }
 if [ "$LIB_SHA_AFTER" = "$LIB_SHA_BEFORE" ]; then

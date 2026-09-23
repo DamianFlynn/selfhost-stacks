@@ -1,0 +1,193 @@
+================================================================================================
+06-36 — phase06-oracle.sh: the announced-case pin, the layer-3 parser, and the cleanup gap
+Plan 06-36, gap-closure round 4. Findings R4-02, R4-06, R4-09, R4-10.
+Recorded 2026-09-23.
+================================================================================================
+
+FINDING IDs IN THIS ROUND ARE ALIASED, AND THE ALIAS IS NOT COSMETIC. Round 4's report
+(06-REVIEW-GAP3.md) reuses round 1's WR-* / IN-* namespace, and round 1's IDs are already cited
+in band in scripts/phase06-oracle.sh — `WR-02` and `WR-06` BOTH already mean something else in
+that file. Everything below, and everything written into the script, uses this round's IDs:
+
+    round-4 report ID | in-band ID | subject
+    ------------------+------------+-----------------------------------------------------------
+    WR-02             | R4-02      | ST_PLANNED_CASES=134 is not invariant over the self-test's
+                      |            | own documented environment-conditional skips
+    WR-06             | R4-06      | the sha256 line parser guards the layer-3 `-l` assertion
+                      |            | and had no case in the set R3-02 pinned in the same round
+    IN-03             | R4-09      | `awk -v p="$REAL_LIB_DB"` applies awk escape processing to
+                      |            | an overridable knob
+    IN-04             | R4-10      | R3-04's two new `exit 3` arms leave the container scratch
+                      |            | and the LXC stamp behind, and the gap is unstated in band
+
+NO ESTATE CONTACT ANYWHERE IN THIS FILE. Every transcript below is `--self-test`, `awk` over a
+`mktemp -d` fixture, or `grep` over the script. No ssh, no docker, no `--run`, no `--arm`.
+scripts/phase06-oracle.sh itself was never mutated in place: every ablation is a scratch copy.
+
+ENVIRONMENT. macOS 27.0 (darwin), bash 3.2 as /bin/bash with bash 5.x on PATH, BSD grep at
+/usr/bin/grep, BWK awk (onetrue awk) as /usr/bin/awk, non-root (uid 501), python3 PRESENT.
+That is the REFERENCE ENVIRONMENT the base case count in § 4 is measured in.
+
+
+================================================================================================
+§ 0  THE THREE VERIFY BLOCKS, RUN AGAINST THE UNFIXED TREE — proof they are not vacuous
+================================================================================================
+
+The plan requires each task's <automated> block to be extracted, parsed, and run BEFORE any edit,
+and to FAIL. A block that passes pre-fix asserts nothing. All three parsed clean under `bash -n`
+and all three failed at their first substantive test.
+
+ONE DEVIATION, recorded because it changes the transcript's first line. Each block opens with
+`cd "$(git rev-parse --show-toplevel)"`. The execution sandbox refuses to run a shell script it
+cannot statically prove does not invoke git outside its own worktree, so that line was resolved
+LITERALLY to the worktree root before running. The worktree root IS `git rev-parse --show-toplevel`
+in this checkout, so the substitution is semantically a no-op; it is recorded rather than passed
+over because the traces below show the literal path.
+
+--- task 1's block, pre-fix (expected to fail at the `awk -v p=` absence test) -----------------
++ cd /Users/damian/Development/damianflynn/selfhost-stacks/.claude/worktrees/agent-a5fdae0ea2f21bf74
++ set -eu
++ F=scripts/phase06-oracle.sh
++ G=/usr/bin/grep
+++ /usr/bin/grep -cF 'awk -v p="$REAL_LIB_DB"' scripts/phase06-oracle.sh
++ test 2 -eq 0
+rc=1
+
+Failed at the FIRST test, as predicted: two live sites still took the path through `awk -v`.
+
+--- task 2's block, pre-fix -------------------------------------------------------------------
++ cd /Users/damian/Development/damianflynn/selfhost-stacks/.claude/worktrees/agent-a5fdae0ea2f21bf74
++ set -eu
++ F=scripts/phase06-oracle.sh
++ G=/usr/bin/grep
+++ /usr/bin/grep -cF R4-06 scripts/phase06-oracle.sh
++ test 0 -ge 1
+rc=1
+
+NOTE, because the plan predicted a different stopping point. The plan says task 2's block "must
+fail at the `ENVIRON["p"] >= 5` test". It failed one test EARLIER, at the `R4-06` marker count,
+because that test is first in the block. Both are pre-fix-false and the block is non-vacuous
+either way; the prediction was off by one test, not wrong about the property.
+
+--- task 3's block, pre-fix (expected to fail at the ST_PLANNED_CASES decrement test) ----------
++ cd /Users/damian/Development/damianflynn/selfhost-stacks/.claude/worktrees/agent-a5fdae0ea2f21bf74
++ set -eu
++ F=scripts/phase06-oracle.sh
++ G=/usr/bin/grep
+++ /usr/bin/grep -cF 'ST_PLANNED_CASES=$((ST_PLANNED_CASES -' scripts/phase06-oracle.sh
++ test 0 -ge 3
+rc=1
+
+Failed at the FIRST test, as predicted.
+
+--- the pre-fix baseline of the file itself ---------------------------------------------------
+$ OUT=<mktemp -d> bash scripts/phase06-oracle.sh --self-test   ; rc=0
+  ✓ self-test: 134 case(s), every fail-closed branch behaved exactly as expected
+
+134 in the reference environment, confirming the round-4 review's own closing note. That figure
+is what § 4 re-measures after task 2's cases land.
+
+
+================================================================================================
+§ 1  R4-09 — the layer-3 parser, probed as a DETACHED COPY over synthetic sha256sum output
+================================================================================================
+
+DISPOSITION: R4-09 IS A CODE FIX. Four consumers changed from
+
+    LC_ALL=C awk -v p="$REAL_LIB_DB" '{ ... rest == p ... }'
+to
+    LC_ALL=C p="$REAL_LIB_DB" awk '{ ... rest == ENVIRON["p"] ... }'
+
+`awk -v var=value` runs *value* through awk's escape processing before the program sees it, so a
+knob containing a backslash was compared in a form the operator never typed. An environment
+assignment is passed through verbatim and read with ENVIRON.
+
+WHAT THIS BUYS, BOUNDED. The old form already failed CLOSED: a mangled comparison yields an EMPTY
+hash, which the `[ -n "$LIB_SHA_*" ] || { unknown ...; exit 3; }` guards route to could-not-look —
+never to a green tick and never to a false RED. This buys correctness for a backslash-bearing
+knob, not a new safety property, which is why the review graded it Info and not a Warning. It also
+does NOT disturb R3-03's deliberate refusal of GNU sha256sum's backslash-ESCAPED OUTPUT form:
+ENVIRON changes how the REQUESTED path arrives, not how the PRINTED line is read.
+
+--- the probe harness -------------------------------------------------------------------------
+Detached copies of both parser forms, over ONE non-empty fixture in a `mktemp -d` that carries
+every case. Writing the negatives into the same file as the positives is deliberate: a refusal
+over an EMPTY fixture proves nothing, which is `self_test_vacuity`'s own opening rule.
+
+    new_parse() { LC_ALL=C p="$1" awk '{ rest = $0; if (sub(/^[0-9a-f]+  /, "", rest) && rest == ENVIRON["p"]) print $1 }' "$2"; }
+    old_parse() { LC_ALL=C awk -v p="$1" '{ rest = $0; if (sub(/^[0-9a-f]+  /, "", rest) && rest == p) print $1 }' "$2"; }
+
+--- the fixture, shown with `sed -n l` so the escapes are unambiguous --------------------------
+aabbccddeeff00112233445566778899aabbccddeeff001122334455667\
+78899  /config/my library.db$
+11111111111111111111111111111111111111111111111111111111111\
+11111  /config/back\slash.db$
+\2222222222222222222222222222222222222222222222222222222222\
+222222  /config/nl\npath.db$
+11111111111111111111111111111111111111111111111111111111111\
+11111  /srv/config/my library.db$
+22222222222222222222222222222222222222222222222222222222222\
+22222$
+
+(The backslash-continuations are `sed -n l`'s 80-column wrapping, not part of the data. Line 3
+begins with a literal `\` — GNU sha256sum's escaped form. Line 5 is a digest with no path.)
+
+--- PROBES 1..4, the shipped ENVIRON parser ---------------------------------------------------
+1 POSITIVE  path with a SPACE          -> [aabb…8899]  expected [aabb…8899]  PASS
+2 POSITIVE  path with a BACKSLASH      -> [1111…1111]  expected [1111…1111]  PASS
+3 NEGATIVE  GNU backslash-ESCAPED line -> []           expected []           PASS
+4 NEGATIVE  suffix-only near-miss      -> []           expected []           PASS
+
+Probe 4 requests `config/my library.db` — the fixture's line 1 path ENDS WITH it, so a suffix
+test would return the digest. Exact equality returns empty.
+
+--- PROBE 5, the same property from the other side --------------------------------------------
+  requested /config/my library.db returned [aabb…8899]; the /srv/… line carries [1111…1111]
+
+The fixture also carries `/srv/config/my library.db`, whose path ends with the probe-1 request.
+The parser returned line 1's digest and never the /srv line's, so it picked the EQUAL line rather
+than the suffix-matching one. R3-03 refused a suffix test by name because it converts a false
+UNKNOWN into a false GREEN, which is strictly worse than the defect it was repairing.
+
+--- PROBE 6, a truncated line (digest with no path) -------------------------------------------
+  requested the bare digest as a path -> [] (empty: the emptiness guards still fire)
+
+--- PROBE 7, R4-09 DRIVEN IN BOTH DIRECTIONS on the backslash case ----------------------------
+  ENVIRON form : [1111111111111111111111111111111111111111111111111111111111111111]
+  old -v form  : []
+
+THIS PAIR IS THE WHOLE OF R4-09. The same requested path, the same fixture, the same program
+apart from how the value arrives. `awk -v` turned the two-character `\s` into `s` before the
+comparison and the line went unmatched; ENVIRON compared the path as written. The old form's
+empty answer is the fail-closed behaviour described above — it routes to `unknown` and exit 3,
+which is why this is a residual and not a false green.
+
+
+================================================================================================
+§ 2  R4-10 — the cleanup gap at R3-04's two `exit 3` arms
+================================================================================================
+
+DISPOSITION: R4-10 IS A CLAIM CORRECTION AND NOTHING ELSE. NO CODE CHANGED. NO `trap` ADDED.
+
+The review's own grading is that this is a PRE-EXISTING CLASS, not a new one, and that leaving
+state behind on a could-not-look is arguably the right call for a forensic instrument. The defect
+is that the gap was nowhere stated in band. It is now stated at the arms, in three graded parts:
+
+  1. the class is pre-existing and shared with the two `exit 3` arms immediately above
+     (`capture_manifests after … || exit 3` and `rsh_classify "the layer-3 hashes after the run"
+     … || exit 3`). R3-04 increased the COUNT of such exits; it did not introduce the behaviour.
+  2. the forensic rationale: the container scratch IS the evidence of what the run saw, and a
+     cleanup firing on an unexplained exit destroys the record of why the instrument went blind.
+  3. what is left behind, named: the container scratch at `$SCRATCH` and the host stamp at
+     `$STAMP_REMOTE`. The operator command that clears the scratch is CITED BY ANCHOR — the
+     step-1 precheck's `'nonempty '*` refusal arm, the one beginning "already exists inside the
+     container and is not empty" — rather than duplicated, because two copies of a destructive
+     command line in one file is exactly how GC-02's fences drifted apart in this very file.
+
+WHY NO TRAP. `scripts/phase06-oracle.sh` has no `trap` anywhere, deliberately. A cleanup trap
+would fire on EVERY `exit 3`, including the forensic ones point 2 exists to protect — a behaviour
+change to the live path smuggled in under a comment-accuracy fix, in a round whose entire subject
+is claims outrunning code. The verify block asserts the trap count is still zero:
+
+$ /usr/bin/grep -c '^[[:space:]]*trap ' scripts/phase06-oracle.sh
+0
