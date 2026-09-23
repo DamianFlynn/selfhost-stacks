@@ -1082,12 +1082,24 @@ outcome is a **recorded negative result** handed back to the operator with the t
 not a wider hammer. **The hypothesis is unproven and the plan set is written so it can honestly
 fail.** These six plans run strictly sequentially; each depends on the one before it.*
 
+*Revised 2026-09-23 after plan review. The review confirmed the safety machinery but found the
+numbers → verdict → permanent-record chain had **no mechanical self-check at its two most
+consequential steps**, and that its one independent corroboration ran AFTER the operator's binding
+decision. Four changes, no re-architecture: (1) 06-42 emits a parseable per-row verdict block and
+**recomputes every verdict from its own numbers** in its verify; (2) 06-43 **recomputes the BRANCH
+value** from four recorded inputs and fails on disagreement, with 06-42's block `diff`-checked
+byte-for-byte; (3) the instrument re-run **moved from 06-44 task 1 into 06-42 task 3**, so the
+corroboration exists before the operator decides — and it is now BINDING, gating `BRANCH: A` in
+06-43 and gating the `REQUIREMENTS.md` tick again in 06-45; (4) the 120 s settle window became a
+subtraction of two recorded epoch timestamps. Wave numbers are unchanged: the fix was relocating one
+task, not re-sequencing the round.*
+
 - [ ] 06-40-PLAN.md — the read-only before-state: the 1,244-row `ArtistItems` census, the three pinned rows, the four D-34 options, a full `.nfo`/`.lrc`/`.jpg` hash manifest, and the touch list resolved and proved to exclude the six OQ-1 `TRUSTFALL` DO-NOT-RESCAN rows
 - [ ] 06-41-PLAN.md — **`autonomous: false`** — the operator gate, then `zfs snapshot tank/media/Music@pre-06-41-conf04-reprobe` and the mtime touch in the same remote step, proved by `zfs diff` to name exactly three files and no `.nfo`, then one file-scope targeted Default-mode refresh with `LibraryMonitor` as the witness
-- [ ] 06-42-PLAN.md — the after-state read-back and the four-way safety re-assert: per-row three-state verdicts, a census delta enumerating every moved row by name, a post-refresh `zfs diff`, a full hash-manifest comparison, and a single machine-readable `SAFETY:` line
-- [ ] 06-43-PLAN.md — **`autonomous: false`** — the branch computed from the measured numbers by a stated rule (`BRANCH: A` closed / `BRANCH: B` disproven / `BRANCH: PARTIAL`), the round-wide forbidden-mode audit, and the operator's decision recorded before any document moves
-- [ ] 06-44-PLAN.md — the deployed instrument re-run **unmodified** for its verdict, then its in-band prose and `quick-health-check.sh`'s exit-3 arm corrected — with a mechanical diff proof that no target, baseline, threshold, branch, counter or exit code moved
-- [ ] 06-45-PLAN.md — the record: `REQUIREMENTS.md`'s CONF-04, ROADMAP's Phase 6 criterion 4 and status row, Phase 7 **E6** split into its two measurements (the second — the ≥4-artist MA discrimination — stays with Phase 7 on every branch), `06-VERIFICATION.md`'s gap record, `DEF-06-45-*`, and `beets.md`
+- [ ] 06-42-PLAN.md — the after-state read-back, the four-way safety re-assert, **and the independent corroboration**: per-row verdicts emitted in a parseable `ROW|…|verdict=` block whose every verdict is recomputed from its own numbers by the plan's own verify, a census delta enumerating every moved row by name, a post-refresh `zfs diff`, a full hash-manifest comparison, a single machine-readable `SAFETY:` line, and a run of the **deployed, unmodified** `check-music-consumers.sh` recorded as `INSTRUMENT RUN:` / `JF_AT_TARGET:` / `JF_PENDING:` — taken here, in this wave, so both measurements exist before anything is decided
+- [ ] 06-43-PLAN.md — **`autonomous: false`** — the branch (`BRANCH: A` closed / `B` disproven / `PARTIAL`) computed by a five-step rule from four recorded inputs and **independently recomputed by its own verify block**, with 06-42's row-verdict block copied byte-for-byte and `diff`-checked; `BRANCH: A` is unreachable without a corroborating instrument run. The exit code and the MA counters are deliberately NOT inputs — the script exits 3 on A and on B alike. Then the round-wide forbidden-mode audit and the operator's decision, recorded before any document moves
+- [ ] 06-44-PLAN.md — the instrument's in-band prose and `quick-health-check.sh`'s exit-3 arm corrected, downstream of a verdict it earned on untouched code in wave 20 — with a mechanical diff proof that no target, baseline, threshold, branch, counter or exit code moved
+- [ ] 06-45-PLAN.md — the record, behind a **tick gate** that re-reads 06-42's corroboration itself and refuses to tick `REQUIREMENTS.md` on an uncorroborated `BRANCH: A`: CONF-04, ROADMAP's Phase 6 criterion 4 and status row, Phase 7 **E6** split into its two measurements (the second — the ≥4-artist MA discrimination — stays with Phase 7 on every branch), `06-VERIFICATION.md`'s gap record, `DEF-06-45-*`, and `beets.md`
 
 **Phase 6 disposition:** **CLOSED WITH ONE OPEN REQUIREMENT — CONF-04**, named, on its Jellyfin half
 only. Criteria 1, 2, 3 and 5 are TRUE and were re-measured from live state at close. Criterion 4
