@@ -178,3 +178,16 @@ T-06-R407, T-06-R408) and all five dispositions were `mitigate`; all five are ap
 |---|---|---|
 | `0f4a73a` | 1 | render the four `_drift_pair` paths and `DASH_RESOLVE_IP`, withdraw two false claims |
 | `8799e02` | 2 | widen the census recipe's second grep to its whole haystack |
+| `4346857` | — | this SUMMARY |
+
+## Self-Check: PASSED
+
+Verified after writing, not assumed:
+
+- `scripts/quick-health-check.sh` — exists, `bash -n` exits 0
+- `.planning/.../artifacts/06-35-qhc-drift-quoting-and-census.txt` — exists, non-empty (19,810 B)
+- `.planning/.../06-35-SUMMARY.md` — exists
+- commits `0f4a73a`, `8799e02`, `4346857` — all present in `git log`
+- neither per-task commit deleted a tracked file (`git diff --diff-filter=D` empty for both)
+- working tree clean; no untracked files left behind
+- both `<automated>` verify blocks re-run post-fix and reach their terminal marker at exit 0
