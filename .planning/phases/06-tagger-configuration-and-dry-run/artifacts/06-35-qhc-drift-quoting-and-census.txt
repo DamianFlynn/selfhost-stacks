@@ -216,4 +216,93 @@ READING OF SECTION 2, stated so the capture is not over- or under-claimed.
 SECTION 3 — R4-08: THE WIDENED CENSUS RECIPE
 ================================================================================
 
-(Appended by task 2 — see below.)
+DISPOSITION: CLAIM CORRECTION ONLY. The recipe lives in a comment. No executable line changed in
+task 2, no call site moved, and no `_Q` rendering was added by it. Widening code to make the old
+recipe complete would have been the exact inversion this round exists to stop.
+
+THE CHANGE. The census block's SECOND grep went from requiring a literal `-n`:
+
+    OLD:  /usr/bin/grep -n  'ssh -n \$SSH_OPTS'         scripts/quick-health-check.sh
+    NEW:  /usr/bin/grep -nE 'ssh (-n )?\$SSH_OPTS'      scripts/quick-health-check.sh
+
+The FIRST grep (the knob-definition pattern) is byte-unchanged — the review does not fault it and
+re-deriving it would be scope creep.
+
+--------------------------------------------------------------------------------
+3a. WHAT THE WIDENING BOUGHT — hit counts, old pattern vs new
+
+    $ /usr/bin/grep -c  'ssh -n \$SSH_OPTS'        scripts/quick-health-check.sh
+    18
+    $ /usr/bin/grep -cE 'ssh (-n )?\$SSH_OPTS'     scripts/quick-health-check.sh
+    20
+
+Two more. Those two are exactly the sites IN-02 / R4-08 names:
+
+    $ /usr/bin/grep -nE 'ssh (-n )?\$SSH_OPTS' scripts/quick-health-check.sh | /usr/bin/grep -F 'bounded_ssh'
+    1084:if ! bounded_ssh "$PROBE_TIMEOUT" ssh $SSH_OPTS root@172.16.1.159 true 2>/dev/null; then
+    1106:if ! bounded_ssh "$PROBE_TIMEOUT" ssh $SSH_OPTS root@172.16.1.159 'command -v timeout >/dev/null 2>&1' 2>/dev/null; then
+
+THE BOUND, from the review and stated in band as well: NEITHER OF THOSE TWO SITES INTERPOLATES A
+KNOB TODAY. Both pass a literal host and a literal remote command. So nothing in the file was
+wrong. The RECIPE was wrong — it was offered as the durable replacement for a wrong number while
+under-counting its own haystack by two.
+
+--------------------------------------------------------------------------------
+3b. THE RECIPE IS STILL NOT AN OCCURRENCE OF WHAT IT MEASURES — CHECKED, NOT ASSUMED
+
+The recipe is a comment inside the file it greps, so it must not match itself. This was verified by
+RUNNING the widened pattern, because it carries more literal text than the one it replaced:
+
+    $ /usr/bin/grep -nE 'ssh (-n )?\$SSH_OPTS' scripts/quick-health-check.sh | /usr/bin/grep '^[0-9]*:[[:space:]]*#'
+    (no output)  exit 1
+
+Zero comment lines among the hits. All 20 are code. The recipe line itself does not match because
+the ERE requires `ssh ` followed by an optional literal `-n ` and then `$SSH_OPTS`, while the
+recipe line has `(` and a backslash in those positions.
+
+THIS CHECK CAUGHT A REAL SELF-MATCH DURING EXECUTION, recorded because the near-miss is the point.
+The first draft of the in-band explanatory paragraph QUOTED the two newly-covered call sites
+verbatim in order to describe them. That paragraph then matched the widened pattern, and the run
+above returned it as a comment-line hit — the recipe counting its own documentation, which is the
+CR-01 / GC-03 shape this phase has already shipped twice. The paragraph was rewritten to describe
+those two sites in PROSE instead, and the check was re-run clean. The prose now says so in band, so
+the next person to document a pattern inside the file it matches meets the warning.
+
+    VACUITY GUARD, run first and not optional: the hit set is 20, not empty. An empty hit set would
+    have satisfied the "zero comment lines" test trivially.
+
+--------------------------------------------------------------------------------
+3c. POST-FIX DRIVE OF BOTH VERIFY BLOCKS
+
+Both <automated> blocks, byte-for-byte as written in the plan (with the single documented
+`git rev-parse` substitution recorded in Section 0), were re-run after the edits:
+
+    $ bash verify-task1.sh   ->  TASK1 VERIFY BLOCK REACHED ITS END    exit 0
+    $ bash verify-task2.sh   ->  TASK2 VERIFY BLOCK REACHED ITS END    exit 0
+
+Both now reach their terminal marker, having failed pre-fix at their first fix-related assertion
+(Section 1). `bash -n scripts/quick-health-check.sh` exits 0, asserted inside both blocks.
+
+================================================================================
+SECTION 4 — NOT DRIVEN
+================================================================================
+
+quick-health-check.sh was EXECUTED ZERO TIMES, so EVERY runtime branch of it is undriven by this
+plan. Named explicitly rather than left as a silence:
+
+  - the vendored-drift block's four comparison branches (match, drift, short-answer, could-not-look)
+    and its exit-3/4/5 remote status arms — all require a live ssh to 172.16.1.159
+  - the DRIFT_APPDATA_ROOT override guard actually firing at runtime
+  - the dashboard probe's 124 / 255 / curl-non-zero / 302 / 401 / 200 arms — all require a live ssh
+    to 172.16.1.159 and a live Traefik
+  - the DASH_RESOLVE_IP override guard actually firing at runtime
+  - bounded_ssh's watchdog and sentinel paths at :1084 and :1106
+  - every other block in the file, none of which this plan touched
+
+WHAT WAS PROVEN INSTEAD, and its limit. The five renderings were proven by CAPTURE: the exact
+remote command string that WOULD be sent was generated by the same construction the script uses and
+echoed, then re-parsed locally with `set --` to show what the remote shell would receive. That is a
+faithful model of the remote word splitting — bash on both ends — but it is a MODEL. It does not
+prove the remote `_drift_pair` then behaves as expected, only that it receives the right argument.
+The claim corrections were proven by grep over the file. Neither class of proof requires, or
+substitutes for, a live run.

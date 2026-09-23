@@ -1509,10 +1509,27 @@ else
     #   owned, not a measurement of what the file holds today. To RE-DERIVE the census, cross-
     #   reference the knob definitions against the remote call sites:
     #       /usr/bin/grep -nE '^[A-Z0-9_]+="\$\{[A-Z0-9_]+:-' scripts/quick-health-check.sh
-    #       /usr/bin/grep -n 'ssh -n \$SSH_OPTS'                scripts/quick-health-check.sh
+    #       /usr/bin/grep -nE 'ssh (-n )?\$SSH_OPTS'          scripts/quick-health-check.sh
     #   and for each knob that reaches a remote command string, check that only its `_Q` form is
     #   interpolated. A number written in this file is a number that the next edit moves without
     #   touching the sentence that states it; a recipe is not.
+    #
+    #   THE SECOND GREP WAS WIDENED 2026-09-23 BY R4-08 (plan 06-35), AND THAT IS A CLAIM
+    #   CORRECTION ONLY — the recipe is a comment, so nothing executable changed, no call site
+    #   moved and no `_Q` was added by it. The old pattern required a literal `-n`, which MISSED
+    #   TWO REMOTE CALL SITES: the two `bounded_ssh` reachability probes near the top of this file
+    #   hand the options variable straight to ssh with NO `-n` between them, so the old haystack
+    #   never contained them. A recipe offered as the durable replacement for a wrong number was
+    #   itself under-counting its own haystack by two.
+    #   (Those two sites are described here in prose rather than quoted, deliberately: reproducing
+    #   their literal text in this comment would make this paragraph a hit for the very pattern it
+    #   documents, and the recipe would then count itself. Find them with the widened grep above.)
+    #   THE BOUND: NEITHER OF THOSE TWO SITES INTERPOLATES A KNOB TODAY — they pass a literal host
+    #   and a literal command — so nothing was wrong in the file. The RECIPE was wrong.
+    #   The alternation also keeps the recipe NON-SELF-MATCHING, which was checked by running it
+    #   rather than assumed: the widened pattern carries more literal text than the one it replaced,
+    #   and a recipe that counts its own comment line is the CR-01 / GC-03 shape this phase has
+    #   already shipped twice. Run it: the hits are code lines only.
     #
     #   WHY THE CENSUS IS NOW A RECIPE, stated so the change does not read as fussiness: the
     #   EXTCONF_PATH site was not merely uncounted — it used the shape the ⛔ paragraph below
