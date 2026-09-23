@@ -241,6 +241,38 @@ None — no external service configuration required.
   It needs no new criterion, only the item.
 - Remaining round-4 findings in other files are owned by the sibling plans of this wave.
 
+## Self-Check: PASSED
+
+Files claimed, checked on disk:
+
+- FOUND: `scripts/phase06-incremental-control.sh`
+- FOUND: `.planning/phases/06-tagger-configuration-and-dry-run/artifacts/06-37-incremental-terminal-traps.txt`
+- FOUND: `.planning/phases/06-tagger-configuration-and-dry-run/06-37-SUMMARY.md`
+
+Commits claimed, checked in `git log`:
+
+- FOUND: `65c8cca` — fix(06-37): make both in-container signal handlers terminal and add PIPE
+- FOUND: `368322e` — docs(06-37): stop R3-09 naming an unconfirmed mechanism as routine
+- FOUND: `26d0d0a` — docs(06-37): complete terminal-signal-handler plan
+
+Gates re-run at the end, over the committed tree:
+
+- task 1 `<automated>` block: **exit 0** (failed pre-fix at `test 0 -eq 2` on the `kill -INT` count)
+- task 2 `<automated>` block: **exit 0** (failed pre-fix at `test 1 -eq 0` on the routine-SIGTERM
+  absence test)
+- `bash -n scripts/phase06-incremental-control.sh`: exit 0
+- `bash scripts/phase06-incremental-control.sh --self-test`: exit 0
+- `/bin/sh -n` and `/bin/dash -n` over both extracted heredoc bodies (92 and 45 lines, asserted
+  non-empty first): exit 0
+- no deletions in either code commit (`git diff --diff-filter=D` empty for both)
+
+## Known Stubs
+
+None. No hardcoded empty values, placeholder text or unwired data paths were introduced. The only
+unresolved items are the container-side delivery questions, which are recorded as an explicit
+NOT-DRIVEN register above rather than as stubs, and which attach to the existing Phase 7 entry
+criterion E12.
+
 ---
 *Phase: 06-tagger-configuration-and-dry-run*
 *Completed: 2026-09-23*
