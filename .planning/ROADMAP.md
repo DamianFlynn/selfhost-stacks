@@ -911,7 +911,7 @@ the last cheap moment before a path-format error can be applied at scale.
      clause fired and the demonstration was relocated to a genuine one-key rank-0 flip on another
      drawn row (`Benson Boone / American Heart`: `['XW','US']` → XW, `['US','XW']` → US, both
      10 tracks, distance 0.0). `GB`-works-and-`UK`-is-silently-inert was proven separately.*
-**Plans**: 34 plans in 15 waves *(14 executed 2026-09-20/21; plans 06-15 … 06-21 added 2026-09-22 as GAP CLOSURE after `06-VERIFICATION.md` scored 5/6 — the D-04 "no bare `beet` invocation" assertion was vacuous (CR-01) — and to disposition all 24 findings in `06-REVIEW.md`, which the same verification marked NOT WIRED. Plans 06-22 … 06-29 added 2026-09-22 as **GAP CLOSURE ROUND 2**, planned against `06-REVIEW-GAP.md` — a code review of round 1's own changes that found 1 BLOCKER and 7 Warnings in the new code, plus two further findings from a cross-family adjudication. GC-03 is CR-01 reproduced one nesting level in, so the phase must not close on "CR-01 fixed" until round 2 lands. Plans 06-30 … 06-34 added 2026-09-23 as **GAP CLOSURE ROUND 3**, planned against `06-REVIEW-GAP2.md` — a code review of **round 2's own** changes, which found **0 Critical, 5 Warning, 5 Info**. Round 3 is deliberately five plans against round 2's eight: half its findings are Info and several are comment corrections, and the goal is to stop the recursion rather than feed it.)*
+**Plans**: 39 plans in 17 waves *(14 executed 2026-09-20/21; plans 06-15 … 06-21 added 2026-09-22 as GAP CLOSURE after `06-VERIFICATION.md` scored 5/6 — the D-04 "no bare `beet` invocation" assertion was vacuous (CR-01) — and to disposition all 24 findings in `06-REVIEW.md`, which the same verification marked NOT WIRED. Plans 06-22 … 06-29 added 2026-09-22 as **GAP CLOSURE ROUND 2**, planned against `06-REVIEW-GAP.md` — a code review of round 1's own changes that found 1 BLOCKER and 7 Warnings in the new code, plus two further findings from a cross-family adjudication. GC-03 is CR-01 reproduced one nesting level in, so the phase must not close on "CR-01 fixed" until round 2 lands. Plans 06-30 … 06-34 added 2026-09-23 as **GAP CLOSURE ROUND 3**, planned against `06-REVIEW-GAP2.md` — a code review of **round 2's own** changes, which found **0 Critical, 5 Warning, 5 Info**. Round 3 is deliberately five plans against round 2's eight: half its findings are Info and several are comment corrections, and the goal is to stop the recursion rather than feed it. Plans 06-35 … 06-39 added 2026-09-23 as **GAP CLOSURE ROUND 4**, planned against `06-REVIEW-GAP3.md` — a deep code review of **round 3's own** 320-insertion diff across the same four scripts, which found **0 Critical, 6 Warning, 4 Info**. ⚠ That report reuses round 1's `WR-*`/`IN-*` ID namespace, which is already cited in band in all four scripts, so round 4's findings are written in band as `R4-01 … R4-10` and the mapping table lives in `06-DISPOSITIONS-GAP3.md`.)*
 
 | Plan | Objective |
 |------|-----------|
@@ -1040,6 +1040,25 @@ parallel.)*
 **Wave 15 — GAP CLOSURE — ROUND 3** *(blocked on Wave 14)*
 
 - [x] 06-34-PLAN.md — the 10-row round-3 disposition register, `06-REVIEW-GAP2.md` wired to it, `DEF-06-34-*` entries carrying the residue **and the round's deliberate refusals** — three of them, across the two plans that made them — and the roadmap and state files told the truth by hand
+
+**Wave 16 — GAP CLOSURE — ROUND 4** *(added 2026-09-23; planned against `06-REVIEW-GAP3.md`, a
+deep code review of round **3's** own gap-closure diff. It found **0 Critical, 6 Warning, 4 Info**
+— no BLOCKER and no reproducible false green — and its two largest findings are the same defect
+class this phase keeps re-manufacturing: a claim the adjacent code does not support, written in the
+very hunk announcing the class closed. So several of these fixes are deliberately claim corrections
+rather than code widenings, and each plan states which it is doing per finding. ⚠ Round 4's report
+reuses round 1's `WR-*`/`IN-*` ID namespace, so these plans cite the findings in band as `R4-*`;
+the mapping is in `06-DISPOSITIONS-GAP3.md`. These four plans own four different files and run in
+parallel.)*
+
+- [ ] 06-35-PLAN.md — render the four `_drift_pair` paths and the dashboard resolve address, and withdraw both the sentence claiming the forbidden-shape class was closed and the census count this edit moves; closes R4-01 (WR-01), R4-07 (IN-01) and R4-08 (IN-02)
+- [ ] 06-36-PLAN.md — make the announced case count adjust where each deliberate skip is decided so a python3-less or root machine stops reporting a false "A SECTION DID NOT RUN", give the layer-3 sha256 parser cases in the pinned set, take the requested paths through `ENVIRON`, and state the could-not-look cleanup gap; closes R4-02 (WR-02), R4-06 (WR-06), R4-09 (IN-03) and R4-10 (IN-04)
+- [ ] 06-37-PLAN.md — make both in-container signal handlers terminal so a delivered signal kills the program instead of being swallowed, add `PIPE`, and stop the paragraph naming an unconfirmed `docker exec` SIGTERM path as routine; closes R4-03 (WR-03) and R4-04 (WR-04)
+- [ ] 06-38-PLAN.md — withdraw the raw grep count the correcting hunk falsified rather than re-pinning it, and audit every other in-band count claim in the same file; closes R4-05 (WR-05)
+
+**Wave 17 — GAP CLOSURE — ROUND 4** *(blocked on Wave 16)*
+
+- [ ] 06-39-PLAN.md — the 10-row round-4 disposition register with the `WR-*`/`IN-*` → `R4-*` mapping table, `06-REVIEW-GAP3.md` wired to it, `DEF-06-39-*` entries carrying the residue **and the round's refusals**, and the roadmap and state files told the truth by hand — including that `06-VERIFICATION.md` is stale
 
 **Phase 6 disposition:** **CLOSED WITH ONE OPEN REQUIREMENT — CONF-04**, named, on its Jellyfin half
 only. Criteria 1, 2, 3 and 5 are TRUE and were re-measured from live state at close. Criterion 4
