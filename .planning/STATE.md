@@ -28,9 +28,9 @@ pipeline that someone owns.
 
 ## Current Position
 
-Phase: 06 (tagger-configuration-and-dry-run) — gap-closure **ROUND 3 EXECUTING**
-(re-verification deliberately NOT run — see the round-3 review block at the end of this section)
-Plan: 29 of 34 executed. Round 1 (06-15..06-21, waves 6-9, 2026-09-22) closed CR-01 and
+Phase: 06 (tagger-configuration-and-dry-run) — gap-closure **ROUND 3 DONE, PHASE NOT VERIFIED**
+(re-verification deliberately NOT run — see the round-3 block at the end of this section)
+Plan: 34 of 34 executed. Round 1 (06-15..06-21, waves 6-9, 2026-09-22) closed CR-01 and
 dispositioned all 24 findings of `06-REVIEW.md`; re-verification is **6/6, status passed**
 (`06-VERIFICATION.md`, gaps_remaining: [], regressions: []).
 **The phase is NOT complete.** A code review of the round-1 changes themselves
@@ -176,6 +176,51 @@ block asserts a measured RED over a could-not-look, the inverse of GC-05).
 anyone read its own diff* and still carried a BLOCKER; verifying now, with five confirmed Warnings
 in the file, would repeat that mistake one level deeper. Operator chose **gap-closure round 3**
 (2026-09-22). Plan it against `06-REVIEW-GAP2.md`.
+
+**ROUND 3 IS DONE — 2026-09-23. Plans 06-30..06-33 closed all ten findings and plan 06-34
+dispositioned them in `06-DISPOSITIONS-GAP2.md`: 9 FIXED, 1 FIXED (undriven), 0 ACCEPTED,
+0 CARRIED, reconciling three ways to 10** — the review's frontmatter 0+5+5, the dispositions
+9+1+0+0, and the fix kinds **4 CODE + 3 CLAIM CORRECTION + 3 BOTH**. `06-REVIEW-GAP2.md` is
+**WIRED** to that register. Ownership: 06-30 R3-01/R3-05, 06-31 R3-02/R3-03/R3-04/R3-06,
+06-32 R3-09/R3-10, 06-33 R3-07/R3-08. **There was no cross-family adjudication this round** — round
+2 had one, round 3 did not, and that is stated rather than left ambiguous, because an absent
+adjudication nobody mentions reads like a lost one.
+**The round's character, and the reason the fix-kind column exists:** the dominant defect class was
+**a claim broader than its code**, so for several findings the honest fix was to narrow the sentence
+rather than widen the code. Ten undifferentiated FIXEDs would have reproduced, one level up, the
+exact over-claim the review is about. **Three refusals are recorded as loudly as the fixes** —
+06-32 refused the best-effort `/tmp/p6-mf.*` sweep, and 06-33 refused both R3-08's third-conjunct
+gate (implied by the other two conjuncts, therefore vacuous) and wiring
+`assert_beet_invocation_contract` live. **What was NOT driven is recorded per finding:** the whole
+layer-3 block (R3-03, R3-04) is reachable only from a live `--run` and is proven offline; the
+`SIGTERM` behaviour behind R3-09 is static reasoning about POSIX `sh` (the single FIXED-undriven
+row); and **`quick-health-check.sh` was not executed at all**, by the review or by the fix.
+**Instruments re-measured at HEAD after this round, not carried forward from any plan's text:**
+`phase06-oracle.sh --self-test` exit **0**, now **gated** on a pinned `ST_PLANNED_CASES=134`
+compared against `ST_RUN` as its own arm before the banner (an ablation deleting `self_test_fences`
+gives exit 1 at 111 ran / 134 announced, where the old gate passed it green);
+`check-beets-config.sh --self-test` exit **0 / 7 cases** (`ST_PLANNED_CASES=7`);
+`phase06-incremental-control.sh --self-test` exit **0**; `bash -n` clean on **all four** scripts;
+and `sh -n` clean on **both extracted in-container programs** (`manifest.sh` 65 lines,
+`taghist.sh` 31) — the gate `bash -n` cannot give, since it parses heredocs as data. Round 3's
+residue is carried by name as `DEF-06-34-01`..`DEF-06-34-06`, and the part that closes only on a
+live run attaches to the **existing** entry criterion **E12**; **no new criterion was added.** One
+correction to the review is recorded in band: **R3-07's census figure was wrong and its finding is
+not** — `assert_beet_invocation_contract` gives 4 raw hits at the reviewed tree and 5 now, not
+"exactly two"; exactly two are *code*, so the conclusion stands.
+**⚠ RE-VERIFICATION HAS NOT BEEN PERFORMED.** Plan 06-34 records dispositions; it did **not** run
+`/gsd-verify` and claims **no** verification result. **Do not read "round 3 complete" as "phase
+complete"** — that is the verifier's call. `REQUIREMENTS.md` was **not** touched and no checkbox
+moved.
+**Still open, unchanged by round 3:** CONF-04's Jellyfin half (Phase 7 entry criterion **E6**),
+CR-01's residue (**E10**), WR-09 (**E11**), and round 2's undriven-until-the-pilot residue
+(**E12**, `DEF-06-29-05`), which round 3's undriven residue now also attaches to.
+**Is a round 4 warranted? Stated both ways, because it is the operator's call and not this plan's.**
+Against: round 3 found **zero Critical** and no reproducible false green, and most of its fixes were
+claim corrections — the marginal return has fallen sharply, and the next step is **`/gsd-verify 06`**.
+For: a fourth review of round 3's own diff is **the same discipline that caught both previous
+rounds**, and round 2 exists precisely because round 1 was verified 6/6 before anyone read its diff.
+It should be a **deliberate decision**, not an omission.
 
 Status: Phase 06 gap-closure round 1 executed and verified 6/6 (2026-09-22); round 2 **EXECUTED**
 against `06-REVIEW-GAP.md` (GC-01 blocker + 7 warnings in round 1's own code, plus GC-16/GC-17
