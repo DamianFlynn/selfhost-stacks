@@ -160,3 +160,18 @@ into the repo working tree: `git status --porcelain --untracked-files=all -- scr
 |---|---|---|
 | `928f9c2` | 1 | widen both in-container traps past the exit pseudo-signal (R3-09) |
 | `befe732` | 2 | give both in-container fences GC-02's predicate, and narrow the claim (R3-10) |
+| `51bd3a0` | — | this summary |
+
+## Self-Check: PASSED
+
+All three claimed files exist on disk and all three commits are present in this worktree branch's
+history. Checked from the worktree root, which is where the work was done.
+
+| Claim | Result |
+|---|---|
+| `scripts/phase06-incremental-control.sh` | FOUND |
+| `.../artifacts/06-32-incremental-trap-fences.txt` | FOUND |
+| `.../06-32-SUMMARY.md` | FOUND |
+| commit `928f9c2` | FOUND |
+| commit `befe732` | FOUND |
+| commit `51bd3a0` | FOUND |
