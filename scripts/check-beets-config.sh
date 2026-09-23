@@ -416,7 +416,35 @@ beet_invocation_violations() {  # stdin: shell source -> stdout: one line per no
 # the third — the synthetic NOT rejected, i.e. the checker is blind — increments nothing. Summed,
 # "one real violation" + "a blind checker" equals the expected total of 1. The two are therefore
 # ALSO reported separately below, and case 6 gates on both independently. ARM1_FAILS keeps exactly
-# the value it always had, because the live arm-1 summary line is a second consumer of it.
+# the value it always had, and that is correct — but R3-07 found that the reason recorded here for
+# preserving it was not. The old wording said the live summary line was a second consumer of this
+# function's contribution to the counter. It is not: this function is called from exactly ONE
+# place, and that place is run_self_test, so it never executes on a live run at all. The live
+# summary line consumes the counter; it never sees anything this function put in it. The real
+# reason to preserve the value is narrower — the self-test's per-case bookkeeping and the live
+# summary share one counter, so changing it here would move a number in a path this change has no
+# business touching.
+#
+# The census, given as a RECIPE rather than a number you must take on trust, and comment-STRIPPED,
+# because a raw count also matches every comment that discusses the function, this one included:
+#   /usr/bin/grep -v '^[[:space:]]*#' scripts/check-beets-config.sh \
+#     | /usr/bin/grep -c 'assert_beet_invocation_contract'
+# The answer is 2 — the definition, and the one call inside run_self_test. Anything higher means
+# someone has wired it somewhere else, and the paragraph below applies. R3-07's own evidence line
+# printed that code-only figure as though it were a raw grep count (raw is 4, and rises with prose
+# like this); that is the same self-referential measurement error this round is closing, so it is
+# corrected here rather than inherited.
+#
+# IF THIS FUNCTION IS EVER CALLED LIVE, its two arms must be re-polarised in the same change.
+# Today the CORRECT outcome — the synthetic line was rejected — routes through cfg_fail, while the
+# DEFECTIVE outcome — the checker rejected nothing, so it is blind — is a bare echo. Under
+# --self-test that is fine: cfg_fail feeds a per-case counter rather than the script's exit code,
+# and case 6's ARM1_SYNTH_REJECTED gate catches the blind arm, so neither outcome is lost. Live it
+# is backwards with respect to FAILURES — a CORRECT run would increment it and a BLIND checker
+# would increment nothing. Wiring this live therefore requires routing the blind arm through
+# cfg_fail and the correctly-rejected-synthetic arm through a self-test-only echo, IN THE SAME
+# COMMIT AS THE WIRING. Expect the temptation: a live run currently never checks the -l + -c
+# source contract at all, which is exactly why this function is the obvious thing to reach for.
 assert_beet_invocation_contract() {
   local d='$' real synth synth_bad n
   ARM1_FAILS=0

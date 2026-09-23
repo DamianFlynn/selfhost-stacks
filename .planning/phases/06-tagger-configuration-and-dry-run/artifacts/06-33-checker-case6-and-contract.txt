@@ -68,3 +68,87 @@ would be a poor trade, and vacuity is the exact class CR-01, GC-03 and GC-05 eac
 
 R3-07 — appended by task 2 of this plan, below, once its figures had been
 measured. Nothing about R3-07 is claimed by this task-1 half of the artifact.
+
+
+R3-07 — THE JUSTIFICATION CORRECTED, AND THE PRECONDITION RECORDED
+=============================================================================================
+Disposition: a CLAIM CORRECTION PLUS A RECORDED PRECONDITION. No behaviour changed. The function
+was NOT wired into the live path and its two arms were NOT re-polarised. Both are deliberate:
+wiring it live is a behaviour change to the live checker, it is not what R3-07 asks for, and it
+is outside a hardening round's brief.
+
+-- (a) THE SENTENCE WHOSE REASON DID NOT APPLY ----------------------------------------------
+GC-13 justified preserving the summed counter's value on the grounds that the live arm-1 summary
+line is a second consumer of it. The preserved value is correct; that reason is not. The counter
+does have a live consumer, but assert_beet_invocation_contract never runs live, so the live
+summary line consumes the counter and never sees this function's contribution to it. The sentence
+is replaced with the true and narrower reason — the self-test's per-case bookkeeping and the live
+summary share one counter, so changing it here would move a number in a path this change has no
+business touching — and with a census RECIPE in place of a number to be taken on trust.
+
+A correction this plan inherited rather than rediscovered. R3-07's own evidence line says the
+function has "exactly two hits, the definition and one call site". Measured, a raw grep gave FOUR
+before this plan: the definition, one call inside run_self_test, and two comment mentions. The
+finding's conclusion is unaffected and correct — exactly two of the four were code, and the code
+call is inside the self-test — but the census sentence printed the code-only figure as though it
+were a raw grep count. That is the same class of self-referential measurement error this round is
+closing, so it is corrected in band rather than silently, and a verification that had pinned the
+number the review printed would have failed on arrival.
+
+The durable figure is the comment-stripped one, because this very fix adds prose that names the
+function:
+
+  $ /usr/bin/grep -v '^[[:space:]]*#' scripts/check-beets-config.sh \
+      | /usr/bin/grep -c 'assert_beet_invocation_contract'
+  2          # the definition, and the one call inside run_self_test — unchanged by this plan
+
+  $ /usr/bin/grep -c 'assert_beet_invocation_contract' scripts/check-beets-config.sh
+  4 before this plan, 5 after it. A raw count is not a call-site census; do not pin it.
+
+-- (b) THE POLARITY PRECONDITION ------------------------------------------------------------
+Recorded at the site, immediately above the function, under the greppable opening
+`IF THIS FUNCTION IS EVER CALLED LIVE` (1 occurrence). It states plainly that today the CORRECT
+outcome — the synthetic line was rejected — routes through cfg_fail while the DEFECTIVE outcome —
+the checker rejected nothing and is blind — is a bare echo; that under --self-test this is
+harmless, because cfg_fail feeds a per-case counter rather than the script's exit code and case
+6's ARM1_SYNTH_REJECTED gate catches the blind arm, so neither outcome is lost; that live the
+polarity is inverted with respect to FAILURES, so a correct run would increment it and a blind
+checker would increment nothing; that any live wiring must therefore route the blind arm through
+cfg_fail and the correctly-rejected-synthetic arm through a self-test-only echo IN THE SAME
+COMMIT AS THE WIRING; and why someone will be tempted — a live run currently never checks the
+-l + -c source contract at all.
+
+NOT DRIVEN. The inverted polarity was not exercised, because exercising it would require calling
+the function live, which this plan explicitly refuses to do. See the NOT-DRIVEN register in
+06-33-SUMMARY.md.
+
+-- (c) COMMENT-ONLY DIFF, PROVEN ------------------------------------------------------------
+Measured from the worktree root, against the task-1 commit d560394.
+
+  $ git diff HEAD -- scripts/check-beets-config.sh | grep -E '^[-+]' \
+      | grep -Ev '^(\+\+\+|---)' | wc -l
+  30         # changed lines in task 2's diff
+
+  $ ... | grep -cEv '^[-+][[:space:]]*#'
+  0          # of which NONE is a non-comment line — the diff is comments only
+
+  $ cmp task2-before.txt task2-after.txt ; echo $?
+  0          # --self-test output byte-identical across task 2. SGR escapes stripped with
+             # sed 's/\x1b\[[0-9;]*m//g' and nothing else normalised: no field in this
+             # script's self-test output legitimately varies between runs on one host.
+
+-- COUNTS, MEASURED FROM THE WORKTREE ROOT --------------------------------------------------
+  grep -cF 'because the live arm-1 summary line is a second consumer of it'        0
+  grep -cF 'R3-07'                                                               >=1
+  grep -cF 'IF THIS FUNCTION IS EVER CALLED LIVE'                                  1
+  grep -v '^[[:space:]]*#' | grep -cF 'assert_beet_invocation_contract'            2
+  grep -cF 'D-04 contract, driven: the synthetic -c-only invocation was REJECTED'  1
+  grep -v '^[[:space:]]*#' | grep -cF 'the checker is BLIND'                       1
+  grep -cF 'cfg_fail "D-04 contract, driven'                                       1
+  grep -cF 'ARM1_FAILS=0'                                                          3
+  grep -cF 'arm-1 assertion failures:'                                             1
+  grep -cF 'ST_PLANNED_CASES=7'                                                    1
+  bash scripts/check-beets-config.sh --self-test                                rc 0
+  bash -n scripts/check-beets-config.sh                                         rc 0
+
+Scratch directory removed after the drive.
