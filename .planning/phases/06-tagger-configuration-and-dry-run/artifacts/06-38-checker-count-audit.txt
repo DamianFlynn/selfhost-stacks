@@ -1,0 +1,561 @@
+================================================================================
+06-38 — R4-05 CLAIM CORRECTION, AND AN AUDIT OF EVERY IN-BAND COUNT CLAIM IN
+        scripts/check-beets-config.sh
+================================================================================
+
+Plan:     06-38 (phase 06, gap-closure round 4, wave 16)
+Written:  2026-09-23
+Subject:  scripts/check-beets-config.sh — one file, one class of claim.
+Finding:  R4-05 (= WR-05 of 06-REVIEW-GAP3.md; see the aliasing note below).
+
+All measurements in this file were answered by /usr/bin/grep BY ABSOLUTE PATH
+(BSD grep, FreeBSD), never the operator's zsh `grep`->`ugrep` alias.
+
+
+--------------------------------------------------------------------------------
+0. FINDING-ID ALIASING — READ THIS BEFORE GREPPING FOR AN ID
+--------------------------------------------------------------------------------
+
+Round 4's report (06-REVIEW-GAP3.md) REUSES round 1's WR-*/IN-* namespace, and
+round 1's IDs are already cited in band in check-beets-config.sh (CR-01, IN-01,
+IN-03, IN-07, WR-04 twice). A bare `WR-05` in band would therefore be ambiguous
+and a grep for it non-discriminating.
+
+    Round-4 report ID  ->  In-band ID used here and in the script
+    WR-05              ->  R4-05
+
+The per-round convention this continues: CR/WR/IN = round 1, GC-* = round 2,
+R3-* = round 3, R4-* = round 4. Plan 06-39 carries the full mapping table.
+
+
+--------------------------------------------------------------------------------
+1. R4-05 — DISPOSITION: CLAIM CORRECTION ONLY
+--------------------------------------------------------------------------------
+
+No behaviour change. No executable line moved. --self-test output byte-identical
+across the change (proven below, not asserted).
+
+THE DEFECT
+    Round 3 (plan 06-33) corrected R3-07's census, which had printed a CODE-ONLY
+    figure as though it were a raw grep count. The correcting hunk itself wrote:
+
+        (raw is 4, and rises with prose like this)
+
+    Measured at HEAD before this plan:
+
+        $ /usr/bin/grep -c 'assert_beet_invocation_contract' \
+              scripts/check-beets-config.sh
+        5
+
+    Raw was 4 at the round-3 diff base (fff070a); THE RECIPE LINE THAT SAME HUNK
+    ADDED made it 5. The sentence was present tense, in a file where the answer
+    was not 4, inside the paragraph whose entire subject is that a number written
+    into a file that greps itself is moved by the sentence that states it.
+
+    The hedge "and rises with prose like this" is not a fix. The hunk that wrote
+    the hedge is what rose it. This is the phase's signature hazard caught for the
+    THIRD consecutive round, and this instance sits inside the fix for the second.
+
+WHAT WAS *NOT* WRONG, AND WAS THEREFORE LEFT ALONE
+    The COMMENT-STRIPPED census in the same block is correct. Re-measured here,
+    after this plan's edit landed:
+
+        $ /usr/bin/grep -v '^[[:space:]]*#' scripts/check-beets-config.sh \
+              | /usr/bin/grep -c 'assert_beet_invocation_contract'
+        2
+
+    That is the definition plus the single call inside run_self_test. It is the
+    DURABLE figure: comment-stripped, so prose about the symbol cannot move it.
+    `The answer is 2` stays, and stays phrased as a recipe you run rather than a
+    number you trust.
+
+THE FIX: WITHDRAWAL, NOT RE-PINNING
+    The parenthetical was deleted and NOT replaced with a corrected number.
+    Re-pinning to 5 would have set up the fourth drift, arriving with the next
+    comment that mentions the symbol.
+
+    The replacement states that the raw count is DELIBERATELY NOT PINNED, gives
+    the reason in one clause, and cites:
+      - scripts/quick-health-check.sh's R3-05 block, which applied exactly this
+        lesson in the same round ("THE TWO NUMBERS AND THE CONSTANT DELTA THAT
+        STOOD HERE ARE WITHDRAWN"). Two sibling files, one round, one lesson --
+        and before this plan only one of them had applied it. READ-ONLY here:
+        plan 06-35 owns that file this round and runs in parallel.
+      - 06-DISPOSITIONS-GAP2.md § Corrections item 1, for the three-ref
+        measurement (bf509f4 -> 2, fff070a -> 4, HEAD -> 5). Cited rather than
+        re-derived in band, so the numbers live in exactly one place.
+
+    Per 06-DISPOSITIONS-GAP2.md § Lessons 4, the retired construction is NOT
+    pasted into the comment disowning it: a grep for a token's absence cannot
+    distinguish a claim from its retraction. The replacement paraphrases the
+    hedge instead of quoting it, so
+
+        /usr/bin/grep -cF '(raw is 4, and rises with prose' scripts/check-beets-config.sh
+
+    can and does return 0.
+
+    NO RAW FIGURE APPEARS ANYWHERE IN THE REPLACEMENT, including in the sentence
+    disowning it.
+
+ONE SELF-INFLICTED DEFECT CAUGHT DURING THIS PLAN, RECORDED RATHER THAN HIDDEN
+    The first draft of the replacement said the moving recipe line was "four
+    lines above". That is the same defect class in positional clothing -- a
+    figure a future edit falsifies -- and it was already wrong by eleven lines as
+    written. Replaced with "at the head of this census", which is positional but
+    not numeric. Caught by re-reading the applied edit rather than by any test in
+    the verify block; no assertion in this plan would have failed on it.
+
+
+--------------------------------------------------------------------------------
+2. MECHANICAL PROOF THAT TASK 1 IS COMMENT-ONLY
+--------------------------------------------------------------------------------
+
+VACUITY GUARD FIRST. This phase has printed a green tick over an empty set twice
+(CR-01, GC-03), so "no non-comment lines changed" is only meaningful once "some
+lines changed" is established.
+
+    $ git diff -U0 -- scripts/check-beets-config.sh \
+        | /usr/bin/grep -c '^[+-][^+-]'
+    22                      (>= 1, so the diff is non-empty)
+
+    That 22 is a DATED OBSERVATION of task 1's working-tree diff, measured
+    immediately before task 1's commit -- not a pin. After task 1 is committed the
+    same command answers about task 2's diff instead, and after both are committed
+    it answers 0. The assertion that matters is the inequality (>= 1), not the
+    figure. The figure is recorded only so a reader can tell the check was run
+    against a real diff. FIRST DRAFT OF THIS LINE SAID 18, WHICH WAS WRONG; it was
+    caught by measuring rather than by any test, and is left recorded here because
+    this artifact should not be the one document in the set that hides an instance
+    of the defect it is auditing.
+
+    $ git diff -U0 -- scripts/check-beets-config.sh \
+        | /usr/bin/grep '^[+-][^+-]' \
+        | /usr/bin/grep -cvE '^[+-][[:space:]]*#'
+    0                       (zero changed lines that are not comments)
+
+SECOND, INDEPENDENT PROOF -- BEHAVIOURAL, NOT TEXTUAL:
+
+    $ bash scripts/check-beets-config.sh --self-test > before.txt 2>&1   # pre-edit
+    $ bash scripts/check-beets-config.sh --self-test > after.txt  2>&1   # post-edit
+    $ cmp before.txt after.txt ; echo $?
+    0                       (byte-identical)
+
+    Determinism of that comparison was established first, by running --self-test
+    twice against the UNEDITED tree and confirming the two captures byte-identical.
+    Without that control, a cmp rc 0 across an edit proves nothing about the edit.
+
+    $ bash -n scripts/check-beets-config.sh ; echo $?
+    0
+    $ bash scripts/check-beets-config.sh --self-test >/dev/null 2>&1 ; echo $?
+    0                       (all 7 cases behaved as expected, 6 of them red)
+
+
+--------------------------------------------------------------------------------
+3. PRE-FIX VERIFY TRANSCRIPTS — PROOF THE VERIFY BLOCKS ARE NOT VACUOUS
+--------------------------------------------------------------------------------
+
+Both <automated> blocks were extracted, bash -n'd, and run against the UNFIXED
+tree BEFORE any edit. A block that passes pre-fix asserts nothing.
+
+TASK 1, pre-fix -- failed at the FIRST assertion, as required:
+
+    + F=scripts/check-beets-config.sh
+    + G=/usr/bin/grep
+    ++ /usr/bin/grep -cF '(raw is 4, and rises with prose' scripts/check-beets-config.sh
+    + test 1 -eq 0
+    rc=1                    (did not reach the end of the block)
+
+TASK 2, pre-fix -- failed at its first assertion, `test -s "$ART"`:
+
+    $ ls .planning/.../artifacts/06-38-checker-count-audit.txt
+    ls: ... No such file or directory
+    rc=1                    (did not reach the end of the block)
+
+Both blocks parse clean under `bash -n`.
+
+TWO ENVIRONMENT SUBSTITUTIONS, RECORDED RATHER THAN LEFT SILENT
+  (a) This workstation's /usr/bin/sed is BSD, not GNU. `sed '0,/re/s//.../'` is a
+      GNU extension that BSD sed ACCEPTS SILENTLY, SUBSTITUTES NOTHING, AND EXITS
+      0 -- a mutation that appears to succeed while changing nothing. No sed was
+      used in this plan; all edits were made with an exact-match string replace,
+      which fails loudly when the anchor does not match.
+  (b) The worktree isolation layer REFUSES `bash -x <file>` (it cannot statically
+      prove the traced text will not run git). Plain `bash <file>` and
+      `bash -n <file>` are permitted. The task-1 pre-fix trace above was obtained
+      by putting `set -x` INSIDE a copy of the block rather than passing -x on the
+      command line. A wrapper that `set -x`'d and then sourced the block by
+      variable was ALSO refused; inlining the trace is what worked.
+
+
+--------------------------------------------------------------------------------
+4. THE AUDIT — EVERY OTHER IN-BAND COUNT CLAIM IN THIS FILE
+--------------------------------------------------------------------------------
+
+SCOPE, STATED TIGHTLY. An unbounded audit is how a two-task plan becomes a
+five-task one.
+  IN SCOPE:  one file, scripts/check-beets-config.sh; and one class of claim --
+             an in-band statement of HOW MANY TIMES some token appears in this
+             file, or in a file this script greps.
+  OUT OF SCOPE: claims about beets, about the estate, about other scripts'
+             contents, and every claim in any other file. Nothing outside
+             check-beets-config.sh was edited by this plan.
+
+ENUMERATION METHOD
+  1. A mechanical sweep over comment lines carrying a digit alongside a count
+     word:
+        /usr/bin/grep -n '^[[:space:]]*#' scripts/check-beets-config.sh \
+          | /usr/bin/grep -iE '[0-9]' \
+          | /usr/bin/grep -iE 'hit|occurrence|times|count|returns|lines|exactly|only|both|two|three|four|one '
+  2. Then a full end-to-end read of the file, because a claim phrased without a
+     keyword ("the definition and the one call") is invisible to step 1. A
+     targeted read is precisely what let this class survive three rounds.
+
+KNOWN GAPS IN THAT METHOD -- THIS IS NOT A COMPLETENESS PROOF.
+  - Step 1 keys on an English keyword list that is not closed. A claim phrased
+    with a word not in the list, and not caught by the read in step 2, is missed.
+  - A count claim written as a spelled-out number with no digit ("twice", "both
+    arms") is invisible to step 1 and depends entirely on the human read.
+  - The read in step 2 is one pass by one reader. Three consecutive review rounds
+    have found an instance of this class that the previous round's reader missed,
+    so the honest prior is that this pass is not exhaustive either.
+  - The audit measures claims AS OF this plan's HEAD. Any claim dispositioned
+    ACCURATE AND STABLE is stable against edits to THIS file only.
+
+THE THREE DISPOSITIONS USED
+  ACCURATE AND STABLE      claim matches and nothing in this file can move it.
+  ACCURATE BUT SELF-MOVING claim matches today, but a future comment mentioning
+                           the token would move it -> converted to a recipe.
+  WRONG                    claim does not match -> corrected BY WITHDRAWAL, not
+                           by re-pinning.
+  EXCLUDED                 deliberately out of scope; reason recorded, because an
+                           exclusion that is not written down reads exactly like
+                           something the audit missed.
+
+
+ROW 1 -- the R3-07 census raw figure  [handled as R4-05, task 1]
+  CLAIM AS WRITTEN  "(raw is 4, and rises with prose like this)"
+  RECIPE            /usr/bin/grep -c 'assert_beet_invocation_contract' \
+                        scripts/check-beets-config.sh
+  MEASURED AT HEAD  5
+  AGREE?            NO
+  DISPOSITION       WRONG -> WITHDRAWN. See section 1. Not re-pinned.
+
+ROW 2 -- the comment-stripped census
+  CLAIM AS WRITTEN  "The answer is 2 — the definition, and the one call inside
+                    run_self_test."
+  RECIPE            /usr/bin/grep -v '^[[:space:]]*#' scripts/check-beets-config.sh \
+                        | /usr/bin/grep -c 'assert_beet_invocation_contract'
+  MEASURED AT HEAD  2
+  AGREE?            YES
+  DISPOSITION       ACCURATE AND STABLE. Stable because the recipe strips
+                    comments, so prose about the symbol -- including the whole of
+                    section 1's replacement text, and including this very audit
+                    row if it were pasted in band -- cannot move it. Only wiring
+                    a genuine new CALL SITE moves it, which is exactly the event
+                    the claim exists to detect. Left untouched, and deliberately
+                    still phrased as a recipe rather than as a bare number.
+                    NOTE: this figure was re-measured AFTER task 1's edit landed,
+                    not before. A census verified only against the pre-edit tree
+                    is the exact mistake R4-05 records.
+
+ROW 3 -- ST_PLANNED_CASES
+  CLAIM AS WRITTEN  local ST_PLANNED_CASES=7
+  DISPOSITION       EXCLUDED -- and NOT TOUCHED.
+  REASON            This is the one number in this file that is SUPPOSED to be a
+                    number. It is a GATED PIN OVER AN UNCONDITIONALLY EXECUTED
+                    SET, not a prose claim about a grep: six run_case calls plus
+                    the manual case 6, all unconditional, checked against st_cases
+                    at the end of run_self_test, which fails loudly if the banner
+                    and the body disagree. Round 4 checked it and recorded it
+                    clean; --self-test exits 0 at 7 both before and after this
+                    plan. Converting it to a "recipe" would destroy a working
+                    guard and would be this audit's own version of the defect it
+                    is auditing. Verified unchanged:
+                        /usr/bin/grep -cF 'ST_PLANNED_CASES=7' <file>   -> 1
+                    That figure is STABLE: the assignment is a single code line and
+                    no comment in this file spells the symbol with its `=7` suffix.
+
+                    THE RAW COUNT OF THE BARE SYMBOL IS DELIBERATELY NOT PINNED
+                    HERE, and the reason is a defect this plan committed twice in
+                    its own artifact before catching it. A first draft of this row
+                    pinned that raw figure at 4; it was 6 when written. Corrected
+                    to 6; then task 2's audit pointer, a COMMENT naming the symbol,
+                    moved it again. Two drifts, in the audit of the defect class,
+                    inside the plan closing the third consecutive instance of it.
+                    So the figure is withdrawn rather than corrected a third time.
+                    If you need it, run:
+                        /usr/bin/grep -cF 'ST_PLANNED_CASES' scripts/check-beets-config.sh
+                    The script's verify asserts only `>= 2` against that symbol --
+                    an inequality no added prose can falsify, which is why it is
+                    the right shape for this claim and a raw equality is not.
+
+ROW 4 -- the self-test banner's case breakdown
+  CLAIM AS WRITTEN  "$ST_PLANNED_CASES cases: 6 synthetic dumps, plus the D-04
+                    contract over this file's own source"
+  RECIPE            read run_self_test end to end and count the cases actually
+                    driven; the total is additionally machine-checked by the
+                    st_cases vs ST_PLANNED_CASES gate.
+  MEASURED AT HEAD  6 synthetic + 1 contract = 7; st_cases gate green.
+  AGREE?            YES
+  DISPOSITION       ACCURATE AND STABLE -- and it is NOT a claim about a grep over
+                    this file at all; it is a description of an executed set,
+                    backed by the same gate as row 3. Stable for the same reason:
+                    adding a case without updating the pin fails --self-test
+                    loudly rather than silently falsifying prose. Left untouched.
+
+ROW 5 -- the GC-13 three-outcomes / one-counter claim
+  CLAIM AS WRITTEN  "this function reports THREE outcomes but used to report them
+                    through ONE counter. Two of them increment ARM1_FAILS ... and
+                    the third ... increments nothing."
+  RECIPE            read assert_beet_invocation_contract's body and count the
+                    branches and their counter effects.
+  MEASURED AT HEAD  Three outcomes; two increment paths; one bare echo. Matches.
+  AGREE?            YES
+  DISPOSITION       ACCURATE AND STABLE. This counts BRANCHES IN CODE, not token
+                    occurrences, so no amount of added prose can move it. Only a
+                    code change to the function moves it -- and any such change is
+                    a behaviour change that this round's brief excludes. Left
+                    untouched. (Its neighbouring JUSTIFICATION sentence was the
+                    subject of R3-07 and was corrected in round 3; that correction
+                    stands and was not re-litigated here.)
+
+ROW 6 -- the arm-count claim in the polarity precondition
+  CLAIM AS WRITTEN  "IF THIS FUNCTION IS EVER CALLED LIVE, its two arms must be
+                    re-polarised in the same change."
+  RECIPE            count the if/else arms of the driven-negative block.
+  MEASURED AT HEAD  2. Matches.
+  AGREE?            YES
+  DISPOSITION       ACCURATE AND STABLE -- a count of code branches, not of token
+                    occurrences. Left untouched, as task 1 (c) requires.
+
+ROW 7 -- case 7's oversize-dump precondition
+  CLAIM AS WRITTEN  the 70,000-character pad and its `bytes7 > 65536` precondition
+  RECIPE            checked by round 4 and recorded clean in 06-REVIEW-GAP3.md
+                    § "What I checked and found clean".
+  DISPOSITION       EXCLUDED -- already checked clean by round 4 this round. Not
+                    re-opened, per task 2's read_first. It is also a numeric
+                    precondition ASSERTED IN CODE, not a prose count claim.
+
+ROW 8 -- the GC-01 here-string forbidden-substring check
+  CLAIM AS WRITTEN  the `grep -qF -- "$forb" <<<` form, replacing a piped
+                    `| grep -q`
+  RECIPE            /usr/bin/grep -cF '| grep -q'                   <file> -> 0
+                    /usr/bin/grep -cF 'grep -qF -- "$forb" <<<'     <file> -> >=1
+  MEASURED AT HEAD  0 and >=1 respectively. Matches.
+  AGREE?            YES
+  DISPOSITION       EXCLUDED from correction -- checked clean by round 4 (GC-01
+                    was the phase's only BLOCKER) -- but RE-ASSERTED in this
+                    plan's verify block so a regression here would fail the plan.
+                    Not a count claim; listed so the audit's silence on it is not
+                    read as an omission.
+
+-- Rows 9-12 were found by the step-2 end-to-end READ, not by the step-1 keyword
+-- sweep's headline output. They are the four claims in this file of the form
+-- "grep it for X, one hit" / "exactly one, so a grep can prove it". These are the
+-- purest instances of the audited class in the file, and the census row (row 1)
+-- had drawn all the attention away from them. Ordered by discovery.
+
+ROW 9 -- the env-override census in the file header
+  CLAIM AS WRITTEN  "ENV OVERRIDES - exactly one, in the ${VAR:-default} form so a
+                    grep can prove it exists"
+  RECIPE (as found) NONE GIVEN. The claim asserted that a grep could prove it and
+                    then did not supply the grep -- so the reader supplies their
+                    own, and the obvious one is wrong.
+  MEASURED AT HEAD  The claim itself is TRUE: exactly one env override exists,
+                    EXTRA_FORBIDDEN_SUBSTRINGS="${EXTRA_FORBIDDEN_SUBSTRINGS:-}".
+                    But the obvious recipe answers something else entirely:
+                        /usr/bin/grep -n ':-' <file> | (non-comment lines) -> 5
+                    of which 3 are Python slices in the embedded extractor
+                    (v[1:-1] twice, s[:-1]) and 1 is an unrelated ${ver:-...}
+                    default in the tool-version banner. Only 1 is an env override.
+  AGREE?            YES on the substance, NO on anything a reader would measure.
+  DISPOSITION       ACCURATE BUT SELF-MOVING -> CONVERTED TO A RECIPE.
+                    Self-moving because any future comment writing the override in
+                    its `${VAR:-}` form would move a naive count, and because the
+                    claim invited a grep it did not specify. The recipe added is
+                    BRACKETED so it is not itself an occurrence:
+
+                        /usr/bin/grep -c \
+                          'EXTRA_FORBIDDEN_SUBSTRINGS="${EXTRA_FORBIDDEN_SUBSTRINGS:[-]}"' \
+                          scripts/check-beets-config.sh
+
+                    VERIFIED NOT SELF-MATCHING: run against the file AFTER the
+                    recipe line was added in band, it answers 1, not 2. That is the
+                    whole point of the bracket, and it was checked rather than
+                    assumed. The comment says in one clause why the hyphen is
+                    bracketed, so nobody "simplifies" it back, and explicitly warns
+                    off `grep -c ':-'`. Same device as the R3-05 block in
+                    scripts/quick-health-check.sh.
+
+ROW 10 -- the beets.yaml lsiown claim
+  CLAIM AS WRITTEN  "stacks/selfhosted/arrs/beets/beets.yaml - grep it for
+                    `lsiown -R abc:abc`, one hit"
+  RECIPE            /usr/bin/grep -c 'lsiown -R abc:abc' \
+                        stacks/selfhosted/arrs/beets/beets.yaml
+  MEASURED AT HEAD  1
+  AGREE?            YES
+  DISPOSITION       ACCURATE AND STABLE. Stable in exactly the sense this audit's
+                    definition names: it counts a token in ANOTHER file that is
+                    under version control. No amount of prose added to
+                    check-beets-config.sh can move it -- including this plan's own
+                    new comment, which pastes the token verbatim. Left untouched,
+                    and the recipe is already stated at the site.
+
+ROW 11 -- the beets.yaml schema-migration citation
+  CLAIM AS WRITTEN  "grep stacks/selfhosted/arrs/beets/beets.yaml for
+                    `MIGRATE ITS SCHEMA`, one hit, on the sentence making that
+                    claim"
+  RECIPE            /usr/bin/grep -c 'MIGRATE ITS SCHEMA' \
+                        stacks/selfhosted/arrs/beets/beets.yaml
+  MEASURED AT HEAD  1
+  AGREE?            YES
+  DISPOSITION       ACCURATE AND STABLE, same reason as row 10. Left untouched.
+
+ROW 12 -- the check-music-freeze.sh shape citation
+  CLAIM AS WRITTEN  "the shape of zfs_query() in check-music-freeze.sh - grep it
+                    for `zfs_query() {`, one hit, the definition"
+  RECIPE            /usr/bin/grep -c 'zfs_query() {' scripts/check-music-freeze.sh
+  MEASURED AT HEAD  1
+  AGREE?            YES
+  DISPOSITION       ACCURATE AND STABLE, same reason as row 10. Left untouched.
+                    NOTE: scripts/check-music-freeze.sh was READ ONLY. This plan
+                    edits exactly one file.
+
+
+--------------------------------------------------------------------------------
+5. WHAT CHANGED IN THE FILE, AND WHAT DID NOT
+--------------------------------------------------------------------------------
+
+CHANGED (comments only, both tasks):
+  - The R3-07 census parenthetical: raw figure WITHDRAWN, replaced with an
+    explicit "deliberately not pinned" note naming R4-05, citing the R3-05 sibling
+    precedent and 06-DISPOSITIONS-GAP2.md § Corrections item 1.
+  - An audit pointer at the census (task 2), recording that the other in-band
+    count claims in this file were measured by plan 06-38 and dispositioned in
+    this artifact -- so the next reader does not have to redo the enumeration to
+    find out whether it was done. It names the three other-file claims as stable,
+    names ST_PLANNED_CASES as excluded and why, and says the artifact records the
+    enumeration's KNOWN GAPS rather than claiming completeness.
+  - The env-override census in the file header (task 2, row 9): converted from a
+    bare "a grep can prove it" assertion into an explicit BRACKETED recipe, with
+    a one-clause note on why the hyphen is bracketed and a warning off the naive
+    `grep -c ':-'`.
+
+NOT CHANGED, DELIBERATELY:
+  - ST_PLANNED_CASES=7 and its gate (row 3).
+  - `The answer is 2` and its recipe (row 2).
+  - The three other-file "one hit" claims (rows 10, 11, 12), each re-measured and
+    each correct.
+  - The `IF THIS FUNCTION IS EVER CALLED LIVE` precondition paragraph, the GC-13
+    justification correction, and the recorded refusal to wire the function live
+    -- all round 3's, all standing. DEF-06-34-02 owns the refusal.
+  - Every executable line in the file.
+  - scripts/quick-health-check.sh and scripts/phase06-oracle.sh -- plans 06-35 and
+    06-36 own those this round and run in parallel. Read only.
+
+
+--------------------------------------------------------------------------------
+5a. DEVIATION (Rule 1) — THE PLAN'S OWN TASK-2 VERIFY BLOCK CARRIED THE DEFECT
+    CLASS IT WAS WRITTEN TO CLOSE
+--------------------------------------------------------------------------------
+
+WHAT THE PLAN WROTE
+    test "$(/usr/bin/grep -cF '| grep -q' scripts/check-beets-config.sh)" -eq 0
+
+    intended as "no piped `| grep -q` was reintroduced" -- GC-01 was the phase's
+    only BLOCKER, so guarding it is right.
+
+WHY IT COULD NEVER PASS
+    Measured at the plan's OWN BASE COMMIT, 24d6624, before this executor touched
+    anything:
+
+        $ git show 24d6624:scripts/check-beets-config.sh | /usr/bin/grep -cF '| grep -q'
+        2
+        $ /usr/bin/grep -cF '| grep -q' scripts/check-beets-config.sh    # after both tasks
+        2
+
+    UNCHANGED BY THIS PLAN. The two hits are COMMENTS that quote the retired
+    construction in order to explain why GC-01 replaced it:
+
+        :641   #   printf '%s' "$raw" | grep -qF -- "$forb"
+        :842   #   `printf | grep -q` form a match near the bottom is still caught
+
+    This is 06-DISPOSITIONS-GAP2.md § Lessons 4 verbatim -- "a grep for a token's
+    absence cannot distinguish a claim from its retraction" -- and § Lessons 3's
+    prescription is the fix: pin the COMMENT-STRIPPED form, not the raw one.
+
+WHAT WAS SUBSTITUTED, AND WHY IT PRESERVES THE INTENT EXACTLY
+        test "$(/usr/bin/grep -v '^[[:space:]]*#' scripts/check-beets-config.sh \
+                  | /usr/bin/grep -cF '| grep -q')" -eq 0
+
+    Measured 0 at base and 0 after both tasks. It still fails loudly if anyone
+    reintroduces an EXECUTABLE piped `| grep -q`, which is the property GC-01
+    cares about, while being immune to comments that discuss the retired form --
+    which is the only reason the original could not pass.
+
+    NO CODE WAS CHANGED TO MAKE A TEST PASS. The assertion was wrong about the
+    tree; the tree was right. Had the executor "fixed" the file to satisfy the raw
+    form, it would have had to DELETE the two comments explaining GC-01 -- losing
+    the phase's only BLOCKER's rationale to satisfy a mis-specified grep.
+
+    Recorded here, in the SUMMARY, and in section 6 rather than silently patched,
+    because a substitution that is not written down is indistinguishable from an
+    executor weakening a test it could not pass.
+
+
+--------------------------------------------------------------------------------
+6. FINDINGS FOR PLAN 06-39 TO DEFER BY NAME
+--------------------------------------------------------------------------------
+
+REQUIRING A *CODE* CHANGE TO scripts/check-beets-config.sh: NONE.
+
+The audit found no in-band count claim in scripts/check-beets-config.sh whose
+correction would require changing an executable line. Every row above is either
+accurate, or was corrected by withdrawing a comment, or is an explicit exclusion.
+
+REQUIRING ATTENTION FROM 06-39, THOUGH NOT A CODE CHANGE HERE:
+
+  F-06-38-01  The round-4 gap-closure plans' verify blocks should themselves be
+              swept for RAW self-referential counts. Plan 06-38's task-2 block
+              asserted `grep -cF '| grep -q' == 0` against a file whose comments
+              legitimately quote that construction; it could not pass at the plan's
+              own base commit. See section 5a. The defect class this round is
+              closing IN THE SCRIPTS is also present IN THE VERIFICATION THAT
+              CHECKS THEM, and nothing in this round's brief was looking there.
+              Cheap mitigation, matching the phase's standing practice: any verify
+              assertion counting a token in a file that discusses that token should
+              use the comment-stripped recipe or an inequality, never a raw
+              equality.
+
+  F-06-38-02  A self-inflicted instance worth recording because it shows the class
+              is not confined to scripts: this artifact pinned a raw
+              ST_PLANNED_CASES count twice and was wrong both times -- once when
+              written, once when the plan's OWN audit-pointer comment moved it.
+              Withdrawn at row 3. Artifacts that quote raw counts of a symbol they
+              also name are subject to exactly the same hazard as the scripts.
+
+This is a genuine empty result, not an unperformed check: every row in section 4
+was measured, by the recipe printed beside it. It is recorded explicitly because
+an omitted section reads like an oversight, and because a later round should be
+able to tell the difference between "nothing was found" and "nobody looked".
+
+The row count is deliberately not restated here. Section 4 is the register; a
+number repeated in a second place is one more thing that can drift out of step
+with it, which is the whole subject of this artifact.
+
+
+--------------------------------------------------------------------------------
+7. SCOPE DISCIPLINE
+--------------------------------------------------------------------------------
+
+  - No estate contact. --self-test is workstation-only and is the only invocation
+    of this script used here. No --run, no ssh, no docker, no live library.db.
+  - No requirement checkbox moved. CONF-04 is NOT closed and is NOT claimed.
+    The phase is NOT declared complete.
+  - 06-VERIFICATION.md is stale and out of scope; not read as a gap source and
+    not touched.
+  - No git push, no host git pull.
+  - git diff --name-only -- scripts/ lists exactly one path:
+        scripts/check-beets-config.sh
+
+_Written 2026-09-23 by plan 06-38, gap-closure round 4._

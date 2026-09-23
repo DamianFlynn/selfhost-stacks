@@ -78,7 +78,17 @@
 #                   itself against a synthetic -c-only line. A control that can only pass is
 #                   uninformative.
 #
-# ENV OVERRIDES - exactly one, in the ${VAR:-default} form so a grep can prove it exists:
+# ENV OVERRIDES - exactly one, in the ${VAR:-default} form so a grep can prove it exists. THE
+# RECIPE, to run rather than to trust (converted from a bare assertion by plan 06-38's R4-05 audit):
+#     /usr/bin/grep -c 'EXTRA_FORBIDDEN_SUBSTRINGS="${EXTRA_FORBIDDEN_SUBSTRINGS:[-]}"' \
+#         scripts/check-beets-config.sh
+# THE HYPHEN IS BRACKETED ON PURPOSE AND MUST STAY THAT WAY. `[-]` matches the real assignment,
+# while this recipe line is NOT itself an occurrence - so writing the recipe in band does not
+# perturb the number it asks you to measure. That is the same device the R3-05 block in
+# scripts/quick-health-check.sh uses, and unbracketing it here would re-create the exact defect
+# R4-05 exists to retire. Do NOT reach for the obvious `grep -c ':-'` instead: it also catches
+# Python slices in the embedded extractor and an unrelated ${ver:-...} default, and answers with a
+# number that has nothing to do with env overrides.
 #     EXTRA_FORBIDDEN_SUBSTRINGS   colon-separated, APPENDED to a built-in list of substrings
 #                                  that must not appear anywhere in arm 1's dump.
 #   It is ADDITIVE: it can only add failures, never remove one. There is no override that can
@@ -431,9 +441,38 @@ beet_invocation_violations() {  # stdin: shell source -> stdout: one line per no
 #     | /usr/bin/grep -c 'assert_beet_invocation_contract'
 # The answer is 2 — the definition, and the one call inside run_self_test. Anything higher means
 # someone has wired it somewhere else, and the paragraph below applies. R3-07's own evidence line
-# printed that code-only figure as though it were a raw grep count (raw is 4, and rises with prose
-# like this); that is the same self-referential measurement error this round is closing, so it is
-# corrected here rather than inherited.
+# printed that code-only figure as though it were a raw grep count; that is the same
+# self-referential measurement error this round is closing, so it is corrected here rather than
+# inherited.
+#
+# THE RAW COUNT IS DELIBERATELY NOT PINNED HERE — R4-05, corrected 2026-09-23 by plan 06-38.
+# Round 3's correcting hunk did pin one, and its own text falsified it in the act of writing it: a
+# number written into a file that greps itself is moved by the sentence that states it, and the
+# recipe line that same hunk added at the head of this census is what moved this one. The hedge it
+# attached, conceding that such a figure drifts as comments about the symbol accumulate, is not a
+# fix — the hunk that wrote the hedge is what drifted it. So the figure is WITHDRAWN, not re-stated,
+# which is what the sibling R3-05 block in scripts/quick-health-check.sh did in this same round:
+# there the header count is the durable one and the raw count is deliberately unpinned; here the
+# COMMENT-STRIPPED figure above is the durable one, and it is the only one this file offers.
+# Re-pinning the raw figure to a fresh number would simply set up the next drift, which would
+# arrive with the next comment that mentions the symbol. If you need the raw figure, run the recipe
+# above WITHOUT its `grep -v` pass — and do not write the answer back into this comment.
+# The measurement across three refs that established the drift is recorded once, in
+# .planning/phases/06-tagger-configuration-and-dry-run/06-DISPOSITIONS-GAP2.md § Corrections
+# item 1, and nothing in this file reads from that register.
+#
+# EVERY OTHER IN-BAND COUNT CLAIM IN THIS FILE WAS AUDITED IN THE SAME PASS — plan 06-38; the
+# table is in artifacts/06-38-checker-count-audit.txt. Each was measured against its own recipe.
+# The claims that count a token in ANOTHER version-controlled file (beets.yaml's `lsiown -R
+# abc:abc` and `MIGRATE ITS SCHEMA`, check-music-freeze.sh's `zfs_query() {`) were left alone:
+# prose added HERE cannot move them. ST_PLANNED_CASES was EXCLUDED BY NAME — it is a gated pin
+# over an unconditionally executed set, not a prose claim about a grep, and it is the one number
+# in this file that is supposed to be a number. The single claim a naive grep would have answered
+# wrongly, the env-override census in this file's header, was converted to a bracketed recipe.
+# No executable line moved, and the audit found nothing that needed one. The artifact records the
+# enumeration method AND ITS KNOWN GAPS: one reader, one pass, an open-ended keyword list — it is
+# not a completeness proof, and three consecutive rounds each found an instance of this class that
+# the previous round's reader had missed.
 #
 # IF THIS FUNCTION IS EVER CALLED LIVE, its two arms must be re-polarised in the same change.
 # Today the CORRECT outcome — the synthetic line was rejected — routes through cfg_fail, while the
