@@ -1,0 +1,288 @@
+================================================================================
+06-37 — TERMINAL SIGNAL HANDLERS ON BOTH IN-CONTAINER PROGRAMS
+scripts/phase06-incremental-control.sh
+Findings closed: R4-03 (report WR-03) and R4-04 (report WR-04) of 06-REVIEW-GAP3.md
+Run: 2026-09-23, workstation only. NO ESTATE CONTACT — no ssh, no docker, no beets, no --arm.
+================================================================================
+
+FINDING ID ALIASING — READ THIS BEFORE GREPPING
+-----------------------------------------------
+Round 4's report reuses round 1's `WR-*` / `IN-*` namespace, and round 1's IDs are already cited
+in band in scripts/phase06-incremental-control.sh (CR-01, IN-02, IN-05, IN-08, IN-10). A bare
+`WR-03` in that file would be ambiguous and would make any grep for it non-discriminating. This
+round is written **R4-01 … R4-10** in band, continuing the phase's per-round convention
+(CR/WR/IN = round 1, GC-* = round 2, R3-* = round 3).
+
+    report WR-03  ->  R4-03   the `INT TERM HUP` handlers do not exit, so a delivered signal is
+                              swallowed: the scratch path is deleted and the program runs on
+    report WR-04  ->  R4-04   R3-09's stated mechanism (`timeout` delivering SIGTERM to the
+                              in-container shell) is not established, and the signal that most
+                              likely *does* arrive (SIGPIPE) was not in the list
+
+    R4-03  ->  CODE
+    R4-04  ->  BOTH — `PIPE` added to the list (code, task 1); the mechanism paragraph stops
+                      naming an unconfirmed mechanism as routine (claim correction, task 2)
+
+
+INTERPRETERS, BY NAME AND VERSION
+---------------------------------
+Host            macOS 27.0 (build 26A428), arm64e
+Drive shell     /bin/dash — Apple system dash, Mach-O universal, 420992 bytes, mtime 2026-09-03
+                sha256 5a09397855d43680e94c1c2c0f994a3537b0f2525f1bd2e11a8ce442adffc007
+                It carries NO version string (`strings` finds none and `--version` is not
+                accepted), so the binary is identified by path + hash rather than by a version
+                number that does not exist. It is the dash-family interpreter these programs run
+                under in the container.
+Harness shell   /bin/bash 3.2.57(1)-release (the driver script only; every program under test ran
+                under /bin/dash)
+Parse-only      /bin/sh  — on this host /bin/sh is **bash 3.2.57 in sh mode**, NOT dash-family.
+                It is used for `sh -n` (a parse, where the family does not matter) and is NOT
+                used for any drive. Both extracted bodies were additionally parsed with
+                `/bin/dash -n` so the POSIX parse is not taken on bash's word alone.
+
+
+================================================================================
+PART 0 — PRE-FIX RUNS OF BOTH VERIFY BLOCKS (vacuity check)
+================================================================================
+Both `<automated>` blocks were extracted, `bash -n`'d, and run against the UNFIXED tree before any
+edit. Neither reached its end. A block that passes pre-fix proves nothing.
+
+  $ bash -n verify-task1.sh  ->  T1 PARSE OK
+  $ bash -n verify-task2.sh  ->  T2 PARSE OK
+
+  $ bash verify-task1.sh  (traced, unfixed tree)                         EXIT=1
+    +++ git rev-parse --show-toplevel
+    ++ cd <worktree root>
+    ++ set -eu
+    ++ F=scripts/phase06-incremental-control.sh
+    ++ G=/usr/bin/grep
+    +++ /usr/bin/grep -cF 'kill -INT' scripts/phase06-incremental-control.sh
+    ++ test 0 -eq 2                      <-- FAILS HERE, at the first re-raise count. Expected.
+
+  $ bash verify-task2.sh  (traced, unfixed tree)                         EXIT=1
+    +++ git rev-parse --show-toplevel
+    ++ cd <worktree root>
+    ++ set -eu
+    ++ F=scripts/phase06-incremental-control.sh
+    ++ G=/usr/bin/grep
+    +++ /usr/bin/grep -cF 'so a bound expiry is a ROUTINE outcome for a manifest over a large tree' \
+          scripts/phase06-incremental-control.sh
+    ++ test 1 -eq 0                      <-- FAILS HERE, at the routine-SIGTERM absence test.
+                                             Expected.
+
+
+================================================================================
+PART 1 — R4-03: THE DASH DRIVE, BOTH DIRECTIONS, WITH A POSITIVE CONTROL
+================================================================================
+Method: a standalone harness in a `mktemp -d` emits a synthetic program that reproduces the trap
+shape of the real in-container program over a real `mktemp`-minted scratch path of the same
+template, runs it under /bin/dash, delivers a signal after 1 s, and reports the wait status, the
+scratch path's survival, and whether the program ran past the signal. Two families are driven:
+
+    mf       reproduces write_prog_manifest's MANDIR trap   (mktemp -d, rm -rf)
+    taghist  reproduces write_prog_taghistory's THPROG trap (mktemp,    rm -f )
+
+DELIVERY WITNESS — why this harness reports an extra column.
+Each program prints, at phase 2, whether its scratch path still exists. Without that column
+"the trap absorbed the signal" and "the signal was never delivered" are INDISTINGUISHABLE: both
+present as exit 0 with the scratch gone by the EXIT trap. `scratch-at-phase2=GONE` on a signalled
+run and `PRESENT` on the control is the proof the signal arrived.
+
+`set -m` IN THE HARNESS IS LOAD-BEARING. POSIX requires a shell without job control to start a
+background command with SIGINT and SIGQUIT set to SIG_IGN, and a signal inherited as ignored
+cannot be trapped. The first run of this drive, without `set -m`, reported SIGINT as
+"ran past the signal, exit 0" for BOTH shapes — a non-delivery that would have read as
+"the defect reproduces" and "the fix does not work" from the same artefact. Recorded because it
+is exactly the class of false reading this round exists to stop.
+
+--------------------------------------------------------------------------------
+  workdir: /tmp/p6-37-drive.nYYygAgv
+  interpreter under drive: /bin/dash
+  ------------------------------------------------------------------------
+  PRE-FIX SHAPE (round 3 / plan 06-32: one trap, four signals, no exit, no re-raise)
+    mf       prefix   SIGTERM  wait-status=0    ran-past-signal=1 delivery-witness=GONE    terminal-line-printed=1 scratch=GONE
+    mf       prefix   SIGINT   wait-status=0    ran-past-signal=1 delivery-witness=GONE    terminal-line-printed=1 scratch=GONE
+    mf       prefix   SIGHUP   wait-status=0    ran-past-signal=1 delivery-witness=GONE    terminal-line-printed=1 scratch=GONE
+    mf       prefix   SIGPIPE   wait-status=141  scratch=PRESENT
+    mf       prefix   CONTROL   exit=0                      delivery-witness=PRESENT terminal-line-printed=1 scratch=GONE
+    taghist  prefix   SIGTERM  wait-status=0    ran-past-signal=1 delivery-witness=GONE    terminal-line-printed=1 scratch=GONE
+    taghist  prefix   SIGINT   wait-status=0    ran-past-signal=1 delivery-witness=GONE    terminal-line-printed=1 scratch=GONE
+    taghist  prefix   SIGHUP   wait-status=0    ran-past-signal=1 delivery-witness=GONE    terminal-line-printed=1 scratch=GONE
+    taghist  prefix   SIGPIPE   wait-status=141  scratch=PRESENT
+    taghist  prefix   CONTROL   exit=0                      delivery-witness=PRESENT terminal-line-printed=1 scratch=GONE
+  ------------------------------------------------------------------------
+  POST-FIX SHAPE (this plan: named cleanup fn, EXIT separate, four terminal handlers + PIPE)
+    mf       postfix  SIGTERM  wait-status=143  ran-past-signal=0 delivery-witness=n/a     terminal-line-printed=0 scratch=GONE
+    mf       postfix  SIGINT   wait-status=130  ran-past-signal=0 delivery-witness=n/a     terminal-line-printed=0 scratch=GONE
+    mf       postfix  SIGHUP   wait-status=129  ran-past-signal=0 delivery-witness=n/a     terminal-line-printed=0 scratch=GONE
+    mf       postfix  SIGPIPE   wait-status=141  scratch=GONE
+    mf       postfix  CONTROL   exit=0                      delivery-witness=PRESENT terminal-line-printed=1 scratch=GONE
+    taghist  postfix  SIGTERM  wait-status=143  ran-past-signal=0 delivery-witness=n/a     terminal-line-printed=0 scratch=GONE
+    taghist  postfix  SIGINT   wait-status=130  ran-past-signal=0 delivery-witness=n/a     terminal-line-printed=0 scratch=GONE
+    taghist  postfix  SIGHUP   wait-status=129  ran-past-signal=0 delivery-witness=n/a     terminal-line-printed=0 scratch=GONE
+    taghist  postfix  SIGPIPE   wait-status=141  scratch=GONE
+    taghist  postfix  CONTROL   exit=0                      delivery-witness=PRESENT terminal-line-printed=1 scratch=GONE
+  ------------------------------------------------------------------------
+  emitted program text, post-fix, family=mf (the shape asserted above):
+      set -u
+      MANDIR="$(mktemp -d /tmp/p6-mf.XXXXXXXX 2>/dev/null)" || MANDIR=""
+      [ -n "$MANDIR" ] || { echo MINT-FAILED; exit 2; }
+      echo "SCRATCH $MANDIR"
+      _p6_clean() { case "${MANDIR:-}" in
+        /tmp/p6-mf.*) case "${MANDIR#/tmp/p6-mf.}" in ""|*[!A-Za-z0-9._-]*) : ;; *) rm -rf "$MANDIR" ;; esac ;;
+      esac; }
+      trap '_p6_clean' EXIT
+      trap '_p6_clean; trap - INT;  kill -INT  $$' INT
+      trap '_p6_clean; trap - TERM; kill -TERM $$' TERM
+      trap '_p6_clean; trap - HUP;  kill -HUP  $$' HUP
+      trap '_p6_clean; trap - PIPE; kill -PIPE $$' PIPE
+      echo PHASE-1
+      sleep 2
+      if [ -e "$MANDIR" ]; then echo 'PHASE-2-STILL-RUNNING-AFTER-SIGNAL scratch-at-phase2=PRESENT'
+      else echo 'PHASE-2-STILL-RUNNING-AFTER-SIGNAL scratch-at-phase2=GONE'; fi
+      echo "MANIFEST OK"
+  ------------------------------------------------------------------------
+  leftover scratch paths this drive is responsible for, removed now:
+      /tmp/p6-mf.wRFISH4w
+      /tmp/p6-taghist.1oLgdkhE
+  drive workdir removed.
+--------------------------------------------------------------------------------
+
+WHAT THE TABLE SAYS, ROW BY ROW
+  PRE-FIX, SIGTERM / SIGINT / SIGHUP — THE DEFECT, REPRODUCED.
+    wait-status 0. The program ran past the signal, printed its terminal line
+    (`MANIFEST OK` / `STATEFILE-SHA …`) and exited 0. `delivery-witness=GONE` against the
+    control's `PRESENT` proves the signal WAS delivered and the trap DID fire — it deleted the
+    scratch directory and the shell then resumed, exactly as POSIX specifies. A killed run
+    produced a normal-looking transcript.
+
+  PRE-FIX, SIGPIPE — THE LEAK R4-04 NAMES.
+    wait-status 141 (128+13) and **scratch=PRESENT**. `PIPE` was not in the round-3 list, so an
+    untrapped SIGPIPE ran no trap at all and the minted directory survived — the "worse litter"
+    case GC-08's own comment names, surviving even where the `TERM` arm is inert.
+
+  POST-FIX, SIGTERM / SIGINT / SIGHUP / SIGPIPE — TERMINAL.
+    wait-status 143 / 130 / 129 / 141 = 128 + 15 / 2 / 1 / 13. `ran-past-signal=0` and
+    `terminal-line-printed=0`: neither `MANIFEST OK` nor a clean `PROBE-RC`/`STATEFILE-SHA` tail
+    can be produced after a delivered signal. `scratch=GONE` on every row, SIGPIPE included.
+
+  POSITIVE CONTROL, BOTH SHAPES, BOTH FAMILIES — UNSIGNALLED RUN UNAFFECTED.
+    exit 0, terminal line printed, `delivery-witness=PRESENT` (the scratch was still there at
+    phase 2, i.e. nothing cleaned up early), scratch GONE at the end via the EXIT trap. Without
+    this row a "fix" that simply kills the program early would be indistinguishable from a fix
+    that works.
+
+
+================================================================================
+PART 2 — R4-03(c): R3-10's PREDICATE MOVED VERBATIM
+================================================================================
+Round 4 drove the two-stage prefix-plus-character-class predicate and recorded it in its
+*checked and found clean* section. It is correct and this plan must not disturb it. The move
+into the named cleanup function is proven verbatim by diffing the extracted text against the
+pre-change file, normalised for leading indentation only:
+
+  VERBATIM  p6-mf\.\*)
+            /tmp/p6-mf.*) case "${MANDIR#/tmp/p6-mf.}" in ""|*[!A-Za-z0-9._-]*) : ;; *) rm -rf "$MANDIR" ;; esac ;;
+  VERBATIM  p6-taghist\.\*)
+            /tmp/p6-taghist.*) case "${THPROG#/tmp/p6-taghist.}" in ""|*[!A-Za-z0-9._-]*) : ;; *) rm -f "$THPROG" ;; esac ;;
+  --- leading-whitespace-sensitive comparison (expected: DIFFERS, indentation only) ---
+    p6-mf\.\*) differs in indentation only (proven above)
+    p6-taghist\.\*) differs in indentation only (proven above)
+
+  exit 0
+
+The second comparison is not decoration: it shows the first comparison is not accidentally
+comparing a line to itself, i.e. that something really did move.
+
+THE SINGLE-QUOTE CONSTRAINT, AND WHY IT RELAXED. The old predicate lived inside a trap body,
+which is a single-quoted string, so `""` and not `''` was required for the empty pattern — an
+inner single quote would have terminated the body. The predicate now lives in a shell FUNCTION
+defined outside any trap, so that constraint no longer binds it. It was nevertheless left
+byte-identical: changing `""` to `''` would have been a gratuitous edit to the one fence round 4
+certified, and dash treats the two patterns identically anyway. The constraint still binds the
+four trap bodies themselves, and none of them contains a single quote.
+
+
+================================================================================
+PART 3 — R4-03(e): BOTH HEREDOC BODIES PARSE AS POSIX sh
+================================================================================
+`bash -n` over the outer file parses both heredocs as DATA and cannot see a syntax error inside
+either program — and this change edits program text. The non-empty assertion comes FIRST: `sh -n`
+over an empty file exits 0, so an extraction that silently matched nothing would print a green
+tick over no parse at all. That is CR-01's shape and this phase has shipped it twice.
+
+  extracted manifest.sh: 92 lines
+    kill -INT  occurrences: 1   trap - INT  occurrences: 1
+    kill -TERM occurrences: 1   trap - TERM occurrences: 1
+    kill -HUP  occurrences: 1   trap - HUP  occurrences: 1
+    kill -PIPE occurrences: 1   trap - PIPE occurrences: 1
+    EXIT-only trap lines: 1
+    /bin/sh -n manifest.sh: PASS
+    /bin/dash -n manifest.sh: PASS
+  extracted taghist.sh: 45 lines
+    kill -INT  occurrences: 1   trap - INT  occurrences: 1
+    kill -TERM occurrences: 1   trap - TERM occurrences: 1
+    kill -HUP  occurrences: 1   trap - HUP  occurrences: 1
+    kill -PIPE occurrences: 1   trap - PIPE occurrences: 1
+    EXIT-only trap lines: 1
+    /bin/sh -n taghist.sh: PASS
+    /bin/dash -n taghist.sh: PASS
+
+  exit 0
+
+`/bin/dash -n` was added beyond the plan's `/bin/sh -n` because on this host `/bin/sh` is bash in
+sh mode; parsing with the actual dash-family binary as well closes the gap between "bash thinks
+this is POSIX" and "the interpreter family that runs it thinks so".
+
+  $ bash -n scripts/phase06-incremental-control.sh        -> exit 0
+  $ bash scripts/phase06-incremental-control.sh --self-test -> exit 0
+
+
+================================================================================
+PART 4 — R4-04: WHAT THIS ARTIFACT DOES **NOT** PROVE
+================================================================================
+THE DRIVE PROVES THE HANDLER SHAPE. IT PROVES NOTHING ABOUT DELIVERY IN THE CONTAINER.
+
+Established, and grep-confirmable in the file:
+  * the transport is `ssh … "timeout $REMOTE_TIMEOUT docker exec -i -u beetle $CONTAINER sh -s…"`
+  * a POSIX shell does not run its EXIT trap on an uncaught signal
+  * on the shape shipped, a delivered INT/TERM/HUP was absorbed and the program continued (above)
+  * on the shape shipped, an untrapped SIGPIPE ran no trap and leaked the minted path (above)
+
+NOT established, and deliberately not tested (this phase makes no estate contact):
+  * that `timeout` delivers SIGTERM to the **in-container** shell. `timeout` signals the
+    `docker exec` CLIENT on LXC 100, and `docker exec` is not known to forward signals to the
+    exec'd process. If that holds here, the `TERM` arm never fires for these programs at all.
+
+Believed, on reasoning of the SAME grade as the line above — NOT an upgrade over it:
+  * when the client dies the daemon tears the exec's streams down, and the in-container shell
+    takes EPIPE/SIGPIPE on its next write to stdout. Both programs write to stdout. This is why
+    `PIPE` joined the list. It is a candidate `FIXED (undriven)` row, exactly as R3-09 was.
+
+NEITHER TRAP HAS EVER BEEN OBSERVED FIRING INSIDE `beets-flask`. The driving condition is a live
+`--arm a` / `--arm b` pair under a deliberately short `REMOTE_TIMEOUT`, checking the container's
+`/tmp` afterwards for surviving `/tmp/p6-mf.*` and `/tmp/p6-taghist.*` names. That attaches to
+the EXISTING Phase 7 entry criterion **E12**; no new criterion is invented, and DEF-06-34-04 /
+DEF-06-34-06 already sit there.
+
+SIGKILL remains untrappable and is still a genuine residual, consistent with DEF-06-34-06. What
+changed is that the round-3 framing — "widening the list SHRINKS the window" — under-described
+the defect: on the non-terminal handlers the signal was ABSORBED, not narrowed.
+
+
+================================================================================
+PART 5 — TASK 1 VERIFY BLOCK, POST-FIX
+================================================================================
+  $ bash verify-task1.sh   -> EXIT=0   (every assertion, after task 1)
+
+  $ bash -n scripts/phase06-incremental-control.sh          -> exit 0
+  $ bash scripts/phase06-incremental-control.sh --self-test -> exit 0
+
+No estate contact was made at any point in task 1: no ssh, no docker, no `--run`, no `--arm`. The
+only invocation of scripts/phase06-incremental-control.sh was `--self-test`, which is
+workstation-only. Every signal drive was a standalone script in a `mktemp -d`, never the real
+program against the real container. Every scratch path the drive minted was removed by name, and
+the remover refuses any path outside the two templates.
+
+(Task 2's transcript is appended below by task 2's own commit; it is deliberately not written
+here in advance of being measured.)
