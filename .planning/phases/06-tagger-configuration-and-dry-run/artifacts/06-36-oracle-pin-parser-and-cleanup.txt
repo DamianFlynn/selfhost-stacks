@@ -191,3 +191,106 @@ is claims outrunning code. The verify block asserts the trap count is still zero
 
 $ /usr/bin/grep -c '^[[:space:]]*trap ' scripts/phase06-oracle.sh
 0
+
+
+================================================================================================
+§ 3  R4-06 — the parser gets cases in the pinned set, and the identity case is driven to FAIL
+================================================================================================
+
+DISPOSITION: R4-06 IS A CODE FIX. R3-03's account of the parser was accurate; it simply had no
+case behind it. Six new `st_case` assertions in `self_test_vacuity` — the section whose stated
+subject is guards that can or cannot fire, which is exactly what the parser is.
+
+--- the six cases, from a green run of the shipped file ----------------------------------------
+== --self-test: R4-06 the layer-3 sha256 line parser, driven both directions ==
+  ✓ aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899 (expected): a path containing a SPACE is matched EXACTLY - the case R3-03 exists for.
+  ✓ 1111111111111111111111111111111111111111111111111111111111111111 (expected): a path containing a BACKSLASH is matched exactly - this is R4-09 driven.
+  ✓  (expected): a GNU backslash-ESCAPED output line is REFUSED - R3-03's DELIBERATE refusal,
+    pinned here as intended behaviour so a future reader does not helpfully 'fix' it.
+  ✓  (expected): a SUFFIX-ONLY near-miss is refused: exact equality, never a suffix test.
+  ✓  (expected): a TRUNCATED line (digest, no path) yields EMPTY, so the guards still fire.
+  ✓ 4 (expected): the driven parser text IS the text all FOUR live layer-3 consumers carry.
+
+All five behavioural cases run over ONE non-empty fixture, so every refusal is a refusal over a
+file whose other lines the positives matched. `self_test_vacuity`'s opening rule — "a guard that
+refuses everything is exactly as useless as one that refuses nothing" — applied to itself.
+
+--- how the identity case counts, and why not more simply ---------------------------------------
+It counts the lines of this script that carry BOTH the driven program text AND the live-only
+marker `"$OUT/layer3.`, and asserts 4. Counting the program text ALONE would be self-referential:
+the self-test's own copy lives in the same file, so the count would have moved the moment the
+block was added — the defect GC-10, R3-05 and R4-05 each are. The four live copies are NOT hoisted
+into one shared variable instead, because DEF-06-29-03 records that this file's fence copies are
+protected by a committed check that FORBIDS exactly that refactor; the house answer here is to
+prove identity, which `self_test_fences` already does for the two stamp fence copies.
+
+FAIL-CLOSED PATH RESOLUTION. `${BASH_SOURCE[0]:-$0}`; if it is not readable the case prints a
+`warn`/`info` pair naming the unreadable path AND is driven RED with the observed value
+`COULD-NOT-LOOK`. It never silently passes. That distinction is CR-01 / GC-03 / GC-05 and a
+vacuous identity case would have been its fourth instance.
+
+--- THE DRIVE: four mutants, each on a SCRATCH COPY from mktemp -d ------------------------------
+scripts/phase06-oracle.sh was never mutated in place.
+
+CONTROL FIRST, because it is a finding in its own right:
+  $ /usr/bin/sed '0,/print \$1 }/s//print $2 }/' scripts/phase06-oracle.sh > sedctl.sh
+    rc=0  IDENTICAL - the mutation was a SILENT NO-OP
+
+`0,/re/` is a GNU sed extension. BSD sed — /usr/bin/sed on this macOS workstation — accepts it
+without complaint and substitutes nothing. The plan's task-2 verify block uses exactly that sed
+and then asserts `! cmp -s` on the next line, so under `set -e` the block would abort there and
+the drive would never run. No gsed is installed (`command -v gsed` returns nothing). The executed
+block substitutes a first-match-only `awk` with the same semantics that EXITS 9 if it matches
+nothing. Recorded as a deviation rather than passed over, because a mutation that silently does
+nothing is the exact failure mode this whole round is about.
+
+MUTANT A — the first `print $1 }` in the file. NOTE: that is now the DRIVEN copy at
+self_test_vacuity, not a live consumer, because the self-test section precedes the live block.
+  2443c2443
+  <   local l3prog='… rest == ENVIRON["p"]) print $1 }'
+  >   local l3prog='… rest == ENVIRON["p"]) print $2 }'
+  rc=1, 3 SELF-TEST REGRESSION lines:
+  ✗ expected 'aabb…8899', got '/config/my': a path containing a SPACE is matched EXACTLY …
+  ✗ expected '1111…1111', got '/config/back\slash.db': a path containing a BACKSLASH …
+  ✗ expected '4', got '0': the driven parser text IS the text all FOUR live layer-3 consumers carry.
+
+MUTANT B — a LIVE consumer ONLY: the field index at the `layer3.before` site.
+  3011 unchanged; 2850 moved:
+  < LIB_SHA_BEFORE="$(… rest == ENVIRON["p"]) print $1 }' "$OUT/layer3.before")"
+  > LIB_SHA_BEFORE="$(… rest == ENVIRON["p"]) print $2 }' "$OUT/layer3.before")"
+  rc=1, 1 SELF-TEST REGRESSION line:
+  ✗ expected '4', got '3': the driven parser text IS the text all FOUR live layer-3 consumers carry.
+
+MUTANT C — a LIVE consumer ONLY: the TWO-SPACE separator at the `layer3.after` site.
+  < … sub(/^[0-9a-f]+  /, "", rest) … "$OUT/layer3.after")"
+  > … sub(/^[0-9a-f]+ /, "", rest) …  "$OUT/layer3.after")"
+  rc=1, 1 SELF-TEST REGRESSION line:
+  ✗ expected '4', got '3': the driven parser text IS the text all FOUR live layer-3 consumers carry.
+
+MUTANT D — a LIVE consumer ONLY: the hex character class at the `layer3.after` site.
+  < … sub(/^[0-9a-f]+  /, "", rest) …
+  > … sub(/^[0-9A-F]+  /, "", rest) …
+  rc=1, 1 SELF-TEST REGRESSION line:
+  ✗ expected '4', got '3': the driven parser text IS the text all FOUR live layer-3 consumers carry.
+
+B, C and D ARE THE FINDING CLOSED. Each changes exactly one of the three things the review named —
+the regex, the two-space separator, the field index — at ONE live site, and each is caught by the
+identity case ALONE (4 → 3). Before this round all three went green.
+
+--- one blocking issue fixed on the way, recorded because it changed a live line ---------------
+Task 2's verify requires `/usr/bin/grep -cF '| grep -q' scripts/phase06-oracle.sh` to be ZERO.
+Pre-fix it was ONE, and the single hit was a COMMENT — the `st_grep_why` preamble, whose subject
+is that this shape must not be used. A detector that always fires on the paragraph forbidding the
+shape is a broken detector, which is the reasoning this file already applies to the retired
+bare-glob fences ("A permanently-hit grep is a broken detector", GC-02 block). The sentence was
+reworded to describe the construction in words instead of quoting it, and it now says so and says
+why. No executable line changed; the count is now 0 and the detector discriminates again.
+
+--- the whole-file state at the end of task 2 ---------------------------------------------------
+$ OUT=<mktemp -d> bash scripts/phase06-oracle.sh --self-test
+  ✗ self-test: 140 case(s) ran but 134 were announced - A SECTION DID NOT RUN   ; rc=1
+
+EXPECTED, AND ASSERTED RATHER THAN TOLERATED. Task 3 owns the pin and runs last — task 2 must not
+touch ST_PLANNED_CASES, or the announcement would be re-measured while the count was still moving.
+`were announced` present, `SELF-TEST REGRESSION` absent: the gate fired and nothing else did.
+Six cases added, 134 → 140.
