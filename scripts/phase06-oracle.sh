@@ -1930,6 +1930,11 @@ self_test_core() {
   if [ "$(id -u)" = "0" ]; then
     warn "SKIPPED as root: an UNREADABLE manifest (mode 000). root bypasses the read bit, so"
     info "the case cannot be constructed here - reported, never silently counted as a pass."
+    # R4-02. A DELIBERATE skip adjusts the announcement AT THE SITE THAT DECIDES TO SKIP. The
+    # number is MEASURED by ablation (force this arm, read ST_RUN off the gate, diff against an
+    # unforced run), never counted by eye: st_mc, st_assert and st_grep_why all funnel into
+    # st_case, so "how many lines look like cases" is the wrong question. Measured delta: 1.
+    ST_PLANNED_CASES=$((ST_PLANNED_CASES - 1))
   else
     cp "$td/st.before.meta" "$td/st.noread.meta"
     chmod 000 "$td/st.noread.meta"
@@ -2261,6 +2266,9 @@ ST_AST
   else
     warn "SKIPPED: no python3 on this workstation, so the ledger payload could not be parsed."
     info "Reported rather than silently counted as a pass. The payload runs in the container."
+    # R4-02, same shape and same reason as the root arm in self_test_core. Measured delta: 2 -
+    # the `parses as Python` case and the `Library() takes an explicit directory=` AST case.
+    ST_PLANNED_CASES=$((ST_PLANNED_CASES - 2))
   fi
 }
 
@@ -2403,6 +2411,9 @@ self_test_vacuity() {
   if [ "$(id -u)" = "0" ]; then
     warn "SKIPPED as root: the PRESENT-BUT-UNREADABLE case. root bypasses the read bit, so it"
     info "cannot be constructed here - reported, never silently counted as a pass."
+    # R4-02, third and last of the environment-conditional arms. Measured delta: 4 - the exit-4
+    # case, its empty-stdout partner, and BOTH halves of the DRIVEN RED for the old pipeline.
+    ST_PLANNED_CASES=$((ST_PLANNED_CASES - 4))
   else
     chmod 000 "$pdir/noread"
     rc=0
@@ -2671,11 +2682,36 @@ if [ "$MODE" = "self-test" ]; then
   # closure becoming unguarded without a single case going red. ST_RUN was REPORTED and never
   # ASSERTED, and a universal claim needs a pinned set behind it.
   #
-  # THE NUMBER IS MEASURED, NOT GUESSED - read off a green run of this file - and it MUST BE
-  # RE-MEASURED whenever a section or a case is added. That maintenance burden is self-enforcing
-  # rather than a request left in a comment: adding a case without re-measuring turns the self-test
-  # RED on the very next run, instead of silently widening the set the banner speaks for.
-  ST_PLANNED_CASES=134
+  # R4-02 CORRECTS THE MAINTENANCE INSTRUCTION THAT STOOD HERE, and the correction matters more
+  # than the arithmetic below it. The old text said the figure "MUST BE RE-MEASURED whenever a
+  # section or a case is added", with no environment attached, and the gate's message told the
+  # operator to "Re-measure only after confirming every section still runs". Both are withdrawn.
+  # THE FAILURE MODE THEY CAUSED, stated so nobody simplifies it back: three case groups in this
+  # self-test are ENVIRONMENT-CONDITIONAL BY DESIGN - one skipped as root in self_test_core, four
+  # skipped as root in self_test_vacuity, two skipped when the workstation has no python3 - so a
+  # single typed figure is correct in ONE environment only. An operator who hit the gate on a
+  # python3-less box, confirmed every section ran (they all had), and followed the old instruction
+  # would re-pin the SHORTFALL figure, which then fails on every box that HAS python3. The pin was
+  # self-destabilising ACROSS environments, and it fired most readily on the machines least likely
+  # to be the operator's - so its first real use was likely to be a misdiagnosis.
+  #
+  # THE SHAPE NOW:
+  #   - the BASE below counts the UNCONDITIONAL cases: what runs when NO environment-conditional
+  #     arm takes its skip branch.
+  #   - each such arm DECREMENTS the announcement itself, beside the `warn` that reports the skip,
+  #     by a delta MEASURED BY ABLATION (force the arm, read ST_RUN off the gate, diff against an
+  #     unforced run) - never counted by eye, because st_mc, st_assert and st_grep_why all funnel
+  #     into st_case. Deltas as measured 2026-09-23: core/root 1, classes/no-python3 2,
+  #     vacuity/root 4; additive, and 140-1-2-4 = 133 with all three taken.
+  #   - THIS IS WHY THE GUARD IS NOT WEAKENED: a DELIBERATE skip adjusts the announcement, while a
+  #     DROPPED SECTION adjusts nothing - so the gate still fires for exactly the case it was built
+  #     for. That control is driven, not asserted: dropping `self_test_fences` from the dispatcher
+  #     below must still exit 1, and it is recorded doing so in
+  #     artifacts/06-36-oracle-pin-parser-and-cleanup.txt § 4.
+  #   - RE-MEASURING THE BASE IS VALID IN THE REFERENCE ENVIRONMENT ONLY: NON-ROOT, WITH `python3`
+  #     PRESENT. Read it off a green run there. A figure read anywhere else is a shortfall figure
+  #     wearing the base's name, which is the defect this paragraph replaces.
+  ST_PLANNED_CASES=140
   ST_FAIL=0
   ST_RUN=0
   REDS=0
@@ -2691,11 +2727,23 @@ if [ "$MODE" = "self-test" ]; then
   # failure. GC-12(b) below exists precisely because two different failures once shared one banner,
   # so this does not recreate that defect by making a third share it.
   if [ "$ST_RUN" -ne "$ST_PLANNED_CASES" ]; then
-    printf '  \342\234\227 self-test: %s case(s) ran but %s were announced - A SECTION DID NOT RUN\n' \
+    # R4-02. The message NO LONGER ASSERTS A SINGLE CAUSE. It used to end "- A SECTION DID NOT RUN",
+    # which was a specific diagnosis the gate has no evidence for; the review drove it printing that
+    # sentence on a box where every section ran. It keeps the virtue it always had - it WITHHOLDS
+    # the banner rather than printing an unbacked universal claim - and now says only what it knows.
+    printf '  \342\234\227 self-test: %s case(s) ran but %s were announced - THE SET IS NOT THE SET\n' \
       "$((ST_RUN))" "$((ST_PLANNED_CASES))"
     printf '      The banner this run would otherwise print claims every fail-closed branch behaved\n'
     printf '      as expected. Over a set whose size nothing pins that claim is unbacked, so it is\n'
-    printf '      withheld. Re-measure only after confirming every section still runs.\n'
+    printf '      withheld. This gate does NOT know which of these happened:\n'
+    printf '        - a section was dropped from the dispatcher, or a rebase lost the line calling it;\n'
+    printf '        - an early `return` fired inside a section, so it ran only partway;\n'
+    printf '        - a case was added or removed and the announced base was not re-measured.\n'
+    printf '      A DELIBERATE environment skip is NOT among the causes: the three environment-\n'
+    printf '      conditional arms (root x2, no-python3) each adjust the announcement at their own\n'
+    printf '      site, so a reported skip can no longer reach this gate. Re-measure the base ONLY\n'
+    printf '      in the reference environment - NON-ROOT, with python3 PRESENT - and only after\n'
+    printf '      reading it off a green run there.\n'
     exit 1
   fi
   # GC-12(b). The gate fires on EITHER counter, so the banner must name BOTH - it used to print
