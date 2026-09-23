@@ -2424,12 +2424,36 @@ self_test_vacuity() {
 # the next reader without running it. Every behavioural case below executes a FENCE TEXT -
 # SCRATCH_FENCE_SH / STAMP_WRITE_FENCE_SH / STAMP_RM_FENCE_SH - and never CLEANUP_PROG,
 # STAMP_WRITE_PROG or STAMP_RM_PROG. A fence text is a bare `case` that either falls through or
-# prints and exits 3; it contains NO `rm`, NO `touch` and NO redirection into a path, and three
-# cases below assert exactly that by inspecting the strings. Driving the full programs instead -
-# even on paths the fence should refuse - would mean that a REGRESSION in the fence turns this
-# self-test into `rm -rf /tmp/p6-x/../../../home`. A self-test case that can destroy a real path
-# under a mistake is a worse defect than the traversal hole it is checking for, so the destructive
-# half is never executed here at all.
+# prints and exits 3. Stated as exactly what is executed and no wider:
+#   no case below executes a destructive program, and three cases below assert that no fence
+#   text contains the token `rm `.
+# Those three cases do it by inspecting the strings.
+#
+# R3-06 NARROWED THAT SENTENCE TO THE CASES THAT BACK IT. It previously named three properties -
+# absence of `rm`, absence of `touch`, and absence of redirection into a path - and said the three
+# cases asserted precisely those. They assert ONE property, the absence of the token `rm `, over
+# three different fence strings. The gap is written out rather than left for the next reader to
+# discover, because this comment is the stated reason a reader may trust that these cases cannot
+# delete anything:
+#   - `touch` is NOT asserted. No case below inspects for it.
+#   - REDIRECTION is NOT asserted either, and a blanket no-redirection claim would be false as
+#     stated, because `>&2` appears in all three fence texts. The narrower intended reading - that
+#     nothing is redirected into a PATH - does hold, since `>&2` duplicates a file descriptor and
+#     opens nothing; but holding is not asserting, and nothing below checks it.
+#   - the token test is the TWO-CHARACTER `rm `, so a tab- or newline-separated `rm` would slip
+#     past it. That bound is acceptable HERE for a specific reason, not a general one: the fence
+#     texts are three short literals under version control, and the destructive half is never
+#     executed in this section at all - so the test is a drift tripwire over reviewed text, not a
+#     sanitiser over untrusted input.
+# THE CASES WERE DELIBERATELY NOT WIDENED to match the old wording. Read the narrower sentence as a
+# CORRECTION, not a weakening: the three cases are byte-unchanged and were already adequate for
+# their bound, and widening executable assertions in order to rescue the prose of a comment is the
+# scope-widening this round exists to stop.
+#
+# Driving the full programs instead - even on paths the fence should refuse - would mean that a
+# REGRESSION in the fence turns this self-test into `rm -rf /tmp/p6-x/../../../home`.
+# A self-test case that can destroy a real path under a mistake is a worse defect than the
+# traversal hole it is checking for, so the destructive half is never executed here at all.
 #
 # What carries the result from the fence text to the shipped program is STRUCTURAL, not behavioural:
 # three cases assert that each PROG literally BEGINS with the fence text that was driven. The
@@ -2551,6 +2575,26 @@ preflight_readable() { # $1 = local directory that must exist and be searchable
 mkdir -p "$OUT"
 
 if [ "$MODE" = "self-test" ]; then
+  # R3-02. ST_PLANNED_CASES is the ANNOUNCED count; ST_RUN is what actually ran, and the two are
+  # compared below, after the sections and before the banner. This mirrors the same guard in
+  # scripts/check-beets-config.sh, added in the same round - one job, one idiom, deliberately not a
+  # second invention for it.
+  #
+  # WHAT IT DEFENDS AGAINST, named concretely, because an unpinned total reads as harmless right up
+  # until it is not. The pre-existing gate fires on ST_FAIL or REDS, and NEITHER COUNTER MOVES WHEN
+  # A SECTION SIMPLY DOES NOT RUN. So: a future edit drops `self_test_fences` from the dispatcher
+  # below - or an early `return` inside it fires, or a rebase loses the one line that calls it - and
+  # ST_FAIL stays 0, REDS stays 0, the script exits 0, and the closing banner still certifies that
+  # EVERY fail-closed branch behaved exactly as expected, over a set that no longer contains THE
+  # ONLY EXECUTED TEST of the `rm -rf` / `rm -f` receiving-side fences. That is the whole GC-02
+  # closure becoming unguarded without a single case going red. ST_RUN was REPORTED and never
+  # ASSERTED, and a universal claim needs a pinned set behind it.
+  #
+  # THE NUMBER IS MEASURED, NOT GUESSED - read off a green run of this file - and it MUST BE
+  # RE-MEASURED whenever a section or a case is added. That maintenance burden is self-enforcing
+  # rather than a request left in a comment: adding a case without re-measuring turns the self-test
+  # RED on the very next run, instead of silently widening the set the banner speaks for.
+  ST_PLANNED_CASES=134
   ST_FAIL=0
   ST_RUN=0
   REDS=0
@@ -2559,6 +2603,20 @@ if [ "$MODE" = "self-test" ]; then
   self_test_vacuity
   self_test_fences
   say ""
+  # R3-02's gate. It is a SEPARATE ARM from the ST_FAIL/REDS gate below, not a third clause folded
+  # into it, and the order mirrors the sibling's: the structural failure is diagnosed before the
+  # behavioural one. Those two counters mean "a case BEHAVED unexpectedly" and "an assertion went
+  # RED inside a case"; this one means "a case that SHOULD HAVE RUN did not" - a third and distinct
+  # failure. GC-12(b) below exists precisely because two different failures once shared one banner,
+  # so this does not recreate that defect by making a third share it.
+  if [ "$ST_RUN" -ne "$ST_PLANNED_CASES" ]; then
+    printf '  \342\234\227 self-test: %s case(s) ran but %s were announced - A SECTION DID NOT RUN\n' \
+      "$((ST_RUN))" "$((ST_PLANNED_CASES))"
+    printf '      The banner this run would otherwise print claims every fail-closed branch behaved\n'
+    printf '      as expected. Over a set whose size nothing pins that claim is unbacked, so it is\n'
+    printf '      withheld. Re-measure only after confirming every section still runs.\n'
+    exit 1
+  fi
   # GC-12(b). The gate fires on EITHER counter, so the banner must name BOTH - it used to print
   # ST_FAIL alone, and a run that failed only because a stray bad() moved REDS printed
   # "0 of N case(s) FAILED" and exited 1: a failure banner asserting nothing failed. REDS is NOT
@@ -2667,16 +2725,34 @@ esac
 # far side. Measured: `/config/my library.db` arrived as argv `/config/my` + `library.db`, argc 3
 # rather than 2. This is a bash WORD context, so %q is exactly the right tool, and it is applied at
 # the CALL SITES rather than inside `dex_cmd` - doing it inside would double-quote the eighteen
-# sites in this file that already pass %q output through it. The consuming `awk -v p=…` keys below
-# stay RAW on purpose: the remote shell REMOVES the %q quoting before sha256sum is exec'd, so
-# sha256sum receives, and prints, the unquoted value. Confirmed by argv capture, not assumed; the
-# drive is in artifacts/06-27-oracle-vacuity-and-claims.txt § 2. The same two lines appear at
-# step 9; both carry the fix and the reason is stated only here.
+# sites in this file that already pass %q output through it. Confirmed by argv capture, not assumed;
+# the drive is in artifacts/06-27-oracle-vacuity-and-claims.txt § 2. THAT HALF OF GC-15 WAS RIGHT
+# AND IS UNCHANGED - the SENDING side is correctly quoted.
+#
+# R3-03 CORRECTS THE OTHER HALF. GC-15 went on to say the consuming `awk -v p=…` keys could stay
+# RAW, because the remote shell REMOVES the %q quoting before sha256sum is exec'd so sha256sum
+# receives, and prints, the unquoted value. Both of those clauses are true and the conclusion did
+# not follow. sha256sum prints `<hash><SP><SP><path>` and does NOT escape a space in the path it
+# prints, so a key on awk's default-split field 2 saw `/config/my`, never matched
+# `/config/my library.db`, and the emptiness guard below fired and exited 3 UNKNOWN - fail-closed,
+# but permanently so, FOR EXACTLY THE INPUT GC-15 WAS WRITTEN TO SUPPORT. An undriveable branch is
+# an unproven branch, which is this file's own stated reason for having the knob at all.
+#
+# So the CONSUMERS changed too, at all FOUR sites (two here, two at step 9), to ONE parser: strip a
+# leading `<hex><SP><SP>` from a copy of the line and compare the REMAINDER to the knob for EXACT
+# equality, then take the digest as field 1 - safe, because a sha256 digest contains no whitespace.
+# Four consumers of one output format must not carry two parsers, so the same form is used at all
+# four. Exact equality rather than a suffix test ON PURPOSE: a suffix test can match a line it was
+# not asked about, and converting this false UNKNOWN into a false GREEN would be strictly worse
+# than the defect being repaired. A line that does not name the requested path yields EMPTY and the
+# guards still fire - including GNU sha256sum's backslash-escaped form for a path containing a
+# newline, which does not begin with hex and is therefore refused rather than mis-parsed. Driven,
+# with no estate contact, in artifacts/06-31-oracle-pin-and-layer3.txt § 1.
 rsh "$(dex_cmd sha256sum "$(printf '%q' "$REAL_LIB_DB")" "$(printf '%q' "$REAL_STATE_PICKLE")")"
 rsh_classify "the layer-3 baseline hashes" || exit 3
 printf '%s\n' "$RSH_OUT" > "$OUT/layer3.before"
-LIB_SHA_BEFORE="$(LC_ALL=C awk -v p="$REAL_LIB_DB" '$2 == p {print $1}' "$OUT/layer3.before")"
-STATE_SHA_BEFORE="$(LC_ALL=C awk -v p="$REAL_STATE_PICKLE" '$2 == p {print $1}' "$OUT/layer3.before")"
+LIB_SHA_BEFORE="$(LC_ALL=C awk -v p="$REAL_LIB_DB" '{ rest = $0; if (sub(/^[0-9a-f]+  /, "", rest) && rest == p) print $1 }' "$OUT/layer3.before")"
+STATE_SHA_BEFORE="$(LC_ALL=C awk -v p="$REAL_STATE_PICKLE" '{ rest = $0; if (sub(/^[0-9a-f]+  /, "", rest) && rest == p) print $1 }' "$OUT/layer3.before")"
 [ -n "$LIB_SHA_BEFORE" ] || { unknown "no sha256 line for $REAL_LIB_DB"; exit 3; }
 [ -n "$STATE_SHA_BEFORE" ] || { unknown "no sha256 line for $REAL_STATE_PICKLE"; exit 3; }
 say "  library.db    before: $LIB_SHA_BEFORE"
@@ -2831,13 +2907,25 @@ capture_manifests after "$OUT/sample.tsv" || exit 3
 diff_manifest src meta || true
 diff_manifest src sha  || true
 
-# GC-15, second of the two sites. Same fix, same reason; the account is at step 3 and is not
-# repeated. The awk keys below are RAW for the reason stated there.
+# GC-15, second of the two sites, as corrected by R3-03. Same sending-side fix and the same
+# whitespace-tolerant consumer as step 3; the account is there and is not repeated.
 rsh "$(dex_cmd sha256sum "$(printf '%q' "$REAL_LIB_DB")" "$(printf '%q' "$REAL_STATE_PICKLE")")"
 rsh_classify "the layer-3 hashes after the run" || exit 3
 printf '%s\n' "$RSH_OUT" > "$OUT/layer3.after"
-LIB_SHA_AFTER="$(LC_ALL=C awk -v p="$REAL_LIB_DB" '$2 == p {print $1}' "$OUT/layer3.after")"
-STATE_SHA_AFTER="$(LC_ALL=C awk -v p="$REAL_STATE_PICKLE" '$2 == p {print $1}' "$OUT/layer3.after")"
+LIB_SHA_AFTER="$(LC_ALL=C awk -v p="$REAL_LIB_DB" '{ rest = $0; if (sub(/^[0-9a-f]+  /, "", rest) && rest == p) print $1 }' "$OUT/layer3.after")"
+STATE_SHA_AFTER="$(LC_ALL=C awk -v p="$REAL_STATE_PICKLE" '{ rest = $0; if (sub(/^[0-9a-f]+  /, "", rest) && rest == p) print $1 }' "$OUT/layer3.after")"
+# R3-04. These two guards are the BEFORE block's, mirrored, and they must sit ABOVE the comparisons
+# below. Without them an absent, unparseable or truncated second sha256sum line left the hash EMPTY,
+# the comparison was false, and the run took the `bad` arm below and printed its CHANGED verdict
+# with `<64-hex> -> ` as the parenthesised pair - the old wording is NOT quoted here, because a
+# grep for that verdict must keep returning exactly one hit, the live one
+# - a MEASURED RED asserted over a COULD-NOT-LOOK, with the arrow pointing at an empty string, on
+# the one assertion whose whole job is to prove `-l` kept the real library.db closed. A could-not-
+# look is never folded into another verdict here; and because UNKNOWN outranks RED in this file's
+# precedence, folding it into RED also DEMOTED the verdict. The BEFORE side already routed this to
+# `unknown`/exit 3; this is the same correction GC-05 made in the opposite direction.
+[ -n "$LIB_SHA_AFTER" ]   || { unknown "no sha256 line for $REAL_LIB_DB after the run"; exit 3; }
+[ -n "$STATE_SHA_AFTER" ] || { unknown "no sha256 line for $REAL_STATE_PICKLE after the run"; exit 3; }
 if [ "$LIB_SHA_AFTER" = "$LIB_SHA_BEFORE" ]; then
   ok "layer 3: the real library.db is byte-identical before and after"
 else
