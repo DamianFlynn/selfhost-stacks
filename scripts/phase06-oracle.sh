@@ -2575,6 +2575,26 @@ preflight_readable() { # $1 = local directory that must exist and be searchable
 mkdir -p "$OUT"
 
 if [ "$MODE" = "self-test" ]; then
+  # R3-02. ST_PLANNED_CASES is the ANNOUNCED count; ST_RUN is what actually ran, and the two are
+  # compared below, after the sections and before the banner. This mirrors the same guard in
+  # scripts/check-beets-config.sh, added in the same round - one job, one idiom, deliberately not a
+  # second invention for it.
+  #
+  # WHAT IT DEFENDS AGAINST, named concretely, because an unpinned total reads as harmless right up
+  # until it is not. The pre-existing gate fires on ST_FAIL or REDS, and NEITHER COUNTER MOVES WHEN
+  # A SECTION SIMPLY DOES NOT RUN. So: a future edit drops `self_test_fences` from the dispatcher
+  # below - or an early `return` inside it fires, or a rebase loses the one line that calls it - and
+  # ST_FAIL stays 0, REDS stays 0, the script exits 0, and the closing banner still certifies that
+  # EVERY fail-closed branch behaved exactly as expected, over a set that no longer contains THE
+  # ONLY EXECUTED TEST of the `rm -rf` / `rm -f` receiving-side fences. That is the whole GC-02
+  # closure becoming unguarded without a single case going red. ST_RUN was REPORTED and never
+  # ASSERTED, and a universal claim needs a pinned set behind it.
+  #
+  # THE NUMBER IS MEASURED, NOT GUESSED - read off a green run of this file - and it MUST BE
+  # RE-MEASURED whenever a section or a case is added. That maintenance burden is self-enforcing
+  # rather than a request left in a comment: adding a case without re-measuring turns the self-test
+  # RED on the very next run, instead of silently widening the set the banner speaks for.
+  ST_PLANNED_CASES=134
   ST_FAIL=0
   ST_RUN=0
   REDS=0
@@ -2583,6 +2603,20 @@ if [ "$MODE" = "self-test" ]; then
   self_test_vacuity
   self_test_fences
   say ""
+  # R3-02's gate. It is a SEPARATE ARM from the ST_FAIL/REDS gate below, not a third clause folded
+  # into it, and the order mirrors the sibling's: the structural failure is diagnosed before the
+  # behavioural one. Those two counters mean "a case BEHAVED unexpectedly" and "an assertion went
+  # RED inside a case"; this one means "a case that SHOULD HAVE RUN did not" - a third and distinct
+  # failure. GC-12(b) below exists precisely because two different failures once shared one banner,
+  # so this does not recreate that defect by making a third share it.
+  if [ "$ST_RUN" -ne "$ST_PLANNED_CASES" ]; then
+    printf '  \342\234\227 self-test: %s case(s) ran but %s were announced - A SECTION DID NOT RUN\n' \
+      "$((ST_RUN))" "$((ST_PLANNED_CASES))"
+    printf '      The banner this run would otherwise print claims every fail-closed branch behaved\n'
+    printf '      as expected. Over a set whose size nothing pins that claim is unbacked, so it is\n'
+    printf '      withheld. Re-measure only after confirming every section still runs.\n'
+    exit 1
+  fi
   # GC-12(b). The gate fires on EITHER counter, so the banner must name BOTH - it used to print
   # ST_FAIL alone, and a run that failed only because a stray bad() moved REDS printed
   # "0 of N case(s) FAILED" and exited 1: a failure banner asserting nothing failed. REDS is NOT

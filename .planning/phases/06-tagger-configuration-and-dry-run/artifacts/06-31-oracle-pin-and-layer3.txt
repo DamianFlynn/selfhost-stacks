@@ -196,3 +196,102 @@ does not read the narrower sentence as a weakening.
 
 REGRESSION CHECK. `--self-test` still exits 0 and still runs the same number of cases after
 this task — see § 4, where the count is measured for the pin.
+
+
+================================================================================
+§ 4 — R3-02: the self-test case-count pin, driven in both directions
+================================================================================
+
+THE DEFECT. The self-test gate fires on `ST_FAIL != 0` or `REDS != 0`, then prints
+`self-test: $ST_RUN case(s), every fail-closed branch behaved exactly as expected`. ST_RUN was
+REPORTED, never ASSERTED — a universal claim over a set whose size nothing pinned. Neither
+counter moves when a section simply does not RUN.
+
+--------------------------------------------------------------------------------
+THE MEASURED PIN — A DATED OBSERVATION, NOT A SECOND SOURCE OF TRUTH
+--------------------------------------------------------------------------------
+  Observed 2026-09-23, from scripts/phase06-oracle.sh AFTER tasks 1 and 2 had landed:
+
+      ST_PLANNED_CASES = 134
+
+  This artifact is EVIDENCE. The shipped script does not read the number from here; it carries
+  its own declaration beside the dispatcher, and the run compares against that.
+
+  Task 3 was ordered LAST on purpose, so the count had stopped moving before it was measured.
+  The plan recorded a planning-time baseline of 134 and warned it might be stale. It was not:
+  the measurement agrees. It agrees for a checkable reason rather than by luck — task 1 changed
+  the layer-3 block, which `--self-test` does not execute, and task 2 changed comment lines only
+  (0 non-comment lines in its diff). Neither could have moved the total. The measurement was
+  taken anyway rather than assumed, because "the plan's number looked right" is not a
+  measurement.
+
+--------------------------------------------------------------------------------
+DRIVE, DIRECTION 1 — the pin CATCHES a dropped section
+--------------------------------------------------------------------------------
+  Method: copy the script into a directory from `mktemp -d` — never inside the repo — and in
+  the copy remove the `self_test_fences` call from the dispatcher AND NOTHING ELSE. Diff of the
+  mutant against the real file, quoted in full so the ablation is checkable:
+
+      2604d2603
+      <   self_test_fences
+
+  One line. Then `--self-test` on the mutant:
+
+      MUTANT RC=1
+
+      ✗ self-test: 111 case(s) ran but 134 were announced - A SECTION DID NOT RUN
+          The banner this run would otherwise print claims every fail-closed branch behaved
+          as expected. Over a set whose size nothing pins that claim is unbacked, so it is
+          withheld. Re-measure only after confirming every section still runs.
+
+  Non-zero exit, and the line names BOTH numbers.
+
+  THE PART THAT MAKES THIS A FIX RATHER THAN A DECORATION — the mutant run produced:
+
+      /usr/bin/grep -c 'SELF-TEST REGRESSION' <mutant transcript>   ->  0
+      /usr/bin/grep -c '❌'                    <mutant transcript>   ->  0
+
+  Zero failed cases and zero reds. So ST_FAIL was 0 and REDS was 0, the PRE-EXISTING gate would
+  have passed this run, and the old banner would have printed
+  `self-test: 111 case(s), every fail-closed branch behaved exactly as expected` — green, exit
+  0, over a set that had silently lost the only executed test of the `rm -rf` / `rm -f`
+  receiving-side fences. R3-02's scenario is not hypothetical; it is reproduced above. The pin
+  is the only thing that catches it.
+
+  23 cases vanished (134 - 111) and nothing else in the transcript changed.
+
+--------------------------------------------------------------------------------
+DRIVE, DIRECTION 2 — the pin does NOT fire on the real file
+--------------------------------------------------------------------------------
+      REAL RC=0
+
+      ✓ self-test: 134 case(s), every fail-closed branch behaved exactly as expected
+
+  Exit 0, and the number the run REPORTS equals the number the file ANNOUNCES. A pin that only
+  ever fires is as useless as one that never does; this is the passing partner.
+
+  The scratch directory was deleted after the drive. Nothing was written inside the repo at any
+  point: the script's own `$OUT` defaults to `${TMPDIR:-/tmp}/phase06-oracle`, outside the
+  working tree, checked before running the mutant.
+
+--------------------------------------------------------------------------------
+SHAPE, AND WHY IT IS A SEPARATE ARM
+--------------------------------------------------------------------------------
+  The primary fix from the review was taken — a GLOBAL pin — not the weaker per-section
+  sentinel alternative its closing paragraph offers. No reason to deviate was found: the global
+  pin is what the sibling `scripts/check-beets-config.sh` already implements, and inventing a
+  second idiom for one job is the cost the review's alternative does not price in. The
+  maintenance burden the alternative avoids is self-enforcing here anyway — adding a case
+  without re-measuring turns the self-test red on the next run, loudly and immediately.
+
+  The gate is a SEPARATE ARM from the `ST_FAIL`/`REDS` gate, not a third clause folded into it.
+  Those counters mean "a case behaved unexpectedly" and "an assertion went red inside a case";
+  this one means "a case that should have run did not" — a third, distinct failure. GC-12(b)
+  exists because two different failures once shared one banner, so a third was not made to
+  share one. Order mirrors the sibling: the structural failure is diagnosed before the
+  behavioural one.
+
+  The mismatch line uses this file's `printf` octal-escape rendering (`\342\234\227`) rather
+  than a pasted literal glyph, matching every other banner in the file.
+
+  The pre-existing `case(s) FAILED` banner is untouched and still its own arm.
