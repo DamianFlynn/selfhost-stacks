@@ -1,0 +1,76 @@
+================================================================================
+06-32 — R3-09 and R3-10: the two in-container trap fences in
+        scripts/phase06-incremental-control.sh
+================================================================================
+Plan:        06-32 (gap-closure round 3, wave 14)
+Date:        2026-09-23
+Findings:    R3-09 — "the minted scratch names are cleaned on EXIT only, and the
+                      remote programs run under timeout"           (INFO)
+             R3-10 — "the new in-container fences are bare globs — the property
+                      GC-02 just removed from the sibling file"    (INFO)
+Files:       scripts/phase06-incremental-control.sh
+Predecessor: 06-25 (GC-08) minted both names; this plan fixes the two fences
+             GC-08 shipped around them.
+Sibling:     GC-02 in scripts/phase06-oracle.sh — the rule copied here in shape.
+
+METHOD NOTE, first because it bounds everything below. This plan executed in a
+git worktree. Its <verify> blocks open with
+`cd "$(git rev-parse --show-toplevel)"`, which inside a worktree resolves to the
+WORKTREE root, and that is where every measurement in this artifact was taken.
+The main checkout does not carry these edits until the wave merges. Same
+correction plans 06-24 and 06-25 recorded in round 2, for the same reason.
+
+NO ESTATE CONTACT. No ssh, no docker exec, no --run, no --arm. Nothing in this
+artifact was executed inside the beets-flask container.
+
+This artifact is written in two passes, one per task, so that nothing is
+recorded before it was measured. § 1 is task 1 (R3-09, the signal list). § 2
+onward is task 2 (R3-10, the predicate and the sh -n proof).
+
+--------------------------------------------------------------------------------
+1. R3-09 — THE TWO TRAP LINES, BEFORE AND AFTER
+--------------------------------------------------------------------------------
+Anchors, not line numbers: grep `mktemp -d /tmp/p6-mf` and `mktemp /tmp/p6-taghist`
+and read down to the trap under each.
+
+  write_prog_manifest()   — BEFORE (as 06-25/GC-08 shipped it)
+    trap 'case "${MANDIR:-}" in /tmp/p6-mf.*) rm -rf "$MANDIR" ;; esac' EXIT
+
+  write_prog_manifest()   — AFTER TASK 1 (signal list widened; the fence itself
+                            is still the prefix-only one, and task 2 replaces it)
+    trap 'case "${MANDIR:-}" in /tmp/p6-mf.*) rm -rf "$MANDIR" ;; esac' EXIT INT TERM HUP
+
+  write_prog_taghistory() — BEFORE
+    trap 'case "${THPROG:-}" in /tmp/p6-taghist.*) rm -f "$THPROG" ;; esac' EXIT
+
+  write_prog_taghistory() — AFTER TASK 1
+    trap 'case "${THPROG:-}" in /tmp/p6-taghist.*) rm -f "$THPROG" ;; esac' EXIT INT TERM HUP
+
+THE SIGNAL BEHAVIOUR IS STATIC REASONING ABOUT POSIX sh, NOT EXECUTED AGAINST
+THE CONTAINER. The review says the same of its own finding, and this phase does
+not contact the estate, so nothing here proves that a `timeout` expiry inside
+beets-flask now runs the trap. What IS established locally:
+
+  * both programs are delivered through the `timeout`-wrapped transport —
+    grep `docker exec -i -u beetle` returns the remote_exec line
+    `timeout $REMOTE_TIMEOUT docker exec -i -u beetle $CONTAINER sh -s$qargs`,
+    with the bound defaulting to 120 at `REMOTE_TIMEOUT="${REMOTE_TIMEOUT:-120}"`;
+  * `timeout` sends SIGTERM at expiry, which an exit-only trap does not catch;
+  * SIGKILL cannot be trapped at all, so the widening shrinks the window rather
+    than closing it. That limit is stated in band beside the manifest trap, not
+    only here.
+
+CONDITION THAT WOULD DRIVE IT: the next real `--arm a` / `--arm b` pair. At that
+point, after a deliberately short REMOTE_TIMEOUT, confirm that no p6-mf or
+p6-taghist name survives in the container's /tmp. That is the driving condition
+06-25 § 8 already records, extended by one case.
+
+REFUSED, AND WHY — the best-effort sweep. The review's second idea is a
+prefix-gated removal of OTHER names carrying the template prefix, older than a
+day. NOT IMPLEMENTED. It reaches destructively over names this run did not mint,
+in a /tmp shared with a redis, an HTTP server and five rq workers all running as
+the same uid 568 (measured in 06-25 § 3). That is a wider blast radius than an
+INFO finding about litter justifies, and this round exists because fences reached
+further than their comments admitted. The refusal is recorded in band at the
+manifest trap and is carried to the deferred register by plan 06-34.
+================================================================================

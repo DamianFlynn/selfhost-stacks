@@ -472,7 +472,22 @@ fi
 # the old `rm -f` sat only after the last one, so any could-not-look left all three files behind -
 # and a MINTED leftover is worse litter than a fixed one, because nobody knows its name. The trap
 # re-checks the name against the template prefix so it can never remove anything else.
-trap 'case "${MANDIR:-}" in /tmp/p6-mf.*) rm -rf "$MANDIR" ;; esac' EXIT
+#
+# R3-09: THE SIGNAL LIST IS NOT JUST THE EXIT PSEUDO-SIGNAL, and that is not decoration. A POSIX
+# shell runs an exit trap on normal termination and on `exit`, but NOT on an uncaught SIGTERM. This
+# program is delivered as `sh -s` through `timeout $REMOTE_TIMEOUT docker exec` (the bound defaults
+# to 120s), so a bound expiry is a ROUTINE outcome for a manifest over a large tree, not an exotic
+# one - and on the narrow list that expiry left behind exactly the minted leftover the sentence
+# above calls the worse litter, one directory per timed-out run, in a /tmp this file's header
+# records as mode 1777.
+# THE RESIDUAL, stated rather than claimed away: SIGKILL cannot be trapped, so a hard kill still
+# leaves the directory. Widening the list SHRINKS the window; it does not close it.
+# NOT DONE, deliberately: the best-effort sweep of other names carrying this template prefix that
+# the review floats as a second idea. Removing a name THIS RUN DID NOT MINT is a wider destructive
+# reach than the finding justifies on a shared container /tmp, in a round whose whole subject is
+# fences reaching further than their comments admit. Carried to the deferred register by plan
+# 06-34 rather than silently dropped.
+trap 'case "${MANDIR:-}" in /tmp/p6-mf.*) rm -rf "$MANDIR" ;; esac' EXIT INT TERM HUP
 echo "MANIFEST-META-BEGIN"
 LC_ALL=C find "$SRC" -type f -printf '%p\t%s\t%T@\n' > "$MANDIR/meta"; MRC=$?
 if [ "$MRC" -ne 0 ]; then echo "MANIFEST BLIND find -printf rc=$MRC"; exit 2; fi
@@ -522,7 +537,11 @@ if [ -z "$THPROG" ]; then
   echo "TAGHIST BLIND could not mint a program path with mktemp - refusing to write-then-execute a fixed name in a world-writable /tmp"
   exit 2
 fi
-trap 'case "${THPROG:-}" in /tmp/p6-taghist.*) rm -f "$THPROG" ;; esac' EXIT
+# R3-09, same reasoning as the manifest trap above and stated once there: an exit trap does not run
+# on an uncaught SIGTERM, and both programs arrive through a `timeout`-bounded `docker exec`, so the
+# narrow list would have leaked a minted name on a routine bound expiry. The SIGKILL residual and
+# the refusal to sweep unminted names are recorded at that site.
+trap 'case "${THPROG:-}" in /tmp/p6-taghist.*) rm -f "$THPROG" ;; esac' EXIT INT TERM HUP
 printf '%s\n' "$PROG" > "$THPROG"
 "$PY" "$THPROG" "$ROOT/state.pickle" 2>&1
 PRC=$?
