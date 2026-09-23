@@ -470,16 +470,29 @@ if [ -z "$MANDIR" ]; then
 fi
 # CLEANUP IS ON A TRAP, not on the success path. Chosen because every BLIND below exits early and
 # the old `rm -f` sat only after the last one, so any could-not-look left all three files behind -
-# and a MINTED leftover is worse litter than a fixed one, because nobody knows its name. The trap
-# re-checks the name against the template prefix so it can never remove anything else.
+# and a MINTED leftover is worse litter than a fixed one, because nobody knows its name.
+#
+# R3-10: WHAT THE TRAP'S RE-CHECK ACTUALLY GIVES, replacing an absolute that this comment used to
+# state and the code never supported. The removal happens only if the value begins with the
+# template prefix AND the remainder is non-empty and drawn entirely from the class
+# [A-Za-z0-9._-]. That class excludes `/`, so a traversal in the remainder is refused; the
+# prefix-only shape this replaces did NOT exclude `/`, because a shell glob matches it - which is
+# the whole content of GC-02 on the three destructive sites in scripts/phase06-oracle.sh, shipped
+# in the same round as the fence it is now correcting here. The two files state ONE rule.
+# THE DEFECT WAS LATENT, NOT REACHABLE, and this comment says so rather than dramatising it:
+# MANDIR is only ever mktemp output, and mktemp will not emit a traversal. What is closed is the
+# inconsistency between two sibling instruments and a claim stronger than its code - which is
+# precisely how the real fence eventually gets deleted as duplicated.
+# `""` and not `''` for the empty pattern: the trap body is a single-quoted string, so an inner
+# single quote would terminate it. dash treats the two patterns identically.
 #
 # R3-09: THE SIGNAL LIST IS NOT JUST THE EXIT PSEUDO-SIGNAL, and that is not decoration. A POSIX
 # shell runs an exit trap on normal termination and on `exit`, but NOT on an uncaught SIGTERM. This
 # program is delivered as `sh -s` through `timeout $REMOTE_TIMEOUT docker exec` (the bound defaults
 # to 120s), so a bound expiry is a ROUTINE outcome for a manifest over a large tree, not an exotic
-# one - and on the narrow list that expiry left behind exactly the minted leftover the sentence
-# above calls the worse litter, one directory per timed-out run, in a /tmp this file's header
-# records as mode 1777.
+# one - and on the narrow list that expiry left behind exactly the minted leftover the CLEANUP
+# paragraph at the top of this block calls the worse litter, one directory per timed-out run, in a
+# /tmp this file's header records as mode 1777.
 # THE RESIDUAL, stated rather than claimed away: SIGKILL cannot be trapped, so a hard kill still
 # leaves the directory. Widening the list SHRINKS the window; it does not close it.
 # NOT DONE, deliberately: the best-effort sweep of other names carrying this template prefix that
@@ -487,7 +500,9 @@ fi
 # reach than the finding justifies on a shared container /tmp, in a round whose whole subject is
 # fences reaching further than their comments admit. Carried to the deferred register by plan
 # 06-34 rather than silently dropped.
-trap 'case "${MANDIR:-}" in /tmp/p6-mf.*) rm -rf "$MANDIR" ;; esac' EXIT INT TERM HUP
+trap 'case "${MANDIR:-}" in
+        /tmp/p6-mf.*) case "${MANDIR#/tmp/p6-mf.}" in ""|*[!A-Za-z0-9._-]*) : ;; *) rm -rf "$MANDIR" ;; esac ;;
+      esac' EXIT INT TERM HUP
 echo "MANIFEST-META-BEGIN"
 LC_ALL=C find "$SRC" -type f -printf '%p\t%s\t%T@\n' > "$MANDIR/meta"; MRC=$?
 if [ "$MRC" -ne 0 ]; then echo "MANIFEST BLIND find -printf rc=$MRC"; exit 2; fi
@@ -541,7 +556,13 @@ fi
 # on an uncaught SIGTERM, and both programs arrive through a `timeout`-bounded `docker exec`, so the
 # narrow list would have leaked a minted name on a routine bound expiry. The SIGKILL residual and
 # the refusal to sweep unminted names are recorded at that site.
-trap 'case "${THPROG:-}" in /tmp/p6-taghist.*) rm -f "$THPROG" ;; esac' EXIT INT TERM HUP
+# R3-10, likewise the same predicate and stated once above: prefix, then a remainder that must be
+# non-empty and free of any byte outside [A-Za-z0-9._-] - a class that excludes `/`, which the
+# prefix-only shape it replaces did not. GC-02 carries the identical rule in
+# scripts/phase06-oracle.sh. Latent here too: THPROG is only ever mktemp output.
+trap 'case "${THPROG:-}" in
+        /tmp/p6-taghist.*) case "${THPROG#/tmp/p6-taghist.}" in ""|*[!A-Za-z0-9._-]*) : ;; *) rm -f "$THPROG" ;; esac ;;
+      esac' EXIT INT TERM HUP
 printf '%s\n' "$PROG" > "$THPROG"
 "$PY" "$THPROG" "$ROOT/state.pickle" 2>&1
 PRC=$?
