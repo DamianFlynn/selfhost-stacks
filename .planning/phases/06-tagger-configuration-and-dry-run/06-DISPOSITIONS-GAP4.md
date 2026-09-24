@@ -57,14 +57,17 @@ non-review items, so one table covers the whole round.
 | **IN-02** | **R6-05** | plan 06-47 — `stacks/selfhosted/arrs/beets.md` | a 2,470-line running log with nothing at the top pointing at the authoritative current state | **FIXED** |
 | *(no review ID)* | **R6-06** | plan 06-48 — `deferred-items.md` § `DEF-06-48-01` | `DEF-06-45-04`'s non-detecting `-cF`-over-a-bracketed-needle recipe, corrected and driven against a control | **FIXED** |
 | *(no review ID)* | **R6-07** | plan 06-48 — `deferred-items.md` § `DEF-06-48-02` | the bracketing convention's undecided scope, now a written decision with reasoning and a revisit condition | **FIXED** |
-| *(no review ID)* | **R6-08** | plan **06-51** (wave 4, `autonomous: false`) — outcome lands in `DEF-06-51-01` and in this register's **`ROUND CLOSE`** section, filled by `06-52` task 3 | the host `git pull --ff-only` sync of LXC 100 at `/mnt/fast/stacks` | **PENDING** |
-| *(no review ID)* | **R6-09** | plan **06-52** (wave 5, `autonomous: false`) — outcome lands in `DEF-06-52-01` and in this register's **`ROUND CLOSE`** section, filled by `06-52` task 3 | the `tank/media/Music@pre-06-41-conf04-reprobe` snapshot-release go/no-go | **PENDING** |
+| *(no review ID)* | **R6-08** | plan **06-51** (wave 4, `autonomous: false`) — outcome in `DEF-06-51-01` and in this register's **`ROUND CLOSE`** section, filled by `06-52` task 3 at wave 5 | the host `git pull --ff-only` sync of LXC 100 at `/mnt/fast/stacks` | **FIXED** |
+| *(no review ID)* | **R6-09** | plan **06-52** (wave 5, `autonomous: false`) — outcome in `DEF-06-52-01` and in this register's **`ROUND CLOSE`** section, filled by `06-52` task 3 at wave 5 | the `tank/media/Music@pre-06-41-conf04-reprobe` snapshot-release go/no-go | **CARRIED** |
 
 ⚠ **The last two rows describe plans that had NOT executed when this register was written.** This
 register is written at wave 3; `06-51` runs at wave 4 and `06-52` at wave 5, both `autonomous: false`
 and both carrying legitimate `halt` / `hold` branches. Their disposition cells were therefore written
-at wave 3 as the literal word `PENDING`, and `06-52` task 3 replaces them with the real outcomes —
-`PENDING` is **not** one of this register's four disposition words and is deliberately not one.
+at wave 3 as the literal word `PENDING`, and `06-52` task 3 **replaced them with the real outcomes
+at wave 5** — `FIXED` for `R6-08`, `CARRIED` for `R6-09`; see § *ROUND CLOSE*. `PENDING` is **not**
+one of this register's four disposition words and is deliberately not one, which is why it could
+not survive the close. *(This paragraph is a dated statement about wave 3; the two cells it
+describes no longer read that way.)*
 `DEF-06-51-01` and `DEF-06-52-01` are the **authoritative fallback**: if the
 round never reaches its close, a reader following those two rows still lands on the truth rather than
 on a silence.
@@ -168,11 +171,65 @@ re-state the totals, rather than leaving the arithmetic describing a subset that
 the table. `06-52` task 3 is named here as the owner of that extension. A reconciliation that is
 never re-run after its table grows is a check that has stopped checking.
 
+### THE EXTENSION — written by `06-52` task 3 at wave 5, as the ⚠ paragraph above required
+
+The five-finding reconciliation above is **left intact and is still correct for its own scope**. What
+follows is added beside it, not folded into it, because the two populations are different: five
+**review findings** with `WR-*`/`IN-*` IDs, and four **round items** with none.
+
+**Round items — `R6-06` … `R6-09`, dispositions, a separate tally:**
+
+| in-band ID | subject, in one clause | disposition | source of the disposition |
+|---|---|---|---|
+| **R6-06** | `DEF-06-45-04`'s non-detecting `-cF`-over-a-bracketed-needle recipe, corrected and driven | **FIXED** | `DEF-06-48-01` |
+| **R6-07** | the bracketing convention's scope, DECIDED | **FIXED** | `DEF-06-48-02` |
+| **R6-08** | the host `git pull --ff-only` sync of LXC 100 | **FIXED** | `DEF-06-51-01` — outcome `proceed`, via the mapping `proceed`/`release` → `FIXED` |
+| **R6-09** | the `tank/media/Music@pre-06-41-conf04-reprobe` go/no-go | **CARRIED** | `DEF-06-52-01` — outcome `hold`, via the mapping `halt`/`hold`/`defer` → `CARRIED` |
+
+| disposition | round items only |
+|---|---|
+| FIXED | **3** |
+| FIXED (undriven) | **0** |
+| ACCEPTED | **0** |
+| CARRIED | **1** |
+| **total** | **4** |
+
+**The totals RESTATED over the table as it now stands — nine rows, not five:**
+
+| disposition | review findings (`R6-01`…`R6-05`) | round items (`R6-06`…`R6-09`) | **whole table** |
+|---|---|---|---|
+| FIXED | 4 | 3 | **7** |
+| FIXED (undriven) | 0 | 0 | **0** |
+| ACCEPTED | 1 | 0 | **1** |
+| CARRIED | 0 | 1 | **1** |
+| **total** | **5** | **4** | **9** |
+
+**Reconciliation over the extended table, so an arithmetic slip stays visible:** the mapping table
+has **9** rows; the whole-table dispositions 7 + 0 + 1 + 1 = **9**; the two populations 5 + 4 = **9**.
+Three routes, one total, and they agree. The **fix-kind** tally deliberately stays at **5** and is
+**not** extended: fix kinds classify *how a review finding was answered*, and the four round items
+have no review finding to answer — inventing CODE/CLAIM-CORRECTION/BOTH labels for them would make
+that tally describe a population it was never about.
+
+**Does either new disposition disagree with what `06-50` predicted?** **No, and the reason is worth
+stating rather than reading as agreement:** `06-50` predicted **nothing** about `R6-08` or `R6-09`.
+It wrote both cells as the literal state `PENDING`, explicitly excluded them from all three routes,
+and named this task as the owner of the extension. So there is **no prior figure to contradict** —
+which is a different thing from two figures that happened to match, and is recorded as such. The one
+substantive note: `CARRIED` is used here **as a disposition for the first time in this register**,
+where the vocabulary section below had recorded it as *"unused in this register as a disposition"* at
+wave 3. That sentence is a dated statement about wave 3 and is now superseded by this line; `R6-09`
+is its first use, via a mapping fixed in `06-52`'s objective **before** the operator answered, so no
+fifth word was needed and none was invented.
+
 ## The vocabulary, which is closed
 
 Exactly four words, unchanged from `06-DISPOSITIONS.md`, `-GAP.md`, `-GAP2.md` and `-GAP3.md`. No
 fifth word was invented, and `PENDING` is **not** one of them — it is a state, was written at wave 3
-onto the two non-review rows and nowhere else, and is excluded from every count above.
+onto the two non-review rows and nowhere else, and is excluded from every count above. *(Dated
+statement about wave 3. At wave 5 `06-52` task 3 replaced both cells with real disposition words —
+`R6-08` **FIXED**, `R6-09` **CARRIED** — so no row carries that state any longer, and the Counts
+section below now reconciles over nine rows rather than five.)*
 
 - **FIXED** — a commit changed the behaviour **and** the changed branch was driven. Cites the plan,
   the commit and the artifact holding the driven transcript. A drive over a **synthetic fixture**
@@ -422,26 +479,202 @@ by an assertion written beforehand** (`DEF-06-39-06`).
 
 ## ROUND CLOSE
 
-**Not yet written.** This section is a deliberate placeholder, created at wave 3 by plan 06-50 so the
-round's ending has a named owner rather than being an omission nobody notices.
+**Written 2026-09-24 by plan `06-52`, task 3, at wave 5 — the round's last act.** The placeholder
+this section replaced was created at wave 3 by plan 06-50 so the round's ending would have a named
+owner rather than be an omission nobody notices. Both `06-51` and `06-52` are `autonomous: false` and
+both carried legitimate `halt` / `hold` branches; **both ran, and neither halted.** Round 6 is
+complete at **7 plans (`06-46` … `06-52`) across 5 waves**.
 
-**Owner:** plan **`06-52`, task 3**, running at wave 5 as the round's last act.
+Every figure below is quoted from `DEF-06-51-01`, `DEF-06-52-01` or
+`artifacts/06-51-host-sync.txt` — the source is named inline for each — rather than paraphrased from
+a plan summary.
 
-**Sources it must fold in:** `DEF-06-51-01` (R6-08 — the host `git pull --ff-only` sync, plan 06-51,
-wave 4) and `DEF-06-52-01` (R6-09 — the snapshot-release go/no-go, plan 06-52, wave 5). Those two
-`DEF-` entries are the authoritative fallback if this section is never filled.
+---
 
-**What `06-52` task 3 owes when it fills this section:**
+### R6-08 — the host `git pull --ff-only` sync of LXC 100 at `/mnt/fast/stacks`
 
-1. The `R6-08` and `R6-09` rows of the mapping table, replaced with their real outcomes.
-2. The § *Counts* reconciliation, **extended** with those two dispositions and re-stated — see the
-   ⚠ paragraph in that section.
-3. The `ROADMAP.md` Phase 6 status row's plan-count numerator, closed to `52/52` per `D-R6-M4`.
-4. The `ROADMAP.md` `**Plans**: … plans in … waves` header, which is `06-52`'s and no earlier plan's.
+**Plan `06-51`, wave 4. Operator answer: `proceed`. Disposition: `FIXED`** (mapping:
+`proceed`/`release` → `FIXED`). Source for all of the below: **`DEF-06-51-01`**, with the raw
+captures in **`artifacts/06-51-host-sync.txt`**.
 
-Both `06-51` and `06-52` are `autonomous: false` and carry legitimate `halt` / `hold` branches. **If
-the round halts, this section stays as written and that is the correct outcome** — an incomplete
-record beats a wrong one.
+**⚠ The gate fired, and then was CLEARED — both halves belong in the record, and a tidy
+clean-pre-flight narrative would be false.** Task 1's read-only pre-flight returned **4 CLEAR and
+1 STOP**. The four clear were real: tracked tree empty, branch `main`, deployed commit a strict
+ancestor of repo HEAD, and an untracked inventory containing **exactly** the two known debris paths
+and no third. What fired was **S4** — three stash entries on the production checkout, dated
+2026-03-09, 2026-03-09 and 2025-10-03, their subjects naming production monitoring and proxy work,
+all three base commits still resolvable. The gate therefore offered **no unqualified `proceed`**,
+only a recommendation to halt plus an override path that would have been recorded as an override.
+
+**The operator took neither. They took the third path the gate itself named: dispose of the entries,
+then re-run the gate.** Their verbatim words, in order — *"ok i have completed an investigation "*
+and *"i hit enter to quick the last time, did not wait for the clean up to complete - done now"* —
+recorded with UTC timestamp **`2026-09-24T21:28:39Z`**. Re-measured **before any write**, the stash
+list returned **EMPTY at rc=0** (a real empty, scored on its own class, not a could-not-look), and
+the gate re-read **5 CLEAR / 0 STOP**.
+
+⛔ **THE OVERRIDE FIELD IS `NO`.** The distinction is load-bearing and is not smoothed here: *an
+override says we wrote to a host we had measured as unsafe; a clearing says we made the host safe,
+then wrote to it.* Equally, **that S4 fired at all is not erased.** Both stages stand in this record.
+
+**What was measured** (`DEF-06-51-01` items 3–6):
+
+| | task 1 pre-flight | after the sync |
+|---|---|---|
+| deployed commit | `ee82fb2` | **`b9c09b5`** |
+| `sha256`, six instrument scripts, joined on basename | **3 MATCH / 3 DIFFERS** | **6 MATCH / 0 DIFFERS** |
+| container count | 99 | **99** |
+| state census | 98 `Up` + 1 `Exited(0)` | **98 `Up` + 1 `Exited(0)`** |
+| created / restarting / paused / dead | 0 / 0 / 0 / 0 | **0 / 0 / 0 / 0** |
+| stash entries | **3 (S4 STOP)** | 0 (CLEAR) |
+
+- The three that differed were exactly the three rounds 5 and 6 edited —
+  `check-music-consumers.sh`, `check-music-freeze.sh`, `quick-health-check.sh`. **A matching commit
+  hash would not have shown this**, which is why per-file digests were demanded: a partial checkout
+  or a local modification leaves the hash right and the file wrong.
+- **Nothing was redeployed, proven on ALL THREE fields.** Normalised `name|image|status` triple sets
+  before and after, set difference computed **empty in both directions**, 99 = 99. `status` is the
+  only field that moves on a restart or a same-image recreation, so a name+image comparison would
+  have let exactly that event pass as "no redeploy". The only `docker` verb issued in either task was
+  **`ps`**; no compose verb at all.
+- **The two-file untracked-debris removal, fenced.** Both paths re-asserted `??` **at the act**, not
+  carried from the gate, then removed **by name — one invocation per path, no glob, no wildcard, no
+  `-r`, and no `git cl[e]an` in any form**. Computed set difference: **exactly those two names**,
+  with **zero** other paths disappearing and zero appearing.
+- **Measured correction to plan 06-51:** its `D-R6-H3` preamble says the host was *"20 commits
+  behind"*. It was **40** at pre-flight and **41** at the push. Superseded by measurement.
+- **One comparator control was INVALID and is kept rather than replaced** — it mutated the *filename*
+  column, so nothing joined and it returned 0 DIFFERS for the wrong reason: the `DEF-06-45-04` shape,
+  occurring inside the drive meant to guard against it. A second, valid control (one digest mutated,
+  filenames intact) returned 1. Both are in the transcript.
+
+**What R6-08 CLOSES:** **`DEF-06-45-05` item 2 is CLOSED** — the deployed instruments are no longer
+behind the repository, proven **per file**. **`DEF-06-29-11` is CLOSED** on the same measurement: the
+host is no longer at a pre-Phase-6 commit, so a live run is no longer *uninformative*.
+
+⚠ **What R6-08 does NOT close, stated conditionally and exactly as `DEF-06-51-01` recorded it:**
+**`DEF-06-39-05` is UNBLOCKED BUT NOT CLOSED.** Plan 06-51 deliberately did **not** run
+`quick-health-check.sh` — its job was to make the instrument honest, not to take a measurement with
+it. The script has now been executed **zero** times across rounds 3, 4, 5 and 6. What changed is that
+a live run would now exercise the current file rather than stale prose; the run itself is owed by
+whoever wants the measurement. It will still exit non-zero on the pre-existing
+`interpolated-host-path` gate if that inventory has moved — a known, documented red, not a fresh
+finding. An unconditional *"unblocked"* here would be a false readiness line, and a later executor
+would act on it. `DEF-06-45-05` items 1 and 3 are untouched.
+
+**Execution-mode note, because it changes who approved what** (`DEF-06-51-01`, closing note): plan
+06-51's task 2 ran **inline by the orchestrator**, not in a delegated executor. **Two subagent
+dispatches were refused by the runtime's permission classifier, the second naming
+`[Remote Shell Writes]`.** Rather than work around the refusal, the task was run inline so every
+host-writing command passed through the **per-command permission gate with the operator present** —
+a *narrower* grant than a standing subagent mandate, not a wider one. **No safety rule of the plan
+was relaxed to achieve it.**
+
+---
+
+### R6-09 — the `tank/media/Music@pre-06-41-conf04-reprobe` snapshot-release go/no-go
+
+**Plan `06-52`, wave 5. Operator answer: `hold`, with the release condition made MECHANICAL.
+Disposition: `CARRIED`** (mapping: `halt`/`hold`/`defer` → `CARRIED`). Source: **`DEF-06-52-01`**,
+transcript in **`artifacts/06-52-snapshot-decision.txt`**.
+
+⛔ **NOTHING WAS DESTROYED, ROLLED BACK OR RELEASED.** The only `zfs` verb issued on any branch, in
+either task, is `zfs list` — a read. `tank/media/Music@pre-06-41-conf04-reprobe` still stands
+(`used` **0B**, `written` **0**). `tank/downloads@pre-phase5` — a **different fence with a different
+owner** (D-32, Phase 7 entry criterion **E4**) — was listed and nothing more. Both re-asserted
+**PRESENT** read-only *after* the decision, at **2026-09-24T22:32:01Z**, ssh rc 0, so "nothing was
+destroyed" is a measurement rather than an inference from "we did not run the command".
+
+**The operator's answer, verbatim, `2026-09-24T22:29:38Z`** (full text in the artifact
+§ *THE OPERATOR'S ANSWER*; the load-bearing passage):
+
+> "Don't defer to Phase 7 planning (option 3) — planning is a document, not a fence, and the item
+> drifts again. Make the release condition mechanical and already-scheduled:
+>
+>   Release tank/media/Music@pre-06-41-conf04-reprobe when Phase 7 Success Criterion 1 is satisfied
+>   — new snapshot taken on the same dataset and rollback exercised — not when Phase 7 is planned.
+>
+> That's an event someone already has to produce evidence for, so the item closes on a commit rather
+> than on remembering. Disposition CARRIED, one named trigger, no judgement left in it."
+
+`defer` was **explicitly REJECTED**, for the same reason the rewrite exists.
+
+⚠ **The executor recommended `release`. The operator chose `hold`. This record does not present
+`hold` as if it had been the recommendation.** Plan 06-52 task 1 measured **both** clauses of
+`DEF-06-45-01`'s stated release condition as **MET** — the round's outcome accepted
+(`negative-carry-e6`, 2026-09-24T14:30:37Z) and Phase 7's pilot fence committed in that phase's
+`**Success Criteria**` item 1 — and recommended `release` on that basis. The operator **overruled it
+using the executor's own self-raised counter-argument**: *"The executor's self-raised
+counter-argument was the right one, and it argued against its own recommendation. I'd take the
+counter-argument."* The counter-argument is that Phase 7's fence is **planned, not taken**, leaving a
+window in which the Music dataset carries no Phase-6-era undo.
+
+**`DEF-06-45-01`'s resulting status: still OPEN, disposition `CARRIED`, release condition REWRITTEN
+in place** from a two-clause judgement call into one mechanical trigger:
+
+    Release `tank/media/Music@pre-06-41-conf04-reprobe` when **Phase 7 Success Criterion 1 is
+    SATISFIED** — a NEW snapshot TAKEN on the same dataset AND rollback EXERCISED — **not** when
+    Phase 7 is merely planned.
+
+The rewrite, not the hold, is the substance of the decision: the trigger is an event someone must
+already produce evidence for, so the item now closes **on a commit rather than on someone
+remembering**. The superseded wording is kept inline in `DEF-06-45-01`, because the difference
+between *planned* and *taken* is the entire point.
+
+**Two further outcomes of this plan, both independent of the snapshot disposition and both at the
+operator's explicit direction:**
+
+1. **A stale figure corrected, in its own commit so it could not ride on the decision.**
+   `DEF-06-45-01` and `CLAUDE.md` § *Constraints* both carried *"`tank` has ~9 T free"*. Measured:
+   **41.9 T used / 5.26 T available** — **stale by ~3.7 T**, and stale in the direction that matters,
+   because the `import.copy` reversibility argument leans on headroom. Both corrected with the
+   measurement and its date.
+2. **`DEF-06-52-02` — a PROCESS DEFECT, recorded as a defect rather than a footnote.** Reading Phase
+   7's `**Entry criteria inherited from Phase 6**` block (E1…E12) **alone** would have answered
+   *"Phase 7's pilot fence is not planned"* — **by omission**, because the commitment lives in that
+   phase's `**Success Criteria**` item 1, a different block. It **failed safe here** (the omission
+   biases toward the non-destructive answer) and would **fail unsafe the moment the omitted thing is
+   a prohibition rather than a plan**, when the omission reads as permission. ⛔ **The lesson is not
+   "we got lucky" — it is that the entry-criteria block is not a closed world, and a criteria-only
+   read is never sufficient evidence of absence.** Promoted to `CONVENTIONS.md` **convention 14** and
+   mirrored into `CLAUDE.md`, because it is a reading-method rule for every future absence claim in
+   this repository, not a Phase 6 fact.
+
+---
+
+### What the round close also moved, and what it deliberately did not
+
+**Moved, per `D-R6-M4` and this register's own ⚠ paragraphs:**
+
+1. The `R6-08` / `R6-09` mapping-table rows — `PENDING` → **FIXED** / **CARRIED**.
+2. The § *Counts* reconciliation — **extended** over `R6-06` … `R6-09` and restated at **9 rows**;
+   see § *THE EXTENSION*.
+3. `.planning/ROADMAP.md`'s Phase 6 status row plan count — closed to **`52/52`**. ⚠ Closed by
+   `06-52` at wave 5 **as its own last act**, so the numerator counts this plan while this plan is
+   still writing its completion. That one-plan overlap is stated rather than left silent.
+4. `.planning/ROADMAP.md`'s `**Plans**:` header — **`45 plans in 23 waves` → `52 plans in 28
+   waves`**. Both figures **derived, not copied**: the plan total counted as `06-NN-PLAN.md` files in
+   the phase directory (**52**), the wave total as the recorded 23 + round 6's 5 (**28**).
+5. `.planning/STATE.md`'s round-6 block — the two `PENDING` operator-action entries replaced with
+   these outcomes, and its `Plan:` line closed to `52 of 52`. **This is the third primary record**,
+   and the one the earlier fix missed; see § *Lessons* item 4.
+
+**Deliberately NOT moved, on every branch:**
+
+- ⛔ **The Phase 6 status word stays `In Progress`.** `06-VERIFICATION.md` stands at `gaps_found`,
+  **5/6**, verified 2026-09-24T15:11:55Z, and **was not re-scored by this round.** Re-scoring is
+  `/gsd-verify 06`'s call, not a plan's.
+- ⛔ **No requirement checkbox moved.** `.planning/REQUIREMENTS.md` is byte-untouched by both `06-51`
+  and `06-52` (`git diff --exit-code HEAD --` returns 0 in each), `- [ ] **CONF-04**` stands, and
+  **no CONF-04 work of any kind** was performed — no re-probe, no mtime touch, no refresh verb.
+- ⛔ **No script was edited.** `git diff --exit-code HEAD -- scripts/` returns 0 for both plans.
+- ⛔ **No `state.*` or `roadmap.*` SDK verb was invoked.** All three primary records were **hand
+  edited**, and each diff was read in the **body**, not in `--stat` — a `roadmap.update-plan-progress`
+  call in this project once wiped a 3,221-character narrative cell while `--stat` looked correct.
+- ⛔ **No `git stash` subcommand** was run by `06-52`, locally or remotely.
+
+**Recommended next:** **`/gsd-verify 06`.** All seven round-6 plans have executed; the phase is
+**not** closed by that fact, and nothing in this register claims it is.
 
 ---
 
@@ -458,12 +691,17 @@ record beats a wrong one.
   Phase 6 status word still reads `In Progress` — the value `06-VERIFICATION.md` (`gaps_found`, 5/6)
   and plan 06-47's audit both say is the correct one.
 - **The ROADMAP plan-count numerator is the executed count at the moment of the edit, not `52`**, per
-  `D-R6-M4`. It is not this plan's job to close it.
-- **The `**Plans**: … plans in … waves` header is untouched** and belongs to `06-52`.
+  `D-R6-M4`. It is not this plan's job to close it. *(Dated: `06-52` closed it to `52/52` at wave 5.)*
+- **The `**Plans**: … plans in … waves` header is untouched** and belongs to `06-52`. *(Dated:
+  `06-52` moved it from `45 plans in 23 waves` to `52 plans in 28 waves` at wave 5.)*
 - **`R6-08` and `R6-09` were recorded as `PENDING` at the time of writing, because they had not
-  executed.** This register states no outcome for either: no commit the host moved to, no sha256
-  verdict, no `proceed`/`halt` answer, no `hold`/`release`/`defer` answer. Their outcomes land in
-  `DEF-06-51-01`, `DEF-06-52-01` and § *ROUND CLOSE*.
+  executed.** As written at wave 3, this register stated no outcome for either: no commit the host
+  moved to, no sha256 verdict, no `proceed`/`halt` answer, no `hold`/`release`/`defer` answer. Their
+  outcomes land in `DEF-06-51-01`, `DEF-06-52-01` and § *ROUND CLOSE*.
+  ✅ **Superseded at wave 5:** `06-52` task 3 filled both rows and wrote § *ROUND CLOSE*, so this
+  bullet is now a dated statement about what plan `06-50` did and did not claim — **not** a standing
+  claim that the register is silent. It is no longer silent: `R6-08` **FIXED** (`proceed`, host at
+  `b9c09b5`, 6/6 sha256 MATCH), `R6-09` **CARRIED** (`hold`, nothing destroyed).
 - **No script was edited by this plan** — `git diff --exit-code HEAD -- scripts/` returns 0.
 - **Prior rounds' carried items stay carried.** CR-01's residue is owned by Phase 7 entry criterion
   **E10**, round 1's WR-09 by **E11**, and the undriven-until-the-pilot residue by **E12**. No `DEF-`

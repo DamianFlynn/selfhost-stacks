@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-24T21:50:00.000Z"
+last_updated: "2026-09-24T22:42:10.000Z"
 progress:
   total_phases: 10
   completed_phases: 5
   total_plans: 124
-  completed_plans: 123
+  completed_plans: 124
   percent: 50
 ---
 
@@ -27,17 +27,17 @@ pipeline that someone owns.
 
 ## Current Position
 
-Phase: 06 (tagger-configuration-and-dry-run) — gap-closure **ROUND 6 EXECUTING; 06-46..06-51 are
-done, only 06-52 remains**
+Phase: 06 (tagger-configuration-and-dry-run) — gap-closure **ROUND 6 COMPLETE: all seven plans
+`06-46` … `06-52` have executed across 5 waves, and neither `autonomous: false` plan halted**
 (round 5 executed and re-verified 2026-09-24: `06-VERIFICATION.md` **gaps_found, 5/6**, CONF-04 the
 single failing truth, carried to Phase 7 E6 under the operator override `negative-carry-e6`)
 
-**R6-08 (plan `06-51`, wave 4) HAS NOW EXECUTED — outcome: PROCEED, on a CLEARED pre-flight.**
-Recorded here so this record is not silent on an operator action that has happened. ⚠ The round-6
-block further down this file still carries `R6-08` and `R6-09` as **PENDING**; that is **by design**
-— `06-50` could not close them and `06-52` task 3 owns replacing both with their real outcomes.
-Until `06-52` runs, the PENDING entries below are stale *for R6-08 only* and this paragraph is the
-correction. What 06-51 established: LXC 100's `/mnt/fast/stacks` moved `ee82fb2` → `b9c09b5`;
+**BOTH OPERATOR ACTIONS HAVE NOW EXECUTED — `R6-08`: PROCEED on a CLEARED pre-flight; `R6-09`:
+HOLD, with the release condition made mechanical.** ✅ **The round-6 block further down this file has
+been closed to match** — plan `06-52` task 3 replaced its two pending operator-action entries with
+these outcomes at wave 5, so the caveat this paragraph used to carry (that the block below was stale
+for R6-08 only) **no longer applies and has been removed**; the block and this paragraph now agree.
+What 06-51 established: LXC 100's `/mnt/fast/stacks` moved `ee82fb2` → `b9c09b5`;
 **6 of 6** instrument scripts now sha256-MATCH between repo and host, where the pre-flight measured
 **3 MATCH / 3 DIFFERS**; nothing redeployed, proven on all three of name/image/status (set
 difference empty both ways, 99 = 99 containers). STOP condition **S4** (three stash entries on the
@@ -46,8 +46,22 @@ entries** and the gate re-read 5 CLEAR / 0 STOP, so this is a **clearing of S4, 
 and both stages are kept in `DEF-06-51-01`. `DEF-06-45-05` item 2 and `DEF-06-29-11` are **CLOSED**;
 `DEF-06-39-05` is **unblocked but NOT closed** — `quick-health-check.sh` has still been run **zero**
 times across rounds 3-6. No requirement checkbox moved; CONF-04 untouched.
+What 06-52 established (`R6-09`, 2026-09-24T22:29:38Z): the operator answered **`hold`** — ⛔
+**nothing was destroyed, rolled back or released**, the only `zfs` verb issued on any branch was
+`list`, and both `tank/media/Music@pre-06-41-conf04-reprobe` and `tank/downloads@pre-phase5` (a
+different fence, entry criterion **E4**) were re-asserted PRESENT read-only after the decision.
+`DEF-06-45-01` stays **OPEN**, disposition **CARRIED**, with its release condition **rewritten from a
+judgement call into one mechanical trigger**: release when **Phase 7 Success Criterion 1 is
+SATISFIED** — a new snapshot taken on the Music dataset **and** rollback exercised — not when Phase 7
+is merely planned. ⚠ The executor **recommended `release`**; the operator overruled it on the
+executor's own self-raised counter-argument that Phase 7's fence is *planned, not taken*, and
+`defer` was explicitly rejected. Two further 06-52 outcomes, both independent of that decision: the
+stale *"`tank` has ~9 T free"* figure corrected to the measured **5.26 T** in `DEF-06-45-01` and
+`CLAUDE.md` § Constraints, and **`DEF-06-52-02`** filed as a **process defect** — a criteria-only
+read of Phase 7's entry-criteria block would have answered "the pilot fence is not planned" **by
+omission**; promoted to `CONVENTIONS.md` convention 14.
 
-Plan: 51 of 52 executed — round 6 (**06-46..06-52**, 5 waves, planned 2026-09-24, commits `d500907`
+Plan: 52 of 52 executed — round 6 (**06-46..06-52**, 5 waves, planned 2026-09-24, commits `d500907`
 + `d7df994`) is the full `06-REVIEW.md` round: WR-01/02/03 + IN-01/02, the `DEF-06-45-04`
 non-detecting-recipe fix, the bracketing-scope decision, and the two `autonomous: false`
 live-estate plans (`06-51` host git sync, `06-52` snapshot go/no-go). ⛔ Round 6 drives **no**
@@ -356,17 +370,53 @@ scoped by **function not directory name**, **not widened to `ROADMAP.md` prose**
 with no `ROADMAP.md` token edit made or required. Re-measured after this plan's own edits, the
 whole-file count of the forbidden token in `ROADMAP.md` is **2 at the base commit and 2 now** — round
 6 added no third occurrence while deciding the convention.
-⛔ **THE TWO OPERATOR ACTIONS ARE RECORDED `PENDING`, WITH THEIR OUTCOMES EXPLICITLY NOT STATED.**
-`R6-08` — the host `git pull --ff-only` sync of LXC 100 at `/mnt/fast/stacks`, owned by plan **`06-51`**
-(wave 4, `autonomous: false`) — and `R6-09` — the `tank/media/Music@pre-06-41-conf04-reprobe` release
-go/no-go, owned by plan **`06-52`** (wave 5, `autonomous: false`) — had **not run** when this block was
-written at wave 3. Both plans carry legitimate halt/hold branches. Their outcomes land in
-**`DEF-06-51-01`** and **`DEF-06-52-01`**, and **`06-52` task 3** is the plan that folds the real
-outcomes back into this block, into the register's `ROUND CLOSE` section and into the register's count
-reconciliation, and closes `ROADMAP.md`'s Phase 6 plan count and its `**Plans**: … waves` header.
-Nothing here states a commit the host moved to, a digest verdict, or a decision on the snapshot,
-because none of those has happened. A false position in this file is read as fact by everything
-downstream.
+✅ **THE TWO OPERATOR ACTIONS HAVE BOTH EXECUTED, AND THEIR REAL OUTCOMES ARE RECORDED HERE.**
+Written into this block by **`06-52` task 3 at wave 5**, replacing the two `06-50`-era entries that
+stated no outcome because neither plan had run when this block was written at wave 3. Both plans
+carried legitimate halt/hold branches; **neither halted.**
+
+**`R6-08` — the host `git pull --ff-only` sync of LXC 100 at `/mnt/fast/stacks` (plan `06-51`, wave 4).
+Answer: `proceed`. Disposition: `FIXED`.** The operator's verbatim words, in order — *"ok i have
+completed an investigation "* and *"i hit enter to quick the last time, did not wait for the clean up
+to complete - done now"* — at **`2026-09-24T21:28:39Z`**. ⚠ **This was a CLEARING of STOP condition
+S4, not an override — the override field is NO.** S4 (three stash entries on the production checkout,
+dated 2026-03-09, 2026-03-09 and 2025-10-03) **fired** at the first pre-flight, which returned 4 CLEAR
+/ 1 STOP and offered no unqualified `proceed`; the operator disposed of the entries and the re-run
+gate read **5 CLEAR / 0 STOP**, measured before any write. *An override says we wrote to a host we had
+measured as unsafe; a clearing says we made the host safe, then wrote to it.* Both stages stand.
+The host moved **`ee82fb2` → `b9c09b5`** (41 commits, fast-forward); **6 of 6** instrument scripts
+sha256-MATCH per file where the pre-flight read **3 MATCH / 3 DIFFERS**; nothing was redeployed,
+proven on all three of `name|image|status` with the set difference empty both ways at **99 = 99**
+containers and a census of 98 `Up` + 1 `Exited(0)`. **`DEF-06-45-05` item 2 is CLOSED** and
+**`DEF-06-29-11` is CLOSED**. ⚠ **`DEF-06-39-05` is UNBLOCKED BUT NOT CLOSED** —
+`quick-health-check.sh` was deliberately not run and has now been executed **zero** times across
+rounds 3, 4, 5 and 6; an unconditional "unblocked" here would be a false readiness line. Detail:
+**`DEF-06-51-01`**.
+
+**`R6-09` — the `tank/media/Music@pre-06-41-conf04-reprobe` release go/no-go (plan `06-52`, wave 5).
+Answer: `hold`, with the release condition made MECHANICAL. Disposition: `CARRIED`.** The operator's
+verbatim answer at **`2026-09-24T22:29:38Z`**, load-bearing passage: *"Don't defer to Phase 7 planning
+(option 3) — planning is a document, not a fence, and the item drifts again. Make the release
+condition mechanical and already-scheduled: Release tank/media/Music@pre-06-41-conf04-reprobe when
+Phase 7 Success Criterion 1 is satisfied — new snapshot taken on the same dataset and rollback
+exercised — not when Phase 7 is planned. That's an event someone already has to produce evidence for,
+so the item closes on a commit rather than on remembering. Disposition CARRIED, one named trigger, no
+judgement left in it."* `defer` was explicitly rejected; `release` was rejected on the executor's own
+self-raised counter-argument, which the operator took over the executor's stated recommendation.
+⛔ **Nothing was destroyed, rolled back or released** — the only `zfs` verb issued on any branch was
+`list`, and both the target and `tank/downloads@pre-phase5` (a different fence, entry criterion
+**E4**, out of scope on every branch) were re-asserted PRESENT read-only after the decision at
+2026-09-24T22:32:01Z. **`DEF-06-45-01` stays OPEN**, disposition **CARRIED**, its release condition
+rewritten in place into one mechanical trigger: release when **Phase 7 Success Criterion 1 is
+SATISFIED** — a new snapshot **taken** on the Music dataset and rollback **exercised** — not when
+Phase 7 is merely planned. Detail: **`DEF-06-52-01`**; and **`DEF-06-52-02`**, the process defect
+filed at the operator's direction, which records that a criteria-only read of Phase 7's
+entry-criteria block would have answered "the pilot fence is not planned" **by omission** — it failed
+safe here and would fail unsafe were the omitted thing a prohibition — promoted to `CONVENTIONS.md`
+convention 14. A separate, independent correction landed in the same plan: the stale *"`tank` has
+~9 T free"* figure in `DEF-06-45-01` and `CLAUDE.md` § Constraints is now the measured **5.26 T**.
+Both plans' register rows are closed in `06-DISPOSITIONS-GAP4.md` § *ROUND CLOSE*, whose Counts
+reconciliation is extended there over all nine round items.
 **`D-R6-M4` — the operator's decision, 2026-09-24: `ROADMAP.md`'s `Plans Complete` column means
 EXECUTED, not authored** (the Phase 4 precedent row reads `16/16` with its status cell still
 `In Progress`, noted "All 16 plans executed"). So the numerator written this round is the **measured**
@@ -955,10 +1005,14 @@ delta of **0 bytes** measured as `raw − tr -d '\000'`, never the vacuous `grep
 and still stale; `stacks/selfhosted/arrs/beets.md` is untouched; and both snapshots stay held, with
 no `zfs rollback` executed. **06-45 owns the record edits, behind its own gate.**
 
-Status: Executing Phase 06 — gap-closure **ROUND 6**, plans **06-46..06-51 COMPLETE**; only
-**06-52** remains (wave 5, `autonomous: false`, the snapshot go/no-go and the ROUND CLOSE). R6-08
-executed 2026-09-24: proceed on a CLEARED pre-flight, host at `b9c09b5`, 6/6 sha256 MATCH, no
-redeploy. Round 5 is COMPLETE (waves 18-23, plans 06-40..06-45). Round 2 ran
+Status: Executing Phase 06 — gap-closure **ROUND 6 COMPLETE**, plans **06-46..06-52**, 5 waves,
+**52 of 52 plans executed**. R6-08 executed 2026-09-24: proceed on a CLEARED pre-flight (S4 fired
+and was cleared, override NO), host at `b9c09b5`, 6/6 sha256 MATCH, no redeploy. R6-09 executed
+2026-09-24: **`hold`** — nothing destroyed, `DEF-06-45-01` OPEN/CARRIED with a mechanical release
+trigger (Phase 7 Success Criterion 1 SATISFIED, not merely planned). `06-52` also closed the
+register's `ROUND CLOSE`, `ROADMAP.md`'s `52/52` and its `52 plans in 28 waves` header, and this
+file's round-6 block. **`/gsd-verify 06` is the next step and the verifier's call — round 6 complete
+is NOT phase complete.** Round 5 is COMPLETE (waves 18-23, plans 06-40..06-45). Round 2 ran
 against `06-REVIEW-GAP.md` (GC-01 blocker + 7 warnings in round 1's own code, plus GC-16/GC-17
 from the cross-family adjudication) — all 17 closed and dispositioned in `06-DISPOSITIONS-GAP.md`
 by plan 06-29. Still 1 open
