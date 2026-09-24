@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-24T23:10:00.000Z"
+last_updated: "2026-09-24T21:50:00.000Z"
 progress:
   total_phases: 10
   completed_phases: 5
   total_plans: 124
-  completed_plans: 122
+  completed_plans: 123
   percent: 50
 ---
 
@@ -27,11 +27,27 @@ pipeline that someone owns.
 
 ## Current Position
 
-Phase: 06 (tagger-configuration-and-dry-run) — gap-closure **ROUND 6 EXECUTING; wave 1 (06-46 and
-06-47), 06-48 and 06-49 are done, 06-50..06-52 remain**
+Phase: 06 (tagger-configuration-and-dry-run) — gap-closure **ROUND 6 EXECUTING; 06-46..06-51 are
+done, only 06-52 remains**
 (round 5 executed and re-verified 2026-09-24: `06-VERIFICATION.md` **gaps_found, 5/6**, CONF-04 the
 single failing truth, carried to Phase 7 E6 under the operator override `negative-carry-e6`)
-Plan: 50 of 52 executed — round 6 (**06-46..06-52**, 5 waves, planned 2026-09-24, commits `d500907`
+
+**R6-08 (plan `06-51`, wave 4) HAS NOW EXECUTED — outcome: PROCEED, on a CLEARED pre-flight.**
+Recorded here so this record is not silent on an operator action that has happened. ⚠ The round-6
+block further down this file still carries `R6-08` and `R6-09` as **PENDING**; that is **by design**
+— `06-50` could not close them and `06-52` task 3 owns replacing both with their real outcomes.
+Until `06-52` runs, the PENDING entries below are stale *for R6-08 only* and this paragraph is the
+correction. What 06-51 established: LXC 100's `/mnt/fast/stacks` moved `ee82fb2` → `b9c09b5`;
+**6 of 6** instrument scripts now sha256-MATCH between repo and host, where the pre-flight measured
+**3 MATCH / 3 DIFFERS**; nothing redeployed, proven on all three of name/image/status (set
+difference empty both ways, 99 = 99 containers). STOP condition **S4** (three stash entries on the
+production checkout) **fired** at the first pre-flight — the operator then **disposed of the
+entries** and the gate re-read 5 CLEAR / 0 STOP, so this is a **clearing of S4, not an override**,
+and both stages are kept in `DEF-06-51-01`. `DEF-06-45-05` item 2 and `DEF-06-29-11` are **CLOSED**;
+`DEF-06-39-05` is **unblocked but NOT closed** — `quick-health-check.sh` has still been run **zero**
+times across rounds 3-6. No requirement checkbox moved; CONF-04 untouched.
+
+Plan: 51 of 52 executed — round 6 (**06-46..06-52**, 5 waves, planned 2026-09-24, commits `d500907`
 + `d7df994`) is the full `06-REVIEW.md` round: WR-01/02/03 + IN-01/02, the `DEF-06-45-04`
 non-detecting-recipe fix, the bracketing-scope decision, and the two `autonomous: false`
 live-estate plans (`06-51` host git sync, `06-52` snapshot go/no-go). ⛔ Round 6 drives **no**
@@ -939,8 +955,10 @@ delta of **0 bytes** measured as `raw − tr -d '\000'`, never the vacuous `grep
 and still stale; `stacks/selfhosted/arrs/beets.md` is untouched; and both snapshots stay held, with
 no `zfs rollback` executed. **06-45 owns the record edits, behind its own gate.**
 
-Status: Executing Phase 06 — gap-closure **ROUND 6**, wave 1 (plan 06-46) COMPLETE; **06-47..06-52**
-remain. Round 5 is COMPLETE (waves 18-23, plans 06-40..06-45). Round 2 ran
+Status: Executing Phase 06 — gap-closure **ROUND 6**, plans **06-46..06-51 COMPLETE**; only
+**06-52** remains (wave 5, `autonomous: false`, the snapshot go/no-go and the ROUND CLOSE). R6-08
+executed 2026-09-24: proceed on a CLEARED pre-flight, host at `b9c09b5`, 6/6 sha256 MATCH, no
+redeploy. Round 5 is COMPLETE (waves 18-23, plans 06-40..06-45). Round 2 ran
 against `06-REVIEW-GAP.md` (GC-01 blocker + 7 warnings in round 1's own code, plus GC-16/GC-17
 from the cross-family adjudication) — all 17 closed and dispositioned in `06-DISPOSITIONS-GAP.md`
 by plan 06-29. Still 1 open
