@@ -502,6 +502,23 @@
         "stack:neocortex-memory",
         "manual-review-required"
       ]
+    },
+    {
+      "description": "SearXNG: give Renovate a versioning scheme it can actually parse, and slow the firehose to weekly. Added 2026-09-24 (quick task 260924-x6w). WHY THIS RULE EXISTS: searxng/searxng tags look like `2026.9.23-3cd69d30e` -- calendar version plus a git hash -- which Renovate's default `docker` versioning cannot parse. The practical effect was not a warning but SILENCE: no update PR had EVER been raised for this image, and the pin sat at 2026.6.23 for three months while ollama in the same compose file got bumped weekly. Nothing in the repo showed a problem, because an unparseable version produces no PR rather than a failed one. That is the failure mode to watch for on any calver-plus-hash image added here in future. WHY IT MATTERED: SearXNG is rolling-release with daily builds, and its engine scrapers break continuously as upstream search sites change -- staleness is not cosmetic, it is the product degrading. The 2026.6.23 pin predated the 2026-09-04 httpx->curl_cffi migration that added browser TLS/JA3 impersonation, so the instance was serving DuckDuckGo CAPTCHAs and Brave 429s that a current image mitigates. The regex versioning below maps year->major, month->minor, day->patch, so a normal update presents as minor/patch and rides the existing automerge rules, while a year rollover presents as MAJOR and lands in manual review via the 'Default: Require manual review for major updates' rule above -- which is the correct place for a human to re-read the upstream changelog anyway. SCHEDULE: weekly, not 'at any time'. Daily builds against prHourlyLimit 6 would crowd out every other update in the repo, which is exactly how the pipeline jammed in 2026-07. NO allowedVersions CEILING, deliberately: see the retired wrtag <0.30.0 pin deleted in Phase 4, which was added on a misdiagnosis and enforced a broken state for months. A ceiling is the wrong instrument for this class of problem -- if a future SearXNG build breaks something, pin the tag in compose.yaml and say why there. REMEMBER: merging deploys nothing. See the README 'Renovate deploy drift' check (git -C /mnt/fast/stacks log -1 vs docker inspect); this image was identical in git and on the host only because BOTH were stale.",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "searxng/searxng"
+      ],
+      "versioning": "regex:^(?<major>\\d{4})\\.(?<minor>\\d{1,2})\\.(?<patch>\\d{1,2})-(?<build>[0-9a-f]+)$",
+      "schedule": [
+        "before 6am on monday"
+      ],
+      "addLabels": [
+        "stack:openwebui",
+        "component:searxng"
+      ]
     }
   ],
   // prConcurrentLimit:
