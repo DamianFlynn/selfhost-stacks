@@ -151,4 +151,22 @@ None. Every Jellyfin call was a GET against endpoints 06-40 already used; no new
 - `INSTRUMENT RUN: MEASURED` over `HOST CHECKOUT: MATCH`, with `JF_AT_TARGET: 0` and `JF_PENDING: 3` — which is what 06-43's branch recompute reads.
 - The fence `tank/media/Music@pre-06-41-conf04-reprobe` still standing, and its rollback command recorded and unexecuted.
 
+## Self-Check: PASSED
+
+Every claim above was re-asserted against disk and git after the summary was written, not before.
+
+- Files claimed created — all three FOUND at their stated line counts (654 / 352 / 154).
+- Commits claimed — `8b1b917`, `ee82fb2`, `f85e539`, `d7b605c` all FOUND in `git log`.
+- `SAFETY: PASS` — exactly one such line, reading PASS.
+- `ROW|` lines — 3 present, 3 reading `verdict=AT-BASELINE`.
+- `CENSUS DELTA` block — 0 content lines, as claimed.
+- `ZFS DIFF POST` block — 3 content lines, as claimed.
+- The forbidden refresh mode's literal token — 0 occurrences in either artifact, so the
+  acceptance criteria that assert a zero count remain real detectors rather than matching prose.
+- The seven fixed-format instrument lines — all present and reading as recorded.
+
+No item was missing and no count needed reconciling.
+
+---
+
 The open question 06-43 owns: what a measured negative means for CONF-04. The evidence says the option is correct, the refresh reached the items, and the prober still did not re-read the tag — consistent with `check-music-consumers.sh` § 4b's own recorded expectation that this discharges on Phase 7's first write rather than by rescanning.

@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-24T08:25:00.000Z"
+last_updated: "2026-09-24T13:55:00.000Z"
 progress:
   total_phases: 10
   completed_phases: 5
   total_plans: 119
-  completed_plans: 113
+  completed_plans: 114
   percent: 50
 ---
 
@@ -29,7 +29,7 @@ pipeline that someone owns.
 
 Phase: 06 (tagger-configuration-and-dry-run) — EXECUTING gap-closure **ROUND 5**
 (re-verification deliberately NOT run — see the round-4 block at the end of this section)
-Plan: 41 of 45 executed. Round 1 (06-15..06-21, waves 6-9, 2026-09-22) closed CR-01 and
+Plan: 42 of 45 executed. Round 1 (06-15..06-21, waves 6-9, 2026-09-22) closed CR-01 and
 dispositioned all 24 findings of `06-REVIEW.md`; re-verification is **6/6, status passed**
 (`06-VERIFICATION.md`, gaps_remaining: [], regressions: []).
 **The phase is NOT complete.** A code review of the round-1 changes themselves
@@ -462,7 +462,74 @@ null result there is a **legitimate recorded negative** — not an argument for 
 **Nothing about CONF-04 changed yet.** No requirement checkbox moved, `06-VERIFICATION.md` was not
 touched and is **still stale**, and CONF-04's Jellyfin half is still OPEN with **E6** owning it.
 
-Status: Executing Phase 06 — gap-closure **ROUND 5**, wave 19 (plan 06-41) COMPLETE. Round 2 ran
+**ROUND 5, WAVE 20 EXECUTED — 2026-09-24. Plan 06-42 HAS MEASURED, AND THE ANSWER IS NO. The lever
+06-41 pulled did not move the rows.** Two artifacts —
+`artifacts/06-42-conf04-reprobe-after.txt` (654 lines, SECTIONS C–K) and
+`artifacts/06-42-consumers-rerun.txt` (352 lines) — and three task commits
+(`8b1b917`, `ee82fb2`, `f85e539`).
+
+**THE MEASUREMENT.** All three pinned rows read **AT-BASELINE**: row 1 (ARTPOP / *Jewels n' Drugs*)
+at **0** browseable `ArtistItems` entities against a target of **4**; rows 2 and 3 at **1** each
+against a target of **2**. The `;`-in-entity-name count is **0** on every row, reported FIRST for
+each row as `check-music-consumers.sh` § 4b checks it. Every verdict is emitted twice — as prose and
+as a fixed eight-field parseable line — and **every one survived independent recomputation** from
+its own `target`/`baseline`/`measured`/`uniqids`/`semis` by § 4b's own five-step order, so a
+misclassification would have failed a script rather than resting on the agent that wrote it.
+⏱ **The settle is arithmetic across two files, as designed:** `READBACK_UTC: 1790257176` minus
+06-41's `POST_UTC: 1790237579` = **19,597 s** against a floor of 120, recomputed by the verify block
+rather than read from the `SETTLE_SECONDS` line.
+
+**THIS IS A MEASUREMENT, NOT AN UNKNOWN — and that distinction is the round's whole value.** 06-41's
+`LibraryMonitor` lines named all three Audio items by full internal path, so "the refresh never
+started" is **ruled out** and "the refresh started and changed nothing" is what happened.
+`PreferNonstandardArtistsTag` still reads **`true`**, re-read with `has($k)`, so the option did not
+revert — the prober simply did not re-read the tag on these files.
+⛔ **NOTHING WAS ESCALATED.** The aggressive per-item refresh mode was not issued, not widened to
+and not reachable on any branch; no second refresh, no additional file touched, and **no
+`zfs rollback` executed** — the command is recorded and left for the operator.
+
+**THE FOUR-WAY SAFETY RE-ASSERT ENDS `SAFETY: PASS`.** The post-refresh `zfs diff` is
+**BYTE-IDENTICAL** to 06-41's block (sha256 `a33ada4a…` on both sides, `cmp -s`): three `M` entries,
+zero non-`M`, zero sidecars, zero DO-NOT-RESCAN rows — so across the POST, the LibraryMonitor
+firing, the three refreshes and five and a half hours of live estate, **ZFS records not one
+additional change under `tank/media/Music`**. The `.nfo` manifest differs on **0 of 91** lines in
+sha256 and mtime; all three sidecar counts and fingerprints are identical (**91 / 944 / 88**); the
+four D-34 options and `SaveLyricsWithMedia` all hold; `library.db` and `state.pickle` are
+byte-identical; `tank/downloads@pre-phase5` is **PRESENT**. **The 1,244-row census delta is
+EMPTY — 0 changed rows, 0 differing lines over all five fields, no path on one side only** — and the
+six OQ-1 `TRUSTFALL` rows are unchanged in count and Id set, so the negative control held. That one
+block carries two facts and neither is softened into the other: nothing outside the three moved,
+**and the three themselves did not move.**
+
+**THE INDEPENDENT CORROBORATION WAS TAKEN HERE, BEFORE ANY BRANCH IS COMPUTED** — relocated out of
+06-44 by the round's own revision, so the one automated cross-check that could catch a wrong branch
+has already run when 06-43 asks the operator. The **deployed, unmodified**
+`check-music-consumers.sh` ran from `/mnt/fast/stacks` with no override and reported
+`INSTRUMENT RUN: MEASURED`, `HOST CHECKOUT: MATCH`, `JF_AT_TARGET: 0`, `JF_PENDING: 3`
+(**summing to the 3 pinned rows**), `MA_AT_TARGET: 2`, `MA_REPORTED: 1`, ending on **3** with
+`FAILURES total: 0` — the pending gate, not the failure gate, exactly as the EXIT-CODE CONVENTION
+predicts. **No line of any script was changed to make it end on 0**, and the Jellyfin and MA
+counters are recorded side by side and never summed. Two instruments by two routes, one answer.
+
+⚠ **THREE DEVIATIONS RECORDED RATHER THAN SMOOTHED.** (1) 06-40 records the `.lrc`/`.jpg`
+**fingerprint values but not the command that made them**, so the recipe was **recovered against
+06-40's own `.nfo` hash as an oracle** — four candidate constructions computed, exactly one
+reproduced `e99b1992…`; guessing would have made the comparison a test of the guess rather than of
+the estate. (2) **The host checkout went STALE mid-plan, by this plan's own two commits**, and the
+plan's own named remedy was applied — push, `git pull --ff-only`, re-verify, re-run — rather than
+relaxing the test or writing `MEASURED` over a `STALE`. (3) **06-41's claim that the host's copy of
+`check-music-consumers.sh` is pre-Phase-6 (`c67d497`) with no `ARTIST_PROOF_ROWS` is MEASURED
+FALSE** — the host copy is byte-identical to the repo copy (`1ed695cf…`) with a clean working tree.
+Corrected in band so a later reader does not re-derive the old conclusion and invent the copy step
+the plan forbids.
+
+**STILL NOT A CLOSE.** No requirement checkbox moved, `06-VERIFICATION.md` was not touched and is
+**still stale**, and CONF-04's Jellyfin half is still **OPEN**. **06-43 owns what the negative
+means**, behind its operator gate, and `tank/media/Music@pre-06-41-conf04-reprobe` **is still
+STANDING** as the undo for the whole round — it must not be destroyed before 06-43 records its
+branch.
+
+Status: Executing Phase 06 — gap-closure **ROUND 5**, wave 20 (plan 06-42) COMPLETE. Round 2 ran
 against `06-REVIEW-GAP.md` (GC-01 blocker + 7 warnings in round 1's own code, plus GC-16/GC-17
 from the cross-family adjudication) — all 17 closed and dispositioned in `06-DISPOSITIONS-GAP.md`
 by plan 06-29. Still 1 open
@@ -1318,6 +1385,7 @@ already open so only 2049 is this phase's delta.
 | Phase 05 P09 | ~2h25m | 3 tasks | 7 files |
 | Phase 05 P10 | ~3 h 20 min | 4 tasks | 8 files |
 | Phase 05 P11 | ~50 min | 2 tasks | 7 files |
+| Phase 06 P42 | ~15 min | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -1802,9 +1870,16 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-09-19T23:59:14.801Z
-Stopped at: Phase 6 context gathered
-Resume file: .planning/phases/06-tagger-configuration-and-dry-run/06-CONTEXT.md
+Last session: 2026-09-24T13:55:00.000Z
+Stopped at: Completed 06-42-PLAN.md (round 5, wave 20) — the CONF-04 re-probe measured a NEGATIVE
+(all three pinned rows AT-BASELINE) with `SAFETY: PASS` and an independent `INSTRUMENT RUN: MEASURED`
+corroboration. **NEXT: 06-43-PLAN.md**, which is `autonomous: false` — it recomputes the branch from
+four recorded inputs and puts the decision to the operator. Do not run it with `--auto`/`--chain`.
+Resume file: .planning/phases/06-tagger-configuration-and-dry-run/06-43-PLAN.md
+
+_(The two lines below are the older Phase 6 entry-point note, kept because the wave-20 pointer above
+supersedes only the resume position, not the phase context.)_
+Previous resume file: .planning/phases/06-tagger-configuration-and-dry-run/06-CONTEXT.md
 
 **NEXT: 02.1-10, the last plan of the phase (wave 9).** It is unblocked — it depends on 02.1-06 and
 02.1-09 and both are now complete. Two things it should carry in:
