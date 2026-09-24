@@ -124,6 +124,49 @@ conversation:
 - **Name**: "DeercrestSearch"
 - **Keyword**: "ds"
 
+Must be a **GET** URL as written above. `search.deercrest.info` serves HTML over GET only —
+external `POST /search` and external `?format=json` both return **403** by design (see
+below), so a browser configured to POST will get a 403 on every search.
+
+### SearXNG configuration
+
+`settings.yml` is **versioned in this repo** at `stacks/selfhosted/openwebui/searxng/settings.yml`
+and is the source of truth. It is **not** bind-mounted from the repo — the container mounts
+`/mnt/fast/appdata/llm-ai/searxng`, so a change here does not reach the host on `git pull`.
+Deploy it explicitly:
+
+```bash
+scp stacks/selfhosted/openwebui/searxng/settings.yml root@172.16.1.159:/tmp/s.new
+ssh root@172.16.1.159 'install -o 977 -g 977 -m 0644 /tmp/s.new \
+  /mnt/fast/appdata/llm-ai/searxng/settings.yml && rm -f /tmp/s.new'
+ssh root@172.16.1.159 'cd /mnt/fast/stacks && \
+  docker compose -f stacks/selfhosted/openwebui/compose.yaml up -d ai-searxng'
+```
+
+Owner is uid/gid `977`, **not** `apps:apps` — the container runs as `977` and will not
+write a file it does not own. Verify with `sha256sum` on both sides after copying; the
+previous copy of this file lived only on the host and rotted for three months unnoticed,
+which is the whole reason it is in git now.
+
+The file is a **small `use_default_settings: true` delta**, not a full config. Keep it that
+way — a full copy freezes the engine list against the image and is how the last one broke.
+Read the comments in it before changing engines; two failure modes there are silent.
+
+### Why `format=json` is blocked from the internet
+
+Open WebUI needs SearXNG's JSON API, but reaches it **internally** at `http://ai-searxng:8080`.
+Externally, both `?format=json` and `POST /search` return 403 at Traefik. A public
+unauthenticated JSON API on a residential WAN IP is a scriptable proxy that launders bot
+traffic into Google/Brave/DDG under this address — which is what gets the upstream engines
+to serve CAPTCHAs in the first place.
+
+SearXNG's own `limiter` **cannot** do this job: its botdetection rejects any request whose
+`Accept` lacks `text/html` and blocks Python user agents, so every JSON client is a bot by
+that definition. Turning the limiter on would break Open WebUI while leaving the HTML path
+exactly as open as before. Both halves of the Traefik block are required — Traefik cannot
+read a request body, so without `server.method: GET` plus the POST rule, a POST walks
+straight through the query-string rule.
+
 ### API Usage Examples
 ```bash
 # Chat with AI model
