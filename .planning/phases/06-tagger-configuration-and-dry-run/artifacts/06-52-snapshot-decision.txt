@@ -1,0 +1,380 @@
+================================================================================
+06-52 — THE SNAPSHOT-RELEASE DECISION RECORD (DEF-06-45-01, round item R6-09)
+================================================================================
+Plan    : 06-52, phase 06-tagger-configuration-and-dry-run, wave 5 (the round's last plan)
+Task 1  : measure, reason, ask. NO WRITE OF ANY KIND IS ISSUED IN THIS TASK.
+Written : 2026-09-24T21:55:09Z (UTC)
+Base    : repository HEAD 5de122ac17f5dbf25a4e1b8e5764dc69bf070a1c, branch main, tree clean
+Host    : atlantis (172.16.1.158) — the Proxmox host, REAL root. LXC 100 is unprivileged and
+          has no `zfs`, so it is not a vantage point for this measurement.
+
+NOTATION, STATED ONCE AND BINDING ON THIS WHOLE FILE. The two destructive ZFS verbs are
+written in BRACKETED form throughout — `zfs [r]ollback` and `zfs [d]estroy` — everywhere they
+appear as narrative, including in the sentences that forbid them. This is the round's standing
+bracketing convention (`DEF-06-48-02`, scoped by function: any file whose content is counted by
+a published recipe must bracket the counted token). The hazard it guards against has now fired
+in TEN consecutive instances across this phase's rounds, twice inside plan 06-51 alone and the
+second time inside the note explaining the first. A prose mention, a quotation of a prose
+mention, and a quotation of the DETECTOR are all indistinguishable to the detector.
+So: an UNBRACKETED occurrence in this file would mean a command that was actually issued.
+
+BOUNDING, per `CLAUDE.md` § Health Checks and this plan's own rule. Every remote command below
+is bounded LINUX-SIDE with `timeout` (macOS has no GNU `timeout`); any piped remote string
+carries `set -o pipefail`; the ssh return code is read and recorded for every step. A non-zero
+rc, a timeout or a missing capture is COULD NOT LOOK and is a stop, kept distinct from "nothing
+is wrong". Every query in this task has a non-empty healthy answer, so an EMPTY result here
+would itself be a could-not-look. No step returned one: every ssh rc below is 0 and every
+stderr was empty.
+
+
+================================================================================
+MEASURED STATE
+================================================================================
+
+--------------------------------------------------------------------------------
+(a) THE FULL SNAPSHOT SET ON tank/media/Music — the target seen in CONTEXT
+--------------------------------------------------------------------------------
+  command : ssh root@172.16.1.158 "timeout 60 zfs list -t snapshot \
+                -o name,used,refer,creation -r tank/media/Music"
+  ssh rc  : 0        stderr: empty
+
+  NAME                                        USED  REFER  CREATION
+  tank/media/Music@pre-project               1.11M  33.9G  Tue Aug 18 13:08 2026
+  tank/media/Music@safe05-watch-t0           85.2K  33.9G  Tue Aug 18 15:42 2026
+  tank/media/Music@pre-chown                 85.2K  33.9G  Tue Aug 18 22:29 2026
+  tank/media/Music@pre-phase5-chown             0B  33.9G  Sat Sep 19 21:42 2026
+  tank/media/Music@backup-20260922              0B  33.9G  Tue Sep 22  8:09 2026
+  tank/media/Music@inc-20260923-1319            0B  33.9G  Wed Sep 23 13:20 2026
+  tank/media/Music@pre-06-41-conf04-reprobe     0B  33.9G  Thu Sep 24  9:05 2026   <- THE TARGET
+
+  Rows: 7. **No snapshot nobody expected.** Stated as a computed comparison rather than as an
+  impression: the name set was diffed against the seven names `06-42-conf04-reprobe-after.txt`
+  SECTION J recorded under "THE tank/media/Music SNAPSHOT SET" (its assertions J3 and J4).
+
+    command : comm -3 <06-42 set> <measured set>
+    output  : EMPTY  — 7 names both sides, identical name for name
+    control : the same comparator against a copy of the measured set with `@pre-chown` mutated
+              to `@pre-chown-DECOY` returned **2** difference lines.
+    So the EMPTY is evidence that the set is unchanged, not evidence that the comparator
+    matches nothing. (`DEF-06-45-04` class: a true zero from a vacuous instrument is the worst
+    shape there is, because it survives review.)
+
+  Nothing has been created and nothing destroyed on this dataset since 06-42 took its reading
+  at 2026-09-24T13:43:30Z.
+
+--------------------------------------------------------------------------------
+(b) THE FULL SNAPSHOT SET ON tank/downloads — the OTHER fence, confirmed PRESENT
+--------------------------------------------------------------------------------
+  command : ssh root@172.16.1.158 "timeout 60 zfs list -t snapshot \
+                -o name,used,refer,creation -r tank/downloads"
+  ssh rc  : 0        stderr: empty
+
+  NAME                                                              USED  REFER  CREATION
+  tank/downloads@pre-project                                        458K  2.00T  Tue Aug 18 13:08 2026
+  tank/downloads@pre-chown                                          458K  2.00T  Tue Aug 18 22:43 2026
+  tank/downloads@pre-phase5                                         842K  2.08T  Fri Sep 18 15:42 2026   <- PRESENT
+  tank/downloads@pre-phase5-chown                                  8.74M  2.17T  Sat Sep 19 21:42 2026
+  tank/downloads/mybook-music-archive@copied-from-mybook-20260922   480K  1.28T  Tue Sep 22  7:29 2026
+  tank/downloads/mybook-music-archive@post-rescue-20260922            0B  1.28T  Tue Sep 22  8:05 2026
+  tank/downloads/mybook-music-archive@backup-20260922                 0B  1.28T  Tue Sep 22  8:09 2026
+  tank/downloads/mybook-music-archive@with-m4-20260922             19.9M  1.30T  Tue Sep 22 21:18 2026
+  tank/downloads/mybook-music-archive@inc-20260923-1319               0B  1.30T  Wed Sep 23 13:20 2026
+
+  `tank/downloads@pre-phase5` is **PRESENT**. It is a DIFFERENT FENCE WITH A DIFFERENT OWNER —
+  Phase 5's only undo for 4,750 renames, 751 in-place tag writes and 26,005 chowns, held under
+  D-32 and `ROADMAP.md` Phase 7 entry criterion **E4**, which states it "is NOT released until
+  Phase 7's pilot passes" — and it is **NOT IN THIS PLAN'S SCOPE ON ANY BRANCH.**
+
+  Nine rows, identical name for name to the nine `06-42` SECTION J recorded (its assertion J2).
+
+--------------------------------------------------------------------------------
+(c) PRESENCE OF THE TARGET, ASSERTED BY EXACT WHOLE-LINE MATCH — AND DRIVEN
+--------------------------------------------------------------------------------
+This is the assertion FORM plan 06-40 used for this same snapshot, and it is reused
+deliberately: a name merely CONTAINING the string must not satisfy the test.
+
+  command : ssh root@172.16.1.158 "set -o pipefail; \
+              timeout 60 zfs list -t snapshot -H -o name -r tank/media/Music \
+              | grep -qxF 'tank/media/Music@pre-06-41-conf04-reprobe' \
+              && echo TARGET_PRESENT || echo TARGET_ABSENT"
+  ssh rc  : 0
+  output  : TARGET_PRESENT
+
+  THE ASSERTION WAS DRIVEN IN BOTH DIRECTIONS, on the host, before its verdict was accepted:
+    negative control — the line `tank/media/Music@pre-06-41-conf04-reprobe-DECOY`, which
+      CONTAINS the target string as a proper prefix, fed to the same `grep -qxF`:
+        output : CONTROL_REJECTED_GOOD      (i.e. it did NOT match — correct)
+    positive control — the exact line fed to the same `grep -qxF`:
+        output : CONTROL_EXACT_MATCHED_GOOD (i.e. it DID match — correct)
+
+  So `-qxF` is proven to discriminate here, and TARGET_PRESENT is a measurement rather than an
+  artefact of a permissive pattern.
+
+--------------------------------------------------------------------------------
+(d) THE TARGET'S `used` — THE REAL COST OF HOLDING IT
+--------------------------------------------------------------------------------
+  command : ssh root@172.16.1.158 "timeout 60 zfs list -t snapshot \
+                -o name,used,refer,written -H tank/media/Music@pre-06-41-conf04-reprobe"
+  ssh rc  : 0
+  output  : tank/media/Music@pre-06-41-conf04-reprobe	0B	33.9G	0
+
+  USED    = **0B**
+  REFER   = 33.9G  (the whole dataset as it stood at the fence)
+  WRITTEN = 0
+
+  Read honestly: `0B` is ZFS's reported referenced-unique space at its display granularity, so
+  the true figure is "below the rounding floor", not provably a literal zero byte. What it does
+  prove is that the fence holds NO unique data blocks worth reporting — consistent with round 5
+  having written three file **mtimes** and zero bytes of content. `WRITTEN = 0` says no blocks
+  were written into the dataset between the previous snapshot and this one.
+
+--------------------------------------------------------------------------------
+(e) POOL AND DATASET SPACE — so a space argument is evaluated against a measurement
+--------------------------------------------------------------------------------
+  command : ssh root@172.16.1.158 "timeout 60 zfs list -o name,used,avail,refer \
+                tank tank/media/Music"
+  ssh rc  : 0
+
+  NAME               USED  AVAIL  REFER
+  tank              41.9T  5.26T   160K
+  tank/media/Music  33.9G  5.26T  33.9G
+
+  ⚠ **A MEASURED CORRECTION TO THE SOURCE MATERIAL, recorded rather than smoothed.**
+  `DEF-06-45-01` states "`tank` has ~9 T free", and `CLAUDE.md` § Constraints carries the same
+  "~9 T free" figure. **Measured now: 5.26 T available.** The prose figure is stale by roughly
+  3.7 T. It does not change this decision's direction — 0B against 5.26 T is the same argument
+  as 0B against 9 T — but restating an unverified number launders it, and this plan's own
+  reasoning would be built on it. The measurement is the number; the prose is not.
+
+  Note also, from `CLAUDE.md`'s project constraints: **ZFS frees space asynchronously and
+  `zfs list` can lag a large delete by ~20 s.** That is recorded here so that nobody reads a
+  space figure as a result on any later branch — but it bears on this decision not at all,
+  because the figure at issue is a hold cost of 0B, not a reclaim.
+
+
+================================================================================
+DEPENDENCY REASONING
+================================================================================
+Five questions, each answered with evidence cited by file and section heading — never by line
+number, because citations into these files go stale (the planner shifts `ROADMAP.md` in its own
+commit, and this phase has a recorded history of exactly that).
+
+--------------------------------------------------------------------------------
+Q1. DOES ANYTHING STILL NEED THIS UNDO?
+--------------------------------------------------------------------------------
+ANSWER: What the fence can undo is **three file mtimes, and nothing else.** No content.
+
+Evidence: `artifacts/06-42-conf04-reprobe-after.txt` § *SECTION G — `zfs diff` RE-RUN AFTER THE
+REFRESH*. `zfs diff -H tank/media/Music@pre-06-41-conf04-reprobe` (rc 0) returned a block of
+exactly **3 lines**, every one a modification entry (tag `M`), with **0** non-`M` entries,
+**0** metadata-sidecar entries, **0** lyric-sidecar entries, **0** image-sidecar entries
+(assertions G1, G5, G6, G7) — and the three decoded paths are exactly the three pinned host
+paths, with 0 off-list and 0 absent (G3, G4). The same artifact's § *SECTION J*, assertion J5,
+records all three files' content `sha256` IDENTICAL to their 06-40 values, and J6 their sizes
+identical; J7 records their mtimes unchanged since 06-41's touch moment.
+
+So: the round wrote three timestamps. The undo restores three timestamps.
+
+THE COUNTER-CONSIDERATION, STATED HONESTLY RATHER THAN SUPPRESSED. That cuts BOTH ways, and it
+would be dishonest to present only the half that argues for a destroy. An undo whose cost is
+nil is **cheap to keep**. "There is almost nothing to undo" is not by itself an argument for
+destroying the undo — it is an argument that the decision is low-stakes in both directions, and
+therefore that the argument for destroying must be an actual argument and not a tidy-up reflex.
+`DEF-06-45-01` says exactly this in its own words: the entry exists "so that a later tidy-up
+does not read 'the round is over' as 'the fence can go'."
+
+--------------------------------------------------------------------------------
+Q2. IS `DEF-06-45-01`'s SECOND RELEASE CLAUSE SATISFIED? IS PHASE 7's PILOT FENCE PLANNED?
+--------------------------------------------------------------------------------
+ANSWER: **YES — the Phase 7 pilot fence IS committed, so clause two is MET.**
+
+Source, named precisely because the plan requires it: `.planning/ROADMAP.md`,
+§ `### Phase 7: Pilot — 12 Albums End to End`, its `**Success Criteria** (what must be TRUE):`
+block, **item 1**. That is where the fence is actually committed. Quoted VERBATIM:
+
+    "Twelve bucket-A albums are imported inside a snapshot fence — ZFS snapshot of the Music
+     dataset and a copy of `library.db` taken together — with rollback exercised at least once,
+     because rolling back only the tree leaves the tagger's `incremental` state claiming those
+     releases are done."
+
+That sentence commits a NEW ZFS snapshot of **the Music dataset** — the very dataset this
+plan's target fences — taken together with a `library.db` copy, as a Phase 7 success criterion.
+Phase 7 Success Criterion **5** reinforces it: "**Undo is demonstrated, not assumed.**"
+
+So the estate is NOT left without an undo across the Phase 6/7 boundary by a release here:
+Phase 7's own first act on the Music dataset is to take its own fence.
+
+WHAT THE **OTHER** BLOCK SAYS, CONSULTED SEPARATELY AND RECORDED SO A LATER READER SEES BOTH.
+`.planning/ROADMAP.md` § `**Entry criteria inherited from Phase 6**` (the E1…E12 block under the
+same Phase 7 heading) was read in full. **The pilot-fence commitment is NOT in it.** What it
+does say, in the three criteria this plan cares about:
+  E4 — pins `tank/downloads@pre-phase5` (the OTHER fence): "is NOT released until Phase 7's
+       pilot passes (D-32)", because Phase 6 wrote nothing and so produced no evidence that
+       Phase 5's changes were correct. E4 says nothing about
+       `tank/media/Music@pre-06-41-conf04-reprobe`.
+  E5 — the 30 Jellyfin items carrying a populated `Artists` string list and zero `ArtistItems`
+       entities, plus the `Def Leppard/Def Leppard (2015)/` repair.
+  E6 — CONF-04's Jellyfin half, OPEN and discharging in Phase 7; the three pinned rows read
+       0/4, 1/2, 1/2 because `PreferNonstandardArtistsTag` is probe-time.
+None of E4, E5 or E6 commits or mentions the pilot's Music-dataset snapshot fence.
+
+⚠ **HAD THIS ANSWER BEEN SOURCED FROM THE ENTRY-CRITERIA BLOCK ALONE IT WOULD HAVE BEEN "NOT
+PLANNED" — BY OMISSION, AND WRONG.** That error biases toward `hold`, so it is a safe error
+rather than a dangerous one; it is still a wrong reading, and both blocks were read by heading
+text so that it was not made.
+
+--------------------------------------------------------------------------------
+Q3. DOES ANY OPEN ITEM REFERENCE THIS SNAPSHOT AS ITS EVIDENCE OR ITS UNDO?
+--------------------------------------------------------------------------------
+ANSWER: **No open item depends on the snapshot EXISTING.** Four were checked by name. The
+distinction applied to each is: does it need the snapshot OBJECT, or only the ARTIFACTS that
+were captured while it stood?
+
+  `DEF-06-45-02` (the mtime lever, a measured negative) — depends on the **artifacts**, not on
+    the object. Its evidence is the pinned-row readings (0/4, 1/2, 1/2), the `LibraryMonitor`
+    naming of all three Audio items, and `PreferNonstandardArtistsTag` re-reading `true` — all
+    captured in `06-41`/`06-42`/`06-43` and committed to git. Destroying the snapshot changes
+    none of them. NOT A DEPENDENCY.
+
+  `DEF-06-45-03` (the E5 hypothesis, explicitly "not a conclusion") — depends on the
+    **artifacts** and on Jellyfin's own current state, not on the snapshot. Its revisit
+    condition is "at Phase 7's first write, if the Jellyfin rows split 2-of-3". NOT A DEPENDENCY.
+
+  `06-VERIFICATION.md` § *Outstanding operator actions* — names this release as an outstanding
+    **operator decision**, not as evidence: "release of the still-held snapshot
+    `tank/media/Music@pre-06-41-conf04-reprobe`, a separate decision deliberately not bundled
+    into round 5." It is the ITEM, not a consumer of it. NOT A DEPENDENCY.
+
+  Phase 7 entry criteria **E5** and **E6** — E6's remaining lever is, per `DEF-06-45-02`, "a
+    genuine write or new import of a multi-artist release"; E5's is an artist-entity repair.
+    Neither is a revisit of the three mtimes, and neither reads from the snapshot. Moreover
+    Phase 7 Success Criterion 1 gives both their OWN fence. NOT A DEPENDENCY.
+
+  `DEF-06-45-01` itself is the only open item that names the snapshot, and it names it as the
+    subject of this decision.
+
+Checked and explicitly OUT OF SCOPE: `tank/downloads@pre-phase5` / E4 / D-32 — a different
+fence with a different owner, measured PRESENT in (b) above, and not touched on any branch.
+
+--------------------------------------------------------------------------------
+Q4. WHAT IS LOST IF IT IS DESTROYED AND SOMETHING LATER NEEDS IT?
+--------------------------------------------------------------------------------
+ANSWER: The three files' **pre-06-41 mtime values become unrecoverable**, permanently. Those
+three files are:
+    /mnt/tank/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-03 Katy Perry - California Gurls.flac
+    /mnt/tank/media/Music/P!nk/The Truth About Love (2012)/CD 01-04 P!nk - Just Give Me a Reason.flac
+    /mnt/tank/media/Music/Lady Gaga/ARTPOP (2013)/CD 01-05 Lady Gaga - Jewels n’ Drugs.flac
+Their content is NOT at risk in either direction — `06-42` SECTION J assertion J5 proves the
+content `sha256` values never moved, so no byte needs restoring.
+
+DOES IT MATTER, AND TO WHOM? Almost certainly not, and the honest reason is worth stating:
+mtime on a media file in this estate is not load-bearing for Jellyfin (which keys on its own
+library database), for Music Assistant, or for beets (whose `incremental` state keys on import
+SOURCE directories, not library files — measured in `06-42` SECTION J, assertions on
+`library.db` and `state.pickle` both IDENTICAL). The one party it could matter to is a future
+forensic reader trying to reconstruct when round 5 touched what — and that reader is better
+served by `06-41`'s and `06-42`'s committed transcripts, which record the touch moment as epoch
+1790237114 explicitly, than by the filesystem.
+
+A NOTE THAT BELONGS HERE: the `zfs [r]ollback` that would consume this fence is **forbidden on
+every branch of this plan and is not offered as an option** — rolling back a live shared dataset
+discards whatever Jellyfin, Music Assistant or the operator has written to `tank/media/Music`
+since 2026-09-24 09:05, and it is not an executor's command to run. `DEF-06-45-01` says the same
+and deliberately leaves the command parked in `06-42` SECTION K for the operator. So the undo
+this fence represents is, in practice, an operator-only and estate-wide action even while held.
+
+--------------------------------------------------------------------------------
+Q5. WHAT IS LOST IF IT IS KEPT?
+--------------------------------------------------------------------------------
+COMPUTED, figures first:
+
+    snapshot `used`                        :  **0B**   (measured, (d) above)
+    snapshot `written`                     :  **0**    (measured, (d) above)
+    `tank` available                       :  **5.26 T** (measured, (e) above — NOT the ~9 T
+                                              the prose carries; see the correction in (e))
+    hold cost as a fraction of free space  :  0B / 5.26 T = **0.000 %** at the granularity
+                                              either figure is reported to
+
+Only now, after the figures: the storage cost is **negligible** — and it is negligible as a
+measurement, not as an adjective.
+
+What is genuinely lost by keeping it is therefore NOT space. It is one more standing object to
+remember, on a pool that already carries 16 snapshots across these two datasets alone, and
+therefore one more thing a future bulk tidy-up could destroy by accident — which is an argument
+about record-keeping, answered by a `DEF-` entry with a sharp revisit condition rather than by a
+destroy.
+
+
+================================================================================
+THE EXECUTOR'S RECOMMENDATION — STATED BEFORE THE GATE, AS THE PLAN REQUIRES
+================================================================================
+**RECOMMENDATION: `release`** — with the reasoning held to the standard this plan set, and with
+the honest statement that it is a close call in which `hold` is a fully defensible answer.
+
+The case for it, in one line each:
+  - `DEF-06-45-01`'s release condition has two clauses and **BOTH are now met**: the round's
+    outcome is accepted (`negative-carry-e6`, 2026-09-24T14:30:37Z) and Phase 7's pilot fence is
+    **committed in Success Criteria item 1**, quoted verbatim above. The entry did not say "hold
+    indefinitely"; it named a condition, and the condition has arrived.
+  - **Nothing open depends on the object** (Q3), only on artifacts that are already in git.
+  - The estate is **not** left without an undo across the boundary — Phase 7 takes its own, of
+    the same dataset, as a success criterion, with rollback exercised at least once.
+  - What is forgone is three mtimes on three files whose content never changed (Q4).
+
+The case against, which is why this is a decision and not a formality:
+  - The hold cost is a **measured 0B** (Q5). Nothing is being paid to keep it.
+  - Phase 7's fence is **planned, not taken**. Between now and the moment Phase 7 actually
+    snapshots the Music dataset there is a window with no Phase-6-era fence on it. That window
+    is the strongest argument for `defer`, and it is a real argument, not a hedge.
+  - `DEF-06-45-01`'s own framing warns against exactly the reflex that a round-closing plan is
+    most at risk of: reading "the round is over" as "the fence can go".
+
+`hold` and `defer` are **first-class successful outcomes of this plan**, not failures and not
+deferrals of the plan's work. On either, the plan completes, `DEF-06-45-01` stays OPEN with a
+SHARPENED revisit condition naming a specific triggering event, and the register disposition is
+`CARRIED`. On `release`, the disposition is `FIXED`.
+
+
+================================================================================
+THE GATE — awaiting the operator
+================================================================================
+DECISION ASKED: Release `tank/media/Music@pre-06-41-conf04-reprobe`, or keep it held?
+
+  [hold]     Keep the snapshot; sharpen the revisit condition.
+             Costs a measured 0B. Keeps an undo across the Phase 6/7 boundary.
+             `DEF-06-45-01` stays OPEN. Register disposition: CARRIED.
+
+  [release]  Destroy exactly this one snapshot — one `zfs [d]estroy`, one fully-qualified name,
+             no `-r`, no `-R`, no `-f`, no glob, with the presence assertion re-taken at the act
+             and a computed before/after name-set difference proving only that one name went.
+             Irreversible: the three pre-06-41 mtimes become unrecoverable.
+             `DEF-06-45-01` CLOSED. Register disposition: FIXED.
+
+  [defer]    Decide at Phase 7's planning, when its own pilot fence is on the table and both
+             clauses can be weighed together. Leaves the item open through a phase boundary.
+             `DEF-06-45-01` stays OPEN. Register disposition: CARRIED.
+
+  Any answer outside {hold, release, defer} is treated as `hold`.
+
+OPERATOR'S ANSWER (verbatim)  : <AWAITING — not yet given>
+UTC TIMESTAMP                 : <AWAITING>
+EXECUTED                      : <NOTHING YET — task 1 issued no write of any kind>
+
+--------------------------------------------------------------------------------
+TASK 1 SELF-ATTESTATION
+--------------------------------------------------------------------------------
+  - Every `zfs` invocation above is `zfs list`. No other `zfs` verb was issued.
+  - No `zfs [d]estroy`, no `zfs [r]ollback`, no `zfs snapshot`, no `touch`, no HTTP verb, no
+    `docker` verb, no compose verb, no package install, and no write to any host.
+  - `tank/downloads@pre-phase5` was LISTED and asserted PRESENT. It was not touched.
+  - No CONF-04 work of any kind: no re-probe, no mtime touch, no refresh, no checkbox move.
+  - `scripts/quick-health-check.sh` was NOT run (`DEF-06-39-05` is unblocked but not closed,
+    per `DEF-06-51-01`; a run is owed by whoever wants the measurement, not by this plan).
+  - No credential and no API key appears on any command line or in this file.
+  - Every zero-expecting or presence assertion in this file was DRIVEN against a control that
+    makes it non-zero before its verdict was accepted: the `-qxF` presence test in both
+    directions (c), and the set comparator in (a).
+
+================================================================================
+END OF TASK 1 — AWAITING THE OPERATOR'S GO/NO-GO
+================================================================================
