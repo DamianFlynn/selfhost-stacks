@@ -8,7 +8,7 @@ progress:
   total_phases: 10
   completed_phases: 5
   total_plans: 124
-  completed_plans: 119
+  completed_plans: 120
   percent: 50
 ---
 
@@ -28,10 +28,10 @@ pipeline that someone owns.
 ## Current Position
 
 Phase: 06 (tagger-configuration-and-dry-run) — gap-closure **ROUND 6 EXECUTING; wave 1 (06-46 and
-06-47) is done, 06-48..06-52 remain**
+06-47) and 06-48 are done, 06-49..06-52 remain**
 (round 5 executed and re-verified 2026-09-24: `06-VERIFICATION.md` **gaps_found, 5/6**, CONF-04 the
 single failing truth, carried to Phase 7 E6 under the operator override `negative-carry-e6`)
-Plan: 47 of 52 executed — round 6 (**06-46..06-52**, 5 waves, planned 2026-09-24, commits `d500907`
+Plan: 48 of 52 executed — round 6 (**06-46..06-52**, 5 waves, planned 2026-09-24, commits `d500907`
 + `d7df994`) is the full `06-REVIEW.md` round: WR-01/02/03 + IN-01/02, the `DEF-06-45-04`
 non-detecting-recipe fix, the bracketing-scope decision, and the two `autonomous: false`
 live-estate plans (`06-51` host git sync, `06-52` snapshot go/no-go). ⛔ Round 6 drives **no**
@@ -170,6 +170,61 @@ changed, no checkbox moved, and `06-VERIFICATION.md` was not re-scored.
 added seven plans to phase 6 (45 → 52) and the project counter was never bumped, so `completed_plans`
 was about to reach 119 of 119 and read as *every plan done* with `06-48..06-52` still outstanding.
 72 (phases 1–5) + 52 (phase 6) = **124**; 72 + 47 executed = **119**. The arithmetic closes both ways.
+
+**ROUND 6, WAVE 2 EXECUTED 06-48 — 2026-09-24. A recipe that could never have matched the thing it
+forbids is replaced by one PROVEN to match it, and the bracketing convention's scope is now a written
+decision instead of an open observation.** Two task commits (`da5a606`, `bcdefd0`) plus the summary
+(`645d2d3`); one artifact, `artifacts/06-48-recipe-control-and-scope.txt`, sections 1–6. **BASE
+COMMIT `ce358779329c4e37112a843bba877883e9a238f9`**, captured by `git rev-parse HEAD` before anything
+was written, because every immutability claim in the plan is anchored to it and not to a moving
+`HEAD`.
+**The control matrix was driven BOTH WAYS and is the plan's whole point:** against a one-line scratch
+control carrying the forbidden mode's real unbracketed token, the corrected `-cE` form returns **1**
+and the published `-cF` form returns **0**. `-F` and a bracketed needle are **mutually exclusive by
+construction** — `-F` suppresses exactly the metacharacter interpretation the bracketing mitigation
+depends on — so `06-43-conf04-verdict.txt` SECTION O's `(O-a)` could only ever have measured the
+mitigation form. `(O-b)` was **already sound** (`-ciE`) and was driven against its own control (**1**)
+as a confirmation, not a correction; `(O-c)` is untouched. The fix is **surgical to `(O-a)`**.
+**Counts RE-DERIVED, not restated:** the corrected recipe and the unchanged `(O-b)` run per file over
+SECTION O's four named artifacts plus `06-43-conf04-verdict.txt` plus
+`scripts/check-music-consumers.sh` and `scripts/quick-health-check.sh` — **0 on all fourteen
+readings**, with § 1 named in band as the drive that makes those zeros evidence.
+⚠ **BOTH HALVES ARE STATED WITHOUT EITHER BEING SOFTENED INTO THE OTHER: the published `0` is TRUE of
+the estate, AND it was not earned by the command printed beside it.** A true number from a vacuous
+instrument is the worst shape there is, because it survives review.
+**The dated artifact is PROVEN IMMUTABLE AGAINST THE BASE COMMIT, not merely clean at the end:**
+`git show <BASE>:…06-43-conf04-verdict.txt | /sbin/sha256sum` and the working file both read
+`d85ebe4b…` (`shasum -a 256` agreed, so the digest is not an artefact of one implementation), and
+`DEF-06-45-04`'s own body digests `b86042f3…` on both sides — it is **closed by `DEF-06-48-01`
+referring to it, not by anything written into it**. The plan drove WHY that anchor is needed: with an
+edit **staged**, `git diff --exit-code protected.txt` exits **0** while
+`git diff --exit-code HEAD -- protected.txt` exits **1** — and even `HEAD --` is blind to an edit the
+plan itself committed, which happened twice here.
+**`DEF-06-48-02` DECIDES the bracketing convention's scope: it STAYS `artifacts/` — NOT widened to
+`ROADMAP.md` prose, NOT dropped.** Scoped by **function, not directory name**: any file whose content
+is counted by a published recipe must bracket the counted token. ROADMAP is deliberately readable
+prose and has never been in a published detector's counted scope, so widening pays a readability cost
+for zero measurement benefit; dropping is equally wrong, because inside `artifacts/` the hazard is
+live and has fired six rounds running. The occurrence count was **re-measured at 2** with the
+corrected `-cE` form and both sites named by **surrounding heading and table row, never by line
+number** — the verification's own two citations for these same sites were **already stale**. The
+entry states explicitly that **no `ROADMAP.md` edit is made or required**, so nobody "finishes the
+job" later.
+⚠ **THE SELF-REFERENTIAL HAZARD FIRED INSIDE THE ENTRY DESCRIBING IT — SEVENTH CONSECUTIVE ROUND.**
+`DEF-06-48-02`'s first draft quoted its scratch control line PLAINLY, and the plan's zero-expecting
+line-citation screen over the two new entries then returned **1** instead of 0: the entry had become
+an occurrence of what it measures, and a naive reading of that 1 would have said *a line citation was
+written*. Bracketed (`ROADMAP.md:[1]615`) and re-measured at **0**, with the scratch control keeping
+the plain form so it still returns 1. Caught, as every previous instance was, **by measuring AFTER the
+edit landed, not by an assertion written beforehand** (`DEF-06-39-06`).
+**Register integrity anchored to the base commit:** `^## DEF-` headings **41 → 43** (= base + 2), with
+**0** base-commit heading strings missing — no existing entry renumbered, reworded or removed.
+**`ROADMAP.md`, `REQUIREMENTS.md` and all of `scripts/` byte-unchanged under `git diff --exit-code
+HEAD --`** at both task commits (the ROADMAP progress row and 06-48 checkbox were bumped afterwards,
+in the metadata commit, hand-edited with the body diffed: exactly 2 lines, Notes cell byte-length
+identical at 33,550). **Zero estate contact** — no ssh, no docker, no HTTP verb, no package install,
+no snapshot taken or destroyed; the three scratch controls lived outside the repository and none was
+staged. Nothing about CONF-04 changed, no checkbox moved, and `06-VERIFICATION.md` was not re-scored.
 
 Previous: Phase 05 (inbox-structure-and-the-junk-gate) — **COMPLETE, closed 2026-09-19 at 4/4
 criteria TRUE**, 11 of 11 plans (fence taken, `_inbox` created, D-21 inode
