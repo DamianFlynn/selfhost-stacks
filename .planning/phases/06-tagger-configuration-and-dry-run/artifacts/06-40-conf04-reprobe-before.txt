@@ -1,0 +1,1457 @@
+================================================================================
+06-40 — CONF-04 RE-PROBE BEFORE-STATE (the read-only half; 06-41 mutates, 06-42 diffs)
+================================================================================
+
+================================================================================
+SECTION 0 — PROVENANCE
+================================================================================
+Taken       : 2026-09-24T06:17:02Z  (UTC)
+Host        : selfhost (172.16.1.159) — LXC 100, run from /mnt/fast/stacks
+Jellyfin    : 10.11.11   (GET /System/Info)
+Route       : 192.168.90.17:8096, resolved FRESH via
+              `docker inspect jellyfin --format '{{(index .NetworkSettings.Networks "t3_proxy").IPAddress}}'`
+              — never a pinned literal. ⚠ MEASURED CORRECTION TO THIS PLAN'S OWN TEXT:
+              06-40-PLAN.md states the container 'is at 192.168.90.25 today' and that 06-03's
+              192.168.90.17 is therefore stale. It is NOT: the address resolved above is what
+              docker returned at run time, and it is recorded as measured rather than as
+              planned. The RULE is unaffected and is the whole point — docker IPAM CAN move
+              it, so it is resolved fresh every time and never pinned. Recording the plan's
+              number instead of the measured one is exactly the drift this phase exists to
+              stop. Never the bare name `jellyfin` either (resolv.conf carries
+              `search deercrest.info`, so it resolves to Cloudflare's public edge), and
+              never 172.16.1.76 (unreachable FROM LXC 100 under macvlan host isolation).
+Music bind  : /mnt/tank/media -> /media (rw)
+/mnt/tank/media/Recordings -> /recordings (ro)
+Credential  : /mnt/fast/secrets/jellyfin-deercrest.env — gated on mode `600 root`; MEASURED: `600 root`.
+              Sourced WITHOUT `set -a`, delivered to curl through `-H @<(printf ...)` so the
+              admin-equivalent key never entered argv on a host whose /proc is world-readable
+              and which has no hidepid (T-06-40-01). Its CONTENTS are recorded nowhere.
+Library     : ItemId read back from GET /Library/VirtualFolders = 7e64e319657a9516ec78490da03edccb
+              pinned JELLYFIN_MUSIC_LIBRARY_ID in scripts/check-music-consumers.sh = 7e64e319657a9516ec78490da03edccb
+              ASSERTION: read-back == pinned  ->  PASS. The round is against the right object.
+              Locations   = ["/media/Music"]
+
+ENDPOINTS ISSUED BY THIS TASK — ALL READ-ONLY, ALL GET:
+  GET /System/Info
+  GET /Library/VirtualFolders
+  GET /Items?IncludeItemTypes=Audio&Recursive=true&ParentId=<Music>&SearchTerm=<title>&Fields=ArtistItems,Artists,Path
+  GET /Items?IncludeItemTypes=Audio&Recursive=true&ParentId=<Music>&Fields=ArtistItems,Artists,AlbumArtist,Path&Limit=5000
+
+NO POST, NO PUT, NO DELETE WAS ISSUED BY THIS PLAN, IN THIS TASK OR ANY OTHER. Nothing under
+/mnt/tank/media was written, moved, chowned, chmodded or snapshotted. This plan is a read.
+
+THE TWO PROHIBITED SCAN ENDPOINTS (D-24, T-06-11) WERE NOT ISSUED AND ARE NOT A FALLBACK FOR
+ANY BRANCH OF THIS ROUND: the per-item metadata refresh in its most aggressive mode (Phase 1
+measured it rewriting 83 of 91 .nfo files with the local-metadata saver already off), and the
+unscoped whole-library scan endpoint. They are named DESCRIPTIVELY ONLY. Their literal tokens
+and query strings are deliberately kept out of this transcript — 06-03 established that
+convention so a grep for them across artifacts/ stays a DETECTOR rather than matching prose,
+and DEF-06-39-06 records that an assertion counting a token in a file which discusses that
+token is self-invalidating. The only scan endpoint this round issues at all is the targeted
+POST /Library/Media/Updated that plan 06-03 issued and proved safe — and it is issued by
+06-41, not here.
+
+
+================================================================================
+SECTION 1 — THE FOUR D-34 LIBRARY OPTIONS (read with has(), never jq's //)
+================================================================================
+Source: GET /Library/VirtualFolders, the Music library object's .LibraryOptions.
+`// "ABSENT"` is WRONG here and deliberately not used: jq's `//` treats `false` as empty,
+so a correctly-false option would report ABSENT. has() is the only safe test.
+
+    PreferNonstandardArtistsTag    = true     (want true ) PASS                the D-34 change itself — a false here means it silently reverted
+    UseCustomTagDelimiters         = false    (want false) PASS                D-34 REJECTED this one; a true widens splitting to / | and backslash across the library
+    SaveLocalMetadata              = false    (want false) PASS                the Phase 1 freeze
+    EnableRealtimeMonitor          = false    (want false) PASS                the Phase 1 freeze
+
+    CustomTagDelimiters            = ["/","|",";","\\"]
+    DelimiterWhitelist             = []
+    (Those two are the blast-radius context for UseCustomTagDelimiters, which is asserted
+     false above. They are load-bearing only if that flag ever goes true.)
+
+  THE ROUND'S PREMISE HOLDS: PreferNonstandardArtistsTag is true, so the prober WILL read the
+  ARTISTS tag the next time it runs on a file. That next run is exactly what 06-41 provokes.
+
+
+================================================================================
+SECTION 2 — THE THREE PINNED ROWS IN FULL (ARTIST_PROOF_ROWS, D-22)
+================================================================================
+Each row is fetched with the SAME GET /Items that section 4b of
+scripts/check-music-consumers.sh issues, and selected by EXACT Path match — SearchTerm only
+narrows the response, it never decides which row answered.
+
+⚠ `Artists` (the flat string list) is recorded for DIAGNOSIS ONLY and is NEVER the thing
+  asserted. 30 of the 1,244 library items carry a populated `Artists` with ZERO ArtistItems,
+  and row 1's album (Lady Gaga/ARTPOP) is one of them — asserting on `Artists` would read
+  green on a row nobody can click. `ArtistItems` is the browseable ENTITY list and is what
+  D-22 means.
+
+--------------------------------------------------------------------------------
+ROW 1
+  internal path : /media/Music/Lady Gaga/ARTPOP (2013)/CD 01-05 Lady Gaga - Jewels n’ Drugs.flac
+  tag position  : ARTISTS
+  search term   : Jewels n' Drugs
+  target N      : 4      (post-re-probe, from ARTIST_PROOF_ROWS)
+  jellyfin base : 0      (the 2026-09-20 baseline, from ARTIST_PROOF_ROWS)
+  MA baseline   : 3      (recorded for completeness; this plan does not touch MA)
+  why this row  : widest N; exercises a dollar sign and dotted initials in artist names
+  MEASURED 2026-09-24T06:17:02Z:
+    ArtistItems length        : 0
+    distinct ArtistItems Ids  : 0
+    entity names              : <none>
+    entity Ids                : <none>
+    entity names containing ';' : 0   (any value > 0 is the D-22 failure itself)
+    Artists (flat, DIAGNOSIS ONLY, never asserted) : ["Lady GaGa"]
+    item Id                   : 1640ecf2cf02e8a60193c64b68f6df66
+    item DateModified         : not returned by this endpoint
+    VERDICT: ArtistItems length == the 2026-09-20 Jellyfin baseline (0). As planned.
+--------------------------------------------------------------------------------
+ROW 2
+  internal path : /media/Music/Katy Perry/Teenage Dream (2010)/CD 01-03 Katy Perry - California Gurls.flac
+  tag position  : ARTISTS
+  search term   : California Gurls
+  target N      : 2      (post-re-probe, from ARTIST_PROOF_ROWS)
+  jellyfin base : 1      (the 2026-09-20 baseline, from ARTIST_PROOF_ROWS)
+  MA baseline   : 2      (recorded for completeness; this plan does not touch MA)
+  why this row  : different album and artist folder — isolates a per-album re-probe from a real fix
+  MEASURED 2026-09-24T06:17:02Z:
+    ArtistItems length        : 1
+    distinct ArtistItems Ids  : 1
+    entity names              : Katy Perry
+    entity Ids                : 9d3079ffbefa7fbb1741de0193237b0b
+    entity names containing ';' : 0   (any value > 0 is the D-22 failure itself)
+    Artists (flat, DIAGNOSIS ONLY, never asserted) : ["Katy Perry"]
+    item Id                   : 9ce997177151226474fec26b2b4c0672
+    item DateModified         : not returned by this endpoint
+    VERDICT: ArtistItems length == the 2026-09-20 Jellyfin baseline (1). As planned.
+--------------------------------------------------------------------------------
+ROW 3
+  internal path : /media/Music/P!nk/The Truth About Love (2012)/CD 01-04 P!nk - Just Give Me a Reason.flac
+  tag position  : ARTISTS
+  search term   : Just Give Me a Reason
+  target N      : 2      (post-re-probe, from ARTIST_PROOF_ROWS)
+  jellyfin base : 1      (the 2026-09-20 baseline, from ARTIST_PROOF_ROWS)
+  MA baseline   : 2      (recorded for completeness; this plan does not touch MA)
+  why this row  : albumartist is SECOND in the tag — the order is the tell in Jellyfin
+  MEASURED 2026-09-24T06:17:02Z:
+    ArtistItems length        : 1
+    distinct ArtistItems Ids  : 1
+    entity names              : P!nk
+    entity Ids                : 7ca25d776805442472b7aa577b6a79ed
+    entity names containing ';' : 0   (any value > 0 is the D-22 failure itself)
+    Artists (flat, DIAGNOSIS ONLY, never asserted) : ["P!nk"]
+    item Id                   : 47d9b03e69955e35b7fc5d9d74ad5c58
+    item DateModified         : not returned by this endpoint
+    VERDICT: ArtistItems length == the 2026-09-20 Jellyfin baseline (1). As planned.
+
+
+================================================================================
+SECTION 3 — THE FULL ArtistItems CENSUS (06-03's recipe, verbatim)
+================================================================================
+GET /Items?IncludeItemTypes=Audio&Recursive=true&ParentId=7e64e319657a9516ec78490da03edccb
+        &Fields=ArtistItems,Artists,AlbumArtist,Path&Limit=5000
+
+TotalRecordCount = 1244
+Items array len  = 1244
+ASSERTION: TotalRecordCount == returned array length -> PASS. This is a COMPLETE answer,
+           not a truncated one. A short answer would be COULD NOT LOOK, never 'fewer files'.
+ROW COUNT: 1244 — identical to the 2026-09-20 census in 06-03. The library has not moved.
+
+ArtistItems length distribution over this census:
+        0 entries : 30 items
+        1 entries : 1208 items
+        2 entries : 5 items
+        3 entries : 1 items
+
+One TSV line per item, LC_ALL=C sorted by path:
+    <Path> TAB <len(ArtistItems)> TAB <distinct Id count> TAB <names joined by "|"> TAB <Ids joined by "|">
+
+--- BEGIN CENSUS (1244 rows) ---
+/media/Music/BLACKPINK/BORN PINK (2022)/Digital Media 01-01 BLACKPINK - Pink Venom.flac	1	1	BLACKPINK	9a8e3d59516f67ab2f210f5265a78cb7
+/media/Music/BLACKPINK/BORN PINK (2022)/Digital Media 01-02 BLACKPINK - Shut Down.flac	1	1	BLACKPINK	9a8e3d59516f67ab2f210f5265a78cb7
+/media/Music/BLACKPINK/BORN PINK (2022)/Digital Media 01-03 BLACKPINK - Typa Girl.flac	1	1	BLACKPINK	9a8e3d59516f67ab2f210f5265a78cb7
+/media/Music/BLACKPINK/BORN PINK (2022)/Digital Media 01-04 BLACKPINK - Yeah Yeah Yeah.flac	1	1	BLACKPINK	9a8e3d59516f67ab2f210f5265a78cb7
+/media/Music/BLACKPINK/BORN PINK (2022)/Digital Media 01-05 BLACKPINK - Hard to Love.flac	1	1	BLACKPINK	9a8e3d59516f67ab2f210f5265a78cb7
+/media/Music/BLACKPINK/BORN PINK (2022)/Digital Media 01-06 BLACKPINK - The Happiest Girl.flac	1	1	BLACKPINK	9a8e3d59516f67ab2f210f5265a78cb7
+/media/Music/BLACKPINK/BORN PINK (2022)/Digital Media 01-07 BLACKPINK - Tally.flac	1	1	BLACKPINK	9a8e3d59516f67ab2f210f5265a78cb7
+/media/Music/BLACKPINK/BORN PINK (2022)/Digital Media 01-08 BLACKPINK - Ready for Love.flac	1	1	BLACKPINK	9a8e3d59516f67ab2f210f5265a78cb7
+/media/Music/BLACKPINK/THE ALBUM (2020)/CD 01-01 BLACKPINK - How You Like That.flac	1	1	BLACKPINK	9a8e3d59516f67ab2f210f5265a78cb7
+/media/Music/BLACKPINK/THE ALBUM (2020)/CD 01-02 BLACKPINK - Ice Cream.flac	1	1	BLACKPINK	9a8e3d59516f67ab2f210f5265a78cb7
+/media/Music/BLACKPINK/THE ALBUM (2020)/CD 01-03 BLACKPINK - Pretty Savage.flac	1	1	BLACKPINK	9a8e3d59516f67ab2f210f5265a78cb7
+/media/Music/BLACKPINK/THE ALBUM (2020)/CD 01-04 BLACKPINK - Bet You Wanna.flac	1	1	BLACKPINK	9a8e3d59516f67ab2f210f5265a78cb7
+/media/Music/BLACKPINK/THE ALBUM (2020)/CD 01-05 BLACKPINK - Lovesick Girls.flac	1	1	BLACKPINK	9a8e3d59516f67ab2f210f5265a78cb7
+/media/Music/BLACKPINK/THE ALBUM (2020)/CD 01-06 BLACKPINK - Crazy Over You.flac	1	1	BLACKPINK	9a8e3d59516f67ab2f210f5265a78cb7
+/media/Music/BLACKPINK/THE ALBUM (2020)/CD 01-07 BLACKPINK - Love to Hate Me.flac	1	1	BLACKPINK	9a8e3d59516f67ab2f210f5265a78cb7
+/media/Music/BLACKPINK/THE ALBUM (2020)/CD 01-08 BLACKPINK - You Never Know.flac	1	1	BLACKPINK	9a8e3d59516f67ab2f210f5265a78cb7
+/media/Music/BLACKPINK/THE ALBUM -JP ver.- (2021)/CD 01-01 BLACKPINK - How You Like That -JP ver.flac	1	1	BLACKPINK	9a8e3d59516f67ab2f210f5265a78cb7
+/media/Music/BLACKPINK/THE ALBUM -JP ver.- (2021)/CD 01-02 BLACKPINK - Ice Cream.flac	1	1	BLACKPINK	9a8e3d59516f67ab2f210f5265a78cb7
+/media/Music/BLACKPINK/THE ALBUM -JP ver.- (2021)/CD 01-03 BLACKPINK - Pretty Savage -JP ver.flac	1	1	BLACKPINK	9a8e3d59516f67ab2f210f5265a78cb7
+/media/Music/BLACKPINK/THE ALBUM -JP ver.- (2021)/CD 01-04 BLACKPINK - Bet You Wanna.flac	1	1	BLACKPINK	9a8e3d59516f67ab2f210f5265a78cb7
+/media/Music/BLACKPINK/THE ALBUM -JP ver.- (2021)/CD 01-05 BLACKPINK - Lovesick Girls -JP ver.flac	1	1	BLACKPINK	9a8e3d59516f67ab2f210f5265a78cb7
+/media/Music/BLACKPINK/THE ALBUM -JP ver.- (2021)/CD 01-06 BLACKPINK - Crazy Over You.flac	1	1	BLACKPINK	9a8e3d59516f67ab2f210f5265a78cb7
+/media/Music/BLACKPINK/THE ALBUM -JP ver.- (2021)/CD 01-07 BLACKPINK - Love to Hate Me.flac	1	1	BLACKPINK	9a8e3d59516f67ab2f210f5265a78cb7
+/media/Music/BLACKPINK/THE ALBUM -JP ver.- (2021)/CD 01-08 BLACKPINK - You Never Know -JP ver.flac	1	1	BLACKPINK	9a8e3d59516f67ab2f210f5265a78cb7
+/media/Music/Benson Boone/Fireworks & Rollerblades (2024)/CD 01-01 Benson Boone - Intro.flac	1	1	Benson Boone	d40fba0e0852c42580ccf5e27624485f
+/media/Music/Benson Boone/Fireworks & Rollerblades (2024)/CD 01-02 Benson Boone - Be Someone.flac	1	1	Benson Boone	d40fba0e0852c42580ccf5e27624485f
+/media/Music/Benson Boone/Fireworks & Rollerblades (2024)/CD 01-03 Benson Boone - Slow It Down.flac	1	1	Benson Boone	d40fba0e0852c42580ccf5e27624485f
+/media/Music/Benson Boone/Fireworks & Rollerblades (2024)/CD 01-04 Benson Boone - Beautiful Things.flac	1	1	Benson Boone	d40fba0e0852c42580ccf5e27624485f
+/media/Music/Benson Boone/Fireworks & Rollerblades (2024)/CD 01-05 Benson Boone - Cry.flac	1	1	Benson Boone	d40fba0e0852c42580ccf5e27624485f
+/media/Music/Benson Boone/Fireworks & Rollerblades (2024)/CD 01-06 Benson Boone - Forever and a Day.flac	1	1	Benson Boone	d40fba0e0852c42580ccf5e27624485f
+/media/Music/Benson Boone/Fireworks & Rollerblades (2024)/CD 01-07 Benson Boone - In the Stars.flac	1	1	Benson Boone	d40fba0e0852c42580ccf5e27624485f
+/media/Music/Benson Boone/Fireworks & Rollerblades (2024)/CD 01-08 Benson Boone - Drunk in My Mind.flac	1	1	Benson Boone	d40fba0e0852c42580ccf5e27624485f
+/media/Music/Benson Boone/Fireworks & Rollerblades (2024)/CD 01-09 Benson Boone - My Greatest Fear.flac	1	1	Benson Boone	d40fba0e0852c42580ccf5e27624485f
+/media/Music/Benson Boone/Fireworks & Rollerblades (2024)/CD 01-10 Benson Boone - There She Goes.flac	1	1	Benson Boone	d40fba0e0852c42580ccf5e27624485f
+/media/Music/Benson Boone/Fireworks & Rollerblades (2024)/CD 01-11 Benson Boone - Hello Love.flac	1	1	Benson Boone	d40fba0e0852c42580ccf5e27624485f
+/media/Music/Benson Boone/Fireworks & Rollerblades (2024)/CD 01-12 Benson Boone - Ghost Town.flac	1	1	Benson Boone	d40fba0e0852c42580ccf5e27624485f
+/media/Music/Benson Boone/Fireworks & Rollerblades (2024)/CD 01-13 Benson Boone - Love of Mine.flac	1	1	Benson Boone	d40fba0e0852c42580ccf5e27624485f
+/media/Music/Benson Boone/Fireworks & Rollerblades (2024)/CD 01-14 Benson Boone - Friend.flac	1	1	Benson Boone	d40fba0e0852c42580ccf5e27624485f
+/media/Music/Benson Boone/Fireworks & Rollerblades (2024)/CD 01-15 Benson Boone - What Do You Want.flac	1	1	Benson Boone	d40fba0e0852c42580ccf5e27624485f
+/media/Music/Chris Norman/Lifelines (2026)/Digital Media 01-01 Chris Norman - Lifelines.mp3	1	1	Chris Norman	7a25e2abf11534a64a8a6737775188aa
+/media/Music/Chris Norman/Lifelines (2026)/Digital Media 01-02 Chris Norman - So You Win Again.mp3	1	1	Chris Norman	7a25e2abf11534a64a8a6737775188aa
+/media/Music/Chris Norman/Lifelines (2026)/Digital Media 01-03 Chris Norman - Crying in the Rain.mp3	1	1	Chris Norman	7a25e2abf11534a64a8a6737775188aa
+/media/Music/Chris Norman/Lifelines (2026)/Digital Media 01-04 Chris Norman - Strawberry Fields Forever.mp3	1	1	Chris Norman	7a25e2abf11534a64a8a6737775188aa
+/media/Music/Chris Norman/Lifelines (2026)/Digital Media 01-05 Chris Norman - Run.mp3	1	1	Chris Norman	7a25e2abf11534a64a8a6737775188aa
+/media/Music/Chris Norman/Lifelines (2026)/Digital Media 01-06 Chris Norman - Free Fallin.mp3	1	1	Chris Norman	7a25e2abf11534a64a8a6737775188aa
+/media/Music/Chris Norman/Lifelines (2026)/Digital Media 01-07 Chris Norman - Midnight Lady.mp3	1	1	Chris Norman	7a25e2abf11534a64a8a6737775188aa
+/media/Music/Chris Norman/Lifelines (2026)/Digital Media 01-08 Chris Norman - Addicted to Love.mp3	1	1	Chris Norman	7a25e2abf11534a64a8a6737775188aa
+/media/Music/Chris Norman/Lifelines (2026)/Digital Media 01-09 Chris Norman - All I Have to Do Is Dream.mp3	1	1	Chris Norman	7a25e2abf11534a64a8a6737775188aa
+/media/Music/Chris Norman/Lifelines (2026)/Digital Media 01-10 Chris Norman - Piece of My Heart.mp3	1	1	Chris Norman	7a25e2abf11534a64a8a6737775188aa
+/media/Music/Chris Norman/Lifelines (2026)/Digital Media 01-11 Chris Norman - Fix You.mp3	1	1	Chris Norman	7a25e2abf11534a64a8a6737775188aa
+/media/Music/Chris Norman/Lifelines (2026)/Digital Media 01-12 Chris Norman - Mexican Girl.mp3	1	1	Chris Norman	7a25e2abf11534a64a8a6737775188aa
+/media/Music/Chris Norman/Lifelines (2026)/Digital Media 01-13 Chris Norman - Whiskey in the Jar.mp3	1	1	Chris Norman	7a25e2abf11534a64a8a6737775188aa
+/media/Music/Chris Norman/Lifelines (2026)/Digital Media 01-14 Chris Norman - The Air That I Breathe.mp3	1	1	Chris Norman	7a25e2abf11534a64a8a6737775188aa
+/media/Music/Chris Norman/Lifelines (2026)/Digital Media 01-15 Chris Norman - Everybody Hurts.mp3	1	1	Chris Norman	7a25e2abf11534a64a8a6737775188aa
+/media/Music/Def Leppard/Adrenalize (1992)/Digital Media 01-01 Def Leppard - Let’s Get Rocked.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Adrenalize (1992)/Digital Media 01-02 Def Leppard - Heaven Is.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Adrenalize (1992)/Digital Media 01-03 Def Leppard - Make Love Like a Man.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Adrenalize (1992)/Digital Media 01-04 Def Leppard - Tonight.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Adrenalize (1992)/Digital Media 01-05 Def Leppard - White Lightning.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Adrenalize (1992)/Digital Media 01-06 Def Leppard - Stand Up (Kick Love Into Motion).flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Adrenalize (1992)/Digital Media 01-07 Def Leppard - Personal Property.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Adrenalize (1992)/Digital Media 01-08 Def Leppard - Have You Ever Needed Someone So Bad.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Adrenalize (1992)/Digital Media 01-09 Def Leppard - I Wanna Touch U.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Adrenalize (1992)/Digital Media 01-10 Def Leppard - Tear It Down.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 01-01 Def Leppard - Now.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 01-02 Def Leppard - Unbelievable.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 01-03 Def Leppard - You’re So Beautiful.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 01-04 Def Leppard - Everyday.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 01-05 Def Leppard - Long Long Way to Go.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 01-06 Def Leppard - Four Letter Word.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 01-07 Def Leppard - Torn to Shreds.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 01-08 Def Leppard - Love Don’t Lie.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 01-09 Def Leppard - Gravity.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 01-10 Def Leppard - Cry.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 01-11 Def Leppard - Girl Like You.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 01-12 Def Leppard - Let Me Be the One.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 01-13 Def Leppard - Scar.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 02-01 Def Leppard - 20th Century Boy.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 02-02 Def Leppard - Rock On.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 02-03 Def Leppard - Hanging On the Telephone.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 02-04 Def Leppard - Waterloo Sunset.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 02-05 Def Leppard - Hell Raiser.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 02-06 Def Leppard - 10538 Overture.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 02-07 Def Leppard - Street Life.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 02-08 Def Leppard - Drive‐In Saturday.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 02-09 Def Leppard - Little Bit of Love.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 02-10 Def Leppard - The Golden Age of Rock ’n’ Roll.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 02-11 Def Leppard - No Matter What.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 02-12 Def Leppard - He’s Gonna Step on You Again.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 02-13 Def Leppard - Don’t Believe a Word.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 02-14 Def Leppard - Stay With Me.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 03-01 Def Leppard - Go.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 03-02 Def Leppard - Nine Lives.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 03-03 Def Leppard - C’mon C’mon.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 03-04 Def Leppard - Love.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 03-05 Def Leppard - Tomorrow.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 03-06 Def Leppard - Cruise Control.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 03-07 Def Leppard - Hallucinate.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 03-08 Def Leppard - Only the Good Die Young.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 03-09 Def Leppard - Bad Actress.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 03-10 Def Leppard - Come Undone.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 03-11 Def Leppard - Gotta Let It Go.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 04-01 Def Leppard - Now (radio edit).flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 04-02 Def Leppard - Long Long Way to Go (radio edit).flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 04-03 Def Leppard - Kiss the Day (UK special edition).flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 04-04 Def Leppard - 10 × Bigger Than Love.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 04-05 Def Leppard - Love Don’t Lie (demo).flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 04-06 Def Leppard - Let Me Be the One (demo).flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 04-07 Def Leppard - Gimme a Job.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 04-08 Def Leppard - Now (acoustic version).flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 04-09 Def Leppard - Long Long Way to Go (stripped version).flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 04-10 Def Leppard - Nine Lives (Joe only vocal version).flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 04-11 Def Leppard - Perfect Girl.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 04-12 Def Leppard - Love (piano version).flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 05-01 Def Leppard - Only After Dark.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 05-02 Def Leppard - You Can’t Always Get What You Want.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 05-03 Def Leppard - Little Wing.flac	1	1	Def Leppard Feat. Hothouse Flowers	2f9eec2e1a390013ee7f60e9c42e2d81
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 05-04 Def Leppard - Ziggy Stardust.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 05-05 Def Leppard - Under My Wheels.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 05-06 Def Leppard - Who Do You Love.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 05-07 Def Leppard - Rebel Rebel.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 05-08 Def Leppard - Led Boots.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 05-09 Def Leppard - ’Cause We Ended as Lovers.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 05-10 Def Leppard - Search and Destroy.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 05-11 Def Leppard - How Does It Feel.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 05-12 Def Leppard - Roxanne (Phil’s demo).flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 05-13 Def Leppard - Dear Friends.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 05-14 Def Leppard - Winter Song.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 05-15 Def Leppard - American Girl.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 05-16 Def Leppard - Heartbeat.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 05-17 Def Leppard - Space Oddity.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 05-18 Def Leppard - When I’m Dead and Gone.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 05-19 Def Leppard - Stay With Me.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 06-01 Def Leppard - Elected.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 06-02 Def Leppard - Action (live).flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 06-03 Def Leppard - No Matter What (live).flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 06-04 Def Leppard - Rock On (live 2006).flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 06-05 Def Leppard - Travellin’ Band (radio edit).flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 06-06 Def Leppard - Now I’m Here (live).flac	1	1	Def Leppard Feat. Brian May	ed81411db636120f1bb18700c0916f7a
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 06-07 Def Leppard - 20th Century Boy (2006 VH‐1 Rock Honors).flac	1	1	Def Leppard Feat. Brian May	ed81411db636120f1bb18700c0916f7a
+/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/CD 06-08 Def Leppard - All the Young Dudes (live).flac	1	1	Def Leppard Feat. Ian Hunter	6c9bcdac68e5e7354e342b6cee5ee72e
+/media/Music/Def Leppard/Def Leppard (2015)/CD 01-01 Def Leppard - Let’s Go.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Def Leppard (2015)/CD 01-02 Def Leppard - Dangerous.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Def Leppard (2015)/CD 01-03 Def Leppard - Man Enough.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Def Leppard (2015)/CD 01-04 Def Leppard - We Belong.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Def Leppard (2015)/CD 01-05 Def Leppard - Invincible.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Def Leppard (2015)/CD 01-06 Def Leppard - Sea of Love.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Def Leppard (2015)/CD 01-07 Def Leppard - Energized.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Def Leppard (2015)/CD 01-08 Def Leppard - All Time High.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Def Leppard (2015)/CD 01-09 Def Leppard - Battle of My Own.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Def Leppard (2015)/CD 01-10 Def Leppard - Broke ’n’ Brokenhearted.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Def Leppard (2015)/CD 01-11 Def Leppard - Forever Young.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Def Leppard (2015)/CD 01-12 Def Leppard - Last Dance.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Def Leppard (2015)/CD 01-13 Def Leppard - Wings of an Angel.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Def Leppard (2015)/CD 01-14 Def Leppard - Blind Faith.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Def Leppard - The Las Vegas Residency Set List (2026)/Digital Media 01-01 Def Leppard - Rejoice.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Def Leppard - The Las Vegas Residency Set List (2026)/Digital Media 01-02 Def Leppard - Animal.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Def Leppard - The Las Vegas Residency Set List (2026)/Digital Media 01-03 Def Leppard - Let’s Get Rocked.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Def Leppard - The Las Vegas Residency Set List (2026)/Digital Media 01-04 Def Leppard - Bringin’ On the Heartbreak (1984 remix).flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Def Leppard - The Las Vegas Residency Set List (2026)/Digital Media 01-05 Def Leppard - Switch 625.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Def Leppard - The Las Vegas Residency Set List (2026)/Digital Media 01-06 Def Leppard - Just Like 73 (Tom Morello version).flac	1	1	Def Leppard Feat. Tom Morello	10db5213e82938c0dc8895c8ed32e98f
+/media/Music/Def Leppard/Def Leppard - The Las Vegas Residency Set List (2026)/Digital Media 01-07 Def Leppard - Rocket.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Def Leppard - The Las Vegas Residency Set List (2026)/Digital Media 01-08 Def Leppard - Rock On.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Def Leppard - The Las Vegas Residency Set List (2026)/Digital Media 01-09 Def Leppard - White Lightning.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Def Leppard - The Las Vegas Residency Set List (2026)/Digital Media 01-10 Def Leppard - Foolin’.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Def Leppard - The Las Vegas Residency Set List (2026)/Digital Media 01-11 Def Leppard - Slang.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Def Leppard - The Las Vegas Residency Set List (2026)/Digital Media 01-12 Def Leppard - Promises.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Def Leppard - The Las Vegas Residency Set List (2026)/Digital Media 01-13 Def Leppard - Armageddon It.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Def Leppard - The Las Vegas Residency Set List (2026)/Digital Media 01-14 Def Leppard - Love Bites.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Def Leppard - The Las Vegas Residency Set List (2026)/Digital Media 01-15 Def Leppard - Rock of Ages.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Def Leppard - The Las Vegas Residency Set List (2026)/Digital Media 01-16 Def Leppard - Photograph.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Def Leppard - The Las Vegas Residency Set List (2026)/Digital Media 01-17 Def Leppard - Hysteria.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Def Leppard - The Las Vegas Residency Set List (2026)/Digital Media 01-18 Def Leppard - Pour Some Sugar on Me (extended version).flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Diamond Star Halos (2022)/CD 01-01 Def Leppard - Take What You Want.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Diamond Star Halos (2022)/CD 01-02 Def Leppard - Kick.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Diamond Star Halos (2022)/CD 01-03 Def Leppard - Fire It Up.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Diamond Star Halos (2022)/CD 01-04 Def Leppard - This Guitar.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Diamond Star Halos (2022)/CD 01-05 Def Leppard - SOS Emergency.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Diamond Star Halos (2022)/CD 01-06 Def Leppard - Liquid Dust.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Diamond Star Halos (2022)/CD 01-07 Def Leppard - U Rok Mi.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Diamond Star Halos (2022)/CD 01-08 Def Leppard - Goodbye for Good This Time.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Diamond Star Halos (2022)/CD 01-09 Def Leppard - All We Need.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Diamond Star Halos (2022)/CD 01-10 Def Leppard - Open Your Eyes.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Diamond Star Halos (2022)/CD 01-11 Def Leppard - Gimme a Kiss That Rocks.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Diamond Star Halos (2022)/CD 01-12 Def Leppard - Angels (Can’t Help You Now).flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Diamond Star Halos (2022)/CD 01-13 Def Leppard - Lifeless.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Diamond Star Halos (2022)/CD 01-14 Def Leppard - Unbreakable.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Diamond Star Halos (2022)/CD 01-15 Def Leppard - From Here to Eternity.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Diamond Star Halos (2022)/CD 01-16 Def Leppard - Goodbye for Good This Time (avant‐garde mix).flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Diamond Star Halos (2022)/CD 01-17 Def Leppard - Lifeless (Joe only version).flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Drastic Symphonies (2023)/CD 01-01 Def Leppard - Turn to Dust.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Drastic Symphonies (2023)/CD 01-02 Def Leppard - Paper Sun.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Drastic Symphonies (2023)/CD 01-03 Def Leppard - Animal.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Drastic Symphonies (2023)/CD 01-04 Def Leppard - Pour Some Sugar on Me (stripped version).flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Drastic Symphonies (2023)/CD 01-05 Def Leppard - Hysteria.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Drastic Symphonies (2023)/CD 01-06 Def Leppard - Love Bites.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Drastic Symphonies (2023)/CD 01-07 Def Leppard - Goodbye for Good This Time.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Drastic Symphonies (2023)/CD 01-08 Def Leppard - Love.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Drastic Symphonies (2023)/CD 01-09 Def Leppard - Gods of War.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Drastic Symphonies (2023)/CD 01-10 Def Leppard - Angels (Can’t Help You Now).flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Drastic Symphonies (2023)/CD 01-11 Def Leppard - Bringin’ On the Heartbreak.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Drastic Symphonies (2023)/CD 01-12 Def Leppard - Switch 625.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Drastic Symphonies (2023)/CD 01-13 Def Leppard - Too Late for Love.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Drastic Symphonies (2023)/CD 01-14 Def Leppard - When Love & Hate Collide.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Drastic Symphonies (2023)/CD 01-15 Def Leppard - Kings of the World.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/High ’n’ Dry (1981)/CD 01-01 Def Leppard - Let It Go.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/High ’n’ Dry (1981)/CD 01-02 Def Leppard - Another Hit and Run.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/High ’n’ Dry (1981)/CD 01-03 Def Leppard - High ’n’ Dry (Saturday Night).flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/High ’n’ Dry (1981)/CD 01-04 Def Leppard - Bringin’ On the Heartbreak.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/High ’n’ Dry (1981)/CD 01-05 Def Leppard - Switch 625.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/High ’n’ Dry (1981)/CD 01-06 Def Leppard - You Got Me Runnin’.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/High ’n’ Dry (1981)/CD 01-07 Def Leppard - Lady Strange.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/High ’n’ Dry (1981)/CD 01-08 Def Leppard - On Through the Night.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/High ’n’ Dry (1981)/CD 01-09 Def Leppard - Mirror, Mirror (Look Into My Eyes).flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/High ’n’ Dry (1981)/CD 01-10 Def Leppard - No No No.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/On Through the Night (1980)/Digital Media 01-01 Def Leppard - Rock Brigade.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/On Through the Night (1980)/Digital Media 01-02 Def Leppard - Hello America.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/On Through the Night (1980)/Digital Media 01-03 Def Leppard - Sorrow Is a Woman.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/On Through the Night (1980)/Digital Media 01-04 Def Leppard - It Could Be You.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/On Through the Night (1980)/Digital Media 01-05 Def Leppard - Satellite.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/On Through the Night (1980)/Digital Media 01-06 Def Leppard - When the Walls Came Tumbling Down.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/On Through the Night (1980)/Digital Media 01-07 Def Leppard - Wasted.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/On Through the Night (1980)/Digital Media 01-08 Def Leppard - Rocks Off.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/On Through the Night (1980)/Digital Media 01-09 Def Leppard - It Don’t Matter.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/On Through the Night (1980)/Digital Media 01-10 Def Leppard - Answer to the Master.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/On Through the Night (1980)/Digital Media 01-11 Def Leppard - Overture.flac	0	0		
+/media/Music/Def Leppard/Pyromania (1983)/CD 01-01 Def Leppard - Rock! Rock! (Till You Drop).flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Pyromania (1983)/CD 01-02 Def Leppard - Photograph.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Pyromania (1983)/CD 01-03 Def Leppard - Stagefright.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Pyromania (1983)/CD 01-04 Def Leppard - Too Late for Love.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Pyromania (1983)/CD 01-05 Def Leppard - Die Hard the Hunter.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Pyromania (1983)/CD 01-06 Def Leppard - Foolin’.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Pyromania (1983)/CD 01-07 Def Leppard - Rock of Ages.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Pyromania (1983)/CD 01-08 Def Leppard - Comin’ Under Fire.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Pyromania (1983)/CD 01-09 Def Leppard - Action! Not Words.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Pyromania (1983)/CD 01-10 Def Leppard - Billy’s Got a Gun.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Retro Active (1993)/CD 01-01 Def Leppard - Desert Song.mp3	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Retro Active (1993)/CD 01-02 Def Leppard - Fractured Love.mp3	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Retro Active (1993)/CD 01-03 Def Leppard - Action.mp3	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Retro Active (1993)/CD 01-04 Def Leppard - Two Steps Behind (acoustic version).mp3	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Retro Active (1993)/CD 01-05 Def Leppard - She’s Too Tough.mp3	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Retro Active (1993)/CD 01-06 Def Leppard - Miss You in a Heartbeat.mp3	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Retro Active (1993)/CD 01-07 Def Leppard - Only After Dark.mp3	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Retro Active (1993)/CD 01-08 Def Leppard - Ride Into the Sun.mp3	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Retro Active (1993)/CD 01-09 Def Leppard - From the Inside.mp3	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Retro Active (1993)/CD 01-10 Def Leppard - Ring of Fire.mp3	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Retro Active (1993)/CD 01-11 Def Leppard - I Wanna Be Your Hero.mp3	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Retro Active (1993)/CD 01-12 Def Leppard - Miss You in a Heartbeat (electric version).mp3	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Retro Active (1993)/CD 01-13 Def Leppard - Two Steps Behind (electric version).mp3	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Retro Active (1993)/CD 01-14 Def Leppard - Miss You in a Heartbeat (acoustic version).mp3	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Rock of Ages - The Definitive Collection (2005)/CD 01-01 Def Leppard - Pour Some Sugar on Me (Historia video edit).flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Rock of Ages - The Definitive Collection (2005)/CD 01-02 Def Leppard - Photograph.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Rock of Ages - The Definitive Collection (2005)/CD 01-03 Def Leppard - Love Bites.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Rock of Ages - The Definitive Collection (2005)/CD 01-04 Def Leppard - Let’s Get Rocked.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Rock of Ages - The Definitive Collection (2005)/CD 01-05 Def Leppard - Two Steps Behind (acoustic version).flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Rock of Ages - The Definitive Collection (2005)/CD 01-06 Def Leppard - Animal.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Rock of Ages - The Definitive Collection (2005)/CD 01-07 Def Leppard - Heaven Is.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Rock of Ages - The Definitive Collection (2005)/CD 01-08 Def Leppard - Foolin’.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Rock of Ages - The Definitive Collection (2005)/CD 01-09 Def Leppard - Rocket (Visualize video edit).flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Rock of Ages - The Definitive Collection (2005)/CD 01-10 Def Leppard - When Love & Hate Collide.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Rock of Ages - The Definitive Collection (2005)/CD 01-11 Def Leppard - Armageddon It.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Rock of Ages - The Definitive Collection (2005)/CD 01-12 Def Leppard - Have You Ever Needed Someone So Bad.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Rock of Ages - The Definitive Collection (2005)/CD 01-13 Def Leppard - Rock of Ages.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Rock of Ages - The Definitive Collection (2005)/CD 01-14 Def Leppard - Hysteria.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Rock of Ages - The Definitive Collection (2005)/CD 01-15 Def Leppard - Miss You in a Heartbeat.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Rock of Ages - The Definitive Collection (2005)/CD 01-16 Def Leppard - Bringin’ On the Heartbreak.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Rock of Ages - The Definitive Collection (2005)/CD 01-17 Def Leppard - Switch 625.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Rock of Ages - The Definitive Collection (2005)/CD 02-01 Def Leppard - Rock Rock (Till You Drop).flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Rock of Ages - The Definitive Collection (2005)/CD 02-02 Def Leppard - Let It Go.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Rock of Ages - The Definitive Collection (2005)/CD 02-03 Def Leppard - High ’n’ Dry (Saturday Night).flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Rock of Ages - The Definitive Collection (2005)/CD 02-04 Def Leppard - Too Late for Love.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Rock of Ages - The Definitive Collection (2005)/CD 02-05 Def Leppard - No Matter What.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Rock of Ages - The Definitive Collection (2005)/CD 02-06 Def Leppard - Promises.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Rock of Ages - The Definitive Collection (2005)/CD 02-07 Def Leppard - Mirror, Mirror (Look Into My Eyes).flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Rock of Ages - The Definitive Collection (2005)/CD 02-08 Def Leppard - Women.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Rock of Ages - The Definitive Collection (2005)/CD 02-09 Def Leppard - Another Hit and Run.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Rock of Ages - The Definitive Collection (2005)/CD 02-10 Def Leppard - Slang.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Rock of Ages - The Definitive Collection (2005)/CD 02-11 Def Leppard - Stand Up (Kick Love Into Motion).flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Rock of Ages - The Definitive Collection (2005)/CD 02-12 Def Leppard - Rock Brigade.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Rock of Ages - The Definitive Collection (2005)/CD 02-13 Def Leppard - Now.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Rock of Ages - The Definitive Collection (2005)/CD 02-14 Def Leppard - Paper Sun.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Rock of Ages - The Definitive Collection (2005)/CD 02-15 Def Leppard - Work It Out.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Rock of Ages - The Definitive Collection (2005)/CD 02-16 Def Leppard - Die Hard the Hunter.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Rock of Ages - The Definitive Collection (2005)/CD 02-17 Def Leppard - Wasted.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/Rock of Ages - The Definitive Collection (2005)/CD 02-18 Def Leppard - Billy’s Got a Gun.flac	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/The Story So Far - The Best of Def Leppard (2018)/Digital Media 01-01 Def Leppard - Animal.mp3	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/The Story So Far - The Best of Def Leppard (2018)/Digital Media 01-02 Def Leppard - Photograph.mp3	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/The Story So Far - The Best of Def Leppard (2018)/Digital Media 01-03 Def Leppard - Pour Some Sugar on Me.mp3	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/The Story So Far - The Best of Def Leppard (2018)/Digital Media 01-04 Def Leppard - Love Bites.mp3	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/The Story So Far - The Best of Def Leppard (2018)/Digital Media 01-05 Def Leppard - Let’s Get Rocked.mp3	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/The Story So Far - The Best of Def Leppard (2018)/Digital Media 01-06 Def Leppard - Armageddon It.mp3	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/The Story So Far - The Best of Def Leppard (2018)/Digital Media 01-07 Def Leppard - Foolin’.mp3	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/The Story So Far - The Best of Def Leppard (2018)/Digital Media 01-08 Def Leppard - Two Steps Behind (string + acoustic version).mp3	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/The Story So Far - The Best of Def Leppard (2018)/Digital Media 01-09 Def Leppard - Heaven Is.mp3	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/The Story So Far - The Best of Def Leppard (2018)/Digital Media 01-10 Def Leppard - Rocket.mp3	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/The Story So Far - The Best of Def Leppard (2018)/Digital Media 01-11 Def Leppard - Hysteria.mp3	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/The Story So Far - The Best of Def Leppard (2018)/Digital Media 01-12 Def Leppard - Have You Ever Needed Someone So Bad.mp3	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/The Story So Far - The Best of Def Leppard (2018)/Digital Media 01-13 Def Leppard - Make Love Like a Man.mp3	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/The Story So Far - The Best of Def Leppard (2018)/Digital Media 01-14 Def Leppard - Action (revised version).mp3	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/The Story So Far - The Best of Def Leppard (2018)/Digital Media 01-15 Def Leppard - When Love and Hate Collide.mp3	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/The Story So Far - The Best of Def Leppard (2018)/Digital Media 01-16 Def Leppard - Rock of Ages.mp3	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/The Story So Far - The Best of Def Leppard (2018)/Digital Media 01-17 Def Leppard - Personal Jesus (remix).mp3	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/The Story So Far - The Best of Def Leppard (2018)/Digital Media 01-18 Def Leppard - Promises.mp3	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/The Story So Far - The Best of Def Leppard (2018)/Digital Media 01-19 Def Leppard - Slang.mp3	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/The Story So Far - The Best of Def Leppard (2018)/Digital Media 01-20 Def Leppard - Bringin’ On the Heartbreak.mp3	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/The Story So Far - The Best of Def Leppard (2018)/Digital Media 01-21 Def Leppard - Rock On (radio edit + remixed).mp3	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/The Story So Far - The Best of Def Leppard (2018)/Digital Media 01-22 Def Leppard - Nine Lives.mp3	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/The Story So Far - The Best of Def Leppard (2018)/Digital Media 01-23 Def Leppard - Work It Out.mp3	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/The Story So Far - The Best of Def Leppard (2018)/Digital Media 01-24 Def Leppard - Stand Up (Kick Love Into Motion).mp3	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/The Story So Far - The Best of Def Leppard (2018)/Digital Media 01-25 Def Leppard - Now.mp3	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/The Story So Far - The Best of Def Leppard (2018)/Digital Media 01-26 Def Leppard - Undefeated.mp3	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/The Story So Far - The Best of Def Leppard (2018)/Digital Media 01-27 Def Leppard - Tonight.mp3	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/The Story So Far - The Best of Def Leppard (2018)/Digital Media 01-28 Def Leppard - C’mon C’mon.mp3	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/The Story So Far - The Best of Def Leppard (2018)/Digital Media 01-29 Def Leppard - No Matter What.mp3	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/The Story So Far - The Best of Def Leppard (2018)/Digital Media 01-30 Def Leppard - All I Want Is Everything.mp3	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/The Story So Far - The Best of Def Leppard (2018)/Digital Media 01-31 Def Leppard - It’s All About Believin’.mp3	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Def Leppard/The Story So Far - The Best of Def Leppard (2018)/Digital Media 01-32 Def Leppard - Kings of the World.mp3	1	1	Def Leppard	e32b17f239aef69555b08532f66c0cb1
+/media/Music/Ed Sheeran/+ (2011)/CD 01-01 Ed Sheeran - The A Team.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/+ (2011)/CD 01-02 Ed Sheeran - Drunk.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/+ (2011)/CD 01-03 Ed Sheeran - U.N.I.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/+ (2011)/CD 01-04 Ed Sheeran - Grade 8.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/+ (2011)/CD 01-05 Ed Sheeran - Wake Me Up.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/+ (2011)/CD 01-06 Ed Sheeran - Small Bump.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/+ (2011)/CD 01-07 Ed Sheeran - This.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/+ (2011)/CD 01-08 Ed Sheeran - The City.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/+ (2011)/CD 01-09 Ed Sheeran - Lego House.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/+ (2011)/CD 01-10 Ed Sheeran - You Need Me, I Don’t Need You.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/+ (2011)/CD 01-11 Ed Sheeran - Kiss Me.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/+ (2011)/CD 01-12 Ed Sheeran - Give Me Love.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/+ (2011)/CD 01-13 Ed Sheeran - Autumn Leaves.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/+ (2011)/CD 01-14 Ed Sheeran - Little Bird.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/+ (2011)/CD 01-15 Ed Sheeran - Gold Rush.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/+ (2011)/CD 01-16 Ed Sheeran - Sunburn.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/- (2023)/CD 01-01 Ed Sheeran - Boat.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/- (2023)/CD 01-02 Ed Sheeran - Salt Water.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/- (2023)/CD 01-03 Ed Sheeran - Eyes Closed.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/- (2023)/CD 01-04 Ed Sheeran - Life Goes On.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/- (2023)/CD 01-05 Ed Sheeran - Dusty.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/- (2023)/CD 01-06 Ed Sheeran - End of Youth.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/- (2023)/CD 01-07 Ed Sheeran - Colourblind.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/- (2023)/CD 01-08 Ed Sheeran - Curtains.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/- (2023)/CD 01-09 Ed Sheeran - Borderline.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/- (2023)/CD 01-10 Ed Sheeran - Spark.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/- (2023)/CD 01-11 Ed Sheeran - Vega.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/- (2023)/CD 01-12 Ed Sheeran - Sycamore.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/- (2023)/CD 01-13 Ed Sheeran - No Strings.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/- (2023)/CD 01-14 Ed Sheeran - The Hills of Aberfeldy.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/- (2023)/CD 01-15 Ed Sheeran - Wildflowers.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/- (2023)/CD 01-16 Ed Sheeran - Stoned.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/- (2023)/CD 01-17 Ed Sheeran - Toughest.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/- (2023)/CD 01-18 Ed Sheeran - Moving.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/5 (2014)/Digital Media 01-01 Ed Sheeran - You Need Me, I Don’t Need You.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/5 (2014)/Digital Media 01-02 Ed Sheeran - So.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/5 (2014)/Digital Media 01-03 Ed Sheeran - Be Like You.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/5 (2014)/Digital Media 01-04 Ed Sheeran - The City.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/5 (2014)/Digital Media 01-05 Ed Sheeran - Sunburn.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/5 (2014)/Digital Media 02-01 Ed Sheeran - Let It Out.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/5 (2014)/Digital Media 02-02 Ed Sheeran - Homeless.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/5 (2014)/Digital Media 02-03 Ed Sheeran - Little Bird.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/5 (2014)/Digital Media 02-04 Ed Sheeran - Sofa.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/5 (2014)/Digital Media 02-05 Ed Sheeran - One Night.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/5 (2014)/Digital Media 02-06 Ed Sheeran - Firefly.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/5 (2014)/Digital Media 02-07 Ed Sheeran - The City (live at Sticky Studios).flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/5 (2014)/Digital Media 02-08 Ed Sheeran - Firefly (Bravado dubstep remix).flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/5 (2014)/Digital Media 03-01 Ed Sheeran - Fall.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/5 (2014)/Digital Media 03-02 Ed Sheeran - Fire Alarms.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/5 (2014)/Digital Media 03-03 Ed Sheeran - Where We Land.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/5 (2014)/Digital Media 03-04 Ed Sheeran - Cold Coffee.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/5 (2014)/Digital Media 03-05 Ed Sheeran - She.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/5 (2014)/Digital Media 04-01 Ed Sheeran - The A Team (live at The Bedford).flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/5 (2014)/Digital Media 04-02 Ed Sheeran - Homeless (live at The Bedford).flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/5 (2014)/Digital Media 04-03 Ed Sheeran - The City (live at The Bedford).flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/5 (2014)/Digital Media 04-04 Ed Sheeran - Fall (live at The Bedford).flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/5 (2014)/Digital Media 04-05 Ed Sheeran - Wake Me Up (live at The Bedford).flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/5 (2014)/Digital Media 04-06 Ed Sheeran - You Need Me, I Don’t Need You (live at The Bedford).flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/5 (2014)/Digital Media 05-01 Ed Sheeran - Lately.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/5 (2014)/Digital Media 05-02 Ed Sheeran - You.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/5 (2014)/Digital Media 05-03 Ed Sheeran - Family.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/5 (2014)/Digital Media 05-04 Ed Sheeran - Radio.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/5 (2014)/Digital Media 05-05 Ed Sheeran - Little Lady.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/5 (2014)/Digital Media 05-06 Ed Sheeran - Drown Me Out.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/5 (2014)/Digital Media 05-07 Ed Sheeran - Nightmares.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/5 (2014)/Digital Media 05-08 Ed Sheeran - Goodbye to You.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/No.6 Collaborations Project (2019)/CD 01-01 Ed Sheeran - Beautiful People.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/No.6 Collaborations Project (2019)/CD 01-02 Ed Sheeran - South of the Border.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/No.6 Collaborations Project (2019)/CD 01-03 Ed Sheeran - Cross Me.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/No.6 Collaborations Project (2019)/CD 01-04 Ed Sheeran - Take Me Back to London.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/No.6 Collaborations Project (2019)/CD 01-05 Ed Sheeran - Best Part of Me.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/No.6 Collaborations Project (2019)/CD 01-06 Ed Sheeran - I Don’t Care.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/No.6 Collaborations Project (2019)/CD 01-07 Ed Sheeran - Antisocial.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/No.6 Collaborations Project (2019)/CD 01-08 Ed Sheeran - Remember the Name.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/No.6 Collaborations Project (2019)/CD 01-09 Ed Sheeran - Feels.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/No.6 Collaborations Project (2019)/CD 01-10 Ed Sheeran - Put It All on Me.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/No.6 Collaborations Project (2019)/CD 01-11 Ed Sheeran - Nothing on You.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/No.6 Collaborations Project (2019)/CD 01-12 Ed Sheeran - I Don’t Want Your Money.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/No.6 Collaborations Project (2019)/CD 01-13 Ed Sheeran - 1000 Nights.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/No.6 Collaborations Project (2019)/CD 01-14 Ed Sheeran - Way to Break My Heart.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/No.6 Collaborations Project (2019)/CD 01-15 Ed Sheeran - BLOW.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/Play (2025)/Digital Media 01-01 Ed Sheeran - Opening.mp3	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/Play (2025)/Digital Media 01-02 Ed Sheeran - Sapphire.mp3	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/Play (2025)/Digital Media 01-03 Ed Sheeran - Azizam.mp3	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/Play (2025)/Digital Media 01-04 Ed Sheeran - Old Phone.mp3	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/Play (2025)/Digital Media 01-05 Ed Sheeran - Symmetry.mp3	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/Play (2025)/Digital Media 01-06 Ed Sheeran - Camera.mp3	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/Play (2025)/Digital Media 01-07 Ed Sheeran - In Other Words.mp3	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/Play (2025)/Digital Media 01-08 Ed Sheeran - A Little More.mp3	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/Play (2025)/Digital Media 01-09 Ed Sheeran - Slowly.mp3	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/Play (2025)/Digital Media 01-10 Ed Sheeran - Don’t Look Down.mp3	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/Play (2025)/Digital Media 01-11 Ed Sheeran - The Vow.mp3	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/Play (2025)/Digital Media 01-12 Ed Sheeran - For Always.mp3	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/Play (2025)/Digital Media 01-13 Ed Sheeran - Heaven.mp3	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/Play (2025)/Digital Media 01-14 Ed Sheeran - Problems.mp3	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/Play (2025)/Digital Media 01-15 Ed Sheeran - War Game.mp3	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/Play (2025)/Digital Media 01-16 Ed Sheeran - Regrets.mp3	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/Play (2025)/Digital Media 01-17 Ed Sheeran - Freedom.mp3	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/Play (2025)/Digital Media 01-18 Ed Sheeran - Sapphire.mp3	1	1	Ed Sheeran,Arijit Singh	1bac8ba15f4c808dd662b553a492f830
+/media/Music/Ed Sheeran/× (2014)/CD 01-01 Ed Sheeran - One.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/× (2014)/CD 01-02 Ed Sheeran - I’m a Mess.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/× (2014)/CD 01-03 Ed Sheeran - Sing.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/× (2014)/CD 01-04 Ed Sheeran - Don’t.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/× (2014)/CD 01-05 Ed Sheeran - Nina.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/× (2014)/CD 01-06 Ed Sheeran - Photograph.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/× (2014)/CD 01-07 Ed Sheeran - Bloodstream.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/× (2014)/CD 01-08 Ed Sheeran - Tenerife Sea.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/× (2014)/CD 01-09 Ed Sheeran - Runaway.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/× (2014)/CD 01-10 Ed Sheeran - The Man.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/× (2014)/CD 01-11 Ed Sheeran - Thinking Out Loud.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/× (2014)/CD 01-12 Ed Sheeran - Afire Love.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/× (2014)/CD 01-13 Ed Sheeran - Take It Back.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/× (2014)/CD 01-14 Ed Sheeran - Shirtsleeves.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/× (2014)/CD 01-15 Ed Sheeran - Even My Dad Does Sometimes.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/× (2014)/CD 01-16 Ed Sheeran - I See Fire.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/× (2014)/CD 01-17 Ed Sheeran - All of the Stars.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/÷ (2017)/CD 01-01 Ed Sheeran - Eraser.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/÷ (2017)/CD 01-02 Ed Sheeran - Castle on the Hill.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/÷ (2017)/CD 01-03 Ed Sheeran - Dive.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/÷ (2017)/CD 01-04 Ed Sheeran - Shape of You.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/÷ (2017)/CD 01-05 Ed Sheeran - Perfect.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/÷ (2017)/CD 01-06 Ed Sheeran - Galway Girl.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/÷ (2017)/CD 01-07 Ed Sheeran - Happier.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/÷ (2017)/CD 01-08 Ed Sheeran - New Man.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/÷ (2017)/CD 01-09 Ed Sheeran - Hearts Don't Break Around Here.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/÷ (2017)/CD 01-10 Ed Sheeran - What Do I Know.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/÷ (2017)/CD 01-11 Ed Sheeran - How Would You Feel (Paean).flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/÷ (2017)/CD 01-12 Ed Sheeran - Supermarket Flowers.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/÷ (2017)/CD 01-13 Ed Sheeran - Barcelona.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/÷ (2017)/CD 01-14 Ed Sheeran - Bibia Be Ye Ye.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/÷ (2017)/CD 01-15 Ed Sheeran - Nancy Mulligan.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Ed Sheeran/÷ (2017)/CD 01-16 Ed Sheeran - Save Myself.flac	1	1	Ed Sheeran	8c258db11d1095acd8d31f57b19fec2c
+/media/Music/Garth Brooks/Christmas Together (2016)/CD 01-01 Garth Brooks - I'm Beginning to See the Light.flac	1	1	Garth Brooks & Trisha Yearwood	e0ed93d3b585c630dc4803795543e2c4
+/media/Music/Garth Brooks/Christmas Together (2016)/CD 01-02 Garth Brooks - Ugly Christmas Sweater.flac	1	1	Garth Brooks & Trisha Yearwood	e0ed93d3b585c630dc4803795543e2c4
+/media/Music/Garth Brooks/Christmas Together (2016)/CD 01-03 Garth Brooks - Santa Baby.flac	1	1	Garth Brooks & Trisha Yearwood	e0ed93d3b585c630dc4803795543e2c4
+/media/Music/Garth Brooks/Christmas Together (2016)/CD 01-04 Garth Brooks - Feliz Navidad.flac	1	1	Garth Brooks & Trisha Yearwood	e0ed93d3b585c630dc4803795543e2c4
+/media/Music/Garth Brooks/Christmas Together (2016)/CD 01-05 Garth Brooks - What Are You Doing New Year's Eve.flac	1	1	Garth Brooks & Trisha Yearwood	e0ed93d3b585c630dc4803795543e2c4
+/media/Music/Garth Brooks/Christmas Together (2016)/CD 01-06 Garth Brooks - Marshmallow World.flac	1	1	Garth Brooks & Trisha Yearwood	e0ed93d3b585c630dc4803795543e2c4
+/media/Music/Garth Brooks/Christmas Together (2016)/CD 01-07 Garth Brooks - Merry Christmas Means I Love You.flac	1	1	Garth Brooks & Trisha Yearwood	e0ed93d3b585c630dc4803795543e2c4
+/media/Music/Garth Brooks/Christmas Together (2016)/CD 01-08 Garth Brooks - Hard Candy Christmas.flac	1	1	Garth Brooks & Trisha Yearwood	e0ed93d3b585c630dc4803795543e2c4
+/media/Music/Garth Brooks/Christmas Together (2016)/CD 01-09 Garth Brooks - Baby, It's Cold Outside.flac	1	1	Garth Brooks & Trisha Yearwood	e0ed93d3b585c630dc4803795543e2c4
+/media/Music/Garth Brooks/Christmas Together (2016)/CD 01-10 Garth Brooks - The Man with the Bag.flac	1	1	Garth Brooks & Trisha Yearwood	e0ed93d3b585c630dc4803795543e2c4
+/media/Music/Garth Brooks/Christmas Together (2016)/CD 01-11 Garth Brooks - What I'm Thankful For (The Thanksgiving Song) (with James Taylor).flac	1	1	Garth Brooks & Trisha Yearwood	e0ed93d3b585c630dc4803795543e2c4
+/media/Music/Garth Brooks/Fun (2020)/CD 01-01 Garth Brooks - The Road I’m On.flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/Fun (2020)/CD 01-02 Garth Brooks - That’s What Cowboys Do.flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/Fun (2020)/CD 01-03 Garth Brooks - All Day Long.flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/Fun (2020)/CD 01-04 Garth Brooks - Shallow.flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/Fun (2020)/CD 01-05 Garth Brooks - Dive Bar.flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/Fun (2020)/CD 01-06 Garth Brooks - Amen.flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/Fun (2020)/CD 01-07 Garth Brooks - The Courage Of Love.flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/Fun (2020)/CD 01-08 Garth Brooks - I Can Be Me With You.flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/Fun (2020)/CD 01-09 Garth Brooks - Message In A Bottle.flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/Fun (2020)/CD 01-10 Garth Brooks - Stronger Than Me.flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/Fun (2020)/CD 01-11 Garth Brooks - (A Hard Way To Make An) Easy Livin’.flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/Fun (2020)/CD 01-12 Garth Brooks - Where The Cross Don’t Burn.flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/Fun (2020)/CD 01-13 Garth Brooks - Party Gras (The Mardi Gras Song).flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/Fun (2020)/CD 01-14 Garth Brooks - Sometimes You’ve Got To Die To (Live Again).flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/Gunslinger (2016)/CD 01-01 Garth Brooks - Honky-Tonk Somewhere.flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/Gunslinger (2016)/CD 01-02 Garth Brooks - Weekend.flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/Gunslinger (2016)/CD 01-03 Garth Brooks - Ask Me How I Know.flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/Gunslinger (2016)/CD 01-04 Garth Brooks - Baby, Let’s Lay Down and Dance.flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/Gunslinger (2016)/CD 01-05 Garth Brooks - He Really Loves You.flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/Gunslinger (2016)/CD 01-06 Garth Brooks - Pure Adrenaline.flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/Gunslinger (2016)/CD 01-07 Garth Brooks - Whiskey to Wine.flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/Gunslinger (2016)/CD 01-08 Garth Brooks - Bang! Bang!.flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/Gunslinger (2016)/CD 01-09 Garth Brooks - Cowboys and Friends.flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/Gunslinger (2016)/CD 01-10 Garth Brooks - 8teen.flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/Ropin’ the Wind (1991)/CD 01-01 Garth Brooks - Against the Grain.flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/Ropin’ the Wind (1991)/CD 01-02 Garth Brooks - Rodeo.flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/Ropin’ the Wind (1991)/CD 01-03 Garth Brooks - What She’s Doing Now.flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/Ropin’ the Wind (1991)/CD 01-04 Garth Brooks - Burning Bridges.flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/Ropin’ the Wind (1991)/CD 01-05 Garth Brooks - Which One of Them.flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/Ropin’ the Wind (1991)/CD 01-06 Garth Brooks - Papa Loved Mama.flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/Ropin’ the Wind (1991)/CD 01-07 Garth Brooks - Shameless.flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/Ropin’ the Wind (1991)/CD 01-08 Garth Brooks - Cold Shoulder.flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/Ropin’ the Wind (1991)/CD 01-09 Garth Brooks - We Bury the Hatchet.flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/Ropin’ the Wind (1991)/CD 01-10 Garth Brooks - In Lonesome Dove.flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/Ropin’ the Wind (1991)/CD 01-11 Garth Brooks - The River.flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/The Ultimate Hits (2007)/CD 01-01 Garth Brooks - Ain't Going Down ('til the Sun Comes Up).flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/The Ultimate Hits (2007)/CD 01-02 Garth Brooks - Friends in Low Places.flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/The Ultimate Hits (2007)/CD 01-03 Garth Brooks - Shameless.flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/The Ultimate Hits (2007)/CD 01-04 Garth Brooks - Two of a Kind, Workin' on a Full House.flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/The Ultimate Hits (2007)/CD 01-05 Garth Brooks - The Beaches of Cheyenne.flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/The Ultimate Hits (2007)/CD 01-06 Garth Brooks - If Tomorrow Never Comes.flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/The Ultimate Hits (2007)/CD 01-07 Garth Brooks - Papa Loved Mama.flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/The Ultimate Hits (2007)/CD 01-08 Garth Brooks - More Than a Memory.flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/The Ultimate Hits (2007)/CD 01-09 Garth Brooks - Good Ride Cowboy.flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/The Ultimate Hits (2007)/CD 01-10 Garth Brooks - In Another's Eyes.flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/The Ultimate Hits (2007)/CD 01-11 Garth Brooks - The Fever.flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/The Ultimate Hits (2007)/CD 01-12 Garth Brooks - Midnight Sun.flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/The Ultimate Hits (2007)/CD 01-13 Garth Brooks - Learning to Live Again.flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/The Ultimate Hits (2007)/CD 01-14 Garth Brooks - Longneck Bottle.flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/The Ultimate Hits (2007)/CD 01-15 Garth Brooks - To Make You Feel My Love.flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/The Ultimate Hits (2007)/CD 01-16 Garth Brooks - We Shall Be Free.flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/The Ultimate Hits (2007)/CD 01-17 Garth Brooks - The Dance.flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/The Ultimate Hits (2007)/CD 02-01 Garth Brooks - Callin' Baton Rouge.flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/The Ultimate Hits (2007)/CD 02-02 Garth Brooks - Two Piña Coladas.flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/The Ultimate Hits (2007)/CD 02-03 Garth Brooks - The Thunder Rolls.flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/The Ultimate Hits (2007)/CD 02-04 Garth Brooks - That Summer.flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/The Ultimate Hits (2007)/CD 02-05 Garth Brooks - The River.flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/The Ultimate Hits (2007)/CD 02-06 Garth Brooks - Beer Run.flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/The Ultimate Hits (2007)/CD 02-07 Garth Brooks - Unanswered Prayers.flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/The Ultimate Hits (2007)/CD 02-08 Garth Brooks - Much Too Young (to Feel This Damn Old).flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/The Ultimate Hits (2007)/CD 02-09 Garth Brooks - Workin' for a Livin'.flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/The Ultimate Hits (2007)/CD 02-10 Garth Brooks - What She's Doing Now.flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/The Ultimate Hits (2007)/CD 02-11 Garth Brooks - When You Come Back to Me Again.flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/The Ultimate Hits (2007)/CD 02-12 Garth Brooks - Standing Outside the Fire.flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/The Ultimate Hits (2007)/CD 02-13 Garth Brooks - American Honky-Tonk Bar Association.flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/The Ultimate Hits (2007)/CD 02-14 Garth Brooks - The Change.flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/The Ultimate Hits (2007)/CD 02-15 Garth Brooks - Rodeo.flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/The Ultimate Hits (2007)/CD 02-16 Garth Brooks - Wrapped Up in You.flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/The Ultimate Hits (2007)/CD 02-17 Garth Brooks - [silence].flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/The Ultimate Hits (2007)/CD 02-18 Garth Brooks - [silence].flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Garth Brooks/The Ultimate Hits (2007)/CD 02-19 Garth Brooks - Leave a Light On.flac	1	1	Garth Brooks	eb3d57acd3abf29a8e5e939a0945cc89
+/media/Music/Hawthorne Heights/If Only You Were Lonely (2006)/CD 01-01 Hawthorne Heights - This Is Who We Are.flac	1	1	Hawthorne Heights	cb4f01025aaa9f9533dc22f4d625c59c
+/media/Music/Hawthorne Heights/If Only You Were Lonely (2006)/CD 01-02 Hawthorne Heights - We Are So Last Year.flac	1	1	Hawthorne Heights	cb4f01025aaa9f9533dc22f4d625c59c
+/media/Music/Hawthorne Heights/If Only You Were Lonely (2006)/CD 01-03 Hawthorne Heights - Language Lessons (Five Words or Less).flac	1	1	Hawthorne Heights	cb4f01025aaa9f9533dc22f4d625c59c
+/media/Music/Hawthorne Heights/If Only You Were Lonely (2006)/CD 01-04 Hawthorne Heights - Pens and Needles.flac	1	1	Hawthorne Heights	cb4f01025aaa9f9533dc22f4d625c59c
+/media/Music/Hawthorne Heights/If Only You Were Lonely (2006)/CD 01-05 Hawthorne Heights - Saying Sorry.flac	1	1	Hawthorne Heights	cb4f01025aaa9f9533dc22f4d625c59c
+/media/Music/Hawthorne Heights/If Only You Were Lonely (2006)/CD 01-06 Hawthorne Heights - Dead in the Water.flac	1	1	Hawthorne Heights	cb4f01025aaa9f9533dc22f4d625c59c
+/media/Music/Hawthorne Heights/If Only You Were Lonely (2006)/CD 01-07 Hawthorne Heights - I Am on Your Side.flac	1	1	Hawthorne Heights	cb4f01025aaa9f9533dc22f4d625c59c
+/media/Music/Hawthorne Heights/If Only You Were Lonely (2006)/CD 01-08 Hawthorne Heights - Breathing in Sequence.flac	1	1	Hawthorne Heights	cb4f01025aaa9f9533dc22f4d625c59c
+/media/Music/Hawthorne Heights/If Only You Were Lonely (2006)/CD 01-09 Hawthorne Heights - Light Sleeper.flac	1	1	Hawthorne Heights	cb4f01025aaa9f9533dc22f4d625c59c
+/media/Music/Hawthorne Heights/If Only You Were Lonely (2006)/CD 01-10 Hawthorne Heights - Cross Me Off Your List.flac	1	1	Hawthorne Heights	cb4f01025aaa9f9533dc22f4d625c59c
+/media/Music/Hawthorne Heights/If Only You Were Lonely (2006)/CD 01-11 Hawthorne Heights - Where Can I Stab Myself in the Ears.flac	1	1	Hawthorne Heights	cb4f01025aaa9f9533dc22f4d625c59c
+/media/Music/Hawthorne Heights/If Only You Were Lonely (2006)/CD 01-12 Hawthorne Heights - Decembers.flac	1	1	Hawthorne Heights	cb4f01025aaa9f9533dc22f4d625c59c
+/media/Music/Hawthorne Heights/If Only You Were Lonely XV (2023)/Digital Media 01-01 Hawthorne Heights - This Is Who We Are.flac	1	1	Hawthorne Heights	cb4f01025aaa9f9533dc22f4d625c59c
+/media/Music/Hawthorne Heights/If Only You Were Lonely XV (2023)/Digital Media 01-02 Hawthorne Heights - We Are So Last Year.flac	1	1	Hawthorne Heights	cb4f01025aaa9f9533dc22f4d625c59c
+/media/Music/Hawthorne Heights/If Only You Were Lonely XV (2023)/Digital Media 01-03 Hawthorne Heights - Language Lessons (Five Words or Less).flac	1	1	Hawthorne Heights	cb4f01025aaa9f9533dc22f4d625c59c
+/media/Music/Hawthorne Heights/If Only You Were Lonely XV (2023)/Digital Media 01-04 Hawthorne Heights - Pens and Needles.flac	1	1	Hawthorne Heights	cb4f01025aaa9f9533dc22f4d625c59c
+/media/Music/Hawthorne Heights/If Only You Were Lonely XV (2023)/Digital Media 01-05 Hawthorne Heights - Saying Sorry.flac	1	1	Hawthorne Heights	cb4f01025aaa9f9533dc22f4d625c59c
+/media/Music/Hawthorne Heights/If Only You Were Lonely XV (2023)/Digital Media 01-06 Hawthorne Heights - Dead in the Water.flac	1	1	Hawthorne Heights	cb4f01025aaa9f9533dc22f4d625c59c
+/media/Music/Hawthorne Heights/If Only You Were Lonely XV (2023)/Digital Media 01-07 Hawthorne Heights - I Am on Your Side.flac	1	1	Hawthorne Heights	cb4f01025aaa9f9533dc22f4d625c59c
+/media/Music/Hawthorne Heights/If Only You Were Lonely XV (2023)/Digital Media 01-08 Hawthorne Heights - Breathing in Sequence.flac	1	1	Hawthorne Heights	cb4f01025aaa9f9533dc22f4d625c59c
+/media/Music/Hawthorne Heights/If Only You Were Lonely XV (2023)/Digital Media 01-09 Hawthorne Heights - Light Sleeper.flac	1	1	Hawthorne Heights	cb4f01025aaa9f9533dc22f4d625c59c
+/media/Music/Hawthorne Heights/If Only You Were Lonely XV (2023)/Digital Media 01-10 Hawthorne Heights - Cross Me Off Your List.flac	1	1	Hawthorne Heights	cb4f01025aaa9f9533dc22f4d625c59c
+/media/Music/Hawthorne Heights/If Only You Were Lonely XV (2023)/Digital Media 01-11 Hawthorne Heights - Where Can I Stab Myself in the Ears.flac	1	1	Hawthorne Heights	cb4f01025aaa9f9533dc22f4d625c59c
+/media/Music/Hawthorne Heights/If Only You Were Lonely XV (2023)/Digital Media 01-12 Hawthorne Heights - Decembers.flac	1	1	Hawthorne Heights	cb4f01025aaa9f9533dc22f4d625c59c
+/media/Music/Hawthorne Heights/The Rain Just Follows Me (2021)/CD 01-01 Hawthorne Heights - Constant Dread.flac	1	1	Hawthorne Heights	cb4f01025aaa9f9533dc22f4d625c59c
+/media/Music/Hawthorne Heights/The Rain Just Follows Me (2021)/CD 01-02 Hawthorne Heights - The Rain Just Follows Me.flac	1	1	Hawthorne Heights	cb4f01025aaa9f9533dc22f4d625c59c
+/media/Music/Hawthorne Heights/The Rain Just Follows Me (2021)/CD 01-03 Hawthorne Heights - Holy Coast.flac	1	1	Hawthorne Heights	cb4f01025aaa9f9533dc22f4d625c59c
+/media/Music/Hawthorne Heights/The Rain Just Follows Me (2021)/CD 01-04 Hawthorne Heights - Tired and Alone.flac	1	1	Hawthorne Heights	cb4f01025aaa9f9533dc22f4d625c59c
+/media/Music/Hawthorne Heights/The Rain Just Follows Me (2021)/CD 01-05 Hawthorne Heights - Thunder in Our Hearts.flac	1	1	Hawthorne Heights	cb4f01025aaa9f9533dc22f4d625c59c
+/media/Music/Hawthorne Heights/The Rain Just Follows Me (2021)/CD 01-06 Hawthorne Heights - Spray Paint It Black.flac	1	1	Hawthorne Heights	cb4f01025aaa9f9533dc22f4d625c59c
+/media/Music/Hawthorne Heights/The Rain Just Follows Me (2021)/CD 01-07 Hawthorne Heights - Dull Headlights.flac	1	1	Hawthorne Heights	cb4f01025aaa9f9533dc22f4d625c59c
+/media/Music/Hawthorne Heights/The Rain Just Follows Me (2021)/CD 01-08 Hawthorne Heights - Palm Canyon Drive.flac	1	1	Hawthorne Heights	cb4f01025aaa9f9533dc22f4d625c59c
+/media/Music/Hawthorne Heights/The Rain Just Follows Me (2021)/CD 01-09 Hawthorne Heights - Seafoam.flac	1	1	Hawthorne Heights	cb4f01025aaa9f9533dc22f4d625c59c
+/media/Music/Hawthorne Heights/The Rain Just Follows Me (2021)/CD 01-10 Hawthorne Heights - Words Can't Hurt.flac	1	1	Hawthorne Heights	cb4f01025aaa9f9533dc22f4d625c59c
+/media/Music/Hawthorne Heights/The Rain Just Follows Me (2021)/CD 01-11 Hawthorne Heights - Bambarra Beach (The End).flac	1	1	Hawthorne Heights	cb4f01025aaa9f9533dc22f4d625c59c
+/media/Music/Katy Perry/143 (2024)/CD 01-01 Katy Perry - Woman's World.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/143 (2024)/CD 01-02 Katy Perry - Gimme Gimme.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/143 (2024)/CD 01-03 Katy Perry - Gorgeous.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/143 (2024)/CD 01-04 Katy Perry - I'm His, He's Mine.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/143 (2024)/CD 01-05 Katy Perry - Crush.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/143 (2024)/CD 01-06 Katy Perry - Lifetimes.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/143 (2024)/CD 01-07 Katy Perry - All the Love.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/143 (2024)/CD 01-08 Katy Perry - Nirvana.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/143 (2024)/CD 01-09 Katy Perry - Artificial.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/143 (2024)/CD 01-10 Katy Perry - Truth.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/143 (2024)/CD 01-11 Katy Perry - Wonder.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/143 (2024)/CD 01-12 Katy Perry - Has a Heart.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/One of the Boys (2008)/Digital Media 01-01 Katy Perry - One of the Boys.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/One of the Boys (2008)/Digital Media 01-02 Katy Perry - I Kissed a Girl.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/One of the Boys (2008)/Digital Media 01-03 Katy Perry - Waking Up in Vegas.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/One of the Boys (2008)/Digital Media 01-04 Katy Perry - Thinking of You.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/One of the Boys (2008)/Digital Media 01-05 Katy Perry - Mannequin.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/One of the Boys (2008)/Digital Media 01-06 Katy Perry - Ur So Gay.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/One of the Boys (2008)/Digital Media 01-07 Katy Perry - Hot n Cold.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/One of the Boys (2008)/Digital Media 01-08 Katy Perry - If You Can Afford Me.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/One of the Boys (2008)/Digital Media 01-09 Katy Perry - Lost.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/One of the Boys (2008)/Digital Media 01-10 Katy Perry - Self Inflicted.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/One of the Boys (2008)/Digital Media 01-11 Katy Perry - I’m Still Breathing.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/One of the Boys (2008)/Digital Media 01-12 Katy Perry - Fingerprints.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/One of the Boys (2008)/Digital Media 01-13 Katy Perry - I Kissed a Girl (rock mix).flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/PRISM (2013)/CD 01-01 Katy Perry - Roar.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/PRISM (2013)/CD 01-02 Katy Perry - Legendary Lovers.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/PRISM (2013)/CD 01-03 Katy Perry - Birthday.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/PRISM (2013)/CD 01-04 Katy Perry - Walking on Air.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/PRISM (2013)/CD 01-05 Katy Perry - Unconditionally.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/PRISM (2013)/CD 01-06 Katy Perry - Dark Horse.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/PRISM (2013)/CD 01-07 Katy Perry - This Is How We Do.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/PRISM (2013)/CD 01-08 Katy Perry - International Smile.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/PRISM (2013)/CD 01-09 Katy Perry - Ghost.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/PRISM (2013)/CD 01-10 Katy Perry - Love Me.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/PRISM (2013)/CD 01-11 Katy Perry - This Moment.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/PRISM (2013)/CD 01-12 Katy Perry - Double Rainbow.flac	1	1	Greg Kurstin	19b8bb32489027f3cada0a45c5747d22
+/media/Music/Katy Perry/PRISM (2013)/CD 01-13 Katy Perry - By the Grace of God.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/PRISM (2013)/CD 01-14 Katy Perry - Spiritual.flac	1	1	Greg Kurstin	19b8bb32489027f3cada0a45c5747d22
+/media/Music/Katy Perry/PRISM (2013)/CD 01-15 Katy Perry - It Takes Two.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/PRISM (2013)/CD 01-16 Katy Perry - Choose Your Battles.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/Smile (2020)/Digital Media 01-01 Katy Perry - Never Really Over.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/Smile (2020)/Digital Media 01-02 Katy Perry - Cry About It Later.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/Smile (2020)/Digital Media 01-03 Katy Perry - Teary Eyes.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/Smile (2020)/Digital Media 01-04 Katy Perry - Daisies.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/Smile (2020)/Digital Media 01-05 Katy Perry - Resilient.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/Smile (2020)/Digital Media 01-06 Katy Perry - Not the End of the World.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/Smile (2020)/Digital Media 01-07 Katy Perry - Smile.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/Smile (2020)/Digital Media 01-08 Katy Perry - Champagne Problems.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/Smile (2020)/Digital Media 01-09 Katy Perry - Tucked.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/Smile (2020)/Digital Media 01-10 Katy Perry - Harleys in Hawaii.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/Smile (2020)/Digital Media 01-11 Katy Perry - Only Love.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/Smile (2020)/Digital Media 01-12 Katy Perry - What Makes a Woman.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-01 Katy Perry - Teenage Dream.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-02 Katy Perry - Last Friday Night (T.G.I.F.).flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-03 Katy Perry - California Gurls.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-04 Katy Perry - Firework.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-05 Katy Perry - Peacock.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-06 Katy Perry - Circle the Drain.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-07 Katy Perry - The One That Got Away.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-08 Katy Perry - E.T.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-09 Katy Perry - Who Am I Living For.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-10 Katy Perry - Pearl.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-11 Katy Perry - Hummingbird Heartbeat.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-12 Katy Perry - Not Like the Movies.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/Witness (2017)/Digital Media 01-01 Katy Perry - Witness.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/Witness (2017)/Digital Media 01-02 Katy Perry - Hey Hey Hey.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/Witness (2017)/Digital Media 01-03 Katy Perry - Roulette.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/Witness (2017)/Digital Media 01-04 Katy Perry - Swish Swish.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/Witness (2017)/Digital Media 01-05 Katy Perry - Déjà vu.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/Witness (2017)/Digital Media 01-06 Katy Perry - Power.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/Witness (2017)/Digital Media 01-07 Katy Perry - Mind Maze.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/Witness (2017)/Digital Media 01-08 Katy Perry - Miss You More.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/Witness (2017)/Digital Media 01-09 Katy Perry - Chained to the Rhythm.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/Witness (2017)/Digital Media 01-10 Katy Perry - Tsunami.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/Witness (2017)/Digital Media 01-11 Katy Perry - Bon appétit.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/Witness (2017)/Digital Media 01-12 Katy Perry - Bigger Than Me.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/Witness (2017)/Digital Media 01-13 Katy Perry - Save as Draft.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/Witness (2017)/Digital Media 01-14 Katy Perry - Pendulum.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Katy Perry/Witness (2017)/Digital Media 01-15 Katy Perry - Into Me You See.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+/media/Music/Lady Gaga/ARTPOP (2013)/CD 01-01 Lady Gaga - Aura.flac	0	0		
+/media/Music/Lady Gaga/ARTPOP (2013)/CD 01-02 Lady Gaga - Venus.flac	0	0		
+/media/Music/Lady Gaga/ARTPOP (2013)/CD 01-03 Lady Gaga - G.U.Y.flac	0	0		
+/media/Music/Lady Gaga/ARTPOP (2013)/CD 01-04 Lady Gaga - Sexxx Dreams.flac	0	0		
+/media/Music/Lady Gaga/ARTPOP (2013)/CD 01-05 Lady Gaga - Jewels n’ Drugs.flac	0	0		
+/media/Music/Lady Gaga/ARTPOP (2013)/CD 01-06 Lady Gaga - MANiCURE.flac	0	0		
+/media/Music/Lady Gaga/ARTPOP (2013)/CD 01-07 Lady Gaga - Do What U Want.flac	0	0		
+/media/Music/Lady Gaga/ARTPOP (2013)/CD 01-08 Lady Gaga - ARTPOP.flac	0	0		
+/media/Music/Lady Gaga/ARTPOP (2013)/CD 01-09 Lady Gaga - Swine.flac	0	0		
+/media/Music/Lady Gaga/ARTPOP (2013)/CD 01-10 Lady Gaga - Donatella.flac	0	0		
+/media/Music/Lady Gaga/ARTPOP (2013)/CD 01-11 Lady Gaga - Fashion!.flac	0	0		
+/media/Music/Lady Gaga/ARTPOP (2013)/CD 01-12 Lady Gaga - Mary Jane Holland.flac	0	0		
+/media/Music/Lady Gaga/ARTPOP (2013)/CD 01-13 Lady Gaga - Dope.flac	0	0		
+/media/Music/Lady Gaga/ARTPOP (2013)/CD 01-14 Lady Gaga - Gypsy.flac	0	0		
+/media/Music/Lady Gaga/ARTPOP (2013)/CD 01-15 Lady Gaga - Applause.flac	0	0		
+/media/Music/Lady Gaga/Born This Way (2011)/CD 01-01 Lady Gaga - Marry the Night.flac	1	1	Lady Gaga	29d7c8ad267773e90ea7ffaa839af365
+/media/Music/Lady Gaga/Born This Way (2011)/CD 01-02 Lady Gaga - Born This Way.flac	1	1	Lady Gaga	29d7c8ad267773e90ea7ffaa839af365
+/media/Music/Lady Gaga/Born This Way (2011)/CD 01-03 Lady Gaga - Government Hooker.flac	1	1	Lady Gaga	29d7c8ad267773e90ea7ffaa839af365
+/media/Music/Lady Gaga/Born This Way (2011)/CD 01-04 Lady Gaga - Judas.flac	1	1	Lady Gaga	29d7c8ad267773e90ea7ffaa839af365
+/media/Music/Lady Gaga/Born This Way (2011)/CD 01-05 Lady Gaga - Americano.flac	1	1	Lady Gaga	29d7c8ad267773e90ea7ffaa839af365
+/media/Music/Lady Gaga/Born This Way (2011)/CD 01-06 Lady Gaga - Hair.flac	1	1	Lady Gaga	29d7c8ad267773e90ea7ffaa839af365
+/media/Music/Lady Gaga/Born This Way (2011)/CD 01-07 Lady Gaga - Scheiße.flac	1	1	Lady Gaga	29d7c8ad267773e90ea7ffaa839af365
+/media/Music/Lady Gaga/Born This Way (2011)/CD 01-08 Lady Gaga - Bloody Mary.flac	1	1	Lady Gaga	29d7c8ad267773e90ea7ffaa839af365
+/media/Music/Lady Gaga/Born This Way (2011)/CD 01-09 Lady Gaga - Bad Kids.flac	1	1	Lady Gaga	29d7c8ad267773e90ea7ffaa839af365
+/media/Music/Lady Gaga/Born This Way (2011)/CD 01-10 Lady Gaga - Highway Unicorn (Road to Love).flac	1	1	Lady Gaga	29d7c8ad267773e90ea7ffaa839af365
+/media/Music/Lady Gaga/Born This Way (2011)/CD 01-11 Lady Gaga - Heavy Metal Lover.flac	1	1	Lady Gaga	29d7c8ad267773e90ea7ffaa839af365
+/media/Music/Lady Gaga/Born This Way (2011)/CD 01-12 Lady Gaga - Electric Chapel.flac	1	1	Lady Gaga	29d7c8ad267773e90ea7ffaa839af365
+/media/Music/Lady Gaga/Born This Way (2011)/CD 01-13 Lady Gaga - Yoü and I.flac	1	1	Lady Gaga	29d7c8ad267773e90ea7ffaa839af365
+/media/Music/Lady Gaga/Born This Way (2011)/CD 01-14 Lady Gaga - The Edge of Glory.flac	1	1	Lady Gaga	29d7c8ad267773e90ea7ffaa839af365
+/media/Music/Lady Gaga/Born This Way (2011)/CD 02-01 Lady Gaga - Marry the Night.flac	1	1	Kylie Minogue	831c9dce227ee4631b1c952ecb978666
+/media/Music/Lady Gaga/Born This Way (2011)/CD 02-02 Lady Gaga - Judas.flac	1	1	Big Freedia	4afe9e7ec0ae9e53cd1d32ccadbd97b7
+/media/Music/Lady Gaga/Born This Way (2011)/CD 02-03 Lady Gaga - Highway Unicorn (Road to Love).flac	1	1	The Highwomen	c5d412853d7ee1c9e1ca112e24a18f25
+/media/Music/Lady Gaga/Born This Way (2011)/CD 02-04 Lady Gaga - Yoü and I.flac	1	1	Ben Platt	eff973357fd573ed1c4358eeda24b537
+/media/Music/Lady Gaga/Born This Way (2011)/CD 02-05 Lady Gaga - The Edge of Glory.flac	1	1	Olly Alexander (Years & Years)	32fe455972030b2571ed6688ece3895d
+/media/Music/Lady Gaga/Born This Way (2011)/CD 02-06 Lady Gaga - Born This Way (The Country Road version).flac	1	1	Orville Peck	a83e10784dee75234bd0b649d7751e10
+/media/Music/Lady Gaga/Joanne (2016)/12 Vinyl 01-01 Lady Gaga - Diamond Heart.flac	0	0		
+/media/Music/Lady Gaga/Joanne (2016)/12 Vinyl 01-02 Lady Gaga - A‐YO.flac	0	0		
+/media/Music/Lady Gaga/Joanne (2016)/12 Vinyl 01-03 Lady Gaga - Joanne.flac	0	0		
+/media/Music/Lady Gaga/Joanne (2016)/12 Vinyl 01-04 Lady Gaga - John Wayne.flac	0	0		
+/media/Music/Lady Gaga/Joanne (2016)/12 Vinyl 01-05 Lady Gaga - Dancin’ in Circles.flac	0	0		
+/media/Music/Lady Gaga/Joanne (2016)/12 Vinyl 01-06 Lady Gaga - Perfect Illusion.flac	0	0		
+/media/Music/Lady Gaga/Joanne (2016)/12 Vinyl 01-07 Lady Gaga - Million Reasons.flac	0	0		
+/media/Music/Lady Gaga/Joanne (2016)/12 Vinyl 02-01 Lady Gaga - Sinner’s Prayer.flac	0	0		
+/media/Music/Lady Gaga/Joanne (2016)/12 Vinyl 02-02 Lady Gaga - Come to Mama.flac	0	0		
+/media/Music/Lady Gaga/Joanne (2016)/12 Vinyl 02-03 Lady Gaga - Hey Girl.flac	0	0		
+/media/Music/Lady Gaga/Joanne (2016)/12 Vinyl 02-04 Lady Gaga - Angel Down.flac	0	0		
+/media/Music/Lady Gaga/Joanne (2016)/12 Vinyl 02-05 Lady Gaga - Grigio Girls.flac	0	0		
+/media/Music/Lady Gaga/Joanne (2016)/12 Vinyl 02-06 Lady Gaga - Just Another Day.flac	0	0		
+/media/Music/Lady Gaga/Joanne (2016)/12 Vinyl 02-07 Lady Gaga - Angel Down (work tape).flac	0	0		
+/media/Music/Lady Gaga/MAYHEM (2025)/12 Vinyl 01-01 Lady Gaga - Disease.flac	1	1	Lady Gaga	29d7c8ad267773e90ea7ffaa839af365
+/media/Music/Lady Gaga/MAYHEM (2025)/12 Vinyl 01-02 Lady Gaga - Abracadabra.flac	1	1	Lady Gaga	29d7c8ad267773e90ea7ffaa839af365
+/media/Music/Lady Gaga/MAYHEM (2025)/12 Vinyl 01-03 Lady Gaga - Garden of Eden.flac	1	1	Lady Gaga	29d7c8ad267773e90ea7ffaa839af365
+/media/Music/Lady Gaga/MAYHEM (2025)/12 Vinyl 01-04 Lady Gaga - Perfect Celebrity.flac	1	1	Lady Gaga	29d7c8ad267773e90ea7ffaa839af365
+/media/Music/Lady Gaga/MAYHEM (2025)/12 Vinyl 01-05 Lady Gaga - Can’t Stop the High.flac	1	1	Lady Gaga	29d7c8ad267773e90ea7ffaa839af365
+/media/Music/Lady Gaga/MAYHEM (2025)/12 Vinyl 01-06 Lady Gaga - Vanish Into You.flac	1	1	Lady Gaga	29d7c8ad267773e90ea7ffaa839af365
+/media/Music/Lady Gaga/MAYHEM (2025)/12 Vinyl 01-07 Lady Gaga - Killah.flac	1	1	Lady Gaga	29d7c8ad267773e90ea7ffaa839af365
+/media/Music/Lady Gaga/MAYHEM (2025)/12 Vinyl 01-08 Lady Gaga - Zombieboy.flac	1	1	Lady Gaga	29d7c8ad267773e90ea7ffaa839af365
+/media/Music/Lady Gaga/MAYHEM (2025)/12 Vinyl 01-09 Lady Gaga - LoveDrug.flac	1	1	Lady Gaga	29d7c8ad267773e90ea7ffaa839af365
+/media/Music/Lady Gaga/MAYHEM (2025)/12 Vinyl 01-10 Lady Gaga - How Bad Do U Want Me.flac	1	1	Lady Gaga	29d7c8ad267773e90ea7ffaa839af365
+/media/Music/Lady Gaga/MAYHEM (2025)/12 Vinyl 01-11 Lady Gaga - Don’t Call Tonight.flac	1	1	Lady Gaga	29d7c8ad267773e90ea7ffaa839af365
+/media/Music/Lady Gaga/MAYHEM (2025)/12 Vinyl 02-01 Lady Gaga - Shadow of a Man.flac	1	1	Lady Gaga	29d7c8ad267773e90ea7ffaa839af365
+/media/Music/Lady Gaga/MAYHEM (2025)/12 Vinyl 02-02 Lady Gaga - The Beast.flac	1	1	Lady Gaga	29d7c8ad267773e90ea7ffaa839af365
+/media/Music/Lady Gaga/MAYHEM (2025)/12 Vinyl 02-03 Lady Gaga - Blade of Grass.flac	1	1	Lady Gaga	29d7c8ad267773e90ea7ffaa839af365
+/media/Music/Lady Gaga/MAYHEM (2025)/12 Vinyl 02-04 Lady Gaga - Die With a Smile.flac	1	1	Lady Gaga	29d7c8ad267773e90ea7ffaa839af365
+/media/Music/P!nk/Can’t Take Me Home (2000)/CD 01-01 P!nk - Split Personality.mp3	1	1	Pink	d5abbaffddcecb1785077779b33330de
+/media/Music/P!nk/Can’t Take Me Home (2000)/CD 01-02 P!nk - Hell Wit Ya.mp3	1	1	Pink	d5abbaffddcecb1785077779b33330de
+/media/Music/P!nk/Can’t Take Me Home (2000)/CD 01-03 P!nk - Most Girls.mp3	1	1	Pink	d5abbaffddcecb1785077779b33330de
+/media/Music/P!nk/Can’t Take Me Home (2000)/CD 01-04 P!nk - There You Go.mp3	1	1	Pink	d5abbaffddcecb1785077779b33330de
+/media/Music/P!nk/Can’t Take Me Home (2000)/CD 01-05 P!nk - You Make Me Sick.mp3	1	1	Pink	d5abbaffddcecb1785077779b33330de
+/media/Music/P!nk/Can’t Take Me Home (2000)/CD 01-06 P!nk - Let Me Let You Know.mp3	1	1	Pink	d5abbaffddcecb1785077779b33330de
+/media/Music/P!nk/Can’t Take Me Home (2000)/CD 01-07 P!nk - Love Is Such a Crazy Thing.mp3	1	1	Pink	d5abbaffddcecb1785077779b33330de
+/media/Music/P!nk/Can’t Take Me Home (2000)/CD 01-08 P!nk - Private Show.mp3	1	1	Pink	d5abbaffddcecb1785077779b33330de
+/media/Music/P!nk/Can’t Take Me Home (2000)/CD 01-09 P!nk - Can’t Take Me Home.mp3	1	1	Pink	d5abbaffddcecb1785077779b33330de
+/media/Music/P!nk/Can’t Take Me Home (2000)/CD 01-10 P!nk - Stop Falling.mp3	1	1	Pink	d5abbaffddcecb1785077779b33330de
+/media/Music/P!nk/Can’t Take Me Home (2000)/CD 01-11 P!nk - Do What U Do.mp3	1	1	Pink	d5abbaffddcecb1785077779b33330de
+/media/Music/P!nk/Can’t Take Me Home (2000)/CD 01-12 P!nk - Hiccup.mp3	1	1	Pink	d5abbaffddcecb1785077779b33330de
+/media/Music/P!nk/Can’t Take Me Home (2000)/CD 01-13 P!nk - Is It Love.mp3	1	1	Pink	d5abbaffddcecb1785077779b33330de
+/media/Music/P!nk/Can’t Take Me Home (2000)/CD 01-14 P!nk - There You Go (Sovereign mix).mp3	1	1	Pink	d5abbaffddcecb1785077779b33330de
+/media/Music/P!nk/Can’t Take Me Home (2000)/CD 01-15 P!nk - Most Girls (X-Men vocal mix).mp3	1	1	Pink	d5abbaffddcecb1785077779b33330de
+/media/Music/P!nk/Funhouse (2008)/Digital Media 01-01 P!nk - So What.mp3	1	1	Pink	d5abbaffddcecb1785077779b33330de
+/media/Music/P!nk/Funhouse (2008)/Digital Media 01-02 P!nk - Sober.mp3	1	1	Pink	d5abbaffddcecb1785077779b33330de
+/media/Music/P!nk/Funhouse (2008)/Digital Media 01-03 P!nk - I Don’t Believe You.mp3	1	1	Pink	d5abbaffddcecb1785077779b33330de
+/media/Music/P!nk/Funhouse (2008)/Digital Media 01-04 P!nk - One Foot Wrong.mp3	1	1	Pink	d5abbaffddcecb1785077779b33330de
+/media/Music/P!nk/Funhouse (2008)/Digital Media 01-05 P!nk - Please Don’t Leave Me.mp3	1	1	Pink	d5abbaffddcecb1785077779b33330de
+/media/Music/P!nk/Funhouse (2008)/Digital Media 01-06 P!nk - Bad Influence.mp3	1	1	Pink	d5abbaffddcecb1785077779b33330de
+/media/Music/P!nk/Funhouse (2008)/Digital Media 01-07 P!nk - Funhouse.mp3	1	1	Pink	d5abbaffddcecb1785077779b33330de
+/media/Music/P!nk/Funhouse (2008)/Digital Media 01-08 P!nk - Crystal Ball.mp3	1	1	Pink	d5abbaffddcecb1785077779b33330de
+/media/Music/P!nk/Funhouse (2008)/Digital Media 01-09 P!nk - Mean.mp3	1	1	Pink	d5abbaffddcecb1785077779b33330de
+/media/Music/P!nk/Funhouse (2008)/Digital Media 01-10 P!nk - It’s All Your Fault.mp3	1	1	Pink	d5abbaffddcecb1785077779b33330de
+/media/Music/P!nk/Funhouse (2008)/Digital Media 01-11 P!nk - Ave Mary A.mp3	1	1	Pink	d5abbaffddcecb1785077779b33330de
+/media/Music/P!nk/Funhouse (2008)/Digital Media 01-12 P!nk - Glitter in the Air.mp3	1	1	Pink	d5abbaffddcecb1785077779b33330de
+/media/Music/P!nk/Funhouse (2008)/Digital Media 01-13 P!nk - Why Did I Ever Like You.mp3	1	1	Pink	d5abbaffddcecb1785077779b33330de
+/media/Music/P!nk/Funhouse (2008)/Digital Media 01-14 P!nk - Could’ve Had Everything.mp3	1	1	Pink	d5abbaffddcecb1785077779b33330de
+/media/Music/P!nk/Greatest Hits… So Far!!! (2010)/CD 01-01 P!nk - Get the Party Started.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/Greatest Hits… So Far!!! (2010)/CD 01-02 P!nk - There You Go.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/Greatest Hits… So Far!!! (2010)/CD 01-03 P!nk - Don’t Let Me Get Me.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/Greatest Hits… So Far!!! (2010)/CD 01-04 P!nk - Just Like a Pill.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/Greatest Hits… So Far!!! (2010)/CD 01-05 P!nk - Family Portrait.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/Greatest Hits… So Far!!! (2010)/CD 01-06 P!nk - Trouble.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/Greatest Hits… So Far!!! (2010)/CD 01-07 P!nk - Stupid Girls.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/Greatest Hits… So Far!!! (2010)/CD 01-08 P!nk - Who Knew.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/Greatest Hits… So Far!!! (2010)/CD 01-09 P!nk - U + Ur Hand.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/Greatest Hits… So Far!!! (2010)/CD 01-10 P!nk - Dear Mr. President.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/Greatest Hits… So Far!!! (2010)/CD 01-11 P!nk - So What.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/Greatest Hits… So Far!!! (2010)/CD 01-12 P!nk - Sober.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/Greatest Hits… So Far!!! (2010)/CD 01-13 P!nk - Please Don’t Leave Me.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/Greatest Hits… So Far!!! (2010)/CD 01-14 P!nk - Glitter in the Air.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/Greatest Hits… So Far!!! (2010)/CD 01-15 P!nk - Raise Your Glass.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/Greatest Hits… So Far!!! (2010)/CD 01-16 P!nk - F-kin’ Perfect.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/Hurts 2B Human (2019)/Digital Media 01-01 P!nk - Hustle.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/Hurts 2B Human (2019)/Digital Media 01-02 P!nk - (Hey Why) Miss You Sometime.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/Hurts 2B Human (2019)/Digital Media 01-03 P!nk - Walk Me Home.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/Hurts 2B Human (2019)/Digital Media 01-04 P!nk - My Attic.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/Hurts 2B Human (2019)/Digital Media 01-05 P!nk - 90 Days.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/Hurts 2B Human (2019)/Digital Media 01-06 P!nk - Hurts 2B Human.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/Hurts 2B Human (2019)/Digital Media 01-07 P!nk - Can We Pretend.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/Hurts 2B Human (2019)/Digital Media 01-08 P!nk - Courage.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/Hurts 2B Human (2019)/Digital Media 01-09 P!nk - Happy.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/Hurts 2B Human (2019)/Digital Media 01-10 P!nk - We Could Have It All.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/Hurts 2B Human (2019)/Digital Media 01-11 P!nk - Love Me Anyway.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/Hurts 2B Human (2019)/Digital Media 01-12 P!nk - Circle Game.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/Hurts 2B Human (2019)/Digital Media 01-13 P!nk - The Last Song of Your Life.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/I’m Not Dead (2006)/Digital Media 01-01 P!nk - Stupid Girls.mp3	1	1	Pink	d5abbaffddcecb1785077779b33330de
+/media/Music/P!nk/I’m Not Dead (2006)/Digital Media 01-02 P!nk - Who Knew.mp3	1	1	Pink	d5abbaffddcecb1785077779b33330de
+/media/Music/P!nk/I’m Not Dead (2006)/Digital Media 01-03 P!nk - Long Way to Happy.mp3	1	1	Pink	d5abbaffddcecb1785077779b33330de
+/media/Music/P!nk/I’m Not Dead (2006)/Digital Media 01-04 P!nk - Nobody Knows.mp3	1	1	Pink	d5abbaffddcecb1785077779b33330de
+/media/Music/P!nk/I’m Not Dead (2006)/Digital Media 01-05 P!nk - Dear Mr. President.mp3	1	1	Pink	d5abbaffddcecb1785077779b33330de
+/media/Music/P!nk/I’m Not Dead (2006)/Digital Media 01-06 P!nk - I’m Not Dead.mp3	1	1	Pink	d5abbaffddcecb1785077779b33330de
+/media/Music/P!nk/I’m Not Dead (2006)/Digital Media 01-07 P!nk - ’Cuz I Can.mp3	1	1	Pink	d5abbaffddcecb1785077779b33330de
+/media/Music/P!nk/I’m Not Dead (2006)/Digital Media 01-08 P!nk - Leave Me Alone (I’m Lonely).mp3	1	1	Pink	d5abbaffddcecb1785077779b33330de
+/media/Music/P!nk/I’m Not Dead (2006)/Digital Media 01-09 P!nk - U + Ur Hand.mp3	1	1	Pink	d5abbaffddcecb1785077779b33330de
+/media/Music/P!nk/I’m Not Dead (2006)/Digital Media 01-10 P!nk - Runaway.mp3	1	1	Pink	d5abbaffddcecb1785077779b33330de
+/media/Music/P!nk/I’m Not Dead (2006)/Digital Media 01-11 P!nk - The One That Got Away.mp3	1	1	Pink	d5abbaffddcecb1785077779b33330de
+/media/Music/P!nk/I’m Not Dead (2006)/Digital Media 01-12 P!nk - I Got Money Now.mp3	1	1	Pink	d5abbaffddcecb1785077779b33330de
+/media/Music/P!nk/I’m Not Dead (2006)/Digital Media 01-13 P!nk - Conversations With My 13 Year Old Self.mp3	1	1	Pink	d5abbaffddcecb1785077779b33330de
+/media/Music/P!nk/I’m Not Dead (2006)/Digital Media 01-14 P!nk - I Have Seen the Rain.mp3	1	1	Pink	d5abbaffddcecb1785077779b33330de
+/media/Music/P!nk/I’m Not Dead (2006)/Digital Media 01-15 P!nk - Crash & Burn.mp3	1	1	Pink	d5abbaffddcecb1785077779b33330de
+/media/Music/P!nk/I’m Not Dead (2006)/Digital Media 01-16 P!nk - Centerfold.mp3	1	1	Pink	d5abbaffddcecb1785077779b33330de
+/media/Music/P!nk/I’m Not Dead (2006)/Digital Media 01-17 P!nk - Fingers.mp3	1	1	Pink	d5abbaffddcecb1785077779b33330de
+/media/Music/P!nk/TRUSTFALL (2023)/CD 01-01 P!nk - When I Get There.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/TRUSTFALL (2023)/CD 01-02 P!nk - TRUSTFALL.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/TRUSTFALL (2023)/CD 01-03 P!nk - Turbulence.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/TRUSTFALL (2023)/CD 01-04 P!nk - Long Way to Go.flac	2	2	P!nk|The Lumineers	7ca25d776805442472b7aa577b6a79ed|68fc6c778e81f8038d7e640572e39130
+/media/Music/P!nk/TRUSTFALL (2023)/CD 01-05 P!nk - Kids in Love.flac	2	2	P!nk|First Aid Kit	7ca25d776805442472b7aa577b6a79ed|ba2911b9f2a4c50228344deaf9fa3410
+/media/Music/P!nk/TRUSTFALL (2023)/CD 01-06 P!nk - Never Gonna Not Dance Again.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/TRUSTFALL (2023)/CD 01-07 P!nk - Runaway.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/TRUSTFALL (2023)/CD 01-08 P!nk - Last Call.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/TRUSTFALL (2023)/CD 01-09 P!nk - Hate Me.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/TRUSTFALL (2023)/CD 01-10 P!nk - Lost Cause.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/TRUSTFALL (2023)/CD 01-11 P!nk - Feel Something.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/TRUSTFALL (2023)/CD 01-12 P!nk - Our Song.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/TRUSTFALL (2023)/CD 01-13 P!nk - Just Say I’m Sorry.flac	2	2	P!nk|Chris Stapleton	7ca25d776805442472b7aa577b6a79ed|5ceb092505d167b118ad6084db940b68
+/media/Music/P!nk/TRUSTFALL (2023)/CD 02-01 P!nk - Dreaming.flac	3	3	Marshmello|P!nk|Sting	28577546c82807123b901bd79b4e7a97|7ca25d776805442472b7aa577b6a79ed|faebf8e0c27c0af62baf76091fe1ea1d
+/media/Music/P!nk/TRUSTFALL (2023)/CD 02-02 P!nk - Irrelevant.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/TRUSTFALL (2023)/CD 02-03 P!nk - All Out of Fight.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/TRUSTFALL (2023)/CD 02-04 P!nk - Just Like Fire + Heartbreaker (live).flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/TRUSTFALL (2023)/CD 02-05 P!nk - When I Get There (live).flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/TRUSTFALL (2023)/CD 02-06 P!nk - Nothing Compares 2 U (live).flac	2	2	P!nk|Brandi Carlile	7ca25d776805442472b7aa577b6a79ed|23b8488e913fa5f6ecc93321d01d6e3a
+/media/Music/P!nk/TRUSTFALL (2023)/CD 02-07 P!nk - No Ordinary Love (live).flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/TRUSTFALL (2023)/CD 02-08 P!nk - Cover Me in Sunshine (live).flac	2	2	P!nk|Willow Sage Hart	7ca25d776805442472b7aa577b6a79ed|4495c4c2d28b9368f044b00ea0d680af
+/media/Music/P!nk/TRUSTFALL (2023)/CD 02-09 P!nk - What About Us (live).flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 01-01 P!nk - Split Personality.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 01-02 P!nk - Hell Wit Ya.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 01-03 P!nk - Most Girls.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 01-04 P!nk - There You Go.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 01-05 P!nk - You Make Me Sick.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 01-06 P!nk - Let Me Let You Know.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 01-07 P!nk - Love Is Such a Crazy Thing.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 01-08 P!nk - Private Show.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 01-09 P!nk - Can’t Take Me Home.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 01-10 P!nk - Stop Falling.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 01-11 P!nk - Do What U Do.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 01-12 P!nk - Hiccup.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 01-13 P!nk - Is It Love.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 01-14 P!nk - There You Go (Sovereign mix).flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 01-15 P!nk - Most Girls (X-Men vocal mix).flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 02-01 P!nk - M!ssundaztood.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 02-02 P!nk - Don’t Let Me Get Me.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 02-03 P!nk - Just Like a Pill.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 02-04 P!nk - Get the Party Started.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 02-05 P!nk - Respect.flac	1	1	P!nk Feat. Scratch	0f8b62b008f758e5401225e3607cf01c
+/media/Music/P!nk/The Album Collection (2010)/CD 02-06 P!nk - 18 Wheeler.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 02-07 P!nk - Family Portrait.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 02-08 P!nk - Misery.flac	1	1	P!nk Feat. Steven Tyler	a9950cbcac6b0d69ba8530cefe326686
+/media/Music/P!nk/The Album Collection (2010)/CD 02-09 P!nk - Dear Diary.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 02-10 P!nk - Eventually.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 02-11 P!nk - Lonely Girl.flac	1	1	P!nk Feat. Linda Perry	503a3d8d72f3fe02959b56a96966fcf8
+/media/Music/P!nk/The Album Collection (2010)/CD 02-12 P!nk - Numb.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 02-13 P!nk - Gone to California.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 02-14 P!nk - My Vietnam.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 03-01 P!nk - Trouble.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 03-02 P!nk - God Is a DJ.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 03-03 P!nk - Last to Know.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 03-04 P!nk - Tonight’s the Night.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 03-05 P!nk - Oh My God.flac	1	1	P!nk Feat. Peaches	be1a647501b12e58a6dc963ba083cfd9
+/media/Music/P!nk/The Album Collection (2010)/CD 03-06 P!nk - Catch Me While I’m Sleeping.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 03-07 P!nk - Waiting for Love.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 03-08 P!nk - Save My Life.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 03-09 P!nk - Try Too Hard.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 03-10 P!nk - Humble Neighborhoods.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 03-11 P!nk - Walk Away.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 03-12 P!nk - Unwind.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 03-13 P!nk - Feel Good Time.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 03-14 P!nk - Love Song.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 03-15 P!nk - Hooker.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 04-01 P!nk - Stupid Girls.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 04-02 P!nk - Who Knew.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 04-03 P!nk - Long Way to Happy.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 04-04 P!nk - Nobody Knows.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 04-05 P!nk - Dear Mr. President.flac	1	1	P!nk Feat. Indigo Girls	e390a60ba00a785e774cc586e8bb40d0
+/media/Music/P!nk/The Album Collection (2010)/CD 04-06 P!nk - I’m Not Dead.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 04-07 P!nk - ’Cuz I Can.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 04-08 P!nk - Leave Me Alone (I’m Lonely).flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 04-09 P!nk - U + Ur Hand.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 04-10 P!nk - Runaway.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 04-11 P!nk - The One That Got Away.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 04-12 P!nk - I Got Money Now.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 04-13 P!nk - Conversations With My 13 Year Old Self.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 04-14 P!nk - Fingers.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 04-15 P!nk - Centerfold.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 04-16 P!nk - I Have Seen the Rain.flac	1	1	P!nk Feat. James T. Moore	051fb35fe3d5970ae0f0a949e12d9456
+/media/Music/P!nk/The Album Collection (2010)/CD 05-01 P!nk - So What.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 05-02 P!nk - Sober.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 05-03 P!nk - I Don’t Believe You.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 05-04 P!nk - One Foot Wrong.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 05-05 P!nk - Please Don’t Leave Me.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 05-06 P!nk - Bad Influence.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 05-07 P!nk - Funhouse.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 05-08 P!nk - Crystal Ball.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 05-09 P!nk - Mean.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 05-10 P!nk - It’s All Your Fault.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 05-11 P!nk - Ave Mary A.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 05-12 P!nk - Glitter in the Air.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Album Collection (2010)/CD 05-13 P!nk - This Is How It Goes Down.flac	1	1	P!nk Feat. Travis Mccoy	2092c2c1100e4f442d19a0357bee50c7
+/media/Music/P!nk/The Album Collection (2010)/CD 05-14 P!nk - Boring.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Truth About Love (2012)/CD 01-01 P!nk - Are We All We Are.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Truth About Love (2012)/CD 01-02 P!nk - Blow Me (One Last Kiss).flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Truth About Love (2012)/CD 01-03 P!nk - Try.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Truth About Love (2012)/CD 01-04 P!nk - Just Give Me a Reason.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Truth About Love (2012)/CD 01-05 P!nk - True Love.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Truth About Love (2012)/CD 01-06 P!nk - How Come You’re Not Here.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Truth About Love (2012)/CD 01-07 P!nk - Slut Like You.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Truth About Love (2012)/CD 01-08 P!nk - The Truth About Love.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Truth About Love (2012)/CD 01-09 P!nk - Beam Me Up.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Truth About Love (2012)/CD 01-10 P!nk - Walk of Shame.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Truth About Love (2012)/CD 01-11 P!nk - Here Comes the Weekend.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Truth About Love (2012)/CD 01-12 P!nk - Where Did the Beat Go.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/The Truth About Love (2012)/CD 01-13 P!nk - The Great Escape.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/Try This (2003)/CD 01-01 P!nk - Trouble.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/Try This (2003)/CD 01-02 P!nk - God Is a DJ.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/Try This (2003)/CD 01-03 P!nk - Last to Know.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/Try This (2003)/CD 01-04 P!nk - Tonight’s the Night.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/Try This (2003)/CD 01-05 P!nk - Oh My God.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/Try This (2003)/CD 01-06 P!nk - Catch Me While I’m Sleeping.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/Try This (2003)/CD 01-07 P!nk - Waiting for Love.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/Try This (2003)/CD 01-08 P!nk - Save My Life.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/Try This (2003)/CD 01-09 P!nk - Try Too Hard.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/Try This (2003)/CD 01-10 P!nk - Humble Neighborhoods.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/Try This (2003)/CD 01-11 P!nk - Walk Away.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/Try This (2003)/CD 01-12 P!nk - Unwind.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/Try This (2003)/CD 01-13 P!nk - Feel Good Time.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/Try This (2003)/CD 01-14 P!nk - Love Song.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/P!nk/Try This (2003)/CD 01-15 P!nk - Hooker.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+/media/Music/Sabrina Carpenter/EVOLution (2016)/Digital Media 01-01 Sabrina Carpenter - On Purpose.flac	1	1	Sabrina Carpenter	0cc910b87721fcf03503cdc777268e21
+/media/Music/Sabrina Carpenter/EVOLution (2016)/Digital Media 01-02 Sabrina Carpenter - Feels Like Loneliness.flac	1	1	Sabrina Carpenter	0cc910b87721fcf03503cdc777268e21
+/media/Music/Sabrina Carpenter/EVOLution (2016)/Digital Media 01-03 Sabrina Carpenter - Thumbs.flac	1	1	Sabrina Carpenter	0cc910b87721fcf03503cdc777268e21
+/media/Music/Sabrina Carpenter/EVOLution (2016)/Digital Media 01-04 Sabrina Carpenter - No Words.flac	1	1	Sabrina Carpenter	0cc910b87721fcf03503cdc777268e21
+/media/Music/Sabrina Carpenter/EVOLution (2016)/Digital Media 01-05 Sabrina Carpenter - Run and Hide.flac	1	1	Sabrina Carpenter	0cc910b87721fcf03503cdc777268e21
+/media/Music/Sabrina Carpenter/EVOLution (2016)/Digital Media 01-06 Sabrina Carpenter - Mirage.flac	1	1	Sabrina Carpenter	0cc910b87721fcf03503cdc777268e21
+/media/Music/Sabrina Carpenter/EVOLution (2016)/Digital Media 01-07 Sabrina Carpenter - Don’t Want It Back.flac	1	1	Sabrina Carpenter	0cc910b87721fcf03503cdc777268e21
+/media/Music/Sabrina Carpenter/EVOLution (2016)/Digital Media 01-08 Sabrina Carpenter - Shadows.flac	1	1	Sabrina Carpenter	0cc910b87721fcf03503cdc777268e21
+/media/Music/Sabrina Carpenter/EVOLution (2016)/Digital Media 01-09 Sabrina Carpenter - Space.flac	1	1	Sabrina Carpenter	0cc910b87721fcf03503cdc777268e21
+/media/Music/Sabrina Carpenter/EVOLution (2016)/Digital Media 01-10 Sabrina Carpenter - All We Have Is Love.flac	1	1	Sabrina Carpenter	0cc910b87721fcf03503cdc777268e21
+/media/Music/Sabrina Carpenter/Eyes Wide Open (2015)/Enhanced CD 01-01 Sabrina Carpenter - Eyes Wide Open.flac	1	1	Sabrina Carpenter	0cc910b87721fcf03503cdc777268e21
+/media/Music/Sabrina Carpenter/Eyes Wide Open (2015)/Enhanced CD 01-02 Sabrina Carpenter - Can't Blame a Girl for Trying.flac	1	1	Sabrina Carpenter	0cc910b87721fcf03503cdc777268e21
+/media/Music/Sabrina Carpenter/Eyes Wide Open (2015)/Enhanced CD 01-03 Sabrina Carpenter - The Middle of Starting Over.flac	1	1	Sabrina Carpenter	0cc910b87721fcf03503cdc777268e21
+/media/Music/Sabrina Carpenter/Eyes Wide Open (2015)/Enhanced CD 01-04 Sabrina Carpenter - We'll Be the Stars.flac	1	1	Sabrina Carpenter	0cc910b87721fcf03503cdc777268e21
+/media/Music/Sabrina Carpenter/Eyes Wide Open (2015)/Enhanced CD 01-05 Sabrina Carpenter - Two Young Hearts.flac	1	1	Sabrina Carpenter	0cc910b87721fcf03503cdc777268e21
+/media/Music/Sabrina Carpenter/Eyes Wide Open (2015)/Enhanced CD 01-06 Sabrina Carpenter - Your Love's Like.flac	1	1	Sabrina Carpenter	0cc910b87721fcf03503cdc777268e21
+/media/Music/Sabrina Carpenter/Eyes Wide Open (2015)/Enhanced CD 01-07 Sabrina Carpenter - Too Young.flac	1	1	Sabrina Carpenter	0cc910b87721fcf03503cdc777268e21
+/media/Music/Sabrina Carpenter/Eyes Wide Open (2015)/Enhanced CD 01-08 Sabrina Carpenter - Seamless.flac	1	1	Sabrina Carpenter	0cc910b87721fcf03503cdc777268e21
+/media/Music/Sabrina Carpenter/Eyes Wide Open (2015)/Enhanced CD 01-09 Sabrina Carpenter - Right Now.flac	1	1	Sabrina Carpenter	0cc910b87721fcf03503cdc777268e21
+/media/Music/Sabrina Carpenter/Eyes Wide Open (2015)/Enhanced CD 01-10 Sabrina Carpenter - Darling I'm a Mess.flac	1	1	Sabrina Carpenter	0cc910b87721fcf03503cdc777268e21
+/media/Music/Sabrina Carpenter/Eyes Wide Open (2015)/Enhanced CD 01-11 Sabrina Carpenter - White Flag.flac	1	1	Sabrina Carpenter	0cc910b87721fcf03503cdc777268e21
+/media/Music/Sabrina Carpenter/Eyes Wide Open (2015)/Enhanced CD 01-12 Sabrina Carpenter - Best Thing I Got.flac	1	1	Sabrina Carpenter	0cc910b87721fcf03503cdc777268e21
+/media/Music/Sabrina Carpenter/Man’s Best Friend (2025)/12 Vinyl 01-01 Sabrina Carpenter - Manchild.flac	1	1	Sabrina Carpenter	0cc910b87721fcf03503cdc777268e21
+/media/Music/Sabrina Carpenter/Man’s Best Friend (2025)/12 Vinyl 01-02 Sabrina Carpenter - Tears.flac	1	1	Sabrina Carpenter	0cc910b87721fcf03503cdc777268e21
+/media/Music/Sabrina Carpenter/Man’s Best Friend (2025)/12 Vinyl 01-03 Sabrina Carpenter - My Man on Willpower.flac	1	1	Sabrina Carpenter	0cc910b87721fcf03503cdc777268e21
+/media/Music/Sabrina Carpenter/Man’s Best Friend (2025)/12 Vinyl 01-04 Sabrina Carpenter - Sugar Talking.flac	1	1	Sabrina Carpenter	0cc910b87721fcf03503cdc777268e21
+/media/Music/Sabrina Carpenter/Man’s Best Friend (2025)/12 Vinyl 01-05 Sabrina Carpenter - We Almost Broke Up Again Last Night.flac	1	1	Sabrina Carpenter	0cc910b87721fcf03503cdc777268e21
+/media/Music/Sabrina Carpenter/Man’s Best Friend (2025)/12 Vinyl 01-06 Sabrina Carpenter - Nobody’s Son.flac	1	1	Sabrina Carpenter	0cc910b87721fcf03503cdc777268e21
+/media/Music/Sabrina Carpenter/Man’s Best Friend (2025)/12 Vinyl 01-07 Sabrina Carpenter - Never Getting Laid.flac	1	1	Sabrina Carpenter	0cc910b87721fcf03503cdc777268e21
+/media/Music/Sabrina Carpenter/Man’s Best Friend (2025)/12 Vinyl 01-08 Sabrina Carpenter - When Did You Get Hot.flac	1	1	Sabrina Carpenter	0cc910b87721fcf03503cdc777268e21
+/media/Music/Sabrina Carpenter/Man’s Best Friend (2025)/12 Vinyl 01-09 Sabrina Carpenter - Go Go Juice.flac	1	1	Sabrina Carpenter	0cc910b87721fcf03503cdc777268e21
+/media/Music/Sabrina Carpenter/Man’s Best Friend (2025)/12 Vinyl 01-10 Sabrina Carpenter - Don’t Worry I’ll Make You Worry.flac	1	1	Sabrina Carpenter	0cc910b87721fcf03503cdc777268e21
+/media/Music/Sabrina Carpenter/Man’s Best Friend (2025)/12 Vinyl 01-11 Sabrina Carpenter - House Tour.flac	1	1	Sabrina Carpenter	0cc910b87721fcf03503cdc777268e21
+/media/Music/Sabrina Carpenter/Man’s Best Friend (2025)/12 Vinyl 01-12 Sabrina Carpenter - Goodbye.flac	1	1	Sabrina Carpenter	0cc910b87721fcf03503cdc777268e21
+/media/Music/Sabrina Carpenter/Man’s Best Friend (2025)/12 Vinyl 01-13 Sabrina Carpenter - Such a Funny Way.flac	1	1	Sabrina Carpenter	0cc910b87721fcf03503cdc777268e21
+/media/Music/Sabrina Carpenter/Singular - Act II (2019)/12 Vinyl 01-01 Sabrina Carpenter - In My Bed.flac	1	1	Sabrina Carpenter	0cc910b87721fcf03503cdc777268e21
+/media/Music/Sabrina Carpenter/Singular - Act II (2019)/12 Vinyl 01-02 Sabrina Carpenter - Pushing 20.flac	1	1	Sabrina Carpenter	0cc910b87721fcf03503cdc777268e21
+/media/Music/Sabrina Carpenter/Singular - Act II (2019)/12 Vinyl 01-03 Sabrina Carpenter - I Can’t Stop Me.flac	1	1	Sabrina Carpenter	0cc910b87721fcf03503cdc777268e21
+/media/Music/Sabrina Carpenter/Singular - Act II (2019)/12 Vinyl 01-04 Sabrina Carpenter - I’m Fakin.flac	1	1	Sabrina Carpenter	0cc910b87721fcf03503cdc777268e21
+/media/Music/Sabrina Carpenter/Singular - Act II (2019)/12 Vinyl 01-05 Sabrina Carpenter - Take Off All Your Cool.flac	1	1	Sabrina Carpenter	0cc910b87721fcf03503cdc777268e21
+/media/Music/Sabrina Carpenter/Singular - Act II (2019)/12 Vinyl 01-06 Sabrina Carpenter - Tell Em.flac	1	1	Sabrina Carpenter	0cc910b87721fcf03503cdc777268e21
+/media/Music/Sabrina Carpenter/Singular - Act II (2019)/12 Vinyl 01-07 Sabrina Carpenter - Exhale.flac	1	1	Sabrina Carpenter	0cc910b87721fcf03503cdc777268e21
+/media/Music/Sabrina Carpenter/Singular - Act II (2019)/12 Vinyl 01-08 Sabrina Carpenter - Take You Back.flac	1	1	Sabrina Carpenter	0cc910b87721fcf03503cdc777268e21
+/media/Music/Sabrina Carpenter/Singular - Act II (2019)/12 Vinyl 01-09 Sabrina Carpenter - Looking at Me.flac	1	1	Sabrina Carpenter	0cc910b87721fcf03503cdc777268e21
+/media/Music/Sabrina Carpenter/emails i can’t send (2022)/CD 01-01 Sabrina Carpenter - emails i can’t send.flac	1	1	Sabrina Carpenter	0cc910b87721fcf03503cdc777268e21
+/media/Music/Sabrina Carpenter/emails i can’t send (2022)/CD 01-02 Sabrina Carpenter - Vicious.flac	1	1	Sabrina Carpenter	0cc910b87721fcf03503cdc777268e21
+/media/Music/Sabrina Carpenter/emails i can’t send (2022)/CD 01-03 Sabrina Carpenter - Read your Mind.flac	1	1	Sabrina Carpenter	0cc910b87721fcf03503cdc777268e21
+/media/Music/Sabrina Carpenter/emails i can’t send (2022)/CD 01-04 Sabrina Carpenter - Tornado Warnings.flac	1	1	Sabrina Carpenter	0cc910b87721fcf03503cdc777268e21
+/media/Music/Sabrina Carpenter/emails i can’t send (2022)/CD 01-05 Sabrina Carpenter - because i liked a boy.flac	1	1	Sabrina Carpenter	0cc910b87721fcf03503cdc777268e21
+/media/Music/Sabrina Carpenter/emails i can’t send (2022)/CD 01-06 Sabrina Carpenter - Already Over.flac	1	1	Sabrina Carpenter	0cc910b87721fcf03503cdc777268e21
+/media/Music/Sabrina Carpenter/emails i can’t send (2022)/CD 01-07 Sabrina Carpenter - how many things.flac	1	1	Sabrina Carpenter	0cc910b87721fcf03503cdc777268e21
+/media/Music/Sabrina Carpenter/emails i can’t send (2022)/CD 01-08 Sabrina Carpenter - bet u wanna.flac	1	1	Sabrina Carpenter	0cc910b87721fcf03503cdc777268e21
+/media/Music/Sabrina Carpenter/emails i can’t send (2022)/CD 01-09 Sabrina Carpenter - Nonsense.flac	1	1	Sabrina Carpenter	0cc910b87721fcf03503cdc777268e21
+/media/Music/Sabrina Carpenter/emails i can’t send (2022)/CD 01-10 Sabrina Carpenter - Fast Times.flac	1	1	Sabrina Carpenter	0cc910b87721fcf03503cdc777268e21
+/media/Music/Sabrina Carpenter/emails i can’t send (2022)/CD 01-11 Sabrina Carpenter - skinny dipping.flac	1	1	Sabrina Carpenter	0cc910b87721fcf03503cdc777268e21
+/media/Music/Sabrina Carpenter/emails i can’t send (2022)/CD 01-12 Sabrina Carpenter - Bad for Business.flac	1	1	Sabrina Carpenter	0cc910b87721fcf03503cdc777268e21
+/media/Music/Sabrina Carpenter/emails i can’t send (2022)/CD 01-13 Sabrina Carpenter - decode.flac	1	1	Sabrina Carpenter	0cc910b87721fcf03503cdc777268e21
+/media/Music/Taylor Swift/1989 (2014)/Digital Media 01-01 Taylor Swift - Welcome to New York (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/1989 (2014)/Digital Media 01-02 Taylor Swift - Welcome to New York.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/1989 (2014)/Digital Media 01-03 Taylor Swift - Blank Space (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/1989 (2014)/Digital Media 01-04 Taylor Swift - Blank Space.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/1989 (2014)/Digital Media 01-05 Taylor Swift - Style (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/1989 (2014)/Digital Media 01-06 Taylor Swift - Style.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/1989 (2014)/Digital Media 01-07 Taylor Swift - Out of the Woods (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/1989 (2014)/Digital Media 01-08 Taylor Swift - Out of the Woods.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/1989 (2014)/Digital Media 01-09 Taylor Swift - All You Had to Do Was Stay (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/1989 (2014)/Digital Media 01-10 Taylor Swift - All You Had to Do Was Stay.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/1989 (2014)/Digital Media 01-11 Taylor Swift - Shake It Off (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/1989 (2014)/Digital Media 01-12 Taylor Swift - Shake It Off.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/1989 (2014)/Digital Media 01-13 Taylor Swift - I Wish You Would (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/1989 (2014)/Digital Media 01-14 Taylor Swift - I Wish You Would.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/1989 (2014)/Digital Media 01-15 Taylor Swift - Bad Blood (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/1989 (2014)/Digital Media 01-16 Taylor Swift - Bad Blood.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/1989 (2014)/Digital Media 01-17 Taylor Swift - Wildest Dreams (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/1989 (2014)/Digital Media 01-18 Taylor Swift - Wildest Dreams.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/1989 (2014)/Digital Media 01-19 Taylor Swift - How You Get the Girl (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/1989 (2014)/Digital Media 01-20 Taylor Swift - How You Get the Girl.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/1989 (2014)/Digital Media 01-21 Taylor Swift - This Love (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/1989 (2014)/Digital Media 01-22 Taylor Swift - This Love.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/1989 (2014)/Digital Media 01-23 Taylor Swift - I Know Places (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/1989 (2014)/Digital Media 01-24 Taylor Swift - I Know Places.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/1989 (2014)/Digital Media 01-25 Taylor Swift - Clean (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/1989 (2014)/Digital Media 01-26 Taylor Swift - Clean.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Fearless (2008)/Digital Media 01-01 Taylor Swift - Fearless (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Fearless (2008)/Digital Media 01-02 Taylor Swift - Fearless.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Fearless (2008)/Digital Media 01-03 Taylor Swift - Fifteen (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Fearless (2008)/Digital Media 01-04 Taylor Swift - Fifteen.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Fearless (2008)/Digital Media 01-05 Taylor Swift - Love Story (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Fearless (2008)/Digital Media 01-06 Taylor Swift - Love Story.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Fearless (2008)/Digital Media 01-07 Taylor Swift - Hey Stephen (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Fearless (2008)/Digital Media 01-08 Taylor Swift - Hey Stephen.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Fearless (2008)/Digital Media 01-09 Taylor Swift - White Horse (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Fearless (2008)/Digital Media 01-10 Taylor Swift - White Horse.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Fearless (2008)/Digital Media 01-11 Taylor Swift - You Belong With Me (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Fearless (2008)/Digital Media 01-12 Taylor Swift - You Belong With Me.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Fearless (2008)/Digital Media 01-13 Taylor Swift - Breathe (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Fearless (2008)/Digital Media 01-14 Taylor Swift - Breathe.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Fearless (2008)/Digital Media 01-15 Taylor Swift - Tell Me Why (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Fearless (2008)/Digital Media 01-16 Taylor Swift - Tell Me Why.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Fearless (2008)/Digital Media 01-17 Taylor Swift - You’re Not Sorry (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Fearless (2008)/Digital Media 01-18 Taylor Swift - You’re Not Sorry.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Fearless (2008)/Digital Media 01-19 Taylor Swift - The Way I Loved You (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Fearless (2008)/Digital Media 01-20 Taylor Swift - The Way I Loved You.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Fearless (2008)/Digital Media 01-21 Taylor Swift - Forever & Always (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Fearless (2008)/Digital Media 01-22 Taylor Swift - Forever & Always.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Fearless (2008)/Digital Media 01-23 Taylor Swift - The Best Day (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Fearless (2008)/Digital Media 01-24 Taylor Swift - The Best Day.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Fearless (2008)/Digital Media 01-25 Taylor Swift - Change (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Fearless (2008)/Digital Media 01-26 Taylor Swift - Change.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Lover (2019)/Digital Media 01-01 Taylor Swift - I Forgot That You Existed.flac	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Lover (2019)/Digital Media 01-02 Taylor Swift - Cruel Summer.flac	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Lover (2019)/Digital Media 01-03 Taylor Swift - Lover.flac	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Lover (2019)/Digital Media 01-04 Taylor Swift - The Man.flac	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Lover (2019)/Digital Media 01-05 Taylor Swift - The Archer.flac	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Lover (2019)/Digital Media 01-06 Taylor Swift - I Think He Knows.flac	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Lover (2019)/Digital Media 01-07 Taylor Swift - Miss Americana & the Heartbreak Prince.flac	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Lover (2019)/Digital Media 01-08 Taylor Swift - Paper Rings.flac	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Lover (2019)/Digital Media 01-09 Taylor Swift - Cornelia Street.flac	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Lover (2019)/Digital Media 01-10 Taylor Swift - Death by a Thousand Cuts.flac	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Lover (2019)/Digital Media 01-11 Taylor Swift - London Boy.flac	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Lover (2019)/Digital Media 01-12 Taylor Swift - Soon You’ll Get Better.flac	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Lover (2019)/Digital Media 01-13 Taylor Swift - False God.flac	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Lover (2019)/Digital Media 01-14 Taylor Swift - You Need to Calm Down.flac	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Lover (2019)/Digital Media 01-15 Taylor Swift - Afterglow.flac	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Lover (2019)/Digital Media 01-16 Taylor Swift - ME!.flac	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Lover (2019)/Digital Media 01-17 Taylor Swift - It’s Nice to Have a Friend.flac	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Lover (2019)/Digital Media 01-18 Taylor Swift - Daylight.flac	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Midnights (2022)/Digital Media 01-01 Taylor Swift - Lavender Haze.flac	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Midnights (2022)/Digital Media 01-02 Taylor Swift - Maroon.flac	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Midnights (2022)/Digital Media 01-03 Taylor Swift - Anti‐Hero.flac	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Midnights (2022)/Digital Media 01-04 Taylor Swift - Snow on the Beach.flac	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Midnights (2022)/Digital Media 01-05 Taylor Swift - You’re on Your Own, Kid.flac	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Midnights (2022)/Digital Media 01-06 Taylor Swift - Midnight Rain.flac	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Midnights (2022)/Digital Media 01-07 Taylor Swift - Question….flac	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Midnights (2022)/Digital Media 01-08 Taylor Swift - Vigilante Shit.flac	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Midnights (2022)/Digital Media 01-09 Taylor Swift - Bejeweled.flac	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Midnights (2022)/Digital Media 01-10 Taylor Swift - Labyrinth.flac	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Midnights (2022)/Digital Media 01-11 Taylor Swift - Karma.flac	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Midnights (2022)/Digital Media 01-12 Taylor Swift - Sweet Nothing.flac	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Midnights (2022)/Digital Media 01-13 Taylor Swift - Mastermind.flac	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Speak Now (2010)/Digital Media 01-01 Taylor Swift - Mine (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Speak Now (2010)/Digital Media 01-02 Taylor Swift - Mine.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Speak Now (2010)/Digital Media 01-03 Taylor Swift - Sparks Fly (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Speak Now (2010)/Digital Media 01-04 Taylor Swift - Sparks Fly.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Speak Now (2010)/Digital Media 01-05 Taylor Swift - Back to December (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Speak Now (2010)/Digital Media 01-06 Taylor Swift - Back to December.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Speak Now (2010)/Digital Media 01-07 Taylor Swift - Speak Now (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Speak Now (2010)/Digital Media 01-08 Taylor Swift - Speak Now.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Speak Now (2010)/Digital Media 01-09 Taylor Swift - Dear John (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Speak Now (2010)/Digital Media 01-10 Taylor Swift - Dear John.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Speak Now (2010)/Digital Media 01-11 Taylor Swift - Mean (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Speak Now (2010)/Digital Media 01-12 Taylor Swift - Mean.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Speak Now (2010)/Digital Media 01-13 Taylor Swift - The Story of Us (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Speak Now (2010)/Digital Media 01-14 Taylor Swift - The Story of Us.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Speak Now (2010)/Digital Media 01-15 Taylor Swift - Never Grow Up (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Speak Now (2010)/Digital Media 01-16 Taylor Swift - Never Grow Up.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Speak Now (2010)/Digital Media 01-17 Taylor Swift - Enchanted (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Speak Now (2010)/Digital Media 01-18 Taylor Swift - Enchanted.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Speak Now (2010)/Digital Media 01-19 Taylor Swift - Better Than Revenge (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Speak Now (2010)/Digital Media 01-20 Taylor Swift - Better Than Revenge.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Speak Now (2010)/Digital Media 01-21 Taylor Swift - Innocent (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Speak Now (2010)/Digital Media 01-22 Taylor Swift - Innocent.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Speak Now (2010)/Digital Media 01-23 Taylor Swift - Haunted (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Speak Now (2010)/Digital Media 01-24 Taylor Swift - Haunted.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Speak Now (2010)/Digital Media 01-25 Taylor Swift - Last Kiss (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Speak Now (2010)/Digital Media 01-26 Taylor Swift - Last Kiss.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Speak Now (2010)/Digital Media 01-27 Taylor Swift - Long Live (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Speak Now (2010)/Digital Media 01-28 Taylor Swift - Long Live.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/THE TORTURED POETS DEPARTMENT (2024)/Digital Media 01-01 Taylor Swift - Fortnight.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/THE TORTURED POETS DEPARTMENT (2024)/Digital Media 01-02 Taylor Swift - The Tortured Poets Department.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/THE TORTURED POETS DEPARTMENT (2024)/Digital Media 01-03 Taylor Swift - My Boy Only Breaks His Favorite Toys.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/THE TORTURED POETS DEPARTMENT (2024)/Digital Media 01-04 Taylor Swift - Down Bad.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/THE TORTURED POETS DEPARTMENT (2024)/Digital Media 01-05 Taylor Swift - So Long, London.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/THE TORTURED POETS DEPARTMENT (2024)/Digital Media 01-06 Taylor Swift - But Daddy I Love Him.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/THE TORTURED POETS DEPARTMENT (2024)/Digital Media 01-07 Taylor Swift - Fresh Out the Slammer.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/THE TORTURED POETS DEPARTMENT (2024)/Digital Media 01-08 Taylor Swift - Florida!!!.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/THE TORTURED POETS DEPARTMENT (2024)/Digital Media 01-09 Taylor Swift - Guilty as Sin.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/THE TORTURED POETS DEPARTMENT (2024)/Digital Media 01-10 Taylor Swift - Who’s Afraid of Little Old Me.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/THE TORTURED POETS DEPARTMENT (2024)/Digital Media 01-11 Taylor Swift - I Can Fix Him (No Really I Can).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/THE TORTURED POETS DEPARTMENT (2024)/Digital Media 01-12 Taylor Swift - loml.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/THE TORTURED POETS DEPARTMENT (2024)/Digital Media 01-13 Taylor Swift - I Can Do It With a Broken Heart.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/THE TORTURED POETS DEPARTMENT (2024)/Digital Media 01-14 Taylor Swift - The Smallest Man Who Ever Lived.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/THE TORTURED POETS DEPARTMENT (2024)/Digital Media 01-15 Taylor Swift - The Alchemy.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/THE TORTURED POETS DEPARTMENT (2024)/Digital Media 01-16 Taylor Swift - Clara Bow.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Taylor Swift (2006)/Digital Media 01-01 Taylor Swift - Tim McGraw (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Taylor Swift (2006)/Digital Media 01-02 Taylor Swift - Tim McGraw.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Taylor Swift (2006)/Digital Media 01-03 Taylor Swift - Picture to Burn (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Taylor Swift (2006)/Digital Media 01-04 Taylor Swift - Picture to Burn.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Taylor Swift (2006)/Digital Media 01-05 Taylor Swift - Teardrops on My Guitar (radio single remix + commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Taylor Swift (2006)/Digital Media 01-06 Taylor Swift - Teardrops on My Guitar (radio single remix).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Taylor Swift (2006)/Digital Media 01-07 Taylor Swift - A Place in This World (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Taylor Swift (2006)/Digital Media 01-08 Taylor Swift - A Place in This World.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Taylor Swift (2006)/Digital Media 01-09 Taylor Swift - Cold as You (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Taylor Swift (2006)/Digital Media 01-10 Taylor Swift - Cold as You.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Taylor Swift (2006)/Digital Media 01-11 Taylor Swift - The Outside (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Taylor Swift (2006)/Digital Media 01-12 Taylor Swift - The Outside.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Taylor Swift (2006)/Digital Media 01-13 Taylor Swift - Tied Together With a Smile (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Taylor Swift (2006)/Digital Media 01-14 Taylor Swift - Tied Together With a Smile.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Taylor Swift (2006)/Digital Media 01-15 Taylor Swift - Stay Beautiful (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Taylor Swift (2006)/Digital Media 01-16 Taylor Swift - Stay Beautiful.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Taylor Swift (2006)/Digital Media 01-17 Taylor Swift - Should’ve Said No (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Taylor Swift (2006)/Digital Media 01-18 Taylor Swift - Should’ve Said No.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Taylor Swift (2006)/Digital Media 01-19 Taylor Swift - Mary’s Song (Oh My My My) (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Taylor Swift (2006)/Digital Media 01-20 Taylor Swift - Mary’s Song (Oh My My My).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Taylor Swift (2006)/Digital Media 01-21 Taylor Swift - Our Song (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Taylor Swift (2006)/Digital Media 01-22 Taylor Swift - Our Song.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Taylor Swift (2006)/Digital Media 01-23 Taylor Swift - I’m Only Me When I’m With You (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Taylor Swift (2006)/Digital Media 01-24 Taylor Swift - I’m Only Me When I’m With You.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Taylor Swift (2006)/Digital Media 01-25 Taylor Swift - Invisible (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Taylor Swift (2006)/Digital Media 01-26 Taylor Swift - Invisible.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Taylor Swift (2006)/Digital Media 01-27 Taylor Swift - A Perfectly Good Heart (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Taylor Swift (2006)/Digital Media 01-28 Taylor Swift - A Perfectly Good Heart.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Taylor Swift (2006)/Digital Media 01-29 Taylor Swift - Teardrops on My Guitar (pop version + commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/Taylor Swift (2006)/Digital Media 01-30 Taylor Swift - Teardrops on My Guitar (pop version).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/The Life of a Showgirl (2025)/CD 01-01 Taylor Swift - The Fate of Ophelia.flac	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/The Life of a Showgirl (2025)/CD 01-02 Taylor Swift - Elizabeth Taylor.flac	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/The Life of a Showgirl (2025)/CD 01-03 Taylor Swift - Opalite.flac	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/The Life of a Showgirl (2025)/CD 01-04 Taylor Swift - Father Figure.flac	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/The Life of a Showgirl (2025)/CD 01-05 Taylor Swift - Eldest Daughter.flac	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/The Life of a Showgirl (2025)/CD 01-06 Taylor Swift - Ruin the Friendship.flac	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/The Life of a Showgirl (2025)/CD 01-07 Taylor Swift - Actually Romantic.flac	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/The Life of a Showgirl (2025)/CD 01-08 Taylor Swift - Wi$h Li$t.flac	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/The Life of a Showgirl (2025)/CD 01-09 Taylor Swift - Wood.flac	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/The Life of a Showgirl (2025)/CD 01-10 Taylor Swift - CANCELLED!.flac	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/The Life of a Showgirl (2025)/CD 01-11 Taylor Swift - Honey.flac	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/The Life of a Showgirl (2025)/CD 01-12 Taylor Swift - The Life of a Showgirl.flac	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/The Life of a Showgirl + Acoustic Collection (2025)/Digital Media 01-01 Taylor Swift - The Fate of Ophelia.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/The Life of a Showgirl + Acoustic Collection (2025)/Digital Media 01-02 Taylor Swift - Elizabeth Taylor.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/The Life of a Showgirl + Acoustic Collection (2025)/Digital Media 01-03 Taylor Swift - Opalite.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/The Life of a Showgirl + Acoustic Collection (2025)/Digital Media 01-04 Taylor Swift - Father Figure.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/The Life of a Showgirl + Acoustic Collection (2025)/Digital Media 01-05 Taylor Swift - Eldest Daughter.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/The Life of a Showgirl + Acoustic Collection (2025)/Digital Media 01-06 Taylor Swift - Ruin the Friendship.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/The Life of a Showgirl + Acoustic Collection (2025)/Digital Media 01-07 Taylor Swift - Actually Romantic.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/The Life of a Showgirl + Acoustic Collection (2025)/Digital Media 01-08 Taylor Swift - Wi$h Li$t.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/The Life of a Showgirl + Acoustic Collection (2025)/Digital Media 01-09 Taylor Swift - Wood.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/The Life of a Showgirl + Acoustic Collection (2025)/Digital Media 01-10 Taylor Swift - CANCELLED!.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/The Life of a Showgirl + Acoustic Collection (2025)/Digital Media 01-11 Taylor Swift - Honey.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/The Life of a Showgirl + Acoustic Collection (2025)/Digital Media 01-12 Taylor Swift - The Life of a Showgirl.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/The Life of a Showgirl + Acoustic Collection (2025)/Digital Media 01-13 Taylor Swift - The Fate of Ophelia - Alone in My Tower (acoustic version).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/The Life of a Showgirl + Acoustic Collection (2025)/Digital Media 01-14 Taylor Swift - Elizabeth Taylor - So Glamorous Cabaret Version.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/The Life of a Showgirl + Acoustic Collection (2025)/Digital Media 01-15 Taylor Swift - Opalite - Life Is a Song (acoustic version).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/The Life of a Showgirl + Acoustic Collection (2025)/Digital Media 01-16 Taylor Swift - Eldest Daughter - Now You’re Home (acoustic version).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/The Life of a Showgirl + Acoustic Collection (2025)/Digital Media 01-17 Taylor Swift - Ruin the Friendship - My Advice Version.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/The Life of a Showgirl + Acoustic Collection (2025)/Digital Media 01-18 Taylor Swift - Wi$h Li$t - Settled Down (acoustic version).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/The Life of a Showgirl + Acoustic Collection (2025)/Digital Media 01-19 Taylor Swift - The Life of a Showgirl - Dressing Room (rehearsal version).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/evermore (2020)/CD 01-01 Taylor Swift - willow.flac	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/evermore (2020)/CD 01-02 Taylor Swift - champagne problems.flac	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/evermore (2020)/CD 01-03 Taylor Swift - gold rush.flac	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/evermore (2020)/CD 01-04 Taylor Swift - ’tis the damn season.flac	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/evermore (2020)/CD 01-05 Taylor Swift - tolerate it.flac	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/evermore (2020)/CD 01-06 Taylor Swift - no body, no crime.flac	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/evermore (2020)/CD 01-07 Taylor Swift - happiness.flac	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/evermore (2020)/CD 01-08 Taylor Swift - dorothea.flac	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/evermore (2020)/CD 01-09 Taylor Swift - coney island.flac	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/evermore (2020)/CD 01-10 Taylor Swift - ivy.flac	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/evermore (2020)/CD 01-11 Taylor Swift - cowboy like me.flac	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/evermore (2020)/CD 01-12 Taylor Swift - long story short.flac	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/evermore (2020)/CD 01-13 Taylor Swift - marjorie.flac	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/evermore (2020)/CD 01-14 Taylor Swift - closure.flac	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/evermore (2020)/CD 01-15 Taylor Swift - evermore.flac	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/evermore (2020)/CD 01-16 Taylor Swift - right where you left me.flac	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/evermore (2020)/CD 01-17 Taylor Swift - it’s time to go.flac	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/folklore (2020)/Digital Media 01-01 Taylor Swift - the 1.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/folklore (2020)/Digital Media 01-02 Taylor Swift - cardigan.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/folklore (2020)/Digital Media 01-03 Taylor Swift - the last great american dynasty.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/folklore (2020)/Digital Media 01-04 Taylor Swift - exile.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/folklore (2020)/Digital Media 01-05 Taylor Swift - my tears ricochet.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/folklore (2020)/Digital Media 01-06 Taylor Swift - mirrorball.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/folklore (2020)/Digital Media 01-07 Taylor Swift - seven.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/folklore (2020)/Digital Media 01-08 Taylor Swift - august.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/folklore (2020)/Digital Media 01-09 Taylor Swift - this is me trying.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/folklore (2020)/Digital Media 01-10 Taylor Swift - illicit affairs.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/folklore (2020)/Digital Media 01-11 Taylor Swift - invisible string.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/folklore (2020)/Digital Media 01-12 Taylor Swift - mad woman.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/folklore (2020)/Digital Media 01-13 Taylor Swift - epiphany.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/folklore (2020)/Digital Media 01-14 Taylor Swift - betty.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/folklore (2020)/Digital Media 01-15 Taylor Swift - peace.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/folklore (2020)/Digital Media 01-16 Taylor Swift - hoax.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/reputation (2017)/Digital Media 01-01 Taylor Swift - …Ready for It! (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/reputation (2017)/Digital Media 01-02 Taylor Swift - …Ready for It.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/reputation (2017)/Digital Media 01-03 Taylor Swift - End Game (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/reputation (2017)/Digital Media 01-04 Taylor Swift - End Game.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/reputation (2017)/Digital Media 01-05 Taylor Swift - I Did Something Bad (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/reputation (2017)/Digital Media 01-06 Taylor Swift - I Did Something Bad.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/reputation (2017)/Digital Media 01-07 Taylor Swift - Don’t Blame Me (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/reputation (2017)/Digital Media 01-08 Taylor Swift - Don’t Blame Me.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/reputation (2017)/Digital Media 01-09 Taylor Swift - Delicate (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/reputation (2017)/Digital Media 01-10 Taylor Swift - Delicate.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/reputation (2017)/Digital Media 01-11 Taylor Swift - Look What You Made Me Do (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/reputation (2017)/Digital Media 01-12 Taylor Swift - Look What You Made Me Do.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/reputation (2017)/Digital Media 01-13 Taylor Swift - So It Goes… (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/reputation (2017)/Digital Media 01-14 Taylor Swift - So It Goes….mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/reputation (2017)/Digital Media 01-15 Taylor Swift - Gorgeous (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/reputation (2017)/Digital Media 01-16 Taylor Swift - Gorgeous.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/reputation (2017)/Digital Media 01-17 Taylor Swift - Getaway Car (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/reputation (2017)/Digital Media 01-18 Taylor Swift - Getaway Car.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/reputation (2017)/Digital Media 01-19 Taylor Swift - King of My Heart (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/reputation (2017)/Digital Media 01-20 Taylor Swift - King of My Heart.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/reputation (2017)/Digital Media 01-21 Taylor Swift - Dancing With Our Hands Tied (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/reputation (2017)/Digital Media 01-22 Taylor Swift - Dancing With Our Hands Tied.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/reputation (2017)/Digital Media 01-23 Taylor Swift - Dress (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/reputation (2017)/Digital Media 01-24 Taylor Swift - Dress.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/reputation (2017)/Digital Media 01-25 Taylor Swift - This Is Why We Can’t Have Nice Things (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/reputation (2017)/Digital Media 01-26 Taylor Swift - This Is Why We Can’t Have Nice Things.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/reputation (2017)/Digital Media 01-27 Taylor Swift - Call It What You Want (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/reputation (2017)/Digital Media 01-28 Taylor Swift - Call It What You Want.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/reputation (2017)/Digital Media 01-29 Taylor Swift - New Year’s Day (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/reputation (2017)/Digital Media 01-30 Taylor Swift - New Year’s Day.mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Taylor Swift/reputation (2017)/Digital Media 01-31 Taylor Swift - Radio Outro (commentary).mp3	1	1	Taylor Swift	d7749171e5c616cd6275a218581fa22d
+/media/Music/Vengaboys/The Greatest Hits Collection (2024)/Digital Media 01-01 Vengaboys - Parada de Tettas.mp3	1	1	Vengaboys	dcc65f7fb9287161e9a3ae6eef24e305
+/media/Music/Vengaboys/The Greatest Hits Collection (2024)/Digital Media 01-02 Vengaboys - To Brazil!.mp3	1	1	Vengaboys	dcc65f7fb9287161e9a3ae6eef24e305
+/media/Music/Vengaboys/The Greatest Hits Collection (2024)/Digital Media 01-03 Vengaboys - Up & Down.mp3	1	1	Vengaboys	dcc65f7fb9287161e9a3ae6eef24e305
+/media/Music/Vengaboys/The Greatest Hits Collection (2024)/Digital Media 01-04 Vengaboys - We Like to Party! (The Vengabus).mp3	1	1	Vengaboys	dcc65f7fb9287161e9a3ae6eef24e305
+/media/Music/Vengaboys/The Greatest Hits Collection (2024)/Digital Media 01-05 Vengaboys - Boom, Boom, Boom, Boom!!.mp3	1	1	Vengaboys	dcc65f7fb9287161e9a3ae6eef24e305
+/media/Music/Vengaboys/The Greatest Hits Collection (2024)/Digital Media 01-06 Vengaboys - We’re Going to Ibiza!.mp3	1	1	Vengaboys	dcc65f7fb9287161e9a3ae6eef24e305
+/media/Music/Vengaboys/The Greatest Hits Collection (2024)/Digital Media 01-07 Vengaboys - Kiss (When the Sun Don’t Shine).mp3	1	1	Vengaboys	dcc65f7fb9287161e9a3ae6eef24e305
+/media/Music/Vengaboys/The Greatest Hits Collection (2024)/Digital Media 01-08 Vengaboys - Shalala Lala.mp3	1	1	Vengaboys	dcc65f7fb9287161e9a3ae6eef24e305
+/media/Music/Vengaboys/The Greatest Hits Collection (2024)/Digital Media 01-09 Vengaboys - Uncle John From Jamaica.mp3	1	1	Vengaboys	dcc65f7fb9287161e9a3ae6eef24e305
+/media/Music/Vengaboys/The Greatest Hits Collection (2024)/Digital Media 01-10 Vengaboys - Cheekah Bow Bow (That Computer Song).mp3	1	1	Vengaboys	dcc65f7fb9287161e9a3ae6eef24e305
+/media/Music/Vengaboys/The Greatest Hits Collection (2024)/Digital Media 01-11 Vengaboys - Forever as One.mp3	1	1	Vengaboys	dcc65f7fb9287161e9a3ae6eef24e305
+/media/Music/Vengaboys/The Greatest Hits Collection (2024)/Digital Media 01-12 Vengaboys - Rocket to Uranus (Hitradio with Perez).mp3	1	1	Vengaboys, Perez Hilton	2de4868d68ef3f180e4cf3de081dd24d
+/media/Music/Vengaboys/The Greatest Hits Collection (2024)/Digital Media 01-13 Vengaboys - Hot Hot Hot.mp3	1	1	Vengaboys	dcc65f7fb9287161e9a3ae6eef24e305
+/media/Music/Vengaboys/The Greatest Hits Collection (2024)/Digital Media 01-14 Vengaboys - 1999 (I Wanna Go Back).mp3	1	1	Vengaboys	dcc65f7fb9287161e9a3ae6eef24e305
+/media/Music/Vengaboys/The Greatest Hits Collection (2024)/Digital Media 01-15 Vengaboys - Megamix (long maxi edit).mp3	1	1	Vengaboys	dcc65f7fb9287161e9a3ae6eef24e305
+/media/Music/Vengaboys/The Platinum Album (2000)/Enhanced CD 01-01 Vengaboys - Shalala Lala.flac	1	1	Vengaboys	dcc65f7fb9287161e9a3ae6eef24e305
+/media/Music/Vengaboys/The Platinum Album (2000)/Enhanced CD 01-02 Vengaboys - 24+7 in My 911.flac	1	1	Vengaboys	dcc65f7fb9287161e9a3ae6eef24e305
+/media/Music/Vengaboys/The Platinum Album (2000)/Enhanced CD 01-03 Vengaboys - Kiss (When the Sun Don't Shine).flac	1	1	Vengaboys	dcc65f7fb9287161e9a3ae6eef24e305
+/media/Music/Vengaboys/The Platinum Album (2000)/Enhanced CD 01-04 Vengaboys - Uncle John From Jamaica.flac	1	1	Vengaboys	dcc65f7fb9287161e9a3ae6eef24e305
+/media/Music/Vengaboys/The Platinum Album (2000)/Enhanced CD 01-05 Vengaboys - Cheekah Bow Bow (That Computer Song).flac	1	1	Vengaboys	dcc65f7fb9287161e9a3ae6eef24e305
+/media/Music/Vengaboys/The Platinum Album (2000)/Enhanced CD 01-06 Vengaboys - 48 Hours.flac	1	1	Vengaboys	dcc65f7fb9287161e9a3ae6eef24e305
+/media/Music/Vengaboys/The Platinum Album (2000)/Enhanced CD 01-07 Vengaboys - Your Place or Mine.flac	1	1	Vengaboys	dcc65f7fb9287161e9a3ae6eef24e305
+/media/Music/Vengaboys/The Platinum Album (2000)/Enhanced CD 01-08 Vengaboys - Skinnydippin'.flac	1	1	Vengaboys	dcc65f7fb9287161e9a3ae6eef24e305
+/media/Music/Vengaboys/The Platinum Album (2000)/Enhanced CD 01-09 Vengaboys - Take Me to the City.flac	1	1	Vengaboys	dcc65f7fb9287161e9a3ae6eef24e305
+/media/Music/Vengaboys/The Platinum Album (2000)/Enhanced CD 01-10 Vengaboys - Forever as One.flac	1	1	Vengaboys	dcc65f7fb9287161e9a3ae6eef24e305
+/media/Music/Vengaboys/The Platinum Album (2000)/Enhanced CD 01-11 Vengaboys - Opus 3 in D#.flac	1	1	Vengaboys	dcc65f7fb9287161e9a3ae6eef24e305
+--- END CENSUS ---
+
+
+================================================================================
+SECTION 4 — THE OQ-1 DO-NOT-RESCAN SET (P!nk/TRUSTFALL (2023))
+================================================================================
+These carry ';' inside the ARTIST tag (not ARTISTS) and Jellyfin ALREADY reads them as
+separate artists with distinct Ids — which is exactly what UseCustomTagDelimiters=false
+predicts it should NOT do. That is almost certainly STALE DB STATE from a pre-10.10 prober.
+A re-probe would very likely COLLAPSE them to one artist each, destroying evidence
+criterion 4 rests on. They are working state. THIS ROUND MUST NOT TOUCH THEM, and 06-41's
+touch list is asserted mechanically to contain zero TRUSTFALL paths (see SECTION 9).
+
+⚠ Row 3 of ARTIST_PROOF_ROWS is /media/Music/P!nk/The Truth About Love (2012)/... — a
+  DIFFERENT ALBUM under the same artist folder. It IS in scope. The exclusion is by album
+  directory, not by artist.
+
+TRUSTFALL (2023) items in the library: 22
+
+Rows with MORE THAN ONE ArtistItems entry — the six OQ-1 rows:
+
+    2 | /media/Music/P!nk/TRUSTFALL (2023)/CD 01-04 P!nk - Long Way to Go.flac
+        names: P!nk | The Lumineers
+        ids  : 7ca25d776805442472b7aa577b6a79ed | 68fc6c778e81f8038d7e640572e39130
+    2 | /media/Music/P!nk/TRUSTFALL (2023)/CD 01-05 P!nk - Kids in Love.flac
+        names: P!nk | First Aid Kit
+        ids  : 7ca25d776805442472b7aa577b6a79ed | ba2911b9f2a4c50228344deaf9fa3410
+    2 | /media/Music/P!nk/TRUSTFALL (2023)/CD 01-13 P!nk - Just Say I’m Sorry.flac
+        names: P!nk | Chris Stapleton
+        ids  : 7ca25d776805442472b7aa577b6a79ed | 5ceb092505d167b118ad6084db940b68
+    3 | /media/Music/P!nk/TRUSTFALL (2023)/CD 02-01 P!nk - Dreaming.flac
+        names: Marshmello | P!nk | Sting
+        ids  : 28577546c82807123b901bd79b4e7a97 | 7ca25d776805442472b7aa577b6a79ed | faebf8e0c27c0af62baf76091fe1ea1d
+    2 | /media/Music/P!nk/TRUSTFALL (2023)/CD 02-06 P!nk - Nothing Compares 2 U (live).flac
+        names: P!nk | Brandi Carlile
+        ids  : 7ca25d776805442472b7aa577b6a79ed | 23b8488e913fa5f6ecc93321d01d6e3a
+    2 | /media/Music/P!nk/TRUSTFALL (2023)/CD 02-08 P!nk - Cover Me in Sunshine (live).flac
+        names: P!nk | Willow Sage Hart
+        ids  : 7ca25d776805442472b7aa577b6a79ed | 4495c4c2d28b9368f044b00ea0d680af
+
+COUNT of DO-NOT-RESCAN rows listed above: 6   (06-03 recorded 6 on 2026-09-20)
+ASSERTION: six rows -> PASS. The set 06-41 must exclude is unchanged.
+
+END OF THE JELLYFIN HALF (sections 0-4). Sections 5-9 are read from atlantis.
