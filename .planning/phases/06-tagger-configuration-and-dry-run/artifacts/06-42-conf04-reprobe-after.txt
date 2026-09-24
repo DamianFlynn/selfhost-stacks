@@ -1,0 +1,366 @@
+================================================================================
+06-42 — CONF-04 RE-PROBE AFTER-STATE (the measurement; 06-40 measured before, 06-41 drove)
+================================================================================
+This file measures what 06-41's re-probe did, and proves it did nothing else. It answers two
+questions and never merges them:
+
+  (1) did the three pinned tracks move from their 2026-09-20 Jellyfin baselines (0 / 1 / 1)
+      to their targets (4 / 2 / 2), as N distinct browseable `ArtistItems` ENTITIES with
+      distinct Ids and no `;` in any entity Name?
+  (2) did the refresh write anything into the library, move any row nobody touched, or
+      disturb any option?
+
+It does NOT decide what the measurement means for CONF-04 — that is 06-43's job, behind an
+operator gate — and it edits no document.
+
+⛔ THE HARD FENCE STILL BINDS. The per-item metadata refresh in its most aggressive mode is
+FORBIDDEN estate-wide (D-24, T-06-11 — Phase 1 measured it rewriting 83 of 91 metadata
+sidecars with the local-metadata saver already off). THE ROWS DID NOT MOVE, AND THAT IS
+RECORDED HERE AS THE RESULT. It is not re-refreshed, the mode is not widened, and no further
+file is touched. A null result is a legitimate recorded negative outcome. The two prohibited
+scan endpoints are named DESCRIPTIVELY ONLY throughout this file; their literal tokens are
+deliberately kept out of it so a grep for them across artifacts/ stays a DETECTOR rather than
+matching prose (DEF-06-39-06).
+
+SECTIONS: C — the three pinned rows, read back (task 1).  D — the full census (task 1).
+          E — the census delta (task 1).  F — the OQ-1 negative control (task 1).
+          G/H/I/J/K — the four-way safety re-assert and the halt gate (task 2).
+
+
+================================================================================
+SECTION C — THE THREE PINNED ROWS, READ BACK
+================================================================================
+Taken  : from LXC 100 (selfhost, 172.16.1.159), where docker runs and the credential lives.
+Bounds : the remote driver carries `set -o pipefail`; the ssh exit status was read into a
+         variable at the workstation BEFORE anything was piped. A step that could not run
+         records UNKNOWN — never a zero. Measured ssh rc: 0. stderr: empty.
+
+Route  : 192.168.90.17:8096, resolved FRESH via
+         `docker inspect jellyfin --format '{{(index .NetworkSettings.Networks "t3_proxy").IPAddress}}'`
+         — never a pinned literal. 06-42-PLAN.md's context carries 192.168.90.25; 06-40 and
+         06-41 both MEASURED .17 and so does this run. The measured value is recorded, the
+         plan's is not, because recording the plan's number instead of the measured one is
+         exactly the drift this phase exists to stop. Never the bare name `jellyfin`
+         (resolv.conf carries `search deercrest.info`, so it resolves to Cloudflare's public
+         edge and a probe would return 200 with the container down), and never 172.16.1.76
+         (unreachable FROM LXC 100 under macvlan host isolation).
+Jellyfin : 10.11.11   (GET /System/Info)
+Library  : ItemId read back from GET /Library/VirtualFolders = 7e64e319657a9516ec78490da03edccb
+           — identical to 06-40's. The round is against the same object.
+Credential : /mnt/fast/secrets/jellyfin-deercrest.env — gated on mode `600 root`; MEASURED:
+           `600 root`. Sourced WITHOUT `set -a`, delivered to curl through `-H @<(printf ...)`
+           so the admin-equivalent key never entered argv on a host whose /proc is
+           world-readable and which has no hidepid. Its CONTENTS are recorded nowhere here.
+
+THIS TASK ISSUED ZERO POST, PUT OR DELETE REQUESTS. Every call is a GET:
+  GET /System/Info
+  GET /Library/VirtualFolders
+  GET /Items?IncludeItemTypes=Audio&Recursive=true&ParentId=<Music>&SearchTerm=<title>&Fields=ArtistItems,Artists,Path   (×3)
+  GET /Items?IncludeItemTypes=Audio&Recursive=true&ParentId=<Music>&Fields=ArtistItems,Artists,AlbumArtist,Path&Limit=5000
+Nothing under /mnt/tank/media was written, moved, chowned, chmodded or snapshotted by this
+task. No snapshot was created and none was destroyed.
+
+--------------------------------------------------------------------------------
+THE MOMENT OF THE READ-BACK, RECORDED BEFORE ANYTHING WAS READ
+--------------------------------------------------------------------------------
+These three lines were emitted by the remote driver as its FIRST action, before the route was
+resolved and before any GET was issued. 06-42's verify block re-does the subtraction from
+06-41's POST_UTC and this file's READBACK_UTC and fails closed below 120 — the settle window
+is arithmetic across two files, not a sentence in either of them.
+
+READBACK_UTC: 1790257176
+READBACK_UTC_ISO: 2026-09-24T13:39:36Z
+SETTLE_SECONDS: 19597
+
+  06-41 POST_UTC : 1790237579   (2026-09-24T08:12:59Z)
+  READBACK_UTC   : 1790257176   (2026-09-24T13:39:36Z)
+  elapsed        : 19597 s  (5 h 26 m 37 s)
+  required       : >= 120 s   (LibraryMonitorDelay = 60, and the refresher restarts its timer
+                   on every reported change)
+  -> the settle window is satisfied by a wide margin, and by a subtraction rather than a claim.
+
+--------------------------------------------------------------------------------
+IS THIS RESULT INTERPRETABLE? YES — AND THAT IS NOT A FORMALITY
+--------------------------------------------------------------------------------
+T-06-42-01 is the threat that a null result gets read as "the refresh did nothing" when the
+refresh never ran. "The refresh never started" and "the refresh started and changed nothing"
+are different facts, and this round's whole value is in telling them apart. The precondition
+for interpreting a null result is 06-41's `LibraryMonitor` evidence:
+
+  06-41 SECTION B, (B7): of the three refreshed paths, named in a LibraryMonitor line: 3,
+  not named: 0 — all three Audio items are named by their FULL internal path in Jellyfin's own
+  log, 60 s after the POST, which is `LibraryMonitorDelay` firing exactly once.
+  06-41 SECTION B, (B5): the POST returned HTTP 204.
+
+  -> ALL THREE ITEMS WERE NAMED. The result below is therefore a MEASUREMENT, not UNKNOWN.
+     The refresh started, reached all three Audio items, and the rows did not move.
+
+--------------------------------------------------------------------------------
+THE ASSERTION FIELD, AND THE FIELD THAT IS NOT ASSERTED
+--------------------------------------------------------------------------------
+⚠ `Artists` (the flat string list) is recorded below for DIAGNOSIS ONLY and is NEVER the thing
+  asserted. 30 of the 1,244 library items carry a populated `Artists` with ZERO `ArtistItems`,
+  and ROW 1'S ALBUM IS ONE OF THEM — asserting on `Artists` would read green on the row most
+  likely to fail (T-06-42-02). `ArtistItems` is the browseable ENTITY list, each entry carrying
+  an Id a user can click, and it is what D-22 means by "parsed correctly": N distinct
+  browseable artist ENTITIES, not a matching count and not one artist named `A;B`.
+
+The `;`-in-entity-name count is reported FIRST for each row, before the count verdict, in the
+same order `check-music-consumers.sh` § 4b checks them and for the same reason: a row sitting
+at its expected N with a `;` inside one entity name is the worst of both worlds, and is the
+precise failure D-22 exists to separate from success. ANY NON-ZERO `;` COUNT IS RED REGARDLESS
+OF THE ENTITY COUNT.
+
+`target` and `baseline` below are COPIED FROM `ARTIST_PROOF_ROWS`, mechanically: the remote
+driver shipped `scripts/check-music-consumers.sh` to LXC 100 over ssh STDIN from a QUOTED
+heredoc (never as an argv word — the ARTPOP path carries U+2019), asserted its sha256 against
+the workstation copy BEFORE parsing, and derived the path/target/baseline triplet with the same
+awk extraction 06-40 SECTION 9 records as the reusable recipe.
+
+  sha256 of the shipped copy : 1ed695cf483029c2e7c3fd815fc97bc1711a8a3e499556910955332a7a6ee819
+  sha256 at the workstation  : 1ed695cf483029c2e7c3fd815fc97bc1711a8a3e499556910955332a7a6ee819
+  (C1) the copy this host parsed is byte-identical to the repo file at HEAD  -> PASS
+  (C2) exactly 3 rows derived from ARTIST_PROOF_ROWS [measured 3]  -> PASS
+
+--------------------------------------------------------------------------------
+ROW 1
+--------------------------------------------------------------------------------
+  internal path : /media/Music/Lady Gaga/ARTPOP (2013)/CD 01-05 Lady Gaga - Jewels n’ Drugs.flac
+  tag position  : ARTISTS          search term : Jewels n' Drugs
+  target N      : 4      (from ARTIST_PROOF_ROWS)
+  jellyfin base : 0      (the 2026-09-20 baseline, from ARTIST_PROOF_ROWS)
+  06-40 measured: 0
+  MEASURED 2026-09-24T13:39:36Z:
+    entity names containing ';' : 0        <- reported FIRST; any value > 0 is RED regardless of count
+    ArtistItems length          : 0
+    distinct ArtistItems Ids    : 0
+    entity names                : <none>
+    entity Ids                  : <none>
+    Artists (flat, DIAGNOSIS ONLY, never asserted) : ["Lady GaGa"]
+    item Id                     : 1640ecf2cf02e8a60193c64b68f6df66
+    VERDICT: AT-BASELINE
+      measured 0 == the 2026-09-20 Jellyfin baseline 0, and != the target 4. The row has not
+      moved. This is the row whose `Artists` is populated while its entity list is empty —
+      the one an assertion on `Artists` would have called green.
+
+--------------------------------------------------------------------------------
+ROW 2
+--------------------------------------------------------------------------------
+  internal path : /media/Music/Katy Perry/Teenage Dream (2010)/CD 01-03 Katy Perry - California Gurls.flac
+  tag position  : ARTISTS          search term : California Gurls
+  target N      : 2      (from ARTIST_PROOF_ROWS)
+  jellyfin base : 1      (the 2026-09-20 baseline, from ARTIST_PROOF_ROWS)
+  06-40 measured: 1
+  MEASURED 2026-09-24T13:39:36Z:
+    entity names containing ';' : 0        <- reported FIRST; any value > 0 is RED regardless of count
+    ArtistItems length          : 1
+    distinct ArtistItems Ids    : 1
+    entity names                : Katy Perry
+    entity Ids                  : 9d3079ffbefa7fbb1741de0193237b0b
+    Artists (flat, DIAGNOSIS ONLY, never asserted) : ["Katy Perry"]
+    item Id                     : 9ce997177151226474fec26b2b4c0672
+    VERDICT: AT-BASELINE
+      measured 1 == the 2026-09-20 Jellyfin baseline 1, and != the target 2. The row has not
+      moved. The second name lives only in the ARTISTS tag, so its absence means the prober
+      did not read ARTISTS on this file.
+
+--------------------------------------------------------------------------------
+ROW 3
+--------------------------------------------------------------------------------
+  internal path : /media/Music/P!nk/The Truth About Love (2012)/CD 01-04 P!nk - Just Give Me a Reason.flac
+  tag position  : ARTISTS          search term : Just Give Me a Reason
+  target N      : 2      (from ARTIST_PROOF_ROWS)
+  jellyfin base : 1      (the 2026-09-20 baseline, from ARTIST_PROOF_ROWS)
+  06-40 measured: 1
+  MEASURED 2026-09-24T13:39:36Z:
+    entity names containing ';' : 0        <- reported FIRST; any value > 0 is RED regardless of count
+    ArtistItems length          : 1
+    distinct ArtistItems Ids    : 1
+    entity names                : P!nk
+    entity Ids                  : 7ca25d776805442472b7aa577b6a79ed
+    Artists (flat, DIAGNOSIS ONLY, never asserted) : ["P!nk"]
+    item Id                     : 47d9b03e69955e35b7fc5d9d74ad5c58
+    VERDICT: AT-BASELINE
+      measured 1 == the 2026-09-20 Jellyfin baseline 1, and != the target 2. The row has not
+      moved. This is the row whose ARTISTS value puts the album artist SECOND
+      (`Nate Ruess;P!nk`); a single entity named `P!nk` is the ARTIST/AlbumArtist derivation,
+      not the ARTISTS one.
+
+--------------------------------------------------------------------------------
+THE SAME THREE ROWS, IN A FIXED PARSEABLE FORM
+--------------------------------------------------------------------------------
+Eight `|`-separated fields per line:
+  `ROW` | internal path | `target=` | `baseline=` | `measured=` | `uniqids=` | `semis=` | `verdict=`
+
+This block exists so the verdict is CHECKABLE rather than asserted (T-06-42-08). The plan's
+verify block recomputes each `verdict` from that row's own five numbers by
+`check-music-consumers.sh` § 4b's own source order — (1) semis > 0 -> OTHER; (2) measured > 0
+and uniqids != measured -> OTHER; (3) measured == target -> AT-TARGET; (4) measured == baseline
+-> AT-BASELINE; (5) otherwise OTHER — and fails the task on any disagreement. `target` and
+`baseline` are never equal on any of the three rows (4/0, 2/1, 2/1), so the rule is total.
+Neither column was adjusted to make a verdict come out; both were derived mechanically from
+the script whose sha256 is asserted above, and task 3 below re-measures the same fact through
+the instrument itself on untouched code.
+
+--- ROW VERDICTS BEGIN ---
+ROW|/media/Music/Lady Gaga/ARTPOP (2013)/CD 01-05 Lady Gaga - Jewels n’ Drugs.flac|target=4|baseline=0|measured=0|uniqids=0|semis=0|verdict=AT-BASELINE
+ROW|/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-03 Katy Perry - California Gurls.flac|target=2|baseline=1|measured=1|uniqids=1|semis=0|verdict=AT-BASELINE
+ROW|/media/Music/P!nk/The Truth About Love (2012)/CD 01-04 P!nk - Just Give Me a Reason.flac|target=2|baseline=1|measured=1|uniqids=1|semis=0|verdict=AT-BASELINE
+--- ROW VERDICTS END ---
+
+  (C3) every row's `;`-in-entity-name count is 0 [3 of 3]  -> PASS
+  (C4) every row carries exactly one of AT-TARGET / AT-BASELINE / OTHER  -> PASS
+  (C5) no row is AT-TARGET, so the "AT-TARGET implies uniqids == length" criterion is
+       vacuously satisfied; it is stated rather than silently skipped. Both rows with a
+       non-zero count have uniqids == length anyway (1 == 1).
+
+  THE RESULT, STATED PLAINLY: ALL THREE ROWS ARE AT BASELINE. The mtime change plus the
+  targeted Default-mode refresh did NOT cause Jellyfin to re-read the ARTISTS tag. 06-03
+  listed "(b) the file's mtime changing" as a mechanism that would re-probe; measured here,
+  it did not. THAT IS A LEGITIMATE RECORDED NEGATIVE AND IT IS NOT AN ARGUMENT FOR
+  ESCALATING TO THE FORBIDDEN REFRESH MODE. What it means for CONF-04 is 06-43's decision.
+
+
+================================================================================
+SECTION D — THE FULL ArtistItems CENSUS (06-40 SECTION 3's recipe, verbatim)
+================================================================================
+GET /Items?IncludeItemTypes=Audio&Recursive=true&ParentId=7e64e319657a9516ec78490da03edccb
+        &Fields=ArtistItems,Artists,AlbumArtist,Path&Limit=5000
+
+TotalRecordCount = 1244
+Items array len  = 1244
+  (D1) ASSERTION: TotalRecordCount == returned array length -> PASS. This is a COMPLETE
+       answer, not a truncated one. A short answer would be COULD NOT LOOK, never
+       'fewer files'.
+  (D2) ROW COUNT: 1244 — identical to 06-40's census and to the 2026-09-20 census in 06-03.
+
+ArtistItems length distribution over this census, beside 06-40's:
+
+        entries      06-40        06-42       delta
+        0            30 items     30 items    0
+        1            1208 items   1208 items  0
+        2            5 items      5 items     0
+        3            1 items      1 items     0
+
+  (D3) the distribution is identical in every bucket  -> PASS
+
+THE CENSUS ROWS THEMSELVES ARE NOT RE-TRANSCRIBED HERE, AND THAT IS DELIBERATE RATHER THAN AN
+OMISSION. 06-40 SECTION 3 holds all 1,244 rows in the same stable sortable form
+(`<Path> TAB len(ArtistItems) TAB distinct-Id count TAB names joined by "|" TAB Ids joined by
+"|"`, LC_ALL=C sorted by path). This task took the census with that recipe verbatim and
+compared it LINE FOR LINE against 06-40's block. THE TWO BLOCKS ARE BYTE-IDENTICAL:
+
+  rows in 06-40 SECTION 3's block        : 1244
+  rows in this task's census             : 1244
+  `diff` lines over the two sorted blocks, ALL FIVE FIELDS compared : 0
+  paths present in 06-40 but absent now  : 0
+  paths present now but absent in 06-40  : 0
+
+Re-printing 1,244 identical rows would add 1,244 lines whose only content is "unchanged", and
+would make the one thing a reader needs — the delta — harder to find, not easier. The delta
+block below is the assertion; 06-40 SECTION 3 remains the authoritative row-level record.
+
+The three pinned rows as they appear in this census, verbatim (tabs shown as they were read):
+
+  /media/Music/Lady Gaga/ARTPOP (2013)/CD 01-05 Lady Gaga - Jewels n’ Drugs.flac	0	0
+  /media/Music/Katy Perry/Teenage Dream (2010)/CD 01-03 Katy Perry - California Gurls.flac	1	1	Katy Perry	9d3079ffbefa7fbb1741de0193237b0b
+  /media/Music/P!nk/The Truth About Love (2012)/CD 01-04 P!nk - Just Give Me a Reason.flac	1	1	P!nk	7ca25d776805442472b7aa577b6a79ed
+
+  These agree field for field with SECTION C's per-row read, which was taken through a
+  DIFFERENT endpoint shape (SearchTerm-narrowed, exact-Path-selected) — two instruments, one
+  answer.
+
+
+================================================================================
+SECTION E — CENSUS DELTA
+================================================================================
+Every item whose `ArtistItems` length OR distinct-Id count changed between 06-40 SECTION 3 and
+SECTION D above, one per line, with its before and after values. This is the assertion that
+makes "only what we touched moved" A LIST RATHER THAN A BELIEF (T-06-42-04).
+
+The comparison was done mechanically at the workstation with the real `grep`/`awk`/`join`/
+`diff` binaries over the two extracted blocks — never by eye and never over the prose. The
+delimiters are load-bearing for the same reason they are in 06-41: this artifact's prose
+necessarily discusses the DO-NOT-RESCAN album and the sidecar extensions, and a count taken
+over narration measures the narration (DEF-06-39-06).
+
+  census row count, 06-40 side : 1244
+  census row count, 06-42 side : 1244
+
+--- CENSUS DELTA BEGIN ---
+--- CENSUS DELTA END ---
+
+  TOTAL NUMBER OF CHANGED ROWS: 0
+
+  (E1) the delta block names no path at all, so trivially every path it names is one of the
+       three pinned internal paths, and no fourth path appears  -> PASS
+  (E2) the expected changed set was "a SUBSET of the three touched paths". The measured set is
+       the EMPTY subset. That is within the expectation and is recorded as the finding it is:
+       the refresh moved nothing, including the three files it was aimed at.
+  (E3) an empty delta is NOT the same claim as an unreadable one. The two census blocks were
+       both present, both 1,244 rows, and the comparison ran to completion — `diff` over the
+       two sorted blocks emitted 0 lines. A comparison that could not run would have been
+       recorded as UNKNOWN.
+
+  READ THIS DELTA TOGETHER WITH SECTION C, NOT INSTEAD OF IT. Zero changed rows is the
+  strongest possible form of "nothing outside the three moved" — and it is simultaneously the
+  measurement that the three themselves did not move either. Both facts come from the same
+  block and neither is softened.
+
+
+================================================================================
+SECTION F — THE OQ-1 DO-NOT-RESCAN NEGATIVE CONTROL (P!nk/TRUSTFALL (2023))
+================================================================================
+These six rows carry `;` inside the ARTIST tag (not ARTISTS) and Jellyfin ALREADY reads them
+as separate artists with distinct Ids — which is what UseCustomTagDelimiters=false predicts it
+should NOT do. That is almost certainly STALE DB STATE from a pre-10.10 prober, and a re-probe
+would very likely COLLAPSE them to one artist each, destroying evidence criterion 4 rests on.
+They are working state. They were never touched and never refreshed: 06-41 asserted zero
+DO-NOT-RESCAN paths in its touch list (SECTION A (d)) and zero in its refresh request (SECTION
+B (B3)). This section is the NEGATIVE CONTROL for "the refresh stayed inside the scope we gave
+it" — if a wider re-probe had run, this is where it would show.
+
+⚠ ROW 3 of ARTIST_PROOF_ROWS is /media/Music/P!nk/The Truth About Love (2012)/... — a DIFFERENT
+  ALBUM under the same artist folder, and it IS in scope. The exclusion is by album directory,
+  not by artist.
+
+TRUSTFALL (2023) items in the library: 22   (06-40 measured 22 — MATCH)
+
+Rows with MORE THAN ONE ArtistItems entry, re-read now and compared field for field against
+06-40 SECTION 4:
+
+  count | ids | path / names / ids                                        | vs 06-40 SECTION 4
+  ------+-----+-----------------------------------------------------------+-------------------
+    2   |  2  | /media/Music/P!nk/TRUSTFALL (2023)/CD 01-04 P!nk - Long Way to Go.flac
+                names: P!nk | The Lumineers
+                ids  : 7ca25d776805442472b7aa577b6a79ed | 68fc6c778e81f8038d7e640572e39130
+                -> count IDENTICAL, Id set IDENTICAL  -> PASS
+    2   |  2  | /media/Music/P!nk/TRUSTFALL (2023)/CD 01-05 P!nk - Kids in Love.flac
+                names: P!nk | First Aid Kit
+                ids  : 7ca25d776805442472b7aa577b6a79ed | ba2911b9f2a4c50228344deaf9fa3410
+                -> count IDENTICAL, Id set IDENTICAL  -> PASS
+    2   |  2  | /media/Music/P!nk/TRUSTFALL (2023)/CD 01-13 P!nk - Just Say I’m Sorry.flac
+                names: P!nk | Chris Stapleton
+                ids  : 7ca25d776805442472b7aa577b6a79ed | 5ceb092505d167b118ad6084db940b68
+                -> count IDENTICAL, Id set IDENTICAL  -> PASS
+    3   |  3  | /media/Music/P!nk/TRUSTFALL (2023)/CD 02-01 P!nk - Dreaming.flac
+                names: Marshmello | P!nk | Sting
+                ids  : 28577546c82807123b901bd79b4e7a97 | 7ca25d776805442472b7aa577b6a79ed | faebf8e0c27c0af62baf76091fe1ea1d
+                -> count IDENTICAL, Id set IDENTICAL  -> PASS
+    2   |  2  | /media/Music/P!nk/TRUSTFALL (2023)/CD 02-06 P!nk - Nothing Compares 2 U (live).flac
+                names: P!nk | Brandi Carlile
+                ids  : 7ca25d776805442472b7aa577b6a79ed | 23b8488e913fa5f6ecc93321d01d6e3a
+                -> count IDENTICAL, Id set IDENTICAL  -> PASS
+    2   |  2  | /media/Music/P!nk/TRUSTFALL (2023)/CD 02-08 P!nk - Cover Me in Sunshine (live).flac
+                names: P!nk | Willow Sage Hart
+                ids  : 7ca25d776805442472b7aa577b6a79ed | 4495c4c2d28b9368f044b00ea0d680af
+                -> count IDENTICAL, Id set IDENTICAL  -> PASS
+
+  (F1) COUNT of DO-NOT-RESCAN rows listed: 6   (06-40 and 06-03 both recorded 6)  -> PASS
+  (F2) every row's ArtistItems count is identical to 06-40 SECTION 4 [0 differ]  -> PASS
+  (F3) every row's Id set is identical to 06-40 SECTION 4 [0 differ]  -> PASS
+  (F4) all six are also inside the 1,244-row census whose delta is empty, so this section and
+       SECTION E agree through two different extractions of the same response.
+
+  THE NEGATIVE CONTROL HOLDS. The refresh did not reach outside the three files it named —
+  and it did not collapse the OQ-1 evidence.
