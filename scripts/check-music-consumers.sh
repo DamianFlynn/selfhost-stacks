@@ -141,9 +141,22 @@
 #         one purpose - deciding whether ANY row is off target - and that is a different question
 #         from whether CONF-04 is closed. CONF-04 closes when BOTH halves read at target, and the
 #         two halves are at different points for different reasons: 4b is a probe-time option
-#         awaiting Phase 7's first write, 4c is a measured MA artist-ENTITY-stage discrepancy. Do
-#         not publish "N of M pending" as a CONF-04 completion figure, and never let a green MA
-#         half offset a pending Jellyfin one.
+#         whose ONE remaining route is a Phase 7 write or import, 4c is a measured MA
+#         artist-ENTITY-stage discrepancy. Do not publish "N of M pending" as a CONF-04 completion
+#         figure, and never let a green MA half offset a pending Jellyfin one.
+#
+#         RESTATED, NOT WEAKENED, AFTER ROUND 5 (2026-09-24). The rule above is unchanged and the
+#         round made it MORE load-bearing, not less, because the two halves are now owned by two
+#         DIFFERENT measurements inside one criterion. 4b's mtime route was driven and measured
+#         not to discharge it (see the target-column paragraph at ARTIST_PROOF_ROWS), so the
+#         Jellyfin half is carried to Phase 7 entry criterion E6 under an explicit recorded
+#         override — a carry of an OPEN requirement, never a close. 4c's surviving row belongs to
+#         E6's SECOND measurement: whether a second >=4-artist track yields four artists in MA or
+#         three, the only thing that separates "MA caps the list at 3" from "Twista specifically
+#         failed to map". Round 5 produced NO evidence bearing on that second measurement and did
+#         not close it. Summing the two counts into one CONF-04 answer would silently merge two
+#         measurements that are neither taken by the same instrument nor discharged by the same
+#         event.
 #
 #   --baseline still exits 0 and is checked FIRST, above both gates. It exists to record a
 #   before-state; neither exit 1 nor exit 3 may fire in baseline mode.
@@ -427,6 +440,36 @@ JELLYFIN_D34_OPTIONS=(
 #   rows moved. The one refresh mode that WOULD re-probe is the aggressive per-item one Phase 1
 #   measured rewriting 83 of 91 .nfo files with SaveLocalMetadata already off; it is forbidden in
 #   this estate and it is not issued here or anywhere.
+#
+#   ⚠ THE OTHER LEVER THIS PARAGRAPH NAMES — "a file whose mtime has not changed" — WAS DRIVEN ON
+#     2026-09-24 AND IS NOW MEASURED FALSE FOR THIS ESTATE. Round 5 (plans 06-40 / 06-41 / 06-42,
+#     verdict in 06-43) took a ZFS snapshot of tank/media/Music, `touch`ed EXACTLY these three
+#     pinned files and nothing else, and re-issued the SAME targeted Default-mode
+#     POST /Library/Media/Updated this paragraph already describes — one write verb for the entire
+#     round. Jellyfin's own LibraryMonitor named all three Audio items by full internal path 60 s
+#     after a 204, so the refresh demonstrably ran and reached them. WHAT IT MOVED: nothing.
+#     ALL THREE ROWS re-measured AT THEIR BASELINE — 0 against target 4, 1 against target 2, 1
+#     against target 2, with zero `;` in any entity name — and the 1,244-row census delta was
+#     EMPTY. Not "two of three"; ZERO of three. `PreferNonstandardArtistsTag` re-read `true`
+#     AFTER the refresh, so the option did not revert: the refresh ran, reached the items, and the
+#     prober did not re-read the ARTISTS tag. 06-03's mechanism (b) — "the file's mtime changing"
+#     — is therefore RULED OUT BY MEASUREMENT at Jellyfin 10.11.11, which is a result and not a
+#     failure. The estate is exactly as 06-40 recorded it plus three mtimes: 0 files changed
+#     content, 0 sidecars written, and `tank/media/Music@pre-06-41-conf04-reprobe` still held.
+#     NOTHING ABOUT THAT NEGATIVE WEAKENS THE FENCE IN THE PARAGRAPH ABOVE. The correct response
+#     to a disproven mechanism is the recorded negative, not a second refresh, not a wider refresh
+#     mode, and not the aggressive per-item one — which stays forbidden, was not issued, and was
+#     unreachable from every branch of that round. CONF-04's Jellyfin half therefore stays OPEN
+#     and is CARRIED to Phase 7 entry criterion E6 under the explicit operator override recorded
+#     in artifacts/06-43-conf04-verdict.txt SECTION P (`negative-carry-e6`, 2026-09-24T14:30:37Z).
+#     An override is an argued, auditable carry of an OPEN requirement — IT IS NOT A CLOSE, the
+#     box at REQUIREMENTS.md stays unticked, and this table is not edited to match a result.
+#
+#   THE BASELINE COLUMN IS DELIBERATELY RETAINED and must not be tidied away once the target is
+#   met. It is what makes a post-discharge REGRESSION detectable: a row back at its 2026-09-20
+#   baseline AFTER E6 discharges it means something reverted — most likely
+#   PreferNonstandardArtistsTag, which section 4a asserts independently — rather than that the
+#   estate is still waiting. Deleting either numeric column trades a detector for a tidier table.
 #
 #   So each row carries BOTH numbers and the check is a DRIFT DETECTOR, not a wish:
 #     count == target   -> PASS. The re-probe has happened (Phase 7 wrote or imported the file).
@@ -1356,9 +1399,16 @@ else
       echo "      '$APATH_I'"
       echo "      This is the 2026-09-20 baseline, unchanged. PreferNonstandardArtistsTag is a"
       echo "      PROBE-TIME option and a Default-mode refresh does not re-run the prober on a file"
-      echo "      whose mtime has not changed (measured twice, plan 06-03). It discharges when"
-      echo "      Phase 7 writes or imports the file — NOT by rescanning, and NOT by the aggressive"
-      echo "      refresh mode, which rewrites .nfo into the library and is forbidden here."
+      echo "      whose mtime has not changed (measured twice, plan 06-03). The mtime route itself"
+      echo "      was then DRIVEN on 2026-09-24 (plan 06-41, inside a ZFS snapshot fence) and is"
+      echo "      MEASURED NOT TO DISCHARGE IT: all three pinned rows came back at baseline, the"
+      echo "      1,244-row census delta was empty, and PreferNonstandardArtistsTag re-read true"
+      echo "      afterwards — the refresh ran and reached the items, and the prober did not"
+      echo "      re-read ARTISTS (06-42 after-state; verdict BRANCH: B in 06-43). So the one"
+      echo "      remaining route is Phase 7 writing or importing the file, carried to entry"
+      echo "      criterion E6 under the recorded override — NOT by rescanning, NOT by a second or"
+      echo "      wider refresh, and NOT by the aggressive per-item refresh mode, which rewrites"
+      echo "      .nfo into the library and stays forbidden here and everywhere."
       echo "      why this row: $AWHY"
     else
       jellyfin_fail "CONF-04 (D-22): '$APATH_I' has $A_N artist entities — expected $ATARGET (post-re-probe)"
@@ -1624,7 +1674,7 @@ echo "  jellyfin out-of-scope:       $JELLYFIN_OUT_OF_SCOPE   (scope!=library �
 echo "  D-34 options read:           PreferNonstandardArtistsTag=${JF_D34_VALUE[PreferNonstandardArtistsTag]}  UseCustomTagDelimiters=${JF_D34_VALUE[UseCustomTagDelimiters]}  SaveLocalMetadata=${JF_D34_VALUE[SaveLocalMetadata]}  EnableRealtimeMonitor=${JF_D34_VALUE[EnableRealtimeMonitor]}"
 echo "  artist rows pinned:          ${#ARTIST_PROOF_ROWS[@]}   (D-22, all in the ARTISTS tag position)"
 echo "  artist rows at target (JF):  $JELLYFIN_ARTIST_OK"
-echo "  artist rows PENDING (JF):    $JELLYFIN_ARTIST_PENDING   (at the 2026-09-20 baseline — NOT green; discharges on Phase 7's first write)"
+echo "  artist rows PENDING (JF):    $JELLYFIN_ARTIST_PENDING   (at the 2026-09-20 baseline — NOT green; the mtime route was driven 2026-09-24 and measured NOT to discharge it, so this is carried to Phase 7 entry criterion E6 under a recorded override — a carry of an OPEN requirement, not a close)"
 echo "  artist rows at target (MA):  $MA_ARTIST_OK"
 echo "  artist rows REPORTED (MA):   $MA_ARTIST_PENDING   (measured discrepancy against the tag — NOT green; plan 06-13 owns it)"
 echo "  MA albums, local provider:   $MA_PROVIDER_ALBUM_COUNT   (target >= 3)"
@@ -1665,12 +1715,29 @@ fi
 # because `warn()` touches no counter and the exit status is the only output anything downstream
 # reads. The sum is taken to answer ONE question — is any row off target — and is NEVER a combined
 # CONF-04 verdict; the two halves stay separate everywhere else in this file and in the summary.
+#
+# THE BANNER NAMES WHICH HALF EACH COUNT BELONGS TO AND WHO OWNS IT (2026-09-24, round 5). Before
+# this edit its last line said only "Discharges on ROADMAP entry criterion E6, not here", which was
+# true and under-specified: E6 owns TWO measurements and each count below is waiting on a DIFFERENT
+# one of them. The Jellyfin count is waiting on a Phase 7 write or import — its other candidate
+# route, an mtime change, was driven on 2026-09-24 inside a ZFS snapshot fence and measured not to
+# discharge it (BRANCH: B, artifacts/06-43-conf04-verdict.txt), so that half is CARRIED to E6 under
+# an explicit operator override rather than closed. The MA count is waiting on E6's SECOND
+# measurement — a second >=4-artist track — which round 5 never had in scope. Neither is discharged
+# by the other, which is why the counts are printed apart and summed for one question only.
+#
+# THE `Discharges on ROADMAP` PHRASE IS A CROSS-FILE ANCHOR, NOT DECORATION: quick-health-check.sh's
+# -eq 3 arm ends its `sed` range on it, and the whole block is capped at 8 lines by that arm's
+# `sed -n '1,8p'`. Keep this block <= 8 lines and keep that phrase on the last one.
 if [[ $(( JELLYFIN_ARTIST_PENDING + MA_ARTIST_PENDING )) -gt 0 ]]; then
-  echo -e "${YELLOW}⚠️  CONF-04 IS NOT CLOSED: $JELLYFIN_ARTIST_PENDING Jellyfin and $MA_ARTIST_PENDING MA artist"
-  echo -e "   row(s) are at a recorded baseline, not at target. Reported, not asserted — see 4b/4c"
-  echo -e "   and stacks/selfhosted/arrs/beets.md § 'Phase 6 — tagger configuration and dry run'.${NC}"
-  echo -e "${YELLOW}   Exiting 3: measured, but not at target. NOT a failure (FAILURES is $FAILURES) and NOT"
-  echo -e "   green. Discharges on ROADMAP entry criterion E6, not here.${NC}"
+  echo -e "${YELLOW}⚠️  CONF-04 IS NOT CLOSED: $JELLYFIN_ARTIST_PENDING Jellyfin and $MA_ARTIST_PENDING MA artist row(s) are at a recorded"
+  echo -e "   baseline, not at target. The two counts are SEPARATE and are NEVER summed into one"
+  echo -e "   CONF-04 answer. See 4b/4c and stacks/selfhosted/arrs/beets.md § 'Phase 6'.${NC}"
+  echo -e "${YELLOW}   JF half: the mtime route was driven 2026-09-24 and measured NOT to discharge it"
+  echo -e "   (06-43, BRANCH: B) — carried to E6 under a recorded override; a carry, never a close."
+  echo -e "   MA half: E6's SECOND measurement — a second >=4-artist track — untouched by round 5."
+  echo -e "   Exiting 3: measured, not at target; NOT a failure (FAILURES is $FAILURES) and NOT green."
+  echo -e "   Discharges on ROADMAP entry criterion E6, not here — BOTH halves, two measurements.${NC}"
   exit 3
 fi
 
