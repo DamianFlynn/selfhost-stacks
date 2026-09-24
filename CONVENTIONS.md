@@ -317,3 +317,41 @@ scripts, so round 4's fixes had to be written in band under an alias.
 `06-DISPOSITIONS-GAP4.md`, which plan **`06-50`** writes — at wave 3, after this file is written.
 That is a forward pointer, deliberately: a conventions file that asserts a future artifact in the
 present tense is stale the moment the plan that would create it changes shape or halts.
+
+---
+
+## 14. A section-scoped read is never sufficient evidence of absence
+
+Convention 1 separates *could not look* from *nothing is wrong* for a **check**. This entry is the
+same rule for a **read**: a criteria block, an entry-criteria list, a requirements table or any
+other named section is **not a closed world**. Finding nothing in one section answers *"it is not
+in this section"* — never *"it is not committed anywhere"*. An absence claim needs the second
+answer, and only an exhaustive search over the document can give it.
+
+**Canonical example:** `.planning/ROADMAP.md`, § `### Phase 7: Pilot — 12 Albums End to End`. The
+phase's snapshot-fence commitment lives in its `**Success Criteria**` block, item 1. It is **not**
+in the same phase's `**Entry criteria inherited from Phase 6**` block (E1…E12), which a reader
+would reasonably take as the place a Phase 6 plan looks. Reading only the entry criteria answers
+*"Phase 7's pilot fence is not planned"* — **by omission, and wrongly**.
+
+**Why it is a rule and not a war story** (`DEF-06-52-02`): that omission **failed safe**, because
+the thing omitted was a *plan*, and its absence biased a decision toward the non-destructive
+answer. It would **fail unsafe** the moment the omitted thing is a **prohibition** — then the
+omission reads as permission, and the same reading method authorises the destructive branch. The
+failure mode does not depend on which way the error happens to fall; the method is unsound either
+way, and its safety is an accident of the subject matter.
+
+**The go-forward rule:**
+
+1. **State the scope of any absence claim in the claim itself.** Write *"not present in
+   § `<heading>`"*, never a bare *"not planned"* / *"not required"* / *"not prohibited"*.
+2. **Before publishing an unscoped absence, search the whole document** — by token, across every
+   section — and record the recipe. `/usr/bin/grep -nE`, never an eyeball over the block you
+   expected it in.
+3. **Drive the search.** A zero from a pattern that cannot match is convention 8's and 9's hazard
+   arriving in a new costume: confirm the recipe returns non-zero against a control containing the
+   real token before the zero is published as evidence.
+4. **Name every section actually consulted, by heading text** (convention: never a line number), so
+   a later reader can see the scope rather than infer it.
+5. **If only one section was read, the finding is `COULD NOT LOOK`, not a negative.** That is
+   convention 1's vocabulary, and it applies to documents exactly as it applies to hosts.

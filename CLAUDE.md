@@ -369,6 +369,7 @@ for each rule's reason and its named canonical example — the list below is nam
 - 11. The `📊 N. Summary` heading is a cross-file grep anchor
 - 12. In-band narrative: durable rationale stays, round-by-round history goes to the phase directory
 - 13. Review ID namespaces are unique per round and chosen before the review is written
+- 14. A section-scoped read is never sufficient evidence of absence
 <!-- GSD:conventions-end -->
 
 <!-- GSD:architecture-start source:ARCHITECTURE.md -->

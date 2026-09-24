@@ -1877,3 +1877,92 @@ the live item is `DEF-06-45-01`, and its trigger is now mechanical.
 
 **Urgency:** discharged as a decision; **high to not destroy the snapshot by accident** until Phase 7
 Success Criterion 1 is satisfied.
+
+---
+
+## DEF-06-52-02 — PROCESS DEFECT: the entry-criteria block is not a closed world, and a criteria-only read is never sufficient evidence of absence
+
+**Found during:** plan 06-52, task 1, while answering whether Phase 7's pilot snapshot fence is
+planned; recorded as a defect at the **operator's explicit direction**, 2026-09-24T22:29:38Z, with
+the instruction that it be *"a process defect, not a footnote"* and that it **not** be buried inside
+`DEF-06-52-01`.
+**Disposition:** **CARRIED** — a rule, written down, with a named go-forward procedure and a home in
+`CONVENTIONS.md`. It changes no code and closes no finding; it changes how the next absence claim is
+made.
+
+### The finding
+
+`DEF-06-45-01`'s second release clause is *"Phase 7's pilot fence planned"*. The obvious place for a
+Phase 6 plan to look is `.planning/ROADMAP.md` § `### Phase 7: Pilot — 12 Albums End to End`, block
+`**Entry criteria inherited from Phase 6**` — the E1…E12 list, which is literally the block naming
+what Phase 6 hands forward, and which already carries **E4** (`tank/downloads@pre-phase5` is not
+released until the pilot passes), **E5** and **E6**.
+
+**The pilot fence is not in that block.** It is committed one block away, in the same phase's
+`**Success Criteria** (what must be TRUE):`, **item 1**: *"Twelve bucket-A albums are imported inside
+a snapshot fence — ZFS snapshot of the Music dataset and a copy of `library.db` taken together — with
+rollback exercised at least once…"*.
+
+So **reading E1…E12 alone would have answered "Phase 7's pilot fence is not planned" — by omission,
+and wrongly.** Plan 06-52 was written to read both blocks by heading text and did, so the wrong answer
+was never published. That is the near-miss. The defect is the reading method, not the near-miss.
+
+### The operator's framing, which is the part that must survive
+
+- **It failed SAFE here.** The omitted thing was a *plan*; its absence biased the decision toward
+  `hold`, the non-destructive answer. Nothing was lost.
+- **It would fail UNSAFE the moment the omitted thing is a PROHIBITION rather than a plan.** Then the
+  omission reads as *permission*, and the identical reading method authorises the destructive branch.
+- ⛔ **The lesson is NOT "we got lucky."** It is that **the entry-criteria block is not a closed
+  world, and a criteria-only read is never sufficient evidence of absence.** The method is unsound in
+  both directions; that this instance landed on the safe side is an accident of the subject matter,
+  not a property of the method.
+
+This is the same distinction `CONVENTIONS.md` convention 1 draws for a *check* — "could not look" is
+not "nothing is wrong" — arriving for the first time in this phase against a **document** rather than
+a host. A read that covered one section and found nothing is a `COULD NOT LOOK`, not a negative.
+
+### The go-forward rule
+
+1. **Scope every absence claim in the claim itself:** *"not present in § `<heading>`"*, never a bare
+   *"not planned"*, *"not required"* or *"not prohibited"*.
+2. **Before publishing an UNSCOPED absence, search the whole document** by token across every
+   section, and record the recipe. `/usr/bin/grep -nE` over the file, not an eyeball over the block
+   you expected it in.
+3. **Drive the search.** A zero from a pattern that cannot match is `DEF-06-45-04`'s class in new
+   clothes: confirm the recipe returns non-zero against a control holding the real token first.
+4. **Name every section actually consulted, by heading text** — never a line number, because
+   citations into `ROADMAP.md` go stale on arrival.
+5. **One section read ⇒ `COULD NOT LOOK`, not a negative.**
+
+### The `CONVENTIONS.md` judgement, made explicitly because the operator asked for it
+
+**CHOSEN: it earns an entry.** Written as `CONVENTIONS.md` **convention 14 — "A section-scoped read
+is never sufficient evidence of absence"**, with `ROADMAP.md`'s Phase 7 Success-Criteria-vs-entry-
+criteria split as its named canonical example, and mirrored into `CLAUDE.md`'s `## Conventions`
+block as entry 14.
+
+**Why there and not only here.** A `DEF-` entry in a phase directory is read by whoever is working
+that phase; this rule is not about Phase 6. It is a **reading-method rule that applies to every
+future absence claim in this repository**, which is exactly the population `CONVENTIONS.md` serves,
+and it sits naturally beside convention 1 (fail closed, keep *could not look* distinct) and
+conventions 8/9 (drive the recipe before publishing the zero) — it is the document-shaped case of
+both. The competing option, leaving it as a round record only, is what the operator's instruction
+rules out: *"a finding recorded where the next phase does not read is a finding nobody owns"* is this
+phase's oldest lesson, and a process defect filed in a phase directory is that failure by
+construction.
+
+**Cost paid and discharged:** `CLAUDE.md`'s mirror is a **generated** block whose opening marker names
+`CONVENTIONS.md` as its source, so adding a fourteenth rule required updating both in the same commit
+or leaving the mirror stale. Both were updated, and the mirror was re-proven by the same **ordered,
+name-for-name** comparator plan 06-49 used — `|A| == |B| == 14` and `B[i] == A[i]` at every index —
+**driven RED first** against a copy of the mirror with entry 3 mutated, which reported
+`INDEX 3 DIFFERS`. A `>= N` floor would have been satisfiable by N wrong names, which is how a mirror
+goes quietly stale while passing its own check.
+
+**Condition under which it should be revisited:** the first absence claim published in this project
+without a stated scope — or, in the other direction, the first time an entry-criteria block is made
+genuinely exhaustive by construction (every phase commitment mirrored into it), which would retire
+clause 1 of the rule for that document only.
+
+**Urgency:** low in consequence today, high in prevention. The next instance may be a prohibition.
