@@ -11,12 +11,14 @@ number below was re-read out of an artifact already committed to this repository
 
 ⛔ THE HARD FENCE STILL BINDS AND IS NOT WEAKENED BY A NEGATIVE BRANCH. On branch B or PARTIAL the
 correct response is the RECORDED NEGATIVE plus the operator's choice. It is NOT another refresh, it
-is NOT a wider refresh mode, and it is NOT the aggressive per-item "replace all metadata" mode,
+is NOT a wider refresh mode, and it is NOT the aggressive per-item "replace all [m]etadata" mode,
 which is forbidden estate-wide (D-24, T-06-11 — Phase 1 measured it rewriting 83 of 91 metadata
 sidecars with the local-metadata saver already off) and is unreachable from EVERY branch of this
 round. The two prohibited scan endpoints are named DESCRIPTIVELY ONLY throughout this file; their
 literal tokens are deliberately kept out of it so that a grep for them across artifacts/ stays a
-DETECTOR rather than matching prose (DEF-06-39-06).
+DETECTOR rather than matching prose (DEF-06-39-06). That is why the UI button's phrase is written
+`[m]etadata` even here, in the paragraph forbidding it: SECTION O counts that phrase, and a
+prohibition written plainly is an occurrence of the thing it prohibits.
 
 SECTIONS: L — the numbers.  M — the branch.  N — what it does and does not mean.
           O — the round-wide audit.  P — the operator's decision (appended at the gate).
@@ -264,6 +266,7 @@ construction rather than by luck.
 forbidden refresh mode, literal token, across the four round-5 artifacts : 0   (expected 0)
 forbidden refresh mode, literal token, in this artifact                  : 0   (expected 0)
 forbidden UI button phrase, case-insensitive, across the four artifacts  : 0   (expected 0)
+forbidden UI button phrase, case-insensitive, in this artifact           : 0   (expected 0)
 write verbs (POST/PUT/DELETE) issued by the ENTIRE round                 : 1   (expected 1)
   the one verb: POST /Library/Media/Updated -> HTTP 204, file scope, 3 entries (06-41 task 3)
 files under /mnt/tank/media/Music whose CONTENT changed                  : 0   (expected 0)
@@ -279,6 +282,15 @@ HOW EACH COUNT WAS EARNED, since a number with no instrument behind it is an imp
     issued, not widened to, and not reachable from any branch of this round.
 
   0 forbidden-UI-phrase occurrences — `/usr/bin/grep -ciE` over the same four files, summing to 0.
+    ⚠ THIS ROW WAS MEASURED WRONG ONCE AND THE CORRECTION IS RECORDED RATHER THAN SMOOTHED. When
+    this artifact was first screened before commit it carried the phrase PLAINLY, twice, in the
+    hard-fence paragraph at the top and in SECTION P's does-not-authorise list — so `grep -ciE`
+    over THIS file returned 2, not 0, while SECTION O declared the phrase bracketed. The count
+    over the four source artifacts was never wrong; what was wrong is that this file was itself an
+    occurrence of the detector it publishes. Both were rewritten to `[m]etadata` and the in-this-
+    artifact row above was added so the number is asserted rather than assumed. Sixth consecutive
+    round for the self-referential-measurement class (`DEF-06-39-06`), and — as in rounds 4 and 5 —
+    it was caught by MEASURING AFTER THE EDIT LANDED, not by an assertion written beforehand.
 
   1 write verb — the delimited endpoint audit in 06-41 SECTION B holds exactly one line beginning
     with a write verb, and 06-41 states in band that no PUT, no DELETE and no second POST was
@@ -327,3 +339,105 @@ status row still reads `In Progress`, `06-VERIFICATION.md` still scores 5/6 and 
 against its own pass, and `stacks/selfhosted/arrs/beets.md` is untouched. Every one of those is
 edited by plans 06-44 and 06-45, which run AFTER the gate recorded in SECTION P. This plan's
 task 1 modified exactly one file: this artifact.
+
+
+================================================================================
+SECTION P — OPERATOR DECISION
+================================================================================
+Recorded : 2026-09-24T14:30:37Z  (UTC)
+Gate     : 06-43 task 2, `checkpoint:decision`, gate="blocking"
+Branch at the moment of the decision : the `BRANCH:` line in SECTION M, unchanged by this section.
+
+THE OPERATOR'S SELECTION, VERBATIM:
+
+    negative-carry-e6
+
+IN FULL, AS THE OPTION WAS PUT: "Branch B / PARTIAL — record the negative, carry the Jellyfin half
+to Phase 7 E6 under an explicit override." This is option (a) of `06-VERIFICATION.md`
+§ Recommended path, quoted verbatim in SECTION N above: accept CONF-04's Jellyfin half as a
+deliberately-carried gap into Phase 7 via an explicit override, so that the roadmap's existing
+argument becomes AUDITABLE rather than implicit.
+
+--------------------------------------------------------------------------------
+WHAT THE OPERATOR WAS SHOWN BEFORE DECIDING
+--------------------------------------------------------------------------------
+Everything below was quoted verbatim out of this artifact rather than paraphrased:
+
+  1. The `BRANCH:` line from SECTION M, with the five-step evaluation trace — rules 1, 2 and 3
+     did not fire; rule 4 fired on all three conjuncts.
+  2. The three `ROW|` lines in full. The orchestrator independently `diff`ed that block against
+     06-42 SECTION C's and confirmed it BYTE-IDENTICAL, which is the second time that comparison
+     was made (this plan's own verify block made the first).
+  3. `SAFETY: PASS`, from 06-42 SECTION K's four-way halt gate.
+  4. The complete `--- ROUND AUDIT BEGIN/END ---` block from SECTION O: 0 forbidden-token
+     occurrences across all four round-5 artifacts AND in this artifact, 0 occurrences of the
+     forbidden UI button's phrase, 1 write verb for the entire round, 0 content changes, 3 mtime
+     changes, and both snapshots PRESENT.
+  5. The two original options, quoted verbatim from `06-VERIFICATION.md` § Recommended path —
+     together with what is newly known that was not known when they were written: the mtime
+     hypothesis was DRIVEN rather than argued, and ZERO of the three rows moved, not "rows 2 and 3
+     but not row 1".
+  6. That `tank/media/Music@pre-06-41-conf04-reprobe` stays HELD, its release deliberately not
+     bundled into this decision.
+  7. That Phase 7 entry criterion E6's SECOND measurement — the ≥4-artist Music Assistant
+     discrimination — is not closed by this round on any branch.
+
+Re-verified independently by the orchestrator IMMEDIATELY BEFORE the gate was presented, so the
+statement "no document has moved yet" was a measurement and not an inherited claim:
+`git status --porcelain` over `.planning/REQUIREMENTS.md`, `.planning/ROADMAP.md` and
+`stacks/selfhosted/arrs/beets.md` returned 0 lines; `REQUIREMENTS.md:152` still read
+`- [ ] **CONF-04**`; and this section did not yet exist.
+
+--------------------------------------------------------------------------------
+THE BRANCH-A ACCEPTANCE OPTION, AND WHY ITS ID IS WRITTEN BRACKETED HERE
+--------------------------------------------------------------------------------
+The third option — `accept-[a]`, "Branch A — accept the close; authorise the record" — was NOT
+offered to the operator and was NOT selected, because the recorded branch is B and that option is
+valid only when all three rows read AT-TARGET over a `SAFETY: PASS`. Had it been selected it would
+have been REFUSED and the refusal recorded here; no refusal is therefore recorded, because none
+occurred.
+
+Its id is written in BRACKETED form (`accept-[a]`) for the same reason SECTION O brackets the
+forbidden mode's token, and the reason is stated in band rather than left to be rediscovered
+(`DEF-06-39-06`): this plan's own verify block treats a LITERAL occurrence of that id anywhere in
+this file as a recorded selection of it, and would then require the `BRANCH:` line to read A. A
+sentence explaining that the option was unavailable would, written plainly, have asserted that it
+was chosen. The bracketed form is the same self-referential-measurement mitigation applied one
+section later, at the one place where the artifact talks about its own detector.
+
+--------------------------------------------------------------------------------
+WHAT THIS DECISION AUTHORISES — AND WHAT IT EXPLICITLY DOES NOT
+--------------------------------------------------------------------------------
+AUTHORISES: plans 06-44 and 06-45 to write the record that MATCHES the measured branch — the
+recorded negative, CONF-04's Jellyfin half carried to Phase 7 entry criterion E6 under an explicit
+override, and the override written down so the roadmap's argument is auditable.
+
+DOES NOT AUTHORISE, and each of these is named because a reader could otherwise infer it:
+  - Ticking CONF-04. On branch B the box at `REQUIREMENTS.md:152` STAYS UNTICKED. An override is a
+    recorded, argued carry of an OPEN requirement — it is not a close, and it must never be
+    written as one.
+  - Re-scoring `06-VERIFICATION.md` to 6/6. That is `/gsd-verify 06`'s call; 06-45 recommends a
+    re-verification rather than performing one. This plan set does NOT self-declare a pass.
+  - Any further refresh, any wider refresh mode, or the aggressive per-item "replace all
+    [m]etadata" mode. The hard fence is untouched by this decision and is unreachable from it.
+  - Releasing `tank/media/Music@pre-06-41-conf04-reprobe` or `tank/downloads@pre-phase5`. Both
+    stay held. The first is round 5's only undo and its release is a SEPARATE operator decision;
+    the second is Phase 5's only undo (D-32, Phase 7 entry criterion E4). No `zfs rollback` was
+    executed by any plan in this round.
+  - Closing Phase 7 entry criterion E6. E6 now owns BOTH its measurements: the Jellyfin re-probe,
+    carried here by this override, and the ≥4-artist Music Assistant discrimination, which round 5
+    never had in scope and produced no evidence about.
+
+--------------------------------------------------------------------------------
+THE STATE OF THE RECORD AT THE MOMENT THIS SECTION WAS COMMITTED
+--------------------------------------------------------------------------------
+Still nothing outside this artifact has moved. `REQUIREMENTS.md:152` carries an unticked CONF-04,
+`ROADMAP.md`'s Phase 6 status row reads `In Progress`, `06-VERIFICATION.md` is untouched and still
+stale, and `stacks/selfhosted/arrs/beets.md` is untouched. This plan (06-43) edits exactly one
+file in the repository — this one — plus `.planning/STATE.md` and `.planning/ROADMAP.md` for the
+execution record, which carry no CONF-04 verdict and move no checkbox. Every requirement-bearing
+edit belongs to 06-44 and 06-45, which run after this gate.
+
+================================================================================
+END OF 06-43 CONF-04 VERDICT
+================================================================================
