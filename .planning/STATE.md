@@ -27,9 +27,15 @@ pipeline that someone owns.
 
 ## Current Position
 
-Phase: 06 (tagger-configuration-and-dry-run) — EXECUTING gap-closure **ROUND 5**
-(re-verification deliberately NOT run — see the round-4 block at the end of this section)
-Plan: 45 of 45 executed — round 5 COMPLETE, phase NOT declared complete. Round 1 (06-15..06-21, waves 6-9, 2026-09-22) closed CR-01 and
+Phase: 06 (tagger-configuration-and-dry-run) — gap-closure **ROUND 6 PLANNED, not yet executed**
+(round 5 executed and re-verified 2026-09-24: `06-VERIFICATION.md` **gaps_found, 5/6**, CONF-04 the
+single failing truth, carried to Phase 7 E6 under the operator override `negative-carry-e6`)
+Plan: 45 of 52 executed — round 6 (**06-46..06-52**, 5 waves, planned 2026-09-24, commits `d500907`
++ `d7df994`) is the full `06-REVIEW.md` round: WR-01/02/03 + IN-01/02, the `DEF-06-45-04`
+non-detecting-recipe fix, the bracketing-scope decision, and the two `autonomous: false`
+live-estate plans (`06-51` host git sync, `06-52` snapshot go/no-go). ⛔ Round 6 drives **no**
+CONF-04 work — `06-VERIFICATION.md` holds that no further Phase 6 action on it is warranted or
+safe. `REQUIREMENTS.md:152` stays `- [ ] CONF-04`. Round 1 (06-15..06-21, waves 6-9, 2026-09-22) closed CR-01 and
 dispositioned all 24 findings of `06-REVIEW.md`; re-verification is **6/6, status passed**
 (`06-VERIFICATION.md`, gaps_remaining: [], regressions: []).
 **The phase is NOT complete.** A code review of the round-1 changes themselves
