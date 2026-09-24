@@ -1706,3 +1706,105 @@ NOTHING WAS WRITTEN UNDER /mnt/tank/media BY THIS TASK. No snapshot was taken. N
 was changed and none was attempted — `chmod` fails EPERM on tank even as real root under
 aclmode=restricted + aclinherit=passthrough, and the target 0755/0644 is recorded in
 CLAUDE.md as NOT achieved. This task is a read.
+
+
+================================================================================
+SECTION 9 — THE RESOLVED TOUCH LIST, PROVED (three paths, zero DO-NOT-RESCAN)
+================================================================================
+Taken : 2026-09-24T06:23:16Z  (UTC), on atlantis (172.16.1.158) as real root.
+
+WHY THIS IS DONE HERE AND NOT AT MUTATION TIME: 06-41 touches a LIST OF FILES. A list built
+by hand at mutation time, against a path carrying U+2019, on a pool where
+insensitive/sensitive semantics have already bitten this project once, is the wrong place to
+discover a typo. The list is built and proved HERE, where nothing is written, and recorded
+below as a REUSABLE RECIPE so 06-41 runs the identical construction rather than a paraphrase.
+
+PROVENANCE OF THE SOURCE OF TRUTH:
+  scripts/check-music-consumers.sh was shipped to this host over ssh STDIN from a QUOTED
+  heredoc and written to /tmp/06-40-t3-ccm.2554986.
+  sha256 of the shipped copy : 1ed695cf483029c2e7c3fd815fc97bc1711a8a3e499556910955332a7a6ee819
+  sha256 at the workstation  : 1ed695cf483029c2e7c3fd815fc97bc1711a8a3e499556910955332a7a6ee819
+  ASSERTION: the copy this host parsed is byte-identical to the repo file at f309bdb
+             -> PASS. The table below IS the table the standing check asserts against.
+
+THE RECIPE, VERBATIM — 06-41 MUST RUN THIS CONSTRUCTION, NOT A PARAPHRASE OF IT:
+
+  # 1. ship the source of truth to atlantis over ssh STDIN, from a QUOTED heredoc, and
+  #    assert its sha256 against the workstation copy before parsing it. Never an argv word:
+  #    the ARTPOP path carries U+2019 and there is no reason to let a quoting layer near it.
+  #
+  # 2. derive the INTERNAL path list from the script itself:
+  awk '/^ARTIST_PROOF_ROWS=\(/{f=1;next} f&&/^\)/{f=0} f&&/^  "\/media\/Music\//{sub(/^  "/,""); sub(/"$/,""); print}' "$SRC" \
+    | awk -F'|' '{print $1}' > "$ILIST"
+  #
+  # 3. derive the TOUCH list by prefix substitution only — never by retyping:
+  sed 's|^/media|/mnt/tank/media|' "$ILIST" > "$PLIST"
+  #
+  # 4. assert (a)..(f) below BEFORE touching anything, then delete both scratch files.
+
+THE RESOLVED TOUCH LIST — this is the exact set 06-41 may touch, and nothing else:
+       1  /mnt/tank/media/Music/Lady Gaga/ARTPOP (2013)/CD 01-05 Lady Gaga - Jewels n’ Drugs.flac
+       2  /mnt/tank/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-03 Katy Perry - California Gurls.flac
+       3  /mnt/tank/media/Music/P!nk/The Truth About Love (2012)/CD 01-04 P!nk - Just Give Me a Reason.flac
+
+--------------------------------------------------------------------------------
+THE SIX ASSERTIONS, EACH WITH ITS OWN VERDICT
+--------------------------------------------------------------------------------
+  (a) line count of the touch list = 3                                    PASS
+  (b) every line passes `test -f` (0 unresolved)                             PASS
+  (c) every line BEGINS with /mnt/tank/media/Music/ (index()==1, not a substring) PASS
+  (d) lines containing the substring TRUSTFALL = 0                          PASS
+      The OQ-1 DO-NOT-RESCAN set (the six P!nk/TRUSTFALL (2023) rows in SECTION 4) is
+      excluded MECHANICALLY, not trusted to care. Row 3's album, The Truth About Love
+      (2012), is a DIFFERENT album under the same artist folder and IS in scope.
+  (e) reverse-substituted touch list == ARTIST_PROOF_ROWS internal paths      PASS
+      Compared with `cmp -s` over the whole file, byte for byte, including the U+2019
+      (’) in the ARTPOP path — not by eye, and not by a normalising comparison.
+  (e2) each reversed path is present in the script as a FIXED STRING (grep -qF)  PASS
+      Independent of the awk extractor used by (e): a bug in the extractor cannot satisfy
+      both instruments.
+  (f) sha256 of each file's CONTENT — 06-42 proves the touch changed METADATA ONLY and
+      not one byte of audio by re-reading these three values:
+      bf3ff6ff8dc465d271ade5fb144860fa504f97777c7364f35c1567b5d4263221  /mnt/tank/media/Music/Lady Gaga/ARTPOP (2013)/CD 01-05 Lady Gaga - Jewels n’ Drugs.flac
+      cd720f4706bc46425fd0f4320aff10ebc16ac660e7ed4ce30662964be6614391  /mnt/tank/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-03 Katy Perry - California Gurls.flac
+      5d9b0822b51fc9a04cae6888a3ebb3e3d5abd8afb66364cf02e0522ec1b3a853  /mnt/tank/media/Music/P!nk/The Truth About Love (2012)/CD 01-04 P!nk - Just Give Me a Reason.flac
+
+  OVERALL: all six assertions PASS. 06-41's touch list is resolved, proved against
+  check-music-consumers.sh's own table, and proved to exclude the DO-NOT-RESCAN set.
+
+--------------------------------------------------------------------------------
+atime, RECORDED SO AN atime-DRIVEN SURPRISE IN 06-42's zfs diff IS ANTICIPATED
+--------------------------------------------------------------------------------
+  sha256sum READS these files; it does not write them. Reading a file updates atime only if
+  the dataset has atime=on, and an atime bump is a metadata write ZFS records:
+  zfs get -H -o value atime tank/media/Music = off
+  zfs get -H -o value relatime tank/media/Music = on
+  (and for completeness, tank/downloads atime is recorded in SECTION 8.)
+
+--------------------------------------------------------------------------------
+SNAPSHOT SET RE-READ, AND THE SCRATCH FILES DELETED
+--------------------------------------------------------------------------------
+      tank/media/Music@backup-20260922
+      tank/media/Music@inc-20260923-1319
+      tank/media/Music@pre-chown
+      tank/media/Music@pre-phase5-chown
+      tank/media/Music@pre-project
+      tank/media/Music@safe05-watch-t0
+  Compare this set with SECTION 7's and SECTION 8's re-read: six names, identical, and
+  still no tank/media/Music@pre-06-41-conf04-reprobe. This task created no snapshot and
+  ran no `zfs diff`.
+
+  DELETED (verified absent with `test -e`): /tmp/06-40-t3-touch-list.2554986
+  DELETED (verified absent with `test -e`): /tmp/06-40-t3-touch-list.2554986.rev
+  DELETED (verified absent with `test -e`): /tmp/06-40-t3-internal-paths.2554986
+  DELETED (verified absent with `test -e`): /tmp/06-40-t3-ccm.2554986
+
+  06-41 rebuilds the touch list under its own snapshot fence, using the recipe above.
+
+THIS PLAN'S ONLY PRODUCT IS THIS ONE FILE UNDER .planning/. Nothing under /mnt/tank/media is
+in the repository — trivially, so `git status --porcelain` can show no modification there —
+and nothing under it was written, moved, chowned, chmodded or snapshotted by any task here.
+
+================================================================================
+END OF 06-40 BEFORE-STATE
+================================================================================
