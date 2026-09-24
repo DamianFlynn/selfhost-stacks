@@ -346,7 +346,22 @@ outcome that must not happen.
 <!-- GSD:conventions-start source:CONVENTIONS.md -->
 ## Conventions
 
-Conventions not yet established. Will populate as patterns emerge during development.
+**`CONVENTIONS.md` at the repository root is authoritative; this block is its mirror.** Read it there
+for each rule's reason and its named canonical example — the list below is names only.
+
+- 1. Fail closed, and keep "could not look" distinct from "nothing is wrong"
+- 2. Bound remote commands Linux-side
+- 3. Assert, do not report
+- 4. `${VAR:-default}` overrides are additive only — an override may only ever make a check redder
+- 5. Pinned counts: the trap, and the remedy
+- 6. The two-layer destructive-command fence is duplicated at each call site on purpose
+- 7. Credentials never enter argv
+- 8. Counted tokens are written bracketed — and only where something counts them
+- 9. Grep hygiene
+- 10. Byte-identity guarantees are anchored to a commit, never to the index
+- 11. The `📊 N. Summary` heading is a cross-file grep anchor
+- 12. In-band narrative: durable rationale stays, round-by-round history goes to the phase directory
+- 13. Review ID namespaces are unique per round and chosen before the review is written
 <!-- GSD:conventions-end -->
 
 <!-- GSD:architecture-start source:ARCHITECTURE.md -->
