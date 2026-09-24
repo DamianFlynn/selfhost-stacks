@@ -13,6 +13,32 @@ currently looks like, why the tagging pipeline stalled, and how to work the back
 State as of 2026-09-04, after the Phase 1 safety harness and the Phase 3 tagger spike (last two
 sections).
 
+> **Current state — read this first.** This file is a **running log, appended phase by phase**. The
+> newest section is the live picture; claims above it may have been superseded in place, or kept
+> deliberately as retractions. Do not read an early section as current.
+>
+> The authoritative current state is the section headed
+> *Phase 6 closed 2026-09-21 — four criteria TRUE, one OPEN on a named half, all five RE-MEASURED at close*.
+> Its verdict table is the sub-section headed *The five criteria* **under that heading** — the same
+> sub-heading text also appears in the Phase 5 closure above it, so disambiguate by the parent — and
+> what remains open is the sub-section headed *Still open at Phase 6 close*.
+>
+> **Cited by heading text, never by line number:** line citations in this repository go stale the
+> moment anything is inserted above them, and this file only ever grows by append. (`06-REVIEW.md`
+> § IN-02 suggests a line number; citing the heading text instead is a deliberate improvement on
+> that advice, not an oversight. Search for the heading text.)
+>
+> **Phase 6's disposition — CLOSED WITH ONE OPEN REQUIREMENT: CONF-04, on its Jellyfin half only.**
+> That half is carried to Phase 7 entry criterion **E6** under the operator's recorded
+> `negative-carry-e6` override (2026-09-24), and `.planning/REQUIREMENTS.md`'s CONF-04 checkbox is
+> deliberately still **unticked**, because an override is an auditable carry of an open requirement
+> and not a close. The **Music Assistant half IS discharged**. The two verdicts are **never summed**
+> into a single CONF-04 answer.
+>
+> **The go-forward rule, as a rule and not a hope:** every future phase-closure section appended to
+> this file **must update this pointer in the same commit**. A closure section whose pointer was not
+> updated is the defect — not the pointer.
+
 > **Amended 2026-09-11 (plan 04-05).** The wrtag and soulbeet **definitions are deleted from this
 > repository** (plan 04-03, D-01/D-05), so what they used to mount is now moot rather than
 > reassuring. The one surviving definition, `beets/beets.yaml`, mounts the library `:ro`.
