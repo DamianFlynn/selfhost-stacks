@@ -66,7 +66,7 @@ services:
   ai-ollama:
     container_name: ai-ollama
     # renovate: datasource=docker depName=ollama/ollama
-    image: ollama/ollama:0.33.2     # AMD Ryzen AI 9 HX PRO 370 with Radeon 890M (gfx1150) + Vulkan
+    image: ollama/ollama:0.34.4     # AMD Ryzen AI 9 HX PRO 370 with Radeon 890M (gfx1150) + Vulkan
     pull_policy: always
     environment:
       - OLLAMA_CONTEXT_LENGTH=8192
@@ -126,7 +126,7 @@ services:
     # measured 912 MB 2026-09-06; cap bounds a runaway, not steady state
     mem_limit: 2g
     # renovate: datasource=docker depName=quay.io/docling-project/docling-serve
-    image: quay.io/docling-project/docling-serve:v1.31.0
+    image: quay.io/docling-project/docling-serve:v1.35.0
     pull_policy: always
     restart: unless-stopped
     environment:
@@ -221,7 +221,12 @@ services:
   ai-searxng:
     container_name: ai-searxng
     # renovate: datasource=docker depName=searxng/searxng
-    image: searxng/searxng:2026.6.23-e3713717f
+    # 2026.9.23 or newer is REQUIRED, not cosmetic. The 2026-09-04 release migrated
+    # outgoing HTTP from httpx to curl_cffi, which added browser TLS/JA3 impersonation --
+    # the actual mitigation for the DuckDuckGo/Brave/Startpage CAPTCHAs and 429s this
+    # instance was serving on 2026.6.23. `impersonate` is set in engine code and is NOT
+    # admin-configurable, so the fix comes from the image, never from settings.yml.
+    image: searxng/searxng:2026.9.23-3cd69d30e
     pull_policy: always
     restart: unless-stopped
     cap_add:
@@ -233,11 +238,20 @@ services:
       - ALL
     environment:
       - SEARXNG_BASE_URL=https://search.deercrest.info
-      - SEARXNG_REDIS_URL=redis://ai-redis:6379/1
+      # SearXNG migrated Redis -> Valkey (PR #4795); `redis.url` is still read but emits a
+      # DeprecationWarning and `valkey.url` wins. The valkey:// SCHEME is deliberate --
+      # whether valkey-py's from_url() parses a redis:// scheme was not verified, and the
+      # scheme sidesteps the question. The ai-redis server itself is RESP-compatible and
+      # stays as-is; only the client library and URL scheme changed.
+      - SEARXNG_VALKEY_URL=valkey://ai-redis:6379/1
       - SEARXNG_SECRET=a2bdf40d27a71225
     volumes:
       - /mnt/fast/appdata/llm-ai/searxng:/etc/searxng
-      
+      # Persistent cache (faviconcache.db, engine caches). Previously unmounted, so every
+      # `docker compose up` threw this away and made SearXNG re-fetch from upstream --
+      # extra requests against engines that are already rate-limiting this WAN IP.
+      - /mnt/fast/appdata/llm-ai/searxng-cache:/var/cache/searxng
+
     depends_on:
       - ai-redis
     networks:
@@ -250,6 +264,38 @@ services:
       - "traefik.http.routers.searxng-rtr.tls=true"
       - "traefik.http.routers.searxng-rtr.tls.certresolver=dns-cloudflare"
       - "traefik.http.services.searxng-svc.loadbalancer.server.port=8080"
+
+      # --- External JSON API is blocked on purpose -------------------------------------
+      # settings.yml enables `formats: [html, json]` because Open WebUI consumes the JSON
+      # API -- but it reaches it INTERNALLY on http://ai-searxng:8080, so format=json never
+      # needs to be reachable from the internet. Left public it would be an open,
+      # unauthenticated, trivially scriptable search API whose every request is laundered
+      # through this residential WAN IP into Google/Brave/DDG: the exact feedback loop that
+      # gets the upstream engines to serve CAPTCHAs.
+      #
+      # SearXNG's own limiter CANNOT defend this. Its botdetection rejects any request whose
+      # Accept header lacks text/html (searx/botdetection/http_accept.py) and blocks Python
+      # user agents (http_user_agent.py), so every JSON client is a bot by definition and
+      # `limiter: true` would break Open WebUI instead. There is no format=json exemption.
+      # Blocking at the edge is therefore the only position that keeps both properties.
+      #
+      # NOTE: tsbridge (below) routes straight to the container and bypasses Traefik, so
+      # JSON stays reachable over the tailnet. That is intended -- the tailnet is identity-
+      # gated; the open internet is not.
+      - "traefik.http.routers.searxng-nojson-rtr.entrypoints=websecure"
+      - "traefik.http.routers.searxng-nojson-rtr.rule=Host(`search.deercrest.info`) && Query(`format`,`json`)"
+      # Traefik's default priority is rule length, which this would already win. Set
+      # explicitly so a later edit to either rule cannot silently invert the order.
+      - "traefik.http.routers.searxng-nojson-rtr.priority=100"
+      - "traefik.http.routers.searxng-nojson-rtr.tls=true"
+      - "traefik.http.routers.searxng-nojson-rtr.tls.certresolver=dns-cloudflare"
+      - "traefik.http.routers.searxng-nojson-rtr.service=searxng-svc"
+      - "traefik.http.routers.searxng-nojson-rtr.middlewares=searxng-denyjson"
+      # ipallowlist scoped to TEST-NET-1 (RFC 5737, never routed on the internet) matches
+      # no real client, so Traefik answers 403 for all of them. This is a deny-all, not an
+      # allowlist with a gap -- 192.0.2.1 cannot be a source address here.
+      - "traefik.http.middlewares.searxng-denyjson.ipallowlist.sourcerange=192.0.2.1/32"
+      # ---------------------------------------------------------------------------------
 
       - "tsbridge.enabled=true"
       - "tsbridge.service.name=search"                  # Default: container name
@@ -267,8 +313,12 @@ services:
     logging:
       driver: "json-file"
       options:
-        max-size: "1m"
-        max-file: "1"
+        # Was 1m/1. Engine CAPTCHA and 429 errors are the primary diagnostic signal for
+        # this container, and at 1m/1 less than 24h survived -- the 2026-09-24 diagnosis
+        # found the window already rotated away and had to reason from a partial log.
+        # 10m x 3 keeps a few days without being a meaningful cost on fast.
+        max-size: "10m"
+        max-file: "3"
 
   # Apache Tika document parsing server
   # Web interface at: http://localhost:9998 (if port exposed)
@@ -299,7 +349,7 @@ services:
     # measured 609 MB 2026-09-06; cap bounds a runaway, not steady state
     mem_limit: 1536m
     # renovate: datasource=docker depName=ghcr.io/open-webui/open-webui
-    image: ghcr.io/open-webui/open-webui:v0.11.1
+    image: ghcr.io/open-webui/open-webui:v0.11.4
     pull_policy: always
     restart: unless-stopped
     
@@ -358,7 +408,11 @@ services:
       - PDF_EXTRACT_IMAGES=true
       - PGVECTOR_DB_URL=postgresql://owui-user:171d29d40f07946b@ai-postgress/owui
       - RAG_EMBEDDING_ENGINE=ollama
-      - RAG_ENBEDDING_MODEL=nomic-embed-text:latest
+      # Was RAG_ENBEDDING_MODEL (N, not M) -- a typo, so this was silently ignored and the
+      # image default sentence-transformers/all-MiniLM-L6-v2 was being sent to OLLAMA,
+      # which has never had that model. Result: RAG embedding failed regardless of search.
+      # Requires `ollama pull nomic-embed-text` on the host; it is not bundled.
+      - RAG_EMBEDDING_MODEL=nomic-embed-text:latest
       - RAG_OLLAMA_BASE_URL=http://ai-ollama:11434
       - RAG_TEXT_SPLITTER=token
       - RAG_WEB_SEARCH_CONCURRENT_REQUESTS=10
@@ -366,7 +420,11 @@ services:
       - RAG_WEB_SEARCH_RESULT_COUNT=6
       - REDIS_KEY_PREFIX=open-webui
       - REDIS_URL=redis://ai-redis:6379/2
-      - SEARXNG_QUERY_URL=https://search.deercrest.info/search?q=<query>
+      # Internal, not https://search.deercrest.info -- that hairpinned every RAG search out
+      # through Cloudflare and Traefik and back into the same LXC. Going direct also lets
+      # the edge block external format=json (see the searxng traefik labels) without
+      # breaking Open WebUI.
+      - SEARXNG_QUERY_URL=http://ai-searxng:8080/search?q=<query>
       - TIKA_SERVER_URL=http://ai-tika:9998
       - TOOL_SERVER_CONNECTIONS=[{"url":"http://ai-openwebui-mcp:8000/time","path":"openapi.json","auth_type":"none","key":"","config":{"enable":true,"access_control":null},"info":{"name":"time","description":""}},{"url":"http://ai-openwebui-mcp:8000/postgress","path":"openapi.json","auth_type":"none","key":"","config":{"enable":true,"access_control":null},"info":{"name":"postgres","description":""}}]
       - USE_CUDA_DOCKER=false
