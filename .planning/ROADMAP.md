@@ -1129,7 +1129,7 @@ task, not re-sequencing the round.*
 - [ ] 06-49-PLAN.md — R6-04: `CONVENTIONS.md` created as the authoritative conventions index with a canonical example per rule, and `CLAUDE.md`'s GSD-managed conventions block synchronised to it
 - [ ] 06-50-PLAN.md — the round-6 register `06-DISPOSITIONS-GAP4.md`: the fresh `R6-*` namespace and its mapping table, all five findings dispositioned, WR-02 stated ACCEPTED with a measured self-binding claim, and the round's five refusals
 - [ ] 06-51-PLAN.md — **`autonomous: false`** — R6-08: `git push` then `git pull --ff-only` on LXC 100 at `/mnt/fast/stacks`, behind a measured pre-flight, proven per-file by sha256 and proven not to have redeployed any of ~103 containers
-- [ ] 06-52-PLAN.md — **`autonomous: false`** — R6-09: the `tank/media/Music@pre-06-41-conf04-reprobe` go/no-go, measured from `zfs list` with the dependency question answered on evidence; `hold` is a first-class outcome
+- [ ] 06-52-PLAN.md — **`autonomous: false`** — R6-09: the `tank/media/Music@pre-06-41-conf04-reprobe` go/no-go, measured from `zfs list` with the dependency question answered on evidence (Phase 7's pilot fence is committed under its **Success Criteria item 1**, not in the E1-E12 block); `hold` is a first-class outcome. As the round's last plan it also closes `06-DISPOSITIONS-GAP4.md`'s `ROUND CLOSE`, folding R6-08's and R6-09's actual outcomes into the round's primary record — the plan count stays with 06-50 deliberately, so a legitimate halt leaves the record incomplete rather than wrong
 
 **Phase 6 disposition:** **CLOSED WITH ONE OPEN REQUIREMENT — CONF-04**, named, on its Jellyfin half
 only. Criteria 1, 2, 3 and 5 are TRUE and were re-measured from live state at close. Criterion 4
