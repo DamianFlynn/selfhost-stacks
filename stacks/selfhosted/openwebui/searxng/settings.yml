@@ -1,0 +1,126 @@
+# SearXNG settings — Deer Crest
+#
+# SOURCE OF TRUTH. Deployed to /mnt/fast/appdata/llm-ai/searxng/settings.yml on LXC 100,
+# which is what the ai-searxng container bind-mounts at /etc/searxng. It is versioned here
+# because the previous copy existed ONLY on the host, where it silently rotted for months
+# with nothing in git showing it. If you change it, change it here and copy it across —
+# see the stack README.
+#
+# WHY THIS FILE IS SHORT (this is the point, do not "helpfully" expand it):
+# It was previously a verbatim 70,044-byte copy of an upstream default settings.yml with
+# no `use_default_settings:` key, which means it fully REPLACED upstream defaults instead
+# of layering on them. Its engine list and tuning were therefore frozen at the day it was
+# copied, and no image upgrade could ever move them.
+#
+# That was not theoretical. The frozen copy carried `suspended_times` of 86400/3600 — the
+# pre-2026-02-22 upstream defaults — while the image it was running against shipped
+# 180/3600. So the instance was benching a CAPTCHA'd engine for a full DAY on defaults
+# upstream had already reduced to three minutes, and upgrading the image did nothing.
+#
+# With `use_default_settings: true` this file contains only deltas. Everything not named
+# here follows the image and improves when the image is upgraded. Keep it that way: add an
+# entry only when the default is genuinely wrong for this estate, and say why.
+#
+# Last reviewed: 2026-09-24 (quick task 260924-x6w) against searxng 2026.9.23-3cd69d30e.
+
+use_default_settings: true
+
+server:
+  # secret_key comes from $SEARXNG_SECRET in compose.yaml.
+  #
+  # limiter MUST stay false. Open WebUI consumes the JSON API, and SearXNG's botdetection
+  # rejects any request whose Accept header lacks text/html
+  # (searx/botdetection/http_accept.py) and blocks Python user agents
+  # (http_user_agent.py). Every JSON API client is a bot by that definition and there is
+  # no format=json exemption, so limiter:true does not harden this instance — it breaks
+  # Open WebUI's web search while leaving the HTML path exactly as open as before.
+  # The abuse path is closed at Traefik instead (see the searxng labels in compose.yaml).
+  limiter: false
+  # public_instance:true switches on link_token botdetection, which requires the client to
+  # fetch a token-bearing resource off the HTML results page. A JSON API consumer cannot
+  # do that, so this is categorically incompatible with Open WebUI. Keep false.
+  public_instance: false
+  image_proxy: true
+
+search:
+  # json is REQUIRED by Open WebUI. Without it /search?format=json returns 403 and every
+  # web search in chat silently returns nothing — which is exactly what was happening
+  # before 2026-09-24. csv and rss are deliberately NOT enabled: nothing here consumes
+  # them and each one is another unauthenticated surface.
+  formats:
+    - html
+    - json
+  autocomplete: "duckduckgo"
+
+# valkey.url is supplied by $SEARXNG_VALKEY_URL in compose.yaml and is deliberately not
+# repeated here — one definition, one place to change it.
+#
+# suspended_times is deliberately NOT overridden. The image's 180/3600 is already correct
+# and shortening it further would only retry sooner against an engine that is actively
+# blocking us, which entrenches the block rather than clearing it.
+
+engines:
+  # --- Retired: these are the engines that were actually failing ---------------------
+  # Measured in the container logs on 2026-09-24, all four on the same WAN IP.
+  #
+  # IMPORTANT: these are `disabled: true`, NOT removed via
+  # `use_default_settings.engines.remove`. Open upstream bug searxng#6336 crashes the
+  # service at startup when a base engine that others reference by `network:` is removed
+  # while those others remain — brave.images, brave.videos and brave.news all declare
+  # `network: brave`. The same trap applies to mojeek, qwant, startpage and yandex.
+  # Disabling is the safe lever and has the same effect for API consumers, because
+  # format=json requests carry no user preferences.
+
+  # CAPTCHA (uk-en) on every request. Its vqd token is derived from the query plus the
+  # User-Agent, which forces a static UA and makes the instance trivially fingerprintable.
+  # Superseded by `duckduckgo web` below, which does not use vqd at all.
+  - name: duckduckgo
+    disabled: true
+
+  # get_sc_code redirected to /sp/captcha, benched for 86400s at a time. The sc code is
+  # scraped per-request and is the choke point; this is outside operator control.
+  - name: startpage
+    disabled: true
+
+  # HTTP 429, suspended 3600s. Replaced by findborg, which serves the same Brave index
+  # through a different front door and therefore a different rate-limit bucket.
+  - name: brave
+    disabled: true
+
+  # NOT re-enabled, and this one is not about blocking. Open upstream bug searxng#6358:
+  # when the server IP is blocked, qwant SILENTLY RETURNS FABRICATED RESULTS rather than
+  # raising an error. These results feed Open WebUI's RAG, so a confident wrong answer is
+  # strictly worse than a missing one. Leave this disabled.
+  - name: qwant
+    disabled: true
+
+  # --- Enabled: off by default upstream, wanted here ---------------------------------
+
+  # Distinct engine from `duckduckgo` above. Scrapes duckduckgo.com HTML and follows
+  # links.duckduckgo.com/d.js, using curl_cffi impersonate="firefox" with
+  # default_headers=False. Crucially it does NOT use vqd, which is the exact mechanism
+  # that CAPTCHAs the standard engine. This is the DuckDuckGo replacement.
+  - name: duckduckgo web
+    disabled: false
+
+  # Independent non-commercial index favouring small, old and text-heavy sites. A poor
+  # primary engine and a genuinely good supplement — it surfaces things the mainstream
+  # engines have dropped. No bot defence, so no blocking risk.
+  - name: marginalia
+    disabled: false
+
+# Relied on but NOT listed above, because they are already enabled in the image defaults
+# and listing them would just be something else to rot:
+#   mojeek    — independent crawler with its own index; solves Mojeek's Altcha
+#               proof-of-work challenge in-engine on current builds
+#   findborg  — Brave's index via a different front door (the brave replacement)
+#   dogpile   — metasearch, broad mainstream coverage
+#   wikipedia, wikidata — public APIs, no bot defence, zero blocking risk
+#
+# Deliberately NOT enabled:
+#   google, bing — disabled upstream by default for good reason; 2026 issue traffic on
+#                  both is relentless and google's is still an open upstream problem
+#   yep          — always HTTP 400 (searxng#6047)
+#
+# Gone entirely — upstream DELETED these, do not add them back:
+#   presearch (removed 2026-07-30), stract (2026-03-03), right dao (2026-03-12)
