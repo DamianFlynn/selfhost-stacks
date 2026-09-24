@@ -307,3 +307,10 @@ beats a wrong one.
 - `06-REVIEW.md`, `.planning/ROADMAP.md`, `.planning/STATE.md` — FOUND, all modified additively.
 - Commits `21eaad4` and `0ab8b4e` — both present in `git log`.
 - Both tasks' `<automated>` verify blocks re-run at HEAD: **PASS**.
+
+## Self-Check: PASSED
+
+All five claimed files present on disk; all three claimed commits (`21eaad4`, `0ab8b4e`,
+`08ede1b`) present in `git log --oneline --all`. Re-measured after the summary landed, the executed
+plan count is **50** — which is the numerator the metadata commit writes, by the same recipe that
+read 49 at task 2.

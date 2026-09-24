@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-24T21:40:00.000Z"
+last_updated: "2026-09-24T23:10:00.000Z"
 progress:
   total_phases: 10
   completed_phases: 5
   total_plans: 124
-  completed_plans: 121
+  completed_plans: 122
   percent: 50
 ---
 
@@ -31,7 +31,7 @@ Phase: 06 (tagger-configuration-and-dry-run) — gap-closure **ROUND 6 EXECUTING
 06-47), 06-48 and 06-49 are done, 06-50..06-52 remain**
 (round 5 executed and re-verified 2026-09-24: `06-VERIFICATION.md` **gaps_found, 5/6**, CONF-04 the
 single failing truth, carried to Phase 7 E6 under the operator override `negative-carry-e6`)
-Plan: 49 of 52 executed — round 6 (**06-46..06-52**, 5 waves, planned 2026-09-24, commits `d500907`
+Plan: 50 of 52 executed — round 6 (**06-46..06-52**, 5 waves, planned 2026-09-24, commits `d500907`
 + `d7df994`) is the full `06-REVIEW.md` round: WR-01/02/03 + IN-01/02, the `DEF-06-45-04`
 non-detecting-recipe fix, the bracketing-scope decision, and the two `autonomous: false`
 live-estate plans (`06-51` host git sync, `06-52` snapshot go/no-go). ⛔ Round 6 drives **no**
@@ -354,9 +354,10 @@ downstream.
 **`D-R6-M4` — the operator's decision, 2026-09-24: `ROADMAP.md`'s `Plans Complete` column means
 EXECUTED, not authored** (the Phase 4 precedent row reads `16/16` with its status cell still
 `In Progress`, noted "All 16 plans executed"). So the numerator written this round is the **measured**
-count of `06-NN-SUMMARY.md` files present in the phase directory — **49** at the moment of the edit,
-never `52/52` — and `06-52` at wave 5 closes it. The `Plan:` line above carries the same measured
-figure, so the two records cannot disagree.
+count of `06-NN-SUMMARY.md` files present in the phase directory — **49** when plan 06-50's task 2
+wrote it, and **50** once 06-50's own summary landed and the identical recipe was re-run, never
+`52/52` — and `06-52` at wave 5 closes it. The `Plan:` line above carries the same measured figure,
+so the two records cannot disagree.
 **⚠ RE-VERIFICATION HAS NOT BEEN PERFORMED BY THIS ROUND.** Plan 06-50 records dispositions; it ran
 **no** `/gsd-verify` and claims **no** verification result. **Do not read "round 6 complete" as "phase
 complete"** — that is the verifier's call. `REQUIREMENTS.md` was **not touched** (asserted
