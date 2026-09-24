@@ -1487,3 +1487,141 @@ run; and `/gsd-verify 06` for the score.
 
 **Urgency:** low individually. Recorded together because "round 5 measured the estate carefully" is
 true and could easily be over-read.
+
+---
+
+## DEF-06-48-01 — the corrected forbidden-mode detector, driven against a control; `DEF-06-45-04` CLOSED by this entry
+
+**Found during:** plan 06-48, task 1, gap-closure round 6 (2026-09-24), closing the round-6 finding
+`R6-06`. Supersedes and closes `DEF-06-45-04`, which recorded the defect and deliberately did not fix
+it.
+**Disposition:** **CORRECTED, and the correction is itself DRIVEN.** The recipe is published here in
+working form; the dated artifact that published the broken one is left untouched.
+
+**The corrected recipe, published in full.** Use `-cE`, never `-cF`:
+
+    for f in artifacts/06-4*-*.txt; do /usr/bin/grep -cE "Full[R]efresh" "$f"; done
+
+over the four files of `06-43-conf04-verdict.txt` SECTION O's counted set —
+`artifacts/06-40-conf04-reprobe-before.txt`, `artifacts/06-41-conf04-reprobe-drive.txt`,
+`artifacts/06-42-conf04-reprobe-after.txt`, `artifacts/06-42-consumers-rerun.txt`. `-F` and a
+bracketed needle are **mutually exclusive by construction**: `-F` suppresses exactly the
+metacharacter interpretation the bracketing mitigation depends on, so the pair can only ever measure
+the mitigation form and never the real token.
+
+**Driven, not asserted.** Against a scratch control file containing the real, unbracketed token, the
+corrected `-cE` form returns **1** and the published `-cF` form returns **0** — both commands and
+both outputs captured in
+`artifacts/06-48-recipe-control-and-scope.txt` **§ 1**. The control's content is deliberately not
+reproduced in any committed file; it lived only in the session scratch directory.
+
+**Re-derived counts.** `artifacts/06-48-recipe-control-and-scope.txt` **§ 3** re-runs the corrected
+recipe over those four files plus `06-43-conf04-verdict.txt` itself plus
+`scripts/check-music-consumers.sh` and `scripts/quick-health-check.sh`: **0 on all seven**. § 1 is
+named there as the drive that makes those zeros evidence about the estate rather than about the
+instrument. Both halves stand without either being softened into the other — **the published `0` is
+TRUE of the estate, and it was not earned by the command printed beside it.**
+
+**`(O-b)` was already sound and needed nothing.** It publishes `-ciE` for the forbidden UI button's
+phrase. § 1 (1-c) drives it against its own control anyway, returning **1**, so its zeros are also
+the zeros of a working instrument. `(O-c)`, the write-verb count, is untouched. The correction is
+**surgical to `(O-a)`**.
+
+**`artifacts/06-43-conf04-verdict.txt` IS DELIBERATELY LEFT UNEDITED** as a dated record, exactly as
+`DEF-06-45-04` instructs. Proven byte-identical to plan 06-48's base commit
+`ce358779329c4e37112a843bba877883e9a238f9` by the sha256 pair in
+`artifacts/06-48-recipe-control-and-scope.txt` **§ 4** (`d85ebe4b…` on both sides) — the one
+comparison neither a staged edit nor a commit made during this plan's own execution can satisfy
+falsely.
+
+**`DEF-06-45-04` is CLOSED by this entry**, and what closing means here is narrow and worth stating:
+the recipe is corrected **somewhere a copier will find it**, not in the dated artifact. A reader who
+reaches `DEF-06-45-04` or `06-43-conf04-verdict.txt` SECTION O should copy the `-cE` form from here.
+
+**Parent class:** `DEF-06-39-06` — the detector became an occurrence of its own mitigation instead of
+a test for the prohibited thing. Cross-referenced rather than restated; see also `DEF-06-21-08` and
+`DEF-06-29-07`.
+
+**Condition under which it should be revisited:** if a future round publishes a forbidden-mode
+detector whose counted scope differs from SECTION O's four-file set, re-derive rather than copy the
+count — the recipe transfers, the number does not.
+
+**Urgency:** closed. Retained at high copy-paste salience, because the broken form is still sitting
+in a committed artifact and will stay there by design.
+
+---
+
+## DEF-06-48-02 — DECISION: the bracketing convention's scope stays `artifacts/` — not widened to `ROADMAP.md` prose, and not dropped
+
+**Found during:** plan 06-48, task 2, gap-closure round 6 (2026-09-24), closing round-6 finding
+`R6-07`. Raised as an Info observation "for a future round" by `06-VERIFICATION.md` § *Anti-Patterns
+Found*; this is that round.
+**Disposition:** **DECIDED.** This is a decision entry, not an observation. An undecided convention
+drifts in whichever direction the next writer happens to push it, so both drift directions are
+refused here explicitly rather than left to be read into silence.
+
+**THE DECISION, IN ONE SENTENCE:** the bracketing convention's scope **stays `artifacts/`** — it is
+**NOT widened to `ROADMAP.md` prose**, and it is **NOT dropped**.
+
+**The reasoning, as reasoning rather than as assertion:**
+
+1. **The convention exists for a specific hazard, and the hazard has a specific home.** A count taken
+   over a file that NAMES the thing it counts measures the narration rather than the estate. That
+   hazard only exists where a file is a **detector target** — somewhere a published recipe actually
+   points.
+
+2. **Widening to `ROADMAP.md` would pay a readability cost for no measurement benefit.** `ROADMAP.md`
+   is deliberately readable prose and has never been inside any published detector's counted scope;
+   the published detector's scope is the round-5 artifact set, and it reads 0 there correctly.
+   Bracketing tokens in a document nobody counts would make the roadmap harder for a future operator
+   to read, which is the opposite of the roadmap's job.
+
+3. **Dropping the convention is equally wrong.** Inside `artifacts/`, where counts ARE published, the
+   hazard is live and has fired in **six consecutive rounds** — most recently as `DEF-06-45-04`
+   itself, one level in, where the detector became an occurrence of its own mitigation.
+
+4. **Therefore the rule is scoped by FUNCTION, not by directory name:** *any file whose content is
+   counted by a published recipe must write the counted token bracketed.* `artifacts/` is simply
+   where that is true today. If a future round publishes a detector whose counted scope includes
+   `ROADMAP.md`, the convention follows the detector — and that is the revisit condition below.
+
+**The measured facts that prompted the decision, re-measured in THIS task and not carried from the
+verification's text:** `/usr/bin/grep -cE 'Full[R]efresh' .planning/ROADMAP.md` returns **2** — one
+pre-existing, one added by plan 06-41's ROADMAP status-row update. Both sites are named by their
+surrounding heading or table row, **never by line number**, because line citations in this repository
+go stale on arrival and `ROADMAP.md` is actively edited (the verification's own two citations for
+these same sites are already stale):
+
+  - **Site 1 (pre-existing):** under the heading `### Phase 1: Safety Harness and Freeze the
+    Writers`, inside the criterion-3 narrative, in correction **(b)** — the sentence explaining that
+    `SaveLocalMetadata: false` gates the automatic save path only.
+  - **Site 2 (added by plan 06-41):** under the heading `## Progress`, in the phase table, in the
+    **Notes cell of the row beginning `| 6. Tagger Configuration and Dry Run |`**.
+
+Read at both sites: each is **prose DESCRIBING the prohibition**, not a detector target. Neither is
+counted by any published recipe.
+
+⚠ **The zero-expecting line-citation screen was DRIVEN first** (`DEF-06-45-04` class, and the reason
+this entry names its own drive): the identical recipe
+`/usr/bin/grep -cE 'ROADMAP\.md:[0-9]+'` returns **1** against a one-line scratch control reading
+`see ROADMAP.md:[1]615 for the row` — **written bracketed HERE, plain in the scratch control**, for
+the same reason the forbidden token is bracketed, and the bracket is load-bearing: the first draft of
+this entry quoted the control PLAINLY, and the screen over these two entries then returned **1**
+instead of 0, because the entry had become an occurrence of what it measures. That is
+`DEF-06-39-06`'s class firing for the seventh consecutive round, caught — as every previous
+instance was — **by measuring after the edit landed, not by an assertion written beforehand.** The
+corrected measurement over the two entries added by this plan is **0**. Only because of the control
+is that **0** evidence that no line citation was written, rather than evidence that the pattern
+matches nothing. Both drives are recorded in `artifacts/06-48-recipe-control-and-scope.txt`
+§ 1 (1-d) and § 6.
+
+**NO `ROADMAP.md` EDIT IS MADE OR REQUIRED BY THIS DECISION.** Stated explicitly so a later reader
+does not go looking for one, and does not "finish the job" by bracketing two tokens the decision
+deliberately leaves plain.
+
+**Condition under which it should be revisited:** the first time a published recipe's counted scope
+includes `ROADMAP.md` — or any other prose document. The convention follows the detector; it does not
+follow the directory name.
+
+**Urgency:** low in consequence, high in preventing silent drift. The value of this entry is that
+neither widening nor dropping can now be read into silence.

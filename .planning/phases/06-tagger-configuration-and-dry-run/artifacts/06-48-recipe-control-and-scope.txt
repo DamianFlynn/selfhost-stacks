@@ -229,3 +229,84 @@ SECTION 5 — WHAT THIS DOES NOT DO
   - CREDENTIAL SCREEN (this repository is PUBLIC): no API key, token, password or header value
     appears in this file. It carries only counts, recipes, digests, repository-relative paths and a
     commit id already public in this repository.
+
+
+================================================================================
+SECTION 6 — THE BRACKETING CONVENTION'S SCOPE: THE DECISION AND ITS MEASUREMENT
+================================================================================
+Recorded by plan 06-48 task 2, closing round-6 finding `R6-07`. The full entry, with its reasoning
+and its revisit condition, is `DEF-06-48-02` in this phase's `deferred-items.md`. The decision and
+its measurement live together here so neither can be read without the other.
+
+THE DECISION, IN ONE SENTENCE: the bracketing convention's scope STAYS `artifacts/` — it is NOT
+widened to `ROADMAP.md` prose, and it is NOT dropped. The rule is scoped by FUNCTION, not by
+directory name: any file whose content is counted by a published recipe must write the counted token
+bracketed. NO `ROADMAP.md` EDIT IS MADE OR REQUIRED BY THIS DECISION.
+
+  (6-a) THE RE-MEASURED OCCURRENCE COUNT, taken in this task with the corrected `-cE` form rather
+        than carried from `06-VERIFICATION.md`'s prose:
+
+        $ /usr/bin/grep -cE 'Full[R]efresh' .planning/ROADMAP.md
+        2
+
+        Both sites named by SURROUNDING HEADING OR TABLE ROW, never by line number — line citations
+        in this repository go stale on arrival, and the verification's own two citations for these
+        same sites are ALREADY STALE (it recorded 94 and 1608; the second now resolves elsewhere).
+
+          Site 1, pre-existing : heading `### Phase 1: Safety Harness and Freeze the Writers`,
+                                 criterion-3 narrative, correction (b).
+          Site 2, added by 06-41 : heading `## Progress`, phase table, the Notes cell of the row
+                                 beginning `| 6. Tagger Configuration and Dry Run |`.
+
+        Read at both: each is PROSE DESCRIBING THE PROHIBITION, not a detector target, and neither is
+        inside any published recipe's counted scope.
+
+  (6-b) THE LINE-CITATION SCREEN OVER THE TWO NEW `DEF-` ENTRIES — a zero-expecting count, and
+        therefore DRIVEN FIRST. The control drive is § 1 (1-d), which returns 1. The real
+        measurement, restricted to the two entries this plan added:
+
+        $ awk '/^## DEF-06-48-01/,0' deferred-items.md | /usr/bin/grep -cE 'ROADMAP\.md:[0-9]+'
+        0
+
+        Control 1, real 0. The 0 is evidence that no line citation was written, not evidence that
+        the pattern matches nothing.
+
+        ⚠ RECORDED RATHER THAN SMOOTHED — THE HAZARD FIRED INSIDE THE ENTRY DESCRIBING THE HAZARD.
+          `DEF-06-48-02`'s first draft quoted the scratch control line PLAINLY in order to explain
+          the drive. This screen then returned **1**, not 0 — the entry had become an occurrence of
+          what it measures, and a naive reading would have said "a line citation was written" when
+          what had actually been written was a description of the detector. The quote in the entry
+          is now bracketed (`ROADMAP.md:[1]615`); the scratch control keeps the plain form, which is
+          why it still returns 1. Seventh consecutive round for `DEF-06-39-06`'s class, and — as in
+          rounds 4, 5 and 6 — it was caught BY MEASURING AFTER THE EDIT LANDED, not by an assertion
+          written beforehand. The 0 above is the post-correction measurement.
+
+  (6-c) THE CONVENTION HONOURED BY THE TWO NEW ENTRIES, measured AFTER the edit landed and never
+        before (`DEF-06-39-06`'s rule), with § 1 (1-a) as the drive:
+
+        $ /usr/bin/grep -cE 'Full[R]efresh' deferred-items.md
+        0
+
+  (6-d) THE `DEF-` REGISTER'S INTEGRITY, anchored to the BASE COMMIT rather than to a moving `HEAD`:
+        heading count at base 41, heading count now 43 (= base + 2), and every one of the 41
+        base-commit `^## DEF-` heading strings still present, zero missing.
+
+  (6-e) THE READ-ONLY FENCE, asserted with the load-bearing `HEAD --` form (§ 4 drives why the bare
+        form is blind):
+
+        git diff --exit-code HEAD -- .planning/ROADMAP.md        -> exit 0
+        git diff --exit-code HEAD -- .planning/REQUIREMENTS.md   -> exit 0
+        git diff --exit-code HEAD -- scripts/                    -> exit 0
+
+  (6-f) `DEF-06-45-04` IS REFERENCED BUT NOT EDITED. Its body, delimited from its own heading to the
+        next one, digested at the base commit and now:
+
+        $ git show <BASE COMMIT>:…/deferred-items.md \
+            | awk '/^## DEF-06-45-04/,/^## DEF-06-45-05/' | /sbin/sha256sum
+        b86042f3fbd8e190f1943863a4376e51cf60adef4bd1847776363f65c3f116dc  -
+
+        $ awk '/^## DEF-06-45-04/,/^## DEF-06-45-05/' …/deferred-items.md | /sbin/sha256sum
+        b86042f3fbd8e190f1943863a4376e51cf60adef4bd1847776363f65c3f116dc  -
+
+        IDENTICAL. `DEF-06-45-04` is closed by `DEF-06-48-01` referring to it, not by anything
+        written into it — the same principle that leaves the dated artifact untouched in § 4.
