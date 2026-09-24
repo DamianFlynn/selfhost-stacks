@@ -117,3 +117,7 @@ None — the plan executed exactly as written. The plan's one STOP condition (ei
 ## Known Stubs
 
 None. Both edits are complete and emitted output is live on the failure path.
+
+## Self-Check: PASSED
+
+All three files present on disk (`scripts/check-music-freeze.sh`, `artifacts/06-46-freeze-fixes.txt`, `06-46-SUMMARY.md`); all three commits present in `git log` (`e515970`, `049e9a3`, `21c263e`).

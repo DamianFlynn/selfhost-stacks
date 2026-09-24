@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-24T15:45:00.000Z"
+last_updated: "2026-09-24T17:20:00.000Z"
 progress:
   total_phases: 10
   completed_phases: 5
   total_plans: 119
-  completed_plans: 117
+  completed_plans: 118
   percent: 50
 ---
 
@@ -27,10 +27,11 @@ pipeline that someone owns.
 
 ## Current Position
 
-Phase: 06 (tagger-configuration-and-dry-run) — gap-closure **ROUND 6 PLANNED, not yet executed**
+Phase: 06 (tagger-configuration-and-dry-run) — gap-closure **ROUND 6 EXECUTING; wave 1 (06-46) is
+done, 06-47..06-52 remain**
 (round 5 executed and re-verified 2026-09-24: `06-VERIFICATION.md` **gaps_found, 5/6**, CONF-04 the
 single failing truth, carried to Phase 7 E6 under the operator override `negative-carry-e6`)
-Plan: 45 of 52 executed — round 6 (**06-46..06-52**, 5 waves, planned 2026-09-24, commits `d500907`
+Plan: 46 of 52 executed — round 6 (**06-46..06-52**, 5 waves, planned 2026-09-24, commits `d500907`
 + `d7df994`) is the full `06-REVIEW.md` round: WR-01/02/03 + IN-01/02, the `DEF-06-45-04`
 non-detecting-recipe fix, the bracketing-scope decision, and the two `autonomous: false`
 live-estate plans (`06-51` host git sync, `06-52` snapshot go/no-go). ⛔ Round 6 drives **no**
@@ -84,6 +85,41 @@ of the `| grep -q`-under-`pipefail` shape remain estate-wide, **five inverted**,
 `set -euo pipefail` to `quick-health-check.sh` arms six more at once. `DEF-06-29-11` — the host is
 at pre-Phase-6 `c67d497`, **nothing in this phase has been pushed**, and three live reds are that
 staleness rather than round-2 fallout.
+
+**ROUND 6, WAVE 1 EXECUTED — 2026-09-24. Plan 06-46 closed `06-REVIEW.md`'s WR-01 (in band `R6-01`)
+and the `check-music-freeze.sh` half of WR-03 (`R6-03`), in four added lines.** Two task commits
+(`e515970`, `049e9a3`) plus the summary (`21c263e`); one artifact,
+`artifacts/06-46-freeze-fixes.txt`. **`shellcheck -S warning` is now clean on ALL SIX reviewed
+scripts where it was clean on five** — WR-01's two SC2034 findings at `:1044` were the only
+shellcheck finding in the set, and the fix takes the **named** form `read -r xn _xs xsrc _xdst
+xflag`, not the review's bare-underscore alternative, because two anonymous positions discard the
+column NAMES and a five-field read with anonymous positions is exactly where a future column
+insertion hides. The column ORDER was read from the producer (`docker inspect --format` at
+`:981-983` emits `name|state|source|destination|rw-flag`), so `_xs` is the container state and
+`_xdst` the mount destination; the premise was checked before editing and the plan's STOP condition
+(either column being consumed) did not fire.
+**Both pinned-count fail arms now print the literal edit they require.** `DECLARED_INTERP_EXPECTED`
+names the constant (by NAME, never a line number — citations here go stale on arrival), interpolates
+pinned → measured, states the read-by-hand precondition and the same-commit rule, and **prohibits
+using the env override to silence a red** — written as a policy on top of the header's documented
+capability, not a contradiction of it. `TAGGER_DEF_EXPECTED` refuses the count bump by name and
+requires a `TAGGER_DEF_<NAME>` + `_CLASS` pair into the `DEF_EXPECTED` set (D-11).
+**Both arms were driven in BOTH directions** from a harness extracted verbatim by line range out of
+the committed file; the artifact states in one clause that this proves the arm TEXT and its
+interpolation and **not** the live block.
+**No predicate, no constant and no failure count moved, and all three were measured against the base
+commit `75c7989`:** `TAGGER_DEF_EXPECTED=2` and `DECLARED_INTERP_EXPECTED:-12` byte-identical,
+comment-stripped `fail ` call sites **24** at both ends (the remediation lines are plain `echo`, so
+`FAILURES` is untouched). `check-beets-config.sh` is byte-identical — WR-03's `ST_PLANNED_CASES=7`
+third is **not** this plan's and is dispositioned ACCEPTED in `06-50`.
+⚠ **The one zero-expecting count this plan publishes was DRIVEN against a control first**
+(`DEF-06-45-04` class): the identical recipe returned **1** against a one-line control containing
+`echo "$xs $xdst"` and **0** against the real script, both captured verbatim.
+**Instruments re-measured at HEAD, not carried forward:** `check-beets-config.sh --self-test` exit
+**0 / 7 cases** (6 red) and `phase06-oracle.sh --self-test` exit **0 / 140 cases**, in the named
+reference environment (macOS 27.0 arm64, **non-root uid 501**, `python3` PRESENT, GNU bash 5.3.15,
+ShellCheck 0.11.0, BSD grep). **Zero estate contact** — no ssh, no docker, no `--run`, no package
+install. Nothing about CONF-04 changed; `REQUIREMENTS.md` was not touched and no checkbox moved.
 
 Previous: Phase 05 (inbox-structure-and-the-junk-gate) — **COMPLETE, closed 2026-09-19 at 4/4
 criteria TRUE**, 11 of 11 plans (fence taken, `_inbox` created, D-21 inode
@@ -655,9 +691,8 @@ delta of **0 bytes** measured as `raw − tr -d '\000'`, never the vacuous `grep
 and still stale; `stacks/selfhosted/arrs/beets.md` is untouched; and both snapshots stay held, with
 no `zfs rollback` executed. **06-45 owns the record edits, behind its own gate.**
 
-Status: Executing Phase 06 — gap-closure **ROUND 5**, wave 22 (plan 06-44) COMPLETE; only **06-45**
-remains. Wave 21 (plan 06-43) COMPLETE — the operator gate is resolved. Wave 20 (plan 06-42)
-COMPLETE. Round 2 ran
+Status: Executing Phase 06 — gap-closure **ROUND 6**, wave 1 (plan 06-46) COMPLETE; **06-47..06-52**
+remain. Round 5 is COMPLETE (waves 18-23, plans 06-40..06-45). Round 2 ran
 against `06-REVIEW-GAP.md` (GC-01 blocker + 7 warnings in round 1's own code, plus GC-16/GC-17
 from the cross-family adjudication) — all 17 closed and dispositioned in `06-DISPOSITIONS-GAP.md`
 by plan 06-29. Still 1 open
@@ -2016,8 +2051,16 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-09-24T15:45:00.000Z
-Stopped at: Completed 06-45-PLAN.md (round 5, wave 23) — **GAP-CLOSURE ROUND 5 IS COMPLETE at
+Last session: 2026-09-24T17:20:00.000Z
+Stopped at: Completed 06-46-PLAN.md (round 6, wave 1) — WR-01 and the `check-music-freeze.sh` half
+of WR-03 closed in band as `R6-01` / `R6-03`. **`shellcheck -S warning` is clean on all six reviewed
+scripts, where it was clean on five**, and both pinned-count fail arms now emit the literal edit they
+require plus the prohibition on silencing them with the env override. Four added lines; no predicate,
+no constant and no `fail ` count moved (24 at both ends, asserted against base `75c7989`); zero estate
+contact. The one zero-expecting count published was driven against a control returning 1 first.
+Next: **06-47** (round 6, wave 2). ⛔ Do NOT run round 6 with `--auto`/`--chain` — `06-51` and `06-52`
+are `autonomous: false` live-estate plans.
+Previously: 06-45-PLAN.md (round 5, wave 23) — **GAP-CLOSURE ROUND 5 IS COMPLETE at
 45/45, and the phase is NOT declared complete.** Five documents now state one truth value for
 CONF-04: `REQUIREMENTS.md`'s checkbox and traceability row, `ROADMAP.md`'s Phase 6 criterion 4 and
 status row and its Phase 7 entry criterion E6, `06-VERIFICATION.md`'s gap record, and
