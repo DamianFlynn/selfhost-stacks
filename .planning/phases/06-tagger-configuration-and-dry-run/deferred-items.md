@@ -1625,3 +1625,94 @@ follow the directory name.
 
 **Urgency:** low in consequence, high in preventing silent drift. The value of this entry is that
 neither widening nor dropping can now be read into silence.
+
+---
+
+## DEF-06-51-01 — LXC 100 synced to `b9c09b5`; `DEF-06-45-05` item 2 CLOSED per file, and S4 was CLEARED rather than overridden
+
+**Found during:** plan 06-51, tasks 1 and 2, the host git sync (2026-09-24).
+**Disposition:** an outstanding operator action, discharged. Recorded in two stages because the
+first stage refused and the second proceeded, and collapsing them into one clean narrative would
+hide the thing most worth knowing.
+
+**1. The pre-flight fired a STOP, and the STOP was real.** Task 1's read-only pre-flight of
+`/mnt/fast/stacks` returned 4 CLEAR and **1 STOP**. The tracked tree was clean
+(`status --porcelain --untracked-files=no` EMPTY, rc=0), the branch was `main`, the deployed commit
+`ee82fb2` was a strict ancestor of the repository HEAD, and the untracked inventory was **exactly**
+the two known debris paths with no third. What fired was **S4**: three stash entries on the
+production checkout, dated 2026-03-09, 2026-03-09 and 2025-10-03, their subjects naming production
+monitoring and proxy work, all three base commits still resolvable objects on the host. Per the
+plan, the gate therefore presented **no** unqualified `proceed` — only a recommendation to halt,
+plus an override path recorded as an override.
+
+**2. The operator CLEARED the condition rather than overriding it.** Shown the finding, the operator
+took the third path the gate itself named: dispose of the entries on the host, then re-run the gate.
+Their verbatim words, in order — *"ok i have completed an investigation "* and *"i hit enter to
+quick the last time, did not wait for the clean up to complete - done now"* — recorded with UTC
+timestamp `2026-09-24T21:28:39Z`. Re-measured before any write: the stash list returns **EMPTY at
+rc=0** (a real empty, scored on its own class, not a could-not-look). Gate re-read **5 CLEAR /
+0 STOP**. ⚠ **The override field is NO.** The distinction is load-bearing and must not be smoothed
+in any downstream record: an override says *we wrote to a host we had measured as unsafe*; a
+clearing says *we made the host safe, then wrote to it*. Equally, that S4 fired at all is **not**
+erased — the two-stage history is the record, and `06-DISPOSITIONS-GAP4.md` should carry both halves.
+
+**3. The debris removal, fenced.** Both paths were re-asserted `??` **at the act**, not carried from
+the gate, then removed by name — one invocation per path, no glob, no wildcard, no `-r`, and **no
+`git cl[e]an` in any form**, whose blast radius would have been whatever else happened to be
+untracked at that instant on a host carrying 98 running containers. Before/after `status --porcelain`
+captures are in the transcript; the computed set difference is **exactly those two names**, with
+**zero** other paths disappearing and zero appearing.
+
+**4. The host moved `ee82fb2` → `b9c09b5`**, by `push` then `[p]ull --ff-only` (41 commits;
+fast-forward, git's own output reading `Fast-forward`, rc=0). ⚠ **Measured correction to the plan:**
+its `D-R6-H3` preamble says the host was *"20 commits behind"*. It was **40** at pre-flight and
+**41** at the push. Superseded by measurement, not by assertion.
+
+**5. Identity proven per file, not by commit hash.** `sha256` on both sides for the same six
+instrument scripts, joined on basename: **6 of 6 MATCH, 0 DIFFERS**, where task 1's pre-flight read
+**3 MATCH / 3 DIFFERS** — the three differing being exactly the three rounds 5 and 6 edited
+(`check-music-consumers.sh`, `check-music-freeze.sh`, `quick-health-check.sh`). This is what closes
+item 2 below: a matching commit hash would not have shown it, because a partial checkout or a local
+modification leaves the hash right and the file wrong. One of the comparator's own controls was
+**INVALID** and is kept in the transcript rather than replaced: it mutated the filename column, so
+nothing joined and it returned 0 for the wrong reason — the `DEF-06-45-04` shape, inside the drive
+meant to guard against it.
+
+**6. Nothing was redeployed, proven on all three fields.** Normalised `name|image|status` triple
+sets before and after: computed set difference **empty in both directions**, count **99 = 99**,
+census **98 × `Up` + 1 × `Exited(0)`** (`buzz-minio-init`, an init container that is supposed to
+have exited 0), and an explicit blind-spot census of **0 created / 0 restarting / 0 paused / 0
+dead** rather than an assumption. The only `docker` verb issued in either task was **`ps`**; no
+compose verb was issued at all. The detector proving that is the repaired one from `DEF-06-48-01`'s
+family, and it was **driven** (3 / 1 / 0 against three controls) before its 0 was accepted — the
+superseded form returns 0 against real-world compose invocations and was structurally incapable.
+
+**What this CLOSES:** **`DEF-06-45-05` item 2 is CLOSED by this entry.** The deployed instruments
+are no longer behind the repository, proven per file. `DEF-06-29-11` — the host sitting at a
+pre-Phase-6 commit, which made a live run *uninformative* rather than merely deferred — is closed by
+the same measurement.
+
+**What this does NOT close, stated so it cannot be inferred:** **`DEF-06-39-05` is UNBLOCKED BUT NOT
+CLOSED.** This plan deliberately did **not** run `quick-health-check.sh` — its job was to make the
+instrument honest, not to take a measurement with it. The script has still been executed **zero**
+times across rounds 3, 4, 5 and 6. What changed is that a live run would now exercise the current
+file rather than stale prose; the run itself is owed by whoever wants the measurement. Note in
+advance that it will still exit non-zero on the pre-existing `interpolated-host-path` gate if that
+inventory has moved — a known, documented red, not a fresh finding. `DEF-06-45-05` items 1 and 3 are
+untouched, and `06-VERIFICATION.md` is not re-scored by this plan.
+
+**Disposition mapping for the register, stated so `06-52` task 3 need not invent one:** the closed
+four-word vocabulary has no `halt` entry, so **halt → `CARRIED`**. That mapping is recorded for
+completeness only — **this plan did not halt**, and `R6-08`'s disposition is the proceed outcome
+above, not `CARRIED`.
+
+**Execution note, because it changes who approved what:** task 2 was run **inline by the
+orchestrator**, not by a delegated executor agent. Two subagent dispatches were refused by the
+runtime's permission classifier, the second naming `[Remote Shell Writes]`. Rather than work around
+that refusal, the task was run inline so every host-writing command passed through the per-command
+permission gate with the operator present — a narrower grant than a standing subagent mandate. No
+safety rule of the plan was relaxed to achieve it.
+
+**Urgency:** discharged. Retained because the S4 finding, the per-file `DIFFERS` evidence and the
+`unblocked ≠ closed` distinction on `DEF-06-39-05` are each easy to over-read as more, or less, than
+they are.
