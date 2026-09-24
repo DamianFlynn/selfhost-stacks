@@ -1347,9 +1347,27 @@ figure is the headroom the `import.copy` reversibility argument leans on, so its
 the direction that matters. The correction does not move the hold/release argument: 0B against
 5.26 T is the same argument as 0B against 9 T.)*
 
-**Condition under which it should be released:** the round's outcome accepted (it now is —
-`negative-carry-e6`, 2026-09-24T14:30:37Z) **and** Phase 7's pilot fence planned, so the estate is
-never without an undo across the boundary. Release is then an operator action, not a plan's.
+**Condition under which it should be released — REWRITTEN 2026-09-24T22:29:38Z by the operator, via
+plan 06-52 (round item `R6-09`). STATUS: still OPEN. DISPOSITION: `CARRIED`.**
+
+    Release `tank/media/Music@pre-06-41-conf04-reprobe` when **Phase 7 Success Criterion 1 is
+    SATISFIED** — a NEW snapshot TAKEN on the same dataset (`tank/media/Music`) AND rollback
+    EXERCISED — **not** when Phase 7 is merely planned.
+
+One named trigger, no judgement left in it. See `DEF-06-52-01` for the measured inventory, the
+five dependency answers, the operator's verbatim words and why the rewrite — not the hold — is the
+substance of the decision.
+
+*Superseded wording, kept because the difference is the whole point:* the original condition read
+*"the round's outcome accepted (it now is — `negative-carry-e6`, 2026-09-24T14:30:37Z) **and**
+Phase 7's pilot fence **planned**, so the estate is never without an undo across the boundary."*
+Plan 06-52 task 1 measured **both** clauses as MET — Phase 7's `**Success Criteria**` item 1
+commits the fence — and on that basis recommended `release`. The operator overruled it: **a plan is
+a document, not a fence.** Between *planned* and *taken* there is a real window in which the Music
+dataset carries no Phase-6-era undo, and a condition a document can satisfy is a condition that
+lets the item drift. `defer` was rejected for the same reason. Release remains an operator action,
+not a plan's — but the trigger is now an event someone must already produce evidence for, so the
+item closes **on a commit rather than on someone remembering**.
 
 **Related and NOT the same fence:** `tank/downloads@pre-phase5` is also still held and is Phase 5's
 only undo (D-32, Phase 7 entry criterion E4). Neither was released by this round.
@@ -1726,3 +1744,136 @@ safety rule of the plan was relaxed to achieve it.
 **Urgency:** discharged. Retained because the S4 finding, the per-file `DIFFERS` evidence and the
 `unblocked ≠ closed` distinction on `DEF-06-39-05` are each easy to over-read as more, or less, than
 they are.
+
+---
+
+## DEF-06-52-01 — `hold`: the snapshot stands, and `DEF-06-45-01`'s release condition is rewritten from a judgement call into one mechanical trigger
+
+**Found during:** plan 06-52, tasks 1 and 2, the snapshot-release go/no-go — gap-closure round 6's
+last plan, round item `R6-09` (2026-09-24).
+**Disposition:** **CARRIED.** From the register's closed four-word vocabulary, via the mapping plan
+06-52's objective fixed in advance so it could not be invented afterwards: `hold` → `CARRIED`,
+`defer` → `CARRIED`, `release` → `FIXED`. No fifth word was introduced.
+
+⛔ **NOTHING WAS DESTROYED, ROLLED BACK OR RELEASED.** The only `zfs` verb issued by this plan on
+any branch, in either task, is `zfs list` — a read. `tank/media/Music@pre-06-41-conf04-reprobe`
+still stands. `tank/downloads@pre-phase5` — a different fence with a different owner (D-32, Phase 7
+entry criterion **E4**) — was listed and nothing more, on every branch.
+
+### 1. The measured inventory
+
+From atlantis (`172.16.1.158`) as real root; LXC 100 is unprivileged and has no `zfs`. Every remote
+command bounded Linux-side with `timeout`, `set -o pipefail` in every piped string, ssh rc read and
+0 throughout. Full transcript: `artifacts/06-52-snapshot-decision.txt` § *MEASURED STATE*.
+
+| | measured |
+|---|---|
+| snapshots on `tank/media/Music` | **7**, name-for-name identical to the set `06-42` SECTION J recorded — comparator driven against a decoy-mutated copy, which returned **2** difference lines |
+| the target's `used` / `written` | **0B** / **0** — the real cost of holding it |
+| the target's presence | **PRESENT**, by exact whole-line `grep -qxF`, driven in BOTH directions on the host: a `-DECOY` line containing the target as a proper prefix was correctly REJECTED, the exact line correctly MATCHED |
+| snapshots on `tank/downloads` | **9**, `@pre-phase5` **PRESENT**, identical to `06-42` SECTION J |
+| `tank` | **41.9 T used / 5.26 T available** |
+| hold cost as a fraction of free space | 0B / 5.26 T = **0.000 %** at the granularity either figure is reported to — *negligible* stated only after the figures, never instead of them |
+
+Re-measured read-only **after** the decision, so the "nothing was destroyed" claim is a measurement
+and not an inference from "we did not run the command": `TARGET_PRESENT` and `PREPHASE5_PRESENT`,
+ssh rc 0, at **2026-09-24T22:32:01Z**.
+
+### 2. The five dependency answers, condensed
+
+1. **Does anything still need this undo?** It can undo **three file mtimes and nothing else.**
+   `06-42` SECTION G: `zfs diff` against this fence returned exactly **3** lines, every one an `M`,
+   with 0 non-`M` and 0 sidecar entries; SECTION J assertion J5 records all three files' content
+   `sha256` byte-identical either side. Counter-consideration stated rather than suppressed: an undo
+   whose cost is nil is **cheap to keep**, so "there is almost nothing to undo" is not by itself an
+   argument for destroying it.
+2. **Is clause two of `DEF-06-45-01` satisfied — is Phase 7's pilot fence planned?** **YES, MET.**
+   Read from `.planning/ROADMAP.md` § `### Phase 7: Pilot — 12 Albums End to End`, its
+   `**Success Criteria**` block, **item 1**, quoted verbatim in the artifact: *"Twelve bucket-A
+   albums are imported inside a snapshot fence — ZFS snapshot of the Music dataset and a copy of
+   `library.db` taken together — with rollback exercised at least once…"*. The
+   `**Entry criteria inherited from Phase 6**` block was read separately and **does not** commit the
+   fence — see `DEF-06-52-02`, which records that asymmetry as a process defect.
+3. **Does any open item depend on the snapshot EXISTING?** **No.** `DEF-06-45-02`, `DEF-06-45-03`,
+   `06-VERIFICATION.md` § *Outstanding operator actions* and Phase 7 criteria **E5**/**E6** were each
+   checked by name; each depends on the **artifacts** captured while it stood, all committed to git,
+   or on Jellyfin's own current state — none on the object. `DEF-06-45-01` is the only open item that
+   names it, and names it as the subject of this decision.
+4. **What is lost if it goes and something later needs it?** Three files' pre-06-41 mtime values,
+   permanently. Content is not at risk in either direction (J5). mtime is not load-bearing for
+   Jellyfin, Music Assistant or beets in this estate, and a forensic reader is better served by
+   `06-41`/`06-42`'s committed transcripts, which record the touch moment as epoch 1790237114.
+5. **What is lost if it is kept?** Not space (see the table). One more standing object on a pool
+   already carrying 16 snapshots across these two datasets — a record-keeping cost, answered by this
+   entry's sharp trigger rather than by a destroy.
+
+### 3. The executor recommended `release`. The operator chose `hold`. That difference is the record.
+
+⚠ **This entry does not present `hold` as if it had been the recommendation.** It was not. Plan
+06-52 task 1 recommended **`release`**, because it measured both clauses of `DEF-06-45-01`'s stated
+release condition as MET. The operator **overruled it, using the executor's own self-raised
+counter-argument** — that Phase 7's fence is *planned, not taken*, leaving a window in which the
+Music dataset carries no Phase-6-era undo. In the operator's words: *"The executor's self-raised
+counter-argument was the right one, and it argued against its own recommendation. I'd take the
+counter-argument."*
+
+**The operator's answer, verbatim, 2026-09-24T22:29:38Z** (reproduced in full in
+`artifacts/06-52-snapshot-decision.txt` § *THE OPERATOR'S ANSWER*; the load-bearing passage):
+
+> "Don't defer to Phase 7 planning (option 3) — planning is a document, not a fence, and the item
+> drifts again. Make the release condition mechanical and already-scheduled:
+>
+>   Release tank/media/Music@pre-06-41-conf04-reprobe when Phase 7 Success Criterion 1 is satisfied
+>   — new snapshot taken on the same dataset and rollback exercised — not when Phase 7 is planned.
+>
+> That's an event someone already has to produce evidence for, so the item closes on a commit rather
+> than on remembering. Disposition CARRIED, one named trigger, no judgement left in it."
+
+`defer` was **explicitly REJECTED**, and for the same reason the rewrite exists: deferring to Phase
+7's *planning* would re-enter the identical trap one phase later.
+
+### 4. `DEF-06-45-01`'s resulting status
+
+**Still OPEN, disposition `CARRIED`, with its release condition REWRITTEN in place** — from a
+two-clause judgement call into a single mechanical trigger:
+
+    Release `tank/media/Music@pre-06-41-conf04-reprobe` when **Phase 7 Success Criterion 1 is
+    SATISFIED** — a NEW snapshot TAKEN on the same dataset AND rollback EXERCISED — **not** when
+    Phase 7 is merely planned.
+
+The rewrite, not the hold, is the substance of this decision. The trigger is an event **someone must
+already produce evidence for**: Phase 7 cannot claim Success Criterion 1 without a taken snapshot
+and an exercised rollback, so the item closes on a commit rather than on someone remembering.
+`DEF-06-45-01`'s superseded wording is kept inline in that entry, because the difference between
+*planned* and *taken* is the whole point.
+
+**A separate, independent correction landed in the same entry and is recorded as its own change:**
+`DEF-06-45-01`'s *"`tank` has ~9 T free"* and `CLAUDE.md` § *Constraints*' identical figure were both
+**stale by ~3.7 T** and were corrected to the measured **5.26 T** in commit `7758286`, deliberately
+ahead of and separate from this decision so the fix could not ride on it. The staleness was in the
+direction that matters: the `import.copy` reversibility argument leans on headroom.
+
+### 5. What was and was not driven
+
+- The `-qxF` presence assertion: driven in both directions **on the host**, before its verdict was
+  accepted.
+- The snapshot-set comparator: driven against a decoy-mutated copy (returned 2), so its EMPTY is
+  evidence of no change rather than an artefact of a comparator that joins nothing.
+- `/usr/bin/grep -cE 'zfs [d]estroy'` over the artifact returns **0**, driven to **1** against a
+  scratch control holding the real unbracketed verb and to **0** against a control holding only the
+  bracketed narrative form — both directions, as the plan required, because a one-directional drive
+  cannot distinguish a clean transcript from a pattern that matches everything.
+- `/usr/bin/grep -cE 'zfs [r]ollback'` over the artifact returns **0**, driven to **1** against a
+  real-verb control first. The forbidden verb appears nowhere unbracketed, **including in the
+  sentences that forbid it** — which is the eleventh instance of this phase's self-referential hazard
+  being designed around rather than tripped over.
+- **`scripts/quick-health-check.sh` was NOT run.** `DEF-06-39-05` stays **unblocked but not closed**,
+  exactly as `DEF-06-51-01` recorded it.
+- No CONF-04 work of any kind. `.planning/REQUIREMENTS.md` and `scripts/` both rc 0 under
+  `git diff --exit-code HEAD --`. `06-VERIFICATION.md` not re-scored.
+
+**Condition under which it should be revisited:** it should not. This entry is the decision record;
+the live item is `DEF-06-45-01`, and its trigger is now mechanical.
+
+**Urgency:** discharged as a decision; **high to not destroy the snapshot by accident** until Phase 7
+Success Criterion 1 is satisfied.

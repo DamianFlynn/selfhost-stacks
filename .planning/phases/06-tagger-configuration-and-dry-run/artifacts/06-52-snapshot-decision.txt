@@ -356,9 +356,17 @@ DECISION ASKED: Release `tank/media/Music@pre-06-41-conf04-reprobe`, or keep it 
 
   Any answer outside {hold, release, defer} is treated as `hold`.
 
-OPERATOR'S ANSWER (verbatim)  : <AWAITING — not yet given>
-UTC TIMESTAMP                 : <AWAITING>
-EXECUTED                      : <NOTHING YET — task 1 issued no write of any kind>
+OPERATOR'S ANSWER (verbatim)  : see § THE OPERATOR'S ANSWER below — reproduced there in full
+                                rather than squeezed onto this line, because it is long and
+                                because paraphrasing it would destroy the part that matters.
+                                RESOLVED DECISION: **hold**, with the release condition made
+                                MECHANICAL. `defer` was explicitly REJECTED. `release` was
+                                rejected — on the executor's own self-raised counter-argument,
+                                which the operator took over the executor's recommendation.
+UTC TIMESTAMP                 : 2026-09-24T22:29:38Z
+EXECUTED                      : **NOTHING WAS DESTROYED, ROLLED BACK OR RELEASED.** Task 2 issued
+                                no `zfs` verb but `list`. See § WHAT TASK 2 EXECUTED below for
+                                the post-decision re-measurement proving both fences still stand.
 
 --------------------------------------------------------------------------------
 TASK 1 SELF-ATTESTATION
@@ -376,5 +384,213 @@ TASK 1 SELF-ATTESTATION
     directions (c), and the set comparator in (a).
 
 ================================================================================
-END OF TASK 1 — AWAITING THE OPERATOR'S GO/NO-GO
+END OF TASK 1 — the operator's go/no-go follows
+================================================================================
+
+
+================================================================================
+THE OPERATOR'S ANSWER — VERBATIM, 2026-09-24T22:29:38Z
+================================================================================
+RESOLVED DECISION: **hold**, with the release condition made MECHANICAL.
+  - `defer` was explicitly REJECTED.
+  - `release` — the executor's own stated recommendation — was REJECTED, on the strength of the
+    counter-argument the executor raised against itself.
+
+Reproduced verbatim below. It is NOT paraphrased into the record anywhere: the reasoning is the
+part that has to survive, and a summary of it would lose exactly the bit that changes what a
+later reader does.
+
+--- BEGIN VERBATIM ---
+"Don't defer to Phase 7 planning (option 3) — planning is a document, not a fence, and the item
+drifts again. Make the release condition mechanical and already-scheduled:
+
+  Release tank/media/Music@pre-06-41-conf04-reprobe when Phase 7 Success Criterion 1 is satisfied
+  — new snapshot taken on the same dataset and rollback exercised — not when Phase 7 is planned.
+
+That's an event someone already has to produce evidence for, so the item closes on a commit rather
+than on remembering. Disposition CARRIED, one named trigger, no judgement left in it.
+
+Two things to do regardless of disposition
+
+1. Fix the 9 T → 5.26 T figure now, in both DEF-06-45-01 and CLAUDE.md § Constraints. You've got a
+convention that restating an unverified number launders it — this is that, caught in the act, and
+it's stale by 3.7 T in the direction that matters (the reversibility argument for import.copy leans
+on headroom). It's independent of the snapshot decision and shouldn't ride on it.
+
+2. Record the entry-criteria-block finding as a process defect, not a footnote. 'Reading E1–E12
+alone answers not planned by omission' is a read that fails safe here and would fail unsafe the
+moment the omitted thing is a prohibition rather than a plan. The lesson isn't 'we got lucky'; it's
+that the entry-criteria block is not a closed world and a criteria-only read is never sufficient
+evidence of absence.
+
+The executor's self-raised counter-argument was the right one, and it argued against its own
+recommendation. I'd take the counter-argument."
+--- END VERBATIM ---
+
+⚠ **THE RECORD MUST NOT PRESENT `hold` AS IF IT HAD BEEN THE RECOMMENDATION.** It was not. The
+executor recommended `release` (§ THE EXECUTOR'S RECOMMENDATION above, unedited and left standing).
+The operator overruled it using the executor's own second bullet under "The case against" — that
+Phase 7's fence is **planned, not taken**, leaving a window with no Phase-6-era fence on the Music
+dataset. Every downstream record states this the same way: recommendation `release`, outcome
+`hold`, and the reason the two differ.
+
+
+================================================================================
+WHAT TASK 2 EXECUTED — the `hold` branch, which is a COMPLETE and SUCCESSFUL outcome
+================================================================================
+Per this plan's task 2, the `hold` branch issues **nothing to the estate**. It is not a skip and
+it is not a failure: the plan's objective states in its own words that `hold` is an outcome this
+plan can reach without failing.
+
+**NOTHING WAS DESTROYED, ROLLED BACK, RELEASED OR CREATED.** The only `zfs` verb issued by this
+plan on any branch, in task 1 and in task 2 alike, is `zfs list` — a read.
+
+POST-DECISION RE-MEASUREMENT (read-only), taken AFTER the answer so the record states a measured
+present state rather than an inference from "we did not run the command":
+
+  command : ssh root@172.16.1.158 "set -o pipefail; \
+              timeout 60 zfs list -t snapshot -H -o name -r tank/media/Music \
+              | grep -qxF 'tank/media/Music@pre-06-41-conf04-reprobe' \
+              && echo TARGET_PRESENT || echo TARGET_ABSENT; \
+              timeout 60 zfs list -t snapshot -H -o name -r tank/downloads \
+              | grep -qxF 'tank/downloads@pre-phase5' \
+              && echo PREPHASE5_PRESENT || echo PREPHASE5_ABSENT; \
+              date -u +%Y-%m-%dT%H:%M:%SZ"
+  ssh rc  : 0        stderr: empty
+  output  : TARGET_PRESENT
+            PREPHASE5_PRESENT
+            2026-09-24T22:32:01Z
+
+  Both fences stand. The `-qxF` exact-whole-line form is the one driven in both directions in
+  MEASURED STATE (c) above; it is reused here unchanged rather than re-derived.
+
+  ⛔ `tank/downloads@pre-phase5` was LISTED and nothing more. Different fence, different owner
+  (D-32, Phase 7 entry criterion E4). Not touched on any branch.
+
+RE-MEASUREMENT OF THE POOL, because operator instruction (1) turns on this figure:
+
+  command : ssh root@172.16.1.158 "set -o pipefail; \
+              timeout 60 zfs list -o name,used,avail,refer tank tank/media/Music"
+  ssh rc  : 0        stderr: empty
+
+  NAME               USED  AVAIL  REFER
+  tank              41.9T  5.26T   160K
+  tank/media/Music  33.9G  5.26T  33.9G
+
+  Re-measured independently in task 2 rather than carried forward from task 1's capture, because
+  the whole point of instruction (1) is that a number restated without measurement launders
+  itself. Same figures: **41.9 T used / 5.26 T available.**
+
+
+--------------------------------------------------------------------------------
+THE TWO VERB COUNTERS, DRIVEN IN BOTH DIRECTIONS BEFORE THEIR ZEROS WERE ACCEPTED
+--------------------------------------------------------------------------------
+The bracketing notation stated at the head of this file is what makes these counts meaningful:
+narrative mentions are bracketed, so an UNBRACKETED occurrence would mean a command actually
+issued. A `0` from a pattern that cannot match is the `DEF-06-45-04` shape and is worthless, so
+each recipe was driven against a scratch control containing the REAL unbracketed verb first. The
+controls live in the session scratchpad, never in this artifact — putting a real verb in here to
+prove the detector works would make the artifact an occurrence of what it measures, which is
+precisely the hazard that has now fired ELEVEN times across this phase's rounds.
+
+  DESTROY COUNTER — `/usr/bin/grep -cE 'zfs [d]estroy'`
+    vs scratch control containing the real unbracketed verb  : **1**   (detects — good)
+    vs scratch control containing only the bracketed form    : **0**   (does not over-count — good)
+    vs THIS ARTIFACT                                          : **0**   (see assertion block below)
+    Both directions recorded, as the plan's acceptance criterion requires: without the negative
+    control the 0 would be indistinguishable from a broken pattern, and without the positive
+    control it would be indistinguishable from a pattern that matches everything.
+
+  ROLLBACK COUNTER — `/usr/bin/grep -cE 'zfs [r]ollback'`
+    vs scratch control containing the real unbracketed verb  : **1**   (detects — good)
+    vs THIS ARTIFACT                                          : **0**   (see assertion block below)
+    The forbidden verb appears nowhere in this transcript in unbracketed form, including in the
+    sentences that forbid it.
+
+  ⚠ A raw `-cF` over a bracketed needle would be STRUCTURALLY INCAPABLE of matching here — `-F`
+  suppresses exactly the metacharacter interpretation the bracketing depends on. That is
+  `DEF-06-45-04`, corrected by `DEF-06-48-01` and now `CONVENTIONS.md` convention 8. `-cE`,
+  always, and driven.
+
+
+--------------------------------------------------------------------------------
+`DEF-06-45-01`'s NEW STATUS — OPEN, disposition CARRIED, trigger MADE MECHANICAL
+--------------------------------------------------------------------------------
+STATUS            : **still OPEN.** Nothing was destroyed, so nothing closed.
+DISPOSITION       : **CARRIED** — from the register's closed four-word vocabulary, per the
+                    mapping this plan's objective fixed in advance: `hold` → `CARRIED`,
+                    `defer` → `CARRIED`, `release` → `FIXED`. No fifth word invented.
+
+THE SHARPENED REVISIT CONDITION, which replaces a judgement call with a single named event:
+
+    Release `tank/media/Music@pre-06-41-conf04-reprobe` when **Phase 7 Success Criterion 1 is
+    SATISFIED** — a NEW snapshot TAKEN on the same dataset (`tank/media/Music`) AND rollback
+    EXERCISED — **not** when Phase 7 is merely planned.
+
+WHY THE REWRITE IS THE SUBSTANCE OF THIS DECISION, not a formality:
+  - The ORIGINAL condition's second clause was *"Phase 7's pilot fence planned"*. Task 1 measured
+    that clause as **MET** — Phase 7 Success Criteria item 1 commits the fence, quoted verbatim in
+    DEPENDENCY REASONING Q2 — which is exactly why the executor recommended `release`.
+  - The operator's objection is that **a plan is a document, not a fence.** Between "planned" and
+    "taken" there is a real window in which the Music dataset carries no Phase-6-era undo, and a
+    condition satisfied by a document lets the item drift.
+  - `defer` was rejected for the same reason and stated plainly: deferring to Phase 7's *planning*
+    would re-enter the same trap one phase later.
+  - The new trigger is an event **someone must already produce evidence for** — Phase 7 cannot
+    claim Success Criterion 1 without a taken snapshot and an exercised rollback. So the item now
+    closes **on a commit rather than on someone remembering**. There is no judgement left in it.
+
+WHAT CLOSING WILL MEAN, WHEN IT HAPPENS: the fence goes and the three pre-06-41 mtimes become
+unrecoverable. Content is not at risk in either direction — `06-42` SECTION J assertion J5 proves
+the three files' content `sha256` never moved.
+
+COST OF CONTINUING TO HOLD, restated from the measurements rather than asserted: `used` **0B**,
+`written` **0**, against **5.26 T** available on `tank`. 0B / 5.26 T = 0.000 % at the granularity
+either figure is reported to.
+
+
+--------------------------------------------------------------------------------
+A PROCESS DEFECT, RECORDED AT THE OPERATOR'S DIRECTION AND NOT AS A FOOTNOTE
+--------------------------------------------------------------------------------
+Task 1's Q2 carries a ⚠ note observing that sourcing the answer from Phase 7's
+`**Entry criteria inherited from Phase 6**` block alone would have produced "not planned" **by
+omission**. Task 1 filed that as a near-miss inside its own reasoning. The operator's instruction
+is that it is a **process defect with a go-forward rule**, and it is recorded as `DEF-06-52-02`
+in `deferred-items.md` rather than buried inside `DEF-06-52-01`.
+
+The framing that must survive, in the operator's own terms:
+  - it failed **SAFE** here (the omission biases toward `hold`, the non-destructive answer), and
+  - it would fail **UNSAFE** the moment the omitted thing is a **PROHIBITION** rather than a plan,
+    because then the omission reads as permission, and
+  - the lesson is NOT "we got lucky" — it is that **the entry-criteria block is not a closed
+    world, and a criteria-only read is never sufficient evidence of absence.**
+
+See `DEF-06-52-02` for the go-forward rule and for the `CONVENTIONS.md` judgement.
+
+
+--------------------------------------------------------------------------------
+TASK 2 SELF-ATTESTATION
+--------------------------------------------------------------------------------
+  - Every `zfs` invocation in this whole file is `zfs list`. No other `zfs` verb was issued by
+    task 1 or by task 2.
+  - `/usr/bin/grep -cE 'zfs [d]estroy'` over this file: **0** — driven to 1 against a real-verb
+    control and to 0 against a bracketed-form control first.
+  - `/usr/bin/grep -cE 'zfs [r]ollback'` over this file: **0** — driven to 1 against a real-verb
+    control first.
+  - `tank/downloads@pre-phase5` was LISTED and asserted PRESENT after the decision. Not touched.
+  - `tank/media/Music@pre-06-41-conf04-reprobe` is PRESENT after the decision. Not touched.
+  - No `touch`, no HTTP verb, no `docker` verb, no compose verb, no package install, and no write
+    of any kind to any host.
+  - No CONF-04 work of any kind: no re-probe, no mtime touch, no refresh, no checkbox move.
+    `.planning/REQUIREMENTS.md` and `scripts/` both return rc 0 under `git diff --exit-code HEAD --`.
+  - `scripts/quick-health-check.sh` was NOT run. `DEF-06-39-05` remains **unblocked but not
+    closed**, per `DEF-06-51-01`.
+  - No `git stash` subcommand was run, locally or remotely.
+  - No credential and no API key appears on any command line or in this file.
+  - Every remote command bounded Linux-side with `timeout`; `set -o pipefail` in every piped
+    remote string; ssh rc read and recorded as 0 for every step; no timeout fired; no
+    could-not-look.
+
+================================================================================
+END OF 06-52 — DECISION `hold`, TRIGGER MECHANICAL, NOTHING DESTROYED
 ================================================================================
