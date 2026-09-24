@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-24T20:05:00.000Z"
+last_updated: "2026-09-24T21:40:00.000Z"
 progress:
   total_phases: 10
   completed_phases: 5
   total_plans: 124
-  completed_plans: 120
+  completed_plans: 121
   percent: 50
 ---
 
@@ -28,10 +28,10 @@ pipeline that someone owns.
 ## Current Position
 
 Phase: 06 (tagger-configuration-and-dry-run) — gap-closure **ROUND 6 EXECUTING; wave 1 (06-46 and
-06-47) and 06-48 are done, 06-49..06-52 remain**
+06-47), 06-48 and 06-49 are done, 06-50..06-52 remain**
 (round 5 executed and re-verified 2026-09-24: `06-VERIFICATION.md` **gaps_found, 5/6**, CONF-04 the
 single failing truth, carried to Phase 7 E6 under the operator override `negative-carry-e6`)
-Plan: 48 of 52 executed — round 6 (**06-46..06-52**, 5 waves, planned 2026-09-24, commits `d500907`
+Plan: 49 of 52 executed — round 6 (**06-46..06-52**, 5 waves, planned 2026-09-24, commits `d500907`
 + `d7df994`) is the full `06-REVIEW.md` round: WR-01/02/03 + IN-01/02, the `DEF-06-45-04`
 non-detecting-recipe fix, the bracketing-scope decision, and the two `autonomous: false`
 live-estate plans (`06-51` host git sync, `06-52` snapshot go/no-go). ⛔ Round 6 drives **no**
@@ -225,6 +225,79 @@ in the metadata commit, hand-edited with the body diffed: exactly 2 lines, Notes
 identical at 33,550). **Zero estate contact** — no ssh, no docker, no HTTP verb, no package install,
 no snapshot taken or destroyed; the three scratch controls lived outside the repository and none was
 staged. Nothing about CONF-04 changed, no checkbox moved, and `06-VERIFICATION.md` was not re-scored.
+
+**ROUND 6, WAVE 2 ALSO EXECUTED 06-49 — 2026-09-24. `CLAUDE.md` said "Conventions not yet
+established" while the six reviewed scripts enforced a dozen load-bearing ones; the repository now has
+an authoritative root-level `CONVENTIONS.md`, and the `CLAUDE.md` block is its proven mirror.** Two
+task commits (`0d9c6f2`, `51ca680`) plus the summary (`4259b93`); **no artifact** — this plan wrote no
+script, no planning document and made no estate contact. **BASE COMMIT `3fd748d`**, captured before
+anything was written, because both byte-identity claims are anchored to it and not to a moving `HEAD`.
+**The structural fact that decided the deliverable was MEASURED, not assumed:** `CLAUDE.md`'s
+`## Conventions` section is a GSD block whose opening marker **names its own source**
+(`GSD:conventions-start source:CONVENTIONS.md`) — and that file **did not exist at the repo root**. So
+the authoritative deliverable is the SOURCE and the block is downstream of it; writing the index into
+the generated block alone would have left the next regeneration to overwrite or orphan it. This also
+resolves `06-REVIEW.md`'s own confused reading that "the repo's own `CONVENTIONS.md` is currently
+empty" — it was absent, not empty.
+**`CONVENTIONS.md` is 319 lines / 13 `## ` sections / 20 lines citing `scripts/`, and every entry
+names a canonical example BY FILE AND SYMBOL, never by line number** (citations here go stale on
+arrival). It covers fail-closed three-state exits, Linux-side bounding, assert-don't-report, the
+additive-only override contract, pinned counts, the deliberately duplicated destructive fence,
+credentials-never-in-argv, the bracketing convention, grep hygiene, commit-anchored byte identity, the
+`📊 N. Summary` grep anchor, the in-band-narrative rule, and per-round ID namespaces.
+**⚠ CONVENTION 4 IS THE PLAN'S WHOLE DISCIPLINE AND GETTING IT BACKWARDS WOULD HAVE SHIPPED THE EXACT
+"docs describe intent, not reality" DEFECT THIS REPO HAS RECORDED.** The redder-only rule's canonical
+example is the `_Q` override guards in `quick-health-check.sh`, each of which sets `EXIT_CODE=1`
+**unconditionally** when its knob moves off the default — the rule enforced by MECHANISM.
+`DECLARED_INTERP_EXPECTED` is the repo's one live knob that does **not** obey it mechanically, and it
+appears in the same entry **under an explicit exception clause** quoting its own header's *"a red to a
+green BY DECLARATION — it resolves nothing"*, naming 06-46's remediation prohibition as the governing
+control, and stating in one clause that **a rule enforced by policy is weaker than one enforced by
+mechanism**. The entry ends by instructing the reader not to cite it as the exemplar.
+**WR-03's fix option (b) is delivered** as the pinned-count entry, naming all four live pins by symbol
+(`DECLARED_INTERP_EXPECTED`, `TAGGER_DEF_EXPECTED`, and `ST_PLANNED_CASES` in BOTH
+`check-beets-config.sh` and `phase06-oracle.sh`), the remedy 06-46's failure arms now print, and the
+harder rule this phase learned twice: **a pin over a set with environment-conditional members must
+adjust where the condition is decided, or it is a constant pretending to be an invariant.**
+`DEF-06-48-02`'s decided scope is written down with its `-cE`-never-`-cF` rule and the
+drive-against-a-control rule.
+**⚠ THE MIRROR IS PROVEN BY ORDERED NAME-FOR-NAME CORRESPONDENCE, NOT BY A COUNT FLOOR — and the
+comparator was DRIVEN RED FIRST.** `|A| == |B| == 13` and `B[i]` contains `A[i]` at every index; the
+identical loop run against a copy of B with entry 3 mutated from `Assert, do not report` to
+`Assert, and also report` **failed at index 3**. A `>= 8` floor is satisfiable by eight WRONG names,
+which is precisely how a mirror goes quietly stale while passing its own check.
+**Both GSD marker lines are byte-identical to the base commit** (`cmp -s`), the diff is a single hunk
+(`@@ -349 +349,16 @@`) strictly inside the marker pair, and the text OUTSIDE the span is byte-identical
+on both sides at the correct offsets — head lines 1–346 through the start marker, tail 33 lines from
+the end marker to EOF (base `350..` vs now `365..`). `Architecture not yet mapped` still reads **1**:
+the architecture half of IN-01 is dispositioned ACCEPTED in `06-50` and **`ARCHITECTURE.md` was
+deliberately NOT created**, because the estate is already mapped by `NETWORK.md`, `MEDIA.md`,
+`DEPLOYMENT.md` and `TAILSCALE.md`, all four linked from `CLAUDE.md` § Documentation.
+**⚠ Four zero-expecting counts, all four DRIVEN against a control first** (`DEF-06-45-04` class): the
+line-citation screen (control **1**, real **0**), the forbidden-mode `-cE` screen (control **1**, real
+**0**, with the `-cF` form returning **0** against the same control as a second independent re-drive of
+`DEF-06-48-01`), the UI-option `-ciE` screen (control **1**, real **0**), and
+`Conventions not yet established` (control = `git show <base>:CLAUDE.md` → **1**, real **0**). Every
+grep by absolute path; every control outside the repository and none staged.
+**⚠ ONE MEASURED CORRECTION TO THE SOURCE MATERIAL, RECORDED IN BAND RATHER THAN RESTATED.**
+`06-REVIEW.md` § WR-02 and this plan both quote `check-beets-config.sh` at **1,223** lines; `wc -l`
+measures **1,222** today. The measured figure is what `CONVENTIONS.md` carries, with the review's
+beside it — a conventions file that quotes a stale count inside the entry ABOUT stale in-band counts
+would be self-refuting. The other two are exact (`quick-health-check.sh` **3,148**,
+`phase06-oracle.sh` **3,274**) and `set -euo pipefail` is at line 124, so "the first 123 are header"
+is correct.
+**⚠ Convention 13 is written as a FORWARD POINTER, not a present-tense fact:** `06-DISPOSITIONS-GAP4.md`
+does not exist — `06-50` writes it at wave 3, after this plan at wave 2 — so the entry says "will live
+in" and names its author. A conventions file asserting a future artifact in the present tense is stale
+the moment that plan changes shape or halts.
+**`scripts/` byte-unchanged under `git diff --exit-code HEAD --` at both task commits**; no planning
+document was touched by the task commits (the ROADMAP row bump 48/52 → 49/52 and the 06-49 checkbox
+happen only in the metadata commit, hand-edited with the BODY diffed: exactly 2 hunks, phase-6 Notes
+cell byte-length identical at 33,488 by `awk` field split). **Zero estate contact** — no ssh, no
+docker, no HTTP verb, no package install. **No script was executed at all** — not `--self-test`, not
+`bash -n` — because no executable file changed, so instrument state at HEAD is exactly what 06-46 last
+measured and is deliberately NOT restated here as though re-driven. Nothing about CONF-04 changed, no
+requirement checkbox moved, and `06-VERIFICATION.md` was not re-scored.
 
 Previous: Phase 05 (inbox-structure-and-the-junk-gate) — **COMPLETE, closed 2026-09-19 at 4/4
 criteria TRUE**, 11 of 11 plans (fence taken, `_inbox` created, D-21 inode
