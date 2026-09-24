@@ -474,3 +474,220 @@ SECTION A OVERALL VERDICT
 
   ROLLBACK, VERBATIM, ONE LINE:  zfs rollback tank/media/Music@pre-06-41-conf04-reprobe
 
+
+================================================================================
+SECTION B — THE TARGETED DEFAULT-MODE REFRESH (06-41 task 3)
+================================================================================
+Taken  : 2026-09-24T08:12:59Z  (UTC)
+Host   : selfhost (selfhost) — LXC 100, where docker runs and the credential lives.
+Bounds : every remote command carries `set -o pipefail` and the ssh exit status was read
+         into a variable at the workstation BEFORE anything was piped. A step that could
+         not run records UNKNOWN — never a zero.
+
+Credential : /mnt/fast/secrets/jellyfin-deercrest.env — gated on mode `600 root`; MEASURED: `600 root`.
+             Sourced WITHOUT `set -a`, delivered to curl through `-H @<(printf ...)` so
+             the admin-equivalent key never entered argv on a host whose /proc is
+             world-readable and which has no hidepid (T-06-41-07). Its CONTENTS are
+             recorded nowhere in this file.
+
+Route  : 192.168.90.17:8096, resolved FRESH via
+         `docker inspect jellyfin --format '{{(index .NetworkSettings.Networks "t3_proxy").IPAddress}}'`
+         — never a pinned literal. ⚠ 06-41-PLAN.md's context says the container is at
+         192.168.90.25; 06-40 MEASURED 192.168.90.17 and recorded the correction. Neither
+         literal is transcribed here: the address above is what docker returned at run
+         time, and it is recorded as measured. Docker IPAM CAN move it, which is exactly
+         why it is resolved fresh every time. Never the bare name `jellyfin` either
+         (resolv.conf carries `search deercrest.info`, so it resolves to Cloudflare's
+         public edge and a health check would return 200 with the container down), and
+         never 172.16.1.76 (unreachable FROM LXC 100 under macvlan host isolation).
+Jellyfin : 10.11.11   (GET /System/Info)
+
+--------------------------------------------------------------------------------
+THE THREE JELLYFIN-INTERNAL PATHS, DERIVED NOT RETYPED
+--------------------------------------------------------------------------------
+check-music-consumers.sh was shipped to THIS host over ssh STDIN from a QUOTED heredoc.
+⚠ The host's own copy at /mnt/fast/stacks is pre-Phase-6 (c67d497) and carries NO
+  ARTIST_PROOF_ROWS at all — parsing it would have yielded an EMPTY list, so the shipped
+  workstation copy is the only valid source and its sha256 is asserted BEFORE parsing.
+  sha256 of the shipped copy : 1ed695cf483029c2e7c3fd815fc97bc1711a8a3e499556910955332a7a6ee819
+  sha256 at the workstation  : 1ed695cf483029c2e7c3fd815fc97bc1711a8a3e499556910955332a7a6ee819
+  (B1) the copy this host parsed is byte-identical to the repo file at HEAD  -> PASS
+  (B2) exactly 3 internal paths derived [measured 3]  -> PASS
+  (B3) DO-NOT-RESCAN album substring in the request path list = 0 [measured 0]  -> PASS
+  (B4) each derived path found in the script as a FIXED STRING (grep -qF), sharing no code with the awk extractor [0 not found]  -> PASS
+
+--------------------------------------------------------------------------------
+THE REQUEST, VERBATIM AND DELIMITED
+--------------------------------------------------------------------------------
+POST /Library/Media/Updated, MediaUpdateInfoPathDto entries, Jellyfin-INTERNAL paths,
+FILE scope. The request shape is 06-03's PASS 2 verbatim. NO album-scope pass is issued:
+06-03 already established that file scope reaches the Audio items themselves, and a
+narrower blast radius is strictly better. The body was built by jq from the derived path
+list, so no path and no quote in it was hand-escaped.
+
+NO P!nk/TRUSTFALL (2023) PATH IS PRESENT — those six are the OQ-1 DO-NOT-RESCAN set,
+asserted 0 by (B3) above and asserted again over the extracted block by the plan's verify.
+
+--- REFRESH REQUEST BEGIN ---
+{
+  "Updates": [
+    {
+      "Path": "/media/Music/Lady Gaga/ARTPOP (2013)/CD 01-05 Lady Gaga - Jewels n’ Drugs.flac",
+      "UpdateType": "Modified"
+    },
+    {
+      "Path": "/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-03 Katy Perry - California Gurls.flac",
+      "UpdateType": "Modified"
+    },
+    {
+      "Path": "/media/Music/P!nk/The Truth About Love (2012)/CD 01-04 P!nk - Just Give Me a Reason.flac",
+      "UpdateType": "Modified"
+    }
+  ]
+}
+--- REFRESH REQUEST END ---
+
+--------------------------------------------------------------------------------
+THE POST, AND ITS MOMENT AS A MACHINE-READABLE NUMBER
+--------------------------------------------------------------------------------
+  endpoint    : POST /Library/Media/Updated
+  curl rc     : 0
+  HTTP status : 204
+
+  The two lines below are written IMMEDIATELY after the POST returned. Plan 06-42 reads
+  POST_UTC and asserts ARITHMETICALLY that its read-back happened at least 120 s later.
+  "Waited 120 s" written in prose is a narrated number that no script checks — the same
+  shape as the verdict defect this round's revision exists to close — so the wait is a
+  subtraction two files apart instead of a claim this file makes about itself.
+
+POST_UTC: 1790237579
+POST_UTC_ISO: 2026-09-24T08:12:59Z
+
+  log window start (for `docker logs --since`) : 2026-09-24T08:12:39Z
+  (B5) the POST returned 204 [measured 204]  -> PASS
+
+--------------------------------------------------------------------------------
+THE SETTLE, AS A SUBTRACTION RATHER THAN A CLAIM
+--------------------------------------------------------------------------------
+  POST_UTC (from the block above) : 1790237579
+  read-back began                 : 1790237714   (2026-09-24T08:15:14Z)
+  elapsed seconds                 : 135
+  required                        : >= 120   (LibraryMonitorDelay = 60, and the refresher
+                                    restarts its timer on every reported change)
+  (B6) at least 120 s elapsed between the POST and this read-back [measured 135s]  -> PASS
+
+--------------------------------------------------------------------------------
+JELLYFIN'S OWN LOG FOR THE WINDOW — THE WITNESS THAT THE REFRESH STARTED
+--------------------------------------------------------------------------------
+  command    : docker logs jellyfin --since 2026-09-24T08:12:39Z   (rc=0)
+  lines in the window : 7
+  LibraryMonitor lines: 3
+
+The log line is what separates "the refresh has not finished yet" from "the refresh never
+started". 06-03 records exactly that distinction, and without it a null result in 06-42 is
+uninterpretable — a census that has not moved would be consistent with both.
+
+  LibraryMonitor lines, verbatim with their timestamps:
+    [09:13:59] [INF] [39] Emby.Server.Implementations.IO.LibraryMonitor: just give me a reason (/media/Music/P!nk/The Truth About Love (2012)/CD 01-04 P!nk - Just Give Me a Reason.flac) will be refreshed.
+    [09:13:59] [INF] [17] Emby.Server.Implementations.IO.LibraryMonitor: jewels n' drugs (/media/Music/Lady Gaga/ARTPOP (2013)/CD 01-05 Lady Gaga - Jewels n’ Drugs.flac) will be refreshed.
+    [09:13:59] [INF] [19] Emby.Server.Implementations.IO.LibraryMonitor: california gurls (/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-03 Katy Perry - California Gurls.flac) will be refreshed.
+
+  of the three refreshed paths, named in a LibraryMonitor line: 3   not named: 0
+  (B7) all three Audio items are named in Jellyfin's own log [0 absent]  -> PASS
+
+--------------------------------------------------------------------------------
+THE EARLY WARNING — ANY METADATA SAVE, IMAGE SAVE OR SIDECAR WRITE IN THE WINDOW
+--------------------------------------------------------------------------------
+A Default-mode refresh that actually re-probes will UPDATE the item, and an item update is
+the point at which a metadata saver could fire. SaveLocalMetadata is false and 06-03
+measured Default-mode refreshes writing no sidecars — but 06-03's refreshes never re-probed,
+so this is the first time that path is exercised on this estate. This log scan is the EARLY
+WARNING; plan 06-42's `zfs diff` and full sidecar hash manifest are the PROOF.
+
+  matching lines: 0
+    (none)
+
+  DID ANY METADATA-SAVE, IMAGE-SAVE OR SIDECAR LINE APPEAR IN THE LOG WINDOW? no
+
+--------------------------------------------------------------------------------
+THE FOUR D-34 / FREEZE OPTIONS, RE-READ AFTER THE REFRESH
+--------------------------------------------------------------------------------
+Read with has($k), never jq's `//` — `//` treats `false` as empty, so a correctly-false
+option would report ABSENT. This is the direct check that nothing in this round re-enabled
+a metadata saver (T-06-41-02), and it is read AFTER the refresh rather than before.
+  GET /Library/VirtualFolders  (rc=0), credential mode MEASURED `600 root`
+
+    PreferNonstandardArtistsTag    = true    (want true ) PASS
+    UseCustomTagDelimiters         = false   (want false) PASS
+    SaveLocalMetadata              = false   (want false) PASS
+    EnableRealtimeMonitor          = false   (want false) PASS
+    SaveLyricsWithMedia            = false   (want false) PASS
+
+--------------------------------------------------------------------------------
+THE ENDPOINT AUDIT — EVERY ENDPOINT THIS PLAN ISSUED, DELIMITED
+--------------------------------------------------------------------------------
+One line per endpoint, each beginning with its HTTP verb. The delimiters matter for the
+same reason they do in SECTION A: the narration around this list necessarily names
+endpoints and verbs, and a count taken over narration measures the narration
+(DEF-06-39-06). Task 2 issued no HTTP at all — it is ssh and zfs only — so every line
+below is task 3's.
+
+--- ENDPOINT AUDIT BEGIN ---
+POST /Library/Media/Updated -> HTTP 204 — file scope, 3 MediaUpdateInfoPathDto entries. THE ONLY WRITE VERB IN THIS PLAN.
+GET /System/Info -> the version and reachability probe, call A
+GET /Library/VirtualFolders -> the four D-34 / freeze options, re-read AFTER the refresh, call B
+--- ENDPOINT AUDIT END ---
+
+NO OTHER WRITE VERB WAS ISSUED ANYWHERE IN THIS ROUND — no PUT, no DELETE, no second POST,
+in this task or any other task of this plan.
+
+THE TWO PROHIBITED SCAN ENDPOINTS (D-24, T-06-11) WERE NOT ISSUED AND WERE NOT A FALLBACK
+ON ANY BRANCH: the per-item metadata refresh in its most aggressive mode (Phase 1 measured
+it rewriting 83 of 91 metadata sidecars with the local-metadata saver already off), and the
+unscoped whole-library scan endpoint. They are named DESCRIPTIVELY ONLY. Their literal
+tokens and query strings are deliberately kept out of this transcript — 06-03 established
+that convention so a grep for them across artifacts/ stays a DETECTOR rather than matching
+prose, and DEF-06-39-06 records that an assertion counting a token in a file which discusses
+that token is self-invalidating.
+
+--------------------------------------------------------------------------------
+TWO OBSERVATIONS ON THE LOG, RECORDED BECAUSE A LATER READER WILL TRIP ON BOTH
+--------------------------------------------------------------------------------
+1. THE CONTAINER'S LOG TIMESTAMPS ARE LOCAL TIME, NOT UTC. The three LibraryMonitor lines
+   read [09:13:59]; the POST went out at 08:12:59Z. That is not an hour of latency — the
+   container is on Europe/Dublin and is at UTC+1 on this date, so 09:13:59 local is
+   08:13:59Z, exactly SIXTY SECONDS after the POST. That is `LibraryMonitorDelay = 60`
+   firing precisely once, which is also the evidence that the timer was not restarted by a
+   later change arriving inside the window. Every other timestamp in this artifact is UTC
+   and is labelled UTC; these three are quoted verbatim from the log and are not.
+
+2. ALL THREE LINES CARRY THE FULL INTERNAL PATH, so the (B7) assertion is made by
+   `grep -qF` on the whole path and not on a basename. 06-03's artifact elides the leading
+   directories with an ellipsis for width; that elision is its own formatting and not the
+   log's. The paths above are the log's, unabbreviated, U+2019 included.
+
+--------------------------------------------------------------------------------
+SECTION B OVERALL VERDICT
+--------------------------------------------------------------------------------
+  ALL SECTION B ASSERTIONS PASS.
+
+  One file-scope POST /Library/Media/Updated returned 204; Jellyfin's LibraryMonitor named
+  all three Audio items by their full internal path; 135 s elapsed before any read-back and
+  that is a subtraction from POST_UTC rather than a sentence; no metadata-save, image-save
+  or sidecar line appeared in the log window; the three Phase 1 freeze fields and both D-34
+  fields were re-read AFTER the refresh and every one of them held; and the endpoint audit
+  shows exactly one write verb issued by this entire plan.
+
+  WHAT THIS DOES AND DOES NOT ESTABLISH, STATED PLAINLY. It establishes that the refresh
+  STARTED and reached the three Audio items themselves — which is precisely the thing whose
+  absence would make a null result in 06-42 uninterpretable. It does NOT establish that the
+  prober re-read the ARTISTS tag, and it does NOT establish that any ArtistItems row moved.
+  That is 06-42's measurement, and a null result there is a legitimate, recorded negative
+  outcome — not an argument for a wider refresh.
+
+  THE FENCE IS STILL STANDING AND IS STILL THE UNDO FOR THE WHOLE ROUND:
+      zfs rollback tank/media/Music@pre-06-41-conf04-reprobe
+
+================================================================================
+END OF 06-41 DRIVE
+================================================================================
