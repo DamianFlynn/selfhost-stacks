@@ -1,0 +1,1034 @@
+06-51 — HOST SYNC TRANSCRIPT (LXC 100, /mnt/fast/stacks)
+Plan: .planning/phases/06-tagger-configuration-and-dry-run/06-51-PLAN.md  (phase 06, plan 51, round 6, wave 4)
+Task 1 — the operator gate. READ-ONLY. Nothing in this section writes to the host.
+Captured: 2026-09-24T20:51:17Z (UTC)
+
+Workstation: macOS 27.0 (darwin), GNU bash, /sbin/sha256sum present (used; shasum -a 256 not needed).
+Host: root@172.16.1.159 (LXC 100 'selfhost'), deployed tree /mnt/fast/stacks.
+REMOTE_TIMEOUT=120 (the repository default, CLAUDE.md s Health Checks).
+
+BINDING CONVENTIONS FOR THIS CAPTURE
+  - Every remote command is bounded LINUX-side with 'timeout 120' inside the remote string.
+    The workstation is macOS and has no GNU timeout (CONVENTIONS.md s 2).
+  - Every remote string containing a pipe carries 'set -o pipefail'. 'timeout N cmd | wc -l'
+    silently exits 0 otherwise; that is the recorded trap.
+  - The ssh return code is read and recorded for EVERY command below.
+  - COULD NOT LOOK means a non-zero ssh/command rc, a timeout, or a missing capture. It NEVER
+    means an empty stdout with a recorded rc of 0. Each query is labelled with its class:
+      empty-is-healthy            -> (a), (e), (i)
+      empty-is-COULD-NOT-LOOK     -> (b), (c), (d), (f), (g), (h), (j)
+  - Narrative mentions of forbidden verbs are written BRACKETED (git [p]ull, git cl[e]an,
+    docker com[p]ose) so this transcript is not an occurrence of what the round's detectors
+    count (CONVENTIONS.md s 8; the DEF-06-39-06 self-invalidating-detector defect).
+
+==========================================================================
+PRE-FLIGHT
+==========================================================================
+All eleven measurements the plan's task 1 specifies: (a), (a2), (b)-(j).
+Host side first, then workstation side.
+
+--------------------------------------------------------------------------
+### (a) Tracked-modified check on the deployed tree
+CLASS: empty-is-healthy  [THIS IS THE CLEANLINESS GATE]
+REMOTE COMMAND (sent as the single argument to: ssh -o BatchMode=yes -o ConnectTimeout=20 root@172.16.1.159):
+$ timeout 120 git -C /mnt/fast/stacks status --porcelain --untracked-files=no
+--- captured stdout ---
+--- end stdout ---
+(stderr empty)
+RESULT: EMPTY, rc=0
+
+--------------------------------------------------------------------------
+### (a2) Full untracked inventory (the bare --porcelain form, including ?? lines)
+CLASS: inventory, NOT a gate
+REMOTE COMMAND (sent as the single argument to: ssh -o BatchMode=yes -o ConnectTimeout=20 root@172.16.1.159):
+$ timeout 120 git -C /mnt/fast/stacks status --porcelain
+--- captured stdout ---
+?? stacks/selfhosted/monitoring/prometheus.yaml.bak
+?? stacks/selfhosted/wrappers/monitoring.app.yaml.disabled
+--- end stdout ---
+(stderr empty)
+RESULT: NON-EMPTY, 2 line(s), rc=0
+
+--------------------------------------------------------------------------
+### (b) Deployed branch
+CLASS: empty-is-COULD-NOT-LOOK
+REMOTE COMMAND (sent as the single argument to: ssh -o BatchMode=yes -o ConnectTimeout=20 root@172.16.1.159):
+$ timeout 120 git -C /mnt/fast/stacks rev-parse --abbrev-ref HEAD
+--- captured stdout ---
+main
+--- end stdout ---
+(stderr empty)
+RESULT: NON-EMPTY, 1 line(s), rc=0
+
+--------------------------------------------------------------------------
+### (c (i)) Deployed commit, full hash
+CLASS: empty-is-COULD-NOT-LOOK
+REMOTE COMMAND (sent as the single argument to: ssh -o BatchMode=yes -o ConnectTimeout=20 root@172.16.1.159):
+$ timeout 120 git -C /mnt/fast/stacks rev-parse HEAD
+--- captured stdout ---
+ee82fb20a4383ee5f274ce177f6d0a03de0797c4
+--- end stdout ---
+(stderr empty)
+RESULT: NON-EMPTY, 1 line(s), rc=0
+
+--------------------------------------------------------------------------
+### (c (ii)) Deployed commit — hash, subject, committer date
+CLASS: empty-is-COULD-NOT-LOOK
+REMOTE COMMAND (sent as the single argument to: ssh -o BatchMode=yes -o ConnectTimeout=20 root@172.16.1.159):
+$ timeout 120 git -C /mnt/fast/stacks log -1 --format=%H%n%s%n%cI
+--- captured stdout ---
+ee82fb20a4383ee5f274ce177f6d0a03de0797c4
+docs(06-42): the four-way safety re-assert — SAFETY: PASS
+2026-09-24T14:46:09+01:00
+--- end stdout ---
+(stderr empty)
+RESULT: NON-EMPTY, 3 line(s), rc=0
+
+--------------------------------------------------------------------------
+### (d) The remote the host would fetch from — read, not assumed
+CLASS: empty-is-COULD-NOT-LOOK
+REMOTE COMMAND (sent as the single argument to: ssh -o BatchMode=yes -o ConnectTimeout=20 root@172.16.1.159):
+$ timeout 120 git -C /mnt/fast/stacks remote -v
+--- captured stdout ---
+origin	git@github.com:DamianFlynn/selfhost-stacks.git (fetch)
+origin	git@github.com:DamianFlynn/selfhost-stacks.git (push)
+--- end stdout ---
+(stderr empty)
+RESULT: NON-EMPTY, 2 line(s), rc=0
+
+--------------------------------------------------------------------------
+### (e) Stash list — any stashed work on the deployed tree
+CLASS: empty-is-healthy
+REMOTE COMMAND (sent as the single argument to: ssh -o BatchMode=yes -o ConnectTimeout=20 root@172.16.1.159):
+$ timeout 120 git -C /mnt/fast/stacks stash list
+--- captured stdout ---
+stash@{0}: WIP on main: a224af4 Fix memory limits: use mem_limit instead of deploy.resources (Swarm-only)
+stash@{1}: WIP on main: aaa377f Add memory limits to Prometheus and cAdvisor
+stash@{2}: WIP on main: b0abd08 feat: functional traefik
+--- end stdout ---
+(stderr empty)
+RESULT: NON-EMPTY, 3 line(s), rc=0
+
+--------------------------------------------------------------------------
+### (f) sha256sum of the six reviewed scripts AS DEPLOYED
+CLASS: empty-is-COULD-NOT-LOOK
+REMOTE COMMAND (sent as the single argument to: ssh -o BatchMode=yes -o ConnectTimeout=20 root@172.16.1.159):
+$ timeout 120 sha256sum /mnt/fast/stacks/scripts/check-beets-config.sh /mnt/fast/stacks/scripts/check-music-consumers.sh /mnt/fast/stacks/scripts/check-music-freeze.sh /mnt/fast/stacks/scripts/phase06-incremental-control.sh /mnt/fast/stacks/scripts/phase06-oracle.sh /mnt/fast/stacks/scripts/quick-health-check.sh
+--- captured stdout ---
+c88ae5783b164f4829c31e2458f47ed6b400080a0c3e6b29e0a6890505e73c59  /mnt/fast/stacks/scripts/check-beets-config.sh
+1ed695cf483029c2e7c3fd815fc97bc1711a8a3e499556910955332a7a6ee819  /mnt/fast/stacks/scripts/check-music-consumers.sh
+31905d4f296ee6872cf7799db7c96c3d75b1aedc3bf890c0151ff5d71679d9a6  /mnt/fast/stacks/scripts/check-music-freeze.sh
+fa835cbd856f7a9880a7482dc68430f46c57766a9b088b93e17603c8d0fcb0b3  /mnt/fast/stacks/scripts/phase06-incremental-control.sh
+7b2efc84f4ec8c9732ed56be282f295fa08e46f75901272035f86c28c678d282  /mnt/fast/stacks/scripts/phase06-oracle.sh
+eacd55fbab660e9a7f7ffdc7691a050c82d562439f7f02ae1b6b0126f1fb4012  /mnt/fast/stacks/scripts/quick-health-check.sh
+--- end stdout ---
+(stderr empty)
+RESULT: NON-EMPTY, 6 line(s), rc=0
+
+--------------------------------------------------------------------------
+### (e-supplementary) Stash detail — because (e) fired a STOP condition
+Two extra READ-ONLY queries, taken so the operator decides on measured facts and not on a
+three-line summary. 'git stash list' and 'git cat-file -t' mutate nothing; refs/stash is read.
+
+--------------------------------------------------------------------------
+### (e-supp-1) Stash entries with their own commit ids and dates
+CLASS: empty-is-COULD-NOT-LOOK (given (e) was non-empty)
+REMOTE COMMAND (sent as the single argument to: ssh -o BatchMode=yes -o ConnectTimeout=20 root@172.16.1.159):
+$ set -o pipefail; timeout 120 git -C /mnt/fast/stacks stash list --format='%gd %H %ci %gs' | cat
+--- captured stdout ---
+stash@{0} 4b7120b7e1c6e1dc5668f656ef2c9e4bde837537 2026-03-09 14:05:56 +0000 WIP on main: a224af4 Fix memory limits: use mem_limit instead of deploy.resources (Swarm-only)
+stash@{1} d8f7ead943f5421062e2be4c83a961adef615891 2026-03-09 13:52:06 +0000 WIP on main: aaa377f Add memory limits to Prometheus and cAdvisor
+stash@{2} cfc7caae0ae52568eebe0db1cd0f15c1dcd9dde1 2025-10-03 12:39:56 +0100 WIP on main: b0abd08 feat: functional traefik
+--- end stdout ---
+(stderr empty)
+RESULT: NON-EMPTY, 3 line(s), rc=0
+
+--------------------------------------------------------------------------
+### (e-supp-2) Are the three stash BASE commits still objects in the host repo?
+CLASS: empty-is-COULD-NOT-LOOK
+REMOTE COMMAND (sent as the single argument to: ssh -o BatchMode=yes -o ConnectTimeout=20 root@172.16.1.159):
+$ for c in a224af4 aaa377f b0abd08; do printf '%s ' "$c"; timeout 120 git -C /mnt/fast/stacks cat-file -t "$c" 2>&1 || echo MISSING; done
+--- captured stdout ---
+a224af4 commit
+aaa377f commit
+b0abd08 commit
+--- end stdout ---
+(stderr empty)
+RESULT: NON-EMPTY, 3 line(s), rc=0
+
+--------------------------------------------------------------------------
+### (g) Running-container fingerprint — the BEFORE half of the no-redeploy proof
+CLASS: empty-is-COULD-NOT-LOOK
+This is a READ. The only docker verb issued anywhere in this task is 'ps'.
+All THREE fields are captured (name|image|status). Capturing status and then comparing only
+name+image would make a restart or a same-image recreation — exactly the event this check
+exists to catch — invisible.
+
+REMOTE COMMAND (running set):
+$ set -o pipefail; timeout 120 docker ps --format '{{.Names}}|{{.Image}}|{{.Status}}' | LC_ALL=C sort
+--- captured stdout (raw, sorted) ---
+agentic-os-db|pgvector/pgvector:pg18|Up 2 days (healthy)
+ai-docling|quay.io/docling-project/docling-serve:v1.25.0|Up 5 days (healthy)
+ai-edgetts|travisvn/openai-edge-tts:latest|Up 5 days
+ai-ollama|ollama/ollama:0.32.5|Up 5 days (healthy)
+ai-openwebui-mcp|ghcr.io/open-webui/mcpo:main|Up 5 days (healthy)
+ai-openwebui|ghcr.io/open-webui/open-webui:v0.9.6|Up 5 days (healthy)
+ai-postgress|pgvector/pgvector:0.8.6-pg18|Up 5 days (healthy)
+ai-redis|redis/redis-stack:7.4.0-v8|Up 5 days (healthy)
+ai-searxng|searxng/searxng:2026.6.23-e3713717f|Up 5 days (healthy)
+ai-tika|apache/tika:3.3.1.0-full|Up 5 days (healthy)
+audiobookshelf|ghcr.io/advplyr/audiobookshelf:2.36.0|Up 5 days
+authelia|authelia/authelia:4.39.20|Up 5 days (healthy)
+autobrr|ghcr.io/autobrr/autobrr:v1.83.0|Up 5 days
+bazarr-exporter|ghcr.io/onedr0p/exportarr:v2.3.0|Up 5 days
+bazarr|ghcr.io/linuxserver/bazarr:v1.5.6-ls340|Up 5 days
+beets-flask|metasauce/beets-flask:v2.0.0-rc6|Up 3 days
+blockbusterr|ghcr.io/mahcks/blockbusterr:v1.4.0|Up 5 days
+buzz-cloudflared|cloudflare/cloudflared:2026.8.2|Up 5 days
+buzz-minio|minio/minio:RELEASE.2025-09-07T16-13-09Z|Up 5 days (healthy)
+buzz-pairing-relay|ghcr.io/block/buzz:sha-df9e773|Up 5 days
+buzz-postgres|postgres:17-alpine|Up 5 days (healthy)
+buzz-redis|2a51817f7925|Up 5 days (healthy)
+buzz-relay|ghcr.io/block/buzz:sha-df9e773|Up 5 days (healthy)
+cal-api|ghcr.io/ridafkih/keeper-api:2.23|Up 5 days
+cal-cron|ghcr.io/ridafkih/keeper-cron:2.23|Up 5 days
+cal-mcp|ghcr.io/ridafkih/keeper-mcp:2.23|Up 5 days
+cal-postgres|a6638641707c|Up 5 days (healthy)
+cal-redis|redis:7-alpine|Up 5 days (healthy)
+cal-web|ghcr.io/ridafkih/keeper-web:2.23|Up 5 days
+cal-worker|ghcr.io/ridafkih/keeper-worker:2.23|Up 5 days
+code-server|lscr.io/linuxserver/code-server:4.109.5|Up 5 days
+couchdb|couchdb:3.5.2|Up 19 hours (healthy)
+dawarich_app|freikin/dawarich:1.10.3|Up 5 days
+dawarich_db|postgis/postgis:17-3.5-alpine|Up 5 days (healthy)
+dawarich_redis|redis:7.4-alpine|Up 5 days (healthy)
+dawarich_sidekiq|freikin/dawarich:1.10.3|Up 5 days
+dispatcharr|ghcr.io/dispatcharr/dispatcharr:0.29.0|Up 5 days
+flaresolverr|ghcr.io/flaresolverr/flaresolverr:v3.5.0|Up 5 days
+freshrss|ghcr.io/linuxserver/freshrss:1.29.1|Up 5 days
+grafana|grafana/grafana:13.1.1|Up 5 days
+immich_kiosk|ghcr.io/damongolding/immich-kiosk:0.43.2|Up 5 days
+immich_machine_learning|ghcr.io/immich-app/immich-machine-learning:v3.2.2|Up 5 days (healthy)
+immich_postgres|ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0|Up 5 days (healthy)
+immich_redis|valkey/valkey:8-bookworm|Up 5 days (healthy)
+immich_server|ghcr.io/immich-app/immich-server:v3.2.2|Up 2 days (healthy)
+janitorr|ghcr.io/schaka/janitorr:stable|Up 5 days (healthy)
+jellyfin|d57d4a0c18b3|Up 5 days (healthy)
+jellystat-db|postgres:18-alpine|Up 5 days
+jellystat|cyfershepard/jellystat:1.1.11|Up 5 days (healthy)
+karakeep-chrome|zenika/alpine-chrome:124|Up 5 days
+karakeep-meilisearch|getmeili/meilisearch:v1.53.1|Up 5 days
+karakeep-web|ghcr.io/karakeep-app/karakeep-web:0.33.2|Up 5 days (healthy)
+karakeep-workers|ghcr.io/karakeep-app/karakeep-workers:0.33.2|Up 5 days
+lidarr-exporter|ghcr.io/onedr0p/exportarr:v2.3.0|Up 5 days
+lidarr|ghcr.io/linuxserver/lidarr:3.1.0.4875-ls21|Up 5 days
+mc_vanilla|itzg/minecraft-bedrock-server:2026.7.6|Up 5 days (healthy)
+mc_yggdrasil|itzg/minecraft-bedrock-server:2026.7.6|Up 5 days (healthy)
+n8n-db|postgres:18-alpine|Up 5 days (healthy)
+n8n|ghcr.io/damianflynn/custom-n8n:2.22.0|Up 5 days
+neocortex-memory-api|node:22.23.2-bookworm-slim|Up About an hour (healthy)
+node-exporter|prom/node-exporter:v1.12.1|Up 5 days
+oxidized|oxidized/oxidized:0.37.0|Up 5 days
+paperless-gpt|icereed/paperless-gpt:v0.27.0|Up 5 days
+paperless_gotenberg|gotenberg/gotenberg:8.34|Up 5 days
+paperless_postgres|postgres:18-alpine|Up 5 days (healthy)
+paperless_redis|redis:7.4-alpine|Up 5 days (healthy)
+paperless_tika|apache/tika:3.3.1.0-full|Up 5 days
+paperless|ghcr.io/paperless-ngx/paperless-ngx:3.0.4|Up 5 days (healthy)
+podsync|ghcr.io/mxpv/podsync:v2.8.0|Up 5 days
+prometheus|prom/prometheus:v3.13.2|Up 5 days
+prowlarr-exporter|ghcr.io/onedr0p/exportarr:v2.3.0|Up 5 days
+prowlarr|ghcr.io/linuxserver/prowlarr:2.3.0.5236-ls138|Up 5 days
+pwpush-db|36e92b0342c5|Up 5 days (healthy)
+pwpush|pglombardo/pwpush:2.9.4|Up 5 days
+qbittorrent|ghcr.io/linuxserver/qbittorrent:5.1.2-r3-ls421|Up 5 days
+radarr-exporter|ghcr.io/onedr0p/exportarr:v2.3.0|Up 5 days
+radarr|ghcr.io/linuxserver/radarr:6.0.4.10291-ls294|Up 5 days
+readarr-exporter|ghcr.io/onedr0p/exportarr:v2.3.0|Up 5 days
+readarr|ghcr.io/pennydreadful/bookshelf:softcover|Up 5 days
+rustdesk-hbbr|rustdesk/rustdesk-server:1.1.15|Up 5 days
+rustdesk-hbbs|rustdesk/rustdesk-server:1.1.15|Up 5 days
+sabnzbd-exporter|ghcr.io/onedr0p/exportarr:v2.3.0|Up 5 days
+sabnzbd|ghcr.io/linuxserver/sabnzbd:5.1.0|Up 5 days
+seerr|ghcr.io/seerr-team/seerr:v3.4.1|Up 5 days
+socket-proxy|tecnativa/docker-socket-proxy:v0.4.2|Up 5 days
+sonarr-exporter|ghcr.io/onedr0p/exportarr:v2.3.0|Up 5 days
+sonarr|lscr.io/linuxserver/sonarr:4.0.16.2944-ls303|Up 5 days
+teleport_postgres|postgres:18-alpine|Up 5 days (healthy)
+teleport|public.ecr.aws/gravitational/teleport-distroless:18.7.2|Up 5 days
+termix|ghcr.io/lukegus/termix:release-2.4.1|Up 5 days (healthy)
+tesla-static|nginx:1.31.3-alpine|Up 5 days
+teslamate-db|postgres:18-trixie|Up 5 days (healthy)
+teslamate-grafana|teslamate/grafana:4.2.0|Up 5 days
+teslamate|teslamate/teslamate:4.2.0|Up 5 days
+traefik|traefik:v3.7.9|Up 5 days
+trek|mauriceboe/trek:4.2.0|Up 5 days (healthy)
+tsbridge|ghcr.io/jtdowney/tsbridge:v0.13.1|Up 5 days
+wizarr|ghcr.io/wizarrrr/wizarr:v2026.7.1|Up 5 days (healthy)
+--- end stdout ---
+(stderr empty)
+RESULT: NON-EMPTY, 98 line(s), rc=0
+
+REMOTE COMMAND (running count, cross-check — piped, so 'set -o pipefail' is present):
+$ set -o pipefail; timeout 120 docker ps -q | wc -l
+--- captured stdout ---
+98
+--- end stdout ---
+RESULT: rc=0
+REMOTE COUNT: 98   LOCAL COUNT OF THE CAPTURE: 98   AGREE: yes
+
+### (g cont.) docker ps -a — the created/exited blind-spot check
+A plain 'docker ps' has a recorded blind spot in this estate: containers in 'created' state were
+silently down for six weeks while status= filters missed them. Captured so the before-picture is
+honest, not so anything is acted on here.
+
+REMOTE COMMAND:
+$ set -o pipefail; timeout 120 docker ps -a --format '{{.Names}}|{{.Image}}|{{.Status}}' | LC_ALL=C sort
+--- captured stdout (raw, sorted) ---
+agentic-os-db|pgvector/pgvector:pg18|Up 2 days (healthy)
+ai-docling|quay.io/docling-project/docling-serve:v1.25.0|Up 5 days (healthy)
+ai-edgetts|travisvn/openai-edge-tts:latest|Up 5 days
+ai-ollama|ollama/ollama:0.32.5|Up 5 days (healthy)
+ai-openwebui-mcp|ghcr.io/open-webui/mcpo:main|Up 5 days (healthy)
+ai-openwebui|ghcr.io/open-webui/open-webui:v0.9.6|Up 5 days (healthy)
+ai-postgress|pgvector/pgvector:0.8.6-pg18|Up 5 days (healthy)
+ai-redis|redis/redis-stack:7.4.0-v8|Up 5 days (healthy)
+ai-searxng|searxng/searxng:2026.6.23-e3713717f|Up 5 days (healthy)
+ai-tika|apache/tika:3.3.1.0-full|Up 5 days (healthy)
+audiobookshelf|ghcr.io/advplyr/audiobookshelf:2.36.0|Up 5 days
+authelia|authelia/authelia:4.39.20|Up 5 days (healthy)
+autobrr|ghcr.io/autobrr/autobrr:v1.83.0|Up 5 days
+bazarr-exporter|ghcr.io/onedr0p/exportarr:v2.3.0|Up 5 days
+bazarr|ghcr.io/linuxserver/bazarr:v1.5.6-ls340|Up 5 days
+beets-flask|metasauce/beets-flask:v2.0.0-rc6|Up 3 days
+blockbusterr|ghcr.io/mahcks/blockbusterr:v1.4.0|Up 5 days
+buzz-cloudflared|cloudflare/cloudflared:2026.8.2|Up 5 days
+buzz-minio-init|minio/mc:RELEASE.2025-08-13T08-35-41Z|Exited (0) 5 weeks ago
+buzz-minio|minio/minio:RELEASE.2025-09-07T16-13-09Z|Up 5 days (healthy)
+buzz-pairing-relay|ghcr.io/block/buzz:sha-df9e773|Up 5 days
+buzz-postgres|postgres:17-alpine|Up 5 days (healthy)
+buzz-redis|2a51817f7925|Up 5 days (healthy)
+buzz-relay|ghcr.io/block/buzz:sha-df9e773|Up 5 days (healthy)
+cal-api|ghcr.io/ridafkih/keeper-api:2.23|Up 5 days
+cal-cron|ghcr.io/ridafkih/keeper-cron:2.23|Up 5 days
+cal-mcp|ghcr.io/ridafkih/keeper-mcp:2.23|Up 5 days
+cal-postgres|a6638641707c|Up 5 days (healthy)
+cal-redis|redis:7-alpine|Up 5 days (healthy)
+cal-web|ghcr.io/ridafkih/keeper-web:2.23|Up 5 days
+cal-worker|ghcr.io/ridafkih/keeper-worker:2.23|Up 5 days
+code-server|lscr.io/linuxserver/code-server:4.109.5|Up 5 days
+couchdb|couchdb:3.5.2|Up 19 hours (healthy)
+dawarich_app|freikin/dawarich:1.10.3|Up 5 days
+dawarich_db|postgis/postgis:17-3.5-alpine|Up 5 days (healthy)
+dawarich_redis|redis:7.4-alpine|Up 5 days (healthy)
+dawarich_sidekiq|freikin/dawarich:1.10.3|Up 5 days
+dispatcharr|ghcr.io/dispatcharr/dispatcharr:0.29.0|Up 5 days
+flaresolverr|ghcr.io/flaresolverr/flaresolverr:v3.5.0|Up 5 days
+freshrss|ghcr.io/linuxserver/freshrss:1.29.1|Up 5 days
+grafana|grafana/grafana:13.1.1|Up 5 days
+immich_kiosk|ghcr.io/damongolding/immich-kiosk:0.43.2|Up 5 days
+immich_machine_learning|ghcr.io/immich-app/immich-machine-learning:v3.2.2|Up 5 days (healthy)
+immich_postgres|ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0|Up 5 days (healthy)
+immich_redis|valkey/valkey:8-bookworm|Up 5 days (healthy)
+immich_server|ghcr.io/immich-app/immich-server:v3.2.2|Up 2 days (healthy)
+janitorr|ghcr.io/schaka/janitorr:stable|Up 5 days (healthy)
+jellyfin|d57d4a0c18b3|Up 5 days (healthy)
+jellystat-db|postgres:18-alpine|Up 5 days
+jellystat|cyfershepard/jellystat:1.1.11|Up 5 days (healthy)
+karakeep-chrome|zenika/alpine-chrome:124|Up 5 days
+karakeep-meilisearch|getmeili/meilisearch:v1.53.1|Up 5 days
+karakeep-web|ghcr.io/karakeep-app/karakeep-web:0.33.2|Up 5 days (healthy)
+karakeep-workers|ghcr.io/karakeep-app/karakeep-workers:0.33.2|Up 5 days
+lidarr-exporter|ghcr.io/onedr0p/exportarr:v2.3.0|Up 5 days
+lidarr|ghcr.io/linuxserver/lidarr:3.1.0.4875-ls21|Up 5 days
+mc_vanilla|itzg/minecraft-bedrock-server:2026.7.6|Up 5 days (healthy)
+mc_yggdrasil|itzg/minecraft-bedrock-server:2026.7.6|Up 5 days (healthy)
+n8n-db|postgres:18-alpine|Up 5 days (healthy)
+n8n|ghcr.io/damianflynn/custom-n8n:2.22.0|Up 5 days
+neocortex-memory-api|node:22.23.2-bookworm-slim|Up About an hour (healthy)
+node-exporter|prom/node-exporter:v1.12.1|Up 5 days
+oxidized|oxidized/oxidized:0.37.0|Up 5 days
+paperless-gpt|icereed/paperless-gpt:v0.27.0|Up 5 days
+paperless_gotenberg|gotenberg/gotenberg:8.34|Up 5 days
+paperless_postgres|postgres:18-alpine|Up 5 days (healthy)
+paperless_redis|redis:7.4-alpine|Up 5 days (healthy)
+paperless_tika|apache/tika:3.3.1.0-full|Up 5 days
+paperless|ghcr.io/paperless-ngx/paperless-ngx:3.0.4|Up 5 days (healthy)
+podsync|ghcr.io/mxpv/podsync:v2.8.0|Up 5 days
+prometheus|prom/prometheus:v3.13.2|Up 5 days
+prowlarr-exporter|ghcr.io/onedr0p/exportarr:v2.3.0|Up 5 days
+prowlarr|ghcr.io/linuxserver/prowlarr:2.3.0.5236-ls138|Up 5 days
+pwpush-db|36e92b0342c5|Up 5 days (healthy)
+pwpush|pglombardo/pwpush:2.9.4|Up 5 days
+qbittorrent|ghcr.io/linuxserver/qbittorrent:5.1.2-r3-ls421|Up 5 days
+radarr-exporter|ghcr.io/onedr0p/exportarr:v2.3.0|Up 5 days
+radarr|ghcr.io/linuxserver/radarr:6.0.4.10291-ls294|Up 5 days
+readarr-exporter|ghcr.io/onedr0p/exportarr:v2.3.0|Up 5 days
+readarr|ghcr.io/pennydreadful/bookshelf:softcover|Up 5 days
+rustdesk-hbbr|rustdesk/rustdesk-server:1.1.15|Up 5 days
+rustdesk-hbbs|rustdesk/rustdesk-server:1.1.15|Up 5 days
+sabnzbd-exporter|ghcr.io/onedr0p/exportarr:v2.3.0|Up 5 days
+sabnzbd|ghcr.io/linuxserver/sabnzbd:5.1.0|Up 5 days
+seerr|ghcr.io/seerr-team/seerr:v3.4.1|Up 5 days
+socket-proxy|tecnativa/docker-socket-proxy:v0.4.2|Up 5 days
+sonarr-exporter|ghcr.io/onedr0p/exportarr:v2.3.0|Up 5 days
+sonarr|lscr.io/linuxserver/sonarr:4.0.16.2944-ls303|Up 5 days
+teleport_postgres|postgres:18-alpine|Up 5 days (healthy)
+teleport|public.ecr.aws/gravitational/teleport-distroless:18.7.2|Up 5 days
+termix|ghcr.io/lukegus/termix:release-2.4.1|Up 5 days (healthy)
+tesla-static|nginx:1.31.3-alpine|Up 5 days
+teslamate-db|postgres:18-trixie|Up 5 days (healthy)
+teslamate-grafana|teslamate/grafana:4.2.0|Up 5 days
+teslamate|teslamate/teslamate:4.2.0|Up 5 days
+traefik|traefik:v3.7.9|Up 5 days
+trek|mauriceboe/trek:4.2.0|Up 5 days (healthy)
+tsbridge|ghcr.io/jtdowney/tsbridge:v0.13.1|Up 5 days
+wizarr|ghcr.io/wizarrrr/wizarr:v2026.7.1|Up 5 days (healthy)
+--- end stdout ---
+RESULT: NON-EMPTY, 99 line(s), rc=0
+
+REMOTE COMMAND (all-container count, piped, pipefail present):
+$ set -o pipefail; timeout 120 docker ps -a -q | wc -l
+--- captured stdout ---
+99
+--- end stdout ---
+RESULT: rc=0
+
+NON-'Up' ENTRIES IN THE -a CAPTURE (computed locally from the raw capture above):
+buzz-minio-init|minio/mc:RELEASE.2025-08-13T08-35-41Z|Exited (0) 5 weeks ago
+  -> exactly one, and it is an init container that is SUPPOSED to have exited 0.
+  -> ZERO containers in 'Created' state. ZERO 'Restarting'. ZERO 'Paused'.
+  -> ZERO non-zero 'Exited' codes.
+
+NORMALISATION RULE (stated here so the task-2 comparison is reproducible):
+  status field -> its leading whitespace-delimited token.
+  If that token is 'Exited', its parenthesised exit code is appended, e.g. 'Exited(137)'.
+  Rationale: the raw status carries an elapsed-time component ('Up 3 hours') that ticks on its
+  own and would make an unchanged estate look changed.
+  DELIBERATE EXCLUSION, stated rather than left silent: the health suffix ('(healthy)',
+  '(unhealthy)', '(health: starting)') is NOT part of the normalised triple, because the plan's
+  rule says leading token. It IS preserved in the raw captures above, so a reviewer can see it.
+  A health flap is not a redeploy; a state-word change is.
+
+NORMALISED BEFORE-SET, running (name|image|state-word), LC_ALL=C sorted:
+agentic-os-db|pgvector/pgvector:pg18|Up
+ai-docling|quay.io/docling-project/docling-serve:v1.25.0|Up
+ai-edgetts|travisvn/openai-edge-tts:latest|Up
+ai-ollama|ollama/ollama:0.32.5|Up
+ai-openwebui-mcp|ghcr.io/open-webui/mcpo:main|Up
+ai-openwebui|ghcr.io/open-webui/open-webui:v0.9.6|Up
+ai-postgress|pgvector/pgvector:0.8.6-pg18|Up
+ai-redis|redis/redis-stack:7.4.0-v8|Up
+ai-searxng|searxng/searxng:2026.6.23-e3713717f|Up
+ai-tika|apache/tika:3.3.1.0-full|Up
+audiobookshelf|ghcr.io/advplyr/audiobookshelf:2.36.0|Up
+authelia|authelia/authelia:4.39.20|Up
+autobrr|ghcr.io/autobrr/autobrr:v1.83.0|Up
+bazarr-exporter|ghcr.io/onedr0p/exportarr:v2.3.0|Up
+bazarr|ghcr.io/linuxserver/bazarr:v1.5.6-ls340|Up
+beets-flask|metasauce/beets-flask:v2.0.0-rc6|Up
+blockbusterr|ghcr.io/mahcks/blockbusterr:v1.4.0|Up
+buzz-cloudflared|cloudflare/cloudflared:2026.8.2|Up
+buzz-minio|minio/minio:RELEASE.2025-09-07T16-13-09Z|Up
+buzz-pairing-relay|ghcr.io/block/buzz:sha-df9e773|Up
+buzz-postgres|postgres:17-alpine|Up
+buzz-redis|2a51817f7925|Up
+buzz-relay|ghcr.io/block/buzz:sha-df9e773|Up
+cal-api|ghcr.io/ridafkih/keeper-api:2.23|Up
+cal-cron|ghcr.io/ridafkih/keeper-cron:2.23|Up
+cal-mcp|ghcr.io/ridafkih/keeper-mcp:2.23|Up
+cal-postgres|a6638641707c|Up
+cal-redis|redis:7-alpine|Up
+cal-web|ghcr.io/ridafkih/keeper-web:2.23|Up
+cal-worker|ghcr.io/ridafkih/keeper-worker:2.23|Up
+code-server|lscr.io/linuxserver/code-server:4.109.5|Up
+couchdb|couchdb:3.5.2|Up
+dawarich_app|freikin/dawarich:1.10.3|Up
+dawarich_db|postgis/postgis:17-3.5-alpine|Up
+dawarich_redis|redis:7.4-alpine|Up
+dawarich_sidekiq|freikin/dawarich:1.10.3|Up
+dispatcharr|ghcr.io/dispatcharr/dispatcharr:0.29.0|Up
+flaresolverr|ghcr.io/flaresolverr/flaresolverr:v3.5.0|Up
+freshrss|ghcr.io/linuxserver/freshrss:1.29.1|Up
+grafana|grafana/grafana:13.1.1|Up
+immich_kiosk|ghcr.io/damongolding/immich-kiosk:0.43.2|Up
+immich_machine_learning|ghcr.io/immich-app/immich-machine-learning:v3.2.2|Up
+immich_postgres|ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0|Up
+immich_redis|valkey/valkey:8-bookworm|Up
+immich_server|ghcr.io/immich-app/immich-server:v3.2.2|Up
+janitorr|ghcr.io/schaka/janitorr:stable|Up
+jellyfin|d57d4a0c18b3|Up
+jellystat-db|postgres:18-alpine|Up
+jellystat|cyfershepard/jellystat:1.1.11|Up
+karakeep-chrome|zenika/alpine-chrome:124|Up
+karakeep-meilisearch|getmeili/meilisearch:v1.53.1|Up
+karakeep-web|ghcr.io/karakeep-app/karakeep-web:0.33.2|Up
+karakeep-workers|ghcr.io/karakeep-app/karakeep-workers:0.33.2|Up
+lidarr-exporter|ghcr.io/onedr0p/exportarr:v2.3.0|Up
+lidarr|ghcr.io/linuxserver/lidarr:3.1.0.4875-ls21|Up
+mc_vanilla|itzg/minecraft-bedrock-server:2026.7.6|Up
+mc_yggdrasil|itzg/minecraft-bedrock-server:2026.7.6|Up
+n8n-db|postgres:18-alpine|Up
+n8n|ghcr.io/damianflynn/custom-n8n:2.22.0|Up
+neocortex-memory-api|node:22.23.2-bookworm-slim|Up
+node-exporter|prom/node-exporter:v1.12.1|Up
+oxidized|oxidized/oxidized:0.37.0|Up
+paperless-gpt|icereed/paperless-gpt:v0.27.0|Up
+paperless_gotenberg|gotenberg/gotenberg:8.34|Up
+paperless_postgres|postgres:18-alpine|Up
+paperless_redis|redis:7.4-alpine|Up
+paperless_tika|apache/tika:3.3.1.0-full|Up
+paperless|ghcr.io/paperless-ngx/paperless-ngx:3.0.4|Up
+podsync|ghcr.io/mxpv/podsync:v2.8.0|Up
+prometheus|prom/prometheus:v3.13.2|Up
+prowlarr-exporter|ghcr.io/onedr0p/exportarr:v2.3.0|Up
+prowlarr|ghcr.io/linuxserver/prowlarr:2.3.0.5236-ls138|Up
+pwpush-db|36e92b0342c5|Up
+pwpush|pglombardo/pwpush:2.9.4|Up
+qbittorrent|ghcr.io/linuxserver/qbittorrent:5.1.2-r3-ls421|Up
+radarr-exporter|ghcr.io/onedr0p/exportarr:v2.3.0|Up
+radarr|ghcr.io/linuxserver/radarr:6.0.4.10291-ls294|Up
+readarr-exporter|ghcr.io/onedr0p/exportarr:v2.3.0|Up
+readarr|ghcr.io/pennydreadful/bookshelf:softcover|Up
+rustdesk-hbbr|rustdesk/rustdesk-server:1.1.15|Up
+rustdesk-hbbs|rustdesk/rustdesk-server:1.1.15|Up
+sabnzbd-exporter|ghcr.io/onedr0p/exportarr:v2.3.0|Up
+sabnzbd|ghcr.io/linuxserver/sabnzbd:5.1.0|Up
+seerr|ghcr.io/seerr-team/seerr:v3.4.1|Up
+socket-proxy|tecnativa/docker-socket-proxy:v0.4.2|Up
+sonarr-exporter|ghcr.io/onedr0p/exportarr:v2.3.0|Up
+sonarr|lscr.io/linuxserver/sonarr:4.0.16.2944-ls303|Up
+teleport_postgres|postgres:18-alpine|Up
+teleport|public.ecr.aws/gravitational/teleport-distroless:18.7.2|Up
+termix|ghcr.io/lukegus/termix:release-2.4.1|Up
+tesla-static|nginx:1.31.3-alpine|Up
+teslamate-db|postgres:18-trixie|Up
+teslamate-grafana|teslamate/grafana:4.2.0|Up
+teslamate|teslamate/teslamate:4.2.0|Up
+traefik|traefik:v3.7.9|Up
+trek|mauriceboe/trek:4.2.0|Up
+tsbridge|ghcr.io/jtdowney/tsbridge:v0.13.1|Up
+wizarr|ghcr.io/wizarrrr/wizarr:v2026.7.1|Up
+
+NORMALISED BEFORE-SET, all (docker ps -a):
+agentic-os-db|pgvector/pgvector:pg18|Up
+ai-docling|quay.io/docling-project/docling-serve:v1.25.0|Up
+ai-edgetts|travisvn/openai-edge-tts:latest|Up
+ai-ollama|ollama/ollama:0.32.5|Up
+ai-openwebui-mcp|ghcr.io/open-webui/mcpo:main|Up
+ai-openwebui|ghcr.io/open-webui/open-webui:v0.9.6|Up
+ai-postgress|pgvector/pgvector:0.8.6-pg18|Up
+ai-redis|redis/redis-stack:7.4.0-v8|Up
+ai-searxng|searxng/searxng:2026.6.23-e3713717f|Up
+ai-tika|apache/tika:3.3.1.0-full|Up
+audiobookshelf|ghcr.io/advplyr/audiobookshelf:2.36.0|Up
+authelia|authelia/authelia:4.39.20|Up
+autobrr|ghcr.io/autobrr/autobrr:v1.83.0|Up
+bazarr-exporter|ghcr.io/onedr0p/exportarr:v2.3.0|Up
+bazarr|ghcr.io/linuxserver/bazarr:v1.5.6-ls340|Up
+beets-flask|metasauce/beets-flask:v2.0.0-rc6|Up
+blockbusterr|ghcr.io/mahcks/blockbusterr:v1.4.0|Up
+buzz-cloudflared|cloudflare/cloudflared:2026.8.2|Up
+buzz-minio-init|minio/mc:RELEASE.2025-08-13T08-35-41Z|Exited(0)
+buzz-minio|minio/minio:RELEASE.2025-09-07T16-13-09Z|Up
+buzz-pairing-relay|ghcr.io/block/buzz:sha-df9e773|Up
+buzz-postgres|postgres:17-alpine|Up
+buzz-redis|2a51817f7925|Up
+buzz-relay|ghcr.io/block/buzz:sha-df9e773|Up
+cal-api|ghcr.io/ridafkih/keeper-api:2.23|Up
+cal-cron|ghcr.io/ridafkih/keeper-cron:2.23|Up
+cal-mcp|ghcr.io/ridafkih/keeper-mcp:2.23|Up
+cal-postgres|a6638641707c|Up
+cal-redis|redis:7-alpine|Up
+cal-web|ghcr.io/ridafkih/keeper-web:2.23|Up
+cal-worker|ghcr.io/ridafkih/keeper-worker:2.23|Up
+code-server|lscr.io/linuxserver/code-server:4.109.5|Up
+couchdb|couchdb:3.5.2|Up
+dawarich_app|freikin/dawarich:1.10.3|Up
+dawarich_db|postgis/postgis:17-3.5-alpine|Up
+dawarich_redis|redis:7.4-alpine|Up
+dawarich_sidekiq|freikin/dawarich:1.10.3|Up
+dispatcharr|ghcr.io/dispatcharr/dispatcharr:0.29.0|Up
+flaresolverr|ghcr.io/flaresolverr/flaresolverr:v3.5.0|Up
+freshrss|ghcr.io/linuxserver/freshrss:1.29.1|Up
+grafana|grafana/grafana:13.1.1|Up
+immich_kiosk|ghcr.io/damongolding/immich-kiosk:0.43.2|Up
+immich_machine_learning|ghcr.io/immich-app/immich-machine-learning:v3.2.2|Up
+immich_postgres|ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0|Up
+immich_redis|valkey/valkey:8-bookworm|Up
+immich_server|ghcr.io/immich-app/immich-server:v3.2.2|Up
+janitorr|ghcr.io/schaka/janitorr:stable|Up
+jellyfin|d57d4a0c18b3|Up
+jellystat-db|postgres:18-alpine|Up
+jellystat|cyfershepard/jellystat:1.1.11|Up
+karakeep-chrome|zenika/alpine-chrome:124|Up
+karakeep-meilisearch|getmeili/meilisearch:v1.53.1|Up
+karakeep-web|ghcr.io/karakeep-app/karakeep-web:0.33.2|Up
+karakeep-workers|ghcr.io/karakeep-app/karakeep-workers:0.33.2|Up
+lidarr-exporter|ghcr.io/onedr0p/exportarr:v2.3.0|Up
+lidarr|ghcr.io/linuxserver/lidarr:3.1.0.4875-ls21|Up
+mc_vanilla|itzg/minecraft-bedrock-server:2026.7.6|Up
+mc_yggdrasil|itzg/minecraft-bedrock-server:2026.7.6|Up
+n8n-db|postgres:18-alpine|Up
+n8n|ghcr.io/damianflynn/custom-n8n:2.22.0|Up
+neocortex-memory-api|node:22.23.2-bookworm-slim|Up
+node-exporter|prom/node-exporter:v1.12.1|Up
+oxidized|oxidized/oxidized:0.37.0|Up
+paperless-gpt|icereed/paperless-gpt:v0.27.0|Up
+paperless_gotenberg|gotenberg/gotenberg:8.34|Up
+paperless_postgres|postgres:18-alpine|Up
+paperless_redis|redis:7.4-alpine|Up
+paperless_tika|apache/tika:3.3.1.0-full|Up
+paperless|ghcr.io/paperless-ngx/paperless-ngx:3.0.4|Up
+podsync|ghcr.io/mxpv/podsync:v2.8.0|Up
+prometheus|prom/prometheus:v3.13.2|Up
+prowlarr-exporter|ghcr.io/onedr0p/exportarr:v2.3.0|Up
+prowlarr|ghcr.io/linuxserver/prowlarr:2.3.0.5236-ls138|Up
+pwpush-db|36e92b0342c5|Up
+pwpush|pglombardo/pwpush:2.9.4|Up
+qbittorrent|ghcr.io/linuxserver/qbittorrent:5.1.2-r3-ls421|Up
+radarr-exporter|ghcr.io/onedr0p/exportarr:v2.3.0|Up
+radarr|ghcr.io/linuxserver/radarr:6.0.4.10291-ls294|Up
+readarr-exporter|ghcr.io/onedr0p/exportarr:v2.3.0|Up
+readarr|ghcr.io/pennydreadful/bookshelf:softcover|Up
+rustdesk-hbbr|rustdesk/rustdesk-server:1.1.15|Up
+rustdesk-hbbs|rustdesk/rustdesk-server:1.1.15|Up
+sabnzbd-exporter|ghcr.io/onedr0p/exportarr:v2.3.0|Up
+sabnzbd|ghcr.io/linuxserver/sabnzbd:5.1.0|Up
+seerr|ghcr.io/seerr-team/seerr:v3.4.1|Up
+socket-proxy|tecnativa/docker-socket-proxy:v0.4.2|Up
+sonarr-exporter|ghcr.io/onedr0p/exportarr:v2.3.0|Up
+sonarr|lscr.io/linuxserver/sonarr:4.0.16.2944-ls303|Up
+teleport_postgres|postgres:18-alpine|Up
+teleport|public.ecr.aws/gravitational/teleport-distroless:18.7.2|Up
+termix|ghcr.io/lukegus/termix:release-2.4.1|Up
+tesla-static|nginx:1.31.3-alpine|Up
+teslamate-db|postgres:18-trixie|Up
+teslamate-grafana|teslamate/grafana:4.2.0|Up
+teslamate|teslamate/teslamate:4.2.0|Up
+traefik|traefik:v3.7.9|Up
+trek|mauriceboe/trek:4.2.0|Up
+tsbridge|ghcr.io/jtdowney/tsbridge:v0.13.1|Up
+wizarr|ghcr.io/wizarrrr/wizarr:v2026.7.1|Up
+
+BEFORE-SET ANCHORS (task 2 recomputes these and differences the SETS, not these digests):
+  running, normalised : b41a1b6faf6ef80fcc0115cf5d3676b8b8bea135260a554f0e95edb185b5b54e   lines=98
+  all,     normalised : 32fb6f4f9c6979a03d0b83385c3d336c8ebf903788e556294c6547615d05e82a   lines=99
+  state-word census, running:  98 Up;
+  state-word census, all    :  1 Exited(0); 98 Up;
+
+CONTAINER COUNT: 98 running, 99 total.
+
+==========================================================================
+PRE-FLIGHT — WORKSTATION SIDE
+==========================================================================
+Taken on the workstation, in the repository at /Users/damian/Development/damianflynn/selfhost-stacks.
+ORDERING NOTE, stated because it changes how (h) reads: (h), (i) and (j) were captured BEFORE
+this artifact file was created, so the ?? line for this file itself could not pollute them.
+The current status is re-captured below as well, so both readings are on the record.
+
+--------------------------------------------------------------------------
+### (h) Workstation HEAD, working-tree status, branch
+CLASS: (HEAD and branch) empty-is-COULD-NOT-LOOK; (status) empty-is-healthy
+
+$ git rev-parse HEAD
+c19eb27405fe19e2ecb7fe41dac21408eb2400ae
+RESULT: NON-EMPTY, rc=0
+
+$ git rev-parse --abbrev-ref HEAD
+main
+RESULT: NON-EMPTY, rc=0
+
+$ git status --porcelain      [captured BEFORE this artifact file existed]
+(no output)
+RESULT: EMPTY, rc=0  -> tracked-clean AND untracked-clean at capture time
+
+$ git status --porcelain      [re-captured after this artifact file was created]
+?? .planning/phases/06-tagger-configuration-and-dry-run/artifacts/06-51-host-sync.txt
+RESULT: NON-EMPTY, rc=0  -> the only entry is this artifact, which this plan owns
+
+--------------------------------------------------------------------------
+### (i) The commits that a [p]ush would carry — listed individually, in full
+CLASS: empty-is-healthy (an empty result legitimately means everything is already pushed)
+
+$ git rev-parse origin/main
+ee82fb20a4383ee5f274ce177f6d0a03de0797c4
+
+$ git log --oneline origin/main..HEAD
+c19eb27 docs(06-50): complete the round-6 disposition-register plan
+08ede1b docs(06-50): summary — round 6's disposition register and its three records
+0ab8b4e docs(06-50): wire 06-REVIEW.md to the register; amend ROADMAP and STATE for round 6
+21eaad4 docs(06-50): R6 register — 06-DISPOSITIONS-GAP4.md, the R6-* mapping table and the WR-02 position
+3085da1 docs(06-49): complete the conventions-index plan
+4259b93 docs(06-49): summary — the conventions index and its proven mirror
+51ca680 docs(06-49): sync CLAUDE.md's GSD conventions block with CONVENTIONS.md
+0d9c6f2 docs(06-49): R6-04 — CONVENTIONS.md, the repo's authoritative conventions index
+3fd748d docs(06-48): complete the corrected-detector / bracketing-scope plan
+bcdefd0 docs(06-48): R6-06 + R6-07 — record the correction and DECIDE the bracketing scope
+da5a606 docs(06-48): R6-06 — drive the corrected forbidden-mode detector against a control
+ce35877 docs(06-47): complete the beets.md pointer / disposition-audit plan
+c06e6b5 docs(06-47): three-way Phase 6 disposition consistency audit
+6a38e02 docs(06-47): R6-05 — head-of-file pointer to the authoritative current state
+5bd212b docs(06-46): complete R6-01 / R6-03(a) freeze-fix plan
+21c263e docs(06-46): summary — R6-01 and R6-03(a) closed in check-music-freeze.sh
+049e9a3 fix(06-46): R6-03(a) — both pinned-count failures now print the literal edit they require
+e515970 fix(06-46): R6-01 — name the two unused columns in the tagger-capable inventory read
+75c7989 docs(06): revise round-6 plans against 06-REVIEWS.md — close 3 HIGH, 6 MEDIUM, 4 LOW
+63f9864 docs(06): cross-AI review of round-6 plans — 6 reviewers, 5 model families
+ccd79e0 docs(06): record round 6 planned in STATE.md — 45 of 52 executed
+d7df994 docs(06): revise round-6 plans against gsd-plan-checker — fold operator outcomes into the round record, fix the Phase 7 fence citation, defend 06-46's requirements
+d500907 docs(06): plan gap-closure round 6 — the full 06-REVIEW.md round, plans 06-46..06-52
+88a53b5 docs(06): re-verify phase 06 against gap-closure round 5 — gaps_found 5/6
+ae8a678 docs(06): add code review report
+5d18461 docs(06-45): record round 5 complete in STATE
+266d1d1 docs(06-45): complete the CONF-04 record plan
+d6ca22d docs(06-45): record round 5 against the gap 06-VERIFICATION raised, and in beets.md
+8f9205b docs(06-45): split E6's two measurements and carry round 5's residue as DEF-06-45-*
+0f0bd17 docs(06-45): record CONF-04's measured negative in REQUIREMENTS and ROADMAP
+094392a docs(06-44): correct the round audit's own detector and its write-up
+78d6488 docs(06-44): complete the instrument-prose correction plan
+8cac538 docs(06-44): name both E6 owners in the health check's exit-3 arm
+646583a docs(06-44): correct the CONF-04 instrument's prose to the round-5 truth
+cd4b36c docs(06-43): complete the CONF-04 verdict plan
+7775a3d docs(06-43): record the operator decision — negative-carry-e6
+88857e3 docs(06-43): compute the CONF-04 branch and audit the whole round
+9b2df61 docs(06-42): complete the CONF-04 re-probe measurement plan
+d7b605c docs(06-42): record the CONF-04 re-probe after-state summary
+f85e539 docs(06-42): re-run the deployed instrument on untouched code
+RESULT: NON-EMPTY, 40 line(s), rc=0
+
+COUNT: 40 commits.
+MEASURED CORRECTION TO THE PLAN, recorded in band rather than silently adopted: 06-51-PLAN.md's
+D-R6-H3 preamble says the host is '20 commits behind'. That was true when the plan was written.
+It is 40 now, because round 6's own plans 06-46 .. 06-50 have landed since. The measured figure is
+40; the plan's 20 is stale, not wrong-at-the-time.
+
+NOTE ON origin/main: this is the LOCAL remote-tracking ref. No fetch was performed by this task —
+a fetch is not among the eleven measurements and this task adds nothing it was not asked for.
+origin/main and the host's HEAD are the SAME commit (ee82fb2), which is consistent.
+
+--------------------------------------------------------------------------
+### (j) sha256sum of the same six scripts IN THE REPOSITORY
+CLASS: empty-is-COULD-NOT-LOOK
+Implementation used: /sbin/sha256sum (present on this workstation). 'shasum -a 256' not needed.
+
+$ /sbin/sha256sum scripts/check-beets-config.sh scripts/check-music-consumers.sh scripts/check-music-freeze.sh scripts/phase06-incremental-control.sh scripts/phase06-oracle.sh scripts/quick-health-check.sh
+c88ae5783b164f4829c31e2458f47ed6b400080a0c3e6b29e0a6890505e73c59  scripts/check-beets-config.sh
+8f2e46503d37adaa5ca7b31175d91f8d302e089c00d25cead56636102445f1fe  scripts/check-music-consumers.sh
+b0723017ae2695eb87c8e7dde36f048de29297eddbfaa335e62d8296324e5d92  scripts/check-music-freeze.sh
+fa835cbd856f7a9880a7482dc68430f46c57766a9b088b93e17603c8d0fcb0b3  scripts/phase06-incremental-control.sh
+7b2efc84f4ec8c9732ed56be282f295fa08e46f75901272035f86c28c678d282  scripts/phase06-oracle.sh
+9fc48c6d900be87d76eeba0891a92066611e4e86118fb1745cbca525d3d25f43  scripts/quick-health-check.sh
+RESULT: NON-EMPTY, 6 line(s), rc=0
+
+==========================================================================
+THE SIX-ROW sha256 COMPARISON — committed vs deployed, PER FILE
+==========================================================================
+Computed mechanically by joining the (j) and (f) captures on basename. No digest is retyped.
+
+script                             committed (repo)                                                   deployed (LXC 100)                                                 verdict
+check-beets-config.sh              c88ae5783b164f4829c31e2458f47ed6b400080a0c3e6b29e0a6890505e73c59   c88ae5783b164f4829c31e2458f47ed6b400080a0c3e6b29e0a6890505e73c59   MATCH
+check-music-consumers.sh           8f2e46503d37adaa5ca7b31175d91f8d302e089c00d25cead56636102445f1fe   1ed695cf483029c2e7c3fd815fc97bc1711a8a3e499556910955332a7a6ee819   DIFFERS
+check-music-freeze.sh              b0723017ae2695eb87c8e7dde36f048de29297eddbfaa335e62d8296324e5d92   31905d4f296ee6872cf7799db7c96c3d75b1aedc3bf890c0151ff5d71679d9a6   DIFFERS
+phase06-incremental-control.sh     fa835cbd856f7a9880a7482dc68430f46c57766a9b088b93e17603c8d0fcb0b3   fa835cbd856f7a9880a7482dc68430f46c57766a9b088b93e17603c8d0fcb0b3   MATCH
+phase06-oracle.sh                  7b2efc84f4ec8c9732ed56be282f295fa08e46f75901272035f86c28c678d282   7b2efc84f4ec8c9732ed56be282f295fa08e46f75901272035f86c28c678d282   MATCH
+quick-health-check.sh              9fc48c6d900be87d76eeba0891a92066611e4e86118fb1745cbca525d3d25f43   eacd55fbab660e9a7f7ffdc7691a050c82d562439f7f02ae1b6b0126f1fb4012   DIFFERS
+
+check-beets-config.sh              MATCH
+check-music-consumers.sh           DIFFERS
+check-music-freeze.sh              DIFFERS
+phase06-incremental-control.sh     MATCH
+phase06-oracle.sh                  MATCH
+quick-health-check.sh              DIFFERS
+---
+MATCH: 3   DIFFERS: 3
+
+READING: three of the six deployed instruments are NOT the committed file. That is exactly what
+DEF-06-45-05 item 2 predicted and it is the reason this plan exists. The three that DIFFER are the
+three that round 5 and round 6 edited; the three that MATCH were not touched since the host last
+synced. A commit hash alone would not have shown this per file, which is why the plan requires
+sha256 on both sides.
+
+==========================================================================
+STOP CONDITIONS — every one evaluated, every one given a verdict word
+==========================================================================
+Verdict vocabulary is closed: CLEAR | STOP | COULD NOT LOOK.
+
+S1  Host has a TRACKED-MODIFIED file
+      Measured by (a): git -C /mnt/fast/stacks status --porcelain --untracked-files=no
+      Output: EMPTY, rc=0  ->  VERDICT: CLEAR
+      (Note the literal --untracked-files=no. The bare --porcelain form is the (a2) INVENTORY,
+       not the gate — D-R6-H3(a).)
+
+S2  Host is not on 'main'
+      Measured by (b): 'main', rc=0  ->  VERDICT: CLEAR
+
+S3  Host HEAD is NOT an ancestor of the workstation HEAD (a divergence)
+      $ git merge-base --is-ancestor ee82fb20a4383ee5f274ce177f6d0a03de0797c4 c19eb27405fe19e2ecb7fe41dac21408eb2400ae
+      rc=0  ->  IS an ancestor, strictly 40 commits behind, fast-forwardable.
+      VERDICT: CLEAR
+
+S4  Stash list is non-empty
+      Measured by (e): THREE entries.  ->  VERDICT: **STOP**
+      stash@{0} 4b7120b7e1c6e1dc5668f656ef2c9e4bde837537  2026-03-09 14:05:56 +0000
+                WIP on main: a224af4 Fix memory limits: use mem_limit instead of deploy.resources (Swarm-only)
+      stash@{1} d8f7ead943f5421062e2be4c83a961adef615891  2026-03-09 13:52:06 +0000
+                WIP on main: aaa377f Add memory limits to Prometheus and cAdvisor
+      stash@{2} cfc7caae0ae52568eebe0db1cd0f15c1dcd9dde1  2025-10-03 12:39:56 +0100
+                WIP on main: b0abd08 feat: functional traefik
+      All three BASE commits (a224af4, aaa377f, b0abd08) are still objects in the host repo,
+      measured by 'git cat-file -t' -> 'commit' on all three.
+
+S5  Any pre-flight command was a COULD NOT LOOK
+      Every one of the eleven measurements returned rc=0 with a capture present. The three
+      empty-is-healthy queries ((a), (e), (i)) are scored on their own class, not as failures:
+        (a) EMPTY, rc=0 -> healthy;  (e) NON-EMPTY, rc=0 -> see S4;  (i) NON-EMPTY, rc=0.
+      No timeout fired; no capture is missing.  ->  VERDICT: CLEAR
+
+S-untracked  NOT A STOP CONDITION, recorded so its absence from this list is deliberate.
+      Untracked files are a reportable NON-blocker per D-R6-H3(a). See the inventory below.
+
+TALLY: 4 CLEAR, 1 STOP, 0 COULD NOT LOOK.
+
+==========================================================================
+THE UNTRACKED INVENTORY — recorded, reportable, and NOT a gate
+==========================================================================
+Per D-R6-H3(a): an untracked file is a recorded, reportable NON-BLOCKER. It cannot block a
+fast-forward and it does not halt this plan. Only a TRACKED-modified file is a stop, and (a)
+measured that separately and found it EMPTY.
+
+Every ?? line from (a2), verbatim, in full:
+?? stacks/selfhosted/monitoring/prometheus.yaml.bak
+?? stacks/selfhosted/wrappers/monitoring.app.yaml.disabled
+
+COUNT: 2 untracked path(s). No other porcelain status codes are present.
+
+The two KNOWN debris paths from D-R6-H3(b), checked individually against the live inventory:
+  PRESENT as ??  : stacks/selfhosted/monitoring/prometheus.yaml.bak
+  PRESENT as ??  : stacks/selfhosted/wrappers/monitoring.app.yaml.disabled
+
+Anything ELSE untracked (computed as the inventory minus those two known paths):
+  (none — the computed difference is empty)
+  -> No third untracked path. The inventory is EXACTLY the two known debris files.
+
+ONE CLAUSE, STATED EXPLICITLY AS THE PLAN REQUIRES: if the operator proceeds, task 2 will remove
+EXACTLY these two files by name — stacks/selfhosted/monitoring/prometheus.yaml.bak and
+stacks/selfhosted/wrappers/monitoring.app.yaml.disabled — one named path per invocation, with no
+glob, no wildcard and no -r, and NOTHING ELSE; it will not use 'git cl[e]an' in any form, because
+'git cl[e]an -fd' deletes whatever happens to be untracked at that instant, which is an unbounded
+deletion on a host carrying 98 running containers.
+
+==========================================================================
+THE GATE — presented in the order the plan's task 1 specifies
+==========================================================================
+
+1. HOST BRANCH, COMMIT AND TRACKED-CLEAN VERDICT
+   branch : main
+   commit : ee82fb20a4383ee5f274ce177f6d0a03de0797c4
+   subject: docs(06-42): the four-way safety re-assert — SAFETY: PASS
+   date   : 2026-09-24T14:46:09+01:00
+   remote : origin  git@github.com:DamianFlynn/selfhost-stacks.git  (fetch and push, read from
+            the host — the source is measured, not assumed)
+   TRACKED-CLEAN VERDICT: CLEAN. 'git status --porcelain --untracked-files=no' returned EMPTY
+   with rc=0. No tracked file in the deployed tree has been edited in place.
+
+2. UNTRACKED INVENTORY
+   ?? stacks/selfhosted/monitoring/prometheus.yaml.bak
+   ?? stacks/selfhosted/wrappers/monitoring.app.yaml.disabled
+   Both known debris paths are present; NOTHING ELSE is untracked. These do not halt the plan
+   (D-R6-H3(a)). On a proceed, task 2 removes exactly those two by name and nothing else.
+
+3. PER-FILE sha256 COMPARISON — 3 MATCH, 3 DIFFERS
+   check-beets-config.sh              MATCH
+   check-music-consumers.sh           DIFFERS
+   check-music-freeze.sh              DIFFERS
+   phase06-incremental-control.sh     MATCH
+   phase06-oracle.sh                  MATCH
+   quick-health-check.sh              DIFFERS
+   ---
+   MATCH: 3   DIFFERS: 3
+
+4. COMMITS THAT A [p]USH WOULD CARRY: 40, from ee82fb2 (exclusive) to c19eb27 (inclusive).
+   Listed individually by hash and subject at (i) above.
+
+5. CONTAINER COUNT AND THE NO-REDEPLOY POSITION
+   98 running, 99 total, 1 deliberately Exited(0) init container, 0 Created, 0 Restarting.
+   NO COMPOSE VERB WILL BE ISSUED by any task of this plan. The only docker verb used in this
+   task was 'ps', and the only docker verb task 2 is permitted to use is 'ps'. Narrative
+   mentions here are bracketed (docker com[p]ose, docker [r]estart) so this transcript is not
+   itself an occurrence of what the round's detector counts.
+
+6. THE SHAPE OF THE WRITE, IF IT HAPPENS
+   The [p]ull would be '--ff-only', so a divergence FAILS rather than producing a merge commit
+   on a production host. Nothing would be force-[p]ushed, rebased or [r]eset. No 'git cl[e]an'.
+   No ZFS write of any kind — the snapshot decision belongs to plan 06-52, not to this one.
+
+==========================================================================
+A STOP CONDITION FIRED — S4, THE STASH LIST
+==========================================================================
+The plan's instruction on this is explicit: 'do not present a proceed option if any of these
+hold; present the finding and the recommendation to halt instead.' So no proceed option is
+offered by this transcript.
+
+THE FINDING, stated as measured:
+  /mnt/fast/stacks carries THREE stash entries. Two are from 2026-03-09 and one from
+  2025-10-03 — roughly six and twelve months old. Their subjects name production monitoring
+  and proxy work: container memory limits (twice) and 'feat: functional traefik'. All three
+  base commits are still resolvable objects in the host repository.
+
+MECHANISM NOTE, labelled as a mechanism note and deliberately kept separate from the verdict so
+it cannot be read as softening it: a fast-forward does not delete refs/stash, so these three
+entries would survive the operation itself. The exposure the STOP guards is not deletion. It is
+that six-to-twelve-month-old uncommitted working state exists on a production host's checkout,
+un-reviewed, and that after a 40-commit fast-forward any later attempt to apply it would land on
+a tree it was never taken against. The plan made a non-empty stash list a categorical STOP and
+this transcript honours that as written; it does not re-litigate it.
+
+THE OTHER FOUR STOP CONDITIONS ARE CLEAR. The tree is tracked-clean, the branch is main, the
+host HEAD is a strict ancestor 40 commits behind, and nothing was a COULD NOT LOOK. Had S4 not
+fired, this pre-flight would have supported a proceed.
+
+RECOMMENDATION: HALT, pending the operator's disposition of the three stash entries.
+The operator is the authority here and may still answer proceed. If they do, that answer is an
+explicit OVERRIDE of a fired STOP condition and must be recorded as such in DEF-06-51-01, with
+the stash disposition named — not folded into a clean-pre-flight narrative.
+
+==========================================================================
+TRANSCRIPT SCREENS — every zero-expecting count DRIVEN against a control first
+==========================================================================
+House rule (CONVENTIONS.md s 3 and s 9, DEF-06-45-04, DEF-06-48-01): a zero from a recipe that
+has not been shown to return non-zero against a control is not evidence. Every control file
+lives OUTSIDE the repository, in the session scratchpad, and none is staged. Needles are
+bracketed and matched with -E, never -F: -F suppresses exactly the metacharacter interpretation
+the bracketing depends on, which is the defect DEF-06-48-01 closed.
+
+S-A  No host-write git verb in this transcript
+     recipe: /usr/bin/grep -cE 'git (([p]ush)|([p]ull)|([c]heckout)|([r]eset)|(cl[e]an))' <file>
+     control (5 lines, each carrying one of the five verbs unbracketed) -> 5
+     this artifact                                                     -> 0
+
+S-B  No forbidden docker verb — the REPAIRED DEF-06-45-04 form, driven three ways
+     recipe: /usr/bin/grep -icE 'docker[ -](com[p]ose|run|exec|restart|stop|start|kill|rm|create|update|pull|push|build)([[:space:]]|$)' <file>
+     control 1: three real-world compose forms — an option-bearing -f ... up -d, the hyphenated
+                spelling, and a --profile ... pull                     -> 3
+     control 2: a single unbracketed docker [r]estart line             -> 1
+     control 3: bracketed narrative only, plus a docker ps line        -> 0
+     this artifact                                                    -> 0
+     (The superseded form required the verb IMMEDIATELY after 'docker com[p]ose' and returned 0
+      against control 1 — a true number from an instrument incapable of detecting what it
+      counts. This form matches docker followed by a space OR a hyphen, so options in between
+      are irrelevant and the hyphenated spelling docker-com[p]ose is caught.)
+     ⚠ THE HAZARD FIRED INSIDE THE ENTRY DESCRIBING IT, AND IS RECORDED RATHER THAN QUIETLY
+       REPAIRED. The two lines above originally wrote both spellings UNBRACKETED, and the
+       post-write re-measure of S-B then returned 1 instead of 0: this transcript had become an
+       occurrence of what it measures, and a naive reading of that 1 would have said a compose
+       verb was issued against a 98-container host. Bracketed and re-measured at 0. Caught the
+       way every previous instance was — by measuring AFTER the edit landed, not by an assertion
+       written beforehand (DEF-06-39-06). The controls keep the plain form, so they still
+       return 3 / 1 / 0.
+
+S-C  No [r]m invocation
+     recipe: /usr/bin/grep -cE '(^|[^-[:alnum:]_])[r]m[[:space:]]' <file>
+     Word-bounded deliberately: a naive two-character search matches the 'rm' inside --format,
+     which this transcript uses legitimately in its docker ps captures.
+     control (one real deletion line) -> 1
+     this artifact                    -> 0
+
+S-D  Which docker verbs actually appear — reported as a SET, not as counts
+     recipe: /usr/bin/grep -oE 'docker [a-z-]+' <file> | sort -u
+     The DISTINCT set of tokens following 'docker ' in this transcript is:
+       'docker ps'        — the real captures; the one and only verb issued
+       'docker com'       — the bracketed narrative docker com[p]ose (-oE stops at '[')
+       'docker verb', 'docker verbs', 'docker followed' — prose
+     -> the ONLY docker verb issued in this task is ps.
+     COUNTS ARE DELIBERATELY NOT PUBLISHED HERE. A line stating 'N x docker ps' is itself another
+     occurrence of 'docker ps', so the number would be stale the instant it was written — the same
+     self-referential shape as S-B above. The SET is stable under that effect; the counts are not.
+
+S-E  No credential material
+     recipe: /usr/bin/grep -icE '(BEGIN [A-Z ]*PRIVATE KEY|ssh-[r]sa |ssh-ed255[1]9 |api[_-]?key|[p]assw|[a-z_]*secret[a-z_]*[[:space:]]*[=:]|Bearer [A-Za-z0-9])' <file>
+     ⚠ THREE PUBLISHED ALTERNATIVES ARE BRACKETED AND THE ONES THAT RAN WERE NOT — stated, not
+       glossed. '[p]assw', 'ssh-[r]sa ' and 'ssh-ed255[1]9 ' were run in their plain forms. Each
+       bracket is a one-character class matching that one character, so the published recipe is
+       the SAME regular expression over the same language and is faithful; it is bracketed only
+       so this line is not itself the thing it counts.
+       This took TWO passes to settle, and both are recorded rather than the failures being
+       dropped. Pass 1: unbracketed '[p]assw' made the recipe line match itself -> 1. Pass 2:
+       after bracketing that one, 'ssh-[r]sa ' and 'ssh-ed255[1]9 ' were STILL plain in the
+       published line and it matched itself again -> 1. Only the third measurement reads 0, and
+       the 1s were never anything but the recipe text — no credential appears anywhere in this
+       transcript, which the per-alternative breakdown below confirms.
+     PER-ALTERNATIVE BREAKDOWN at the settled state (each alternative run alone against this file):
+       BEGIN ... PRIVATE KEY -> 0   ssh-[r]sa -> 0   ssh-ed255[1]9 -> 0   api[_-]?key -> 0
+       [p]assw -> 0   secret-assignment -> 0   Bearer-token -> 0
+     this artifact -> 0. No credential is passed on any command line in this task; ssh
+     authenticates by key from the agent and no key material is printed.
+
+S-F  No NUL byte, and the file is text
+     REJECTED RECIPE, recorded because it was run and found vacuous rather than quietly dropped:
+       /usr/bin/grep -c $'\\000' <file>  returned 864 against this artifact — which is exactly
+       its line count. bash cannot embed a NUL in a string, so $'\\000' collapses to the EMPTY
+       string and the recipe matches every line. It is structurally incapable of detecting what
+       it counts: the DEF-06-45-04 shape, caught here in the act.
+     WORKING RECIPE: byte-count delta under tr -d, i.e.
+       $(wc -c < f) - $(LC_ALL=C tr -d '\\000' < f | wc -c)
+       control (a file containing one real NUL) -> 1   and file(1) reports 'data'
+       this artifact                            -> 0   and file(1) reports UTF-8 text
+
+==========================================================================
+TASK 1 NO-WRITE ATTESTATION
+==========================================================================
+NOTHING WAS WRITTEN TO LXC 100 BY THIS TASK. Every one of the thirteen remote invocations above
+is a read: git status, git rev-parse, git log, git remote -v, git stash list, git cat-file -t,
+sha256sum, and docker ps. No file was created, modified or deleted on the host — not even the
+two untracked debris files, whose removal belongs to task 2 and only after the operator answers.
+No compose verb. No service [r]estart. No beet invocation. No Jellyfin or Music Assistant API
+call. No zfs read or write. No package install.
+
+==========================================================================
+OPERATOR ANSWER
+==========================================================================
+STATUS: AWAITING. Not yet answered at the time this section was written.
+
+The question put to the operator:
+  Sync /mnt/fast/stacks on LXC 100 to the repository by [p]ush then [p]ull --ff-only, removing
+  the two named untracked debris files first?
+
+Because STOP condition S4 fired, this gate presents ONE option and a recommendation:
+  halt    — record the pre-flight, leave the host untouched. RECOMMENDED.
+            Cost: DEF-06-45-05 item 2 stays OPEN; the three deployed instruments stay behind the
+            repository; DEF-06-39-05 stays BLOCKED, not merely unblocked-but-unrun.
+  proceed — available only as an explicit OPERATOR OVERRIDE of a fired STOP condition, and
+            recorded as such. Cost: writes to the deployed tree on a host carrying 98 running
+            containers, with three stash entries of unreviewed provenance still on it.
+
+Per the plan's resume-signal: any answer other than 'proceed' or 'halt' is treated as halt.
+
+TO BE FILLED BY THE CONTINUATION AGENT, VERBATIM:
+  answer         : <the operator's exact words>
+  timestamp (UTC): <date -u +%Y-%m-%dT%H:%M:%SZ at the moment of the answer>
+  override?      : <yes/no — yes if the answer is proceed, since S4 fired>
+
+==========================================================================
+END OF TASK 1
+==========================================================================
+
+==========================================================================
+SETTLED SCREEN STATE — measured AFTER the last edit landed
+==========================================================================
+Taken as the final act on this file, because a screen asserted before an edit is an assertion,
+not a measurement. Three passes were needed; all three are on the record above.
+  S-A  host-write git verb      -> 0     control -> 5
+  S-B  forbidden docker verb    -> 0     controls -> 3 / 1 / 0
+  S-C  [r]m invocation          -> 0     control -> 1
+  S-E  credential material      -> 0     (per-alternative breakdown all 0)
+  S-G  the literal task-2 screen for a 'git cl[e]an' of any form
+                                -> 0     control -> 1
+  S-F  NUL bytes                -> 0     control -> 1;  file(1) reports UTF-8 text
+Every control file lives in the session scratchpad OUTSIDE this repository and none is staged.
+
+REPOSITORY HYGIENE FOR THIS TASK (the 'HEAD --' is load-bearing: a bare
+'git diff --exit-code <path>' compares against the INDEX and is blind to a staged edit):
+  git diff --exit-code HEAD -- scripts/                 rc=0  (no script touched)
+  git diff --exit-code HEAD -- .planning/REQUIREMENTS.md rc=0  (no requirement touched)
+This task changed exactly one path in the repository: this artifact.
