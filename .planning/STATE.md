@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-24T06:25:00.000Z"
+last_updated: "2026-09-24T08:25:00.000Z"
 progress:
   total_phases: 10
   completed_phases: 5
   total_plans: 119
-  completed_plans: 112
+  completed_plans: 113
   percent: 50
 ---
 
@@ -29,7 +29,7 @@ pipeline that someone owns.
 
 Phase: 06 (tagger-configuration-and-dry-run) — EXECUTING gap-closure **ROUND 5**
 (re-verification deliberately NOT run — see the round-4 block at the end of this section)
-Plan: 40 of 45 executed. Round 1 (06-15..06-21, waves 6-9, 2026-09-22) closed CR-01 and
+Plan: 41 of 45 executed. Round 1 (06-15..06-21, waves 6-9, 2026-09-22) closed CR-01 and
 dispositioned all 24 findings of `06-REVIEW.md`; re-verification is **6/6, status passed**
 (`06-VERIFICATION.md`, gaps_remaining: [], regressions: []).
 **The phase is NOT complete.** A code review of the round-1 changes themselves
@@ -391,7 +391,78 @@ touched and is **still stale**, and CONF-04's Jellyfin half is still OPEN with *
 06-40 is the before-state; **06-41 is the plan that mutates, and it is `autonomous: false`** — it
 gates on the operator, mints the snapshot and touches exactly the three files proved above.
 
-Status: Executing Phase 06 — gap-closure **ROUND 5**, wave 18 (plan 06-40) COMPLETE. Round 2 ran
+**ROUND 5, WAVE 19 EXECUTED — 2026-09-24. Plan 06-41 HAS WRITTEN. The lever 06-03 named and never
+pulled has been pulled, and it is the first write into the Music library since Phase 1 sealed it.**
+One artifact, `artifacts/06-41-conf04-reprobe-drive.txt`, 693 lines, SECTIONS A and B. Two commits,
+one per driving task (`2410058` the fence and the touch, `4961271` the refresh).
+**The operator gate was answered `proceed`** (task 1, `checkpoint:decision`), presented with all six
+required items read out of the 06-40 artifact and with its own verify measuring the snapshot count
+at **0** immediately before presenting — nothing had been written at that moment.
+**THE FENCE CAME FIRST AND IN THE SAME REMOTE STEP AS THE MUTATION**, so the two could not come
+apart: `zfs snapshot tank/media/Music@pre-06-41-conf04-reprobe` returned 0 and was **listed back and
+asserted equal** before any file was touched. The touch list was **re-derived and all seven
+assertions re-run** rather than carried forward — 06-40 proved it against a tree that had since been
+snapshotted — from a copy of `check-music-consumers.sh` shipped over ssh STDIN from a quoted heredoc
+and sha256-asserted `1ed695cf…` **before** parsing; `TRUSTFALL` substring count **0**.
+**The permission was probed with its own no-op form first** (`touch -r f f` — the same `utimensat`,
+setting each file's times to the values it already held) on all three, so an `EPERM` would have been
+a recorded negative and a stop rather than a discovery mid-mutation. All three returned 0.
+**Three mtimes moved and not one byte of audio did:** each mtime strictly newer than 06-40 Section
+5's value, each content sha256 **identical** to Section 9 (f), sizes unchanged.
+**`zfs diff` against the fence came back clean — three `M` entries, zero non-`M`, exactly three
+distinct paths and all three pinned, zero metadata/lyric/image sidecars, zero DO-NOT-RESCAN rows.**
+That one command proves both "only three files moved" and "nothing was written into the library"
+from a single source, on a 33.9 GB dataset Jellyfin, Music Assistant and the operator all depend on.
+**ONE WRITE VERB IN THE WHOLE PLAN:** a file-scope `POST /Library/Media/Updated` carrying three
+`{Path, UpdateType:"Modified"}` entries built by `jq` from the derived list (nothing hand-escaped),
+returning **204** — and **Jellyfin's `LibraryMonitor` named all three Audio items by full internal
+path**, U+2019 included, **60 s later, matching `LibraryMonitorDelay = 60` exactly**. The API key
+travelled via `-H @<(printf ...)` and never entered argv; no header value is recorded.
+**⏱ THE SETTLE IS A SUBTRACTION, NOT A SENTENCE:** `POST_UTC: 1790237579` was written immediately
+after the POST returned; the read-back began at 1790237714, **135 s** later. 06-42 recomputes that
+from the epoch independently rather than inheriting a prose claim.
+**Zero** metadata-save, image-save or sidecar lines in the log window, recorded as the literal word
+`no`; and the four D-34 options plus `SaveLyricsWithMedia` were **re-read AFTER the refresh** with
+`has($k)` and every one held. The endpoint audit shows **exactly one line beginning with `POST`**,
+both prohibited scan endpoints are named descriptively only, and `FullRefresh` counts **0** over the
+whole artifact.
+**⚠ TWO DEFECTS IN THIS PLAN'S OWN INSTRUMENTS, RECORDED RATHER THAN SMOOTHED — NEITHER TOUCHED THE
+ESTATE.** (1) The `zfs diff` path decoder ran `sed 's/\0/\/g'` before `printf %b`; zfs writes a
+space as `\0040`, the sed rewrote it to `\40`, and a digit of the following filename was eaten —
+`CD 01-03` decoded as `CD 1-03`. Assertions (6b)/(6c)/(6d) FAILED over a block that was **correct
+from the first capture**. The three FAIL verdicts are **left standing in the artifact and annotated
+in band**, with the corrected verdicts recomputed against a re-read proved byte-identical by
+`cmp -s` — so the repair is a **read**, not a second mutation. `printf %b` already decodes `\0nnn`;
+the sed was the entire bug. (2) That same overflow emitted **three NUL bytes** into the report,
+caught only because `file` reported `data` rather than `text`. **Screen committed text artifacts for
+NUL, not only for credentials.**
+**⚠ `grep` IS A SHELL FUNCTION ON THE WORKSTATION AND SILENTLY MATCHED NOTHING** — several searches
+over a file whose content was demonstrably present returned empty. Every screen was re-run with
+`/usr/bin/grep`; the plan's `<automated>` blocks run under `bash -c`, which does not inherit it, and
+both passed. **A tool that answers "no matches" when it was never really consulted is the exact
+false-green shape this phase exists to remove.**
+**⚠ `grep -c $'\000'` AND `awk 'index($0,"\000")'` ARE VACUOUS NUL TESTS** — the needle reduces to
+the empty string and matches every line; both reported NULs in files that had none. The honest
+instrument is a byte-count comparison across `tr -d '\000'`. Fifth consecutive round for the
+self-referential-measurement class (`DEF-06-39-06`). Also: **`ls` under `pipefail` returns 2 on an
+empty glob** and briefly looked like a failed cleanup; `find` returns 0. `/tmp/06-41*` is empty on
+**both** atlantis and LXC 100.
+**⚠ THE JELLYFIN ADDRESS IN 06-41'S OWN CONTEXT IS WRONG AGAIN** — it says 192.168.90.25;
+`docker inspect` returned **192.168.90.17**, which is 06-40's measurement. Neither literal is
+transcribed as a constant anywhere; the route is resolved fresh on every call.
+**⚠ `tank/media/Music@pre-06-41-conf04-reprobe` IS NOW STANDING AND IS THE ONLY UNDO FOR THIS ROUND.
+It must not be destroyed before 06-43 records its branch.** Rollback, one line:
+`zfs rollback tank/media/Music@pre-06-41-conf04-reprobe`.
+**WHAT THIS DOES NOT ESTABLISH, stated because 06-42 depends on the distinction:** the refresh
+**started** and reached the three Audio items themselves — the thing whose absence would make a null
+result uninterpretable, since an unmoved census is consistent both with "never started" and with
+"started and found nothing". It does **NOT** establish that the prober re-read the `ARTISTS` tag, and
+it does **NOT** establish that any `ArtistItems` row moved. That is **06-42's** measurement, and a
+null result there is a **legitimate recorded negative** — not an argument for a wider refresh.
+**Nothing about CONF-04 changed yet.** No requirement checkbox moved, `06-VERIFICATION.md` was not
+touched and is **still stale**, and CONF-04's Jellyfin half is still OPEN with **E6** owning it.
+
+Status: Executing Phase 06 — gap-closure **ROUND 5**, wave 19 (plan 06-41) COMPLETE. Round 2 ran
 against `06-REVIEW-GAP.md` (GC-01 blocker + 7 warnings in round 1's own code, plus GC-16/GC-17
 from the cross-family adjudication) — all 17 closed and dispositioned in `06-DISPOSITIONS-GAP.md`
 by plan 06-29. Still 1 open
