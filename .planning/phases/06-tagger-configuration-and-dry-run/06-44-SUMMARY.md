@@ -134,7 +134,15 @@ plan's own round-audit measurement** and is recorded rather than smoothed.
 - **Fix:** re-measured with `-cE`, where `[R]` is a character class matching the real `R`, and **driven in both directions against a one-line control file containing the real token** — `-cE` returns 1, `-cF` returns 0 — so the correct form is proven non-vacuous and the broken form is proven non-detecting, rather than either being argued. Corrected counts recorded in the Threat Flags section with both columns shown. The result is unchanged: **0 occurrences of the real token in either script and in this SUMMARY.**
 - **Carried, not fixed here:** `06-43`'s published recipe `(O-a)` has the same defect. Its `0` is true of those artifacts (the task verify blocks checked the plain literal separately) but was not earned by the command it publishes. Correcting a committed artifact's recipe is not this plan's to do — flagged for 06-45 / `/gsd-verify 06`.
 - **Files modified:** none (the defect was in a measurement, not in a committed file)
-- **Commit:** recorded in this SUMMARY under the final commit.
+- **Commit:** `78d6488`
+
+**2. [Rule 1 - Bug] The write-up of finding 1 was itself an occurrence of the token it counts**
+
+- **Found during:** the re-measurement taken *after* finding 1's correction landed — the same method, one revision later.
+- **Issue:** the corrected Threat Flags section explained why `-F` is right in the verify blocks and wrong in the audit recipe, and did so by **quoting the verify-block command with the literal token in it**. That took this SUMMARY's real-token count from 0 to **1**. A paragraph written to document the self-referential-measurement mitigation became an instance of the hazard it documents.
+- **Fix:** the needle is now *described* rather than quoted, the miss is recorded in band beside the corrected table, and the count was re-taken a third time. Final state: **0**.
+- **Files modified:** `.planning/phases/06-tagger-configuration-and-dry-run/06-44-SUMMARY.md`
+- **Commit:** the follow-up commit recorded below.
 
 ### Deliberate Non-Deviations
 
@@ -202,9 +210,23 @@ Counts taken after both commits and after this SUMMARY was written, with the cor
 | `scripts/quick-health-check.sh` | **0** | 0 | 0 |
 | this SUMMARY | **0** | 1 — the mitigation itself, as intended | 0 |
 
-Independently, both task verify blocks assert `grep -cF "FullRefresh"` (the plain literal, no
-brackets, therefore a correct fixed-string detector) returns `0` on each script, and both passed.
-Two detectors of different construction, one answer.
+(The SUMMARY row was **1** in the real-token column for one revision — see the note below the next
+paragraph — and is 0 as committed.)
+
+Independently, both task verify blocks assert a `grep -cF` against the **plain, unbracketed literal**
+— a correct fixed-string detector, because there are no brackets in the needle for `-F` to take
+literally — and it returns `0` on each script. Both verify blocks passed. Two detectors of different
+construction, one answer.
+
+**⚠ AND THIS PARAGRAPH ITSELF FIRED THE DETECTOR ONCE, ON THE FIRST WRITING.** It originally quoted
+that verify-block command *with the literal token inside it*, to show why `-F` is correct there and
+wrong above — and in doing so made this SUMMARY an occurrence of the thing it counts, taking the
+`-cE` count from 0 to **1**. Caught by re-measuring after the edit landed, and rewritten to describe
+the needle rather than quote it. **Third consecutive round in which the only thing that caught this
+class was a post-edit measurement, and the second time in this single document**: first the vacuous
+`-F` detector, then this. The lesson is not "remember to bracket it" — it is that **a document
+discussing a token cannot be trusted to know its own count, so the count must be re-taken after every
+edit to that document**, including edits that exist to explain the mitigation.
 
 ## Self-Check: PASSED
 
