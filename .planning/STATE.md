@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-23T22:48:24.490Z"
+last_updated: "2026-09-24T06:25:00.000Z"
 progress:
   total_phases: 10
   completed_phases: 5
   total_plans: 119
-  completed_plans: 111
+  completed_plans: 112
   percent: 50
 ---
 
@@ -27,9 +27,9 @@ pipeline that someone owns.
 
 ## Current Position
 
-Phase: 06 (tagger-configuration-and-dry-run) — gap-closure **ROUND 4 DONE, PHASE NOT VERIFIED**
+Phase: 06 (tagger-configuration-and-dry-run) — EXECUTING gap-closure **ROUND 5**
 (re-verification deliberately NOT run — see the round-4 block at the end of this section)
-Plan: 39 of 39 executed. Round 1 (06-15..06-21, waves 6-9, 2026-09-22) closed CR-01 and
+Plan: 40 of 45 executed. Round 1 (06-15..06-21, waves 6-9, 2026-09-22) closed CR-01 and
 dispositioned all 24 findings of `06-REVIEW.md`; re-verification is **6/6, status passed**
 (`06-VERIFICATION.md`, gaps_remaining: [], regressions: []).
 **The phase is NOT complete.** A code review of the round-1 changes themselves
@@ -333,7 +333,65 @@ forbidding it. If a round 5 is commissioned, **give it a fresh `R5-*` ID namespa
 written** (`DEF-06-39-01`) and **sweep its `<automated>` blocks for raw self-referential counts before
 executing** (`DEF-06-39-06`). It should be a **deliberate decision**, not an omission.
 
-Status: Ready to execute
+**ROUND 5, WAVE 18 EXECUTED — 2026-09-24. Plan 06-40 took the complete before-state for CONF-04's
+Jellyfin re-probe and WROTE NOTHING.** One artifact,
+`artifacts/06-40-conf04-reprobe-before.txt`, 1,810 lines, sections 0 through 9. Three commits,
+one per task (`d5f49cd` Jellyfin, `f309bdb` filesystem, `69cd2a8` touch list).
+**The round's premise is LIVE and was measured, not assumed:** `PreferNonstandardArtistsTag` reads
+**`true`**, `UseCustomTagDelimiters` / `SaveLocalMetadata` / `EnableRealtimeMonitor` all **`false`**,
+each read with `has($k)` rather than jq's `//` (which treats `false` as empty and would report a
+correctly-false option as ABSENT). The Music library `ItemId` was **read back** from
+`/Library/VirtualFolders` and asserted equal to the pinned `JELLYFIN_MUSIC_LIBRARY_ID` — a mismatch
+would have meant the whole round was aimed at a recreated object.
+**The three pinned rows read 0, 1, 1 — exactly the 2026-09-20 Jellyfin baselines.** Nothing moved,
+so nothing needed escalating; the plan's halt condition did not fire. The census is **1,244** with
+`TotalRecordCount` equal to the returned array length (a short answer would have been COULD NOT
+LOOK, never "fewer files"), the length distribution is identical to 06-03's, and the six OQ-1
+`TRUSTFALL` DO-NOT-RESCAN rows are listed by name with their entity Ids.
+**On disk, read from atlantis as REAL ROOT** — never from LXC 100, whose sparse idmap surfaces
+unmapped ids as `65534`: the three pinned files exist at `568:568` / `0777`, with mtimes recorded
+to the second in UTC **and as epochs**, so the artifact is TZ-proof. All **91** `.nfo` are hashed
+individually (Phase 1's number, unmoved), beside `.lrc` **944** and `.jpg` **88** with a
+path+size+mtime fingerprint each. `tank/media/Music@pre-06-41-conf04-reprobe` is asserted **ABSENT**
+with `grep -qxF` (so a name merely *containing* it could not satisfy the test), and the D-32 fence
+`tank/downloads@pre-phase5` is **PRESENT**. beets' own state is fingerprinted: `library.db`
+`fbbdde0c…` and `state.pickle` `f6a9a1ad…` under `/mnt/fast/appdata/arrs/beets/config`, the
+`beets-flask` `/config` bind read back from `docker inspect` rather than assumed — and its `/media`
+bind reads **`ro`**, which is D-05's fence, while Jellyfin's reads `rw` and always has.
+**The touch list is DERIVED, not retyped.** `check-music-consumers.sh` was shipped to atlantis over
+ssh STDIN from a quoted heredoc, its sha256 asserted byte-identical to the workstation copy
+*before* parsing, and the three paths extracted from `ARTIST_PROOF_ROWS` and prefix-substituted.
+All six assertions PASS — 3 lines, all `test -f`, all beginning with `/mnt/tank/media/Music/` by
+`index()==1` rather than a substring match, `TRUSTFALL` substring count **0**, `cmp -s`
+byte-identical on the reverse substitution including the U+2019, and three content sha256 values —
+plus an **independent seventh** (`grep -qF` of each reversed path against the script) that shares no
+code with the `awk` extractor, so a bug in the extractor cannot satisfy both.
+**⚠ ONE MEASURED CORRECTION TO THE PLAN'S OWN TEXT, RECORDED IN BAND RATHER THAN SMOOTHED:**
+06-40-PLAN.md states the Jellyfin container "is at 192.168.90.25 today" and that 06-03's
+`192.168.90.17` is therefore stale. `docker inspect` returned **192.168.90.17** at run time. The
+RULE is untouched and is the entire point — docker IPAM *can* move it, so it is resolved fresh and
+never pinned — but writing the plan's number instead of the measured one is exactly the drift this
+phase exists to stop.
+**⚠ `zfs get atime tank/media/Music` is `off`** (relatime `on`), recorded so an atime-driven
+surprise in 06-42's `zfs diff` is anticipated rather than mysterious. `sha256sum` reads; it does
+not write.
+**NOTHING WAS WRITTEN, and that is a measurement:** GET only, zero POST/PUT/DELETE, zero snapshots,
+zero permission changes and none attempted (`chmod` fails `EPERM` on `tank` even as real root under
+`aclmode=restricted`). The `tank/media/Music` snapshot set was re-read twice after the first read
+and was byte-identical both times, and all four `/tmp` scratch files were deleted and verified
+absent — `/tmp/06-40-*` on atlantis is empty.
+**⚠ STATE.md WAS CORRUPTED AGAIN BY A `state.*` WRITE AND WAS REPAIRED BY HAND IN THIS PLAN'S
+COMMIT.** The `Plan:` line had been replaced with a bare `Plan: 1 of 45`, orphaning
+`dispositioned all 24 findings of 06-REVIEW.md…` as a dangling fragment, and `Status:` likewise
+orphaned `against 06-REVIEW-GAP.md…`. Both continuations were rejoined; **nothing was deleted**.
+This is the fourth recorded instance of that defect class. **Always `git diff .planning/STATE.md`
+after any `state.*` write**, and prefer a hand edit.
+**Nothing about CONF-04 changed.** No requirement checkbox moved, `06-VERIFICATION.md` was not
+touched and is **still stale**, and CONF-04's Jellyfin half is still OPEN with **E6** owning it.
+06-40 is the before-state; **06-41 is the plan that mutates, and it is `autonomous: false`** — it
+gates on the operator, mints the snapshot and touches exactly the three files proved above.
+
+Status: Executing Phase 06 — gap-closure **ROUND 5**, wave 18 (plan 06-40) COMPLETE. Round 2 ran
 against `06-REVIEW-GAP.md` (GC-01 blocker + 7 warnings in round 1's own code, plus GC-16/GC-17
 from the cross-family adjudication) — all 17 closed and dispositioned in `06-DISPOSITIONS-GAP.md`
 by plan 06-29. Still 1 open
