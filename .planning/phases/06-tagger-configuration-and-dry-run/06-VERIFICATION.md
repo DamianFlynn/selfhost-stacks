@@ -26,6 +26,28 @@ gaps:
         issue: "Correctly reports the Jellyfin rows as pending (exit 3 gate, WR-03/06-17) rather than falsely green — the instrumentation is honest, but the underlying fact it reports is that the requirement is unmet"
     missing:
       - "A live Jellyfin re-probe of at least the three pinned multi-artist tracks (or equivalent write activity) confirming ARTISTS-tag parsing reaches 4/2/2, which by the roadmap's own design cannot happen before Phase 7's first write"
+    round_5:
+      dated: "2026-09-24"
+      status: "STILL OPEN — carried, not closed. The gap this report raised is unchanged in its truth value and changed in what is known about it."
+      branch: "B — the mtime hypothesis is DISPROVEN (artifacts/06-43-conf04-verdict.txt SECTION M, computed by a five-step rule and independently recomputed by that plan's own verify block)"
+      what_was_driven: "The operator declined BOTH paths this report recommended and chose a third: drive the Jellyfin re-probe inside Phase 6. Mechanism (plans 06-41, 06-42): three file mtimes touched from atlantis as real root inside the ZFS snapshot fence tank/media/Music@pre-06-41-conf04-reprobe, then the same targeted Default-mode POST /Library/Media/Updated at file scope (one write verb for the whole round, HTTP 204), then a 19,597 s settle before the measurement."
+      per_row_results:
+        - "row 1 — Lady Gaga / ARTPOP (2013) / Jewels n' Drugs: target 4, 2026-09-20 baseline 0, MEASURED 0, distinct entity Ids 0, ';' in any entity name 0 — AT-BASELINE"
+        - "row 2 — Katy Perry / Teenage Dream (2010) / California Gurls: target 2, baseline 1, MEASURED 1, distinct entity Ids 1, semis 0 — AT-BASELINE"
+        - "row 3 — P!nk / The Truth About Love (2012) / Just Give Me a Reason: target 2, baseline 1, MEASURED 1, distinct entity Ids 1, semis 0 — AT-BASELINE"
+      measurement_not_unknown: "ZERO of three rows moved and the 1,244-row census delta is EMPTY. 06-41's LibraryMonitor named all three Audio items by full internal path 60 s after the POST, so 'the refresh never started' is ruled out; PreferNonstandardArtistsTag re-read true afterwards, so the option did not revert. The refresh ran, reached the items, and the prober did not re-read the ARTISTS tag."
+      safety: "SAFETY: PASS, asserted four ways — zfs diff byte-identical to the post-touch block (three M entries, zero non-M, zero sidecars, zero DO-NOT-RESCAN rows), 0 of 91 .nfo differing in sha256 or mtime, all three pinned files' content sha256 unchanged, and both snapshots PRESENT. 1 write verb, 0 content changes, 3 mtime changes for the entire round. The aggressive per-item refresh mode was not issued and was unreachable from every branch."
+      instrument_corroboration: "The deployed, unmodified check-music-consumers.sh reported INSTRUMENT RUN: MEASURED, HOST CHECKOUT: MATCH, JF_AT_TARGET: 0, JF_PENDING: 3, MA_AT_TARGET: 2, MA_REPORTED: 1, EXIT CODE: 3 — taken in wave 20 on untouched code, before any branch was computed and before the operator decided anything."
+      operator_decision: "negative-carry-e6, recorded verbatim 2026-09-24T14:30:37Z in artifacts/06-43-conf04-verdict.txt SECTION P. This is option (a) of this report's own Recommended path: carry CONF-04's Jellyfin half to Phase 7 entry criterion E6 under an explicit override, so the roadmap's argument becomes auditable rather than implicit."
+      why_the_gap_stays_open: "An override is a recorded, argued CARRY of an OPEN requirement. It is not a close and must never be written as one. REQUIREMENTS.md:152 still reads '- [ ] **CONF-04**', requirements mark-complete was not run, and this gap entry therefore keeps status: partial."
+      not_closed_by_this_round: "Phase 7 entry criterion E6's SECOND measurement — whether a second >=4-artist track yields four artists in Music Assistant or three, the only measurement separating 'MA caps the list at 3' from 'Twista specifically failed to map' — was never in round 5's scope and stays with Phase 7 on every branch."
+      exit_code_is_not_a_verdict: "check-music-consumers.sh still exits 3 because MA_ARTIST_PENDING stays 1, and 06-42's own artifact records that it would have exited 3 on a fully successful re-probe too. An exit code, and any 'N of M pending' figure, may never be published as a CONF-04 completion figure. The Jellyfin and MA verdicts are never summed."
+      artifacts:
+        - ".planning/phases/06-tagger-configuration-and-dry-run/artifacts/06-40-conf04-reprobe-before.txt"
+        - ".planning/phases/06-tagger-configuration-and-dry-run/artifacts/06-41-conf04-reprobe-drive.txt"
+        - ".planning/phases/06-tagger-configuration-and-dry-run/artifacts/06-42-conf04-reprobe-after.txt"
+        - ".planning/phases/06-tagger-configuration-and-dry-run/artifacts/06-42-consumers-rerun.txt"
+        - ".planning/phases/06-tagger-configuration-and-dry-run/artifacts/06-43-conf04-verdict.txt"
 deferred:
   - truth: "CONF-04 Jellyfin-half discharge mechanism"
     addressed_in: "Phase 7"
@@ -34,6 +56,20 @@ deferred:
     addressed_in: "Phase 7 (existing entry criterion E12)"
     evidence: "06-DISPOSITIONS-GAP3.md: 'Condition that would drive it: a live --arm a / --arm b pair ... attaches to the existing Phase 7 entry criterion E12'; ROADMAP.md's Phase 7 entry-criteria section already carries E12 as the catch-all for gap-closure's undriven live-estate residue."
 human_verification: []
+superseded_note: >-
+  Added 2026-09-24 by plan 06-45, the last plan of gap-closure round 5. The headline `status:`
+  (gaps_found) and `score:` (5/6 must-haves verified) fields above are DELIBERATELY UNCHANGED and
+  were asserted unchanged by that plan's verify block. Round 5 drove CONF-04's Jellyfin half and
+  MEASURED that the mtime mechanism does not discharge it (BRANCH: B), and the operator recorded an
+  explicit override — `negative-carry-e6` — carrying that half to Phase 7 entry criterion E6. An
+  override is an auditable carry of an OPEN requirement; it is NOT a close, and CONF-04's checkbox
+  in REQUIREMENTS.md stays unticked. RE-SCORING THIS REPORT IS `/gsd-verify 06`'s CALL AND NOBODY
+  ELSE'S. Plan 06-45 performed no verification and claims no verification result; it recorded a
+  measurement against the gap this report raised, and nothing more. `/gsd-verify 06` has not been
+  run since this pass (2026-09-23) and is the RECOMMENDED NEXT STEP — rounds 1 through 4 each ended
+  with "this is a record, not a re-close", and round 5 holds to that in the one round that had the
+  most reason to break it. See the `round_5:` sub-record under the CONF-04 gap above, and the
+  "## Round 5" body section below.
 ---
 
 # Phase 6: Tagger Configuration and Dry Run Verification Report
@@ -189,6 +225,81 @@ criterion, and an override would make that argument auditable rather than implic
 Phase 6 open until Phase 7's first write allows the Jellyfin re-probe and the three pinned census
 rows to actually move. Both are legitimate; what is not legitimate is closing Phase 6 as "passed,
 6/6" while REQUIREMENTS.md still shows the box unticked.
+
+**Outcome, recorded 2026-09-24 by plan 06-45 — the two options above are left standing as the record
+of what was on the table, but they were not the only outcomes.** The operator declined both and
+chose a third: drive the Jellyfin re-probe inside Phase 6 (gap-closure round 5, plans 06-40 … 06-45).
+It was driven, and **it did not discharge the gap** — see `## Round 5` below. The operator then
+selected option **(a)** on the measured negative: `negative-carry-e6`, an explicit override carrying
+CONF-04's Jellyfin half to Phase 7 entry criterion E6. Option (b) was not taken, and the third path —
+"drive it now" — is no longer available, because it has now been tried and measured. **What remains
+illegitimate is exactly what this paragraph said it was:** closing Phase 6 as "passed, 6/6" while
+`REQUIREMENTS.md` shows the box unticked. It still shows the box unticked, and this report has not
+been re-scored.
+
+## Round 5 — CONF-04's Jellyfin half, driven
+
+*Added 2026-09-24 by plan 06-45. This section records a measurement against the gap this report
+raised. **It is not a verification verdict**: plan 06-45 performed no verification and claims no
+verification result, and re-scoring this report is `/gsd-verify 06`'s call.*
+
+**The operator declined both of this report's recommended paths and chose a third.** Rather than
+accepting the carry immediately (option a) or holding Phase 6 open until Phase 7's first write
+(option b), the decision was to **pull the lever `06-03` named and never pulled** — the one thing
+that could have turned the argument into a measurement — and to accept a negative result as a
+planned outcome rather than a failure.
+
+**What was driven** (plans 06-41 and 06-42): three file mtimes touched from atlantis as real root
+inside the ZFS snapshot fence `tank/media/Music@pre-06-41-conf04-reprobe`, taken in the *same remote
+step* as the mutation so the fence and the change could not come apart; then the same targeted
+Default-mode `POST /Library/Media/Updated` at **file** scope that 06-03 had already proved safe —
+**one write verb for the entire round**, HTTP 204 — then a settle of 19,597 s against a floor of 120
+before anything was read back.
+
+**What was measured:**
+
+| Row | Target | 2026-09-20 baseline | Measured | `;` in any entity name | Verdict |
+|---|---|---|---|---|---|
+| `Lady Gaga / ARTPOP (2013) / Jewels n’ Drugs` | 4 | 0 | **0** | 0 | AT-BASELINE |
+| `Katy Perry / Teenage Dream (2010) / California Gurls` | 2 | 1 | **1** | 0 | AT-BASELINE |
+| `P!nk / The Truth About Love (2012) / Just Give Me a Reason` | 2 | 1 | **1** | 0 | AT-BASELINE |
+
+**Zero of three rows moved**, and the 1,244-row census delta is **empty** — which is simultaneously
+the proof that nothing outside the three moved and the proof that the three themselves did not.
+
+**This is a MEASUREMENT, not an UNKNOWN, and the distinction is the round's whole value.** 06-41's
+`LibraryMonitor` named all three Audio items by full internal path 60 s after the POST, so "the
+refresh never started" is ruled out. `PreferNonstandardArtistsTag` re-read `true` afterwards, so the
+option did not revert. The refresh ran, reached the items, and **the prober did not re-read the
+`ARTISTS` tag**. 06-03's mechanism (b) — "the file's mtime changing" — is disproven for this estate
+at Jellyfin 10.11.11. The computed verdict is `BRANCH: B` (`artifacts/06-43-conf04-verdict.txt`
+SECTION M), evaluated by a five-step rule and independently recomputed by that plan's own verify
+block from the same lines.
+
+**Nothing was escalated, and the round was safe on four independent instruments** ending
+`SAFETY: PASS`: the post-refresh `zfs diff` is byte-identical to the post-touch block (three `M`
+entries, zero non-`M`, zero sidecars, zero `TRUSTFALL` DO-NOT-RESCAN rows); the `.nfo` manifest
+differs on **0 of 91** lines in sha256 and mtime; all three pinned files' content sha256 values are
+unchanged; and both snapshots are PRESENT. **0 files changed content; 3 changed mtime.** No second
+refresh was issued, no wider refresh mode was used, and the aggressive per-item mode remains
+forbidden and was unreachable from every branch.
+
+**The operator's decision on the negative: `negative-carry-e6`** (2026-09-24T14:30:37Z,
+`artifacts/06-43-conf04-verdict.txt` SECTION P) — option (a) above. ⚠ **It is a CARRY, not a close.**
+The gap entry for CONF-04 above therefore keeps `status: partial`; `REQUIREMENTS.md:152` still reads
+`- [ ] **CONF-04**`; `requirements mark-complete` was not run; and this report's `status:` and
+`score:` are unchanged.
+
+**What round 5 did NOT close, stated so it is not inferred:** Phase 7 entry criterion **E6's second
+measurement** — whether a second ≥4-artist track yields four artists in Music Assistant or three,
+the only thing separating "MA caps the list at 3" from "`Twista` specifically failed to map" — was
+never in scope and stays with Phase 7. And the exit code is not a verdict:
+`check-music-consumers.sh` still exits 3 because `MA_ARTIST_PENDING` stays 1, and it would have
+exited 3 on a fully successful re-probe too. The Jellyfin and MA verdicts are **never summed**.
+
+**Recommended next step: run `/gsd-verify 06`.** It has not been run since this pass, and five
+documents have moved since (`REQUIREMENTS.md`, `ROADMAP.md`, this report, `deferred-items.md` and
+`stacks/selfhosted/arrs/beets.md`), plus two instrument scripts corrected by plan 06-44.
 
 ---
 

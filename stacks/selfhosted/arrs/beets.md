@@ -1727,6 +1727,104 @@ Before/after transcripts:
 complete options object and **exactly one field differed** — that endpoint is a full-object
 replace, the same hazard this estate already paid for once on `/System/Configuration/encoding`.
 
+### The sequel to that finding: mechanism (b) was DRIVEN on 2026-09-24, and it does not work
+
+*Gap-closure round 5, plans 06-40 … 06-45. The section above is the dated record of what was true
+on 2026-09-20 and is deliberately NOT rewritten; this is the correction beside it, which is the
+convention this page uses throughout.*
+
+The section above names two ways the evidence for CONF-04's Jellyfin half could arrive, and says it
+arrives "when a file is **written or newly imported** — i.e. Phase 7". One of those mechanisms —
+**(b) the file's mtime changing** — needs no write of content at all. On 2026-09-24 the operator
+chose to pull exactly that lever, inside Phase 6, rather than argue about it for another phase.
+
+**It did not work. That is the result, and it is a measurement rather than an unknown.**
+
+#### The mechanism, in enough detail to repeat
+
+1. **Three files**, and only three — the pinned rows of `ARTIST_PROOF_ROWS` in
+   `scripts/check-music-consumers.sh`, with the touch list **derived from that script by prefix
+   substitution and never retyped**, against a copy whose sha256 was asserted before parsing:
+   - `Lady Gaga/ARTPOP (2013)/CD 01-05 Lady Gaga - Jewels n’ Drugs.flac`
+   - `Katy Perry/Teenage Dream (2010)/CD 01-03 Katy Perry - California Gurls.flac`
+   - `P!nk/The Truth About Love (2012)/CD 01-04 P!nk - Just Give Me a Reason.flac`
+2. **A ZFS snapshot taken in the SAME remote step as the mutation**, so the fence and the change
+   could not come apart: `zfs snapshot tank/media/Music@pre-06-41-conf04-reprobe`, listed back and
+   asserted equal **before any file was touched**.
+3. **`touch` from atlantis as real root** — never from LXC 100, whose sparse idmap distorts
+   ownership. The permission was probed first with its own no-op form (`touch -r f f`, the same
+   `utimensat` with no change) on all three, so an `EPERM` would have been a recorded negative and
+   a stop, rather than a discovery mid-mutation.
+4. **The same targeted Default-mode `POST /Library/Media/Updated` at file scope**, body built by
+   `jq` from the derived list so nothing was hand-escaped. HTTP **204**. This was the **only write
+   verb issued by the entire round**.
+5. **A settle well past the floor**: ≥120 s required, **19,597 s** actually elapsed, computed as a
+   subtraction between two recorded epochs rather than asserted in a sentence.
+
+#### The controls that prove nothing was written into the library
+
+- **`zfs diff` against the fence** — the round's strongest control, and it is one instrument
+  carrying both halves of the safety claim: **three `M` entries, zero non-`M`, exactly three
+  distinct paths and all three pinned, zero `.nfo`/`.lrc`/`.jpg` sidecar entries**. Re-taken after
+  the refresh it is **byte-identical** to the post-touch capture (`cmp -s`, sha256 equal both
+  sides), so across the POST, the `LibraryMonitor` firing and five and a half hours of live estate,
+  ZFS records not one additional change under `tank/media/Music`.
+- **A `.nfo` hash manifest**: all **91** files differ on **0** lines in sha256 *and* mtime, and all
+  three sidecar set fingerprints (91 `.nfo` / 944 `.lrc` / 88 `.jpg`) are identical to the
+  before-state. The dataset is `atime=off` / `relatime=on`, so a read cannot contaminate the diff.
+- **Content hashes**: all three pinned files' sha256 values are unchanged at unchanged sizes. Three
+  mtimes moved; not one byte of audio did.
+- **The six `P!nk/TRUSTFALL (2023)` DO-NOT-RESCAN rows were EXCLUDED from the touch list and
+  verified unchanged** in count and entity-Id set — the negative control held, and the touch list's
+  `TRUSTFALL` substring count was asserted **0** before the mutation, twice.
+
+#### The numbers, per row
+
+| Row | Target | Baseline (2026-09-20) | Measured (2026-09-24) | `;` in any entity name | Verdict |
+|---|---|---|---|---|---|
+| `Jewels n’ Drugs` | 4 | 0 | **0** | 0 | AT-BASELINE |
+| `California Gurls` | 2 | 1 | **1** | 0 | AT-BASELINE |
+| `Just Give Me a Reason` | 2 | 1 | **1** | 0 | AT-BASELINE |
+
+**Zero of three rows moved**, and the 1,244-row census delta is **empty**.
+
+#### Why this is a measurement and not a "could not look"
+
+Jellyfin's own `LibraryMonitor` named **all three Audio items by full internal path**, U+2019
+included, 60 s after the POST returned — matching `LibraryMonitorDelay = 60` exactly. So "the
+refresh never started" is ruled out. And `PreferNonstandardArtistsTag` re-read **`true`**
+afterwards, so the option did not revert. The refresh ran, reached the items, and **the prober did
+not re-read the `ARTISTS` tag**. Mechanism (b) is **disproven for this estate at Jellyfin 10.11.11**.
+
+⛔ **Nothing was escalated, and the fence above is untouched.** No second refresh was issued, no
+wider refresh mode was used, no further file was touched, and no `zfs rollback` was executed. The
+aggressive per-item refresh mode — the one Phase 1 measured rewriting 83 of 91 `.nfo` with
+`SaveLocalMetadata` already off — **remains forbidden, was not issued, and was unreachable from
+every branch of the round**. If you are reading this at 3 a.m. because a row is still at baseline:
+the answer is not a bigger refresh.
+
+#### What is still held
+
+**`tank/media/Music@pre-06-41-conf04-reprobe` is STILL HELD and has not been released.** It is the
+only undo for the round's three mtime writes, its release is a **separate operator decision**, and
+nothing schedules its destruction. It costs essentially nothing — the round changed 0 bytes of
+content and `tank` has ~9 T free. Separately, `tank/downloads@pre-phase5` is also still held as
+Phase 5's only undo.
+
+#### And the rule that survives all of it
+
+**The Jellyfin and the Music Assistant verdicts are separate and must never be summed into one
+CONF-04 answer.** The MA half stays discharged; the Jellyfin half stays OPEN, now carried to Phase 7
+entry criterion **E6** under the operator's explicit `negative-carry-e6` override — an auditable
+carry of an open requirement, **not a close**. `scripts/check-music-consumers.sh` **still exits 3**,
+and that is correct: `MA_ARTIST_PENDING` is 1 because MA returns three artists against row 1's
+four-value `ARTISTS` tag, a *reported measured discrepancy* owned by E6's **second** measurement.
+The audit would have exited 3 on a fully successful Jellyfin re-probe too — **so an exit code, and
+any "N of M pending" figure, is never a CONF-04 completion signal.**
+
+Transcripts:
+`.planning/phases/06-tagger-configuration-and-dry-run/artifacts/06-4{0,1,2,3}-*.txt`.
+
 ### The assertion
 
 `scripts/check-music-consumers.sh` § 4 now reads `GET /Library/VirtualFolders` — nothing else in
