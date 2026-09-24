@@ -45,6 +45,11 @@ networks:
   # Traefik.
   t3_proxy:
     external: true
+  # tsbridge lives here and resolves its backends BY CONTAINER NAME over Docker's
+  # embedded DNS, so the api must share this network or every tailnet request is a
+  # 502: "lookup neocortex-memory-api on 127.0.0.11:53: no such host" (TODO-317).
+  traefik_default:
+    external: true
   # agentic-os declares no named network, so compose gave its stack the default name. Joining it
   # is what lets `agentic-os-db` resolve by container name; the published 172.16.1.159:5433 is the
   # fallback, not the path used here.
@@ -158,6 +163,7 @@ services:
     # No host port. Traefik on t3_proxy, and `docker exec` on LXC 100.
     networks:
       - t3_proxy
+      - traefik_default
       - agentic-os_default
     security_opt:
       - no-new-privileges:true
@@ -185,6 +191,25 @@ services:
       - traefik.http.routers.neocortex-memory-rtr.tls.certresolver=dns-cloudflare
       - traefik.http.routers.neocortex-memory-rtr.service=neocortex-memory-svc
       - traefik.http.services.neocortex-memory-svc.loadbalancer.server.port=8787
+
+      # -- tailnet route (TODO-317) -----------------------------------------
+      # The public Traefik router above stays for any non-Pi consumer. This adds
+      # a SECOND, private entrypoint on the tailnet, because the mini cannot
+      # complete a sustained index pass over its direct LAN path to this host:
+      # it fails part-way with EHOSTUNREACH while ping and curl from the same
+      # machine stay perfect. The same Traefik router and certificate carried
+      # 149/149 when the TCP path was changed, so the route is the variable.
+      #
+      # tsbridge is this estate's existing idiom (chat, immich_server, mc_*),
+      # and it uses tsnet, which is why it needs no /dev/net/tun on this LXC.
+      #
+      # whois is deliberately OFF: this API authenticates with a bearer token
+      # and has no use for identity headers on a POST-heavy ingest path.
+      - tsbridge.enabled=true
+      - tsbridge.service.name=cortex
+      - tsbridge.service.port=8787
+      - tsbridge.service.tags=tag:prod
+      - tsbridge.service.whois_enabled=false
 
   ########################### ONE-SHOT: PRODUCTION DEPENDENCIES
   # `docker compose run --rm deps`
