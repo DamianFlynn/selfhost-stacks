@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-24T13:55:00.000Z"
+last_updated: "2026-09-24T14:35:00.000Z"
 progress:
   total_phases: 10
   completed_phases: 5
   total_plans: 119
-  completed_plans: 114
+  completed_plans: 115
   percent: 50
 ---
 
@@ -29,7 +29,7 @@ pipeline that someone owns.
 
 Phase: 06 (tagger-configuration-and-dry-run) — EXECUTING gap-closure **ROUND 5**
 (re-verification deliberately NOT run — see the round-4 block at the end of this section)
-Plan: 42 of 45 executed. Round 1 (06-15..06-21, waves 6-9, 2026-09-22) closed CR-01 and
+Plan: 43 of 45 executed. Round 1 (06-15..06-21, waves 6-9, 2026-09-22) closed CR-01 and
 dispositioned all 24 findings of `06-REVIEW.md`; re-verification is **6/6, status passed**
 (`06-VERIFICATION.md`, gaps_remaining: [], regressions: []).
 **The phase is NOT complete.** A code review of the round-1 changes themselves
@@ -529,7 +529,78 @@ means**, behind its operator gate, and `tank/media/Music@pre-06-41-conf04-reprob
 STANDING** as the undo for the whole round — it must not be destroyed before 06-43 records its
 branch.
 
-Status: Executing Phase 06 — gap-closure **ROUND 5**, wave 20 (plan 06-42) COMPLETE. Round 2 ran
+**ROUND 5, WAVE 21 EXECUTED — 2026-09-24. Plan 06-43 HAS COMPUTED THE VERDICT AND THE OPERATOR HAS
+CHOSEN WHAT IT MEANS.** One artifact, `artifacts/06-43-conf04-verdict.txt` (443 lines, SECTIONS
+L–P), two commits (`88857e3` the branch and the round audit, `7775a3d` the operator decision).
+
+**THE LINE IS `BRANCH: B` — THE MTIME HYPOTHESIS IS RECORDED DISPROVEN — AND IT WAS COMPUTED, NOT
+CLAIMED.** The plan's five-step rule was evaluated strictly in order over four recorded inputs, and
+the plan's own `<automated>` verify block **independently recomputed the same value from the same
+lines** and would have failed the task on disagreement, so the conclusion does not rest on the
+agent that wrote it. Rule 1 did not fire (`SAFETY: PASS`); rule 2 did not fire
+(`INSTRUMENT RUN: MEASURED`); rule 3 failed on **all three** conjuncts (AT-TARGET count 0 not 3,
+`JF_AT_TARGET` 0 not 3, `JF_PENDING` 3 not 0); **rule 4 fired on all three.** SECTION L's `ROW`
+verdict block was **extracted with `sed` and spliced with `awk` over a placeholder rather than
+retyped**, then `diff`ed against 06-42's inside the verify — a transcription slip between the
+measurement and the verdict could not survive, U+2019 included.
+**⚠ THE EXIT CODE AND BOTH MA COUNTERS ARE RECORDED AND ARE EXPLICITLY NOT INPUTS**, stated inside
+the rule rather than left implicit: `check-music-consumers.sh` exits **3 on branch A and branch B
+alike** because `MA_ARTIST_PENDING` stays 1 either way, and an exit code that cannot distinguish A
+from B cannot decide between them. A surviving `MA_REPORTED: 1` does **not** disqualify branch A,
+and a green MA half may **never** offset a pending Jellyfin one — the script's own point (c),
+applied at the one step where it would have been easiest to break.
+
+**THE OPERATOR SELECTED `negative-carry-e6`**, recorded verbatim in SECTION P at
+**2026-09-24T14:30:37Z UTC**. That is option **(a)** of `06-VERIFICATION.md` § Recommended path:
+record the negative and **carry CONF-04's Jellyfin half to Phase 7 entry criterion E6 under an
+explicit override**, so the roadmap's existing argument becomes **auditable rather than implicit**.
+The branch-A acceptance option was neither offered nor selected on a `BRANCH: B`, so **no refusal
+is recorded, because none occurred**.
+**WHAT THE DECISION DOES NOT AUTHORISE, each named so it is not inferred:** ticking CONF-04 — **the
+box at `REQUIREMENTS.md:152` STAYS UNTICKED**, because an override is a recorded, argued carry of
+an OPEN requirement and must never be written as a close; re-scoring `06-VERIFICATION.md` to 6/6 —
+that is **`/gsd-verify 06`'s call**, which 06-45 *recommends* rather than performs, and this plan
+set does **not** self-declare a pass; any further refresh, any wider refresh mode, or the
+aggressive per-item mode — **the hard fence is untouched by this decision and is unreachable from
+it**; releasing either snapshot; or closing E6.
+
+**THE ROUND-WIDE AUDIT, MECHANICAL AND DELIMITED:** 0 occurrences of the forbidden mode's literal
+token across **all five** round-5 artifacts, 0 occurrences of the forbidden UI button's phrase,
+**1 write verb for the entire round** (06-41's single file-scope `POST` → 204), **0 files changed
+content**, **3 files changed mtime**, and **both snapshots PRESENT** — `tank/downloads@pre-phase5`
+(D-32, Phase 7 entry criterion E4) and `tank/media/Music@pre-06-41-conf04-reprobe`, the latter
+recorded as **STILL HELD, NOT RELEASED**: its release is a **separate operator decision**,
+deliberately not bundled into this gate. Every count carries the instrument that produced it. No
+`zfs rollback` was executed by any plan in this round.
+**⚠ ONE DEFECT IN THIS PLAN'S OWN ARTIFACT, CAUGHT BY MEASURING AFTER THE EDIT LANDED AND RECORDED
+IN BAND RATHER THAN SMOOTHED: the file MATCHED THE DETECTOR IT PUBLISHES.** SECTION O declared the
+forbidden UI button's phrase written in bracketed form and published a count of **0**, while the
+prose carried it **PLAINLY, TWICE** — in the hard-fence paragraph *forbidding* it and in SECTION
+P's does-not-authorise list — so `/usr/bin/grep -ciE` over the file returned **2** against a
+published **0**. The count over the four *source* artifacts was never wrong; what was wrong is that
+this file was itself an occurrence of its own detector. Both were rewritten to the bracketed form,
+an **`in this artifact`** audit row was added so the number is **asserted rather than assumed**,
+and the top paragraph now states why it brackets the phrase *even while forbidding it*. **Sixth
+consecutive round for the self-referential-measurement class (`DEF-06-39-06`)**, and the second
+consecutive round in which it was caught by a **post-edit measurement** rather than by an assertion
+written beforehand. **Screen a committed artifact against its OWN published detectors, not only for
+credentials and NULs.**
+
+**⚠ E6's SECOND MEASUREMENT IS NOT CLOSED BY THIS ROUND AND STAYS WITH PHASE 7** — whether a second
+≥4-artist track yields four artists in Music Assistant or three, the only measurement separating
+"MA caps the list at 3" from "`Twista` specifically failed to map". Round 5 never had it in scope,
+took no step toward it, and produced no evidence bearing on it. **E5 is named in the artifact too:**
+row 1 of `ARTIST_PROOF_ROWS` is one of the 30 items carrying a populated `Artists` string list with
+**zero** linked artist entities, which is why a per-file refresh that performs no artist-entity
+creation was always the weakest lever on that particular row.
+**STILL NOT A CLOSE.** No requirement checkbox moved; `06-VERIFICATION.md` was not touched and is
+**still stale**; `stacks/selfhosted/arrs/beets.md` is untouched; and CONF-04's Jellyfin half is
+still **OPEN** — now with an **explicit, operator-signed override** carrying it to **E6**, which
+**06-44 and 06-45** write. Both downstream plans **read the `BRANCH:` line** rather than
+re-deriving the conclusion from the measurements.
+
+Status: Executing Phase 06 — gap-closure **ROUND 5**, wave 21 (plan 06-43) COMPLETE; the operator
+gate is resolved and 06-44 / 06-45 remain. Wave 20 (plan 06-42) COMPLETE. Round 2 ran
 against `06-REVIEW-GAP.md` (GC-01 blocker + 7 warnings in round 1's own code, plus GC-16/GC-17
 from the cross-family adjudication) — all 17 closed and dispositioned in `06-DISPOSITIONS-GAP.md`
 by plan 06-29. Still 1 open
