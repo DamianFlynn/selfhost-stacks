@@ -221,3 +221,19 @@ None. This plan produces one artifact and every section in it is measured.
 
 None. No new network endpoint, auth path, file access pattern or schema was introduced — this plan
 issues GETs and reads.
+
+## Self-Check: PASSED
+
+Verified after writing this summary, against disk and `git log`, not against the text above:
+
+- `artifacts/06-40-conf04-reprobe-before.txt` — FOUND (1,810 lines, 10 `SECTION n` headings:
+  0-9 plus the END banner's reference)
+- `06-40-SUMMARY.md` — FOUND
+- Commits `d5f49cd`, `f309bdb`, `69cd2a8`, `a9dfb9c` — all FOUND
+- `git status --porcelain` — clean; nothing left uncommitted
+- Forbidden-token screen over the artifact: the aggressive refresh mode's literal token count is
+  `0` and the "replace all metadata" phrase count is `0`
+- Credential screen over the artifact: no `MediaBrowser Token` value, no `X-Emby-Token` value, no
+  `*ArrApiKey`, no MA password. The credential file's MODE (`600 root`) is recorded; its contents
+  are not
+- `/tmp/06-40-*` on atlantis: empty — every scratch file deleted and verified absent
