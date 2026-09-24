@@ -299,6 +299,75 @@ docker, no HTTP verb, no package install. **No script was executed at all** — 
 measured and is deliberately NOT restated here as though re-driven. Nothing about CONF-04 changed, no
 requirement checkbox moved, and `06-VERIFICATION.md` was not re-scored.
 
+**ROUND 6, WAVE 3 EXECUTED 06-50 — 2026-09-24. Round 6 PLANNED plans 06-46 … 06-52; plans
+06-46 … 06-50 have executed at the time this block was written, and 06-51 and 06-52 have NOT.**
+`06-DISPOSITIONS-GAP4.md` is the round's register (536 lines): **4 FIXED, 0 FIXED (undriven),
+1 ACCEPTED, 0 CARRIED — 5 total**, reconciling three ways — the review's frontmatter 0+3+2, the
+dispositions 4+0+1+0, and the fix kinds **1 CODE + 3 CLAIM CORRECTION + 1 BOTH**. Two task commits —
+`21eaad4` (the register) and the commit carrying this block; no artifact and no estate contact.
+**BASE COMMIT
+`3085da162460448aba1eb151ad4cabac390abbb1`**, captured before anything was written, because every
+byte-identity claim is anchored to it and not to a moving `HEAD`.
+**⚠ THE ID ALIAS, FIRST BECAUSE EVERY CITATION DEPENDS ON IT.** `06-REVIEW.md` reuses round 1's
+`WR-*`/`IN-*` namespace, already cited in band across all six scripts — **39** pre-existing citations
+of the five reused IDs and **94** across the whole namespace, measured at the base commit and
+**identical at the pre-round tree `75c7989`**, which is the mechanical proof round 6 added none. The
+round's IDs are `R6-01 … R6-09`, minted **up front in the fix plans** rather than aliased afterwards
+(`DEF-06-39-01`), and the mapping table sits in the register immediately after its Source table,
+before any citation is used in prose.
+**The five findings and their dispositions:** `R6-01 (WR-01)` **FIXED** — the only
+`shellcheck -S warning` finding across the six scripts, so the set is clean on all six where it was
+clean on five; `R6-02 (WR-02)` **ACCEPTED**; `R6-03 (WR-03)` **FIXED** — both of the review's own fix
+options delivered, the failure arms naming the literal edit and `CONVENTIONS.md` naming all four live
+pins by symbol, with the third site `ST_PLANNED_CASES=7` deliberately untouched (`DEF-06-39-02`);
+`R6-04 (IN-01)` **FIXED** — `CONVENTIONS.md` written and `CLAUDE.md`'s block proven a name-for-name
+mirror by a comparator driven red first, with the **architecture half ACCEPTED and `ARCHITECTURE.md`
+deliberately NOT created**; `R6-05 (IN-02)` **FIXED** — a heading-text pointer at the head of
+`beets.md`, deliberately not the line-number form the finding itself suggested.
+**`R6-02 (WR-02)` — the extreme comment-to-code ratio — is ACCEPTED with reasoning, not fixed: a bulk
+strip of round-by-round narrative out of the six most heavily reviewed files, at the end of a
+recursion in which every round's diff became the next round's findings, risks losing the reason a
+fail-closed branch exists on instruments that run against ~103 containers, so the durable half is
+taken as a forward rule (`CONVENTIONS.md` convention 12) and the round binds itself instead.** That
+self-binding is **measured, not asserted**: one file under `scripts/` changed, **+6 / −1** lines, of
+which 3 are single-line `R6-01`/`R6-03` citations and 2 are emitted failure output, with **0** lines
+of new in-band historical narrative and **0** new `WR-*`/`IN-*` citations.
+**The recipe correction and the scope decision are round items, outside the five-finding
+reconciliation:** `R6-06` closed `DEF-06-45-04` — the `-cF`-over-a-bracketed-needle detector that
+could never match, corrected to `-cE` and driven both ways against a control (`-cE` → 1, `-cF` → 0) —
+and `R6-07` **DECIDED** the bracketing convention's scope in `DEF-06-48-02`: it **stays `artifacts/`**,
+scoped by **function not directory name**, **not widened to `ROADMAP.md` prose** and **not dropped**,
+with no `ROADMAP.md` token edit made or required. Re-measured after this plan's own edits, the
+whole-file count of the forbidden token in `ROADMAP.md` is **2 at the base commit and 2 now** — round
+6 added no third occurrence while deciding the convention.
+⛔ **THE TWO OPERATOR ACTIONS ARE RECORDED `PENDING`, WITH THEIR OUTCOMES EXPLICITLY NOT STATED.**
+`R6-08` — the host `git pull --ff-only` sync of LXC 100 at `/mnt/fast/stacks`, owned by plan **`06-51`**
+(wave 4, `autonomous: false`) — and `R6-09` — the `tank/media/Music@pre-06-41-conf04-reprobe` release
+go/no-go, owned by plan **`06-52`** (wave 5, `autonomous: false`) — had **not run** when this block was
+written at wave 3. Both plans carry legitimate halt/hold branches. Their outcomes land in
+**`DEF-06-51-01`** and **`DEF-06-52-01`**, and **`06-52` task 3** is the plan that folds the real
+outcomes back into this block, into the register's `ROUND CLOSE` section and into the register's count
+reconciliation, and closes `ROADMAP.md`'s Phase 6 plan count and its `**Plans**: … waves` header.
+Nothing here states a commit the host moved to, a digest verdict, or a decision on the snapshot,
+because none of those has happened. A false position in this file is read as fact by everything
+downstream.
+**`D-R6-M4` — the operator's decision, 2026-09-24: `ROADMAP.md`'s `Plans Complete` column means
+EXECUTED, not authored** (the Phase 4 precedent row reads `16/16` with its status cell still
+`In Progress`, noted "All 16 plans executed"). So the numerator written this round is the **measured**
+count of `06-NN-SUMMARY.md` files present in the phase directory — **49** at the moment of the edit,
+never `52/52` — and `06-52` at wave 5 closes it. The `Plan:` line above carries the same measured
+figure, so the two records cannot disagree.
+**⚠ RE-VERIFICATION HAS NOT BEEN PERFORMED BY THIS ROUND.** Plan 06-50 records dispositions; it ran
+**no** `/gsd-verify` and claims **no** verification result. **Do not read "round 6 complete" as "phase
+complete"** — that is the verifier's call. `REQUIREMENTS.md` was **not touched** (asserted
+byte-unchanged under `git diff --exit-code HEAD --`), the unticked `- [ ] **CONF-04**` box **stands**
+(measured 1 unticked / 0 ticked, the ticked recipe driven to 1 against a control first), no checkbox
+moved, `ROADMAP.md`'s Phase 6 status cell still reads `In Progress`, and `06-VERIFICATION.md` stands
+at `gaps_found`, **5/6**, un-rescored. **`/gsd-verify 06` is the next step, after `06-51` and `06-52`
+have run.** No script was edited by this plan (`git diff --exit-code HEAD -- scripts/` returns 0), no
+`state.*` or `roadmap.*` SDK verb was invoked, and there was **zero estate contact** — no ssh, no
+docker, no HTTP verb, no package install.
+
 Previous: Phase 05 (inbox-structure-and-the-junk-gate) — **COMPLETE, closed 2026-09-19 at 4/4
 criteria TRUE**, 11 of 11 plans (fence taken, `_inbox` created, D-21 inode
 proof driven; criteria 2/3/4 amended in band and criterion 4 now asserted by the standing check; the

@@ -168,3 +168,51 @@ past five phases of history to find the live picture.
 _Reviewed: 2026-09-24T15:08:05Z_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
+
+---
+
+## Wiring — where round 6's fixes are recorded
+
+**Appended 2026-09-24 by plan 06-50 (wave 3). Nothing above this line was edited.**
+
+**Round 6's fixes and refusals are dispositioned, finding by finding, in
+`.planning/phases/06-tagger-configuration-and-dry-run/06-DISPOSITIONS-GAP4.md`.** That register is
+the record a future reader should follow: it names, for each finding, the plan, the commit, the
+evidence, what was driven and what was not, and — where nothing was changed — the reason and the
+revisit condition.
+
+### ⚠ Read the mapping table before following any citation
+
+**This review's `WR-*` / `IN-*` IDs alias round 1's namespace, which is already cited in band across
+all six scripts in scope.** Measured at plan 06-50's base commit `3085da1`, the five IDs this review
+reuses account for **39** pre-existing in-band citations across those six files (`WR-01` 16,
+`WR-02` 4, `WR-03` 15, `IN-01` 2, `IN-02` 2), and the whole `WR-*` / `IN-*` namespace accounts for
+**94** — none of which has anything to do with round 6. A grep for `WR-02` in `phase06-oracle.sh`
+finds round 1's empty-manifest finding, not this review's comment-ratio finding.
+
+**So round 6's in-band and register IDs are `R6-01` … `R6-05`** for the five findings here, plus
+**`R6-06` … `R6-09`** for the round's four non-review items (the corrected detector, the bracketing
+scope decision, the host sync and the snapshot go/no-go). The mapping table sits in
+`06-DISPOSITIONS-GAP4.md` **immediately after its Source table**, before any citation is used in
+prose. The namespace was chosen **up front**, in the fix plans themselves, rather than aliased
+afterwards — the rule `DEF-06-39-01` established after round 4 paid that cost four times over.
+
+| This review | In band / register | Closed by |
+|---|---|---|
+| `WR-01` | `R6-01` | plan 06-46 |
+| `WR-02` | `R6-02` | plan 06-49 (ACCEPTED, with a forward rule) |
+| `WR-03` | `R6-03` | plans 06-46 + 06-49 |
+| `IN-01` | `R6-04` | plan 06-49 |
+| `IN-02` | `R6-05` | plan 06-47 |
+
+### This round's totals
+
+**4 FIXED, 0 FIXED (undriven), 1 ACCEPTED, 0 CARRIED — 5 total**, reconciling three ways: this
+review's frontmatter `0 + 3 + 2 = 5`; the dispositions `4 + 0 + 1 + 0 = 5`; the fix kinds
+**1 CODE + 3 CLAIM CORRECTION + 1 BOTH** `= 5`.
+
+**This is a record, not a re-close.** Plan 06-50 ran no `/gsd-verify` and claims no verification
+result. `REQUIREMENTS.md` is untouched, `- [ ] **CONF-04**` stands, entry criterion **E6** still owns
+the Jellyfin half, and `ROADMAP.md`'s Phase 6 status row still reads `In Progress`.
+
+_Dispositioned: 2026-09-24 by plan 06-50_
