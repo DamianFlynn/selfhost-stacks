@@ -1455,3 +1455,254 @@ COUNT of DO-NOT-RESCAN rows listed above: 6   (06-03 recorded 6 on 2026-09-20)
 ASSERTION: six rows -> PASS. The set 06-41 must exclude is unchanged.
 
 END OF THE JELLYFIN HALF (sections 0-4). Sections 5-9 are read from atlantis.
+
+
+================================================================================
+SECTION 5 — THE THREE PINNED FILES ON DISK (read from atlantis as real root)
+================================================================================
+Taken  : 2026-09-24T06:20:46Z  (UTC)
+Host   : atlantis (172.16.1.158) — the Proxmox host. REAL root, the only place `zfs`
+         exists, and the only vantage point from which the on-disk ownership is not
+         distorted by LXC 100's sparse idmap. CLAUDE.md records 65534 appearing
+         container-side for unmapped ids: ownership read from LXC 100 is NOT the disk.
+Bounds : every remote command in this task carries `set -o pipefail` and the ssh exit
+         status is read into a variable BEFORE anything is piped. macOS has no GNU
+         `timeout`, and `timeout N cmd | wc -l` silently exits 0 — that shape hung this
+         estate for ~10 minutes once (DEF-06-10-01) and is not used here.
+         A command that could not run records UNKNOWN. It NEVER records a zero.
+
+THE /media -> host BIND, READ BACK FROM `docker inspect` RATHER THAN ASSUMED:
+  jellyfin: /mnt/tank/media -> /media (rw)
+  beets-flask: /mnt/tank/media -> /media (ro)
+  (read on LXC 100, where docker runs; the two lines above are this run's output, not a
+   remembered value. Jellyfin's bind is `rw` and always has been — the `:ro` fence D-05
+   talks about is the BEETS side, and it reads `ro` above. Noted so a reader does not
+   mistake Jellyfin's rw for drift introduced here.)
+
+MAPPING: the Jellyfin-INTERNAL path prefix /media becomes the host prefix /mnt/tank/media.
+
+The path list was written to /tmp/06-40-t2-pinned-paths.2542933 over ssh STDIN from a QUOTED heredoc — never as an
+argv word. The ARTPOP path carries U+2019 (’) and no local shell, no ssh quoting layer and
+no normalisation pass gets to touch the byte sequence on that route.
+
+  (a) line count of /tmp/06-40-t2-pinned-paths.2542933: 3
+      ASSERTION: exactly 3 lines -> PASS
+
+  FILE 1: /mnt/tank/media/Music/Lady Gaga/ARTPOP (2013)/CD 01-05 Lady Gaga - Jewels n’ Drugs.flac
+      exists       : YES  (test -f -> PASS)
+      size (bytes) : 30023946
+      mtime (UTC)  : 2016-01-13T19:02:07Z   (epoch 1452711727)
+      owner uid:gid: 568:568   (568:568 as CLAUDE.md records -> PASS)
+      mode         : 0777   (0777 as CLAUDE.md records — chmod fails EPERM on tank under aclmode=restricted; this task changes no permission and did not try) -> PASS
+  FILE 2: /mnt/tank/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-03 Katy Perry - California Gurls.flac
+      exists       : YES  (test -f -> PASS)
+      size (bytes) : 29357615
+      mtime (UTC)  : 2016-02-22T08:08:52Z   (epoch 1456128532)
+      owner uid:gid: 568:568   (568:568 as CLAUDE.md records -> PASS)
+      mode         : 0777   (0777 as CLAUDE.md records — chmod fails EPERM on tank under aclmode=restricted; this task changes no permission and did not try) -> PASS
+  FILE 3: /mnt/tank/media/Music/P!nk/The Truth About Love (2012)/CD 01-04 P!nk - Just Give Me a Reason.flac
+      exists       : YES  (test -f -> PASS)
+      size (bytes) : 23920625
+      mtime (UTC)  : 2015-08-20T19:19:04Z   (epoch 1440098344)
+      owner uid:gid: 568:568   (568:568 as CLAUDE.md records -> PASS)
+      mode         : 0777   (0777 as CLAUDE.md records — chmod fails EPERM on tank under aclmode=restricted; this task changes no permission and did not try) -> PASS
+
+  (b) ASSERTION: every line passes `test -f` -> PASS (0 of 3 missing)
+
+
+================================================================================
+SECTION 6 — EVERY .nfo UNDER THE DATASET, HASHED (the write-detection control)
+================================================================================
+This is the control that detects the ONE outcome this round must never produce: metadata
+written into the library. Phase 1 measured the aggressive per-item refresh mode rewriting
+83 of 91 .nfo with the local-metadata saver already OFF; that mode is forbidden estate-wide
+and is not issued by any plan in this round. This manifest is how a later reader PROVES it.
+
+COUNT of .nfo under /mnt/tank/media/Music: 91
+  Phase 1 measured 91. MATCH — the library's .nfo population has not moved.
+
+sha256  mtime(UTC)  path   — LC_ALL=C sorted by path:
+0e563058fe201eda090ee5f42d650ce44e8e49ed312284cebe51e2a05dc9b373  2026-08-18T14:34:10Z  /mnt/tank/media/Music/BLACKPINK/BORN PINK (2022)/album.nfo
+2e97ba8e67e0dcc00012da3edff2c56d19549f52f8fb77e7079c166b995e13f0  2026-08-18T14:34:08Z  /mnt/tank/media/Music/BLACKPINK/THE ALBUM (2020)/album.nfo
+7240602841f6bc73a614b471c0f352f76ff4d58028ab4d7370477f0e5cb451dd  2026-08-18T14:34:09Z  /mnt/tank/media/Music/BLACKPINK/THE ALBUM -JP ver.- (2021)/album.nfo
+3c3ffe98d9f6b98f23e54f5dee286011e6eb6aa02f8c78198d34e0463b610a8d  2026-08-18T14:34:02Z  /mnt/tank/media/Music/BLACKPINK/artist.nfo
+a8d95e717d63c86cc4835a6dd07e25e5ba97f1515b5c8971b690f8a48ccbb09a  2026-08-18T14:34:02Z  /mnt/tank/media/Music/Benson Boone/Fireworks & Rollerblades (2024)/album.nfo
+1f664d5c9c735dc20e9e7c608d53d0915bf02e5699c318cca60235572867b27b  2026-08-18T14:33:56Z  /mnt/tank/media/Music/Benson Boone/artist.nfo
+7701406717dc165f568c2c6787747306a22b5c772f4bcab15241f4d720368a70  2026-08-18T14:34:01Z  /mnt/tank/media/Music/Chris Norman/Lifelines (2026)/album.nfo
+0db1cd052ab774f004d6cb520d3eaa63bd5114ae62ff0c9b07990c413afab766  2026-08-18T14:33:56Z  /mnt/tank/media/Music/Chris Norman/artist.nfo
+ba08611a691e4be612d6b3e897811bddf2f62378ec712f542956ec15a4992c31  2026-08-18T14:33:59Z  /mnt/tank/media/Music/Def Leppard/Adrenalize (1992)/album.nfo
+c5eecf1dd1a6f1cfd7e97e9e4dbca4e9ab55f67441d7c8e979790a26ddd7b597  2026-08-18T14:34:12Z  /mnt/tank/media/Music/Def Leppard/CD Collection, Volume 3 (2021)/album.nfo
+0eef65a9823b93ae65df2485c8c64267ae78d3bba70fa3067ba499b917d265b5  2026-08-18T14:34:36Z  /mnt/tank/media/Music/Def Leppard/Def Leppard (2015)/album.nfo
+e5c6a979aeca7e91b53908d703effcc8e550cbdabdabec24a8d36354dbb11f36  2026-08-18T14:34:37Z  /mnt/tank/media/Music/Def Leppard/Def Leppard - The Las Vegas Residency Set List (2026)/album.nfo
+387320f315adea2ccdb6637d3af9af76592d07bd6e38b24d18a542fa069d889d  2026-08-18T14:34:40Z  /mnt/tank/media/Music/Def Leppard/Diamond Star Halos (2022)/album.nfo
+b64b929b96023e7a715c3e71c91f816e74bec3a5ed38b674af716c0db83e489d  2026-08-18T14:34:41Z  /mnt/tank/media/Music/Def Leppard/Drastic Symphonies (2023)/album.nfo
+1c46263b2f28a0801dc56aaad7e1feb36ea75116f55fb0232a5889034bb89251  2026-08-18T14:34:57Z  /mnt/tank/media/Music/Def Leppard/High ’n’ Dry (1981)/album.nfo
+5435becc64707bb83bc3da0aab8a97d9843b8a5d6d67cbf49d9112d9f6d08788  2026-08-18T14:34:57Z  /mnt/tank/media/Music/Def Leppard/On Through the Night (1980)/album.nfo
+296bbb768639473d18106d83a192c20b1044c575bc3e48f7944cda926985f7df  2026-08-18T14:34:58Z  /mnt/tank/media/Music/Def Leppard/Pyromania (1983)/album.nfo
+e7736d0ad4a7c0373f25174c8505d24ce959f2b697c51d9a8436c478c657d10e  2026-08-18T14:34:59Z  /mnt/tank/media/Music/Def Leppard/Retro Active (1993)/album.nfo
+a26cd73b08907866dac7bde86a71d454042b9917ab900f8d1f473c9965f30214  2026-08-18T14:35:02Z  /mnt/tank/media/Music/Def Leppard/Rock of Ages - The Definitive Collection (2005)/album.nfo
+deb4bd1701c6ab32fed68b1027949221ebd554125f2b74ef8042ce7bbb717ee2  2026-08-18T14:35:04Z  /mnt/tank/media/Music/Def Leppard/The Story So Far - The Best of Def Leppard (2018)/album.nfo
+7d50ed6c95d093fa457dfb72e77a20df67f965ebde2b9cc15944a95e608ba6ba  2026-08-18T14:33:56Z  /mnt/tank/media/Music/Def Leppard/artist.nfo
+e746c124cde68738724f6362f0572cf8a96b737b10a9af2cccf10e5fe57a9bc2  2026-08-18T14:34:06Z  /mnt/tank/media/Music/Ed Sheeran/+ (2011)/album.nfo
+a53f312e59ef2989aeddd32dbaafba0e44840291f3ac5428cccbe89e7f5af36a  2026-08-18T14:34:31Z  /mnt/tank/media/Music/Ed Sheeran/- (2023)/album.nfo
+11b0ccaf28bd36476831f632d7042fb0566eb3dc1dd445f81de1d4da48634b41  2026-08-18T14:34:20Z  /mnt/tank/media/Music/Ed Sheeran/5 (2014)/album.nfo
+cde772804bf2ff83975dbd27f4ca6a6ab576c3a924a180c1630c050cb8e6e972  2026-08-18T14:34:24Z  /mnt/tank/media/Music/Ed Sheeran/No.6 Collaborations Project (2019)/album.nfo
+47d13ab934b2290cc94b4d160fd87a5cb5188089176b2efd51501e138698453e  2026-08-18T14:34:26Z  /mnt/tank/media/Music/Ed Sheeran/Play (2025)/album.nfo
+c8c5312e6074ceca22c3e7f353bd7b0a85259c27f09b94205e5a44df1a142786  2025-10-26T22:31:28Z  /mnt/tank/media/Music/Ed Sheeran/album.nfo
+dc4c36d9f9350744aa1f4ee6d72ecbf72035750b49f27cc13ab284f48035c46f  2026-08-18T14:34:01Z  /mnt/tank/media/Music/Ed Sheeran/artist.nfo
+4464a32c2d9810597047a259e00f03cc0b6115b77c245cf214fc8674b7bf8ed7  2026-08-18T14:34:24Z  /mnt/tank/media/Music/Ed Sheeran/× (2014)/album.nfo
+7b8af3f089bd9ad3db726b89d87712040cf0e30ecefebba4eec622bb28b7ae45  2026-08-18T14:34:21Z  /mnt/tank/media/Music/Ed Sheeran/÷ (2017)/album.nfo
+99fe8d63c7cbdb7a6b01c4e5d62c0cd614d32f71890868836d62498b74b625b5  2026-08-18T14:33:59Z  /mnt/tank/media/Music/Garth Brooks/Christmas Together (2016)/album.nfo
+279f28555e80cef3c86d607f66863949e60c09633e9a9bf492b18cc6f2f0b476  2026-08-18T14:34:06Z  /mnt/tank/media/Music/Garth Brooks/Fun (2020)/album.nfo
+311d7d6a084f7583f3077beddb4f1cdb42ae1fd1b1122db547aae40d080856e1  2026-08-18T14:34:10Z  /mnt/tank/media/Music/Garth Brooks/Gunslinger (2016)/album.nfo
+da867455c36fb3785d1363f5393132d504f2b2ef4858519cd19ded8233ed038f  2026-08-18T14:34:12Z  /mnt/tank/media/Music/Garth Brooks/Ropin’ the Wind (1991)/album.nfo
+ae2ad3254a7d93b1da4532ac685deeab4cbd6fa93d43d42ed70f4c1cf4e69585  2026-08-18T14:34:18Z  /mnt/tank/media/Music/Garth Brooks/The Ultimate Hits (2007)/album.nfo
+d15df38321355fd6a4ec64756eef73e948d91e410989f5496bcfe38c14c4c232  2026-08-18T14:33:56Z  /mnt/tank/media/Music/Garth Brooks/artist.nfo
+57f9e325193ea1b2ff0e2a5d2bf2131983c5e1a0b203424a9c642f4ca8b3610e  2026-08-18T14:34:02Z  /mnt/tank/media/Music/Hawthorne Heights/If Only You Were Lonely (2006)/album.nfo
+427aa99565d7b61de10d253f514de3f2568f6a3c8b10ba14c2832a65fc01d099  2026-08-18T14:34:04Z  /mnt/tank/media/Music/Hawthorne Heights/If Only You Were Lonely XV (2023)/album.nfo
+06722b3af4a7da599320056f60df3dae5fdedf34089434915a3b5de4c1f66cd2  2026-08-18T14:34:08Z  /mnt/tank/media/Music/Hawthorne Heights/The Rain Just Follows Me (2021)/album.nfo
+a3e8964bb091e8fd43f8a67340d70d486d5d3a02ad9f9ad0224dcbeaae73b2f8  2026-08-18T14:33:56Z  /mnt/tank/media/Music/Hawthorne Heights/artist.nfo
+77a9b8ae02571e92ce293b4eb6640e38406280ae6fe4ed12d36d20aa8c0858fb  2026-08-18T14:34:13Z  /mnt/tank/media/Music/Katy Perry/143 (2024)/album.nfo
+2be454534e8c2a3bc6e8bfa8cd43dac9894ff9491c8a38d65a5a8114ceef0b6f  2026-08-18T14:34:15Z  /mnt/tank/media/Music/Katy Perry/One of the Boys (2008)/album.nfo
+6c838c0251098c394bc8d60665a0f628b7cd74b6f7b5f4055741561f1463180a  2026-08-18T14:34:21Z  /mnt/tank/media/Music/Katy Perry/PRISM (2013)/album.nfo
+cd25a3eda3e60ea96dbe5558d68ff0c7fe7d7015265b46b3b6b462d7eeb5056a  2026-08-18T14:34:27Z  /mnt/tank/media/Music/Katy Perry/Smile (2020)/album.nfo
+452a65cd9f6cf5a27cbb33385cb8ab16754aac01f0d6b55126335ba62b6270db  2026-08-18T14:34:28Z  /mnt/tank/media/Music/Katy Perry/Teenage Dream (2010)/album.nfo
+f013b316e70360c68907dcb96b51570882037d6b3b31d371f235b14931ff4516  2026-08-18T14:34:30Z  /mnt/tank/media/Music/Katy Perry/Witness (2017)/album.nfo
+66233a8cd9752c0198bdb4c6a8c5979839edae49b3772e9330f994d207895d57  2026-08-18T14:34:09Z  /mnt/tank/media/Music/Katy Perry/artist.nfo
+14169824492facbb83efb3876adec872debab09ed92cb5c70e7b388fdf4b1ae6  2026-08-18T14:34:00Z  /mnt/tank/media/Music/Lady Gaga/ARTPOP (2013)/album.nfo
+06a84606491b630dfc5199cf9c1c4d58e831f33457e26adf11be1f660cd2951b  2026-08-18T14:34:11Z  /mnt/tank/media/Music/Lady Gaga/Born This Way (2011)/album.nfo
+c316cbff39548568fbba54e11dfe859d3361bbd08e012e379257bcd067614c7d  2025-10-26T22:43:44Z  /mnt/tank/media/Music/Lady Gaga/Joanne (2016)/12 Vinyl 01/album.nfo
+6822add04488599992e539e0bd33cfd3c8eea1f778d1ec0fbef9ae43dd34c030  2025-10-26T22:43:43Z  /mnt/tank/media/Music/Lady Gaga/Joanne (2016)/12 Vinyl 02/album.nfo
+31aa0084fb9a746d6662177bf6051e9792709743648c2ff3d512df49750c8365  2026-08-18T14:34:14Z  /mnt/tank/media/Music/Lady Gaga/Joanne (2016)/album.nfo
+ff2e538f819eaa902fa8667e1a2e7c5cca2bb5f5fe36abc267ec729a68a9fe81  2025-10-26T22:50:28Z  /mnt/tank/media/Music/Lady Gaga/Joanne (2016)/artist.nfo
+c3e267382c5acbed085b0aebcbfb2774b3121a9bde06290c1f8b4b8c8d5f96a6  2025-10-26T22:39:41Z  /mnt/tank/media/Music/Lady Gaga/MAYHEM (2025)/12 Vinyl 01/album.nfo
+dd7367cd66f1126ef076343cabe4160668477849ea0353e24e592dcc80c6f039  2025-10-26T22:39:40Z  /mnt/tank/media/Music/Lady Gaga/MAYHEM (2025)/12 Vinyl 02/album.nfo
+95dc96142e250af56f601b8c2f5abe937def542212fc6825d1f314a6697124f8  2026-08-18T14:34:20Z  /mnt/tank/media/Music/Lady Gaga/MAYHEM (2025)/album.nfo
+e95651d1b8aad368f616ad9e3d716f6cc49c952417ceec7ae3bbceab96ebba5d  2025-10-26T22:50:29Z  /mnt/tank/media/Music/Lady Gaga/MAYHEM (2025)/artist.nfo
+d10f6eb3260413a71a811af3e47bc204bfb3424dfa48acd7694bae78232862a2  2026-08-18T14:33:56Z  /mnt/tank/media/Music/Lady Gaga/artist.nfo
+2ae7598d263d4bb6aad0323823cb45e0dc9fa0c2e7b5f49f409a55feeaa76d45  2026-08-18T14:34:42Z  /mnt/tank/media/Music/P!nk/Can’t Take Me Home (2000)/album.nfo
+1ab161406294fa58cbc6b5216adf0f304c4615da39947fe7314722989a948c31  2026-08-18T14:34:43Z  /mnt/tank/media/Music/P!nk/Funhouse (2008)/album.nfo
+810283fdecc20cfd6437e1a581e3543f6326bef21d89d6c367439e203fd0a0c7  2026-08-18T14:34:45Z  /mnt/tank/media/Music/P!nk/Greatest Hits… So Far!!! (2010)/album.nfo
+71a32753fbd88e03307734c85cf8344e25209509985f14449840edb9e67876b8  2026-08-18T14:34:46Z  /mnt/tank/media/Music/P!nk/Hurts 2B Human (2019)/album.nfo
+8f6cf75ef94817d835866e938211ea9b1a415569b1f9306ac5875f37f5afa9cb  2026-08-18T14:34:48Z  /mnt/tank/media/Music/P!nk/I’m Not Dead (2006)/album.nfo
+68c052407c9a74b1b9e920d17cf8947944901d155792b765290f900842605b77  2026-08-18T14:34:50Z  /mnt/tank/media/Music/P!nk/TRUSTFALL (2023)/album.nfo
+fff9a9248dba9cb61f3e4d1e5d71ba05c0ba112597b8d11dfd6478f0c07633b9  2026-08-18T14:34:14Z  /mnt/tank/media/Music/P!nk/The Album Collection (2010)/album.nfo
+de50a81e42a31348cdbad2a8bf0b6f78ea40819ef80f2e1e172330bdf2c209c1  2026-08-18T14:34:51Z  /mnt/tank/media/Music/P!nk/The Truth About Love (2012)/album.nfo
+5973a2ddeb4c3b1bd42c5cf8538393cfb695e1d02f2e4db3694e21edd4fb702d  2026-08-18T14:34:53Z  /mnt/tank/media/Music/P!nk/Try This (2003)/album.nfo
+bc50fce892e76d726bc251a5719e1a4e7cecf09c669334acc3d0b2a3c0ac865a  2026-08-18T14:33:56Z  /mnt/tank/media/Music/P!nk/artist.nfo
+5313c294c23eb6bd3e411d9fbf00bd5cce4178229bc4541dfbe57b678c86980f  2026-08-18T14:34:06Z  /mnt/tank/media/Music/Sabrina Carpenter/EVOLution (2016)/album.nfo
+f7350c64da55d6e396adfbb67429534202b81884181ccda49cf94d257dc67866  2026-08-18T14:34:11Z  /mnt/tank/media/Music/Sabrina Carpenter/Eyes Wide Open (2015)/album.nfo
+365cb98bc84cdd380c83914fd572614caf5e7a4ac232ee7acd1157d5f1dd81d6  2026-08-18T14:34:15Z  /mnt/tank/media/Music/Sabrina Carpenter/Man’s Best Friend (2025)/album.nfo
+d4b5b100fe97701b2f6da5b52b128f0980746f6031a138816cd37901db1be878  2026-08-18T14:34:17Z  /mnt/tank/media/Music/Sabrina Carpenter/Singular - Act II (2019)/album.nfo
+9b5068b12c5aac0dfaa43b36d84a1e2d66f0f6ac0c218c4c0540298d3123578a  2026-08-18T14:33:56Z  /mnt/tank/media/Music/Sabrina Carpenter/artist.nfo
+763c947642512f3eeab6e18388a6d09c966e58e0eceedf7775f6129521565200  2026-08-18T14:34:04Z  /mnt/tank/media/Music/Sabrina Carpenter/emails i can’t send (2022)/album.nfo
+f3eeb3b671cdab3d3ecb9e6e33659b3489a2539141af43bee4887b043207835e  2026-08-18T14:34:07Z  /mnt/tank/media/Music/Taylor Swift/1989 (2014)/album.nfo
+e66a2ff44b1296b59fcad9a9e6f84a6db8209828785f977b210dd969f3e5bc62  2026-08-18T14:34:27Z  /mnt/tank/media/Music/Taylor Swift/Fearless (2008)/album.nfo
+b8f4634e4428bdca1b869949a5871cfa15ce441cf05e86bc5f2d89ed1be4571c  2026-08-18T14:34:33Z  /mnt/tank/media/Music/Taylor Swift/Lover (2019)/album.nfo
+503ae69435a2a63dd69d00ea92496d79726a9e98aa4f746a05b58b50f281a79c  2026-08-18T14:34:34Z  /mnt/tank/media/Music/Taylor Swift/Midnights (2022)/album.nfo
+513bfb7ade8496c30646a59305bf847606f8b2d336187884fd1149b7afac865a  2026-08-18T14:34:44Z  /mnt/tank/media/Music/Taylor Swift/Speak Now (2010)/album.nfo
+6cbb13c6bc05ee3c300ce6470adfa2d0f14d6ccc732830cd9caf5bd4b3e70ed1  2026-08-18T14:34:48Z  /mnt/tank/media/Music/Taylor Swift/THE TORTURED POETS DEPARTMENT (2024)/album.nfo
+34414c4b11225ed4c1d8c2e6ba44ae57799f98c53e92554c52670569eaee558b  2026-08-18T14:34:46Z  /mnt/tank/media/Music/Taylor Swift/Taylor Swift (2006)/album.nfo
+ab101a9206b0460464a0593af77b7745521402237e102e2af95294ad84c4f43c  2026-08-18T14:34:30Z  /mnt/tank/media/Music/Taylor Swift/The Life of a Showgirl (2025)/album.nfo
+776323a037253b7ef55a4fc12d08fddadf35ea8ebd2af844d669ef31e5c12cd9  2026-08-18T14:34:32Z  /mnt/tank/media/Music/Taylor Swift/The Life of a Showgirl + Acoustic Collection (2025)/album.nfo
+aa54cc315e2406e404ba11ac42f5772a42305cf154a93b879ef874c1c4ef25f1  2025-10-26T22:31:36Z  /mnt/tank/media/Music/Taylor Swift/album.nfo
+ae25499585adbf684a045d92a9fb05b996506dd909bbbcb6528ee353f352c601  2026-08-18T14:33:56Z  /mnt/tank/media/Music/Taylor Swift/artist.nfo
+98361dfa2c37d07c3e3e68e5be6eae262efbf7cf11eb38e465193dd698c521d5  2026-08-18T14:34:18Z  /mnt/tank/media/Music/Taylor Swift/evermore (2020)/album.nfo
+eec16f61559d19af78cb789b0a4a8cbad9c132e693d47fc9d863c0553f4e8df9  2026-08-18T14:34:28Z  /mnt/tank/media/Music/Taylor Swift/folklore (2020)/album.nfo
+2896b6b460e15208f5c76ae03c723ab10bb2b876c26c9aa72d9b721f753b40e4  2026-08-18T14:34:40Z  /mnt/tank/media/Music/Taylor Swift/reputation (2017)/album.nfo
+aedb2337c13a535baab1f8ecf0fc3fb4da2fbdb8d788ffd8f78d0b46527a06b7  2026-08-18T14:34:01Z  /mnt/tank/media/Music/Vengaboys/The Greatest Hits Collection (2024)/album.nfo
+ee70f4249cd811d411e96d43d62be2f876947a6aa048ec42891b7851651ac896  2026-08-18T14:34:06Z  /mnt/tank/media/Music/Vengaboys/The Platinum Album (2000)/album.nfo
+a40595c9cc103426a964fc97cf376c9cdc34aca27dd9efcde8c999a57843bc68  2026-08-18T14:33:56Z  /mnt/tank/media/Music/Vengaboys/artist.nfo
+
+THE OTHER TWO WRITE PATHS THE PHASE 1 FREEZE GATES — .lrc (SaveLyricsWithMedia) and .jpg
+(the image savers). Counts, plus one aggregate sha256 over the LC_ALL=C-sorted
+path<TAB>size<TAB>mtime-epoch list of each set, so 06-42 has a single diffable token per
+set without a thousand extra lines. It is a FINGERPRINT OF PATH+SIZE+MTIME, not of content
+— stated plainly rather than left to be misread as a content hash.
+
+  .lrc count: 944     path+size+mtime fingerprint sha256: f4c9a2c69624d834fe8b8d34131effe1cf1d090d1e8a5a53dacc55b23bb47f6b
+  .jpg count: 88      path+size+mtime fingerprint sha256: 384474a4c45737715f7451a42fe6e6155c0c2dbf27be33ba5026e93ca4c5a703
+  .nfo count: 91      path+size+mtime fingerprint sha256: e99b1992b31a6f2d20008895fed2c675b61b9bf24645f4306a3431f0b01be7c2
+
+
+================================================================================
+SECTION 7 — THE DATASET AND ITS SNAPSHOTS
+================================================================================
+$ zfs list -o name,used,avail,mountpoint tank/media/Music
+NAME               USED  AVAIL  MOUNTPOINT
+tank/media/Music  33.9G  5.27T  /mnt/tank/media/Music
+
+$ zfs list -t snapshot -o name,creation -r tank/media/Music
+NAME                                CREATION
+tank/media/Music@pre-project        Tue Aug 18 13:08 2026
+tank/media/Music@safe05-watch-t0    Tue Aug 18 15:42 2026
+tank/media/Music@pre-chown          Tue Aug 18 22:29 2026
+tank/media/Music@pre-phase5-chown   Sat Sep 19 21:42 2026
+tank/media/Music@backup-20260922    Tue Sep 22  8:09 2026
+tank/media/Music@inc-20260923-1319  Wed Sep 23 13:20 2026
+
+06-41 MINTS tank/media/Music@pre-06-41-conf04-reprobe. A pre-existing one would mean this
+round has ALREADY RUN once, and this artifact would not be a before-state at all:
+  ASSERTION: tank/media/Music@pre-06-41-conf04-reprobe does NOT exist -> PASS.
+  (asserted with `grep -qxF` against the -H -o name list, so a snapshot whose name merely
+   CONTAINS that string could not satisfy it.)
+
+NO SNAPSHOT WAS CREATED BY THIS TASK AND `zfs diff` WAS NOT RUN BY THIS TASK. The set is
+re-read at the end of SECTION 8 and compared, so that is a measurement rather than a promise.
+
+
+================================================================================
+SECTION 8 — BEETS' OWN STATE (the D-29 layer-3 control) AND THE D-32 FENCE
+================================================================================
+The surviving tagger is the container `beets-flask` (metasauce/beets-flask:v2.0.0-rc6).
+Its /config is the host directory /mnt/fast/appdata/arrs/beets/config, read back from
+`docker inspect beets-flask` rather than assumed. Its /media bind is `ro` — see SECTION 5.
+
+An mtime change on LIBRARY files cannot in principle move beets' `incremental` state:
+`incremental` keys on import SOURCE directories, not on library files. But "cannot in
+principle" is how this project has been wrong before, so it is MEASURED rather than argued.
+
+  /mnt/fast/appdata/arrs/beets/config/library.db
+      sha256 : fbbdde0c416e72b9884e56c562fd88eaa4da447926e1cb6cc17c3e04aee7da1a
+      size   : 53248 bytes
+      mtime  : 2026-09-11T23:42:52Z   (epoch 1789170172)
+      owner  : 568:568   mode 0770
+  /mnt/fast/appdata/arrs/beets/config/state.pickle
+      sha256 : f6a9a1ad7aa553e42e53a8056fa80724785111180a5e2122be4f8732d1e4bc7c
+      size   : 47 bytes
+      mtime  : 2025-11-18T13:50:21Z   (epoch 1763473821)
+      owner  : 568:568   mode 0770
+
+THE D-32 FENCE — tank/downloads@pre-phase5. It is the ONLY undo for Phase 5's 4,750 renames,
+751 tag writes and 26,005 chowns, and it is NOT released by this round:
+  NAME                                                             CREATION
+  tank/downloads@pre-project                                       Tue Aug 18 13:08 2026
+  tank/downloads@pre-chown                                         Tue Aug 18 22:43 2026
+  tank/downloads@pre-phase5                                        Fri Sep 18 15:42 2026
+  tank/downloads@pre-phase5-chown                                  Sat Sep 19 21:42 2026
+  tank/downloads/mybook-music-archive@copied-from-mybook-20260922  Tue Sep 22  7:29 2026
+  tank/downloads/mybook-music-archive@post-rescue-20260922         Tue Sep 22  8:05 2026
+  tank/downloads/mybook-music-archive@backup-20260922              Tue Sep 22  8:09 2026
+  tank/downloads/mybook-music-archive@with-m4-20260922             Tue Sep 22 21:18 2026
+  tank/downloads/mybook-music-archive@inc-20260923-1319            Wed Sep 23 13:20 2026
+  ASSERTION: tank/downloads@pre-phase5 is PRESENT -> PASS. Untouched by this round.
+
+  `zfs get -H -o value atime tank/downloads` = off
+
+RE-READ OF THE tank/media/Music SNAPSHOT SET, AT THE END OF THIS TASK:
+  ASSERTION: the set is BYTE-IDENTICAL to the one read at the start of SECTION 7 -> PASS.
+  This task created no snapshot. Names, in full:
+      tank/media/Music@backup-20260922
+      tank/media/Music@inc-20260923-1319
+      tank/media/Music@pre-chown
+      tank/media/Music@pre-phase5-chown
+      tank/media/Music@pre-project
+      tank/media/Music@safe05-watch-t0
+
+  scratch path list /tmp/06-40-t2-pinned-paths.2542933 DELETED (verified absent with `test -e`). SECTION 9 rebuilds
+  its own under a different unique name; 06-41 rebuilds it again under its own snapshot fence.
+
+NOTHING WAS WRITTEN UNDER /mnt/tank/media BY THIS TASK. No snapshot was taken. No permission
+was changed and none was attempted — `chmod` fails EPERM on tank even as real root under
+aclmode=restricted + aclinherit=passthrough, and the target 0755/0644 is recorded in
+CLAUDE.md as NOT achieved. This task is a read.
