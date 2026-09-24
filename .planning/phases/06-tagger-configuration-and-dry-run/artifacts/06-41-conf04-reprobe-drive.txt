@@ -1,0 +1,476 @@
+================================================================================
+06-41 — CONF-04 RE-PROBE DRIVE (the mutating half; 06-40 measured before, 06-42 diffs after)
+================================================================================
+This plan drives the one lever plan 06-03 named and never pulled: it changes the mtime of
+exactly three files under /mnt/tank/media/Music inside a ZFS snapshot fence, then issues the
+already-proven-safe targeted Default-mode refresh, so Jellyfin's audio prober re-runs on those
+three and reads the ARTISTS tag through the PreferNonstandardArtistsTag option that has been
+true since 2026-09-20.
+
+THE HYPOTHESIS IS UNPROVEN AND THIS FILE DOES NOT PREJUDGE IT. 06-03 measured a Default-mode
+refresh declining to re-probe a file whose mtime had not changed, and listed "(b) the file's
+mtime changing" as a mechanism that would. Nobody had tried it. A NEGATIVE RESULT IS A
+LEGITIMATE OUTCOME and is recorded as one in 06-43. It is NOT an argument for escalating to
+the forbidden refresh mode.
+
+⛔ THE HARD FENCE. The per-item metadata refresh in its most aggressive mode is FORBIDDEN
+estate-wide (D-24, T-06-11 — Phase 1 measured it rewriting 83 of 91 metadata sidecars with the
+local-metadata saver already off). It is not issued here, it is not a fallback here, and on no
+branch of this plan is it reachable. The only scan endpoint this plan issues at all is the
+targeted POST /Library/Media/Updated that plan 06-03 issued and proved safe. The two prohibited
+scan endpoints are named DESCRIPTIVELY ONLY throughout this file; their literal tokens and query
+strings are deliberately kept out of it, so that a grep for them across artifacts/ stays a
+DETECTOR rather than matching prose (DEF-06-39-06).
+
+⛔ THE SECOND FENCE. SaveLocalMetadata, EnableRealtimeMonitor and SaveLyricsWithMedia are OFF on
+the Music library, permanently (Phase 1). None is re-enabled by this plan, not even temporarily
+to make a measurement easier. 06-40 SECTION 1 measured all three false before this plan ran.
+
+OPERATOR GATE (task 1, checkpoint:decision). The six items the gate requires were presented with
+values read out of artifacts/06-40-conf04-reprobe-before.txt — the three host paths with their
+mtimes and sha256, the SECTION 9 (d) TRUSTFALL = 0 exclusion proof together with the (e)/(e2)
+dual-instrument path proof, the snapshot name and the verbatim one-line rollback, the four
+measured D-34/freeze option values, the statement that the forbidden mode is unreachable on
+every branch and that a null result is a recorded negative, and the residual risk that 06-03's
+refreshes never actually re-probed so the metadata-saver path is exercised here for the first
+time. The gate's own automated verify was run immediately before presenting and measured the
+snapshot count at 0 — nothing had been written. THE OPERATOR'S ANSWER, VERBATIM: proceed
+
+SECTIONS: A — the fence and the mutation (task 2).  B — the targeted refresh (task 3).
+
+================================================================================
+SECTION A — THE FENCE AND THE MUTATION (06-41 task 2)
+================================================================================
+Taken  : 2026-09-24T08:05:14Z  (UTC)
+Host   : atlantis (atlantis) — the Proxmox host. REAL root, the only place `zfs`
+         exists, and the only vantage point from which on-disk ownership is not
+         distorted by LXC 100's sparse idmap.
+Bounds : this driver carries `set -o pipefail`; the ssh exit status was read into a
+         variable at the workstation BEFORE anything was piped. A step that could not
+         run records UNKNOWN — never a zero.
+
+--------------------------------------------------------------------------------
+STEP 1 — THE FENCE, TAKEN FIRST AND IN THIS SAME REMOTE STEP AS THE MUTATION
+--------------------------------------------------------------------------------
+  command issued : zfs snapshot tank/media/Music@pre-06-41-conf04-reprobe
+  exit status    : 0
+  listed back    : tank/media/Music@pre-06-41-conf04-reprobe    (zfs list -t snapshot -H -o name, rc=0)
+  (1) the snapshot listed back equals the name minted, exactly  -> PASS
+
+  THE ROLLBACK COMMAND THAT UNDOES EVERYTHING THIS PLAN DID, VERBATIM, ONE LINE:
+      zfs rollback tank/media/Music@pre-06-41-conf04-reprobe
+  (run on atlantis as root. It is the whole undo: the three mtimes return to their
+   06-40 values and any file Jellyfin might have written into the dataset after the
+   snapshot disappears with it.)
+
+--------------------------------------------------------------------------------
+STEP 2 — THE TOUCH LIST, REBUILT BY 06-40 SECTION 9'S RECIPE AND RE-PROVED
+--------------------------------------------------------------------------------
+Re-running the assertions here is not redundancy. 06-40 proved the list against a tree
+that has since had a snapshot taken and could in principle have changed.
+
+PROVENANCE OF THE SOURCE OF TRUTH:
+  scripts/check-music-consumers.sh was shipped to this host over ssh STDIN from a
+  QUOTED heredoc and written to /tmp/06-41-ccm.t2-20260924 — never as an argv word. The ARTPOP path carries
+  U+2019 and no local shell, no ssh quoting layer and no normalisation pass touches it.
+  sha256 of the shipped copy : 1ed695cf483029c2e7c3fd815fc97bc1711a8a3e499556910955332a7a6ee819
+  sha256 at the workstation  : 1ed695cf483029c2e7c3fd815fc97bc1711a8a3e499556910955332a7a6ee819
+  (2) the copy this host parsed is byte-identical to the repo file at HEAD  -> PASS
+
+THE RESOLVED TOUCH LIST — the exact set this plan may touch, and nothing else:
+  1  /mnt/tank/media/Music/Lady Gaga/ARTPOP (2013)/CD 01-05 Lady Gaga - Jewels n’ Drugs.flac
+  2  /mnt/tank/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-03 Katy Perry - California Gurls.flac
+  3  /mnt/tank/media/Music/P!nk/The Truth About Love (2012)/CD 01-04 P!nk - Just Give Me a Reason.flac
+
+THE SEVEN ASSERTIONS (06-40's six, plus its independently-derived (e2)):
+  (a) line count of the touch list = 3                     [measured 3]  -> PASS
+  (b) every line passes `test -f`                          [0 unresolved]  -> PASS
+  (c) every line BEGINS with /mnt/tank/media/Music/ (index()==1, not a substring) [0 violations]  -> PASS
+  (d) lines containing the DO-NOT-RESCAN album substring = 0 [measured 0]  -> PASS
+      The OQ-1 DO-NOT-RESCAN set (the six P!nk/TRUSTFALL (2023) rows, 06-40 SECTION 4)
+      is excluded MECHANICALLY, not trusted to care. Row 3's album, The Truth About Love
+      (2012), is a DIFFERENT album under the same artist folder and IS in scope.
+  (e) reverse-substituted touch list == ARTIST_PROOF_ROWS internal paths, `cmp -s` byte for byte including the U+2019  -> PASS
+  (e2) each reversed path found in the script as a FIXED STRING (grep -qF), sharing no code with the awk extractor [0 not found]  -> PASS
+
+--------------------------------------------------------------------------------
+STEP 3 — PERMISSION PROBE, CHANGING NOTHING (`touch -r <file> <file>`)
+--------------------------------------------------------------------------------
+`touch -r f f` sets a file's times to the values it already holds — a no-op write that
+exercises exactly the syscall step 4 needs (utimensat, NOT chmod). CLAUDE.md records
+`chmod` failing EPERM on tank even as real root under aclmode=restricted; if this probe
+had failed the same way, the honest outcome was a recorded negative and a stop — not a
+dataset property change and not a wider refresh.
+
+  OK    /mnt/tank/media/Music/Lady Gaga/ARTPOP (2013)/CD 01-05 Lady Gaga - Jewels n’ Drugs.flac
+  OK    /mnt/tank/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-03 Katy Perry - California Gurls.flac
+  OK    /mnt/tank/media/Music/P!nk/The Truth About Love (2012)/CD 01-04 P!nk - Just Give Me a Reason.flac
+  stderr from the probe: (empty)
+  (3) all three files accept a no-op utimensat as real root [0 denied]  -> PASS
+
+--------------------------------------------------------------------------------
+STEP 4 / 5 — THE MUTATION, AND THE BEFORE/AFTER PROOF PER FILE
+--------------------------------------------------------------------------------
+  exact command form used, once per path, from the proved list:
+      touch "$p"        (no -r, no -d, no -t: current time, metadata only)
+  issued at : 2026-09-24T08:05:14Z   (epoch 1790237114)
+  touch failures: 0
+  (4) all three touches returned 0 [0 failures]  -> PASS
+
+  FILE 1: /mnt/tank/media/Music/Lady Gaga/ARTPOP (2013)/CD 01-05 Lady Gaga - Jewels n’ Drugs.flac
+      mtime BEFORE (06-40 SECTION 5) : 2016-01-13T19:02:07Z   (epoch 1452711727)
+      mtime AFTER  (measured here)   : 2026-09-24T08:05:14Z   (epoch 1790237114)
+      -> AFTER is STRICTLY NEWER than BEFORE  -> PASS
+      sha256 BEFORE (06-40 SECTION 9 (f)) : bf3ff6ff8dc465d271ade5fb144860fa504f97777c7364f35c1567b5d4263221
+      sha256 AFTER  (measured here)       : bf3ff6ff8dc465d271ade5fb144860fa504f97777c7364f35c1567b5d4263221
+      -> CONTENT IDENTICAL, byte for byte  -> PASS
+      size (bytes) : 30023946
+
+  FILE 2: /mnt/tank/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-03 Katy Perry - California Gurls.flac
+      mtime BEFORE (06-40 SECTION 5) : 2016-02-22T08:08:52Z   (epoch 1456128532)
+      mtime AFTER  (measured here)   : 2026-09-24T08:05:14Z   (epoch 1790237114)
+      -> AFTER is STRICTLY NEWER than BEFORE  -> PASS
+      sha256 BEFORE (06-40 SECTION 9 (f)) : cd720f4706bc46425fd0f4320aff10ebc16ac660e7ed4ce30662964be6614391
+      sha256 AFTER  (measured here)       : cd720f4706bc46425fd0f4320aff10ebc16ac660e7ed4ce30662964be6614391
+      -> CONTENT IDENTICAL, byte for byte  -> PASS
+      size (bytes) : 29357615
+
+  FILE 3: /mnt/tank/media/Music/P!nk/The Truth About Love (2012)/CD 01-04 P!nk - Just Give Me a Reason.flac
+      mtime BEFORE (06-40 SECTION 5) : 2015-08-20T19:19:04Z   (epoch 1440098344)
+      mtime AFTER  (measured here)   : 2026-09-24T08:05:14Z   (epoch 1790237114)
+      -> AFTER is STRICTLY NEWER than BEFORE  -> PASS
+      sha256 BEFORE (06-40 SECTION 9 (f)) : 5d9b0822b51fc9a04cae6888a3ebb3e3d5abd8afb66364cf02e0522ec1b3a853
+      sha256 AFTER  (measured here)       : 5d9b0822b51fc9a04cae6888a3ebb3e3d5abd8afb66364cf02e0522ec1b3a853
+      -> CONTENT IDENTICAL, byte for byte  -> PASS
+      size (bytes) : 23920625
+
+  (5a) every mtime is strictly newer than 06-40 SECTION 5's value [0 violations]  -> PASS
+  (5b) every content sha256 is IDENTICAL to 06-40 SECTION 9 (f)'s value [0 violations]  -> PASS
+
+--------------------------------------------------------------------------------
+STEP 6 — `zfs diff` AGAINST THE FENCE, VERBATIM AND DELIMITED
+--------------------------------------------------------------------------------
+  command : zfs diff -H tank/media/Music@pre-06-41-conf04-reprobe
+  exit rc : 0
+
+This one command proves BOTH halves of the round's safety claim from a single source:
+"only three files moved" and "nothing was written into the library". The delimiters are
+not decoration — every mechanical assertion below is made over the EXTRACTED block, because
+this artifact's prose necessarily discusses the metadata sidecar extensions and the
+DO-NOT-RESCAN album, and a grep for a token in a file that talks about that token cannot
+tell a claim from its retraction (DEF-06-39-06).
+
+ANTICIPATED, per 06-40 SECTION 9: this dataset is atime=off / relatime=on, so a READ
+(sha256sum, ffprobe, Jellyfin) cannot contaminate the diff with an atime bump. Had atime
+been on, the fallback stated in the plan would apply. It is off, so it does not.
+
+Non-ASCII bytes are escaped \0NNN by zfs diff itself; the U+2019 in the ARTPOP path
+appears in that form below and is un-escaped before comparison, never compared by eye.
+
+--- ZFS DIFF BEGIN ---
+M	/mnt/tank/media/Music/Katy\0040Perry/Teenage\0040Dream\0040(2010)/CD\004001-03\0040Katy\0040Perry\0040-\0040California\0040Gurls.flac
+M	/mnt/tank/media/Music/P!nk/The\0040Truth\0040About\0040Love\0040(2012)/CD\004001-04\0040P!nk\0040-\0040Just\0040Give\0040Me\0040a\0040Reason.flac
+M	/mnt/tank/media/Music/Lady\0040Gaga/ARTPOP\0040(2013)/CD\004001-05\0040Lady\0040Gaga\0040-\0040Jewels\0040n\0342\0200\0231\0040Drugs.flac
+--- ZFS DIFF END ---
+
+ASSERTIONS OVER THE EXTRACTED BLOCK (not over this file):
+  raw line count in the block : 3
+  (6a) every line is a modification entry (tag M); non-M entries = 0  -> PASS
+  (6b) distinct paths named = 3 [measured 6]  -> FAIL
+  (6c) every path named is one of the three pinned host paths, by `grep -qxF` after un-escaping [3 off-list]  -> FAIL
+  (6d) every one of the three pinned paths IS named — the diff is not silently short [3 absent]  -> FAIL
+  ⚠ THOSE THREE FAIL VERDICTS ARE A DEFECT IN THIS RUN'S OWN DECODER, NOT A FINDING ABOUT THE
+    ESTATE, AND THEY ARE LEFT STANDING ABOVE RATHER THAN EDITED OUT. The driver decoded zfs's
+    \0NNN escapes by piping each path through `sed` before `printf %b`; zfs writes a space as
+    \0040, the sed rewrote that to \40, and `printf %b` then consumed a digit of the following
+    filename — `CD 01-03` decoded as `CD 1-03`. Every decoded path therefore missed the pinned
+    list (3 off-list) and every pinned path looked absent (3 absent), and the "6 distinct" is 3
+    mangled paths counted alongside the 3 correct ones. `printf %b` already decodes the \0nnn
+    form unaided; the sed was the entire bug. The CORRECTED verdicts are STEP 6bis below, and
+    they are computed against a re-read of `zfs diff` PROVED BYTE-IDENTICAL to the block above.
+
+    The defective decoder's own three output lines are DELIBERATELY NOT REPRODUCED here: the
+    \40 overflow emitted a literal NUL byte into each of them, and a NUL does not belong in a
+    committed text artifact. Their content is fully described by the sentence above, and the
+    correct decoding of the same three paths is listed in STEP 6bis.
+
+  Sidecar and DO-NOT-RESCAN screens over the block are asserted by the plan's
+  <automated> verify at the repo, over the extracted region, and are stated here as
+  measured counts rather than asserted twice with two instruments that could disagree:
+      metadata-sidecar entries in the block  : 0
+      lyric-sidecar entries in the block     : 0
+      image-sidecar entries in the block     : 0
+      DO-NOT-RESCAN-album entries in the block: 0
+  (6e) all four screens over the block are zero  -> PASS
+
+--------------------------------------------------------------------------------
+STEP 6bis — ASSERTIONS (6b)/(6c)/(6d) RE-COMPUTED WITH A CORRECTED DECODER
+--------------------------------------------------------------------------------
+Taken : 2026-09-24T08:07:44Z  (UTC), on atlantis as real root. READ-ONLY.
+
+WHY THIS SUB-STEP EXISTS, stated rather than smoothed. The first run's (6b)/(6c)/(6d)
+reported FAIL — 6 distinct paths where 3 were expected, 3 off-list, 3 absent. THAT WAS A
+DEFECT IN THE FIRST RUN'S OWN DECODER AND NOT A FINDING ABOUT THE ESTATE. It piped the
+path through `sed 's/\\0/\\/g'` before `printf %b`; zfs writes a space as \0040, the sed
+rewrote that to \40, and a digit of the following filename was eaten — `CD 01-03` decoded
+as `CD 1-03`, so every decoded path missed the pinned list and every pinned path looked
+absent. The 6 was 3 mangled paths plus the 3 pinned ones, counted apart. `printf %b`
+already decodes the \0nnn form; the sed was the whole bug and is removed here.
+
+THE VERBATIM BLOCK ABOVE IS NOT RE-CAPTURED OR REPLACED. This sub-step re-reads
+`zfs diff` and proves the re-read is byte-identical to it, so the one block in this
+artifact remains the authoritative record and the assertions below are made over it:
+  re-read command : zfs diff -H tank/media/Music@pre-06-41-conf04-reprobe   (rc=0)
+  sha256 of the block captured above, computed at the workstation : a33ada4a5bd5cbdeebc3b83a032b1db4d7e6bd633c1bf691d9bd2539106a6340
+  sha256 of the same bytes as this host received them             : a33ada4a5bd5cbdeebc3b83a032b1db4d7e6bd633c1bf691d9bd2539106a6340
+  (6-ref) the reference block reached this host byte-intact  -> PASS
+  (6-idem) the re-read of `zfs diff` is BYTE-IDENTICAL to the block captured above (`cmp -s`) — nothing moved on the dataset between the two reads  -> PASS
+
+  source of truth re-shipped for this sub-step, sha256 re-asserted before parsing:
+      shipped : 1ed695cf483029c2e7c3fd815fc97bc1711a8a3e499556910955332a7a6ee819
+      repo    : 1ed695cf483029c2e7c3fd815fc97bc1711a8a3e499556910955332a7a6ee819
+  (6-src) the touch list this sub-step compares against is derived from the repo file at HEAD  -> PASS
+  (6-list) the rebuilt touch list still holds exactly 3 lines [measured 3]  -> PASS
+
+  THE DECODED PATHS, one per line, as the corrected decoder returns them:
+      /mnt/tank/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-03 Katy Perry - California Gurls.flac
+      /mnt/tank/media/Music/Lady Gaga/ARTPOP (2013)/CD 01-05 Lady Gaga - Jewels n’ Drugs.flac
+      /mnt/tank/media/Music/P!nk/The Truth About Love (2012)/CD 01-04 P!nk - Just Give Me a Reason.flac
+
+  (6a) every line in the block is a modification entry (tag M); non-M entries = 0  -> PASS
+  (6b) distinct paths named in the block = 3 [measured 3]  -> PASS
+  (6c) every path named is one of the three pinned host paths, `grep -qxF` after decoding [0 off-list]  -> PASS
+  (6d) every one of the three pinned paths IS named — the block is not silently short [0 absent]  -> PASS
+
+--------------------------------------------------------------------------------
+STEP 7 — THE COMMAND TRANSCRIPT, VERBATIM AND DELIMITED
+--------------------------------------------------------------------------------
+This is bash xtrace over BOTH of task 2's remote runs — the mutation run and the read-only
+assertion-repair run of STEP 6bis — concatenated into the ONE block the plan allows, with every
+executed command's stderr folded in. It is a TRACE, not a narration: the claim "no permission
+change, no ownership change, no dataset property write and no snapshot destroy was issued" is
+made over the commands actually executed, not over the prose explaining why they were not.
+
+The two traces are concatenated rather than separated by a label because the plan requires
+exactly one delimiter pair and requires that nothing but the command output sit between them.
+The boundary is self-evident: the mutation run's trace opens with `+ zfs snapshot` and closes
+with its `rm -f` of the scratch files; the repair run's trace opens with the next `+ sha256sum`.
+Concatenating them makes the screen STRONGER than the plan asks, because it then covers every
+command this task issued to the estate rather than only the first run's.
+
+Screens over the extracted block, measured at the workstation with the real grep binary before
+this artifact was written — `chmod ` 0, `chown ` 0, `zfs set ` 0, `zfs destroy` 0, on both
+traces independently and on the concatenation.
+
+--- COMMAND TRANSCRIPT BEGIN ---
++ zfs snapshot tank/media/Music@pre-06-41-conf04-reprobe
++ SNAP_RC=0
++ set +x
++ zfs list -t snapshot -H -o name tank/media/Music@pre-06-41-conf04-reprobe
++ SNAP_BACK_RC=0
++ set +x
++ '[' 0 = 1 ']'
++ sha256sum /tmp/06-41-ccm.t2-20260924
+++ awk '{print $1}' /tmp/06-41-ccmsha.t2-20260924
++ CCM_SHA_HOST=1ed695cf483029c2e7c3fd815fc97bc1711a8a3e499556910955332a7a6ee819
++ awk '/^ARTIST_PROOF_ROWS=\(/{f=1;next} f&&/^\)/{f=0} f&&/^  "\/media\/Music\//{sub(/^  "/,""); sub(/"$/,""); print}' /tmp/06-41-ccm.t2-20260924
++ awk '-F|' '{print $1}'
++ sed 's|^/media|/mnt/tank/media|' /tmp/06-41-internal-paths.t2-20260924
++ sed 's|^/mnt/tank/media|/media|' /tmp/06-41-touch-list.t2-20260924
+++ wc -l
+++ tr -d ' '
++ NLINES=3
++ MISSING=0
++ IFS=
++ read -r p
++ '[' -f '/mnt/tank/media/Music/Lady Gaga/ARTPOP (2013)/CD 01-05 Lady Gaga - Jewels n’ Drugs.flac' ']'
++ IFS=
++ read -r p
++ '[' -f '/mnt/tank/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-03 Katy Perry - California Gurls.flac' ']'
++ IFS=
++ read -r p
++ '[' -f '/mnt/tank/media/Music/P!nk/The Truth About Love (2012)/CD 01-04 P!nk - Just Give Me a Reason.flac' ']'
++ IFS=
++ read -r p
+++ awk 'index($0,"/mnt/tank/media/Music/")!=1{c++} END{print c+0}' /tmp/06-41-touch-list.t2-20260924
++ NOTUNDER=0
+++ grep -cF TRUSTFALL /tmp/06-41-touch-list.t2-20260924
++ NTRUST=0
++ TRUST_RC=1
++ '[' 1 -le 1 ']'
++ cmp -s /tmp/06-41-touch-list.t2-20260924.rev /tmp/06-41-internal-paths.t2-20260924
++ CMP_RC=0
++ E2_MISS=0
++ IFS=
++ read -r r
++ grep -qF -- '/media/Music/Lady Gaga/ARTPOP (2013)/CD 01-05 Lady Gaga - Jewels n’ Drugs.flac' /tmp/06-41-ccm.t2-20260924
++ IFS=
++ read -r r
++ grep -qF -- '/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-03 Katy Perry - California Gurls.flac' /tmp/06-41-ccm.t2-20260924
++ IFS=
++ read -r r
++ grep -qF -- '/media/Music/P!nk/The Truth About Love (2012)/CD 01-04 P!nk - Just Give Me a Reason.flac' /tmp/06-41-ccm.t2-20260924
++ IFS=
++ read -r r
++ set +x
++ PROBE_FAILS=0
++ :
++ IFS=
++ read -r p
++ touch -r '/mnt/tank/media/Music/Lady Gaga/ARTPOP (2013)/CD 01-05 Lady Gaga - Jewels n’ Drugs.flac' '/mnt/tank/media/Music/Lady Gaga/ARTPOP (2013)/CD 01-05 Lady Gaga - Jewels n’ Drugs.flac'
++ printf 'OK    %s\n' '/mnt/tank/media/Music/Lady Gaga/ARTPOP (2013)/CD 01-05 Lady Gaga - Jewels n’ Drugs.flac'
++ IFS=
++ read -r p
++ touch -r '/mnt/tank/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-03 Katy Perry - California Gurls.flac' '/mnt/tank/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-03 Katy Perry - California Gurls.flac'
++ printf 'OK    %s\n' '/mnt/tank/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-03 Katy Perry - California Gurls.flac'
++ IFS=
++ read -r p
++ touch -r '/mnt/tank/media/Music/P!nk/The Truth About Love (2012)/CD 01-04 P!nk - Just Give Me a Reason.flac' '/mnt/tank/media/Music/P!nk/The Truth About Love (2012)/CD 01-04 P!nk - Just Give Me a Reason.flac'
++ printf 'OK    %s\n' '/mnt/tank/media/Music/P!nk/The Truth About Love (2012)/CD 01-04 P!nk - Just Give Me a Reason.flac'
++ IFS=
++ read -r p
++ set +x
+++ date -u +%s
++ TOUCH_UTC_EPOCH=1790237114
+++ date -u +%Y-%m-%dT%H:%M:%SZ
++ TOUCH_UTC_ISO=2026-09-24T08:05:14Z
++ TOUCH_FAILS=0
++ IFS=
++ read -r p
++ touch '/mnt/tank/media/Music/Lady Gaga/ARTPOP (2013)/CD 01-05 Lady Gaga - Jewels n’ Drugs.flac'
++ IFS=
++ read -r p
++ touch '/mnt/tank/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-03 Katy Perry - California Gurls.flac'
++ IFS=
++ read -r p
++ touch '/mnt/tank/media/Music/P!nk/The Truth About Love (2012)/CD 01-04 P!nk - Just Give Me a Reason.flac'
++ IFS=
++ read -r p
++ :
++ IFS=
++ read -r p
+++ stat -c '%Y|%s' '/mnt/tank/media/Music/Lady Gaga/ARTPOP (2013)/CD 01-05 Lady Gaga - Jewels n’ Drugs.flac'
++ st='1790237114|30023946'
+++ sha256sum '/mnt/tank/media/Music/Lady Gaga/ARTPOP (2013)/CD 01-05 Lady Gaga - Jewels n’ Drugs.flac'
+++ awk '{print $1}'
++ sh=bf3ff6ff8dc465d271ade5fb144860fa504f97777c7364f35c1567b5d4263221
++ printf '%s|%s\n' '1790237114|30023946' bf3ff6ff8dc465d271ade5fb144860fa504f97777c7364f35c1567b5d4263221
++ IFS=
++ read -r p
+++ stat -c '%Y|%s' '/mnt/tank/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-03 Katy Perry - California Gurls.flac'
++ st='1790237114|29357615'
+++ sha256sum '/mnt/tank/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-03 Katy Perry - California Gurls.flac'
+++ awk '{print $1}'
++ sh=cd720f4706bc46425fd0f4320aff10ebc16ac660e7ed4ce30662964be6614391
++ printf '%s|%s\n' '1790237114|29357615' cd720f4706bc46425fd0f4320aff10ebc16ac660e7ed4ce30662964be6614391
++ IFS=
++ read -r p
+++ stat -c '%Y|%s' '/mnt/tank/media/Music/P!nk/The Truth About Love (2012)/CD 01-04 P!nk - Just Give Me a Reason.flac'
++ st='1790237114|23920625'
+++ sha256sum '/mnt/tank/media/Music/P!nk/The Truth About Love (2012)/CD 01-04 P!nk - Just Give Me a Reason.flac'
+++ awk '{print $1}'
++ sh=5d9b0822b51fc9a04cae6888a3ebb3e3d5abd8afb66364cf02e0522ec1b3a853
++ printf '%s|%s\n' '1790237114|23920625' 5d9b0822b51fc9a04cae6888a3ebb3e3d5abd8afb66364cf02e0522ec1b3a853
++ IFS=
++ read -r p
++ set +x
++ zfs diff -H tank/media/Music@pre-06-41-conf04-reprobe
++ DIFF_RC=0
++ set +x
++ rm -f /tmp/06-41-ccm.t2-20260924 /tmp/06-41-internal-paths.t2-20260924 /tmp/06-41-touch-list.t2-20260924 /tmp/06-41-touch-list.t2-20260924.rev /tmp/06-41-zfsdiff.t2-20260924 /tmp/06-41-snapback.t2-20260924 /tmp/06-41-ccmsha.t2-20260924 /tmp/06-41-probe.t2-20260924 /tmp/06-41-proberes.t2-20260924 /tmp/06-41-after.t2-20260924 /tmp/06-41-differr.t2-20260924 /tmp/06-41-diffpaths.t2-20260924
++ set +x
++ sha256sum /tmp/06-41r-ccm.r1-20260924
+++ awk '{print $1}' /tmp/06-41r-ccmsha.r1-20260924
++ CCM_SHA_HOST=1ed695cf483029c2e7c3fd815fc97bc1711a8a3e499556910955332a7a6ee819
++ sha256sum /tmp/06-41r-diffblock.r1-20260924
+++ awk '{print $1}' /tmp/06-41r-refsha.r1-20260924
++ REF_SHA_HOST=a33ada4a5bd5cbdeebc3b83a032b1db4d7e6bd633c1bf691d9bd2539106a6340
++ awk '/^ARTIST_PROOF_ROWS=\(/{f=1;next} f&&/^\)/{f=0} f&&/^  "\/media\/Music\//{sub(/^  "/,""); sub(/"$/,""); print}' /tmp/06-41r-ccm.r1-20260924
++ awk '-F|' '{print $1}'
++ sed 's|^/media|/mnt/tank/media|' /tmp/06-41r-internal.r1-20260924
+++ wc -l
+++ tr -d ' '
++ NLINES=3
++ zfs diff -H tank/media/Music@pre-06-41-conf04-reprobe
++ DIFF_RC=0
++ cmp -s /tmp/06-41r-zfsdiff.r1-20260924 /tmp/06-41r-diffblock.r1-20260924
++ SAME_RC=0
++ :
++ IFS='	'
++ read -r tag pth rest
++ unesc '/mnt/tank/media/Music/Katy\0040Perry/Teenage\0040Dream\0040(2010)/CD\004001-03\0040Katy\0040Perry\0040-\0040California\0040Gurls.flac'
++ printf %b '/mnt/tank/media/Music/Katy\0040Perry/Teenage\0040Dream\0040(2010)/CD\004001-03\0040Katy\0040Perry\0040-\0040California\0040Gurls.flac'
++ printf '\n'
++ IFS='	'
++ read -r tag pth rest
++ unesc '/mnt/tank/media/Music/P!nk/The\0040Truth\0040About\0040Love\0040(2012)/CD\004001-04\0040P!nk\0040-\0040Just\0040Give\0040Me\0040a\0040Reason.flac'
++ printf %b '/mnt/tank/media/Music/P!nk/The\0040Truth\0040About\0040Love\0040(2012)/CD\004001-04\0040P!nk\0040-\0040Just\0040Give\0040Me\0040a\0040Reason.flac'
++ printf '\n'
++ IFS='	'
++ read -r tag pth rest
++ unesc '/mnt/tank/media/Music/Lady\0040Gaga/ARTPOP\0040(2013)/CD\004001-05\0040Lady\0040Gaga\0040-\0040Jewels\0040n\0342\0200\0231\0040Drugs.flac'
++ printf %b '/mnt/tank/media/Music/Lady\0040Gaga/ARTPOP\0040(2013)/CD\004001-05\0040Lady\0040Gaga\0040-\0040Jewels\0040n\0342\0200\0231\0040Drugs.flac'
++ printf '\n'
++ IFS='	'
++ read -r tag pth rest
+++ awk '-F\t' '$1!="M"{c++} END{print c+0}' /tmp/06-41r-zfsdiff.r1-20260924
++ NON_M=0
++ LC_ALL=C
++ sort -u /tmp/06-41r-decoded.r1-20260924
+++ grep -c . /tmp/06-41r-decoded.r1-20260924.u
++ NDISTINCT=3
++ OFFLIST=0
++ IFS=
++ read -r d
++ '[' -n '/mnt/tank/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-03 Katy Perry - California Gurls.flac' ']'
++ grep -qxF -- '/mnt/tank/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-03 Katy Perry - California Gurls.flac' /tmp/06-41r-touch.r1-20260924
++ IFS=
++ read -r d
++ '[' -n '/mnt/tank/media/Music/Lady Gaga/ARTPOP (2013)/CD 01-05 Lady Gaga - Jewels n’ Drugs.flac' ']'
++ grep -qxF -- '/mnt/tank/media/Music/Lady Gaga/ARTPOP (2013)/CD 01-05 Lady Gaga - Jewels n’ Drugs.flac' /tmp/06-41r-touch.r1-20260924
++ IFS=
++ read -r d
++ '[' -n '/mnt/tank/media/Music/P!nk/The Truth About Love (2012)/CD 01-04 P!nk - Just Give Me a Reason.flac' ']'
++ grep -qxF -- '/mnt/tank/media/Music/P!nk/The Truth About Love (2012)/CD 01-04 P!nk - Just Give Me a Reason.flac' /tmp/06-41r-touch.r1-20260924
++ IFS=
++ read -r d
++ UNSEEN=0
++ IFS=
++ read -r p
++ grep -qxF -- '/mnt/tank/media/Music/Lady Gaga/ARTPOP (2013)/CD 01-05 Lady Gaga - Jewels n’ Drugs.flac' /tmp/06-41r-decoded.r1-20260924
++ IFS=
++ read -r p
++ grep -qxF -- '/mnt/tank/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-03 Katy Perry - California Gurls.flac' /tmp/06-41r-decoded.r1-20260924
++ IFS=
++ read -r p
++ grep -qxF -- '/mnt/tank/media/Music/P!nk/The Truth About Love (2012)/CD 01-04 P!nk - Just Give Me a Reason.flac' /tmp/06-41r-decoded.r1-20260924
++ IFS=
++ read -r p
++ set +x
++ rm -f /tmp/06-41r-ccm.r1-20260924 /tmp/06-41r-diffblock.r1-20260924 /tmp/06-41r-internal.r1-20260924 /tmp/06-41r-touch.r1-20260924 /tmp/06-41r-zfsdiff.r1-20260924 /tmp/06-41r-decoded.r1-20260924 /tmp/06-41r-decoded.r1-20260924.u /tmp/06-41r-ccmsha.r1-20260924 /tmp/06-41r-refsha.r1-20260924 /tmp/06-41r-differr.r1-20260924
++ set +x
+--- COMMAND TRANSCRIPT END ---
+
+--------------------------------------------------------------------------------
+SECTION A OVERALL VERDICT
+--------------------------------------------------------------------------------
+  ALL SECTION A ASSERTIONS PASS.
+
+  The mutation run reported 3 failures and they were (6b)/(6c)/(6d). All three were the
+  decoder defect described in the annotation above; all three are re-computed in STEP 6bis
+  against a re-read of `zfs diff` proved byte-identical to the captured block, and all three
+  PASS there. No assertion about the estate failed at any point in this task, and the estate
+  was not touched a second time to make any of them pass — the repair run is a read.
+
+  WHAT IS NOW TRUE, AND MEASURED:
+    - A snapshot named tank/media/Music@pre-06-41-conf04-reprobe exists, minted in the same
+      remote step as the mutation and before it.
+    - Exactly three files under /mnt/tank/media/Music carry a new mtime.
+    - All three carry byte-identical content: sha256 unchanged from 06-40 SECTION 9 (f).
+    - `zfs diff` against that snapshot names those three files and nothing else — three M
+      entries, zero non-M, zero metadata/lyric/image sidecars, zero DO-NOT-RESCAN rows.
+    - No permission change, no ownership change, no dataset property write and no snapshot
+      destroy was issued, asserted over the command trace rather than over this sentence.
+
+  ROLLBACK, VERBATIM, ONE LINE:  zfs rollback tank/media/Music@pre-06-41-conf04-reprobe
+
