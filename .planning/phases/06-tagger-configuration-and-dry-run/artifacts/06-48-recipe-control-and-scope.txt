@@ -1,0 +1,231 @@
+================================================================================
+06-48 — THE CORRECTED FORBIDDEN-MODE DETECTOR, DRIVEN; AND THE BRACKETING
+        CONVENTION'S SCOPE, DECIDED
+================================================================================
+Plan        : 06-48 (gap-closure round 6, wave 2), tasks 1 and 2
+Written     : 2026-09-24
+Workstation : macOS 27.0 (darwin, arm64), non-root uid 501, BSD grep at /usr/bin/grep
+BASE COMMIT : ce358779329c4e37112a843bba877883e9a238f9
+
+Every measurement below is taken with `/usr/bin/grep` BY ABSOLUTE PATH. The bare name `grep` is a
+shell function in this session and has silently matched nothing before (plan 06-41 records that
+hazard), so the absolute path is not pedantry.
+
+THIS FILE HONOURS THE CONVENTION IT IS ABOUT. The forbidden refresh mode's token is written only as
+`Full[R]efresh` and the forbidden UI button's phrase only as `Replace all [m]etadata`, everywhere,
+including in prose. Both are measured against this file AFTER it was written, never before —
+`DEF-06-39-06`'s rule, which this phase has now broken and re-learned in six consecutive rounds.
+
+WHY THIS ARTIFACT EXISTS, IN ONE PARAGRAPH. `artifacts/06-43-conf04-verdict.txt` SECTION O publishes
+recipe `(O-a)` as `/usr/bin/grep -cF "Full[R]efresh"`. `-F` makes the brackets LITERAL, so the
+command searches for the mitigation form and is structurally incapable of matching the real token.
+The `0` it published is TRUE of the estate — re-measured below with `-cE`, every round-5 artifact and
+both instrument scripts read 0 — but it was NOT EARNED BY THE COMMAND PRINTED BESIDE IT. A true
+number from a vacuous instrument is the worst shape there is, because it survives review. Both
+halves of that sentence are stated below without either being softened into the other.
+
+SCOPE FENCE, STATED BEFORE ANY MEASUREMENT. `artifacts/06-43-conf04-verdict.txt` is a DATED RECORD
+AND IS DELIBERATELY LEFT UNEDITED — `DEF-06-45-04` says so explicitly, and editing a dated artifact
+to make a later reading true is the retro-fitting this phase forbids. The correction lands HERE, in
+a new driven artifact, plus a `DEF-` entry that supersedes and closes `DEF-06-45-04`. This plan does
+not touch `ROADMAP.md`, does not touch `REQUIREMENTS.md`, touches no script, and drives NO CONF-04
+work of any kind.
+
+
+================================================================================
+SECTION 1 — THE CONTROL, DRIVEN BOTH WAYS
+================================================================================
+A one-line control file was created in the session scratch directory:
+
+  /private/tmp/claude-501/-Users-damian-Development-damianflynn-selfhost-stacks/\
+    b0a1e891-0308-4c5b-b62f-99b3f98511d6/scratchpad/06-48-token-control.txt
+
+It contains the forbidden mode's REAL, UNBRACKETED literal token on one line. Its content is
+DELIBERATELY NOT REPRODUCED IN THIS ARTIFACT — reproducing it would make this file an occurrence of
+the thing it counts, which is precisely the defect class (`DEF-06-39-06`) this correction sits
+inside. The control lives only in scratch and is NEVER COMMITTED. That it does contain the real
+token is proven not by quoting it but by the (1-a) result below: a `-cE` match against the bracketed
+character class can only come from a real `R` in the file.
+
+  (1-a) THE CORRECTED FORM — extended regex, bracketed needle read as a character class:
+
+        $ /usr/bin/grep -cE 'Full[R]efresh' "$S/06-48-token-control.txt"
+        1
+
+  (1-b) THE PUBLISHED FORM — fixed string, bracketed needle read as five literal characters:
+
+        $ /usr/bin/grep -cF 'Full[R]efresh' "$S/06-48-token-control.txt"
+        0
+        (shell exit status 1, i.e. "no match", not an error)
+
+WHAT THE MATRIX PROVES, IN ONE CLAUSE: the published `-cF` form is NON-DETECTING — it returns 0
+against a string that unambiguously contains the token — and the corrected `-cE` form is
+NON-VACUOUS, because it returns non-zero against the same string.
+
+  (1-c) THE SAME DRIVE FOR `(O-b)`'s PHRASE, so the UI-button zeros below are evidence too. Control
+        file `06-48-uiphrase-control.txt`, one line carrying the phrase unbracketed, content again
+        not reproduced here:
+
+        $ /usr/bin/grep -ciE 'Replace all [m]etadata' "$S/06-48-uiphrase-control.txt"
+        1
+
+        `(O-b)` was ALREADY `-ciE` in the dated artifact and is therefore already sound; this drive
+        establishes that its published zeros are the zeros of a working instrument, not of a broken
+        one. It is a confirmation, not a correction.
+
+  (1-d) THE LINE-CITATION SCREEN'S OWN DRIVE, used by SECTION 6. Control file
+        `06-48-linecite-control.txt`, one line reading `see ROADMAP.md:1615 for the row`:
+
+        $ /usr/bin/grep -cE 'ROADMAP\.md:[0-9]+' "$S/06-48-linecite-control.txt"
+        1
+
+        (That control is quoted in full because the pattern it exercises is a line-citation shape,
+        not a forbidden token — quoting it costs nothing and carries no prohibited string.)
+
+SCRATCH HYGIENE. `git status --short` shows no untracked file carrying the unbracketed token, and
+`git diff --cached --name-only` includes no control file: all three controls live outside the
+repository tree entirely, under the session scratch directory named above.
+
+
+================================================================================
+SECTION 2 — `(O-a-corrected)`, PUBLISHED
+================================================================================
+This supersedes `(O-a)` of `06-43-conf04-verdict.txt` SECTION O. It is the SAME loop over the SAME
+four named files, with `-cF` replaced by `-cE` and NOTHING ELSE CHANGED:
+
+  (O-a-corrected) occurrence count of the forbidden mode's literal token:
+        `for f in artifacts/06-4*-*.txt; do /usr/bin/grep -cE "Full[R]efresh" "$f"; done`
+
+The four files of SECTION O's counted set, copied verbatim from there so the set is not a moving
+target:
+
+        artifacts/06-40-conf04-reprobe-before.txt
+        artifacts/06-41-conf04-reprobe-drive.txt
+        artifacts/06-42-conf04-reprobe-after.txt
+        artifacts/06-42-consumers-rerun.txt
+
+`(O-b)` is UNCHANGED and needs no correction — it already reads:
+
+  (O-b) occurrence count of the forbidden UI button's phrase, case-insensitive:
+        `for f in artifacts/06-4*-*.txt; do /usr/bin/grep -ciE "Replace all [m]etadata" "$f"; done`
+
+`(O-c)`, the write-verb count over 06-41's delimited endpoint audit, is likewise unchanged and
+untouched by this correction. The correction is SURGICAL TO `(O-a)`.
+
+⚠ WARNING TO ANY COPIER. `-F` and a bracketed needle are MUTUALLY EXCLUSIVE BY CONSTRUCTION: `-F`
+  suppresses exactly the metacharacter interpretation that makes the bracketing mitigation work, so
+  the pair can only ever measure the mitigation form and never the real token. Anyone copying a
+  forbidden-mode detector out of this phase must copy the `-cE` form FROM HERE and not the `-cF`
+  form from the dated artifact. The `-cF` string appears in this file only where the defect is
+  quoted in order to explain it; every PUBLISHED recipe here is `-cE` or `-ciE`.
+
+
+================================================================================
+SECTION 3 — THE COUNTS, RE-DERIVED WITH THE CORRECTED RECIPE
+================================================================================
+These are RE-DERIVED IN THIS TASK, not restated from SECTION O and not carried from
+`06-VERIFICATION.md`'s independent re-drive. Run at the base commit, per file, `/usr/bin/grep -cE`:
+
+--- RE-DERIVED COUNTS BEGIN ---
+(O-a-corrected), forbidden refresh mode token, `-cE`:
+  artifacts/06-40-conf04-reprobe-before.txt                               : 0
+  artifacts/06-41-conf04-reprobe-drive.txt                                : 0
+  artifacts/06-42-conf04-reprobe-after.txt                                : 0
+  artifacts/06-42-consumers-rerun.txt                                     : 0
+  artifacts/06-43-conf04-verdict.txt                                      : 0
+  scripts/check-music-consumers.sh                                        : 0
+  scripts/quick-health-check.sh                                           : 0
+
+(O-b) unchanged, forbidden UI button phrase, `-ciE`:
+  artifacts/06-40-conf04-reprobe-before.txt                               : 0
+  artifacts/06-41-conf04-reprobe-drive.txt                                : 0
+  artifacts/06-42-conf04-reprobe-after.txt                                : 0
+  artifacts/06-42-consumers-rerun.txt                                     : 0
+  artifacts/06-43-conf04-verdict.txt                                      : 0
+  scripts/check-music-consumers.sh                                        : 0
+  scripts/quick-health-check.sh                                           : 0
+--- RE-DERIVED COUNTS END ---
+
+THESE ARE ZERO-EXPECTING COUNTS AND SECTION 1 IS THEIR DRIVE. A `0` from a recipe that cannot
+detect is worthless. Section 1 (1-a) shows the identical `(O-a-corrected)` recipe returning **1**
+against a control containing the real token, and (1-c) shows the identical `(O-b)` recipe returning
+**1** against a control containing the phrase. Only because of those two drives are the fourteen
+zeros above evidence about the estate rather than evidence about the instrument.
+
+BOTH HALVES, NEITHER SOFTENED INTO THE OTHER:
+
+  1. The published `0` in `06-43-conf04-verdict.txt` SECTION O IS CONFIRMED TRUE OF THE ESTATE. The
+     forbidden mode's token does not occur in any of the four round-5 artifacts, nor in the verdict
+     artifact itself, nor in either instrument script. The prohibition was honoured in fact.
+
+  2. AND that `0` WAS NOT EARNED BY THE COMMAND PRINTED BESIDE IT. `(O-a)` as published would have
+     returned 0 over a corpus saturated with the token. The number is right; the instrument that
+     produced it could not have been wrong, which is a different and much weaker property than being
+     right.
+
+Neither sentence licenses deleting the other. "It was true anyway" is not a defence of a vacuous
+detector, and "the detector was vacuous" is not grounds for doubting the estate.
+
+
+================================================================================
+SECTION 4 — THE DATED ARTIFACT'S IMMUTABILITY, PROVEN AGAINST THE BASE COMMIT
+================================================================================
+Target: `.planning/phases/06-tagger-configuration-and-dry-run/artifacts/06-43-conf04-verdict.txt`
+
+  $ git show ce358779329c4e37112a843bba877883e9a238f9:.planning/phases/\
+      06-tagger-configuration-and-dry-run/artifacts/06-43-conf04-verdict.txt | /sbin/sha256sum
+  d85ebe4b68b830d11519fcf2e04f9c66f08351472b33ebb453669a064cedd35c  -
+
+  $ /sbin/sha256sum .planning/phases/06-tagger-configuration-and-dry-run/artifacts/\
+      06-43-conf04-verdict.txt
+  d85ebe4b68b830d11519fcf2e04f9c66f08351472b33ebb453669a064cedd35c  \
+      .planning/phases/06-tagger-configuration-and-dry-run/artifacts/06-43-conf04-verdict.txt
+
+THE TWO DIGESTS ARE IDENTICAL. The dated artifact is byte-identical to its state at this plan's
+BASE COMMIT.
+
+(`/sbin/sha256sum` IS present on this workstation and was used. `shasum -a 256` was run as a
+cross-check and returned the same digest on both sides; the digest is therefore not an artefact of
+one implementation.)
+
+WHY THIS COMPARISON AND NOT `git diff --exit-code <path>`, IN ONE CLAUSE: the bare form compares the
+working tree against the INDEX and is blind to a STAGED edit, and even `git diff --exit-code HEAD --
+<path>` is blind to an edit THIS PLAN ITSELF COMMITTED — while the guarantee actually owed here is
+immutability across the WHOLE PLAN, not cleanliness at the end of it. The base-commit digest is the
+only comparison that survives both.
+
+THE STAGED-EDIT BLINDNESS IS DRIVEN, NOT ASSERTED. In a throwaway scratch repository, one committed
+file, then modified and `git add`-ed:
+
+  --- with the edit STAGED ---
+  git diff --exit-code protected.txt          -> exit 0      (BLIND)
+  git diff --exit-code HEAD -- protected.txt  -> exit 1      (SEES IT)
+
+This plan stages and commits while it runs, so the blind state is the LIKELY one here, not a corner
+case. Every byte-identity guarantee in this plan is therefore written with `HEAD --`, and the dated
+artifact additionally carries the base-commit digest above.
+
+SECONDARY (weaker, recorded because the plan requires both):
+
+  $ git diff --exit-code HEAD -- .planning/phases/06-tagger-configuration-and-dry-run/\
+      artifacts/06-43-conf04-verdict.txt
+  exit 0
+
+
+================================================================================
+SECTION 5 — WHAT THIS DOES NOT DO
+================================================================================
+  - SECTION O of `06-43-conf04-verdict.txt` IS LEFT UNEDITED. The recipe is corrected somewhere a
+    copier will find it, not retro-fitted into the dated record.
+  - NO CONF-04 FACT CHANGES. `REQUIREMENTS.md:152`'s checkbox is untouched and unticked; the
+    operator's `negative-carry-e6` override and Phase 7 entry criterion E6 are exactly where round 5
+    left them.
+  - THE FORBIDDEN PER-ITEM REFRESH MODE REMAINS FORBIDDEN, UNISSUED AND UNREACHED. Nothing in this
+    plan issues it, widens toward it, or makes it reachable from any branch.
+  - `06-VERIFICATION.md` IS NOT RE-SCORED. That is `/gsd-verify 06`'s call, not an executor's.
+  - ZERO ESTATE CONTACT. This task issued no `ssh`, no `docker`, no HTTP verb of any kind, no
+    package-manager install, and took and destroyed no snapshot. Every command above ran on the
+    workstation against files already in this repository, plus three scratch control files.
+  - CREDENTIAL SCREEN (this repository is PUBLIC): no API key, token, password or header value
+    appears in this file. It carries only counts, recipes, digests, repository-relative paths and a
+    commit id already public in this repository.
