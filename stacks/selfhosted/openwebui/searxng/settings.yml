@@ -21,7 +21,7 @@
 # here follows the image and improves when the image is upgraded. Keep it that way: add an
 # entry only when the default is genuinely wrong for this estate, and say why.
 #
-# Last reviewed: 2026-09-24 (quick task 260924-x6w) against searxng 2026.9.23-3cd69d30e.
+# Last reviewed: 2026-09-25 (quick task 260924-x6w) against searxng 2026.9.23-3cd69d30e.
 
 use_default_settings: true
 
@@ -41,6 +41,17 @@ server:
   # do that, so this is categorically incompatible with Open WebUI. Keep false.
   public_instance: false
   image_proxy: true
+  # GET, not the upstream default of POST. This is load-bearing for the external
+  # format=json block in compose.yaml, not a preference.
+  #
+  # Traefik can match a query string but cannot read a request body. With the default
+  # method:POST the search form submits its parameters in the body, so `format=json`
+  # arrives somewhere Traefik cannot see it and a POST walks straight through the
+  # Query(format,json) rule — measured returning HTTP 200 on 2026-09-25, which is the
+  # bypass this setting closes. With GET the parameters are in the URL where the rule can
+  # see them, and compose.yaml separately denies external POST to /search so the body
+  # route is shut as well. /autocompleter still accepts POST and is unaffected.
+  method: "GET"
 
 search:
   # json is REQUIRED by Open WebUI. Without it /search?format=json returns 403 and every
@@ -59,68 +70,98 @@ search:
 # and shortening it further would only retry sooner against an engine that is actively
 # blocking us, which entrenches the block rather than clearing it.
 
+# ======================================================================================
+# ENGINES
+#
+# READ THIS BEFORE EDITING. Every entry below was MEASURED against this exact image on
+# 2026-09-25, not taken from a guide. 25 consecutive live queries (5 engines x 5 varied
+# queries) were run from this instance's own WAN IP; the pass/fail column is what came
+# back, not what the documentation predicted.
+#
+# The headline result: upgrading the image from 2026.6.23 to 2026.9.23 fixed the blocking
+# on its own. The 2026-09-04 curl_cffi migration added browser TLS/JA3 impersonation, and
+# brave — which had been returning HTTP 429 and benching itself for an hour — went to 5/5
+# with the highest result count of any engine. google and bing likewise went 5/5. Do not
+# "restore" a disable below on the strength of a blog post; re-measure first.
+#
+# TWO TRAPS, both of which caught an earlier draft of this file:
+#
+# 1. `inactive: true` is NOT the same as `disabled: true`. An inactive engine is not
+#    loaded into the config at all, so writing `disabled: false` against it does NOTHING
+#    and fails SILENTLY — the engine simply never appears. mojeek, startpage, findborg,
+#    dogpile and marginalia are all `inactive: true` in this image and cannot be turned on
+#    from here. mojeek and startpage are inactive because they now demand a proof-of-work
+#    CAPTCHA that would burn CPU on this LXC on every search; marginalia needs an API key.
+#
+# 2. Never use `use_default_settings.engines.remove:`. Open upstream bug searxng#6336
+#    crashes the service at startup when a base engine that others reference by `network:`
+#    is removed while those others remain — brave.images, brave.videos and brave.news all
+#    declare `network: brave`. `disabled: true` is the safe lever and has the same effect
+#    for API consumers, because format=json requests carry no user preferences.
+# ======================================================================================
+
 engines:
-  # --- Retired: these are the engines that were actually failing ---------------------
-  # Measured in the container logs on 2026-09-24, all four on the same WAN IP.
-  #
-  # IMPORTANT: these are `disabled: true`, NOT removed via
-  # `use_default_settings.engines.remove`. Open upstream bug searxng#6336 crashes the
-  # service at startup when a base engine that others reference by `network:` is removed
-  # while those others remain — brave.images, brave.videos and brave.news all declare
-  # `network: brave`. The same trap applies to mojeek, qwant, startpage and yandex.
-  # Disabling is the safe lever and has the same effect for API consumers, because
-  # format=json requests carry no user preferences.
+  # --- Re-enabled: the image upgrade fixed these -------------------------------------
 
-  # CAPTCHA (uk-en) on every request. Its vqd token is derived from the query plus the
-  # User-Agent, which forces a static UA and makes the instance trivially fingerprintable.
-  # Superseded by `duckduckgo web` below, which does not use vqd at all.
-  - name: duckduckgo
-    disabled: true
-
-  # get_sc_code redirected to /sp/captcha, benched for 86400s at a time. The sc code is
-  # scraped per-request and is the choke point; this is outside operator control.
-  - name: startpage
-    disabled: true
-
-  # HTTP 429, suspended 3600s. Replaced by findborg, which serves the same Brave index
-  # through a different front door and therefore a different rate-limit bucket.
+  # Was HTTP 429, suspended 3600s, on 2026.6.23. Now 5/5 with ~24 results per query, the
+  # strongest engine in the set. This is the single clearest piece of evidence that the
+  # stale pin, not the engine list, was the actual fault.
   - name: brave
-    disabled: true
+    disabled: false
 
-  # NOT re-enabled, and this one is not about blocking. Open upstream bug searxng#6358:
-  # when the server IP is blocked, qwant SILENTLY RETURNS FABRICATED RESULTS rather than
-  # raising an error. These results feed Open WebUI's RAG, so a confident wrong answer is
-  # strictly worse than a missing one. Leave this disabled.
-  - name: qwant
-    disabled: true
+  # Disabled upstream by default because it is churn-prone and its scraper breaks when
+  # Google changes markup. Measured 5/5 here. Accepted deliberately: the weekly Renovate
+  # schedule added for this image is what keeps the scraper current, and if google starts
+  # failing the correct response is to take the update, not to hand-tune this file.
+  - name: google
+    disabled: false
 
-  # --- Enabled: off by default upstream, wanted here ---------------------------------
+  # Also disabled upstream by default, same reasoning as google. Measured 5/5.
+  - name: bing
+    disabled: false
 
-  # Distinct engine from `duckduckgo` above. Scrapes duckduckgo.com HTML and follows
-  # links.duckduckgo.com/d.js, using curl_cffi impersonate="firefox" with
-  # default_headers=False. Crucially it does NOT use vqd, which is the exact mechanism
-  # that CAPTCHAs the standard engine. This is the DuckDuckGo replacement.
+  # Not enabled by default. Distinct engine from `duckduckgo` below — it scrapes
+  # duckduckgo.com HTML and follows links.duckduckgo.com/d.js using curl_cffi
+  # impersonate="firefox", and crucially does NOT use the vqd token that is the exact
+  # mechanism CAPTCHA-ing the standard engine. Measured 5/5.
   - name: duckduckgo web
     disabled: false
 
-  # Independent non-commercial index favouring small, old and text-heavy sites. A poor
-  # primary engine and a genuinely good supplement — it surfaces things the mainstream
-  # engines have dropped. No bot defence, so no blocking risk.
-  - name: marginalia
-    disabled: false
+  # --- Retired -----------------------------------------------------------------------
 
-# Relied on but NOT listed above, because they are already enabled in the image defaults
-# and listing them would just be something else to rot:
-#   mojeek    — independent crawler with its own index; solves Mojeek's Altcha
-#               proof-of-work challenge in-engine on current builds
-#   findborg  — Brave's index via a different front door (the brave replacement)
-#   dogpile   — metasearch, broad mainstream coverage
-#   wikipedia, wikidata — public APIs, no bot defence, zero blocking risk
+  # Still CAPTCHA (uk-en) on every request even on the current image — re-measured
+  # 2026-09-25, this one did NOT recover. Its vqd token is derived from the query plus the
+  # User-Agent, which forces a static UA and makes the instance trivially fingerprintable.
+  # `duckduckgo web` above is the working replacement; keep this one off.
+  - name: duckduckgo
+    disabled: true
+
+  # NOT a blocking issue, and the reason matters. Open upstream bug searxng#6358: when the
+  # server IP is blocked, qwant SILENTLY RETURNS FABRICATED RESULTS rather than raising an
+  # error. These results feed Open WebUI's RAG, where a confident wrong answer is strictly
+  # worse than a missing one. Leave this disabled regardless of how it measures.
+  - name: qwant
+    disabled: true
+
+# Already enabled in the image defaults, relied on, and deliberately NOT repeated above —
+# listing them would only create something else to drift:
+#   google cse           5/5, ~20 results
+#   wikipedia, wikidata  public APIs, no bot defence
 #
-# Deliberately NOT enabled:
-#   google, bing — disabled upstream by default for good reason; 2026 issue traffic on
-#                  both is relentless and google's is still an open upstream problem
-#   yep          — always HTTP 400 (searxng#6047)
+# Measured and REJECTED on 2026-09-25, recorded so nobody re-tests them on a hunch:
+#   searchmysite   access denied
+#   mwmbl          0 results (upstream's own docstring calls it a proof of concept)
+#   crowdview      0 results
+#   wiby           1 result
+#   encyclosearch  1 result
+#   quark          crashed 1 of 5
+#   yahoo          works (5/5, 7 results) but adds little over the four above
+#   seznam         works (5/5) but is Czech-focused
+#
+# Restraint is deliberate. Every extra engine slows every search to the pace of its
+# slowest member and multiplies the outbound request volume from this single residential
+# WAN IP — which is the pressure that produces blocking in the first place. Five general
+# web engines plus the encyclopedias is enough; adding more is a cost, not a free win.
 #
 # Gone entirely — upstream DELETED these, do not add them back:
 #   presearch (removed 2026-07-30), stract (2026-03-03), right dao (2026-03-12)

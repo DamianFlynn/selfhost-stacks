@@ -291,6 +291,21 @@ services:
       - "traefik.http.routers.searxng-nojson-rtr.tls.certresolver=dns-cloudflare"
       - "traefik.http.routers.searxng-nojson-rtr.service=searxng-svc"
       - "traefik.http.routers.searxng-nojson-rtr.middlewares=searxng-denyjson"
+      # Second half of the block, and it is NOT redundant. Traefik can match a query
+      # string but cannot read a request body, so with SearXNG's upstream default of
+      # method:POST the `format=json` parameter arrives in the body where the rule above
+      # cannot see it -- measured returning HTTP 200 on 2026-09-25, a complete bypass.
+      # settings.yml now sets server.method GET so the form's parameters are in the URL,
+      # and this rule denies external POST to /search so the body route is closed too.
+      # Scoped to /search on purpose: /autocompleter legitimately takes POST.
+      # Both halves are required; removing either one reopens the hole.
+      - "traefik.http.routers.searxng-nopost-rtr.entrypoints=websecure"
+      - "traefik.http.routers.searxng-nopost-rtr.rule=Host(`search.deercrest.info`) && Method(`POST`) && Path(`/search`)"
+      - "traefik.http.routers.searxng-nopost-rtr.priority=110"
+      - "traefik.http.routers.searxng-nopost-rtr.tls=true"
+      - "traefik.http.routers.searxng-nopost-rtr.tls.certresolver=dns-cloudflare"
+      - "traefik.http.routers.searxng-nopost-rtr.service=searxng-svc"
+      - "traefik.http.routers.searxng-nopost-rtr.middlewares=searxng-denyjson"
       # ipallowlist scoped to TEST-NET-1 (RFC 5737, never routed on the internet) matches
       # no real client, so Traefik answers 403 for all of them. This is a deny-all, not an
       # allowlist with a gap -- 192.0.2.1 cannot be a source address here.
