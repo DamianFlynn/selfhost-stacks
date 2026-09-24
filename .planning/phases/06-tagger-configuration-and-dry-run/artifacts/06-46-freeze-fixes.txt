@@ -1,0 +1,216 @@
+06-46 — R6-01 and R6-03(a) driven transcript
+============================================
+
+Plan:        .planning/phases/06-tagger-configuration-and-dry-run/06-46-PLAN.md
+Base commit: 75c7989
+Task 1 commit: e515970
+Run date:    2026-09-24
+Environment: Darwin 27.0.0 arm64 (macOS), NON-ROOT uid 501 (damian), python3 PRESENT
+             (/opt/homebrew/bin/python3), GNU bash 5.3.15, ShellCheck 0.11.0,
+             BSD grep at /usr/bin/grep.
+             This is the named reference environment of 06-DISPOSITIONS-GAP3.md, so the
+             self-test case counts below are directly comparable to the recorded figures.
+
+NO ESTATE CONTACT OF ANY KIND was made by this plan: zero ssh, zero docker, zero --run.
+
+WHAT THE HARNESS IN SECTION 3 PROVES, AND WHAT IT DOES NOT.
+  It proves the TEXT of each fail arm and the INTERPOLATION of the values into it; it does NOT
+  prove the live block, which is reachable only with estate contact this plan makes none of.
+
+
+SECTION 1 — shellcheck -S warning before/after matrix, all six reviewed scripts
+------------------------------------------------------------------------------
+
+BEFORE (at base commit 75c7989) — 5 clean, 1 with two SC2034 findings:
+
+  --- check-beets-config.sh: exit=0 lines=0
+  --- check-music-consumers.sh: exit=0 lines=0
+  --- check-music-freeze.sh: exit=1 lines=6
+
+  In scripts/check-music-freeze.sh line 1044:
+        while IFS='|' read -r xn xs xsrc xdst xflag; do
+                                 ^-- SC2034 (warning): xs appears unused. Verify use (or export if used externally).
+                                         ^--^ SC2034 (warning): xdst appears unused. Verify use (or export if used externally).
+
+  For more information:
+    https://www.shellcheck.net/wiki/SC2034 -- xdst appears unused. Verify use (...
+  --- phase06-incremental-control.sh: exit=0 lines=0
+  --- phase06-oracle.sh: exit=0 lines=0
+  --- quick-health-check.sh: exit=0 lines=0
+
+AFTER (working tree with both R6-01 and R6-03 edits) — 6 clean:
+
+  === AFTER: shellcheck -S warning across six scripts ===
+  --- check-beets-config.sh: exit=0 output_lines=0
+  --- check-music-consumers.sh: exit=0 output_lines=0
+  --- check-music-freeze.sh: exit=0 output_lines=0
+  --- phase06-incremental-control.sh: exit=0 output_lines=0
+  --- phase06-oracle.sh: exit=0 output_lines=0
+  --- quick-health-check.sh: exit=0 output_lines=0
+
+The round therefore ends cleaner than it started, which was WR-01's stated purpose.
+WR-01 was the only shellcheck finding across all six scripts; there is now none.
+
+
+SECTION 2 — task 1 (R6-01), and the DRIVEN CONTROL for its zero-expecting recipe
+--------------------------------------------------------------------------------
+
+The edit, at scripts/check-music-freeze.sh:1044 (one comment line + the changed read):
+
+      # R6-01: `_`-prefixed names mark a column parsed but not consumed, so the field COUNT stays five.
+      while IFS='|' read -r xn _xs xsrc _xdst xflag; do
+
+Premise check, done BEFORE editing (WR-01 is a wrong finding if either is referenced):
+  /usr/bin/grep -nE '\b(xs|xdst)\b' scripts/check-music-freeze.sh   (at base commit)
+    1044:      while IFS='|' read -r xn xs xsrc xdst xflag; do
+  — the binding line and nothing else. Neither column is consumed. Premise holds.
+
+Column ORDER was READ, not assumed. The producer is the docker inspect --format at :981-983:
+  '{{$n := .Name}}{{$s := .State.Status}}{{range .Mounts}}{{$n}}|{{$s}}|{{.Source}}|{{.Destination}}|{{if .RW}}rw{{else}}ro{{end}}{{"\n"}}{{end}}'
+  => name|state|source|destination|rw-flag, so _xs is the container STATE and _xdst the mount
+  DESTINATION — exactly the two the loop body does not consume (it uses xn, xsrc, xflag).
+
+*** THE ZERO-EXPECTING RECIPE, DRIVEN AGAINST A CONTROL FIRST (DEF-06-45-04 class). ***
+
+  === DRIVEN CONTROL for the zero-expecting $xs/$xdst recipe ===
+  control file content:
+  echo "$xs $xdst"
+  recipe against CONTROL (must be >= 1): 1
+  recipe against REAL script (must be 0): 0
+
+  The identical recipe was used on both sides:
+    /usr/bin/grep -vE '^[[:space:]]*#' <file> | /usr/bin/grep -cE '\$\{?(xs|xdst)\b'
+  It returned 1 against a one-line control containing `echo "$xs $xdst"`, and 0 against the
+  real script. The 0 is therefore evidence that the references are GONE, not evidence that the
+  instrument cannot detect.
+
+Other task-1 measurements:
+
+  === bash -n ===                                        exit=0
+  === shellcheck check-music-freeze.sh ===               exit=0 (zero output)
+  === pattern count (expect 1) ===                       1
+        recipe: /usr/bin/grep -cE "IFS='\|' read -r xn _xs xsrc _xdst xflag" scripts/check-music-freeze.sh
+  === field count of the changed line ===                names bound: 5
+  === git diff --stat ===
+   scripts/check-music-freeze.sh | 3 ++-
+   1 file changed, 2 insertions(+), 1 deletion(-)
+
+
+SECTION 3 — task 2 (R6-03(a)), BOTH FAIL ARMS DRIVEN IN BOTH DIRECTIONS
+------------------------------------------------------------------------
+
+Method. `check-music-freeze.sh` contacts the estate as a whole and these branches are reachable
+only when the counts disagree, so each block's text was extracted VERBATIM by line range out of
+the file that this task commits (interp block lines 511-518; tagger block lines 831-847, started
+one line early at the DEF_EXPECTED sort so the expected SET is derived by the real code rather
+than stubbed), concatenated after stub fail/pass/warn/info helpers and stub values, and run.
+
+  stubs:
+    FAILURES=0
+    fail() { echo "  ❌ $*"; FAILURES=$((FAILURES + 1)); }
+    pass() { echo "  ✅ $*"; }
+    warn() { echo "  ⚠️  $*"; }
+    info() { echo "  $*"; }
+
+Stub values — interp: DECLARED_INTERP_EXPECTED=12, INTERP_COUNT 12 (green) / 13 (red), two
+synthetic INTERP_ROWS lines. Tagger: the real TAGGER_DEF_* constants, DEF_FILES = the sorted
+named pair (green) / that pair plus a synthetic third `stacks/selfhosted/arrs/picard/picard.yaml`
+(red), TAGGER_DEFS 2 / 3.
+
+--- DRIVE 1 of 4: interp GREEN (expected=12, found=12) — remediation line ABSENT ---
+
+  ===== DRIVE: interp-green =====
+    12 volume lines interpolate a variable into the HOST path; none can be resolved statically (pinned inventory, expected=12). §2's pass below is a claim about the resolvable lines only.
+  [harness exit=0]
+
+--- DRIVE 2 of 4: interp RED (expected=12, found=13) — remediation line PRESENT, both values interpolated ---
+
+  ===== DRIVE: interp-red =====
+    ❌ interpolated-host-path inventory MOVED: expected=12, found=13. These lines are invisible to §2's driving grep and cannot be resolved statically, so §2 is UNKNOWN until each new one is read by hand and DECLARED_INTERP_EXPECTED is moved in the same commit:
+           stacks/selfhosted/x/a.yaml:9:      - ${MEDIA}:/media
+           stacks/selfhosted/x/b.yaml:4:      - ${APPDATA}/new:/config
+           remediation: read each new line above BY HAND — they are invisible to §2's driving grep, so §2 is UNKNOWN, not clean, until they are — then move DECLARED_INTERP_EXPECTED in scripts/check-music-freeze.sh from 12 to 13, in the SAME COMMIT as the change that moved the count. Do NOT export the DECLARED_INTERP_EXPECTED environment override to silence this: its only sanctioned use is making this check REDDER, i.e. driving the failure branch. The constant's own header already states that the knob can declare a red green and resolve nothing; this line is the policy on top of that documented capability, not a denial of it.
+  [harness exit=0]
+
+  Both values are live-interpolated: the stub pin 12 and the stub measurement 13 appear as
+  "from 12 to 13". No line number is emitted; the site is cited as the file plus the constant
+  NAME, because line citations in this repo go stale on arrival.
+
+--- DRIVE 3 of 4: tagger GREEN (named pair, count 2) — remediation line ABSENT ---
+
+  ===== DRIVE: tagger-green =====
+    ✅ tagger definitions: expected=2 — found exactly the named pair:
+           stacks/selfhosted/arrs/beets/flask.yaml — ACTIVE front end — metasauce/beets-flask:v2.0.0-rc6, engine beets 2.12.0
+           stacks/selfhosted/arrs/beets/beets.yaml — DORMANT agent-driven CLI arm — lscr.io/linuxserver/beets:2.13.1-ls349
+  [harness exit=0]
+
+--- DRIVE 4 of 4: tagger RED (unnamed third definition, count 3) — remediation line PRESENT ---
+
+  ===== DRIVE: tagger-red =====
+    ❌ tagger definitions: expected=2, exactly this named pair — found 3:
+           expected: stacks/selfhosted/arrs/beets/flask.yaml — ACTIVE front end — metasauce/beets-flask:v2.0.0-rc6, engine beets 2.12.0
+           expected: stacks/selfhosted/arrs/beets/beets.yaml — DORMANT agent-driven CLI arm — lscr.io/linuxserver/beets:2.13.1-ls349
+           found:
+             stacks/selfhosted/arrs/beets/beets.yaml
+             stacks/selfhosted/arrs/beets/flask.yaml
+             stacks/selfhosted/arrs/picard/picard.yaml
+           remediation: do NOT bump TAGGER_DEF_EXPECTED on its own — a third definition must be added the way the two above are, as a TAGGER_DEF_<NAME> path constant AND a TAGGER_DEF_<NAME>_CLASS one-line class string, both added to the expected SET built at the DEF_EXPECTED sort, with TAGGER_DEF_EXPECTED moved in the same commit; D-11 asserts this pair BY NAME AND BY CLASS, so a bare count can never read as a pass and an unnamed third definition must keep failing.
+  [harness exit=0]
+
+Both remediation lines use `echo` with a single double-quoted argument, never `printf` with a
+data-derived format string, so no measured value can be interpreted as a format (T-06R6-04).
+
+
+SECTION 4 — nothing else moved
+-------------------------------
+
+  === bash -n ===                                                  exit=0
+  === shellcheck (check-music-freeze.sh, after both edits) ===      exit=0, zero output
+  === non-comment 'remediation' count (expect 2): 2
+        /usr/bin/grep -vE '^[[:space:]]*#' scripts/check-music-freeze.sh | /usr/bin/grep -c 'remediation'
+        The word is a literal substring of each emitted echo ARGUMENT; the two R6-03 comment
+        lines do not carry it and would be stripped by the filter in any case.
+  === comment-stripped 'fail ' call sites (expect 24): 24
+        Re-measured at the base commit 75c7989 before being trusted, where it also read 24.
+        Unchanged: the remediation lines are plain `echo`, so FAILURES is not incremented and
+        one violation cannot be double-counted.
+  === check-beets-config.sh byte-identical to HEAD? ===
+        git diff --exit-code HEAD -- scripts/check-beets-config.sh   exit=0
+        The `HEAD --` is load-bearing; a bare `git diff --exit-code <path>` is blind to a staged
+        edit and this plan stages. WR-03's ST_PLANNED_CASES=7 third is NOT touched here; it is
+        dispositioned ACCEPTED in 06-50 (and was excluded by name in round 4, DEF-06-39-02).
+  === constants, base commit vs working tree ===
+        base:  153:TAGGER_DEF_EXPECTED=2
+               508:DECLARED_INTERP_EXPECTED="${DECLARED_INTERP_EXPECTED:-12}"
+        work:  153:TAGGER_DEF_EXPECTED=2
+               508:DECLARED_INTERP_EXPECTED="${DECLARED_INTERP_EXPECTED:-12}"
+        Neither pinned constant moved. No predicate changed. No new assertion logic.
+  === hard-coded line number in the interp remediation? ===         none
+  === git diff --stat (task 2) ===
+   scripts/check-music-freeze.sh | 4 ++++
+   1 file changed, 4 insertions(+)
+
+
+SECTION 5 — the two untouched instruments, re-measured rather than carried forward
+----------------------------------------------------------------------------------
+
+  === check-beets-config.sh --self-test ===   exit=0
+    ✅ --self-test: all 7 cases behaved as expected (6 of them red)
+
+  === phase06-oracle.sh --self-test ===       exit=0
+    ✓ self-test: 140 case(s), every fail-closed branch behaved exactly as expected
+
+Both match the named-reference-environment figures in 06-DISPOSITIONS-GAP3.md (7 / 140), and
+this run IS that environment: macOS, non-root uid 501, python3 present. Neither file was touched
+by this plan, so these are controls on the claim that nothing else moved, not achievements.
+
+
+SECTION 6 — hygiene screen on this artifact
+--------------------------------------------
+
+No credential, no API key, no host address and no header value appears above. The only
+interpolated data are counts, repo-relative paths and the TAGGER_DEF_*_CLASS image strings the
+script already prints. `file` reports the artifact as text and the byte count is unchanged
+across `tr -d '\000'` — the honest NUL instrument, because `grep -c $'\000'` and
+`awk 'index($0,"\000")'` both reduce the needle to the empty string and match every line
+(recorded in round 5, plan 06-41). Both screens are re-run in this task's verify block.

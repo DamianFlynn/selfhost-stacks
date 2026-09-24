@@ -513,6 +513,8 @@ if [[ "$INTERP_COUNT" -eq "$DECLARED_INTERP_EXPECTED" ]]; then
 else
   fail "interpolated-host-path inventory MOVED: expected=$DECLARED_INTERP_EXPECTED, found=$INTERP_COUNT. These lines are invisible to §2's driving grep and cannot be resolved statically, so §2 is UNKNOWN until each new one is read by hand and DECLARED_INTERP_EXPECTED is moved in the same commit:"
   printf '%s\n' "$INTERP_ROWS" | sed 's/^/         /'
+  # R6-03: failure output that names the literal edit, so a contributor who tripped this for an unrelated reason is not left guessing.
+  echo "         remediation: read each new line above BY HAND — they are invisible to §2's driving grep, so §2 is UNKNOWN, not clean, until they are — then move DECLARED_INTERP_EXPECTED in scripts/check-music-freeze.sh from $DECLARED_INTERP_EXPECTED to $INTERP_COUNT, in the SAME COMMIT as the change that moved the count. Do NOT export the DECLARED_INTERP_EXPECTED environment override to silence this: its only sanctioned use is making this check REDDER, i.e. driving the failure branch. The constant's own header already states that the knob can declare a red green and resolve nothing; this line is the policy on top of that documented capability, not a denial of it."
 fi
 echo ""
 
@@ -840,6 +842,8 @@ else
       echo "         expected: $TAGGER_DEF_CLI — $TAGGER_DEF_CLI_CLASS"
       echo "         found:"
       printf '%s\n' "$DEF_FILES" | sed 's/^/           /'
+      # R6-03: failure output that names the literal edit, so the named-pair rule is not "fixed" by moving the count.
+      echo "         remediation: do NOT bump TAGGER_DEF_EXPECTED on its own — a third definition must be added the way the two above are, as a TAGGER_DEF_<NAME> path constant AND a TAGGER_DEF_<NAME>_CLASS one-line class string, both added to the expected SET built at the DEF_EXPECTED sort, with TAGGER_DEF_EXPECTED moved in the same commit; D-11 asserts this pair BY NAME AND BY CLASS, so a bare count can never read as a pass and an unnamed third definition must keep failing."
     fi
   fi
 
