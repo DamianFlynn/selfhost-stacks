@@ -1,0 +1,414 @@
+================================================================================
+06-47 — PHASE 6 DISPOSITION CONSISTENCY AUDIT
+Four records, five named checks, every check verdicted
+Written 2026-09-24T19:56Z by plan 06-47 (gap-closure round 6, wave 1)
+================================================================================
+
+SCOPE AND THE ONE PEN THIS PLAN HOLDS
+-------------------------------------
+This plan writes exactly ONE of the four records it audits: stacks/selfhosted/arrs/beets.md.
+For the other three it can only MEASURE AGREEMENT and NAME AN OWNER for any divergence.
+That asymmetry is deliberate. A plan that asserts a four-record outcome while holding one
+pen is the over-claim shape round 6 exists to remove, so nothing below is phrased as
+"all four records were made to agree" — only as "all four were read, and here is what each
+one says".
+
+Untouched by this plan, asserted with `git diff --exit-code HEAD -- <path>` (see the
+INSTRUMENT NOTE below for why the `HEAD --` is load-bearing):
+  .planning/REQUIREMENTS.md
+  .planning/ROADMAP.md
+  .planning/phases/06-tagger-configuration-and-dry-run/deferred-items.md
+
+INSTRUMENT NOTE 1 — grep is invoked BY ABSOLUTE PATH, every time
+---------------------------------------------------------------
+Every measurement in this file is taken with /usr/bin/grep. The workstation's bare `grep`
+is a SHELL FUNCTION and has silently matched nothing in this phase before, over files whose
+content was demonstrably present (recorded in plan 06-41). A tool that answers "no matches"
+when it was never really consulted is the exact false-green shape this phase exists to
+remove. Bare `grep` appears nowhere in this audit.
+
+INSTRUMENT NOTE 2 — the `HEAD --` rule on every byte-identity claim
+------------------------------------------------------------------
+A bare `git diff --exit-code <path>` compares the working tree against the INDEX, not a
+commit. With an edit STAGED it exits 0. This plan stages and commits while it runs, so every
+byte-identity guarantee in this file is written `git diff --exit-code HEAD -- <path>`.
+
+INSTRUMENT NOTE 3 — every zero-expecting recipe was DRIVEN against a control first
+----------------------------------------------------------------------------------
+A count of 0 from a recipe that can never match is worth nothing. DEF-06-45-04 is exactly
+that defect: 06-43 SECTION O published a `grep -cF` with a bracketed needle, which can never
+match the real token, and the true `0` it printed was not earned by the printed recipe.
+Every zero-expecting count below is preceded by the SAME recipe run against a control that
+DOES contain the thing being screened for, observed to return non-zero. See § DRIVES.
+
+================================================================================
+§ DRIVES — the control runs, recorded before any zero is read as evidence
+================================================================================
+
+DRIVE A — the line-citation screen (task 1's zero)
+--------------------------------------------------
+Recipe (extended regex, both citation forms):
+    /usr/bin/grep -cE 'beets\.md:[0-9]+|line ~?[0-9]{3,}'
+
+  A1  vs CONTROL — a scratch file containing both forms, one per line:
+          see beets.md:2051 for the closure
+          the table at line 2051 of this file
+      RESULT: 2          <-- non-zero, so the recipe DETECTS
+
+  A2  vs the real target, `/usr/bin/head -n 45 stacks/selfhosted/arrs/beets.md`:
+      RESULT: 0          <-- earned. No line citation was written into the new pointer.
+
+DRIVE B — the forbidden-refresh-mode bracketing convention
+-----------------------------------------------------------
+Recipe (EXTENDED regex, never -F; the bracket is the convention that keeps the literal
+token out of the prose while leaving the recipe able to match it):
+    /usr/bin/grep -cE 'Full[R]efresh'
+
+  B1  vs CONTROL — a one-line scratch file carrying the real, unbracketed token:
+      RESULT: 1          <-- non-zero, so the recipe DETECTS
+
+  B2  vs the 26 lines this plan ADDED to beets.md
+      (`git diff -U0 | grep '^+' | grep -v '^+++'`):
+      RESULT: 0          <-- earned
+
+  B3  sanity — vs a line containing the BRACKETED literal `Full[R]efresh`:
+      RESULT: 0          <-- confirms -cE is reading the brackets as a character class,
+                             i.e. B1/B2 are measuring the real token and not the prose form
+
+  B4  vs THIS ARTIFACT, after writing:  see § CLOSING MEASUREMENTS
+
+DRIVE C — the CONF-04 checkbox tick screen
+-------------------------------------------
+Recipe:
+    /usr/bin/grep -cE '^- \[[xX]\] \*\*CONF-04\*\*'
+
+  C1  vs CONTROL — a scratch line reading `- [x] **CONF-04**: control line`:
+      RESULT: 1          <-- non-zero, so the recipe DETECTS a ticked box
+
+  C2  vs .planning/REQUIREMENTS.md:
+      RESULT: 0          <-- earned: no ticked CONF-04 box exists
+
+  C3  the matching UNTICKED recipe, `^- \[ \] \*\*CONF-04\*\*`, vs the same file:
+      RESULT: 1          <-- the box exists and is unticked; C2's 0 is not the 0 of an
+                             absent line
+
+DRIVE D — the false-close screen
+---------------------------------
+Recipe (case-insensitive):
+    /usr/bin/grep -cEi 'phase 6 (is )?(now )?(complete|fully passed)'
+
+  D1  vs CONTROL — `Phase 6 is Complete and fully passed`:
+      RESULT: 1          <-- non-zero, so the recipe DETECTS
+
+  D2  vs .planning/ROADMAP.md .................................. 0
+  D3  vs stacks/selfhosted/arrs/beets.md ....................... 0
+  D4  vs .../06-tagger-configuration-and-dry-run/deferred-items.md  0
+  D5  vs .planning/REQUIREMENTS.md ............................. 0
+      All four earned. No record claims Phase 6 is complete or fully passed.
+
+================================================================================
+§ SOURCE 1 — .planning/ROADMAP.md
+Located by heading text: the paragraph beginning `**Phase 6 disposition:**`, and the
+phase-status table row beginning `| 6. Tagger Configuration and Dry Run |`.
+(Locators are heading/row TEXT, not line numbers: line citations in this repository go
+stale on arrival — the planner shifts ROADMAP.md in its own commit.)
+================================================================================
+
+QUOTED VERBATIM — the disposition paragraph, opening sentences:
+
+    **Phase 6 disposition:** **CLOSED WITH ONE OPEN REQUIREMENT — CONF-04**, named, on its Jellyfin half
+    only. Criteria 1, 2, 3 and 5 are TRUE and were re-measured from live state at close. Criterion 4
+    carries two verdicts that must never be summed. `tank/downloads@pre-phase5` is **NOT** released —
+    see Phase 7's entry criteria.
+
+QUOTED VERBATIM — the same file, the Phase 7 entry-criteria block (the `negative-carry-e6`
+sentence), located by the text `carries CONF-04's Jellyfin half`:
+
+    The operator's
+    recorded decision `negative-carry-e6` (2026-09-24T14:30:37Z) **carries CONF-04's Jellyfin half
+    to Phase 7 entry criterion E6 under an explicit override** — an auditable carry of an OPEN
+    requirement, **not a close**. `REQUIREMENTS.md`'s box stays unticked. The two verdicts are
+    still never summed.
+
+QUOTED VERBATIM — the status-row status word, extracted mechanically rather than retyped, via
+    /usr/bin/grep -oE '^\| 6\. Tagger Configuration and Dry Run \| [0-9]+/[0-9]+ \| [A-Za-z ]+\|'
+
+    | 6. Tagger Configuration and Dry Run | 46/52 | In Progress|
+
+  STATUS WORD: `In Progress`
+
+================================================================================
+§ SOURCE 2 — stacks/selfhosted/arrs/beets.md   (the ONE file this plan writes)
+Located by heading text: the section headed `Phase 6 closed 2026-09-21 — four criteria
+TRUE, one OPEN on a named half, all five RE-MEASURED at close`, its sub-section `The five
+criteria`, and its sub-section `Still open at Phase 6 close`.
+================================================================================
+
+QUOTED VERBATIM — the closure heading:
+
+    ## Phase 6 closed 2026-09-21 — four criteria TRUE, one OPEN on a named half, all five RE-MEASURED at close
+
+  Byte-identity of the heading text reproduced by this plan's new head-of-file pointer,
+  proven mechanically rather than by eye:
+    /usr/bin/grep -cF '<the heading text>' beets.md ....................... 2
+      (the pointer + the real heading)
+    the same -cF restricted to lines beginning with `#` ................... 1
+      (exactly one real heading carries it)
+
+  DISAMBIGUATION RECORDED, because it is a live stale-pointer hazard: the sub-heading text
+  `### The five criteria` occurs TWICE in this file — once in the Phase 5 closure and once
+  in the Phase 6 closure. The pointer therefore names it AS NESTED UNDER the Phase 6
+  closure heading rather than as a standalone locator. `### Still open at Phase 6 close`
+  occurs once and needs no such qualification.
+
+QUOTED VERBATIM — criterion 4's verdict cell, from `The five criteria`:
+
+    **TWO VERDICTS, NEVER SUMMED.** Jellyfin **OPEN**; Music Assistant **PROVEN, one row a measured discrepancy**
+
+QUOTED VERBATIM — the first bullet of `Still open at Phase 6 close`:
+
+    - **CONF-04's Jellyfin half — the one open requirement, and a NAMED PHASE 7 ENTRY BLOCKER.** The
+      option is set and asserted; the three pinned rows still read 0, 1, 1 against targets 4, 2, 2
+      because a Default-mode refresh does not re-probe an unchanged file, and the refresh mode that
+      would is forbidden in this estate. Neither "could not look" nor "nothing is wrong" — **do not
+      record it as green, and do not sum it with the MA half.** It discharges on Phase 7's first write
+      or import of a multi-artist release.
+
+QUOTED VERBATIM — the round-5 sequel section, sub-heading `And the rule that survives all of it`
+(this is where beets.md carries the `negative-carry-e6` fact):
+
+    **The Jellyfin and the Music Assistant verdicts are separate and must never be summed into one
+    CONF-04 answer.** The MA half stays discharged; the Jellyfin half stays OPEN, now carried to Phase 7
+    entry criterion **E6** under the operator's explicit `negative-carry-e6` override — an auditable
+    carry of an open requirement, **not a close**.
+
+================================================================================
+§ SOURCE 3 — .planning/phases/06-tagger-configuration-and-dry-run/deferred-items.md
+Located by heading text: `## DEF-06-45-02 — the mtime lever was DRIVEN and did not
+re-probe: a measured negative Phase 7 must not spend its first hour repeating`.
+READ ONLY — not in this plan's files_modified.
+================================================================================
+
+QUOTED VERBATIM — DEF-06-45-02's statement of what the carry means, sub-heading
+`Where it attaches`:
+
+    **Where it attaches:** Phase 7 entry criterion **E6**, first measurement, which this round leaves
+    STILL OPEN under the operator's explicit `negative-carry-e6` override. The remaining untried
+    mechanism is a genuine write or new import of a multi-artist release.
+
+QUOTED VERBATIM — the same entry, on what the correct response to the disproven mechanism is:
+
+    ⛔ **The correct response to a disproven mechanism is the recorded negative.** Not a second refresh,
+    not a wider refresh mode, and not the aggressive per-item one — which stays forbidden, was not
+    issued, and was unreachable from every branch of the round.
+
+MEASURED SILENCE, recorded rather than smoothed — this file does NOT carry check (iii):
+    /usr/bin/grep -n 'Music Assistant' deferred-items.md
+      -> 2 hits, NEITHER about CONF-04's Music Assistant half (one is the
+         `Various Artists/` duplicate-artist-page entry, one is the rollback warning
+         in DEF-06-45-01)
+    /usr/bin/grep -nc 'summed' deferred-items.md
+      -> 2 hits, NEITHER an assertion about CONF-04's two verdicts (one is a grep-trap
+         lesson quoting the register of another file, one is an unrelated counter)
+    /usr/bin/grep -n -i 'discharg' deferred-items.md
+      -> 1 hit, `stays until Phase 7 entry criterion **E6** discharges CONF-04`
+  This is SILENCE, not CONTRADICTION. See check (iii) for how it is verdicted and why no
+  owning plan is named for it.
+
+================================================================================
+§ SOURCE 4 — .planning/REQUIREMENTS.md
+Located by the requirement line text `- [ ] **CONF-04**` and by the traceability-table row
+beginning `| CONF-04 | Phase 6 |`.
+READ ONLY, AND NOT EDITED AT ALL. A REQUIREMENTS.md edit in round 6 is out of scope by
+operator decision.
+================================================================================
+
+QUOTED VERBATIM — the checkbox line:
+
+    - [ ] **CONF-04**: `;` is the multi-artist delimiter, the one both consumers parse
+
+CHECKBOX STATE, read with an EXPLICIT unticked/ticked count (both recipes driven, § DRIVE C):
+    unticked  `^- \[ \] \*\*CONF-04\*\*`  ........... 1
+    ticked    `^- \[[xX]\] \*\*CONF-04\*\*`  ........ 0
+  VERDICT: UNTICKED. Exactly one CONF-04 checkbox exists and it is unticked.
+
+QUOTED VERBATIM — the traceability row, opening clause:
+
+    **OPEN (Phase 6 closed with this requirement half-discharged, and it is a NAMED PHASE 7 ENTRY
+    BLOCKER).** Two consumers, **two separate verdicts that are never summed** — an averaged tick
+    would hide exactly the half that is not done. **Music Assistant half: DISCHARGED (plan 06-13,
+    re-measured at close by 06-14 ...)**
+
+QUOTED VERBATIM — the same row, on the override:
+
+    **The operator's recorded decision is `negative-carry-e6` (2026-09-24T14:30:37Z,
+    `artifacts/06-43-conf04-verdict.txt` SECTION P)** — option (a) of `06-VERIFICATION.md`
+    § Recommended path: carry the Jellyfin half to **Phase 7 entry criterion E6** under an explicit
+    override so the roadmap's argument becomes auditable rather than implicit. **That override is
+    NOT a close.** The checkbox stays unticked, `requirements mark-complete` was not run, and
+    `06-VERIFICATION.md` was not re-scored — that is `/gsd-verify 06`'s call.
+
+================================================================================
+§ THE PROCEDURAL RECOMMENDATION BEING HONOURED
+Source: .planning/phases/06-tagger-configuration-and-dry-run/06-VERIFICATION.md,
+located by heading text `### Gaps Summary` and by the paragraph beginning
+`**Recommended path, unchanged in kind from the prior pass but narrowed in scope:**`.
+Frontmatter: `status: gaps_found`, `score: 5/6 must-haves verified`.
+================================================================================
+
+QUOTED VERBATIM — the recommendation:
+
+    What remains is procedural: Phase 6 should be understood, and communicated,
+    as **closed with one explicitly carried requirement (CONF-04's Jellyfin half)**, not as fully
+    passed — exactly what `ROADMAP.md`'s own "In Progress" status row and the unticked
+    `REQUIREMENTS.md` checkbox already say. No further action inside Phase 6 is warranted or safe
+
+QUOTED VERBATIM — the sentence this audit exists to keep true:
+
+    **What this verification will not do is convert a well-documented carry into a met requirement.**
+
+================================================================================
+§ THE FIVE NAMED CHECKS
+Verdict words are drawn from the closed set { AGREE, DISAGREE, COULD NOT LOOK }.
+No check is left unverdicted. Every DISAGREE names an owning plan.
+================================================================================
+
+CHECK (i) — Phase 6's disposition is CLOSED WITH ONE OPEN REQUIREMENT, not "complete" and
+            not "passed".
+
+  ROADMAP.md ......... AGREE  — `**CLOSED WITH ONE OPEN REQUIREMENT — CONF-04**`; status
+                               row reads `In Progress`, not `Complete`.
+  beets.md ........... AGREE  — closure heading `four criteria TRUE, one OPEN on a named
+                               half`; the head-of-file pointer added by this plan states
+                               `CLOSED WITH ONE OPEN REQUIREMENT` in the same words.
+  deferred-items.md .. AGREE  — DEF-06-45-02: `this round leaves STILL OPEN`.
+  REQUIREMENTS.md .... AGREE  — `OPEN (Phase 6 closed with this requirement
+                               half-discharged ...)`.
+  Corroborating screen: DRIVE D returned 0 on all four records against a recipe driven to
+  return 1.
+  OVERALL VERDICT: AGREE. No owner required.
+
+CHECK (ii) — the open requirement is CONF-04, on its JELLYFIN HALF ONLY.
+
+  ROADMAP.md ......... AGREE  — `— CONF-04**, named, on its Jellyfin half only.`
+  beets.md ........... AGREE  — `CONF-04's Jellyfin half — the one open requirement`.
+  deferred-items.md .. AGREE  — DEF-06-45-02 attaches to `E6, first measurement`, the
+                               Jellyfin measurement.
+  REQUIREMENTS.md .... AGREE  — `Jellyfin half: COULD NOT LOOK — OPEN by measurement, not
+                               by omission.`
+  OVERALL VERDICT: AGREE. No owner required.
+
+CHECK (iii) — the Music Assistant half is DISCHARGED, and the two verdicts are NEVER SUMMED.
+
+  ROADMAP.md ......... AGREE  — `Criterion 4 carries two verdicts that must never be
+                               summed`; status row `Music Assistant discharged`.
+  beets.md ........... AGREE  — criterion-4 cell `**TWO VERDICTS, NEVER SUMMED.**`, and
+                               `The MA half stays discharged`.
+  deferred-items.md .. COULD NOT LOOK — the record is SILENT on this fact. Measured three
+                               ways above (§ SOURCE 3): no statement about the Music
+                               Assistant half of CONF-04, and no never-summed assertion.
+                               ⚠ SILENCE IS NOT CONTRADICTION. Nothing in the file asserts
+                               the opposite, so this is NOT a divergence and NO owning plan
+                               is named for it — naming an owner for a record that simply
+                               does not speak to a fact would manufacture work and would
+                               read, later, as a defect that was never there. It is recorded
+                               here so a future reader does not mistake the absence of a
+                               fourth AGREE for an unexamined record.
+  REQUIREMENTS.md .... AGREE  — `two separate verdicts that are never summed`; `Music
+                               Assistant half: DISCHARGED`.
+  OVERALL VERDICT: AGREE among the three records that state the fact; one record silent.
+  No owner required.
+
+CHECK (iv) — the carry is an OPERATOR OVERRIDE named `negative-carry-e6`, owned by Phase 7
+             entry criterion E6, and an override is a CARRY, NOT A CLOSE.
+
+  ROADMAP.md ......... AGREE  — `an auditable carry of an OPEN requirement, **not a
+                               close**` (twice: the Phase 7 entry-criteria block and the
+                               E6 entry).
+  beets.md ........... AGREE  — `an auditable carry of an open requirement, **not a
+                               close**`, naming `E6` and `negative-carry-e6`.
+  deferred-items.md .. AGREE  — `STILL OPEN under the operator's explicit
+                               `negative-carry-e6` override`, attached to E6.
+  REQUIREMENTS.md .... AGREE  — `**That override is NOT a close.**`
+  OVERALL VERDICT: AGREE. No owner required.
+
+CHECK (v) — REQUIREMENTS.md's CONF-04 checkbox is UNTICKED and stays unticked.
+
+  REQUIREMENTS.md .... AGREE  — measured 1 unticked / 0 ticked, both recipes driven
+                               (§ DRIVE C).
+  ROADMAP.md ......... AGREE  — `` `REQUIREMENTS.md`'s box stays unticked. ``
+  beets.md ........... AGREE  — the pointer added by this plan states the checkbox is
+                               `deliberately still **unticked**`.
+  deferred-items.md .. COULD NOT LOOK — silent on the checkbox state specifically; it
+                               carries the carry (check iv) but makes no claim about
+                               REQUIREMENTS.md's box. Silence, not contradiction; no owner
+                               named, for the reason given under check (iii).
+  OVERALL VERDICT: AGREE. No owner required.
+
+DIVERGENCE TALLY: 0 DISAGREE. No beets.md correction was forced by this audit, and no
+before/after text is quoted below because there is none to quote. No owning plan is named
+for ROADMAP.md (owner would have been 06-50, wave 3), none for deferred-items.md (owners
+would have been 06-51, wave 4, to correct and 06-50, wave 3, to record in
+06-DISPOSITIONS-GAP4.md § Corrections to the source material), and the REQUIREMENTS.md
+ABORT BRANCH DID NOT FIRE — this plan therefore files a -SUMMARY.md and not a -PARTIAL.md.
+
+================================================================================
+§ THE ROADMAP STATUS WORD — `In Progress` IS CORRECT AND MUST NOT BE FLIPPED
+================================================================================
+Recorded explicitly so that a later reader does not read this consistency audit as a
+mandate to make the four records agree by flipping the status word.
+
+`06-VERIFICATION.md` scores this phase `status: gaps_found`, `score: 5/6 must-haves
+verified`. One of the six requirements Phase 6 was scoped to close remains OPEN. A status
+row reading `Complete` beside an unticked required checkbox is precisely the FALSE CLOSE
+this phase has spent five gap-closure rounds refusing, and `06-VERIFICATION.md` names the
+`In Progress` row and the unticked checkbox together as the two things that ALREADY say the
+right thing.
+
+Therefore: `In Progress` is the consistent value, not the inconsistent one. Nothing in this
+audit is an argument for changing it. Plan 06-47 did not change it and does not hold the pen
+on that file in any case.
+
+The same applies to the checkbox: an override is a recorded carry, not a close.
+`requirements mark-complete` was not run by this plan and CONF-04 was not driven.
+
+================================================================================
+§ WHAT THIS AUDIT DOES NOT ESTABLISH
+================================================================================
+- It does NOT establish that CONF-04 is met, half-met, or nearer to being met. It measured
+  four records' agreement about a disposition. Not one byte of estate state was read.
+- It does NOT re-score `06-VERIFICATION.md`. That is `/gsd-verify 06`'s call.
+- It does NOT establish that the three records this plan cannot write will STAY consistent.
+  It establishes what they said at the commit this artifact was written against.
+- Zero estate contact: no ssh, no docker, no API call, no package-manager install of any
+  kind. Every measurement is a local read of a committed file.
+
+================================================================================
+§ CLOSING MEASUREMENTS
+================================================================================
+Byte-identity of the three records this plan must not touch, asserted with the `HEAD --`
+form (a bare `git diff --exit-code <path>` is blind to a STAGED edit, and this plan stages):
+
+    git diff --exit-code HEAD -- .planning/REQUIREMENTS.md .................... 0
+    git diff --exit-code HEAD -- .planning/ROADMAP.md ......................... 0
+    git diff --exit-code HEAD -- .../06-tagger-.../deferred-items.md .......... 0
+
+beets.md change shape for this plan's task 1, from `git diff --numstat`:
+
+    26 insertions, 0 deletions          <-- purely additive, as required
+
+Artifact hygiene:
+    /usr/bin/file -b <this file>            -> reports text (no NUL bytes; a NUL-bearing
+                                               artifact shipped once in this phase, 06-41,
+                                               and was caught only by `file`)
+    /usr/bin/grep -cE 'Full[R]efresh' <this file>  -> 0, and the recipe was driven to
+                                               return 1 against a control carrying the real
+                                               token (DRIVE B1) before this 0 was read as
+                                               evidence.
+
+No credential, no API key, and no hostname or IP address beyond what the quoted sources
+already contain appears anywhere in this file.
+
+================================================================================
+END — 06-47 disposition consistency audit
+================================================================================
