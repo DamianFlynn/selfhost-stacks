@@ -1334,8 +1334,18 @@ to it since the snapshot. The command is recorded in 06-42 SECTION K for the ope
 deliberately left there.
 
 **Cost of holding it:** negligible. The round changed 0 bytes of content, so the snapshot's
-referenced-unique space is essentially nil, and `tank` has ~9 T free. There is no space argument for
-destroying it in a hurry.
+referenced-unique space is essentially nil, and `tank` has **5.26 T free**. There is no space
+argument for destroying it in a hurry.
+*(⚠ Figure corrected 2026-09-24 by plan 06-52, as its own change, independent of the snapshot
+decision. This line read "~9 T free" when the entry was written on 2026-09-24 by plan 06-45 —
+**stale by ~3.7 T**. Measured on atlantis as real root, `zfs list -o name,used,avail,refer tank`:
+`41.9T` used / **`5.26T`** avail, re-measured 2026-09-24T22:32:01Z; transcript in
+`artifacts/06-52-snapshot-decision.txt` § MEASURED STATE (e). The same stale figure stood in
+`CLAUDE.md` § Constraints and was corrected in the same commit. Both are now measurements with a
+date rather than a restated number, because restating an unverified number launders it — and this
+figure is the headroom the `import.copy` reversibility argument leans on, so its staleness was in
+the direction that matters. The correction does not move the hold/release argument: 0B against
+5.26 T is the same argument as 0B against 9 T.)*
 
 **Condition under which it should be released:** the round's outcome accepted (it now is —
 `negative-carry-e6`, 2026-09-24T14:30:37Z) **and** Phase 7's pilot fence planned, so the estate is

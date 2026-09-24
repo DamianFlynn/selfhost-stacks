@@ -110,8 +110,15 @@ outcome that must not happen.
 ### Constraints
 
 - **Storage semantics**: `import.move: yes` is currently set — a bulk run *moves* files out of
-  the source rather than copying. First passes must switch to `copy`; `tank` has 9 T free, so
-  the duplication is affordable and reversible.
+  the source rather than copying. First passes must switch to `copy`; `tank` has **5.26 T free**,
+  so the duplication is affordable and reversible. *(Corrected 2026-09-24 by plan 06-52. This
+  bullet read "9 T free" from 2026-08-17 until then — **stale by ~3.7 T**, and stale in the
+  direction that matters, because the reversibility argument for `import.copy` leans on headroom.
+  Measured on atlantis as real root: `zfs list -o name,used,avail,refer tank` returns
+  `tank 41.9T used / 5.26T avail`, re-measured 2026-09-24T22:32:01Z and recorded in
+  `.planning/phases/06-tagger-configuration-and-dry-run/artifacts/06-52-snapshot-decision.txt`
+  § MEASURED STATE (e). Restating an unverified number launders it; the measurement is the
+  number and the prose is not. Re-measure before leaning on this figure again — it moves.)*
 - **Filesystem**: `rsync -a` fails writing to `tank` (`mkstemp ... Operation not permitted`) due
   to `acltype=nfsv4` + `aclmode=restricted` (confirmed on both `tank/media` and `tank/downloads`),
   while printing stats that look like success and exiting 23. Use `rsync -rlt --no-p --no-o --no-g`.
