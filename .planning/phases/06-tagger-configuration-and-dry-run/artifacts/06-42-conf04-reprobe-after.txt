@@ -364,3 +364,291 @@ Rows with MORE THAN ONE ArtistItems entry, re-read now and compared field for fi
 
   THE NEGATIVE CONTROL HOLDS. The refresh did not reach outside the three files it named —
   and it did not collapse the OQ-1 evidence.
+
+
+================================================================================
+SECTION G — `zfs diff` RE-RUN AFTER THE REFRESH (control 1 of 2)
+================================================================================
+Taken  : 2026-09-24T13:43:30Z  (UTC)
+Host   : atlantis (172.16.1.158) — the Proxmox host. REAL root, the only place `zfs` exists,
+         and the only vantage point from which on-disk state is not distorted by LXC 100's
+         sparse idmap.
+Bounds : the remote driver carries `set -o pipefail`; the ssh exit status was read into a
+         variable at the workstation BEFORE anything was piped. Measured ssh rc: 0. stderr:
+         empty. A step that could not run records UNKNOWN — never a clean result.
+
+  command : zfs diff -H tank/media/Music@pre-06-41-conf04-reprobe
+  exit rc : 0
+
+THE TOUCH DIFF AND THIS DIFF ARE TWO DIFFERENT MEASUREMENTS AND ARE NOT THE SAME CLAIM.
+06-41 SECTION A ran this command immediately after the touch, to prove THE TOUCH was narrow.
+This run is taken AFTER the refresh, to prove THE REFRESH wrote nothing. `CLAUDE.md` § Jellyfin
+side effects records that the Phase 1 freeze gates the AUTOMATIC save path only — an explicit
+refresh still writes — and 06-03's refreshes never actually re-probed, so 06-41 was the first
+time on this estate that a Default-mode refresh reached the prober at all. This is the single
+strongest control in the round.
+
+Non-ASCII bytes are escaped \0NNN by `zfs diff` itself; the U+2019 in the ARTPOP path appears
+in that form below and is decoded with `printf %b` alone before comparison, never by eye. The
+`sed`-before-`printf` decoder that produced 06-41's transient (6b)/(6c)/(6d) FAIL verdicts is
+NOT used here — `printf %b` already decodes the \0nnn form unaided, and the sed was the whole
+bug (06-41 STEP 6bis).
+
+Every mechanical assertion below is made over the EXTRACTED block, not over this file, because
+this artifact's prose necessarily discusses the sidecar extensions and the DO-NOT-RESCAN album,
+and a grep for a token in a file that talks about that token cannot tell a claim from its
+retraction (DEF-06-39-06).
+
+--- ZFS DIFF POST BEGIN ---
+M	/mnt/tank/media/Music/Katy\0040Perry/Teenage\0040Dream\0040(2010)/CD\004001-03\0040Katy\0040Perry\0040-\0040California\0040Gurls.flac
+M	/mnt/tank/media/Music/P!nk/The\0040Truth\0040About\0040Love\0040(2012)/CD\004001-04\0040P!nk\0040-\0040Just\0040Give\0040Me\0040a\0040Reason.flac
+M	/mnt/tank/media/Music/Lady\0040Gaga/ARTPOP\0040(2013)/CD\004001-05\0040Lady\0040Gaga\0040-\0040Jewels\0040n\0342\0200\0231\0040Drugs.flac
+--- ZFS DIFF POST END ---
+
+THE DECODED PATHS, one per line, as `printf %b` returns them:
+    /mnt/tank/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-03 Katy Perry - California Gurls.flac
+    /mnt/tank/media/Music/P!nk/The Truth About Love (2012)/CD 01-04 P!nk - Just Give Me a Reason.flac
+    /mnt/tank/media/Music/Lady Gaga/ARTPOP (2013)/CD 01-05 Lady Gaga - Jewels n’ Drugs.flac
+
+ASSERTIONS OVER THE EXTRACTED BLOCK:
+  raw line count in the block                                          : 3
+  (G1) every line is a modification entry (tag M); non-M entries = 0    -> PASS
+  (G2) distinct decoded paths named = 3 [measured 3]                    -> PASS
+  (G3) every path named is one of the three pinned host paths, by `grep -qxF` after decoding
+       [0 off-list]                                                     -> PASS
+  (G4) every one of the three pinned paths IS named — the block is not silently short
+       [0 absent]                                                       -> PASS
+  (G5) metadata-sidecar entries in the block  : 0                       -> PASS
+  (G6) lyric-sidecar entries in the block     : 0                       -> PASS
+  (G7) image-sidecar entries in the block     : 0                       -> PASS
+  (G8) DO-NOT-RESCAN-album entries in the block: 0                      -> PASS
+
+  (G9) THE BLOCK HAS NOT GROWN SINCE 06-41. It is BYTE-IDENTICAL to the block 06-41 SECTION A
+       captured immediately after the touch, proved by sha256 at the workstation rather than
+       by eye:
+         sha256 of 06-41 SECTION A's block : a33ada4a5bd5cbdeebc3b83a032b1db4d7e6bd633c1bf691d9bd2539106a6340
+         sha256 of this run's block        : a33ada4a5bd5cbdeebc3b83a032b1db4d7e6bd633c1bf691d9bd2539106a6340
+         `cmp -s` over the two extracted blocks: identical                -> PASS
+
+       That is the finding, stated plainly: BETWEEN THE TOUCH AND NOW — across the POST, the
+       LibraryMonitor firing, the three items being refreshed, and five and a half hours of
+       live estate — ZFS RECORDS NOT ONE ADDITIONAL CHANGE ANYWHERE UNDER tank/media/Music.
+       Jellyfin wrote nothing.
+
+  ANTICIPATED AND CONFIRMED, per 06-40 SECTION 9: this dataset is atime=off / relatime=on
+  (re-measured this run: atime = off, relatime = on), so a READ — sha256sum, ffprobe, or
+  Jellyfin's own prober — cannot contaminate the diff with an atime bump. The clean block
+  above is therefore a real absence of writes, not an artefact of a dataset that does not
+  record reads at all.
+
+
+================================================================================
+SECTION H — THE SIDECAR HASH MANIFEST, RE-TAKEN (control 2 of 2)
+================================================================================
+`zfs diff` and this manifest are DELIBERATELY REDUNDANT. They fail for different reasons — a
+diff can be defeated by a snapshot problem, a manifest by a find/sort problem — and this
+project has recorded six occasions of a check reporting a pass it had not earned. Two controls
+that agree is the point.
+
+--------------------------------------------------------------------------------
+THE .nfo MANIFEST, COMPARED LINE FOR LINE
+--------------------------------------------------------------------------------
+Re-taken with 06-40 SECTION 6's shape — `sha256  mtime(UTC)  path`, LC_ALL=C sorted by path —
+and diffed against 06-40 SECTION 6's 91 lines at the workstation with the real `diff` binary.
+
+  .nfo count, 06-40 side : 91
+  .nfo count, 06-42 side : 91          -> pairwise equal
+  manifest lines, 06-40  : 91
+  manifest lines, 06-42  : 91
+  NUMBER OF DIFFERING MANIFEST LINES : 0
+
+  (H1) identical counts        [91 == 91]                               -> PASS
+  (H2) identical sha256 values [0 of 91 differ]                         -> PASS
+  (H3) identical mtimes        [0 of 91 differ]                         -> PASS
+
+  Not one of the 91 `.nfo` files changed content or mtime. Phase 1 measured the forbidden
+  aggressive refresh mode rewriting 83 of those 91 with the local-metadata saver already off;
+  the targeted Default-mode refresh 06-41 issued rewrote none.
+
+--------------------------------------------------------------------------------
+THE .lrc AND .jpg SETS, BY FINGERPRINT
+--------------------------------------------------------------------------------
+06-40 SECTION 6 records one aggregate sha256 per set over the LC_ALL=C-sorted
+`path<TAB>size<TAB>mtime` list — a FINGERPRINT OF PATH+SIZE+MTIME, not of content, stated
+plainly rather than left to be misread as a content hash.
+
+⚠ 06-40 records the fingerprint VALUES but not the literal command that produced them, so the
+  recipe was RECOVERED RATHER THAN ASSUMED, against 06-40's own `.nfo` fingerprint as an
+  oracle: four candidate constructions were computed and exactly one reproduced
+  `e99b1992…be7c2`. That one —
+  `find <root> -type f -name '*.EXT' -printf '%p\t%s\t%T@\n' | LC_ALL=C sort | sha256sum` —
+  is the recipe, and the .lrc and .jpg comparisons below are therefore like-for-like rather
+  than a comparison of two different constructions that would differ whatever the estate did.
+  The other three candidates are recorded as what they are: wrong constructions, not findings.
+
+      set    count 06-40   count 06-42   fingerprint 06-40 == 06-42
+      .nfo   91            91            e99b1992b31a6f2d20008895fed2c675b61b9bf24645f4306a3431f0b01be7c2   IDENTICAL
+      .lrc   944           944           f4c9a2c69624d834fe8b8d34131effe1cf1d090d1e8a5a53dacc55b23bb47f6b   IDENTICAL
+      .jpg   88            88            384474a4c45737715f7451a42fe6e6155c0c2dbf27be33ba5026e93ca4c5a703   IDENTICAL
+
+  (H4) the three counts are pairwise equal [91/91, 944/944, 88/88]      -> PASS
+  (H5) all three fingerprints are identical to 06-40 SECTION 6          -> PASS
+
+  TOTAL DIFFERING LINES ACROSS THE WHOLE MANIFEST COMPARISON: 0
+
+  THE TWO CONTROLS AGREE. `zfs diff` says no path under the dataset changed beyond the three
+  touched files; the manifest says every one of the 1,123 sidecar files (91 + 944 + 88) is
+  unchanged in path, size, mtime and — for the 91 `.nfo` — content. Nothing was written into
+  /mnt/tank/media/Music by the re-probe.
+
+
+================================================================================
+SECTION I — THE OPTIONS AND THE FREEZE, RE-READ AFTER THE REFRESH
+================================================================================
+Taken  : 2026-09-24T13:44:11Z  (UTC), from LXC 100.
+  GET /Library/VirtualFolders  (rc=0), route 192.168.90.17:8096 resolved fresh,
+  credential mode MEASURED `600 root`, key delivered via `-H @<(printf ...)`.
+
+Read with `has($k)`, NEVER jq's `//` — `//` treats `false` as empty, so a correctly-false
+option would report ABSENT and a disabled saver would look like a missing key. A refresh that
+flipped an option would be a far bigger finding than a refresh that did nothing, which is why
+this is re-read rather than assumed to be inherited from 06-41's own post-refresh read.
+
+    option                          06-40 SECTION 1    06-42 (now)    want     verdict
+    PreferNonstandardArtistsTag     true               true           true     PASS
+    UseCustomTagDelimiters          false              false          false    PASS
+    SaveLocalMetadata               false              false          false    PASS
+    EnableRealtimeMonitor           false              false          false    PASS
+    SaveLyricsWithMedia             false (06-41 §B)   false          false    PASS
+
+    CustomTagDelimiters             ["/","|",";","\\"]   ["/","|",";","\\"]    IDENTICAL
+    DelimiterWhitelist              []                   []                    IDENTICAL
+    MetadataSavers                  not recorded         ["Nfo"]               see below
+    ItemId                          7e64e319657a9516ec78490da03edccb            IDENTICAL
+    Locations                       ["/media/Music"]                            IDENTICAL
+
+  (I1) all four D-34 values are identical to 06-40 SECTION 1            -> PASS
+  (I2) SaveLyricsWithMedia is false, as 06-41 SECTION B measured it     -> PASS
+  (I3) the two blast-radius fields behind UseCustomTagDelimiters are unchanged  -> PASS
+
+  ON `MetadataSavers = ["Nfo"]`, RECORDED HONESTLY RATHER THAN QUIETLY. 06-40 did not record
+  this field, so there is NO before-value to diff it against and this run cannot prove it did
+  not change — it is recorded as a first measurement, not as a comparison. What it means is
+  that the Nfo saver is the CONFIGURED saver for this library; what gates it is
+  `SaveLocalMetadata`, which reads false above and has since Phase 1. The saver being listed
+  is not the saver being armed, and SECTIONS G and H measured, from two independent directions,
+  that it wrote nothing. A future round should pin this field so the next reader gets a diff
+  rather than this paragraph.
+
+  THE ROUND'S PREMISE STILL HOLDS AND IS NOT THE EXPLANATION FOR THE NULL RESULT:
+  PreferNonstandardArtistsTag is true. The prober WOULD read the ARTISTS tag if it ran. The
+  measured negative in SECTION C is therefore about the prober not running on these files, not
+  about the option having reverted.
+
+
+================================================================================
+SECTION J — BEETS' OWN STATE (D-29 layer 3) AND THE D-32 FENCE
+================================================================================
+Taken  : 2026-09-24T13:43:30Z  (UTC), on atlantis as real root, in the same remote step as
+         SECTION G. Read-only.
+
+An mtime change on LIBRARY files cannot in principle move beets' `incremental` state:
+`incremental` keys on import SOURCE directories, not on library files. But "cannot in
+principle" is how this project has been wrong before, so it is MEASURED.
+
+  /mnt/fast/appdata/arrs/beets/config/library.db
+      sha256 06-40 : fbbdde0c416e72b9884e56c562fd88eaa4da447926e1cb6cc17c3e04aee7da1a
+      sha256 now   : fbbdde0c416e72b9884e56c562fd88eaa4da447926e1cb6cc17c3e04aee7da1a   IDENTICAL
+      size   : 53248 bytes  (06-40: 53248)                                              IDENTICAL
+      mtime  : 2026-09-11T23:42:52Z (epoch 1789170172)  (06-40: same)                   IDENTICAL
+      owner  : 568:568   mode 0770  (06-40: same)                                       IDENTICAL
+  /mnt/fast/appdata/arrs/beets/config/state.pickle
+      sha256 06-40 : f6a9a1ad7aa553e42e53a8056fa80724785111180a5e2122be4f8732d1e4bc7c
+      sha256 now   : f6a9a1ad7aa553e42e53a8056fa80724785111180a5e2122be4f8732d1e4bc7c   IDENTICAL
+      size   : 47 bytes  (06-40: 47)                                                    IDENTICAL
+      mtime  : 2025-11-18T13:50:21Z (epoch 1763473821)  (06-40: same)                   IDENTICAL
+      owner  : 568:568   mode 0770  (06-40: same)                                       IDENTICAL
+
+  (J1) both beets state files are byte-identical to 06-40 SECTION 8     -> PASS
+
+--------------------------------------------------------------------------------
+THE D-32 FENCE — tank/downloads@pre-phase5
+--------------------------------------------------------------------------------
+It is the ONLY undo for Phase 5's 4,750 renames, 751 tag writes and 26,005 chowns, and it is
+NOT released by this round.
+
+  NAME                                                             CREATION
+  tank/downloads@pre-project                                       Tue Aug 18 13:08 2026
+  tank/downloads@pre-chown                                         Tue Aug 18 22:43 2026
+  tank/downloads@pre-phase5                                        Fri Sep 18 15:42 2026
+  tank/downloads@pre-phase5-chown                                  Sat Sep 19 21:42 2026
+  tank/downloads/mybook-music-archive@copied-from-mybook-20260922  Tue Sep 22  7:29 2026
+  tank/downloads/mybook-music-archive@post-rescue-20260922         Tue Sep 22  8:05 2026
+  tank/downloads/mybook-music-archive@backup-20260922              Tue Sep 22  8:09 2026
+  tank/downloads/mybook-music-archive@with-m4-20260922             Tue Sep 22 21:18 2026
+  tank/downloads/mybook-music-archive@inc-20260923-1319            Wed Sep 23 13:20 2026
+
+  (J2) tank/downloads@pre-phase5 is PRESENT, asserted with `grep -qxF` against the -H -o name
+       list so a snapshot merely CONTAINING that string could not satisfy it   -> PASS
+       The set is identical to 06-40 SECTION 8's, name for name.
+
+--------------------------------------------------------------------------------
+THE tank/media/Music SNAPSHOT SET
+--------------------------------------------------------------------------------
+      tank/media/Music@backup-20260922
+      tank/media/Music@inc-20260923-1319
+      tank/media/Music@pre-06-41-conf04-reprobe      <- 06-41's fence, STANDING
+      tank/media/Music@pre-chown
+      tank/media/Music@pre-phase5-chown
+      tank/media/Music@pre-project
+      tank/media/Music@safe05-watch-t0
+
+  (J3) 06-40's six names are all still present, unchanged                      -> PASS
+  (J4) the only addition is 06-41's fence, which this plan MUST NOT destroy    -> PASS
+       THIS PLAN CREATED NO SNAPSHOT AND DESTROYED NONE.
+
+--------------------------------------------------------------------------------
+THE THREE LIBRARY FILES — CONTENT, RE-READ ONE MORE TIME
+--------------------------------------------------------------------------------
+The re-probe READS files; it must not have written one. 06-40 SECTION 9 (f) recorded each
+file's content sha256; 06-41 re-read them immediately after the touch and they held. This is
+the third read, after the refresh.
+
+  bf3ff6ff8dc465d271ade5fb144860fa504f97777c7364f35c1567b5d4263221  30023946  /mnt/tank/media/Music/Lady Gaga/ARTPOP (2013)/CD 01-05 Lady Gaga - Jewels n’ Drugs.flac
+  cd720f4706bc46425fd0f4320aff10ebc16ac660e7ed4ce30662964be6614391  29357615  /mnt/tank/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-03 Katy Perry - California Gurls.flac
+  5d9b0822b51fc9a04cae6888a3ebb3e3d5abd8afb66364cf02e0522ec1b3a853  23920625  /mnt/tank/media/Music/P!nk/The Truth About Love (2012)/CD 01-04 P!nk - Just Give Me a Reason.flac
+
+  (J5) all three content sha256 values are IDENTICAL to 06-40 SECTION 9 (f)    -> PASS
+  (J6) all three sizes are IDENTICAL to 06-40 SECTION 5                        -> PASS
+  (J7) all three mtimes read epoch 1790237114 — 06-41's touch moment, unchanged since.
+       Jellyfin did not re-stamp them, and nothing else did either.             -> PASS
+
+
+================================================================================
+SECTION K — THE HALT GATE
+================================================================================
+Four assertions had to hold for this plan to continue past task 2, and each was measured with
+an instrument that fails for a different reason than the others:
+
+  1. nothing written into the library      — `zfs diff` block byte-identical to 06-41's, and
+                                             zero sidecar entries inside it          (SECTION G)
+  2. nothing written into the library      — 91/91 `.nfo` identical in sha256 and mtime, all
+                                             three sidecar fingerprints identical    (SECTION H)
+  3. no option or freeze field changed     — four D-34 values plus SaveLyricsWithMedia all
+                                             identical to their recorded values      (SECTION I)
+  4. nothing outside the three moved       — the 1,244-row census delta is empty, and the six
+                                             OQ-1 rows are unchanged           (SECTIONS E, F)
+
+SAFETY: PASS
+
+  No rollback is required and none was executed. The fence stays standing for 06-43's operator
+  decision. Recorded here for the operator's convenience, NOT run by this plan and NOT to be
+  run by an executor — rolling back a live shared dataset discards whatever any service wrote
+  to it since the snapshot, which makes it an estate decision:
+
+      zfs rollback tank/media/Music@pre-06-41-conf04-reprobe
+
+  WHAT THIS SECTION DOES AND DOES NOT SAY. It says the round was SAFE: the estate is in the
+  state 06-40 measured, plus three mtimes. It says nothing about whether the re-probe WORKED —
+  it did not, and SECTION C is where that is recorded. Those two verdicts are separate and are
+  never summed, for the same reason the Jellyfin and MA halves of CONF-04 are never summed.
