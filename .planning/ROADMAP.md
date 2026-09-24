@@ -1372,6 +1372,42 @@ item nobody owns.)*:
       yields four artists in Music Assistant or three — the only measurement that separates "MA caps
       the list at 3" from "`Twista` specifically failed to map", which a sample of one cannot.
 
+      *Dispositioned separately 2026-09-24 by gap-closure round 5 (plans 06-40 … 06-45). The text
+      above is deliberately NOT rewritten — it is the record of why this criterion exists. E6 names
+      TWO measurements and **exactly one of them was driven**, so each now carries its own
+      disposition and they must not be read as one:*
+
+      **E6's FIRST measurement — whether Jellyfin's re-probe produces 4/2/2 entities — is STILL
+      OPEN, and is now open on a DRIVEN NEGATIVE rather than on an untried mechanism.** Round 5
+      pulled the lever 06-03 named and never pulled, inside Phase 6: three file mtimes touched from
+      atlantis as real root inside the ZFS snapshot fence
+      `tank/media/Music@pre-06-41-conf04-reprobe` (plan **06-41**), then the same targeted
+      Default-mode `POST /Library/Media/Updated` at file scope — one write verb, HTTP 204 — and the
+      measurement taken after a 19,597 s settle (plan **06-42**;
+      `artifacts/06-42-conf04-reprobe-after.txt`, `artifacts/06-43-conf04-verdict.txt`). **ZERO of
+      the three rows moved**: 0 against a target of 4, 1 against 2, 1 against 2, all AT-BASELINE,
+      `;`-in-entity-name count 0, and an EMPTY 1,244-row census delta. It is a MEASUREMENT, not an
+      UNKNOWN — the `LibraryMonitor` named all three Audio items, so the refresh ran and reached
+      them, and `PreferNonstandardArtistsTag` re-read `true` afterwards. **Phase 7 should therefore
+      NOT spend its first hour re-trying the mtime route: it is measured false for this estate at
+      Jellyfin 10.11.11 (`DEF-06-45-02`).** The remaining untried mechanism is a genuine write or
+      new import of a multi-artist release — Phase 7's own work. CONF-04's Jellyfin half is carried
+      here under the operator's explicit `negative-carry-e6` override (2026-09-24T14:30:37Z), which
+      is an **auditable carry of an OPEN requirement and not a close**; `REQUIREMENTS.md`'s box
+      stays unticked.
+
+      **E6's SECOND measurement — whether a second ≥4-artist track yields four artists in Music
+      Assistant or three — is NOT CLOSED BY ROUND 5 AND REMAINS WITH PHASE 7, on every branch.**
+      Round 5 never had it in scope, took no step toward it, and produced **no evidence bearing on
+      it whatsoever**. It is the only measurement that separates "MA caps the list at 3" from
+      "`Twista` specifically failed to map", and a sample of one cannot settle it. ⚠ **It did not
+      go with the first measurement and must not be read as having done so** — that is the single
+      easiest thing for a future reader to assume, which is why it is stated here in its own
+      paragraph. The MA half's surviving `MA_REPORTED: 1` is a *reported measured discrepancy*
+      owned by this measurement, which is why `scripts/check-music-consumers.sh` still exits 3 and
+      why that exit code is **not** a CONF-04 completion signal. The two verdicts are never summed,
+      and this second measurement is Phase 7's to take, unchanged and undischarged by round 5.
+
   E7. **DUPE-01 / DUPE-02 need a roadmap decision BEFORE this phase runs.** Phase 1 measured 828
       duplicate groups / 19.4 % duplication; Phase 3 re-confirmed `dj-mixes` is a byte-for-byte
       duplicate subset of `unsorted`, which makes Phase 7's diff join **last-wins** — a silent

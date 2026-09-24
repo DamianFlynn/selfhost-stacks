@@ -1313,3 +1313,177 @@ than restating them.
 
 **Urgency:** low in consequence, high in recurrence — this is the fourth consecutive round in which
 the class has fired, and the first in which it fired in the verification rather than the code.
+
+---
+
+## DEF-06-45-01 — `tank/media/Music@pre-06-41-conf04-reprobe` is STILL HELD, and its release is a separate operator decision
+
+**Found during:** plan 06-45, task 2, closing gap-closure round 5 (2026-09-24). Created by plan
+06-41 and standing ever since.
+**Disposition:** deliberately NOT bundled into the round's closure, and named here so that a later
+tidy-up does not read "the round is over" as "the fence can go".
+
+The snapshot is **round 5's only undo** for its three writes — three file mtimes under
+`tank/media/Music`, and nothing else. It was taken in the *same remote step* as the mutation so the
+fence and the change could not come apart, listed back and asserted equal before any file was
+touched, and re-asserted PRESENT by 06-42 SECTION J and again by 06-43 SECTION O.
+
+**No `zfs rollback` has been executed by any plan in this round, and none is an executor's to run.**
+Rolling back a live shared dataset discards whatever Jellyfin, Music Assistant or the operator wrote
+to it since the snapshot. The command is recorded in 06-42 SECTION K for the operator and is
+deliberately left there.
+
+**Cost of holding it:** negligible. The round changed 0 bytes of content, so the snapshot's
+referenced-unique space is essentially nil, and `tank` has ~9 T free. There is no space argument for
+destroying it in a hurry.
+
+**Condition under which it should be released:** the round's outcome accepted (it now is —
+`negative-carry-e6`, 2026-09-24T14:30:37Z) **and** Phase 7's pilot fence planned, so the estate is
+never without an undo across the boundary. Release is then an operator action, not a plan's.
+
+**Related and NOT the same fence:** `tank/downloads@pre-phase5` is also still held and is Phase 5's
+only undo (D-32, Phase 7 entry criterion E4). Neither was released by this round.
+
+**Urgency:** low to release, high to not destroy by accident.
+
+---
+
+## DEF-06-45-02 — the mtime lever was DRIVEN and did not re-probe: a measured negative Phase 7 must not spend its first hour repeating
+
+**Found during:** plans 06-41 and 06-42, verdict computed in 06-43, recorded here by 06-45 task 2
+(2026-09-24).
+**Disposition:** a **result**, carried so it is not re-discovered. `06-03` listed "(b) the file's
+mtime changing" as a mechanism that would cause Jellyfin to re-probe; round 5 pulled exactly that
+lever inside a snapshot fence and measured that it does not.
+
+**What was driven:** three file mtimes touched from atlantis as real root (the permission was
+probed first with its own no-op form, `touch -r f f`, so an `EPERM` would have been a recorded
+negative rather than a discovery mid-mutation), then the same targeted Default-mode
+`POST /Library/Media/Updated` at **file** scope that 06-03 proved safe — **one write verb for the
+entire round**, HTTP 204 — and a settle of 19,597 s against a floor of 120.
+
+**What was measured:** ZERO of the three pinned rows moved. Row 1 measured **0** against a target of
+**4**; rows 2 and 3 measured **1** each against a target of **2**; all three AT-BASELINE, with a
+`;`-in-entity-name count of 0 on every row and an **EMPTY** 1,244-row census delta.
+
+**Why it is a measurement and not an UNKNOWN** — the distinction is the whole value of the round:
+06-41's `LibraryMonitor` named all three Audio items by full internal path 60 s after the POST, so
+"the refresh never started" is ruled out; and `PreferNonstandardArtistsTag` re-read **`true`**
+afterwards, so the option did not revert. The refresh ran, reached the items, and the prober did not
+re-read the `ARTISTS` tag.
+
+⛔ **The correct response to a disproven mechanism is the recorded negative.** Not a second refresh,
+not a wider refresh mode, and not the aggressive per-item one — which stays forbidden, was not
+issued, and was unreachable from every branch of the round.
+
+**Where it attaches:** Phase 7 entry criterion **E6**, first measurement, which this round leaves
+STILL OPEN under the operator's explicit `negative-carry-e6` override. The remaining untried
+mechanism is a genuine write or new import of a multi-artist release.
+
+**Condition under which it should be revisited:** Phase 7's first write or import. If someone
+proposes re-touching mtimes to force a re-probe, this entry is the answer.
+
+**Urgency:** low in consequence, high in save-the-next-person value.
+
+---
+
+## DEF-06-45-03 — HYPOTHESIS (not a conclusion): row 1 may be an E5 problem, not an E6 one
+
+**Found during:** plan 06-43 SECTION N, recorded here by 06-45 task 2 (2026-09-24).
+**Disposition:** carried as a **hypothesis with its evidence**, deliberately not written as a
+finding. Round 5 produced no experiment that separates it from the simpler explanation.
+
+**The evidence.** Row 1 of `ARTIST_PROOF_ROWS` —
+`/media/Music/Lady Gaga/ARTPOP (2013)/CD 01-05 Lady Gaga - Jewels n’ Drugs.flac` — is one of the
+**30** Jellyfin items that carry a populated `Artists` *string* list and **ZERO** linked
+`ArtistItems` entities (all of `Lady Gaga/ARTPOP (2013)`, all of `Lady Gaga/Joanne (2016)`, and one
+Def Leppard track). That set is Phase 7 entry criterion **E5**, and it predates round 5.
+
+**The hypothesis.** "The prober re-ran" and "browseable artist entities exist" may be two different
+facts. A per-file Default-mode refresh performs no artist-**entity** creation, so on an item already
+in that shape it could re-probe and still produce zero entities — which would make row 1 the
+**weakest** of the three rows to have pinned a mechanism test on, independent of whether the
+mechanism works.
+
+**Why it is NOT a conclusion.** Rows 2 and 3 are *not* in the 30-item set, and they did not move
+either. The simplest reading of all three rows together is the one 06-43 recorded: the prober did
+not re-read `ARTISTS` at all. The E5 shape would only become load-bearing if a future re-probe moved
+rows 2 and 3 and left row 1 at zero.
+
+**Condition under which it should be revisited:** at Phase 7's first write, if the Jellyfin rows
+split 2-of-3. Then E5's artist-entity repair, not E6's re-probe, is the lever for row 1.
+
+**Urgency:** low. Recorded so that a 2-of-3 result is recognised instead of puzzled over.
+
+---
+
+## DEF-06-45-04 — `06-43` SECTION O publishes a NON-DETECTING recipe: `grep -cF` with a bracketed needle can never match the real token
+
+**Found during:** plan 06-44's post-commit round audit (2026-09-24), independently confirmed by the
+orchestrator, and carried here because correcting a committed artifact's published recipe was
+outside both plans' `files_modified`.
+**Disposition:** **CARRIED, not fixed.** The defect is in a *recipe*, and the *number it published
+is nevertheless true* — which is precisely why it is worth writing down rather than shrugging at.
+
+**The defect.** `06-43-conf04-verdict.txt` SECTION O recipe **`(O-a)`** publishes
+`/usr/bin/grep -cF "Full[R]efresh"` as the forbidden-mode detector. **`-F` makes the brackets
+literal**, so the command searches for the *mitigation form* and is structurally incapable of
+matching the real token. The correct form is **`-cE`**, where `[R]` is a character class matching
+the real `R`.
+
+**Driven both ways, not argued:** against a one-line control file containing the real token, `-cE`
+returns **1** and `-cF` returns **0**. So the published form is proven non-detecting and the
+corrected form is proven non-vacuous.
+
+**The published `0` is still TRUE of those artifacts.** Re-measured with `-cE`, every round-5
+artifact and both instrument scripts read **0**. The number was simply **not earned by the command
+printed beside it** — a true result from a vacuous instrument, which is the worst shape of all
+because it survives review.
+
+**`(O-b)` is sound** and needs no correction: it already uses `-ciE` for the forbidden UI button's
+phrase.
+
+**This is `DEF-06-39-06` one level in:** the detector became an occurrence of its own mitigation
+instead of a test for the prohibited thing. Cross-referenced rather than restated; see also
+`DEF-06-21-08` and `DEF-06-29-07` for the broader "plan verify blocks are a systemic defect class in
+this phase" finding.
+
+**Condition under which it should be revisited:** whenever `(O-a)` is next cited or copied — by
+`/gsd-verify 06`, by a Phase 7 plan, or by anyone reaching for a round-6 audit recipe. Copy the
+`-cE` form from this entry, not the `-cF` form from the artifact. The artifact itself is a dated
+record and is deliberately left unedited.
+
+**Urgency:** low in consequence, high in copy-paste risk.
+
+---
+
+## DEF-06-45-05 — round 5's could-not-looks, named as could-not-looks rather than as clean results
+
+**Found during:** plan 06-45, task 2, auditing what round 5 did and did not observe (2026-09-24).
+**Disposition:** a standing limit restated, because a round that measured a great deal can make the
+things it never looked at invisible.
+
+**1. The live health check was not run — in this round either.** `scripts/quick-health-check.sh` was
+executed **zero** times across round 5, as in rounds 3 and 4. 06-44 refused the live run
+deliberately and said why: it would have exercised that plan's *edited local arm* against the **old
+prose still deployed** on LXC 100, which is a partial and misleading test of exactly the thing that
+changed. `DEF-06-39-05` already owns this limit; it is cross-referenced, not restated.
+
+**2. The deployed instrument is once again behind the repository.** 06-42 took its corroborating run
+on a host checkout asserted `MATCH` — the honest remedy (push, `git pull --ff-only`, re-run) having
+been applied mid-plan rather than the test relaxed. But rounds 5's later commits (06-43's artifact,
+06-44's two script corrections, and this plan's five documents) have **not** been pushed, so
+`/mnt/fast/stacks` on LXC 100 now carries the pre-06-44 prose again. Any live run before a
+`git pull --ff-only` measures the wrong file.
+
+**3. What the round never touched, stated so it is not inferred as verified:** E6's second
+measurement (see `ROADMAP.md`, and it produced no evidence bearing on it); the E5 artist-entity
+repair (`DEF-06-45-03`); the container-side signal behaviour (`DEF-06-39-04`, E12); and
+`06-VERIFICATION.md`'s score, which this round deliberately did not re-compute.
+
+**Condition under which these clear:** the same operator `git push` + host `git pull --ff-only` the
+vendored-drift block has been waiting on since round 1, followed by a real `quick-health-check.sh`
+run; and `/gsd-verify 06` for the score.
+
+**Urgency:** low individually. Recorded together because "round 5 measured the estate carefully" is
+true and could easily be over-read.
