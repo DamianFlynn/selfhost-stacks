@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-24T15:10:00.000Z"
+last_updated: "2026-09-24T15:45:00.000Z"
 progress:
   total_phases: 10
   completed_phases: 5
   total_plans: 119
-  completed_plans: 116
+  completed_plans: 117
   percent: 50
 ---
 
@@ -29,7 +29,7 @@ pipeline that someone owns.
 
 Phase: 06 (tagger-configuration-and-dry-run) — EXECUTING gap-closure **ROUND 5**
 (re-verification deliberately NOT run — see the round-4 block at the end of this section)
-Plan: 44 of 45 executed. Round 1 (06-15..06-21, waves 6-9, 2026-09-22) closed CR-01 and
+Plan: 45 of 45 executed — round 5 COMPLETE, phase NOT declared complete. Round 1 (06-15..06-21, waves 6-9, 2026-09-22) closed CR-01 and
 dispositioned all 24 findings of `06-REVIEW.md`; re-verification is **6/6, status passed**
 (`06-VERIFICATION.md`, gaps_remaining: [], regressions: []).
 **The phase is NOT complete.** A code review of the round-1 changes themselves
@@ -1445,7 +1445,7 @@ already open so only 2049 is this phase's delta.
 
 **Velocity:**
 
-- Total plans completed: 54
+- Total plans completed: 55
 - Average duration: ~42m (excluding 01-06's 374-minute observation window)
 - Total execution time: ~375m of work
 
@@ -1508,6 +1508,7 @@ already open so only 2049 is this phase's delta.
 | Phase 05 P10 | ~3 h 20 min | 4 tasks | 8 files |
 | Phase 05 P11 | ~50 min | 2 tasks | 7 files |
 | Phase 06 P42 | ~15 min | 3 tasks | 2 files |
+| Phase 06 P45 | ~25 min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -1519,6 +1520,23 @@ already open so only 2049 is this phase's delta.
 
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
+
+- [06-45]: **CONF-04 stays OPEN and its checkbox stays UNTICKED — the tick gate held.** A tick
+  required all four of `BRANCH: A`, `INSTRUMENT RUN: MEASURED`, `JF_AT_TARGET: 3`, `JF_PENDING: 0`;
+  the measured state is `BRANCH: B` / `MEASURED` / `0` / `3`. The operator's `negative-carry-e6`
+  override carries the Jellyfin half to Phase 7 entry criterion **E6** and is written at every site
+  as an auditable **carry of an OPEN requirement, never a close** — the single easiest wrong
+  inference for a downstream reader, flagged independently by 06-43 and 06-44.
+- [06-45]: **No verification verdict was self-declared.** `06-VERIFICATION.md` keeps
+  `status: gaps_found` / `score: 5/6` byte-identical; a `superseded_note:` states that re-scoring is
+  **`/gsd-verify 06`'s call** and that running it is the recommended next step. Phase 6's Status cell
+  stays `In Progress`; only the plan counter moved, 44/45 → 45/45.
+- [06-45]: **Phase 7 entry criterion E6 now carries its two measurements separately**, because
+  exactly one moved. The FIRST (Jellyfin's re-probe reaching 4/2/2) is STILL OPEN on a *driven*
+  negative — the mtime route is measured false for this estate at Jellyfin 10.11.11, so Phase 7 must
+  not repeat it (`DEF-06-45-02`). The SECOND (the ≥4-artist Music Assistant discrimination between
+  "MA caps at 3" and "`Twista` specifically failed to map") was never in round 5's scope and stays
+  with Phase 7 on every branch.
 
 - [04-14]: **The PRE-HOOK snapshot moved to the `incomplete` tree, chosen on measurement rather than
   taste.** Job A's earliest *possible* destination-tree sighting was 12:18:00.074Z while its
@@ -1992,17 +2010,25 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-09-24T15:10:00.000Z
-Stopped at: Completed 06-44-PLAN.md (round 5, wave 22) — the CONF-04 instrument and the health entry
-point now state the round-5 truth in prose, with a mechanical proof that **0 non-comment,
-non-message lines** and **0 control-flow or `EXIT_CODE=` lines** changed in either file. The
-Jellyfin half is written as **CARRIED to Phase 7 entry criterion E6 under the recorded override**,
-never as closed; the exit code was **not** tuned (still 3, on `MA_ARTIST_PENDING` 1); no requirement
-checkbox moved and `requirements mark-complete` was not run.
-**NEXT: 06-45-PLAN.md** — the last plan of round 5. It owns the requirement-record edits behind its
-own gate: `REQUIREMENTS.md:152` still carries an unticked CONF-04, and an override is a carry of an
-OPEN requirement, never a close. `06-VERIFICATION.md` stays `/gsd-verify 06`'s call.
-Resume file: .planning/phases/06-tagger-configuration-and-dry-run/06-45-PLAN.md
+Last session: 2026-09-24T15:45:00.000Z
+Stopped at: Completed 06-45-PLAN.md (round 5, wave 23) — **GAP-CLOSURE ROUND 5 IS COMPLETE at
+45/45, and the phase is NOT declared complete.** Five documents now state one truth value for
+CONF-04: `REQUIREMENTS.md`'s checkbox and traceability row, `ROADMAP.md`'s Phase 6 criterion 4 and
+status row and its Phase 7 entry criterion E6, `06-VERIFICATION.md`'s gap record, and
+`stacks/selfhosted/arrs/beets.md`. **The tick gate held and CONF-04 is still unticked**
+(`BRANCH: B` against a required `A`; `JF_AT_TARGET: 0`/`JF_PENDING: 3` against a required `3`/`0`);
+`requirements mark-complete` was not run. E6 carries two separately-dispositioned measurements and
+its second — the ≥4-artist MA discrimination — stays with Phase 7. Residue carried as
+`DEF-06-45-01`..`05` (register 36 → 41), including the still-held snapshot
+`tank/media/Music@pre-06-41-conf04-reprobe` and a non-detecting `grep -cF` recipe published in
+06-43 SECTION O. All edits to dated records are purely additive, measured rather than asserted.
+**NEXT: `/gsd-verify 06`.** It has not been run since 2026-09-23, and seven files have moved since
+(these five documents plus the two instrument scripts 06-44 corrected). Re-scoring
+`06-VERIFICATION.md` from 5/6 is the verifier's call and no plan in this round claimed it.
+Also outstanding and unchanged: the operator `git push` + host `git pull --ff-only` in
+`/mnt/fast/stacks`, without which a live `quick-health-check.sh` measures pre-06-44 prose
+(`DEF-06-45-05`). Both snapshots stay held; no `zfs rollback` was executed.
+Resume file: .planning/phases/06-tagger-configuration-and-dry-run/06-VERIFICATION.md
 
 _(The two lines below are the older Phase 6 entry-point note, kept because the wave-20 pointer above
 supersedes only the resume position, not the phase context.)_
