@@ -2636,8 +2636,34 @@ elif [ "$CONSUMERS_RC" -eq 3 ]; then
     #   healthy. So CONF-04 pending makes the whole health check non-zero for as long as it is
     #   open — that is not a bug to be tuned out, it is what makes a post-Phase-7 REGRESSION back
     #   to the baseline detectable by tooling rather than only by a human reading yellow text.
-    #   It clears when ROADMAP entry criterion E6 discharges the Jellyfin half, and on nothing
-    #   else. Do not add an override: there is no success-producing knob anywhere in this file.
+    #   Do not add an override: there is no success-producing knob anywhere in this file.
+    #
+    #   WHAT CLEARS IT — TWO OWNERS, NOT ONE. Corrected 2026-09-24 (plan 06-44, round 5). This
+    #   paragraph used to end "It clears when ROADMAP entry criterion E6 discharges the Jellyfin
+    #   half, and on nothing else", which was true and under-specified: E6 owns TWO measurements
+    #   and the audit's two pending counts are waiting on DIFFERENT ones of them. The audit's own
+    #   exit-3 banner now says the same thing in the same words, and the two accounts must be
+    #   corrected together or they drift (the GC-04 stale-citation class).
+    #     * THE JELLYFIN COUNT. Its other candidate route — a file mtime change making the
+    #       Default-mode refresh re-probe — was DRIVEN on 2026-09-24 inside a ZFS snapshot fence
+    #       (plan 06-41) and MEASURED NOT TO DISCHARGE IT: all three pinned rows came back at
+    #       their 2026-09-20 baseline, the 1,244-row census delta was empty, and
+    #       PreferNonstandardArtistsTag re-read `true` afterwards, so the refresh ran and reached
+    #       the items and the prober still did not re-read ARTISTS. See
+    #       .planning/phases/06-tagger-configuration-and-dry-run/artifacts/06-42-conf04-reprobe-after.txt
+    #       for the after-state and .../06-43-conf04-verdict.txt for the computed `BRANCH: B`.
+    #       The one remaining route is a Phase 7 write or import, and that half is CARRIED to E6
+    #       under the explicit operator override recorded in 06-43 SECTION P. AN OVERRIDE IS AN
+    #       ARGUED, AUDITABLE CARRY OF AN OPEN REQUIREMENT — IT IS NOT A CLOSE, and nothing here
+    #       may be read as ticking CONF-04.
+    #     * THE MUSIC ASSISTANT COUNT. It is waiting on E6's SECOND measurement — whether a
+    #       second >=4-artist track yields four artists in MA or three, the only thing that
+    #       separates "MA caps the list at 3" from "Twista specifically failed to map". Round 5
+    #       never had that in scope and produced no evidence bearing on it.
+    #   Neither half discharges the other and the two counts are NEVER summed into one CONF-04
+    #   answer. The audit exits 3 while EITHER is non-zero, which is why it would have exited 3
+    #   even on a fully successful Jellyfin re-probe — so this arm firing is not, by itself,
+    #   evidence about which half is open. Read the two counts in the summary below.
     #
     # The anchor guard is applied exactly as the `-eq 0` arm applies it. A renumbered `📊 6.`
     # heading must not be able to hide behind this new arm — an audit whose summary cannot be
@@ -2656,7 +2682,12 @@ elif [ "$CONSUMERS_RC" -eq 3 ]; then
         EXIT_CODE=1
     else
         echo "⚠️  CONF-04 MEASURED AND OPEN — artist rows at baseline, not at target (exit 3)"
-        echo "  This is NOT an audit failure and NOT a pass. The audit's own words:"
+        echo "  This is NOT an audit failure and NOT a pass. The Jellyfin and MA counts belong to"
+        echo "  TWO DIFFERENT measurements inside ROADMAP entry criterion E6 and are never summed"
+        echo "  into one CONF-04 answer: the Jellyfin half is carried to E6 under the recorded"
+        echo "  2026-09-24 override after the mtime route was driven and measured not to discharge"
+        echo "  it, and the MA half awaits E6's second, >=4-artist measurement. A carry is not a"
+        echo "  close — CONF-04 stays open. The audit's own words:"
         # BOUNDED range. The end pattern is emitted by the same exit-3 block that produces status
         # 3, so it exists whenever this arm is reached — but a sed range whose end never matches
         # runs to EOF, so the `1,8p` cap is the guard rather than a trust in the end pattern.
