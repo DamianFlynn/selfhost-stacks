@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-24T14:35:00.000Z"
+last_updated: "2026-09-24T15:10:00.000Z"
 progress:
   total_phases: 10
   completed_phases: 5
   total_plans: 119
-  completed_plans: 115
+  completed_plans: 116
   percent: 50
 ---
 
@@ -29,7 +29,7 @@ pipeline that someone owns.
 
 Phase: 06 (tagger-configuration-and-dry-run) — EXECUTING gap-closure **ROUND 5**
 (re-verification deliberately NOT run — see the round-4 block at the end of this section)
-Plan: 43 of 45 executed. Round 1 (06-15..06-21, waves 6-9, 2026-09-22) closed CR-01 and
+Plan: 44 of 45 executed. Round 1 (06-15..06-21, waves 6-9, 2026-09-22) closed CR-01 and
 dispositioned all 24 findings of `06-REVIEW.md`; re-verification is **6/6, status passed**
 (`06-VERIFICATION.md`, gaps_remaining: [], regressions: []).
 **The phase is NOT complete.** A code review of the round-1 changes themselves
@@ -599,8 +599,59 @@ still **OPEN** — now with an **explicit, operator-signed override** carrying i
 **06-44 and 06-45** write. Both downstream plans **read the `BRANCH:` line** rather than
 re-deriving the conclusion from the measurements.
 
-Status: Executing Phase 06 — gap-closure **ROUND 5**, wave 21 (plan 06-43) COMPLETE; the operator
-gate is resolved and 06-44 / 06-45 remain. Wave 20 (plan 06-42) COMPLETE. Round 2 ran
+**ROUND 5, WAVE 22 EXECUTED — 2026-09-24. Plan 06-44 HAS MADE THE INSTRUMENT'S PROSE TRUE, AND
+CHANGED NOTHING ELSE.** Two prose-corrected scripts, two task commits (`646583a` for
+`scripts/check-music-consumers.sh`, `8cac538` for `scripts/quick-health-check.sh`), **no artifact
+and no estate contact** — this plan issued no HTTP, no ssh and no write outside the repository.
+Every sentence in the standing CONF-04 drift detector and in the health entry point that named
+**Phase 7 as the single owner** of the Jellyfin half's discharge now states the round-5 truth: the
+mtime lever those very sentences named was **DRIVEN on 2026-09-24 inside a ZFS snapshot fence and
+measured NOT to discharge it** — ZERO of three rows moved, the 1,244-row census delta was empty,
+and `PreferNonstandardArtistsTag` re-read `true` afterwards, so the refresh ran, reached the items,
+and the prober still did not re-read `ARTISTS`. **The Jellyfin half is written as CARRIED to Phase 7
+entry criterion E6 under the recorded override, never as closed**, and the scripts say so in those
+words in five places: the `target`-column paragraph, the EXIT 3 point (c), section 4b's PENDING
+echo block, the `artist rows PENDING (JF)` summary line and the exit-3 banner.
+**THE VERDICT WAS EARNED ON UNTOUCHED CODE AND THIS PLAN DID NOT RE-RUN IT.** The instrument
+reached its Jellyfin-half verdict in **06-42 task 3**, in wave 20, before the branch was computed
+and before the operator decided anything. The planning order was corrected for exactly that reason,
+and this plan runs strictly downstream of the gate.
+**THE MECHANICAL PROOF THAT NO LOGIC MOVED, which is the whole point of the round:** the changed-line
+audit over both diffs reports **0 lines that are neither a comment nor a printed message**, and **0
+added `if`/`elif`/`case`/`EXIT_CODE=` lines**. No `target`, `baseline`, threshold, branch condition,
+counter or exit code changed; all three `ARTIST_PROOF_ROWS` definitions survive verbatim with **both
+numeric columns**; the exit ladder is intact and in order (`--baseline` 1699 < `FAILURES` 1704 <
+pending 1732 < green banner 1746); `EXIT_CODE=1` stays on the exit-3 arm; the `📊 6. Summary` anchor
+and the **7** `CONSUMERS_OVERRIDDEN` notices are unmoved. `shellcheck -S warning` is **byte-identical
+to the pre-edit run on both files** and `bash -n` is clean on both.
+**⚠ THE EXIT CODE WAS DELIBERATELY NOT TUNED.** `check-music-consumers.sh` still exits **3**, because
+`MA_ARTIST_PENDING` stays **1** — a reported measured discrepancy owned by **E6's SECOND
+measurement** — and it would have exited 3 on a fully successful re-probe too. Not one line was
+changed to make any process end on 0, and the banner now says so in band.
+**⚠ THE BASELINE COLUMN IS RECORDED AS DELIBERATELY RETAINED**, in band, so it is not tidied away
+once the target is met: after E6 discharges the Jellyfin half, a row back at its 2026-09-20 baseline
+is a **REGRESSION** (most likely `PreferNonstandardArtistsTag` reverting, which section 4a asserts
+independently), not a wait. Deleting either numeric column trades a detector for a tidier table.
+**THE CROSS-FILE CONTRACT WAS EXERCISED, NOT ASSUMED.** The rewritten exit-3 banner is 8 lines and
+`quick-health-check.sh`'s arm caps its `sed` window at `1,8p` — so the banner was rendered locally
+with stub counters and pushed through that **exact** pipeline: all 8 lines survive, the
+`Discharges on ROADMAP` end anchor is still on the last one, and **both halves are named inside the
+window a reader actually sees**. The two files' accounts of the exit-3 contract were corrected in
+the same round, which is what stops the `GC-04` stale-citation class recurring.
+**DEF-06-39-06, SEVENTH CONSECUTIVE ROUND, AND CLEAN — MEASURED AFTER THE EDITS LANDED, not before:**
+the forbidden mode's literal token and the forbidden UI button's phrase both count **0** in
+`check-music-consumers.sh`, **0** in `quick-health-check.sh` and **0** in this plan's SUMMARY, which
+writes both in bracketed form for exactly that reason. Both scripts credential-screened before each
+commit (the repo is PUBLIC): no password, token, key or bearer string in any added line, and a NUL
+delta of **0 bytes** measured as `raw − tr -d '\000'`, never the vacuous `grep -c $'\000'`.
+**STILL NOT A CLOSE, AND THIS PLAN DID NOT MOVE ONE.** `REQUIREMENTS.md:152` still carries an
+**unticked CONF-04**; `requirements mark-complete` was **not** run; `06-VERIFICATION.md` is untouched
+and still stale; `stacks/selfhosted/arrs/beets.md` is untouched; and both snapshots stay held, with
+no `zfs rollback` executed. **06-45 owns the record edits, behind its own gate.**
+
+Status: Executing Phase 06 — gap-closure **ROUND 5**, wave 22 (plan 06-44) COMPLETE; only **06-45**
+remains. Wave 21 (plan 06-43) COMPLETE — the operator gate is resolved. Wave 20 (plan 06-42)
+COMPLETE. Round 2 ran
 against `06-REVIEW-GAP.md` (GC-01 blocker + 7 warnings in round 1's own code, plus GC-16/GC-17
 from the cross-family adjudication) — all 17 closed and dispositioned in `06-DISPOSITIONS-GAP.md`
 by plan 06-29. Still 1 open
@@ -1941,12 +1992,17 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-09-24T13:55:00.000Z
-Stopped at: Completed 06-42-PLAN.md (round 5, wave 20) — the CONF-04 re-probe measured a NEGATIVE
-(all three pinned rows AT-BASELINE) with `SAFETY: PASS` and an independent `INSTRUMENT RUN: MEASURED`
-corroboration. **NEXT: 06-43-PLAN.md**, which is `autonomous: false` — it recomputes the branch from
-four recorded inputs and puts the decision to the operator. Do not run it with `--auto`/`--chain`.
-Resume file: .planning/phases/06-tagger-configuration-and-dry-run/06-43-PLAN.md
+Last session: 2026-09-24T15:10:00.000Z
+Stopped at: Completed 06-44-PLAN.md (round 5, wave 22) — the CONF-04 instrument and the health entry
+point now state the round-5 truth in prose, with a mechanical proof that **0 non-comment,
+non-message lines** and **0 control-flow or `EXIT_CODE=` lines** changed in either file. The
+Jellyfin half is written as **CARRIED to Phase 7 entry criterion E6 under the recorded override**,
+never as closed; the exit code was **not** tuned (still 3, on `MA_ARTIST_PENDING` 1); no requirement
+checkbox moved and `requirements mark-complete` was not run.
+**NEXT: 06-45-PLAN.md** — the last plan of round 5. It owns the requirement-record edits behind its
+own gate: `REQUIREMENTS.md:152` still carries an unticked CONF-04, and an override is a carry of an
+OPEN requirement, never a close. `06-VERIFICATION.md` stays `/gsd-verify 06`'s call.
+Resume file: .planning/phases/06-tagger-configuration-and-dry-run/06-45-PLAN.md
 
 _(The two lines below are the older Phase 6 entry-point note, kept because the wave-20 pointer above
 supersedes only the resume position, not the phase context.)_
