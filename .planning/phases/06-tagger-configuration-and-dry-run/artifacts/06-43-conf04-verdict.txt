@@ -1,0 +1,329 @@
+================================================================================
+06-43 — THE CONF-04 VERDICT (what the round-5 measurement MEANS, in one line)
+================================================================================
+06-40 measured the before-state. 06-41 drove the lever. 06-42 measured the after-state and
+corroborated it through the deployed instrument. THIS file does one thing only: it states the
+outcome as exactly one of three named branches, computed from four recorded inputs by a stated
+rule, and records the operator's decision about what that outcome means for CONF-04.
+
+No estate contact was made by task 1. No API call, no ssh command, no write of any kind. Every
+number below was re-read out of an artifact already committed to this repository.
+
+⛔ THE HARD FENCE STILL BINDS AND IS NOT WEAKENED BY A NEGATIVE BRANCH. On branch B or PARTIAL the
+correct response is the RECORDED NEGATIVE plus the operator's choice. It is NOT another refresh, it
+is NOT a wider refresh mode, and it is NOT the aggressive per-item "replace all metadata" mode,
+which is forbidden estate-wide (D-24, T-06-11 — Phase 1 measured it rewriting 83 of 91 metadata
+sidecars with the local-metadata saver already off) and is unreachable from EVERY branch of this
+round. The two prohibited scan endpoints are named DESCRIPTIVELY ONLY throughout this file; their
+literal tokens are deliberately kept out of it so that a grep for them across artifacts/ stays a
+DETECTOR rather than matching prose (DEF-06-39-06).
+
+SECTIONS: L — the numbers.  M — the branch.  N — what it does and does not mean.
+          O — the round-wide audit.  P — the operator's decision (appended at the gate).
+
+
+================================================================================
+SECTION L — THE NUMBERS
+================================================================================
+The block below is 06-42 SECTION C's `--- ROW VERDICTS BEGIN/END ---` block, copied BYTE-FOR-BYTE
+including its markers. It was not retyped, reordered or reformatted: it was extracted from
+`artifacts/06-42-conf04-reprobe-after.txt` with `sed -n '/^--- ROW VERDICTS BEGIN ---$/,/^--- ROW
+VERDICTS END ---$/p'` and spliced in mechanically. This plan's verify block `diff`s the two blocks
+and fails the task on any difference, so a transcription slip between the MEASUREMENT and the
+VERDICT cannot survive.
+
+Eight `|`-separated fields per line:
+  `ROW` | internal path | `target=` | `baseline=` | `measured=` | `uniqids=` | `semis=` | `verdict=`
+
+--- ROW VERDICTS BEGIN ---
+ROW|/media/Music/Lady Gaga/ARTPOP (2013)/CD 01-05 Lady Gaga - Jewels n’ Drugs.flac|target=4|baseline=0|measured=0|uniqids=0|semis=0|verdict=AT-BASELINE
+ROW|/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-03 Katy Perry - California Gurls.flac|target=2|baseline=1|measured=1|uniqids=1|semis=0|verdict=AT-BASELINE
+ROW|/media/Music/P!nk/The Truth About Love (2012)/CD 01-04 P!nk - Just Give Me a Reason.flac|target=2|baseline=1|measured=1|uniqids=1|semis=0|verdict=AT-BASELINE
+--- ROW VERDICTS END ---
+
+--------------------------------------------------------------------------------
+THE SAME THREE ROWS, IN PROSE, FOR A HUMAN READER
+--------------------------------------------------------------------------------
+  Row 1 — `/media/Music/Lady Gaga/ARTPOP (2013)/CD 01-05 Lady Gaga - Jewels n’ Drugs.flac`
+          target 4 browseable `ArtistItems` entities; the 2026-09-20 Jellyfin baseline is 0;
+          MEASURED 0, with 0 distinct entity Ids and 0 `;` inside any entity name.
+          verdict AT-BASELINE — the row did not move. This is the row whose flat `Artists` string
+          list IS populated while its entity list is empty, one of the 30 library items in that
+          shape, which is why `Artists` is never the field asserted.
+
+  Row 2 — `/media/Music/Katy Perry/Teenage Dream (2010)/CD 01-03 Katy Perry - California Gurls.flac`
+          target 2; baseline 1; MEASURED 1, with 1 distinct entity Id (`Katy Perry`) and 0 `;`.
+          verdict AT-BASELINE — the row did not move. The second name lives only in the ARTISTS
+          tag, so its absence means the prober did not read ARTISTS on this file.
+
+  Row 3 — `/media/Music/P!nk/The Truth About Love (2012)/CD 01-04 P!nk - Just Give Me a Reason.flac`
+          target 2; baseline 1; MEASURED 1, with 1 distinct entity Id (`P!nk`) and 0 `;`.
+          verdict AT-BASELINE — the row did not move. A single entity named `P!nk` is the
+          ARTIST/AlbumArtist derivation, not the ARTISTS one (the tag reads `Nate Ruess;P!nk`).
+
+--------------------------------------------------------------------------------
+THE FOUR RECORDED INPUTS, EACH COPIED VERBATIM ONTO ITS OWN LINE
+--------------------------------------------------------------------------------
+From `artifacts/06-42-conf04-reprobe-after.txt` SECTION K (the four-way halt gate):
+
+SAFETY: PASS
+
+From `artifacts/06-42-consumers-rerun.txt`, the deployed unmodified instrument's fixed-format
+block (taken 2026-09-24T13:47:01Z from `/mnt/fast/stacks/scripts/check-music-consumers.sh` on
+LXC 100, with no override and no copy step):
+
+INSTRUMENT RUN: MEASURED
+HOST CHECKOUT: MATCH ee82fb20a4383ee5f274ce177f6d0a03de0797c4
+EXIT CODE: 3
+JF_AT_TARGET: 0
+JF_PENDING: 3
+MA_AT_TARGET: 2
+MA_REPORTED: 1
+
+  Of those seven lines, exactly THREE are inputs to the branch: `INSTRUMENT RUN`, `JF_AT_TARGET`
+  and `JF_PENDING`. `HOST CHECKOUT` is what earns the word `MEASURED` and is recorded for the
+  audit trail. `EXIT CODE`, `MA_AT_TARGET` and `MA_REPORTED` are recorded here FOR THE RECORD and
+  take no part in the rule — see the two carve-outs stated in SECTION M.
+
+  The two Jellyfin counters account for every pinned row: 0 at target + 3 pending = 3, the number
+  of rows in `ARTIST_PROOF_ROWS`. The MA counters are NOT added to them, here or anywhere.
+
+
+================================================================================
+SECTION M — THE BRANCH
+================================================================================
+The branch is COMPUTED by the rule below and by no other. It is evaluated strictly in order, from
+exactly four inputs: the three `verdict=` values in SECTION L's copied block, 06-42's `SAFETY:`
+value, and the instrument's `INSTRUMENT RUN:` / `JF_AT_TARGET:` / `JF_PENDING:` values. This
+plan's verify block re-evaluates the SAME rule from the SAME lines and fails the task if the
+written value differs — so what follows is a computation with a check, not a judgement.
+
+  1. `SAFETY:` is not `PASS`                                            ->  PARTIAL
+  2. `INSTRUMENT RUN:` is not `MEASURED`                                ->  PARTIAL
+     (reason: UNCORROBORATED)
+  3. all three `verdict=AT-TARGET` and `JF_AT_TARGET` is 3
+     and `JF_PENDING` is 0                                              ->  A
+  4. all three `verdict=AT-BASELINE` and `JF_AT_TARGET` is 0
+     and `JF_PENDING` is 3                                              ->  B
+  5. anything else                                                      ->  PARTIAL
+
+THE EVALUATION, STEP BY STEP, AGAINST THE MEASURED VALUES:
+
+  rule 1 : `SAFETY:` reads PASS            -> does not fire.
+  rule 2 : `INSTRUMENT RUN:` reads MEASURED -> does not fire. The corroboration ran and looked.
+  rule 3 : `verdict=AT-TARGET` count is 0, not 3; `JF_AT_TARGET` is 0, not 3; `JF_PENDING` is 3,
+           not 0                           -> does not fire. All three conjuncts fail.
+  rule 4 : `verdict=AT-BASELINE` count is 3; `JF_AT_TARGET` is 0; `JF_PENDING` is 3
+                                           -> FIRES. All three conjuncts hold.
+  rule 5 : not reached.
+
+BRANCH: B
+
+  Branch B is: THE MTIME HYPOTHESIS IS DISPROVEN. All three rows read AT-BASELINE after a refresh
+  that Jellyfin's own log confirms ran (06-41 SECTION B (B7): all three Audio items named by full
+  internal path in a `LibraryMonitor` line, 60 s after a POST that returned 204). The touch did
+  not cause a re-probe, or the re-probe did not produce entities. This is recorded as a
+  REPRODUCIBLE NEGATIVE and handed back to the operator with the two original options.
+  THIS IS NOT A FAILURE OF THE PLAN SET. 06-03 listed "(b) the file's mtime changing" as a
+  mechanism that would re-probe; round 5 pulled that lever inside a snapshot fence and measured
+  that it does not. A mechanism ruled out by measurement is a result.
+
+⚠ TWO THINGS THE RULE DELIBERATELY DOES NOT USE, STATED BECAUSE A READER WILL REACH FOR BOTH.
+
+  THE EXIT CODE IS NOT AN INPUT. `check-music-consumers.sh` exits 3 on branch A and on branch B
+  ALIKE, because `MA_ARTIST_PENDING` stays 1 either way — MA returns three artists against row 1's
+  four-value ARTISTS tag, which is a reported measured discrepancy owned by Phase 7 entry
+  criterion E6's SECOND measurement. An exit code that cannot distinguish A from B cannot decide
+  between them, and wiring it in would be the first step toward summing the two halves. 06-42's
+  own instrument artifact states the counterfactual explicitly: on a fully successful re-probe the
+  counters would have read 3 at target (JF) / 0 pending (JF) / 1 reported (MA) and the process
+  would STILL have ended on 3.
+
+  THE MA COUNTERS ARE NOT INPUTS. `MA_AT_TARGET` and `MA_REPORTED` are recorded in SECTION L for
+  the record and take no part in rule 3, 4 or 5. A surviving MA pending row does NOT disqualify
+  branch A, and a green MA half may never offset a pending Jellyfin one. This is
+  `check-music-consumers.sh`'s own point (c) — the Jellyfin and the MA verdict are still separate
+  and are never summed into one CONF-04 answer — applied at the one step where it would be easiest
+  to break.
+
+⚠ WHY RULE 2 EXISTS, AND WHAT TO DO IF IT EVER FIRES. Branch A permanently records a requirement
+  as met in a PUBLIC repository, so it requires two independent measurements agreeing: this
+  round's own API reads (06-42 task 1) and the deployed instrument's own verdict (06-42 task 3).
+  If the instrument could not look — most likely a host checkout that has not pulled — the honest
+  state is "measured but uncorroborated", which is not A. The remedy is a two-minute operator
+  action and not a dead end: `git push`, then `git pull --ff-only` in `/mnt/fast/stacks` on
+  LXC 100, then re-run 06-42 task 3. That is precisely what happened during 06-42 (the host went
+  two commits stale by that plan's own commits), the remedy was applied, and the recorded MATCH is
+  on the real equality rather than a relaxed test. Rule 2 did NOT fire on this round.
+
+
+================================================================================
+SECTION N — WHAT THE BRANCH DOES AND DOES NOT MEAN
+================================================================================
+Written out so that no downstream reader — 06-44, 06-45, `/gsd-verify 06`, or a human a year from
+now — has to infer any of it.
+
+--------------------------------------------------------------------------------
+ON THE MEASURED BRANCH (B): CONF-04 STAYS OPEN, HONESTLY
+--------------------------------------------------------------------------------
+CONF-04's Jellyfin half is NOT closed by this round. The option is correct and live
+(`PreferNonstandardArtistsTag` re-read as `true` AFTER the refresh, with `has($k)` rather than
+jq's `//`), the refresh reached all three Audio items, and the prober still did not re-read the
+ARTISTS tag. Nothing here argues for escalating: the aggressive per-item refresh mode remains
+forbidden and unreachable, no second refresh was issued, and no further file was touched.
+
+THE TWO ORIGINAL OPTIONS GO BACK TO THE OPERATOR, quoted verbatim from `06-VERIFICATION.md`
+§ Recommended path rather than paraphrased:
+
+    **Recommended path:** either (a) accept CONF-04's Jellyfin half as a deliberately-carried gap into
+    Phase 7 via an explicit override (the roadmap already argues for this, citing E6 as the owning
+    criterion, and an override would make that argument auditable rather than implicit), or (b) hold
+    Phase 6 open until Phase 7's first write allows the Jellyfin re-probe and the three pinned census
+    rows to actually move. Both are legitimate; what is not legitimate is closing Phase 6 as "passed,
+    6/6" while REQUIREMENTS.md still shows the box unticked.
+
+WHAT IS NOW KNOWN THAT WAS NOT KNOWN WHEN THOSE OPTIONS WERE WRITTEN:
+  - The mtime hypothesis was DRIVEN, not argued, and it did not close the gap. 06-03's mechanism
+    (b) is measured false for this estate at Jellyfin 10.11.11.
+  - EXACTLY ZERO of the three rows moved. Not "mostly"; not "rows 2 and 3 but not row 1". The
+    1,244-row census delta is empty, which is simultaneously the proof that nothing outside the
+    three moved AND the proof that the three themselves did not.
+  - The round was SAFE, measured four ways, and the estate is in the state 06-40 recorded plus
+    three mtimes.
+
+--------------------------------------------------------------------------------
+ON BRANCH A, HAD IT FIRED — RECORDED SO THE CARVE-OUT IS NOT LOST
+--------------------------------------------------------------------------------
+Branch A did NOT fire on this round; this paragraph is the standing statement of what it would
+have meant, kept because the same rule will be re-evaluated at Phase 7's first write. On A,
+CONF-04's JELLYFIN half closes by measurement, the MA half having already been discharged on
+2026-09-21, and CONF-04 as a requirement closes. Even then, `check-music-consumers.sh` would STILL
+exit 3, because MA row 1 remains a reported measured discrepancy (3 artists returned against a
+4-value ARTISTS tag) and `MA_ARTIST_PENDING` is still 1 — AND THAT IS CORRECT AND MUST NOT BE
+TUNED OUT. No line of any script may be changed to make the process end on 0.
+
+--------------------------------------------------------------------------------
+THE RULE THAT BINDS EVERY BRANCH
+--------------------------------------------------------------------------------
+THE JELLYFIN AND THE MA VERDICTS ARE SEPARATE AND ARE NEVER SUMMED INTO ONE CONF-04 ANSWER.
+`JELLYFIN_ARTIST_PENDING` and `MA_ARTIST_PENDING` are added together for exactly one purpose —
+deciding whether ANY row is off target — and that is a different question from whether CONF-04 is
+closed. "N of M pending" may never be published as a CONF-04 completion figure, and a green MA
+half may never offset a pending Jellyfin one.
+
+--------------------------------------------------------------------------------
+WHAT THIS ROUND DOES NOT CLOSE, ON EVERY BRANCH
+--------------------------------------------------------------------------------
+Phase 7 entry criterion E6 names TWO measurements. THE SECOND ONE IS NOT CLOSED BY THIS ROUND AND
+STAYS WITH PHASE 7 REGARDLESS OF THE BRANCH: whether a second ≥4-artist track yields four artists
+in Music Assistant or three — the only measurement that separates "MA caps the list at 3" from
+"`Twista` specifically failed to map", which a sample of one cannot settle. Round 5 never had it
+in scope, took no step toward it, and produced no evidence bearing on it. It is stated here
+because it is the single easiest thing for a future reader to over-claim.
+
+Also unchanged by this round and named so it is not absorbed: Phase 7 entry criterion E5 — the 30
+library items (all of `Lady Gaga/ARTPOP (2013)`, all of `Lady Gaga/Joanne (2016)`, and one Def
+Leppard track) carrying a populated `Artists` string list with ZERO linked artist entities. Row 1
+of `ARTIST_PROOF_ROWS` is one of those items, which is why a per-file refresh that performs no
+artist-entity creation was always the weakest lever on that particular row.
+
+
+================================================================================
+SECTION O — THE ROUND-WIDE AUDIT
+================================================================================
+Mechanical counts over round 5's artifacts, taken at the workstation with `/usr/bin/grep` (the
+bare name is shadowed by a shell function in this session and has silently matched nothing before
+— 06-41 records that hazard).
+
+THE RECIPES, WITH THE COUNTED TOKENS WRITTEN IN BRACKETED FORM. This is the mitigation
+`DEF-06-39-06` requires and it is stated in band rather than left implicit: a count taken over a
+file that NAMES the thing it counts measures the narration, not the estate, so the recipe below
+writes `Full[R]efresh` and `Replace all [m]etadata` — bracketed character classes that match the
+real token when used as a pattern but are not themselves an occurrence of it. The counts are also
+taken over the delimited block boundaries of the source artifacts where those exist, never over
+this file's prose.
+
+  (O-a) occurrence count of the forbidden mode's literal token:
+        `for f in artifacts/06-4*-*.txt; do /usr/bin/grep -cF "Full[R]efresh" "$f"; done`
+  (O-b) occurrence count of the forbidden UI button's phrase, case-insensitive:
+        `for f in artifacts/06-4*-*.txt; do /usr/bin/grep -ciE "Replace all [m]etadata" "$f"; done`
+  (O-c) write verbs issued by the whole round, from 06-41 SECTION B's delimited endpoint audit:
+        `sed -n '/^--- ENDPOINT AUDIT BEGIN ---$/,/^--- ENDPOINT AUDIT END ---$/p' \
+           artifacts/06-41-conf04-reprobe-drive.txt | /usr/bin/grep -cE '^(POST|PUT|DELETE) '`
+
+The four files in the counted set, named so the set is not a moving target:
+  artifacts/06-40-conf04-reprobe-before.txt
+  artifacts/06-41-conf04-reprobe-drive.txt
+  artifacts/06-42-conf04-reprobe-after.txt
+  artifacts/06-42-consumers-rerun.txt
+This artifact (`06-43-conf04-verdict.txt`) is the fifth and is asserted separately below; it was
+written with both tokens bracketed for exactly that reason, and its own count is therefore 0 by
+construction rather than by luck.
+
+--- ROUND AUDIT BEGIN ---
+forbidden refresh mode, literal token, across the four round-5 artifacts : 0   (expected 0)
+forbidden refresh mode, literal token, in this artifact                  : 0   (expected 0)
+forbidden UI button phrase, case-insensitive, across the four artifacts  : 0   (expected 0)
+write verbs (POST/PUT/DELETE) issued by the ENTIRE round                 : 1   (expected 1)
+  the one verb: POST /Library/Media/Updated -> HTTP 204, file scope, 3 entries (06-41 task 3)
+files under /mnt/tank/media/Music whose CONTENT changed                  : 0   (expected 0)
+files under /mnt/tank/media/Music whose MTIME changed                    : 3   (expected 3)
+snapshot tank/downloads@pre-phase5                                       : PRESENT — NOT RELEASED
+snapshot tank/media/Music@pre-06-41-conf04-reprobe                       : PRESENT — STILL HELD
+--- ROUND AUDIT END ---
+
+HOW EACH COUNT WAS EARNED, since a number with no instrument behind it is an impression:
+
+  0 forbidden-token occurrences — `/usr/bin/grep -cF` over each of the four files individually,
+    summing to 0. The prohibition is honoured in fact and not only in prose: the mode was not
+    issued, not widened to, and not reachable from any branch of this round.
+
+  0 forbidden-UI-phrase occurrences — `/usr/bin/grep -ciE` over the same four files, summing to 0.
+
+  1 write verb — the delimited endpoint audit in 06-41 SECTION B holds exactly one line beginning
+    with a write verb, and 06-41 states in band that no PUT, no DELETE and no second POST was
+    issued in any task of that plan. 06-40 issued GET only and took no snapshot. 06-42 issued GET
+    only. This plan (06-43) issued no HTTP at all.
+
+  0 files changed content — three independent instruments agree. (1) 06-42 SECTION G: the
+    post-refresh `zfs diff` block is byte-identical to 06-41's post-touch block (sha256
+    `a33ada4a…` both sides, `cmp -s`), three `M` entries, zero non-`M`, zero sidecar entries.
+    (2) 06-42 SECTION H: the `.nfo` manifest differs on 0 of 91 lines in sha256 AND mtime, and all
+    three sidecar set fingerprints (91 `.nfo` / 944 `.lrc` / 88 `.jpg`) are identical to 06-40's.
+    (3) 06-42 SECTION J (J5): the three pinned files' content sha256 values are identical to
+    06-40 SECTION 9 (f), at identical sizes. The dataset is `atime=off` / `relatime=on`, so a read
+    cannot contaminate the diff and the clean block is a real absence of writes.
+
+  3 files changed mtime — the three pinned library files, and only those, by 06-41's `touch`.
+    06-42 SECTION J (J7) re-read all three at epoch 1790237114, 06-41's touch moment, unchanged
+    since: Jellyfin did not re-stamp them and nothing else did either.
+
+  both snapshots PRESENT — 06-42 SECTION J asserts `tank/downloads@pre-phase5` with `grep -qxF`
+    against the `-H -o name` list, so a snapshot merely CONTAINING that string could not satisfy
+    it (J2), and lists `tank/media/Music@pre-06-41-conf04-reprobe` as standing (J4). This plan
+    created no snapshot and destroyed none.
+
+⚠ `tank/media/Music@pre-06-41-conf04-reprobe` IS STILL HELD, NOT RELEASED, AND ITS RELEASE IS A
+  SEPARATE OPERATOR DECISION ONCE THE OUTCOME IS ACCEPTED. It is not destroyed by this round and
+  is deliberately not bundled into the gate below. It is the only undo for round 5's three writes.
+  No `zfs rollback` was executed by this plan or by 06-42; the command is recorded in 06-42
+  SECTION K for the operator and is not an executor's to run — rolling back a live shared dataset
+  discards whatever any service wrote to it since the snapshot.
+
+⚠ `tank/downloads@pre-phase5` IS ALSO NOT RELEASED BY THIS ROUND. It is the only undo for Phase
+  5's 4,750 renames, 751 tag writes and 26,005 chowns (D-32, Phase 7 entry criterion E4).
+
+CREDENTIAL SCREEN (this repository is PUBLIC): this task issued no authenticated call and read no
+secret. The artifact carries only counts, verdicts, internal paths, snapshot names and commit ids
+already committed to this repository. No API key, token, password or header value appears in it,
+and no secret FILE CONTENTS are recorded — only the two secret file PATHS' mode assertions are
+referenced, by description, from 06-42.
+
+--------------------------------------------------------------------------------
+STATE OF THE RECORD AT THE MOMENT THIS SECTION WAS WRITTEN
+--------------------------------------------------------------------------------
+Nothing has moved. `REQUIREMENTS.md:152` still carries an unticked CONF-04, `ROADMAP.md`'s Phase 6
+status row still reads `In Progress`, `06-VERIFICATION.md` still scores 5/6 and is still dated
+against its own pass, and `stacks/selfhosted/arrs/beets.md` is untouched. Every one of those is
+edited by plans 06-44 and 06-45, which run AFTER the gate recorded in SECTION P. This plan's
+task 1 modified exactly one file: this artifact.
