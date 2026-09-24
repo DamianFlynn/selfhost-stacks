@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-24T17:20:00.000Z"
+last_updated: "2026-09-24T20:05:00.000Z"
 progress:
   total_phases: 10
   completed_phases: 5
-  total_plans: 119
-  completed_plans: 118
+  total_plans: 124
+  completed_plans: 119
   percent: 50
 ---
 
@@ -27,11 +27,11 @@ pipeline that someone owns.
 
 ## Current Position
 
-Phase: 06 (tagger-configuration-and-dry-run) — gap-closure **ROUND 6 EXECUTING; wave 1 (06-46) is
-done, 06-47..06-52 remain**
+Phase: 06 (tagger-configuration-and-dry-run) — gap-closure **ROUND 6 EXECUTING; wave 1 (06-46 and
+06-47) is done, 06-48..06-52 remain**
 (round 5 executed and re-verified 2026-09-24: `06-VERIFICATION.md` **gaps_found, 5/6**, CONF-04 the
 single failing truth, carried to Phase 7 E6 under the operator override `negative-carry-e6`)
-Plan: 46 of 52 executed — round 6 (**06-46..06-52**, 5 waves, planned 2026-09-24, commits `d500907`
+Plan: 47 of 52 executed — round 6 (**06-46..06-52**, 5 waves, planned 2026-09-24, commits `d500907`
 + `d7df994`) is the full `06-REVIEW.md` round: WR-01/02/03 + IN-01/02, the `DEF-06-45-04`
 non-detecting-recipe fix, the bracketing-scope decision, and the two `autonomous: false`
 live-estate plans (`06-51` host git sync, `06-52` snapshot go/no-go). ⛔ Round 6 drives **no**
@@ -120,6 +120,56 @@ third is **not** this plan's and is dispositioned ACCEPTED in `06-50`.
 reference environment (macOS 27.0 arm64, **non-root uid 501**, `python3` PRESENT, GNU bash 5.3.15,
 ShellCheck 0.11.0, BSD grep). **Zero estate contact** — no ssh, no docker, no `--run`, no package
 install. Nothing about CONF-04 changed; `REQUIREMENTS.md` was not touched and no checkbox moved.
+
+**ROUND 6, WAVE 1 ALSO EXECUTED 06-47 — 2026-09-24. `beets.md` now tells a reader where the
+authoritative current state is, on line 16 instead of line 2051, and it does it by HEADING TEXT.**
+Two task commits (`6a38e02`, `c06e6b5`); one artifact,
+`artifacts/06-47-disposition-consistency.txt` (24,453 bytes). The pointer is **26 insertions,
+0 deletions** — purely additive — inserted before the existing `Amended 2026-09-11` blockquote so it
+is the FIRST blockquote a reader meets. It says the file is a running log appended phase by phase,
+names the Phase 6 closure section by its exact heading, states the disposition, and carries a
+**go-forward rule**: every future closure section must update the pointer **in the same commit**, and
+a closure section whose pointer was not updated is the defect, not the pointer.
+**⚠ `06-REVIEW.md` § IN-02's own suggested fix is a LINE NUMBER (`see § Phase N closed, line X`) and
+it was deliberately NOT taken** — line citations in this repository go stale on arrival and this file
+only ever grows by append. The departure is stated in the pointer itself, with the reason, so it
+cannot later read as an oversight. Byte-identity of the cited heading is proven **mechanically**:
+`/usr/bin/grep -cF` returns **2** over the file (pointer + real heading) and **1** restricted to
+`#`-prefixed lines.
+**⚠ `### The five criteria` OCCURS TWICE in `beets.md`** — once in the Phase 5 closure, once in
+Phase 6's — so a bare sub-heading locator would have resolved to the wrong section for a reader
+searching from the top. The pointer names it as nested under the Phase 6 closure heading and
+discloses the ambiguity in band. `### Still open at Phase 6 close` is unique.
+**The four-record disposition audit found 0 DISAGREE.** `ROADMAP.md`, `beets.md`,
+`deferred-items.md` and `REQUIREMENTS.md` were quoted verbatim under labelled headings with
+**heading-text locators, never line numbers**, then scored on five named checks each carrying a
+verdict word from the closed set `{AGREE, DISAGREE, COULD NOT LOOK}`. No `beets.md` correction was
+forced, no owning plan had to be named, and **the `REQUIREMENTS.md` ABORT branch did not fire** — so
+this plan files a `-SUMMARY.md`, which in this repo is read as *plan complete* on filename existence
+alone, and the filename is earned.
+**⚠ `deferred-items.md` is SILENT on two of the five checks** (the MA half being discharged, and the
+checkbox state) — measured three ways. It is verdicted **COULD NOT LOOK**, not DISAGREE, and **no
+owning plan is named for it**: silence is not contradiction, and naming `06-50`/`06-51` for a
+non-divergence would have shipped a phantom correction into `06-DISPOSITIONS-GAP4.md`.
+**The artifact records EXPLICITLY that ROADMAP's `In Progress` is CORRECT and must not be flipped to
+`Complete`**, with `06-VERIFICATION.md`'s `gaps_found` 5/6 as the reason — because a consistency
+audit is exactly the document a later reader could misread as a mandate to make four records agree by
+moving a status word.
+**⚠ Four zero-expecting counts, all four DRIVEN against a control first** (`DEF-06-45-04` class):
+the line-citation screen (control **2**, real **0**), the bracketed forbidden-token screen (control
+**1**, real **0**, plus a third drive proving `-cE` reads `[R]` as a character class), the
+ticked-CONF-04-checkbox screen (control **1**, real **0**, with the unticked recipe returning **1**
+so the 0 is not the 0 of an absent line), and the "Phase 6 is complete/passed" screen (control **1**,
+**0** on all four records). Every grep by absolute path.
+**`REQUIREMENTS.md`, `ROADMAP.md` and `deferred-items.md` are byte-unchanged**, asserted with
+`git diff --exit-code HEAD -- <path>` — the `HEAD --` is load-bearing, because a bare
+`git diff --exit-code <path>` compares against the **index** and is blind to a staged edit, and this
+plan stages. **Zero estate contact**: no ssh, no docker, no package install. Nothing about CONF-04
+changed, no checkbox moved, and `06-VERIFICATION.md` was not re-scored.
+**⚠ `total_plans` in this file's frontmatter was STALE at 119 and is corrected here to 124.** Round 6
+added seven plans to phase 6 (45 → 52) and the project counter was never bumped, so `completed_plans`
+was about to reach 119 of 119 and read as *every plan done* with `06-48..06-52` still outstanding.
+72 (phases 1–5) + 52 (phase 6) = **124**; 72 + 47 executed = **119**. The arithmetic closes both ways.
 
 Previous: Phase 05 (inbox-structure-and-the-junk-gate) — **COMPLETE, closed 2026-09-19 at 4/4
 criteria TRUE**, 11 of 11 plans (fence taken, `_inbox` created, D-21 inode
