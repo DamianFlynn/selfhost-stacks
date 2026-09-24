@@ -1041,7 +1041,8 @@ else
     while IFS='|' read -r tn ts; do
       [[ -z "${tn:-}" ]] && continue
       tmode="none"
-      while IFS='|' read -r xn xs xsrc xdst xflag; do
+      # R6-01: `_`-prefixed names mark a column parsed but not consumed, so the field COUNT stays five.
+      while IFS='|' read -r xn _xs xsrc _xdst xflag; do
         [[ -z "${xn:-}" ]] && continue
         [[ "$xn" != "$tn" ]] && continue
         if census_reaches_library "${xsrc:-}"; then
