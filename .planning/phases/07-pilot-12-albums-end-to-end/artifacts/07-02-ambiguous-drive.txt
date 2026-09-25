@@ -1,0 +1,323 @@
+07-02 AMBIGUOUS-JOIN DRIVE  (plan 07-02, D-11 / D-12)
+====================================================================================================
+Recorded 2026-09-25. Instrument: scripts/diff-music-tags.sh.
+  task 1 commit 506f74f  test(07-02): --self-test added, join still last-wins (the RED step)
+  task 2 commit 0e3775f  fix(07-02):  AMBIGUOUS on both sides, exit 3 in both arms (the GREEN step)
+Workstation runs: macOS, GNU bash 5.3.15 (/usr/bin/env bash), jq 1.7.1. Host runs: LXC 100
+(root@172.16.1.159), GNU bash 5.2.37, jq 1.7.
+
+----------------------------------------------------------------------------------------------------
+1. RED STEP - fixtures driven against the UNFIXED join (workstation)
+----------------------------------------------------------------------------------------------------
+Expected at this point: A and D behave, B, C and E do not (last-wins hides the divergent record).
+$ bash scripts/diff-music-tags.sh --self-test   (HEAD 3ee514a + uncommitted task-1 self-test; join still last-wins)
+🧪 --self-test — 5 cases: synthetic fixture pairs, each driven through the text arm AND the --json arm
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ✅ case 1 'A: identical duplicate pair, BEFORE side': text exit 0, --json exit 0, expected 0
+  ❌ case 2 'B: divergent duplicate pair, BEFORE side': text exit 0, --json exit 0, expected 3
+  ❌ case 3 'C: divergent duplicate pair, AFTER side only': text exit 0, --json exit 0, expected 3
+  ✅ case 4 'D: plain field loss, no duplicates': text exit 1, --json exit 1, expected 1
+  ❌ case 5 'E: field loss AND a divergent duplicate pair': text exit 1, --json exit 1, expected 3
+
+❌ --self-test: 3 of 5 cases did not behave as expected
+exit 1
+
+Reading: B exits 0 because its TKEY-bearing record comes FIRST and the last-wins `index` discards
+it - the D-11 defect exactly. C exits 0 for the same reason on the AFTER side. E exits 1, i.e. a
+measured red where the instrument was in fact blind. The fixtures therefore detect the defect.
+
+----------------------------------------------------------------------------------------------------
+2. GREEN STEP - same fixtures after the fix (workstation)
+----------------------------------------------------------------------------------------------------
+$ bash scripts/diff-music-tags.sh --self-test   (HEAD 0e3775f, fix committed)
+🧪 --self-test — 5 cases: synthetic fixture pairs, each driven through the text arm AND the --json arm
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ✅ case 1 'A: identical duplicate pair, BEFORE side': text exit 0, --json exit 0, expected 0
+  ✅ case 2 'B: divergent duplicate pair, BEFORE side': text exit 3, --json exit 3, expected 3
+  ✅ case 3 'C: divergent duplicate pair, AFTER side only': text exit 3, --json exit 3, expected 3
+  ✅ case 4 'D: plain field loss, no duplicates': text exit 1, --json exit 1, expected 1
+  ✅ case 5 'E: field loss AND a divergent duplicate pair': text exit 3, --json exit 3, expected 3
+
+✅ --self-test: all 5 cases behaved as expected (4 of them red by design)
+exit 0
+
+Every case is driven through BOTH arms (text `--summary-only` and `--json`), each as a subprocess
+of the script itself, so the `--json` arm's own exit-3 decision is asserted, not assumed
+(T-07-02-02). "4 of them red by design" = B, C, E (exit 3) + D (exit 1).
+
+Additional manual drives (workstation scratchpad, not the repo):
+  - divergent BEFORE pair, --json arm: exit 3; counts.ambiguous_before 1, counts.ambiguous_after 0,
+    ambiguous_before = [{"audio_md5":"k1","paths":["/x/a.flac","/y/a.flac"],"variants":2}]
+  - self-diff of an unduplicated one-record fixture: exit 0 (contract unchanged)
+  - unknown option: exit 2 (usage contract unchanged)
+shellcheck 0.11.0 (/opt/homebrew/bin/shellcheck) on the fixed file: 3 findings, all severity info -
+  SC2329 (cleanup() invoked only via trap), SC2016 x2 (the FLATTEN_JQ / JOIN_JQ jq programs are
+  single-quoted on purpose). The same 3 are present on the pre-plan file (HEAD 3ee514a): no new
+  finding introduced. Not "clean" - 3 pre-existing infos.
+Comment-stripped /tmp/ grep: control line 'x=/tmp/x' -> 1; scripts/diff-music-tags.sh -> 0.
+No .diff-music-tags-selftest.* directory remained under $PWD after either run (count 0).
+
+----------------------------------------------------------------------------------------------------
+3. HOST DRIVE TRANSCRIPT (LXC 100) - every remote command under `timeout`, piped remote strings
+   under `set -o pipefail`, every ssh RC recorded
+----------------------------------------------------------------------------------------------------
+Note on ssh RC: in steps 4-6 the remote string ends in `echo`, so ssh RC=0 reports that the
+remote shell ran; the SCRIPT's own exit is the `script exit N` line, read from PIPESTATUS[0] /
+$? inside the remote shell. Step 7 attempts 1-2 are kept, not tidied away.
+
+=== step 1: sha256 of Phase 1 capture BEFORE the drive (2026-09-25T22:44:02Z)
+7b3a09aeb44d4aba544d239b5edcf1a69496c764656abef23d1764d15225fd88  /mnt/fast/safety/music-pre-project/tags/pre-project.ndjson.gz
+ssh RC=0
+=== step 2: mkdir + copy capture into the drive dir
+7b3a09aeb44d4aba544d239b5edcf1a69496c764656abef23d1764d15225fd88  /mnt/fast/safety/phase07/diff-drive/pre-project.ndjson.gz
+total 11244
+drwxr-xr-x 2 root root     4096 Sep 25 22:44 .
+drwxr-xr-x 3 root root     4096 Sep 25 22:44 ..
+-rw-r--r-- 1 root root 11504507 Sep 25 22:44 pre-project.ndjson.gz
+ssh RC=0
+=== step 3: scp committed script (HEAD 0e3775f) and compare sha256
+workstation: 4bbfaf6046bd89fe5d83e8276657bf74c478f06b4d9aa07e12b7fe2e01e4cc24  scripts/diff-music-tags.sh
+scp RC=0
+4bbfaf6046bd89fe5d83e8276657bf74c478f06b4d9aa07e12b7fe2e01e4cc24  /mnt/fast/safety/phase07/diff-drive/diff-music-tags.sh
+ssh RC=0
+=== step 4: host-side --self-test (cwd /mnt/fast/safety/phase07/diff-drive; LXC 100 bash 5.2.37, jq 1.7)
+🧪 --self-test — 5 cases: synthetic fixture pairs, each driven through the text arm AND the --json arm
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ✅ case 1 'A: identical duplicate pair, BEFORE side': text exit 0, --json exit 0, expected 0
+  ✅ case 2 'B: divergent duplicate pair, BEFORE side': text exit 3, --json exit 3, expected 3
+  ✅ case 3 'C: divergent duplicate pair, AFTER side only': text exit 3, --json exit 3, expected 3
+  ✅ case 4 'D: plain field loss, no duplicates': text exit 1, --json exit 1, expected 1
+  ✅ case 5 'E: field loss AND a divergent duplicate pair': text exit 3, --json exit 3, expected 3
+
+✅ --self-test: all 5 cases behaved as expected (4 of them red by design)
+script exit 0
+.
+..
+diff-music-tags.sh
+pre-project.ndjson.gz
+ssh RC=0
+=== step 5: real-data self-diff, text arm --summary-only
+🔍 Music tag snapshot diff
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+BEFORE: pre-project.ndjson.gz  (9736 records, 8672 distinct audio_md5)
+AFTER : pre-project.ndjson.gz  (9736 records, 8672 distinct audio_md5)
+
+📊 Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  MATCHED:            8672
+  MISSING_AFTER:      0
+  NEW_AFTER:          0
+  AMBIGUOUS_BEFORE:   314
+  AMBIGUOUS_AFTER:    314
+  FIELDS_DROPPED:     0
+  FIELDS_GAINED:      0
+  FIELDS_CHANGED:     0
+
+  Matched files whose BEFORE tag set was empty: 55
+
+❓ UNKNOWN (exit 3): the comparison is NOT trustworthy for the audio_md5 values below.
+   Each is held by several records whose tags differ, so the join would have to pick one of
+   them and discard the rest. BEFORE: 314, AFTER: 314. Loss counts above are not a verdict.
+   BEFORE 0194ffdad36ff1f8127640c737013134  (2 variants)  /mnt/tank/downloads/complete/nzb/dj-mixes/VA-Mastermix.Issue.426-2021.1/03.Mastermix.Christmas.Swing.123.mp3 | /mnt/tank/downloads/complete/nzb/dj-mixes/VA-Mastermix.Issue. …
+   BEFORE 024e41432538a08bcf2b9bfc8be9a28e  (2 variants)  /mnt/tank/downloads/complete/nzb/dj-mixes/Mastermix_Issue_423_-/205. Various Artists - Party Slam 1.mp3 | /mnt/tank/downloads/complete/nzb/unsorted/Mastermix_Issue_423_-/20 …
+   BEFORE 02522e06528d906249c421c07cd5327b  (2 variants)  /mnt/tank/downloads/complete/nzb/dj-mixes/Mastermix_Issue_425_-/202. Various Artists - Disco Nights.mp3 | /mnt/tank/downloads/complete/nzb/unsorted/Mastermix_Issue_425_-/20 …
+   BEFORE 05a2ca59053e72150b1a1e2554927a98  (2 variants)  /mnt/tank/downloads/complete/nzb/dj-mixes/VA-Mastermix.Issue.443-WEB-2023-MST/05_va_-_indie_fusion_1_79-mst.mp3 | /mnt/tank/downloads/complete/nzb/unsorted/VA-Mastermix.Iss …
+   BEFORE 05fbbab2d8bed801ede4c9263aed5c25  (2 variants)  /mnt/tank/downloads/complete/nzb/dj-mixes/Mastermix_Issue_424_-/204. Various Artists - Lounge & Bar Grooves 4.mp3 | /mnt/tank/downloads/complete/nzb/unsorted/Mastermix_Issu …
+   [... listing truncated IN THIS ARTIFACT ONLY: the script named all 314 BEFORE and all 314 AFTER keys, one line each; re-run to reproduce ...]
+script exit 3
+wall-clock  s
+bash: line 1: bc: command not found
+ssh RC=0
+=== step 6: real-data self-diff, --json arm | jq .counts
+{
+  "before_records": 9736,
+  "after_records": 9736,
+  "before_keys": 8672,
+  "after_keys": 8672,
+  "matched": 8672,
+  "missing_after": 0,
+  "new_after": 0,
+  "fields_dropped": 0,
+  "fields_gained": 0,
+  "fields_changed": 0,
+  "matched_with_no_before_fields": 55,
+  "duplicate_keys_before": 828,
+  "duplicate_keys_after": 828,
+  "ambiguous_before": 314,
+  "ambiguous_after": 314
+}
+script exit 3
+wall-clock  s
+bash: line 1: bc: command not found
+ssh RC=0
+=== step 7: independent census of multi-record groups (jq over zcat, not the script; census.jq in drive dir)
+jq: error (at <stdin>:9736): Cannot index object with object
+ssh RC=5
+(step 7 attempt 1 failed on a bug in the census's own field-breakdown expression - '.t[.]' indexed with the record, not the key; fixed to bind $k and re-run below. The diff script is not involved.)
+=== step 7 (attempt 2)
+d12aa01af6b58ed005affab232374874e407dc97d40c0ea966790f3e6d4646b2  census.jq
+jq: error (at <stdin>:9736): Cannot index object with object
+ssh RC=5
+(attempt 2 above scp'd an unmodified census.jq - the local sed edit failed on its own quoting; attempt 3 applies the fix)
+=== step 7 (attempt 3)
+55f1849f19c59d96ddad34d19e724a93aaf6407f557dc2526aa82af3fd350b10  census.jq
+{
+  "multi_record_groups": 828,
+  "multi_record_groups_multi_path": 828,
+  "identical": 514,
+  "divergent": 314,
+  "divergent_single_path": 0,
+  "divergent_roots": [
+    {
+      "roots": "/mnt/tank/downloads/complete/nzb/dj-mixes + /mnt/tank/downloads/complete/nzb/unsorted",
+      "n": 282
+    },
+    {
+      "roots": "/mnt/tank/downloads/complete/nzb/unsorted",
+      "n": 32
+    }
+  ],
+  "divergent_fields_top": [
+    {
+      "field": "genre",
+      "groups": 313
+    },
+    {
+      "field": "album",
+      "groups": 305
+    },
+    {
+      "field": "album_artist",
+      "groups": 278
+    },
+    {
+      "field": "title",
+      "groups": 258
+    },
+    {
+      "field": "track",
+      "groups": 221
+    },
+    {
+      "field": "artist",
+      "groups": 214
+    },
+    {
+      "field": "tbpm",
+      "groups": 62
+    },
+    {
+      "field": "id3v1 comment",
+      "groups": 46
+    },
+    {
+      "field": "copyright",
+      "groups": 30
+    },
+    {
+      "field": "date",
+      "groups": 21
+    }
+  ]
+}
+ssh RC=0
+=== step 8: wall-clock re-run (steps 5/6 timing failed: bc is not installed on LXC 100; the exit codes above stand). Timed with date +%s%N integer arithmetic
+text arm: script exit 3, wall-clock 3261 ms
+--json arm: script exit 3, wall-clock 3103 ms
+ssh RC=0
+=== step 9: fenced cleanup of the COPY (and the --json output file), then sha256 of the Phase 1 original AFTER the drive (2026-09-25T22:45:20Z)
+removed /mnt/fast/safety/phase07/diff-drive/pre-project.ndjson.gz
+removed /mnt/fast/safety/phase07/diff-drive/counts.json.part
+7b3a09aeb44d4aba544d239b5edcf1a69496c764656abef23d1764d15225fd88  /mnt/fast/safety/music-pre-project/tags/pre-project.ndjson.gz
+total 40
+drwxr-xr-x 2 root root  4096 Sep 25 22:45 .
+drwxr-xr-x 3 root root  4096 Sep 25 22:44 ..
+-rw-r--r-- 1 root root  1528 Sep 25 22:44 census.jq
+-rwxr-xr-x 1 root root 24693 Sep 25 22:44 diff-music-tags.sh
+0
+ssh RC=0
+
+----------------------------------------------------------------------------------------------------
+4. REAL-DATA READING
+----------------------------------------------------------------------------------------------------
+Input: the Phase 1 QUAL-01 capture, /mnt/fast/safety/music-pre-project/tags/pre-project.ndjson.gz,
+COPIED to /mnt/fast/safety/phase07/diff-drive/ and diffed against itself there.
+
+  records (as the diff reports them)       9736
+  distinct audio_md5                       8672
+  exit code, text arm                      3   (UNKNOWN)
+  exit code, --json arm                    3   (UNKNOWN)
+  duplicate_keys_before                    828  (total duplicate groups, pre-existing count)
+  AMBIGUOUS_BEFORE                         314  (the divergent subset)
+  AMBIGUOUS_AFTER                          314  (same file on both sides, so equal - expected)
+  identical-collapsed groups               828 - 314 = 514
+  wall-clock                               3261 ms text arm, 3103 ms --json arm
+
+  Reconciliation, COMPUTED by an independent jq census (section 3 step 7 attempt 3, census.jq
+  sha256 55f1849f..., reproduced below), not asserted:
+    multi_record_groups 828, identical 514, divergent 314
+    identical + divergent = 514 + 314 = 828 == multi_record_groups 828 == duplicate_keys_before 828
+    divergent 314 == AMBIGUOUS_BEFORE 314 (the script and the census agree)
+  Every multi-record group spans more than one path (multi_record_groups_multi_path 828), and no
+  divergent group is one path recorded twice (divergent_single_path 0), so `dupgroups`' extra
+  multi-path filter excludes nothing here and the 828s are the same set.
+  Record-count cross-check: 9736 - 8672 = 1064 surplus records across 828 groups.
+
+MEANING, BOTH WAYS:
+  AMBIGUOUS_BEFORE = 314 > 0, so the arm FIRED ON RAW REAL DATA - exit 3 expected and observed,
+  through both arms. The 514 identical groups did NOT fire: had they done so, AMBIGUOUS would read
+  828, not 314. Both directions are therefore driven on real data, and no real-derived positive
+  was needed (plan branch "AMBIGUOUS_BEFORE == 0" not taken).
+
+WHERE THE 314 LIVE (census divergent_roots):
+  282  dj-mixes + unsorted   (the DUPE-01 overlap: the same audio carries different tags per root)
+   32  unsorted only         (two unsorted folders holding the same audio, tagged differently)
+Most-divergent fields (groups in which the field's value differs across records): genre 313,
+album 305, album_artist 278, title 258, track 221, artist 214, tbpm 62, id3v1 comment 46,
+copyright 30, date 21.
+
+CONSEQUENCE THE PILOT MUST CARRY: before plan 07-02, the literal "self-diff of the snapshot returns
+zero differences" assertion passed on this capture (exit 0) while 314 keys were compared against
+whichever record the file walk emitted last. It now exits 3. Any QUAL-02 BEFORE capture that spans
+both roots of a DUPE-01 pair will read UNKNOWN until its scope excludes one side or the groups are
+resolved; that is the control D-13's `unsorted` amendment names, working as intended.
+
+SAFETY RECORD:
+  - Phase 1 capture sha256 before the drive: 7b3a09aeb44d4aba544d239b5edcf1a69496c764656abef23d1764d15225fd88
+  - Phase 1 capture sha256 after the drive:  7b3a09aeb44d4aba544d239b5edcf1a69496c764656abef23d1764d15225fd88  (identical)
+  - Script sha256, workstation (commit 0e3775f): 4bbfaf6046bd89fe5d83e8276657bf74c478f06b4d9aa07e12b7fe2e01e4cc24
+  - Script sha256, scp'd copy on LXC 100:        4bbfaf6046bd89fe5d83e8276657bf74c478f06b4d9aa07e12b7fe2e01e4cc24  (equal)
+    The host's deployed /mnt/fast/stacks copy was NOT used - it predates this plan.
+  - Nothing under /mnt/tank was opened for writing: the only inputs were the copied NDJSON in
+    /mnt/fast/safety/phase07/diff-drive/ and the census program; the script's scratch files are
+    created beside BEFORE (i.e. in the drive dir) and removed by its EXIT trap (no
+    .diff-music-tags.* left, step 9); the /mnt/tank paths above are strings inside the capture.
+  - The copy was removed by an exact-path-fenced `rm -f` (asserted equal to
+    /mnt/fast/safety/phase07/diff-drive/pre-project.ndjson.gz before issuing it), as was the
+    --json output file counts.json.part. Left on the host: diff-music-tags.sh and census.jq (small,
+    kept so the reading can be reproduced).
+  - bc is not installed on LXC 100 (steps 5/6 timing lines failed); step 8 re-timed with integer
+    date arithmetic. Exit codes from steps 5/6 are unaffected.
+
+----------------------------------------------------------------------------------------------------
+5. census.jq (the independent reconciliation program, run as `zcat ... | jq -s -f census.jq`)
+----------------------------------------------------------------------------------------------------
+def flat:
+  ( ((.ffprobe.format.tags // {}) | to_entries | map({ key: (.key | ascii_downcase), value: { n: .key, v: (.value | tostring) } }) )
+    + ( [ .ffprobe.streams[]? | select(.codec_type == "audio") ] | to_entries
+        | map( (.key | tostring) as $i | ((.value.tags // {}) | to_entries
+               | map({ key: ("stream" + $i + "." + (.key | ascii_downcase)), value: { n: ("stream" + $i + "." + .key), v: (.value | tostring) } }) ) )
+        | add // [] ) ) | from_entries;
+[ .[] | { k: (.audio_md5 // ""), p: (.source_path // ""), t: flat } ]
+| group_by(.k) | map(select(length > 1)) as $g
+| { multi_record_groups: ($g | length),
+    multi_record_groups_multi_path: ($g | map(select((map(.p)|unique|length) > 1)) | length),
+    identical: ($g | map(select((map(.t)|unique|length) == 1)) | length),
+    divergent: ($g | map(select((map(.t)|unique|length) > 1)) | length),
+    divergent_single_path: ($g | map(select((map(.t)|unique|length) > 1 and (map(.p)|unique|length) == 1)) | length),
+    divergent_roots: ($g | map(select((map(.t)|unique|length) > 1)) | map(map(.p | split("/")[0:7] | join("/")) | unique | join(" + ")) | group_by(.) | map({roots: .[0], n: length}) | sort_by(-.n) | .[0:6]),
+    divergent_fields_top: ($g | map(select((map(.t)|unique|length) > 1)) | map( . as $grp | ([$grp[].t | keys[]] | unique) as $ks | [ $ks[] as $k | select( ([$grp[] | (.t[$k].v // null)] | unique | length) > 1 ) | $k ] ) | flatten | group_by(.) | map({field: .[0], groups: length}) | sort_by(-.groups) | .[0:10])
+  }
