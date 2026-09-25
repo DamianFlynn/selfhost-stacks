@@ -1601,7 +1601,7 @@ item nobody owns.)*:
 
 Plans:
 - [x] 07-01-PLAN.md — evidence map registered before the run (D-31) + argued D-13 amendment of the `unsorted` rule
-- [ ] 07-02-PLAN.md — `diff-music-tags.sh` fails closed on an ambiguous join, both sides, driven on fixtures and real data (D-11, D-12)
+- [x] 07-02-PLAN.md — `diff-music-tags.sh` fails closed on an ambiguous join, both sides, driven on fixtures and real data (D-11, D-12)
 - [ ] 07-03-PLAN.md — `check-music-import.sh`, the criterion-7 sweep, fail-closed, folded into quick-health-check (D-25)
 - [ ] 07-04-PLAN.md — `route-dj-album.sh` (D-08) and its D-04 exemption-register entry, overlay-key half driven (D-27)
 - [ ] 07-05-PLAN.md — first real oracle `--run` before the grant (D-30), arm1.dump sized, DJ rule 2 asserted read-only (D-09)

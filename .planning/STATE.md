@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-25T22:50:00.000Z"
+last_updated: "2026-09-25T23:05:00.000Z"
 progress:
   total_phases: 10
   completed_phases: 5
   total_plans: 141
-  completed_plans: 125
+  completed_plans: 126
   percent: 50
 ---
 
@@ -21,13 +21,15 @@ See: .planning/PROJECT.md (updated 2026-08-17)
 **Core value:** New music downloads land in the library correctly tagged, through exactly one
 pipeline that someone owns.
 **Current focus:** Phase 07 — pilot-12-albums-end-to-end (**PLANNED 2026-09-25, 17 plans in
-13 waves, 1 of 17 executed — 07-01 done**; Phase 06 stays `In Progress` at `gaps_found` 5/6 with CONF-04 carried to
+13 waves, 2 of 17 executed — 07-01, 07-02 done**; Phase 06 stays `In Progress` at `gaps_found` 5/6 with CONF-04 carried to
 Phase 7 E6 — `/gsd-verify 06` is still owed)
 
 **Definition of done (CONS-04):** a file is imported only when verified with `ffprobe` on the file
 *and* visible in both Jellyfin and Music Assistant. Never "tool configured".
 
 ## Current Position
+
+**PLAN 07-02 COMPLETE — 2026-09-25.** `scripts/diff-music-tags.sh` now fails closed on an ambiguous join (D-11): a duplicated `audio_md5` whose records carry differing tag maps is AMBIGUOUS on either side and exits 3 UNKNOWN through both the text and `--json` arms (3 outranks 1). A permanent 5-case `--self-test` was observed RED before the fix (`506f74f`) and GREEN after (`0e3775f`). On the real Phase 1 capture (LXC 100, `d4de9a0`) the arm FIRED: 828 duplicate groups = 514 identical + 314 AMBIGUOUS (282 `dj-mixes`+`unsorted`, 32 `unsorted`-only), so a full-capture self-diff now exits 3, not 0 — pilot captures spanning a DUPE-01 pair will read UNKNOWN. Capture sha256 unchanged. Next: 07-03. No library write has happened yet.
 
 **PLAN 07-01 COMPLETE — 2026-09-25.** `07-EVIDENCE-MAP.md` registered before the run (commit `823fe04`) and the ROADMAP DUPE-01/02 `unsorted` rule amended in band to BULK import, with the pilot excepted and conditional on the D-11 AMBIGUOUS arm (commit `dd90e78`). Next: 07-02. No library write has happened yet.
 
@@ -2447,8 +2449,8 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-09-25T22:50:00.000Z
-Stopped at: Completed 07-01-PLAN.md (evidence map + D-13 amendment); next is 07-02. Earlier: Phase 7 context gathered — `/gsd-discuss-phase 7` complete. `07-CONTEXT.md` captures
+Last session: 2026-09-25T23:05:00.000Z
+Stopped at: Completed 07-02-PLAN.md (diff-music-tags AMBIGUOUS arm, D-11/D-12); next is 07-03. Before that: Completed 07-01-PLAN.md (evidence map + D-13 amendment). Earlier: Phase 7 context gathered — `/gsd-discuss-phase 7` complete. `07-CONTEXT.md` captures
 **D-01 … D-31** across five areas plus closure. Three findings surfaced that were recorded nowhere:
 (1) `tank/downloads/mybook-music-archive` (**1.30 T / 165,467 audio / 450 DJ releases**) has **no
 QUAL-01 before-state** — `snapshot-music-tags.sh` pins four roots and it is none of them — so
