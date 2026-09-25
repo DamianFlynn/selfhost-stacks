@@ -39,9 +39,11 @@ Four things must be established before it can be trusted with that role, and thr
 3. **The OS disk is spoken for.** `/` lives on the Samsung 840 EVO (`sdc`), which was decided on 2026-09-22 to be flashed to EXT0DB6Q and deployed into the NUC after its Fanxiang S101Q failed. If the EVO leaves, hufflepuff needs a boot disk — the wiped Crucial M4 512 GB (`sdb`) is the candidate.
 4. **`/` was never enumerated by the scavenge.** That job covered `/pool/*` and `/mnt/mediahub`; the OS disk holds 214 G of 915 G and the estate's own record is that *three gaps surfaced after the scavenge was declared complete*. The healthy `immich_postgres` running there today is direct evidence that application state exists on `/` that nobody has looked at.
 
-### The honest alternative
+### The honest alternative, and how it was settled
 
-Keeping a whole server to hold a second copy has costs — power, space, one more thing to maintain, and old disks. A second USB disk is the obvious comparison and this plan must answer it explicitly rather than assume the server is free because it is already owned. The case for hufflepuff rests on *physical separation and being powered off*, not on capacity; if that case does not survive G1, selling it as originally intended remains the right answer and this plan says so.
+Keeping a whole server to hold a second copy has costs — power, space, one more thing to maintain, and old disks. A second USB disk is the obvious comparison, and this plan required it to be answered explicitly rather than assuming the server is free because it is already owned. The case for hufflepuff rests on *physical separation and being powered off*, not on capacity.
+
+**DECIDED 2026-09-25 by the operator: keep hufflepuff.** Discard the failed 16 TB disk entirely rather than rebuild a raidz1; mirror the two survivors; move the OS to the Crucial M4 so the 840 EVO can be released to the NUC; rewrite the NixOS configuration to a new minimal generation rather than carry the old one forward. G1 below therefore no longer carries a keep-or-sell gate — it gathers the evidence that the execution plan needs. The execution itself is `hufflepuff-rebuild-as-backup-tier.plan.md`, which is this plan's G6 expanded.
 
 ## Solution
 
@@ -145,7 +147,7 @@ Tier 2 scheduling depends on the G1 keep-or-sell decision and is specified only 
 
 1. **Disarm hufflepuff and confirm intent (G0).** Establish whether the running Immich containers were started deliberately. If not: `systemctl disable --now docker`, confirm `is-enabled` → `disabled`, and confirm no `libvirt` autostart. **This is a safety action independent of the keep-or-sell decision** and is not contingent on the rest of the plan. Record what the four containers were doing and whether anything bound to them.
 
-2. **Enumerate and baseline (G1).** Produce the pinned `ONROOT_STATE` inventory with sizes and owning service. Enumerate hufflepuff's **`/`** — never enumerated by the scavenge, currently 214 G, and demonstrably holding at least one live Postgres. Read SMART on all three 16 TB disks and identify which was the DEGRADED member. Confirm `neocortex-platform` has a git remote. Then take the **keep-or-sell decision on hufflepuff with those numbers in hand**, against the explicit alternative of a second USB disk. Record it as a decision with a reason.
+2. **Enumerate and baseline (G1).** Produce the pinned `ONROOT_STATE` inventory for **LXC 100** with sizes and owning service. Confirm `neocortex-platform` has a git remote. *(The hufflepuff half of this gate is closed: `/` was enumerated on 2026-09-25 — 212 G, of which 140 G is reclaimable Docker layers and ~18 G is genuinely irreplaceable application state on `/srv/appdata`. The keep decision is recorded above. SMART re-reads and serial identification move to the rebuild plan's G3, where they are acted on.)*
 
 3. **Close the ZFS gap (G2).** Extend the backup set to `fast/appdata` minus the stated exclusions. Run a full send. Verify by dataset size and snapshot presence on the target, not by exit code.
 
@@ -155,7 +157,7 @@ Tier 2 scheduling depends on the G1 keep-or-sell decision and is specified only 
 
 6. **Prove by restore (G5).** Restore a representative set — one Postgres dump, one file tree, one full dataset — onto a **disposable** target. Reconcile counts and hashes. This gate, not G2, is what permits the queued restructuring plans to start.
 
-7. **Stand up tier 2 (G6), only if G1 decided keep.** Disarm permanently, verify disks, rebuild a pool on verified members only, provide a boot disk, and implement the powered-on replication window with WoL or a smart switch. Prove a restore from tier 2 independently of tier 1.
+7. **Stand up tier 2 (G6).** Delegated in full to `hufflepuff-rebuild-as-backup-tier.plan.md`: extract the unscavenged state, disarm permanently, rebuild the OS on the M4 with a minimal NixOS generation, build a mirror from the two verified 16 TB survivors, and implement the powered-on replication window. Prove a restore from tier 2 independently of tier 1. **G0 of that plan — disarming Docker — is a live safety action and does not wait for this plan's earlier gates.**
 
 Each gate gets stable todos with owners, acceptance checks, evidence paths and a rollback. **No gate is passed on the strength of a command exiting 0.**
 
