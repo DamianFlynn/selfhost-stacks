@@ -23,7 +23,14 @@ umask 077
 readonly BASE=/mnt/fast/appdata/automation/backups/neocortex
 readonly STAGING=$BASE/staging
 readonly PG_CONTAINER=agentic-os-db
-readonly PG_DB=agentic_os
+# TODO-318: both databases on this server are backed up. `agentic_os` is v1 (538 MB,
+# list-checked only); `neocortex_memory` is the v2 store that TODO-317 populated, and it
+# is the one the drill actually RESTORES — a backup proven against an empty database
+# proves nothing, which is why this todo runs after 317 rather than beside it.
+readonly PG_DBS=(agentic_os neocortex_memory)
+# The database whose row counts bracket its own dump. Only this one: `agentic_os` has no
+# meaning to the v2 acceptance and counting it would just be two more numbers to ignore.
+readonly PG_COUNT_DB=neocortex_memory
 readonly COUCH_CONTAINER=couchdb
 readonly COUCH_DB=neocortex
 readonly COUCH_ENV=/mnt/fast/stacks/stacks/selfhosted/couchdb/.env
@@ -75,6 +82,16 @@ couch_admin_curl() {
 
 couch_stat() { couch_admin_curl "/$COUCH_DB" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["doc_count"], d["update_seq"].split("-")[0])'; }
 
+# Row counts for one database as "<memory_sources> <memory_chunks>" (TODO-318).
+# Read as the container's superuser, exactly like the dump — the backup path has never
+# used `memory_api` and must not start now: a backup that depends on an application role
+# fails the day that role is revoked or rotated.
+pg_counts() {
+  docker exec "$PG_CONTAINER" sh -lc \
+    'psql -qAtX -U "$POSTGRES_USER" -d '"$1"' -c "SELECT (SELECT count(*) FROM memory_sources), (SELECT count(*) FROM memory_chunks)"' \
+    | tr '|' ' '
+}
+
 # ------------------------------------------------------------------------ health ----
 op_health() {
   local mount_ok=no pg_ok=no couch_ok=no space_kb
@@ -109,16 +126,32 @@ op_prepare() {
   # manifest, so prepare removes its own mess. Cleared once the manifest is written.
   trap 'rm -rf -- "$dir"' ERR
 
-  # --- Postgres: dump inside the container, verify with the SAME image's pg_restore so
-  #     the reader can never be an older major than the writer.
-  docker exec "$PG_CONTAINER" sh -lc \
-    "pg_dump -Fc --compress=0 -U \"\$POSTGRES_USER\" -d $PG_DB" > "$dir/agentic_os.dump"
-  [[ -s $dir/agentic_os.dump ]] || die "pg_dump produced an empty file"
-  # pg_restore cannot read a custom-format dump from stdin ("could not open input file
-  # \"-\"") — it seeks. Mount the run directory read-only and name the file instead.
-  docker run --rm -v "$dir:/w:ro" pgvector/pgvector:pg18 pg_restore --list /w/agentic_os.dump > "$dir/agentic_os.toc" \
-    || die "pg_restore --list refused the dump"
-  grep -q ';' "$dir/agentic_os.toc" || die "pg_restore --list produced no table of contents"
+  # --- Postgres: dump EACH database inside the container, verifying every dump with the
+  #     SAME image's pg_restore so the reader can never be an older major than the writer.
+  local db counts_before counts_after
+  : > "$dir/.pg-meta.tsv"
+  for db in "${PG_DBS[@]}"; do
+    counts_before=- ; counts_after=-
+    # COUNTS ARE EVIDENCE OF QUIET, NOT A BRACKET, and the difference matters.
+    # `pg_dump` opens its own session and takes its own snapshot, so no count taken from
+    # outside it is snapshot-identical to what was dumped. A concurrent insert-then-delete
+    # can leave the dumped number OUTSIDE both readings (100 -> 120 -> 100), so "within
+    # the bracket" would be a false guarantee and the manifest must not imply one. What
+    # the pair does prove is the negative: if before == after, nothing changed either
+    # side of the dump, and an acceptance run is required to show exactly that. An
+    # unattended nightly run records whatever it sees and is a valid backup either way.
+    if [[ $db == "$PG_COUNT_DB" ]]; then counts_before=$(pg_counts "$db"); fi
+    docker exec "$PG_CONTAINER" sh -lc \
+      "pg_dump -Fc --compress=0 -U \"\$POSTGRES_USER\" -d $db" > "$dir/$db.dump"
+    if [[ $db == "$PG_COUNT_DB" ]]; then counts_after=$(pg_counts "$db"); fi
+    [[ -s $dir/$db.dump ]] || die "pg_dump produced an empty file for $db"
+    # pg_restore cannot read a custom-format dump from stdin ("could not open input file
+    # \"-\"") — it seeks. Mount the run directory read-only and name the file instead.
+    docker run --rm -v "$dir:/w:ro" pgvector/pgvector:pg18 pg_restore --list "/w/$db.dump" > "$dir/$db.toc" \
+      || die "pg_restore --list refused the $db dump"
+    grep -q ';' "$dir/$db.toc" || die "pg_restore --list produced no table of contents for $db"
+    printf '%s\t%s\t%s\n' "$db" "$counts_before" "$counts_after" >> "$dir/.pg-meta.tsv"
+  done
 
   # --- CouchDB: quiesce, tar the whole tree with ownership/mode/symlink/mtime, restart
   #     from an EXIT trap so a failure anywhere below still brings the service back.
@@ -137,7 +170,7 @@ op_prepare() {
   [[ $before == "$after" ]] || die "couchdb doc_count/update_seq changed across the backup ($before -> $after)"
 
   # --- manifest LAST, so its presence means every artifact above succeeded.
-  ( cd "$dir" && sha256sum agentic_os.dump couchdb.tar > sha256sums.txt )
+  ( cd "$dir" && sha256sum "${PG_DBS[@]/%/.dump}" couchdb.tar > sha256sums.txt )
   python3 - "$dir" "$RUN_ID" "$before" <<'PY' > "$dir/lxc-manifest.json"
 import hashlib, json, os, sys, subprocess, datetime
 d, run_id, couch = sys.argv[1:4]
@@ -148,18 +181,47 @@ def h(p):
         for b in iter(lambda: f.read(1 << 20), b""):
             x.update(b)
     return x.hexdigest()
+
+# TODO-318: `postgres` is a LIST now, one entry per database, because this host backs up
+# two. The old shape was a single object; readers accept both for one release (see
+# neocortex-backup.sh and neocortex-restore-drill.sh) so a mini still on the previous
+# platform commit can merge a bundle produced here without a flag day.
+pg = []
+with open(os.path.join(d, ".pg-meta.tsv")) as f:
+    for line in f:
+        db, cb, ca = line.rstrip("\n").split("\t")
+        entry = {
+            "database": db,
+            "dump": db + ".dump",
+            "bytes": os.path.getsize(os.path.join(d, db + ".dump")),
+            "sha256": h(db + ".dump"),
+            "format": "custom, --compress=0 (restic dedupes)",
+        }
+        if cb != "-":
+            sb, chb = cb.split()
+            sa, cha = ca.split()
+            # Named counts_before/counts_after, never "rows": they bracket the dump in
+            # WALL-CLOCK terms only. pg_dump's own snapshot is not observable from here,
+            # so equality is evidence the database was quiet, and inequality is a signal
+            # to repeat the run — not a range the dumped value is promised to lie in.
+            entry["counts_before"] = {"memory_sources": int(sb), "memory_chunks": int(chb)}
+            entry["counts_after"] = {"memory_sources": int(sa), "memory_chunks": int(cha)}
+            entry["quiet"] = (cb == ca)
+        pg.append(entry)
+
 print(json.dumps({
     "run_id": run_id,
     "created_utc": datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0).isoformat(),
     "host": subprocess.run(["hostname"], capture_output=True, text=True).stdout.strip(),
-    "postgres": {"database": "agentic_os", "dump": "agentic_os.dump",
-                 "bytes": os.path.getsize(os.path.join(d, "agentic_os.dump")), "sha256": h("agentic_os.dump"),
-                 "format": "custom, --compress=0 (restic dedupes)"},
+    "postgres": pg,
     "couchdb": {"database": "neocortex", "archive": "couchdb.tar",
                 "bytes": os.path.getsize(os.path.join(d, "couchdb.tar")), "sha256": h("couchdb.tar"),
                 "doc_count": int(doc_count), "update_seq": update_seq},
 }, indent=2))
 PY
+  # Scratch input to the manifest, not an artifact: `fetch` names its members explicitly
+  # and the mini validates that list, so leaving this here would only be litter.
+  rm -f "$dir/.pg-meta.tsv"
   trap - ERR
   printf 'prepared %s\n' "$RUN_ID" >&2
   cat "$dir/lxc-manifest.json"
@@ -170,9 +232,14 @@ op_fetch() {
   local dir; dir=$(run_dir)
   [[ -d $dir ]] || die "no such run"
   [[ -f $dir/lxc-manifest.json ]] || die "run has no manifest — prepare did not complete"
-  # Deterministic: fixed member order, numeric owner, no directory entry.
-  tar --numeric-owner --format=pax -C "$dir" -cf - \
-      lxc-manifest.json sha256sums.txt agentic_os.toc agentic_os.dump couchdb.tar
+  # Deterministic: fixed member order, numeric owner, no directory entry. The per-database
+  # members are generated from PG_DBS rather than listed by hand, so adding a database in
+  # one place cannot leave `fetch` silently shipping a bundle without it.
+  local members=(lxc-manifest.json sha256sums.txt)
+  local db
+  for db in "${PG_DBS[@]}"; do members+=("$db.toc" "$db.dump"); done
+  members+=(couchdb.tar)
+  tar --numeric-owner --format=pax -C "$dir" -cf - "${members[@]}"
 }
 
 # ----------------------------------------------------------------------- cleanup ----
