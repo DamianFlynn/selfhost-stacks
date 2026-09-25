@@ -1,0 +1,87 @@
+# 07-08 — D-22 measurements, taken BEFORE any tracked file under stacks/selfhosted/arrs/beets/ was edited
+# Measured 2026-09-26 (UTC 2026-09-25T23:5xZ). Every read below is read-only: sha256sum, awk, a python
+# yaml parse, docker inspect, grep/sed over the image's own source, zfs list, find. No ssh write, no
+# docker compose, nothing installed under /mnt/fast/appdata, no library or beets DB touched.
+
+== BASE ==
+003a7b23fa3e67c91490749c5831fcad5b755586   (git rev-parse HEAD on the workstation, 2026-09-26)
+
+== C10 PREVIOUS DIGESTS ==
+# Source of truth: `git show <BASE>:<path>` through TWO hashers. NOT copied from 06-04-first-start.txt.
+
+stacks/selfhosted/arrs/beets/config.yaml
+  git show BASE:… | shasum -a 256       661c729738a12be61d94dcf0cf0bfb6b0cdaa9c996d2ed9fffb9bc494394668f
+  git show BASE:… | openssl dgst -sha256 661c729738a12be61d94dcf0cf0bfb6b0cdaa9c996d2ed9fffb9bc494394668f   AGREE
+  producing commit (git log -1)          1a6428608b8e6c42bc80ecad1187616eaace1a29 2026-09-21 08:21:40 +0100
+  appdata  (LXC 100, sha256sum /mnt/fast/appdata/arrs/beets/config/config.yaml)
+                                         661c729738a12be61d94dcf0cf0bfb6b0cdaa9c996d2ed9fffb9bc494394668f
+  container (docker exec beets-flask sha256sum /config/config.yaml)
+                                         661c729738a12be61d94dcf0cf0bfb6b0cdaa9c996d2ed9fffb9bc494394668f
+  VERDICT: repo = appdata = container.
+  Context only (not the PREVIOUS digest): 06-04 proved against 96a7c622779f95a13cd858c09b34072bcfc01405fecccd00b361ecdb5cb3e1f7
+  (06-04-first-start.txt lines 160, 248, 431). The object has moved once since that proof (C10 confirmed).
+
+stacks/selfhosted/arrs/beets/flask-config.yaml
+  git show BASE:… | shasum -a 256       949bd1f3b13501d448865ce2d19195db209050279f8a0022e97cd7e54d835db8
+  git show BASE:… | openssl dgst -sha256 949bd1f3b13501d448865ce2d19195db209050279f8a0022e97cd7e54d835db8   AGREE
+  producing commit (git log -1)          f1848e204621c9de54784f58b05b7c2660fdff46 2026-09-20 23:34:03 +0100
+  appdata  (LXC 100, /mnt/fast/appdata/arrs/beets/config/beets-flask/config.yaml)
+                                         949bd1f3b13501d448865ce2d19195db209050279f8a0022e97cd7e54d835db8
+  container (docker exec beets-flask sha256sum /config/beets-flask/config.yaml)
+                                         949bd1f3b13501d448865ce2d19195db209050279f8a0022e97cd7e54d835db8
+  VERDICT: repo = appdata = container; unchanged since 06-04 (06-04-first-start.txt line 161).
+
+== C1 IMPORT KEYS ==
+  repo config.yaml (BASE), import: stanza     copy: yes   move: no   write: yes
+  appdata copy, awk over the import: stanza   copy: yes   move: no   write: yes
+    (python3 on LXC 100 has no yaml module — ModuleNotFoundError — so the parse was repeated with the
+     container's own interpreter: docker exec beets-flask /venv/bin/python … yaml.safe_load(/config/config.yaml)
+     → {'copy': True, 'move': False, 'write': True}. The appdata file and /config/config.yaml are the same
+     object by the sha256 above.)
+  in-container EFFECTIVE (server process), from 07-05's pre-grant check-beets-config.sh run
+    (artifacts/07-05-oracle-run.txt lines 417-419, 459-460, 490):
+      import.copy = true (asserted, CONF-01), import.move = false (asserted, CONF-01),
+      import.write = true (REPORTED). rc6 injects its own schema defaults at the highest priority in the
+      server process, so the server's effective value is the one that governs a D-20 import; rc6 also
+      TYPE-enforces copy/move as Literal[True]/Literal[False].
+  CONCLUSION: all three copies read copy / no-move. D-22 item 2 ("import.move → copy") is a
+  VERIFICATION, not an edit. No "changed move→copy" claim may be written anywhere. CLAUDE.md
+  § Constraints' "import.move: yes is currently set" is stale — it describes neither the repo, the
+  appdata copy nor the running server. (Not edited here: CLAUDE.md is outside files_modified.)
+
+== C3 READONLY GUARD ==
+  Source read: /repo/backend/beets_flask inside the running beets-flask image (rc6).
+    docker exec beets-flask grep -rn -i readonly /repo/backend/beets_flask --include=*.py
+      server/routes/library/resources.py:385   delete_entities()  → raise ValueError("Library is read-only")
+      server/routes/library/resources.py:394   update_entities()  → raise ValueError("Library is read-only")
+      config/schema.py:118                      LibrarySectionSchema.readonly: bool = False
+  THREE hits, TWO guards. What reaches the guards (resources.py, read):
+      resource_query() wrapper  — DELETE → delete_entities; PATCH → update_entities   (bulk /albums, /items queries)
+      resource() wrapper        — DELETE → delete_entities; PATCH → update_entities   (/album/<id>, /item/<id>)
+    i.e. the LIBRARY BROWSER's delete and edit actions only.
+  What does NOT reach them:
+      - inbox import / candidate-confirm import: importer/session.py + invoker/enqueue.py — no readonly read
+        anywhere in either (the grep has no hit outside resources.py/schema.py).
+      - UNDO IMPORT: invoker/enqueue.py:607 run_import_undo → importer/session.py:1005 UndoSession →
+        session.py:1113 delete_from_beets() → item.remove(delete_files). It calls item.remove directly and
+        never goes through delete_entities, so the guard is not in its path.
+      - enqueue.py:664 delete_items() → delete_from_beets — same, unguarded.
+  DECISION RULE APPLIED: the flag gates neither the inbox import, nor the candidate-confirm import, nor any
+  removal UNDO IMPORT uses. It gates only library-browser edit/delete actions, which D-20 and D-14 do not use.
+  → KEEP `readonly: true`. Argument: it is still worth holding — with /media rw, those browser actions become
+  able to edit tags or delete files in the real library outside any per-album confirmation, and the flag is
+  the only thing closing them. The MOUNT (not this flag) is what D-23 asserts.
+
+== TANK FREE ==
+  From atlantis (172.16.1.158) as real root (id -u = 0), 2026-09-25T23:58:25Z:
+    NAME               USED  AVAIL  REFER
+    tank              41.9T  5.26T   160K
+    tank/media/Music  33.9G  5.26T  33.9G
+  Matches 06-52's 5.26 T. config.yaml's "tank has 9 T free" is stale by ~3.7 T and is corrected in D-22.
+
+== 01-AUTO ==
+  From atlantis as real root:
+    /mnt/tank/downloads/complete/nzb/_inbox/01-auto   dir-exists
+    audio files (mp3/flac/m4a/ogg/opus/wav/aac/wma/aiff/alac, find -type f, pipefail)  0   (find rc 0)
+    entries of any kind (find -mindepth 1)                                                0   (find rc 0)
+  The directory stays (D-21); only the registration goes.
