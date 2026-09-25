@@ -2245,6 +2245,27 @@ Recent decisions affecting current work:
 
 ### Blockers/Concerns
 
+- **⚠ OPEN, OPERATOR ACTION: LXC 100's `/mnt/fast/stacks` checkout has DIVERGED from `origin/main`,
+  and the host side of the fork exists NOWHERE ELSE.** Measured 2026-09-25 during quick task
+  `260925-ae4`, independently re-confirmed by the orchestrator: host `HEAD` is `745611e`
+  *"feat(neocortex-memory): a private tailnet route via tsbridge (TODO-317)"* — authored
+  2026-09-24T23:23Z, 25 insertions to `stacks/selfhosted/neocortex-memory/compose.yaml` — and
+  **`git cat-file -t 745611e` FAILS on the workstation**. It is unpushed and the production
+  container host is its only copy. Common ancestor `c406259`; host is **1 ahead / 1 behind**, so
+  `git pull --ff-only` *cannot* succeed and the usual deploy path is blocked until someone
+  reconciles it.
+  **Why this was not fixed in passing:** resolving someone's unpushed feature commit on a
+  production checkout is an operator decision, not a side effect of a two-line health-check fix.
+  `260925-ae4` therefore deployed its one file by `scp` and issued **no** `pull`/`rebase`/`merge`/
+  `reset`/`checkout -f`/`clean` on the host at any point; `745611e` was re-asserted as host `HEAD`
+  after the copy.
+  **Disclosed transient cost:** the host tree now reports one modified file
+  (` M scripts/check-music-freeze.sh`). It self-heals the moment `0228f4f` reaches `origin/main`
+  and the divergence is resolved — it is not drift to chase separately.
+  **Until it is resolved, every future host deploy inherits the same blockage.** The estate's
+  documented Renovate-deploy-drift problem now has a second, sharper form: not "merged changes
+  never reach the host" but "the host cannot fast-forward at all."
+
 - **v1 is now 39 requirements** (was 34; earlier the header wrongly said 33). Arithmetic checks
   both ways: by category SAFE 5 + WRIT 4 + CONS 4 + TAGR 6 + CONF 6 + INBX 3 + QUAL 4 + IMPT 3 +
   INGS 4 = 39; by phase 10 + 3 + 3 + 3 + 3 + 6 + 6 + 4 + 1 = 39. No requirement is unmapped and
@@ -2369,6 +2390,7 @@ Recent decisions affecting current work:
 | 260915-k9p | Correct the Traefik dashboard probe: `:8080` was never published to the host, so the probe asserted a promise the config never made. Now asserts the real chain (websecure + `traefik-rtr` + TLS + `chain-authelia@file`), with an unauthenticated 200 as a new violation branch. 9 branches driven; the plan's own control-B driver was measured false and replaced (`9db2e39`) | 2026-09-15 | complete ✓ |
 | 260918-c12 | Scheduled image-drift detection (repo pin vs running image) with Grafana->Telegram alerting; alert-only v1. First sweep: 14 of 97 containers drifted. G0-G3 deployed; G4 Telegram creds open (`91ec081`, `d68da3a`) | 2026-09-18 | complete ✓ (G4 open) |
 | 260924-x6w | SearXNG result quality + Open WebUI web search and RAG. Five independent faults, not the one suspected: engine blocking was real, but the JSON API was returning **403** so chat web search returned *nothing*, and there was **no embedding model on the box at all** (`RAG_ENBEDDING_MODEL` typo). Root cause was the 3-month image pin predating the curl_cffi TLS-impersonation migration — after upgrading, **brave/google/bing measured 5/5 and were enabled rather than replaced**; only duckduckgo stayed blocked. The frozen 70 KB `settings.yml` (proven stale by its pre-Feb-2026 `suspended_times`) became a `use_default_settings` delta, now versioned in-repo. Verification found and closed a **POST bypass in this task's own Traefik JSON block**. 0 → 41 results via the Open WebUI path (`1569121`, `9d1518e`, `08e7ce3`, `3e6d81a`) | 2026-09-25 | complete ✓ (V7 chat-UI search unverified; needs a human) |
+| 260925-ae4 | Close the two reds `/gsd-verify-work 6` found in `quick-health-check.sh` — **neither introduced by Phase 6**. (1) The interpolated-host-path pin was one behind reality: `2f19870` (2026-09-18) added a 13th line in `node-exporter.yaml` without moving `DECLARED_INTERP_EXPECTED` in the same commit, so convention 5's trap had been firing for a week and the estate's single entry point had been red for an unrelated reason. Pin moved 12 → 13 and the line **declared in band** — with the mechanism's own limit written down: *the pin gates on inventory SIZE, not CONTENT*, so repointing `${APPDATA_DIR}` under the library or dropping the `:ro` keeps the count at thirteen and the section green while the declaration silently becomes false. (2) The deployed beets `config.yaml` was stale against the repo — **comments-only**, `max_filename_length: 0` byte-identical, so no config-correctness impact; the cost was that plan 06-07's retraction never reached the running copy and a grep of it returned the superseded wrong explanation. Refreshed host-side through the existing inode (owner/mode preserved by mechanism); no container restart. ⚠ A repo-only edit would NOT have closed (1) — `quick-health-check.sh:2426` runs the freeze script **over ssh on LXC 100**, so the script was `scp`'d. **The host checkout has DIVERGED and that was deliberately left alone** — see Blockers/Concerns (`0228f4f`) | 2026-09-25 | complete ✓ (overall exit stays 1; CONF-04 pending is its sole cause, by design) |
 
 ## Session Continuity
 

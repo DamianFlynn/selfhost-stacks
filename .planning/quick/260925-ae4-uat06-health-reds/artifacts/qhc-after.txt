@@ -1,0 +1,95 @@
+=== Quick Server Health Check ===
+Traefik: ✅ Running
+  Health: 
+no healthcheck
+Authelia: ✅ Running
+Containers running: 98
+✅ No unhealthy containers
+Traefik dashboard: ✅ Protected (HTTP 302 → Authelia)
+Vendored-file drift:
+  ✅ vendored files match (4): audio.bash, sabnzbd beets-config.yaml, survivor config.yaml, flask-config.yaml
+D-03 — one vendored beets config into both containers:
+  ✅ one config, both containers: /mnt/fast/appdata/arrs/beets/config/config.yaml -> /config/config.yaml :ro
+     runtime  (beets-flask, inspected): config :ro, /mnt/tank/media :ro
+     declared (dormant CLI arm, rendered):       config :ro, /mnt/tank/media :ro
+D-04 — throwaway -l plus -c overlay on every beet invocation:
+  counts: raw=202  comment-stripped=101  invocation-shaped=10  (executable 8 = asserted 3 + exempt 5, documentation 2)
+  ✅ no ASSERTED beet invocation opens the real library (3 of 8 invocation-shaped lines outside *.md)
+     5 lines were NOT asserted over — the named exemption register at the pinned baseline (5), see the block comment
+     documentation hits at the pinned baseline (2) — historic quotations, see the block comment
+extended.conf destructive switches:
+  ✅ extended.conf switches disarmed (2): requireBeetsMatch=false, ConversionFormat in {FLAC,OPUS}
+Music freeze harness: ✅ Intact
+    tagger-class writers:        0   (target 0)
+    unclassified writers:        0   (target 0)
+    declared rw reaching Music:  0   (target 0, jellyfin.yaml excluded)
+    ownership mismatches:        0   (target 0, want 568:568)
+    tagger definitions:          2   (target 2 — the NAMED pair, not a count; D-11)
+    tagger definitions, active:  stacks/selfhosted/arrs/beets/flask.yaml   (ACTIVE front end — metasauce/beets-flask:v2.0.0-rc6, engine beets 2.12.0)
+    tagger definitions, dormant: stacks/selfhosted/arrs/beets/beets.yaml   (DORMANT agent-driven CLI arm — lscr.io/linuxserver/beets:2.13.1-ls349)
+    beets databases:             1   (target 1 = SURVIVOR_DB)
+    tagger databases:            0   (target 0 — wrtag.db*/soulbeet.db*)
+    retired paths present:       0   (target 0)
+    rw on Music, non-tagger:     0   (target 0, excluding the D-21 consumer exception)
+    rw on Music, tagger-capable: 0   (target 0 — Phase 1 D-20, any container state)
+    rw on Music, Jellyfin D-21:  1   (documented consumer exception, printed separately)
+    tagger-capable containers:   3   (mounts a beets/wrtag/soulbeet config or DB; reported)
+Music consumers audit: ⚠️  CONF-04 MEASURED AND OPEN — artist rows at baseline, not at target (exit 3)
+  This is NOT an audit failure and NOT a pass. The Jellyfin and MA counts belong to
+  TWO DIFFERENT measurements inside ROADMAP entry criterion E6 and are never summed
+  into one CONF-04 answer: the Jellyfin half is carried to E6 under the recorded
+  2026-09-24 override after the mtime route was driven and measured not to discharge
+  it, and the MA half awaits E6's second, >=4-artist measurement. A carry is not a
+  close — CONF-04 stays open. The audit's own words:
+    ⚠️  CONF-04 IS NOT CLOSED: 3 Jellyfin and 1 MA artist row(s) are at a recorded
+    baseline, not at target. The two counts are SEPARATE and are NEVER summed into one
+    CONF-04 answer. See 4b/4c and stacks/selfhosted/arrs/beets.md § 'Phase 6'.
+    JF half: the mtime route was driven 2026-09-24 and measured NOT to discharge it
+    (06-43, BRANCH: B) — carried to E6 under a recorded override; a carry, never a close.
+    MA half: E6's SECOND measurement — a second >=4-artist track — untouched by round 5.
+    Exiting 3: measured, not at target; NOT a failure (FAILURES is 0) and NOT green.
+    Discharges on ROADMAP entry criterion E6, not here — BOTH halves, two measurements.
+  Summary:
+      MA version (live):           2.11.0b2   (assertions proven at 2.11.0b2)
+      artist rows pinned:          3   (D-22, all in the ARTISTS tag position)
+      artist rows at target (JF):  0
+      artist rows PENDING (JF):    3   (at the 2026-09-20 baseline — NOT green; the mtime route was driven 2026-09-24 and measured NOT to discharge it, so this is carried to Phase 7 entry criterion E6 under a recorded override — a carry of an OPEN requirement, not a close)
+      artist rows at target (MA):  2
+      artist rows REPORTED (MA):   1   (measured discrepancy against the tag — NOT green; plan 06-13 owns it)
+      FAILURES total:              0
+Library underscore-dir guard: ✅ No '_'-prefixed directories under /mnt/tank/media/Music
+Jellyfin transcode retention: ✅ Transcode retention intact
+    / headroom:              22133624832 bytes (20.61 GiB)  (target ≥ 21474836480)
+    volume mounts:           0  (target 0)
+    transcode quota:         53687091200 bytes  (target 53687091200)
+    transcode mounted:       zfs=yes devid=46 parent=64518  (target yes, and devid ≠ parent)
+    transcode target:        /cache/transcodes  (target /cache/transcodes)
+    encoding values:         5 asserted, 0 drifted; 2 amdgpu values REPORTED (see section 5)
+    unreachable:             0  (could-not-look, counted apart from bound violations — VALIDATION row 38)
+    toolchain missing:       0
+    FAILURES total:          0
+Container image drift: ✅ Measured — 7 drifted (REPORTED, not asserted: v1 is alert-only, D-01)
+    image drift:        7  (REPORTED, not asserted — v1 is ALERT-ONLY, D-01)
+    unresolvable:       2  (ASSERTED; expected 2)
+    unhealthy:          0
+    created:            0
+    commits behind:     0  (LOWER BOUND — DRIFT_GIT_FETCH=0)
+    could-not-look:     0
+    FAILURES total:     0  (fatal findings only — image drift is NOT in this total)
+
+❌ Health check FAILED. The failing block is whichever one above carries a ❌ or a ⚠️ —
+   that is any of: the Traefik or Authelia container probes, the Traefik dashboard
+   probe, the container counts, the music freeze harness, the consumers audit, the
+   library underscore-dir guard, the Jellyfin transcode retention audit, the
+   vendored-file drift block, the D-03 vendored-config mount block, the D-04
+   throwaway -l scan, the extended.conf destructive-switch block, or the
+   container image-drift block.
+   ⚠️ The image-drift block CANNOT fail on the drift count itself — if it is red, it is
+      a could-not-look or the unresolvable set moved. Do not go looking for a tag.
+   ⚠️ The consumers audit carries a ⚠️ BY DESIGN for as long as CONF-04 is open: its
+      exit 3 means the D-22 artist rows were read successfully and are sitting at their
+      RECORDED BASELINE. That is the state this project has written down, not a new
+      fault — but it is also NOT a pass, and CONF-04 is NOT closed. It clears when
+      ROADMAP entry criterion E6 discharges CONF-04's Jellyfin half, and on nothing
+      else. Do not tune it out: the non-zero exit is what makes a later regression back
+      to the baseline detectable by tooling instead of only by a human reading yellow.
