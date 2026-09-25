@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-26T01:00:00.000Z"
+last_updated: "2026-09-26T01:45:00.000Z"
 progress:
   total_phases: 10
   completed_phases: 5
   total_plans: 141
-  completed_plans: 128
+  completed_plans: 129
   percent: 50
 ---
 
@@ -21,13 +21,15 @@ See: .planning/PROJECT.md (updated 2026-08-17)
 **Core value:** New music downloads land in the library correctly tagged, through exactly one
 pipeline that someone owns.
 **Current focus:** Phase 07 — pilot-12-albums-end-to-end (**PLANNED 2026-09-25, 17 plans in
-13 waves, 4 of 17 executed — 07-01, 07-02, 07-05, 07-06 done**; Phase 06 stays `In Progress` at `gaps_found` 5/6 with CONF-04 carried to
+13 waves, 5 of 17 executed — 07-01, 07-02, 07-03, 07-05, 07-06 done**; Phase 06 stays `In Progress` at `gaps_found` 5/6 with CONF-04 carried to
 Phase 7 E6 — `/gsd-verify 06` is still owed)
 
 **Definition of done (CONS-04):** a file is imported only when verified with `ffprobe` on the file
 *and* visible in both Jellyfin and Music Assistant. Never "tool configured".
 
 ## Current Position
+
+**PLAN 07-03 COMPLETE — 2026-09-26.** Criterion 7 now has a standing instrument: `scripts/check-music-import.sh` sweeps what beets imported for `.N`-suffix collisions (DB rows AND on-disk files, G-03), empty `mb_albumid` on non-DJ album items, and track count vs `tracktotal` per album-disc (disagreeing totals are a finding, never first-wins). It reads `library.db` via python sqlite `mode=ro` inside beets-flask, no `beet` invocation. Per-class vacuity guard: an empty library or any class with 0 checkable rows is exit 3. `--self-test` 10/10 (7 red by design) on workstation and LXC 100, proven able to fail by three mutations (`e8d24c2`). Folded into `quick-health-check.sh` as the tenth fatal block with knob `IMPORT_SWEEP_SCRIPT`; notice headers 13 → 14 (conditions Q/R/S); EXIT_CODE=1 sites 98 → 104, all 6 new ones in the new block (`317c1a4`). Live run on the real library: exit 3, `items read: 0`; `library.db` `fbbdde0c…` and `state.pickle` unchanged (`54be778`). ⚠ The routine health check reads ❌ on the sweep (script absent at the deployed path, exit 127) until the host checkout is pulled, then ⚠️ UNKNOWN until the first pilot import. No library write has happened yet.
 
 **PLAN 07-06 COMPLETE — 2026-09-26.** The twelve are named before the run. The declaration (seed `gsd-07-pilot-draw-2026-09-25`, F1 ≥4-artist predicate, P-IDs, ONE execution order, `EXECUTION SET` lines) was committed alone in `70cd38c` before any measurement. Live population 165/3,275 (vs 162/3,236; +3/+39 new `music/` downloads). **F1 eligible = 0 → E6 second measurement NOT TAKEN** (control fires 4/4 on the library's Jewels n' Drugs). The seeded draw, run twice with zero diff, took P09 `VA-Mastermix.90.s.12.inch.USB.Top.Up-2024`, P10 Now 117 (2-disc), P11 `Mastermix_Issue_415` (**DJ twin → 07-13**; first TKEY/EnergyLevel carrier) and P12 Now 116, all from `unsorted/` (`d64f638`). D-26 is TRUE on both S5 folders. `07-EXPECTED-TREE.txt` = 132 FROZEN lines byte-identical to `cb9f49a` (four equal digests) + 207 APPENDED lines from the unmodified Phase 6 generator; re-derivation matches FROZEN, so no config drift (`88beeff`). No library write has happened yet.
 
@@ -2453,8 +2455,8 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-09-25T23:05:00.000Z
-Stopped at: Completed 07-02-PLAN.md (diff-music-tags AMBIGUOUS arm, D-11/D-12); next is 07-03. Before that: Completed 07-01-PLAN.md (evidence map + D-13 amendment). Earlier: Phase 7 context gathered — `/gsd-discuss-phase 7` complete. `07-CONTEXT.md` captures
+Last session: 2026-09-26T01:45:00.000Z
+Stopped at: Completed 07-03-PLAN.md (check-music-import.sh criterion-7 sweep + qhc fold-in, D-25). Before that: Completed 07-02-PLAN.md (diff-music-tags AMBIGUOUS arm, D-11/D-12); next is 07-03. Before that: Completed 07-01-PLAN.md (evidence map + D-13 amendment). Earlier: Phase 7 context gathered — `/gsd-discuss-phase 7` complete. `07-CONTEXT.md` captures
 **D-01 … D-31** across five areas plus closure. Three findings surfaced that were recorded nowhere:
 (1) `tank/downloads/mybook-music-archive` (**1.30 T / 165,467 audio / 450 DJ releases**) has **no
 QUAL-01 before-state** — `snapshot-music-tags.sh` pins four roots and it is none of them — so
