@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-26T03:30:00.000Z"
+last_updated: "2026-09-26T04:15:00.000Z"
 progress:
   total_phases: 10
   completed_phases: 5
   total_plans: 141
-  completed_plans: 130
+  completed_plans: 131
   percent: 50
 ---
 
@@ -21,13 +21,15 @@ See: .planning/PROJECT.md (updated 2026-08-17)
 **Core value:** New music downloads land in the library correctly tagged, through exactly one
 pipeline that someone owns.
 **Current focus:** Phase 07 — pilot-12-albums-end-to-end (**PLANNED 2026-09-25, 17 plans in
-13 waves, 6 of 17 executed — 07-01 … 07-06 done**; Phase 06 stays `In Progress` at `gaps_found` 5/6 with CONF-04 carried to
+13 waves, 7 of 17 executed — 07-01 … 07-07 done**; Phase 06 stays `In Progress` at `gaps_found` 5/6 with CONF-04 carried to
 Phase 7 E6 — `/gsd-verify 06` is still owed)
 
 **Definition of done (CONS-04):** a file is imported only when verified with `ffprobe` on the file
 *and* visible in both Jellyfin and Music Assistant. Never "tool configured".
 
 ## Current Position
+
+**PLAN 07-07 COMPLETE — 2026-09-26.** The BEFORE of record exists: `pre-07-P01`…`P12` (one `snapshot-music-tags.sh` run per folder, all rc 0, `.failed` empty, records == 07-SAMPLE counts) and `pre-07-pilot` = **339 records / 339 distinct keys**. Phase 1's `pre-project` covers **271/339** (P01–P04, P06 = 0); same-folder diffs show 0 tag change on all 271 since 2026-08-18 (P08/P11 against both twins exit 3, E7 by design). Criterion-8 manifest from atlantis as root: 347 files, 12 P-IDs, `8480c429…` (`a9013fd`). `check-music-consumers.sh` gains section **4c** (D-24 census; MA D-22 renumbered 4d): coverage gate TotalRecordCount 1244 == Items 1244, pinned **29** (ARTPOP 15 + Joanne 14 — not the prose 30: the Def Leppard item has an EMPTY Artists list), changed set → exit 3; pins registered in CONVENTIONS §5. Baselines: JF 70 albums / 1,244 audio, MA 70 / 1,244 provider-filtered; proof rows JF 3 PENDING, MA row 1 REPORTED — its name set moved to `Twista | Lady Gaga | Too $hort` (T.I. now absent), count unchanged (`369b27b`). No library write has happened yet.
 
 **PLAN 07-04 COMPLETE — 2026-09-26.** E1's mechanism exists: `scripts/route-dj-album.sh --album-id N [--apply]` runs inside beets-flask only (readonly constant), refuses any beets but exactly 2.12.0, is read-only by default (version + one-album `ls` + which DJ `paths:` rule it reaches), and under `--apply` does `modify -a -M -y id:N albumtype=dj` → `move -a -p` → `move -a` → item read-back asserting every item `dj` under `/media/Music/DJ/`. `BEET_REALLIB=/venv/bin/beet` (bare `beet` is not on `beetle`'s PATH — measured). Its 7 invocation lines are registered in `D04_EXEMPT_RE` (file + `$BEET_REALLIB`), register reason 4, `D04_EXEMPT_BASELINE` 5 → 12 in the same commit; `D04_DOC_BASELINE` still 2. Counts pre 8/3/5/2 → before-edit 15/10/5/2 (N = 7) → after 15/3/12/2; overlay-key half driven both ways on both files in a deleted scratch clone (DEF-06-21-06) (`40cc63d`). ⚠ The routine health check's D-04 block reads ❌ (exempt 5 vs pinned 12) until the host checkout is pulled. `--apply` never run; first use is 07-13's gate. No library write has happened yet.
 
