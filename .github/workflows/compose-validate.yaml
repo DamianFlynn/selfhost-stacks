@@ -1,15 +1,74 @@
+# Required status check on `main`.
+#
+# THIS WORKFLOW HAS A SECOND JOB BEYOND VALIDATION, AND IT IS THE LOAD-BEARING ONE:
+# it exists so that every pull request has something to wait for. GitHub will only let you
+# enable auto-merge on a PR that is BLOCKED from merging. A PR that is already clean and
+# mergeable cannot have auto-merge enabled at all, so Renovate's `platformAutomerge: true`
+# silently fails and the PR sits open forever.
+#
+# That is exactly what happened here. Until 2026-09-25 this workflow carried
+#     on: pull_request: paths: ['stacks/**/compose.yaml']
+# but most stacks define their services in per-service files (`audiobookshelf.yaml`,
+# `tsproxy.yaml`, `prometheus.yaml`, ...) pulled in by `include:`, NOT in compose.yaml. So a
+# Renovate PR bumping one of those matched no path, ran no check, had no merge blocker, and
+# could never auto-merge. PRs that DID touch a compose.yaml (immich, ollama, meilisearch) got
+# a check and merged normally — which is why the queue looked half-working rather than broken.
+# The result was 22 PRs open, the oldest from 2026-07-31, and tsbridge running v0.13.1 on the
+# host against v0.15.0 in git.
+#
+# CONSEQUENCE FOR ANY FUTURE EDIT: do NOT add a `paths:` filter to this workflow. A required
+# check that does not run on some PRs does not "skip" on those PRs — it stays pending, and
+# they are blocked forever. If the cost of running it everywhere ever matters, make the JOB
+# exit early on irrelevant diffs; never gate the TRIGGER.
+
 name: compose-validate
+
 on:
   pull_request:
-    paths:
-      - 'stacks/**/compose.yaml'
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
 jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      # Catches the realistic failure mode of a hand-edit: a file that no longer parses.
+      # Covers every stack, not just the two with full compose validation below.
+      - name: YAML parses across all stacks
+        run: |
+          python3 - <<'EOF'
+          import glob, sys, yaml
+          bad = []
+          files = sorted(glob.glob('stacks/**/*.yaml', recursive=True)
+                         + glob.glob('stacks/**/*.yml', recursive=True))
+          for f in files:
+              try:
+                  yaml.safe_load(open(f))
+              except Exception as e:
+                  bad.append((f, str(e).split('\n')[0]))
+          print(f"parsed {len(files)} files under stacks/")
+          for f, e in bad:
+              print(f"::error file={f}::YAML parse failed: {e}")
+          if not files:
+              print("::error::no yaml files found -- the glob is wrong, failing closed")
+              sys.exit(1)
+          sys.exit(1 if bad else 0)
+          EOF
+
+      - name: Renovate config is valid
+        run: npx --yes --package renovate -- renovate-config-validator renovate.json5
+
       - uses: docker/setup-buildx-action@v3
-      
+
+      # Only the two stacks whose interpolation can be satisfied from committed .env.sample
+      # files. The rest reference secrets that are deliberately not in this public repo, so
+      # `docker compose config` cannot resolve them and a broader sweep here would be red for
+      # reasons that are not defects. The YAML step above is what covers those.
       - name: Prepare environment files for validation
         run: |
           # Create directory structure matching server paths
@@ -23,7 +82,7 @@ jobs:
           # to an empty string and `config` fails on ":/var/lib/postgresql/data".
           cp stacks/selfhosted/code-server/.env.sample stacks/selfhosted/code-server/.env
           cp stacks/selfhosted/immich/.env.sample stacks/selfhosted/immich/.env
-      
+
       - name: Validate code-server compose
         run: docker compose -f stacks/selfhosted/code-server/compose.yaml config >/dev/null
       - name: Validate immich compose
