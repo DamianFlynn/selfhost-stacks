@@ -174,35 +174,51 @@ resource "proxmox_virtual_environment_container" "selfhost" {
 
   # fast/appdata child datasets — one mount_point per ZFS dataset
 
-  # STAGED, NOT YET CUT OVER — added 2026-09-22 (neocortex v2 TODO-315 follow-up).
+  # ─── agentic-os: mount_point block REMOVED 2026-09-25. Re-add it when the migration runs. ───
   #
-  # The dataset fast/appdata/agentic-os EXISTS on the host (created 2026-09-22, owned 568:568 to
-  # match the idmap's identity-mapped apps uid) and is EMPTY. The agentic-os Postgres data —
-  # Damian's live v1 memory store, 754 MB, 17,225 memory_chunks — is still at this same path
-  # INSIDE the container, on the ext4 root disk, because agentic-os predates the rule that every
-  # appdata path must be a named dataset.
+  # The migration itself is unchanged and still wanted — neocortex v2 TODO-315 follow-up. Only the
+  # staged Terraform block is gone, and the reason is that it was not inert. It was the last thing
+  # arming the destroy landmine.
   #
-  # THIS BLOCK IS RECONCILIATION ONLY — Terraform will never apply it. `mount_point` is in this
-  # resource's ignore_changes (see the lifecycle block below and its TRADE-OFF note), so adding a
-  # bind mount here plans clean and does nothing. Confirmed by `terraform plan` on 2026-09-22:
-  # zero diff for container 100.
+  # WHY IT WAS REMOVED, measured on 2026-09-25 rather than reasoned about:
+  #   `mount_point` is a positional TypeList. A block present in config but absent from the host
+  #   re-indexes EVERY subsequent mount, and each shifted block independently carries the
+  #   block-level ForceNew (see the root-cause note in the lifecycle section below). Proven by
+  #   running `terraform plan` with `mount_point` temporarily lifted out of ignore_changes:
   #
-  # The mount is therefore added BY HAND, as that note instructs:
-  #   pct set 100 -mp32 /mnt/fast/appdata/agentic-os,mp=/mnt/fast/appdata/agentic-os
-  #   pct reboot 100
-  # (mp0..mp31 are taken; 32 is the next free index.)
+  #     with this block    -> "selfhost must be replaced", many "# forces replacement"
+  #                           ~ volume "/mnt/fast/appdata/arrs" -> "/mnt/fast/appdata/agentic-os"
+  #     without this block -> Plan: 0 to add, 1 to change, 0 to destroy   (clean)
   #
-  # And mounting the empty dataset over the live directory HIDES the data rather than moving it,
-  # so the mount and the copy are one operation, in this order:
-  #   stacks/selfhosted/agentic-os/MIGRATION-to-zfs.md
+  #   The earlier note claimed this block was "RECONCILIATION ONLY — Terraform will never apply
+  #   it", which was true but incomplete: ignore_changes stopped it being APPLIED, it did not stop
+  #   it arming a replacement. The block did nothing useful and cost the estate its only remaining
+  #   ForceNew trigger, so it goes until the host actually has the mount.
   #
-  # ⚠ DO NOT run `terraform apply` to do this. It would not add the mount, and as of 2026-09-22
-  # there is unrelated drift in state — container 102 (mpe) plans `memory.dedicated 8192 -> 3072`
-  # — so an apply would silently cut that container's RAM while achieving nothing here.
-  mount_point {
-    volume = "/mnt/fast/appdata/agentic-os"
-    path   = "/mnt/fast/appdata/agentic-os"
-  }
+  # THE MIGRATION CONTEXT, preserved verbatim because it is still the procedure:
+  #   The dataset fast/appdata/agentic-os EXISTS on the host (created 2026-09-22, owned 568:568 to
+  #   match the idmap's identity-mapped apps uid) and is EMPTY. The agentic-os Postgres data —
+  #   the live v1 memory store, 754 MB, 17,225 memory_chunks — is still at this same path INSIDE
+  #   the container, on the ext4 root disk, because agentic-os predates the rule that every
+  #   appdata path must be a named dataset.
+  #
+  #   The mount is added BY HAND, because ignore_changes means Terraform cannot do it:
+  #     pct set 100 -mpNN /mnt/fast/appdata/agentic-os,mp=/mnt/fast/appdata/agentic-os
+  #     pct reboot 100
+  #   (pick the next free index at the time — do NOT assume 32; two slots were freed on
+  #   2026-09-25 when the orphaned buzz mounts were detached.)
+  #
+  #   Mounting the empty dataset over the live directory HIDES the data rather than moving it, so
+  #   the mount and the copy are ONE operation, in the order given in:
+  #     stacks/selfhosted/agentic-os/MIGRATION-to-zfs.md
+  #
+  #   ⚠ DO NOT run `terraform apply` to do this. It would not add the mount, and there is standing
+  #   unrelated drift in state — container 102 (mpe) plans `memory.dedicated 8192 -> 3072` — so an
+  #   apply would silently cut that container's RAM while achieving nothing here.
+  #
+  # WHEN THE MIGRATION RUNS: do the host mount and the data copy first, then re-add the
+  # mount_point block here so config matches the host. Adding it before the host has the mount
+  # re-arms exactly what this removal disarmed.
 
   mount_point {
     volume = "/mnt/fast/appdata/arrs"
