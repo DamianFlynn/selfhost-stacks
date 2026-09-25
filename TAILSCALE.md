@@ -140,6 +140,36 @@ labels:
   - "tsbridge.service.port=8080"     # port inside the container
 ```
 
+#### The service must share a Docker network with `tsbridge`
+
+**This is the one that bites.** tsbridge resolves its backend **by container name over Docker's
+embedded DNS** (`127.0.0.11:53`), not by container IP from the socket. So a labelled service that
+shares no network with tsbridge produces a fast `502 Bad Gateway`, not a timeout:
+
+```
+proxy error backend=neocortex-memory-api:8787
+  error="dial tcp: lookup neocortex-memory-api on 127.0.0.11:53: no such host"
+```
+
+tsbridge runs on **`traefik_default`**. Every labelled service must join it:
+
+```yaml
+networks:
+  traefik_default:
+    external: true
+```
+
+and list `traefik_default` among the service's `networks:`. Joining `t3_proxy` is **not**
+sufficient — tsbridge is not on it. `neocortex-memory` hit this on first deployment (2026-09-25).
+
+#### Optional labels worth knowing
+
+| label | when |
+|---|---|
+| `tsbridge.service.tags=tag:prod` | override the default `tag:server` |
+| `tsbridge.service.whois_enabled=false` | **set false for machine-to-machine APIs.** `true` injects Tailscale identity headers, which a bearer-token API neither needs nor wants on a POST-heavy path |
+| `tsbridge.service.access_log=false` | quieten a chatty service |
+
 Current nodes:
 
 | Node | Stack | Port |
@@ -152,8 +182,9 @@ Current nodes:
 | `photos` | `immich` | 2283 |
 | `code` | `code-server` | 8443 |
 | `mc_vanilla` / `mc_yggdrasil` | `minecraft` | 19132 |
+| `cortex` | `neocortex-memory` | 8787 |
 
-Nine services in total. (`tsproxy.yaml` mentions `tsbridge.enabled=true` in its header comment
+Ten services in total. (`tsproxy.yaml` mentions `tsbridge.enabled=true` in its header comment
 as documentation — that is not a service definition, and `whoami` is a stale node, not a current
 one.) `mcp` is defined but its node has been offline for ~7 days — worth checking the container.
 
@@ -347,9 +378,43 @@ ssh <ha> 'bash -lc "ha apps restart a0d7b954_tailscale"'   # ~15 s, gateway recl
 
 ### Adding a service to the tailnet
 
-Add the three `tsbridge.*` labels (§3) and `docker compose up -d`. tsbridge creates the node via
-OAuth; no manual auth, no console approval. Approval is only needed for **subnet routes and exit
-nodes**, which must be ticked separately.
+Add the `tsbridge.*` labels (§3), **join `traefik_default`**, and `docker compose up -d`.
+tsbridge creates the node via OAuth; no manual auth, no console approval. Approval is only needed
+for **subnet routes and exit nodes**, which must be ticked separately.
+
+Verify in this order — each step fails differently:
+
+```sh
+docker logs --tail 20 tsbridge | grep -i <name>      # "added service" then "priming TLS certificate"
+tailscale status | grep <name>                        # the node exists and is active
+curl -sS -o /dev/null -w '%{http_code}\n' https://<name>.<tailnet>.ts.net/<health-path>
+```
+
+A **timeout** means the node is not up or TLS has not been provisioned yet (the first request
+provisions it — try twice). A **502** means tsbridge reached its own listener but could not dial
+the backend: almost always the shared-network requirement above.
+
+### When a service needs a tailnet route rather than the LAN
+
+Not every service does — most are reachable on the LAN and through Traefik. Reach for a tailnet
+node when a client's **direct LAN path to LXC 100 is itself the problem**.
+
+The worked example is `neocortex-memory` (2026-09-25). The Mac mini could not complete a sustained
+index pass to `cortex.deercrest.info` → `172.16.1.159:443` over `en0`: it failed part-way with
+`EHOSTUNREACH`, while `ping` and `curl` from that same machine at that same moment were perfect
+(0.0% loss, HTTP 200 in 17 ms). The identical workload completed **149/149 twice** once the path
+changed — first through SSH tunnels, then over the tailnet node.
+
+Two things that made the diagnosis slow, worth remembering:
+
+- The **gateway's subnet route does not help a client that is on the LAN.** The mini is physically
+  on `172.16.1.0/24`, so its kernel uses the connected route on `en0`; a host does not tunnel to
+  its own subnet. Subnet routing is for clients *off* the LAN. What was needed was a tailnet
+  identity for the **service**.
+- The tailnet connection is `direct 172.16.1.159:34675` — WireGuard/UDP over **the same physical
+  `en0` to the same host**. The wire never changed. Only the protocol and socket behaviour did,
+  which is why the failure is specific to sustained TCP to port 443 on that destination and is
+  **still unexplained**, merely routed around.
 
 ### Onboarding a new subnet router
 
@@ -372,3 +437,12 @@ nodes**, which must be ticked separately.
 - [ ] Consider tagging `homeassistant` to match the other infrastructure nodes, rather than
       relying on expiry-disabled
 - [ ] Both subnet routers share a site and power feed — an off-site router would cover that
+- [ ] **LXC 100 has no `/dev/net/tun`.** Everything above works regardless, because `tsbridge`
+      uses `tsnet` (userspace networking) — that is *why* it runs there. But it means no stock
+      `tailscaled` on the container, so LXC 100 cannot advertise routes, act as an exit node, or
+      give itself a single host-level tailnet identity. Adding it is a Proxmox container config
+      change plus an **LXC restart**, which takes down Traefik, Immich, Jellyfin, CouchDB and the
+      memory API together. Worth scheduling deliberately rather than doing under pressure; decide
+      first whether per-service `tsbridge` nodes already cover the need
+- [ ] `tsbridge` is running **v0.13.1** while `tsproxy.yaml` declares **v0.15.0** — deployment
+      drift; `docker compose up -d` on the traefik stack would close it
