@@ -206,3 +206,84 @@ Each gate gets stable todos with owners, acceptance checks, evidence paths and a
 - Prior incidents that constrain this plan: the September duplicate-stack event on hufflepuff; the `zfs recv` parent-dataset and `rc=141` failures from the first backup run; the `mkdir -p` dataset trap; the stale-utmp clock on hufflepuff.
 - Hardware facts: `zpool status backup` (single USB vdev); `lsblk` on hufflepuff 2026-09-25 (3× ST16000NM001G, M4 512 G, 840 EVO 931 G); SMART verdicts from 2026-09-20, **which predate the pool destroy and must be re-read before any disk is trusted**.
 - Open dependency: the Grafana→Telegram alert route's credentials remain an open item from quick task 260918-c12 (G4). G5 of this plan cannot pass while that is unproven.
+
+
+---
+
+## Execution log — G5 restore drill, 2026-09-25 — **PASSED**
+
+**This is the gate the restructuring programme was waiting on.** Until this ran, the estate had
+copies whose recoverability was assumed. It is now measured.
+
+### Method
+
+Restored **from the backup pool**, never from the source, onto a **disposable** target — so the
+drill proves the backup is self-sufficient rather than that tank can read its own datasets.
+
+| what | from | to |
+|---|---|---|
+| `appdata/traefik` | `backup` pool snapshot | `tank/restore-drill/traefik` (new, disposable) |
+| `appdata/dawarich` | `backup` pool snapshot | `tank/restore-drill/dawarich` (new, disposable) |
+| Immich `pg_dumpall` | `/backup/backups/immich-db/immich-20260925.sql.gz` | throwaway Postgres on LXC 100 |
+
+A **third pool** was used as the restore target (source `fast` → backup `backup` → restore `tank`),
+and the dump was copied from the backup pool and **sha256-verified in transit** before use.
+
+### Results
+
+**Filesystem restores — byte-identical.** Compared against the *source-side snapshot of the same
+name* rather than the live tree, so ongoing writes could not confound the comparison:
+
+| dataset | files | tree sha256 |
+|---|---|---|
+| traefik | 78 = 78 | `2f542f8b0838523a` = `2f542f8b0838523a` |
+| dawarich | 2,858 = 2,858 | `9efb5d9d9b51ac0c` = `9efb5d9d9b51ac0c` |
+
+**Immich database — all 11 tables EXACT** against the live database:
+
+```
+asset        134,920   asset_exif   134,920   asset_face   183,836
+face_search  183,835   smart_search 115,211   album_asset  232,962
+asset_file   288,648   person         6,319   album            411
+tag              130   user               2
+```
+
+`gzip -t` on the backup-pool copy passed before restore, confirming the stream was not truncated —
+the failure mode the existing 1 MB size assertion exists to catch, checked independently.
+
+The throwaway Postgres ran with `--network none`, no ports and no volumes, on the correct Immich
+image (`postgres:14-vectorchord0.4.3-pgvectors0.2.0`), so it could not reach or be reached by the
+live stack.
+
+### What went wrong, kept because the trap is documented in this very plan
+
+The first restore attempt failed with **`send_rc=141`** and
+`cannot open 'tank/restore-drill': dataset does not exist`. **`zfs recv` does not create
+intermediate parents** — a trap recorded in this plan's own Implementation Notes and in two
+sibling plans, and walked into anyway. Fixed with `zfs create -p` first.
+
+It is recorded because of *how* it was diagnosed: `rc=141` is SIGPIPE and says only that the
+pipeline broke. The cause was legible solely because recv's **stderr was captured separately**.
+Reading the exit code alone would have produced a mystery.
+
+Separately, three table-count checks initially returned **COULD-NOT-LOOK** because Immich v3
+renamed them (`users`→`user`, `exif`→`asset_exif`, `asset_faces`→`asset_face`). Per rule 1 those
+were resolved rather than left, by enumerating `pg_stat_user_tables` and re-checking — which is
+what turned a 4-table partial check into an 11-table exact one.
+
+### Cleanup
+
+Throwaway container removed, staged dump deleted, `tank/restore-drill` destroyed behind a
+two-layer fence: the target name was matched exactly, and its children were asserted to be
+precisely the two datasets the drill created before `zfs destroy -r` ran. Source and backup
+datasets confirmed intact afterwards.
+
+### Consequence
+
+**G5 is met. The deploy may proceed.** What is now proven: ZFS datasets restore byte-identically
+from the backup pool to an unrelated pool, and the Immich database restores to exact row counts
+from the backup-pool copy of the dump.
+
+**What is still NOT proven, and must not be inferred from this:** a bare-metal rebuild of LXC 100.
+This drill recovers *data*; it does not demonstrate reconstructing the host, its bind mounts or
+its Terraform-managed configuration. That remains follow-on work.
