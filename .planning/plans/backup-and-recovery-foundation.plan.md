@@ -271,6 +271,36 @@ renamed them (`users`→`user`, `exif`→`asset_exif`, `asset_faces`→`asset_fa
 were resolved rather than left, by enumerating `pg_stat_user_tables` and re-checking — which is
 what turned a 4-table partial check into an 11-table exact one.
 
+### Footnote — the harness later reported this command as FAILED. It did not fail.
+
+Recorded because the record would otherwise contradict itself: the background task that ran the
+restore was reported by the harness as `failed with exit code 255`, while this log says PASSED.
+
+Reading the captured output settles it:
+
+```
+restore exit: 0                              <- the psql restore returned 0
+ERROR:  current user cannot be dropped       <- expected
+ERROR:  role "postgres" already exists       <- expected
+Read from remote host 172.16.1.159: Operation timed out
+client_loop: send disconnect: Broken pipe
+[exited with code 255]
+```
+
+**Exit 255 is ssh's transport failure, raised after the restore had already returned 0** — the
+session dropped while idle. The two `ERROR:` lines are the normal output of restoring a
+`pg_dumpall --clean` into a fresh instance: you cannot `DROP` the role you are connected as, and
+`postgres` already exists in a new container. Neither affects data.
+
+The verdict does not rest on that exit code in any case: the eleven table counts were measured in
+**separate** commands against the restored database afterwards, and all matched live exactly. That
+is the evidence, not the wrapper's exit status.
+
+Two things to carry forward: **read a pipeline's captured output before believing its exit code**
+(the same lesson as `rc=141` above, arriving from the opposite direction — there a 0 would have
+lied, here a 255 did), and expect those two benign `ERROR:` lines on any future Immich restore
+drill rather than treating them as a failed restore.
+
 ### Cleanup
 
 Throwaway container removed, staged dump deleted, `tank/restore-drill` destroyed behind a
