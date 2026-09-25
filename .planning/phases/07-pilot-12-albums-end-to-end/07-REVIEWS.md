@@ -2238,3 +2238,13 @@ The replan in commit `9c60a78` successfully closes the two critical round-1 bloc
    `{ ! /usr/bin/grep -qE 'D-17 TRIGGER: NOT FIRED' "$A" || test "$(/usr/bin/grep -cE 'zfs [d]estroy' "$A")" -eq 0; }`
 
 ---
+
+## Round 2 — operator decisions (2026-09-25)
+
+These two answers settle the round-2 PLAUSIBLE items that were marked **operator**. They bind the
+`--reviews` replan.
+
+| # | Question | Operator's answer | What the replan must do |
+|---|----------|-------------------|-------------------------|
+| P7R2-10 | Is the operator's adjudication at the 07-11 gate the quality gate before 07-12, or is a mechanical check needed? | **Mechanical first.** | Promoted to **CONFIRMED (MED)**. Before 07-12 stages anything, require a computed `QUALITY: PASS` line for P01, separate from `EQUALITY VERDICT`. It has to show that no criterion 3/4/7 finding from 07-10 or the re-run is unresolved: ffprobe/DB mismatch, ownership ≠ `568:568`, UNEXPLAINED drop or sweep finding. 07-12's precondition then requires **both** PASS lines, with any other reading → `STOP STATE 07-12-PRECONDITION`. The operator's adjudication stays, but sits on top of the mechanical gate and doesn't replace it. |
+| P7R2-21 | Does an unplanned Music Assistant sync between 07-10 and 07-15 (`MA SYNC SINCE 07-10: FOUND`) block criterion 6? | **No, not a block.** | **Closed, no change.** FOUND stays a recorded finding, as 07-15 T2 already writes it, and doesn't hold the sync gate or criterion 6's closure. Don't add a STOP for it. |
