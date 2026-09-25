@@ -685,6 +685,42 @@
 #     does not close CONF-04. CR-01's carried residue stays carried — see the CR-01 row in
 #     06-DISPOSITIONS.md. What closed here is the NESTED instance, and the blind spot next to it.
 #
+# ⚠️  EXIT-CODE BEHAVIOUR CHANGED AGAIN — A TENTH FATAL BLOCK (THE MUSIC IMPORT SWEEP) WAS ADDED
+#     2026-09-26 (plan 07-03, phase 7 D-25, criterion 7 / IMPT-02).
+#
+#     NOTICE COUNT: measured AFTER this notice was written, with the header recipe the thirteenth
+#     notice gives (driven first against a one-line control holding the real header text, which it
+#     counted as 1). This notice does not write the shared phrase a second time in its own body.
+#     The number is recorded in .planning/phases/07-pilot-12-albums-end-to-end/07-03-SUMMARY.md,
+#     NOT here — writing it into a file that the recipe greps is how the earlier counts drifted.
+#
+#     BLOCK ordinal goes nine -> TEN.
+#
+#     WHAT IT ASSERTS: scripts/check-music-import.sh, run on LXC 100, finds ZERO of the three
+#     criterion-7 damage classes over what beets imported — a `.N`-suffix path collision (DB rows
+#     AND the on-disk files beside them), an empty mb_albumid on a non-DJ album item, and an
+#     album-disc whose track count disagrees with its tracktotal (or whose items disagree about
+#     it). The sweep reads library.db through Python sqlite in `mode=ro` inside beets-flask; it
+#     issues no beets CLI invocation, so it needs no D-04 exemption. Phase 9 criterion 2 runs the
+#     same script after every batch.
+#
+#     ⚠️ UNTIL THE FIRST PILOT IMPORT THIS BLOCK IS ⚠️ UNKNOWN BY DESIGN: the real library holds 0
+#     items, and the sweep's per-class vacuity guard refuses to call an empty library clean. That
+#     is the guard working, not a fault. It is never folded into green.
+#
+#     ⚠️ THE CONDITION LETTERS ARE Q, R AND S. P was the last letter in use, measured with
+#     `grep -nE '^#[[:space:]]+[A-Z]\.[[:space:]]' scripts/quick-health-check.sh` before writing.
+#
+#     WHAT NOW EXITS THIS SCRIPT 1 THAT DID NOT BEFORE:
+#       Q. A CRITERION-7 FINDING: the sweep exits 1 with one or more findings in any class.
+#       R. THE SWEEP COULD NOT LOOK, OR HAD NOTHING TO LOOK AT, kept distinct from the above and
+#          from a genuine zero: 172.16.1.159 unreachable or no output; the bound exceeded (124);
+#          the summary anchor `📊 5. Summary` missing on an exit 0; or the sweep's own exit 3 —
+#          container down, database unreadable, dump truncated, a directory unreadable, an empty
+#          library, or ANY class with zero checkable rows. Three verdicts, never two.
+#       S. THE FOLD-IN RUN WITH A NON-DEFAULT IMPORT_SWEEP_SCRIPT. Same additive contract as
+#          CONSUMERS_SCRIPT (condition O): it may drive any arm and can never produce the tick.
+#
 # ⚠️  KNOWN LIMIT, AND IT APPLIES TO THIS WHOLE FILE: THIS SCRIPT IS MANUAL. IT ONLY EVER FIRES
 #     WHEN SOMEBODY TYPES IT (D-22, phase 02.1).
 #     There is no cron entry, no systemd timer and no notification path. Nothing here will tell
@@ -924,6 +960,17 @@ D04_EXEMPT_BASELINE="${D04_EXEMPT_BASELINE:-5}"
 #   Same ADDITIVE contract as every other knob in this file: a non-default value prints a warning
 #   and forces EXIT_CODE=1, so an override can drive the arms but can NEVER produce the green tick.
 CONSUMERS_SCRIPT="${CONSUMERS_SCRIPT:-/mnt/fast/stacks/scripts/check-music-consumers.sh}"
+
+# IMPORT_SWEEP_SCRIPT, added 2026-09-26 by plan 07-03 (D-25). The music import sweep fold-in runs
+# scripts/check-music-import.sh from the host's DEPLOYED checkout. The knob exists for the same
+# single reason as CONSUMERS_SCRIPT: AN UNDRIVEABLE BRANCH IS AN UNPROVEN BRANCH — its exit-1 and
+# exit-3 arms must be drivable from a stub without deploying unmerged work to the live estate.
+#   ⛔ DO NOT REUSE CONSUMERS_SCRIPT OR ANY *_REPO_ROOT KNOB FOR THIS. They are different claims
+#   that merely share a default directory; one knob moving two verdicts is how a run reports on a
+#   file nobody asked it to look at. This one names ONE FILE, the one this fold-in invokes.
+#   Same ADDITIVE contract as every other knob in this file: a non-default value prints a warning
+#   and forces EXIT_CODE=1, so an override can drive the arms but can NEVER produce the green tick.
+IMPORT_SWEEP_SCRIPT="${IMPORT_SWEEP_SCRIPT:-/mnt/fast/stacks/scripts/check-music-import.sh}"
 
 # ENV OVERRIDES for the "extended.conf destructive switches" block (CR-01/WR-01), added 2026-09-14.
 # Same contract as DRIFT_APPDATA_ROOT above, and the precedent is stated explicitly because it is
@@ -2718,6 +2765,106 @@ else
     EXIT_CODE=1
 fi
 
+# ── MUSIC IMPORT SWEEP — criterion 7 / IMPT-02 (plan 07-03, D-25) ────────────────────────────────
+#
+# WHAT AND WHY. scripts/check-music-import.sh asserts ZERO of the three criterion-7 damage classes
+# over what beets imported: `.N`-suffix path collisions (DB rows and the on-disk files beside
+# them), an empty mb_albumid on a non-DJ album item, and track count vs tracktotal per album-disc.
+# It reads library.db READ-ONLY (Python sqlite, `mode=ro`, inside beets-flask) and makes no beets
+# CLI invocation. Host-resident on LXC 100 because that is where the container is; it lands there
+# by `git pull` into /mnt/fast/stacks, like the consumers audit above.
+#
+# ⚠️ UNKNOWN BY DESIGN UNTIL THE FIRST PILOT IMPORT. The real library holds 0 items, and the sweep
+# refuses a vacuous green: an empty library, or ANY class with zero checkable rows, is its exit 3.
+# That is the vacuity guard working, not a fault — and it is NEVER folded into green here.
+#
+# THE SHAPE IS COPIED FROM THE CONSUMERS BLOCK ABOVE: its own knob, the `_Q` render, the ssh status
+# captured on the very next line with NO local pipe before it, the ANSI strip on its own line, the
+# arms in the house S1 order (empty-not-124 → 124 → 0 → 3 → else), the `📊 N. Summary` anchor guard
+# (CONVENTIONS §11), and the GC-14 override notice on every non-green arm. The remote string holds
+# no pipe, so it needs no `set -o pipefail`.
+echo -n "Music import sweep: "
+IMPORT_SWEEP_OVERRIDDEN=0
+if [ "$IMPORT_SWEEP_SCRIPT" != "/mnt/fast/stacks/scripts/check-music-import.sh" ]; then
+    IMPORT_SWEEP_OVERRIDDEN=1
+fi
+IMPORT_SWEEP_SCRIPT_Q=$(printf '%q' "$IMPORT_SWEEP_SCRIPT")
+IMPORT_SWEEP_OUT=$(ssh -n $SSH_OPTS root@172.16.1.159 \
+    "timeout $REMOTE_TIMEOUT bash $IMPORT_SWEEP_SCRIPT_Q 2>&1")
+IMPORT_SWEEP_RC=$?   # ssh propagates the remote exit status — do NOT pipe before capturing this
+IMPORT_SWEEP_OUT=$(printf '%s\n' "$IMPORT_SWEEP_OUT" | LC_ALL=C sed $'s/\033\\[[0-9;]*m//g')
+if [ -z "$IMPORT_SWEEP_OUT" ] && [ "$IMPORT_SWEEP_RC" -ne 124 ]; then
+    echo "⚠️  UNKNOWN — 172.16.1.159 unreachable or the import sweep produced no output"
+    echo "  The criterion-7 state is unknown, NOT green. Check the host, then re-run:"
+    echo "  ssh root@172.16.1.159 'cd /mnt/fast/stacks && git pull --ff-only && bash scripts/check-music-import.sh'"
+    if [ "$IMPORT_SWEEP_OVERRIDDEN" -eq 1 ]; then   # GC-14
+        echo "  ⚠️  IMPORT_SWEEP_SCRIPT override in effect — ran: $IMPORT_SWEEP_SCRIPT (not the"
+        echo "  deployed path). Read the re-run line above as the DEPLOYED sweep, which is not what"
+        echo "  just produced no output. This says nothing about 172.16.1.159 being unreachable."
+    fi
+    EXIT_CODE=1
+elif [ "$IMPORT_SWEEP_RC" -eq 124 ]; then
+    echo "⚠️  UNKNOWN — the import sweep exceeded its ${REMOTE_TIMEOUT}s bound and was killed."
+    echo "  This is NOT a clean sweep. Nothing was measured — the command never returned. A wedged"
+    echo "  dockerd is the usual cause (read /proc/pressure/io on atlantis 172.16.1.158). Re-run with"
+    echo "  a larger budget before concluding anything: REMOTE_TIMEOUT=300 bash scripts/quick-health-check.sh"
+    if [ "$IMPORT_SWEEP_OVERRIDDEN" -eq 1 ]; then   # GC-14
+        echo "  ⚠️  IMPORT_SWEEP_SCRIPT override in effect — ran: $IMPORT_SWEEP_SCRIPT (not the"
+        echo "  deployed path). What exceeded the bound was THAT file; dockerd is not implicated."
+    fi
+    EXIT_CODE=1
+elif [ "$IMPORT_SWEEP_RC" -eq 0 ]; then
+    SUMMARY=$(echo "$IMPORT_SWEEP_OUT" | sed -n '/^📊 5\. Summary/,$p' \
+              | grep -E 'items read|FINDINGS total')
+    if [ -z "$SUMMARY" ]; then
+        echo "⚠️  UNKNOWN — the import sweep exited 0 but its '📊 5. Summary' block was not found."
+        echo "  The section heading this fold-in anchors on has changed, so nothing here was"
+        echo "  actually read. State is UNKNOWN, not green. See check-music-import.sh's summary."
+        if [ "$IMPORT_SWEEP_OVERRIDDEN" -eq 1 ]; then   # GC-14
+            echo "  ⚠️  IMPORT_SWEEP_SCRIPT override in effect — ran: $IMPORT_SWEEP_SCRIPT (not the"
+            echo "  deployed path). The heading that could not be found is THAT file's."
+        fi
+        EXIT_CODE=1
+    elif [ "$IMPORT_SWEEP_OVERRIDDEN" -eq 1 ]; then
+        # ADDITIVE CONTRACT. An overridden IMPORT_SWEEP_SCRIPT may drive any arm but never the tick.
+        echo "⚠️  IMPORT_SWEEP_SCRIPT override in effect — this run cannot report the sweep green"
+        echo "  ran: $IMPORT_SWEEP_SCRIPT (not the deployed path). Exit 0 from an overridden sweep is"
+        echo "  evidence about THAT file, not about the library."
+        echo "$SUMMARY" | sed 's/^/  /'
+        EXIT_CODE=1
+    else
+        echo "✅ No criterion-7 damage in what beets imported"
+        echo "$SUMMARY" | sed 's/^/  /'
+    fi
+elif [ "$IMPORT_SWEEP_RC" -eq 3 ]; then
+    # EXIT 3 = the sweep COULD NOT LOOK, or found NOTHING TO CHECK. Not a finding, not green.
+    # Until the first pilot import this is the expected arm (0 items). Its UNKNOWN reasons are
+    # printed so the reader can tell "container down" from "library empty" without re-running.
+    echo "⚠️  UNKNOWN — the sweep could not look or found nothing to check (exit 3)"
+    echo "  NOT clean: a zero from a sweep that checked nothing means nothing. Its reasons:"
+    echo "$IMPORT_SWEEP_OUT" | grep 'UNKNOWN reason:' | sed 's/^ */    /'
+    echo "  Summary:"
+    echo "$IMPORT_SWEEP_OUT" | sed -n '/^📊 5\. Summary/,$p' \
+        | grep -E 'items read|checkable rows per class|FINDINGS total' | sed 's/^ */    /'
+    if [ "$IMPORT_SWEEP_OVERRIDDEN" -eq 1 ]; then   # GC-14
+        echo "  ⚠️  IMPORT_SWEEP_SCRIPT override in effect — ran: $IMPORT_SWEEP_SCRIPT (not the"
+        echo "  deployed path). Exit 3 from an overridden sweep says nothing about the library."
+    fi
+    EXIT_CODE=1
+else
+    echo "❌ CRITERION-7 FINDINGS OR A BROKEN SWEEP (check-music-import.sh exit $IMPORT_SWEEP_RC)"
+    echo "  Findings:"
+    echo "$IMPORT_SWEEP_OUT" | grep '❌' | sed 's/^ */    /'
+    echo "  Summary:"
+    echo "$IMPORT_SWEEP_OUT" | sed -n '/^📊 5\. Summary/,$p' | sed 's/^/  /'
+    if [ "$IMPORT_SWEEP_OVERRIDDEN" -eq 1 ]; then   # GC-14
+        echo "  ⚠️  IMPORT_SWEEP_SCRIPT override in effect — ran: $IMPORT_SWEEP_SCRIPT (not the"
+        echo "  deployed path). A non-zero exit from an overridden sweep is evidence about THAT file,"
+        echo "  not about the library."
+    fi
+    EXIT_CODE=1
+fi
+
 # ── LIBRARY UNDERSCORE-DIRECTORY GUARD — ROADMAP Phase 5 criterion 4 (D-22) ──────────────────────
 #
 # WHAT AND WHY. Zero directories whose basename begins with `_` may exist anywhere under
@@ -3128,9 +3275,17 @@ if [ "$EXIT_CODE" -ne 0 ]; then
     # NOT ADDED HERE, deliberately: a new `EXIT-CODE BEHAVIOUR CHANGED` notice. This edit creates
     # no new fatal condition — it only names conditions that already existed. 06-23 added the one
     # new notice this round is entitled to (the thirteenth, for condition P).
+    #
+    # Extended again 2026-09-26 (plan 07-03, D-25) when the music import sweep was added. NOT from
+    # recollection: the mechanical enumeration above was RE-RUN, before and after the edit, with
+    # the same anchor method — every other block's site count unchanged, the new block's sites
+    # attributed to it alone. Both runs are recorded in
+    # .planning/phases/07-pilot-12-albums-end-to-end/artifacts/07-03-sweep-drive.txt.
+    # Like the consumers audit, the sweep carries a ⚠️ BY DESIGN until the first pilot import.
     echo "❌ Health check FAILED. The failing block is whichever one above carries a ❌ or a ⚠️ —"
     echo "   that is any of: the Traefik or Authelia container probes, the Traefik dashboard"
     echo "   probe, the container counts, the music freeze harness, the consumers audit, the"
+    echo "   music import sweep, the"
     echo "   library underscore-dir guard, the Jellyfin transcode retention audit, the"
     echo "   vendored-file drift block, the D-03 vendored-config mount block, the D-04"
     echo "   throwaway -l scan, the extended.conf destructive-switch block, or the"
@@ -3144,5 +3299,8 @@ if [ "$EXIT_CODE" -ne 0 ]; then
     echo "      ROADMAP entry criterion E6 discharges CONF-04's Jellyfin half, and on nothing"
     echo "      else. Do not tune it out: the non-zero exit is what makes a later regression back"
     echo "      to the baseline detectable by tooling instead of only by a human reading yellow."
+    echo "   ⚠️ The music import sweep carries a ⚠️ BY DESIGN until the first pilot import: the"
+    echo "      library holds 0 items and the sweep refuses to call nothing clean (its exit 3)."
+    echo "      Once items exist, a ⚠️ there is a could-not-look and a ❌ is a criterion-7 finding."
     exit 1
 fi

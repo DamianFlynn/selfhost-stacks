@@ -78,8 +78,8 @@ success-producing override and no sentinel that skips a block anywhere in these 
 
 **Canonical example — a knob that obeys the rule by mechanism:** the `_Q`-rendered override guards
 in `scripts/quick-health-check.sh` (`D04_DOC_BASELINE`, `D04_REPO_ROOT`, `D04_EXEMPT_BASELINE`,
-`DRIFT_APPDATA_ROOT`, `DRIFT_REPO_ROOT`, `D03_REPO_ROOT`, `CONSUMERS_SCRIPT`, `EXTCONF_HOST`,
-`EXTCONF_PATH`, `DASH_HOST`, `DASH_RESOLVE_IP`, `MUSIC_UNDERSCORE_HOST`, `MUSIC_UNDERSCORE_ROOT`).
+`DRIFT_APPDATA_ROOT`, `DRIFT_REPO_ROOT`, `D03_REPO_ROOT`, `CONSUMERS_SCRIPT`,
+`IMPORT_SWEEP_SCRIPT`, `EXTCONF_HOST`, `EXTCONF_PATH`, `DASH_HOST`, `DASH_RESOLVE_IP`, `MUSIC_UNDERSCORE_HOST`, `MUSIC_UNDERSCORE_ROOT`).
 Each guard is a one-line comparison against the default that prints *"override in effect — this run
 cannot report … green"* and sets `EXIT_CODE=1` unconditionally. Setting a knob can therefore only
 move the run toward red. That is the rule **enforced by mechanism**, and it is what this entry

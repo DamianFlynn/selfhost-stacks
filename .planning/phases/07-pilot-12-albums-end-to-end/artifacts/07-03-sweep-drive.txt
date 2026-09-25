@@ -1,0 +1,108 @@
+================================================================================
+PLAN 07-03 — DRIVEN ARTIFACT
+criterion 7 / IMPT-02 / D-25: scripts/check-music-import.sh, its quick-health-check
+fold-in, its self-test and its first live reading.
+Base commit: f667b22   Task 1 commit: e8d24c2
+Date: 2026-09-25T23:34:47Z   Workstation: darwin, /usr/bin/grep (BSD grep)
+================================================================================
+
+--------------------------------------------------------------------------------
+1. TASK 2 — THE MECHANICAL EXIT_CODE=1 ENUMERATION, BEFORE AND AFTER
+--------------------------------------------------------------------------------
+
+Method: 06-26-qhc-knobs-and-tail.txt §3.1 re-run — every executable
+`EXIT_CODE=1` site (`/usr/bin/grep -n 'EXIT_CODE=1' | /usr/bin/grep -v '^[0-9]*:[[:space:]]*#'`)
+attributed to the greatest block-start ANCHOR at or before it. Anchors are grepped
+(first match), never hard-coded line numbers. The anchor set, verbatim:
+
+    ANCHORS=(
+      '^if ! bounded_ssh "\$PROBE_TIMEOUT"|STARTUP GATE: coreutils timeout probe [exits immediately]'
+      '^echo -n "Traefik: "|the Traefik container probe'
+      '^echo -n "Authelia: "|the Authelia container probe'
+      '^RUNNING=\$\(ssh|the container counts'
+      '^if \[ "\$DASH_HOST" != |the Traefik dashboard probe'
+      '^DRIFT_RUN=0|the vendored-file drift block'
+      '^echo "D-03 — |the D-03 vendored-config mount block'
+      '^echo "D-04 — |the D-04 throwaway -l scan'
+      '^echo "extended\.conf destructive switches:"|the extended.conf destructive-switch block'
+      '^echo -n "Music freeze harness: "|the music freeze harness'
+      '^echo -n "Music consumers audit: "|the consumers audit'
+      '^echo -n "Music import sweep: "|the music import sweep'
+      '^MUSIC_UNDERSCORE_HOST=|the library underscore-dir guard'
+      '^echo -n "Jellyfin transcode retention: "|the Jellyfin transcode retention audit'
+      '^echo -n "Container image drift: "|the container image-drift block'
+    )
+
+BEFORE (fresh, on f667b22's file, taken before any edit). The import-sweep anchor
+is absent here, which is correct — the block did not exist yet:
+
+    anchor absent: the music import sweep
+    executable EXIT_CODE=1 sites found: 98
+    
+    sites   from    owning block
+    ------------------------------------------------------------------------
+    1       1084    STARTUP GATE: coreutils timeout probe [exits immediately]
+    4       1158    the Traefik container probe
+    4       1186    the Authelia container probe
+    4       1243    the container counts
+    9       1359    the Traefik dashboard probe
+    10      1457    the vendored-file drift block
+    17      1717    the D-03 vendored-config mount block
+    13      1984    the D-04 throwaway -l scan
+    9       2234    the extended.conf destructive-switch block
+    4       2424    the music freeze harness
+    7       2523    the consumers audit
+    5       2771    the library underscore-dir guard
+    4       2850    the Jellyfin transcode retention audit
+    7       2979    the container image-drift block
+
+The BEFORE vector reproduces 06-26 §3.1 exactly (98 sites; 1/4/4/4/9/10/17/13/9/4/7/5/4/7),
+so the anchor set is the same partition that artifact recorded.
+
+AFTER (the edited file):
+
+    executable EXIT_CODE=1 sites found: 104
+    
+    sites   from    owning block
+    ------------------------------------------------------------------------
+    1       1131    STARTUP GATE: coreutils timeout probe [exits immediately]
+    4       1205    the Traefik container probe
+    4       1233    the Authelia container probe
+    4       1290    the container counts
+    9       1406    the Traefik dashboard probe
+    10      1504    the vendored-file drift block
+    17      1764    the D-03 vendored-config mount block
+    13      2031    the D-04 throwaway -l scan
+    9       2281    the extended.conf destructive-switch block
+    4       2471    the music freeze harness
+    7       2570    the consumers audit
+    6       2786    the music import sweep
+    5       2918    the library underscore-dir guard
+    4       2997    the Jellyfin transcode retention audit
+    7       3126    the container image-drift block
+
+DELTA: 98 -> 104. The music import sweep owns all 6 new sites (empty-not-124, 124,
+exit-0 anchor guard, exit-0 override, exit 3, else). Every other block's count is
+UNCHANGED. The failure tail now names "the music import sweep" and carries a dated
+"Extended again 2026-09-26 (plan 07-03, D-25)" paragraph.
+
+NOTICE HEADER COUNT, measured with the thirteenth notice's recipe:
+    control  a two-line file: the real header text '# ⚠️  EXIT-CODE BEHAVIOUR CHANGE' + 'D AGAIN — control'
+             and one non-header line
+             -> /usr/bin/grep -c '^# ⚠️  EXIT-CODE BEHAVIOUR CHANGE[D]' = 1
+    before   13
+    after    14
+
+CONDITION LETTERS: the recipe `grep -nE '^#[[:space:]]+[A-Z]\.[[:space:]]'` read P as the last
+letter in use before the edit; the new notice uses Q, R, S.
+
+PIPEFAIL RULE: `/usr/bin/grep -n 'timeout \$REMOTE_TIMEOUT.*|'` over the new block: 0 hits —
+the remote string holds no pipe, so no `set -o pipefail` is needed.
+set -euo pipefail lines in quick-health-check.sh: 0 (DEF-06-29-01 respected).
+
+D-04 SCAN COUNT VECTOR (simulated locally with the block's own D04_INV_RE over the
+staged tree): raw / comment-stripped / invocation-shaped / executable / documentation
+    f667b22 (before task 1):   raw=202 stripped=101 inv=10 exe=8 doc=2
+    after tasks 1 and 2:       raw=204 stripped=101 inv=10 exe=8 doc=2
+The new script adds two raw hits, both in comment lines; the stripped and invocation
+vectors, and therefore every D-04 pin, are unchanged. No D-04 exemption was needed.
