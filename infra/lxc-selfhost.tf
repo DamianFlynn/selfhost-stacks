@@ -447,7 +447,7 @@ resource "null_resource" "patch_lxc_config" {
       # Also strip any raw lxc.mount.entry lines for fast/appdata or fast/home
       # that may have been added manually — child ZFS datasets are now handled
       # exclusively via Proxmox mp<N> entries in the container resource.
-      "sed -i '/^lxc\\.idmap:/d;/^lxc\\.cgroup2\\.devices\\.allow:.*226/d;/^lxc\\.mount\\.entry:.*dri/d;/^lxc\\.mount\\.entry:.*fast\\/appdata/d;/^lxc\\.mount\\.entry:.*fast\\/home/d' ${local.conf}",
+      "sed -i '/^lxc\\.idmap:/d;/^lxc\\.cgroup2\\.devices\\.allow:.*226/d;/^lxc\\.cgroup2\\.devices\\.allow:.*10:200/d;/^lxc\\.mount\\.entry:.*dri/d;/^lxc\\.mount\\.entry:.*dev\\/net\\/tun/d;/^lxc\\.mount\\.entry:.*fast\\/appdata/d;/^lxc\\.mount\\.entry:.*fast\\/home/d' ${local.conf}",
 
       # ── UID idmap lines ──────────────────────────────────────────────────
       # Maps container UIDs to host UIDs.  The apps uid (568) is passed
@@ -478,6 +478,25 @@ resource "null_resource" "patch_lxc_config" {
       # 'optional' prevents boot failure if the host has no GPU at re-run time.
       "echo 'lxc.mount.entry: /dev/dri/${local.gpu_card} dev/dri/${local.gpu_card} none bind,optional,create=file'     >> ${local.conf}",
       "echo 'lxc.mount.entry: /dev/dri/${local.gpu_render} dev/dri/${local.gpu_render} none bind,optional,create=file' >> ${local.conf}",
+
+      # ── TUN/TAP device (10:200) ──────────────────────────────────────────
+      # Needed by userspace VPN clients running INSIDE containers on this LXC —
+      # tsbridge/tailscale in userspace-networking mode works without it, but
+      # kernel-mode networking (and anything doing real tunnel setup) requires
+      # /dev/net/tun. Added 2026-09-26 to unblock tsbridge v0.15.x.
+      #
+      # `tun` is BUILT INTO the Proxmox kernel (present in modules.builtin as
+      # kernel/drivers/net/tun.ko with no loadable .ko on disk, and absent from
+      # lsmod/proc/modules). So there is deliberately NO modprobe here and
+      # nothing to persist in /etc/modules — /dev/net/tun exists from boot.
+      # Verified on 7.0.14-4-pve.
+      #
+      # NOTE: no 'optional' here, unlike the GPU entries above. The GPU mounts
+      # are optional so the container still boots on a host with no iGPU; tun is
+      # unconditional because it is a kernel builtin and its absence would mean
+      # something is genuinely wrong rather than merely different hardware.
+      "echo 'lxc.cgroup2.devices.allow: c 10:200 rwm' >> ${local.conf}",
+      "echo 'lxc.mount.entry: /dev/net/tun dev/net/tun none bind,create=file' >> ${local.conf}",
 
       # Confirm the patch was written
       "echo '--- LXC config patch applied ---' && grep -E 'lxc\\.(idmap|cgroup2|mount)' ${local.conf}",

@@ -6,6 +6,13 @@ terraform.tfvars
 *.tfstate.backup
 terraform.tfstate.*.backup
 *.tfstate.lock.info
+# Catch-all for hand-made state copies. THIS REPO IS PUBLIC and the state contains the LXC
+# root passwords in cleartext, so the rules above are not sufficient on their own: they only
+# match names ENDING in .tfstate or .backup. A safety copy named
+# `terraform.tfstate.pre-landmine-20260925-214850` (made before disarming the LXC-100 destroy
+# landmine) matched none of them and sat one `git add -A` away from publishing those
+# credentials. Any suffix after `terraform.tfstate.` is now ignored.
+terraform.tfstate.*
 
 # Terraform working directory
 .terraform/
