@@ -112,7 +112,7 @@ services:
     container_name: buzz-cloudflared
     mem_limit: 128m
     # renovate: datasource=docker depName=cloudflare/cloudflared
-    image: cloudflare/cloudflared:2026.8.2
+    image: cloudflare/cloudflared:2026.9.3
     restart: unless-stopped
     command: tunnel --no-autoupdate run
     environment:
