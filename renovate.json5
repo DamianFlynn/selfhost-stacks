@@ -511,7 +511,13 @@
       "matchPackageNames": [
         "searxng/searxng"
       ],
-      "versioning": "regex:^(?<major>\\d{4})\\.(?<minor>\\d{1,2})\\.(?<patch>\\d{1,2})-(?<build>[0-9a-f]+)$",
+      // The git hash is matched but NOT captured, and that is the whole point. Capturing it as
+      // `build` made Renovate order same-day tags by HASH STRING, which is not chronological:
+      // within hours of the rule landing it proposed 2026.9.23-783a09462 (published 11:07) over
+      // the deployed 2026.9.23-3cd69d30e (published 15:25) -- a four-hour DOWNGRADE presented as
+      // an update, because "783..." sorts above "3cd...". Leaving the hash uncaptured makes every
+      // build of a given day compare EQUAL, so no PR is raised until the date actually moves.
+      "versioning": "regex:^(?<major>\\d{4})\\.(?<minor>\\d{1,2})\\.(?<patch>\\d{1,2})-[0-9a-f]+$",
       "schedule": [
         "before 6am on monday"
       ],
