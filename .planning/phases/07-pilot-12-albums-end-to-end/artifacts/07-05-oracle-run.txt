@@ -1,0 +1,385 @@
+# 07-05 — the first real `phase06-oracle.sh --run` BEFORE the D-22 grant (D-30 / E12), and the
+# live arm-1 dump size (DEF-06-29-04)
+#
+# Plan: .planning/phases/07-pilot-12-albums-end-to-end/07-05-PLAN.md, tasks 1 and 2.
+# Operator workstation (macOS) -> root@172.16.1.159 (LXC 100) -> docker exec beets-flask.
+# Repo HEAD at run time: 5f27bb1 (scripts/phase06-oracle.sh last changed at ef8181f).
+# Session scratch paths are abbreviated to <SP> below (the Claude session scratchpad on the
+# workstation); nothing else in any transcript was edited. No ANSI escapes were present
+# (`grep -c $'\033'` over the raw transcript = 0), so "ANSI-stripped" was a no-op.
+#
+# Nothing here writes to /mnt/tank: /media is RW=false (precondition a, oracle layer 1), and the
+# oracle's layer 2 (source manifests, meta + sha) and -newer sweep both report identical / 0.
+
+=====================================================================================
+§ 0  PRECONDITIONS  (2026-09-25T22:48:06Z; one ssh, bounded Linux-side with timeout)
+=====================================================================================
+$ ssh root@172.16.1.159 'set -o pipefail; timeout 60 docker inspect --format
+    "{{range .Mounts}}{{.Source}}|{{.Destination}}|RW={{.RW}}\n{{end}}" beets-flask; echo rc=$?;
+    timeout 60 docker exec beets-flask sha256sum /config/library.db /config/state.pickle; echo rc=$?;
+    timeout 60 docker exec beets-flask readlink -f /bin/sh; echo rc=$?'
+/mnt/fast/appdata/arrs/beets/config|/config|RW=true
+/mnt/fast/appdata/arrs/beets/config/config.yaml|/config/config.yaml|RW=false
+/mnt/fast/appdata/arrs/beets/config/beets-flask/config.yaml|/config/beets-flask/config.yaml|RW=false
+/mnt/fast/appdata/arrs/beets/logs|/logs|RW=true
+/mnt/tank/downloads|/downloads|RW=true
+/mnt/tank/media|/media|RW=false
+rc=0
+fbbdde0c416e72b9884e56c562fd88eaa4da447926e1cb6cc17c3e04aee7da1a  /config/library.db
+f6a9a1ad7aa553e42e53a8056fa80724785111180a5e2122be4f8732d1e4bc7c  /config/state.pickle
+rc=0
+/usr/bin/dash
+rc=0
+ssh_rc=0
+
+(a) /mnt/tank/media -> /media RW=false ................................. HOLDS
+(b) library.db   = fbbdde0c416e72b9884e56c562fd88eaa4da447926e1cb6cc17c3e04aee7da1a (fixture) HOLDS
+    state.pickle = f6a9a1ad7aa553e42e53a8056fa80724785111180a5e2122be4f8732d1e4bc7c (fixture) HOLDS
+(c) the container's /bin/sh resolves to /usr/bin/dash .................... HOLDS
+    (and `sh` as docker exec resolves it on PATH: /usr/bin/sh -> /usr/bin/dash, § 3.2)
+=> Sequencing intact: the grant (07-09) has not happened and no import has landed. Proceed.
+
+=====================================================================================
+§ 1  --self-test
+=====================================================================================
+$ bash scripts/phase06-oracle.sh --self-test
+  ✓ self-test: 140 case(s), every fail-closed branch behaved exactly as expected
+exit 0   (140 cases)
+
+=====================================================================================
+§ 2  --run  (full transcript; 2026-09-25T22:48:26Z -> 22:49:44Z)
+=====================================================================================
+$ OUT=<SP>/oracle-out bash scripts/phase06-oracle.sh --run
+  (OUT overridden to a FRESH directory so layer3.before/after are unambiguously this run's; OUT is
+   an output-location knob and can only make the run refuse, never pass - THE OVERRIDE CONTRACT)
+
+== phase06-oracle.sh: run ==
+  ----------------------------------------------------------------
+  host       root@172.16.1.159   container beets-flask   engine /venv/bin/beet
+  expected   .planning/phases/06-tagger-configuration-and-dry-run/06-EXPECTED-TREE.txt   (CONSTANT - not overridable)
+  sample     .planning/phases/06-tagger-configuration-and-dry-run/06-SAMPLE.md      (CONSTANT - not overridable)
+  out        <SP>/oracle-out
+
+  ✓ sampled folders read from 06-SAMPLE.md: 10 folders, 174 audio files
+  ✓ fixture and sample agree on the denominator: 174 lines / 174 files
+  ✓ container beets-flask is running
+  ✓ container scratch '/tmp/p6' is absent or empty (probed with find, whose status is READ)
+  ✓ layer 1 (structural): /media is mounted RW=false on beets-flask
+  library.db    before: fbbdde0c416e72b9884e56c562fd88eaa4da447926e1cb6cc17c3e04aee7da1a
+  state.pickle  before: f6a9a1ad7aa553e42e53a8056fa80724785111180a5e2122be4f8732d1e4bc7c
+  ✓ the library this run opens IS the one 06-EXPECTED-TREE.txt's header names
+
+== layer 2: BEFORE manifests over every sampled source folder ==
+  ----------------------------------------------------------------
+  ✓ before-manifests captured: 190 files across 10 folders
+  ✓ stamp taken outside both mounts: /mnt/fast/safety/phase06/oracle.stamp
+
+== the throwaway library and the -c overlay ==
+  ----------------------------------------------------------------
+  ✓ copied /config/library.db -> /tmp/p6/lib.8410.db (the ORIGINAL is never opened by this run)
+  ✓ overlay placed: library, statefile AND directory all redirected (-l alone redirects none but the first)
+
+== the as-is import into the throwaway library ==
+  ----------------------------------------------------------------
+  S1  10 files  /downloads/complete/nzb/music/Benson Boone-American Heart-24BIT-44KHZ-WEB-FLAC-2025-OBZEN-xpost 
+/downloads/complete/nzb/music/Benson Boone-American Heart-24BIT-44KHZ-WEB-FLAC-2025-OBZEN-xpost
+  S1  15 files  /downloads/complete/nzb/music/Benson.Boone.-.Fireworks.&.Rollerblades.(2024).[16Bit-44.1kHz].FLAC.[PMEDIA].⭐️-xpost 
+/downloads/complete/nzb/music/Benson.Boone.-.Fireworks.&.Rollerblades.(2024).[16Bit-44.1kHz].FLAC.[PMEDIA].⭐️-xpost
+  S1  10 files  /downloads/complete/nzb/music/Benson_Boone_-_American_Heart-WEB-2025-BENSONBOONE 
+/downloads/complete/nzb/music/Benson_Boone_-_American_Heart-WEB-2025-BENSONBOONE
+  S2  32 files  /downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost 
+/downloads/complete/nzb/music/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost
+  S3  44 files  /downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY 
+/downloads/complete/nzb/music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY
+  S4  30 files  /downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001 
+/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__1-115_2023/Vol 001
+  S5  10 files  /downloads/complete/nzb/dj-mixes/Mastermix.Issue.420.2021 [--set albumtype=dj]
+/downloads/complete/nzb/dj-mixes/Mastermix.Issue.420.2021
+  S5  10 files  /downloads/complete/nzb/dj-mixes/Mastermix.Issue.421.2021 [--set albumtype=dj]
+/downloads/complete/nzb/dj-mixes/Mastermix.Issue.421.2021
+  S6  12 files  /media/Music/Katy Perry/Teenage Dream (2010) 
+/media/Music/Katy Perry/Teenage Dream (2010)
+  S7  1 files  /downloads/complete/nzb/music/Cyril - Stumblin In (LUNAX Remix) (Extended Mix)-(5021732254740)-SINGLE-WEB-2024-ZzZz [9c1feafc0] [2af13ead9]-xpost [-s]
+/downloads/complete/nzb/music/Cyril - Stumblin In (LUNAX Remix) (Extended Mix)-(5021732254740)-SINGLE-WEB-2024-ZzZz [9c1feafc0] [2af13ead9]-xpost/01-cyril_-_stumblin_in_(lunax_remix)_(extended_mix)-zzzz.mp3
+  ✓ all 10 sampled folders imported as-is into the throwaway
+
+== the oracle: beet move -p ==
+  ----------------------------------------------------------------
+  pairs parsed:            174
+  unparsed payload lines:  0
+  SGR-coloured raw lines:  0   [sanitised into <SP>/oracle-out/oracle.raw.txt.clean]
+  'Moving N items':        174   [read from stderr, the same loop that printed the pairs]
+  (N already in place):    0   [READ from the 'Moving N items…' log line]
+  ✓ positive control: every line is a ' -> ' pair, 174 == 174, N in place = 0,
+    and '/media/Music/' appears in the raw transcript. The measurement can be trusted to have looked.
+
+== the three-layer wrote-nothing verdict ==
+  ----------------------------------------------------------------
+  ✓ layer 2 (src.meta manifest): identical before and after
+  ✓ layer 2 (src.sha manifest): identical before and after
+  ✓ layer 3: the real library.db is byte-identical before and after
+  ✓ layer 3: the real state.pickle is byte-identical before and after
+  ✓ -newer sweep: 0 files newer than the stamp across all 10 sampled folders
+
+== the diff against 06-EXPECTED-TREE.txt ==
+  ----------------------------------------------------------------
+  ✓ ZERO LINES OF DIFFERENCE against the committed expected tree. This is the pass.
+
+== the class assertions (D-27) ==
+  ----------------------------------------------------------------
+  ✓ field view read: 174 items, six columns each
+  ✓ CONF-03 top level: every destination's top level is its item's own album artist, byte-exact
+  ✓ D-15 no Compilations/: zero Compilations/ components, and 44 destination(s) under the literal Various Artists
+  ✓ D-13 DJ count equality: DJ/ destinations = 20, exactly the sampled DJ file count
+  ✓ D-16 %aunique{} firings: %aunique{} fired 1 time(s), exactly the set the fixture predicts
+  ✓ D-19b singletons: 1 singleton resolution(s), all of them expected and all listed
+  ✓ D-19a album != artist: zero album directories equal their artist directory; 0 reported with the
+    '<artist> (' prefix shape, which is the live Def Leppard defect's shape and is NOT failed here
+  ✓ the '-1 - ' shape: zero destination filenames begin with '-1 - '
+  ✓ the .N collision shape: zero destinations carry a .N collision suffix
+  ✓ D-18 protected fields: 870 ledger records, five per sampled file, every one a noop - no protected DJ
+    field is proposed for change (327 of them absent on both sides, listed as NULL-EQUIVALENT)
+
+== CONF-04's write side, REPORTED (D-23 as amended by D-34) ==
+  ----------------------------------------------------------------
+  ✓ CONF-04 write side: 174 field-view row(s) READ; of them 12 item(s) carry a non-empty artists
+    field, 1 with MORE THAN ONE artist; beets cannot emit ';' inside ARTIST, so the
+    multi-artist information lands in ARTISTS (D-23 amended by D-34)
+  beets CANNOT be configured to emit ';' inside ARTIST - no delimiter or join key exists in
+  config_default.yaml at either version. 'artist' carries MusicBrainz's own join phrases
+  concatenated, and the multi-artist information lands in ARTISTS (TXXX / Vorbis). That is
+  what D-34 aligns Jellyfin to by enabling PreferNonstandardArtistsTag on the Music library.
+
+  ✓ container scratch '/tmp/p6' removed and its absence asserted
+
+  ----------------------------------------------------------------
+  ✓ VERDICT: GREEN - zero-diff against the committed tree, and nothing was written.
+
+EXIT CODE: 0   (VERDICT: GREEN - recorded, not gated on; the oracle judges the Phase 6 tree)
+
+=====================================================================================
+§ 3  THE FOUR E12 CONFIRMATIONS  (DEF-06-29-05)
+=====================================================================================
+
+--- § 3.1  CONFIRMATION 1: layer3.before AND layer3.after exist and BOTH awk keys parse ---------
+Both files are in the run's $OUT (<SP>/oracle-out/layer3.before, <SP>/oracle-out/layer3.after).
+Each re-parsed with the oracle's own consumer, verbatim:
+  LC_ALL=C p="$KEY" awk '{ rest = $0; if (sub(/^[0-9a-f]+  /, "", rest) && rest == ENVIRON["p"]) print $1 }'
+== layer3.before
+fbbdde0c416e72b9884e56c562fd88eaa4da447926e1cb6cc17c3e04aee7da1a  /config/library.db
+f6a9a1ad7aa553e42e53a8056fa80724785111180a5e2122be4f8732d1e4bc7c  /config/state.pickle
+  key /config/library.db -> fbbdde0c416e72b9884e56c562fd88eaa4da447926e1cb6cc17c3e04aee7da1a  (len 64)
+  key /config/state.pickle -> f6a9a1ad7aa553e42e53a8056fa80724785111180a5e2122be4f8732d1e4bc7c  (len 64)
+== layer3.after
+fbbdde0c416e72b9884e56c562fd88eaa4da447926e1cb6cc17c3e04aee7da1a  /config/library.db
+f6a9a1ad7aa553e42e53a8056fa80724785111180a5e2122be4f8732d1e4bc7c  /config/state.pickle
+  key /config/library.db -> fbbdde0c416e72b9884e56c562fd88eaa4da447926e1cb6cc17c3e04aee7da1a  (len 64)
+  key /config/state.pickle -> f6a9a1ad7aa553e42e53a8056fa80724785111180a5e2122be4f8732d1e4bc7c  (len 64)
+  LIB_SHA_BEFORE   = fbbdde0c416e72b9884e56c562fd88eaa4da447926e1cb6cc17c3e04aee7da1a
+  STATE_SHA_BEFORE = f6a9a1ad7aa553e42e53a8056fa80724785111180a5e2122be4f8732d1e4bc7c
+  LIB_SHA_AFTER    = fbbdde0c416e72b9884e56c562fd88eaa4da447926e1cb6cc17c3e04aee7da1a
+  STATE_SHA_AFTER  = f6a9a1ad7aa553e42e53a8056fa80724785111180a5e2122be4f8732d1e4bc7c
+CONFIRMATION 1: CONFIRMED - four non-empty 64-hex values; the run's own lines "layer 3: ... byte-
+identical before and after" (§ 2) are the same comparison.
+
+--- § 3.2  CONFIRMATION 2: the destructive fence REFUSES end to end under the container's dash --
+Program text extracted BY SYMBOL from the committed scripts/phase06-oracle.sh (awk from
+`SCRATCH_FENCE_SH='` to its closing `esac'`, from `CLEANUP_PROG=` to `echo gone'`, and the
+`dex_cmd()` / `remote_sh_c()` function bodies), sourced into bash with REMOTE_TIMEOUT=300
+CONTAINER_USER=beetle CONTAINER=beets-flask (the file's defaults), and sent as
+`ssh root@LXC "$(dex_cmd "$(remote_sh_c "$CLEANUP_PROG" "$ARG")")"` - the exact step-12 construction.
+  sha256(CLEANUP_PROG text, as printf '%s')     = 1d3f04f705512e6c2e8f02be58137605790d1d952b6f12ac3449c041de96ed39
+  sha256(SCRATCH_FENCE_SH text, as printf '%s') = 91cb471cb11a9a1a0ceb59dbee18b0b5672964252f5172d59f79ec0a64cbe6c3
+CANARY DESIGN (T-07-05-02): the sentinel dir /tmp/p7-canary is owned by beetle, the SAME user the
+cleanup runs as, so a fence that failed open WOULD have been able to delete it - the survival of
+`keep` below is therefore evidence, not an artefact of permissions.
+
+## setup: canary with sentinel, owned by the same user the cleanup runs as (beetle)
+$ timeout 60 docker exec -u beetle beets-flask sh -c 'mkdir /tmp/p7-canary && touch /tmp/p7-canary/keep && ls -la /tmp/p7-canary'
+total 8
+drwxr-xr-x 2 beetle beetle 4096 Sep 25 23:50 .
+drwxrwxrwt 1 root   root   4096 Sep 25 23:50 ..
+-rw-r--r-- 1 beetle beetle    0 Sep 25 23:50 keep
+ssh_rc=0
+
+## refusal case: SCRATCH=[/tmp/p6-x/../p7-canary]
+$ timeout 300 docker exec -u beetle beets-flask sh -c $'case "$1" in\n  /tmp/p6) : ;;\n  /tmp/p6-*)\n    case "${1#/tmp/p6-}" in\n      ""|*[!A-Za-z0-9._-]*)\n        echo "REFUSED: the scratch path is not a throwaway root under /tmp/p6" >&2; exit 3 ;;\n    esac\n    ;;\n  *) echo "REFUSED: the scratch path is not a throwaway root under /tmp/p6" >&2; exit 3 ;;\nesac\nrm -rf "$1"\n[ -e "$1" ] && echo present || echo gone' sh /tmp/p6-x/../p7-canary
+REFUSED: the scratch path is not a throwaway root under /tmp/p6
+ssh_rc=3
+
+## refusal case: SCRATCH=[/tmp/p7-canary]
+$ timeout 300 docker exec -u beetle beets-flask sh -c $'case "$1" in\n  /tmp/p6) : ;;\n  /tmp/p6-*)\n    case "${1#/tmp/p6-}" in\n      ""|*[!A-Za-z0-9._-]*)\n        echo "REFUSED: the scratch path is not a throwaway root under /tmp/p6" >&2; exit 3 ;;\n    esac\n    ;;\n  *) echo "REFUSED: the scratch path is not a throwaway root under /tmp/p6" >&2; exit 3 ;;\nesac\nrm -rf "$1"\n[ -e "$1" ] && echo present || echo gone' sh /tmp/p7-canary
+REFUSED: the scratch path is not a throwaway root under /tmp/p6
+ssh_rc=3
+
+## refusal case: SCRATCH=[/tmp/p6 /tmp/p7-canary]
+$ timeout 300 docker exec -u beetle beets-flask sh -c $'case "$1" in\n  /tmp/p6) : ;;\n  /tmp/p6-*)\n    case "${1#/tmp/p6-}" in\n      ""|*[!A-Za-z0-9._-]*)\n        echo "REFUSED: the scratch path is not a throwaway root under /tmp/p6" >&2; exit 3 ;;\n    esac\n    ;;\n  *) echo "REFUSED: the scratch path is not a throwaway root under /tmp/p6" >&2; exit 3 ;;\nesac\nrm -rf "$1"\n[ -e "$1" ] && echo present || echo gone' sh /tmp/p6\ /tmp/p7-canary
+REFUSED: the scratch path is not a throwaway root under /tmp/p6
+ssh_rc=3
+
+## refusal case: SCRATCH=[]
+$ timeout 300 docker exec -u beetle beets-flask sh -c $'case "$1" in\n  /tmp/p6) : ;;\n  /tmp/p6-*)\n    case "${1#/tmp/p6-}" in\n      ""|*[!A-Za-z0-9._-]*)\n        echo "REFUSED: the scratch path is not a throwaway root under /tmp/p6" >&2; exit 3 ;;\n    esac\n    ;;\n  *) echo "REFUSED: the scratch path is not a throwaway root under /tmp/p6" >&2; exit 3 ;;\nesac\nrm -rf "$1"\n[ -e "$1" ] && echo present || echo gone' sh ''
+REFUSED: the scratch path is not a throwaway root under /tmp/p6
+ssh_rc=3
+
+## sentinel after all four refusal cases
+$ timeout 60 docker exec -u beetle beets-flask sh -c 'ls -la /tmp/p7-canary/keep && test -f /tmp/p7-canary/keep && echo SENTINEL-PRESENT'
+-rw-r--r-- 1 beetle beetle 0 Sep 25 23:50 /tmp/p7-canary/keep
+SENTINEL-PRESENT
+ssh_rc=0
+
+## positive: empty /tmp/p6-p7probe through the same program
+$ timeout 60 docker exec -u beetle beets-flask sh -c 'mkdir /tmp/p6-p7probe && echo made'
+made
+ssh_rc=0
+$ timeout 300 docker exec -u beetle beets-flask sh -c $'case "$1" in\n  /tmp/p6) : ;;\n  /tmp/p6-*)\n    case "${1#/tmp/p6-}" in\n      ""|*[!A-Za-z0-9._-]*)\n        echo "REFUSED: the scratch path is not a throwaway root under /tmp/p6" >&2; exit 3 ;;\n    esac\n    ;;\n  *) echo "REFUSED: the scratch path is not a throwaway root under /tmp/p6" >&2; exit 3 ;;\nesac\nrm -rf "$1"\n[ -e "$1" ] && echo present || echo gone' sh /tmp/p6-p7probe
+gone
+ssh_rc=0
+$ timeout 60 docker exec -u beetle beets-flask sh -c 'test -e /tmp/p6-p7probe && echo probe-present || echo probe-absent'
+probe-absent
+ssh_rc=0
+
+## remove the canary with a literal rm -rf (no variable)
+$ timeout 60 docker exec -u beetle beets-flask rm -rf /tmp/p7-canary
+ssh_rc=0
+$ timeout 60 docker exec -u beetle beets-flask sh -c 'test -e /tmp/p7-canary && echo canary-present || echo canary-absent'
+canary-absent
+ssh_rc=0
+
+  arg                         stdout/stderr                                              exit
+  /tmp/p6-x/../p7-canary      REFUSED: the scratch path is not a throwaway root ...     3
+  /tmp/p7-canary              REFUSED: ...                                               3
+  '/tmp/p6 /tmp/p7-canary'    REFUSED: ...   (one parameter; %q kept it one word)        3
+  '' (empty)                  REFUSED: ...                                               3
+  sentinel /tmp/p7-canary/keep after all four: PRESENT
+  positive /tmp/p6-p7probe (empty dir): `gone`, exit 0, then probe-absent - the program EXECUTES
+    under dash, so the four refusals are refusals and not a program that never ran
+  canary removed by literal `rm -rf /tmp/p7-canary` (no variable): canary-absent
+CONFIRMATION 2: CONFIRMED - DEF-06-29-05 items 1 and 2 (the program has now been executed, and the
+predicate has now run under the container's dash) are closed for CLEANUP_PROG. STAMP_WRITE_PROG and
+STAMP_RM_PROG run on LXC 100 (bash), not in the container; they executed in the real run (§ 2: stamp
+taken; § 3.3: stamp absent afterwards) and were not canary-driven - not asked for by E12.
+
+--- § 3.3  CONFIRMATION 3: no /tmp/p6-mf.* or /tmp/p6-taghist.* survives ---------------------
+NOTE, stated so it is not over-read: phase06-oracle.sh itself mints neither name - both are
+`mktemp` names in scripts/phase06-incremental-control.sh (:466 and :605). The listing is the
+state E12 asks about after this run; it is also the first post-Phase-6 look at whether the
+incremental control's earlier live runs left litter (they did not).
+The recipe was driven against a CONTROL first, on LXC 100 and on the workstation:
+
+## which sh docker exec resolves (the program above ran as argv[0]=sh via PATH)
+$ timeout 60 docker exec -u beetle beets-flask sh -c 'command -v sh; readlink -f "$(command -v sh)"'
+/usr/bin/sh
+/usr/bin/dash
+ssh_rc=0
+
+## control: the listing recipe must SEE a deliberately planted /tmp/p6-mf.control on LXC 100
+$ touch /tmp/p6-mf.control && echo planted
+planted
+ssh_rc=0
+$ ls -d /tmp/p6-mf.* /tmp/p6-taghist.* 2>/dev/null; echo list_rc=$?
+/tmp/p6-mf.control
+list_rc=2
+ssh_rc=0
+$ rm -f /tmp/p6-mf.control; test -e /tmp/p6-mf.control && echo control-present || echo control-absent
+control-absent
+ssh_rc=0
+
+## after the run: LXC 100
+$ ls -d /tmp/p6-mf.* /tmp/p6-taghist.* 2>/dev/null; echo list_rc=$?
+list_rc=2
+ssh_rc=0
+
+## after the run: inside beets-flask
+$ timeout 60 docker exec beets-flask sh -c 'ls -d /tmp/p6-mf.* /tmp/p6-taghist.* 2>/dev/null; echo list_rc=$?'
+list_rc=2
+ssh_rc=0
+
+## after the run: inside beets-flask, the oracle's own scratch roots
+$ timeout 60 docker exec beets-flask sh -c 'ls -d /tmp/p6 /tmp/p6-* /tmp/p7-* 2>/dev/null; echo list_rc=$?'
+list_rc=2
+ssh_rc=0
+
+## oracle host stamp removed by step 12?
+$ ls -la /mnt/fast/safety/phase06/ 2>&1; echo rc=$?
+total 15560
+drwxr-xr-x 4 root root    4096 Sep 25 22:49 .
+drwxr-xr-x 6 apps apps    4096 Sep 25 22:44 ..
+-rw-r--r-- 1 root root   13385 Sep 20 23:51 06-06-exposure.sh
+-rw-r--r-- 1 root root    1753 Sep 20 23:54 06-06-final-checks.sh
+-rw-r--r-- 1 root root    4026 Sep 20 23:38 06-06-liveness-a.sh
+-rw-r--r-- 1 root root    3443 Sep 20 23:39 06-06-liveness-b.sh
+-rw-r--r-- 1 root root    4787 Sep 20 23:44 06-06-liveness-c.sh
+drwxr-xr-x 3 root root    4096 Sep 21 20:05 06-12-stage
+drwxr-xr-x 2 root root    4096 Sep 20 23:00 __pycache__
+-rw-r--r-- 1 root root    1030 Sep 20 23:29 after-counts.txt
+-rw-r--r-- 1 root root   51682 Sep 20 23:20 audit.json
+-rw-r--r-- 1 root root    3870 Sep 20 22:59 draw-1.ndjson
+-rw-r--r-- 1 root root    3870 Sep 20 22:59 draw-2.ndjson
+-rw-r--r-- 1 root root    8447 Sep 20 23:18 draw-a.json
+-rw-r--r-- 1 root root     189 Sep 20 23:18 draw-a.log
+-rw-r--r-- 1 root root    8447 Sep 20 23:18 draw-b.json
+-rw-r--r-- 1 root root     189 Sep 20 23:18 draw-b.log
+-rw-r--r-- 1 root root   14336 Sep 20 23:20 expected-tree.txt
+-rw-r--r-- 1 root root       0 Sep 20 23:02 fields.err
+-rw-r--r-- 1 root root 7446106 Sep 20 23:17 fields.ndjson
+-rw-r--r-- 1 root root       7 Sep 20 23:17 fields.status
+-rw-r--r-- 1 root root  153157 Sep 20 22:58 folders.ndjson
+-rw-r--r-- 1 root root  267579 Sep 20 22:57 live-djmixes.ndjson
+-rw-r--r-- 1 root root 1014109 Sep 20 22:57 live-library.ndjson
+-rw-r--r-- 1 root root  423048 Sep 20 22:53 live-music.ndjson
+-rw-r--r-- 1 root root 6364473 Sep 20 22:57 live-unsorted.ndjson
+-rw-r--r-- 1 root root    2635 Sep 20 22:59 phase06-draw.py
+-rw-r--r-- 1 root root    7267 Sep 20 23:20 phase06-expected-tree.py
+-rwxrwx--- 1 root root    2206 Sep 20 23:02 phase06-fields.py
+-rw-r--r-- 1 root root    3711 Sep 20 22:58 phase06-folders.py
+-rwxrwx--- 1 root root   29162 Sep 20 23:02 phase06-folders.txt
+-rw-r--r-- 1 root root    1629 Sep 20 22:53 phase06-live-tags.py
+-rw-r--r-- 1 root root    6434 Sep 20 23:18 phase06-strata.py
+-rw-r--r-- 1 root root     169 Sep 20 22:59 s6-artists-semicolon.json
+-rw-r--r-- 1 root root     137 Sep 20 23:18 s6-container.json
+-rw-r--r-- 1 root root    1001 Sep 20 23:21 sampled-folders.txt
+rc=0
+ssh_rc=0
+
+(workstation half re-run under bash - the first attempt ran under zsh, whose NOMATCH aborted
+ the ls before it listed anything, which is not evidence either way; recorded, then redone:)
+## workstation control (bash): planted /var/folders/bg/kkhtkflx485bdl5r3d_36llr0000gn/T/p6-mf.control
+/var/folders/bg/kkhtkflx485bdl5r3d_36llr0000gn/T/p6-mf.control
+list_rc=1
+## workstation after the run (bash): /var/folders/bg/kkhtkflx485bdl5r3d_36llr0000gn/T and /tmp
+list_rc=1
+
+  control planted on LXC 100 /tmp/p6-mf.control ....... LISTED   (recipe can see a match)
+  control planted in workstation $TMPDIR ............... LISTED
+  LXC 100 after the run ................................ EMPTY
+  inside beets-flask after the run ..................... EMPTY  (also: no /tmp/p6, /tmp/p6-*, /tmp/p7-*)
+  workstation $TMPDIR and /tmp after the run ........... EMPTY
+  both controls removed by literal name ................ yes
+  oracle host stamp /mnt/fast/safety/phase06/oracle.stamp absent after step 12 (listing above)
+CONFIRMATION 3: CONFIRMED.
+
+--- § 3.4  CONFIRMATION 4: GC-15's space-bearing REAL_LIB_DB ---------------------------------
+NOT DRIVEN; predicted UNKNOWN + exit 3 (the plan's and DEF-06-29-05 item 3's wording). Driving it
+would need a real library path containing a space inside the real container, which this plan must
+not create. It stays a prediction and must not be read as confirmed.
+A DATED CAVEAT ON THE PREDICTION ITSELF, not a correction of this plan: DEF-06-29-05 was written
+(06-24..06-27) when the consumer keyed on awk's default-split $2, which is why it predicted UNKNOWN.
+R3-03 / R4-09 (06-31, 06-36) replaced that consumer with exact-equality ENVIRON matching, and
+06-31-oracle-pin-and-layer3.txt § 1 drove the NEW key to yield the hash for a space-bearing path
+on synthetic input. So the current committed code predicts a MATCH on the parse side, and the
+UNKNOWN + exit 3 prediction is stale for the consumer. What remains unmeasured on either reading is
+the SEND side (the %q'd dex_cmd sha256sum argv) against the real container. Not driven here.
+GC-05's live vacuity arms (DEF-06-29-05 item 4) were also NOT exercised: this sample holds 20 DJ
+files and 44 Various Artists destinations, so neither D-13 nor D-15 was vacuous. Recorded, not
+engineered.
+
+=====================================================================================
+§ 4  REAL STATE AT THE END  (after every step of task 1)
+=====================================================================================
+$ ssh root@172.16.1.159 'timeout 60 docker exec beets-flask sha256sum /config/library.db /config/state.pickle; echo rc=$?'
+fbbdde0c416e72b9884e56c562fd88eaa4da447926e1cb6cc17c3e04aee7da1a  /config/library.db
+f6a9a1ad7aa553e42e53a8056fa80724785111180a5e2122be4f8732d1e4bc7c  /config/state.pickle
+rc=0
+library.db / state.pickle: IDENTICAL to § 0 (fixture fbbdde0c... / f6a9a1ad...). /media stayed
+RW=false throughout (layer 1 in § 2).
