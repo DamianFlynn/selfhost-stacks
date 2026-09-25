@@ -1,0 +1,112 @@
+# 07-06 draw transcript — plan 07-06 tasks 2 and 3
+# Measured 2026-09-26 (UTC), after the declaration commit 70cd38cf95ea345f87ad969949ed1e4d77471c36.
+# Fence: /mnt/fast/safety/phase07/draw/ on LXC 100 (172.16.1.159). Machine-readable outputs stay at
+# the fence; only their digests are recorded here. Read-only against /mnt/tank and the beets state.
+
+== TASK 2 ==
+
+-- fence script copies (Phase 6 originals at /mnt/fast/safety/phase06/, sha256 original == copy) --
+COPY-EQUAL phase06-live-tags.py      dd0e9bc71ceb8ca823c0cb28a016e020491b97de393214c2eaa00d4137c9272e
+COPY-EQUAL phase06-folders.py        264ee3d7231c8a882cf742cdc064b2956c897099b0305932406c2e5cab7b9ca7
+COPY-EQUAL phase06-fields.py         1e858e6cec138443f098579c9bb856176fa4569c9f894dbef35e70cceeee9f20
+COPY-EQUAL phase06-strata.py         a57a6d1c06488ffb8d405c83f2ef92c609afb7843d993cbebb2175adb7ff1081
+COPY-EQUAL phase06-expected-tree.py  c347b9c083c393543ddc35093a2c52c57cda44bc2c69a617c24dbc9604141920
+
+-- new programs written for this plan --
+phase07-population.py  3a88f9d250c84c93bb71d95de33a83ce175dc11c69f6dfc1ba35f0d41655c9fe  (in-container, stdin)
+phase07-draw.py        e40b868a1ecceff160c7d294295f198ce4f6391458a1a7eabb043f5308868e64  (host, the declared key)
+phase07-d18.py         dfc4583e8808679329b86c967a70454c4c8bc6ebfebea9aac16547c234c2929f  (in-container, stdin)
+phase07-rows.py        5f7d3c004a9f81c35f5c674e08a9a81f60a8298983eaace579a7abbbc1d2f76a  (host, imports phase06-strata.aggregate unchanged)
+
+-- commands --
+D=/mnt/fast/safety/phase07/draw
+(cd /mnt/fast/appdata/arrs/beets/config && LC_ALL=C ls -la --time-style=full-iso .) > $D/config-listing-before.txt
+ssh root@172.16.1.158 'while IFS= read -r p; do test -d "$p" && echo PRESENT "$p" || echo MISSING "$p"; done' < reused.txt
+for r in a b; do docker exec -i beets-flask /venv/bin/python - /downloads/complete/nzb/music /downloads/complete/nzb/unsorted \
+    < phase07-population.py > population-$r.ndjson; done
+for r in a b; do python3 phase07-draw.py population-$r.ndjson reused.txt djmixes-names.txt > draw-$r.json 2> draw-$r.log; done
+diff draw-a.json draw-b.json && diff draw-a.log draw-b.log
+docker exec -i beets-flask /venv/bin/python - "/media/Music/Lady Gaga" "/media/Music/P!nk" "/media/Music/Katy Perry" \
+    < phase07-population.py > control-s6.ndjson                       # F1 positive control
+for r in a b; do docker exec -i beets-flask /venv/bin/python -c "$(cat phase06-fields.py)" /dev/stdin \
+    < pilot-folders.txt > fields-$r.ndjson; done                      # byte-identical Phase 6 reader
+docker exec -i beets-flask /venv/bin/python - "${F[@]}" < phase07-d18.py > d18.ndjson
+python3 phase07-rows.py > rows.txt
+(cd /mnt/fast/appdata/arrs/beets/config && LC_ALL=C ls -la --time-style=full-iso .) > $D/config-listing-after.txt
+
+-- 1. reused folders (atlantis, id -u = 0) --
+PRESENT x8, MISSING x0 (exact paths: reused.txt b2c52f1f974048b27f5a283ee0e191576589282dcc85b56b89ad13ff76c2afbf)
+
+-- 2. population --
+population-a.ndjson  3bd1e769152687b90fe7fe86bb664ca29ba095d6e2319695bc6057f6bd4769a8  (8,021 lines)
+population-b.ndjson  3bd1e769152687b90fe7fe86bb664ca29ba095d6e2319695bc6057f6bd4769a8  (cmp: identical)
+# population incl reused: folders=165 audio=3275 (D-06 expectation 162 / 3,236)
+# excluded: now-set audio files=4746; loose audio files in roots=0; audio-less top-level dirs=0
+#   /mnt/tank/downloads/complete/nzb/music/: folders=46 audio=570
+#   /mnt/tank/downloads/complete/nzb/unsorted/: folders=119 audio=2705
+# population minus reused: folders=159 audio=3163
+# population extensions: {'.flac': 339, '.mp3': 2688, '.wav': 134, '.wv': 2}
+
+-- 3. F1 --
+# F1 eligible (>=4-artist): 0
+# F1 NOT TAKEN — eligible set empty; F1 reallocates to a fourth D-06 draw
+distinct-count histogram over 3,275 files (incl reused): mediafile artists {0: 3266, 1: 9}; raw ARTISTS {0: 3266, 1: 9}
+control-s6.ndjson  947aefbf959b4f5796f4b2fe473728ea971f0f75f8842409fed805cf54887c25
+  control reading: "CD 01-05 Lady Gaga - Jewels n’ Drugs.flac" mf=4 raw=4 ['Lady Gaga','T.I.','Too $hort','Twista']; five 2-artist files read 2/2
+E6 second measurement: NOT TAKEN — eligible set empty
+
+-- 4. draw, twice --
+draw-a.json  52c5d619384d1c4f129a568488a669c44e747a89e51dd67ca6d1743820d02221
+draw-b.json  52c5d619384d1c4f129a568488a669c44e747a89e51dd67ca6d1743820d02221
+draw-a.log   ce5ef4dd55060ece0d68082a7295b27ef9cfbbc374638069aa965e59d052aae9
+draw-b.log   ce5ef4dd55060ece0d68082a7295b27ef9cfbbc374638069aa965e59d052aae9
+diff draw-a.json draw-b.json: 0 lines; diff draw-a.log draw-b.log: 0 lines
+# F2-F4 eligible: 159
+# DRAWN F1 P09 key=00c30dca93a1df50 audio=100 twin=False /mnt/tank/downloads/complete/nzb/unsorted/VA-Mastermix.90.s.12.inch.USB.Top.Up-2024
+# DRAWN F2 P10 key=00dd601ffb1e6dfc audio=50 twin=False /mnt/tank/downloads/complete/nzb/unsorted/VA.Now.That.s.What.I.Call.Music_.117.2024..CD.FLAC..CDNOW117
+# DRAWN F3 P11 key=036c6290d12d7457 audio=10 twin=True /mnt/tank/downloads/complete/nzb/unsorted/Mastermix_Issue_415
+# DRAWN F4 P12 key=037905778e0a4152 audio=47 twin=False /mnt/tank/downloads/complete/nzb/unsorted/VA-Now_That.s_What_I_Call_Music__116__2023
+
+-- 5. twins (exact name vs LC_ALL=C ls of dj-mixes, 60 names: djmixes-names.txt 6721f38b…c5) --
+DJ TWINS AMONG FRESH DRAWS: P11   (/mnt/tank/downloads/complete/nzb/dj-mixes/Mastermix_Issue_415 exists)
+
+-- field view of the twelve (phase06-fields.py unchanged), twice --
+pilot-folders.txt  8222b5931eed3be76a4b1ad021f3db973eeb174baeeda1810e96514aea87583f
+fields-a.ndjson    3915799825baa16facff2717d40fbbe3daebaf23d4122c3124670a654c2ee7f5  (339 records, 0 errors)
+fields-b.ndjson    3915799825baa16facff2717d40fbbe3daebaf23d4122c3124670a654c2ee7f5  (cmp: identical)
+rows.txt           096e5bb1045f94b6a635587341abbfca1d3fcb4d7e7676b8f2016292499e1237
+d18.ndjson         59708b51d98cdbdcac9fb25eedb1c21f9ad0bb29391b10ea154385016d45ffe0
+
+-- D-26 per-file album (mediafile), both S5 folders --
+Mastermix.Issue.420.2021 | 4200101 - Mastermix - Club Cuts.mp3 | Issue 420
+Mastermix.Issue.420.2021 | 4200102 - Mastermix - Mastermixed 5.mp3 | Issue 420
+Mastermix.Issue.420.2021 | 4200103 - Mastermix - Reggae Fusion.mp3 | Issue 420
+Mastermix.Issue.420.2021 | 4200104 - Mastermix - Into The 80s.mp3 | Issue 420
+Mastermix.Issue.420.2021 | 4200105 - Mastermix - Triple Tracker Crazibiza.mp3 | Issue 420
+Mastermix.Issue.420.2021 | 4200201 - Mastermix - The Ibiza Sessions Jackin' House.mp3 | Issue 420
+Mastermix.Issue.420.2021 | 4200202 - Mastermix - Party On Fire.mp3 | Issue 420
+Mastermix.Issue.420.2021 | 4200203 - Mastermix - Classic Disco vs. Nu Disco.mp3 | Issue 420
+Mastermix.Issue.420.2021 | 4200204 - Mastermix - Hit The Dancefloor Latin Pop.mp3 | Issue 420
+Mastermix.Issue.420.2021 | 4200205 - Mastermix - Summer Slam 00s Club Classics.mp3 | Issue 420
+Mastermix.Issue.421.2021 | 01. Mastermix - Club Cuts.mp3 | Mastermix Issue 421
+Mastermix.Issue.421.2021 | 01. Mastermix - The Ibiza Sessions (Balearic Beats).mp3 | Mastermix Issue 421
+Mastermix.Issue.421.2021 | 02. Mastermix - Deep House Covers 2021.mp3 | Mastermix Issue 421
+Mastermix.Issue.421.2021 | 02. Mastermix - Pride (The Mix 2021).mp3 | Mastermix Issue 421
+Mastermix.Issue.421.2021 | 03. Mastermix - Electro Swing Party.mp3 | Mastermix Issue 421
+Mastermix.Issue.421.2021 | 03. Mastermix - Where The Rap Party At.mp3 | Mastermix Issue 421
+Mastermix.Issue.421.2021 | 04. Mastermix - Jackin' House Floorfillers.mp3 | Mastermix Issue 421
+Mastermix.Issue.421.2021 | 04. Mastermix - Lounge & Bar Grooves.mp3 | Mastermix Issue 421
+Mastermix.Issue.421.2021 | 05. Mastermix - Cool Summer Dance Triple Tracker.mp3 | Mastermix Issue 421
+Mastermix.Issue.421.2021 | 05. Mastermix - The Secret Garden.mp3 | Mastermix Issue 421
+D-26 VERDICT Mastermix.Issue.420.2021: TRUE (10/10 non-empty, 1 distinct)
+D-26 VERDICT Mastermix.Issue.421.2021: TRUE (10/10 non-empty, 1 distinct)
+(information: P11 Mastermix_Issue_415 would be FALSE — 'Mastermix' x9, 'Mastermix Issue 415 (Januar 2021)' x1)
+
+-- nothing written --
+config-listing-before.txt  ca1ff4cf9e5d30f316211cfbd896d111393f1b95957b115b37ef4b19d170731c
+config-listing-after.txt   ca1ff4cf9e5d30f316211cfbd896d111393f1b95957b115b37ef4b19d170731c  (diff: identical)
+library.db sha256 fbbdde0c416e72b9884e56c562fd88eaa4da447926e1cb6cc17c3e04aee7da1a; items 0, albums 0 (sqlite mode=ro)
+
+-- declaration section unchanged (git show 70cd38c:07-SAMPLE.md vs first N bytes of working file) --
+shasum -a 256       committed 000a4399b986041a3b02d176667e32849d258684efbee5365c8735a9932e90d0  working-prefix 000a4399b986041a3b02d176667e32849d258684efbee5365c8735a9932e90d0
+openssl dgst -sha256 committed 000a4399b986041a3b02d176667e32849d258684efbee5365c8735a9932e90d0  working-prefix 000a4399b986041a3b02d176667e32849d258684efbee5365c8735a9932e90d0
