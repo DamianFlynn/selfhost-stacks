@@ -481,7 +481,7 @@ echo ""
 #      cannot be resolved statically: THERE IS NO .env IN THIS REPO to resolve it against. Only
 #      .env.sample files are tracked and none of them defines MEDIA, APPDATA or DOWNLOADS.
 #
-# WHY (3) IS A PINNED INVENTORY AND NOT A BLANKET REFUSAL. Twelve such lines exist right now and
+# WHY (3) IS A PINNED INVENTORY AND NOT A BLANKET REFUSAL. Thirteen such lines exist right now and
 # none of them resolves into the library — but this parser cannot prove that, and a `fail` on
 # their mere existence would make §2, and therefore quick-health-check.sh, PERMANENTLY RED. This
 # file's own history is the argument against that: a permanently-red check trains the reader to
@@ -491,6 +491,25 @@ echo ""
 # so a NEW interpolated mount is exactly the thing worth being told about — and when one appears,
 # read it by hand and move the constant in the SAME COMMIT, which is this estate's standing
 # answer to the permanent-red trap everywhere else.
+#
+# THE THIRTEENTH LINE, DECLARED. stacks/selfhosted/monitoring/node-exporter.yaml carries
+#       - ${APPDATA_DIR}/monitoring/node-exporter-textfile:/var/lib/node_exporter/textfile_collector:ro
+# added by 2f19870 (2026-09-18, "feat(260918-c12): textfile collector, drift timer units and
+# Grafana Telegram alerting"). Read by hand, it is safe on three independent counts: the suffix is
+# `:ro`, so it could not write even if its host side DID resolve into the library; its host side is
+# a monitoring appdata directory under ${APPDATA_DIR}, not under ${MEDIA}, which is the variable
+# that plausibly expands to /mnt/tank/media; and it does not reach /mnt/tank/media/Music at all.
+# §2's actual concern — a rw path reaching the library — is therefore unaffected.
+#   WHAT WOULD FALSIFY THAT, and it is the limit of this whole mechanism: the pin gates on the SIZE
+#   of the inventory, not on the CONTENT of any line in it. Repoint ${APPDATA_DIR} beneath the
+#   library, or drop the `:ro`, and this line stays one line — the count stays thirteen and this
+#   section stays green while the declaration above has quietly become false. So re-read the line
+#   before trusting it; do not re-trust this paragraph. Mutation of an existing interpolated line
+#   is a blind spot the inventory does not cover and does not claim to.
+# 2f19870 did NOT move the pin in its own commit — the convention-5 same-commit move simply did not
+# happen there, and the check fired a week later as designed. This declaration is the REMEDIATION
+# for that, not the move itself, so a reader who greps 2f19870 lands on an account of what went
+# wrong rather than on a convention being presented as having been honoured.
 #
 #   DECLARED_INTERP_EXPECTED  the pinned size of that inventory. Overridable so the failure branch
 #                             can be driven without editing this file. It can only ever move a
@@ -505,7 +524,7 @@ else
   pass "no long-form 'type: bind' mounts — every volume line in the tree is a form this parser can read"
 fi
 
-DECLARED_INTERP_EXPECTED="${DECLARED_INTERP_EXPECTED:-12}"
+DECLARED_INTERP_EXPECTED="${DECLARED_INTERP_EXPECTED:-13}"
 INTERP_ROWS="$(grep -rnE '^[[:space:]]*-[[:space:]]*"?\$\{?[A-Za-z_][^:]*:/' "$STACKS" --include='*.yaml' --include='*.yml' 2>/dev/null || true)"
 INTERP_COUNT="$(count_lines "$INTERP_ROWS")"
 if [[ "$INTERP_COUNT" -eq "$DECLARED_INTERP_EXPECTED" ]]; then
