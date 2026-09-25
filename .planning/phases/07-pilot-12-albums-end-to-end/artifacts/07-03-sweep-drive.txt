@@ -106,3 +106,203 @@ staged tree): raw / comment-stripped / invocation-shaped / executable / document
     after tasks 1 and 2:       raw=204 stripped=101 inv=10 exe=8 doc=2
 The new script adds two raw hits, both in comment lines; the stripped and invocation
 vectors, and therefore every D-04 pin, are unchanged. No D-04 exemption was needed.
+
+--------------------------------------------------------------------------------
+2. TASK 1 — LOCAL CONTROLS (workstation, bash 5.3, BSD grep)
+--------------------------------------------------------------------------------
+
+--self-test on the workstation: exit 0, 10 of 10 cases as expected, 7 red by design,
+dumper-level check PASSED against local python3 (BLOB path, 1 item, 1 orphan, DB cksum unchanged).
+
+The self-test was itself shown able to fail — three mutated copies of the script (in the
+session scratchpad, never committed), each run with --self-test:
+    A. judge treats every suffix-shaped name as a collision (sibling test removed)
+       -> case "Symphony Op.64.flac, no sibling" RED: exit 1, expected 0, path not listed
+    B. class 3 disagreeing-totals branch disabled (first-wins)
+       -> case "9 items vs tracktotal 10, and disagreeing totals" RED: TRACKTOTAL-DISAGREE absent
+    C. class-2 vacuity guard removed
+       -> case "all singletons" RED: class 2 not named; --self-test exit 1
+
+No-beet-invocation grep, driven against a control first:
+    control file "docker exec beets-flask beet ls"  -> comment-stripped count 1
+    scripts/check-music-import.sh                   -> comment-stripped count 0
+Write-SQL grep (case-insensitive INSERT|UPDATE|DELETE|DROP, comment-stripped), control first:
+    control file "INSERT INTO x"                    -> 1
+    scripts/check-music-import.sh                   -> 0
+    (the dumper-level self-test builds its fixture DB with CREATE TABLE … AS SELECT on a
+     temp file under the self-test directory; the real DB is only ever opened mode=ro)
+mode=ro occurrences: 3
+Exit ladder line numbers at 317c1a4: UNKNOWN gate 379, FINDINGS gate 383, green line 391
+
+--------------------------------------------------------------------------------
+3. TASK 3 — THE SWEEP ON LXC 100 (self-test, then the first live reading)
+--------------------------------------------------------------------------------
+
+Copied by scp to /mnt/fast/safety/phase07/sweep-drive/ (NOT deployed: the host checkout
+/mnt/fast/stacks was not touched, no git pull, no push). ANSI colour stripped below.
+
+## workstation file sha256 (committed at 317c1a4, git show HEAD:)
+70da42b35d7654d6f29e50c5b7e00d6f62f2dd2e6764a166fa401e93c35a062c  -
+working tree == HEAD for scripts/check-music-import.sh
+drwxr-xr-x 2 root root 4096 Sep 25 23:35 /mnt/fast/safety/phase07/sweep-drive
+mkdir rc=0
+scp rc=0
+## host copy sha256
+70da42b35d7654d6f29e50c5b7e00d6f62f2dd2e6764a166fa401e93c35a062c  /mnt/fast/safety/phase07/sweep-drive/check-music-import.sh
+## host environment
+selfhost
+GNU bash, version 5.2.37(1)-release (x86_64-pc-linux-gnu)
+jq-1.7
+/usr/bin/python3
+Python 3.13.5
+/dev/mapper/pve-vm--100--disk--0  126G  102G   18G  86% /
+
+## 2a. host-side --self-test (cd /mnt/fast/safety/phase07/sweep-drive; timeout 300 bash ./check-music-import.sh --self-test)
+🧪 --self-test — 10 fixture cases through the live judge, plus an uncounted dumper-level check
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ✅ case 'clean fixture': exit 0, as expected
+  ✅ case 'Title.1.mp3 beside Title.mp3 (class 1)': exit 1, as expected
+  ✅ case 'Symphony Op.64.flac, no sibling (near-miss)': exit 0, as expected
+  ✅ case 'non-DJ album item, empty mb_albumid (class 2)': exit 1, as expected
+  ✅ case 'DJ album + singleton, empty mb_albumid (not failures)': exit 0, as expected
+  ✅ case '9 items vs tracktotal 10, and disagreeing totals (class 3)': exit 1, as expected
+  ✅ case 'empty library (vacuous)': exit 3, as expected
+  ✅ case 'every tracktotal 0/NULL (class 3 vacuous)': exit 3, as expected
+  ✅ case 'all singletons (classes 2 and 3 vacuous)': exit 3, as expected
+  ✅ case 'on-disk Title.1.flac with no item row (class 1, filesystem)': exit 1, as expected
+
+  ✅ dumper-level check (uncounted): BLOB path decoded, 1 item row, 1 orphan Title.1.flac with its sibling, DB unchanged
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ --self-test: all 10 cases behaved as expected (7 of them red by design)
+ssh RC=0
+leftover fixture dirs: 0
+
+## 2b. beets state hashes BEFORE the live run (23:35:26Z)
+fbbdde0c416e72b9884e56c562fd88eaa4da447926e1cb6cc17c3e04aee7da1a  /config/library.db
+f6a9a1ad7aa553e42e53a8056fa80724785111180a5e2122be4f8732d1e4bc7c  /config/state.pickle
+ssh RC=0
+
+## 2c. live run, default knobs (cd /mnt/fast/safety/phase07/sweep-drive; timeout 180 bash ./check-music-import.sh)
+🔎 Music import sweep — criterion 7 (IMPT-02, D-25) over beets-flask:/config/library.db
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📊 1. Dump integrity
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✅ trailer present and consistent: 0 item row(s), 0 on-disk orphan(s)
+
+📊 2. Class 1 — .N-suffix path collisions (DB rows AND on-disk files)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  no collision-suffix names (0 suffix-shaped with no sibling — listed in the summary)
+
+📊 3. Class 2 — empty mb_albumid on non-DJ album items
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  no empty mb_albumid on a non-DJ album item
+
+📊 4. Class 3 — track count vs tracktotal, per (album_id, disc)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  no album-disc disagrees with its tracktotal
+
+  ⚠️  UNKNOWN: the library holds 0 items — nothing was checked, so 0 findings means nothing (vacuous)
+📊 5. Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  items read:                  0
+  collision findings:          0
+  empty mb_albumid findings:   0
+  tracktotal findings:         0
+  DJ as-is exception:          0   (D-08: albumtype dj imported as-is — counted, not a failure)
+  singletons:                  0   (album_id NULL, so no album id to carry — counted, not a failure)
+  suffix-shaped, no sibling:   0   (a .N.ext name with no un-suffixed sibling on disk — characterised near-miss, not a failure)
+  on-disk, no item row:        0   (audio beside imported items that beets has no row for — a finding only as a class-1 collision)
+  uncheckable album-discs:     0   (no non-zero tracktotal — class 3 cannot judge them)
+  checkable rows per class:    class1=0 class2=0 class3=0   (any 0 is UNKNOWN, never clean)
+  UNKNOWN reason:              the library holds 0 items — nothing was checked, so 0 findings means nothing (vacuous)
+  UNKNOWN total:               1
+  FINDINGS total:              0
+
+⚠️  UNKNOWN: 1 reason(s) — the sweep could not look, or found nothing to check. NOT clean. (findings: 0)
+ssh RC=3
+
+## 2d. beets state hashes AFTER the live run (23:35:26Z)
+fbbdde0c416e72b9884e56c562fd88eaa4da447926e1cb6cc17c3e04aee7da1a  /config/library.db
+f6a9a1ad7aa553e42e53a8056fa80724785111180a5e2122be4f8732d1e4bc7c  /config/state.pickle
+ssh RC=0
+scratch dump dirs left in /tmp: 0
+
+READING:
+  * Host-side --self-test: ssh RC=0, 10/10, dumper-level check PASSED under LXC 100 python3
+    3.13.5 and jq 1.7 — the judge and the dumper program are proven on the host that runs them.
+  * Live run: exit 3 (ssh RC=3), items read: 0. This is the per-class vacuity guard firing
+    on REAL data: the library is empty, so the zeros on every class line mean "could not
+    look" (nothing to check), NOT "clean". The run refused the green line.
+  * library.db sha256 fbbdde0c… is identical before and after the live run, and is the
+    same value 06-SAMPLE.md recorded (0 items, 0 albums). state.pickle f6a9a1ad… identical
+    before and after. The sweep opened the database read-only and changed nothing.
+  * No fixture directory and no /tmp dump directory was left behind.
+
+--------------------------------------------------------------------------------
+4. TASK 2 — THE FOLD-IN BLOCK DRIVEN IN ISOLATION
+--------------------------------------------------------------------------------
+
+The block was extracted verbatim from quick-health-check.sh and sourced with SSH_OPTS,
+REMOTE_TIMEOUT and EXIT_CODE preset (the whole health check was not run — every other block
+is unchanged and 1 of them needs atlantis). Stubs were created in the sweep-drive dir and
+removed by exact name afterwards.
+
+block extracted from 317c1a4:scripts/quick-health-check.sh,       82 lines, run with SSH_OPTS/REMOTE_TIMEOUT/EXIT_CODE preset
+
+### A. default path — NOT YET DEPLOYED on the host (host checkout predates 07-03)   (IMPORT_SWEEP_SCRIPT=<default>)
+Music import sweep: ❌ CRITERION-7 FINDINGS OR A BROKEN SWEEP (check-music-import.sh exit 127)
+  Findings:
+  Summary:
+  -> block EXIT_CODE=1
+
+### B. override -> the scp-verified copy (real sweep, real empty library)   (IMPORT_SWEEP_SCRIPT=/mnt/fast/safety/phase07/sweep-drive/check-music-import.sh)
+Music import sweep: ⚠️  UNKNOWN — the sweep could not look or found nothing to check (exit 3)
+  NOT clean: a zero from a sweep that checked nothing means nothing. Its reasons:
+    UNKNOWN reason:              the library holds 0 items — nothing was checked, so 0 findings means nothing (vacuous)
+  Summary:
+    items read:                  0
+    checkable rows per class:    class1=0 class2=0 class3=0   (any 0 is UNKNOWN, never clean)
+    FINDINGS total:              0
+  ⚠️  IMPORT_SWEEP_SCRIPT override in effect — ran: /mnt/fast/safety/phase07/sweep-drive/check-music-import.sh (not the
+  deployed path). Exit 3 from an overridden sweep says nothing about the library.
+  -> block EXIT_CODE=1
+
+### C. override -> stub exiting 0 WITH the summary anchor   (IMPORT_SWEEP_SCRIPT=/mnt/fast/safety/phase07/sweep-drive/stub-exit0.sh)
+Music import sweep: ⚠️  IMPORT_SWEEP_SCRIPT override in effect — this run cannot report the sweep green
+  ran: /mnt/fast/safety/phase07/sweep-drive/stub-exit0.sh (not the deployed path). Exit 0 from an overridden sweep is
+  evidence about THAT file, not about the library.
+    items read:                  3
+    FINDINGS total:              0
+  -> block EXIT_CODE=1
+
+### D. override -> stub exiting 0 WITHOUT the summary anchor   (IMPORT_SWEEP_SCRIPT=/mnt/fast/safety/phase07/sweep-drive/stub-exit0-noanchor.sh)
+Music import sweep: ⚠️  UNKNOWN — the import sweep exited 0 but its '📊 5. Summary' block was not found.
+  The section heading this fold-in anchors on has changed, so nothing here was
+  actually read. State is UNKNOWN, not green. See check-music-import.sh's summary.
+  ⚠️  IMPORT_SWEEP_SCRIPT override in effect — ran: /mnt/fast/safety/phase07/sweep-drive/stub-exit0-noanchor.sh (not the
+  deployed path). The heading that could not be found is THAT file's.
+  -> block EXIT_CODE=1
+
+### E. override -> stub exiting 1 with a finding   (IMPORT_SWEEP_SCRIPT=/mnt/fast/safety/phase07/sweep-drive/stub-exit1.sh)
+Music import sweep: ❌ CRITERION-7 FINDINGS OR A BROKEN SWEEP (check-music-import.sh exit 1)
+  Findings:
+    ❌ COLLISION-SUFFIX (item): /music/x/T.1.flac
+  Summary:
+  📊 5. Summary
+    FINDINGS total:              1
+  ⚠️  IMPORT_SWEEP_SCRIPT override in effect — ran: /mnt/fast/safety/phase07/sweep-drive/stub-exit1.sh (not the
+  deployed path). A non-zero exit from an overridden sweep is evidence about THAT file,
+  not about the library.
+  -> block EXIT_CODE=1
+
+READING:
+  * Every arm driven set EXIT_CODE=1; none printed the ✅ line (no override can reach it).
+  * Arm A is the state of the ROUTINE health check until the host checkout is updated: the
+    deployed path does not exist yet, so bash exits 127 and the block reports ❌ BROKEN.
+    Non-green and correct in verdict; the label is "broken" rather than "unknown" because
+    a missing script IS a broken sweep. After a git pull on the host it becomes arm B
+    without the override notice: ⚠️ UNKNOWN, 0 items, until the first pilot import.
+  * Not driven: the 124 and empty-output arms (they are copied line-for-line from the
+    consumers block, whose arms 06-26 drove).
