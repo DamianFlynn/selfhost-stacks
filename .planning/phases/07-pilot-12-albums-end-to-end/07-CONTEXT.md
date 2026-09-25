@@ -206,6 +206,15 @@ for the estate's nine unowned project snapshots.
   library during the phase that first grants `rw`, to manufacture a case the corpus may hand you
   free).
 
+  *Ratified at plan time, 2026-09-25 (plan-checker warning 1, answered by the operator during
+  `/gsd-plan-phase 7`):* ROADMAP criterion 1's **"rollback exercised at least once" is discharged by
+  this `UNDO IMPORT` back-out** covering tree, `library.db` and `state.pickle` together — **no
+  `zfs rollback` of `tank/media/Music` is planned on any branch**, and D-17's mechanical release of
+  `tank/media/Music@pre-06-41-conf04-reprobe` fires on that back-out plus the new snapshot. The
+  mapping is still registered in the 07-01 evidence map before the run and `/gsd-verify 07` still
+  scores it; this note records that the operator chose it knowingly, so the gate at 07-11 is a
+  confirmation and not a first reading.
+
 - **D-16: The fence is BOTH datasets, taken in ONE remote step, with `zfs rollback` on the arrs
   dataset PROHIBITED.** `tank/media/Music@pre-07-pilot` **and** `fast/appdata/arrs@pre-07-pilot`,
   both listed back and asserted equal **before any file is written** — the 06-41 pattern, so the
@@ -297,6 +306,14 @@ for the estate's nine unowned project snapshots.
   those proofs stay attributable to the object they were actually taken against.
   *One commit, not four,* because E3 makes the grant a deliberate first act and four commits is
   four chances to land in a half-granted state.
+
+  *Ratified at plan time, 2026-09-25 (plan-checker warning 2, answered by the operator during
+  `/gsd-plan-phase 7`):* the `:ro → :rw` flip in item 1 is **`flask.yaml` ONLY — beets-flask, the
+  one container Phase 6 D-04 permits to open the real `library.db`**. `beets.yaml` (the dormant
+  2.13.1 CLI arm) **stays `:ro`**, so nothing but the sanctioned writer can write the library and
+  `check-music-freeze.sh`'s mount census keeps a single named exception. The `<canonical_refs>` list
+  below names both compose files because both are *read* by D-22, not because both flip. 07-09's
+  gate keeps a `grant-both` override, but flask-only is the decided default.
 
 - **D-23: `/media` STAYS `rw` after the phase, with a standing assertion.** Phase 8 and Phase 9 both
   need it, so revoking at phase end means re-granting immediately. Instead, add an assertion to

@@ -3,11 +3,11 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-25T13:16:59.891Z"
+last_updated: "2026-09-25T15:51:25.000Z"
 progress:
   total_phases: 10
   completed_phases: 5
-  total_plans: 124
+  total_plans: 141
   completed_plans: 124
   percent: 50
 ---
@@ -20,12 +20,38 @@ See: .planning/PROJECT.md (updated 2026-08-17)
 
 **Core value:** New music downloads land in the library correctly tagged, through exactly one
 pipeline that someone owns.
-**Current focus:** Phase 06 — tagger-configuration-and-dry-run
+**Current focus:** Phase 07 — pilot-12-albums-end-to-end (**PLANNED 2026-09-25, 17 plans in
+13 waves, 0 executed**; Phase 06 stays `In Progress` at `gaps_found` 5/6 with CONF-04 carried to
+Phase 7 E6 — `/gsd-verify 06` is still owed)
 
 **Definition of done (CONS-04):** a file is imported only when verified with `ffprobe` on the file
 *and* visible in both Jellyfin and Music Assistant. Never "tool configured".
 
 ## Current Position
+
+**PHASE 07 PLANNED — 2026-09-25. 17 plans in 13 waves, committed in `114586e`; 0 executed.** Research
+was skipped by operator decision (the ROADMAP entry says it is not needed) and **Nyquist validation
+was disabled project-wide** (`workflow.nyquist_validation: false`) in the same run, so no
+`07-RESEARCH.md` or `07-VALIDATION.md` exists and none is owed. `07-PATTERNS.md` recorded **eleven
+measured couplings C1 … C11** the context did not name — among them that repo `config.yaml` already
+reads `copy: yes` (so `CLAUDE.md`'s `import.move: yes` is stale or describes the appdata copy), that
+`01-auto` is registered in `flask-config.yaml` not `flask.yaml`, and that **four standing checks go red
+the moment `/media` becomes `rw`** (quick-health-check's D-03 block, `check-music-freeze.sh`'s mount
+census, the oracle's `assert_media_readonly` and its `FIXTURE_LIB_SHA256`); every one has an owning
+plan. Plan-checker verdict: **0 BLOCKER, 4 WARNING, 1 INFO, no revision round run** — warnings 1 and
+2 were interpretive and the operator ratified both at plan time (recorded in band in `07-CONTEXT.md`
+under D-15 and D-22): criterion 1's "rollback exercised" is discharged by `UNDO IMPORT`, **no
+`zfs rollback` of `tank/media/Music` is planned**, and the `rw` grant is **flask-only**. Warning 3
+(dense gated tasks in 07-09/11/12/15/17 — split rather than push through if a context window
+stalls) and warning 4 (bare "D-04" means Phase 6's beet-invocation rule in some plans and Phase 7's
+sample composition in others) are carried as execution notes. **9 of 17 plans are `autonomous: false`**
+— every live-estate write (fence + grant, P01, undo, the other albums, the DJ pair, the Def Leppard
+repair, the MA sync, snapshot pruning, the trust verdict) stops at a `hold`-first gate. ⛔ Standing
+prohibitions carried into every plan: no `zfs rollback` of `fast/appdata/arrs`; no snapshot destroyed
+on a plan's own judgement except D-17's single mechanical release; `tank/downloads@pre-phase5` never
+offered; no `FullRefresh`; no E6 mtime-route retry. Next: `/gsd-execute-phase 07` (waves 1–4 are
+repo-only and autonomous; wave 5 is the first gate). `total_plans` in the frontmatter moves
+124 → 141 to carry the seventeen.
 
 Phase: 06 (tagger-configuration-and-dry-run) — gap-closure **ROUND 6 COMPLETE: all seven plans
 `06-46` … `06-52` have executed across 5 waves, and neither `autonomous: false` plan halted**
