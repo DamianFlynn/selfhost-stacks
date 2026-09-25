@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-25T23:05:00.000Z"
+last_updated: "2026-09-25T22:58:00.000Z"
 progress:
   total_phases: 10
   completed_phases: 5
   total_plans: 141
-  completed_plans: 126
+  completed_plans: 127
   percent: 50
 ---
 
@@ -21,13 +21,15 @@ See: .planning/PROJECT.md (updated 2026-08-17)
 **Core value:** New music downloads land in the library correctly tagged, through exactly one
 pipeline that someone owns.
 **Current focus:** Phase 07 — pilot-12-albums-end-to-end (**PLANNED 2026-09-25, 17 plans in
-13 waves, 2 of 17 executed — 07-01, 07-02 done**; Phase 06 stays `In Progress` at `gaps_found` 5/6 with CONF-04 carried to
+13 waves, 3 of 17 executed — 07-01, 07-02, 07-05 done**; Phase 06 stays `In Progress` at `gaps_found` 5/6 with CONF-04 carried to
 Phase 7 E6 — `/gsd-verify 06` is still owed)
 
 **Definition of done (CONS-04):** a file is imported only when verified with `ffprobe` on the file
 *and* visible in both Jellyfin and Music Assistant. Never "tool configured".
 
 ## Current Position
+
+**PLAN 07-05 COMPLETE — 2026-09-25.** The first live `phase06-oracle.sh --run` after the Phase 6 hardenings ran PRE-GRANT (`/media` RW=false, `library.db` at `fbbdde0c…`): exit 0 GREEN, zero-diff, 174/174 (`d39af8a`). E12 confirmations 1–3 CONFIRMED on real material — layer3 keys parse both sides; `CLEANUP_PROG` refuses 4/4 hostile args under the container's dash with a `beetle`-owned canary surviving; no `p6-mf`/`p6-taghist` litter — and confirmation 4 (GC-15 space path) left PREDICTED, not driven. `check-beets-config.sh` now prints `arm1.dump bytes:`; live = **5977 B** vs the 65536 B GC-01 ceiling, so GC-01 was latent (`8bee310`); pre-grant C1 = copy true / move false / write true. DJ path rule 2 evaluated for the first time on `Mastermix_Issue_403`: 10/10 `DJ/Various Artists/…/0[12]-NN title.mp3`, no defect; source manifest identical, real state unchanged (`7e1cc71`). ⛔ After 07-09's grant the oracle's layer 1 and fixture check go red by design (C7/C8). No library write has happened yet.
 
 **PLAN 07-02 COMPLETE — 2026-09-25.** `scripts/diff-music-tags.sh` now fails closed on an ambiguous join (D-11): a duplicated `audio_md5` whose records carry differing tag maps is AMBIGUOUS on either side and exits 3 UNKNOWN through both the text and `--json` arms (3 outranks 1). A permanent 5-case `--self-test` was observed RED before the fix (`506f74f`) and GREEN after (`0e3775f`). On the real Phase 1 capture (LXC 100, `d4de9a0`) the arm FIRED: 828 duplicate groups = 514 identical + 314 AMBIGUOUS (282 `dj-mixes`+`unsorted`, 32 `unsorted`-only), so a full-capture self-diff now exits 3, not 0 — pilot captures spanning a DUPE-01 pair will read UNKNOWN. Capture sha256 unchanged. Next: 07-03. No library write has happened yet.
 
