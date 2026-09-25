@@ -1,0 +1,461 @@
+# ==============================================================================
+# 07-EXPECTED-TREE.txt — the committed pre-run oracle for the Phase 7 pilot (D-07)
+# Written 2026-09-26 by plan 07-06 task 3, BEFORE the first Phase 7 import.
+# ==============================================================================
+#
+# WHAT THIS FILE IS
+# ------------------------------------------------------------------------------
+# An INPUT, committed before the run it judges — the same kind of fixture as
+# 06-EXPECTED-TREE.txt, and at the phase root for the same reason. One intended
+# destination per pilot audio file. EVERY LINE THAT IS NOT A PATH BEGINS WITH
+# '#'; ANY CONSUMER MUST STRIP '^#' BEFORE DIFFING. Paths are container-internal,
+# rooted at /media/Music (config.yaml `directory:`); the host equivalent is
+# /mnt/tank/media/Music.
+#
+# TWO SECTIONS, AND THEY ARE NOT THE SAME KIND OF EVIDENCE
+# ------------------------------------------------------------------------------
+# FROZEN   — 132 lines carried BYTE-IDENTICAL from 06-EXPECTED-TREE.txt at its
+#            commit (anchor below), extracted with `git show <anchor>:<path>`,
+#            never from the index or the working tree (CONVENTIONS rule 10).
+#            They are the Phase 6 prediction for the six reused bucket-A rows and
+#            the two S5 folders, registered 2026-09-21 before anyone knew the
+#            answer. Selected by the stratum field of the Phase 6 audit.json
+#            (S1 35 + S2 32 + S3 44 + S5 20 + S7 1; S4 `Vol 001` 30 and S6 Katy
+#            Perry 12 excluded) and cross-checked by source-folder prefix — both
+#            selectors return the same 132 lines. LC_ALL=C order kept from the
+#            source.
+#            ⛔ FROZEN LINES ARE NEVER EDITED. A frozen line that fails is a
+#            FINDING to adjudicate (it names a change since 2026-09-21), never a
+#            line to update (D-07).
+# APPENDED — 207 lines for the four fresh draws P09..P12, derived 2026-09-26 by
+#            the Phase 6 generator phase06-expected-tree.py, copied to
+#            /mnt/fast/safety/phase07/draw/ with sha256 equal to the fence
+#            original, run UNMODIFIED over all twelve folders in one input (P1:
+#            one library) — the input selection is the only thing this plan
+#            chose. LC_ALL=C sorted within the section.
+#
+# ANCHOR
+# ------------------------------------------------------------------------------
+# cb9f49a61c1f2a14dafa8016023e1a3f716f197c
+#   = git log -1 --format=%H -- .planning/phases/06-tagger-configuration-and-dry-run/06-EXPECTED-TREE.txt
+#   (docs(06-05): commit the expected tree BEFORE the run it judges (D-27))
+#
+# READ THE ORACLE FOR WHAT IT IS
+# ------------------------------------------------------------------------------
+# Every line renders each file's OWN tags (as-is) through the committed `paths:`
+# stanza. The pilot imports through `02-review` with MusicBrainz matching
+# (D-20), so a matched album may legitimately carry different albumartist /
+# album / title text than its own tags did. Plans 07-10 / 07-12 / 07-13 must
+# classify EVERY divergence as exactly one of:
+#   (a) "the match changed the tag"   — the rendered path follows the stored
+#       tags correctly; the oracle's input differed;
+#   (b) "the template rendered wrongly" — the stored tags, run through the
+#       stanza, do not give the landed path. This is the defect class.
+# Never resolve a divergence by editing a line here.
+#
+# PRECONDITIONS THE APPENDED LINES ASSUME (the generator's P1-P4, restated)
+# ------------------------------------------------------------------------------
+#  P1. All twelve in ONE library — %aunique{} was evaluated over the twelve.
+#  P2. DJ routing: P07, P08 AND P11 carry albumtype=dj when their paths are
+#      computed. P11 (Mastermix_Issue_415, an unsorted/ folder) is a dj-mixes
+#      name twin; 07-SAMPLE.md § EXECUTION ORDER sends every twin to plan 07-13,
+#      which routes it by D-08 (beet modify albumtype=dj + beet move) exactly as
+#      P07/P08. Its generator input record was therefore labelled S5 — the
+#      generator's DJ branch keys on that label; its code is unchanged. P09
+#      (VA-Mastermix.90.s.12.inch.USB.Top.Up-2024) is DJ-service content but NOT
+#      a twin, so by the declared rules it stays in 07-12 and is rendered WITHOUT
+#      albumtype=dj (rule 6 default, under `Various Artists/`).
+#  P3. Singletons with `-s` — none of the four fresh folders is a one-file
+#      folder; P06 (frozen) is the only singleton row.
+#  P4. As-is tags: the oracle's input is the file's own tags (see above).
+#
+# PER-P-ID LINE COUNTS (339 = 132 FROZEN + 207 APPENDED)
+# ------------------------------------------------------------------------------
+#   FROZEN    P01  32  S2  rule 4 disctotal:2..  Michael Jackson/The Essential Michael Jackson/DD-TT
+#             P02  10  S1  rule 6 default        Benson Boone/American Heart/
+#             P03  15  S1  rule 6 default        Benson Boone/Fireworks & Rollerblades/
+#             P04  10  S1  rule 6 default        Benson Boone/American Heart [Night Street Records, Inc. - Warner Records Inc.]/
+#             P05  44  S3  rule 5 comp           Various Artists/NOW That's What I Call Music! 121/
+#             P06   1  S7  rule 1 singleton      Singles/Cyril/
+#             P07  10  S5  rule 3 albumtype:=dj  DJ/Mastermix/Issue 420/
+#             P08  10  S5  rule 3 albumtype:=dj  DJ/Various Artists/Mastermix Issue 421/
+#   APPENDED  P09 100      rule 6 default        Various Artists/Mastermix 90s 12inch USB Top Up/00 <title>
+#                          (no `track` on any file -> PaddedInt renders 00 on all 100)
+#             P10  50      rule 4 disctotal:2..  Various/NOW That's What I Call Music! 117/DD-TT
+#                          (albumartist tag `Various` on 50/50 -> as-is keeps it, comp false;
+#                           NOT `Various Artists/`)
+#             P11  10      rule 3 albumtype:=dj  DJ/Mastermix/Mastermix Issue 415 (Januar 2021)/
+#                          (album-level `album` comes from items[0]; 9 of 10 files say `Mastermix`)
+#             P12  47      rule 5 comp           Various Artists/Now That's What I Call Music 116/
+#
+# %aunique{} — IMPORT-ORDER DEPENDENT (from 07-SAMPLE.md § The predicted firing)
+# ------------------------------------------------------------------------------
+# library.db holds 0 items / 0 albums (sha256 fbbdde0c…, read mode=ro,
+# 2026-09-26), so every collision is intra-pilot, and among the twelve there is
+# exactly ONE: P02 / P04, Benson Boone / American Heart. Separating
+# disambiguator: `label` (albumtype empty both, year 2025 both). Under the
+# declared order P02 BEFORE P04: P02 renders no suffix (alone at its import, and
+# its label is empty afterwards); P04 renders
+# " [Night Street Records, Inc. - Warner Records Inc.]" — the frozen Phase 6
+# prediction, reproduced by today's re-derivation. ⚠ A MusicBrainz match may
+# populate `label` on both and change this; with the SAME label on both, the
+# next disambiguator decides and the numeric-id fallback becomes reachable.
+# Plans 07-12 read the prediction against the labels actually stored and the
+# order actually recorded in albums.added.
+#
+# SELF-CHECK
+# ------------------------------------------------------------------------------
+#   FROZEN non-'#' lines                          132  (each present verbatim in git show <anchor>:06-EXPECTED-TREE.txt)
+#   APPENDED lines                                207  (= 07-SAMPLE.md fresh audio total 100+50+10+47)
+#   FROZEN digest, git show <anchor> extraction   2f7c1127ca3a9ec92f7bb252d27f76bc2f4e655b8b2f5ccaeca16d0a929d869f  (shasum -a 256 and openssl dgst -sha256)
+#   FROZEN digest, this file's section            2f7c1127ca3a9ec92f7bb252d27f76bc2f4e655b8b2f5ccaeca16d0a929d869f  (shasum -a 256 and openssl dgst -sha256)
+#   APPENDED digest                               dd8bc5c59f6b0f7bae1c7f12eb9b7b019742acbb0a188181315b01494f60a690
+#   re-derivation of all 132 reused lines today   identical to FROZEN (incl. the 20 S5 lines) — no config change since the anchor
+#   duplicate destinations (all 339)                0
+#   APPENDED lines overlapping FROZEN               0
+#   bracketed non-year integers                     0  (recipe driven first: control `/media/Music/A/B [12]/01 T.mp3` -> 1, `[2024]` -> 0)
+#   `Compilations/`                                 0
+#   longest APPENDED path component                69 characters (limit 200)
+#   `:` in titles renders `_` (beets `replace:`), e.g. P12 `What Was I Made For_ [From The Motion Picture _Barbie_]`
+# ==============================================================================
+# ===== FROZEN — carried byte-identical from 06-EXPECTED-TREE.txt @ cb9f49a61c1f2a14dafa8016023e1a3f716f197c =====
+/media/Music/Benson Boone/American Heart [Night Street Records, Inc. - Warner Records Inc.]/01 Sorry I'm Here For Someone Else.mp3
+/media/Music/Benson Boone/American Heart [Night Street Records, Inc. - Warner Records Inc.]/02 Mr Electric Blue.mp3
+/media/Music/Benson Boone/American Heart [Night Street Records, Inc. - Warner Records Inc.]/03 Man In Me.mp3
+/media/Music/Benson Boone/American Heart [Night Street Records, Inc. - Warner Records Inc.]/04 Mystical Magical.mp3
+/media/Music/Benson Boone/American Heart [Night Street Records, Inc. - Warner Records Inc.]/05 Reminds Me Of You.mp3
+/media/Music/Benson Boone/American Heart [Night Street Records, Inc. - Warner Records Inc.]/06 Momma Song.mp3
+/media/Music/Benson Boone/American Heart [Night Street Records, Inc. - Warner Records Inc.]/07 I Wanna Be The One You Call.mp3
+/media/Music/Benson Boone/American Heart [Night Street Records, Inc. - Warner Records Inc.]/08 Wanted Man.mp3
+/media/Music/Benson Boone/American Heart [Night Street Records, Inc. - Warner Records Inc.]/09 Take Me Home.mp3
+/media/Music/Benson Boone/American Heart [Night Street Records, Inc. - Warner Records Inc.]/10 Young American Heart.mp3
+/media/Music/Benson Boone/American Heart/01 Sorry I'm Here For Someone Else.flac
+/media/Music/Benson Boone/American Heart/02 Mr Electric Blue.flac
+/media/Music/Benson Boone/American Heart/03 Man In Me.flac
+/media/Music/Benson Boone/American Heart/04 Mystical Magical.flac
+/media/Music/Benson Boone/American Heart/05 Reminds Me Of You.flac
+/media/Music/Benson Boone/American Heart/06 Momma Song.flac
+/media/Music/Benson Boone/American Heart/07 I Wanna Be The One You Call.flac
+/media/Music/Benson Boone/American Heart/08 Wanted Man.flac
+/media/Music/Benson Boone/American Heart/09 Take Me Home.flac
+/media/Music/Benson Boone/American Heart/10 Young American Heart.flac
+/media/Music/Benson Boone/Fireworks & Rollerblades/01 Intro.flac
+/media/Music/Benson Boone/Fireworks & Rollerblades/02 Be Someone.flac
+/media/Music/Benson Boone/Fireworks & Rollerblades/03 Slow It Down.flac
+/media/Music/Benson Boone/Fireworks & Rollerblades/04 Beautiful Things.flac
+/media/Music/Benson Boone/Fireworks & Rollerblades/05 Cry.flac
+/media/Music/Benson Boone/Fireworks & Rollerblades/06 Forever and a Day.flac
+/media/Music/Benson Boone/Fireworks & Rollerblades/07 In The Stars.flac
+/media/Music/Benson Boone/Fireworks & Rollerblades/08 Drunk In My Mind.flac
+/media/Music/Benson Boone/Fireworks & Rollerblades/09 My Greatest Fear.flac
+/media/Music/Benson Boone/Fireworks & Rollerblades/10 There She Goes.flac
+/media/Music/Benson Boone/Fireworks & Rollerblades/11 Hello Love.flac
+/media/Music/Benson Boone/Fireworks & Rollerblades/12 Ghost Town.flac
+/media/Music/Benson Boone/Fireworks & Rollerblades/13 Love Of Mine.flac
+/media/Music/Benson Boone/Fireworks & Rollerblades/14 Friend.flac
+/media/Music/Benson Boone/Fireworks & Rollerblades/15 What Do You Want.flac
+/media/Music/DJ/Mastermix/Issue 420/01 Club Cuts.mp3
+/media/Music/DJ/Mastermix/Issue 420/01 The Ibiza Sessions_ Jackin' House.mp3
+/media/Music/DJ/Mastermix/Issue 420/02 Mastermixed 5.mp3
+/media/Music/DJ/Mastermix/Issue 420/02 Party On Fire.mp3
+/media/Music/DJ/Mastermix/Issue 420/03 Classic Disco vs. Nu Disco.mp3
+/media/Music/DJ/Mastermix/Issue 420/03 Reggae Fusion.mp3
+/media/Music/DJ/Mastermix/Issue 420/04 Hit The Dancefloor_ Latin Pop.mp3
+/media/Music/DJ/Mastermix/Issue 420/04 Into The 80s.mp3
+/media/Music/DJ/Mastermix/Issue 420/05 Summer Slam_ 00s Club Classics.mp3
+/media/Music/DJ/Mastermix/Issue 420/05 Triple Tracker_ Crazibiza.mp3
+/media/Music/DJ/Various Artists/Mastermix Issue 421/01 Club Cuts.mp3
+/media/Music/DJ/Various Artists/Mastermix Issue 421/01 The Ibiza Sessions (Balearic Beats).mp3
+/media/Music/DJ/Various Artists/Mastermix Issue 421/02 Deep House Covers 2021.mp3
+/media/Music/DJ/Various Artists/Mastermix Issue 421/02 Pride (The Mix 2021).mp3
+/media/Music/DJ/Various Artists/Mastermix Issue 421/03 Electro Swing Party.mp3
+/media/Music/DJ/Various Artists/Mastermix Issue 421/03 Where The Rap Party At.mp3
+/media/Music/DJ/Various Artists/Mastermix Issue 421/04 Jackin' House Floorfillers.mp3
+/media/Music/DJ/Various Artists/Mastermix Issue 421/04 Lounge & Bar Grooves.mp3
+/media/Music/DJ/Various Artists/Mastermix Issue 421/05 Cool Summer Dance Triple Tracker.mp3
+/media/Music/DJ/Various Artists/Mastermix Issue 421/05 The Secret Garden.mp3
+/media/Music/Michael Jackson/The Essential Michael Jackson/01-07 Enjoy Yourself.flac
+/media/Music/Michael Jackson/The Essential Michael Jackson/01-08 Blame It on the Boogie.flac
+/media/Music/Michael Jackson/The Essential Michael Jackson/01-09 Shake Your Body (Down to the Ground) (Single Edit).flac
+/media/Music/Michael Jackson/The Essential Michael Jackson/01-10 Don't Stop 'Til You Get Enough.flac
+/media/Music/Michael Jackson/The Essential Michael Jackson/01-11 Rock with You (Single Version).flac
+/media/Music/Michael Jackson/The Essential Michael Jackson/01-12 Off the Wall.flac
+/media/Music/Michael Jackson/The Essential Michael Jackson/01-13 She's Out of My Life.flac
+/media/Music/Michael Jackson/The Essential Michael Jackson/01-14 Can You Feel It (7_ Version).flac
+/media/Music/Michael Jackson/The Essential Michael Jackson/01-15 The Girl Is Mine (with Paul McCartney).flac
+/media/Music/Michael Jackson/The Essential Michael Jackson/01-16 Billie Jean.flac
+/media/Music/Michael Jackson/The Essential Michael Jackson/01-17 Beat It.flac
+/media/Music/Michael Jackson/The Essential Michael Jackson/01-18 Wanna Be Startin' Somethin' (Single Version).flac
+/media/Music/Michael Jackson/The Essential Michael Jackson/01-19 Human Nature 7_.flac
+/media/Music/Michael Jackson/The Essential Michael Jackson/01-20 P.Y.T. (Pretty Young Thing).flac
+/media/Music/Michael Jackson/The Essential Michael Jackson/01-21 Thriller (Single Version).flac
+/media/Music/Michael Jackson/The Essential Michael Jackson/02-01 Bad.flac
+/media/Music/Michael Jackson/The Essential Michael Jackson/02-02 I Just Can't Stop Loving You (feat. Siedah Garrett).flac
+/media/Music/Michael Jackson/The Essential Michael Jackson/02-03 Leave Me Alone.flac
+/media/Music/Michael Jackson/The Essential Michael Jackson/02-04 The Way You Make Me Feel (Single Version).flac
+/media/Music/Michael Jackson/The Essential Michael Jackson/02-05 Man in the Mirror.flac
+/media/Music/Michael Jackson/The Essential Michael Jackson/02-06 Dirty Diana.flac
+/media/Music/Michael Jackson/The Essential Michael Jackson/02-07 Another Part of Me (Single Version).flac
+/media/Music/Michael Jackson/The Essential Michael Jackson/02-08 Smooth Criminal (Radio Edit).flac
+/media/Music/Michael Jackson/The Essential Michael Jackson/02-09 Black or White (Single Version).flac
+/media/Music/Michael Jackson/The Essential Michael Jackson/02-10 Heal the World.flac
+/media/Music/Michael Jackson/The Essential Michael Jackson/02-11 Remember the Time.flac
+/media/Music/Michael Jackson/The Essential Michael Jackson/02-12 In the Closet (Single Version).flac
+/media/Music/Michael Jackson/The Essential Michael Jackson/02-13 Who Is It (7_ Edit).flac
+/media/Music/Michael Jackson/The Essential Michael Jackson/02-14 Will You Be There (Single Version).flac
+/media/Music/Michael Jackson/The Essential Michael Jackson/02-15 Dangerous.flac
+/media/Music/Michael Jackson/The Essential Michael Jackson/02-16 You Are Not Alone (Single Version).flac
+/media/Music/Michael Jackson/The Essential Michael Jackson/02-17 You Rock My World.flac
+/media/Music/Singles/Cyril/Stumblin' In (LUNAX Remix) (Extended Mix).mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/01 Blessings.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/01 Busy Woman.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/02 Gold.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/02 Manchild.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/03 Azizam.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/03 Bloodline.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/04 Plastic Box.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/04 Sports Car.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/05 Abracadabra.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/05 Sorry I'm Here For Someone Else.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/06 Back To Friends.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/06 Mystical Magical.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/07 Cry For Me.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/07 The Giver.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/08 Love Me Not.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/08 Mutt.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/09 Headphones On.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/09 Undressed.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/10 Burning Down.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/10 Living My Best Life.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/11 Cliché.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/11 Twilight Zone.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/12 Fufn.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/12 Heart By Heart.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/13 Hairdresser.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/13 Me & You.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/14 I'm The Problem.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/14 One Thing.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/15 Little Bit Closer.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/15 Nice To Each Other (Radio Edit).mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/16 A Little Love.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/16 Henry, Come On.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/17 Make It On Your Own.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/17 Party 4 U.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/18 Little Richard's Bible.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/18 Relationships.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/19 Beautiful People.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/19 Rocket.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/20 Can't Decide.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/20 Taste.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/21 Tell Me.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/21 What The Hell Just Happened_.mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/22 The Glen (Levi Heron Edit).mp3
+/media/Music/Various Artists/NOW That's What I Call Music! 121/22 Wasted Love.mp3
+# ===== APPENDED — derived 2026-09-26 for P09 … P12 by phase06-expected-tree.py (sha256 c347b9c083c393543ddc35093a2c52c57cda44bc2c69a617c24dbc9604141920) =====
+/media/Music/DJ/Mastermix/Mastermix Issue 415 (Januar 2021)/01 Club Beats.mp3
+/media/Music/DJ/Mastermix/Mastermix Issue 415 (Januar 2021)/102 Cool Cuts Nu Disco.mp3
+/media/Music/DJ/Mastermix/Mastermix Issue 415 (Januar 2021)/103 Cool Cuts Nu Funky House.mp3
+/media/Music/DJ/Mastermix/Mastermix Issue 415 (Januar 2021)/104 Party With Me Tonight.mp3
+/media/Music/DJ/Mastermix/Mastermix Issue 415 (Januar 2021)/105 Classic Cuts Funky House.mp3
+/media/Music/DJ/Mastermix/Mastermix Issue 415 (Januar 2021)/201 Mix That Funky Music.mp3
+/media/Music/DJ/Mastermix/Mastermix Issue 415 (Januar 2021)/202 Disco On The Dancefloor.mp3
+/media/Music/DJ/Mastermix/Mastermix Issue 415 (Januar 2021)/203 The Pop Train 80s.mp3
+/media/Music/DJ/Mastermix/Mastermix Issue 415 (Januar 2021)/204 Smooth Grooves 1.mp3
+/media/Music/DJ/Mastermix/Mastermix Issue 415 (Januar 2021)/205 Mastermixed 1.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Ain't That Just The Way (Extended Version) 87.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Anthem (Mafia Mix) 124.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Baby Baby (Dancing Divaz Club Mix) 132.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Barber's Adagio For Strings (Atb Remix) 133.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Better Best Forgotten (W.I.P. '99 Cream Of Manchester Mix) 131.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Bitter Sweet Symphony (Extended Version) 85.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Boss Drum (Beatmasters Boss Mix) 116.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Breath Of Life (Divine Inspiration Mix) 132.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Charly (Alley Cat Mix) 131.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Close To You (Extended) 96.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Coco Jamboo (Extended Version) 100.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Crucified (Nuzak Remix) 122.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Crush (David Morales Club Mix) 125.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Cry India (Ark Anthem Mix) 130.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Earth Song (Hani's Extended Radio Experience) 129.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 England's Irie (Pass The Durazac Mix) 118.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Enjoy The Silence (Ecstatic Dub) 113.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Erotica (William Orbit 12'') 102.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Everybody Get Up (Paul Masterson Vocal Mix) 133.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Everybody, Everybody (House Mix) 117.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Fable (Club Version) 136.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Fame '90 (House Mix) 114.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Feeling So Real (Original) 81.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Five Megamix 98.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Fools Gold '95 (Tall Paul Remix) 124.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Frozen (Extended Club Mix) 126.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Genie In A Bottle (Flavio Vs. Mad Boris Mix) 130.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Get A Life (Club Mix) 101.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Get Ready For This (Orchestral Mix) 124.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Getting Away With It (Extended Version) 126.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Got To Have Your Love (Club With Bonus Beats) 106.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Hallo Spaceboy (12'' Remix By Pet Shop Boys) 130.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Hang On To Your Love (Extended Version) 118.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Hangin' Tough (Tougher Mix) 89.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 He's On The Phone (Motiv 8 Mix) 132.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Here Comes The Hotstepper (Allaam Mix) 100.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 History (Tony Moran's History Lesson) 123.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 History Repeating (Ankle Length Mix) 144.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Hold On (Hip Hop Remix) 99.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Honey To The Bee (Delakota Mix) 140.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 I Want You Back (Long Version) 112.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 I Wish (Street Mix) 98.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 I'm Still Waiting (Phil Chill 1990 Remix - The Full Monty) 89.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 In The Summertime (Sting & Shaggy Remix) 88.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 It Ain't Over 'Til It's Over (Extended & Dub Version) 79.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Jealousy (Extended Version) 101.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Jump They Say (Brothers In Rhythm 12'' Remix) 125.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Kinky Afro (Full Length) 117.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Lady Marmalade (Mark!'S Miami Madness Mix) 128.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Love Thy Will Be Done (Prince Mix) 91.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Lucky Man (Happiness More Or Less) 76.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Mother Universe (12'' Version) 95.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Mysterious Girl (Bag O' Tricks Mix) 86.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 No Good (Start The Dance) (Original Mix) 145.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 No More Alcohol (Rapino's Dance Mix) 102.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Not So Manic Now (Way Out West Remix) 131.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Ooops Up (Vocal Version 12'' Mix) 102.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Open Your Heart (M People Master Mix) 124.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Opposites Attract (12'' Mix) 116.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Pray (Slam The Hammer Mix) 120.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Preacher Man (Shep's Club Mix) 123.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 R.S.V.P. (Extended Mix) 118.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Rescue Me (Titanic Mix) 118.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Roam (12'' Remix) 133.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Roam (Extended Remix) 135.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Rock My Heart (Extended Mix) 130.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 S Club Party (Dave's Git Down Party) 124.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Saturday Night (Beagle Mix) 130.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Save Our Love (West End Mix) 119.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Say You'll Be There (Junior's Main Pass) 125.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Shake Your Head (Steve ''Silk'' Hurley Dub Mix) 120.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Sight For Sore Eyes (Master Mix) 121.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Sing Hallelujah! (Long) 124.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 So Hard (Extended Dance Mix) 119.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Something Got Me Started (E-Smoove's Late Night Mix) 120.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Stay (Original 12'') 133.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Stop (Morales Remix) 128.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Stranded (Extended Version) 91.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Stranger In Moscow (Tee's In-House Club Mix) 124.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Strawberry Fields Forever (Raspberry Ripple Remix) 91.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Stupid Girl (Todd Terry Tee's Freeze Club) 121.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Summer Son (Giorgio Moroder Alternative 12'') 127.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Sunshine (Original Mix) 128.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Sure (Full Pressure Mix) 91.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Tainted Love '91 (12'') 143.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Temple Of Love (1992) (Full Length) 110.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 That Girl (Club Mix) 127.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 The 1814 Megamix (Full Version) 114.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 The Best Of M People Megamix 124.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 The Emperor's New Clothes (Remix Hank Shocklee) 115.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 The Look '95 (Chaps Donna Bass Mix) 94.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 There's Nothing Like This (12'') 143.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Thieves In The Temple (Remix - Extended Lp Version) 129.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Thrill Me (Nellee Hooper Mix) 94.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 To Love Somebody (Definitive Mix) 115.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Too Many Walls (L'autre Mix) 96.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Unpretty (M. J. Cole Remix - Vox Up) 98.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 What Do I Have To Do (Extended Mix) 122.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 Where Love Lives (Dancing Divaz Club Mix) 127.mp3
+/media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 White Lines (Don't Do It) (70's Club Mix) 117.mp3
+/media/Music/Various Artists/Now That's What I Call Music 116/01 Angry.mp3
+/media/Music/Various Artists/Now That's What I Call Music 116/01 Desire.mp3
+/media/Music/Various Artists/Now That's What I Call Music 116/02 bad idea right_.mp3
+/media/Music/Various Artists/Now That's What I Call Music 116/02 vampire.mp3
+/media/Music/Various Artists/Now That's What I Call Music 116/03 Paint The Town Red.mp3
+/media/Music/Various Artists/Now That's What I Call Music 116/03 What Was I Made For_ [From The Motion Picture _Barbie_].mp3
+/media/Music/Various Artists/Now That's What I Call Music 116/04 Black Friday.mp3
+/media/Music/Various Artists/Now That's What I Call Music 116/04 Strangers.mp3
+/media/Music/Various Artists/Now That's What I Call Music 116/05 (It Goes Like) Nanana (Edit).mp3
+/media/Music/Various Artists/Now That's What I Call Music 116/05 Radio.mp3
+/media/Music/Various Artists/Now That's What I Call Music 116/06 Gimme Love.mp3
+/media/Music/Various Artists/Now That's What I Call Music 116/06 Tension.mp3
+/media/Music/Various Artists/Now That's What I Call Music 116/07 Million Dollar Bill.mp3
+/media/Music/Various Artists/Now That's What I Call Music 116/07 VULGAR.mp3
+/media/Music/Various Artists/Now That's What I Call Music 116/08 Disconnect.mp3
+/media/Music/Various Artists/Now That's What I Call Music 116/08 MIND YOUR BUSINESS.mp3
+/media/Music/Various Artists/Now That's What I Call Music 116/09 Bittersweet Goodbye.mp3
+/media/Music/Various Artists/Now That's What I Call Music 116/09 Keep Going Up.mp3
+/media/Music/Various Artists/Now That's What I Call Music 116/10 Asking.mp3
+/media/Music/Various Artists/Now That's What I Call Music 116/10 Feel It (Club Edit).mp3
+/media/Music/Various Artists/Now That's What I Call Music 116/11 DNA (Loving You) [feat. Hannah Boleyn].mp3
+/media/Music/Various Artists/Now That's What I Call Music 116/11 Voodoo.mp3
+/media/Music/Various Artists/Now That's What I Call Music 116/12 Good Love.mp3
+/media/Music/Various Artists/Now That's What I Call Music 116/12 My Love (feat. Ayra Starr).mp3
+/media/Music/Various Artists/Now That's What I Call Music 116/13 Drinkin'.mp3
+/media/Music/Various Artists/Now That's What I Call Music 116/13 Single Soon.mp3
+/media/Music/Various Artists/Now That's What I Call Music 116/14 Mr Right.mp3
+/media/Music/Various Artists/Now That's What I Call Music 116/14 The Weekend.mp3
+/media/Music/Various Artists/Now That's What I Call Music 116/15 Snooze.mp3
+/media/Music/Various Artists/Now That's What I Call Music 116/15 These Are The Days.mp3
+/media/Music/Various Artists/Now That's What I Call Music 116/16 Mosquito.mp3
+/media/Music/Various Artists/Now That's What I Call Music 116/16 When the Rain Comes.mp3
+/media/Music/Various Artists/Now That's What I Call Music 116/17 BLACK MOONLIGHT.mp3
+/media/Music/Various Artists/Now That's What I Call Music 116/17 Last Time I Saw You.mp3
+/media/Music/Various Artists/Now That's What I Call Music 116/18 Overdrive.mp3
+/media/Music/Various Artists/Now That's What I Call Music 116/18 Your Side of Town.mp3
+/media/Music/Various Artists/Now That's What I Call Music 116/19 A Love.mp3
+/media/Music/Various Artists/Now That's What I Call Music 116/19 The Hardest Part.mp3
+/media/Music/Various Artists/Now That's What I Call Music 116/20 Don't Forget Me.mp3
+/media/Music/Various Artists/Now That's What I Call Music 116/20 Until I Found You.mp3
+/media/Music/Various Artists/Now That's What I Call Music 116/21 Blindside.mp3
+/media/Music/Various Artists/Now That's What I Call Music 116/21 Never Gonna Stop.mp3
+/media/Music/Various Artists/Now That's What I Call Music 116/22 Beside You.mp3
+/media/Music/Various Artists/Now That's What I Call Music 116/22 Heaven.mp3
+/media/Music/Various Artists/Now That's What I Call Music 116/23 Fast Car.mp3
+/media/Music/Various Artists/Now That's What I Call Music 116/23 Windows.mp3
+/media/Music/Various Artists/Now That's What I Call Music 116/24 Where Do We Go From Here_.mp3
+/media/Music/Various/NOW That's What I Call Music! 117/01-01 Stick Season.flac
+/media/Music/Various/NOW That's What I Call Music! 117/01-02 Beautiful Things.flac
+/media/Music/Various/NOW That's What I Call Music! 117/01-03 Lose Control.flac
+/media/Music/Various/NOW That's What I Call Music! 117/01-04 Yes, And_.flac
+/media/Music/Various/NOW That's What I Call Music! 117/01-05 Greedy.flac
+/media/Music/Various/NOW That's What I Call Music! 117/01-06 Get Him Back!.flac
+/media/Music/Various/NOW That's What I Call Music! 117/01-07 Used To Be Young.flac
+/media/Music/Various/NOW That's What I Call Music! 117/01-08 Strangers.flac
+/media/Music/Various/NOW That's What I Call Music! 117/01-09 Water.flac
+/media/Music/Various/NOW That's What I Call Music! 117/01-10 Agora Hills.flac
+/media/Music/Various/NOW That's What I Call Music! 117/01-11 Alibi.flac
+/media/Music/Various/NOW That's What I Call Music! 117/01-12 On My Love.flac
+/media/Music/Various/NOW That's What I Call Music! 117/01-13 Never Be Alone.flac
+/media/Music/Various/NOW That's What I Call Music! 117/01-14 Won't Forget You.flac
+/media/Music/Various/NOW That's What I Call Music! 117/01-15 We Ain't Here For Long.flac
+/media/Music/Various/NOW That's What I Call Music! 117/01-16 Pink Friday Girls.flac
+/media/Music/Various/NOW That's What I Call Music! 117/01-17 Nice To Meet You.flac
+/media/Music/Various/NOW That's What I Call Music! 117/01-18 Bad Woman.flac
+/media/Music/Various/NOW That's What I Call Music! 117/01-19 No California.flac
+/media/Music/Various/NOW That's What I Call Music! 117/01-20 A Little More Lost.flac
+/media/Music/Various/NOW That's What I Call Music! 117/01-21 Feather.flac
+/media/Music/Various/NOW That's What I Call Music! 117/01-22 Hold On To Now.flac
+/media/Music/Various/NOW That's What I Call Music! 117/01-23 Loneliness.flac
+/media/Music/Various/NOW That's What I Call Music! 117/01-24 Bextor - Murder On The Dancefloor.flac
+/media/Music/Various/NOW That's What I Call Music! 117/02-01 Dizzy.flac
+/media/Music/Various/NOW That's What I Call Music! 117/02-02 Houdini.flac
+/media/Music/Various/NOW That's What I Call Music! 117/02-03 Lovin On Me.flac
+/media/Music/Various/NOW That's What I Call Music! 117/02-04 Lil Boo Thang.flac
+/media/Music/Various/NOW That's What I Call Music! 117/02-05 Can't Get Enough.flac
+/media/Music/Various/NOW That's What I Call Music! 117/02-06 Body Moving.flac
+/media/Music/Various/NOW That's What I Call Music! 117/02-07 Worth It_.flac
+/media/Music/Various/NOW That's What I Call Music! 117/02-08 Nothing Matters.flac
+/media/Music/Various/NOW That's What I Call Music! 117/02-09 Take Me Home, Country Roads.flac
+/media/Music/Various/NOW That's What I Call Music! 117/02-10 One Of Your Girls.flac
+/media/Music/Various/NOW That's What I Call Music! 117/02-11 Dance Alone.flac
+/media/Music/Various/NOW That's What I Call Music! 117/02-12 Spicy Margarita.flac
+/media/Music/Various/NOW That's What I Call Music! 117/02-13 When We Were Young (The Logical Song).flac
+/media/Music/Various/NOW That's What I Call Music! 117/02-14 Heart Still Beating.flac
+/media/Music/Various/NOW That's What I Call Music! 117/02-15 Shooting Star.flac
+/media/Music/Various/NOW That's What I Call Music! 117/02-16 Strong Enough.flac
+/media/Music/Various/NOW That's What I Call Music! 117/02-17 Bitter Sweet Love.flac
+/media/Music/Various/NOW That's What I Call Music! 117/02-18 Just Another Rainbow.flac
+/media/Music/Various/NOW That's What I Call Music! 117/02-19 The Sound Of Silence (CYRIL Remix).flac
+/media/Music/Various/NOW That's What I Call Music! 117/02-20 Heather On The Hill.flac
+/media/Music/Various/NOW That's What I Call Music! 117/02-21 Head Underwater.flac
+/media/Music/Various/NOW That's What I Call Music! 117/02-22 Lighthouse.flac
+/media/Music/Various/NOW That's What I Call Music! 117/02-23 All Out Of Fight.flac
+/media/Music/Various/NOW That's What I Call Music! 117/02-24 All The Love That I Ever Needed.flac
+/media/Music/Various/NOW That's What I Call Music! 117/02-25 This Life.flac
+/media/Music/Various/NOW That's What I Call Music! 117/02-26 Unwritten.flac

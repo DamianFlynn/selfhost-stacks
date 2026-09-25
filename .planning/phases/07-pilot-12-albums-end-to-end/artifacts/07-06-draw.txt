@@ -110,3 +110,46 @@ library.db sha256 fbbdde0c416e72b9884e56c562fd88eaa4da447926e1cb6cc17c3e04aee7da
 -- declaration section unchanged (git show 70cd38c:07-SAMPLE.md vs first N bytes of working file) --
 shasum -a 256       committed 000a4399b986041a3b02d176667e32849d258684efbee5365c8735a9932e90d0  working-prefix 000a4399b986041a3b02d176667e32849d258684efbee5365c8735a9932e90d0
 openssl dgst -sha256 committed 000a4399b986041a3b02d176667e32849d258684efbee5365c8735a9932e90d0  working-prefix 000a4399b986041a3b02d176667e32849d258684efbee5365c8735a9932e90d0
+
+== TASK 3 — 07-EXPECTED-TREE.txt ==
+
+ANCHOR=$(git log -1 --format=%H -- .planning/phases/06-tagger-configuration-and-dry-run/06-EXPECTED-TREE.txt)
+ANCHOR = cb9f49a61c1f2a14dafa8016023e1a3f716f197c   (short cb9f49a, as expected)
+git show $ANCHOR:… > 06-anchor-cb9f49a.txt    37b2083eef14b936081495dcc6e80123528054fadbc4187d060e0d8d5a8430f0
+audit.json (fence original == copy)           d078f4a2ccef81ac5cd2694d4e2e0d0799ad1d024dcd7a5cb606c8652468f43c
+anchor non-# lines 174 == audit records 174, dest sets equal: True
+by stratum: S1 35, S2 32, S3 44, S4 30, S5 20, S6 12, S7 1
+selected by stratum {S1,S2,S3,S5,S7}: 132 ; selected by reused source-folder prefix: 132 ; identical lists: True
+
+-- byte-identity (CONVENTIONS §10), four digests --
+shasum -a 256        git-show extraction   2f7c1127ca3a9ec92f7bb252d27f76bc2f4e655b8b2f5ccaeca16d0a929d869f
+openssl dgst -sha256 git-show extraction   2f7c1127ca3a9ec92f7bb252d27f76bc2f4e655b8b2f5ccaeca16d0a929d869f
+shasum -a 256        FROZEN section (file) 2f7c1127ca3a9ec92f7bb252d27f76bc2f4e655b8b2f5ccaeca16d0a929d869f
+openssl dgst -sha256 FROZEN section (file) 2f7c1127ca3a9ec92f7bb252d27f76bc2f4e655b8b2f5ccaeca16d0a929d869f
+plan verify loop: each of the 132 FROZEN lines found verbatim (grep -qxF) in git show $ANCHOR:… — PASS
+
+-- generator (unmodified, sha256 c347b9c0…1920 == fence original) over all twelve, twice --
+python3 phase06-expected-tree.py gen-input-12.json fields-a.ndjson gen-audit-$r.json > gen-tree-$r.txt   (r = a, b)
+gen-input-12.json  0ad996e1263772065a5ff64fdf2610ed03524b9013c4c2e7d83685521ff93f77
+  labels: reused as 06-SAMPLE (S1 x3, S2, S3, S7, S5 x2); P09 other, P10 S2, P12 S3;
+  P11 labelled S5 = DJ branch, because 07-13 routes a dj-mixes twin with albumtype=dj (D-08) — input selection only
+gen-tree-a.txt == gen-tree-b.txt (cmp), gen-audit-a.json == gen-audit-b.json
+gen-tree-a.txt     956b5918dfae0fe8cff371993b8631454b5770bceac5ea05d0c2f9519a479188  (339 lines, 0 collisions)
+gen-audit-a.json   099b2f040bb6eeeee2b9ee608abe5cdce646bed173cca6973899fb60c4d0f4a3
+firings: P02 label -> "" ; P04 label -> " [Night Street Records, Inc. - Warner Records Inc.]" (group size 2) — no other
+appended-207.txt   dd8bc5c59f6b0f7bae1c7f12eb9b7b019742acbb0a188181315b01494f60a690
+  rules: 3 albumtype:=dj 10 (P11) · 4 disctotal:2.. 50 (P10) · 5 comp 47 (P12) · 6 default 100 (P09)
+  appended count 207 == fresh audio total in 07-SAMPLE.md (100+50+10+47)
+
+-- S5 re-derivation vs FROZEN --
+S5 re-derived (20) == FROZEN S5 (20): True
+all 132 reused re-derived == FROZEN (132): True   -> no config change since the anchor; nothing filed to deferred-items.md
+
+-- numeric-id landmine recipe: grep -oE '\[[0-9]+\]' | grep -vxcE '\[(19|20)[0-9]{2}\]' --
+control '/media/Music/A/B [12]/01 T.mp3'   -> 1   (fires)
+control '/media/Music/A/B [2024]/01 T.mp3' -> 0   (year excluded)
+APPENDED -> 0 ; FROZEN -> 0
+
+-- other --
+non-# lines 339; duplicate destinations 0; non-/media/Music/ lines 0; `Compilations/` in non-# lines 0
+git diff --exit-code HEAD -- …/06-EXPECTED-TREE.txt -> exit 0
