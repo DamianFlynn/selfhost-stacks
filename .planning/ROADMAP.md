@@ -1597,7 +1597,7 @@ item nobody owns.)*:
       `.planning/phases/06-tagger-configuration-and-dry-run/06-REVIEW-GAP.md` and
       `.planning/phases/06-tagger-configuration-and-dry-run/06-DISPOSITIONS-GAP.md`.
 
-**Plans**: 17 plans in 13 waves (planned 2026-09-25; revised the same day against cross-AI review round 1 — `07-REVIEWS.md`, all 15 CONFIRMED + 7 PLAUSIBLE findings; 0/17 executed)
+**Plans**: 17 plans in 13 waves (planned 2026-09-25; revised the same day against cross-AI review round 1 — `07-REVIEWS.md`, all 15 CONFIRMED + 7 PLAUSIBLE findings — and again against round 2, all 16 CONFIRMED + operator-promoted P7R2-10 + PLAUSIBLE P7R2-18…20; 0/17 executed)
 
 Plans:
 - [ ] 07-01-PLAN.md — evidence map registered before the run (D-31) + argued D-13 amendment of the `unsorted` rule
