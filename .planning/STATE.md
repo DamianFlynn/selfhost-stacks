@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-24T22:42:10.000Z"
+last_updated: "2026-09-25T13:16:59.891Z"
 progress:
   total_phases: 10
   completed_phases: 5
@@ -62,7 +62,9 @@ read of Phase 7's entry-criteria block would have answered "the pilot fence is n
 omission**; promoted to `CONVENTIONS.md` convention 14.
 
 Plan: 52 of 52 executed — round 6 (**06-46..06-52**, 5 waves, planned 2026-09-24, commits `d500907`
+
 + `d7df994`) is the full `06-REVIEW.md` round: WR-01/02/03 + IN-01/02, the `DEF-06-45-04`
+
 non-detecting-recipe fix, the bracketing-scope decision, and the two `autonomous: false`
 live-estate plans (`06-51` host git sync, `06-52` snapshot go/no-go). ⛔ Round 6 drives **no**
 CONF-04 work — `06-VERIFICATION.md` holds that no further Phase 6 action on it is warranted or
@@ -1888,10 +1890,12 @@ Recent decisions affecting current work:
   override carries the Jellyfin half to Phase 7 entry criterion **E6** and is written at every site
   as an auditable **carry of an OPEN requirement, never a close** — the single easiest wrong
   inference for a downstream reader, flagged independently by 06-43 and 06-44.
+
 - [06-45]: **No verification verdict was self-declared.** `06-VERIFICATION.md` keeps
   `status: gaps_found` / `score: 5/6` byte-identical; a `superseded_note:` states that re-scoring is
   **`/gsd-verify 06`'s call** and that running it is the recommended next step. Phase 6's Status cell
   stays `In Progress`; only the plan counter moved, 44/45 → 45/45.
+
 - [06-45]: **Phase 7 entry criterion E6 now carries its two measurements separately**, because
   exactly one moved. The FIRST (Jellyfin's re-probe reaching 4/2/2) is STILL OPEN on a *driven*
   negative — the mtime route is measured false for this estate at Jellyfin 10.11.11, so Phase 7 must
@@ -2411,8 +2415,26 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-09-24T17:20:00.000Z
-Stopped at: Completed 06-46-PLAN.md (round 6, wave 1) — WR-01 and the `check-music-freeze.sh` half
+Last session: 2026-09-25T13:16:59.848Z
+Stopped at: Phase 7 context gathered — `/gsd-discuss-phase 7` complete. `07-CONTEXT.md` captures
+**D-01 … D-31** across five areas plus closure. Three findings surfaced that were recorded nowhere:
+(1) `tank/downloads/mybook-music-archive` (**1.30 T / 165,467 audio / 450 DJ releases**) has **no
+QUAL-01 before-state** — `snapshot-music-tags.sh` pins four roots and it is none of them — so
+criterion 4 is uncomputable against it; it is scoped OUT and given its own **inserted phase between
+8 and 9**, with DUPE-01/02 folded in. (2) `diff-music-tags.sh:156`'s `reduce` join is **silently
+last-wins** on duplicate `audio_md5`, so whether QUAL-02 fires depends on file-walk order — fixed by
+a fail-closed **AMBIGUOUS/exit 3**, symmetric on both sides, driven on fixtures *and* the real
+snapshot. (3) `ROADMAP.md`'s *"must precede any import of `unsorted`"* conflicts with the agreed
+draw, and is **amended in band** to *bulk* import with the pilot named as the exception.
+Sample: 6 reused bucket-A rows + the 2 DJ folders + 4 fresh (one slot reserved for E6's ≥4-artist
+measurement); `Michael Jackson – The Essential` is the gated first album. ⛔ **Phase 6 is NOT
+complete** — `06-VERIFICATION.md` stands at `gaps_found` 5/6, CONF-04 unticked, ROADMAP status
+`In Progress`; `/gsd-verify 06` is still its next step. Next for Phase 7: `/gsd-plan-phase 7`.
+⚠ `state.record-session` set `completed_phases: 6` / `total_plans: 126` / `percent: 60` unasked;
+reverted to 5 / 124 / 50 against the ROADMAP's five `Complete` rows — 6 would have been a false
+close of Phase 6.
+
+Previously: 06-46-PLAN.md (round 6, wave 1) — WR-01 and the `check-music-freeze.sh` half
 of WR-03 closed in band as `R6-01` / `R6-03`. **`shellcheck -S warning` is clean on all six reviewed
 scripts, where it was clean on five**, and both pinned-count fail arms now emit the literal edit they
 require plus the prohibition on silencing them with the env override. Four added lines; no predicate,
@@ -2437,7 +2459,7 @@ its second — the ≥4-artist MA discrimination — stays with Phase 7. Residue
 Also outstanding and unchanged: the operator `git push` + host `git pull --ff-only` in
 `/mnt/fast/stacks`, without which a live `quick-health-check.sh` measures pre-06-44 prose
 (`DEF-06-45-05`). Both snapshots stay held; no `zfs rollback` was executed.
-Resume file: .planning/phases/06-tagger-configuration-and-dry-run/06-VERIFICATION.md
+Resume file: .planning/phases/07-pilot-12-albums-end-to-end/07-CONTEXT.md
 
 _(The two lines below are the older Phase 6 entry-point note, kept because the wave-20 pointer above
 supersedes only the resume position, not the phase context.)_
