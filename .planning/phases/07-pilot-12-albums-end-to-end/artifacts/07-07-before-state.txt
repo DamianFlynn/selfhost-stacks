@@ -1,0 +1,139 @@
+# 07-07 before-state record — plan 07-07 tasks 1 and 2
+# Measured 2026-09-25T23:46Z .. (UTC) on LXC 100 (172.16.1.159) and atlantis (172.16.1.158, real root).
+# Nothing in this plan wrote to /mnt/tank, beets state, Jellyfin or Music Assistant. Machine-readable
+# outputs stay at the fences named below; only counts and digests are recorded here.
+
+== TASK 1 ==
+
+-- driver programs (workstation scratch, scp'd to /mnt/fast/safety/phase07/before/) --
+capture.sh   463f37b9e3ccf4972c6e50344a5fbb3a014d473bac92ad6f7d191996db9d7719  (one snapshot run per folder; refuses an existing basename)
+manifest.sh  879f478e910c987ee0c94801566868c60b0ea6b85e001428d340f87823ba18ef  (atlantis, id -u = 0 asserted)
+xcheck.sh    4f9fd2032883379037673d0ef2eca5123d3e7c5ce8b2c828d616fdc332293350  (coverage + informational diff, on copies)
+folders.tsv  97e2a00ef1d8545b44b615805541665109bbc6b30c7713422531c2089cd09267  (P-ID, folder, audio count — read off 07-SAMPLE.md § The twelve)
+
+-- 0. folders present, audio counts (LXC 100, same AUDIO_EXT as the snapshot script) --
+12 PRESENT, 0 MISSING; found == 07-SAMPLE count on all twelve (32 10 15 10 44 1 10 10 100 50 10 47 = 339).
+No folder path contains a comma (grep -c ',' folders.tsv = 0), so `--roots`' comma split cannot fire;
+checked anyway: every capture log reports `roots: 1`, and each capture's record count equals its
+folder's audio count (below). P03's path (`&`, `⭐️`) is printed verbatim in its log.
+
+== BEFORE CAPTURE ==
+
+instrument: scripts/snapshot-music-tags.sh on LXC 100 from /mnt/fast/stacks (checkout at 0c95427, not pulled)
+sha256 deployed 60212666a6a5ce792ddaa9f844ae9eff450bc06d093c9a769fa17e080ce92f27 == workstation (HEAD) — EQUAL
+command, per P-ID:  timeout 3600 bash scripts/snapshot-music-tags.sh pre-07-PNN --roots "<folder>"
+output dir:         /mnt/fast/safety/music-pre-project/tags/   (no pre-07-* existed before the run)
+run window:         2026-09-25T23:46:19Z .. 23:47:37Z
+
+P-ID  rc  roots  expected  records  .done  .failed(lines)  distinct audio_md5  sha256(ndjson.gz)
+P01   0   1      32        32       32     0               32                  7ba9d87ef616bbf78df1f962ca4613fb6ba63af3ea6f4ceb20e5694e92171f01
+P02   0   1      10        10       10     0               10                  e9bf1beb2e96e05ec3d789c372978d4eef88cae26840bed0e737807ec985c158
+P03   0   1      15        15       15     0               15                  c61152d7e81918cf3b936a25885c55a06d7a766f8b6ff0d2097d352bf466a214
+P04   0   1      10        10       10     0               10                  871944789f355465a945d10882d940cb66856fae91b972865827258b41415c95
+P05   0   1      44        44       44     0               44                  348065899675013705ae4134427bf4c3bcc75e1e9195acb9fce6c6fd96ce8a6d
+P06   0   1      1         1        1      0               1                   20f015c18ad7fab83cbfef501b923f8282c5d7dfa4d8bd2e06821b8fc188666c
+P07   0   1      10        10       10     0               10                  4eb2afa97f7a7d4481358793bb68981ce7f54829d9edc67ca03447f9c099997f
+P08   0   1      10        10       10     0               10                  cbbe1c93accfd2d538ad72fa94e7f2ab212a90854990a17e9c0a7cf4e09afbd2
+P09   0   1      100       100      100    0               100                 9fa83f14f59b631b7acb01b30986b06abe621b69d2fc382ce47c55daf08a7eea
+P10   0   1      50        50       50     0               50                  1bf5dc01e8d5dddf3d4b1653f27adb43fe17a51dc0d44fca832da70a7a655189
+P11   0   1      10        10       10     0               10                  00ffd1d901c4dfd5e4219b7b1ed62dd7a3ded2041d92d900fe781ca072f30d7b
+P12   0   1      47        47       47     0               47                  60008befdf74df6434a695c80738b76ce87e80b3fbd643bc9d39b5d8e827fa93
+
+concatenation (gzip members concatenate):
+  cat pre-07-P01.ndjson.gz … pre-07-P12.ndjson.gz > pre-07-pilot.ndjson.gz   (chown 568:568, chmod 644)
+  pre-07-pilot records [339] == sum [339]; distinct audio_md5 339; jq-valid lines 339
+  sha256 a05cc33f7d37af3c5c392ef75549d179b2a6a8fd6ccff9d46b2b95a6afe05db9
+  Only the .ndjson.gz is concatenated; pre-07-pilot has no .done/.failed of its own (the twelve per-album
+  ledgers are the resume record).
+
+scope (carried finding 07-02 / E7): each per-album capture is ONE folder, so no capture spans both roots of
+a DUPE-01 pair, and pre-07-pilot carries no duplicate audio_md5 (339 records, 339 keys). The twins still
+exist beside P07, P08 and P11 (see PRE-PROJECT COVERAGE) and are NOT in any pre-07-* capture — by design.
+
+read-only: the snapshot script is read-only against its scan roots by construction (ffmpeg `-f md5 -` to
+stdout, ffprobe; its only writes are its own three outputs under the fence).
+
+== PRE-PROJECT COVERAGE ==
+
+pre-project.ndjson.gz (2026-08-18): 9,736 records, sha256 7b3a09aeb44d4aba544d239b5edcf1a69496c764656abef23d1764d15225fd88
+read via a byte-equal COPY under /mnt/fast/safety/phase07/before-xcheck/ (copy sha256 identical).
+diff instrument: /mnt/fast/safety/phase07/diff-drive/diff-music-tags.sh, sha256
+4bbfaf6046bd89fe5d83e8276657bf74c478f06b4d9aa07e12b7fe2e01e4cc24 == workstation HEAD (plan 07-02 version).
+(The host checkout's own copy is the pre-07-02 467e51fd…, so it was not used.)
+
+P-ID  covered/total  pre-project records on those keys (by scan_root)
+P01   0/32           0
+P02   0/10           0
+P03   0/15           0
+P04   0/10           0
+P05   44/44          44  (music)
+P06   0/1            0
+P07   10/10          20  (dj-mixes 10 + unsorted 10 — the DUPE-01 twin)
+P08   10/10          20  (dj-mixes 10 + unsorted 10 — the DUPE-01 twin)
+P09   100/100        100 (unsorted)
+P10   50/50          50  (unsorted)
+P11   10/10          20  (unsorted 10 + dj-mixes 10 — the DUPE-01 twin)
+P12   47/47          47  (unsorted)
+TOTAL 271/339        — 68 pilot files (P01-P04, P06: all music/ arrivals after 2026-08-18) have NO
+                       pre-project record at all.
+
+This is why `pre-07-pilot` (and the per-album `pre-07-PNN`) is the BEFORE of record: pre-project covers
+271 of 339 (79.9 %), and for the three twin albums its keys are held by two differing records, so a diff
+against it is UNKNOWN (below). The twins' folders are all still present:
+  P07 twin /mnt/tank/downloads/complete/nzb/unsorted/Mastermix.Issue.420.2021  present
+  P08 twin /mnt/tank/downloads/complete/nzb/unsorted/Mastermix.Issue.421.2021  present
+  P11 twin /mnt/tank/downloads/complete/nzb/dj-mixes/Mastermix_Issue_415       present
+
+cross-check — pre-project restricted to the album's keys as BEFORE, pre-07-PNN as AFTER, `--json`
+(information, not a gate: the tag change the backlog underwent 2026-08-18 → now):
+P-ID  rc  matched  missing_after  new_after  dropped  gained  changed  dup_keys_before  ambiguous_before
+P05   0   44       0              0          0        0       0        0                0
+P07   0   10       0              0          0        0       0        10               0   (twins identical)
+P08   3   10       0              0          0        0       0        10               10  (UNKNOWN)
+P09   0   100      0              0          0        0       0        0                0
+P10   0   50       0              0          0        0       0        0                0
+P11   3   10       0              0          0        18      27       10               9   (UNKNOWN)
+P12   0   47       0              0          0        0       0        0                0
+P01-P04, P06: not run (coverage 0).
+
+P08 / P11 exit 3 is the 07-02 E7 contract firing as designed — the join would have to pick one of two
+differing twin records (P11's `changed 27` is the dj-mixes twin's tags read against the unsorted file:
+e.g. album `Mastermix Issue 415 (Januar 2021)` vs `Mastermix`, track `03` vs `203`). Re-run with BEFORE
+restricted to records from the SAME folder as the AFTER:
+P07 same-folder  rc 0  matched 10  dropped 0 gained 0 changed 0  ambiguous 0
+P08 same-folder  rc 0  matched 10  dropped 0 gained 0 changed 0  ambiguous 0
+P11 same-folder  rc 0  matched 10  dropped 0 gained 0 changed 0  ambiguous 0
+
+Reading: on every covered pilot file, the tags today are identical to 2026-08-18 (0 changed, 0 gained,
+0 dropped, 271/271). Phase 5's in-place writes did not touch these twelve folders' covered files.
+
+== SOURCE MANIFEST ==
+
+read on atlantis as real root (`id -u` = 0, hostname atlantis; tank/downloads mounted at /mnt/tank/downloads)
+per folder: `find . -type f` → P-ID<TAB>relative path<TAB>size<TAB>sha256<TAB>mtime_epoch, sorted LC_ALL=C
+control-character filename check: none in any of the twelve folders (TSV cannot be split by a name)
+bounded: timeout 3000, rc=0
+
+P-ID  top-level stat (%u:%g %a, from atlantis)  regular files (audio + non-audio)
+P01   568:568 777                                32
+P02   568:568 777                                10
+P03   568:568 777                                15
+P04   568:568 777                                10
+P05   568:568 777                                44
+P06   568:568 777                                1
+P07   568:568 777                                11  (+ album.nfo)
+P08   568:568 777                                11  (+ album.nfo)
+P09   568:568 777                                100
+P10   568:568 777                                52  (+ .cue, .log)
+P11   568:568 777                                11  (+ Mastermix Issue 415.nzb)
+P12   568:568 777                                50  (+ .m3u, Front.webp, Back.webp)
+
+manifest lines [347]; distinct P-IDs 12; sha256 8480c429729665c5ca3a08fda989c7f9238dba46683f4490504b82cf95d0b411
+  atlantis  /root/phase07-0707/source-manifest-before.tsv
+  LXC 100   /mnt/fast/safety/phase07/source-manifest-before.tsv                        (sha256 equal)
+  repo      .planning/phases/07-pilot-12-albums-end-to-end/artifacts/07-07-source-manifest-before.tsv (sha256 equal)
+Non-audio files are 8 (347 − 339). The criterion-8 AFTER manifest is re-taken identically (same program,
+same host, same user) in plan 07-17 and compared to this one.
+
+No write under /mnt/tank: the manifest program only runs `find`, `stat` and `sha256sum` inside each
+folder; its only output is under /root/phase07-0707/ on atlantis.
