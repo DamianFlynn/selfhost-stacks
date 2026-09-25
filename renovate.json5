@@ -532,21 +532,29 @@
   // and sit open awaiting review; at a limit of 10 those permanently occupy slots and eventually
   // block ALL other updates -- which is how the pipeline jammed in 2026-07.
   //
-  // RAISED AGAIN 20 -> 50 on 2026-09-25, because the SAME jam had recurred and the 2026-07 note
-  // above describes it exactly. Measured on the Dependency Dashboard that day: 21 PRs open against
-  // a limit of 20, so 23 further updates were parked in Rate-Limited and COULD NOT OPEN AT ALL.
-  // The oldest open PR dated from 2026-07-31, two months earlier.
+  // RAISED AGAIN 20 -> 50 on 2026-09-25, when 21 PRs were open against a limit of 20 and 23
+  // further updates sat in Rate-Limited, unable to open at all. Oldest open PR: 2026-07-31.
   //
-  // This is a SYMPTOM FIX AND IT WILL RECUR. Raising the ceiling does not address the mechanism:
-  // manual-review PRs never close by themselves, so any fixed ceiling is eventually consumed by
-  // them and the queue silently stops. The actual remedy is to triage the open list on a cadence
-  // and close what will never be merged. Renovate offers no way to exempt automerge:false PRs from
-  // this count, which is why there is no cleverer setting to reach for here.
+  // CORRECTION, SAME DAY, AND IT MATTERS: the first version of this note blamed the jam on
+  // manual-review PRs consuming the ceiling, by analogy with the 2026-07 note above. THAT WAS
+  // WRONG and was written before the list was actually read. Of the 22 open PRs, ZERO were major
+  // and ZERO carried manual-review-required. Every one was a clean, mergeable patch/minor update
+  // labelled `automerge` that had simply never merged.
   //
-  // WHAT THE JAM COSTS, so the next reader does not treat it as cosmetic: while it held, tsbridge
-  // ran v0.13.1 on the host against v0.15.0 declared in tsproxy.yaml, with the v0.15.1 PR (#322)
-  // open and stuck since 2026-08-21 -- a month of a load-bearing tailnet proxy being two minors
-  // behind what the repo claimed. A jammed queue reads as quiet, not as broken.
+  // The real cause was in .github/workflows/compose-validate.yaml, not here: its `paths:` filter
+  // meant PRs touching per-service files (audiobookshelf.yaml, tsproxy.yaml, ...) ran no check,
+  // so there was no merge blocker, so GitHub REFUSED to enable auto-merge -- it only permits it on
+  // a PR that is blocked -- so platformAutomerge silently failed. Fixed there, with `validate` now
+  // a required status check on main. Read that file's header before touching automerge behaviour.
+  //
+  // So this raise is headroom for the backlog to drain, NOT the fix. The ceiling is still worth
+  // keeping: manual-review PRs genuinely do accumulate over time and 50 is not infinite.
+  //
+  // WHAT THE JAM COST, so it is not read as cosmetic: while it held, tsbridge ran v0.13.1 on the
+  // host against v0.15.0 declared in tsproxy.yaml, with the v0.15.1 PR (#322) stuck open since
+  // 2026-08-21 -- a load-bearing tailnet proxy a month and two minors behind what the repo
+  // claimed, at the same time as new work (TODO-317) was being built on it. A jammed queue reads
+  // as quiet, not as broken.
   "prConcurrentLimit": 50,
   "prHourlyLimit": 6,
   "schedule": [
