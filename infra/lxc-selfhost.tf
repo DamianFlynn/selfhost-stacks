@@ -345,14 +345,40 @@ resource "proxmox_virtual_environment_container" "selfhost" {
   # have destroyed and recreated the Docker host. The landmine had been armed for
   # months, waiting for the next person to run apply without reading the plan.
   #
-  # Root cause: 33 `mount_point` blocks each diffed as
+  # Observed symptom: `mount_point` blocks each diffed as
   #     - mount_options     = [] -> null
   #     ~ path_in_datastore = "/mnt/..." -> (known after apply)
-  #   marked "# forces replacement". This config never sets `mount_options`;
-  #   bpg/proxmox 0.95.0 holds `[]` in state, reads config's absence as `null`,
-  #   and treats that transition on a nested block as replacement-forcing. It is a
-  #   provider representation artifact, NOT real infrastructure drift — the actual
-  #   bind mounts on the host are correct and unchanged.
+  #   marked "# forces replacement".
+  #
+  # ROOT CAUSE — CORRECTED 2026-09-25, read from the provider source at tag v0.95.0.
+  #   The original note recorded this as a `mount_options [] -> null` "provider
+  #   representation artifact". THAT WAS WRONG, and it matters, because it implies a
+  #   cosmetic diff that a newer provider would fix. Neither half is true.
+  #
+  #   The real mechanism is two things in proxmoxtf/resource/container/container.go:
+  #     1. BLOCK-LEVEL `ForceNew: true` on the `mount_point` TypeList itself
+  #        (line 681-685; also .size line 745 and .volume line 752). ANY change to
+  #        the mount SET forces replacement, by design. mount_options is incidental.
+  #     2. A READ ASYMMETRY (lines 2719-2730): mount points present in PVE but ABSENT
+  #        from config are written into state on refresh. The next plan therefore wants
+  #        to remove them, the block count changes, and (1) forces replacement.
+  #
+  #   So the trigger is not a representation quirk — it is any divergence between the
+  #   mounts on the host and the mounts in this file. As of 2026-09-25 that divergence
+  #   EXISTS and the landmine is still armed: `fast/appdata/buzz` and `tank/buzz` are
+  #   in state and on the host (mp29/mp30) but not in this config, and
+  #   `fast/appdata/agentic-os` is declared here but exists on neither. Reconciling
+  #   those three is what actually disarms this; `ignore_changes` only hides it.
+  #
+  #   NOT FIXABLE BY UPGRADING. The ForceNew set on mount_point is unchanged through
+  #   v0.114.0. Upstream issue #3028, fix PR #3032 — open and unmerged at 2026-09-25.
+  #   Watch that PR; until it lands, `ignore_changes = [mount_point]` below is correct
+  #   and necessary.
+  #
+  #   Also note `initialization[0].user_account[0].keys` is ForceNew and is NOT in the
+  #   ignore list: rotating an SSH key in tfvars plans a DESTROY of this container.
+  #   prevent_destroy turns that into a hard apply error rather than data loss, which
+  #   is the right outcome, but it is a trap worth knowing before you rotate a key.
   #
   # Two independent guards, deliberately. ignore_changes alone would have been
   # enough to silence THIS diff, but it only covers the failure mode we happen to
