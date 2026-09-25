@@ -383,3 +383,130 @@ f6a9a1ad7aa553e42e53a8056fa80724785111180a5e2122be4f8732d1e4bc7c  /config/state.
 rc=0
 library.db / state.pickle: IDENTICAL to § 0 (fixture fbbdde0c... / f6a9a1ad...). /media stayed
 RW=false throughout (layer 1 in § 2).
+
+=====================================================================================
+§ 5  ARM1 DUMP SIZE  (task 2; DEF-06-29-04)  — 2026-09-25T22:52:31Z
+=====================================================================================
+One line added to scripts/check-beets-config.sh, immediately after
+`cp "$WORKDIR/exec.out" "$WORKDIR/arm1.dump"` (WORKDIR is a mktemp -d, so the size can only be
+captured inside the run), using the file's own `info` helper and carrying no `beet` token:
+    info "arm1.dump bytes: $(wc -c <"$WORKDIR/arm1.dump" | tr -d ' ')"
+git diff --stat: scripts/check-beets-config.sh | 1 + (1 insertion, 0 deletions)
+
+$ bash scripts/check-beets-config.sh --self-test
+  ✅ --self-test: all 7 cases behaved as expected (6 of them red)
+exit 0 — same announced count (7 cases, 6 red) as the pre-edit baseline run minutes earlier.
+
+$ bash scripts/check-beets-config.sh      (LIVE, pre-grant; transcript below, ANSI SGR stripped)
+EXIT CODE: 0   (FAILURES total: 0)
+
+  arm1.dump bytes: 5977
+
+  GC-01 margin, as stated in 06-22-pipefail-141.txt PART 1: the ceiling is the 64 KiB PIPE BUFFER,
+  65536 bytes — BSD grep 2.6.0 found the substring at 57357 bytes (56 KiB) and missed it with
+  pipeline rc 141 at 65549 bytes (64 KiB) and above.
+  live arm-1 dump: 5977 bytes = 91 per mille (~9 %) of 65536; headroom 59559 bytes.
+  READING: the live dump was ~91 % BELOW the ceiling, not in the ~17 %-below band the review's brief
+  measured on another instance. GC-01 was therefore LATENT against this estate, not about to fire.
+  (The dump is the REDACTED form - `dump(full=True, redact=True)` - and T-06-33 asserts redacted and
+  unredacted are byte-identical here, so the figure is the size either way.) The fix (plan 06-22)
+  removed the pipeline, so this number no longer bounds anything; it is recorded as history, which
+  is all DEF-06-29-04 asked for.
+
+  PRE-GRANT C1 READING for plan 07-08 (server-committed arm 1, the object that will import):
+    import.copy  = true    (asserted, CONF-01)
+    import.move  = false   (asserted, CONF-01)
+    import.write = true    (REPORTED, not asserted - Phase 7 behaviour)
+  plus import.duplicate_action = ask, incremental = true, incremental_skip_later = true,
+  directory = /media/Music, library = /config/library.db, statefile = /config/state.pickle.
+  D-29 layer 3 either side: fbbdde0c... / f6a9a1ad... unchanged.
+
+---- live transcript (verbatim, SGR-stripped) ----
+🧰 0. Toolchain preconditions
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✅ ssh /usr/bin/ssh — OpenSSH_10.3p1, LibreSSL 3.3.6
+  ✅ jq /usr/bin/jq — jq-1.7.1-apple
+  ✅ python3 /opt/homebrew/bin/python3 — Python 3.14.7
+  ✅ base64 /usr/bin/base64 — base64: invalid option -- V
+  ✅ docker (remote, root@172.16.1.159) server 29.2.1
+
+⏳ 1. Readiness gate — the watchdog registration line
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✅ readiness: the watchdog registration line is present (attempt 1 of 6)
+  [INFO] beets-flask.wdog: Registering watchdog with debounce of 30 seconds for inboxes: ['/downloads/complete/nzb/_inbox/01-auto', '/downloads/complete/nzb/_inbox/02-review', '/downloads/complete/nzb/_inbox/03-asis']
+
+🅰  2. ARM 1 — the server-committed effective config (CONFIG_ROUTE)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  D-29 layer 3, before: fbbdde0c416e72b9884e56c562fd88eaa4da447926e1cb6cc17c3e04aee7da1a /config/library.db f6a9a1ad7aa553e42e53a8056fa80724785111180a5e2122be4f8732d1e4bc7c /config/state.pickle 
+  arm1.dump bytes: 5977
+  ✅ ARM 1 read via CONFIG_ROUTE=server-committed — 262 lines, 44 top-level keys
+
+🅱  3. ARM 2 — the CLI/confuse view (CONFIG_ROUTE_CLI)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✅ ARM 2 no-op overlay /tmp/phase06-check-beets-config-noop.yaml: truncated, then MEASURED at 0 bytes — nothing in it can outrank the vendored config
+  ✅ ARM 2 read via CONFIG_ROUTE_CLI=confuse — 227 lines
+  ✅ ARM 2 assembled from 3 file(s):
+      /tmp/phase06-check-beets-config-noop.yaml
+      /config/config.yaml
+      /venv/lib/python3.12/site-packages/beets/config_default.yaml
+  ✅ T-06-33: the redacted and unredacted dumps are byte-identical — no beets credential exists, asserted rather than assumed
+  D-29 layer 3, after:  fbbdde0c416e72b9884e56c562fd88eaa4da447926e1cb6cc17c3e04aee7da1a /config/library.db f6a9a1ad7aa553e42e53a8056fa80724785111180a5e2122be4f8732d1e4bc7c /config/state.pickle 
+  ✅ D-29 layer 3: library.db and state.pickle are byte-identical either side of this run
+
+🔎 4. Assertions over the server-committed config (ARM 1 only)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✅ positive control: rc6 schema keys present in the dump (gui.num_preview_workers=4, gui.terminal.start_path=/repo) — this IS the server-committed object
+  ✅ CONF-01 import.copy = true
+  ✅ CONF-01 import.move = false
+  ✅ CONF-02 import.incremental = true
+  ✅ CONF-02 import.incremental_skip_later = true
+  ✅ CONF-05 match.preferred.countries contains GB — ["GB","US"]
+  ✅ CONF-05 match.preferred.countries contains UK = false (not 'true')
+  ✅ CONF-05 match.preferred.original_year = true
+  ✅ CONF-05 musicbrainz.extra_tags is a non-empty list (5 entries): ["year","catalognum","country","media","label"]
+  ✅ T-06-31 import.duplicate_action = ask
+  ✅ match.medium_rec_thresh = 0.25
+  ✅ directory = /media/Music
+  ✅ statefile = /config/state.pickle
+  ✅ library = /config/library.db
+  ✅ SAFE-01 scrub.auto = false
+  ✅ SAFE-01 lastgenre.auto = false
+  ✅ SAFE-01 embedart.auto = false
+  ✅ paths.comp equals paths.default — the inherited compilation rule is OVERRIDDEN, which is the only way to neutralise it (there is no syntax for deleting an inherited path rule)
+  ✅ paths: no rule routes anything into a Compilations/ tree
+  ✅ per_disc_numbering = true
+  ✅ asciify_paths = false
+  ✅ va_name = Various Artists
+  ✅ plugins is a one-entry list containing musicbrainz
+
+⚖️  5. ARM 1 vs ARM 2 — reported, not asserted equal
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  KEY                                        ARM 1 (server-committed)     ARM 2 (confuse/CLI)
+  .library                                   "/config/library.db"         "/tmp/p6-cbc-throwaway.blb"
+  .gui.num_preview_workers                   4                            UNKNOWN
+  .gui.terminal.start_path                   "/repo"                      UNKNOWN
+  3 of 26 compared keys differ — expected, and the point of D-30
+
+  ⚠️  REPORTED, not asserted: import.write = true in the server-committed config. That is Phase 7 behaviour; a Phase 6 invocation overrides it to no through its own -c overlay.
+
+📊 6. Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  CONFIG_ROUTE (arm 1):        server-committed
+  CONFIG_ROUTE_CLI (arm 2):    confuse
+  READY_ROUTE:                 watchdog-log-line
+  arm 1 blind:                 0   (1 = nothing below section 4 was measured)
+  arm 2 blind:                 0
+  inter-arm differences:       3 of 26 compared keys (reported, not asserted)
+  redaction no-op (T-06-33):   no-op
+  no-op overlay size (WR-04):  0   (bytes; anything but 0 refuses arm 2)
+  D-29 before:                 fbbdde0c416e72b9884e56c562fd88eaa4da447926e1cb6cc17c3e04aee7da1a /config/library.db f6a9a1ad7aa553e42e53a8056fa80724785111180a5e2122be4f8732d1e4bc7c /config/state.pickle 
+  D-29 after:                  fbbdde0c416e72b9884e56c562fd88eaa4da447926e1cb6cc17c3e04aee7da1a /config/library.db f6a9a1ad7aa553e42e53a8056fa80724785111180a5e2122be4f8732d1e4bc7c /config/state.pickle 
+  toolchain missing:           0
+  arm-1 assertion failures:    0
+  FAILURES total:              0
+
+✅ CONF-01 (copy not move), CONF-02 (incremental AND incremental_skip_later), CONF-05
+   (GB not UK, original_year, musicbrainz.extra_tags), the four rc6 schema-default
+   landmines, the SAFE-01 three and the path stanza are all asserted TRUE of the
+   SERVER-COMMITTED config — the object that will actually import.
+---- end ----

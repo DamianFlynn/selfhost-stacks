@@ -1009,6 +1009,7 @@ PYARM1
     fail "ARM 1: UNKNOWN, not green — the route exited 0 but produced an EMPTY dump"
   else
     cp "$WORKDIR/exec.out" "$WORKDIR/arm1.dump"
+    info "arm1.dump bytes: $(wc -c <"$WORKDIR/arm1.dump" | tr -d ' ')"
     CONFIG_ROUTE="server-committed"
     ARM1_JSON="$(dump_to_json <"$WORKDIR/arm1.dump")"
     if [[ -z "$ARM1_JSON" ]]; then
