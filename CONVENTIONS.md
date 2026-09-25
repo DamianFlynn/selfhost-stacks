@@ -133,6 +133,9 @@ from the failure message unless the convention is written down, which is what th
   compared against `ST_RUN`.
 - `ST_PLANNED_CASES` — `scripts/diff-music-tags.sh`, the announced self-test case count,
   compared against `st_cases` (plan `07-02`, D-12).
+- `ST_PLANNED_CASES` — `scripts/check-music-import.sh`, the announced self-test case count,
+  compared against `st_cases`. Its dumper-level check is deliberately **not** counted, because it
+  runs only where a local `python3` exists (plan `07-03`, D-25).
 
 **The remedy, which the failure output now prints (plan `06-46`):** read every new line **by hand**
 — they are invisible to the driving grep, so the section is `UNKNOWN`, not clean, until they are —
