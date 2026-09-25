@@ -1600,7 +1600,7 @@ item nobody owns.)*:
 **Plans**: 17 plans in 13 waves (planned 2026-09-25; revised the same day against cross-AI review round 1 — `07-REVIEWS.md`, all 15 CONFIRMED + 7 PLAUSIBLE findings — and again against round 2, all 16 CONFIRMED + operator-promoted P7R2-10 + PLAUSIBLE P7R2-18…20; 0/17 executed)
 
 Plans:
-- [ ] 07-01-PLAN.md — evidence map registered before the run (D-31) + argued D-13 amendment of the `unsorted` rule
+- [x] 07-01-PLAN.md — evidence map registered before the run (D-31) + argued D-13 amendment of the `unsorted` rule
 - [ ] 07-02-PLAN.md — `diff-music-tags.sh` fails closed on an ambiguous join, both sides, driven on fixtures and real data (D-11, D-12)
 - [ ] 07-03-PLAN.md — `check-music-import.sh`, the criterion-7 sweep, fail-closed, folded into quick-health-check (D-25)
 - [ ] 07-04-PLAN.md — `route-dj-album.sh` (D-08) and its D-04 exemption-register entry, overlay-key half driven (D-27)

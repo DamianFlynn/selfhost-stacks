@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-25T15:51:25.000Z"
+last_updated: "2026-09-25T22:50:00.000Z"
 progress:
   total_phases: 10
   completed_phases: 5
   total_plans: 141
-  completed_plans: 124
+  completed_plans: 125
   percent: 50
 ---
 
@@ -21,13 +21,15 @@ See: .planning/PROJECT.md (updated 2026-08-17)
 **Core value:** New music downloads land in the library correctly tagged, through exactly one
 pipeline that someone owns.
 **Current focus:** Phase 07 — pilot-12-albums-end-to-end (**PLANNED 2026-09-25, 17 plans in
-13 waves, 0 executed**; Phase 06 stays `In Progress` at `gaps_found` 5/6 with CONF-04 carried to
+13 waves, 1 of 17 executed — 07-01 done**; Phase 06 stays `In Progress` at `gaps_found` 5/6 with CONF-04 carried to
 Phase 7 E6 — `/gsd-verify 06` is still owed)
 
 **Definition of done (CONS-04):** a file is imported only when verified with `ffprobe` on the file
 *and* visible in both Jellyfin and Music Assistant. Never "tool configured".
 
 ## Current Position
+
+**PLAN 07-01 COMPLETE — 2026-09-25.** `07-EVIDENCE-MAP.md` registered before the run (commit `823fe04`) and the ROADMAP DUPE-01/02 `unsorted` rule amended in band to BULK import, with the pilot excepted and conditional on the D-11 AMBIGUOUS arm (commit `dd90e78`). Next: 07-02. No library write has happened yet.
 
 **PHASE 07 REPLANNED (`--reviews`, round 2) — 2026-09-25.** The round-2 CONFIRMED findings (P7R2-01…09, 11…17), the operator-promoted P7R2-10 and the PLAUSIBLE P7R2-18…20 were folded into 12 of the 17 plans. 07-02, 04, 05, 08 and 14 were untouched. The REFUTED list was a hard exclusion, and P7R2-21 was left unchanged by operator decision: an MA sync FOUND is a finding, not a block. Key changes: 07-09 verifies are now keyed on per-run `## RUN <n>` sections and the ledger's newest token, which closes the fail-open verify P7R2-01. They also add a named `STATE 07-09-GRANTED` and re-entry for every post-grant stop. 07-10 reads how 07-09 ended. 07-11 T3 binds the destroy count to the verdict in both directions and computes a mechanical `QUALITY: PASS` line. 07-12 now requires both `QUALITY: PASS` and `EQUALITY VERDICT: PASS`. 07-12/07-13 check disposition completeness against 07-06's `EXECUTION SET` lines, and 07-13 gains a `ROUTE-PARTIAL` stop. Plan-checker: **VERIFICATION PASSED, 0 BLOCKER / 0 WARNING**, first iteration. The step-13a decision-coverage gate returned `total: 0` (the known parser blind spot), so D-01…D-31 coverage was confirmed by the checker's grep instead.
 
@@ -2445,8 +2447,8 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-09-25T13:16:59.848Z
-Stopped at: Phase 7 context gathered — `/gsd-discuss-phase 7` complete. `07-CONTEXT.md` captures
+Last session: 2026-09-25T22:50:00.000Z
+Stopped at: Completed 07-01-PLAN.md (evidence map + D-13 amendment); next is 07-02. Earlier: Phase 7 context gathered — `/gsd-discuss-phase 7` complete. `07-CONTEXT.md` captures
 **D-01 … D-31** across five areas plus closure. Three findings surfaced that were recorded nowhere:
 (1) `tank/downloads/mybook-music-archive` (**1.30 T / 165,467 audio / 450 DJ releases**) has **no
 QUAL-01 before-state** — `snapshot-music-tags.sh` pins four roots and it is none of them — so
