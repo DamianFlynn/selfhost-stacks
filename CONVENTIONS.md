@@ -131,6 +131,8 @@ from the failure message unless the convention is written down, which is what th
   compared against `st_cases`.
 - `ST_PLANNED_CASES` — `scripts/phase06-oracle.sh`, the same idea over a much larger harness,
   compared against `ST_RUN`.
+- `ST_PLANNED_CASES` — `scripts/diff-music-tags.sh`, the announced self-test case count,
+  compared against `st_cases` (plan `07-02`, D-12).
 
 **The remedy, which the failure output now prints (plan `06-46`):** read every new line **by hand**
 — they are invisible to the driving grep, so the section is `UNKNOWN`, not clean, until they are —

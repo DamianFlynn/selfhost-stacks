@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # diff-music-tags.sh - Field-level comparison of two tag snapshots, keyed on the audio-stream hash
 # Usage: ./scripts/diff-music-tags.sh BEFORE.ndjson.gz AFTER.ndjson.gz [--summary-only] [--full] [--json]
+#        ./scripts/diff-music-tags.sh --self-test
 #
 # Consumes the NDJSON emitted by scripts/snapshot-music-tags.sh and answers the one question
 # QUAL-02 gates on: did any file, or any tag field, get LOST between the two captures?
@@ -63,11 +64,13 @@ NC='\033[0m' # No Color
 usage() {
   cat >&2 <<'EOF'
 usage: ./scripts/diff-music-tags.sh BEFORE AFTER [--summary-only] [--full] [--json]
+       ./scripts/diff-music-tags.sh --self-test
 
   BEFORE, AFTER   gzipped (or plain) NDJSON produced by scripts/snapshot-music-tags.sh
   --summary-only  print only the counts block
   --full          do not truncate tag values in the per-file rows
   --json          emit the whole result as one JSON object, for programmatic gating
+  --self-test     drive five synthetic fixture pairs through both output arms (D-12)
 
 exit 0 = no net metadata loss, 1 = loss detected, 2 = usage or input error
 EOF
@@ -75,13 +78,14 @@ EOF
 }
 
 BEFORE=""; AFTER=""
-SUMMARY_ONLY=0; FULL=0; AS_JSON=0
+SUMMARY_ONLY=0; FULL=0; AS_JSON=0; SELFTEST_MODE=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --summary-only) SUMMARY_ONLY=1; shift ;;
     --full)         FULL=1; shift ;;
     --json)         AS_JSON=1; shift ;;
+    --self-test)    SELFTEST_MODE=1; shift ;;
     -h|--help)      usage ;;
     -*)             echo "unknown option: $1" >&2; usage ;;
     *)              if   [[ -z "$BEFORE" ]]; then BEFORE="$1"
@@ -91,9 +95,118 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-[[ -n "$BEFORE" && -n "$AFTER" ]] || usage
-
 command -v jq >/dev/null 2>&1 || { echo "jq is required and was not found" >&2; exit 2; }
+
+# ─── --self-test (D-12, plan 07-02) ───────────────────────────────────────────
+# Five synthetic fixture pairs, each driven through THIS FILE AS A SUBPROCESS (`bash "$0" …`), so
+# the self-test exercises the real code path rather than a restatement of it. Every case runs
+# twice: once through the text arm (`--summary-only`) and once through the `--json` arm, and BOTH
+# observed exit codes must equal the expected one — the `--json` arm carries its own exit
+# decision, so a case proven only through the text arm would leave `--json` callers untested.
+#
+# ST_PLANNED_CASES is the ANNOUNCED count; st_cases is what actually ran, and the two are compared
+# at the end — the check-beets-config.sh pattern (CONVENTIONS §5 lists this pin).
+#
+# Fixtures live under $PWD, never the system temp directory (LXC 100's is tmpfs), in a directory
+# created by mktemp -d with a fixed `.diff-music-tags-selftest.` prefix, and removed at the end by
+# an `rm -rf` fenced AT ITS CALL SITE (CONVENTIONS §6): non-empty, absolute, basename-pattern.
+st_record() {  # key, path, tags-json → one NDJSON record in the snapshot-music-tags.sh emit_record shape
+  jq -nc --arg k "$1" --arg p "$2" --argjson t "$3" \
+    '{audio_md5: $k, source_path: $p, scan_root: "/selftest", size_bytes: 1, mtime_epoch: 0,
+      ffprobe: {format: {tags: $t}, streams: [{codec_type: "audio"}]}}'
+}
+
+run_self_test() {
+  local ST_PLANNED_CASES=5
+  echo "🧪 --self-test — $ST_PLANNED_CASES cases: synthetic fixture pairs, each driven through the text arm AND the --json arm"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo ""
+
+  local st_failures=0 st_cases=0 st_red_cases=0
+  local st_dir
+  st_dir="$(mktemp -d "${PWD}/.diff-music-tags-selftest.XXXXXX")" || {
+    echo -e "${RED}❌ --self-test: could not create a fixture directory under $PWD${NC}" >&2
+    return 1
+  }
+
+  local t_title='{"TITLE":"Song","ARTIST":"Artist"}'
+  local t_title_key='{"TITLE":"Song","ARTIST":"Artist","TKEY":"8A"}'
+  local t_title_genre='{"TITLE":"Song","ARTIST":"Artist","GENRE":"Dance"}'
+
+  # st_case NAME EXPECTED_EXIT — fixture NDJSON is read from $st_before and $st_after
+  local st_before st_after
+  st_case() {
+    local name="$1" expect="$2" slug="case$((st_cases + 1))"
+    local b="$st_dir/$slug.before.ndjson" a="$st_dir/$slug.after.ndjson"
+    printf '%s\n' "$st_before" > "$b"; printf '%s\n' "$st_after" > "$a"
+    gzip -f "$b"; gzip -f "$a"
+    local rc_text=0 rc_json=0
+    bash "$0" "$b.gz" "$a.gz" --summary-only >/dev/null 2>&1 || rc_text=$?
+    bash "$0" "$b.gz" "$a.gz" --json         >/dev/null 2>&1 || rc_json=$?
+    st_cases=$((st_cases + 1))
+    if [[ $expect -ne 0 ]]; then st_red_cases=$((st_red_cases + 1)); fi
+    if [[ $rc_text -eq $expect && $rc_json -eq $expect ]]; then
+      echo -e "  ${GREEN}✅ case $st_cases '$name': text exit $rc_text, --json exit $rc_json, expected $expect${NC}"
+    else
+      echo -e "  ${RED}❌ case $st_cases '$name': text exit $rc_text, --json exit $rc_json, expected $expect${NC}"
+      st_failures=$((st_failures + 1))
+    fi
+  }
+
+  # A. Identical duplicate pair on the BEFORE side — collapses harmlessly, must NOT fire.
+  st_before="$(st_record k1 /selftest/dj-mixes/a.flac "$t_title"; st_record k1 /selftest/unsorted/a.flac "$t_title")"
+  st_after="$(st_record k1 /selftest/library/a.flac "$t_title")"
+  st_case "A: identical duplicate pair, BEFORE side" 0
+
+  # B. Divergent duplicate pair on the BEFORE side. The TKEY-bearing record comes FIRST, so the
+  #    old last-wins join discards it and reports a clean exit 0 — the D-11 defect exactly.
+  st_before="$(st_record k1 /selftest/dj-mixes/a.flac "$t_title_key"; st_record k1 /selftest/unsorted/a.flac "$t_title")"
+  st_after="$(st_record k1 /selftest/library/a.flac "$t_title")"
+  st_case "B: divergent duplicate pair, BEFORE side" 3
+
+  # C. Divergent duplicate pair on the AFTER side only (D-11 is symmetric: \$A is covered too).
+  st_before="$(st_record k1 /selftest/unsorted/a.flac "$t_title")"
+  st_after="$(st_record k1 /selftest/library/a.flac "$t_title"; st_record k1 /selftest/library/a-copy.flac "$t_title_genre")"
+  st_case "C: divergent duplicate pair, AFTER side only" 3
+
+  # D. Plain loss, no duplicates — the pre-existing contract, unchanged: exit 1.
+  st_before="$(st_record k2 /selftest/unsorted/b.flac "$t_title_genre")"
+  st_after="$(st_record k2 /selftest/library/b.flac "$t_title")"
+  st_case "D: plain field loss, no duplicates" 1
+
+  # E. Loss AND ambiguity in one run — precedence: 3 (UNKNOWN) outranks 1 (loss).
+  st_before="$(st_record k1 /selftest/dj-mixes/a.flac "$t_title_key"; st_record k1 /selftest/unsorted/a.flac "$t_title"
+               st_record k2 /selftest/unsorted/b.flac "$t_title_genre")"
+  st_after="$(st_record k1 /selftest/library/a.flac "$t_title"; st_record k2 /selftest/library/b.flac "$t_title")"
+  st_case "E: field loss AND a divergent duplicate pair" 3
+
+  # Fixture cleanup — fenced at the call site (CONVENTIONS §6), never via a shared helper.
+  local st_base="${st_dir##*/}"
+  if [[ -z "$st_dir" || "$st_dir" != /* || "$st_base" != .diff-music-tags-selftest.* ]]; then
+    echo -e "${RED}❌ --self-test: REFUSED rm -rf on '$st_dir' — not an absolute .diff-music-tags-selftest.* path${NC}" >&2
+    st_failures=$((st_failures + 1))
+  else
+    rm -rf -- "$st_dir"
+  fi
+
+  echo ""
+  if [[ $st_cases -ne $ST_PLANNED_CASES ]]; then
+    echo -e "${RED}❌ --self-test: $st_cases cases ran but $ST_PLANNED_CASES were announced — the banner and the body disagree${NC}"
+    return 1
+  fi
+  if [[ $st_failures -gt 0 ]]; then
+    echo -e "${RED}❌ --self-test: $st_failures of $st_cases cases did not behave as expected${NC}"
+    return 1
+  fi
+  echo -e "${GREEN}✅ --self-test: all $st_cases cases behaved as expected ($st_red_cases of them red by design)${NC}"
+  return 0
+}
+
+if [[ $SELFTEST_MODE -eq 1 ]]; then
+  if run_self_test; then exit 0; else exit 1; fi
+fi
+
+[[ -n "$BEFORE" && -n "$AFTER" ]] || usage
 
 for f in "$BEFORE" "$AFTER"; do
   [[ -f "$f" ]] || { echo -e "${RED}input not found: $f${NC}" >&2; exit 2; }
