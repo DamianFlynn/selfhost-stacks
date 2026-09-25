@@ -23,11 +23,29 @@
 #   plus, informational only: audio_md5 values seen under more than one path on either side.
 #      That is a legitimate DUPE-01 finding (`dj-mixes` and `unsorted` share all 85 folder names),
 #      not an error, so it never affects the exit code.
+#      CORRECTED 2026-09-25, plan 07-02, D-11: true only for IDENTICAL duplicates; a duplicate whose
+#      tag maps differ is AMBIGUOUS and exits 3. (Kept visible rather than deleted - this repo's
+#      style for a retracted claim.)
+#   7. AMBIGUOUS       per side, an audio_md5 held by more than one record whose flattened tag maps
+#                      DIFFER. The join keeps one record per key, so for such a key it would have
+#                      to pick one of several differing records - and before plan 07-02 it silently
+#                      kept the LAST in stream order, making the QUAL-02 verdict depend on file-walk
+#                      order (E7). Identical duplicates collapse harmlessly and are not ambiguous.
 #
 # EXIT CODES (the contract Phase 7 gates on):
-#   0  no net metadata loss - MISSING_AFTER is 0 AND FIELDS_DROPPED is 0
-#   1  loss detected        - either is non-zero
+#   0  no net metadata loss - MISSING_AFTER is 0 AND FIELDS_DROPPED is 0 AND nothing is AMBIGUOUS
+#   1  loss detected        - MISSING_AFTER or FIELDS_DROPPED is non-zero
 #   2  usage or input error
+#   3  UNKNOWN              - an ambiguous join (D-11): AMBIGUOUS_BEFORE + AMBIGUOUS_AFTER > 0, so
+#                             the comparison for the named audio_md5 values is not trustworthy
+#
+#   PRECEDENCE, when one run BOTH measured a loss AND had an ambiguous join: 3 (UNKNOWN) OUTRANKS
+#   1 (loss). Reason, in one sentence: a blind instrument wins over a measured red, because a
+#   loss reported through a join that silently chose one of several differing records asserts a
+#   cause the run did not establish - the same order scripts/phase06-oracle.sh states in its own
+#   PRECEDENCE paragraph (CONVENTIONS §1). Both output arms (text and --json) apply the ladder in
+#   this order, and the text arm's green line sits textually after both checks, so it is
+#   unreachable while any AMBIGUOUS count is non-zero.
 # This makes the roadmap's "trial diff of the snapshot against itself returns zero differences" a
 # literal exit-0 assertion, and makes Phase 7's QUAL-02 gate a script invocation rather than a
 # judgement call.
@@ -72,7 +90,8 @@ usage: ./scripts/diff-music-tags.sh BEFORE AFTER [--summary-only] [--full] [--js
   --json          emit the whole result as one JSON object, for programmatic gating
   --self-test     drive five synthetic fixture pairs through both output arms (D-12)
 
-exit 0 = no net metadata loss, 1 = loss detected, 2 = usage or input error
+exit 0 = no net metadata loss, 1 = loss detected, 2 = usage or input error,
+     3 = UNKNOWN (ambiguous join: a duplicated audio_md5 whose records' tags differ)
 EOF
   exit 2
 }
@@ -270,6 +289,12 @@ JOIN_JQ='
   def dupgroups: group_by(.k) | map(select(length > 1))
                  | map({ audio_md5: .[0].k, paths: (map(.p) | unique) })
                  | map(select(.paths | length > 1));
+  # D-11 (plan 07-02): `index` keeps ONE record per key (last wins). That is harmless when every
+  # record for the key carries the same flattened tag map, and a silent choice when they differ.
+  # The differing groups are named here so the exit ladder can refuse to trust the comparison.
+  def ambiguous: group_by(.k) | map(select(length > 1 and ((map(.t) | unique | length) > 1)))
+                 | map({ audio_md5: .[0].k, paths: (map(.p) | unique),
+                         variants: (map(.t) | unique | length) });
 
   ($B | index) as $bi | ($A | index) as $ai |
   ($bi | keys)  as $bk | ($ai | keys) as $ak |
@@ -313,7 +338,9 @@ JOIN_JQ='
       matched_with_no_before_fields:
         ([ $matched[] | select(($bi[.].t | length) == 0) ] | length),
       duplicate_keys_before: (($B | dupgroups) | length),
-      duplicate_keys_after:  (($A | dupgroups) | length)
+      duplicate_keys_after:  (($A | dupgroups) | length),
+      ambiguous_before:      (($B | ambiguous) | length),
+      ambiguous_after:       (($A | ambiguous) | length)
     },
     missing_after:  [ $only_b[] | { audio_md5: ., source_path: $bi[.].p } ],
     new_after:      [ $only_a[] | { audio_md5: ., source_path: $ai[.].p } ],
@@ -321,7 +348,9 @@ JOIN_JQ='
     fields_gained:  $gained,
     fields_changed: $changed,
     duplicates_before: ($B | dupgroups),
-    duplicates_after:  ($A | dupgroups)
+    duplicates_after:  ($A | dupgroups),
+    ambiguous_before:  ($B | ambiguous),
+    ambiguous_after:   ($A | ambiguous)
   }
 '
 
@@ -331,7 +360,12 @@ if [[ $AS_JSON -eq 1 ]]; then
   printf '%s\n' "$RESULT"
   MISSING="$(jq -r '.counts.missing_after'  <<< "$RESULT")"
   DROPPED="$(jq -r '.counts.fields_dropped' <<< "$RESULT")"
-  [[ "$MISSING" -eq 0 && "$DROPPED" -eq 0 ]] && exit 0 || exit 1
+  AMBB="$(jq -r '.counts.ambiguous_before' <<< "$RESULT")"
+  AMBA="$(jq -r '.counts.ambiguous_after'  <<< "$RESULT")"
+  # Same ladder as the text arm, same order: UNKNOWN (3) before loss (1) before green (0).
+  if [[ $((AMBB + AMBA)) -gt 0 ]]; then exit 3; fi
+  if [[ "$MISSING" -gt 0 || "$DROPPED" -gt 0 ]]; then exit 1; fi
+  exit 0
 fi
 
 c() { jq -r ".counts.$1" <<< "$RESULT"; }
@@ -340,6 +374,7 @@ MATCHED="$(c matched)"; MISSING="$(c missing_after)"; NEWA="$(c new_after)"
 DROPPED="$(c fields_dropped)"; GAINED="$(c fields_gained)"; CHANGED="$(c fields_changed)"
 NOFIELDS="$(c matched_with_no_before_fields)"
 DUPB="$(c duplicate_keys_before)"; DUPA="$(c duplicate_keys_after)"
+AMBB="$(c ambiguous_before)"; AMBA="$(c ambiguous_after)"
 
 echo "🔍 Music tag snapshot diff"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -382,8 +417,19 @@ if [[ $SUMMARY_ONLY -eq 0 && ( "$DUPB" -gt 0 || "$DUPA" -gt 0 ) ]]; then
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   echo "   Informational: identical audio in two roots is exactly what the audio-stream key is"
   echo "   designed to expose (DUPE-01), not an error. This does not affect the exit code."
+  echo "   CORRECTED 2026-09-25, plan 07-02, D-11: true only for IDENTICAL duplicates; a duplicate"
+  echo "   whose tag maps differ is AMBIGUOUS and exits 3 - see the AMBIGUOUS block below."
   jq -r '(.duplicates_before[] | [.audio_md5, "BEFORE", (.paths | join(" | "))] | @tsv),
          (.duplicates_after[]  | [.audio_md5, "AFTER",  (.paths | join(" | "))] | @tsv)' <<< "$RESULT" \
+    | sed 's/^/  /'
+  echo ""
+fi
+
+if [[ $SUMMARY_ONLY -eq 0 && ( "$AMBB" -gt 0 || "$AMBA" -gt 0 ) ]]; then
+  echo "7️⃣  AMBIGUOUS — one audio_md5, several records whose tags DIFFER  (BEFORE: $AMBB, AFTER: $AMBA)"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  jq -r '(.ambiguous_before[] | [.audio_md5, "BEFORE", "\(.variants) variants", (.paths | join(" | "))] | @tsv),
+         (.ambiguous_after[]  | [.audio_md5, "AFTER",  "\(.variants) variants", (.paths | join(" | "))] | @tsv)' <<< "$RESULT" \
     | sed 's/^/  /'
   echo ""
 fi
@@ -393,6 +439,8 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo "  MATCHED:            $MATCHED"
 echo "  MISSING_AFTER:      $MISSING"
 echo "  NEW_AFTER:          $NEWA"
+echo "  AMBIGUOUS_BEFORE:   $AMBB"
+echo "  AMBIGUOUS_AFTER:    $AMBA"
 echo "  FIELDS_DROPPED:     $DROPPED"
 echo "  FIELDS_GAINED:      $GAINED"
 echo "  FIELDS_CHANGED:     $CHANGED"
@@ -405,9 +453,19 @@ if [[ "$MATCHED" -gt 0 && "$NOFIELDS" -eq "$MATCHED" ]]; then
 fi
 echo ""
 
-if [[ "$MISSING" -eq 0 && "$DROPPED" -eq 0 ]]; then
-  echo -e "${GREEN}✅ No net metadata loss (exit 0)${NC}"
-  exit 0
+# Exit ladder (D-11): UNKNOWN (3) before loss (1) before green (0). The green line is textually
+# after both checks, so it cannot be reached while any AMBIGUOUS count is non-zero.
+if [[ $((AMBB + AMBA)) -gt 0 ]]; then
+  echo -e "${YELLOW}❓ UNKNOWN (exit 3): the comparison is NOT trustworthy for the audio_md5 values below.${NC}"
+  echo -e "${YELLOW}   Each is held by several records whose tags differ, so the join would have to pick one of${NC}"
+  echo -e "${YELLOW}   them and discard the rest. BEFORE: $AMBB, AFTER: $AMBA. Loss counts above are not a verdict.${NC}"
+  jq -r '(.ambiguous_before[] | "   BEFORE \(.audio_md5)  (\(.variants) variants)  \(.paths | join(" | "))"),
+         (.ambiguous_after[]  | "   AFTER  \(.audio_md5)  (\(.variants) variants)  \(.paths | join(" | "))")' <<< "$RESULT"
+  exit 3
 fi
-echo -e "${RED}❌ Net metadata loss detected: $MISSING file(s) missing, $DROPPED field(s) dropped (exit 1)${NC}"
-exit 1
+if [[ "$MISSING" -gt 0 || "$DROPPED" -gt 0 ]]; then
+  echo -e "${RED}❌ Net metadata loss detected: $MISSING file(s) missing, $DROPPED field(s) dropped (exit 1)${NC}"
+  exit 1
+fi
+echo -e "${GREEN}✅ No net metadata loss (exit 0)${NC}"
+exit 0
