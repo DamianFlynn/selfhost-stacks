@@ -29,6 +29,8 @@ Phase 7 E6 — `/gsd-verify 06` is still owed)
 
 ## Current Position
 
+**PHASE 07 REPLANNED (`--reviews`, round 1) — 2026-09-25.** All 15 CONFIRMED (G-01…G-15) and 7 PLAUSIBLE (P-01…P-07) findings from `07-REVIEWS.md` were folded into 15 of the 17 plans (07-02 and 07-08 were untouched). The REFUTED list was a hard exclusion. The two HIGHs are closed in 07-11: D-17 now fires only on a PAIRED `UNDO IMPORT` witness for tree, DB and state, **plus** `EQUALITY VERDICT: PASS`, and every restore, vacuous or failed branch writes `NOT FIRED`. New gates: 07-10 measures MA periodic sync before the first write (P-01), and 07-09 has a partial-fence branch and gates post-grant import keys. 07-07 moved from wave 2 to wave 3 (it now shares CONVENTIONS.md with 07-03); still 13 waves. Plan-checker: **0 BLOCKER, 2 WARNING**, and both were fixed by the orchestrator (07-11 FIRED verify now requires TREE/DB/STATE all `yes`; phase `deferred-items.md` declared in 07-10/12/13). The config drift was fixed: `workflow.nyquist_validation` is now actually `false`. It had read `true` despite the line below.
+
 **PHASE 07 PLANNED — 2026-09-25. 17 plans in 13 waves, committed in `114586e`; 0 executed.** Research
 was skipped by operator decision (the ROADMAP entry says it is not needed) and **Nyquist validation
 was disabled project-wide** (`workflow.nyquist_validation: false`) in the same run, so no
