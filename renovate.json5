@@ -531,7 +531,23 @@
   // Raised from the config:recommended default of 10. Major updates are automerge:false by design
   // and sit open awaiting review; at a limit of 10 those permanently occupy slots and eventually
   // block ALL other updates -- which is how the pipeline jammed in 2026-07.
-  "prConcurrentLimit": 20,
+  //
+  // RAISED AGAIN 20 -> 50 on 2026-09-25, because the SAME jam had recurred and the 2026-07 note
+  // above describes it exactly. Measured on the Dependency Dashboard that day: 21 PRs open against
+  // a limit of 20, so 23 further updates were parked in Rate-Limited and COULD NOT OPEN AT ALL.
+  // The oldest open PR dated from 2026-07-31, two months earlier.
+  //
+  // This is a SYMPTOM FIX AND IT WILL RECUR. Raising the ceiling does not address the mechanism:
+  // manual-review PRs never close by themselves, so any fixed ceiling is eventually consumed by
+  // them and the queue silently stops. The actual remedy is to triage the open list on a cadence
+  // and close what will never be merged. Renovate offers no way to exempt automerge:false PRs from
+  // this count, which is why there is no cleverer setting to reach for here.
+  //
+  // WHAT THE JAM COSTS, so the next reader does not treat it as cosmetic: while it held, tsbridge
+  // ran v0.13.1 on the host against v0.15.0 declared in tsproxy.yaml, with the v0.15.1 PR (#322)
+  // open and stuck since 2026-08-21 -- a month of a load-bearing tailnet proxy being two minors
+  // behind what the repo claimed. A jammed queue reads as quiet, not as broken.
+  "prConcurrentLimit": 50,
   "prHourlyLimit": 6,
   "schedule": [
     "at any time"
