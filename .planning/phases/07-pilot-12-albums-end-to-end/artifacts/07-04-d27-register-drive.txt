@@ -1,0 +1,198 @@
+07-04 — D-27 REGISTER DRIVE: route-dj-album.sh counted, registered, and the overlay-key half driven both ways
+==========================================================================================================
+Recorded 2026-09-26 by plan 07-04 (executor). Workstation (macOS), bash, matcher /usr/bin/grep —
+the SAME matcher quick-health-check.sh's D-04 block uses, because that block's matching is LOCAL
+(only the `git grep` runs remote). Every count below was ALSO reproduced with GNU grep
+(/opt/homebrew/bin/ggrep) and was identical.
+
+WHERE: a scratch clone, never the real checkout —
+  git clone -q --no-hardlinks <repo> <scratchpad>/d04-scratch.XXXXXX/repo   (at real HEAD 75deefa)
+The "task-1 commit" the plan measures at was made IN THE SCRATCH CLONE ONLY, so that the real
+repository gets the script and the pin move in ONE commit (acceptance: "moved in the same commit
+as the script"). Scratch commit history, oldest first:
+  (75deefa real HEAD) -> "scratch: task-1 route script" -> "scratch: register edit"
+                      -> "scratch: four mutant lines (never leaves scratch)"
+
+HOW: d04-measure.sh (reproduced in full at the end) extracts D04_INV_RE and D04_EXEMPT_RE
+VERBATIM from the clone's own scripts/quick-health-check.sh (eval of the assignment line — not
+retyped), runs the block's own remote command locally in the clone:
+  git grep -n -I -w -E -e 'beet' -e 'BEET[A-Z_]*' HEAD -- scripts stacks
+and then the block's exact local grep / grep -vE pipeline to derive D04_INVOKE_ASSERT,
+D04_INVOKE_EXEMPT and the D04_N_* counts.
+  NOTE: the plan text says `git grep -n -I -i beet`; the block's real command is the -w -E form
+  above, and "the block's own regexes over the block's own input" is the point of the
+  measurement, so the block's form is what was run.
+
+PRE-PLAN (real HEAD 75deefa, no route script):
+  raw=204 comment-stripped=101 invocation-shaped=10  D04_N_EXE=8  D04_N_ASSERT=3  D04_N_EXEMPT=5  D04_N_DOC=2
+  (reproduces the 06-23 vector: invocation-shaped 10, executable 8, asserted 3, exempt 5, doc 2)
+
+---------------------------------------------------------------------------------------------
+1. BEFORE THE REGISTER EDIT (scratch HEAD = route script only; D04_EXEMPT_RE unchanged)
+---------------------------------------------------------------------------------------------
+== BEFORE REGISTER EDIT (scratch HEAD = task-1 script only)  (HEAD c655395; matcher /usr/bin/grep)
+D04_EXEMPT_RE in effect: ^HEAD:scripts/phase06-oracle\.sh:[0-9]*:.*\$SCRATCH_OVERLAY|^HEAD:scripts/phase06-incremental-control\.sh:[0-9]*:.*\$ROOT/overlay\.yaml
+counts: raw=217 comment-stripped=110 invocation-shaped=17  D04_N_EXE=15  D04_N_ASSERT=10  D04_N_EXEMPT=5  D04_N_DOC=2
+-- D04_INVOKE_ASSERT (10):
+   HEAD:scripts/check-beets-config.sh:1074:    beet_exec "${BEET_BIN} -l ${THROWAWAY_DB} -c ${OVERLAY} config -d"
+   HEAD:scripts/check-beets-config.sh:1090:    beet_exec "${BEET_BIN} -l ${THROWAWAY_DB} -c ${OVERLAY} config -p -d"
+   HEAD:scripts/check-beets-config.sh:1101:      beet_exec "${BEET_BIN} -l ${THROWAWAY_DB} -c ${OVERLAY} config -d -c"
+   HEAD:scripts/route-dj-album.sh:140:OUT="$(timeout "$ROUTE_TIMEOUT" docker exec -u "$ROUTE_USER" "$ROUTE_CONTAINER" "$BEET_REALLIB" --version)" || RC=$?
+   HEAD:scripts/route-dj-album.sh:151:OUT="$(timeout "$ROUTE_TIMEOUT" docker exec -u "$ROUTE_USER" "$ROUTE_CONTAINER" "$BEET_REALLIB" ls -a -f '$id|$disctotal|$albumtype|$albumartist|$album|$path' "id:$A
+   HEAD:scripts/route-dj-album.sh:181:OUT="$(timeout "$ROUTE_TIMEOUT" docker exec -u "$ROUTE_USER" "$ROUTE_CONTAINER" "$BEET_REALLIB" modify -h)" || RC=$?
+   HEAD:scripts/route-dj-album.sh:190:timeout "$ROUTE_TIMEOUT" docker exec -u "$ROUTE_USER" "$ROUTE_CONTAINER" "$BEET_REALLIB" modify -a -M -y "id:$ALBUM_ID" albumtype=dj || RC=$?
+   HEAD:scripts/route-dj-album.sh:196:OUT="$(timeout "$ROUTE_TIMEOUT" docker exec -u "$ROUTE_USER" "$ROUTE_CONTAINER" "$BEET_REALLIB" move -a -p "id:$ALBUM_ID")" || RC=$?
+   HEAD:scripts/route-dj-album.sh:205:timeout "$ROUTE_TIMEOUT" docker exec -u "$ROUTE_USER" "$ROUTE_CONTAINER" "$BEET_REALLIB" move -a "id:$ALBUM_ID" || RC=$?
+   HEAD:scripts/route-dj-album.sh:212:OUT="$(timeout "$ROUTE_TIMEOUT" docker exec -u "$ROUTE_USER" "$ROUTE_CONTAINER" "$BEET_REALLIB" ls -f '$albumtype|$path' "album_id:$ALBUM_ID")" || RC=$?
+-- D04_INVOKE_EXEMPT (5):
+   HEAD:scripts/phase06-incremental-control.sh:587:  "$BEET" -c "$ROOT/overlay.yaml" import --pretend "$ROOT/src" 2>&1 || IRC=$?
+   HEAD:scripts/phase06-incremental-control.sh:589:  "$BEET" -c "$ROOT/overlay.yaml" import "$ROOT/src" 2>&1 || IRC=$?
+   HEAD:scripts/phase06-oracle.sh:3002:  rsh "$(dex_cmd "$BEET_BIN" -c "$(printf '%q' "$SCRATCH_OVERLAY")" import -A -q $EXTRA "$(printf '%q' "$CPATH")")"
+   HEAD:scripts/phase06-oracle.sh:3015:rsh_to "$(dex_cmd "$BEET_BIN" -c "$(printf '%q' "$SCRATCH_OVERLAY")" move -p)" "$OUT/oracle.raw.txt"
+   HEAD:scripts/phase06-oracle.sh:3186:rsh_to "$(dex_cmd "$BEET_BIN" -c "$(printf '%q' "$SCRATCH_OVERLAY")" ls -f "'$LS_FMT'")" "$OUT/fields.tsv"
+-- route-dj-album.sh lines in D04_INVOKE_ASSERT: 7
+-- route-dj-album.sh lines in D04_INVOKE_EXEMPT: 0
+
+D04 ROUTE-SCRIPT LINES IN ASSERT SET: N = 7
+  equal to the script's own comment-stripped "$BEET_REALLIB" executable-line count = 7:
+  grep -vE '^[[:space:]]*#' scripts/route-dj-album.sh | grep -cE '"\$BEET_REALLIB"'  ->  7
+  N >= 1, so the scan SEES the writer; registration proceeds. (N = 0 would have been a STOP.)
+  This is the red-by-design move (E10): D04_N_ASSERT 3 -> 10, and all seven new asserted lines
+  lack -l and -c, so a D-04 run over this tree without the register edit would print seven ❌.
+
+---------------------------------------------------------------------------------------------
+2. AFTER THE REGISTER EDIT (scratch HEAD = route script + extended D04_EXEMPT_RE + pin 5 -> 12)
+---------------------------------------------------------------------------------------------
+== AFTER REGISTER EDIT (scratch HEAD = script + register)  (HEAD 2b446e4; matcher /usr/bin/grep)
+D04_EXEMPT_RE in effect: ^HEAD:scripts/phase06-oracle\.sh:[0-9]*:.*\$SCRATCH_OVERLAY|^HEAD:scripts/phase06-incremental-control\.sh:[0-9]*:.*\$ROOT/overlay\.yaml|^HEAD:scripts/route-dj-album\.sh:[0-9]*:.*\$BEET_REALLIB
+counts: raw=220 comment-stripped=111 invocation-shaped=17  D04_N_EXE=15  D04_N_ASSERT=3  D04_N_EXEMPT=12  D04_N_DOC=2
+-- D04_INVOKE_ASSERT (3):
+   HEAD:scripts/check-beets-config.sh:1074:    beet_exec "${BEET_BIN} -l ${THROWAWAY_DB} -c ${OVERLAY} config -d"
+   HEAD:scripts/check-beets-config.sh:1090:    beet_exec "${BEET_BIN} -l ${THROWAWAY_DB} -c ${OVERLAY} config -p -d"
+   HEAD:scripts/check-beets-config.sh:1101:      beet_exec "${BEET_BIN} -l ${THROWAWAY_DB} -c ${OVERLAY} config -d -c"
+-- D04_INVOKE_EXEMPT (12):
+   HEAD:scripts/phase06-incremental-control.sh:587:  "$BEET" -c "$ROOT/overlay.yaml" import --pretend "$ROOT/src" 2>&1 || IRC=$?
+   HEAD:scripts/phase06-incremental-control.sh:589:  "$BEET" -c "$ROOT/overlay.yaml" import "$ROOT/src" 2>&1 || IRC=$?
+   HEAD:scripts/phase06-oracle.sh:3002:  rsh "$(dex_cmd "$BEET_BIN" -c "$(printf '%q' "$SCRATCH_OVERLAY")" import -A -q $EXTRA "$(printf '%q' "$CPATH")")"
+   HEAD:scripts/phase06-oracle.sh:3015:rsh_to "$(dex_cmd "$BEET_BIN" -c "$(printf '%q' "$SCRATCH_OVERLAY")" move -p)" "$OUT/oracle.raw.txt"
+   HEAD:scripts/phase06-oracle.sh:3186:rsh_to "$(dex_cmd "$BEET_BIN" -c "$(printf '%q' "$SCRATCH_OVERLAY")" ls -f "'$LS_FMT'")" "$OUT/fields.tsv"
+   HEAD:scripts/route-dj-album.sh:140:OUT="$(timeout "$ROUTE_TIMEOUT" docker exec -u "$ROUTE_USER" "$ROUTE_CONTAINER" "$BEET_REALLIB" --version)" || RC=$?
+   HEAD:scripts/route-dj-album.sh:151:OUT="$(timeout "$ROUTE_TIMEOUT" docker exec -u "$ROUTE_USER" "$ROUTE_CONTAINER" "$BEET_REALLIB" ls -a -f '$id|$disctotal|$albumtype|$albumartist|$album|$path' "id:$A
+   HEAD:scripts/route-dj-album.sh:181:OUT="$(timeout "$ROUTE_TIMEOUT" docker exec -u "$ROUTE_USER" "$ROUTE_CONTAINER" "$BEET_REALLIB" modify -h)" || RC=$?
+   HEAD:scripts/route-dj-album.sh:190:timeout "$ROUTE_TIMEOUT" docker exec -u "$ROUTE_USER" "$ROUTE_CONTAINER" "$BEET_REALLIB" modify -a -M -y "id:$ALBUM_ID" albumtype=dj || RC=$?
+   HEAD:scripts/route-dj-album.sh:196:OUT="$(timeout "$ROUTE_TIMEOUT" docker exec -u "$ROUTE_USER" "$ROUTE_CONTAINER" "$BEET_REALLIB" move -a -p "id:$ALBUM_ID")" || RC=$?
+   HEAD:scripts/route-dj-album.sh:205:timeout "$ROUTE_TIMEOUT" docker exec -u "$ROUTE_USER" "$ROUTE_CONTAINER" "$BEET_REALLIB" move -a "id:$ALBUM_ID" || RC=$?
+   HEAD:scripts/route-dj-album.sh:212:OUT="$(timeout "$ROUTE_TIMEOUT" docker exec -u "$ROUTE_USER" "$ROUTE_CONTAINER" "$BEET_REALLIB" ls -f '$albumtype|$path' "album_id:$ALBUM_ID")" || RC=$?
+-- route-dj-album.sh lines in D04_INVOKE_ASSERT: 0
+-- route-dj-album.sh lines in D04_INVOKE_EXEMPT: 7
+
+  D04_N_ASSERT = 3   back at its pre-plan value (3)
+  D04_N_EXEMPT = 12  = 5 + N (N = 7)            -> D04_EXEMPT_BASELINE default and guard literal moved 5 -> 12
+  D04_N_EXE    = 15  = pre-plan 8 + N (7)
+  D04_N_DOC    = 2   D04_DOC_BASELINE NOT moved (still 2)
+  With these counts the block's green arm holds: every asserted line carries -l and -c and none is
+  `-l /config/library.db`; N_EXEMPT == baseline 12; N_DOC == baseline 2; no override.
+  raw/comment-stripped move (217/110 -> 220/111) only because the register edit adds comment and
+  code lines to quick-health-check.sh that contain the BEET_ token; the invocation-shaped count
+  (17) does not move between 1 and 2 — the edit changes placement, not detection.
+
+---------------------------------------------------------------------------------------------
+3. THE OVERLAY-KEY HALF DRIVEN BOTH WAYS (DEF-06-21-06) — four mutant lines, scratch clone only
+---------------------------------------------------------------------------------------------
+Mutants appended and COMMITTED IN THE SCRATCH CLONE (git grep reads HEAD, so they must be committed):
+  (a) scripts/phase06-oracle.sh   — WITHOUT $SCRATCH_OVERLAY:
+      rsh_to "$(dex_cmd "$BEET_BIN" -c "$(printf '%q' "$OTHER_OVERLAY")" ls)" "$OUT/mutant-a.txt"
+  (b) scripts/phase06-oracle.sh   — WITH $SCRATCH_OVERLAY:
+      rsh_to "$(dex_cmd "$BEET_BIN" -c "$(printf '%q' "$SCRATCH_OVERLAY")" ls -a)" "$OUT/mutant-b.txt"
+  (c) scripts/route-dj-album.sh   — WITHOUT $BEET_REALLIB (uses "$BEET_OTHER"):
+      timeout "$ROUTE_TIMEOUT" docker exec -u "$ROUTE_USER" "$ROUTE_CONTAINER" "$BEET_OTHER" ls "id:$ALBUM_ID" || RC=$?
+  (d) scripts/route-dj-album.sh   — WITH $BEET_REALLIB:
+      timeout "$ROUTE_TIMEOUT" docker exec -u "$ROUTE_USER" "$ROUTE_CONTAINER" "$BEET_REALLIB" stats "id:$ALBUM_ID" || RC=$?
+
+== MUTANT DRIVE (scratch HEAD = register + 4 mutants)  (HEAD 0020344; matcher /usr/bin/grep)
+D04_EXEMPT_RE in effect: ^HEAD:scripts/phase06-oracle\.sh:[0-9]*:.*\$SCRATCH_OVERLAY|^HEAD:scripts/phase06-incremental-control\.sh:[0-9]*:.*\$ROOT/overlay\.yaml|^HEAD:scripts/route-dj-album\.sh:[0-9]*:.*\$BEET_REALLIB
+counts: raw=224 comment-stripped=115 invocation-shaped=21  D04_N_EXE=19  D04_N_ASSERT=5  D04_N_EXEMPT=14  D04_N_DOC=2
+-- D04_INVOKE_ASSERT (5):
+   HEAD:scripts/check-beets-config.sh:1074:    beet_exec "${BEET_BIN} -l ${THROWAWAY_DB} -c ${OVERLAY} config -d"
+   HEAD:scripts/check-beets-config.sh:1090:    beet_exec "${BEET_BIN} -l ${THROWAWAY_DB} -c ${OVERLAY} config -p -d"
+   HEAD:scripts/check-beets-config.sh:1101:      beet_exec "${BEET_BIN} -l ${THROWAWAY_DB} -c ${OVERLAY} config -d -c"
+   HEAD:scripts/phase06-oracle.sh:3275:rsh_to "$(dex_cmd "$BEET_BIN" -c "$(printf '%q' "$OTHER_OVERLAY")" ls)" "$OUT/mutant-a.txt"
+   HEAD:scripts/route-dj-album.sh:234:timeout "$ROUTE_TIMEOUT" docker exec -u "$ROUTE_USER" "$ROUTE_CONTAINER" "$BEET_OTHER" ls "id:$ALBUM_ID" || RC=$?
+-- D04_INVOKE_EXEMPT (14):
+   HEAD:scripts/phase06-incremental-control.sh:587:  "$BEET" -c "$ROOT/overlay.yaml" import --pretend "$ROOT/src" 2>&1 || IRC=$?
+   HEAD:scripts/phase06-incremental-control.sh:589:  "$BEET" -c "$ROOT/overlay.yaml" import "$ROOT/src" 2>&1 || IRC=$?
+   HEAD:scripts/phase06-oracle.sh:3002:  rsh "$(dex_cmd "$BEET_BIN" -c "$(printf '%q' "$SCRATCH_OVERLAY")" import -A -q $EXTRA "$(printf '%q' "$CPATH")")"
+   HEAD:scripts/phase06-oracle.sh:3015:rsh_to "$(dex_cmd "$BEET_BIN" -c "$(printf '%q' "$SCRATCH_OVERLAY")" move -p)" "$OUT/oracle.raw.txt"
+   HEAD:scripts/phase06-oracle.sh:3186:rsh_to "$(dex_cmd "$BEET_BIN" -c "$(printf '%q' "$SCRATCH_OVERLAY")" ls -f "'$LS_FMT'")" "$OUT/fields.tsv"
+   HEAD:scripts/phase06-oracle.sh:3276:rsh_to "$(dex_cmd "$BEET_BIN" -c "$(printf '%q' "$SCRATCH_OVERLAY")" ls -a)" "$OUT/mutant-b.txt"
+   HEAD:scripts/route-dj-album.sh:140:OUT="$(timeout "$ROUTE_TIMEOUT" docker exec -u "$ROUTE_USER" "$ROUTE_CONTAINER" "$BEET_REALLIB" --version)" || RC=$?
+   HEAD:scripts/route-dj-album.sh:151:OUT="$(timeout "$ROUTE_TIMEOUT" docker exec -u "$ROUTE_USER" "$ROUTE_CONTAINER" "$BEET_REALLIB" ls -a -f '$id|$disctotal|$albumtype|$albumartist|$album|$path' "id:$A
+   HEAD:scripts/route-dj-album.sh:181:OUT="$(timeout "$ROUTE_TIMEOUT" docker exec -u "$ROUTE_USER" "$ROUTE_CONTAINER" "$BEET_REALLIB" modify -h)" || RC=$?
+   HEAD:scripts/route-dj-album.sh:190:timeout "$ROUTE_TIMEOUT" docker exec -u "$ROUTE_USER" "$ROUTE_CONTAINER" "$BEET_REALLIB" modify -a -M -y "id:$ALBUM_ID" albumtype=dj || RC=$?
+   HEAD:scripts/route-dj-album.sh:196:OUT="$(timeout "$ROUTE_TIMEOUT" docker exec -u "$ROUTE_USER" "$ROUTE_CONTAINER" "$BEET_REALLIB" move -a -p "id:$ALBUM_ID")" || RC=$?
+   HEAD:scripts/route-dj-album.sh:205:timeout "$ROUTE_TIMEOUT" docker exec -u "$ROUTE_USER" "$ROUTE_CONTAINER" "$BEET_REALLIB" move -a "id:$ALBUM_ID" || RC=$?
+   HEAD:scripts/route-dj-album.sh:212:OUT="$(timeout "$ROUTE_TIMEOUT" docker exec -u "$ROUTE_USER" "$ROUTE_CONTAINER" "$BEET_REALLIB" ls -f '$albumtype|$path' "album_id:$ALBUM_ID")" || RC=$?
+   HEAD:scripts/route-dj-album.sh:235:timeout "$ROUTE_TIMEOUT" docker exec -u "$ROUTE_USER" "$ROUTE_CONTAINER" "$BEET_REALLIB" stats "id:$ALBUM_ID" || RC=$?
+-- route-dj-album.sh lines in D04_INVOKE_ASSERT: 1
+-- route-dj-album.sh lines in D04_INVOKE_EXEMPT: 8
+
+OBSERVED PLACEMENT (four observations):
+mutant (a) scripts/phase06-oracle.sh:3275  [without $SCRATCH_OVERLAY]  in D04_INVOKE_ASSERT=1  in D04_INVOKE_EXEMPT=0
+mutant (b) scripts/phase06-oracle.sh:3276  [with $SCRATCH_OVERLAY]  in D04_INVOKE_ASSERT=0  in D04_INVOKE_EXEMPT=1
+mutant (c) scripts/route-dj-album.sh:234  [without $BEET_REALLIB ($BEET_OTHER)]  in D04_INVOKE_ASSERT=1  in D04_INVOKE_EXEMPT=0
+mutant (d) scripts/route-dj-album.sh:235  [with $BEET_REALLIB]  in D04_INVOKE_ASSERT=0  in D04_INVOKE_EXEMPT=1
+
+  Result: without-token -> D04_INVOKE_ASSERT, with-token -> D04_INVOKE_EXEMPT, for BOTH files.
+  The overlay-key half of D04_EXEMPT_RE discriminates; DEF-06-21-06 is DRIVEN.
+  The mutant tree would be RED twice over: (a) and (c) are asserted and carry no `-l`, so the
+  loop prints ❌ for each; and D04_N_EXEMPT = 14 != pinned 12, so the exempt-count arm prints ❌.
+  The optional whole-block run with D04_REPO_ROOT on LXC 100 was NOT done: the scratch lives on
+  the workstation, and LXC 100's root fs is 85% full — the placement is read from the block's own
+  pipeline above, which is the same evidence that run would have printed.
+
+---------------------------------------------------------------------------------------------
+4. CONTAINMENT
+---------------------------------------------------------------------------------------------
+  Scratch clone deleted with an exact-prefix fence:
+    case "$SC" in "$SCRATCHPAD"/d04-scratch.??????) [ -d "$SC/repo/.git" ] && rm -rf -- "$SC" ;; *) refuse ;; esac
+    -> deleted; path re-tested absent.
+  Real repository, checked after the delete:
+    git log --all -S'mutant-a.txt' --oneline | wc -l  -> 0
+    git log --all -S'BEET_OTHER'   --oneline | wc -l  -> 1  (that one is 114586e, the
+      07-04-PLAN.md prose that NAMES the variable at :171 — no script file; not a mutant)
+    working-tree mutant markers (oracle, route script): scripts/route-dj-album.sh:0 scripts/phase06-oracle.sh:0 
+  No mutant reached the real repository.
+
+---------------------------------------------------------------------------------------------
+5. THE DRIVER (d04-measure.sh, scratchpad; reproduced verbatim)
+---------------------------------------------------------------------------------------------
+  #!/usr/bin/env bash
+  # d04-measure.sh <clone-dir> <label> [grep-binary]
+  # Applies quick-health-check.sh's OWN D-04 regexes (extracted verbatim from the clone's copy of the
+  # file, not retyped) and its OWN local pipeline to the block's own remote command's output.
+  CLONE="$1"; LABEL="$2"; G="${3:-/usr/bin/grep}"
+  QHC="$CLONE/scripts/quick-health-check.sh"
+  eval "$(/usr/bin/grep -E '^[[:space:]]*D04_INV_RE=' "$QHC" | sed 's/^[[:space:]]*//')"
+  eval "$(/usr/bin/grep -E '^[[:space:]]*D04_EXEMPT_RE=' "$QHC" | sed 's/^[[:space:]]*//')"
+  D04_OUT=$(cd "$CLONE" && git grep -n -I -w -E -e 'beet' -e 'BEET[A-Z_]*' HEAD -- scripts stacks)
+  D04_HITS=$(printf '%s\n' "$D04_OUT" | $G '^HEAD:')
+  D04_RAW=$(printf '%s\n' "$D04_HITS" | $G -c '^HEAD:')
+  D04_KEPT=$(printf '%s\n' "$D04_HITS" | $G -vE '^HEAD:[^:]*:[0-9]*:[[:space:]]*(#|//)')
+  D04_STRIPPED=$(printf '%s\n' "$D04_KEPT" | $G -c '^HEAD:')
+  D04_INVOKE_ALL=$(printf '%s\n' "$D04_KEPT" | $G -E "$D04_INV_RE")
+  D04_INVOKE_DOC=$(printf '%s\n' "$D04_INVOKE_ALL" | $G '\.md:')
+  D04_INVOKE_EXE=$(printf '%s\n' "$D04_INVOKE_ALL" | $G -v '\.md:' | $G '^HEAD:')
+  D04_INVOKE_EXEMPT=$(printf '%s\n' "$D04_INVOKE_EXE" | $G -E "$D04_EXEMPT_RE")
+  D04_INVOKE_ASSERT=$(printf '%s\n' "$D04_INVOKE_EXE" | $G -vE "$D04_EXEMPT_RE" | $G '^HEAD:')
+  D04_N_ALL=$(printf '%s\n' "$D04_INVOKE_ALL" | $G -c '^HEAD:')
+  D04_N_DOC=$(printf '%s\n' "$D04_INVOKE_DOC" | $G -c '^HEAD:')
+  D04_N_EXE=$(printf '%s\n' "$D04_INVOKE_EXE" | $G -c '^HEAD:')
+  D04_N_EXEMPT=$(printf '%s\n' "$D04_INVOKE_EXEMPT" | $G -c '^HEAD:')
+  D04_N_ASSERT=$(printf '%s\n' "$D04_INVOKE_ASSERT" | $G -c '^HEAD:')
+  echo "== $LABEL  (HEAD $(cd "$CLONE" && git rev-parse --short HEAD); matcher $G)"
+  echo "D04_EXEMPT_RE in effect: $D04_EXEMPT_RE"
+  echo "counts: raw=$D04_RAW comment-stripped=$D04_STRIPPED invocation-shaped=$D04_N_ALL  D04_N_EXE=$D04_N_EXE  D04_N_ASSERT=$D04_N_ASSERT  D04_N_EXEMPT=$D04_N_EXEMPT  D04_N_DOC=$D04_N_DOC"
+  echo "-- D04_INVOKE_ASSERT ($D04_N_ASSERT):"; printf '%s\n' "$D04_INVOKE_ASSERT" | $G '^HEAD:' | cut -c1-200 | sed 's/^/   /'
+  echo "-- D04_INVOKE_EXEMPT ($D04_N_EXEMPT):"; printf '%s\n' "$D04_INVOKE_EXEMPT" | $G '^HEAD:' | cut -c1-200 | sed 's/^/   /'
+  echo "-- route-dj-album.sh lines in D04_INVOKE_ASSERT: $(printf '%s\n' "$D04_INVOKE_ASSERT" | $G -c '^HEAD:scripts/route-dj-album\.sh:')"
+  echo "-- route-dj-album.sh lines in D04_INVOKE_EXEMPT: $(printf '%s\n' "$D04_INVOKE_EXEMPT" | $G -c '^HEAD:scripts/route-dj-album\.sh:')"

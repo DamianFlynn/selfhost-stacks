@@ -506,9 +506,10 @@
 #          does NOT mean there are none. The two sibling guards one screen above already refuse
 #          exactly this reasoning for the raw count and the comment-stripped count; this is the
 #          third, and it is the one that was missing when the defect landed.
-#       L. THE EXEMPT INVOCATION COUNT LEAVING ITS PIN. Five invocation-shaped executable lines
-#          are NAMED exemptions (three in phase06-oracle.sh, two in phase06-incremental-control.sh)
-#          rather than assertions, for the three reasons set out in full in the D-04 block comment.
+#       L. THE EXEMPT INVOCATION COUNT LEAVING ITS PIN. Twelve invocation-shaped executable lines
+#          are NAMED exemptions (three in phase06-oracle.sh, two in phase06-incremental-control.sh,
+#          and — since plan 07-04, 2026-09-26 — seven in route-dj-album.sh) rather than
+#          assertions, for the four reasons set out in full in the D-04 block comment.
 #          The count is pinned by D04_EXEMPT_BASELINE and a move is a red that prints every exempt
 #          line, so a new non-compliant invocation cannot join that set in silence. The green line
 #          also NAMES the exempt count, so a green D-04 always states how many lines it did not
@@ -941,10 +942,11 @@ D04_REPO_ROOT="${D04_REPO_ROOT:-/mnt/fast/stacks}"
 # D04_DOC_BASELINE above, applied to the other set the block does not assert over: an exemption
 # that is not counted is an exemption that can grow. Same ADDITIVE contract — any non-default
 # value prints a warning and forces EXIT_CODE=1, so the pin can only ever make the block redder
-# and can never be used to make a moved count report green. The reason the five lines are exempt
+# and can never be used to make a moved count report green. The reason the twelve lines are exempt
 # is stated IN FULL in the D-04 block comment, not here; do not raise this number without reading
 # it, because raising it is how a real violation gets waved through.
-D04_EXEMPT_BASELINE="${D04_EXEMPT_BASELINE:-5}"
+# moved 5 → 12 by plan 07-04 (D-27): registered route-dj-album.sh invocations; reason in the register comment
+D04_EXEMPT_BASELINE="${D04_EXEMPT_BASELINE:-12}"
 
 # CONSUMERS_SCRIPT, added 2026-09-22 by plan 06-17 (WR-03). The music-consumers fold-in runs the
 # audit from the host's DEPLOYED checkout, and that path was hard-coded. check-music-consumers.sh
@@ -1979,13 +1981,15 @@ fi
 #   of what is actually being looked for — a shell variable holding the beets binary.
 #
 # THE EXEMPTION REGISTER, AND ITS REASON IN FULL, BECAUSE AN UNEXPLAINED EXEMPTION IS WORSE THAN
-# NONE. Five invocation-shaped executable lines are NOT asserted against the literal `-l`-and-`-c`
-# rule. They are NAMED by `D04_EXEMPT_RE` (keyed on the file path AND the distinguishing overlay
-# variable, so a DIFFERENT invocation added to either file does not inherit the exemption) and
+# NONE. Twelve invocation-shaped executable lines are NOT asserted against the literal
+# `-l`-and-`-c` rule (five until 2026-09-26; plan 07-04 registered seven more — reason 4). They
+# are NAMED by `D04_EXEMPT_RE` (keyed on the file path AND the distinguishing variable token, so a
+# DIFFERENT invocation added to any of the three files does not inherit the exemption) and
 # COUNTED against `D04_EXEMPT_BASELINE`; a move in that count is its own red that prints every
-# exempt line. The five are the three `phase06-oracle.sh` lines carrying `$SCRATCH_OVERLAY` and
-# the two `phase06-incremental-control.sh` lines carrying `$ROOT/overlay.yaml`. Three reasons,
-# all of which have to hold:
+# exempt line. The twelve are the three `phase06-oracle.sh` lines carrying `$SCRATCH_OVERLAY`,
+# the two `phase06-incremental-control.sh` lines carrying `$ROOT/overlay.yaml` — for those five,
+# reasons 1-3 below, all of which have to hold — and the seven `route-dj-album.sh` lines carrying
+# `$BEET_REALLIB`, whose reason is 4 and is a DIFFERENT KIND of reason:
 #   1. EACH ONE PASSES A `-c` OVERLAY THAT REDIRECTS `library`, `statefile` AND `directory`
 #      TOGETHER into a throwaway root. That is the STRONGER half of D-04's rule and the half `-l`
 #      cannot achieve at all — `-l` redirects `library` and nothing else, which is exactly why the
@@ -2001,9 +2005,26 @@ fi
 #      `.planning/phases/06-tagger-configuration-and-dry-run/artifacts/06-11-oracle-run.txt` and
 #      `.../artifacts/06-11-wrote-nothing.txt` for the oracle, and `.../06-20-incremental-driven.txt`
 #      for the incremental control.
+#   4. `scripts/route-dj-album.sh` (plan 07-04, D-27) IS THE D-08 OPERATION AND CANNOT BE
+#      COMPLIANT. Reasons 1-3 do not apply to it and are not claimed: it has no overlay, because
+#      routing a REAL imported album into `DJ/` (`modify -a -M -y id:N albumtype=dj`, then a
+#      pretend move, then the move) is by definition a write to the real `/config/library.db`,
+#      and D-04 names beets-flask's own beets 2.12.0 as the ONLY sanctioned opener of that file.
+#      So the exemption rests on four controls instead, each checkable in the script:
+#        * its container is a readonly constant (`ROUTE_CONTAINER=beets-flask`), not a knob — the
+#          2.13.1 `beets` container is never used;
+#        * its VERSION GUARD reads `--version` inside the container and refuses (exit 3) anything
+#          but exactly `beets version 2.12.0`;
+#        * every writing call (`modify`, `move -p`, `move`) sits behind `--apply`; the default
+#          mode issues only `--version` and `ls`;
+#        * its first `--apply` is plan 07-13's, behind that plan's `autonomous: false` gate.
+#      The key is the file path AND the `$BEET_REALLIB` token, so a beets call added to that file
+#      under ANY other variable is asserted, and goes red. Measured before and after in
+#      `.planning/phases/07-pilot-12-albums-end-to-end/artifacts/07-04-d27-register-drive.txt`,
+#      where the overlay-key half of this register is also driven both ways (DEF-06-21-06).
 #   ⛔ THE EXEMPTION IS NOT A SKIP. The green line below NAMES the exempt count, so a green D-04
 #   always states how many lines it did not assert over. A reader who never opens this comment
-#   still cannot mistake 3 asserted lines for 8.
+#   still cannot mistake 3 asserted lines for 15.
 #
 # AND THIS PARAGRAPH ITSELF MOVES THAT GREP'S COUNT, WHICH IS STATED RATHER THAN ROUNDED, the same
 # convention the EXIT-CODE notices use: `grep -c 'timeout $REMOTE_TIMEOUT.*|'` goes 6 -> 8, because
@@ -2040,7 +2061,8 @@ if [ "$D04_REPO_ROOT" != "/mnt/fast/stacks" ]; then
     echo "  ⚠️  D04_REPO_ROOT override in effect — this run cannot report D-04 green"
     EXIT_CODE=1
 fi
-if [ "$D04_EXEMPT_BASELINE" != "5" ]; then
+# moved 5 → 12 by plan 07-04 (D-27): registered route-dj-album.sh invocations; reason in the register comment
+if [ "$D04_EXEMPT_BASELINE" != "12" ]; then
     D04_OVERRIDDEN=1
     echo "  ⚠️  D04_EXEMPT_BASELINE override in effect — this run cannot report D-04 green"
     EXIT_CODE=1
@@ -2107,10 +2129,11 @@ else
     #   substantive, graded WARNING not BLOCKER, and these lines are the comment being brought
     #   FORWARD to the widened behaviour, not corrected backwards to the old one.
     D04_INV_RE='^HEAD:[^:]*:[0-9]*:[[:space:]]*(sudo[[:space:]]+)?beet[[:space:]]|[[:space:]](&&|;)[[:space:]]*beet[[:space:]]|docker[[:space:]][^`]*[[:space:]]beet[[:space:]]|(^HEAD:[^:]*:[0-9]*:[[:space:]]*(sudo[[:space:]]+)?|"|[[:space:]](&&|;)[[:space:]]*|docker[[:space:]][^`]*[[:space:]])\$\{?BEET[A-Z_]*\}?"?[[:space:]]+(-|[a-z])'
-    # The NAMED exemption register. Keyed on the file path AND the distinguishing overlay variable,
-    # so a different invocation added to either file does NOT inherit the exemption. Reason in full
+    # The NAMED exemption register. Keyed on the file path AND the distinguishing variable token,
+    # so a different invocation added to any of the files does NOT inherit the exemption. Reason in full
     # in the block comment above; count pinned by D04_EXEMPT_BASELINE.
-    D04_EXEMPT_RE='^HEAD:scripts/phase06-oracle\.sh:[0-9]*:.*\$SCRATCH_OVERLAY|^HEAD:scripts/phase06-incremental-control\.sh:[0-9]*:.*\$ROOT/overlay\.yaml'
+    # route-dj-album.sh alternation added 2026-09-26 by plan 07-04 (D-27) — reason 4 in the register.
+    D04_EXEMPT_RE='^HEAD:scripts/phase06-oracle\.sh:[0-9]*:.*\$SCRATCH_OVERLAY|^HEAD:scripts/phase06-incremental-control\.sh:[0-9]*:.*\$ROOT/overlay\.yaml|^HEAD:scripts/route-dj-album\.sh:[0-9]*:.*\$BEET_REALLIB'
     D04_INVOKE_ALL=$(printf '%s\n' "$D04_KEPT" | grep -E "$D04_INV_RE")
     D04_INVOKE_DOC=$(printf '%s\n' "$D04_INVOKE_ALL" | grep '\.md:')
     D04_INVOKE_EXE=$(printf '%s\n' "$D04_INVOKE_ALL" | grep -v '\.md:' | grep '^HEAD:')
