@@ -1,0 +1,306 @@
+# 07-05 task 3 — D-09 / E1 / DEF-06-12-01: DJ path rule 2 asserted READ-ONLY, for the first time
+#
+# Rule under test (stacks/selfhosted/arrs/beets/config.yaml `paths:`, rule 2, unchanged):
+#     'albumtype:=dj disctotal:2..':  'DJ/$albumartist/$album%aunique{}/$disc-$track $title'
+# with `per_disc_numbering: yes`. `disc` and `track` are PaddedInt(2), so the expected rendering is
+# `02-05`, not `2-05` (06-EXPECTED-TREE.txt header § "THE RENDERING IS 02-05, NOT 2-05").
+# Discriminator: rule 3 (`albumtype:=dj`, single disc) renders `DJ/.../<TT> <title>` with NO disc
+# prefix; rule 4 (`disctotal:2..`) renders the disc prefix WITHOUT the `DJ/` root. Only rule 2
+# produces BOTH, so `DJ/` + `0[12]-NN ` on every basename is rule 2 firing and nothing else.
+#
+# Engine: beets-flask's own beets 2.12.0 (D-04). The 2.13.1 `beets` container was not used.
+# Every beet invocation carried BOTH `-l /tmp/p6-p7rule2/lib.db` (outside /config/library.db) AND
+# `-c /tmp/p6-p7rule2/overlay.yaml`. These invocations were AD HOC over ssh and are NOT committed
+# anywhere, so check-beets-config.sh's D-04 source scan is unaffected by them.
+# 2026-09-25, ~22:53-22:56Z. Nothing was imported into the real library; /media stayed RW=false.
+
+=====================================================================================
+§ 1  FOLDER CHOICE — mechanical
+=====================================================================================
+The seven names from 06-SAMPLE.md § "What this sample does NOT cover" item 1, sorted:
+$ printf '%s\n' <the seven> | LC_ALL=C sort
+Mastermix_Issue_403
+Mastermix_Issue_404
+Mastermix_Issue_413
+Mastermix_Issue_418_April_2021
+VA-Mastermix.Issue.422-2021
+VA-Mastermix.Issue.427.2CD-2021
+VA-Mastermix.Issue.429-2022
+First by LC_ALL=C: Mastermix_Issue_403.
+
+Existence as EXACTLY ONE directory under /mnt/tank/downloads/complete/nzb/dj-mixes/ (LXC 100):
+$ cd /mnt/tank/downloads/complete/nzb/dj-mixes && find . -mindepth 1 -maxdepth 1 -type d -name "Mastermix_Issue_403*"
+./Mastermix_Issue_403
+rc=0        -> exactly one match.
+
+beets' own field view, through `mediafile` in beets-flask (/venv/bin/python, user beetle),
+container path /downloads/complete/nzb/dj-mixes/Mastermix_Issue_403:
+file  disc  disctotal  track  tracktotal  albumartist  album  artist  title  albumtype
+01 - Chart Hits - Pop Dance.mp3	1	2	1	None	Various Artists	Mastermix Issue Vol. 403 (January 2020)	Various Artists	Chart Hits - Pop Dance	None
+01 - The DJs Set Old School Rap.mp3	2	2	1	None	Various Artists	Mastermix Issue Vol. 403 (January 2020)	Various Artists	The DJs Set: Old School Rap	None
+02 - DJ Playlist - Rock Classics.mp3	1	2	2	None	Various Artists	Mastermix Issue Vol. 403 (January 2020)	Various Artists	DJ Playlist - Rock Classics	None
+02 - Mastermixed January 2020.mp3	2	2	2	None	Various Artists	Mastermix Issue Vol. 403 (January 2020)	Various Artists	Mastermixed: January 2020	None
+03 - All Out 80s.mp3	2	2	3	None	Various Artists	Mastermix Issue Vol. 403 (January 2020)	Various Artists	All Out 80s	None
+03 - Retro Disco.mp3	1	2	3	None	Various Artists	Mastermix Issue Vol. 403 (January 2020)	Various Artists	Retro Disco	None
+04 - Acoustic Love.mp3	2	2	4	None	Various Artists	Mastermix Issue Vol. 403 (January 2020)	Various Artists	Acoustic Love	None
+04 - All Funked Up.mp3	1	2	4	None	Various Artists	Mastermix Issue Vol. 403 (January 2020)	Various Artists	All Funked Up	None
+05 - DJ Playlist - 70s Disco Floorfillers.mp3	1	2	5	None	Various Artists	Mastermix Issue Vol. 403 (January 2020)	Various Artists	DJ Playlist - 70s Disco Floorfillers	None
+05 - Pump Up The 80s.mp3	2	2	5	None	Various Artists	Mastermix Issue Vol. 403 (January 2020)	Various Artists	Pump Up The 80s	None
+NONAUDIO	album.nfo
+NONAUDIO	folder.jpg
+AUDIO_COUNT	10
+disctotal = 2 on ALL 10 audio files (disc 1 x5, disc 2 x5). No fallback to the next name needed.
+Audio file count: 10 (plus album.nfo and folder.jpg, non-audio, carried in the manifest).
+
+=====================================================================================
+§ 2  SOURCE MANIFEST BEFORE — atlantis (172.16.1.158) as REAL root (id -u = 0)
+=====================================================================================
+$ cd /mnt/tank/downloads/complete/nzb/dj-mixes/Mastermix_Issue_403
+$ set -o pipefail; timeout 300 find . -type f -printf "%P\t%s\t%T@\n" | LC_ALL=C sort      rc=0
+01 - Chart Hits - Pop Dance.mp3	33630622	1592134842.0000000000
+01 - The DJs Set Old School Rap.mp3	32520950	1592134465.0000000000
+02 - DJ Playlist - Rock Classics.mp3	42851856	1592134796.0000000000
+02 - Mastermixed January 2020.mp3	40429779	1592134741.0000000000
+03 - All Out 80s.mp3	39611596	1592134765.0000000000
+03 - Retro Disco.mp3	28203400	1592134685.0000000000
+04 - Acoustic Love.mp3	40565591	1592134496.0000000000
+04 - All Funked Up.mp3	36545869	1592134611.0000000000
+05 - DJ Playlist - 70s Disco Floorfillers.mp3	46977131	1592134606.0000000000
+05 - Pump Up The 80s.mp3	38588648	1592134526.0000000000
+album.nfo	1945	1786954313.0338538240
+folder.jpg	537523	1786954307.5408540200
+$ set -o pipefail; timeout 300 find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum   rc=0
+a639de64b4c1073a1d27ad98164187ff93bbdc4a33e61d656d70accb807a4d88  ./01 - Chart Hits - Pop Dance.mp3
+914df5819caca7078b5db6253814fdece0257a7babbd02d4d7c00f3d6444eba6  ./01 - The DJs Set Old School Rap.mp3
+ea227e6070c84b88c8c51ba07a846282a020cc879374767011f80e72b02e1508  ./02 - DJ Playlist - Rock Classics.mp3
+0a5e795e69b1de440d1148abd4efa52606724f41bf5b7273b1cd282f1b5c189b  ./02 - Mastermixed January 2020.mp3
+b2cb2935a3a746c36c1ab2383698eaa224eadee84297ed79d4e973940660d1bf  ./03 - All Out 80s.mp3
+d0684ecb9a966c10b4b0e5a68235362d9f8c7d2b88e3c38af04968e8b2091880  ./03 - Retro Disco.mp3
+cf8ed944f2cc476cb5a6c3a9ad5bbc99b91814adc4e20cabb4d1555cc17569f1  ./04 - Acoustic Love.mp3
+ce17ca47caed2120f213a4bbcb8f6a6d5fa9a55670451a5df320fa1af93ea352  ./04 - All Funked Up.mp3
+9f80cb89fc628ea28052307b52d2a0471cb2b1e126eed5b717d9b24d7c8a0ad5  ./05 - DJ Playlist - 70s Disco Floorfillers.mp3
+758b367eb8ae4cd1363adea9151edffd59f0ed0852ff4e0804d4b8efdf3f370d  ./05 - Pump Up The 80s.mp3
+417e9d22b1570ec31eca00c40609ada46f5671583711c40935bc24eee8216cac  ./album.nfo
+c092684ceaace2bf4edfb0fbe7cf6ea036349a5b5590838f0618b19c37f0a611  ./folder.jpg
+Saved on LXC 100 at /mnt/fast/safety/phase07/rule2/r2-before.{meta,sha}
+  (sha256 55e23c38... r2-before.meta, 4b6f1fe6... r2-before.sha). LXC 100's /mnt/fast/safety/phase07/
+  is where 07-02 put its phase-7 working state; atlantis has no phase07/ directory, so the manifests
+  were measured on atlantis and stored beside 07-02's on LXC 100.
+
+=====================================================================================
+§ 3  THROWAWAY LIBRARY, OVERLAY, AND THE EFFECTIVE-CONFIG ASSERTION (BEFORE ANY IMPORT)
+=====================================================================================
+## scratch probe (must be absent)
+$ timeout 60 docker exec -u beetle beets-flask sh -c 'test -e /tmp/p6-p7rule2 && echo PRESENT || echo absent'
+absent
+ssh_rc=0
+## create scratch + place overlay
+$ timeout 60 docker exec -u beetle beets-flask mkdir /tmp/p6-p7rule2
+ssh_rc=0
+place_rc=0
+$ timeout 60 docker exec -u beetle beets-flask cat /tmp/p6-p7rule2/overlay.yaml
+library: /tmp/p6-p7rule2/lib.db
+statefile: /tmp/p6-p7rule2/state.pickle
+directory: /media/Music
+import:
+    write: no
+    copy: no
+    move: no
+    autotag: no
+    resume: no
+    incremental: no
+    duplicate_action: keep
+ui:
+    color: no
+ssh_rc=0
+## effective config BEFORE import (beet -l ... -c ... config)
+config_rc=0
+## beet version
+$ timeout 60 docker exec -u beetle beets-flask /venv/bin/beet --version
+beets version 2.12.0
+Python version 3.12.14
+plugins: musicbrainz
+ssh_rc=0
+
+The effective config, as printed by
+  beet -l /tmp/p6-p7rule2/lib.db -c /tmp/p6-p7rule2/overlay.yaml config        (rc=0, stderr empty)
+top of the dump (the keys the assertion reads; full dump 74 lines, not reproduced):
+# --------------- Main ---------------
+
+library: /tmp/p6-p7rule2/lib.db
+statefile: /tmp/p6-p7rule2/state.pickle
+directory: /media/Music
+
+import:
+    write: no
+    copy: no
+    move: no
+    autotag: no
+    resume: no
+    incremental: no
+    duplicate_action: keep
+    incremental_skip_later: yes
+
+
+PARSED-VALUE ASSERTION (residual LOW from the refuted grok F4): the captured text fed to
+yaml.safe_load inside beets-flask (/venv/bin/python); booleans compared with `is False`, paths
+through os.path.realpath and a /tmp/p6-p7rule2/ prefix test; a missing key is a STOP (exit 9),
+never a default.
+import.write parsed=False type=bool is False -> True
+import.copy parsed=False type=bool is False -> True
+import.move parsed=False type=bool is False -> True
+library parsed='/tmp/p6-p7rule2/lib.db' realpath='/tmp/p6-p7rule2/lib.db' startswith /tmp/p6-p7rule2/ -> True
+statefile parsed='/tmp/p6-p7rule2/state.pickle' realpath='/tmp/p6-p7rule2/state.pickle' startswith /tmp/p6-p7rule2/ -> True
+directory parsed='/media/Music' (recorded)
+PARSED-ASSERTION: PASS
+parse_rc=0
+
+Parser controls (the same parse.py, fed doctored copies of the captured text):
+import.write parsed=False type=bool is False -> True
+import.copy parsed=False type=bool is False -> True
+import.move parsed=True type=bool is False -> False
+library parsed='/tmp/p6-p7rule2/lib.db' realpath='/tmp/p6-p7rule2/lib.db' startswith /tmp/p6-p7rule2/ -> True
+statefile parsed='/tmp/p6-p7rule2/state.pickle' realpath='/tmp/p6-p7rule2/state.pickle' startswith /tmp/p6-p7rule2/ -> True
+directory parsed='/media/Music' (recorded)
+PARSED-ASSERTION: FAIL
+neg_rc=8
+import.write parsed=False type=bool is False -> True
+import.copy parsed=False type=bool is False -> True
+MISSING import.move -> STOP
+neg2_rc=9
+  - `move: yes` substituted -> import.move parsed=True, PARSED-ASSERTION FAIL, exit 8   (detected)
+  - `move:` + library/statefile/directory lines deleted -> "MISSING import.move -> STOP", exit 9
+=> write/copy/move all parsed False; library and statefile resolve under /tmp/p6-p7rule2/. PROCEED.
+
+=====================================================================================
+§ 4  THE AS-IS IMPORT AND `move -p`
+=====================================================================================
+Real hashes immediately before the import:
+fbbdde0c416e72b9884e56c562fd88eaa4da447926e1cb6cc17c3e04aee7da1a  /config/library.db
+f6a9a1ad7aa553e42e53a8056fa80724785111180a5e2122be4f8732d1e4bc7c  /config/state.pickle
+$ beet -l /tmp/p6-p7rule2/lib.db -c /tmp/p6-p7rule2/overlay.yaml import -A -q --set albumtype=dj /downloads/complete/nzb/dj-mixes/Mastermix_Issue_403
+/downloads/complete/nzb/dj-mixes/Mastermix_Issue_403
+import_rc=0
+$ beet -l … -c … ls -a -f '$albumtype|$albumartist|$album|$disctotal'
+dj|Various Artists|Mastermix Issue Vol. 403 (January 2020)|02
+ls_rc=0
+$ beet -l … -c … move -p          (rc=0; stderr: "Moving 10 items.")
+RENDERED PATHS, VERBATIM:
+/downloads/complete/nzb/dj-mixes/Mastermix_Issue_403/01 - Chart Hits - Pop Dance.mp3 
+  -> /media/Music/DJ/Various Artists/Mastermix Issue Vol. 403 (January 2020)/01-01 Chart Hits - Pop Dance.mp3
+/downloads/complete/nzb/dj-mixes/Mastermix_Issue_403/02 - DJ Playlist - Rock Classics.mp3 
+  -> /media/Music/DJ/Various Artists/Mastermix Issue Vol. 403 (January 2020)/01-02 DJ Playlist - Rock Classics.mp3
+/downloads/complete/nzb/dj-mixes/Mastermix_Issue_403/03 - Retro Disco.mp3 
+  -> /media/Music/DJ/Various Artists/Mastermix Issue Vol. 403 (January 2020)/01-03 Retro Disco.mp3
+/downloads/complete/nzb/dj-mixes/Mastermix_Issue_403/04 - All Funked Up.mp3 
+  -> /media/Music/DJ/Various Artists/Mastermix Issue Vol. 403 (January 2020)/01-04 All Funked Up.mp3
+/downloads/complete/nzb/dj-mixes/Mastermix_Issue_403/05 - DJ Playlist - 70s Disco Floorfillers.mp3 
+  -> /media/Music/DJ/Various Artists/Mastermix Issue Vol. 403 (January 2020)/01-05 DJ Playlist - 70s Disco Floorfillers.mp3
+/downloads/complete/nzb/dj-mixes/Mastermix_Issue_403/01 - The DJs Set Old School Rap.mp3 
+  -> /media/Music/DJ/Various Artists/Mastermix Issue Vol. 403 (January 2020)/02-01 The DJs Set_ Old School Rap.mp3
+/downloads/complete/nzb/dj-mixes/Mastermix_Issue_403/02 - Mastermixed January 2020.mp3 
+  -> /media/Music/DJ/Various Artists/Mastermix Issue Vol. 403 (January 2020)/02-02 Mastermixed_ January 2020.mp3
+/downloads/complete/nzb/dj-mixes/Mastermix_Issue_403/03 - All Out 80s.mp3 
+  -> /media/Music/DJ/Various Artists/Mastermix Issue Vol. 403 (January 2020)/02-03 All Out 80s.mp3
+/downloads/complete/nzb/dj-mixes/Mastermix_Issue_403/04 - Acoustic Love.mp3 
+  -> /media/Music/DJ/Various Artists/Mastermix Issue Vol. 403 (January 2020)/02-04 Acoustic Love.mp3
+/downloads/complete/nzb/dj-mixes/Mastermix_Issue_403/05 - Pump Up The 80s.mp3 
+  -> /media/Music/DJ/Various Artists/Mastermix Issue Vol. 403 (January 2020)/02-05 Pump Up The 80s.mp3
+
+=====================================================================================
+§ 5  ASSERTIONS OVER THE CAPTURED DESTINATIONS
+=====================================================================================
+Negative recipes driven against CONTROL strings FIRST (each defect shape must be detected):
+## NEGATIVE RECIPES driven against control strings FIRST (each must be DETECTED: the named check FAILs, exit 1)
+-- control: [/media/Music/DJ/X/Y/-1 - T.mp3]
+  FAIL  basenames NOT matching ^0[12]-[0-9]{2} .+\.(mp3|flac|wav)$: 1 (want 0)
+  FAIL  basenames with disc 01: absent (want present)
+  FAIL  basenames with disc 02: absent (want present)
+  FAIL  occurrences of '-1 - ': 1 (want 0)
+  failures: 4
+   exit=1
+-- control: [/media/Music/DJ/X/Y/00-01 T.mp3]
+  FAIL  basenames NOT matching ^0[12]-[0-9]{2} .+\.(mp3|flac|wav)$: 1 (want 0)
+  FAIL  basenames with disc 01: absent (want present)
+  FAIL  basenames with disc 02: absent (want present)
+  FAIL  basenames starting 00-: 1 (want 0)
+  failures: 4
+   exit=1
+-- control: [/media/Music/DJ/X/Y/Disc 2/01 T.mp3]
+  FAIL  basenames NOT matching ^0[12]-[0-9]{2} .+\.(mp3|flac|wav)$: 1 (want 0)
+  FAIL  basenames with disc 01: absent (want present)
+  FAIL  basenames with disc 02: absent (want present)
+  FAIL  a 'Disc N' or 'CD N' DIRECTORY component: 1 (want 0)
+  failures: 4
+   exit=1
+-- control: [/media/Music/DJ/X/Y [12]/01-01 T.mp3]
+  FAIL  basenames with disc 02: absent (want present)
+  FAIL  bracketed integer ' [NN]' that is not a 4-digit year: 1 (want 0)
+  failures: 2
+   exit=1
+-- positive control (a year in brackets is allowed; two discs, one album dir): must PASS, exit 0
+  failures: 0
+   exit=0
+
+Then over the 10 captured ` -> ` destinations:
+  PASS  line count == audio file count: 10 (want 10)
+  PASS  destinations NOT beginning /media/Music/DJ/: 0 (want 0)
+  PASS  basenames NOT matching ^0[12]-[0-9]{2} .+\.(mp3|flac|wav)$: 0 (want 0)
+  PASS  basenames with disc 01: present (want present)
+  PASS  basenames with disc 02: present (want present)
+  PASS  occurrences of '-1 - ': 0 (want 0)
+  PASS  basenames starting 00-: 0 (want 0)
+  PASS  a 'Disc N' or 'CD N' DIRECTORY component: 0 (want 0)
+  PASS  bracketed integer ' [NN]' that is not a 4-digit year: 0 (want 0)
+  PASS  distinct album directories: 1 (want 1)
+  failures: 0
+assert_rc=0
+Per-disc split: 01-01..01-05 (5 files) and 02-01..02-05 (5 files); each source's disc/track from § 1
+maps to its rendered prefix (e.g. "01 - The DJs Set Old School Rap.mp3", disc 2 track 1 -> 02-01).
+The literal `02-05` row is present: ".../02-05 Pump Up The 80s.mp3".
+
+RULE 2 VERDICT: RENDERS CORRECTLY — DJ/<albumartist>/<album>/<DD>-<TT> <title>.<ext>, disc-prefixed
+flat, PaddedInt(2) on both fields, no `-1 - `, no `00-`, no Disc/CD subdirectory, no stray
+bracketed integer, one album directory. No rendering defect found, so nothing was added to
+deferred-items.md; the `paths:` stanza was not touched (locked from Phase 6).
+
+Observation, NOT a rule-2 defect and not a finding: two titles carrying `:` render with `_`
+("The DJs Set_ Old School Rap", "Mastermixed_ January 2020"). That is beets' default `replace:`
+table sanitising a path character, applied by every rule alike; recorded so the pilot is not
+surprised by it.
+
+=====================================================================================
+§ 6  AFTERWARDS — fenced cleanup, source manifest AFTER, real state
+=====================================================================================
+## scratch contents before cleanup
+$ timeout 60 docker exec -u beetle beets-flask ls -la /tmp/p6-p7rule2
+total 72
+drwxr-xr-x 2 beetle beetle  4096 Sep 25 23:54 .
+drwxrwxrwt 1 root   root    4096 Sep 25 23:54 ..
+-rw-r--r-- 1 beetle beetle 53248 Sep 25 23:54 lib.db
+-rw-r--r-- 1 beetle beetle   240 Sep 25 23:54 overlay.yaml
+-rw-r--r-- 1 beetle beetle   861 Sep 25 23:54 parse.py
+ssh_rc=0
+## cleanup through the oracle CLEANUP_PROG (sha256 1d3f04f7... as extracted in § 3.2 of 07-05-oracle-run.txt)
+$ timeout 300 docker exec -u beetle beets-flask sh -c $'case "$1" in\n  /tmp/p6) : ;;\n  /tmp/p6-*)\n    case "${1#/tmp/p6-}" in\n      ""|*[!A-Za-z0-9._-]*)\n        echo "REFUSED: the scratch path is not a throwaway root under /tmp/p6" >&2; exit 3 ;;\n    esac\n    ;;\n  *) echo "REFUSED: the scratch path is not a throwaway root under /tmp/p6" >&2; exit 3 ;;\nesac\nrm -rf "$1"\n[ -e "$1" ] && echo present || echo gone' sh /tmp/p6-p7rule2
+gone
+ssh_rc=0
+$ timeout 60 docker exec -u beetle beets-flask sh -c 'test -e /tmp/p6-p7rule2 && echo present || echo absent'
+absent
+ssh_rc=0
+(no state.pickle was ever created in scratch: the overlay sets incremental: no and resume: no.)
+
+Source manifest AFTER, atlantis as real root, same two commands (rc=0 both):
+$ cmp r2-before.meta r2-after.meta  -> META-IDENTICAL   (path, size AND mtime per file, 12 files)
+$ cmp r2-before.sha  r2-after.sha   -> SHA-IDENTICAL    (content per file, 12 files)
+Stored beside BEFORE at /mnt/fast/safety/phase07/rule2/r2-after.{meta,sha}; re-compared there on
+LXC 100: host-cmp-identical.
+=> SOURCE MANIFEST BYTE-IDENTICAL BEFORE AND AFTER (sha256 and size per file identical; mtime
+   recorded and identical too).
+
+Real beets state after:
+fbbdde0c416e72b9884e56c562fd88eaa4da447926e1cb6cc17c3e04aee7da1a  /config/library.db
+f6a9a1ad7aa553e42e53a8056fa80724785111180a5e2122be4f8732d1e4bc7c  /config/state.pickle
+cmp against the pre-import reading: REAL-UNCHANGED (library.db fbbdde0c..., state.pickle f6a9a1ad...).
+
+$ git diff --exit-code HEAD -- stacks/selfhosted/arrs/beets/config.yaml   -> exit 0 (unchanged)
