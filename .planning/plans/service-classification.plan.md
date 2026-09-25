@@ -1,6 +1,6 @@
 # Classify Every Service: Active, Dormant-but-Maintained, or Delete
 
-**Status:** IN PROGRESS — authorised by the operator 2026-09-25. **Scope:** every container and every declared-but-not-running stack on LXC 100, plus the stale routing and duplicate-name config that has accumulated alongside them. Produces a recorded disposition per service and the `profiles:` mechanism to express "maintained but powered down". **Depends on:** `unblock-disarm-reclaim-close-backup-gap.plan.md` (app state must be replicated off-box before anything is deleted — done 2026-09-25). **Blocks:** the 27-container deploy, which should not pull images for services about to be stopped. **Explicitly out of scope:** consolidating Postgres/Redis/Meilisearch instances (that is the consolidation plan, and it must run *after* this one so it operates on a smaller surface), the hufflepuff rebuild, `/dev/net/tun`, Silo.
+**Status:** LARGELY COMPLETE — C1–C6 done 2026-09-25; C7 (durable record) is this document — authorised by the operator 2026-09-25. **Scope:** every container and every declared-but-not-running stack on LXC 100, plus the stale routing and duplicate-name config that has accumulated alongside them. Produces a recorded disposition per service and the `profiles:` mechanism to express "maintained but powered down". **Depends on:** `unblock-disarm-reclaim-close-backup-gap.plan.md` (app state must be replicated off-box before anything is deleted — done 2026-09-25). **Blocks:** the 27-container deploy, which should not pull images for services about to be stopped. **Explicitly out of scope:** consolidating Postgres/Redis/Meilisearch instances (that is the consolidation plan, and it must run *after* this one so it operates on a smaller surface), the hufflepuff rebuild, `/dev/net/tun`, Silo.
 
 ## Problem
 
@@ -131,3 +131,78 @@ A row whose only signal is "zero Traefik hits" and which is reachable another wa
 - Measured evidence: `.planning/analysis/STACK-MAP.md`; the Traefik access log 2025-10-02 → 2026-09-25; CPU and container-state measurements taken 2026-09-25.
 - Conventions: `CONVENTIONS.md` rules 1 (fail closed; "could not look" ≠ "nothing wrong"), 2, 3.
 - Prior incidents constraining the method: the `created`-state blind spot that hid two down services for six weeks; `docker ps` disagreeing with `docker inspect`.
+
+---
+
+## Execution log — 2026-09-25
+
+### Outcome
+
+**98 → 81 running containers.** 27 services dormant, 4 definitions deleted.
+
+| disposition | services |
+|---|---|
+| **DELETED** | `buzz` (7 containers), `code-server`, `homarr`, the duplicate `social/postiz.yaml`, and the untracked `music/` `.env` residue from the wrtag era |
+| **DORMANT** (27) | `pwpush`+db, `rustdesk` ×2, `teleport`+db, `termix`, `blockbusterr`, `janitorr`, `oxidized`, `postiz` (3), `books` (2), `mcp` (3), `saas` (2), `open-archiver` (5), `rybbit` (2) |
+| **ACTIVE, corrected** | `jellystat`, `qbittorrent`, `flaresolverr`, `minecraft` ×2 |
+
+### The mechanism is proven, not assumed
+
+`docker compose up -d` was run across **all eleven** stacks containing dormant services.
+**Zero dormant services started**; the running count stayed at 81. All 27 retain their `image:`
+line, so Renovate still parses and bumps them — confirmed by parsing every file, with Dependency
+Dashboard confirmation due on the next Renovate run.
+
+### Three corrections to claims made earlier in this same plan's proposal
+
+Recorded because each would have caused real damage, and because the pattern matters more than
+the individual errors: **every one came from treating one signal as complete.**
+
+**1. `jellystat`, `qbittorrent` and `flaresolverr` are ACTIVE.** All three were proposed as
+dormancy candidates on Traefik evidence alone. Checking:
+
+- `jellystat` — newest `jf_playback_activity` row **2026-09-24 23:35**, i.e. yesterday. The UI is
+  unvisited; the *collector* is running. It holds the **only independent copy of Jellyfin watch
+  history** outside a 363 MB SQLite file with no exporter. Stopping it would have quietly ended
+  the collection and removed the migration bridge for any future media-server change.
+- `qbittorrent` — 13 torrents, newest added 2026-09-13.
+- `flaresolverr` — Prowlarr calls it at `http://flaresolverr:8191`; it never touches Traefik.
+
+This is precisely the blind spot the Problem section named, and it still nearly caught the plan
+that named it.
+
+**2. There is no stale-router debris.** The proposal claimed `wrtag@docker` still had a live
+router and that five arrs had duplicate routers. **Neither is in git.** Those were historical
+lines in a year-long access log — `wrtag` last seen 2026-01-22, bare `sonarr` 2025-12-28. A log
+that spans a year is a record of what *happened*, not a description of what *is*.
+
+**3. `rybbit.yaml` has no duplicate service key.** That appearance was damage from the dormancy
+script itself: it failed to reset its section tracker at the end of the `services:` block and
+inserted a `profiles:` line into `volumes:`, corrupting the volume definition. Caught by
+verification, removed, volume restored to `driver`/`driver_opts`.
+
+### Findings worth keeping
+
+- **Teleport's 535 hits in 30 days are attack traffic, not usage.** `GET /.env`,
+  `/proc/self/environ`, `/actuator/configprops`, `/trace.axd`, `/test.php`, from external IPs.
+  A publicly-exposed **infrastructure access gateway** nobody uses, being probed for credentials.
+  Dormancy here closes an attack surface, which is a better reason than tidiness.
+- **`social/compose.yaml` carried `include: - postiz.yaml`.** Deleting that file without fixing
+  the include would have broken the whole stack. Include and four orphaned postiz volumes removed.
+- **`postiz` was declared twice** — in `postiz/` and in `social/` — with the same three container
+  names, so only one could ever run. `postiz/` survives and is dormant.
+- **`saas` is Cal.com and is NOT a duplicate of the running `cal-*` containers**, which are
+  Keeper (`ghcr.io/ridafkih/keeper-*`) and merely share a `cal-` name prefix. Checked because the
+  names collided on sight.
+- An unrelated `.planning/config.json` toggle (`nyquist_validation` true→false) had been changed
+  by a tool run and was reverted, not committed.
+
+### Still open
+
+- **`rybbit` was classified DORMANT without an explicit operator decision.** It was not running,
+  and the plan's stated default for anything uncertain is DORMANT rather than DELETE. It is
+  tracked in GitHub issue #307 and needs a real answer.
+- **Nothing was deleted from disk.** Appdata for every deleted service is retained and is now
+  replicated off-box. Release is gated on the restore proof that the parent backup plan still has
+  open.
+- **The reduced deploy set has not yet been recalculated** and handed to the deploy plan.
