@@ -52,7 +52,8 @@
 #   4. The three proof albums in Jellyfin  CONS-04 groundwork, D-42
 #   4a. The D-34 library options           CONF-04, plan 06-03, T-06-13
 #   4b. D-22 artist entities in Jellyfin   CONF-04, plan 06-03
-#   4c. D-22 artist entities in MA         CONF-04, plan 06-13 (fails closed while MA is down)
+#   4c. Artists-without-ArtistItems census D-24, plan 07-07 (exit 3 on a measured change)
+#   4d. D-22 artist entities in MA         CONF-04, plan 06-13 (fails closed while MA is down)
 #   5. Mount liveness                      CONS-03, D-11 adjacent
 #   6. Summary
 #
@@ -79,7 +80,7 @@
 #        ticked. See the ARTIST_PROOF_ROWS table for why that third state exists and why it is
 #        not a fudge: the option is probe-time, and the refresh that would re-probe is forbidden.
 #
-#   4c — THE MA HALF, WRITTEN NOW AND FAILING CLOSED. MA unreachable emits `ma_fail` with
+#   4d — THE MA HALF, WRITTEN NOW AND FAILING CLOSED. MA unreachable emits `ma_fail` with
 #        `UNKNOWN, not green`, NOT `warn` and NOT the out-of-scope branch, so criterion 4 stays
 #        OPEN instead of reading as passed while the consumer that would falsify it is down.
 #        ⚠ `music/tracks/library_items` is research assumption A2 — inferred, not confirmed
@@ -108,7 +109,7 @@
 #
 # EXIT 3 - THE PENDING STATE, MADE MACHINE-READABLE (WR-03, plan 06-17, 2026-09-22):
 #
-#   Sections 4b and 4c carry a deliberate THIRD state: a D-22 artist row sitting at its RECORDED
+#   Sections 4b and 4d carry a deliberate THIRD state: a D-22 artist row sitting at its RECORDED
 #   BASELINE rather than at its target is PENDING - reported, counted in the summary, never ticked.
 #   The design is right and is argued at length at the ARTIST_PROOF_ROWS table. The DEFECT this
 #   exit code fixes is that the third state was invisible to the only machine-readable output this
@@ -141,7 +142,7 @@
 #         one purpose - deciding whether ANY row is off target - and that is a different question
 #         from whether CONF-04 is closed. CONF-04 closes when BOTH halves read at target, and the
 #         two halves are at different points for different reasons: 4b is a probe-time option
-#         whose ONE remaining route is a Phase 7 write or import, 4c is a measured MA
+#         whose ONE remaining route is a Phase 7 write or import, 4d is a measured MA
 #         artist-ENTITY-stage discrepancy. Do not publish "N of M pending" as a CONF-04 completion
 #         figure, and never let a green MA half offset a pending Jellyfin one.
 #
@@ -150,7 +151,7 @@
 #         DIFFERENT measurements inside one criterion. 4b's mtime route was driven and measured
 #         not to discharge it (see the target-column paragraph at ARTIST_PROOF_ROWS), so the
 #         Jellyfin half is carried to Phase 7 entry criterion E6 under an explicit recorded
-#         override — a carry of an OPEN requirement, never a close. 4c's surviving row belongs to
+#         override — a carry of an OPEN requirement, never a close. 4d's surviving row belongs to
 #         E6's SECOND measurement: whether a second >=4-artist track yields four artists in MA or
 #         three, the only thing that separates "MA caps the list at 3" from "Twista specifically
 #         failed to map". Round 5 produced NO evidence bearing on that second measurement and did
@@ -536,6 +537,46 @@ ARTIST_PROOF_ROWS=(
   # transfer to MA: MA normalises the order and returns `P!nk | Nate Ruess` (measured 2026-09-20),
   # so only the SET is meaningful there.
   "/media/Music/P!nk/The Truth About Love (2012)/CD 01-04 P!nk - Just Give Me a Reason.flac|2|1|2|ARTISTS|Just Give Me a Reason|albumartist is SECOND in the tag — the order is the tell in Jellyfin"
+)
+
+# D-24 census pin (section 4c, plan 07-07). CONVENTIONS §5 live pin: MEASURED, never the prose "30".
+# The three values move together, by hand, in the commit that adjudicates a change — see 4c.
+# Measured 2026-09-26 (TotalRecordCount 1244 == Items 1244): 29 = ARTPOP (2013) x15 + Joanne (2016)
+# x14. The prose "30 … one Def Leppard track" counted items with ZERO ArtistItems; the Def Leppard
+# one (`On Through the Night (1980)/… Overture.flac`) has an EMPTY Artists list too, so it is not in
+# this predicate's set. It is the E5 repair's business, recorded in 07-07-before-state.txt.
+D24_CENSUS_BASELINE_N=29
+D24_CENSUS_BASELINE_SHA="fa2e7a51e6852fae1c015e46c13f201209dd0636dc84e4bd1ae1936debf1fc77"
+D24_CENSUS_BASELINE_PATHS=(
+  '/media/Music/Lady Gaga/ARTPOP (2013)/CD 01-01 Lady Gaga - Aura.flac'
+  '/media/Music/Lady Gaga/ARTPOP (2013)/CD 01-02 Lady Gaga - Venus.flac'
+  '/media/Music/Lady Gaga/ARTPOP (2013)/CD 01-03 Lady Gaga - G.U.Y.flac'
+  '/media/Music/Lady Gaga/ARTPOP (2013)/CD 01-04 Lady Gaga - Sexxx Dreams.flac'
+  '/media/Music/Lady Gaga/ARTPOP (2013)/CD 01-05 Lady Gaga - Jewels n’ Drugs.flac'
+  '/media/Music/Lady Gaga/ARTPOP (2013)/CD 01-06 Lady Gaga - MANiCURE.flac'
+  '/media/Music/Lady Gaga/ARTPOP (2013)/CD 01-07 Lady Gaga - Do What U Want.flac'
+  '/media/Music/Lady Gaga/ARTPOP (2013)/CD 01-08 Lady Gaga - ARTPOP.flac'
+  '/media/Music/Lady Gaga/ARTPOP (2013)/CD 01-09 Lady Gaga - Swine.flac'
+  '/media/Music/Lady Gaga/ARTPOP (2013)/CD 01-10 Lady Gaga - Donatella.flac'
+  '/media/Music/Lady Gaga/ARTPOP (2013)/CD 01-11 Lady Gaga - Fashion!.flac'
+  '/media/Music/Lady Gaga/ARTPOP (2013)/CD 01-12 Lady Gaga - Mary Jane Holland.flac'
+  '/media/Music/Lady Gaga/ARTPOP (2013)/CD 01-13 Lady Gaga - Dope.flac'
+  '/media/Music/Lady Gaga/ARTPOP (2013)/CD 01-14 Lady Gaga - Gypsy.flac'
+  '/media/Music/Lady Gaga/ARTPOP (2013)/CD 01-15 Lady Gaga - Applause.flac'
+  '/media/Music/Lady Gaga/Joanne (2016)/12 Vinyl 01-01 Lady Gaga - Diamond Heart.flac'
+  '/media/Music/Lady Gaga/Joanne (2016)/12 Vinyl 01-02 Lady Gaga - A‐YO.flac'
+  '/media/Music/Lady Gaga/Joanne (2016)/12 Vinyl 01-03 Lady Gaga - Joanne.flac'
+  '/media/Music/Lady Gaga/Joanne (2016)/12 Vinyl 01-04 Lady Gaga - John Wayne.flac'
+  '/media/Music/Lady Gaga/Joanne (2016)/12 Vinyl 01-05 Lady Gaga - Dancin’ in Circles.flac'
+  '/media/Music/Lady Gaga/Joanne (2016)/12 Vinyl 01-06 Lady Gaga - Perfect Illusion.flac'
+  '/media/Music/Lady Gaga/Joanne (2016)/12 Vinyl 01-07 Lady Gaga - Million Reasons.flac'
+  '/media/Music/Lady Gaga/Joanne (2016)/12 Vinyl 02-01 Lady Gaga - Sinner’s Prayer.flac'
+  '/media/Music/Lady Gaga/Joanne (2016)/12 Vinyl 02-02 Lady Gaga - Come to Mama.flac'
+  '/media/Music/Lady Gaga/Joanne (2016)/12 Vinyl 02-03 Lady Gaga - Hey Girl.flac'
+  '/media/Music/Lady Gaga/Joanne (2016)/12 Vinyl 02-04 Lady Gaga - Angel Down.flac'
+  '/media/Music/Lady Gaga/Joanne (2016)/12 Vinyl 02-05 Lady Gaga - Grigio Girls.flac'
+  '/media/Music/Lady Gaga/Joanne (2016)/12 Vinyl 02-06 Lady Gaga - Just Another Day.flac'
+  '/media/Music/Lady Gaga/Joanne (2016)/12 Vinyl 02-07 Lady Gaga - Angel Down (work tape).flac'
 )
 
 # Colors
@@ -1420,7 +1461,85 @@ fi
 echo ""
 
 # ---------------------------------------------------------------------------------------------
-# 4c. D-22 — the same rows in Music Assistant (CONF-04, plan 06-13 owns closing it)
+# 4c. Artists-without-ArtistItems census (D-24)
+#
+# The standing census of Jellyfin Music items whose flat `Artists` string list is populated while
+# their browseable `ArtistItems` ENTITY list is EMPTY — the "30 of the 1,244" that section 4b's
+# preamble and ARTIST_PROOF_ROWS row 1 describe in prose. Added 2026-09-26 by plan 07-07 (D-24):
+# it is the only instrument that tests DEF-06-45-03's hypothesis that row 1 is an E5 (import)
+# problem rather than an E6 one, because a Phase 7 import that rewrites one of these files should
+# REMOVE its path from this set.
+#
+# ONE read-only GET /Items over the whole Music library, no SearchTerm. No POST, no refresh.
+#
+# COVERAGE BEFORE CLASSIFICATION (P-03). `TotalRecordCount` must be present and equal to the
+# length of `Items` in the SAME response. A truncated or paginated response would make a SMALLER
+# set, and a smaller set here reads like progress; so a mismatch is `jellyfin_fail` UNKNOWN and no
+# pin comparison is made at all.
+#
+# THE PIN (CONVENTIONS §5). D24_CENSUS_BASELINE_N and D24_CENSUS_BASELINE_SHA (sha256 of the
+# LC_ALL=C-sorted, newline-terminated path list) are MEASURED values, and D24_CENSUS_BASELINE_PATHS
+# is the list they digest — kept so a change can be printed as added/removed paths rather than as
+# a bare digest mismatch. The three must agree with each other (checked below, red if not).
+# A changed set is NEVER green and NEVER red: it is a measured change, counted in
+# D24_CENSUS_CHANGED, which terminates the run with exit 3 (the existing PENDING arm). Remedy:
+# adjudicate every added/removed path by hand in the plan that made the write (07-14 / 07-15),
+# then re-pin all three in the SAME commit with the reason. Never via an override — there is none.
+# ---------------------------------------------------------------------------------------------
+echo "🧾 4c. Artists-without-ArtistItems census (D-24)"
+rule
+D24_CENSUS_CHANGED=0
+D24_CENSUS_N="unknown"
+D24_CENSUS_TOTAL="unknown"
+D24_CENSUS_LEN="unknown"
+if [[ "$JELLYFIN_ROUTE" == "unavailable" ]]; then
+  jellyfin_fail "D-24 census: Jellyfin unreachable — UNKNOWN, not green"
+else
+  JFC="$(jf_api /Items \
+    --data-urlencode "IncludeItemTypes=Audio" \
+    --data-urlencode "Recursive=true" \
+    --data-urlencode "ParentId=${JELLYFIN_MUSIC_LIBRARY_ID}" \
+    --data-urlencode "Fields=ArtistItems,Artists,Path")"
+  if ! printf '%s' "$JFC" | jq -e 'has("Items") and (.Items | type == "array")' >/dev/null 2>&1; then
+    jellyfin_fail "D-24 census: no Items envelope — UNKNOWN, not green"
+  else
+    D24_CENSUS_TOTAL="$(printf '%s' "$JFC" | jq -r '.TotalRecordCount // "absent"')"
+    D24_CENSUS_LEN="$(printf '%s' "$JFC" | jq -r '.Items | length')"
+    echo "  coverage: TotalRecordCount=$D24_CENSUS_TOTAL  Items length=$D24_CENSUS_LEN"
+    if [[ ! "$D24_CENSUS_TOTAL" =~ ^[0-9]+$ || "$D24_CENSUS_TOTAL" -ne "$D24_CENSUS_LEN" ]]; then
+      jellyfin_fail "D-24 census: response covers $D24_CENSUS_LEN of $D24_CENSUS_TOTAL items — UNKNOWN, not green"
+    else
+      D24_LIST="$(printf '%s' "$JFC" | jq -r '.Items[]
+        | select(((.Artists // []) | length) > 0 and ((.ArtistItems // []) | length) == 0)
+        | .Path // "<no Path>"' | LC_ALL=C sort)"
+      D24_CENSUS_N=0
+      [[ -n "$D24_LIST" ]] && D24_CENSUS_N="$(printf '%s\n' "$D24_LIST" | wc -l | tr -d ' ')"
+      D24_SHA="$(if [[ -n "$D24_LIST" ]]; then printf '%s\n' "$D24_LIST"; fi | sha256sum | cut -d' ' -f1)"
+      D24_PIN_LIST="$(if [[ ${#D24_CENSUS_BASELINE_PATHS[@]} -gt 0 ]]; then printf '%s\n' "${D24_CENSUS_BASELINE_PATHS[@]}"; fi | LC_ALL=C sort)"
+      D24_PIN_SHA="$(if [[ -n "$D24_PIN_LIST" ]]; then printf '%s\n' "$D24_PIN_LIST"; fi | sha256sum | cut -d' ' -f1)"
+      echo "  measured: $D24_CENSUS_N item(s)  sha256 $D24_SHA"
+      echo "  pinned:   $D24_CENSUS_BASELINE_N item(s)  sha256 $D24_CENSUS_BASELINE_SHA"
+      if [[ "$D24_PIN_SHA" != "$D24_CENSUS_BASELINE_SHA" || ${#D24_CENSUS_BASELINE_PATHS[@]} -ne "$D24_CENSUS_BASELINE_N" ]]; then
+        # The pin table disagrees with ITSELF — an edit moved one of the three without the others.
+        # That is a defect in this file, not a measurement, so it is red rather than pending.
+        jellyfin_fail "D-24 census: pin table inconsistent (paths=${#D24_CENSUS_BASELINE_PATHS[@]}, digest $D24_PIN_SHA) — re-pin all three together"
+      elif [[ "$D24_SHA" == "$D24_CENSUS_BASELINE_SHA" ]]; then
+        pass "D-24 census: $D24_CENSUS_N item(s) with Artists but no ArtistItems — at the recorded baseline"
+      else
+        D24_CENSUS_CHANGED=$((D24_CENSUS_CHANGED + 1))
+        warn "D-24 census: $D24_CENSUS_N item(s), pinned $D24_CENSUS_BASELINE_N — MEASURED CHANGE, not green."
+        echo "      measured change against the D-24 baseline: adjudicate in the plan that made the"
+        echo "      write (07-14 / 07-15), then re-pin in the same commit with the reason (CONVENTIONS §5)."
+        LC_ALL=C comm -13 <(printf '%s\n' "$D24_PIN_LIST") <(printf '%s\n' "$D24_LIST") | sed '/^$/d; s/^/      + /'
+        LC_ALL=C comm -23 <(printf '%s\n' "$D24_PIN_LIST") <(printf '%s\n' "$D24_LIST") | sed '/^$/d; s/^/      - /'
+      fi
+    fi
+  fi
+fi
+echo ""
+
+# ---------------------------------------------------------------------------------------------
+# 4d. D-22 — the same rows in Music Assistant (CONF-04, plan 06-13 owns closing it)
 #
 # Written now and FAILING CLOSED, so criterion 4 stays OPEN rather than reading as passed while
 # the consumer that would falsify it is unreachable. MA being down is COULD NOT LOOK.
@@ -1430,7 +1549,7 @@ echo ""
 #   /mnt/tank/downloads); it is the WRONG precedent for a consumer that is merely down. An
 #   unreachable consumer is a failed assertion, not an out-of-scope row.
 # ---------------------------------------------------------------------------------------------
-echo "🎧 4c. D-22 artist entities in Music Assistant (CONF-04, plan 06-13)"
+echo "🎧 4d. D-22 artist entities in Music Assistant (CONF-04, plan 06-13)"
 rule
 MA_ARTIST_OK=0
 MA_ARTIST_PENDING=0
@@ -1677,6 +1796,7 @@ echo "  artist rows at target (JF):  $JELLYFIN_ARTIST_OK"
 echo "  artist rows PENDING (JF):    $JELLYFIN_ARTIST_PENDING   (at the 2026-09-20 baseline — NOT green; the mtime route was driven 2026-09-24 and measured NOT to discharge it, so this is carried to Phase 7 entry criterion E6 under a recorded override — a carry of an OPEN requirement, not a close)"
 echo "  artist rows at target (MA):  $MA_ARTIST_OK"
 echo "  artist rows REPORTED (MA):   $MA_ARTIST_PENDING   (measured discrepancy against the tag — NOT green; plan 06-13 owns it)"
+echo "  D-24 census (Artists, no ArtistItems): $D24_CENSUS_N   (pinned $D24_CENSUS_BASELINE_N; TotalRecordCount=$D24_CENSUS_TOTAL Items=$D24_CENSUS_LEN; changed=$D24_CENSUS_CHANGED)"
 echo "  MA albums, local provider:   $MA_PROVIDER_ALBUM_COUNT   (target >= 3)"
 echo "  toolchain missing:           $TOOLS_MISSING"
 echo "  export assertions failed:    $EXPORT_FAILURES"
@@ -1706,6 +1826,21 @@ if [[ $FAILURES -gt 0 ]]; then
   exit 1
 fi
 
+# D-24 (plan 07-07): a measured change in the section-4c census feeds the SAME exit-3 arm as a
+# pending artist row — measured, not at the pin, never green. It is printed as its own block ABOVE
+# the CONF-04 block so that block (and the 8-line range quick-health-check.sh reads out of it)
+# stays byte-identical. When artist rows are also pending, the CONF-04 block below exits 3; when
+# they are not, this block exits 3 itself. Either way the green banner is unreachable.
+if [[ $D24_CENSUS_CHANGED -gt 0 ]]; then
+  echo -e "${YELLOW}⚠️  D-24 CENSUS CHANGED: $D24_CENSUS_N item(s) with Artists but no ArtistItems, pinned $D24_CENSUS_BASELINE_N."
+  echo -e "   Measured change against the D-24 baseline: adjudicate in the plan that made the write"
+  echo -e "   (07-14 / 07-15), then re-pin in the same commit with the reason. NOT green.${NC}"
+  if [[ $(( JELLYFIN_ARTIST_PENDING + MA_ARTIST_PENDING )) -eq 0 ]]; then
+    echo -e "${YELLOW}   Exiting 3: measured, not at the pin; NOT a failure (FAILURES is $FAILURES) and NOT green.${NC}"
+    exit 3
+  fi
+fi
+
 # The banner below is about the PINNED ALBUMS and nothing else. If any D-22 artist row is sitting
 # at a baseline rather than at its target, say so on the line ABOVE it — a green banner standing
 # alone over a summary with a non-zero pending count is exactly how a reader concludes CONF-04
@@ -1732,7 +1867,7 @@ fi
 if [[ $(( JELLYFIN_ARTIST_PENDING + MA_ARTIST_PENDING )) -gt 0 ]]; then
   echo -e "${YELLOW}⚠️  CONF-04 IS NOT CLOSED: $JELLYFIN_ARTIST_PENDING Jellyfin and $MA_ARTIST_PENDING MA artist row(s) are at a recorded"
   echo -e "   baseline, not at target. The two counts are SEPARATE and are NEVER summed into one"
-  echo -e "   CONF-04 answer. See 4b/4c and stacks/selfhosted/arrs/beets.md § 'Phase 6'.${NC}"
+  echo -e "   CONF-04 answer. See 4b/4d and stacks/selfhosted/arrs/beets.md § 'Phase 6'.${NC}"
   echo -e "${YELLOW}   JF half: the mtime route was driven 2026-09-24 and measured NOT to discharge it"
   echo -e "   (06-43, BRANCH: B) — carried to E6 under a recorded override; a carry, never a close."
   echo -e "   MA half: E6's SECOND measurement — a second >=4-artist track — untouched by round 5."

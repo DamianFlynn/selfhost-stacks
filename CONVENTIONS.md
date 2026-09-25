@@ -136,6 +136,12 @@ from the failure message unless the convention is written down, which is what th
 - `ST_PLANNED_CASES` — `scripts/check-music-import.sh`, the announced self-test case count,
   compared against `st_cases`. Its dumper-level check is deliberately **not** counted, because it
   runs only where a local `python3` exists (plan `07-03`, D-25).
+- `D24_CENSUS_BASELINE_N` / `D24_CENSUS_BASELINE_SHA` — `scripts/check-music-consumers.sh`, the
+  pinned count and sorted-path digest (with `D24_CENSUS_BASELINE_PATHS`, the list it digests) of
+  Jellyfin Music items with `Artists` but no `ArtistItems`. Moves when any import, repair or
+  consumer re-scan changes that set, for reasons unrelated to this check. A changed set exits 3,
+  never green; remedy per this section — adjudicate every added/removed path by hand, re-pin all
+  three in the same commit with the reason, never via an override (plan `07-07`, D-24).
 
 **The remedy, which the failure output now prints (plan `06-46`):** read every new line **by hand**
 — they are invisible to the driving grep, so the section is `UNKNOWN`, not clean, until they are —

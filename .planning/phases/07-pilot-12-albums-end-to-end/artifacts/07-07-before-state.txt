@@ -137,3 +137,99 @@ same host, same user) in plan 07-17 and compared to this one.
 
 No write under /mnt/tank: the manifest program only runs `find`, `stat` and `sha256sum` inside each
 folder; its only output is under /root/phase07-0707/ on atlantis.
+
+== TASK 2 ==
+
+== CONSUMER BASELINES ==
+
+instrument: scripts/check-music-consumers.sh as edited by this task (section 4c added), scp'd to
+/mnt/fast/safety/phase07/consumers/ on LXC 100. The deployed checkout (/mnt/fast/stacks, 0c95427) was
+NOT touched. Read-only: GETs to Jellyfin; Music Assistant via its command API (auth/login + reads).
+No POST to Jellyfin, no refresh, no MA `music/sync`.
+
+-- runs --
+run1  2026-09-25T23:53:12Z  script sha256 eced77f4… with an EMPTY pin (N=0, sha of "")  -> rc 3
+      measurement run: the census printed its whole set as "added" (29 paths); pinned from THIS output.
+      run1.out sha256 6172ed359c8a2eea6c8f861380570533d603ca6011df792bf0613ac1ce5e97f7
+run2  2026-09-25T23:54:27Z  script sha256 a8078e8472f8d1862425827f0471cebba88d9d9ba54aba8ba194b59a0e9c3340
+      (== the committed file)  -> rc 3   FAILURES total 0, ❌ lines 0
+      run2.out sha256 53b350ae6438305743f32d4535e370bf81c4f86bdc317ff984f2715325af4424
+      exit 3 expected (CONF-04 pending: 3 JF rows at baseline, 1 MA row REPORTED). D-24: changed=0.
+
+-- arms driven on throwaway copies (deleted after), same host, same minute --
+drive-cov  copy + `Limit=5` on the 4c /Items call -> "response covers 5 of 1244 items — UNKNOWN, not green", rc 1
+drive-pin  copy with D24_CENSUS_BASELINE_N=28     -> "pin table inconsistent … re-pin all three together", rc 1
+changed    run1 (empty pin)                       -> "MEASURED CHANGE, not green", + paths printed, rc 3
+
+-- D-24 census (section 4c) --
+coverage (P-03): TotalRecordCount [1244]  Items length [1244]  — EQUAL; separately recorded JF Audio count
+                 below is also 1244. The pin was taken only from this covered run.
+measured N [29]  sha256 fa2e7a51e6852fae1c015e46c13f201209dd0636dc84e4bd1ae1936debf1fc77
+prose expectation 30 (ARTPOP all, Joanne all, one Def Leppard track)  ->  measured 29:
+  Lady Gaga/ARTPOP (2013)   15
+  Lady Gaga/Joanne (2016)   14
+  Def Leppard               0
+Why 29, not 30 (measured, baseline-probe.sh sha256 d71559f7bd91639c42d1a94a78e5bb46cf9dcd05c25ddbd9d0a27afd292040c6):
+  items with ZERO ArtistItems = [30]; exactly one of them also has an EMPTY Artists list:
+    /media/Music/Def Leppard/On Through the Night (1980)/Digital Media 01-11 Def Leppard - Overture.flac
+    (Artists empty, ArtistItems empty, AlbumArtist empty)
+  So the prose "30 with a populated Artists list" miscounted by one: the Def Leppard item is in the
+  zero-ArtistItems set but NOT in D-24's predicate (non-empty Artists AND zero ArtistItems). It is NOT
+  in the `Def Leppard (2015)/` folder the E5 repair names — all fourteen of those read Artists = ArtistItems
+  = "Def Leppard". Recorded for plan 07-14/07-15 to adjudicate; not pinned into this census.
+path list (LC_ALL=C sorted; digest above):
+  /media/Music/Lady Gaga/ARTPOP (2013)/CD 01-01 Lady Gaga - Aura.flac
+  /media/Music/Lady Gaga/ARTPOP (2013)/CD 01-02 Lady Gaga - Venus.flac
+  /media/Music/Lady Gaga/ARTPOP (2013)/CD 01-03 Lady Gaga - G.U.Y.flac
+  /media/Music/Lady Gaga/ARTPOP (2013)/CD 01-04 Lady Gaga - Sexxx Dreams.flac
+  /media/Music/Lady Gaga/ARTPOP (2013)/CD 01-05 Lady Gaga - Jewels n’ Drugs.flac
+  /media/Music/Lady Gaga/ARTPOP (2013)/CD 01-06 Lady Gaga - MANiCURE.flac
+  /media/Music/Lady Gaga/ARTPOP (2013)/CD 01-07 Lady Gaga - Do What U Want.flac
+  /media/Music/Lady Gaga/ARTPOP (2013)/CD 01-08 Lady Gaga - ARTPOP.flac
+  /media/Music/Lady Gaga/ARTPOP (2013)/CD 01-09 Lady Gaga - Swine.flac
+  /media/Music/Lady Gaga/ARTPOP (2013)/CD 01-10 Lady Gaga - Donatella.flac
+  /media/Music/Lady Gaga/ARTPOP (2013)/CD 01-11 Lady Gaga - Fashion!.flac
+  /media/Music/Lady Gaga/ARTPOP (2013)/CD 01-12 Lady Gaga - Mary Jane Holland.flac
+  /media/Music/Lady Gaga/ARTPOP (2013)/CD 01-13 Lady Gaga - Dope.flac
+  /media/Music/Lady Gaga/ARTPOP (2013)/CD 01-14 Lady Gaga - Gypsy.flac
+  /media/Music/Lady Gaga/ARTPOP (2013)/CD 01-15 Lady Gaga - Applause.flac
+  /media/Music/Lady Gaga/Joanne (2016)/12 Vinyl 01-01 Lady Gaga - Diamond Heart.flac
+  /media/Music/Lady Gaga/Joanne (2016)/12 Vinyl 01-02 Lady Gaga - A‐YO.flac
+  /media/Music/Lady Gaga/Joanne (2016)/12 Vinyl 01-03 Lady Gaga - Joanne.flac
+  /media/Music/Lady Gaga/Joanne (2016)/12 Vinyl 01-04 Lady Gaga - John Wayne.flac
+  /media/Music/Lady Gaga/Joanne (2016)/12 Vinyl 01-05 Lady Gaga - Dancin’ in Circles.flac
+  /media/Music/Lady Gaga/Joanne (2016)/12 Vinyl 01-06 Lady Gaga - Perfect Illusion.flac
+  /media/Music/Lady Gaga/Joanne (2016)/12 Vinyl 01-07 Lady Gaga - Million Reasons.flac
+  /media/Music/Lady Gaga/Joanne (2016)/12 Vinyl 02-01 Lady Gaga - Sinner’s Prayer.flac
+  /media/Music/Lady Gaga/Joanne (2016)/12 Vinyl 02-02 Lady Gaga - Come to Mama.flac
+  /media/Music/Lady Gaga/Joanne (2016)/12 Vinyl 02-03 Lady Gaga - Hey Girl.flac
+  /media/Music/Lady Gaga/Joanne (2016)/12 Vinyl 02-04 Lady Gaga - Angel Down.flac
+  /media/Music/Lady Gaga/Joanne (2016)/12 Vinyl 02-05 Lady Gaga - Grigio Girls.flac
+  /media/Music/Lady Gaga/Joanne (2016)/12 Vinyl 02-06 Lady Gaga - Just Another Day.flac
+  /media/Music/Lady Gaga/Joanne (2016)/12 Vinyl 02-07 Lady Gaga - Angel Down (work tape).flac
+
+-- ARTIST_PROOF_ROWS (run2) --
+row  path                                                                          JF ArtistItems  JF state             MA artists  MA state
+1    Lady Gaga/ARTPOP (2013)/CD 01-05 Lady Gaga - Jewels n’ Drugs.flac             0 (target 4)    PENDING (baseline 0) 3 (tag 4)   REPORTED (baseline 3)
+2    Katy Perry/Teenage Dream (2010)/CD 01-03 Katy Perry - California Gurls.flac   1 (target 2)    PENDING (baseline 1) 2           at target: Katy Perry | Snoop Dogg
+3    P!nk/The Truth About Love (2012)/CD 01-04 P!nk - Just Give Me a Reason.flac   1 (target 2)    PENDING (baseline 1) 2           at target: P!nk | Nate Ruess
+counters: JELLYFIN_ARTIST_OK 0, JELLYFIN_ARTIST_PENDING 3, MA_ARTIST_OK 2, MA_ARTIST_PENDING (REPORTED) 1
+
+⚠ INFORMATION, NOT A CONCLUSION — row 1's MA NAME SET has moved while its COUNT has not. The 06-13
+record (2026-09-20, MA 2.11.0b2) reads `T.I. | Lady GaGa | Too $hort` (Twista absent). run2 reads
+`Twista | Lady Gaga | Too $hort` — Twista PRESENT, T.I. ABSENT, and "Lady Gaga" spelled as the
+ARTISTS tag has it. The check counts, so it still reports at baseline 3. A different fourth name now
+being dropped weighs against "Twista specifically failed to map" and toward "MA caps the list at 3",
+but it is one file; E6's second >=4-artist measurement still settles it. Handed to 07-15.
+
+-- criterion-6 counts --
+Jellyfin (GET /Items, Recursive=true, ParentId=7e64e319657a9516ec78490da03edccb):
+  MusicAlbum  TotalRecordCount [70]    Items 70
+  Audio       TotalRecordCount [1244]  Items 1244
+Music Assistant 2.11.0b2, provider-filtered (provider=filesystem_local--XJaJWNUS, limit 2000 — none at
+the limit, so these are counts, not floors):
+  albums  (music/albums/library_items)   [70]   (== the audit's "MA albums, local provider: 70")
+  tracks  (music/tracks/library_items)   [1244]
+  artists (music/artists/library_items)  [66]
+  music/albums/count UNFILTERED = 156 — IGNORES its provider argument (API SHAPE NOTE 3); recorded
+  labelled, never used as the library figure.
