@@ -1,0 +1,85 @@
+{
+  "phase": "7",
+  "phase_name": "Pilot — 12 Albums End to End",
+  "timestamp": "2026-09-25T00:00:00Z",
+  "areas_completed": ["The new archive and import scope", "The sample draw"],
+  "areas_remaining": ["DUPE-01 last-wins (E7)", "The undo shape (QUAL-04)", "Execution path + the rw grant (E3/E11)"],
+  "decisions": {
+    "The new archive and import scope": [
+      {
+        "question": "Does the 1.3 T mybook-music-archive enter Phase 7's scope, given it has no QUAL-01 before-state?",
+        "answer": "No — own phase, decide trigger now",
+        "options_presented": ["No — own phase, decide trigger now (Recommended)", "Capture its before-state during Phase 7", "Draw some of the 12 from it"]
+      },
+      {
+        "question": "Where does the archive phase sit, and what mechanically triggers it?",
+        "answer": "New phase between 8 and 9",
+        "options_presented": ["New Phase 10, after 9 (Recommended)", "Beyond This Milestone, with a named trigger", "New phase between 8 and 9"]
+      }
+    ],
+    "The sample draw": [
+      {
+        "question": "Where do the twelve albums come from?",
+        "answer": "Phase 6's ten + 2 fresh",
+        "options_presented": ["Phase 6's ten + 2 fresh (Recommended)", "Fresh seeded draw of twelve", "Stratified fresh draw"]
+      },
+      {
+        "question": "Criterion 1 says twelve bucket-A albums, but the reused ten span buckets A, B and C. How do you want the twelve composed?",
+        "answer": "Bucket A + the DJ pair",
+        "options_presented": ["Bucket A only — 6 reused + 6 fresh (Recommended)", "All nine importable + 3 fresh", "Bucket A + the DJ pair"]
+      },
+      {
+        "question": "Which E1 route supplies albumtype=dj for the two dj-mixes folders?",
+        "answer": "beet modify + beet move, post-import",
+        "options_presented": ["beet modify + beet move, post-import (Recommended)", "Hook plugin keyed on source path", "Global import.set_fields"]
+      },
+      {
+        "question": "E6's second measurement needs a second track carrying >=4 artists. How should the draw handle it?",
+        "answer": "Reserve one of the four fresh slots for it",
+        "options_presented": ["Reserve one of the four fresh slots for it (Recommended)", "Take it opportunistically", "Write a fenced test file, as D-21 did"]
+      },
+      {
+        "question": "Does the pilot run as one batch of twelve, or gated?",
+        "answer": "One album, gate, then eleven",
+        "options_presented": ["One album, gate, then eleven (Recommended)", "All twelve in one batch", "Three batches of four"]
+      },
+      {
+        "question": "Which album is the gated first one?",
+        "answer": "S2 — Michael Jackson, The Essential",
+        "options_presented": ["S2 — Michael Jackson, The Essential (Recommended)", "The Benson Boone duplicate pair", "An S1 single-artist album"]
+      },
+      {
+        "question": "Where do the three unreserved fresh slots draw from?",
+        "answer": "music/ and unsorted/ combined",
+        "options_presented": ["music/ and unsorted/ combined (Recommended)", "music/ only", "unsorted/ only"]
+      },
+      {
+        "question": "How is the expected-tree oracle handled for the six reused rows?",
+        "answer": "Freeze Phase 6's lines, append new ones",
+        "options_presented": ["Freeze Phase 6's lines, append new ones (Recommended)", "Re-derive all twelve from current config", "Both — frozen and re-derived, diffed"]
+      },
+      {
+        "question": "DJ path rule 2 has been evaluated by no instrument. How should Phase 7 handle it?",
+        "answer": "Named read-only class assertion, no import",
+        "options_presented": ["Named read-only class assertion, no import (Recommended)", "Leave it deferred, as the roadmap says", "Add one of the seven as a thirteenth album"]
+      }
+    ]
+  },
+  "deferred_ideas": [
+    "mybook-music-archive (1.30 T, 175,050 files, 165,467 audio, 450 DJ releases) — its own inserted phase between 8 and 9, covering QUAL-01 capture plus dedupe",
+    "CLAUDE.md's 144-folder backlog denominator and ~46 DJ-release figure are both stale — 450 distinct DJ releases measured 2026-09-22"
+  ],
+  "canonical_refs": [
+    ".planning/ROADMAP.md",
+    ".planning/REQUIREMENTS.md",
+    ".planning/PROJECT.md",
+    ".planning/phases/06-tagger-configuration-and-dry-run/06-CONTEXT.md",
+    ".planning/phases/06-tagger-configuration-and-dry-run/06-SAMPLE.md",
+    ".planning/phases/06-tagger-configuration-and-dry-run/06-EXPECTED-TREE.txt",
+    ".planning/phases/06-tagger-configuration-and-dry-run/deferred-items.md",
+    ".planning/phases/06-tagger-configuration-and-dry-run/06-VERIFICATION.md",
+    "scripts/snapshot-music-tags.sh",
+    "scripts/diff-music-tags.sh",
+    "CONVENTIONS.md"
+  ]
+}

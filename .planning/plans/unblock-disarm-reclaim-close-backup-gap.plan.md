@@ -8,7 +8,7 @@ Three conditions are live simultaneously, and each blocks or endangers the restr
 
 **1. hufflepuff is running a duplicate stack right now.** Measured 2026-09-25: `docker` is `enabled` **and** `active`, with `immich_postgres`, `immich_redis` and `immich_machine_learning` up 13 hours and `immich_server` crash-looping. The operator confirmed this was not intentional. This is the September incident recurring — the one where 30 containers, including prowlarr and sabnzbd **on the shared indexer and usenet accounts**, ran beside production for two days. Stopping the unit is not enough; it was stopped in September and is running again. It must be **disabled**.
 
-**2. LXC 100 cannot take the deploy.** `/` is 126 G, **99 G used, 21 G free, 83 %** — with **60.9 GB of reclaimable Docker images** (76 % of 79.83 GB total). The queued deploy pulls 27 images. It would not fit, and a full root filesystem on a host running ~100 containers is an outage that arrives without warning.
+**2. LXC 100 cannot take the deploy.** `/` is 126 G, **99 G used, 21 G free, 83 %** — with roughly **21 GB of genuinely unreferenced Docker images** (`docker system df` claims 60.9 GB reclaimable, but that counts shared layers still held by running containers — see the T2 log). The queued deploy pulls 27 images. It would not fit, and a full root filesystem on a host running ~100 containers is an outage that arrives without warning.
 
 **3. No application state has an off-box copy.** `run-backup.sh` replicates seven `tank` datasets and **zero bytes of `fast/appdata`**. Nothing schedules it. The deploy queued behind this contains one-way schema migrations — Paperless `3.0.4 → 3.2.1`, Dawarich `1.10.3 → 1.15.2` — that cannot be downgraded out of.
 
@@ -43,7 +43,7 @@ Docker images are re-pullable by definition — every tag in the estate is pinne
 - `INCLUDE` — all of `fast/appdata/*` except the two exclusions below.
 - `EXCLUDE` — `fast/appdata/hoarder` (142 G, re-downloadable podsync media) and `fast/appdata/agentic-os` (96 K, empty orphan dataset).
 - `SCRIPTS=/usr/local/bin/{run-backup.sh,backup-incremental.sh}` on atlantis.
-- Pre-change baselines, pinned for comparison: LXC `/` **21 G free / 83 %**; reclaimable images **60.9 GB**; `backup` **11.0 T free / 24 % CAP**; datasets replicated off-box **7**; `fast` live snapshots **1**.
+- Pre-change baselines, pinned for comparison: LXC `/` **21 G free / 83 %**; genuinely unreferenced images **~21 GB** (not the 60.9 GB `docker system df` reports); `backup` **11.0 T free / 24 % CAP**; datasets replicated off-box **7**; `fast` live snapshots **1**.
 
 ## Implementation Notes
 
@@ -65,8 +65,8 @@ Per CONVENTIONS rules 1–3: fail closed, bound remote commands Linux-side, and 
 
 | # | Task | Host | Verification | Status |
 |---|---|---|---|---|
-| T1 | `systemctl disable --now docker`; confirm no libvirt autostart | hufflepuff | `is-enabled`→`disabled`, `is-active`→`inactive`, `docker ps` unreachable | ☐ |
-| T2 | `docker image prune -a` | LXC 100 | `df /` free space materially up; all 98 running containers still running | ☐ |
+| T1 | Disarm docker/k3s/samba **via the nix flake**, not `systemctl` | hufflepuff | units report `not-found`; sshd still active | ✅ **DONE** |
+| T2 | `docker image prune -a` | LXC 100 | `df /` free space materially up; all 98 running containers still running | ✅ **DONE** |
 | T3 | Extend backup set to `fast/appdata` minus exclusions; run it | atlantis | every included dataset present on `backup` with a snapshot; sizes reconcile | ☐ |
 | T4 | Install `backup-incremental.timer`; prove failure is visible | atlantis | `systemctl list-timers` shows it; a forced failure produces a signal | ☐ |
 
@@ -105,3 +105,91 @@ Per CONVENTIONS rules 1–3: fail closed, bound remote commands Linux-side, and 
 ## Execution log
 
 *(appended as tasks complete; each entry records what was measured, not what was intended)*
+
+### T1 — hufflepuff disarmed — 2026-09-25 — DONE, with one unintended side effect
+
+**`systemctl disable` does not work on this host, and that is not a detail.** hufflepuff is NixOS;
+`/etc/systemd/system` is generated into the read-only Nix store, so the attempt failed with
+`Read-only file system`. The plan's premise that this was "two commands" was wrong.
+
+Chasing it produced a finding worth more than the task: **`/etc/nixos/` is not the live config.**
+It is 84 lines dated Nov 2023, does not mention Docker at all, and is unused. The real
+configuration is a snowfall flake at **`/home/damian/snow`**, a git repo with remote
+`https://github.com/DamianFlynn/nix-snowfall.git`. So the rebuild plan's instruction to "capture
+`/etc/nixos` before the EVO leaves" was aimed at the wrong file — **that plan must be corrected**,
+and the good news is the real config is already pushed to GitHub and cannot be lost with the disk.
+
+Also established: **only generation 64 existed** before this change. The rebuild plan's assumption
+that "the old generation remains bootable" was true only by luck — there was exactly one.
+
+Action taken, after asserting each target line matched before editing (a refusal was wired in and
+would have aborted on any mismatch):
+
+```
+systems/x86_64-linux/hufflepuff/default.nix
+  44  docker.enable = true;  ->  false
+  45  k3s.enable    = true;  ->  false
+  63  samba enable  = true;  ->  false     (shares point at /pool/*, destroyed in September)
+```
+
+then `nixos-rebuild switch --flake .#hufflepuff`. Backup of the original at `.bak-20260925`.
+
+**Result — stronger than the plan asked for:**
+
+| check | before | after |
+|---|---|---|
+| `docker.service` enabled | `enabled` | **`not-found`** |
+| `docker.service` active | `active` | `inactive` |
+| `k3s` | enabled | **`not-found`** |
+| `samba-smbd` | enabled | **`not-found`** |
+| running containers | 4 (Immich) | **0** |
+| `sshd` | active | active |
+| generations | 64 only | 64 retained, **65 current** |
+
+`not-found` is a stronger guarantee than `disabled`: booting generation 65 cannot start Docker
+because the unit does not exist in that generation. The DoD said "cannot restart its old stack on
+boot" and this satisfies it — with the caveat that **booting generation 64 from the bootloader
+would bring it all back**, which is inherent to NixOS and is not a defect.
+
+**⚠️ UNINTENDED SIDE EFFECT, recorded rather than buried: the OS was downgraded 24.11 → 23.11.**
+The running system was `24.11.20250412` (generation 64); the rebuild produced
+`23.11.20240709`. Cause: the repo's `flake.lock` is older than whatever generation 64 was built
+from, and `git status` showed it already modified *before* this session touched anything. The
+lock should have been compared against the running version before rebuilding; it was not.
+Generation 64 remains available for rollback. Left in place pending an operator decision, on the
+reasoning that this host is destined for a wipe and a minimal rebuild regardless — **that is a
+judgement, not a verification, and is flagged as such.**
+
+**Failed units after the rebuild, with honest attribution:**
+
+- `zfs-import-pool.service` — **pre-existing and predicted.** The config still declares
+  `system.zfs.pools = [ "pool" ]` and that pool was destroyed on 2026-09-22. Fix when the new
+  mirror is built.
+- `home-manager-damian.service`, `systemd-oomd.service`/`.socket` — **attribution unknown.** No
+  baseline of failed units was captured before the rebuild, so these cannot be claimed as
+  pre-existing. Recorded as unknown rather than assumed harmless.
+
+### T2 — LXC 100 disk reclaimed — 2026-09-25 — DONE
+
+| | before | after |
+|---|---|---|
+| `/` used | 99 G | **81 G** |
+| `/` free | 21 G | **39 G** |
+| `/` capacity | 83 % | **68 %** |
+| running containers | 98 | **98** (unchanged — asserted) |
+
+Reclaimed **18.93 GB**. The deploy is unblocked.
+
+**Correction to this plan's own Problem section, and to the two parent plans: the "60.9 GB
+reclaimable" figure was wrong.** `docker system df` reports shared layer space that running
+containers still hold, not space that can be freed. Enumerating images actually unreferenced by
+any container gave ~21 GB, and the measured result was 18.93 GB.
+
+**The metric is provably misleading: after pruning everything removable, `docker system df` still
+reports "60.9GB (100%)" reclaimable.** Do not quote that field as free-able space. Enumerate
+unreferenced images instead — `docker ps -aq | xargs docker inspect -f '{{.Image}}'` against
+`docker images`.
+
+Four of the five reclaimed images (`docling-serve:v1.25.0` 8.86 GB, `open-webui:v0.9.6` 4.78 GB,
+`ollama:0.32.5` 4.76 GB, `searxng:2026.6.23` 259 MB) were the versions superseded by the SearXNG
+deploy earlier the same day, plus 8 dangling layers (~2.3 GB).

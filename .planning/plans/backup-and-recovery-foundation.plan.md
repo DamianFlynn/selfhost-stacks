@@ -104,7 +104,7 @@ Tier 0 and tier 1 are independent of every open question about hufflepuff. **The
 - `ONROOT_STATE` — enumerate and pin at G1. Known members: `/automation/n8n-postgres`, paperless, teleport, teslamate, dawarich, grafana, prometheus, rustdesk, termix, trek, `/var/lib/docker/volumes` (19 volumes, 948.7 MB, 9 active), and `/mnt/fast/stacks-private/neocortex-platform` (236 MB, a separate repo — confirm it has a git remote before treating it as expendable).
 - `RESTORE_TARGET` — a disposable dataset or a scratch LXC. **Never restore over a live path.**
 - `TIMER_UNIT=backup-incremental.timer`; `ALERT_PATH` — the existing Grafana→Telegram route used by image-drift detection. Telegram credentials are a known open item (G4 of quick task 260918-c12) and must be confirmed working, not assumed.
-- Free space at plan time, for later comparison: `backup` 11.0 T avail / 24% CAP; `fast` 1.40 T free / 22%; `tank` 8.08 T free / **88% CAP — past the ZFS performance threshold**; LXC 100 `/` **21 G free of 126 G, 83% used, with 60.9 GB reclaimable Docker images**.
+- Free space at plan time, for later comparison: `backup` 11.0 T avail / 24% CAP; `fast` 1.40 T free / 22%; `tank` 8.08 T free / **88% CAP — past the ZFS performance threshold**; LXC 100 `/` **21 G free of 126 G, 83% used** (resolved 2026-09-25: pruned to 39 G free / 68%, reclaiming 18.93 GB). **Do not quote `docker system df`'s "60.9 GB reclaimable"** — it counts shared layers still held by running containers and still reports 60.9 GB *after* a full prune.
 
 ## Implementation Notes
 
@@ -141,7 +141,7 @@ A snapshot on `fast` is a rollback point, not a backup — it dies with the pool
 
 ### Deliberately not solved here
 
-Tier 2 scheduling depends on the G1 keep-or-sell decision and is specified only to the point of that gate. The relocation of on-root state to ZFS is named as follow-on work with a Terraform dependency, not attempted inline. Neither `tank` at 88% CAP nor the 60.9 GB of reclaimable Docker images is fixed here, though both are recorded because they constrain the plans queued behind this one.
+Tier 2 scheduling depends on the G1 keep-or-sell decision and is specified only to the point of that gate. The relocation of on-root state to ZFS is named as follow-on work with a Terraform dependency, not attempted inline. `tank` at 88% CAP is not fixed here and is recorded because it constrains the plans queued behind this one. The LXC image reclaim *was* done on 2026-09-25 (18.93 GB, 83% -> 68%) under `unblock-disarm-reclaim-close-backup-gap.plan.md`.
 
 ## Workflow
 
@@ -171,7 +171,7 @@ Each gate gets stable todos with owners, acceptance checks, evidence paths and a
 6. A dump mechanism for the non-ZFS tier, with size assertions.
 7. `backup-incremental.timer` installed, plus a **proven** alert path for failure and for silence.
 8. A restore runbook and the evidence from an actual restore drill on a disposable target.
-9. Follow-on work recorded, not silently dropped: relocating on-root state to ZFS (Terraform), `tank` at 88% CAP, and the 60.9 GB image reclaim that the deploy plan depends on.
+9. Follow-on work recorded, not silently dropped: relocating on-root state to ZFS (Terraform) and `tank` at 88% CAP. *(The image reclaim the deploy depended on is DONE — 18.93 GB, 2026-09-25.)*
 
 ## Definition Of Done
 

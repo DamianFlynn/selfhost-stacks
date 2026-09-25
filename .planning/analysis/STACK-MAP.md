@@ -355,7 +355,7 @@ The `created`-state trap that cost six weeks in 2026 is not currently firing.
 | Containers | 99 | 98 | 2.19 GB | 1.7 kB |
 | Local volumes | 19 | 9 | 948 MB | 8.9 kB |
 
-**60.9 GB is reclaimable on a filesystem with 20.6 GB free.** 8 images are dangling. The
+**60.9 GB is reclaimable on a filesystem with 20.6 GB free.** *[CORRECTED 2026-09-25: that figure is wrong. `docker system df`'s RECLAIMABLE counts shared layers still held by running containers. Enumerating images actually unreferenced by any container gave ~21 GB, and a full `prune -a` recovered **18.93 GB** (83% -> 68%). The field still reports 60.9 GB *after* the prune, which proves it does not describe free-able space. See `.planning/plans/unblock-disarm-reclaim-close-backup-gap.plan.md` § T2.]* 8 images are dangling. The
 identifiable stale ones:
 
 | Image | Size | Why it is stale |
