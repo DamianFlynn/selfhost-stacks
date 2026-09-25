@@ -197,11 +197,20 @@ verification, removed, volume restored to `driver`/`driver_opts`.
 - An unrelated `.planning/config.json` toggle (`nyquist_validation` true→false) had been changed
   by a tool run and was reverted, not committed.
 
-### Still open
+### Operator confirmations — 2026-09-25, after the fact
 
-- **`rybbit` was classified DORMANT without an explicit operator decision.** It was not running,
-  and the plan's stated default for anything uncertain is DORMANT rather than DELETE. It is
-  tracked in GitHub issue #307 and needs a real answer.
+All four were already in the state below; these are decisions recorded against them, not changes.
+Recorded because the C4 gate requires a real answer per service, and "it happened to be right" is
+not an answer.
+
+| service | operator's words | disposition |
+|---|---|---|
+| `rybbit` | *"not in use, will need to be rebuilt"* | **DORMANT** — closes the one item this plan left open. The rebuild note matters: its appdata at `/mnt/fast/appdata/social/rybbit` should not be assumed restorable-as-is. Still tracked in issue #307. |
+| `teleport` | *"dormant, not used"* | **DORMANT** — confirms the scanner-traffic reading was right and the 535 hits were never usage |
+| `saas` (Cal.com) | *"not in use either"* | **DORMANT** |
+| `mcp` ×3 | *"mcps are dormant also"* | **DORMANT** — Atlassian, D365FO, Notion |
+
+### Still open
 - **Nothing was deleted from disk.** Appdata for every deleted service is retained and is now
   replicated off-box. Release is gated on the restore proof that the parent backup plan still has
   open.
