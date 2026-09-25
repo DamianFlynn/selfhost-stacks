@@ -67,8 +67,8 @@ Per CONVENTIONS rules 1–3: fail closed, bound remote commands Linux-side, and 
 |---|---|---|---|---|
 | T1 | Disarm docker/k3s/samba **via the nix flake**, not `systemctl` | hufflepuff | units report `not-found`; sshd still active | ✅ **DONE** |
 | T2 | `docker image prune -a` | LXC 100 | `df /` free space materially up; all 98 running containers still running | ✅ **DONE** |
-| T3 | Extend backup set to `fast/appdata` minus exclusions; run it | atlantis | every included dataset present on `backup` with a snapshot; sizes reconcile | ☐ |
-| T4 | Install `backup-incremental.timer`; prove failure is visible | atlantis | `systemctl list-timers` shows it; a forced failure produces a signal | ☐ |
+| T3 | Extend backup set to `fast/appdata` minus exclusions; run it | atlantis | every included dataset present on `backup` with a snapshot; sizes reconcile | ✅ **DONE** |
+| T4 | Install `backup-incremental.timer`; prove failure is visible | atlantis | `systemctl list-timers` shows it; a forced failure produces a signal | ⚠️ **MOSTLY** — timer done + freshness check written and red-branch-driven; fold-in to `quick-health-check.sh` outstanding |
 
 1. **T1 — disarm.** Record what the four containers were before stopping them, so the incident is closed with evidence rather than just silenced.
 2. **T2 — reclaim.** Capture `docker system df` before and after. Assert the running-container count is unchanged — a prune that takes a container down is a failure, not a success.
@@ -193,3 +193,78 @@ unreferenced images instead — `docker ps -aq | xargs docker inspect -f '{{.Ima
 Four of the five reclaimed images (`docling-serve:v1.25.0` 8.86 GB, `open-webui:v0.9.6` 4.78 GB,
 `ollama:0.32.5` 4.76 GB, `searxng:2026.6.23` 259 MB) were the versions superseded by the SearXNG
 deploy earlier the same day, plus 8 dangling layers (~2.3 GB).
+
+### T3 — `fast/appdata` now replicated off-box — 2026-09-25 — DONE, VERIFIED
+
+Both scripts extended (backups at `.bak-20260925`). One generalisation and one addition:
+
+- Target mapping `backup/${ds#tank/}` → `backup/${ds#*/}`, so it works for any source pool.
+  `tank/media/Photos` → `media/Photos` is unchanged; `fast/appdata/arrs` → `appdata/arrs` is new.
+- The `fast/appdata` list is **enumerated dynamically, not hardcoded.** A static list silently
+  misses any dataset created later, and a backup that quietly stops covering new things is the
+  exact failure this whole exercise exists to close. New datasets are in by default; exclusion is
+  an explicit act with a reason recorded in the script.
+
+Ran `run-backup.sh`: `pg_dumpall` rc=0 at **858 MB** (clears the 1 MB assertion), the seven tank
+datasets correctly skipped as already present, and **16 `fast/appdata` datasets sent, every one
+rc=0**, in under three minutes.
+
+**Verified by assertion, not by reading the log** — every included dataset present on the target
+with `refer` within 50 % of source, and both exclusions confirmed *absent*:
+
+```
+checked=16  fail=0
+ok absent: backup/appdata/hoarder
+ok absent: backup/appdata/agentic-os
+backup  3.52T alloc  11.0T free  ONLINE
+```
+
+Also fixed a cosmetic bug introduced by the append: `say "ALL DONE"` was left mid-script, so the
+log claimed completion before the `fast/appdata` sends ran. Moved to the end.
+
+### T4 — scheduled, and silence made loud — 2026-09-25 — MOSTLY DONE
+
+`backup-incremental.service` + `.timer` installed, `enabled`, `active`, first run 2026-09-26 00:25.
+
+Two deliberate properties:
+
+- **`ConditionPathIsDirectory=/backup`** — the service does not start if the USB pool is not
+  imported. A run that "succeeds" against a missing target is the failure mode that leaves a stale
+  backup looking healthy.
+- **`Persistent=true`** — if the machine was off at the scheduled time it runs on next boot rather
+  than silently skipping the day. Silence is the thing this timer exists to prevent.
+
+Proven via systemd, not just by running the script: `Result=success`, `ExecMainStatus=0`, and the
+incremental correctly found `backup-20260925` as the base for the new datasets and sent against it.
+
+New `scripts/check-backup-freshness.sh`. It asserts on **snapshot age**, not on a log line or a
+marker file, because a snapshot on the target exists only if a `zfs recv` actually completed — a
+log can be written by a run that then died. Checks pool health, per-dataset freshness (48 h default),
+datasets holding data with no snapshot at all, and that the timer is still enabled.
+
+**It caught itself being wrong, which is the part worth recording.** The first version ran a
+`while read` loop *inside* the ssh payload; the escaping mangled it, so it returned one line
+instead of 28 and printed `all 0 snapshotted datasets are within 48h` and **exited 0 having
+examined nothing**. A false green, in the check written to prevent false greens — the same class
+as this repo's documented heredoc-through-ssh trap. Fixed by keeping the remote side to flat
+single commands and joining locally, plus a **cardinality guard**: fewer than 5 datasets on a pool
+holding 3.5 T is itself a violation.
+
+All branches driven, not assumed:
+
+| branch | result |
+|---|---|
+| green (real state) | 27 datasets examined, 23 snapshotted, 0 stale, **exit 0** |
+| `BACKUP_MAX_AGE_HOURS=0` | every dataset STALE, **exit 1** |
+| unreachable host | `ssh transport failed (rc=255)` → **exit 1** |
+| absent pool | `pool not imported (remote rc=1)` → **exit 1** |
+
+The pool-absent message initially blamed ssh, because `zpool list` exits 1 and the transport check
+caught it first. Now 255 is distinguished from other non-zero, so a reader is sent to the disk
+rather than to the network.
+
+**OUTSTANDING:** folding this into `scripts/quick-health-check.sh`. That file is 400+ lines of
+documented convention — block ordinals, the `📊 N. Summary` grep anchor (CONVENTIONS rule 11),
+per-branch reasoning — and doing it hastily would be worse than doing it deliberately. Until it is
+folded in, the check exists and passes but **nothing runs it automatically**, which is a weaker
+position than the DoD asks for and is recorded as such rather than ticked.
