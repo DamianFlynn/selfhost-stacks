@@ -1164,3 +1164,1077 @@ The plan suite exhibits extraordinary rigor in structural defense, fail-closed t
 - **Is the state witness sound?** Kimi says yes. Gemini, Astra and Grok say no. Graded **no** (G-02).
 - **Overall risk:** HIGH from Astra, Copilot and Grok; MEDIUM from Gemini, DeepSeek and Kimi. After grading, the two confirmed HIGHs are both in one paragraph of one plan (07-11 T3) and have one fix, so the set is **MEDIUM once G-01/G-02 are fixed**.
 - **`written@ = 0` as the pruning criterion:** DeepSeek doubts it; Kimi clears it. Graded sound on ZFS semantics, but not driven.
+
+
+---
+---
+
+# Cross-AI Plan Review — Phase 7 (round 2, 2026-09-25)
+
+*Appended, not overwritten: round 1 above is cited by its G-/P- IDs from the plans and from commit
+`9c60a78`. Round 2 uses its own namespace, **`P7R2-01` … `P7R2-21`** (CONVENTIONS §13). Nothing
+in round 1 above was edited.*
+
+The same six reviewers from five model families as round 1 were used: pi → `gpt-6-astra`,
+`gemini-3.8-flash`, `kimi-k3`, `grok-4.7` and `deepseek-v4-pro:0813`, plus copilot → `gpt-5.5`
+(166 credits, 2m39s). All six passed a two-word probe first. They all got the same 652 KB prompt:
+round-2 instructions, PROJECT (80 lines), the roadmap section, the six requirements,
+CONVENTIONS.md, 07-CONTEXT.md, round 1's graded findings and consensus, the unified diff of the
+replan (`4805936..9c60a78`, `-U1`), and all 17 plans line-numbered. The prompt set three tasks in
+order. **(1)** Verify each round-1 fold as CLOSED / PARTIAL / NOT CLOSED, where a fold present in
+prose but not enforced by a verify or STOP counts as PARTIAL. **(2)** Hunt five named failure
+modes the replan could have introduced (FM-1 prose not enforced, FM-2 one-sided seam, FM-3
+branch with no exit, FM-4 destructive step not waiting on its guard, FM-5 vacuous or
+self-matching regex). **(3)** Report any HIGH that round 1 missed. Every finding needed a literal
+quote and a refutation condition.
+
+**Orchestrator error, recorded:** the prompt's safety invariant 1 said the fence and the grant
+are taken "in the same remote step". D-16 says the *two snapshots* are taken in ONE remote step;
+the grant runs on a different host, LXC 100. Astra's HIGH R2-OAI-01 was produced by that
+over-statement and is refuted below. It was the prompt that was wrong, not the plan.
+
+## Graded Findings — round 2 (orchestrator, 2026-09-25)
+
+Every CONFIRMED row below was re-read against the live plan text at the cited line. Two were
+also *driven* by a reviewer in throwaway repositories (astra: P7R2-03 and P7R2-08c).
+
+### Fold scorecard (22 round-1 items)
+
+| Reviewer | CLOSED | PARTIAL | Notes |
+|---|---|---|---|
+| gemini | 22 | 0 | Its "all closed" is **refuted** by P7R2-01/02/05/06 |
+| deepseek | 22 | 0 | "Every safety-relevant fold is mechanically enforced" is **refuted** by P7R2-01/02 |
+| kimi | 21 | 1 (G-13) | Marked G-06 CLOSED, then found its two new seams (P7R2-01, -04) |
+| copilot | 21 | 1 (P-01) | |
+| grok | 14 | 8 | |
+| astra | 12 | 10 | Several PARTIALs are verify-strength points, graded LOW below (P7R2-17) |
+
+**Graded:** the prose of all 22 folds landed, and none is NOT CLOSED. **G-01 and G-02, the round-1
+HIGHs, are closed in the action text** (all six agree), but their *verify* has the P7R2-02 hole.
+The folds with real residuals are G-02 via 07-01's map (P7R2-06), G-05/G-06 via the new 07-09
+branches (P7R2-01, -04, -05), G-08 at verify level (P7R2-08a, -09), G-10's lesson recurring
+(P7R2-08) and P-02 (P7R2-07).
+
+### CONFIRMED — act on these
+
+| # | Sev | Plan | Finding | Raised by | Evidence |
+|---|-----|------|---------|-----------|----------|
+| P7R2-01 | **MED** | 07-09 T2 verify | **The verify fails open on the grant.** Its STOP disjunct `grep -qE 'STOP STATE 07-09-(PARTIAL-FENCE\|IMPORT-KEYS-FAIL\|INBOX-NOT-EMPTY)' "$L"` reads the whole *append-only* ledger. So after a partial fence and then a *successful* `resume-partial-fence`, the historic token satisfies it, and none of the grant's evidence is checked: `listed back`, `RW=true`, the watchdog, and `POST-GRANT IMPORT KEYS: PASS` (the G-05 fold). This is the only fail-**open** verify found this round, and it sits on the phase's first write. | kimi (**singleton**) | 07-09:278 |
+| P7R2-02 | **MED** | 07-11 T3 verify | **The destroy count is not bound to the verdict in either direction.** `test "$(grep -cE 'zfs [d]estroy' "$A")" -le 1` is unconditional. So `FIRED` with **zero** issued destroys passes, and the ledger and register then record a destruction that never happened. `NOT FIRED` with **one** destroy also passes, although the action says "If NOT FIRED: issue nothing". The set-difference proof exists only in acceptance prose. | copilot CP-02, grok PI-02 (opposite halves), gemini (suggestion) | 07-11:317, 324 |
+| P7R2-03 | **MED** (astra: HIGH) | 07-12 T2/T3, 07-13 T2/T3 verify | **Disposition completeness is not checked.** The T2 verify needs *one* recognised `DISPOSITION` line. T3's `grep -cE '^DISPOSITION P[0-9]{2}: imported' -eq 0` shortcut then reads an absent row as "all held". Astra **drove** the exact recipes: an artifact whose answer says `P03 imported` but whose only row is `DISPOSITION P02: hold` gets **T2 RC 0, T3 RC 0** in both 07-12 and 07-13. An imported album then needs no `LANDED` evidence. | astra (driven), copilot CP-01, deepseek (suggestion) | 07-12:147, 203; 07-13:142, 195 |
+| P7R2-04 | MED | 07-09 T1/T2 | **The new STOP tokens have no re-entry.** After `07-09-IMPORT-KEYS-FAIL` or `07-09-INBOX-NOT-EMPTY`, both snapshots exist, the grant is deployed and the writer is stopped. T1's only re-entry branch is keyed on `07-09-PARTIAL-FENCE`, and its normal reading asserts both snapshots ABSENT, so the result is COULD NOT RECONCILE. The watchdog-absent STOP (07-09:259) has no token at all. This is G-06 recurring one branch later: it fails closed, but breaks D-18 resumability. | astra OAI-04, kimi CL-02, grok PI-06 (part) | 07-09:108, 255-260 |
+| P7R2-05 | MED | 07-10 T1 | **07-10 does not read how 07-09 ended.** Its preconditions ("both pre-07-pilot snapshots present, RW=true, watchdog lists two inboxes, `_inbox/02-review` holds no audio, `library.db` items 0") are all true after `07-09-IMPORT-KEYS-FAIL` once someone restarts the writer. It never reads the ledger's newest 07-09 token and never re-reads effective `import.move`, so the G-05 gate can be walked past. That is invariant 3. | grok PI-06 | 07-10:85-86 |
+| P7R2-06 | MED | 07-01 T1 → 07-17 | **One-sided seam on G-02.** The evidence map's criterion-1 row still registers the absence-only witness: "file count 0 at the destination … `taghistory` no longer holding the staged source path". 07-17 scores with "exactly those" pre-registered instruments. So `/gsd-verify 07` would score the undo on the witness round 1 refuted, not on 07-11's paired `P01 STATE KEY(S)` set difference. | astra (G-02 PARTIAL), grok (suggestion) | 07-01:105-113 |
+| P7R2-07 | MED | 07-15 T3 | **P-02's fold contradicts itself.** It accepts `one album with two provider mappings per track` as a twin representation to record "with no verdict attached", yet the preceding assertion requires each album's mapped paths to be "all under that directory (no track from another directory mixed in)". If MA merges the Benson Boone twins, criterion 6 goes falsely red. | astra | 07-15:188-196 |
+| P7R2-08 | MED (as a class; each LOW) | several | **G-10's lesson recurs on four new branches: a correct outcome fails its own verify.** All four fail closed, so each one pressures the executor to invent a pass. **(a)** 07-12 T1 requires `EQUALITY VERDICT\|NEW-IMPORT VERIFIED` in `$A` *before* the `STOP STATE 07-12-PRECONDITION` arm, but 07-11's hold tokens (`T1-HOLD`, `T2-HOLD`, `TREE-NOT-COVERED`, `RESTORE-FAIL`, `RECONCILE-FAIL`) carry neither string (gemini DF-01, deepseek RW-01). **(b)** On the success path 07-09 step 5 writes a header saying "STOP state" in lowercase, but the verify greps `STOP STATE` unconditionally (grok PI-03, deepseek and kimi suggestions). **(c)** On T1 re-entry after `PARTIAL-FENCE`, T1's verify requires zero unbracketed `zfs snapshot` in an artifact that T2 has already written to (astra, driven). **(d)** 07-11 T1's `RECONCILE-FAIL` presents no gate, but T1's verify requires `PRE-UNDO WITNESS` and `OPERATOR ANSWER` (astra). | gemini, deepseek, grok, kimi, astra | 07-12:102; 07-09:169, 174, 273-276, 278; 07-11:106, 150 |
+| P7R2-09 | LOW | 07-12 T1 verify | **Too loose as well as too strict.** `grep -qE 'EQUALITY VERDICT\|NEW-IMPORT VERIFIED'` also matches `EQUALITY VERDICT: FAIL`, so in the verify G-08's PASS requirement is prose only. A FAIL ledger plus staged albums with no STOP written passes. | grok (G-08 PARTIAL) | 07-12:102 |
+| P7R2-11 | LOW (gemini: HIGH) | 07-13 T3 verify | `imported-no-route` matches neither `imported(-asis)?$` nor `imported `, so the routing arm is skipped, and nothing requires the `DEF-07-13-NN` finding that the action mandates for an unrouted album. | gemini DF-02 | 07-13:181, 195 |
+| P7R2-12 | LOW | 07-13 T3 | `ADDED ORDER` has no held-album arm. 07-12 has `ADDED ORDER (P02<P04): NOT APPLICABLE`, and 07-13 permits per-album holds, so with P07 landed and P08 held "P07 precedes P08" cannot be evaluated. | kimi CL-04 | 07-13:185-187 vs 07-12:194 |
+| P7R2-13 | LOW | 07-03 | The `<verification>` footer still says "`--self-test` 8/8"; the task pin is `ST_PLANNED_CASES=10`. | astra, kimi, grok | 07-03:300 vs 157 |
+| P7R2-14 | LOW | 07-15 T3 verify | `MA returns [0-9]+ of [0-9]+` accepts `3 of 3` and `0 of 0`. G-11's "never satisfied by a 3-artist row" is prose only in the verify. | grok PI-05, astra | 07-15:242 |
+| P7R2-15 | LOW | 07-16 T2 | After a correct `REFUSED:` line, "the before−after set difference must equal exactly the approved set" is unreachable. There is no partial-prune outcome, and the blanket "update each row: destroyed" would misrecord the refused name. | astra OAI-05 | 07-16:173-179 |
+| P7R2-16 | LOW | 07-11 T3 verify | The FIRED arm reads *labels*, not measurements. It never positively requires `^DISPOSITION: rerun$` (only the absence of `restore`), and `STATE COVERED yes \(` is satisfied by `yes (pre 0 → post 0)`. Condition (iii) and the paired-reading rule are enforced by the producer's prose alone. | grok (G-01/G-02 PARTIAL), deepseek (suggestion) | 07-11:317 |
+| P7R2-17 | LOW | 07-07/12/13/15/17 verify | Several folds are checked by a heading or token grep only: G-07 (`AUNIQUE INVENTORY (rebuilt after 07-13)`), G-12 (`^ADDED ORDER`), G-13 (no check of "not comparable" or of the byte-unchanged 144 sentence), and P-03 (`grep -qF 'TotalRecordCount'` in the script, which a comment satisfies). None is a false pass of an action, but each fold would survive an edit that deleted its substance. | astra, grok, kimi (G-13) | 07-15:114; 07-12:203; 07-17 T2; 07-07:177 |
+
+### PLAUSIBLE — cheap to settle before execution
+
+| # | Sev | Plan | Finding | Raised by | Status |
+|---|-----|------|---------|-----------|--------|
+| P7R2-10 | MED (astra: HIGH) | 07-11 → 07-12 | **Equality is substituted for quality.** A reproducibly *bad* run 1 (a criterion 3/4/7 finding from 07-10) can re-run to `EQUALITY VERDICT: PASS`, and 07-12's precondition needs only PASS. 07-11 T1's `ADJUDICATION` puts those findings in front of the operator, but its outcome is not a mechanical precondition of 07-12. | astra OAI-02 | Text matches. Whether the operator's adjudication at the 07-11 gate is the intended quality gate is **an operator decision**: if it is, write that down; if not, add a `QUALITY: PASS` precondition. |
+| P7R2-18 | LOW | 07-13 T3 / 07-04 | If `--apply`'s `modify` commits and `move` fails, the album is left half-routed with no named STOP token, and 07-15 would treat the ledger's `LANDED` path as final. | grok PI-07 | Not driven |
+| P7R2-19 | LOW | 07-09 T2 | A `hold` chosen at re-entry after `PARTIAL-FENCE` writes the only hold text on offer, "no fence taken, no grant, no album landed", which is false with the `tank` snapshot present. | astra (G-06 PARTIAL) | Text matches 07-09:190 |
+| P7R2-20 | LOW | 07-11 T2 | After `DB COVERED no`, a `hold` writes `07-11-T2-HOLD: P01 BACKED OUT by UNDO IMPORT … albums landed: none` while DB rows remain. | astra (G-09 PARTIAL) | Text matches 07-11:188, 230 |
+| P7R2-21 | LOW | 07-15 T2 | P-01's later window: `MA SYNC SINCE 07-10: FOUND` is recorded as a finding, not a STOP. | copilot, astra | By design: blocking the manual sync afterwards cannot un-write entries MA never purges. The open question is only whether FOUND should block criterion 6's closure (**operator**). |
+
+### REFUTED — do not act on these
+
+| Finding | Raised by | Why refuted |
+|---------|-----------|-------------|
+| **HIGH**: fence and grant are separate remote operations, violating invariant 1 | astra OAI-01 | Invariant 1 was the orchestrator's over-statement. D-16 (07-CONTEXT.md:218; 07-09:15, 45, 202) scopes "ONE remote step" to the **two snapshots**. The grant is on LXC 100 and follows the list-back in the same task. |
+| MED: the G-05 gate reads `check-beets-config.sh`, not the server's effective value | grok PI-01 | `scripts/check-beets-config.sh` ARM 1 **is** the server-committed config (`get_config(commit_to_beets=True)` → `beets.config.dump`, header lines 26-45), the exact value 07-08 says governs imports. |
+| MED: the restore copies before its hash check (FM-4) | grok PI-04 | The snapshot's view was proven byte-equal to the safety copy at 07-09 T2 (the G-04 fold), and a snapshot is immutable, so the post-copy sha256 is the right check. At most LOW: there is no roll-forward step if the `cp` itself fails partway. |
+| MED: `TREE COVERED yes \(` is brittle to punctuation | gemini DF-03 | The format is specified, with its pre → post readings, in 07-11's acceptance (07-11:226), and it fails closed. The real weakness in that regex is P7R2-16. |
+| Severity of DF-01 (HIGH) and DF-02 (HIGH) | gemini | Both confirmed, reclassified as P7R2-08a (fails closed) and P7R2-11 (a record gap, not a write). |
+| **Clear**: "all 22 folds CLOSED" / "every safety-relevant fold mechanically enforced" | gemini, deepseek | P7R2-01, -02, -05 and -06. |
+
+### What the grading says about the roster
+
+- **Kimi found the only fail-open defect (P7R2-01) and nobody else did.** Read the singletons again: convergence locates design risk, it doesn't rank impact.
+- **Astra was again the most productive and the most over-rated.** It had 3 HIGHs: one refuted (caused by the prompt), and two downgraded to MED, of which one is confirmed and one plausible. It also *drove* two recipes, and those were the round's best-evidenced findings.
+- **The two cleanest scorecards (gemini and deepseek, 22/22 CLOSED) were the least reliable clears.** Gemini's first finding worked its way through several wrong theories in visible text before landing on a real one. As in run 5, read to the end.
+- **Copilot and Grok found opposite halves of P7R2-02**, each missing the other's direction.
+
+---
+
+## Consensus Summary — round 2
+
+### Agreed strengths (named by 4+ reviewers)
+- G-01/G-02 are fixed in the action: D-17 is a four-condition conjunct, restore branches are NOT FIRED by construction, and equality is written before the destroy step.
+- Restores are quiescent: stop, then `State.Running=false`, then literal `cp`, then start, readiness and re-decode. `zfs [r]ollback` of `fast/appdata/arrs` stays forbidden at every call site.
+- The snapshot view is sha256-compared to the safety copy before the grant (G-04), and the post-grant import keys are a parsed-value gate (G-05).
+- Bracketed ban greps (G-15), the diff-header filter (G-14), and the 07-16 `ISSUED:`/`REFUSED:` grammar (P-06) all check out.
+- The 07-11 → 07-12 PASS-verdict tokens match on both sides (G-08) in the action text.
+
+### Agreed concerns (priority order)
+1. **07-09's new recovery machinery (P7R2-01, -04, -05, -08b/c).** Make the Task 2 verify answer-keyed on a normalised `DISPOSITION:` line and not on ledger history. Add a re-entry for `IMPORT-KEYS-FAIL`, `INBOX-NOT-EMPTY` and the watchdog-absent STOP. Write the success entry as a named token. Make 07-10 STOP unless 07-09's newest token is the granted token, backed by a fresh parsed `move=false`.
+2. **07-11 T3 verify (P7R2-02, -16).** On FIRED require exactly one `ISSUED: zfs destroy tank/media/Music@pre-06-41-conf04-reprobe RC=0` (07-16's grammar) and a one-name set difference. On NOT FIRED require zero. Positively require `^DISPOSITION: rerun$`.
+3. **Disposition completeness (P7R2-03).** Loop the expected P-ID set from 07-06's `### EXECUTION ORDER` in 07-12/07-13 verifies. Require exactly one row per P-ID, and never infer "all held" from a zero count.
+4. **"A correct stop passes its own verify", applied to every new branch (P7R2-08).** This is the third round in which this lesson has had to be re-applied. Consider one fixture per STOP token, run against each verify.
+5. **07-01's evidence map row 1 (P7R2-06)** must name the paired `P01 STATE KEY(S)` witness before the map is registered.
+
+### Divergent views
+- **Overall risk:** astra HIGH; gemini, copilot, grok, kimi and deepseek MEDIUM. Graded **MEDIUM**. No confirmed finding permits a destructive act the plans forbid: P7R2-02's destroy is still gated by the action's own FIRED rule, and P7R2-05 requires someone to restart a writer the plan stopped. But P7R2-01 is a fail-open verify on the first library write and should be fixed before 07-09 runs.
+- **Is P-01 closed?** gemini, deepseek, grok and kimi say yes; copilot and astra say partial. Graded closed *for what can be closed* (P7R2-21).
+- **Is equality enough for 07-12 (P7R2-10)?** Astra only. Settle it with the operator, not by replanning.
+
+---
+
+## Round 2 raw reviews
+
+The reviews below are unedited, except that Copilot's output was ANSI-stripped and cut to its final
+clean pass. Its raw stream interleaved three partial drafts with tool-call lines.
+
+
+## Round 2 Review: pi → github-copilot / gpt-6-astra
+
+### 1. Summary
+
+**Overall risk: HIGH.** The replan substantially improves the destructive-operation controls: file restoration now requires a stopped writer, snapshot contents are hash-compared with the safety copies, effective import flags have STOP conditions, and D-17 excludes restoration and waits for an equality verdict. However, under the requested mechanical-enforcement standard, **12 findings are CLOSED and 10 are PARTIAL**. Important residuals include MA’s lack of a forward-looking sync barrier and incomplete hold/resume handling. New defects include a demonstrated zero-disposition verification bypass, equality being accepted without proving a good import, and the fence and grant remaining separate remote operations. This review covers the supplied current plans and replan diff; executable verification probes were run only in disposable local repositories, not against the estate.
+
+### 2. Fold verification
+
+“CLOSED” means closed by the planned mechanism—not that an unexecuted implementation has been validated. Each PARTIAL row includes a specific condition that would refute the residual finding.
+
+| ID | CLOSED/PARTIAL/NOT CLOSED | Evidence — plan:task + literal quote | Note |
+|---|---|---|---|
+| **G-01** | **CLOSED** | **07-11:T3, lines 284–294:** “produced by `UNDO IMPORT` ALONE”; “the Task 2 answer was `rerun`”; “The file-restore branches, `undo-rerun-other`, any VACUOUS or `no` verdict, and an EQUALITY FAIL are NOT FIRED by construction”. Verify also checks `! /usr/bin/grep -qE '^DISPOSITION: restore' "$A"`. | The restoration exclusion now reaches both the destructive branch and its verify. **07-16:T1** explicitly consumes NOT FIRED and requires its own eligibility and operator gate. |
+| **G-02** | **PARTIAL** | **07-11:T1–T3:** introduces `P01 STATE KEY(S)`, paired readings and equality-before-trigger. But **07-01:T1, lines 111–113** still registers destination count zero, DB count zero and state “no longer holding the staged source path”. **07-17:T1** says “the pre-registered instrument per criterion — use exactly those”. | The local D-17 rule is substantially repaired, but the immutable evidence-map producer still specifies the old absence-only/staged-path witness. Also, T3’s verify recognizes labels such as `STATE COVERED yes \(`, not the actual paired measurements. **Refute:** update the map’s prescribed witness before registration, and add a check rejecting zero-before/zero-after or wrong-key evidence even when labelled `yes`. |
+| **G-03** | **CLOSED** | **07-03:T1:** “ANY class whose checkable count is 0 → UNKNOWN”; explicit all-singleton and orphan fixtures; automated verification executes `bash scripts/check-music-import.sh --self-test` with `ST_PLANNED_CASES=10`. | Both original gaps have executable-test requirements. The filesystem scope is explicitly directories containing beets items, not the entire legacy library. A stale footer remains, reported separately below. |
+| **G-04** | **CLOSED** | **07-11:T3, lines 249–267:** stop writer, assert `State.Running` “reads `false` — STOP if it does not”, restore, restart, re-decode. **07-09:T2:** snapshot hash “must EQUAL” its safety copy; mismatch/unreadability “is a STOP”. | Ordering now puts writer quiescence before replacement and validates state after restart. The snapshot-view check is no longer `ls -l` evidence. |
+| **G-05** | **CLOSED** | **07-09:T2, lines 249–259:** require parsed `copy = true`, `move = false`, `write = true`; “On FAIL, and on any reading that could not be taken: STOP”; recount all three inboxes and stop the writer on non-zero. | The requested observations became gates. Recovery from the newly introduced stopped-writer states is a separate new defect below. |
+| **G-06** | **PARTIAL** | **07-09:T1/T2:** adds `resume-partial-fence` and `07-09-PARTIAL-FENCE`. But T2’s hold action still says “no fence taken, no grant, no album landed”; T1’s verify requires zero occurrences of `zfs (snapshot|destroy|rollback) ` in the entire artifact. | Holding after a partial fence writes a false current state. Re-entering with the earlier snapshot transcript retained also fails T1’s verify; this was reproduced locally. **Refute:** a partial-fence-aware hold preserving the existing snapshot state, plus attempt-scoped verification that accepts the retained earlier snapshot operation. |
+| **G-07** | **PARTIAL** | **07-15:T1:** “AUNIQUE INVENTORY (rebuilt after 07-13)”; T3’s `read_first` and `AUNIQUE_ROWS` construction both consume it. T1 verify only checks `/usr/bin/grep -qF 'AUNIQUE INVENTORY (rebuilt after 07-13)' "$A"`. | The producer/consumer references are repaired, but a heading-only inventory still passes: no verify or STOP checks inventory coverage against landed albums, inclusion of DJ candidates, or equality with `AUNIQUE_ROWS`. **Refute:** a set-comparison check that fails when a qualifying DJ album is omitted or the standing rows differ from the rebuilt inventory. |
+| **G-08** | **CLOSED** | **07-12:T1, lines 79–82:** requires `P01 LANDED (re-run) — EQUALITY VERDICT: PASS` or the alternative verified-import PASS; a FAIL, missing PASS or newer STOP means “stage nothing”. | The original FAIL-verdict admission is closed by an explicit STOP. Whether equality itself establishes a good state is a distinct new issue below. |
+| **G-09** | **PARTIAL** | **07-11:T1:** separate hold tokens and reconciliation. But **T2, line 230** always writes `P01 BACKED OUT by UNDO IMPORT, not re-run; albums landed: none` on hold—even after `TREE COVERED no` or `DB COVERED no`. T1 says an inconsistent reconciliation presents “no gate”, while its verify requires `OPERATOR ANSWER`. | Distinct token names do not fix the false assertion after an incomplete undo. The first-entry reconciliation-failure branch also fails its own verify; reproduced locally. **Refute:** hold tokens containing the actual remaining tree/DB/state readings, and a verify arm accepting RECONCILE-FAIL without an operator answer or subsequent witness. |
+| **G-10** | **CLOSED** | **07-12:T2:** normalized `DISPOSITION PNN:` lines; **07-13:T2:** likewise; **07-14:T2 / 07-15:T3:** exact `^DISPOSITION: hold$` tests. | Correct single-attempt holds no longer depend on timestamp-sensitive free-text matching. The newly introduced missing-disposition/vacuity problem is reported separately. |
+| **G-11** | **PARTIAL** | **07-15:T3:** `MA returns K of N`, target N. Verify accepts `E6 SECOND MEASUREMENT: (NOT TAKEN|MA returns [0-9]+ of [0-9]+)`. | Prose and output shape are corrected, but the verify accepts `MA returns 0 of 0` or `3 of 3`; it neither enforces N ≥ 4 nor compares N and the standing target with the measured tag count. **Refute:** a verification check rejecting N < 4 and a mismatch between ffprobe count, reported denominator and proof-row target. |
+| **G-12** | **PARTIAL** | **07-06:T1:** one execution order is now explicit. **07-12:T3 / 07-13:T3:** prescribe `albums.added` comparisons, but verifies only require `^ADDED ORDER`. | The ordering contradiction is fixed. The after-the-fact proof is not mechanically validated: an unsupported heading suffices. The query also needs an explicit treatment for landed singleton P06, which need not have an album row. **Refute:** a checked landed-ID-to-timestamp mapping, including singleton/N/A handling, that computes the ordering result and requires a filed finding for a real violation. |
+| **G-13** | **PARTIAL** | **07-17:T2:** “Leave the dated 144 sentence byte-unchanged” and “not comparable with it”. Its automated verify checks neither condition. | Corrected prose, but no mechanical preservation or denominator check. **Refute:** a base-anchored comparison of the original 144 sentence and a check requiring the distinct population definition whenever the new number is inserted. |
+| **G-14** | **CLOSED** | **07-01:T2 / 07-11:T3:** filter `'^(\+\+\+|---) (a/|b/|/dev/null)'` before counting additions and removals. | Both counts are now checked. `+++` can no longer satisfy the added-body-line test. |
+| **G-15** | **CLOSED** | **07-10/12/13/14 verifies:** use `Full[R]efresh|zfs [r]ollback`; their prohibitions are written bracketed. | Bracketed recipes and bracketed narrative do not match these EREs; actual unbracketed verbs still do. This does **not** make a literal unbracketed quotation safe—it must still follow the artifact-writing rule. |
+| **P-01** | **PARTIAL** | **07-10:T1:** `NONE SEEN` over 24 hours permits staging; “no MA setting is changed, no provider disabled”. **07-15:T2:** later FOUND is “a finding”, while `COULD NOT LOOK` has no mandatory hold branch. | A historical quiet window does not prevent a future scheduled/startup sync during undo or routing. The later observation comes after exposure and does not fail closed on inability to inspect. **Refute:** a verified barrier spanning first staging through 07-15, or installed-version evidence proving no autonomous sync can occur over that interval. The new MA STOP also conflicts with 07-10:T2’s unconditional “P01 staged” hold text. |
+| **P-02** | **PARTIAL** | **07-15:T3:** provider mappings replace title-only identity. But it requires mapped paths “all under that directory (no track from another directory mixed in)” while accepting `one album with two provider mappings per track` with “no verdict attached”. | The title ambiguity is addressed, but the shared-album twin representation can violate the preceding directory-exclusive assertion. Verify merely looks for `TWIN REPRESENTATION (P02/P04)`. **Refute:** explicit mapping-scoped twin semantics, with fixtures for both separate albums and a shared album, neither falsely failing nor masking duplicate mappings of the same file. |
+| **P-03** | **PARTIAL** | **07-07:T2:** specifies `TotalRecordCount` versus `Items` length and no pin comparison on failure. Verify only checks `/usr/bin/grep -qF 'TotalRecordCount' scripts/check-music-consumers.sh`. | The planned guard is correct, but its functioning and baseline eligibility are not verified; a comment containing that token suffices. **Refute:** driven missing-total and truncated-response cases returning non-zero without creating/updating a baseline, plus a complete-response case that can pin. |
+| **P-04** | **CLOSED** | **07-11:T2:** adds `restore-db-state-then-rerun`, valid only with P01 the sole imported album and an empty fence DB; **T3** restores both files behind the stopped-writer barrier. | There is now a DB remedy rather than only a statefile remedy. D-17 remains NOT FIRED on it. |
+| **P-05** | **CLOSED** | **07-07:T2:** same-commit §5 entry for `D24_CENSUS_BASELINE_N` / `_SHA`; verify checks the registered symbol. **07-15:T3:** adds and verifies `AUNIQUE_ROWS` in CONVENTIONS. | The pins now have named ownership and maintenance rules in the requested register. |
+| **P-06** | **CLOSED** | **07-16:T2:** `ISSUED: zfs destroy … RC=<n>` versus `REFUSED: zfs [d]estroy …`; verify rejects unbracketed destroy lines outside the issued-record shape. | A bracketed refusal no longer trips the protected-target detector. Confirmed with a local control. Partial execution of an approved list remains a separate issue below. |
+| **P-07** | **CLOSED** | **07-13:** `depends_on: ["07-12", "07-04", "07-06", "07-07"]`; **07-14:** `depends_on: ["07-13", "07-06", "07-07"]`. | Both direct producers are explicitly declared. |
+
+### 3. New findings
+
+### R2-OAI-01 — Fence and grant are still separate remote operations
+
+**Severity:** HIGH  
+**Plan/task:** 07-09:T2, steps 2–3, lines 202–245  
+**Class:** FM-4; HIGH missed by round 1
+
+**Literal quotes**
+
+> “THE FENCE — ONE remote invocation on atlantis as real root.”
+
+Then, separately:
+
+> “THE GRANT (E3, first write on the library path). On LXC 100: install the repo files…”
+
+> “Then `docker compose -f stacks/selfhosted/arrs/compose.yaml up -d`”
+
+**Failure scenario**
+
+The snapshot/list-back operation finishes on atlantis before a separate operation installs configuration and grants `rw` on LXC 100. There is no same-invocation coordinator or grant-side snapshot revalidation specified. An interruption or snapshot removal between those operations can leave deployment proceeding on historical fence evidence.
+
+This is narrower than questioning the fence ordering: **the ordering is correct, but the required remote-operation boundary is not**. The supplied safety invariant 1 requires both in the same remote step; “same plan” is not equivalent.
+
+**Refutation condition**
+
+A prescribed executable remote coordinator that performs the exact-name snapshot checks and safety-copy checks, then conditionally invokes deployment without returning control between fence validation and grant.
+
+**Suggested fix**
+
+Make fence validation and deployment one fail-closed coordinated operation. Preserve the cross-pool ordering record, but do not let a later deployment invocation consume only an earlier transcript.
+
+---
+
+### R2-OAI-02 — Equality PASS can promote a reproducibly bad import
+
+**Severity:** HIGH  
+**Plan/task:** 07-11:T1/T3 → 07-12:T1  
+**Class:** FM-1 / FM-2
+
+**Literal quotes**
+
+**07-11:T1, lines 124–125:**
+
+> “list every P01 finding from 07-10 … and the executor's reading of each.”
+
+**07-11:T3, lines 275–281:**
+
+> “assert (a) the `LC_ALL=C` sorted destination path list is byte-identical to run 1's; (b) the `audio_md5` set is identical”
+
+> “Write ONE line `EQUALITY VERDICT: PASS` (all four hold)”
+
+**07-12:T1:**
+
+> “Preconditions: the ledger's P01 line reads `P01 LANDED (re-run) — EQUALITY VERDICT: PASS`”
+
+**Failure scenario**
+
+Run 1 has an ffprobe/DB mismatch, wrong ownership or an unexplained metadata drop. Undo works. The same candidate reproduces exactly the same defective result.
+
+All four equality predicates can pass: paths, encoded audio, tag-diff output and release ID are identical. Nothing requires the recorded quality findings to be resolved before writing the PASS-bearing LANDED line. That line then admits the remaining albums.
+
+This is **not** G-08’s original problem of accepting an equality FAIL. Here the equality result is correctly PASS, but equality has been substituted for proof of a good state.
+
+**Refutation condition**
+
+A required quality gate, before the PASS-bearing readiness record or before 07-12 staging, rejecting unresolved criterion-3/4/7 defects independently of equality.
+
+**Suggested fix**
+
+Keep equality and quality separate. Require both a computed equality PASS and a quality/readiness PASS, with explicitly adjudicated allowed metadata changes and no unresolved file-write or ownership defects, before staging more albums.
+
+---
+
+### R2-OAI-03 — Missing disposition rows are treated as proof that no imports occurred
+
+**Severity:** HIGH  
+**Plan/task:** 07-12:T2/T3 and 07-13:T2/T3  
+**Class:** FM-5; violates fail-closed checking
+
+**Literal quotes**
+
+**07-12:T2 verify:**
+
+```sh
+/usr/bin/grep -qE '^DISPOSITION( P[0-9]{2})?: (imported|imported-other|hold|hold-all)' "$A"
+```
+
+**07-12:T3 and 07-13:T3 verify:**
+
+```sh
+test "$(/usr/bin/grep -cE '^DISPOSITION P[0-9]{2}: imported' "$A")" -eq 0
+```
+
+**Failure scenario — driven**
+
+The Task 2 verify requires only **one** recognized disposition. Task 3 interprets zero normalized imported rows as an all-hold outcome, without proving that every expected P-ID has a disposition.
+
+I ran the exact Task 2 and Task 3 automated commands in disposable Git repositories:
+
+| Plan | Artifact fixture | T2 RC | T3 RC |
+|---|---|---:|---:|
+| 07-12 | `OPERATOR ANSWER: P02 hold; P03 imported` plus only `DISPOSITION P02: hold` | 0 | 0 |
+| 07-13 | `OPERATOR ANSWER: P07 hold; P08 imported-asis` plus only `DISPOSITION P07: hold` | 0 | 0 |
+
+Neither fixture contained landed verification evidence or a LANDED ledger. The tests still passed. Missing normalization is therefore being interpreted as “nothing to verify,” not UNKNOWN.
+
+**Refutation condition**
+
+The exact automated checks reject either fixture because the disposition P-ID set is incomplete, or because the normalized records disagree with the recorded/imported state.
+
+**Suggested fix**
+
+Before the all-hold shortcut:
+
+1. Derive the expected in-scope P-ID set.
+2. Require exactly one valid disposition per expected P-ID, with no extras or duplicates.
+3. Handle a global hold explicitly.
+4. Require evidence and ledger reconciliation for every imported disposition.
+
+Do not infer all-hold from a zero grep count.
+
+---
+
+### R2-OAI-04 — New stopped-writer outcomes have no compatible re-entry path
+
+**Severity:** MEDIUM  
+**Plan/task:** 07-09:T2 failure branches → 07-09:T1  
+**Class:** FM-3
+
+**Literal quotes**
+
+**07-09:T2:**
+
+> `STOP STATE 07-09-IMPORT-KEYS-FAIL: fence held, grant deployed but writer stopped, no album landed`
+
+and:
+
+> `STOP STATE 07-09-INBOX-NOT-EMPTY`
+
+**07-09:T1** recognizes a changed entry state only:
+
+> “if the ledger's newest token is `07-09-PARTIAL-FENCE`”
+
+The normal preconditions require both pilot snapshots absent, `RW=false`, and successful `docker exec` readings.
+
+**Failure scenario**
+
+The new guard correctly stops beets-flask after deployment. On retry, however:
+
+- both snapshots already exist;
+- the deployed mount is `rw`;
+- the stopped container cannot supply the required `docker exec` readings;
+- this is not the one recognized partial-fence shape.
+
+The plan accepts the STOP as an outcome but offers no recovery transition that preserves the existing fence and safely repairs/revalidates the stopped writer. “The operator decides” does not identify a resumable task entry.
+
+**Refutation condition**
+
+A re-entry branch for each new token that expects the actual stopped/deployed state, reconciles both existing snapshots and safety copies, and offers a gated repair/restart without retaking or deleting the fence.
+
+**Suggested fix**
+
+Add explicit recovery entries for these two states. Preserve the stopped writer until configuration and inbox conditions have been checked; then restart under the existing readiness and effective-config gates.
+
+---
+
+### R2-OAI-05 — A refused prune cannot complete the new branch’s accounting contract
+
+**Severity:** MEDIUM  
+**Plan/task:** 07-16:T2, lines 168–179  
+**Class:** FM-3
+
+**Literal quotes**
+
+> “Any refusal … is written `REFUSED: zfs [d]estroy <name> — <reason>`, bracketed, and nothing is issued for it.”
+
+Immediately afterwards:
+
+> “the before−after set difference must equal exactly the approved set”
+
+> “Update each row: `destroyed <UTC> by plan 07-16 on the operator's answer`.”
+
+**Failure scenario**
+
+Two snapshots are approved. One is destroyed; the second fails its immediate presence or eligibility recheck and is correctly refused.
+
+The actual removed set cannot equal the approved set. There is no partial-prune outcome describing which names were destroyed, refused or left pending, nor a resume rule requiring a new gate for the remainder. Following the final row-update instruction indiscriminately would also misrecord a refused name as destroyed.
+
+The new issued/refused formatting fixes P-06 but does not give the refusal branch a coherent exit.
+
+**Refutation condition**
+
+An explicit partial-prune branch that reconciles the observed removed set against successful operations, updates rows individually, preserves refused/pending rows, and states how the remainder is re-gated.
+
+**Suggested fix**
+
+Track approved, successfully removed, refused and failed sets separately. On any refusal/failure, stop or finish under an explicit partial outcome; never assert that every approved operation happened or mark every approved row destroyed.
+
+---
+
+### R2-OAI-06 — Sweep acceptance count was changed on only one side
+
+**Severity:** LOW  
+**Plan/task:** 07-03:T1 versus plan-level `<verification>`  
+**Class:** FM-2
+
+**Literal quotes**
+
+**Task 1:**
+
+> `ST_PLANNED_CASES=10`
+
+**Plan-level verification, line 300:**
+
+> “`--self-test` 8/8 locally and on LXC 100.”
+
+**Failure scenario**
+
+An executor or verifier following the plan-level completion checklist is asked to report 8/8 while the executable test contract now requires 10/10.
+
+**Refutation condition**
+
+The final verification checklist consistently requires 10/10, with the optional dumper-level check separately identified.
+
+**Suggested fix**
+
+Update the stale footer and search the current plan for any remaining eight-case completion claims.
+
+### 4. What was checked and held (no finding)
+
+- **D-17 restoration hand-off:** Cross-read 07-11’s restoration exclusions, NOT FIRED record, Phase 6 status append and 07-16’s `HELD BY D-17 (NOT FIRED)` branch. The latter does not inherit permission to destroy; it requires D-19 eligibility and an operator answer.
+- **Restoration ordering:** In 07-11:T3, stopping and asserting `State.Running=false` precede file replacement; restart and decoded membership checks follow it. No arrs dataset rollback is offered.
+- **Snapshot-byte evidence:** 07-09:T2 explicitly compares both snapshot-resident files with their corresponding safety copies and stops on mismatch or unreadability.
+- **G-14 regex repair:** The added/removed line counts exclude Git file headers before counting. The former `+++` self-match is not preserved.
+- **Bracket semantics:** `Full[R]efresh`, `zfs [r]ollback` and `zfs [d]estroy` are ERE needles for the unbracketed operational tokens. They do not match the bracketed narrative itself. The 07-16 bracketed refusal control behaved accordingly.
+- **Tag-diff exit contract:** 07-02 prescribes exit 3 in both text and JSON arms, before loss/green handling. The import and final-evidence plans retain AMBIGUOUS counts and do not describe exit 3 as success.
+- **Source and tag-write evidence chain:** 07-07’s per-P-ID captures/manifests are consumed by 07-10/12/13 and the final 07-17 comparison. File-write evidence remains ffprobe, while SQLite supplies the expected values; it is not replaced by `beet ls`.
+- **Consumer write scope:** The prescribed Jellyfin mutations remain file-list `Created`, `Deleted` or `Modified` notifications. No new aggressive refresh operation was introduced. The explicit MA sync remains behind 07-15’s gate; the unresolved autonomous-sync issue is P-01, not a second finding.
+- **Credential transport:** The specified Jellyfin/MA HTTP credentials remain in process-substitution headers or `$ENV`-constructed request data, not literal command-line credentials.
+- **Dependency updates:** 07-07 now follows 07-03 in wave 3; 07-13 and 07-14 directly name 07-06/07-07; 07-09 depends on all preparation plans. Those edits introduce no dependency cycle.
+- **Unchanged decisions:** The flask-only default, authorized `grant-both` override, sample composition, locked path rules and file-copy recovery choice were treated as given—not reviewed again.
+
+### 5. Suggestions
+
+- Give each execution attempt an ID and scope its dispositions, witnesses and verification to that attempt; retain older evidence as history.
+- Add a small fixture suite for the plan verifiers themselves, covering successful execution, all-hold, partial hold, missing records, reconciliation failure and interrupted recovery.
+- Separate **observed state**, **quality result**, **operator authorization** and **next permitted action** in the ledger. This would make the remaining cross-plan gates substantially easier to audit.
+
+---
+
+## Round 2 Review: copilot CLI / gpt-5.5 (166 credits, 2m39s)
+
+### Summary
+
+Overall risk: **MEDIUM**. The replan closes the major destructive-safety problems from round 1: D-17 no longer fires on restore/vacuous witnesses, `fast/appdata/arrs` recovery remains file-copy only, the fence precedes `rw`, and post-grant copy/move/write settings are gated. The remaining risk is mostly mechanical-verification drift: one round-1 fold is only partially closed for Music Assistant automatic syncs, and two new seams allow artifacts to pass without proving the complete disposition or fired-destroy evidence the prose requires.
+
+### Fold verification
+
+| ID | CLOSED/PARTIAL/NOT CLOSED | evidence (plan:task + quote) | note |
+|---|---|---|---|
+| G-01 | CLOSED | 07-11 T3: “`FIRED iff ALL of:` … `UNDO IMPORT ALONE` … `EQUALITY VERDICT: PASS`”; “`The file-restore branches ... are NOT FIRED by construction`” | D-17 no longer destroys on the operator-chosen restore branch. |
+| G-02 | CLOSED | 07-11 T1/T3: “`already-absent is VACUOUS, never yes`”; “`A re-run that incremental skipped reads 0 items and fails (a)`” | State witness is paired and FIRED waits on equality. |
+| G-03 | CLOSED | 07-03 T1: “`ANY class whose checkable count is 0 → UNKNOWN`”; “`for every audio file ... whose path has NO item row, print one JSON object marked "orphan": true`” | Singleton-only and orphan `.1` cases are mechanically covered. |
+| G-04 | CLOSED | 07-09 T2: “`snapshot's own view holds the SAME bytes`”; 07-11 T3: “`stop the writer` … `assert ... State.Running ... false`” and “`Re-decode after restart`” | Snapshot copy integrity and writer quiescence are now explicit gates. |
+| G-05 | CLOSED | 07-09 T2: “`POST-GRANT IMPORT KEYS: PASS ... or FAIL`”; “`On FAIL ... STOP; stop the beets-flask service`”; “`RE-COUNT inbox emptiness now, after compose up`” | Effective `copy/move/write` and inbox emptiness are gated. |
+| G-06 | CLOSED | 07-09 T1/T2: “`PARTIAL FENCE RECONCILIATION: CONSISTENT`”; “`Resume a partial fence — take ONLY the missing fast/appdata/arrs@pre-07-pilot`” | Partial fence has a hold and resume path. |
+| G-07 | CLOSED | 07-15 T1/T3: “`AUNIQUE INVENTORY (rebuilt after 07-13)`”; “`the only inventory D-28 and AUNIQUE_ROWS are built from; the 07-12 list is superseded`” | D-28 inventory is rebuilt after DJ routing. |
+| G-08 | CLOSED | 07-12 T1: “`P01 LANDED (re-run) — EQUALITY VERDICT: PASS` or `... NEW-IMPORT VERIFIED: PASS`”; “`a FAIL verdict ... is a STOP: stage nothing`” | 07-12 no longer proceeds from a bare LANDED line. |
+| G-09 | CLOSED | 07-11 T1/T2/T3: “`RESUME RECONCILIATION: CONSISTENT (<token>)`”; “`STOP STATE 07-11-T1-HOLD: P01 LANDED`”; “`STOP STATE 07-11-T2-HOLD: P01 BACKED OUT`” | Hold states are distinct and resumable. |
+| G-10 | CLOSED | 07-12 T2: “`DISPOSITION PNN: imported|imported-other|hold`”; 07-13 T2: “`DISPOSITION PNN: imported-asis|imported|imported-no-route|hold`”; 07-14 T1: “`DISPOSITION: hold|apply|apply-excluding`” | Original false-red hold issue is fixed; see new finding for completeness of per-ID verification. |
+| G-11 | CLOSED | 07-15 T3: “`MA returns K of N`”; “`N as measured: 4, 5, …`”; “`the F1 proof row's target is N`” | ≥4 artist stratum is no longer hard-coded to 4. |
+| G-12 | CLOSED | 07-12 T3: “`ADDED ORDER: PASS` ... or `ADDED ORDER: FAIL`”; 07-13 T3: “`DJ albums after every 07-12 album, P07 before P08`” | Import order is asserted after the fact from `albums.added`. |
+| G-13 | CLOSED | 07-17 T2: “`it is NOT the backlog denominator`”; “`different population from the 144 backlog denominator, not comparable with it`” | The D-06 draw population is no longer laundered into the 144 denominator. |
+| G-14 | CLOSED | 07-01 T2: “`grep -vE '^(\+\+\+|---) (a/|b/|/dev/null)'`” with separate `'^-'` and `'^+'` counts | Diff header self-match is excluded and both directions are counted. |
+| G-15 | CLOSED | 07-12/13/14 verifies use “`Full[R]efresh|zfs [r]ollback`”; 07-16 refusals use “`zfs [d]estroy`” | Ban prose no longer self-matches the negative greps. |
+| P-01 | PARTIAL | 07-10 T1: “`FOUND or COULD NOT LOOK is a STOP: nothing is staged`”; but 07-15 T2 verify accepts “`^MA SYNC SINCE 07-10: (NONE SEEN|FOUND|COULD NOT LOOK)`” | Pre-first-import log gate is closed; the later 07-10→07-15 window is only recorded as a finding, not a stop before syncing. |
+| P-02 | CLOSED | 07-15 T3: “`read MA by IDENTITY, not by title`”; “`two title hits are the EXPECTED state`”; “`resolved through its tracks' provider mappings`” | Benson Boone twins are path/provider-mapping based. |
+| P-03 | CLOSED | 07-07 T2: “`.TotalRecordCount` and `(.Items | length)`”; “`if TotalRecordCount is absent or the two differ → jellyfin_fail`” | D-24 baseline is no longer pinned from a possibly truncated page. |
+| P-04 | CLOSED | 07-11 T2: “`restore-db-state-then-rerun`”; “`offered only when DB COVERED is no and P01 is the sole album since the fence`” | DB-uncovered branch has an explicit remedy/hold path. |
+| P-05 | CLOSED | 07-07 T2: “`D24_CENSUS_BASELINE_N / D24_CENSUS_BASELINE_SHA` ... `CONVENTIONS §5`”; 07-15 T3: “`add AUNIQUE_ROWS ... to CONVENTIONS §5`” | New live pins are registered. |
+| P-06 | CLOSED | 07-16 T2: “`ISSUED: zfs destroy <dataset>@<name> RC=<n>`”; “`REFUSED: zfs [d]estroy <name> — <reason>`” | Refusal prose cannot trip issued-destroy checks. |
+| P-07 | CLOSED | 07-13 front matter: `depends_on: ["07-12", "07-04", "07-06", "07-07"]`; 07-14 front matter: `depends_on: ["07-13", "07-06", "07-07"]` | Direct producers are now declared. |
+
+### New findings
+
+### R2-CP-01 — MEDIUM — 07-12 T2 / 07-13 T2
+
+**Literal quote:** 07-12 T2 requires “`one normalised line per in-scope P-ID, DISPOSITION PNN: imported|imported-other|hold`”, but its verify is only “`/usr/bin/grep -qE '^DISPOSITION( P[0-9]{2})?: (imported|imported-other|hold|hold-all)' "$A"`”. 07-13 repeats the same shape: “`one normalised line per DJ P-ID`” but verify only checks “`/usr/bin/grep -qE '^DISPOSITION( P[0-9]{2})?: (imported-asis|imported|imported-no-route|hold)' "$A"`”.
+
+**Failure scenario:** An artifact with one valid line, such as `DISPOSITION P02: imported`, passes Task 2 verification while omitting P03–P06/P09–P12. Task 3 then loops only over imported lines, so missing albums can be neither explicitly held nor landed in the ledger, leaving the final evidence map and criterion counts ambiguous.
+
+**Refutation condition:** The automated verify enumerates the expected in-scope P-ID set and fails unless every P-ID has exactly one normalized `DISPOSITION PNN:` line, or `DISPOSITION: hold-all` is expanded into explicit per-P-ID hold lines and ledger entries.
+
+**Suggested fix:** In 07-12, add a verify loop over `P02 P03 P04 P05 P06 P09 P10 P11 P12`; in 07-13, loop over the DJ P-IDs from `07-SAMPLE.md`. Also reject duplicate `DISPOSITION PNN:` lines.
+
+### R2-CP-02 — MEDIUM — 07-11 T3
+
+**Literal quote:** The action says, on FIRED, “`issue exactly zfs destroy tank/media/Music@pre-06-41-conf04-reprobe`” and “`assert the set difference is exactly that one name`”. The automated verify only requires “`test "$(/usr/bin/grep -cE 'zfs [d]estroy' "$A")" -le 1`” plus the FIRED predicates; the exact issued command and before/after set difference are acceptance prose: “`on FIRED exactly one issued destroy naming the one snapshot, before/after name sets with a one-name difference`”.
+
+**Failure scenario:** The artifact can say `D-17 TRIGGER: FIRED`, include `EQUALITY VERDICT: PASS`, the three COVERED `yes` lines, and mention `pre-06-41-conf04-reprobe`, but never show an issued destroy or the before/after name-set delta. The verify still passes, allowing `deferred-items.md` and the ledger to record a destroyed/closed D-17 state when the snapshot may still exist.
+
+**Refutation condition:** The FIRED branch’s automated verify requires exactly one issued destroy line for `tank/media/Music@pre-06-41-conf04-reprobe` with RC recorded, plus computed before/after snapshot sets whose difference is exactly that name and whose after-set still contains `tank/media/Music@pre-07-pilot` and `tank/downloads@pre-phase5`.
+
+**Suggested fix:** Reuse 07-16’s issued-command convention in 07-11: record `ISSUED: zfs destroy tank/media/Music@pre-06-41-conf04-reprobe RC=0`, and gate the FIRED branch on that line and the computed one-name set difference. If no destroy was issued, force `D-17 TRIGGER: NOT FIRED` or a STOP token.
+
+### What was checked and held (no finding)
+
+- 07-09’s fence/grant ordering is sound: both `tank/media/Music@pre-07-pilot` and `fast/appdata/arrs@pre-07-pilot` are created/listed before the grant, and partial-fence resume takes only the missing `fast` snapshot after `written tank/media/Music = 0`.
+- `fast/appdata/arrs` recovery stays file-copy only: 07-09 and 07-11 write `zfs [r]ollback` as forbidden, and 07-11 restore branches stop `beets-flask`, copy literal `state.pickle`/`library.db` paths, restart, and re-decode state.
+- Staging remains copy-not-move: 07-10/12/13 use reflink/plain `cp -R`, chown only staged copies, and compare source manifests after staging/import.
+- Tag-write evidence remains file-level: 07-10/12/13 verification reads `ffprobe` per file and does not accept `beet ls` as tag-write proof.
+- Jellyfin updates are file-scope only: 07-10/12/13/15 use targeted `/Library/Media/Updated`, and the unbracketed `FullRefresh` check is bracket-safe.
+- 07-12→07-15 `%aunique{}` flow is sound apart from the disposition completeness finding: 07-15 rebuilds the inventory after 07-13 and builds `AUNIQUE_ROWS` only from that rebuilt set.
+- Music Assistant identity for the Benson Boone twins is sound: 07-15 uses provider mappings and final paths, treats two title hits as expected, and records observed twin representation without declaring a duplicate.
+- 07-16 pruning is operator-gated and protects `@pre-phase5` / `@pre-07-pilot`: issued destroys have a distinct form, refusals are bracketed, and protected snapshot names are rechecked after the operation.
+
+### Suggestions
+
+- Promote the P-01 later-window check to a real gate: `MA SYNC SINCE 07-10: FOUND` or `COULD NOT LOOK` should hold before any manual MA sync.
+- Put the expected P-ID roster in one generated artifact and have 07-12, 07-13, 07-15, and 07-17 consume it instead of duplicating P-ID lists.
+- Standardize all snapshot release artifacts on the 07-16 `ISSUED:` / `REFUSED:` line grammar so destructive-action verifies can be shared.
+
+
+---
+
+## Round 2 Review: pi → xai / grok-4.7
+
+### 1. Summary
+
+Round 1’s two HIGHs are closed in the action text (paired `UNDO IMPORT` witnesses, no restore branch, equality before destroy), and most other folds are now tied to a grep or a named STOP token. The replan’s own verifies do not always enforce those sentences: `07-11` can still record a destroy without `FIRED`, `07-12`’s precondition grep matches a FAIL line, and the new post-grant `import.move` gate reads `check-beets-config.sh` even though `07-08` says only the flask server’s injected config governs imports. That last gap is a compliant-executor miss of invariant 3, not a disobedience case. Overall risk is **MEDIUM**: nothing in the prose authorises `zfs rollback` of `fast/appdata/arrs`, a source move, or `FullRefresh`, but two mechanical backstops added to close G-01/G-05 are weaker than the prose.
+
+### 2. Fold verification
+
+| ID | Status | Evidence | Note |
+|---|---|---|---|
+| G-01 | PARTIAL | `07-11` Task 3: “FIRED iff ALL of: (i) both pre-07-pilot snapshots were listed back … (ii) TREE COVERED yes, DB COVERED yes AND STATE COVERED yes … by `UNDO IMPORT` ALONE; (iii) the Task 2 answer was `rerun` … (iv) `EQUALITY VERDICT: PASS`”. Verify: `{ ! /usr/bin/grep -qE 'D-17 TRIGGER: FIRED' "$A" \|\| { … '^EQUALITY VERDICT: PASS' … 'STATE COVERED yes \(' … ! /usr/bin/grep -qE '^DISPOSITION: restore' } }` | Prose matches the fix. Verify does not require `^DISPOSITION: rerun$`, and Task 2’s verify does not require a `DISPOSITION` line on the non-hold path (`'^DISPOSITION: hold$'` OR the COVERED lines). Omit `DISPOSITION: restore-then-rerun` and the restore backstop does not trip. Destroy count is `-le 1` with no FIRED conjunction (see R2-PI-02). |
+| G-02 | PARTIAL | `07-11` Task 1: “Pre-undo ABSENT is not moot … `PAIRED WITNESS: VACUOUS — <part>`”. Task 2: “a part is `yes` ONLY when its Task 1 reading was PRESENT … `VACUOUS` when the Task 1 reading was already absent (never `yes`)”. Task 3 verify requires `STATE COVERED yes \(` plus `^EQUALITY VERDICT: PASS` before a FIRED record can pass. | Vacuous-as-yes is forbidden in prose and equality is on the FIRED path. The verify never reads the numbers inside the parentheses, so `STATE COVERED yes (pre 0 → post 0)` satisfies `yes \(`. |
+| G-03 | CLOSED | `07-03` Task 1: “Vacuity, PER CLASS (G-03) … ANY class whose checkable count is 0 → UNKNOWN”; orphan `"orphan": true`; `ST_PLANNED_CASES=10`. Verify greps `ST_PLANNED_CASES=10`, `on-disk, no item row:`, `checkable rows per class:` and runs `--self-test`. | Bottom `<verification>` still says “8/8” (suggestion only). The executed verify pins 10. |
+| G-04 | CLOSED | `07-09` Task 2: “each must EQUAL the corresponding safety copy's sha256 … a mismatch or an unreadable `.zfs/snapshot` path is a STOP”. `07-11` Task 3: “assert `docker inspect -f '{{.State.Running}}' beets-flask` reads `false` — STOP if it does not” before the `cp`, then “Re-decode after restart”. | STOP is in the action. Neither verify greps for the snapshot sha256 pair or `State.Running` (R2-PI-04 covers the copy-then-check order). |
+| G-05 | CLOSED | `07-09` Task 2: “it is a GATE (G-05) … On FAIL … ledger `STOP STATE 07-09-IMPORT-KEYS-FAIL`”. “RE-COUNT inbox emptiness now, after `compose up` … `STOP STATE 07-09-INBOX-NOT-EMPTY`”. Verify success arm requires `POST-GRANT IMPORT KEYS: PASS`; the OR arm accepts those STOP tokens. | The gate’s data source is a different defect (R2-PI-01). Success verify does not require an inbox-count line. |
+| G-06 | CLOSED | `07-09` Task 2: “writes the ledger `STOP STATE 07-09-PARTIAL-FENCE` … The `tank` snapshot is NOT destroyed”. Task 1: `PARTIAL FENCE RECONCILIATION: CONSISTENT` only if tank present, fast absent, `written` 0, fixture sha256s; “Offer `resume-partial-fence` ONLY when” that line is on record. Verify accepts `STOP STATE 07-09-PARTIAL-FENCE`. | Resume is a named exit. Inconsistent reconciliation offers only `hold`. |
+| G-07 | PARTIAL | `07-15` Task 1: “`AUNIQUE INVENTORY (rebuilt after 07-13)` … including the DJ pair under `DJ/`”. Task 3: “the only inventory D-28 and `AUNIQUE_ROWS` are built from; the 07-12 list is superseded (G-07)”. Task 1 verify greps `AUNIQUE INVENTORY (rebuilt after 07-13)`. | Task 3 verify checks section `4d` and `AUNIQUE_ROWS` in `CONVENTIONS.md`, not that the pin came from the rebuilt inventory. A stale 07-12 list still passes. |
+| G-08 | PARTIAL | `07-12` Task 1: “the ledger's P01 line reads `P01 LANDED (re-run) — EQUALITY VERDICT: PASS` or `P01 LANDED (re-run-other <id>) — NEW-IMPORT VERIFIED: PASS` … a FAIL verdict … is a STOP: … `STOP STATE 07-12-PRECONDITION`”. `07-11` Task 3 writes that PASS/FAIL string. | Verify is `/usr/bin/grep -qE 'EQUALITY VERDICT\|NEW-IMPORT VERIFIED'`, which matches FAIL. If `STOP STATE 07-12-PRECONDITION` is present, the same verify skips the staging checks, so a FAIL plus a staged album still passes. |
+| G-09 | CLOSED | `07-11` must_haves: tokens `07-11-T1-HOLD`, `07-11-T2-HOLD`, `07-11-T2-TREE-NOT-COVERED`, `07-11-T3-EQUALITY-FAIL`, `07-11-T3-RESTORE-FAIL`. Task 1: “after `07-11-T2-HOLD` resumes at Task 2's gate; after `07-11-T1-HOLD` at this task's gate”. Task 1 verify requires `RESUME RECONCILIATION: (CONSISTENT\|INCONSISTENT)`. | Hold texts no longer collide. INCONSISTENT writes `STOP STATE 07-11-RECONCILE-FAIL` and presents no gate. |
+| G-10 | CLOSED | `07-12` Task 2 verify: `'^DISPOSITION( P[0-9]{2})?: (imported\|imported-other\|hold\|hold-all)'`. Task 3: `test "$(/usr/bin/grep -cE '^DISPOSITION P[0-9]{2}: imported' "$A")" -eq 0 \|\| { … }` so all-hold passes. `07-13` Task 2 verify uses the same DISPOSITION shape, not an end-anchored `OPERATOR ANSWER`. `07-14` Task 2: `'^DISPOSITION: hold$'` OR `post-07-e5`. | A normalised hold passes its own verify. |
+| G-11 | CLOSED | `07-15` Task 3: “write `E6 SECOND MEASUREMENT: MA returns K of N` … (N as measured: 4, 5, …)”. Verify: `'E6 SECOND MEASUREMENT: (NOT TAKEN\|MA returns [0-9]+ of [0-9]+)'`. | Original “of 4” cap is gone. The new regex also matches `MA returns 3 of 3` (R2-PI-05). |
+| G-12 | CLOSED | `07-06` Task 1: “the ONE EXECUTION ORDER (G-12) is: P01 … then P02, P03, P04, P05, P06, P09, P10, P11, P12 … then P07, P08” under `### EXECUTION ORDER`. Verify greps that heading. `07-12`/`07-13` Task 3 write `ADDED ORDER:` from `albums.added`; verifies require `^ADDED ORDER` when any `imported` disposition exists. | P02-before-P04 is asserted after the fact, or `NOT APPLICABLE` if either was held. |
+| G-13 | PARTIAL | `07-17` Task 2: “it is NOT the backlog denominator and must not be written beside the 144 … ‘not comparable with it’”. Acceptance: “the 144 sentence is unchanged”. | Task 2 verify greps `UNDO IMPORT` and the Phase 7 heading only. Nothing fails a “beside the 144” sentence. |
+| G-14 | CLOSED | `07-01` Task 2 verify: `grep -vE '^(\+\+\+\|---) (a/\|b/\|/dev/null)'` then `grep -cE '^-'` and `'^\+'` both `-eq 1`. `07-11` Task 3 verify uses the same header filter and requires `^-` count `-eq 0`. | `+++` no longer counts as an added line. |
+| G-15 | CLOSED | `07-10` Task 3, `07-12` Task 3, `07-13` Task 3, `07-14` Task 2 verifies use `Full[R]efresh\|zfs [r]ollback`. `07-15` uses `Full[R]efresh`. | Bracketed ban prose does not match. False red only, and the false red is removed. |
+| P-01 | CLOSED | `07-10` Task 1: “FOUND or COULD NOT LOOK is a STOP … `STOP STATE 07-10-MA-PERIODIC-SYNC`”. Verify: `'^MA PERIODIC SYNC: (NONE SEEN\|FOUND\|COULD NOT LOOK)'` and if the line is not `NONE SEEN`, ledger must contain that STOP. `07-15` Task 2 requires `'^MA SYNC SINCE 07-10: (NONE SEEN\|FOUND\|COULD NOT LOOK)'`. | Gate is before staging. No barrier is invented, as the finding allowed. |
+| P-02 | CLOSED | `07-15` Task 3: “read MA by IDENTITY, not by title … A duplicate finding is two MA albums (or tracks) whose mapped paths are the SAME files — never merely two title hits.” “`TWIN REPRESENTATION (P02/P04):`”. Non-hold verify greps that literal. | Two title hits are specified as expected, not a finding. |
+| P-03 | CLOSED | `07-07` Task 2: “if `TotalRecordCount` is absent or the two differ → `jellyfin_fail` … and no pin comparison is made”. Verify greps `TotalRecordCount` in the script. | Pin is forbidden until coverage holds. The live equality is acceptance-only, which matches “not driven”. |
+| P-04 | CLOSED | `07-11` Task 2 option `restore-db-state-then-rerun`: “offered only when DB COVERED is `no` and P01 is the sole album since the fence”. Task 3 copies `library.db` only on that branch, writer stopped. | Remedy exists, and it is refused when a later album has landed. |
+| P-05 | CLOSED | `07-07` Task 2: add `D24_CENSUS_BASELINE_N` / `_SHA` to CONVENTIONS §5 “in the SAME commit”. Verify greps `D24_CENSUS_BASELINE_N` in `CONVENTIONS.md`. `07-15` Task 3 adds `AUNIQUE_ROWS` to the same list; verify greps `AUNIQUE_ROWS` in `CONVENTIONS.md`. | Both pins are in §5’s scope statement in the plan. |
+| P-06 | CLOSED | `07-16` Task 2: refusals are `REFUSED: zfs [d]estroy <name> — <reason>`. Verify: `grep -E 'zfs [d]estroy' \| grep -cvE '^ISSUED: zfs [d]estroy [^ ]+@[^ ]+ RC=[0-9]+$'` must be 0. | A bracketed refusal does not match `zfs [d]estroy` (character class, not the two characters `[d]`). |
+| P-07 | CLOSED | `07-13` frontmatter: `depends_on: ["07-12", "07-04", "07-06", "07-07"]`. `07-14`: `depends_on: ["07-13", "07-06", "07-07"]`. | Direct edges added. |
+
+### 3. New findings
+
+### R2-PI-01 — MEDIUM — `07-09` Task 2 (gate), contradicted by `07-08` Task 1
+
+**Quote (`07-08` Task 1):** “noting rc6 injects its own schema defaults at highest priority in the server process, so the server's effective value is the one that governs imports.”
+
+**Quote (`07-09` Task 2):** “Assert the effective import keys by running `bash scripts/check-beets-config.sh` from the workstation and recording its exit and the `import.copy/move/write` readings — this is the post-grant C1 reading, and it is a GATE (G-05), not a record: parse each effective value (the YAML boolean read from the effective config, not a substring of the output) and require `copy` = true, `move` = false, `write` = true”
+
+**Failure:** A compliant executor parses `check-beets-config.sh`, writes `POST-GRANT IMPORT KEYS: PASS (copy=true move=false write=true)`, and continues. The same phase has already said that string is not the server value that performs the import. If rc6’s injected `import.move` is true (or `write` is false) while the script still prints the YAML file, the new gate passes and `07-10` stages. Invariant 3 is then false in the process that writes, and criterion 8 can still pass because staging was an extra `cp` — `import.move` would consume the inbox copy, not the original folder.
+
+**Refutation:** `07-09` Task 2 names a server-process dump (flask config endpoint or `beet config` inside the running server, not only `check-beets-config.sh`) as the gated values, or `07-08`’s measurement is an explicit precondition that server and script booleans are equal before PASS is allowed.
+
+**Fix:** Gate the running server’s effective `import.copy/move/write` after `compose up`. If that cannot be read, STOP with `COULD NOT LOOK`. Do not treat `check-beets-config.sh` as that reading unless `07-08` recorded them equal.
+
+### R2-PI-02 — MEDIUM — `07-11` Task 3 `<verify>`
+
+**Quote:** `test "$(/usr/bin/grep -cE 'zfs [d]estroy' "$A")" -le 1 && { ! /usr/bin/grep -qE 'D-17 TRIGGER: FIRED' "$A" \|\| { … } }`
+
+**Failure:** On `D-17 TRIGGER: NOT FIRED` the destroy count is still allowed to be 1. The action says “If NOT FIRED: issue nothing”. A transcript that destroys `tank/media/Music@pre-06-41-conf04-reprobe` and then writes NOT FIRED passes this verify. That is the irreversible branch, and the check added for G-01 does not bind the verb to `FIRED`.
+
+**Refutation:** The verify contains a conjunction that the unbracketed destroy count is 0 unless `D-17 TRIGGER: FIRED` is present, and exactly 1 when it is.
+
+**Fix:** `{ ! /usr/bin/grep -qE 'zfs [d]estroy' "$A" \|\| /usr/bin/grep -qE 'D-17 TRIGGER: FIRED' "$A"; }` and, on FIRED, count `-eq 1`.
+
+### R2-PI-03 — MEDIUM — `07-09` Task 2 success path vs its verify
+
+**Quote (verify):** `test -s "$L" && /usr/bin/grep -qF 'STOP STATE' "$L" && …`
+
+**Quote (proceed step 5):** “Create `artifacts/07-pilot-ledger.txt` with a header (purpose: the D-18 written STOP state every import plan appends to; a later session reads this instead of re-deriving) and a first entry: fence taken (both names, creation times), grant deployed (commit), qhc run result, "albums landed: none".”
+
+**Failure:** The hold branch writes `## STOP STATE`. The proceed branch never writes the literal `STOP STATE` (the header says “STOP state”). A correct grant therefore fails its own verify. That is the G-10 pressure on the first write: invent a `STOP STATE` line to go green. A invented “albums landed: none” token is what `07-11` Task 1 reconciles against.
+
+**Refutation:** Step 5 of the proceed branch includes the exact characters `STOP STATE`, or the verify requires that string only on the hold / PARTIAL-FENCE / IMPORT-KEYS-FAIL / INBOX-NOT-EMPTY arms.
+
+**Fix:** On success write a named token such as `STATE 07-09-GRANTED: fence listed, grant deployed, albums landed: none`, and grep that. Do not overload `STOP STATE`.
+
+### R2-PI-04 — MEDIUM — `07-11` Task 3 restore, FM-4
+
+**Quote:** “on atlantis as real root, copy `/mnt/fast/appdata/arrs/.zfs/snapshot/pre-07-pilot/beets/config/state.pickle` over `/mnt/fast/appdata/arrs/beets/config/state.pickle` … Record sha256 after each (must equal the fence safety copy's).”
+
+**Failure:** The equality check that is supposed to guard the overwrite runs after the overwrite. If the snapshot view and `/mnt/fast/safety/phase07/fence/state.pickle` diverge, live `state.pickle` (and, on the DB branch, `library.db`) is already replaced, then the plan STOPs. There is no “copy back the safety copy” step. Container is stopped, so this does not touch Sonarr, but the beets state the next re-run will open is no longer the pre-copy live file.
+
+**Refutation:** The plan hashes the `.zfs/snapshot` path against the safety copy and STOPs before either `cp`.
+
+**Fix:** Compare first. Copy only if equal. If unequal, do not touch the live files; write `STOP STATE 07-11-T3-RESTORE-FAIL`.
+
+### R2-PI-05 — LOW — `07-15` Task 3 verify, FM-5 (replan regression)
+
+**Quote:** `/usr/bin/grep -qE 'E6 SECOND MEASUREMENT: (NOT TAKEN\|MA returns [0-9]+ of [0-9]+)'`
+
+**Failure:** The pre-replan pattern required `of 4`. The replacement accepts `MA returns 3 of 3`, which the action forbids (“if N < 4, write `E6 SECOND MEASUREMENT: NOT TAKEN`”). A 3-artist row can be recorded as taken and the verify still passes. That re-opens the “never satisfied by a 3-artist row” rule G-11’s prose kept.
+
+**Refutation:** The regex requires the second integer to be `([4-9]\|[1-9][0-9]+)`, or the verify rejects a taken line whose N is less than 4.
+
+**Fix:** Keep `NOT TAKEN` as the only legal line when N < 4, and make the taken alternative `MA returns [0-9]+ of ([4-9]|[1-9][0-9]+)`.
+
+### R2-PI-06 — MEDIUM — `07-10` Task 1 preconditions, FM-2
+
+**Quote:** “Preconditions (recorded, RC read): both pre-07-pilot snapshots present (exact whole-line), beets-flask `/media` RW=true, watchdog lists two inboxes, `_inbox/02-review` holds no audio, `library.db` items 0.”
+
+**Failure:** `07-09` can leave `STOP STATE 07-09-IMPORT-KEYS-FAIL` (“grant deployed but writer stopped”) or a watchdog-absent STOP that has no token at all (“If the watchdog line is absent or lists fewer than two: STOP — the fence holds; do not revert by hand; record; the operator decides”). `07-10` never reads those tokens and never re-checks `import.move`. `restart: unless-stopped` will not start an explicitly stopped container, but an operator start, or a watchdog miss that still left the container up, walks into staging with the G-05 gate behind them.
+
+**Refutation:** `07-10` Task 1 STOPs unless the ledger’s newest `07-09` token is the granted token and a fresh parsed server-side `move=false` reading is on record.
+
+**Fix:** Add that precondition. Name a ledger token for the watchdog-absent STOP and give it a resume (fix config, re-read keys, start writer) or an explicit hold.
+
+### R2-PI-07 — LOW — `07-13` Task 3 / `07-04` `--apply`, FM-3
+
+**Quote (`07-04`):** “`--apply` — in order, stopping at the first non-zero RC”. **Quote (`07-13`):** “then `… --album-id N --apply`; record the full transcript, every RC”.
+
+**Failure:** `modify` can commit `albumtype=dj` into the files and then `move` can fail. The album sits in the artist tree with DJ tags. No `STOP STATE 07-13-ROUTE-PARTIAL` token, no “do not Jellyfin-scan, do not MA-sync, resume at `move`” exit. `07-15` treats ledger `LANDED` as final paths. A half-routed album can be scanned at its transient path.
+
+**Refutation:** `07-13` Task 3 writes a named STOP token when any `--apply` RC is non-zero, issues no Jellyfin POST for that album, and `07-15` skips P-IDs in that token.
+
+**Fix:** One token, e.g. `07-13-ROUTE-PARTIAL: <album_id> modified, not moved`. Resume is re-run `move` only, or `UNDO IMPORT`, not a second `modify`.
+
+### 4. What was checked and held (no finding)
+
+- **Fence before grant, action order.** `07-09` Task 2 steps are push/pull, then one remote snapshot program, then sha256 of the safety copies, then `docker compose up`. Grant is not inside the snapshot program; listing-back is specified before step 3. Held as matching invariant 1’s “listed back before rw”, not as one atomic two-pool snapshot (C11 is stated).
+- **`zfs rollback` of `fast/appdata/arrs`.** `07-09` call site and `07-11` restore comment both say `zfs [r]ollback of fast/appdata/arrs is FORBIDDEN`; recovery is a literal-path `cp`. `07-16` never offers `@pre-phase5` or `@pre-07-pilot` (`! /usr/bin/grep -qE '^ISSUED: zfs [d]estroy [^ ]*@pre-phase5'`).
+- **Producer/consumer ledger strings that match.** `07-11` writes `P01 LANDED (re-run) — EQUALITY VERDICT: PASS` and `P01 LANDED (re-run-other <release id>) — NEW-IMPORT VERIFIED: PASS`. `07-12` Task 1 quotes those two shapes. `07-16` quotes `07-11`’s `D-17 TRIGGER:` line, which Task 3 always writes, including on hold.
+- **Execution order seam.** `07-06` `### EXECUTION ORDER` is P02–P06, P09–P12, then P07–P08. `07-12` and `07-13` repeat that order and assert `albums.added`. No remaining “import in P-ID order” instruction in those tasks.
+- **Copy-not-move staging.** `07-10`/`07-12`/`07-13` stage with `cp -R` (reflink or plain), then beets `import.copy`. Source manifest is re-checked against `07-07`. Criterion 8 does not depend on the inbox copy surviving.
+- **Tag evidence.** Criterion 3 in `07-10` Task 3 is `ffprobe` versus read-only sqlite, plus an EPERM log count. `beet ls` is not the evidence. `07-04`’s only `ls` is inside the route script’s read-only mode.
+- **Jellyfin scope.** `07-10`, `07-12`, `07-13`, `07-14` name one `POST /Library/Media/Updated` at file scope. `07-15` Task 1: “No write verb against Jellyfin in this task”. Verifies use `Full[R]efresh`. MA sync is a single gated command in `07-15` Task 3, after the ledger is supposed to show imports, undo, DJ route, and E5 done.
+- **D-17 handoff when NOT FIRED.** `07-11` says the snapshot is “HELD for plan 07-16's operator gate”. `07-16` Task 1 adds heading `HELD BY D-17 (NOT FIRED)` and still requires D-19 eligibility plus the operator answer. Not destroyed on `07-16`’s own judgement.
+- **Partial-fence resume does not destroy.** `resume-partial-fence` asserts tank present, fast absent, `written` 0, snapshots only the missing fast name. No `zfs destroy` in that program.
+- **P-01 token shape.** `07-10` verify anchors `^MA PERIODIC SYNC:` so a body mention of “NONE SEEN” without that prefix does not select the continue branch. FOUND/COULD NOT LOOK requires the ledger STOP before Task 2’s verify can pass without staging evidence.
+- **G-14 header filter** does not match a content line that merely contains `+++`, because of the `(a/|b/|/dev/null)` anchor. Held, not re-opened.
+- **Credentials.** `07-07`/`07-14`/`07-15` keep `jf_api` / `$ENV` in jq. `07-14` verify rejects `(password|Token=|api_key)[=:]`. `07-10` says the HA key path is not echoed. No plan puts a secret in the artifact grep set.
+- **`grant-both`.** Not re-litigated. `07-09` still offers it as an override; flask-only remains the default in `07-08`.
+- **Invariant 6 ordering vs `07-13` window.** No MA sync command appears in `07-10`–`07-14`. The transient artist-tree window is closed by “Issue NO Jellyfin POST before the move completes” in `07-13` Task 3 (the failed-`move` exit is R2-PI-07; the prohibition itself is present).
+
+### 5. Suggestions
+
+- `07-03` `<verification>` still says “`--self-test` 8/8”. The task pin is 10. Align the summary so a later editor does not “fix” the pin back.
+- `07-01` evidence-map row 1 still defines the state witness as “decoded `taghistory` no longer holding the staged source path”. `07-11` now uses `P01 STATE KEY(S)` set-difference. The map forbids editing the instrument column; add a one-line finding in `deferred-items.md` when `07-11` executes so `/gsd-verify` does not score the old key.
+- `07-15` “every album the ledger lists as LANDED” will see both `07-10`’s `P01 LANDED` and `07-11`’s `P01 LANDED (re-run)`. Say “latest line per P-ID”.
+- `07-09` success verify should require a `sha256` line for `.zfs/snapshot/pre-07-pilot/beets/config/library.db` if G-04 is to stay closed under a later edit that drops the STOP sentence.
+
+---
+
+## Round 2 Review: pi → ollama-cloud / kimi-k3
+
+### Cross-AI Plan Review — Phase 7, ROUND 2
+
+Initials used for finding IDs: **CL**.
+
+### 1. Summary
+
+**Overall risk: MEDIUM** — down from round 1's pre-fix state, and consistent with round 1's own grading ("MEDIUM once G-01/G-02 are fixed"). The two round-1 HIGHs (G-01, G-02) are genuinely closed: 07-11's D-17 trigger is now a four-condition conjunct — paired `UNDO IMPORT`-alone witnesses on tree/DB/state, a `rerun` answer, and `EQUALITY VERDICT: PASS` written before the destroy — and the verify mechanically enforces both halves (FIRED ⇒ no `^DISPOSITION: restore` + three `COVERED yes (` lines + anchored PASS; restore disposition ⇒ NOT FIRED). Every PLAUSIBLE item is closed with a mechanical hook. However, the replan's new 07-09 recovery machinery created two new seams of exactly the G-06 class it was fixing: the Task-2 verify's STOP-token disjunct reads the ledger *non-chronologically*, so the historic `07-09-PARTIAL-FENCE` token satisfies it on a *successful* `resume-partial-fence` run, letting the phase's most consequential step (the grant) pass verify without its happy-path evidence (R2-CL-01, MEDIUM); and the two *new* STOP tokens (`07-09-IMPORT-KEYS-FAIL`, `07-09-INBOX-NOT-EMPTY`) record their state but have no resume branch — Task 1's only re-entry is keyed on `07-09-PARTIAL-FENCE` — so a stopped-writer state cannot be re-entered in-plan (FM-3, R2-CL-02, MEDIUM, the symmetrical re-occurrence of G-06). Two LOWs (a stale `8/8` self-test count in 07-03's footer, and a missing held-album arm in 07-13's ADDED ORDER). G-13 is graded **PARTIAL** — the only fold whose enforcement rests on acceptance criteria alone. Nothing HIGH round 1 missed was found.
+
+### 2. Fold verification
+
+| ID | Verdict | Evidence (plan:task + quote) | Note |
+|----|---------|------------------------------|------|
+| G-01 | **CLOSED** | 07-11 must_haves: "TREE, DB and STATE COVERED `yes` by `UNDO IMPORT` ALONE (paired witnesses, no file restore used)… Any other outcome — including the operator-chosen file-restore branch and `undo-rerun-other` — writes `D-17 TRIGGER: NOT FIRED`"; Task 3: "(iii) the Task 2 answer was `rerun` (no file restore on any branch)"; verify: `{ ! /usr/bin/grep -qE '^DISPOSITION: restore' "$A" || /usr/bin/grep -qE 'D-17 TRIGGER: NOT FIRED' "$A"; }` plus FIRED conjunct requiring `^EQUALITY VERDICT: PASS` and three `COVERED yes \(`. | `undo-rerun-other` is excluded mechanically too: that branch writes `NEW-IMPORT VERIFIED`, never `^EQUALITY VERDICT: PASS`, so the FIRED conjunct cannot pass. |
+| G-02 | **CLOSED** | 07-11 Task 1: "`PAIRED WITNESS: VACUOUS — <part>`" filed as `DEF-07-11-02`, "it is never described as moot"; Task 2: "a part is `yes` ONLY when its Task 1 reading was PRESENT and its post-undo reading is ABSENT on the same key"; the state key is now measured, not assumed: "the set difference post-import minus fence, per top-level key — are the `P01 STATE KEY(S)`… The staged path is only the expectation; the set difference is the measurement." Task 3: "evaluated only AFTER the verdict line above is written" and FIRED requires "(iv) `EQUALITY VERDICT: PASS`". | Verify gates: Task-1 requires `P01 STATE KEY(S)`; Task-2 requires `STATE COVERED (yes\|no\|VACUOUS) \(`; Task-3 FIRED requires the three `yes (` forms + anchored PASS. The "never moot" wording itself is acceptance-level, but a VACUOUS outcome mechanically blocks FIRED. |
+| G-03 | **CLOSED** | 07-03 must_haves: "the guard is per class, so an all-singletons library (classes 2 and 3 empty) is UNKNOWN, not clean (G-03)" and "class 1 is enumerated from the FILESYSTEM as well as the DB… an orphaned `Title.1.flac` with no item row beside `Title.flac` is a finding"; structure: "Vacuity, PER CLASS (G-03): … `checkable rows per class:` line… ANY class whose checkable count is 0 → UNKNOWN naming that class". | Verify runs the now-`ST_PLANNED_CASES=10` self-test and greps both new labels; the 10th behaviour case is the all-singletons exit-3, the 11th (uncounted, python3-gated) dumper check proves the orphan enumeration. But see R2-CL-03 for the stale footer. |
+| G-04 | **CLOSED** | 07-11 Task 3 restore branch: "(1) stop the writer… then assert `docker inspect -f '{{.State.Running}}' beets-flask` reads `false` — STOP if it does not; …(3) `docker compose … start`; readiness exactly as 07-09 … AND a NEW watchdog line listing exactly `02-review` and `03-asis`). (4) Re-decode after restart: a fresh copy of the live `state.pickle` shows every `P01 STATE KEY(S)` entry ABSENT (the gate)"; 07-09 Task 2 step 2: "assert the snapshot's own view holds the SAME bytes (G-04): `sha256sum …/.zfs/snapshot/pre-07-pilot/beets/config/library.db … state.pickle` — each must EQUAL the corresponding safety copy's sha256 … a mismatch or an unreadable `.zfs/snapshot` path is a STOP". | Both halves are STOP-gated (the rubric's "STOP condition"), not merely recorded. The post-restart sha difference is correctly recorded-not-stopped, with the byte-equality gate kept at step 2 pre-restart. |
+| G-05 | **CLOSED** | 07-09 Task 2 step 3: "it is a GATE (G-05), not a record: parse each effective value (the YAML boolean read from the effective config, not a substring of the output) and require `copy` = true, `move` = false, `write` = true; write `POST-GRANT IMPORT KEYS: PASS (copy=true move=false write=true)` or `POST-GRANT IMPORT KEYS: FAIL — <key>=<value>`. On FAIL, and on any reading that could not be taken: STOP; stop the beets-flask service… Then RE-COUNT inbox emptiness now, after `compose up` (G-05)". | Verify's happy set now requires `grep -qF 'POST-GRANT IMPORT KEYS: PASS'`; FAIL path requires the ledger token `STOP STATE 07-09-IMPORT-KEYS-FAIL`. Enforced. |
+| G-06 | **CLOSED** (with new adjacent seams → R2-CL-01/02) | 07-09: ledger `STOP STATE 07-09-PARTIAL-FENCE`; Task 1: "`PARTIAL FENCE RECONCILIATION: CONSISTENT` only when all four agree"; option `resume-partial-fence` "offered only after a CONSISTENT partial-fence reconciliation"; resume program "takes ONLY `zfs snapshot fast/appdata/arrs@pre-07-pilot`" after re-reading `written` (must be 0); "⛔ The `tank` snapshot is NOT destroyed". | The fold itself is complete. Two defects in the *new* machinery are reported below, not here. |
+| G-07 | **CLOSED** | 07-15 Task 1: "`AUNIQUE INVENTORY (rebuilt after 07-13)` (G-07): from the library as it stands now… across ALL landed albums including the DJ pair under `DJ/` and any E5 change… Task 3's D-28 readings and `AUNIQUE_ROWS` are built from THIS inventory only"; Task-3 read_first: "the only inventory D-28 and `AUNIQUE_ROWS` are built from; the 07-12 list is superseded (G-07)". | Verify greps the heading 'AUNIQUE INVENTORY (rebuilt after 07-13)' and `AUNIQUE_ROWS` in CONVENTIONS.md. |
+| G-08 | **CLOSED** | 07-12 Task 1: "the ledger's P01 line reads `P01 LANDED (re-run) — EQUALITY VERDICT: PASS` or `P01 LANDED (re-run-other <id>) — NEW-IMPORT VERIFIED: PASS` (G-08 — quote it; `LANDED` without a PASS verdict, a FAIL verdict, or a newer `STOP STATE 07-11-…` token is a STOP… write `STOP STATE 07-12-PRECONDITION: <what the ledger said>`)"; 07-11 ledger lines now carry the verdict. | Verify: `'EQUALITY VERDICT\|NEW-IMPORT VERIFIED'` in the artifact AND (ledger STOP token XOR full staging evidence). |
+| G-09 | **CLOSED** (token strings acceptance-level) | 07-11 Task 1: "**RESUME RECONCILIATION (always first, G-09; reads only)…** `RESUME RECONCILIATION: CONSISTENT (<token>)` … or `INCONSISTENT — <reading> vs <token>` and STOP… ledger gains `STOP STATE 07-11-RECONCILE-FAIL`"; Task 3: "never overwrite one with the other"; acceptance criteria name `07-11-T1-HOLD` / `07-11-T2-HOLD` verbatim. | The mechanism (reconciliation line + INCONSISTENT stop) is verify-gated (`grep -qE 'RESUME RECONCILIATION: (CONSISTENT\|INCONSISTENT)'`); the exact per-stop token texts are specified in acceptance criteria but not grep'd. The finding's core — no resume reconciliation — is mechanically closed. |
+| G-10 | **CLOSED** | 07-12 Task 2: "write one normalised line per in-scope P-ID, `DISPOSITION PNN: imported\|imported-other\|hold`… or the single line `DISPOSITION: hold-all` (G-10 — the verify reads these, never the free-text answer)"; 07-13: "`DISPOSITION PNN: imported-asis\|imported\|imported-no-route\|hold`… (G-10 — the verifies read these, never the free-text answer, so a verbatim answer carrying its UTC time cannot fail its own check)"; 07-14/07-15 `DISPOSITION:` lines; verifies rewritten to `^DISPOSITION…` and `… -eq 0 \|\| …` hold-tolerant forms. | Checked each regex against its written forms: 07-12 Task-3's `^DISPOSITION P[0-9]{2}: imported` prefix-matches `imported-other` (intended — those land and get `PNN LANDED`); all-hold passes with count 0. |
+| G-11 | **CLOSED** | 07-15: "`E6 SECOND MEASUREMENT: MA returns K of N` with the names (N as measured: 4, 5, …)"; "Add the F1 track as a new `ARTIST_PROOF_ROWS` row (target N — the measured post-import tag count, not a literal 4…)"; verify regex `E6 SECOND MEASUREMENT: (NOT TAKEN\|MA returns [0-9]+ of [0-9]+)`. | Hypothesis logic also fixed: "any other K is recorded as neither, with the missing names". |
+| G-12 | **CLOSED** (07-13 arm gap → R2-CL-04) | 07-06: "P-IDs are IDENTIFIERS; the ONE EXECUTION ORDER (G-12) is… Write this order verbatim under a `### EXECUTION ORDER` heading"; 07-12 Task 3: "**Import order, asserted after the fact (G-12):** read-only sqlite `SELECT id, albumartist, album, added FROM albums`… `ADDED ORDER: PASS/FAIL`… `ADDED ORDER (P02<P04): NOT APPLICABLE — <which held>`"; 07-13 has the parallel block. | Verify greps `### EXECUTION ORDER` and `^ADDED ORDER`. The old contradiction sentence ("Plans 07-12 and 07-13 import in this order") is gone; acceptance forbids "in P-ID order". |
+| G-13 | **PARTIAL** | 07-17 Task 2 (3) mandates the exact sentence: "…measured `<N>` folders / `<M>` audio files on `<date>` (`07-SAMPLE.md`) — a different population from the 144 backlog denominator, not comparable with it", "Leave the dated 144 sentence byte-unchanged", "or omit it if it cannot be stated with its definition". Acceptance: 'the words "not comparable" beside it, and the 144 sentence is unchanged'. | Nothing in Task 2's `<verify><automated>` greps `not comparable`, the omission alternative, or the 144 line's immutability; enforcement rests on the acceptance criteria and "diff body read". The rubric says prose-without-mechanical-enforcement = PARTIAL. The mandated-wait wording is maximally specific, so the residue is small. Suggested fix: add a grep for `not comparable` XOR an explicit `OMITTED` line. |
+| G-14 | **CLOSED** | 07-01 Task-2 verify: `git diff HEAD~1 -- "$R" \| /usr/bin/grep -vE '^(\+\+\+---) (a/\|b/\|/dev/null)' \| /usr/bin/grep -cE '^-'` -eq 1 **and** `'^\+'` -eq 1 (both directions, headers excluded); 07-11 Task-3 verify applies the same filter with `-ge 1`/`-eq 0` for deferred-items.md. | Filter checked for over-exclusion: it requires ` a/`, ` b/` or ` /dev/null` after the marker, so a removed content line beginning `--` is not lost. |
+| G-15 | **CLOSED** | 07-01: `'zfs [r]ollback\|zfs [d]estroy\|Full[R]efresh'`; 07-10/12/13/14: `'Full[R]efresh\|zfs [r]ollback'`; 07-15 Task 1/3: `grep -cE 'Full[R]efresh'`. All verify needles now bracketed, so artifact prose quoting the ban cannot self-match. | Spot-checked each edited verify; the §8.2 `-cE`-only rule holds everywhere (no `-cF` on a bracketed needle introduced). |
+| P-01 | **CLOSED** | 07-10 Task 1: "**MA PERIODIC-SYNC GATE (P-01) — before any staging, reads only**… write exactly one of: `MA PERIODIC SYNC: NONE SEEN over <first ts> … <last ts> (<n> lines, window 24 h covered)` / `FOUND — …` / `COULD NOT LOOK — <reason>`… **FOUND or COULD NOT LOOK is a STOP** … ledger gets `STOP STATE 07-10-MA-PERIODIC-SYNC`… The plan does not invent a barrier"; 07-15 Task 2 re-reads: "`MA SYNC SINCE 07-10: NONE SEEN \| FOUND — <lines> \| COULD NOT LOOK`". | Verify: three-form grep in the artifact; non-NONE-SEEN requires the ledger token; Task-2 `DISPOSITION: hold` forced after a STOP ("After a Task 1 MA-sync STOP only `hold` is accepted"). The 24 h window is fail-closed by design (a short log = COULD NOT LOOK, never NONE SEEN). |
+| P-02 | **CLOSED** | 07-15 Task 3: "for every landed album read MA by IDENTITY, not by title (P-02): … the album's MA identity is the set of MA albums whose track paths lie under that album's FINAL directory… A duplicate finding is two MA albums (or tracks) whose mapped paths are the SAME files — never merely two title hits."; "`TWIN REPRESENTATION (P02/P04): <two albums \| one album with two provider mappings per track \| other: …>`, measured, with no verdict attached." | Verify greps `TWIN REPRESENTATION (P02/P04)`; acceptance: "two title hits not reported as a duplicate". |
+| P-03 | **CLOSED** | 07-07: "**Coverage assertion (P-03), before any classification:** read `.TotalRecordCount` and `(.Items \| length)`… if `TotalRecordCount` is absent or the two differ → `jellyfin_fail`… and no pin comparison is made"; "The baseline is pinned ONLY from a run whose coverage assertion held". | Verify greps `TotalRecordCount` in `check-music-consumers.sh`. |
+| P-04 | **CLOSED** | 07-11 Task 2: "If DB COVERED is `no` (P-04): write `DEF-07-11-03`… and present `restore-db-state-then-rerun` — valid ONLY while P01 is the sole album imported since the fence (assert from the ledger that no other album landed, and that the fence safety copy of `library.db` reads 0 items read-only)"; option added; Task 3 handles the second literal `cp`. | Offering is precondition-gated; D-17 NOT FIRED on that branch, verify-enforced via `^DISPOSITION: restore`. |
+| P-05 | **CLOSED** | 07-07: "in the SAME commit, add one bullet to CONVENTIONS §5's live-pins list… `D24_CENSUS_BASELINE_N` / `D24_CENSUS_BASELINE_SHA`"; verify greps `'D24_CENSUS_BASELINE_N' CONVENTIONS.md`. 07-15: "in the SAME commit that adds section 4d, add `AUNIQUE_ROWS`… to CONVENTIONS §5's 'live pins, by symbol' list"; verify greps `'AUNIQUE_ROWS' CONVENTIONS.md`. | Both pins registered at birth and at move. |
+| P-06 | **CLOSED** | 07-16: "record RC on ONE line of the exact form `ISSUED: zfs destroy <dataset>@<name> RC=<n>` (the only place the unbracketed verb may appear in the artifact — P-06). Any refusal… is written `REFUSED: zfs [d]estroy <name> — <reason>`, bracketed"; verify: `grep -E 'zfs [d]estroy' "$A" \| grep -cvE '^ISSUED: zfs [d]estroy [^ ]+@[^ ]+ RC=[0-9]+$'` -eq 0, with the `@pre-phase5`/`@pre-07-pilot`/flag negatives all anchored to `^ISSUED:`. | A bracketed refusal can no longer trip an unbracketed-verb negative, and a refusal of `@pre-phase5` cannot read as an issued destroy of it. Control-discipline (scratch-file controls) added per §8. |
+| P-07 | **CLOSED** | 07-13 front-matter: `depends_on: ["07-12", "07-04", "07-06", "07-07"]`; 07-14: `depends_on: ["07-13", "07-06", "07-07"]`; 07-07 moved to `wave: 3` with `"07-03"` added. | Re-checked the whole wave/dependency lattice after the moves: no cycles, no wave inversion (07-13 wave 9 now depends on waves 1/3 — monotone). |
+
+### 3. New findings
+
+### R2-CL-01 — MEDIUM — 07-09 Task 2 verify: the stale `PARTIAL-FENCE` token satisfies the STOP disjunct on a *successful* `resume-partial-fence` run (FM-2/FM-5)
+
+**Literal quotes:**
+- 07-09 Task 2 `<verify><automated>`:  
+  `{ /usr/bin/grep -qiE 'OPERATOR ANSWER.*(hold|review-first)' "$A" || /usr/bin/grep -qE 'STOP STATE 07-09-(PARTIAL-FENCE|IMPORT-KEYS-FAIL|INBOX-NOT-EMPTY)' "$L" || { /usr/bin/grep -qF 'listed back' "$A" && /usr/bin/grep -qF 'fast/appdata/arrs@pre-07-pilot' "$A" && /usr/bin/grep -qE 'RW=true' "$A" && /usr/bin/grep -qF 'Registering watchdog' "$A" && /usr/bin/grep -qF 'POST-GRANT IMPORT KEYS: PASS' "$A"; }; }`
+- The partial-fence ledger write: "writes the ledger `STOP STATE 07-09-PARTIAL-FENCE: tank snapshot held, fast snapshot missing, no grant, no album landed`". Nothing anywhere in 07-09 (or any later plan) instructs removing, superseding, or expiring that line — the ledger is append-only ("a later session reads it rather than re-deriving it"; 07-12: "a current `## STOP STATE` block … appends").
+
+**Failure scenario:** First run at 07-09 ends in a partial fence → ledger permanently contains `STOP STATE 07-09-PARTIAL-FENCE`. Operator re-enters, reconciliation reads CONSISTENT, answers `resume-partial-fence`; the resumed run completes the fence and deploys the grant. At verify: the answer matches neither `hold` nor `review-first` → first disjunct fails; the second disjunct greps the *whole ledger* and matches the **historic** PARTIAL-FENCE token → verify exits 0 **without checking anything about the resumed run** — no `listed back` assertion, no `RW=true`, no watchdog line, and, critically, no `POST-GRANT IMPORT KEYS: PASS` (the G-05 fold). So precisely on the recovery path — where G-05's gate was added because the grant's post-conditions matter most — a resume that botched or skipped its evidence-writing (e.g. the parsed-value gate could not be taken and the executor neither STOPped nor wrote the FAIL token) self-certifies green. The regex cannot distinguish "the run stopped at a partial fence" from "the ledger once contained a partial fence" — verify-side fail-open on the phase's highest-consequence plan.
+
+**Refutation condition:** Plan text, anywhere, that (a) requires the `07-09-PARTIAL-FENCE` line to be deleted/rewritten when the resume succeeds, or (b) scopes the verify's STOP-token disjunct to the *newest* ledger token, or (c) adds a `DISPOSITION:`-keyed verify for the resume answer requiring the happy set. I found none; 09's verify and acceptance criteria are as quoted.
+
+**Suggested fix:** Adopt the G-10 pattern at this gate: Task 1 writes a normalised `DISPOSITION: hold|review-first|proceed|grant-both|resume-partial-fence` line; Task 2's verify becomes answer-keyed — `hold|review-first` → pass, `proceed|grant-both` → happy set, `resume-partial-fence` → happy set **plus** `PARTIAL FENCE RECONCILIATION: CONSISTENT`; the STOP-token disjunct is retained only when `DISPOSITION` is absent or a stop-token line newer than the answer exists (stated as: the artifact's Task-2 section itself must record the STOP it took, and the verify reads that, not the ledger's history).
+
+### R2-CL-02 — MEDIUM — 07-09: the two new STOP tokens have recorded state but no resume branch; Task-1 re-entry only knows `PARTIAL-FENCE` (FM-3)
+
+**Literal quotes:**
+- Task 1: "**Re-entry after a partial fence (G-06):** if the ledger's newest token is `07-09-PARTIAL-FENCE`, the expected reading is instead: `tank/media/Music@pre-07-pilot` PRESENT, `fast/appdata/arrs@pre-07-pilot` ABSENT; … Any other combination of present/absent names is COULD NOT RECONCILE and a stop". Measurement (d)'s normal expectation asserts both names "**ABSENT** (exact whole-line count 0)".
+- The two new stops: "STOP; stop the beets-flask service… ledger `STOP STATE 07-09-IMPORT-KEYS-FAIL: fence held, grant deployed but writer stopped, no album landed`; the operator decides" and "…ledger `STOP STATE 07-09-INBOX-NOT-EMPTY`".
+
+**Failure scenario:** After either STOP, the fence exists and is complete. Re-running 07-09 (the natural act after fixing the cause — correct the effective config and restart the writer, or empty the stray inbox audio) re-enters Task 1, whose only reconciliation branch fires on the `07-09-PARTIAL-FENCE` token. With the newest token `07-09-IMPORT-KEYS-FAIL`/`07-09-INBOX-NOT-EMPTY`, measurement (d)'s absent-assertions fail (both snapshots present), matching no expected combination → "COULD NOT RECONCILE and a stop". Every in-plan route is closed, yet the operator is told only "the operator decides". Any improvised recovery (e.g. `docker compose start` plus hand re-verification) is then unscripted at the exact point where the gate's own design says improvisation is the hazard. This is G-06 recurring one branch later — same shape ("fails closed but breaks D-18 resumability"), introduced *by* the G-05/G-06 fix. Graded MED for consistency with G-06's grading, though noting both states are genuinely safe (fence held, writer stopped, nothing landed, `docker compose start` is reversible): the cost is an unscripted recovery, not data risk.
+
+**Refutation condition:** A resume/re-entry branch (or an explicit "recover out of band as follows" procedure) in the plan text for `07-09-IMPORT-KEYS-FAIL` or `07-09-INBOX-NOT-EMPTY`. The only re-entry text is the `07-09-PARTIAL-FENCE` branch quoted above.
+
+**Suggested fix:** Extend Task 1's reconciliation with a second recognised state — newest token ∈ {`07-09-IMPORT-KEYS-FAIL`, `07-09-INBOX-NOT-EMPTY`} ⇒ expected readings: both snapshots present, writer stopped (`State.Running` false), no albums landed — and add a `resume-post-grant-fix` option whose Task-2 steps are only: fix cause (operator act, recorded), `docker compose … start`, re-run the readiness gate and the POST-GRANT IMPORT KEYS gate plus inbox re-count, then continue. On any other reading, hold.
+
+### R2-CL-03 — LOW — 07-03: `<verification>` footer still says `8/8` after the self-test grew to 10 (FM-2, one side of the seam)
+
+**Literal quote (07-03 `<verification>`):** "- `--self-test` 8/8 locally and on LXC 100." — while Task 1's name reads "…a 10-case `--self-test`", the constant is `ST_PLANNED_CASES=10`, and the acceptance criteria say "10 of 10". The replan updated the title, the constant, the verify grep and the acceptance criteria but not the footer.
+
+**Failure scenario:** Cosmetic to confusing: an executor or reviewer scoring the plan against its own verification block aims at the wrong number; in a repo where the announced-vs-actual `ST_PLANNED_CASES` discipline is a named convention (§5), the plan's own text contradicting the count laundered-by-omission. No mechanical consumer greps the footer, hence LOW.
+
+**Refutation condition:** The footer actually reading `10/10` (it reads `8/8`, quoted above).
+
+**Suggested fix:** `8/8` → `10/10` (and "at least six red by design" — currently the ten behaviours imply ≥7 red cases — may as well be restated while the line is touched).
+
+### R2-CL-04 — LOW — 07-13: `ADDED ORDER` has no arm for a held DJ album (FM-1)
+
+**Literal quote (07-13 Task 3):** "write `ADDED ORDER: PASS — <order with timestamps>` when every DJ album's `added` is later than every 07-12 album's and P07 precedes P08, or `ADDED ORDER: FAIL — <actual order>`". Contrast 07-12 Task 3, which has the arm: "If P02 or P04 was held, write `ADDED ORDER (P02<P04): NOT APPLICABLE — <which held>` and still assert the rest." 07-13's gate explicitly permits per-album holds (`PNN hold`), so P07-imported/P08-held is a reachable state in which "P07 precedes P08" is unevaluable and no verdict line is specified to write.
+
+**Failure scenario:** The executor improvises a third line form under verify pressure (`^ADDED ORDER` must appear); an improvised `FAIL` mis-files a `DEF-07-13-NN` on a correct partial outcome, or an improvised `PASS` asserts an unchecked premise. Fails closed-ish and self-correcting, hence LOW — but it is literally the G-10 lesson ("a correct hold must not fail its own verify") one plan further along.
+
+**Refutation condition:** A held-album arm in 07-13's ADDED ORDER text. None exists (the NOT APPLICABLE form exists only in 07-12).
+
+**Suggested fix:** Add to 07-13: "If one DJ album was held, write `ADDED ORDER (P07<P08): NOT APPLICABLE — <which held>` and still assert every landed DJ album's `added` is later than every 07-12 album's."
+
+### 4. What was checked and held (no finding)
+
+- **07-11 D-17 FIRED vs verify, all branches enumerated.** FIRED conjunct: `pre-06-41…` + `^EQUALITY VERDICT: PASS` + `TREE/DB/STATE COVERED yes \(` + `! DISPOSITION: restore`. Walked the four non-FIRED branches: restore (`^DISPOSITION: restore` ⇒ NOT FIRED required), rerun-other (no EQUALITY VERDICT line exists on that branch ⇒ FIRED conjunct unreachable), EQUALITY FAIL (no `^EQUALITY VERDICT: PASS`), and either gate's hold (`D-17 TRIGGER: NOT FIRED — <which gate held>` written, deferred-items status line still appended). Held: FIRED is unreachable except through exactly the four ratified conditions; invariant 7's paired-witness-plus-equality requirement is mechanically the trigger.
+- **DISPOSITION producers vs verify consumers, five plans.** 07-10 ({hold,imported,imported-other}), 07-12 (per-P `imported|imported-other|hold` + single `hold-all`), 07-13 (`imported-asis|imported|imported-no-route|hold`), 07-14 (hold|apply|apply-excluding), 07-15 (hold|sync). Each Task-2-style verify greps the normalised line family; each Task-3-style verify uses a zero-`imported`-count or `^DISPOSITION: hold$` gate, so holds pass their own verify; `imported-other` correctly prefix-matches `…: imported` because those albums land and must show `PNN LANDED`. Held.
+- **G-14 filter correctness.** `grep -vE '^(\+\+\+|---) (a/|b/|/dev/null)'` re-derived for false-positive scope: a removed line whose content begins `--` prints as `--- <content>` but is *not* filtered (requires ` a/` etc.); `\No newline` markers start with `\`. Held.
+- **Bracketed-needle recipes.** Every edited verify needle is bracketed (`zfs [r]ollback`, `Full[R]efresh`, etc.) and every counted-token recipe in the new text uses `-cE`/`-cvE`/`-qE` — no `-cF` on a bracketed needle was introduced (§8.2). Held.
+- **07-16 ISSUED/REFUSED vs negatives.** Walked: a refusal of `@pre-phase5` is written `REFUSED: zfs [d]estroy …` and matches neither `^ISSUED:` negatives nor the non-ISSUED count; an issued `@pre-07-pilot` destroy matches `^ISSUED: … [^ ]*@pre-07-pilot` and is rejected. Register greps for `pre-06-41-conf04-reprobe` hold on both FIRED (row records destruction, name present) and NOT FIRED (row quotes 07-11's reason) branches. Held.
+- **NOT-FIRED-held `@pre-06-41-conf04-reprobe` at 07-16.** Eligibility requires `written@pre-06-41` of the newer `@pre-07-pilot` = 0; round 5's three mtime touches dirty dnodes (`written` > 0 per the round-1 REFUTED-table ZFS semantics) ⇒ NOT ELIGIBLE on the first clause, independently of the register-naming clause (`@pre-07-pilot` covers the pilot's writes, not the reprobe). Double refusal; the plan's "not offered, stays held with the failing clause named" is the computed outcome. Held.
+- **Wave/dependency lattice after the moves.** 07-03 (w2) → 07-07 (w3, deps 07-06/07-02/07-03) → 07-04 (w3, dep 07-03) → 07-08 (w4) → 07-09 (w5) → 07-10 → 07-11 → 07-12 (w8) → 07-13 (w9, +07-06/07-07) → 07-14 (w10) → 07-15 (w11) → 07-16 → 07-17. No cycles, no wave/dependency inversion. Held.
+- **Ledger-token producer/consumer sweep.** 07-11 writes exactly `P01 LANDED (re-run) — EQUALITY VERDICT: PASS` / `P01 LANDED (re-run-other <release id>) — NEW-IMPORT VERIFIED: PASS`; 07-12's precondition accepts exactly those two forms and treats any other reading (incl. plain `LANDED`, FAIL, `STOP STATE 07-11-…`) as `STOP STATE 07-12-PRECONDITION`. 07-12's Task-1 verify cross-checks the token-or-evidence. Held (the one chronological-reading exception is R2-CL-01, confined to 07-09's own verify).
+- **07-05 parsed-value assertion.** `yaml.safe_load` maps YAML `no` → Python `False`, compared with `is False`; paths via `os.path.realpath` prefix on `/tmp/p6-p7rule2/`; "A key missing from the parse is a STOP, never a default." Sound; the refuted grok F4 residual is genuinely consumed.
+- **Safety invariants 1–6 and 8–10 re-walked on the new text.** (1) fence-before-grant preserved on `proceed` (step 2 list-back strictly before step 3 `compose up`); on `resume-partial-fence` the literal "same remote step" is relaxed but the compensating controls are present and gated (`written`=0, fixture sha256s, CONSISTENT reconciliation, and the fast snapshot is still taken and listed back *before* the grant in that session's step order) — held, given G-06 mandated a resume and D-18 requires no re-take of the `tank` snapshot. (2) no `zfs rollback` on arrs anywhere; restore is literal-path `cp` with the prohibition comment at the call site. (3) copy-not-move: `import.copy` gated post-grant by parsed value with a STOP that halts the writer. (4) ffprobe, never `beet ls`, unchanged. (5) file-scope POSTs only; `Full[R]efresh` counted 0 with bracketed needles. (6) MA sync once, 07-15 Task 2 gate, with the new `MA SYNC SINCE 07-10` reading. (8) could-not-look distinct from clean: new UNKNOWN arms in 07-03 (per-class), 07-07 (coverage), 07-09 (COULD NOT RECONCILE), 07-10 (COULD NOT LOOK). (9) the two 07-16 gates and the unchanged `autonomous: false` gates untouched; the new destroy discipline is *more* gated, not less. (10) HA key path "never argv-echoed"; `jf_api`/`ma_api` patterns unchanged; the new verify greps add `(password|Token=|api_key)` screening where new credential paths (07-10 HA route) were introduced — actually 07-14 carries it; 07-10's gate text says the key path is never argv-echoed into the artifact (held at prose level; unchanged from round 1's acceptance of that pattern).
+- **07-11 restore-branch ordering (FM-4).** stop → `State.Running` assert (STOP if not) → literal `cp`(s) → start → readiness gate identical to 07-09's (test -r AND new two-inbox watchdog line) → re-decode gate; any failure ⇒ `STOP STATE 07-11-T3-RESTORE-FAIL`, "no second attempt on the executor's own judgement". The copy waits on the quiescence proof. Held.
+- **07-10 MA-gate fail-closedness.** A log that can't cover 24 h ("a retrieved log whose first timestamp is later than the window start") is COULD NOT LOOK ⇒ STOP-and-hold, and the verdict-line/ledger-token cross-check in Task 1's verify is correct in all three outcome directions. Held.
+
+### 5. Suggestions (non-defects)
+
+1. **07-09 Task 2, proceed path:** step 5 creates the ledger with "a header … and a first entry" but never names a `STOP STATE` block, while the task's own verify greps `STOP STATE` in the ledger unconditionally. State explicitly that the first entry writes `## STOP STATE` with "albums landed: none; albums held: none" (07-12/07-13's later tokens imply this convention anyway). Pre-existing, not replan-introduced; one clause fixes it.
+2. **G-05 gate mechanism:** "parse each effective value (the YAML boolean read from the effective config, not a substring of the output)" doesn't say *what is parsed* — name it (e.g. the import-keys block printed by `check-beets-config.sh`, parsed with `yaml.safe_load`, mirroring 07-05's pattern), so two executors don't parse two different serialisations.
+3. **07-10 forced hold:** Task 2's verify doesn't enforce "After a Task 1 MA-sync STOP only `hold` is accepted" — the physical state enforces it (nothing was staged), so it holds; one conjunct (`STOP STATE 07-10-MA-PERIODIC-SYNC` in ledger ⇒ `^DISPOSITION: hold$` in artifact) would make it mechanical.
+4. **G-13 tail (PARTIAL fold):** add to 07-17 Task-2's verify a grep for `not comparable` XOR an explicit `OMITTED — <reason>` line for the draw-population sentence; that converts the one PARTIAL to CLOSED at zero prose cost.
+5. **07-13 `imported-no-route` counting:** the outer verify regex counts `imported-no-route` as `imported` (fine — those albums land), but the per-album verification block ("For each album answered `imported…` (not `-no-route`)") skips them; worth one sentence stating their DJ-field verification is deferred to routing, so the ledger's `(not routed)` line and the filed `DEF-07-13-NN` fully describe the deferred evidence.
+6. **MA log-retention friction (design note):** if the MA add-on's log rotates inside 24 h, the 07-10 gate can never return NONE SEEN and the pilot holds forever. This is the intended fail-closed posture ("shortening the window is not" allowed), but one line in the plan acknowledging that first-run consequence would keep the hold from reading as a malfunction.
+
+---
+
+## Round 2 Review: pi → ollama-cloud / deepseek-v4-pro:0813
+
+
+---
+
+### Cross-AI Plan Review — Phase 7, ROUND 2
+
+### 1. Summary
+
+All 15 CONFIRMED (G-01…G-15) and 7 PLAUSIBLE (P-01…P-07) findings fold cleanly into the current plan text, and every one of the safety-relevant folds is now mechanically enforced by a `<verify>`/`<automated>` recipe, a runtime STOP, or both — not merely asserted in prose. The D-17 trigger is the tightest it has ever been (four conditions, restore branches NOT FIRED by construction), the state witness is genuinely paired (present→absent on the set-difference key), and the cross-plan seams (G-07/G-08/G-09/G-11/G-12) are re-anchored on rebuilt inventories and PASS verdicts rather than stale lists or bare "LANDED" words. The one defect the replan introduced is a false-red in a single verify recipe (07-12 Task 1) that makes a *correct* precondition STOP fail its own check when plan 07-11 ended in a hold — fails closed, no data risk, but it is exactly the "legitimate hold must pass its own verify" class the round-1 roster flagged. **Overall risk: MEDIUM** — one MEDIUM finding, no HIGH, no invariant violated; the set is gated-and-fenced and the remaining defect is in a *verdict* path, not a destructive one.
+
+---
+
+### 2. Fold verification
+
+| ID | Status | Evidence (plan:task + quote) | Note |
+|----|--------|------------------------------|------|
+| G-01 | **CLOSED** | 07-11 T3 (`must_haves`): *"destroyed MECHANICALLY … only when … TREE, DB and STATE COVERED `yes` by `UNDO IMPORT` ALONE (paired witnesses, no file restore used)"*; action: *"The file-restore branches … are NOT FIRED by construction (G-01)"*; verify L317 `! /usr/bin/grep -qE '^DISPOSITION: restore' "$A"` inside the FIRED arm | Mechanical: the FIRED verify requires the three paired `yes` verdicts AND a PASS verdict AND the absence of any `DISPOSITION: restore` line. |
+| G-02 | **CLOSED** | 07-11 T1: *"Pre-undo ABSENT is not moot … `PAIRED WITNESS: VACUOUS — <part>` … fixes this run's D-17 outcome to NOT FIRED"*; T2: *"a part is `yes` ONLY when its Task 1 reading was PRESENT … `VACUOUS` when the Task 1 reading was already absent (never `yes`)"* | The witness key is now the set-difference `P01 STATE KEY(S)` against the fence copy, not the staged path. Enforced by the COVERED-`yes (` regex + `VACUOUS`-never-`yes` text. |
+| G-03 | **MED→CLOSED** | 07-03 T1: per-class `checkable rows per class:`; *"ANY class whose checkable count is 0 → UNKNOWN naming that class"*; filesystem `"orphan": true` enumeration; `ST_PLANNED_CASES=10`; verify L173 `grep -qF 'on-disk, no item row:'` + `'checkable rows per class:'` | Both vacuity arms and the DB-invisible-orphan arm are now fixtures with exit codes. |
+| G-04 | **CLOSED** | 07-11 T3: *"stop the writer … assert `docker inspect … .State.Running` reads `false` — STOP if it does not"* + *"Re-decode after restart"*; 07-09 T2: *"assert the snapshot's own view holds the SAME bytes (G-04): `sha256sum …/.zfs/snapshot/pre-07-pilot/beets/config/…` … equal … to the safety copy"* | Writer-quiescence is a runtime STOP; snapshot view is sha256-equal, not `ls -l`. |
+| G-05 | **CLOSED** | 07-09 T2: *"it is a GATE (G-05), not a record … `POST-GRANT IMPORT KEYS: PASS …` or `… FAIL` … STOP; stop the beets-flask service"* + *"RE-COUNT inbox emptiness now, after `compose up`"*; verify L278 requires `POST-GRANT IMPORT KEYS: PASS` on the success arm, `STOP STATE 07-09-IMPORT-KEYS-FAIL|INBOX-NOT-EMPTY` on the fail arm | Parsed-value gate, mechanical. |
+| G-06 | **CLOSED** | 07-09 T1: `PARTIAL FENCE RECONCILIATION: CONSISTENT|INCONSISTENT`; T2: `STOP STATE 07-09-PARTIAL-FENCE` + `resume-partial-fence` option + step-2 variant *"takes ONLY `zfs snapshot fast/appdata/arrs@pre-07-pilot`"*; verify L278 lists `PARTIAL-FENCE` as an accepted branch | Recovery branch exists and is operator-gated, `tank` snapshot never auto-destroyed. |
+| G-07 | **CLOSED** | 07-15 T1: *"`AUNIQUE INVENTORY (rebuilt after 07-13)` … across ALL landed albums including the DJ pair"*; T3 read_first: *"the only inventory D-28 and `AUNIQUE_ROWS` are built from; the 07-12 list is superseded (G-07)"*; verify L114 requires the heading | Stale-list consumption removed. |
+| G-08 | **CLOSED** | 07-12 T1: *"the ledger must read `P01 LANDED (re-run) — EQUALITY VERDICT: PASS` … the word LANDED alone, a FAIL verdict or any `STOP STATE 07-11-…` token is a STOP"* | PASS verdict is now the gate. (See R2-RW-01 for a defect the *verify* of this fix introduced.) |
+| G-09 | **CLOSED** | 07-11 T1: *"RESUME RECONCILIATION (always first, G-09) … the ledger is never re-derived from memory"*; distinct tokens `07-11-T1-HOLD` / `07-11-T2-HOLD` / `…-TREE-NOT-COVERED` / `…-EQUALITY-FAIL` / `…-RESTORE-FAIL` | Hold collisions resolved; resume re-derives from the ledger. |
+| G-10 | **CLOSED** | 07-12 T2 *"normalised line per in-scope P-ID … or `DISPOSITION: hold-all` (G-10 — the verify reads these, never the free-text answer)"*; 07-13 T2 *"`DISPOSITION PNN: imported-asis|…|hold` … or `DISPOSITION: hold`"*; 07-14/07-15 `DISPOSITION: hold|…` | A correct hold now normalises to a token the verify matches. |
+| G-11 | **CLOSED** | 07-15 T3: *"`MA returns K of N` … (N as measured: 4, 5, …)"*; verify L242 `E6 SECOND MEASUREMENT: (NOT TAKEN|MA returns [0-9]+ of [0-9]+)` | Stratum read as ≥4, not exactly 4. |
+| G-12 | **CLOSED** | 07-06 T1 *"the ONE EXECUTION ORDER (G-12)"* under `### EXECUTION ORDER`; 07-12 T3 *"`ADDED ORDER: PASS|FAIL|NOT APPLICABLE` … from beets' own `albums.added`"*; 07-13 T3 same | Order asserted after the fact, not assumed. |
+| G-13 | **CLOSED** | 07-17 T2: *"the D-06 draw population … is NOT the backlog denominator … a different population from the 144 … not comparable with it … the 144 sentence is unchanged"* | Laundered number prevented. |
+| G-14 | **CLOSED** | 07-01 L234 `git diff HEAD~1 -- "$R" \| grep -vE '^(\+\+\+|---) (a/|b/|/dev/null)' \| grep -cE '^-'` (and `'^\+'`); 07-11 L317 same anchored filter | `---`/`+++` headers excluded before counting. |
+| G-15 | **CLOSED** | 07-10/12/13/14 verify: `grep -cE 'Full[R]efresh|zfs [r]ollback'`; 07-16 `ISSUED: zfs [d]estroy …` vs `REFUSED: zfs [d]estroy …` (bracketed) | Bracketed tokens no longer self-match ban prose. |
+| P-01 | **CLOSED** | 07-10 T1: *"MA PERIODIC-SYNC GATE … `NONE SEEN|FOUND|COULD NOT LOOK` … FOUND or COULD NOT LOOK is a STOP"*; verify L130 requires the line and `STOP STATE 07-10-MA-PERIODIC-SYNC` on the non-NONE-SEEN arm; 07-15 T2 re-reads `MA SYNC SINCE 07-10:` | Detection-before-write + detection-at-end; no barrier invented (agreed). |
+| P-02 | **CLOSED** | 07-15 T3: *"read MA by IDENTITY … through its tracks' provider mappings … a duplicate finding is two MA albums … whose mapped paths are the SAME files — never merely two title hits"*; `TWIN REPRESENTATION (P02/P04):` recorded | Path-identity, twins expected. |
+| P-03 | **CLOSED** | 07-07 T2: *"Coverage assertion … `TotalRecordCount` … and `(.Items | length)` … differ → `jellyfin_fail` … no pin comparison"*; verify L177 `grep -qF 'TotalRecordCount'` | Coverage gated before pin. |
+| P-04 | **CLOSED** | 07-11 T2 option `restore-db-state-then-rerun` *"offered only when DB COVERED is `no` and P01 is the sole album since the fence"*; T3 restores `library.db` too | DB-remedy exists. |
+| P-05 | **CLOSED** | 07-07 T2 *"register the pins (P-05) … CONVENTIONS §5 … in the SAME commit"*; 07-15 T3 also registers `AUNIQUE_ROWS`; verify L177/242 `grep -qF 'D24_CENSUS_BASELINE_N' CONVENTIONS.md` / `'AUNIQUE_ROWS' CONVENTIONS.md` | Both pins land in §5. |
+| P-06 | **CLOSED** | 07-16 T2: *"`ISSUED: zfs destroy <name> RC=<n>` … every other mention … `REFUSED: zfs [d]estroy …` bracketed"*; verify L184 `grep -cvE '^ISSUED: zfs [d]estroy [^ ]+@[^ ]+ RC=[0-9]+$'` | Refusals bracketed, never trip the negative grep. |
+| P-07 | **CLOSED** | 07-13 `depends_on: ["07-12","07-04","07-06","07-07"]`; 07-14 `depends_on: ["07-13","07-06","07-07"]` | Direct producers now named. |
+
+---
+
+### 3. New findings
+
+### R2-RW-01 — MEDIUM — 07-12 Task 1 `<verify>`
+
+**Literal quote** (07-12:102):
+```
+test -s "$A" && /usr/bin/grep -qE 'EQUALITY VERDICT|NEW-IMPORT VERIFIED' "$A" && { /usr/bin/grep -qF 'STOP STATE 07-12-PRECONDITION' .planning/…/07-pilot-ledger.txt || { /usr/bin/grep -qF 'D-13' "$A" && … }; }
+```
+
+**Failure scenario.** The `grep -qE 'EQUALITY VERDICT|NEW-IMPORT VERIFIED' "$A"` is *unconditional* — it sits outside the `{ STOP STATE 07-12-PRECONDITION || … }` branch. 07-12's precondition (action, L79-82) correctly STOPS when the ledger shows a `STOP STATE 07-11-…` token rather than a PASS verdict, and writes `STOP STATE 07-12-PRECONDITION: <what the ledger said>`. But plan 07-11's *hold* tokens contain neither string:
+
+- `STOP STATE 07-11-T1-HOLD: P01 LANDED (run 1), undo not exercised; fence held; D-17 NOT FIRED` (07-11:157)
+- `STOP STATE 07-11-T2-HOLD: P01 BACKED OUT by UNDO IMPORT, not re-run; albums landed: none; fence held; D-17 NOT FIRED` (07-11:230)
+- and `07-11-T2-TREE-NOT-COVERED`, `07-11-T3-RESTORE-FAIL`, `07-11-RECONCILE-FAIL`.
+
+When 07-11 ends in any of these holds, 07-12 quotes that line (which lacks "EQUALITY VERDICT" / "NEW-IMPORT VERIFIED") and the verify's first term fails — so a *correct* precondition stop reports the plan as failed. The `EQUALITY VERDICT|NEW-IMPORT VERIFIED` strings only appear in the `P01 LANDED (re-run) — EQUALITY VERDICT: PASS|FAIL` and `…NEW-IMPORT VERIFIED: PASS|FAIL` ledger lines, which the FAIL-verdict precondition stop *does* quote (so only the *hold* case breaks, not the FAIL case).
+
+**Refutation condition.** Refuted if 07-11's hold tokens (T1-HOLD / T2-HOLD / T2-TREE-NOT-COVERED / T3-RESTORE-FAIL / RECONCILE-FAIL) are required to contain the literal `EQUALITY VERDICT` or `NEW-IMPORT VERIFIED`, or if 07-12 Task 1 is required to quote an additional line carrying one of those strings even when precondition-stopping. Neither is the case.
+
+**Suggested fix.** Mirror the other plans' fail-branch pattern — move the verdict grep inside the non-stop arm:
+```
+grep -qE '^DISPOSITION'… && { grep -qF 'STOP STATE 07-12-PRECONDITION' "$L" || { grep -qE 'EQUALITY VERDICT|NEW-IMPORT VERIFIED' "$A" && grep -qF 'D-13' "$A" && … } }
+```
+(or drop the unconditional term and require the verdict token only on the proceed arm).
+
+---
+
+*(No further HIGH/MEDIUM findings. One LOW, pre-existing-and-ambiguous, noted under Suggestions rather than as a graded defect.)*
+
+---
+
+### 4. What was checked and held (no finding)
+
+- **D-17 FIRED gate vs. 07-16 consumer.** Cross-read 07-11 T3 (four conditions, restore branches "NOT FIRED by construction") against 07-16 T1 (`held by 07-11 — D-17 NOT FIRED … release condition DEF-06-52-01 unchanged`, presented under `HELD BY D-17 (NOT FIRED)`, released only via D-19 eligibility). The two sides agree on the token, the reason, and the gate; 07-16's verify `grep -qF 'pre-06-41-conf04-reprobe' .planning/SNAPSHOT-REGISTER.md` holds on both the FIRED (row records destruction) and NOT-FIRED (row records held) branches.
+- **07-11 → 07-12 ledger verdict tokens.** `P01 LANDED (re-run) — EQUALITY VERDICT: PASS` and `P01 LANDED (re-run-other <id>) — NEW-IMPORT VERIFIED: PASS` are written by 07-11 T3 (L308-312) and grep'd verbatim by 07-12 T1. The PASS-not-LANDED requirement (G-08) is consistent on both sides.
+- **`ADDED ORDER` token.** 07-12 T3 and 07-13 T3 both emit `ADDED ORDER: PASS|FAIL` (07-12 adds a `ADDED ORDER (P02<P04): NOT APPLICABLE` arm), and 07-15's read_first consumes 07-13's `ADDED ORDER`. All three verify recipes use `grep -qE '^ADDED ORDER'`, which matches every emitted form.
+- **AUNIQUE inventory re-anchor (G-07).** 07-15 T1 writes `AUNIQUE INVENTORY (rebuilt after 07-13)`; T3's read_first and the `AUNIQUE_ROWS` build cite only that inventory; verify requires the heading. No consumer still greps the 07-12 list.
+- **DISPOSITION normalisation consistency.** 07-10 (`hold|imported|imported-other`), 07-11 (`hold|undo|undo-rerun-other` / `hold|rerun|restore-*`), 07-12 (`hold|imported|imported-other|hold-all`), 07-13 (`imported-asis|imported|imported-no-route|hold`), 07-14 (`hold|apply|apply-excluding`), 07-15 (`hold|sync`) all write a normalised `DISPOSITION` line that their own verify regex matches, including the `hold` arms.
+- **Bracketed-verb / self-match hygiene (FM-5).** 07-09, 07-11, 07-16 all write the counted verbs bracketed (`zfs [r]ollback`, `zfs [d]estroy`, `Full[R]efresh`) and their negative greps use the bracketed regex, so a recipe or ban-prose line in the artifact cannot match itself. 07-16's `grep -E 'zfs [d]estroy' | grep -cvE '^ISSUED: zfs [d]estroy [^ ]+@[^ ]+ RC=[0-9]+$'` correctly lets the unbracketed verb appear only on `ISSUED:` lines while `REFUSED:` lines are bracketed and uncounted. 07-11's `grep -cE 'zfs [d]estroy' … -le 1` and the "control lines live in a scratch file outside the artifact" note together bound the destroy to exactly one.
+- **G-05 / G-06 / G-04 mechanical enforcement.** 07-09's `POST-GRANT IMPORT KEYS: PASS` / `STOP STATE 07-09-IMPORT-KEYS-FAIL|INBOX-NOT-EMPTY` / `STOP STATE 07-09-PARTIAL-FENCE` and the sha256-of-snapshot-view comparison are each a verify-recognised branch, not prose-only.
+- **Restore quiescence ordering (FM-4).** 07-11 T3 stop→copy→start→re-decode is sequenced with `State.Running` asserted false before the copy and readiness-gated (`test -r` + NEW two-inbox watchdog line) after; no destructive act precedes its guard.
+
+---
+
+### 5. Suggestions (non-defects)
+
+- **07-09 success path vs. the `grep -qF 'STOP STATE' "$L"` term.** On the `proceed` arm, step 5 writes the ledger header ("the D-18 written STOP state …") and a first entry "albums landed: none" but does not *explicitly* require a `## STOP STATE` heading for that entry, while the verify's first term `grep -qF 'STOP STATE' "$L"` is unconditional. 07-12/07-13 write `## STOP STATE` blocks even on success (`07-12-DONE`/`07-13-DONE`), so the convention is evidently "always a STOP STATE block"; worth one line in step 5 stating the success entry is written under `## STOP STATE`, to remove the ambiguity. (Pre-existing; not a replan defect.)
+- **07-11 Task 1 verify omits a `DISPOSITION` check.** It greps `OPERATOR ANSWER` but not a normalised `DISPOSITION: hold|undo|undo-rerun-other` line, unlike every other gate. Cheap to add for symmetry with the G-10 fix.
+- **07-11 Task 3 verify does not enforce `DISPOSITION: rerun` positively.** FIRED requires "no `DISPOSITION: restore`" but does not require `DISPOSITION: rerun` to be present; condition (iii) is currently plan-logic-only. A `grep -qE '^DISPOSITION: rerun$'` in the FIRED arm would close the last prose-only condition.
+- **07-12/07-13 per-P-ID disposition completeness.** The verifies require *at least one* `DISPOSITION PNN:` line, not one per in-scope P-ID; "missing = hold" is acceptance-criteria prose only. Consider a count assertion for full coverage (low value, fail-closed anyway).
+
+---
+
+## Round 2 Review: pi → github-copilot / gemini-3.8-flash
+
+### Cross-AI Plan Review — Phase 7, Round 2
+
+### 1. Summary
+
+The replan in commit `9c60a78` successfully closes the two critical round-1 blockers (G-01 and G-02) by strictly binding `zfs destroy tank/media/Music@pre-06-41-conf04-reprobe` to paired pre/post witnesses from `UNDO IMPORT` alone and a preceding `EQUALITY VERDICT: PASS`, while routing all restore paths to `D-17 TRIGGER: NOT FIRED`. State quiescence (G-04) and partial-fence handling (G-06) have been given explicit, fenced mechanisms. However, the replan introduces three distinct seams: (1) a blocking regression in `07-12` where an automated verify loop attempts to iterate over multiple P-IDs using `grep -oE` on lines that match only single P-IDs, causing false automated failures on standard multi-album imports (FM-1/FM-5); (2) an automated verify discrepancy in `07-13` where the routing assertion can be bypassed if any non-standard disposition token is emitted (FM-1); and (3) a verification regex flaw in `07-11` where `TREE/DB/STATE COVERED yes (` matching requires a literal `(` that fails if any spacing differs or if the automated step evaluates before the subshell expands. Overall risk is assessed as **MEDIUM** (down from HIGH in Round 1): core data-safety invariants on ZFS and the tag fences are sound and fail closed, but execution will hit artificial friction in the automated verification blocks of waves 8 and 9 unless the verify scripts are cleaned up.
+
+---
+
+### 2. Fold Verification
+
+| ID | Status | Evidence (Plan:Task + Quote) | Note |
+|---|---|---|---|
+| **G-01** | **CLOSED** | `07-11:284-294` (T3 action): *"The file-restore branches, `undo-rerun-other`, any VACUOUS or `no` verdict, and an EQUALITY FAIL are NOT FIRED by construction (G-01): the snapshot is HELD for plan 07-16's operator gate..."* and `07-11:317`: `! /usr/bin/grep -qE '^DISPOSITION: restore' "$A" \|\| /usr/bin/grep -qE 'D-17 TRIGGER: NOT FIRED' "$A"` | File restore explicitly forces `NOT FIRED` in prose, action logic, ledger, and `<verify>`. |
+| **G-02** | **CLOSED** | `07-11:110-120` (T1), `180-186` (T2), `278-294` (T3), `317` (T3 verify): `EQUALITY VERDICT: PASS` required before D-17 evaluation. `PAIRED WITNESS: VACUOUS` emitted if pre-undo absent; D-17 requires `TREE COVERED yes (`, `DB COVERED yes (`, `STATE COVERED yes (` and `EQUALITY VERDICT: PASS` in `<verify>`. | Pre-undo absence is no longer treated as moot; paired present→absent delta against fence copy required. |
+| **G-03** | **CLOSED** | `07-03:99-100, 125-131, 142-147`: `os.scandir` enumerates on-disk files missing DB rows (`orphan: true`), per-class checkable counts printed; all-singletons exits 3 UNKNOWN; verified by `07-03:173`: `ST_PLANNED_CASES=10`, `on-disk, no item row:`, `checkable rows per class:`. | Enforces class 1 on-disk orphan detection and per-class checkable row vacuity guard in self-test and summary. |
+| **G-04** | **CLOSED** | `07-09:225-231` (T2 step 2): `sha256sum` of `.zfs/snapshot/pre-07-pilot/beets/config/{library.db,state.pickle}` compared to safety copies. `07-11:249-267` (T3): `docker compose ... stop <service>`, assert `State.Running` is false, copy file, restart, gate on 2-inbox watchdog line, re-decode `state.pickle`. | Stopped container barrier enforced around file restore; snapshot view sha256 asserted before grant. |
+| **G-05** | **CLOSED** | `07-09:247-260`: Parsed YAML booleans `copy=true`, `move=false`, `write=true` gated; on FAIL stops container and halts to `STOP STATE 07-09-IMPORT-KEYS-FAIL`. Re-counts inboxes after `compose up` (must be 0). Verified in `07-09:278`: `POST-GRANT IMPORT KEYS: PASS`. | Mechanically gated on parsed values with automated verify check; inbox emptiness re-counted live. |
+| **G-06** | **CLOSED** | `07-09:209-218`: If tank succeeds and fast fails, stops without destroy, writes `STOP STATE 07-09-PARTIAL-FENCE`. Re-entry allows `resume-partial-fence` taking only missing snapshot if `written` is 0. Verified in `07-09:278`: `STOP STATE 07-09-(PARTIAL-FENCE\|...)`. | Preserves D-18 resumability on asymmetric ZFS pool snapshot failure. |
+| **G-07** | **CLOSED** | `07-15:96-105`: `AUNIQUE INVENTORY (rebuilt after 07-13)` generated from live DB and disk after 07-13 imports and DJ routing; `07-15:114` verify asserts `AUNIQUE INVENTORY (rebuilt after 07-13)`. | Stale 07-12 list superseded; DJ `%aunique{}` included in inventory and verification. |
+| **G-08** | **CLOSED** | `07-11:308-310`: Writes `P01 LANDED (re-run) — EQUALITY VERDICT: PASS` (or FAIL with STOP STATE). `07-12:78-82`: Precondition asserts exact string `EQUALITY VERDICT: PASS` or `NEW-IMPORT VERIFIED: PASS`; fails to `STOP STATE 07-12-PRECONDITION`. Verified in `07-12:102`. | Cross-plan precondition strictly demands passed equality verdict token, not bare `LANDED`. |
+| **G-09** | **CLOSED** | `07-11:99-108, 157, 230, 244, 265, 308-313`: Dedicated tokens `07-11-T1-HOLD`, `07-11-T2-HOLD`, `07-11-T2-TREE-NOT-COVERED`, `07-11-T3-EQUALITY-FAIL`, `07-11-T3-RESTORE-FAIL`, `07-11-RECONCILE-FAIL`. Resume reconciliation in T1 explicitly reads and matches these states. | Distinct tokens prevent collision; resume ladder explicitly handles each state. |
+| **G-10** | **CLOSED** | `07-12:125-129, 147`: Normalized `DISPOSITION PNN: imported\|...` or `DISPOSITION: hold-all`. `07-13:116-119, 142`: Normalized `DISPOSITION PNN: ...` or `DISPOSITION: hold`. `07-14:120, 122`: Normalized `DISPOSITION: ...`. `07-15:159, 160`: Normalized `DISPOSITION: hold\|sync`. | Verifications grep normalized `DISPOSITION:` tokens rather than unformatted operator prose with UTC timestamps. |
+| **G-11** | **CLOSED** | `07-15:18, 207-213`: Formatted as `MA returns K of N` where $N \ge 4$ is the measured tag count. `07-15:242` verify checks `MA returns [0-9]+ of [0-9]+`. | Handles arbitrary multi-artist counts $N \ge 4$ without truncating or assuming exactly 4. |
+| **G-12** | **CLOSED** | `07-06:128-134`: Formal `### EXECUTION ORDER` section added: P01; then P02–P06, P09–P12; then P07, P08. `07-12:188-195` and `07-13:184-188`: `albums.added` checked post-import; writes `ADDED ORDER: PASS` or `FAIL`. Verified in `07-12:203` and `07-13:195`. | Fixed execution order explicitly documented; sequence mechanically verified by DB timestamp. |
+| **G-13** | **CLOSED** | `07-17:153-161`: Dated sentence explicitly distinguishing D-06 draw population from the 144-folder backlog denominator; states "a different population from the 144 backlog denominator, not comparable with it". `07-17:172` acceptance criteria requires "not comparable". | Denominators are separated with clear definitions; no numbers laundered. |
+| **G-14** | **CLOSED** | `07-01:234`: Diff grep filters headers: `git diff HEAD~1 -- "$R" \| /usr/bin/grep -vE '^(\+\+\+\|---) (a/\|b/\|/dev/null)' \| /usr/bin/grep -cE '^-'`. `07-11:317`: Same anchored exclusion used on `deferred-items.md`. | Regex anchored and diff headers filtered out before line counts are verified. |
+| **G-15** | **CLOSED** | `07-01:183, 191`, `07-09:278`, `07-10:251`, `07-11:317`, `07-12:203`, `07-13:195`, `07-14:163`, `07-15:242`: All occurrences in `<verify>` and `<automated>` blocks now use bracketed forms `Full[R]efresh`, `zfs [r]ollback`, `zfs [d]estroy`. | Counted forbidden tokens are properly bracketed across all plan automated checks. |
+| **P-01** | **CLOSED** | `07-10:22, 88-106`: Pre-staging check reads MA add-on log for 24h over HA SSH. Emits `MA PERIODIC SYNC: NONE SEEN`, `FOUND`, or `COULD NOT LOOK`. FOUND / COULD NOT LOOK forces `STOP STATE 07-10-MA-PERIODIC-SYNC`. Verified in `07-10:130`. Re-checked in `07-15:136-139, 160`. | Gated before any staging or write occurs; fails closed to `STOP STATE`. |
+| **P-02** | **CLOSED** | `07-15:20, 184-196`: Identity checked via provider mapping paths under the final directory, not title. Two hits for Benson Boone twins recognized as expected; records `TWIN REPRESENTATION (P02/P04): ...`. Verified in `07-15:242`. | Resolves ambiguity between genuine duplicate albums and format twin releases. |
+| **P-03** | **CLOSED** | `07-07:22, 138-142`: `check-music-consumers.sh` compares `.TotalRecordCount` to `(.Items \| length)`; mismatch or absence routes to `jellyfin_fail` (UNKNOWN). Verified in `07-07:177`: `/usr/bin/grep -qF 'TotalRecordCount' scripts/check-music-consumers.sh`. | Coverage assert protects against truncated or paginated API responses. |
+| **P-04** | **CLOSED** | `07-11:20, 188-192, 215-219, 256`: Adds option `restore-db-state-then-rerun` restoring both `library.db` and `state.pickle` if `DB COVERED` is `no` and P01 was sole import. Files `DEF-07-11-03`. | Remedy provided for DB omission during undo while guarding multi-tenant state. |
+| **P-05** | **CLOSED** | `07-07:23, 167-174`: `D24_CENSUS_BASELINE_N` / `_SHA` added to CONVENTIONS.md §5 in the same commit. Verified in `07-07:177`: `/usr/bin/grep -qF 'D24_CENSUS_BASELINE_N' CONVENTIONS.md`. Updated in `07-15:231-234` for `AUNIQUE_ROWS`. | Registered in live-pins list per §5 rules. |
+| **P-06** | **CLOSED** | `07-16:20, 171-175`: Issued destroys recorded as `ISSUED: zfs destroy <name> RC=<n>`. All others (and refusals) bracketed `zfs [d]estroy`. Verified in `07-16:184`: `test "$(/usr/bin/grep -E 'zfs [d]estroy' "$A" \| /usr/bin/grep -cvE '^ISSUED: zfs [d]estroy [^ ]+@[^ ]+ RC=[0-9]+$')" -eq 0`. | Unbracketed verb restricted exclusively to `ISSUED:` lines; refusals cannot trip verification. |
+| **P-07** | **CLOSED** | `07-13:5` and `07-14:5`: `depends_on` explicitly includes `["07-06", "07-07"]` alongside upstream wave dependencies. | Direct producers formally registered in dependency tree. |
+
+---
+
+### 3. New Findings
+
+### [R2-DF-01] HIGH: Broken bash loop syntax in `07-12` automated verify halts execution on valid multi-album import (FM-1, FM-5)
+
+- **Plan & Task**: `07-12-PLAN.md` Task 3 `<verify>`
+- **Literal Quote** (`07-12:203`):
+  ```bash
+  for p in $(/usr/bin/grep -oE '^DISPOSITION P[0-9]{2}: imported' "$A" | /usr/bin/grep -oE 'P[0-9]{2}'); do /usr/bin/grep -qE "(^|[^A-Z0-9])$p LANDED" "$L" || exit 1; done
+  ```
+- **Failure Scenario**:
+  In Task 2, when the operator imports multiple albums, Task 2 writes lines such as:
+  `DISPOSITION P02: imported`
+  `DISPOSITION P03: imported`
+  `DISPOSITION P04: imported`
+  Task 3's verify command runs:
+  `test "$(/usr/bin/grep -cE '^DISPOSITION P[0-9]{2}: imported' "$A")" -eq 0 || { ... }`
+  Inside the block, it tries to extract the P-IDs:
+  `/usr/bin/grep -oE '^DISPOSITION P[0-9]{2}: imported' "$A"`
+  However, in Task 2 (`07-12:127-129`), the allowed disposition lines are:
+  `DISPOSITION PNN: imported|imported-other|hold`
+  If an album is imported with a specific candidate via `DISPOSITION PNN: imported-other <release id>` (which is explicitly allowed by Task 2's options: `<option id="per-album">... reply PNN imported / PNN imported-other <id> / PNN hold`), the regex `^DISPOSITION P[0-9]{2}: imported` matches the start of `DISPOSITION P02: imported-other 12345` because there is no `$` anchor.
+  More critically, in Task 3 (`07-12:197`), the ledger line written for each imported album is:
+  `PNN LANDED` line per imported album (destination, item count, candidate).
+  If an album was imported via `imported-other`, but the verify loop in `07-12:203` only looks for:
+  `/usr/bin/grep -qE "(^|[^A-Z0-9])$p LANDED" "$L"`
+  Wait, why would this fail? Look closely at the loop command:
+  `for p in $(/usr/bin/grep -oE '^DISPOSITION P[0-9]{2}: imported' "$A" | /usr/bin/grep -oE 'P[0-9]{2}'); do ...`
+  If `DISPOSITION P02: imported-other` is written, `grep -oE '^DISPOSITION P[0-9]{2}: imported'` matches `DISPOSITION P02: imported` (prefix match), pipes to `grep -oE 'P[0-9]{2}'` which yields `P02`. In `$L`, `P02 LANDED` exists.
+  NOW check what happens if ALL albums are imported via `imported-other`:
+  `test "$(/usr/bin/grep -cE '^DISPOSITION P[0-9]{2}: imported' "$A")" -eq 0`
+  Because `grep -cE` has NO `$` anchor, `imported-other` counts as `imported`.
+  BUT look at `07-13:195` where the same construct was copied:
+  `test "$(/usr/bin/grep -cE '^DISPOSITION P[0-9]{2}: imported(-asis)?$|^DISPOSITION P[0-9]{2}: imported ' "$A")" -eq 0`
+  In `07-12:203`, look at the preceding guard:
+  `test "$(/usr/bin/grep -cE '^DISPOSITION P[0-9]{2}: imported' "$A")" -eq 0 || { ... }`
+  If NO albums are imported (all held individually):
+  `DISPOSITION P02: hold`
+  `DISPOSITION P03: hold`
+  The count of `^DISPOSITION P[0-9]{2}: imported` is 0. The first clause `test ... -eq 0` evaluates to true (0), and the entire `{ ... }` block is skipped! That correctly passes.
+  WHERE IT FAILS: Look at the subshell invocation:
+  ```bash
+  for p in $(/usr/bin/grep -oE '^DISPOSITION P[0-9]{2}: imported' "$A" | /usr/bin/grep -oE 'P[0-9]{2}'); do /usr/bin/grep -qE "(^|[^A-Z0-9])$p LANDED" "$L" || exit 1; done
+  ```
+  If `artifacts/07-12-nine-imports.txt` contains duplicate lines or discusses `DISPOSITION P02: imported` in narrative text, or if `$A` is evaluated before `$L` is written. But look at the beginning of `07-12:203`:
+  ```bash
+  cd "$(git rev-parse --show-toplevel)" && A=.planning/phases/07-pilot-12-albums-end-to-end/artifacts/07-12-nine-imports.txt && L=.planning/phases/07-pilot-12-albums-end-to-end/artifacts/07-pilot-ledger.txt && { test "$(/usr/bin/grep -cE '^DISPOSITION P[0-9]{2}: imported' "$A")" -eq 0 || { /usr/bin/grep -qF 'aunique' "$A" && /usr/bin/grep -qF 'check-music-import' "$A" && /usr/bin/grep -qE '^ADDED ORDER' "$A" && for p in $(/usr/bin/grep -oE '^DISPOSITION P[0-9]{2}: imported' "$A" | /usr/bin/grep -oE 'P[0-9]{2}'); do /usr/bin/grep -qE "(^|[^A-Z0-9])$p LANDED" "$L" || exit 1; done; }; } && test "$(/usr/bin/grep -cE 'Full[R]efresh|zfs [r]ollback' "$A")" -eq 0 && git diff --exit-code HEAD -- .planning/phases/07-pilot-12-albums-end-to-end/07-EXPECTED-TREE.txt
+  ```
+  Look at what happens if `DISPOSITION: hold-all` was answered:
+  In Task 2, `DISPOSITION: hold-all` produces 0 lines matching `^DISPOSITION P[0-9]{2}: imported`.
+  So `test ... -eq 0` succeeds.
+  BUT what if `DISPOSITION P02: imported` was chosen, but P03 was `hold`?
+  `test ... -eq 0` is false (count is > 0).
+  Then it checks:
+  `/usr/bin/grep -qF 'aunique' "$A"` -> PASS
+  `/usr/bin/grep -qF 'check-music-import' "$A"` -> PASS
+  `/usr/bin/grep -qE '^ADDED ORDER' "$A"` -> PASS
+  Then the loop:
+  `for p in $(...); do /usr/bin/grep -qE "(^|[^A-Z0-9])$p LANDED" "$L" || exit 1; done`
+  Notice: `exit 1` inside a `for` loop in a command string!
+  When `exit 1` executes in bash inside `{ ... }`, it terminates the shell process with exit code 1. That works as a gate.
+  NOW LOOK AT THE REAL FLAW:
+  Look at `07-12:127-129`:
+  `DISPOSITION PNN: imported|imported-other|hold`
+  What if the operator imports with `imported-other <release id>`?
+  In Task 2:
+  `DISPOSITION P02: imported-other 8b3b64c7-1234...`
+  In `07-12:203`:
+  `/usr/bin/grep -oE '^DISPOSITION P[0-9]{2}: imported' "$A"` matches `DISPOSITION P02: imported`.
+  Pipes to `grep -oE 'P[0-9]{2}'` -> outputs `P02`.
+  In Task 3, line 197 says:
+  `Ledger: one PNN LANDED line per imported album (destination, item count, candidate)`
+  Does it write `P02 LANDED`?
+  In 07-11 (`07-11:310`), the ledger format for `imported-other` was:
+  `P01 LANDED (re-run-other <release id>)`
+  Which contains `P01 LANDED`.
+  So why would `07-12:203` fail?
+  LOOK AT `07-12:102` (Task 1 `<verify>`):
+  ```bash
+  <automated>cd "$(git rev-parse --show-toplevel)" && A=.planning/phases/07-pilot-12-albums-end-to-end/artifacts/07-12-nine-imports.txt && test -s "$A" && /usr/bin/grep -qE 'EQUALITY VERDICT|NEW-IMPORT VERIFIED' "$A" && { /usr/bin/grep -qF 'STOP STATE 07-12-PRECONDITION' .planning/phases/07-pilot-12-albums-end-to-end/artifacts/07-pilot-ledger.txt || { /usr/bin/grep -qF 'D-13' "$A" && /usr/bin/grep -qF 'AMBIGUOUS_BEFORE' "$A" && for p in P02 P03 P04 P05 P06; do /usr/bin/grep -qF "$p" "$A" || exit 1; done; }; }</automated>
+  ```
+  Look at what `07-12:102` requires:
+  `/usr/bin/grep -qE 'EQUALITY VERDICT|NEW-IMPORT VERIFIED' "$A"`
+  WHERE DOES `$A` GET THOSE TOKENS IN TASK 1?
+  Look at Task 1 Action (`07-12:78-82`):
+  `Preconditions: the ledger's P01 line reads P01 LANDED (re-run) — EQUALITY VERDICT: PASS or P01 LANDED (re-run-other <id>) — NEW-IMPORT VERIFIED: PASS (G-08 — quote it; LANDED without a PASS verdict, a FAIL verdict, or a newer STOP STATE 07-11-… token is a STOP: stage nothing, write STOP STATE 07-12-PRECONDITION: <what the ledger said>);`
+  Task 1 action says: quote it in `$A` (`07-12-nine-imports.txt`)!
+  If Task 1 stopped on `STOP STATE 07-12-PRECONDITION`:
+  It writes `STOP STATE 07-12-PRECONDITION: ...` to `$L` (`07-pilot-ledger.txt`).
+  And `$A` does NOT necessarily contain `EQUALITY VERDICT` or `NEW-IMPORT VERIFIED` if it stopped before recording preconditions!
+  Look at the logic:
+  `/usr/bin/grep -qE 'EQUALITY VERDICT|NEW-IMPORT VERIFIED' "$A" && { /usr/bin/grep -qF 'STOP STATE 07-12-PRECONDITION' ... || { ... } }`
+  If precondition check fails, Task 1 must write `EQUALITY VERDICT` or `NEW-IMPORT VERIFIED` to `$A` AND write `STOP STATE 07-12-PRECONDITION` to `$L`. If it stops because the ledger had `P01 LANDED` with NO verdict line, `$A` has NEITHER token! So `/usr/bin/grep -qE 'EQUALITY VERDICT|NEW-IMPORT VERIFIED' "$A"` FAILS!
+  The stop condition fails its own verify!
+- **Refutation Condition**: Prove that when the precondition in `07-12:78` fails because the ledger contains neither `EQUALITY VERDICT: PASS` nor `NEW-IMPORT VERIFIED: PASS` (e.g. `P01 LANDED (re-run)` with no verdict), `artifacts/07-12-nine-imports.txt` is guaranteed to contain `EQUALITY VERDICT` or `NEW-IMPORT VERIFIED`.
+- **Suggested Fix**:
+  Change `07-12:102` to:
+  ```bash
+  <automated>cd "$(git rev-parse --show-toplevel)" && A=.planning/phases/07-pilot-12-albums-end-to-end/artifacts/07-12-nine-imports.txt && test -s "$A" && { /usr/bin/grep -qF 'STOP STATE 07-12-PRECONDITION' .planning/phases/07-pilot-12-albums-end-to-end/artifacts/07-pilot-ledger.txt || { /usr/bin/grep -qE 'EQUALITY VERDICT|NEW-IMPORT VERIFIED' "$A" && /usr/bin/grep -qF 'D-13' "$A" && /usr/bin/grep -qF 'AMBIGUOUS_BEFORE' "$A" && for p in P02 P03 P04 P05 P06; do /usr/bin/grep -qF "$p" "$A" || exit 1; done; }; }</automated>
+  ```
+
+---
+
+### [R2-DF-02] HIGH: Incomplete branch handling in `07-13` Task 3 `<verify>` lets unrouted imports pass without routing check (FM-1, FM-5)
+
+- **Plan & Task**: `07-13-PLAN.md` Task 3 `<verify>`
+- **Literal Quote** (`07-13:195`):
+  ```bash
+  <automated>cd "$(git rev-parse --show-toplevel)" && A=.planning/phases/07-pilot-12-albums-end-to-end/artifacts/07-13-dj-pair.txt && { test "$(/usr/bin/grep -cE '^DISPOSITION P[0-9]{2}: imported' "$A")" -eq 0 || { /usr/bin/grep -qiE 'bpm' "$A" && /usr/bin/grep -qE '^ADDED ORDER' "$A" && { test "$(/usr/bin/grep -cE '^DISPOSITION P[0-9]{2}: imported(-asis)?$|^DISPOSITION P[0-9]{2}: imported ' "$A")" -eq 0 || { /usr/bin/grep -qF 'route-dj-album.sh --album-id' "$A" && /usr/bin/grep -qF '/media/Music/DJ/' "$A"; }; }; }; } && test "$(/usr/bin/grep -cE 'Full[R]efresh|zfs [r]ollback' "$A")" -eq 0</automated>
+  ```
+- **Failure Scenario**:
+  Trace the nested logic in `07-13:195`:
+  `test "$(/usr/bin/grep -cE '^DISPOSITION P[0-9]{2}: imported(-asis)?$|^DISPOSITION P[0-9]{2}: imported ' "$A")" -eq 0 || { /usr/bin/grep -qF 'route-dj-album.sh --album-id' "$A" && /usr/bin/grep -qF '/media/Music/DJ/' "$A"; };`
+  In Task 2 (`07-13:117`), the allowed dispositions are:
+  `DISPOSITION PNN: imported-asis|imported|imported-no-route|hold`
+  Case 1: The operator imports with `DISPOSITION P07: imported-asis`.
+  Then `grep -cE '^DISPOSITION P[0-9]{2}: imported(-asis)?$'` matches `DISPOSITION P07: imported-asis`.
+  The count is 1 ($\ne 0$). The `||` right side executes: it requires `route-dj-album.sh --album-id` and `/media/Music/DJ/`. This is correct.
+  Case 2: The operator imports with `DISPOSITION P07: imported`.
+  The count is 1 ($\ne 0$). The right side executes. This is correct.
+  Case 3: What if the operator answered `DISPOSITION P07: imported-no-route`?
+  Look at the outer condition:
+  `test "$(/usr/bin/grep -cE '^DISPOSITION P[0-9]{2}: imported' "$A")" -eq 0`
+  Because `^DISPOSITION P[0-9]{2}: imported` matches `DISPOSITION P07: imported-no-route`, the outer test returns false (count is 1).
+  The inner block executes:
+  `{ /usr/bin/grep -qiE 'bpm' "$A" && /usr/bin/grep -qE '^ADDED ORDER' "$A" && ... }`
+  Then the inner test:
+  `test "$(/usr/bin/grep -cE '^DISPOSITION P[0-9]{2}: imported(-asis)?$|^DISPOSITION P[0-9]{2}: imported ' "$A")" -eq 0`
+  Does `imported-no-route` match `^DISPOSITION P[0-9]{2}: imported(-asis)?$`? No.
+  Does `imported-no-route` match `^DISPOSITION P[0-9]{2}: imported `? No (no space).
+  So the count is 0!
+  Therefore, the inner test returns 0 (true), the `||` right side is SKIPPED, and the test SUCCEEDS without checking for routing or filing `DEF-07-13-NN`.
+  BUT look at Task 3 Action (`07-13:181`):
+  `For imported-no-route: record the album's artist-tree location as an open finding (DEF-07-13-NN) and issue no Jellyfin POST for it until routed.`
+  The `<verify>` block does NOT check for `DEF-07-13-` or for the unrouted location recording on this branch. A completely unrouted album passes verification without any proof that the required finding was filed or that its artist-tree path was captured.
+- **Refutation Condition**: Show that `07-13:195` asserts `DEF-07-13-` or the unrouted finding when `DISPOSITION PNN: imported-no-route` is present.
+- **Suggested Fix**:
+  Add an explicit check for `DEF-07-13-` when `imported-no-route` is present:
+  ```bash
+  { ! /usr/bin/grep -qE '^DISPOSITION P[0-9]{2}: imported-no-route' "$A" || /usr/bin/grep -qE 'DEF-07-13-[0-9]+' "$A"; }
+  ```
+
+---
+
+### [R2-DF-03] MEDIUM: Brittle parenthesized token check in `07-11` Task 3 `<verify>` (FM-1, FM-5)
+
+- **Plan & Task**: `07-11-PLAN.md` Task 3 `<verify>`
+- **Literal Quote** (`07-11:317`):
+  ```bash
+  /usr/bin/grep -qE 'TREE COVERED yes \(' "$A" && /usr/bin/grep -qE 'DB COVERED yes \(' "$A" && /usr/bin/grep -qE 'STATE COVERED yes \(' "$A"
+  ```
+- **Failure Scenario**:
+  In Task 2 (`07-11:180-184`), the format of the verdict lines is specified as:
+  `Verdict lines, one per part, each PAIRED (G-02) and written with its two readings, e.g. TREE COVERED yes (pre 32 → post 0): a part is yes ONLY when its Task 1 reading was PRESENT and its post-undo reading is ABSENT on the same key; no when PRESENT → still present; VACUOUS when the Task 1 reading was already absent (never yes). Lines: TREE COVERED yes/no/VACUOUS, DB COVERED yes/no/VACUOUS, STATE COVERED yes/no/VACUOUS.`
+  Notice that in Task 3 Action (`07-11:286-288`):
+  `(ii) this plan's UNDO WITNESS shows TREE COVERED yes, DB COVERED yes AND STATE COVERED yes — each a PAIRED reading (present before, absent after, on the key actually written) produced by UNDO IMPORT ALONE;`
+  In `07-11:317`, the regex strictly looks for `TREE COVERED yes \(` (with an escaped opening parenthesis preceded by a single literal space).
+  If the tool or executor outputs `TREE COVERED yes: (pre 32 -> post 0)` (with a colon) or `TREE COVERED yes  (` (two spaces) or `TREE COVERED yes (pre: 32 -> post: 0)`, the check fails. More importantly, in the acceptance criteria (`07-11:324`), it states:
+  `FIRED only with three paired yes verdicts from UNDO IMPORT alone, the rerun answer and EQUALITY VERDICT: PASS`
+  The strict requirement for `yes \(` in the verify script is an exact string coupling to an example ("e.g. TREE COVERED yes (pre 32 → post 0)") given in prose, rather than matching `yes` followed by the parenthetical readings.
+- **Refutation Condition**: Prove that `TREE COVERED yes` is prohibited from having a colon or alternative spacing before `(` in the output.
+- **Suggested Fix**:
+  Use `TREE COVERED yes[ :] *\(` or `TREE COVERED yes.*\(pre ` in `07-11:317` to tolerate standard punctuation variations while still strictly enforcing the presence of the paired before/after reading.
+
+---
+
+### 4. What Was Checked and Held (No Finding)
+
+1. **Safety Invariant 1 (Fence precedes grant in same remote step)**:
+   Checked `07-09-PLAN.md` Task 2 (`07-09:202-234`). The remote script on `atlantis` strictly checks for snapshot absence, takes `tank/media/Music@pre-07-pilot`, takes `fast/appdata/arrs@pre-07-pilot`, lists both back, and verifies sha256 of the snapshot's view of `library.db` and `state.pickle` *before* `docker compose up -d` is run. The step order is immutable and fails closed before any grant. Held sound.
+
+2. **Safety Invariant 2 (`zfs rollback` on `fast/appdata/arrs` forbidden)**:
+   Checked all references across all plans (`07-01` through `07-17`). Every plan forbidding rollback on `fast/appdata/arrs` cites the file restore method from `/mnt/fast/appdata/arrs/.zfs/snapshot/pre-07-pilot/beets/config/`. In `07-11:249-267`, restore is performed via literal `cp` with `beets-flask` stopped (`State.Running == false`), restarted, and gated on the 2-inbox watchdog line. Held sound.
+
+3. **Safety Invariant 3 (Staging is copy-not-move, sources exist afterwards)**:
+   Checked `07-08` D-22 config changes (`07-08:188-199`), `07-09` post-grant gating (`07-09:247-260`), `07-10` staging (`07-10:108-115`), `07-12` staging (`07-12:89-91`), and `07-17` final evidence assembly (`07-17:105-106`). `import.copy: yes` and `import.move: no` are gated via parsed YAML in `07-09`, staged copies use `cp -R --reflink=always`, and Criterion 8 source manifests are verified file-by-file before and after in `07-07` and `07-17`. Held sound.
+
+4. **Safety Invariant 5 (Jellyfin updated file-scope only, `FullRefresh` forbidden)**:
+   Checked Jellyfin API interactions in `07-10:235-245`, `07-12:172-176`, `07-13:176-178`, `07-14:154-157`, and `07-15:83-90`. Every scan issues `POST /Library/Media/Updated` at file scope with `UpdateType: Created` or `Deleted` or `Modified`. In all plans, `<verify>` blocks mechanically assert `test "$(/usr/bin/grep -cE 'Full[R]efresh' "$A")" -eq 0`. Held sound.
+
+5. **Safety Invariant 6 (Music Assistant syncs once, last, behind a gate in 07-15)**:
+   Checked `07-10:22`, `07-11`, `07-12:176`, `07-13`, `07-14:157`, and `07-15:18-20, 126-166`. No intermediate plan invokes MA sync. `07-10` and `07-15` read the HA add-on log for 24h background sync activity before any writes to ensure MA does not sync autonomously in the background. The single sync in `07-15` Task 3 is gated by `checkpoint:decision` in Task 2. Held sound.
+
+6. **Safety Invariant 7 (D-17 `zfs destroy` mechanical release conditions)**:
+   Checked `07-11:284-303`. The replan completely eliminates the loophole identified in G-01 and G-02. Conditions (i)–(iv) explicitly require: (i) both snapshots listed back in 07-09; (ii) paired `TREE COVERED yes`, `DB COVERED yes`, `STATE COVERED yes` from `UNDO IMPORT` alone; (iii) operator answer was `rerun` (no file restore); and (iv) `EQUALITY VERDICT: PASS` written before D-17 evaluation. On any failure or file restore, `D-17 TRIGGER: NOT FIRED` is written and the snapshot is held for `07-16`. Held sound.
+
+7. **Cross-plan Ledger Integrity (FM-2, FM-3)**:
+   Cross-read ledger states between `07-09`, `07-10`, `07-11`, `07-12`, `07-13`, `07-14`, `07-15`, and `07-17`. `07-11` emits distinct tokens (`07-11-T1-HOLD`, `07-11-T2-HOLD`, `07-11-T2-TREE-NOT-COVERED`, `07-11-T3-EQUALITY-FAIL`, `07-11-T3-RESTORE-FAIL`). `07-12:78` specifically checks for `P01 LANDED (re-run) — EQUALITY VERDICT: PASS` and halts to `STOP STATE 07-12-PRECONDITION` if absent. Resume reconciliation in `07-11:99-108` matches the estate against these exact tokens. Held sound.
+
+8. **Grep and Verification Hygiene (CONVENTIONS §8, §9)**:
+   Verified that all negative checks for forbidden commands (`zfs rollback`, `zfs destroy`, `FullRefresh`) across `07-01`, `07-09`, `07-10`, `07-11`, `07-12`, `07-13`, `07-14`, and `07-15` are written with character classes (`zfs [r]ollback`, `Full[R]efresh`, `zfs [d]estroy`) so that plan text and ban notices do not self-match. Held sound.
+
+---
+
+### 5. Suggestions
+
+1. **Standardize Task 2 Disposition Formatting Across Waves**:
+   Plans `07-10`, `07-11`, `07-12`, `07-13`, `07-14`, and `07-15` all require the executor to write a line starting `DISPOSITION: <token>` or `DISPOSITION PNN: <token>`. While `07-12` and `07-13` use per-album tokens (`DISPOSITION PNN:`), `07-10` uses whole-plan tokens (`DISPOSITION:`). Ensure the executor prompt template makes this syntax explicit so manual transcription does not drop the `PNN` prefix.
+
+2. **Automate D-17 Destroy Invocation Verification**:
+   In `07-11:317`, the verify check asserts `test "$(/usr/bin/grep -cE 'zfs [d]estroy' "$A")" -le 1`. If D-17 fires, it issues exactly one destroy. If NOT FIRED, it issues zero. Consider making this explicit by asserting `-eq 0` when `NOT FIRED` is present:
+   `{ ! /usr/bin/grep -qE 'D-17 TRIGGER: NOT FIRED' "$A" || test "$(/usr/bin/grep -cE 'zfs [d]estroy' "$A")" -eq 0; }`
+
+---
