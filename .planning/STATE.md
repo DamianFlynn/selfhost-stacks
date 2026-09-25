@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-26T01:45:00.000Z"
+last_updated: "2026-09-26T03:30:00.000Z"
 progress:
   total_phases: 10
   completed_phases: 5
   total_plans: 141
-  completed_plans: 129
+  completed_plans: 130
   percent: 50
 ---
 
@@ -21,13 +21,15 @@ See: .planning/PROJECT.md (updated 2026-08-17)
 **Core value:** New music downloads land in the library correctly tagged, through exactly one
 pipeline that someone owns.
 **Current focus:** Phase 07 — pilot-12-albums-end-to-end (**PLANNED 2026-09-25, 17 plans in
-13 waves, 5 of 17 executed — 07-01, 07-02, 07-03, 07-05, 07-06 done**; Phase 06 stays `In Progress` at `gaps_found` 5/6 with CONF-04 carried to
+13 waves, 6 of 17 executed — 07-01 … 07-06 done**; Phase 06 stays `In Progress` at `gaps_found` 5/6 with CONF-04 carried to
 Phase 7 E6 — `/gsd-verify 06` is still owed)
 
 **Definition of done (CONS-04):** a file is imported only when verified with `ffprobe` on the file
 *and* visible in both Jellyfin and Music Assistant. Never "tool configured".
 
 ## Current Position
+
+**PLAN 07-04 COMPLETE — 2026-09-26.** E1's mechanism exists: `scripts/route-dj-album.sh --album-id N [--apply]` runs inside beets-flask only (readonly constant), refuses any beets but exactly 2.12.0, is read-only by default (version + one-album `ls` + which DJ `paths:` rule it reaches), and under `--apply` does `modify -a -M -y id:N albumtype=dj` → `move -a -p` → `move -a` → item read-back asserting every item `dj` under `/media/Music/DJ/`. `BEET_REALLIB=/venv/bin/beet` (bare `beet` is not on `beetle`'s PATH — measured). Its 7 invocation lines are registered in `D04_EXEMPT_RE` (file + `$BEET_REALLIB`), register reason 4, `D04_EXEMPT_BASELINE` 5 → 12 in the same commit; `D04_DOC_BASELINE` still 2. Counts pre 8/3/5/2 → before-edit 15/10/5/2 (N = 7) → after 15/3/12/2; overlay-key half driven both ways on both files in a deleted scratch clone (DEF-06-21-06) (`40cc63d`). ⚠ The routine health check's D-04 block reads ❌ (exempt 5 vs pinned 12) until the host checkout is pulled. `--apply` never run; first use is 07-13's gate. No library write has happened yet.
 
 **PLAN 07-03 COMPLETE — 2026-09-26.** Criterion 7 now has a standing instrument: `scripts/check-music-import.sh` sweeps what beets imported for `.N`-suffix collisions (DB rows AND on-disk files, G-03), empty `mb_albumid` on non-DJ album items, and track count vs `tracktotal` per album-disc (disagreeing totals are a finding, never first-wins). It reads `library.db` via python sqlite `mode=ro` inside beets-flask, no `beet` invocation. Per-class vacuity guard: an empty library or any class with 0 checkable rows is exit 3. `--self-test` 10/10 (7 red by design) on workstation and LXC 100, proven able to fail by three mutations (`e8d24c2`). Folded into `quick-health-check.sh` as the tenth fatal block with knob `IMPORT_SWEEP_SCRIPT`; notice headers 13 → 14 (conditions Q/R/S); EXIT_CODE=1 sites 98 → 104, all 6 new ones in the new block (`317c1a4`). Live run on the real library: exit 3, `items read: 0`; `library.db` `fbbdde0c…` and `state.pickle` unchanged (`54be778`). ⚠ The routine health check reads ❌ on the sweep (script absent at the deployed path, exit 127) until the host checkout is pulled, then ⚠️ UNKNOWN until the first pilot import. No library write has happened yet.
 
