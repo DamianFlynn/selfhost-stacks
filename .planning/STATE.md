@@ -2245,8 +2245,25 @@ Recent decisions affecting current work:
 
 ### Blockers/Concerns
 
-- **⚠ OPEN, OPERATOR ACTION: LXC 100's `/mnt/fast/stacks` checkout has DIVERGED from `origin/main`,
-  and the host side of the fork exists NOWHERE ELSE.** Measured 2026-09-25 during quick task
+- ~~**⚠ OPEN, OPERATOR ACTION: LXC 100's `/mnt/fast/stacks` checkout has DIVERGED from
+  `origin/main`.**~~ **RESOLVED by the operator 2026-09-25, same day, and verified.** Workstation
+  `HEAD`, `origin/main` and host `HEAD` all measured at **`f6d94c3`** with **0 ahead / 0 behind**
+  and **both working trees clean** (host dirty count 0, so the transient ` M
+  scripts/check-music-freeze.sh` cleared exactly as predicted). The at-risk work was **preserved,
+  not lost** — it now reads `cc9b74f` *"feat(neocortex-memory): a private tailnet route via
+  tsbridge (TODO-317)"*; the old `745611e` no longer resolves on either side, so it was rebased
+  onto the pushed history rather than discarded.
+  **The `260925-ae4` fix survived that rebase** — `0228f4f` is still in history, the pin reads
+  `13` on both sides, and `scripts/check-music-freeze.sh` is byte-identical workstation↔host
+  (`01b77f25c4745c6f…`), so the file that was `scp`'d out-of-band is now legitimately git-tracked
+  and the two are no longer distinguishable. Deployed beets config re-asserted at
+  `661c729738a12be6…` = repo. Acceptance re-run after the reconciliation: both blocks still green,
+  `UNKNOWN` sweep 0, exit 1 with CONF-04 pending as its sole cause.
+  **Kept rather than deleted, because the lesson outlives the incident:** a production checkout
+  that is simultaneously ahead and behind cannot `pull --ff-only`, and the host was the only copy
+  of real work for roughly a day. The estate's Renovate-deploy-drift problem has this sharper
+  second form, and it is worth recognising early next time.
+  *Original entry, for the record:* Measured 2026-09-25 during quick task
   `260925-ae4`, independently re-confirmed by the orchestrator: host `HEAD` is `745611e`
   *"feat(neocortex-memory): a private tailnet route via tsbridge (TODO-317)"* — authored
   2026-09-24T23:23Z, 25 insertions to `stacks/selfhosted/neocortex-memory/compose.yaml` — and
