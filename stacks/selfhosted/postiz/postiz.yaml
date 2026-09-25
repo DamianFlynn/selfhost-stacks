@@ -1,5 +1,6 @@
 services:
   postiz:
+    profiles: ["dormant"]   # classified DORMANT 2026-09-25 -- see .planning/plans/service-classification.plan.md
     image: ghcr.io/gitroomhq/postiz-app:v2.24.0
     container_name: postiz
     # measured 969 MB 2026-09-06; cap bounds a runaway, not steady state
@@ -65,6 +66,7 @@ services:
         condition: service_healthy
 
   postiz_postgres:
+    profiles: ["dormant"]   # classified DORMANT 2026-09-25 -- see .planning/plans/service-classification.plan.md
     image: postgres:18-alpine
     container_name: postiz_postgres
     restart: unless-stopped
@@ -84,6 +86,7 @@ services:
       start_period: 30s
 
   postiz_redis:
+    profiles: ["dormant"]   # classified DORMANT 2026-09-25 -- see .planning/plans/service-classification.plan.md
     image: redis:7.4-alpine
     container_name: postiz_redis
     restart: unless-stopped

@@ -1,5 +1,6 @@
 services:
   mcp-notion:
+    profiles: ["dormant"]   # classified DORMANT 2026-09-25 -- see .planning/plans/service-classification.plan.md
     image: mcp/notion
     container_name: mcp-notion
     restart: unless-stopped

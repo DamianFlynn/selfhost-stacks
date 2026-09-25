@@ -1,5 +1,6 @@
 services:
   rustdesk-hbbs:
+    profiles: ["dormant"]   # classified DORMANT 2026-09-25 -- see .planning/plans/service-classification.plan.md
     image: rustdesk/rustdesk-server:1.1.16
     container_name: rustdesk-hbbs
     command: hbbs -r desktop.deercrest.info:21117
@@ -13,6 +14,7 @@ services:
       - "21118:21118"
 
   rustdesk-hbbr:
+    profiles: ["dormant"]   # classified DORMANT 2026-09-25 -- see .planning/plans/service-classification.plan.md
     image: rustdesk/rustdesk-server:1.1.16
     container_name: rustdesk-hbbr
     command: hbbr

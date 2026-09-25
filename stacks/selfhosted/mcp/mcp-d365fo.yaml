@@ -1,5 +1,6 @@
 services:
   mcp-d365fo:
+    profiles: ["dormant"]   # classified DORMANT 2026-09-25 -- see .planning/plans/service-classification.plan.md
     image: ghcr.io/mafzaal/d365fo-client:0.3.8
     container_name: mcp-d365fo
     restart: unless-stopped

@@ -1,5 +1,6 @@
 services:
   termix:
+    profiles: ["dormant"]   # classified DORMANT 2026-09-25 -- see .planning/plans/service-classification.plan.md
     image: ghcr.io/lukegus/termix:release-2.4.1
     container_name: termix
     restart: unless-stopped

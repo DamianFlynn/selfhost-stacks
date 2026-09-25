@@ -34,6 +34,7 @@ services:
   # Janitorr - Automated media cleanup and management
   # Removes watched/old media to free up space based on rules
   janitorr:
+    profiles: ["dormant"]   # classified DORMANT 2026-09-25 -- see .planning/plans/service-classification.plan.md
     hostname: "janitorr"
     container_name: janitorr
     # measured 431 MB 2026-09-06; cap bounds a runaway, not steady state

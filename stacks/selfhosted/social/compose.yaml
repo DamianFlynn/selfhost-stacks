@@ -1,6 +1,10 @@
-# Social Stack - Postiz, Rybbit
-# Social media scheduling, Reddit client for content discovery
-# Integrates with Hugo static site and automation workflows
+# Social Stack - Rybbit
+# Web analytics. Rybbit is classified DORMANT (2026-09-25) and does not start
+# without `--profile dormant`; see .planning/plans/service-classification.plan.md
+#
+# Postiz was REMOVED from this stack on 2026-09-25. It was declared in BOTH
+# stacks/selfhosted/postiz/ and here, with the same three container names, so only
+# one could ever run. postiz/ is the survivor and is itself dormant.
 
 name: social
 
@@ -13,32 +17,6 @@ networks:
 
 ########################### VOLUMES
 volumes:
-  # Postiz
-  postiz_postgres:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: /mnt/fast/appdata/social/postiz/postgres
-  postiz_redis:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: /mnt/fast/appdata/social/postiz/redis
-  postiz_config:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: /mnt/fast/appdata/social/postiz/config
-  postiz_uploads:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: /mnt/fast/appdata/social/postiz/uploads
-
   # Rybbit
   rybbit_data:
     driver: local
@@ -55,5 +33,4 @@ volumes:
 
 ########################### SERVICES
 include:
-  - postiz.yaml
   - rybbit.yaml

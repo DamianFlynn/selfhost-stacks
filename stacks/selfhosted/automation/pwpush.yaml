@@ -28,6 +28,7 @@ networks:
 services:
 
   pwpush-db:
+    profiles: ["dormant"]   # classified DORMANT 2026-09-25 -- see .planning/plans/service-classification.plan.md
     container_name: "pwpush-db"
     image: docker.io/postgres:18
     volumes:
@@ -49,6 +50,7 @@ services:
 
 
   pwpush:
+    profiles: ["dormant"]   # classified DORMANT 2026-09-25 -- see .planning/plans/service-classification.plan.md
     container_name: "pwpush"
     # measured 565 MB 2026-09-06; cap bounds a runaway, not steady state
     mem_limit: 1g

@@ -17,6 +17,7 @@ networks:
 services:
   # Main web application for archiving and managing digital content
   open-archiver:
+    profiles: ["dormant"]   # classified DORMANT 2026-09-25 -- see .planning/plans/service-classification.plan.md
     image: logiclabshq/open-archiver:v0.6.0
     container_name: open-archiver
     # measured 891 MB 2026-09-06; cap bounds a runaway, not steady state
@@ -52,6 +53,7 @@ services:
 
   # PostgreSQL database for storing application data
   postgres:
+    profiles: ["dormant"]   # classified DORMANT 2026-09-25 -- see .planning/plans/service-classification.plan.md
     image: postgres:18-alpine
     container_name: open-archiver_postgres
     hostname: postgres
@@ -69,6 +71,7 @@ services:
 # Redis-compatible cache/queue for session management and job processing
   
   valkey:
+    profiles: ["dormant"]   # classified DORMANT 2026-09-25 -- see .planning/plans/service-classification.plan.md
     image: valkey/valkey:9-alpine
     container_name: open-archiver_valkey
     hostname: valkey
@@ -83,6 +86,7 @@ services:
 # Fast search engine for full-text search across archived content
   
   meilisearch:
+    profiles: ["dormant"]   # classified DORMANT 2026-09-25 -- see .planning/plans/service-classification.plan.md
     image: getmeili/meilisearch:v1.54
     container_name: open-archiver_meilisearch
     hostname: meilisearch
@@ -98,6 +102,7 @@ services:
 # Apache Tika for content extraction and metadata parsing from documents
   
   tika:
+    profiles: ["dormant"]   # classified DORMANT 2026-09-25 -- see .planning/plans/service-classification.plan.md
     image: apache/tika:3.3.1.0-full
     container_name: open-archiver_tika
     hostname: tika
