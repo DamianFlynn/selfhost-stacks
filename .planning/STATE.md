@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-26T04:15:00.000Z"
+last_updated: "2026-09-26T00:10:00.000Z"
 progress:
   total_phases: 10
   completed_phases: 5
   total_plans: 141
-  completed_plans: 131
+  completed_plans: 132
   percent: 50
 ---
 
@@ -21,13 +21,15 @@ See: .planning/PROJECT.md (updated 2026-08-17)
 **Core value:** New music downloads land in the library correctly tagged, through exactly one
 pipeline that someone owns.
 **Current focus:** Phase 07 — pilot-12-albums-end-to-end (**PLANNED 2026-09-25, 17 plans in
-13 waves, 7 of 17 executed — 07-01 … 07-07 done**; Phase 06 stays `In Progress` at `gaps_found` 5/6 with CONF-04 carried to
+13 waves, 8 of 17 executed — 07-01 … 07-08 done**; Phase 06 stays `In Progress` at `gaps_found` 5/6 with CONF-04 carried to
 Phase 7 E6 — `/gsd-verify 06` is still owed)
 
 **Definition of done (CONS-04):** a file is imported only when verified with `ffprobe` on the file
 *and* visible in both Jellyfin and Music Assistant. Never "tool configured".
 
 ## Current Position
+
+**PLAN 07-08 COMPLETE — 2026-09-26. BUILT, NOT DEPLOYED.** The D-22 commit is **`926f1ff`**: exactly 7 files — `flask.yaml` `/mnt/tank/media:/media:rw` (beets-flask ONLY; `beets.yaml` stays `:ro`), `flask-config.yaml` `01-auto` DE-REGISTERED (D-21; dir kept, 0 entries) with readiness text 3 → 2 (C4), `config.yaml` comments only (C1: copy yes / move no already in repo, appdata AND server — item 2 was a verification; `write: yes` recorded FORCED with D-21 as bound; tank 9 T → measured 5.26 T), `gui.library.readonly` KEPT true (C3: rc6 gates only library-browser DELETE/PATCH; import and UNDO IMPORT unguarded), qhc D-03 flask arm inverted to RW=true = standing assertion D-23 (notice headers 14 → 15, conditions T/U), `check-music-freeze.sh` literal `PHASE7_RW_TAGGER="beets-flask"` exception in §1, §2 and §6b (driven 6 scenarios on a synthetic docker), beets.md digest register (PREVIOUS `661c7297…`@`1a64286` / `949bd1f3…`@`f1848e2` → NEW `7d726454…` / `875fcf7e…`). Hash recorded in `8c6c50e`; D-04 doc count still 2. ⚠ qhc is red by design until 07-09 deploys (D-23 arm reads RW=false; drift block red from host pull to install). No library write has happened yet; host checkout still `0c95427`.
 
 **PLAN 07-07 COMPLETE — 2026-09-26.** The BEFORE of record exists: `pre-07-P01`…`P12` (one `snapshot-music-tags.sh` run per folder, all rc 0, `.failed` empty, records == 07-SAMPLE counts) and `pre-07-pilot` = **339 records / 339 distinct keys**. Phase 1's `pre-project` covers **271/339** (P01–P04, P06 = 0); same-folder diffs show 0 tag change on all 271 since 2026-08-18 (P08/P11 against both twins exit 3, E7 by design). Criterion-8 manifest from atlantis as root: 347 files, 12 P-IDs, `8480c429…` (`a9013fd`). `check-music-consumers.sh` gains section **4c** (D-24 census; MA D-22 renumbered 4d): coverage gate TotalRecordCount 1244 == Items 1244, pinned **29** (ARTPOP 15 + Joanne 14 — not the prose 30: the Def Leppard item has an EMPTY Artists list), changed set → exit 3; pins registered in CONVENTIONS §5. Baselines: JF 70 albums / 1,244 audio, MA 70 / 1,244 provider-filtered; proof rows JF 3 PENDING, MA row 1 REPORTED — its name set moved to `Twista | Lady Gaga | Too $hort` (T.I. now absent), count unchanged (`369b27b`). No library write has happened yet.
 
