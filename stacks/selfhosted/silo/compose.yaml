@@ -98,7 +98,21 @@ services:
       # Keep the collation stable so a future pg_upgrade/restore does not reindex.
       - POSTGRES_INITDB_ARGS=--encoding=UTF8
     volumes:
-      - /mnt/fast/appdata/silo/postgres:/var/lib/postgresql/data
+      # MOUNT AT /var/lib/postgresql, **NOT** /var/lib/postgresql/data.
+      # Postgres 18+ Docker images changed this and refuse to start on the old layout:
+      #   "in 18+, these Docker images are configured to store database data in a format
+      #    which is compatible with pg_ctlcluster (specifically, using major-version-
+      #    specific directory names) ... there appears to be PostgreSQL data in:
+      #    /var/lib/postgresql/data (unused mount/volume)"
+      # (docker-library/postgres#37, PR #1259). The image then sets
+      # PGDATA=/var/lib/postgresql/18/docker itself, so data lands in an 18/ subdirectory
+      # and `pg_upgrade --link` can work without crossing a mount boundary later.
+      # Mounting one level deeper made silo-db exit 1 and restart-loop, and because
+      # `depends_on: condition: service_healthy` gates the app, silo never started either.
+      # Every other PG18 container on this estate (paperless_postgres, teslamate-db,
+      # n8n-db, jellystat-db, ai-postgress) already mounts at /var/lib/postgresql --
+      # this now matches them.
+      - /mnt/fast/appdata/silo/postgres:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${SILO_DB_USER:-silo} -d ${SILO_DB_NAME:-silo}"]
       interval: 30s
