@@ -1,0 +1,293 @@
+# ====================================================================================
+# Silo — Jellyfin-compatible media server (Go + Postgres), AGPL-3.0
+# ====================================================================================
+#
+# WHAT THIS IS, AND WHAT IT IS NOT.
+#   Silo is a SPIKE alongside Jellyfin, not a replacement for it. Two of its non-goals
+#   are permanent and settle that:
+#     - Live TV is out of scope FOREVER. docs/non-goals.md names HDHomeRun by name,
+#       plus DVB, IPTV/M3U/Xtream, EPG/XMLTV, DVR and .strm: "not in core, not in a
+#       plugin, not in a client." Jellycompat hardcodes EnableLiveTvAccess:false.
+#       => Dispatcharr + the HDHomeRun can never migrate here.
+#     - There is NO music library type. Seven types exist (movies, series, mixed,
+#       audiobooks, ebooks, manga, podcasts); MusicAlbum returns empty and there is no
+#       /MusicGenres route (/Artists is a stub).
+#       => the tagged music library (issue #305) can never live here either.
+#   Operator accepted both on 2026-09-26: Music Assistant covers music, Dispatcharr
+#   covers TV, and Jellyfin's own handling of each was judged poor anyway.
+#
+# MATURITY — READ BEFORE TRUSTING THIS WITH ANYTHING.
+#   ZERO git tags and ZERO GitHub releases at four months old; the project's own
+#   docs/release-versioning.md says "the repository has no release tags". Bus factor 1
+#   (lead 1,411 commits, next human 92). 312 open issues. `latest` moves 10-20x PER DAY.
+#   Worst of all, docs/update-to-1.0.md describes a ONE-WAY path: "1.0 is not reachable
+#   directly from an arbitrary alpha build" — installs must go 0.x -> a final BRIDGE
+#   RELEASE -> 1.0, and 1.0's squashed schema "refuses to start" on anything else.
+#   That bridge release DOES NOT EXIST YET. Rolling the image back does not reverse
+#   migrations. Treat every byte in silo-db as expendable and re-creatable.
+#
+# WHY NOT `nightly`: it is ABANDONED, not a fast stream — its image was built
+#   2026-05-25 and no current workflow writes it. `latest` is the live tag. We pin a
+#   DIGEST because there is no semver to pin instead.
+#
+########################### NETWORKS
+networks:
+  # Traefik's shared proxy network.
+  t3_proxy:
+    external: true
+
+  # Karakeep's network, joined SOLELY to reach karakeep-meilisearch:7700.
+  # Operator's explicit request: share one Meilisearch rather than stand up a third.
+  # That is safe here, and the safety is a property of Silo's code rather than a hope:
+  # internal/catalog/search_indexer.go:565-586 scopes index deletion to
+  # "<prefix>_rebuild_" and its own recorded previous-active index, with the comment
+  # "Indexes outside the prefix are never touched, so a shared Meilisearch instance
+  # stays safe." Silo's live indexes are named silo_media_items_rebuild_<unix>, so they
+  # cannot collide with Karakeep's `bookmarks`.
+  #   ⚠ THE ONE WAY TO BREAK THAT: previousActiveUID is deleted regardless of prefix.
+  #     It comes from Silo's own state so it is safe as configured — but if anyone ever
+  #     points catalog.search.meilisearch.index at a name another app owns, Silo will
+  #     delete that app's index on its next rebuild. Keep the prefix distinct.
+  # Also note v1.54.0 is not merely "compatible": it is the exact version Silo's own
+  # compose pins and tests against.
+  karakeep_default:
+    external: true
+
+  # Private network for Silo <-> its own Postgres. Nothing else joins it.
+  silo:
+    name: silo
+
+########################### SERVICES
+services:
+
+  # ────────────────────────────────────────────────────────────────────────────────────
+  # Dedicated Postgres. DELIBERATELY NOT SHARED — this is the one place we go against
+  # the estate's Postgres-consolidation goal, and the reason is isolation, not tidiness:
+  #   - Silo is alpha with 312 open issues and a one-way 1.0 migration path;
+  #   - its migrations run AT STARTUP under a database lock before the HTTP listener
+  #     opens, so a slow one stalls the server and would stall a shared server's other
+  #     tenants with it;
+  #   - max_connections defaults to 100 and Silo will happily use them.
+  #   ai-postgress (pgvector/pgvector:0.8.6-pg18) was the obvious shared candidate and
+  #   was rejected: it backs Open WebUI, and risking a working service to save one
+  #   container is the wrong trade for a pre-release product.
+  #
+  # pgvector is MANDATORY, not optional: migrations/sql/001_schema.sql:27 does
+  # `CREATE EXTENSION IF NOT EXISTS vector`. A stock postgres:18 image does NOT carry
+  # the pgvector binary, which is why this is the pgvector image. It also needs pg_trgm
+  # (102_catalog_perf_indexes.sql) and citext (165_case_insensitive_username_email.sql);
+  # both of those ARE trusted extensions so the database owner can create them, but
+  # `vector` is NOT trusted (pgvector#288) and needs superuser — which is fine here
+  # because on a dedicated instance POSTGRES_USER *is* the superuser.
+  silo-db:
+    # renovate: datasource=docker depName=pgvector/pgvector
+    image: pgvector/pgvector:pg18
+    container_name: silo-db
+    restart: unless-stopped
+    # Bounds a runaway, not steady state — estate convention. Silo's schema is large
+    # but the working set for a spike library is small.
+    mem_limit: 1g
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - silo
+    environment:
+      - POSTGRES_DB=${SILO_DB_NAME:-silo}
+      - POSTGRES_USER=${SILO_DB_USER:-silo}
+      - POSTGRES_PASSWORD=${SILO_DB_PASSWORD:?SILO_DB_PASSWORD must be set in .env}
+      # Keep the collation stable so a future pg_upgrade/restore does not reindex.
+      - POSTGRES_INITDB_ARGS=--encoding=UTF8
+    volumes:
+      - /mnt/fast/appdata/silo/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${SILO_DB_USER:-silo} -d ${SILO_DB_NAME:-silo}"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  # ────────────────────────────────────────────────────────────────────────────────────
+  silo:
+    # Pinned by DIGEST because the project publishes no semver and no git tags at all.
+    # This digest is build-923, revision 54dcc2f3, built 2026-09-26T15:47:38Z.
+    # `latest` moves 10-20 times a day, so a tag pin here would be meaningless.
+    # renovate: datasource=docker depName=ghcr.io/silo-server/silo-server
+    image: ghcr.io/silo-server/silo-server@sha256:ff0ee96908ba2db0102c658fe3a0ca9bb1f436b1c5863a611c158e0ab41abd6c
+    container_name: silo
+    restart: unless-stopped
+    # Bounds a runaway. Chosen deliberately low because LXC 100 had ~8 GiB available of
+    # 24 GiB when this was deployed, with 82 containers already running. Four OPEN
+    # upstream issues describe work that never finishes and would otherwise grow without
+    # bound: #666 (progress pings keep dead sessions alive, transcode slots held 15h with
+    # zero byte flow), #998 (orphaned downloads keep transcoding), #581 (ffmpeg/ffprobe
+    # stalls block scans with no timeout), #411 (deleting a large library never completes).
+    mem_limit: 3g
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      silo-db:
+        condition: service_healthy
+    networks:
+      - t3_proxy
+      - karakeep_default
+      - silo
+    ports:
+      # ONLY the web/API listener is published, on 8090.
+      #
+      # The container also listens on 8096 (Jellyfin/Emby compat) and 13378
+      # (Audiobookshelf compat), and BOTH are enabled by default. Neither is published:
+      #   - 13378 IS ALREADY TAKEN on this host by the audiobookshelf container.
+      #     Publishing it would fail to bind, and this estate has a documented case of a
+      #     container sitting in `created` for six weeks over exactly that class of
+      #     conflict (dispatcharr/pulse-agent on 9191, see NETWORK.md).
+      #   - 8096 is Jellyfin's canonical port. It is free on the host today only because
+      #     Jellyfin lives on iot_macvlan at 172.16.1.76 and publishes nothing. Taking it
+      #     would make "8096 on this box" ambiguous for whoever debugs it next.
+      # Disable both compat listeners in Admin -> Settings if they are not wanted; they
+      # remain reachable container-internally regardless.
+      - "8090:8080"
+    environment:
+      # ── The only two REQUIRED variables (internal/config/bootstrap.go) ──────────────
+      - DATABASE_URL=postgres://${SILO_DB_USER:-silo}:${SILO_DB_PASSWORD:?}@silo-db:5432/${SILO_DB_NAME:-silo}?sslmode=disable
+      # >= 32 chars, enforced (minSecretKeyLen). The server refuses to start without it.
+      # It encrypts integration API keys, S3 credentials, plugin config secrets AND the
+      # Tailscale plugin's tsnet node identity. Silo's own compose says: "Back it up
+      # SEPARATELY from your database dumps; losing it makes encrypted secrets
+      # unrecoverable." The docs say "treat it like a CA private key."
+      - SECRET_KEY=${SILO_SECRET_KEY:?SILO_SECRET_KEY must be set in .env, >=32 chars}
+
+      - MODE=integrated
+      - PORT=8080
+      - JF_PORT=8096
+
+      # POSTGRES_TUNE IS DELIBERATELY UNSET — do not add it.
+      # Unset means DISABLED at code level (postgres_tune.go:114-118 returns early on an
+      # empty value); it is Silo's own compose that defaults it to `auto`. Enabled, it
+      # writes shared_buffers/effective_cache_size/etc. via persistent ALTER SYSTEM into
+      # postgresql.auto.conf, and turning it off later does NOT remove what it wrote.
+      # Two further reasons it must stay off HERE specifically:
+      #   - it would need ALTER SYSTEM rights on the app credential;
+      #   - its memory detection falls back to /proc/meminfo, and inside nested LXC
+      #     Docker without the lxcfs view that is the PHYSICAL host's RAM, not this
+      #     container's 24 GiB.
+      # (For the record, its budget maths is gentler than often claimed: shared_buffers
+      # is budget/4 ~= 18.75% of detected RAM, and effective_cache_size allocates
+      # nothing. It is still not wanted on a box with 82 containers.)
+
+      # Plugin binaries are cached here; the Tailscale plugin lands in this directory.
+      - SILO_PLUGIN_CACHE_DIR=/var/lib/silo/plugins
+
+      # Default is 20m. Raised because a big-table-rewrite migration on an alpha schema
+      # is exactly the thing that would time out halfway, and migrations hold a DB lock.
+      - SILO_MIGRATE_TIMEOUT=60m
+
+      - TZ=${TZ:-Europe/Dublin}
+
+      # NOT SET, on purpose:
+      #   REDIS_URL       — optional in `integrated` mode. ai-redis could serve it later
+      #                     on its own DB index (keys are namespaced silo:*, and there is
+      #                     no FLUSHDB/FLUSHALL/KEYS anywhere in the code), but a spike
+      #                     does not need a third moving part on day one.
+      #   SILO_METRICS_LISTEN — the metrics endpoint is UNAUTHENTICATED. If it is ever
+      #                     enabled, bind it to 127.0.0.1 and never route it.
+      #   SILO_TRUSTED_PROXIES — when set it OVERWRITES the admin setting on every
+      #                     startup. The default already trusts RFC1918 + loopback, which
+      #                     is what Traefik needs. If it is ever narrowed, loopback MUST
+      #                     be kept: the network-access middleware depends on it.
+    volumes:
+      # Media READ-ONLY. This is the single most valuable property Silo has for this
+      # estate: it never writes beside media. NFO handling is a read-only metadata
+      # provider, artwork goes to its own blob store, and even downloaded subtitles go
+      # to the blob store under a subtitles/ prefix. That is the direct opposite of
+      # Jellyfin's SaveLocalMetadata, which is a standing problem here — it rewrote 83
+      # of 91 .nfo in the Music library when a refresh was tested.
+      - /mnt/tank/media:/mnt/media:ro
+
+      - /mnt/fast/appdata/silo/plugins:/var/lib/silo/plugins
+      - /mnt/fast/appdata/silo/artwork:/var/lib/silo/artwork
+      - /mnt/fast/appdata/silo/compat:/var/lib/silo/compat
+      # Transcode scratch. Bound to real disk on purpose — left unbound it lands on the
+      # container filesystem, i.e. LXC 100's 126 G ext4 root, which is the exact failure
+      # that once put 19 GB of Jellyfin transcode cache on / and emptied it.
+      # Deliberately NOT under /mnt/fast/transcode: that dataset carries a 50 G quota
+      # sized for Jellyfin, and sharing it would let a Silo transcode starve a live TV
+      # stream of its ENOSPC headroom.
+      - /mnt/fast/appdata/silo/transcode:/tmp/silo-transcode
+
+      # lxcfs-virtualised /proc, read-only. Silo's own docs have a section on this:
+      # Docker nested inside an LXC sees the PHYSICAL host's /proc/stat, /proc/loadavg
+      # and /proc/meminfo while its own cgroup reports no limit, so resource reporting
+      # and any auto-tuning read the wrong machine. LXC 100's /proc IS the virtualised
+      # view (free -g reports 24 GiB, not the host's 28), so passing it through gives
+      # Silo the honest numbers.
+      #   ⚠ Proxmox caveat from those same docs: lxcfs only virtualises /proc/loadavg
+      #     when run with -l, and on Proxmox that defaults to OFF. So loadavg here may
+      #     still be the physical host's. Do not read Silo's load figures as its own.
+      - /proc/meminfo:/host/proc/meminfo:ro
+      - /proc/stat:/host/proc/stat:ro
+      - /proc/loadavg:/host/proc/loadavg:ro
+
+    # NO /dev/dri, AND NO devices: BLOCK AT ALL — hardware transcode stays off.
+    # This is the D-30 amdgpu mitigation applied to a second consumer. Jellyfin's
+    # hwaccel was turned OFF deliberately after the 2026-08-31 outage (~6 h), and an
+    # orphaned VAAPI ffmpeg is a known second GPU userptr source behind that kernel oops.
+    # Silo's VAAPI path is the same hwupload on /dev/dri/renderD* and is UNVALIDATED
+    # upstream: issue #1174 is open with all three coverage cases recorded "Not run",
+    # and #610 notes the image ships an OpenCL ICD loader with no driver, so the only
+    # GPU HDR tone-map path is unusable anyway. Belt and braces, also set
+    # playback.hw_accel=none in Admin -> Settings (default is `auto`).
+    healthcheck:
+      # /api/v1/health is liveness; /api/v1/ready also checks dependencies. Both are
+      # documented as retained permanently across the v1->v2 cut.
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/api/v1/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      # Migrations run at startup under a DB lock BEFORE the HTTP listener opens, so a
+      # long one legitimately shows `unhealthy` for a while. Follow the logs; do not
+      # restart it mid-migration.
+      start_period: 180s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=t3_proxy"
+
+      # ── AUTHELIA IS DELIBERATELY IN FRONT, and the reason is recorded on purpose ────
+      # Jellyfin does NOT sit behind Authelia on this estate because media clients
+      # cannot complete an SSO redirect. Silo's WEB UI is a different case: no client is
+      # pointed at it, the Jellyfin-compat listener is not published, and the software is
+      # pre-release with 312 open issues. So the web UI gets SSO in front of its own
+      # login — defence in depth on an alpha.
+      #
+      # This comment exists because of what an audit on 2026-09-26 found: a router with
+      # a Host() rule and NO middlewares= label is PUBLIC the instant DNS exists, and
+      # two such routers were live that day — immich-kiosk was serving the family photo
+      # library unauthenticated, and the Ollama API (which has no auth of its own) was
+      # open to the internet. "No middleware, reason unrecorded" is the shape that
+      # produced both. If SSO is ever removed here to admit a client, add an explicit
+      # replacement control and say so on this line.
+      - "traefik.http.routers.silo-rtr.entrypoints=websecure"
+      - "traefik.http.routers.silo-rtr.rule=Host(`silo.deercrest.info`)"
+      - "traefik.http.routers.silo-rtr.middlewares=chain-authelia@file"
+      - "traefik.http.routers.silo-rtr.tls=true"
+      - "traefik.http.routers.silo-rtr.tls.certresolver=dns-cloudflare"
+      - "traefik.http.services.silo-svc.loadbalancer.server.port=8080"
+      - "traefik.http.routers.silo-rtr.service=silo-svc"
+
+      # tsbridge is NOT enabled here. Silo has its own Tailscale plugin
+      # (Silo-Community/silo-plugin-tailscale v0.1.3, ironicbadger) which is also
+      # userspace tsnet + gvisor — verified: no /dev/net/tun, no NET_ADMIN, no daemon.
+      # Using both would put two tsnet nodes in front of one service. Install the plugin
+      # from Admin -> Plugins instead; it needs MagicDNS and HTTPS certificates enabled
+      # in the tailnet, and a tskey-auth-* key (NOT OAuth).
+      #   For the record: this plugin is why Silo was once thought to justify adding
+      #   /dev/net/tun to LXC 100. It does not, and never did.
