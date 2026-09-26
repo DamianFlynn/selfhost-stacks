@@ -130,3 +130,96 @@ MA PERIODIC SYNC: COULD NOT LOOK — run 2, HA REST (hass.deercrest.info) slug d
 
 => STOP again (P-01 fails closed). Nothing staged; no cp, no chown, no preview; D-29 not
    evaluated. Ledger gains a second `STOP STATE 07-10-MA-PERIODIC-SYNC` line. Task 2 is hold-only.
+
+## Task 1 — RUN 3 (2026-09-26, 15:4xZ onward): operator-approved MA API route from LXC 100 (D-39)
+
+OPERATOR ROUTE ANSWER (Task 1 route only — NOT a Task 2 answer): question "The MA add-on log only
+holds the current boot (~4 h, since ~11:03Z today); the P-01 gate needs 24 h to see whether MA runs
+a periodic provider sync. How should 07-10 proceed?"; options "wait, re-run tomorrow" / "MA API
+from LXC 100 (D-39)" / "sync barrier" / "hold (decide later)"; verbatim answer "MA API from LXC
+100 (D-39)"; relayed verbatim by the orchestrator ~2026-09-26T15:4xZ. Terms: read-only calls only.
+
+Credential handling: /mnt/fast/secrets/ma-deercrest.env gated on mode `600 root` (read: 600 root),
+sourced without `set -a`; login exactly as scripts/check-music-consumers.sh ma_login (jq reads
+the pair from its own env, body on stdin); bearer passed as `-H @<(printf …)`; token never printed.
+MA_URL http://172.16.1.31:8095, login OK. GET /info: server_version 2.11.0b2 (was 2.11.0b0 when
+P-01 was measured on 2026-09-25), schema 68.
+
+Calls made (all reads; the command schema was read first, and every call below is declared with a
+read scope — config.core.read / system.read — except logging/get, which is `system.manage`
+scope but is documented "Return the application log from file" and takes no parameters):
+  GET  /api-docs/commands.json      311 commands. Sync/scheduler-related: music/sync (WRITE, not
+                                    called), tasks/list|get|log (read), tasks/run|update_schedule|
+                                    set_enabled|cancel|retry|remove|clear_finished (WRITE, not called),
+                                    logging/get (read).
+  config/providers                  30 providers; filesystem_local--XJaJWNUS enabled.
+  config/providers/get (fs local)   11 entries; NO interval/schedule key. The sync toggles are
+                                    library_sync_{artists,albums,tracks,playlists,podcasts,
+                                    audiobooks} = true. This is why 2026-09-25's reading found "no
+                                    sync-interval setting": the interval does not live in provider
+                                    config.
+  config/core                       domains discovery, streams, webserver, players, metadata,
+                                    cache, music, player_queues, tasks.
+  config/core/get tasks             max_concurrent_tasks 2, log_level GLOBAL. No schedule key.
+  config/core/get music             reset_db (action, not invoked), log_level. No schedule key.
+  tasks/list                        23 tasks WITH `schedule` objects — the scheduler lives here.
+  logging/get                       179 lines, 20,496 bytes, one server start in it.
+  (music/synctasks was also sent in the first read script; MA returned "Invalid Command" — a
+  read name that does not exist in 2.11.0b2; logged by MA as an ERROR line at 15:47:40Z.)
+
+POSITIVE CONTROL that the read would show a schedule if one existed: the same tasks/list response
+carries enabled schedules on 13 recurring tasks, e.g. `playlist_metadata_cleanup` hourly every 2,
+`genre_mapping_scan` daily 04:00, `music_sync_builtin--bbsqELSo_*` hourly every 3 — and its
+`genre_mapping_scan` last_run 15:16:11.979Z matches the `Genre mapping scan completed` line the
+run-2 add-on log shows at 16:16:11.969 local. The read is not blind.
+
+FINDING — the local filesystem provider IS on a periodic schedule (tasks/list, read 15:48:07Z):
+  id music_sync_filesystem_local--XJaJWNUS_artist    schedule hourly every 12, enabled  last_run 2026-09-26T09:16:11.967Z  next_run 2026-09-26T21:16:11.967Z
+  id music_sync_filesystem_local--XJaJWNUS_album     schedule hourly every 12, enabled  last_run 2026-09-26T09:16:11.968Z  next_run 2026-09-26T21:16:11.968Z
+  id music_sync_filesystem_local--XJaJWNUS_playlist  schedule hourly every 12, enabled  last_run 2026-09-26T09:16:13.756Z  next_run 2026-09-26T21:16:13.756Z
+  id music_sync_filesystem_local--XJaJWNUS_track     schedule hourly every 12, enabled  last_run 2026-09-26T09:17:23.383Z  next_run 2026-09-26T21:17:23.383Z
+  All four: status success, created_at 2026-09-25T21:15:48Z (the server start), last_run_user_id null
+  (scheduler-initiated, not a user).
+
+SYNC-LINE PATTERN — derived from REAL provider-sync lines in MA's own log (logging/get), not
+guessed; the log is in local time UTC+1 (same offset measured in run 2):
+  PAT = \[music_assistant\.Filesystem \(local disk\)\] Found [0-9]+ changed/new items to process for Filesystem \(local disk\)
+  Drive (CONVENTIONS §8.3): a real sync line -> 1; `[music_assistant] Loaded music provider
+  Filesystem (local disk)` -> 0; `[music_assistant.music.genre] Genre mapping scan completed` -> 0.
+  Over the full log: 5 matches —
+    2026-09-25 22:16:13.750 / 22:16:13.906 / 22:17:24.469 local = 21:16:13Z / 21:16:13Z / 21:17:24Z (first run after the 21:15:38Z server start)
+    2026-09-26 10:16:15.517 / 10:17:24.521 local            = 09:16:15Z / 09:17:24Z (scheduled run, 12 h later; matches tasks/list last_run)
+  Interval between runs: 12 h 00 min. Each reports `Found 0 changed/new items`.
+  No recorded operator or executor action explains either run (07-09 ran 14:4x–15:0xZ today; no
+  plan has called music/sync since Phase 6).
+  Log coverage: 2026-09-25T21:15:38Z (server start) … 2026-09-26T15:48:07Z, ~18.5 h — short of 24 h,
+  but FOUND does not depend on the full window: the scheduler state plus two logged runs 12 h apart
+  settle it.
+
+MA counts, provider-filtered (music/{albums,tracks,artists}/library_items, provider
+filesystem_local--XJaJWNUS, limit 5000; control: a bogus instance id returns 0), 15:49:47Z:
+  albums 70, tracks 1244, artists 66 — equal to 07-07's baseline 70 / 1,244 / 66.
+
+OPERATOR REQUEST, NOT EXECUTED: the operator also asked (relayed verbatim ~15:5xZ: "can you trigger
+music assistant via the api to do the scan") for ONE manual `music/sync` of the local provider as a
+positive control. The guarded script (refused to trigger unless the pre-counts equal the baseline and
+providers == [filesystem_local--XJaJWNUS]) was REFUSED by this session's permission classifier
+before it ran ("Modify Shared Resources"). Nothing was sent to music/sync; nothing was scp'd for it.
+It is now also redundant for P-01: the pattern above was derived and driven from real scheduled
+sync lines, which is what the manual sync was meant to supply.
+
+MA PERIODIC SYNC: FOUND — filesystem_local--XJaJWNUS syncs every 12 h by MA's own scheduler (tasks music_sync_filesystem_local--XJaJWNUS_{artist,album,playlist,track}, hourly every 12, enabled); logged runs 2026-09-25T21:16:13Z–21:17:24Z and 2026-09-26T09:16:15Z–09:17:24Z (interval 12 h, 0 items each, no operator/executor action behind them); NEXT RUN 2026-09-26T21:16:11Z
+
+=> STOP (P-01: FOUND is a STOP). Nothing staged; D-29 not evaluated. No MA setting was changed
+   and no task schedule was touched — the barrier is the operator's decision. Consequence for the
+   plan: any P01 import that is in /media/Music at 21:16Z (or any later 12-hourly run) is picked up
+   by MA, outside the fence, before 07-11's undo can run — exactly the T-07-10-05 threat.
+   Barrier options available through the API (writes, NOT done): `tasks/set_enabled` false on the
+   four music_sync_filesystem_local--XJaJWNUS_* tasks for the pilot's duration, or
+   `tasks/update_schedule`. Ledger gains `STOP STATE 07-10-MA-PERIODIC-SYNC: FOUND`.
+
+Run 3 pre-gate re-reads (15:50:47Z): 07-09 token `STATE 07-09-GRANTED`; check-beets-config.sh EXIT 0,
+FAILURES 0, copy=[true] move=[false] write=[true]; both `@pre-07-pilot` snapshots present (exact
+whole-line count 2); inboxes 01-auto 0 / 02-review 0 / 03-asis 0; beets-flask /media RW=true;
+library.db (mode=ro) items 0.
+PRE-STAGING IMPORT KEYS: PASS (copy=true move=false write=true)
