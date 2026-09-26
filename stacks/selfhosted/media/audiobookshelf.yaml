@@ -12,10 +12,35 @@ services:
     networks:
       - t3_proxy
     volumes:
-      - ${APPDATA}/audiobookshelf:/config
-      - ${APPDATA}/audiobookshelf/metadata:/metadata
-      - ${MEDIA}/audiobooks:/audiobooks
-      - ${MEDIA}/podcasts:/podcasts
+      # PATHS ARE LITERAL ON PURPOSE -- do not reintroduce ${APPDATA}/${MEDIA}.
+      #
+      # This service was BROKEN from at least 2026-06-11 to 2026-09-26 and looked healthy the
+      # whole time. `${APPDATA}` and `${MEDIA}` are defined NOWHERE in this estate: there is no
+      # root-level .env at /mnt/fast/stacks, and this stack's own media/.env defines only PUID,
+      # PGID, TZ, DOMAINNAME and a few service secrets. Compose substituted empty strings and
+      # emitted only a `variable is not set` warning, so the container silently bind-mounted
+      # /audiobookshelf, /audiobooks and /podcasts -- absolute paths on LXC 100's 126 G ext4
+      # ROOT filesystem (same family as the documented "/mnt/fast/appdata is not a mountpoint"
+      # trap). Result: the config sqlite sat unbacked on the root fs and the library was mounted
+      # at an empty directory, so audiobookshelf served ZERO books while running, healthy and
+      # proxied. The real 22 G / 999-file library at /mnt/tank/media/Books was never mounted.
+      #
+      # Every other service in this stack (jellyfin, dispatcharr, jellystat, seerr, wizarr) uses
+      # literal paths. This file was the only one using the variables, which is why nothing else
+      # broke and why nobody noticed.
+      - /mnt/fast/appdata/media/audiobookshelf:/config
+      - /mnt/fast/appdata/media/audiobookshelf/metadata:/metadata
+      # The library: 938 mp3 + 40 m4b + 21 m4a across 9 author folders, ALREADY visible inside
+      # LXC 100 via an existing mount of /mnt/tank/media -- so this needed no new mount_point,
+      # and therefore did not go near the bpg provider's block-level ForceNew landmine on the
+      # positional mount_point list (see infra/lxc-selfhost.tf).
+      - /mnt/tank/media/Books:/audiobooks
+      # NO /podcasts MOUNT. There is no podcasts directory anywhere on tank, and podcasts are
+      # already owned by podsync, which downloads to /mnt/fast/appdata/hoarder/podsync/downloads
+      # and serves its own feeds. The previous `${MEDIA}/podcasts` line resolved to an empty
+      # /podcasts on the container root and served nothing. If audiobookshelf should ever also
+      # serve podcasts, mount podsync's downloads directory read-only and add the library in the
+      # UI -- do not recreate a path that does not exist.
     environment:
       - PUID=568
       - PGID=568
