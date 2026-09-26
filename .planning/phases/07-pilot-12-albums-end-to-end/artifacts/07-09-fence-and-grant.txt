@@ -181,3 +181,197 @@ GATE: Take the two-dataset fence and deploy the D-22 grant now?
 
 AWAITING OPERATOR ANSWER (no answer recorded yet; the `OPERATOR ANSWER` and `DISPOSITION:` lines are
 written by the continuation run once the operator has answered).
+
+## RUN 2 — 2026-09-26T14:44:56Z
+
+Continuation run. RUN 1 measured and asked; the operator answered RUN 1's gate `proceed` (below). The
+world moved between RUN 1 (00:08:37Z) and the answer — another session committed and pushed 1a0f556
+(audiobookshelf mounts), 61acd67 (paperless host rename) and dc84c5b (check-music-freeze.sh pin
+13 -> 9) — so Task 1's reads were re-taken here, per the run rules, before any write. RUN 1 is not
+edited; the answer is recorded in this section because both verifies read only the newest section.
+
+LEDGER READ: `LC_ALL=C /usr/bin/grep -oE '^(STOP )?STATE 07-09-[A-Z][A-Z-]*[A-Z]' artifacts/07-pilot-ledger.txt | tail -n 1`
+  → ledger file does not exist (`ls` rc 1). No token has ever been written.
+NEWEST 07-09 TOKEN: none
+GOVERNING 07-09 TOKEN: none
+Expected reading for GOVERNING=none: the fresh reading (both pre-07-pilot names ABSENT, pre-phase5 PRESENT).
+
+MEASURED STATE (re-taken 2026-09-26T14:44:56Z .. 14:50Z)
+
+(a) instruments landed — workstation HEAD = dc84c5b3e6720704079257c652ba3bd83a3878ef
+  git merge-base --is-ancestor: 823fe04 rc=0, 70cd38c rc=0, 88beeff rc=0, 926f1ff (D-22) rc=0.
+  07-01 … 07-08 SUMMARY.md present (unchanged since RUN 1).
+
+(b) workstation git: `git status --porcelain` empty; after `git fetch origin`:
+  origin/main..HEAD = 0, HEAD..origin/main = 0 → origin/main == HEAD == dc84c5b. The push step of
+  Task 2 is a no-op (the other session already pushed every Phase 7 commit).
+
+(c) host checkout — LXC 100 /mnt/fast/stacks; ssh rc 0
+  `git status --porcelain` read into a variable: status_rc=0 lines=0 → CLEAN
+  rev-parse HEAD = dc84c5b3e6720704079257c652ba3bd83a3878ef   (already pulled by the other session)
+  git fetch origin: fetch_rc=0 (renovate/* branches force-updated only); origin/main = dc84c5b
+  ahead=0 behind=0 → host HEAD == workstation HEAD already; `pull --ff-only` will be a no-op.
+  Consequence recorded: the host checkout already carries the D-22 compose change (flask.yaml
+  /mnt/tank/media:/media:rw) but the container has NOT been recreated — see (g), RW=false,
+  StartedAt unchanged since RUN 1. The grant is still undeployed.
+
+(d) ZFS — atlantis, id=0 host=atlantis; list_rc=0
+  tank/media/Music snapshots: identical to RUN 1's twelve (newest inc-20260926-0020).
+  fast/appdata/arrs snapshots: identical to RUN 1's five.
+  tank/downloads snapshots: pre-project, pre-chown, pre-phase5, pre-phase5-chown (+ the unchanged
+    mybook-music-archive children).
+  Exact whole-line counts (grep -cxF):
+    tank/media/Music@pre-07-pilot    = 0  ABSENT  (PASS)
+    fast/appdata/arrs@pre-07-pilot   = 0  ABSENT  (PASS)
+    tank/downloads@pre-phase5        = 1  PRESENT (PASS)
+  zfs list -o name,used,avail,refer:
+    fast 465G 1.30T 136K | fast/appdata/arrs 5.02G 1.30T 4.82G | tank 41.9T 5.26T 160K |
+    tank/media/Music 33.9G 5.26T 33.9G
+  mountpoint fast/appdata/arrs = /mnt/fast/appdata/arrs (PASS); written tank/media/Music = 0.
+  /mnt/fast/safety/phase07/fence does not exist yet (expected; created by Task 2).
+  → fresh reading, CONSISTENT with GOVERNING=none.
+
+(e) beets DB — docker exec beets-flask; sha_rc=0, count_rc=0
+    fbbdde0c416e72b9884e56c562fd88eaa4da447926e1cb6cc17c3e04aee7da1a  /config/library.db    (= fixture)
+    f6a9a1ad7aa553e42e53a8056fa80724785111180a5e2122be4f8732d1e4bc7c  /config/state.pickle  (= fixture)
+    items 0, albums 0 (sqlite3 mode=ro via /venv/bin/python) — PASS
+
+(f) inboxes — atlantis, find -type f over the audio extension set, timeout 60, rc 0 each
+    01-auto audio=0 entries=0 | 02-review audio=0 entries=0 | 03-asis audio=0 entries=0 — PASS
+
+(g) beets-flask — inspect_rc=0, logs_rc=0
+  running=true started=2026-09-25T23:31:10.593073583Z (same as RUN 1 — not recreated) image v2.0.0-rc6
+  /mnt/tank/media -> /media RW=false (PASS, pre-grant); /config/config.yaml RW=false;
+  /config/beets-flask/config.yaml RW=false; /config RW=true; /downloads RW=true; /logs RW=true
+  newest watchdog line: three inboxes incl. 01-auto (pre-grant, PASS).
+
+(h) appdata modes/owners/digests (LXC 100):
+  660 568:568 …/beets/config/config.yaml              661c729738a12be61d94dcf0cf0bfb6b0cdaa9c996d2ed9fffb9bc494394668f
+  660 568:568 …/beets/config/beets-flask/config.yaml  949bd1f3b13501d448865ce2d19195db209050279f8a0022e97cd7e54d835db8
+  repo targets: config.yaml 7d7264546e7aafe791c3b2c28dc1b39cdf818ff3105f02f5834eb4208103fdab
+                flask-config.yaml 875fcf7ef5246fbfaef373824653381c7e43d3801c099a94e4046fcae63813c8
+
+(i) consumers:
+  Jellyfin http://172.16.1.76:8096/System/Info/Public from the workstation: http=200.
+  Music Assistant http://172.16.1.31:8095/info from the WORKSTATION: http=000 curl rc 28 twice, ping
+    100 % loss — a workstation-route fact (the workstation is off-LAN, ~65 ms RTT to 172.16.1.1).
+    Re-read from LXC 100: http=200 rc=0, ping 0 % loss. MA is reachable; recorded as a route note,
+    not a could-not-look (the reading was taken, from the host that consumes it).
+
+(j) dc84c5b vs 07-08's D-22 freeze exception (orchestrator's ask):
+  `git show dc84c5b -- scripts/check-music-freeze.sh`: the only non-comment change is
+    -DECLARED_INTERP_EXPECTED="${DECLARED_INTERP_EXPECTED:-13}"
+    +DECLARED_INTERP_EXPECTED="${DECLARED_INTERP_EXPECTED:-9}"
+  PHASE7_RW_TAGGER / _SRC / _DST / _DECL (lines 147-150) and their three use sites are untouched.
+  `bash -n` rc 0. The script has no self-test mode, so it was run read-only on the host at dc84c5b:
+    freeze_rc=0; "declared rw, Phase 7 D-22/D-23 tagger exception (beets-flask): 1";
+    "tagger-class D-22 exception: 0"; FAILURES total: 0. → exception intact.
+
+DEPENDENCY REASONING (RUN 1's six answers re-checked against the re-measurement)
+1. Instruments hardened and committed: unchanged — every commit RUN 1 cited is an ancestor of dc84c5b.
+2. Evidence map committed before any write: 823fe04 ancestor; no pre-07-pilot name exists, written=0,
+   /media RW=false.
+3. Host can fast-forward: better than RUN 1 — the host is already AT dc84c5b, clean, 0/0; there is no
+   divergence and nothing to pull. The three foreign commits touch audiobookshelf.yaml, the paperless
+   host rule and a freeze-script constant; none touches arrs/, beets or the D-22 files.
+4. Room: 8.3 GB pilot copy vs tank 5.26T avail; fast 1.30T avail. Unchanged.
+5. Dormant arm: the grant is beets-flask only; the CLI beets arm stays :ro (operator chose `proceed`,
+   not `grant-both`).
+6. Budgeted review: unspent; the operator chose not to spend it here.
+RECOMMENDATION: no re-measured fact contradicts the `proceed` preconditions — continue as answered.
+
+OPERATOR ANSWER (2026-09-26T14:3xZ; relayed verbatim by the orchestrator at 2026-09-26T14:39:46Z from
+  the operator's AskUserQuestion response to RUN 1's gate — "07-09 gate: take the two-dataset fence
+  (tank/media/Music@pre-07-pilot + fast/appdata/arrs@pre-07-pilot) and deploy the D-22 rw grant to
+  beets-flask now? 'proceed' also pushes 31 commits to origin/main (public repo) and fast-forwards the
+  host checkout." options hold / review-first / proceed / grant-both): "proceed"
+DISPOSITION: proceed
+
+TASK 2 — proceed
+
+Step 1 — push / host pull (2026-09-26T14:47:41Z)
+  `git push origin main`: "Everything up-to-date", push_rc=0 (origin already == dc84c5b; the other
+    session pushed — the "31 commits" in the gate question were already public before this run).
+  host `git -C /mnt/fast/stacks pull --ff-only`: "Already up to date.", pull_rc=0, ssh_rc=0
+  workstation HEAD = host HEAD = dc84c5b3e6720704079257c652ba3bd83a3878ef → HEAD EQUAL (PASS)
+
+Step 2 — THE FENCE: ONE ssh invocation on atlantis as real root (`ssh root@172.16.1.158 'bash -s' <
+  fence program`), ssh_rc=0, 2026-09-26T14:48:27Z.
+  ⛔ D-16, at this call site (and as the program's own header comment): zfs [r]ollback on
+  fast/appdata/arrs is FORBIDDEN on every branch — recovery is a file copy from
+  /mnt/fast/appdata/arrs/.zfs/snapshot/pre-07-pilot/beets/config/. zfs [d]estroy is not issued.
+  whoami id=0 host=atlantis
+  absent-assert tank/media/Music@pre-07-pilot: absent PASS
+  absent-assert fast/appdata/arrs@pre-07-pilot: absent PASS
+  tank/media/Music@pre-07-pilot
+    command issued: zfs [s]napshot tank/media/Music@pre-07-pilot
+    exit status:    0 (14:48:28Z)
+    listed back:    `zfs list -t snapshot -H -p -o name,creation` rc 0; exact whole-line count on the
+                    name column = 1; creation 1790434107 = 2026-09-26T14:48:27Z
+    PASS
+  fast/appdata/arrs@pre-07-pilot
+    command issued: zfs [s]napshot fast/appdata/arrs@pre-07-pilot
+    exit status:    0 (14:48:28Z)
+    listed back:    exact whole-line count on the name column = 1; creation 1790434108 = 2026-09-26T14:48:28Z
+    PASS
+  C11 order: tank/media/Music@pre-07-pilot FIRST (14:48:27Z), then fast/appdata/arrs@pre-07-pilot
+    (14:48:28Z) — two pools, one step, ~1 s apart, not one atomic snapshot. Nothing could write
+    library.db in the gap: /media was still :ro and no import is possible (inboxes 0).
+  written tank/media/Music = 0 after the fence; tank/downloads@pre-phase5 still present (count 1).
+  Safety copies (cp -p) → /mnt/fast/safety/phase07/fence/, and G-04 side by side (sha256):
+    library.db   source=fbbdde0c416e72b9884e56c562fd88eaa4da447926e1cb6cc17c3e04aee7da1a
+                 copy  =fbbdde0c416e72b9884e56c562fd88eaa4da447926e1cb6cc17c3e04aee7da1a
+                 .zfs/snapshot/pre-07-pilot view=fbbdde0c416e72b9884e56c562fd88eaa4da447926e1cb6cc17c3e04aee7da1a  EQUAL PASS
+    state.pickle source=f6a9a1ad7aa553e42e53a8056fa80724785111180a5e2122be4f8732d1e4bc7c
+                 copy  =f6a9a1ad7aa553e42e53a8056fa80724785111180a5e2122be4f8732d1e4bc7c
+                 .zfs/snapshot/pre-07-pilot view=f6a9a1ad7aa553e42e53a8056fa80724785111180a5e2122be4f8732d1e4bc7c  EQUAL PASS
+    (fixture values, 07-05 § 4.) ls -l, size/owner only: library.db 53248 apps:apps, state.pickle 47
+    apps:apps in both the copy dir and the snapshot view.
+  FENCE COMPLETE — both names listed back and asserted before any write on the library path.
+
+Step 3 — THE GRANT (2026-09-26T14:49:25Z, LXC 100, host HEAD dc84c5b; ssh_rc 0)
+  compose service resolved: `docker compose -f stacks/selfhosted/arrs/compose.yaml config --services`
+    (services_rc 0) lists `beets-flask` (project name `arrs`).
+  install -m 660 -o 568 -g 568 stacks/selfhosted/arrs/beets/config.yaml → /mnt/fast/appdata/arrs/beets/config/config.yaml   rc 0
+  install -m 660 -o 568 -g 568 stacks/selfhosted/arrs/beets/flask-config.yaml → …/beets-flask/config.yaml                   rc 0
+  C9 sha256 repo vs appdata:
+    config.yaml        repo=7d7264546e7aafe791c3b2c28dc1b39cdf818ff3105f02f5834eb4208103fdab appdata=same EQUAL
+    flask config.yaml  repo=875fcf7ef5246fbfaef373824653381c7e43d3801c099a94e4046fcae63813c8 appdata=same EQUAL
+  FINDING (mode): stat after install reads `760 568:568` on both, not the task-1 `660`, although
+    `install -m 660` was issued — fast/appdata/arrs is acltype=nfsv4 / aclmode=passthrough /
+    aclinherit=passthrough (read from atlantis), so the inherited ACL, not the requested mode, sets
+    the bits LXC 100 reports. Owner/group preserved. Not a stop condition (the stop is a sha256
+    mismatch); recorded for the operator, not "fixed" by a chmod.
+  `docker compose -f stacks/selfhosted/arrs/compose.yaml up -d --no-deps beets-flask` → up_rc=1:
+    Error response from daemon: Conflict. The container name "/beets-flask" is already in use by
+    container "6e84f0c9853f5d75aa45167820a4763381e198457c477c83f9861c3da19f1d4e". You have to remove
+    (or rename) that container to be able to reuse that name.
+  Cause, read (not changed): the running container's labels are project=`beets`,
+    config_files=/mnt/fast/stacks/stacks/selfhosted/arrs/beets/flask.yaml, working_dir=…/arrs/beets,
+    created 2026-09-24T23:07:39Z — it was brought up from flask.yaml directly, not through
+    arrs/compose.yaml (which `include:`s flask.yaml and names the project `arrs`; sonarr's labels
+    read project=arrs). The plan's deploy command therefore cannot recreate it without first
+    removing the other project's container — a choice this run does not make on its own judgement.
+  Container NOT recreated: StartedAt still 2026-09-25T23:31:10Z, /mnt/tank/media -> /media RW=false.
+  → compose error = STOP (GRANT-FAIL). Stopping the writer:
+    `docker compose -f stacks/selfhosted/arrs/compose.yaml stop beets-flask` (14:50:03Z) → rc 0 but a
+      no-op: State.Running still true (the arrs project does not own the container).
+    `docker compose -f stacks/selfhosted/arrs/beets/flask.yaml stop beets-flask` (14:51:28Z, the
+      owning project; the same reversible stop, touches no file) → "Container beets-flask Stopped", rc 0
+    docker inspect: status=exited exit=143 finished=2026-09-26T14:51:30Z; restart policy
+      unless-stopped (an explicit stop survives a daemon restart); /media RW=false.
+WRITER STOPPED: State.Running=false
+  Post-stop: written tank/media/Music = 0 (atlantis). Both pre-07-pilot snapshots and the two safety
+    copies are held; nothing destroyed, nothing rolled back.
+  Steps 4 (quick-health-check) and 5 (GRANTED) NOT run — the plan stops at the first failure.
+
+LEDGER: STOP STATE 07-09-GRANT-FAIL: compose error at `docker compose -f stacks/selfhosted/arrs/compose.yaml up -d --no-deps beets-flask` (Conflict: container name "/beets-flask" already in use by 6e84f0c9853f — created 2026-09-24T23:07:39Z by compose project `beets` from stacks/selfhosted/arrs/beets/flask.yaml, not project `arrs`); appdata configs installed (7d726454… / 875fcf7e…, sha256 = repo), container NOT recreated, /media still RW=false; fence held (tank/media/Music@pre-07-pilot 2026-09-26T14:48:27Z, fast/appdata/arrs@pre-07-pilot 2026-09-26T14:48:28Z), writer stopped; no album landed
+
+RE-ENTRY (P7R2-04): re-run Task 1 → POST-GRANT RECONCILIATION (both names present, written 0, safety
+  copies, writer stopped, item count 0 from a copy) → `resume-post-grant`, with the operator's fix for
+  the cause stated. Candidate fixes for the operator to choose between (none applied):
+    (a) `docker rm beets-flask` (the stopped container only; /config, /downloads and /media are bind
+        mounts, no volume is lost), then resume-post-grant runs the plan's arrs-project `up -d`; or
+    (b) amend the plan's deploy/stop commands to the owning project `-f stacks/selfhosted/arrs/beets/flask.yaml`.
+  Note for (a)/(b): while stopped, /media is still :ro, so no path to the library exists; the new
+  configs are already in appdata, so any restart of the old container would read two inboxes.

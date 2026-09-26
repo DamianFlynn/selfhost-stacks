@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-26T00:10:00.000Z"
+last_updated: "2026-09-26T14:55:00.000Z"
 progress:
   total_phases: 10
   completed_phases: 5
@@ -28,6 +28,8 @@ Phase 7 E6 — `/gsd-verify 06` is still owed)
 *and* visible in both Jellyfin and Music Assistant. Never "tool configured".
 
 ## Current Position
+
+**PLAN 07-09 STOPPED — `STOP STATE 07-09-GRANT-FAIL` — 2026-09-26 (RUN 2, operator answered `proceed`).** FENCE TAKEN: `tank/media/Music@pre-07-pilot` 14:48:27Z then `fast/appdata/arrs@pre-07-pilot` 14:48:28Z, listed back; safety copies in `/mnt/fast/safety/phase07/fence/` sha256-equal to the snapshot view (G-04). Appdata configs installed (`7d726454…`/`875fcf7e…` = repo). GRANT NOT DEPLOYED: `arrs/compose.yaml up -d beets-flask` hit a container-name conflict — the live container belongs to compose project `beets` (from `arrs/beets/flask.yaml`, created 2026-09-24), not `arrs`. Writer STOPPED (`State.Running=false`), `/media` still RW=false, written 0, no album landed. Re-entry: Task 1 post-grant reconciliation → `resume-post-grant` after the operator picks a fix (`docker rm beets-flask` then arrs-project up, or amend the plan to the `beets` project). Host = origin = workstation at `dc84c5b` before this run. See `07-09-PARTIAL.md`.
 
 **PLAN 07-08 COMPLETE — 2026-09-26. BUILT, NOT DEPLOYED.** The D-22 commit is **`926f1ff`**: exactly 7 files — `flask.yaml` `/mnt/tank/media:/media:rw` (beets-flask ONLY; `beets.yaml` stays `:ro`), `flask-config.yaml` `01-auto` DE-REGISTERED (D-21; dir kept, 0 entries) with readiness text 3 → 2 (C4), `config.yaml` comments only (C1: copy yes / move no already in repo, appdata AND server — item 2 was a verification; `write: yes` recorded FORCED with D-21 as bound; tank 9 T → measured 5.26 T), `gui.library.readonly` KEPT true (C3: rc6 gates only library-browser DELETE/PATCH; import and UNDO IMPORT unguarded), qhc D-03 flask arm inverted to RW=true = standing assertion D-23 (notice headers 14 → 15, conditions T/U), `check-music-freeze.sh` literal `PHASE7_RW_TAGGER="beets-flask"` exception in §1, §2 and §6b (driven 6 scenarios on a synthetic docker), beets.md digest register (PREVIOUS `661c7297…`@`1a64286` / `949bd1f3…`@`f1848e2` → NEW `7d726454…` / `875fcf7e…`). Hash recorded in `8c6c50e`; D-04 doc count still 2. ⚠ qhc is red by design until 07-09 deploys (D-23 arm reads RW=false; drift block red from host pull to install). No library write has happened yet; host checkout still `0c95427`.
 
