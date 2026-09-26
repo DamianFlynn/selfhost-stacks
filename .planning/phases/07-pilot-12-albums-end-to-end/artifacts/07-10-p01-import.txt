@@ -1,0 +1,67 @@
+# 07-10-p01-import.txt — plan 07-10, P01 `Michael Jackson – The Essential` (D-10, D-20)
+# Executor run 1, 2026-09-26, started 15:10:08Z. Workstation and host (/mnt/fast/stacks) both at
+# 460dfce, host porcelain 0 lines.
+
+## Task 1 — preconditions (P7R2-05), read before anything else
+
+(1) Ledger's newest 07-09 token, by 07-09's own extraction, verbatim:
+    LC_ALL=C /usr/bin/grep -oE '^(STOP )?STATE 07-09-[A-Z][A-Z-]*[A-Z]' artifacts/07-pilot-ledger.txt | tail -n 1
+    -> `STATE 07-09-GRANTED`
+PRECONDITION 07-09 TOKEN: 07-09-GRANTED
+
+(2) Effective import keys, taken fresh: `bash scripts/check-beets-config.sh` from the workstation,
+    15:10Z, EXIT 0, FAILURES total 0, arm 1 (server-committed) not blind, READY_ROUTE
+    watchdog-log-line. D-29 before == after (library.db fbbdde0c…, state.pickle f6a9a1ad…).
+    Values extracted from the ANSI-stripped output with anchored sed (whole-value capture, compared
+    as exact strings, never a substring): copy=[true] move=[false] write=[true].
+PRE-STAGING IMPORT KEYS: PASS (copy=true move=false write=true)
+
+(3) Remaining preconditions (each command's RC read):
+    - Fence, `zfs list -H -t snapshot` from atlantis (via LXC 100), RC 0; exact whole-line names
+      present: `tank/media/Music@pre-07-pilot` (creation 1790434107 = 14:48:27Z) and
+      `fast/appdata/arrs@pre-07-pilot` (1790434108 = 14:48:28Z).                     TRUE
+    - beets-flask mounts (`docker inspect`, RC 0): /media RW=true, /downloads RW=true,
+      /config/config.yaml RW=false, /config/beets-flask/config.yaml RW=false.        TRUE
+    - Watchdog registration line (check-beets-config section 1): inboxes
+      ['/downloads/complete/nzb/_inbox/02-review', '/downloads/complete/nzb/_inbox/03-asis'] — two.
+                                                                                      TRUE
+    - Inbox audio from atlantis (find over flac/mp3/m4a/ogg/opus/wav/aiff/wma/ape/wv):
+      01-auto 0, 02-review 0, 03-asis 0; `_inbox/02-review` is an empty directory.  TRUE
+      (The same ssh also ran an unrelated `zfs get sensitive,…` that is not a valid property
+      list; it failed and set the ssh RC to 2. The inbox counts were printed before it and are
+      unaffected. Recorded rather than hidden.)
+    - library.db via `docker exec -u 568 beets-flask /venv/bin/python`, sqlite `mode=ro`, RC 0:
+      items 0, albums 0.                                                               TRUE
+    - tank avail 5.26T (atlantis, `zfs list`).
+    All preconditions TRUE. No PRECONDITION stop.
+
+## Task 1 — MA PERIODIC-SYNC GATE (P-01), before any staging, reads only
+
+Route, as the plan specifies: from the workstation over the HA SSH route (HA_SSH_* from
+~/.claude/secrets/ha-deercrest.env, mode 600; key path not echoed), `ha addons` to resolve the MA
+add-on slug, then `ha addons logs <slug>`.
+
+Attempt 1, 15:12Z: `ssh -i <key> -p <port> -o BatchMode=yes -o ConnectTimeout=10
+    <user>@<HA_SSH_HOST> 'timeout 30 ha addons …'`
+    -> `ssh: connect to host 172.16.1.31 port 22: Operation timed out`, ssh RC 255.
+    Consistent with the carried 07-09 observation that 172.16.1.31 is reachable from LXC 100 but
+    not from the workstation. Control, 15:15:48Z: TCP 172.16.1.31:22 from LXC 100 is OPEN — the
+    route exists only from a host that must not hold the NUC key (check-music-consumers.sh header:
+    "DO NOT … copy the NUC SSH key onto LXC 100").
+Attempt 2 (HA tailnet address + HA REST as a reachability probe): NOT RUN — refused by this
+    session's permission policy before execution. No other route was tried.
+Also standing against this route even when reachable: ~/.claude/memory/tools/home-assistant.md
+    records that the `ha` CLI returns "unauthorized" from the sysadmin SSH user.
+
+MA add-on slug: NOT RESOLVED. Log lines retrieved: 0. First/last timestamps: none.
+Sync-line pattern: NOT DERIVED and NOT DRIVEN — with no log retrieved there is nothing to drive a
+control against, and a pattern written without its two-way drive would be the §8.3 trap.
+No MA setting was read or changed; no provider was disabled; no barrier was invented.
+
+MA PERIODIC SYNC: COULD NOT LOOK — HA SSH route from the workstation timed out (172.16.1.31:22, ssh RC 255); slug unresolved, 0 log lines retrieved, 24 h window not covered
+
+=> STOP (P-01 fails closed). Nothing staged: `_inbox/02-review` untouched, no `cp`, no `chown`,
+   no watchdog event, no preview. D-29 not evaluated (no preview exists). Fence held, grant
+   deployed, writer running with /media RW=true and zero items. Ledger line appended:
+   `STOP STATE 07-10-MA-PERIODIC-SYNC: COULD NOT LOOK; …`.
+   Task 2's gate is presented with `hold` as its only option.
