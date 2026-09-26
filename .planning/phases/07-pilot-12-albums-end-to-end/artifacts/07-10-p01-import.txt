@@ -645,3 +645,145 @@ P01 DISPOSITION: exception-gate — 2026-09-26T19:45Z — operator: "exception-g
   Appended to 07-SAMPLE-AMENDMENT.md (PENDING line kept). Consequence per the amendment: P01 is
   re-staged at the END of 07-12 (its dangling row d2772a06… is read first) and presented at a
   separate D-29 EXCEPTION gate, default hold there. It is not staged by this plan.
+
+## Task 3 — verify P10 (continuation, 2026-09-26T19:46Z–19:54Z)
+Beets' view (library.db /config/library.db, sqlite mode=ro, docker exec -i -u 568 beets-flask
+/venv/bin/python -, RC 0, 19:46:27Z; beets 2.12.0 stores item paths RELATIVE to `directory: /media/Music`):
+  album id 1: albumartist 'Various Artists', album 'Now That’s What I Call Music! 117', mb_albumid
+  b057dee8-02ea-4b48-8681-f5e3255bc47d, albumtype album, comp 1, year 2024, label 'Sony Music', disctotal 2.
+  items 50 (asserted), all album_id 1, all mb_albumid b057dee8…, mb_trackid set on 50/50;
+  disc 1 = track 1..24 (tracktotal 24), disc 2 = track 1..26 (tracktotal 26), disctotal 2 on 50/50.
+  Destination: /media/Music/Various Artists/Now That’s What I Call Music! 117/ (host /mnt/tank/media/Music/…).
+
+Criterion 3 — ffprobe vs DB, per file (LXC 100, `timeout 30 ffprobe -v error -show_format
+-show_streams -of json` on every one of the 50 item paths, python comparator /root/phase07-0710-ma/crit3.py):
+  fields compared: TITLE, ARTIST, ALBUM, ALBUM_ARTIST, TRACK, DISC (numeric), MUSICBRAINZ_ALBUMID.
+  files ffprobed 50, ffprobe rc-fail 0, field mismatches 0 (350 comparisons).
+  Comparator driven first against a control row (DB title set to ZZ_CONTROL, disc 7): 2 mismatches
+  reported, so a zero reading is capable of being non-zero.
+  Ownership FROM ATLANTIS as real root (19:47:42Z, stat): album dir 568:568 777, `Various Artists/`
+  568:568 777, files 50/50 568:568 (mode 777, NFSv4 aclmode, expected); not 568:568: 0. The album dir
+  holds exactly 50 entries, all .flac (no art, no .cue/.log copied).
+  EPERM / PermissionError / Error writing in beets-flask's log for this import: 0. The import logs
+  to /logs/beets-flask.log and /logs/redis_workers.log inside the container, not to `docker logs`
+  (docker logs since 18:49Z held 0 lines, so that route would have read a vacuous zero). Pattern
+  driven against a control first (3 of 3 planted lines hit, "Import candidate done" 0). Counted over
+  beets-flask.log from the import enqueue (20:44:19 IST = 19:44:19Z, 4 lines) and redis_workers.log
+  from the run_import_candidate line: 0 and 0; traceback/error lines 0.
+  The file log carries exactly ONE run_import_candidate line (19:44:19Z) and none near 19:01Z.
+  That independently confirms no confirm was sent at the first "imported" relay.
+Criterion 3: PASS (50/50 files match their DB rows on 7 fields; 50/50 568:568; 0 EPERM-class lines)
+
+Criterion 4 — tag diff (LXC 100; `df -h /mnt/fast/safety` read first: 126G, 102G used, 18G avail, 86%):
+  `bash scripts/snapshot-music-tags.sh post-07-P10 --roots "/mnt/tank/media/Music/Various Artists/Now That’s What I Call Music! 117"`
+    (host HEAD 29622d4, porcelain 0) 19:48:18Z: 50 seen, 50 written, 0 failed, RC 0 ->
+    /mnt/fast/safety/music-pre-project/tags/post-07-P10.ndjson.gz.
+  `diff-music-tags.sh pre-07-P10.ndjson.gz post-07-P10.ndjson.gz`: text EXIT 0 ("No net metadata
+    loss"); `--json` EXIT 0 (715,120 B). Outputs under /mnt/fast/safety/phase07/diff/P10/.
+  MATCHED 50, MISSING_AFTER 0, NEW_AFTER 0, AMBIGUOUS_BEFORE 0, AMBIGUOUS_AFTER 0, duplicate keys 0/0,
+  empty-BEFORE counter ("matched files whose BEFORE tag set was empty") 0.
+  FIELDS_DROPPED 0, so no drop needs a reason and none is UNEXPLAINED.
+  FIELDS_GAINED 2008, every one a MusicBrainz-supplied field: 50 each of ALBUM ARTIST, ALBUMARTISTS,
+    ALBUMARTISTSORT, ALBUMARTISTS_CREDIT, ALBUMARTISTS_SORT, ALBUMARTIST_CREDIT, ALBUM_ARTISTS,
+    ARTISTS, ARTISTSORT, ARTISTS_CREDIT, ARTISTS_SORT, ARTIST_CREDIT, BARCODE (196588831829), BPM (0),
+    CATALOGNUMBER (CDNOW117), COMPILATION (1), DISCC, DISCTOTAL (2), ISRC, LABEL/PUBLISHER (Sony Music),
+    LANGUAGE, MEDIA (CD), MUSICBRAINZ_{ALBUMARTISTID (89ad4ac3… = Various Artists), ALBUMID (b057dee8…),
+    ALBUMSTATUS, ALBUMTYPE, ARTISTID, RELEASEGROUPID, RELEASETRACKID, TRACKID}, ORIGINALDATE
+    (2024-04-05), RELEASECOUNTRY (GB), RELEASESTATUS, RELEASETYPE (album;compilation), SCRIPT, TRACKC,
+    TRACKTOTAL, YEAR; plus MUSICBRAINZ_WORKID 36, COMPOSER 6, COMPOSERSORT 6, LYRICIST 6, ARRANGER 3, REMIXER 1.
+  FIELDS_CHANGED 190, each with its reason:
+    ALBUM 50: "NOW That's What I Call Music! 117" -> "Now That’s What I Call Music! 117" (MB title; DEF-07-10-01)
+    album_artist 50: "Various" -> "Various Artists" (va_name on a VA release; DEF-07-10-01, as predicted)
+    DATE 50: "2024" -> "2024-04-05" (MB release date; precision gained, year unchanged)
+    track 18: "01".."09" -> "1".."9" on both discs (leading zero normalised; same number)
+    TITLE 13 / ARTIST 9: MB corrections of the file's own text. The file's split-wrong
+      "Sophie Ellis" / "Bextor - Murder On The Dancefloor" -> "Sophie Ellis‐Bextor" / "Murder on the
+      Dancefloor"; "Calum Scot" -> "Calum Scott"; "Olly Alexander (Years & Years)" -> "Olly Alexander";
+      "Miley Cyrus" -> "MILEY", "Raye" -> "RAYE", "P!Nk" -> "P!nk" (MB credit text); "Feat." -> "feat.",
+      "X" -> "x"; title case (e.g. "Used To Be Young" -> "Used to Be Young"); ASCII ' -> U+2019 (3 titles).
+      All MATCH-CHANGED-TAG; the rename consequence is DEF-07-10-02.
+Criterion 4: PASS (exit 0, MATCHED 50, 0 dropped, 0 ambiguous, 0 empty-BEFORE; 190 changes all reasoned)
+
+APPENDED oracle comparison (D-07). 07-EXPECTED-TREE.txt `^#` lines stripped, lines under
+`/media/Music/Various/NOW That's What I Call Music! 117/` selected: 50 (asserted). The actual paths
+are the 50 item paths prefixed /media/Music/, LC_ALL=C sorted. `diff`: 100 lines (50 < / 50 >), so all 50
+diverge. Paired by sorted order, the DD-TT prefix agrees on 50/50 (0 prefix mismatches).
+  Directory level, 50/50: oracle /media/Music/Various/NOW That's What I Call Music! 117/ -> actual
+    /media/Music/Various Artists/Now That’s What I Call Music! 117/. MATCH-CHANGED-TAG: albumartist
+    tag "Various" -> "Various Artists" and album "NOW That's …" -> "Now That’s …" (U+2019).
+    Task 1 prediction, quoted: "VA NORMALISATION (P10): as-is -> Various/NOW That's What I Call Music! 117/;
+    MB VA match -> Various Artists/NOW That's What I Call Music! 117/ (album text per MB); … MISMATCH —
+    DEF-07-10-01 filed", refined at Step 5 to "/media/Music/Various Artists/Now That’s What I Call Music! 117/".
+    The prediction held exactly.
+  File-name level, 13 of 50 differ beyond the directory (37 identical), each MATCH-CHANGED-TAG
+  (the TITLE changes above; tag before -> after):
+    01-07 Used To Be Young -> Used to Be Young          01-14 Won't Forget You -> Won’t Forget You
+    01-15 We Ain't Here For Long -> We Ain’t Here for Long   01-17 Nice To Meet You -> Nice to Meet You
+    01-22 Hold On To Now -> Hold On to Now              01-24 Bextor - Murder On The Dancefloor -> Murder on the Dancefloor
+    02-03 Lovin On Me -> Lovin on Me                    02-05 Can't Get Enough -> Can’t Get Enough
+    02-10 One Of Your Girls -> One of Your Girls        02-19 The Sound Of Silence (CYRIL Remix) -> The Sound of Silence (CYRIL remix)
+    02-20 Heather On The Hill -> Heather on the Hill    02-23 All Out Of Fight -> All Out of Fight
+    02-24 All The Love That I Ever Needed -> All the Love That I Ever Needed
+  TEMPLATE-DEFECT: 0. All 50 names match `0[12]-NN `, there is no `Disc N/` subdir and no `-1 - `, and rule 4's
+  disc prefix survived comp=true, as predicted. 07-EXPECTED-TREE.txt not edited.
+  Findings: DEF-07-10-01 (materialised) and DEF-07-10-02 (file names), both MATCH-CHANGED-TAG.
+
+Criterion 7 — `bash /mnt/fast/stacks/scripts/check-music-import.sh` on LXC 100, 19:49:07Z (deployed
+sha256 70da42b3… = repo): EXIT 3, UNKNOWN 1, FINDINGS 0. items read 50; class 2 (empty mb_albumid) 0
+findings over 50 checkable; class 3 (tracktotal per album-disc) 0 findings over 2 checkable
+(disc 1 = 24, disc 2 = 26). Class 1 could not look: "directory could not be enumerated for class 1:
+Various Artists/Now That’s What I Call Music! 117 (FileNotFoundError …)". Cause, from the script
+source: the dumper passes beets' item path straight to os.scandir(os.path.dirname(p)) and to its
+sibling check. beets 2.12.0 stores item paths RELATIVE to `directory: /media/Music`, so on the first
+real library the class-1 sweep resolves against the cwd and is blind. The self-test fixtures never
+used a relative path. This is an instrument defect, not a library defect -> DEF-07-10-03. It is NOT
+fixed here (scripts are outside this plan's files, and a fix needs a deploy); plan 07-11's gate adjudicates.
+  Supplementary class-1 reading by hand (atlantis, 19:49:35Z; recorded, not a substitute for the
+  instrument): the album dir holds 50 .flac = 50 item rows, 0 names matching `\.[0-9]+\.<ext>$`, and
+  all 50 item paths resolved under /mnt/tank/media/Music/ (ffprobe rc 0 on 50/50).
+Criterion 7: UNKNOWN (exit 3, class 1 blind on relative item paths, DEF-07-10-03; classes 2 and 3 clean; findings 0)
+
+Criterion 8 (P10) — source manifest re-taken on atlantis as real root, 19:49:35Z, the staging
+script's recipe (relpath, size, sha256, mtime): 52 rows, RC 0; `cmp` against the pre-stage
+p10-source-before.tsv: IDENTICAL. (relpath, sha256) against the 07-07 manifest's 52 P10 rows: EQUAL.
+Criterion 8 (P10): PASS (source unchanged, 52 rows)
+  Note for 07-11: `_inbox/02-review` still holds the staged P10 copy (1 entry). import.copy leaves it,
+  and this plan does not remove it.
+
+Criterion 6, Jellyfin half (FIRST; MA not touched). /root/phase07-0710-ma/jf-0710.sh on LXC 100,
+secrets gated `600 root`, key via -H @<(printf …) only:
+  JELLYFIN_ADDR 192.168.90.37:8096 resolved fresh by docker inspect (t3_proxy) at 19:50:12Z, and again per call.
+  Pre-read 19:50:12Z: MusicAlbum matching "Call Music! 117" 0; library MusicAlbum 70, Audio 1,244.
+    Search driven first: SearchTerm ARTPOP -> 1 (so the search can see a hit); "Call Music" -> 0.
+  ONE POST /Library/Media/Updated, 19:50:23Z, body = 50 {Path:"/media/Music/Various Artists/Now That’s
+    What I Call Music! 117/NN-NN …flac", UpdateType:"Created"} entries (Default mode, file scope):
+    HTTP 204. No Full[R]efresh, no per-item refresh, no library scan.
+  First poll 19:51:42Z (≥ 60 s): 1 album, 50 Audio children, not yet probed (IndexNumber null, Name =
+    file stem). Re-polled until 0 unprobed: 19:51:56Z.
+  Result: exactly ONE MusicAlbum d18d5c99c4451068e6b3d6999cd48a3d "Now That’s What I Call Music! 117",
+    AlbumArtist "Various Artists" (= beets albumartist), path /media/Music/Various Artists/Now That’s
+    What I Call Music! 117; Audio children 50; ParentIndexNumber set exactly [1,2]; disc 1 n=24
+    IndexNumber 1..24, disc 2 n=26 IndexNumber 1..26, no gaps. Library totals after: MusicAlbum 71
+    (+1), Audio 1,294 (+50).
+  E6 first measurement input (recorded, NOT scored): 12 tracks carry ≥ 2 ARTISTS values (11 with 2,
+    1 with 3). Jellyfin's `Artists` array equals the tag's values in order on 12/12. `ArtistItems`
+    (linked MusicArtist entities) is 0 on 11 of the 12 and 1 on "Dance Alone" (Kylie Minogue only).
+    Across all 50 tracks ArtistItems is 1 on 5 and 0 on 45 at 19:53:21Z. Reading: a targeted file-scope
+    update links only artists that already exist as entities; new artist entities are not created
+    without the library-wide validation this plan forbids. Recorded for E6, not a finding against P10.
+Criterion 6 (Jellyfin half): PASS (204; one album; 50 tracks; discs {1,2}; per-disc 1..N contiguous)
+
+Barrier after the import, and MA counts:
+  BARRIER READ 19:54:06Z (SINCE 19:46:13Z, RC 0): 4/4 enabled=false, next_run null, updated_at
+  15:55:04Z; control 16; drive 1/0/0; log 214 lines; later server-start/sync lines 0.
+BARRIER: VERIFIED (4/4 enabled=false, next_run null) at 2026-09-26T19:54:06Z
+  MA provider-filtered counts, 19:54:01Z (/root/ma-counts-0710.sh, the barrier helper's login plus
+  music/{albums,tracks,artists}/library_items with provider + limit 5000 ONLY, no write verb in the
+  script, grep-checked 0): filesystem_local--XJaJWNUS albums 70, tracks 1244, artists 66 = the 07-07
+  baseline 70 / 1,244 / 66. Control: bogus instance filesystem_local--ZZBOGUS0 -> 0 / 0 / 0. Local
+  albums named *117*: 0. MA has not seen P10.
+
+Findings carried to plan 07-11's gate (no other album is staged until it adjudicates them):
+  DEF-07-10-01 materialised (directory Various Artists/ + MB album text), DEF-07-10-02 (13 file
+  names follow MB titles), DEF-07-10-03 (criterion 7 instrument blind on relative paths -> UNKNOWN).
+Run 6 end: 2026-09-26T19:55Z.
