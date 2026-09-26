@@ -431,3 +431,87 @@ OPERATOR ANSWER (2026-09-26, after 14:48Z; relayed verbatim by the orchestrator 
 OPERATOR'S STATED FIX: `docker rm beets-flask` (the stopped stray-project container only), then
   redeploy through stacks/selfhosted/arrs/compose.yaml.
 DISPOSITION: resume-post-grant
+
+TASK 2 — resume-post-grant
+
+Step 1 — push / host pull (2026-09-26T14:57:45Z)
+  git push origin main: dc84c5b..3ba4754, push_rc=0 (RUN 2's and RUN 3's docs commits).
+  host git pull --ff-only: dc84c5b..3ba4754 fast-forward, pull_rc=0.
+  workstation HEAD = host HEAD = 3ba4754d5691075225c522d466acaf35816223e5 → HEAD EQUAL (PASS)
+
+Step 2 — resume-post-grant variant: ONE ssh invocation on atlantis, as real root, 2026-09-26T14:58:09Z.
+  It takes NOTHING.
+  ⛔ D-16, at this call site (and as the program's header comment): zfs [r]ollback on
+  fast/appdata/arrs is FORBIDDEN on every branch. Recovery is a file copy from
+  /mnt/fast/appdata/arrs/.zfs/snapshot/pre-07-pilot/beets/config/. zfs [d]estroy is not issued.
+  listed back: `zfs list -t snapshot -H -p -o name,creation` rc 0
+    tank/media/Music@pre-07-pilot   creation 1790434107 (14:48:27Z) — exact whole-line count on the name column 1 — PASS
+    fast/appdata/arrs@pre-07-pilot  creation 1790434108 (14:48:28Z) — exact whole-line count on the name column 1 — PASS
+  written tank/media/Music = 0 (PASS)
+  Fence copies and G-04 are not re-taken on this variant. Quoted from RUN 2: library.db
+    fbbdde0c… source = copy = .zfs view, EQUAL PASS; state.pickle f6a9a1ad… source = copy = .zfs view,
+    EQUAL PASS.
+
+Step 3 — THE GRANT (LXC 100, host HEAD 3ba4754, 2026-09-26T14:58:36Z)
+  install -m 660 -o 568 -g 568 (both configs) rc 0/0. C9: config.yaml 7d7264546e7a… = repo EQUAL;
+    flask config.yaml 875fcf7ef524… = repo EQUAL. The mode reads 760 568:568 again (nfsv4 ACL passthrough, as RUN 2).
+  Operator's fix (verbatim above): the container was confirmed stopped first, and the exact name was
+    matched: `false beets 6e84f0c9853f5d75aa45167820a4763381e198457c477c83f9861c3da19f1d4e`
+    (Running, project, Id). Every mount was type=bind (RUN 3 (g)).
+    `docker rm beets-flask` → rc 0 (only the stopped container was removed; no volume, no file,
+    no image).
+    No file was moved, renamed or copied: stacks/selfhosted/arrs/beets/flask.yaml stays at its
+    pinned path. arrs/compose.yaml `include:`s it at that path.
+  `docker compose -f stacks/selfhosted/arrs/compose.yaml config --services` lists beets-flask (RUN 2).
+  `docker compose -f stacks/selfhosted/arrs/compose.yaml up -d --no-deps beets-flask` → Created, Started, up_rc=0
+  post-up: running=true started=2026-09-26T14:58:36.252888465Z image=metasauce/beets-flask:v2.0.0-rc6
+    COMPOSE PROJECT LABEL NOW: project=arrs,
+    config_files=/mnt/fast/stacks/stacks/selfhosted/arrs/compose.yaml. The stray `beets` project
+    ownership is gone.
+  Readiness (bounded poll, 180 s):
+    NEW watchdog line after the recreate (docker logs --since 14:58:36Z --timestamps; 1 line):
+      2026-09-26T14:58:40.463920537Z [INFO] beets-flask.wdog: Registering watchdog with debounce of 30 seconds for inboxes: ['/downloads/complete/nzb/_inbox/02-review', '/downloads/complete/nzb/_inbox/03-asis']
+      → exactly TWO inboxes (02-review, 03-asis); 01-auto mentions 0 (C4, D-21 PASS).
+    DEVIATION: `docker exec -u abc beets-flask test -r /config/config.yaml` cannot be evaluated on
+      this image. The daemon answered "unable to find user abc: no matching entries in passwd file"
+      on all 36 polls. abc is the LSIO user; beets-flask is not an LSIO image, and flask.yaml's own
+      READINESS GATE comment says the LSIO race does not apply here. The service user is uid 568,
+      named beetle (`getent passwd 568` → beetle:x:568:568). The gate was re-run as that user:
+      `docker exec -u 568 … test -r /config/config.yaml` rc 0, and `-u beetle` rc 0
+      (15:03:06Z). That is outside the 180 s bound, but only because the plan's command could not
+      run; the file was the same one, and the watchdog was up by +4 s. Inside the container, as uid
+      568, the configs read 7d726454… and 875fcf7e… (= repo).
+  docker inspect beets-flask mounts (all bind):
+    /mnt/tank/media -> /media RW=true           (D-22 PASS)
+    /mnt/fast/appdata/arrs/beets/config/config.yaml -> /config/config.yaml RW=false   (PASS)
+    /mnt/fast/appdata/arrs/beets/config/beets-flask/config.yaml -> /config/beets-flask/config.yaml RW=false
+    /mnt/fast/appdata/arrs/beets/config -> /config RW=true; /mnt/tank/downloads -> /downloads RW=true;
+    /mnt/fast/appdata/arrs/beets/logs -> /logs RW=true
+  `bash scripts/check-beets-config.sh` (workstation) cbc_rc=0, FAILURES total 0. The readings are
+    jq-parsed from the arm-1 server-committed JSON (the script's jget at :539 and :1186):
+    "CONF-01 import.copy = true", "CONF-01 import.move = false", "REPORTED … import.write = true".
+    The gate extracted each value with an anchored sed and compared it as an exact string:
+    copy=[true] move=[false] write=[true]. D-29 before and after both read fbbdde0c… / f6a9a1ad….
+POST-GRANT IMPORT KEYS: PASS (copy=true move=false write=true)
+  Inbox recount after compose up (atlantis, 15:04:16Z; find over the audio extension set, rc 0):
+POST-GRANT INBOX RECOUNT: PASS (01-auto 0, 02-review 0, 03-asis 0)
+
+Step 4 — `bash scripts/quick-health-check.sh`, run once end to end from the workstation,
+  15:04:16Z → 15:04:40Z. EXIT 1.
+  Traefik ✅ running · Authelia ✅ · containers running 81, no unhealthy ✅ · dashboard ✅ 302 → Authelia
+  Vendored-file drift ✅ 4 match (audio.bash, sabnzbd beets-config.yaml, survivor config.yaml, flask-config.yaml)
+  D-03 ✅ /media RW=true on beets-flask, deliberate (D-22/D-23); one config :ro in both; dormant CLI arm /media :ro
+  D-04 ✅ no asserted beet invocation opens the real library (15 executable = 3 asserted + 12 exempt; doc 2)
+  extended.conf ✅ disarmed (2)
+  Music freeze harness ✅ Intact. D-22 exception 1 (beets-flask), declared D-22 1 (flask.yaml),
+    tagger writers 0, ownership mismatches 0, beets DBs 1, rw tagger-capable 0.
+  Music consumers audit ⚠️ exit 3: CONF-04 measured and open (expected, E6)
+  Music import sweep ⚠️ UNKNOWN, exit 3: the library holds 0 items (expected vacuity guard)
+  Underscore-dir guard ✅ · Jellyfin transcode retention ✅ (FAILURES 0) · image drift ✅ (drift 0, unresolvable 2 as expected)
+  → Exit 1 comes only from the two expected could-not-look / pending blocks. There is no other red,
+    no finding for deferred-items.md, and no QHC-RED.
+
+After: tank/downloads@pre-phase5 count 1; both pre-07-pilot names count 1; written 0; items 0
+  (docker exec, mode=ro) — no import has run. 15:04:55Z.
+
+LEDGER: STATE 07-09-GRANTED: fence listed back (tank/media/Music@pre-07-pilot 2026-09-26T14:48:27Z, fast/appdata/arrs@pre-07-pilot 2026-09-26T14:48:28Z), grant deployed (926f1ff, via arrs/compose.yaml at host HEAD 3ba4754 on 2026-09-26T14:58:36Z after removing the stray project-beets container), POST-GRANT IMPORT KEYS PASS, inboxes 0, qhc exit 1 (consumers CONF-04 exit 3 + import sweep UNKNOWN on an empty library, both expected); albums landed: none

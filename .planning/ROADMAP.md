@@ -1608,7 +1608,7 @@ Plans:
 - [x] 07-06-PLAN.md — the twelve named before the run: declared, seeded draw, frozen + appended expected tree (D-04..D-07, D-26)
 - [x] 07-07-PLAN.md — per-album BEFORE capture, source manifests, D-24 census and consumer baselines
 - [x] 07-08-PLAN.md — the ONE D-22 commit: rw for beets-flask + every flag and check that moves with it (D-21..D-23, C1..C10)
-- [ ] 07-09-PLAN.md — GATED: two-dataset fence then the grant, first end-to-end quick-health-check (D-16, E3)
+- [x] 07-09-PLAN.md — GATED: two-dataset fence then the grant, first end-to-end quick-health-check (D-16, E3)
 - [ ] 07-10-PLAN.md — GATED: P01 (Michael Jackson – The Essential) imported through 02-review and verified (D-10, D-20, D-29)
 - [ ] 07-11-PLAN.md — GATED: P01 backed out with UNDO IMPORT on tree/DB/state.pickle, re-run equal; D-17 mechanical release (D-14, D-15, D-17)
 - [ ] 07-12-PLAN.md — GATED: remaining bucket-A albums imported per album and verified
