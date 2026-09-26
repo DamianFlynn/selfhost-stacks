@@ -96,8 +96,39 @@ services:
       - openwebui
     labels:
       - "traefik.enable=true"
+      # ─────────────────────────────────────────────────────────────────────────────────────
+      # INTERNAL + TAILNET ONLY. OLLAMA HAS NO AUTHENTICATION OF ANY KIND.
+      #
+      # Until 2026-09-26 this router had NO middleware, so the whole Ollama API was open to the
+      # internet. Measured, not inferred: `GET https://ollama.deercrest.info/api/tags` returned
+      # the model list and `/api/version` returned {"version":"0.34.4"} from off-network. Ollama
+      # ships no auth, so that exposed, to anyone who found the name:
+      #   - unlimited inference on this box's hardware (compute theft), and GPU inference is the
+      #     implicated trigger in the amdgpu HMM kernel oops that took the estate down for ~6 h
+      #     on 2026-08-31 (see README § GPU Hardware Acceleration);
+      #   - POST /api/pull to fill the disk — directly against the D-17 `/` headroom floor;
+      #   - DELETE /api/delete to remove models; POST /api/create to add them.
+      #
+      # An ipallowlist, not Authelia: API clients cannot complete an SSO redirect, and the
+      # internal consumer is unaffected either way because open-webui talks to
+      # http://ai-ollama:11434 directly on the docker network and never traverses Traefik.
+      # Off-LAN access is already provided properly by tsbridge (`service=ollama` on the
+      # tailnet), which is why the public route was redundant as well as dangerous.
+      #
+      # Traefik matches the immediate peer address, so a request arriving through the Cloudflare
+      # proxy presents a Cloudflare edge IP and is denied by construction.
+      #
+      # Evidence it was unused before removal: ai-ollama's own GIN log showed 10 requests in 24 h
+      # total. NOTE the limit of the Traefik access log as evidence here — it is filtered to
+      # statusCodes 204-299,400-499,500-599, so a plain 200 is NEVER written. Zero lines for this
+      # host proves no 4xx/5xx, NOT no successful access. Do not cite it as proof of no traffic.
+      #
+      # To revert deliberately, remove the two middleware lines — but read the paragraph above
+      # first, because unauthenticated inference is the default state of this software.
       - "traefik.http.routers.ollama-rtr.entrypoints=websecure"
       - "traefik.http.routers.ollama-rtr.rule=Host(`ollama.deercrest.info`)"
+      - "traefik.http.routers.ollama-rtr.middlewares=ollama-internal-only"
+      - "traefik.http.middlewares.ollama-internal-only.ipallowlist.sourcerange=172.16.1.0/24,100.64.0.0/10,127.0.0.1/32"
       - "traefik.http.routers.ollama-rtr.tls=true"
       - "traefik.http.routers.ollama-rtr.tls.certresolver=dns-cloudflare"
       - "traefik.http.services.ollama-svc.loadbalancer.server.port=11434"
