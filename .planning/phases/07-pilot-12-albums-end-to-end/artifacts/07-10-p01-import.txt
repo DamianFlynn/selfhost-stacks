@@ -65,3 +65,68 @@ MA PERIODIC SYNC: COULD NOT LOOK — HA SSH route from the workstation timed out
    deployed, writer running with /media RW=true and zero items. Ledger line appended:
    `STOP STATE 07-10-MA-PERIODIC-SYNC: COULD NOT LOOK; …`.
    Task 2's gate is presented with `hold` as its only option.
+
+## Task 1 — RUN 2 (2026-09-26, 15:2xZ onward): operator-approved HA REST route
+
+OPERATOR ROUTE ANSWER (Task 1 route only — NOT a Task 2 answer): question "07-10 can't read the
+Music Assistant add-on log (needed to measure MA periodic sync before the first import). Which
+route should it use?"; options "hold for now" / "HA REST API from workstation" / "I'll paste the
+log" / "read from LXC 100 (D-39)"; verbatim answer "HA REST API from workstation"; relayed
+verbatim by the orchestrator ~2026-09-26T15:2xZ. Terms: read-only GETs through the Supervisor
+proxy only; token never in argv; 401/403/404 on logs = COULD NOT LOOK, no other route.
+
+Token handling (CONVENTIONS §7): the Authorization header was built by the shell builtin printf
+from HA_TOKEN_FILE (mode 600) and fed to `curl -H @-` on stdin; never on a command line, never
+printed. Only GET was issued; no POST/PUT.
+
+Pre-gate re-reads, run 2 (15:31:27Z):
+  07-09 token (07-09's extraction): `STATE 07-09-GRANTED`.
+  check-beets-config.sh EXIT 0, FAILURES 0, arm 1 blind 0; copy=[true] move=[false] write=[true]
+    (anchored sed on ANSI-stripped output, exact-string compare); watchdog on 02-review + 03-asis.
+  Fence (atlantis, exact whole-line grep -x, RC 0): fast/appdata/arrs@pre-07-pilot,
+    tank/media/Music@pre-07-pilot. Inboxes 01-auto 0 / 02-review 0 / 03-asis 0.
+  beets-flask /media RW=true; library.db (mode=ro) items 0.
+PRECONDITION 07-09 TOKEN: 07-09-GRANTED
+PRE-STAGING IMPORT KEYS: PASS (copy=true move=false write=true)
+
+Route order as instructed:
+  HA_URL (LAN, http://172.16.1.31:8123)  GET /api/hassio/addons -> curl rc 28 (connect timeout 15 s), no HTTP code.
+  HA_EXTERNAL_URL (https://hass.deercrest.info) GET /api/hassio/addons -> 401 (empty body).
+  HA_TAILNET_URL GET /api/hassio/addons -> 401.
+  Control, same header, same two routes: GET /api/ -> 200 on both. The token is valid; the
+    Supervisor proxy refuses THIS endpoint to it (admin-only path class). /addons/<slug>/info is
+    401 likewise.
+Slug: `GET /api/hassio/addons` was refused, so the slug was resolved by probing the logs endpoint
+  on HA_EXTERNAL_URL: d5369777_music_assistant_beta/logs -> 200; d5369777_music_assistant/logs ->
+  400 (not installed). Slug = `d5369777_music_assistant_beta` (consistent with MA 2.11.0b0).
+Log retrieval, 15:30:31Z (all GET, all 200 unless stated):
+  /logs (default)                               23 lines
+  /logs?lines=100000                            23 lines (identical)
+  /logs + Range: entries=:-100000:              23 lines (identical)
+  /logs + Range: entries=:-5000:5000            23 lines (identical)
+  /logs/boots/0                                 23 lines (identical)
+  /logs/boots/-1, /logs/boots/-2                400 "Logs only contain 1 boots"
+  /logs/latest                                  401
+  Widening was attempted five ways and could not go past 23 lines.
+Log clock: the newest line reads 16:16:12 while UTC at retrieval was 15:30:31Z, so the add-on logs
+  local time, UTC+1 (IST). Converted below.
+  First line: 2026-09-26 12:03:33.400 local = 11:03:33Z   (auth: user login)
+  Last line:  2026-09-26 16:16:12.089 local = 15:16:12Z   (music.genre)
+  Window stated: 24 h ending at the read, 2026-09-25T15:30:31Z … 2026-09-26T15:30:31Z.
+  Retrieved coverage: 11:03:33Z … 15:16:12Z, ~4 h 13 min. The first timestamp is ~19 h 33 min
+  later than the window start -> the plan's COULD NOT LOOK clause (shortening the window is not
+  allowed).
+Content, for the record (not a verdict): 23 lines = 3 user logins, 12 AirPlay player
+  register/unavailable lines for BYO-MBP-LY62L726TL, 2 Last.fm recommendation lines, and 4
+  `[music_assistant.music.genre] Genre mapping scan completed: 0 items mapped` lines in two pairs,
+  at 12:16:12Z and 15:16:12Z — a recurring scheduled job, 3 h apart. Whether the scheduler that
+  fires it also fires a provider sync is not answerable from this log.
+Sync-line pattern: NOT DERIVED. No Phase 6 artifact records a real MA provider-sync log line
+  (LC_ALL=C grep over .planning/phases for `sync task|Sync(ing)? .*completed|music_assistant\.music\]`
+  -> 0 hits), and none of the 23 retrieved lines is one, so there is no real sync line to drive a
+  control against (CONVENTIONS §8.3). An undriven pattern is not used.
+
+MA PERIODIC SYNC: COULD NOT LOOK — run 2, HA REST (hass.deercrest.info) slug d5369777_music_assistant_beta: log capped at 23 lines, 11:03:33Z … 15:16:12Z, 24 h window not covered (starts ~19.5 h late); sync pattern not derivable (no recorded sync line)
+
+=> STOP again (P-01 fails closed). Nothing staged; no cp, no chown, no preview; D-29 not
+   evaluated. Ledger gains a second `STOP STATE 07-10-MA-PERIODIC-SYNC` line. Task 2 is hold-only.
