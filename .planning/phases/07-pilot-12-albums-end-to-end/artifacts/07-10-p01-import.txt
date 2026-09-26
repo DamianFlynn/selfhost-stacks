@@ -287,3 +287,97 @@ MA PERIODIC SYNC: FOUND — run 4: unchanged reading (12-hourly scheduler syncs 
 
 => STOP. Nothing staged; D-29 not evaluated; no candidate named (no preview exists). Ledger gains
    a fourth 07-10 STOP token. Task 2 is hold-only.
+
+## Task 1 — RUN 5 (2026-09-26, 16:0xZ onward): operator override of P-01, staging
+
+OPERATOR OVERRIDE (P-01 only — NOT a Task 2 answer): question "P-01 reads FOUND (MA's 12-h
+sync), and the plan only continues on NONE SEEN. The barrier (4 fs-sync tasks disabled,
+verified) is in place. How should the pilot get past P-01?"; options "override: barrier =
+continue (Recommended)" / "amend the plans first" / "hold"; verbatim answer "override: barrier =
+continue (Recommended)"; the selected option's text read: "Operator statement recorded verbatim
+in 07-10: 'P-01: FOUND with the barrier verified counts as continue.' Run 5 re-verifies the
+barrier, stages P01 into 02-review, and returns to the import gate with a named candidate."
+Relayed verbatim by the orchestrator ~2026-09-26T16:0xZ.
+OPERATOR STATEMENT: P-01: FOUND with the barrier verified counts as continue.
+
+Run 5 barrier re-verify, read-only, IMMEDIATELY before staging (tasks/list, 16:01:24Z):
+  the four music_sync_filesystem_local--XJaJWNUS_{track,playlist,album,artist} enabled=false,
+  next_run=null; control: 16 other tasks enabled=true.
+BARRIER: VERIFIED (4/4 enabled=false, next_run null) at 2026-09-26T16:01:24Z
+MA PERIODIC SYNC: FOUND — run 5: reading unchanged; continued under the OPERATOR STATEMENT above (barrier verified 16:01:24Z), not under the plan's NONE SEEN rule
+
+Run 5 preconditions (16:01:36Z): 07-09 token `STATE 07-09-GRANTED`; check-beets-config.sh EXIT 0,
+FAILURES 0, copy=[true] move=[false] write=[true]; watchdog on 02-review + 03-asis; both
+`@pre-07-pilot` snapshots present (exact whole-line count 2); inboxes 01-auto 0 / 02-review 0 /
+03-asis 0, and `_inbox/02-review` has 0 entries; beets-flask /media RW=true; library.db items 0.
+PRE-STAGING IMPORT KEYS: PASS (copy=true move=false write=true)
+
+STAGING (atlantis as real root, /root/stage-p01.sh; working files in /root/phase07-0710/):
+  Source and inbox are the same dataset: findmnt -T -> tank/downloads for both;
+  feature@block_cloning active; zfs_bclone_enabled 1.
+  16:02:28.725Z  cp -R --reflink=always -- "<P01 source>" /mnt/tank/downloads/complete/nzb/_inbox/02-review/
+                 rc 0, stderr empty -> METHOD: reflink (no plain-copy fallback used)
+  16:02:29.223Z  copied (0.5 s for 2.9 G)
+  chown -R 568:568 on the staged copy ONLY; target asserted to begin
+                 /mnt/tank/downloads/complete/nzb/_inbox/02-review/ (case-match + [[ == prefix ]]),
+                 rc 0, target /mnt/tank/downloads/complete/nzb/_inbox/02-review/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost
+  Staged per-file (relpath, sha256) set, 32 files, vs 07-07 manifest P01 rows (32): EQUAL
+  SOURCE manifest re-taken (relpath, size, sha256, mtime) vs 07-07 P01 rows: UNCHANGED
+  Staged owner 568:568 on the dir and on all 32 files; dir mode 777 (NFSv4 ACL passthrough, expected).
+  tank/downloads used 3.51T avail 5.26T after staging.
+
+PREVIEW (watchdog, debounce 30 s): "Starting inbox handler task …" / "Enqueuing … as preview".
+  Read from beets-flask's own state, READ-ONLY (sqlite mode=ro on
+  /config/beets-flask/beets-flask-sqlite.db, via `docker exec -u 568`), the 06-12 route:
+  folder d2772a06… created 16:03:02Z; session 8ad1c311… progress PREVIEW_COMPLETED 16:03:13Z,
+  exc None; task 12b53f52…: cur_artist "Michael Jackson", cur_album "The Essential Michael
+  Jackson", 32 items, chosen_candidate_id None, choice_flag None (a preview never chooses).
+  5 candidates (= musicbrainz.search_limit 5, effective config).
+  Files, per disc (from the task's items): disc 1 = tracks 7..21 (15 files), disc 2 = tracks
+  1..17 (17 files). Disc 1 tracks 1–6 are ABSENT from the source folder (07-07 manifest agrees:
+  101–106 do not exist; the folder starts at 107).
+
+CANDIDATE TABLE (distance = raw/max from the `distances` row; per-disc counts from track_info):
+  rank mbid                                  country label  catno       media         barcode        disambig  dist    discs (cand vs files)
+  1    f890ca09-0b44-4539-ae13-238266b242fa  US      Epic   E2K 94287   CD            827969428726   —         0.1207  21+17 vs 15+17
+  2    60fa00b3-927b-4363-a7c9-33d33e3713dc  CA      Epic   E2K 94287   CD            827969428726   —         0.1240  21+17 vs 15+17
+  3    b8a2b280-c4e2-45bc-aeb5-c448eb3a4f6f  FR      Epic   —           Digital Media 0827969428726  Qobuz     0.1254  21+17 vs 15+17
+  4    4b7a5129-0311-416c-bbbb-84eb9c75cb86  US      Legacy EPC5204222  CD            5099752042227  —         0.2551  21+17 vs 15+17
+  5    f5ef2123-0faa-4779-856e-c8075c5fb3ce  XE      Epic   520422 2    CD            5099752042227  —         0.2583  21+17 vs 15+17
+  All five: album "The Essential Michael Jackson", artist "Michael Jackson", 2005, 2 mediums,
+  source MusicBrainz, albumtype album, va false. Album-level penalties on all five:
+  missing_tracks ×6 (1.0 each), plus country (0.5 for US, 1.0 otherwise).
+
+D-29, APPLIED IN ORDER:
+  (1) recommendation. beets-flask does not persist `recommendation`; it is DERIVED here from the
+      effective server-committed config read at 16:1xZ (get_config(commit_to_beets=True), the
+      check-beets-config arm-1 route): strong_rec_thresh 0.04, medium_rec_thresh 0.25,
+      rec_gap_thresh 0.25, max_rec {missing_tracks: medium, unmatched_tracks: medium}.
+      Best distance 0.1207: not < 0.04, <= 0.25 -> `medium`; max_rec caps missing_tracks at medium
+      -> stays `medium`. recommendation = medium (task-level: it is the recommendation the task
+      carries for rank 1). Not `none` -> step 1 does not refuse.
+  (2) track count, PER DISC. Every candidate has disc 1 = 21 tracks, disc 2 = 17 tracks; the
+      files are 15 + 17. Disc 1 mismatches on all five -> ALL FIVE REFUSED at step 2.
+      Rank 1: REFUSED (21 != 15 on disc 1)   Rank 2: REFUSED (21 != 15)   Rank 3: REFUSED (21 != 15)
+      Rank 4: REFUSED (21 != 15)             Rank 5: REFUSED (21 != 15)
+  (3) per-track distance, listed for the record although step 2 already refused (non-zero
+      title/length penalties):
+      Rank 1 (and rank 2, identical apart from 1-10 length 0.1278): 17 tracks — titles differ by
+        version suffixes the files carry and MusicBrainz does not ("(Single Version)", "(7" Edit)",
+        "(Radio Edit)", "(with Paul McCartney)", "(feat. Siedah Garrett)"): 1-09 0.125, 1-11 0.389,
+        1-14 0.12, 1-15 0.17, 1-18 0.241, 1-19 0.083, 1-21 0.467, 2-02 0.044, 2-04 0.269,
+        2-07 0.064, 2-08 0.117, 2-12 0.389, 2-13 0.125, 2-14 0.333, 2-16 0.333;
+        track_length: 1-10 0.116, 2-09 `Black or White` 1.0 (length beyond track_length_max 30 s
+        — the file is the Single Version, MB's is the album cut).
+      Rank 3 (Qobuz digital): 21 tracks, title penalties from MB's "(album version)"/"(single
+        version)" suffixes; 2-09 track_length 1.0.
+      Ranks 4–5 (5099752042227): 30 tracks with penalties, including track_index 1.0 on 28 and a
+        wrong-title mapping `Earth Song` (2-15) at 0.778 and `Got to Be There` (1-04) at 0.846 —
+        a different running order; these two would be a confident wrong match.
+D-29 VERDICT: NONE PASSES. Every candidate fails the per-disc track count (disc 1: 21 in every
+  MusicBrainz release vs 15 files — the source lacks disc 1 tracks 1–6). Lowest-rank candidate
+  that fails ONLY step 2: rank 1, f890ca09-0b44-4539-ae13-238266b242fa (US CD, Epic E2K 94287,
+  barcode 827969428726 = the folder's own UPC), recommendation medium, distance 0.1207.
+  Per Task 2: "Recommend `hold` if no candidate passes."
+
+Post-preview (16:1xZ): barrier re-read VERIFIED (4/4 disabled); library.db items 0. Nothing imported.
