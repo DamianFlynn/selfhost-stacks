@@ -26,3 +26,12 @@ DEF-07-10-03: check-music-import.sh class 1 is blind on a real beets 2.12 librar
   relative paths with the effective `directory` (or read beets' own absolute-path API) and add a
   relative-path fixture to --self-test. Every later criterion-7 reading (07-11 re-run, 07-12, 07-13)
   stays UNKNOWN until it is fixed. For 07-11's gate.
+  RESOLVED 2026-09-26 (operator-approved quick fix between 07-10 and 07-11, "Fix first"): commit
+  245dfa7 — the dumper joins each relative item path to beets' `directory`, read through beets' own
+  config loader in the container (absolute paths unchanged; unreadable/non-absolute directory with a
+  relative path present -> dumper exit 5, run UNKNOWN; the judge also refuses non-absolute paths).
+  --self-test cases 11-13 (relative paths through the real dumper) went RED on the unfixed dumper and
+  GREEN 13/13 after, on the workstation and on LXC 100. Deployed to /mnt/fast/stacks at 245dfa7, sha256
+  f75c577f… = repo. Live criterion 7 on P10, 2026-09-26T20:05:06Z: EXIT 0, class1=50 class2=50
+  class3=2 checkable rows, FINDINGS 0, UNKNOWN 0; library.db sha256 unchanged. Details:
+  artifacts/07-10-p01-import.txt § DEF-07-10-03 FIX.

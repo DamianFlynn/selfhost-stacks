@@ -787,3 +787,46 @@ Findings carried to plan 07-11's gate (no other album is staged until it adjudic
   DEF-07-10-01 materialised (directory Various Artists/ + MB album text), DEF-07-10-02 (13 file
   names follow MB titles), DEF-07-10-03 (criterion 7 instrument blind on relative paths -> UNKNOWN).
 Run 6 end: 2026-09-26T19:55Z.
+
+=== DEF-07-10-03 FIX (between 07-10 and 07-11) ===
+2026-09-26. Operator-approved quick fix ("Fix first", after criterion 7 read UNKNOWN on P10). Not a
+07-10 or 07-11 task; the ledger is not touched (newest token stays STATE 07-10-LANDED).
+Commit: 245dfa7 fix(07): check-music-import.sh joins relative beets item paths to directory (DEF-07-10-03)
+  Cause confirmed in beets 2.12.0 source inside beets-flask (beets/dbcore/pathutils.py):
+  normalize_path_for_db stores paths under the music dir RELATIVE; expand_path_from_db joins them
+  back to `directory` on read. The dumper read the raw column and never joined it.
+  Fix: the dumper resolves each relative item path as normpath(join(directory, path)), with
+  `directory` from beets' own config loader (`from beets import config; config["directory"].as_filename()`,
+  BEETSDIR=/config -> '/media/Music', read in the container while diagnosing). Absolute stored paths are
+  unchanged. A relative path with an unreadable or non-absolute directory -> dumper exit 5, no trailer,
+  run UNKNOWN. The judge also refuses any item path that is still not absolute (BADPATH -> UNKNOWN).
+  The trailer carries `relative` and `music_dir`, and section 1 prints the resolution line.
+Self-test (RED then GREEN): new cases 11-13 run the real dumper over a sqlite fixture with RELATIVE
+  paths from an empty cwd, then the judge: 11 clean -> 0, 12 item Title.1.flac + on-disk Song.1.flac
+  collisions -> 1 (2 findings), 13 beets directory unreadable -> 3.
+  RED, unfixed dumper, workstation: exit 1, 4 checks failed; 11 and 12 read exit 3 with "directory
+    could not be enumerated for class 1: Artist/Album (FileNotFoundError …)", the live symptom.
+  GREEN, workstation (macOS, python3 present): 13/13, exit 0.
+  GREEN, LXC 100 (/mnt/fast/stacks at 245dfa7, `timeout 120` Linux-side): 13/13, exit 0; no fixture dir left.
+  Skip arm driven on the workstation with python3 removed from PATH: pin decremented 13 -> 10 beside
+    its warning, no count-mismatch. (That harness ran /bin/bash 3.2, which lacks mapfile, so 2 path-list
+    needles failed there identically on the unmodified HEAD script: a harness artefact, not this fix.)
+  Pin: ST_PLANNED_CASES 10 -> 13, reference environment "python3 present"; CONVENTIONS §5 bullet updated.
+Deploy: pushed to origin/main. Host checkout `git -C /mnt/fast/stacks status --porcelain`: empty, RC 0
+  (clean) at 29622d4; `git pull --ff-only` RC 0 -> 245dfa7.
+  sha256 scripts/check-music-import.sh: host f75c577f0cd5ce13f51804ba287ecfbe2348105912ea78003a3854ab64b5f8fc
+  = workstation working file = `git show 245dfa7:` (all three equal).
+Criterion 7 re-read on P10, LXC 100, `bash /mnt/fast/stacks/scripts/check-music-import.sh` from
+  /mnt/fast/stacks under `timeout 180`, 2026-09-26T20:05:06Z (the same invocation as § Task 3):
+  EXIT 0. "✅ Import sweep clean: 50 items, three classes checked, zero findings".
+  trailer consistent: 50 item rows, 0 on-disk orphans; "50 item path(s) stored relative to beets'
+  directory, resolved against /media/Music".
+  collision findings 0, empty mb_albumid findings 0, tracktotal findings 0; DJ 0, singletons 0,
+  suffix-shaped no sibling 0, on-disk no item row 0, uncheckable album-discs 0.
+  checkable rows per class: class1=50 class2=50 class3=2. UNKNOWN 0, FINDINGS 0.
+  Read-only fence (docker exec beets-flask sha256sum), before and after the run:
+    /config/library.db   a9e7036f39fbac698eea123d315f9e45c25a35cd4a32af4fc4b0b823108ea87d (unchanged)
+    /config/state.pickle 224fe2792fc67ed7c550155eaad0434d65c5bb24e8ee45d53e61c9a80580bae3 (unchanged)
+  No beet invocation, no import, no MA call, no Jellyfin call; MA fs-sync tasks were not touched.
+Criterion 7 (P10): PASS (exit 0, all three classes checked, findings 0) — supersedes the § Task 3
+  UNKNOWN reading, which stays above as the record of what the unfixed instrument returned.
