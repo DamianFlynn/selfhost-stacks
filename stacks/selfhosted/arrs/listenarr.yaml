@@ -4,6 +4,16 @@
 
 services:
   listenarr:
+    profiles: ["dormant"]   # classified DORMANT 2026-09-26 (operator decision) -- see .planning/plans/service-classification.plan.md
+    # Kept dormant deliberately while boxarr, paperless-gpt and immich-kiosk were brought up in the
+    # same pass. Two things to fix BEFORE it is ever activated:
+    #   1. `image:` is `:latest`, which violates this repo's pinning convention and the documented
+    #      Renovate deploy-drift problem. Pin it first.
+    #   2. It is the other consumer of ${APPDATA}/${MEDIA}/${DOWNLOADS}. Those DO resolve here --
+    #      `arrs/.env` defines all three, unlike `media/.env` -- which is the only reason listenarr
+    #      escaped the failure that left audiobookshelf mounting the LXC root and serving zero books
+    #      for ~3.5 months. Verify the resolved paths on first deploy rather than assuming.
+    # No DNS record was created for listenarr.deercrest.info; its Host rule stays inert until then.
     # renovate: datasource=docker depName=ghcr.io/listenarrs/listenarr
     image: ghcr.io/listenarrs/listenarr:latest
     container_name: listenarr

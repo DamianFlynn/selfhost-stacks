@@ -35,7 +35,12 @@ include:
   - autobrr.yaml
   - janitorr.yaml
   - blockbusterr.yaml
-#  - boxarr.yaml  # Commented out - image not published to Docker Hub yet (needs to be built from source)
+  - boxarr.yaml  # Re-enabled 2026-09-26. The comment here previously read "image not published to
+                 # Docker Hub yet (needs to be built from source)" — STALE:
+                 # ghcr.io/iongpt/boxarr:2.1.0 pulls cleanly (digest f4e99515...). It was never a
+                 # Docker Hub image at all, it is GHCR, which is likely why the claim outlived the
+                 # fact. Boxarr takes no env vars — all config is through its web UI — and the
+                 # matching proxied CNAME was created in the same pass.
   - beets/flask.yaml  # beets-flask — THE ACTIVE tagger runtime (plan 06-04, D-01). Included: it is the inbox watchdog and must come up with the stack.
 #  - beets/beets.yaml  # The DORMANT agent-driven CLI arm (D-12). Stays commented out: restart:"no" + profiles:["manual"], started by hand or by a bot, never by `docker compose up`.
 
