@@ -223,3 +223,67 @@ FAILURES 0, copy=[true] move=[false] write=[true]; both `@pre-07-pilot` snapshot
 whole-line count 2); inboxes 01-auto 0 / 02-review 0 / 03-asis 0; beets-flask /media RW=true;
 library.db (mode=ro) items 0.
 PRE-STAGING IMPORT KEYS: PASS (copy=true move=false write=true)
+
+## Task 1 — RUN 4 (2026-09-26, 15:55Z onward): operator-chosen barrier applied; P-01 re-evaluated
+
+OPERATOR BARRIER ANSWER (Task 1 barrier only — NOT a Task 2 answer): question "MA auto-syncs the
+local provider every 12 h (next 21:16Z tonight). What barrier should protect the pilot before P01
+is imported?"; options "I'll disable in MA UI" / "allow API disable" / "hold"; verbatim answer
+"allow API disable". The operator then typed directly, verbatim: "i approve the call to home and
+music assistant to make any vhanges needed". Both relayed verbatim by the orchestrator ~15:5xZ.
+
+BARRIER APPLIED — by the ORCHESTRATOR (main session), not by this executor, at
+2026-09-26T15:55:04Z from LXC 100 with the D-39 credential (argv-clean, check-music-consumers.sh
+mechanism): `tasks/set_enabled {task_id, enabled:false}` on exactly
+music_sync_filesystem_local--XJaJWNUS_{artist,album,playlist,track}. Nothing else in MA or HA
+changed (orchestrator's statement). builtin--bbsqELSo radio/playlist/track syncs left enabled
+(not library-backed).
+
+BARRIER RE-VERIFIED by this executor, READ-ONLY (tasks/list via D-39 login, 15:55:55Z, MA 2.11.0b2):
+  music_sync_filesystem_local--XJaJWNUS_track     enabled=false next_run=null updated_at 15:55:04.249Z
+  music_sync_filesystem_local--XJaJWNUS_playlist  enabled=false next_run=null updated_at 15:55:04.236Z
+  music_sync_filesystem_local--XJaJWNUS_album     enabled=false next_run=null updated_at 15:55:04.224Z
+  music_sync_filesystem_local--XJaJWNUS_artist    enabled=false next_run=null updated_at 15:55:04.213Z
+  -> fs sync tasks present 4, enabled=false 4, next_run null 4.
+  Control (the read distinguishes the states): 16 tasks read `schedule.enabled == true`, incl.
+  music_sync_builtin--bbsqELSo_{radio,playlist,track} next_run 18:16Z.
+  MA log (logging/get): still 1 server start, still 5 provider-sync lines (none since run 3).
+BARRIER: VERIFIED (4/4 enabled=false, next_run null) at 2026-09-26T15:55:55Z
+
+CARRIED OBLIGATIONS (from the orchestrator's relay, recorded here so they cannot be lost):
+  - RE-ENABLE OWED: `tasks/set_enabled enabled:true` on the same four ids, at/after plan 07-15's
+    MA proof. Until then MA does not see new local content on its own.
+  - RE-VERIFY BEFORE EVERY IMPORT, 07-10 … 07-14: the four tasks were created_at
+    2026-09-25T21:15:48Z (the last server start), so an MA restart may re-create them ENABLED.
+    Immediately before each import: read-only tasks/list, all four enabled=false.
+  - Not measured and noted as residual: `audio_analysis_background_scan` ("background scan of local
+    files", daily 23:00Z, enabled) — whether it can add library items is unknown; and whether the
+    filesystem provider has any change-watcher outside the scheduler is unknown. The 21:15Z
+    restart-time sync (run 3) shows a RESTART also syncs, independent of the schedule.
+
+Run 4 pre-gate re-reads (15:56:10Z): 07-09 token `STATE 07-09-GRANTED`; check-beets-config.sh EXIT 0,
+FAILURES 0, copy=[true] move=[false] write=[true]; both `@pre-07-pilot` snapshots present (count 2);
+inboxes 01-auto 0 / 02-review 0 / 03-asis 0; beets-flask /media RW=true; library.db items 0.
+PRE-STAGING IMPORT KEYS: PASS (copy=true move=false write=true)
+
+P-01 EVALUATION WITH THE BARRIER IN PLACE — against the plan's text, not reinterpreted.
+  The plan (07-10-PLAN.md Task 1) says, verbatim: "**FOUND or COULD NOT LOOK is a STOP:** nothing
+  is staged, the ledger gets (at the start of its own line) `STOP STATE 07-10-MA-PERIODIC-SYNC:
+  <FOUND | COULD NOT LOOK>; fence held, grant deployed, no album staged or landed`, and Task 2's
+  gate is presented with `hold` as its only option. The plan does not invent a barrier (no MA
+  setting is changed, no provider disabled); the operator decides what the barrier is. Only `NONE
+  SEEN` continues to staging."
+  The reading is still FOUND: the two logged syncs (21:16Z, 09:16Z) are in the window and no
+  recorded operator or executor action explains them — disabling the schedule afterwards does not
+  change what the window contains. The plan names no state in which FOUND + a barrier continues;
+  "the operator decides what the barrier is" says who chooses the barrier, and the very next
+  sentence still says "Only `NONE SEEN` continues to staging".
+  VERDICT: the plan's P-01 rule does NOT recognise a barrier as satisfying it. Proceeding needs
+  either an explicit operator override of that sentence for 07-10, or a plan amendment (e.g.
+  "FOUND + barrier VERIFIED read-only immediately before staging continues"). Neither is inferred
+  here.
+
+MA PERIODIC SYNC: FOUND — run 4: unchanged reading (12-hourly scheduler syncs logged 2026-09-25T21:16Z and 2026-09-26T09:16Z); operator barrier applied 15:55:04Z and verified 15:55:55Z (4/4 disabled), but the plan's rule is "Only NONE SEEN continues to staging"
+
+=> STOP. Nothing staged; D-29 not evaluated; no candidate named (no preview exists). Ledger gains
+   a fourth 07-10 STOP token. Task 2 is hold-only.
