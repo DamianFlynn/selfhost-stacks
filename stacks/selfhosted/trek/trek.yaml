@@ -30,7 +30,7 @@
 
 services:
   trek:
-    image: mauriceboe/trek:4.2.0
+    image: mauriceboe/trek:4.3.3
     container_name: trek
     hostname: trek
     # Upstream sizes TREK at ~250 MB; the cap bounds a runaway, not steady state.
