@@ -604,3 +604,44 @@ next_run null; control 16 enabled; drive 1/0/0; 0 server-start or sync lines aft
 BARRIER: VERIFIED (4/4 enabled=false, next_run null) at 2026-09-26T18:49:53Z
 Staged copy present in _inbox/02-review (52 files); library.db items 0.
 Gate presented to the operator via the orchestrator (checkpoint:decision). Awaiting both answers.
+
+### Task 2 — the operator's answers (continuation, 2026-09-26T19:46Z)
+A premature first answer, and what caught it. The orchestrator first relayed "imported" for P10 at
+about 19:01Z. A first continuation checked live state before recording anything (19:01–19:03Z):
+library.db items 0, beets-flask session 788f3bba… still PREVIEW_COMPLETED, task chosen_candidate_id
+None. So it stopped and recorded nothing. The operator later explained, verbatim: "i forgot to open
+the web ui the first time, sorry". The first answer was relayed before the operator had confirmed
+anything, because the web UI had not been opened. It is NOT a beets-flask front-end defect: no
+confirm was lost, so no deferred item is filed. The operator was told, chose "Retry import in UI",
+and performed the import. Lesson: the relayed answer alone is not evidence of an import. The
+pre-record live-state read (library.db items plus the beets-flask session and task state) is what
+caught the premature answer, and it stays a precondition for recording any "imported".
+
+Live state re-read by this executor before recording (read-only; sqlite mode=ro via
+`docker exec -i -u 568 beets-flask /venv/bin/python -`; the orchestrator's read was not taken on trust):
+  19:46:27Z library.db (/config/library.db): items 50, albums 1; album row id 1, albumartist
+    'Various Artists', album 'Now That’s What I Call Music! 117', mb_albumid
+    b057dee8-02ea-4b48-8681-f5e3255bc47d (= D-29 rank 1), albumtype album, comp 1, year 2024, label
+    'Sony Music', disctotal 2, added 1790451859.30 = 2026-09-26T19:44:19Z.
+  beets-flask own DB (mode=ro, not edited): folders 5, sessions 5; session 788f3bba-4a9a-48ae-b00a-fc7a85c124ba
+    (folder c455ff4d…) progress IMPORT_COMPLETED, exc None, updated 19:44:29Z; task b931b749…
+    chosen_candidate_id 073c7ff8-b50b-45d6-adfc-ca687650ccc7, choice_flag APPLY, progress
+    IMPORT_COMPLETED. The P01 session 8ad1c311… (folder d2772a06…) still PREVIEW_COMPLETED, still dangling.
+  The import therefore happened at about 19:44:19–19:44:29Z, AFTER the 18:49:53Z pre-gate barrier read.
+
+Post-import BARRIER READ (/root/ma-read-0710.sh on LXC 100, SINCE=2026-09-26T18:49:53Z, RC 0), read
+at 19:46:13Z: all four music_sync_filesystem_local--XJaJWNUS_{track,playlist,album,artist} tasks
+enabled=false, next_run null, updated_at unchanged 15:55:04Z, schedule {"type":"hourly","enabled":false,"every":12,…};
+present 4, disabled 4, control 16 other tasks enabled=true; pattern drive 1/0/0; log 212 lines,
+last 20:46:13 local; server-start/sync lines later than 18:49:53Z: 0 (newest sync still 09:17:24Z).
+So no MA sync or restart has captured the imported state.
+BARRIER: VERIFIED (4/4 enabled=false, next_run null) at 2026-09-26T19:46:13Z
+
+OPERATOR ANSWER (P10): imported — 2026-09-26T19:45Z (relayed verbatim by the orchestrator after the retry; import completed 19:44:29Z)
+DISPOSITION: imported
+  Candidate confirmed: b057dee8-02ea-4b48-8681-f5e3255bc47d = the named D-29 rank 1, so this is not imported-other.
+OPERATOR ANSWER (P01): exception-gate — 2026-09-26T19:45Z (relayed verbatim)
+P01 DISPOSITION: exception-gate — 2026-09-26T19:45Z — operator: "exception-gate"
+  Appended to 07-SAMPLE-AMENDMENT.md (PENDING line kept). Consequence per the amendment: P01 is
+  re-staged at the END of 07-12 (its dangling row d2772a06… is read first) and presented at a
+  separate D-29 EXCEPTION gate, default hold there. It is not staged by this plan.

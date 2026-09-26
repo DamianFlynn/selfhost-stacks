@@ -79,3 +79,5 @@ P01 never counts as landed unless a later `P01 LANDED (D-29 EXCEPTION …)` ledg
   disabled 2026-09-26T15:55:04Z. They are re-verified read-only before every import in 07-10 …
   07-14, and the re-enable (`tasks/set_enabled enabled:true`, same four ids) is owed at plan 07-15,
   after its MA proof.
+
+P01 DISPOSITION: exception-gate — 2026-09-26T19:45Z — operator: "exception-gate"
