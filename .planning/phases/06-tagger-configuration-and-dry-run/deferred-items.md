@@ -1884,6 +1884,13 @@ Success Criterion 1 is satisfied.
 nothing was re-run. `tank/media/Music@pre-06-41-conf04-reprobe` is **HELD** (present, re-listed
 20:07Z) for a re-entry of 07-11 or plan 07-16's operator gate; `DEF-06-45-01` **still OPEN**.
 
+**Status 2026-09-26T21:05Z (plan 07-11 run 2):** trigger **NOT FIRED** — `UNDO IMPORT` covered the tree
+(50 → 0) and `library.db` (50 → 0) but not `state.pickle` (taghistory entry 1 → 1, `DEF-07-11-01` in the Phase 7
+`deferred-items.md`), and the operator chose `restore-then-rerun` (a `state.pickle` file copy from
+`fast/appdata/arrs@pre-07-pilot`). The re-run's `EQUALITY VERDICT: PASS` is on record, but conditions (ii) and
+(iii) fail, so the file-restore branch is NOT FIRED by construction. `tank/media/Music@pre-06-41-conf04-reprobe`
+is **HELD** (present, re-listed 21:05:00Z) for plan 07-16's operator gate; `DEF-06-45-01` **still OPEN**.
+
 ---
 
 ## DEF-06-52-02 — PROCESS DEFECT: the entry-criteria block is not a closed world, and a criteria-only read is never sufficient evidence of absence

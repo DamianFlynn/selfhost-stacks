@@ -507,3 +507,181 @@ rank 1, distance 0.00605 — the run-1 candidate. The operator replies only afte
 verifies live state (library.db 50 items for b057dee8, a NEW taghistory entry for the staged path, session
 IMPORT_COMPLETED) before recording anything, then continues Task 3 (post-07-P10-rerun measurements, EQUALITY,
 QUALITY, D-17 NOT FIRED line, Phase 6 status line).
+
+=== 07-11 RUN 2 — Task 3 continued (after the operator's re-import) ===
+Readings 2026-09-26T20:59:04Z–21:05:00Z. The only writes by this continuation: the post-07-P10-rerun tag
+snapshot and its diff outputs under /mnt/fast/safety, scratch files under /root/phase07-0711/rerun and
+/root/phase07-0710/*.postrerun|after-rerun.tsv, /tmp copies inside beets-flask, and ONE targeted Jellyfin
+`POST /Library/Media/Updated` (UpdateType Created). No zfs write verb, no beets command, no DB edit, no
+file removed, no Full[R]efresh, no library scan, no MA write.
+
+## Task 3 — OPERATOR ANSWER (re-import)
+OPERATOR ANSWER (verbatim, relayed by the orchestrator, recorded 2026-09-26T20:59Z): rerun done
+  Relayed context: re-imported through the existing beets-flask session 788f3bba, candidate rank 1
+  073c7ff8 / b057dee8…. Not taken on trust — every reading below was re-taken before anything was recorded.
+
+## Task 3 — LIVE-STATE CHECK before recording (reads only)
+(DB) LXC 100, `docker exec -i -u 568 beets-flask /venv/bin/python -`, sqlite mode=ro, 20:59:19Z, RC 0:
+  items 50, albums 1; album row id 1 'Various Artists' / 'Now That’s What I Call Music! 117' /
+  mb_albumid b057dee8-02ea-4b48-8681-f5e3255bc47d / albumtype album / comp 1 / 2024 / 'Sony Music' / disctotal 2;
+  items with mb_albumid b057dee8… 50; mb_trackid set 50/50; disc 1 = 24 items track 1..24 tracktotal 24,
+  disc 2 = 26 items track 1..26 tracktotal 26; added 1790456276.05 = 2026-09-26T20:57:56Z (the re-import;
+  run 1's was 19:44:19Z). item_attributes 200, album_attributes 4 (reading only; run 1 did not record it).
+  sha256 /config/library.db 8c9a06c839e2f40914e9df47e598c0c540f063d43790da3f4ca833391a42f79f (run 1 post-import
+  a9e7036f… — an SQLite file carrying new `added` times and rowids is not expected to be byte-equal; the
+  item/path/tag readings below are the witness).
+(state) `docker exec beets-flask cp /config/state.pickle /tmp/p7-state.postrerun.r2.pickle` cp_rc 0, 20:59:32Z.
+  live /config/state.pickle 224fe2792fc67ed7c550155eaad0434d65c5bb24e8ee45d53e61c9a80580bae3, beetle:beetle 770
+  155 B, mtime 2026-09-26T20:58:05.14Z (the re-import's write). It is BYTE-IDENTICAL to run 1's post-import
+  state.pickle (224fe279…, 07-11 run 2 Task 1) — the re-run reproduced the incremental state exactly.
+  Decoded (/venv/bin/python, container default user, cwd /tmp, /tmp copies only; /config never written), dec_rc 0:
+    fence keys ['taghistory','tagprogress']; taghistory 0; tagprogress 0   (copy f6a9a1ad…)
+    live  keys ['taghistory','tagprogress']; taghistory 1; tagprogress 0   (copy 224fe279…)
+    set difference live - fence: taghistory +1 (b'/downloads/complete/nzb/_inbox/02-review/VA.Now.That.s.What.I.Call.Music_.117.2024..CD.FLAC..CDNOW117',);
+    tagprogress 0; fence - live 0 on both.
+  NEW taghistory entry for the staged path: PRESENT (absent after the 20:36Z restore, present now). So the
+  re-import went through; `incremental` did not skip it.
+(beets-flask own DB, mode=ro, not edited) folders 5, sessions 5, tasks 5, candidates 25 (no new row);
+  session 788f3bba-4a9a-48ae-b00a-fc7a85c124ba progress IMPORT_COMPLETED, exc None, updated 2026-09-26 20:58:05;
+  task b931b749-46cb-4b14-a715-d7ef09520188 IMPORT_COMPLETED, choice_flag APPLY, chosen_candidate_id
+  073c7ff8-b50b-45d6-adfc-ca687650ccc7 (= rank 1, b057dee8…, the run-1 candidate — same candidate, same rank).
+  beets-flask.log: 21:57:55 local (20:57:55Z) `Import task on hash='c455ff4d…'`; 20:57:56Z `Resetting state from
+  … DELETION_COMPLETED … to PREVIEW_COMPLETED for import session 788f3bba…`; `Running ImportSession`;
+  20:58:05Z `Completed ImportSession`; `Import candidate done`. redis_workers.log: exactly one
+  run_import_candidate line (job 8203b05e…, candidate_ids=None — the session's stored choice was used).
+(tree) atlantis as real root (id -u 0), TZ=UTC, 20:59:42Z, `set -o pipefail; timeout 60 find "<P10 dir>" -type f | wc -l` RC 0:
+  P10 destination files 50; entries (any type) 50; *.flac 50; non-flac 0; owners 50 × 568:568.
+  Album dir and `Various Artists/` apps:apps (568:568) 777; `Various Artists/` holds exactly the album dir.
+  Library-wide: entries not 568 by user or group 0; *.nfo 91 (= the pre-existing 91), *.nfo newer than 20:40Z 0;
+  entries newer than 20:40Z outside the album's contents: 3, all directories (library root, `Various Artists/`,
+  the album dir — the re-import's mkdirs); empty directories 0. `zfs get written@pre-07-pilot tank/media/Music` 1.06G
+  (= run 1 landed).
+(staging) `_inbox/02-review/VA.Now.That.s.What.I.Call.Music_.117.2024..CD.FLAC..CDNOW117` PRESENT, 52 files;
+  inboxes 01-auto 0 / 02-review 1 / 03-asis 0. No re-stage was needed or done in this plan.
+Live state agrees with "rerun done": 50 items / 1 album b057dee8, new taghistory entry, session
+IMPORT_COMPLETED, 50 FLAC 568:568, no .nfo or other non-568 file anywhere in the library. Nothing contradicts it.
+
+## Task 3 — BARRIER after the re-import
+/root/ma-read-0710.sh SINCE=2026-09-26T20:40:23Z, RC 0, read 20:59:48Z: 4/4
+  music_sync_filesystem_local--XJaJWNUS_{track,playlist,album,artist} enabled=false next_run null (updated_at
+  15:55:04Z); control 16 enabled; drive 1/0/0; log 223 lines; server-start/sync lines later than SINCE: 0
+  (newest sync still 09:17:24Z).
+BARRIER: VERIFIED (4/4 enabled=false, next_run null) at 2026-09-26T20:59:48Z
+  MA counts (/root/ma-counts-0710.sh, RC 0, 20:59:48Z): filesystem_local--XJaJWNUS 70 / 1244 / 66 = baseline;
+  ZZBOGUS0 0/0/0; local *117* 0.
+
+## Task 3 — post-07-P10-rerun measurements (07-10 Task 3 repeated)
+Criterion 3 — ffprobe vs DB (LXC 100, /root/phase07-0710-ma/crit3.py unchanged, over a fresh read-only items
+  dump /root/phase07-0711/rerun/items.tsv, 20:59:57Z): files ffprobed 50, rc-fail 0, field mismatches 0
+  (350 comparisons, 7 fields). Control re-driven (ctl.tsv, DB disc 7): 2 mismatches reported -> the zero can be
+  non-zero. The items dump's columns path..mb_trackid (12 columns) are IDENTICAL to run 1's items.tsv (cmp on
+  LC_ALL=C sorted rows), and the relative path column is IDENTICAL.
+  Ownership from atlantis (above): 50/50 568:568, not 568:568 0.
+  EPERM-class lines (EPERM|PermissionError|Error writing|Operation not permitted) in /logs/beets-flask.log from the
+  re-import's enqueue line (5 lines) and /logs/redis_workers.log from its run_import_candidate line: 0 and 0;
+  traceback/[ERROR] 0. Pattern driven on 3 planted lines: 3.
+Criterion 3 (re-run): PASS (0 mismatches / 350; 50/50 568:568; 0 EPERM-class lines)
+Criterion 4 — tag diff (LXC 100, host /mnt/fast/stacks 245dfa7, porcelain 0; `df` /mnt/fast/safety 18G avail):
+  `bash scripts/snapshot-music-tags.sh post-07-P10-rerun --roots "/mnt/tank/media/Music/Various Artists/Now That’s
+  What I Call Music! 117"` 21:00:23Z: snapshot complete, snap_rc 0, 50 ledger lines ->
+  /mnt/fast/safety/music-pre-project/tags/post-07-P10-rerun.ndjson.gz.
+  `diff-music-tags.sh pre-07-P10.ndjson.gz post-07-P10-rerun.ndjson.gz`: text EXIT 0 ("No net metadata loss");
+  `--json` EXIT 0 (715,120 B, stderr 0 B). Outputs under /mnt/fast/safety/phase07/diff/P10-rerun/.
+  counts {"matched":50,"missing_after":0,"new_after":0,"fields_dropped":0,"fields_gained":2008,"fields_changed":190,
+  "matched_with_no_before_fields":0,"duplicate_keys_before":0,"duplicate_keys_after":0,"ambiguous_before":0,
+  "ambiguous_after":0} — the same counts as run 1. FIELDS_DROPPED 0 -> UNEXPLAINED 0.
+Criterion 4 (re-run): PASS (exit 0, MATCHED 50, 0 dropped, 0 UNEXPLAINED, MISSING_AFTER 0, 0 ambiguous)
+Criterion 7 — `bash /mnt/fast/stacks/scripts/check-music-import.sh` (245dfa7, the fixed instrument), `timeout 180`,
+  2026-09-26T21:00:58Z: EXIT 0, "Import sweep clean: 50 items, three classes checked, zero findings";
+  50 item paths relative, resolved against /media/Music; checkable class1=50 class2=50 class3=2; UNKNOWN 0,
+  FINDINGS 0. library.db / state.pickle sha256 identical before and after the run (8c9a06c8… / 224fe279…).
+Criterion 7 (re-run): PASS (exit 0, findings 0)
+Criterion 8 — source manifest re-taken on atlantis as real root 21:01:14Z, the staging recipe (P10, relpath, size,
+  sha256, mtime) -> /root/phase07-0710/p10-source-after-rerun.tsv, 52 rows, RC 0; `cmp` vs p10-source-before.tsv:
+  IDENTICAL; (relpath, sha256) vs the 07-07 manifest's 52 P10 rows: EQUAL. Staged copy (relpath, sha256): EQUAL.
+Criterion 8 (re-run): PASS (source unchanged, 52 rows)
+Criterion 6, Jellyfin half (targeted, exactly as 07-10 did; MA not touched):
+  Pre (jf-read-0711.sh, GET only, grep -c POST = 0, 21:01:27Z): Music MetadataSavers [] (the DEF-07-11-05
+  remediation still holds), SaveLocalMetadata false, EnableRealtimeMonitor false, SaveLyricsWithMedia false;
+  P10 albums 0. jf-0710.sh MODE=pre 21:01:28Z: matching 117 0; library MusicAlbum 70, Audio 1,244.
+  ONE POST /Library/Media/Updated, 21:01:32Z, /root/phase07-0710-ma/jf-0710.sh MODE=post unchanged, body 50
+  {Path, UpdateType:"Created"} from actual.txt — body cmp-IDENTICAL to run 1's jf-body.json (actual.txt is
+  byte-identical to this re-run's path list, equality (a) below): HTTP 204. No Full[R]efresh, no per-item
+  refresh, no scan call.
+  Poll 21:02:48Z (≥ 60 s): 1 album, 50 children, not yet probed; bounded re-poll (15 s, ≤ 10) -> 21:03:08Z:
+  exactly ONE MusicAlbum d18d5c99c4451068e6b3d6999cd48a3d (the same Id as run 1) "Now That’s What I Call Music! 117",
+  AlbumArtist "Various Artists"; Audio children 50; ParentIndexNumber [1,2]; disc 1 n=24 idx 1..24; disc 2 n=26
+  idx 1..26. Library totals 21:04:4xZ: MusicAlbum 71 (+1), Audio 1,294 (+50) = run 1.
+  Jellyfin log since 21:01:00Z outside /media/TV (TV has its own realtime monitor on): two webhook notifier
+  tasks ×3, `LibraryMonitor: Music (/media/Music) will be refreshed.` (Jellyfin's own reaction, not a call made
+  here), Apple Music artist-image search for "Various Artists" (0 found). No save/nfo line.
+  Sidecar check, atlantis 21:04:48Z (≈ 3 min after the POST; run 1's .nfo were born 80–100 s after its POST):
+  album dir entries 50, non-flac 0; `Various Artists/` holds only the album dir; *.nfo 91 (none new);
+  entries newer than 21:01:00Z anywhere in the library: 0; not 568: 0. MetadataSavers re-read 21:04:4xZ: [].
+Criterion 6 (Jellyfin half, re-run): PASS (204; one album; 50 tracks; discs {1,2}; per-disc 1..N contiguous; no sidecar)
+Barrier after the Jellyfin step: /root/ma-read-0710.sh SINCE=2026-09-26T20:59:48Z, RC 0: 4/4 enabled=false,
+  next_run null; later server-start/sync 0.
+BARRIER: VERIFIED (4/4 enabled=false, next_run null) at 2026-09-26T21:04:58Z
+  MA counts 21:04:58Z: 70 / 1244 / 66 = baseline; ZZBOGUS0 0/0/0; local *117* 0. MA has not seen P10.
+Snapshots, atlantis 21:05:00Z, exact whole-line, RC 0: fast/appdata/arrs@pre-07-pilot, tank/media/Music@pre-07-pilot,
+  tank/media/Music@pre-06-41-conf04-reprobe, tank/downloads@pre-phase5 (listed only; never a target) — all PRESENT.
+
+## Task 3 — EQUALITY (criterion 5, "no hand-repair"; computed comparisons, LXC 100)
+  Run 1 = post-07-P10.ndjson.gz (07-10, 19:48Z) and /mnt/fast/safety/phase07/diff/P10/diff.json;
+  re-run = post-07-P10-rerun.ndjson.gz and /mnt/fast/safety/phase07/diff/P10-rerun/diff.json.
+  (a) destination path list, `jq -r .source_path | LC_ALL=C sort`, 50 lines each: cmp IDENTICAL (a_rc 0), sha256
+      7c354fbd… both; also cmp-IDENTICAL to 07-10's actual.txt with /mnt/tank stripped, and the DB relative path
+      column IDENTICAL. -> HOLDS
+  (b) audio_md5 set, LC_ALL=C sorted, 50 lines each, 50 distinct: cmp IDENTICAL (b_rc 0), sha256 ff3cab60… both.
+      Control: the run-1 list with one character altered -> cmp rc 1. Stronger reading: per-file
+      {audio_md5, path, size, full ffprobe tag set} records sorted: IDENTICAL on all 50. -> HOLDS
+  (c) `--json` diff output with every source_path key removed (jq -S walk del(.source_path)): cmp IDENTICAL
+      (c_rc 0), sha256 cb624f40… both; the raw diff.json files are also byte-identical (2dd3b2d7… both). Per-file
+      fields gained/changed/dropped equal (2008 / 190 / 0). -> HOLDS
+  (d) P10 mb_albumid: run 1 b057dee8-02ea-4b48-8681-f5e3255bc47d, re-run b057dee8-02ea-4b48-8681-f5e3255bc47d
+      (DB album row and 50/50 items). -> HOLDS
+  The re-run read 50 items, not 0, so this is not "equal by absence".
+EQUALITY VERDICT: PASS
+
+## Task 3 — QUALITY (P7R2-10, computed, separate from equality)
+  (q1) criterion 3 ffprobe/DB mismatches: 0 (of 350).
+  (q2) files or album directory whose owner read from atlantis is not 568:568: 0 (library-wide 0; no .nfo written).
+  (q3) UNEXPLAINED drops 0; MISSING_AFTER 0; diff exit 0.
+  (q4) check-music-import.sh exit 0, findings 0.
+  (q5) 07-10 / Task 1 ADJUDICATION criterion 3/4/7 findings, each with the re-run's reading of the same class:
+       DEF-07-10-03 (criterion 7 UNKNOWN) -> re-run exit 0, UNKNOWN 0: resolved.
+       DEF-07-11-05 (criterion 3 owner class: 2 Jellyfin .nfo, 100000:100000) -> re-run not-568 count 0, new .nfo 0
+         after the same Jellyfin step, MetadataSavers []: resolved.
+       DEF-07-10-01 / DEF-07-10-02 are MATCH-CHANGED-TAG oracle divergences (criterion 2's oracle), not criterion
+         3/4/7 findings; the re-run reproduces them byte-for-byte (equality (a)); for /gsd-verify 07.
+       Unresolved: 0.
+QUALITY: PASS (P10; ffprobe/DB mismatches 0; owner not 568:568 0; UNEXPLAINED drops 0; MISSING_AFTER 0; diff exit 0; sweep exit 0; 07-10 findings unresolved 0)
+  The operator's Task 1 ADJUDICATION stays on the record on top of this line.
+
+## Task 3 — D-17 (mechanical, evaluated after the verdict and quality lines)
+  (i)   both pre-07-pilot snapshots listed back in 07-09-fence-and-grant.txt:
+          "tank/media/Music@pre-07-pilot  creation 1790434107 (14:48:27Z) — exact whole-line count on the name column 1 — PASS"
+          "fast/appdata/arrs@pre-07-pilot  creation 1790434108 (14:48:28Z) — exact whole-line count on the name column 1 — PASS"
+        -> HOLDS (both re-listed PRESENT at 21:05:00Z).
+  (ii)  UNDO WITNESS by UNDO IMPORT alone: "TREE COVERED yes (pre 50 → post 0)", "DB COVERED yes (pre 50 → post 0)",
+        "STATE COVERED no (pre 1 → post 1)" -> FAILS (STATE not covered; DEF-07-11-01).
+  (iii) Task 2 answer: "DISPOSITION: restore-then-rerun" (a state.pickle FILE restore was used) -> FAILS.
+  (iv)  "EQUALITY VERDICT: PASS" -> HOLDS.
+D-17 TRIGGER: NOT FIRED — (ii) STATE COVERED no (UNDO IMPORT left the taghistory entry; DEF-07-11-01) and (iii) the Task 2 answer was restore-then-rerun (file restore used); (i) and (iv) hold
+  The file-restore branch is NOT FIRED by construction (G-01). tank/media/Music@pre-06-41-conf04-reprobe is HELD
+  for plan 07-16's operator gate — present at 21:05:00Z. No zfs write verb issued (the destroy step was not
+  entered). tank/downloads@pre-phase5 listed only, never a target.
+  Verb recipes driven both ways in scratch (outside this artifact) before relying on them: `grep -cE 'zfs [d]estroy'`
+  real verb -> 1, bracketed form -> 0; `grep -cE 'zfs [r]ollback'` real verb -> 1, bracketed form -> 0.
+
+## Task 3 — OPERATOR-FACING LESSON (for 07-17 / beets.md; beets.md is not in this plan's files and is not edited)
+  UNDO IMPORT in beets-flask (v2.0.0-rc6) does NOT revert state.pickle. It removes the album's files from the
+  tree and its rows from library.db, and leaves beets' incremental `taghistory` entry for the source folder in
+  place. A COMPLETE undo therefore needs a second step: with beets-flask stopped, FILE-copy state.pickle back
+  from the pre-import snapshot (`fast/appdata/arrs@pre-07-pilot`'s `.zfs/snapshot/`, never a zfs [r]ollback of
+  that dataset), then restart (DEF-07-11-01). Without it, any NEW read of the same folder (fresh session,
+  re-staged folder, `beet import`) is expected to be skipped silently under `incremental: yes`.
+  Measured here: after the restore, the re-import through the existing session reproduced run 1 exactly — same
+  paths, same audio, same tags, same diff, and a state.pickle byte-identical (224fe279…) to run 1's.
+  Not measured here: whether a re-import of the SAME beets-flask session would have gone through WITHOUT the
+  restore (the source reading in Task 2 expects it would); the restore was chosen before that could be tested.

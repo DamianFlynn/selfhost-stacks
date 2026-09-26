@@ -85,3 +85,11 @@ DEF-07-11-01: `UNDO IMPORT` does not cover `state.pickle`; D-14's claim is falsi
   `stacks/selfhosted/arrs/beets.md`'s recovery-fence text should say UNDO IMPORT covers tree + library only.
   Remedy options at 07-11's Task 2 gate: hold / restore-then-rerun (file copy from the arrs snapshot) / rerun.
   D-17 NOT FIRED for 07-11 run 2.
+  Update 2026-09-26T21:05Z (07-11 run 2 Task 3): the operator chose restore-then-rerun. With beets-flask stopped,
+  state.pickle was FILE-copied from fast/appdata/arrs@pre-07-pilot (224fe279… -> f6a9a1ad… = fence; taghistory
+  entry ABSENT after restart); the operator then re-imported through session 788f3bba (candidate 073c7ff8 /
+  b057dee8…, rank 1). Result: EQUALITY VERDICT: PASS (paths, audio_md5, diff output and mb_albumid identical to
+  run 1; state.pickle byte-identical to run 1's post-import 224fe279…) and QUALITY: PASS. Operator lesson: a
+  complete undo in beets-flask is UNDO IMPORT **plus** the state.pickle file restore — UNDO IMPORT alone does not
+  revert the incremental state. Still OPEN for plan 07-17 to write into stacks/selfhosted/arrs/beets.md. Not
+  measured: whether a same-session re-import goes through without the restore.
