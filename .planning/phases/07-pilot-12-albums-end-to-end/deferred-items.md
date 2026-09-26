@@ -49,3 +49,26 @@ DEF-07-11-05: Jellyfin writes `.nfo` into the Music library on NEW-ITEM creation
   (criterion 3 owner) count; (c) the same step runs for every album still to land in 07-12/07-13.
   Not fixed: operator decides out of band (e.g. whether to clear MetadataSavers for Music before any
   further targeted update, how the undo witness counts non-beets files, and what happens to these two).
+  RESOLVED 2026-09-26 (operator-approved pre-undo cleanup between 07-11 run 1 and its re-entry, "Fix saver
+  + remove 2 files"; NOT part of UNDO IMPORT): (a) Music library MetadataSavers ["Nfo"] -> [] by one
+  POST /Library/VirtualFolders/LibraryOptions at 20:16:27Z (HTTP 204), body = the GET's LibraryOptions
+  with only that key changed; AFTER read shows Music differs only in MetadataSavers and Shows, Movies,
+  Collections and TV Recordings LibraryOptions sha256 unchanged; no scan triggered. (b) The two sidecars
+  deleted from atlantis as real root at 20:17:16Z behind a two-layer fence, forensic copies kept under
+  /mnt/fast/safety/phase07/def-07-11-05/deleted-sidecars/ (artist.nfo 5ed045f8…, album.nfo e65682e1…).
+  After: P10 dir 50 files, all .flac, all 568:568; `Various Artists/` holds only the album dir; library
+  entries not 568: 0; library.db a9e7036f… / state.pickle 224fe279… unchanged, items 50. The ledger's
+  STOP STATE 07-11-RECONCILE-FAIL stands; 07-11 re-enters from Task 1. Details:
+  artifacts/07-11-p10-undo-rerun.txt § DEF-07-11-05 REMEDIATION.
+
+DEF-07-11-06: No check asserts the Jellyfin Music library's `MetadataSavers` is empty, so DEF-07-11-05 can regress invisibly
+  Filed 2026-09-26 with the DEF-07-11-05 remediation. scripts/check-music-freeze.sh reads no Jellyfin
+  library option at all; the only reader is scripts/check-music-consumers.sh (folded into
+  quick-health-check.sh), whose option table (~line 422) asserts SaveLocalMetadata == false and
+  EnableRealtimeMonitor == false only — nothing in scripts/ reads MetadataSavers, the setting that
+  actually wrote the two .nfo. If "Nfo" returns (UI edit, library re-creation, a Jellyfin
+  upgrade resetting defaults), the next targeted update writes into Music again with every check green.
+  Proposed follow-up, NOT implemented: add a `MetadataSavers` row to that table asserting Music
+  `LibraryOptions.MetadataSavers == []` (fail closed
+  on an unreadable response, CONVENTIONS §1), and assert no library entry is owned by anything but
+  568:568. Out of scope for the operator-approved remediation.

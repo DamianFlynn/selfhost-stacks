@@ -97,3 +97,89 @@ D-17 TRIGGER: NOT FIRED — RECONCILE-FAIL at Task 1 (no UNDO WITNESS, no re-run
   Verb recipes driven both ways in scratch (outside this artifact): `grep -cE 'zfs [d]estroy'` real verb -> 1,
   bracketed form -> 0; `grep -cE 'zfs [r]ollback'` real verb -> 1, bracketed form -> 0.
 Phase 6 status line appended under DEF-06-52-01 (NOT FIRED; DEF-06-45-01 still OPEN).
+
+=== DEF-07-11-05 REMEDIATION (pre-undo cleanup, operator: "Fix saver + remove 2 files") ===
+Dated 2026-09-26, 20:15Z–20:18Z. Operator-approved, out of band, between 07-11 run 1 (STOP STATE
+07-11-RECONCILE-FAIL) and its re-entry. This is a PRE-UNDO CLEANUP and is NOT part of UNDO IMPORT.
+Scope as approved: (a) remove "Nfo" from the Jellyfin Music library's MetadataSavers only;
+(b) delete exactly the two Jellyfin-written sidecars named in DEF-07-11-05. The ledger was not
+touched: its newest token is still STOP STATE 07-11-RECONCILE-FAIL, and 07-11 re-enters from Task 1
+(RESUME RECONCILIATION). No beets command, no import, no MA write (barrier untouched), no zfs verb,
+no library scan, no FullRefresh, no item refresh.
+
+Auth: same pattern as run 1's jf-read-0711.sh — /mnt/fast/secrets/jellyfin-deercrest.env gated on
+"600 root", key passed as -H @<(printf …) (CONVENTIONS §7); nothing credential-bearing is recorded.
+Jellyfin jellyfin/jellyfin:10.11.11, JELLYFIN_ADDR resolved from the t3_proxy network (192.168.90.37:8096).
+Helpers on LXC 100: /root/phase07-0711/remed/jf-snap.sh (GET only; grep -c POST = 0).
+
+## (a) BEFORE — GET /Library/VirtualFolders, 2026-09-26T20:15:41Z, RC 0
+  sha256 of each library's LibraryOptions (jq -S -c canonical form):
+    Music          music        7e64e319657a9516ec78490da03edccb  c57ee47fb1660e396ef2d9bd5a1763813fad3b75d845d1b3f5725a5dffee7987
+    Shows          tvshows      a656b907eb3a73532e40e44b968d0225  894579bbafe3f697c69185ad760e7c695e78b81216df661d7ba083fd54ac3fce
+    Collections    boxsets      9d7ad6afe9afa2dab1a2f6e00ad28fa6  d7ffd872864af97c44d6f2b110447fde33a8f4a4ef8fa4f7ce86bc4839fcbbbb
+    Movies         movies       f137a2dd21bbc1b99aa5c0f6bf02a805  1fdaea74ef4e3a4c19b8c7e75381a0b72a8a25bcc4f0ebf5ea75bcc52095f29f
+    TV Recordings  homevideos   8d73cb254e556faef9d9987273477294  c56daf0d628966418d2550076c7d5ec03e318f1becf37a9d452350009f63026a
+  Music (/media/Music): MetadataSavers=["Nfo"], SaveLocalMetadata=false, EnableRealtimeMonitor=false,
+    SaveLyricsWithMedia=false, LocalMetadataReaderOrder=["Nfo"]
+  Safety copy of the exact BEFORE bytes (on LXC 100):
+    /mnt/fast/safety/phase07/def-07-11-05/lo-before-7e64e319657a9516ec78490da03edccb.json  c57ee47f… (Music LibraryOptions)
+    /mnt/fast/safety/phase07/def-07-11-05/vf-before.json                                    beec6595323eff613d3f2545db89192ccec1b8d0e5dfc04924db9da909e75cb9 (full GET response)
+
+## (a) WRITE — one POST, 2026-09-26T20:16:27Z
+  Body = {Id: 7e64e319…, LibraryOptions: <BEFORE Music LibraryOptions with .MetadataSavers |= map(select(. != "Nfo"))>}.
+  Pre-check of the body against BEFORE: top-level keys that differ = ["MetadataSavers"] only (42 keys);
+  PathInfos=[{"Path":"/media/Music"}] carried unchanged.
+  POST /Library/VirtualFolders/LibraryOptions -> HTTP 204, curl RC 0, empty response body.
+  Jellyfin log since 20:16:00Z: 2 lines, both the Webhook Item Added/Deleted Notifier scheduled tasks;
+  lines matching scan|refresh|nfo|saver: 0. No scan was triggered.
+
+## (a) AFTER — GET /Library/VirtualFolders, 2026-09-26T20:16:40Z, RC 0
+    Music          cc00f50da735befa61a498786eb08e6bffe09c15c5871aa20b50151c8f195ad1  CHANGED (intended)
+    Shows          894579bb…  SAME
+    Collections    d7ffd872…  SAME
+    Movies         1fdaea74…  SAME
+    TV Recordings  c56daf0d…  SAME
+  Music AFTER is byte-identical (cmp) to the body sent; keys that differ BEFORE->AFTER = ["MetadataSavers"] only.
+  Music: MetadataSavers=[] (was ["Nfo"]); SaveLocalMetadata=false, EnableRealtimeMonitor=false,
+    SaveLyricsWithMedia=false, LocalMetadataReaderOrder=["Nfo"] — all unchanged. (The Nfo READER is left
+    alone: reading .nfo is not a write path; only the saver was in scope.)
+  Non-LibraryOptions fields of all five VirtualFolders entries: diff BEFORE vs AFTER = none.
+
+## (b) CLEANUP — atlantis as real root (uid 0), TZ=UTC
+  Pre-check (read-only), each path: regular file, not a symlink, owner 100000:100000, mode 777, name *.nfo:
+    Various Artists/artist.nfo
+      size 600   birth 2026-09-26T19:51:43.870Z  sha256 5ed045f8f6d88e0efc21973df64234d3f5ae043780ab6e2bd1e120b57cf39c50
+      head: <?xml … standalone="yes"?> / <artist> / <biography /> / <outline /> / <lockdata>false</lockdata> / <dateadded>2026-09-26 19:51:23</dateadded>
+    Various Artists/Now That’s What I Call Music! 117/album.nfo
+      size 9315  birth 2026-09-26T19:52:05.963Z  sha256 e65682e18620b5bb223d858f91aebd6a12346c5eee46456f00b33076729c5f19
+      head: <?xml … standalone="yes"?> / <album> / <review /> / <outline /> / <lockdata>false</lockdata> / <dateadded>2026-09-26 19:51:23</dateadded>
+  Fence (CONVENTIONS §6, two layers, each written at its own call site): layer 1 on the workstation
+  (exact equality to the two allowlisted literals, prefix "/mnt/tank/media/Music/Various Artists/",
+  suffix .nfo, no "..", no glob characters); layer 2 inside the remote program (same allowlist and
+  prefix/suffix, plus -f and not -L, owner 100000:100000, size and sha256 equal to the pre-check).
+  Before each delete, a forensic copy was taken and its sha256 re-verified:
+    atlantis /mnt/fast/safety/phase07/def-07-11-05/deleted-sidecars/{artist.nfo,album.nfo}
+  Delete: `rm -f -- "<exact path>"`, one path per call, no glob, no -r:
+    2026-09-26T20:17:16Z  Various Artists/artist.nfo                                    rm RC 0, ABSENT after
+    2026-09-26T20:17:16Z  Various Artists/Now That’s What I Call Music! 117/album.nfo   rm RC 0, ABSENT after
+
+## (b) VERIFY — atlantis, 2026-09-26T20:17:28Z
+  P10 album dir: entries (any type) 50; files 50; *.flac 50; non-flac 0; owners 50 × 568:568 (all type f).
+  P10 dir itself 568:568. `Various Artists/` holds exactly one entry: the album directory (568:568).
+  Library-wide (/mnt/tank/media/Music):
+    entries not owned 568 by user or group: 0
+    *.nfo total 91, all 568:568 (= the pre-existing 91 in run 1's reading); *.nfo with mtime after 19:00Z: 0
+    entries with mtime OR ctime after 2026-09-26T19:00Z, outside the P10 album's contents: 3, all directories —
+      /mnt/tank/media/Music (19:44:19Z, the import), Various Artists/ and the album dir (20:17:16Z, these deletes).
+  No other stray file found; nothing else was deleted.
+
+## Nothing else moved — LXC 100, 2026-09-26T20:18Z (reads only)
+  docker exec beets-flask sha256sum, RC 0:
+    /config/library.db   a9e7036f39fbac698eea123d315f9e45c25a35cd4a32af4fc4b0b823108ea87d (= run 1 reading)
+    /config/state.pickle 224fe2792fc67ed7c550155eaad0434d65c5bb24e8ee45d53e61c9a80580bae3 (= run 1 reading)
+  library.db (sqlite mode=ro, uid 568): items 50, albums 1.
+
+Consequence for re-entry: the tree now agrees with STATE 07-10-LANDED (50 files, all .flac, 568:568), and
+the targeted-update path can no longer write .nfo into Music. 07-11 re-enters from Task 1, which re-takes
+every reading itself; nothing in this section substitutes for them.
+Gap left open (filed as DEF-07-11-06): no health check asserts the Music MetadataSavers value.
