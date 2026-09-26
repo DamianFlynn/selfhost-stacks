@@ -166,3 +166,23 @@ DEF-07-12-06: New procedure — PARTIAL state.pickle surgery (remove named taghi
   check; re-decode. The procedure was authorised by the operator's verbatim statement recorded in § C. Not
   measured: behaviour if tagprogress is non-empty (it was {} throughout); the procedure asserts {} and stops
   otherwise.
+
+DEF-07-12-07: A DuplicateException in beets-flask cannot be cleared by a plain retry — the duplicate toggle keys off duplicate_ids computed at PREVIEW time; the folder page's candidate SEARCH is the retry route
+  Filed by 07-12 run 1 (2026-09-26T23:20Z), for plan 07-17 / stacks/selfhosted/arrs/beets.md (operator-facing).
+  P04's first import (22:00:12Z) failed with DuplicateException (import.duplicate_action: ask) because P02 landed
+  after P04's preview, so every P04 candidate still carried duplicate_ids '' and the UI hid the duplicate-action
+  toggle; the request carried duplicate_actions={}. The candidate search (AddCandidatesSession, 23:09:41Z)
+  recomputed duplicate_ids on five of six candidates (the original c33163f3 card was left ''), ADDED the searched
+  release as a second card for the same release, and showed the toggle; the import at 23:11:42Z carried
+  duplicate_actions {task: 'keep'} and landed P04 beside P02 without touching P02. The frontend stores the action
+  per TASK and sends it with whatever card is selected. Lesson: after any import lands, re-search (or re-preview)
+  every still-staged folder that could be its duplicate before importing it; only "Keep both" is safe ("Remove
+  old items" deletes the landed album, "Merge" folds it). Not measured: whether a full inbox re-preview does the same.
+
+DEF-07-12-08: P03 landed beside a PRE-EXISTING, untracked copy of the same album — `Benson Boone/Fireworks & Rollerblades (2024)/` (in @pre-07-pilot, not in library.db)
+  Filed by 07-12 run 1 (2026-09-26T23:20Z), for the Phase 8/9 duplicate reconciliation (and 07-15's MA/Jellyfin
+  count reading). The 34 GB library pre-dates beets' library.db, so beets' duplicate check cannot see it: P03's
+  `Fireworks & Rollerblades/` (15 FLAC, MB ef528afc) now sits next to the 2024 copy (15 FLAC + 15 lyrics +
+  album.nfo + folder.jpg), which this plan did not touch (live == snapshot by name/size/mtime/owner). Jellyfin and
+  MA will see two albums with the same name. Any pilot album whose artist already exists in the library can do the
+  same; 07-15 should expect it when reading MA/Jellyfin counts.

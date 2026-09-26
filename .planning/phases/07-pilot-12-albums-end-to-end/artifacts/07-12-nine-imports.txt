@@ -671,3 +671,101 @@ unless the import request carries a duplicate action for task 0de63004.
 
 P04 CHECKPOINT (operator decision; default hold). Returned to the orchestrator at 2026-09-26T22:4xZ. Nothing
 imported by this agent.
+
+=== 07-12 RUN 1 — P04 answer and Task 3 (continuation agent, 2026-09-26T23:13Z onward) ===
+The only writes by this continuation: /tmp copies inside beets-flask; scratch under /root/phase07-0712/ (LXC 100)
+and /root/phase07-0712/ (atlantis); post-07-PNN tag snapshots and diff outputs under /mnt/fast/safety; the
+compliant copy-based `move -p` scratch under /tmp/p6-p7aunique (removed through the fenced cleanup); and ONE
+targeted Jellyfin `POST /Library/Media/Updated` (UpdateType Created). No import, no undo, no zfs write verb, no
+beets DB edit, no Full[R]efresh, no library scan, no MA write.
+
+## F — P04 LIVE-STATE VERIFICATION (reads only), before recording the answer
+OPERATOR ANSWER (P04, verbatim, relayed by the orchestrator, recorded 2026-09-26T23:13Z): "imported c33163f3"
+  Relayed context: the operator used the folder page's candidate search for c33163f3-6217-4dc8-8e88-65f623b62c9b,
+  selected the catno 093624834588 card, chose "Keep both" at the duplicate prompt, and imported.
+(F1) beets-flask DB (mode=ro, /root/phase07-0712/gate-read.py, 23:13:42Z, RC 0): folder 13 / session 13 / task 13 /
+  candidate 66 (65 -> 66: the search added ONE candidate). P04 session ecac6a1b-979a-4e0c-a506-e362ce71b9f0
+  IMPORT_COMPLETED, exc None, updated 23:11:43Z; task 0de63004 IMPORT_COMPLETED, flag APPLY, chosen
+  6d13e171-49b2-4301-b0c0-0c75d5664c9a = c33163f3-6217-4dc8-8e88-65f623b62c9b (the ORIGINAL preview card, rank 3 of the
+  preview-time tie; = the release agreed at the gate).
+    | candidate | mbid | dist | duplicate_ids now |
+    | 86237a06 (preview rank 1) | e4fdb1dc | 0.0175 | '2' |
+    | be48cfc5 (preview rank 2) | c0df8104 | 0.0175 | '2' |
+    | 6d13e171 (preview rank 3, CHOSEN) | c33163f3 | 0.0175 | '' |
+    | 770a05e0 (NEW, added by the search) | c33163f3 | 0.0175 | '2' |
+    | 08da9419 | b3a1e018 | 0.0261 | '2' |
+    | 8b094120 | cfb585a2 | 0.0261 | '2' |
+  Worker log (/logs/redis_workers.log, /logs/beets-flask.log, UTC+1 converted):
+    23:09:41Z run_preview_add_candidates(8c4fb033…, search={'0de63004…': {'search_ids': ['c33163f3-6217-4dc…']}})
+      -> Running/Completed AddCandidatesSession on ecac6a1b 23:09:41.3Z–23:09:42.2Z, "Add candidates done".
+    23:11:42Z run_import_candidate(8c4fb033…, candidate_ids={'0de63004…': '6d13e171-…'},
+      duplicate_actions={'0de63004…': 'keep'}) -> "Resetting state from WAITING_FOR_USER_SELECTION to
+      PREVIEW_COMPLETED", Running ImportSession 23:11:42.7Z, Completed 23:11:43.2Z, "Import candidate done".
+    0 Traceback / ERROR lines in the window 23:09Z–23:12Z.
+(F2) library.db (mode=ro, same read): items 177, albums 7; items with no album 0.
+  album 9 'Benson Boone' / 'American Heart' mb_albumid c33163f3-6217-4dc8-8e88-65f623b62c9b added
+  2026-09-26T23:11:42.78Z items 10, path0 'Benson Boone/American Heart [093624834588]/01 Sorry I’m Here for Someone Else.mp3'.
+  album 2 (P02) 'Benson Boone' / 'American Heart' c0df8104… added 21:58:27.98Z items 10 — unchanged. 177 = 167 + 10.
+  sha256 /config/library.db c7a537cb… (mtime 23:11:43Z, the P04 import).
+(F3) state.pickle: live b703ecb0ec66830d3cb5fda8d3d741dece09bedb2e7e78c9fb413e3f0a2765f1, 848 B, mtime 23:11:43Z.
+  `docker exec beets-flask cp /config/state.pickle /tmp/p7-state.postP04.pickle` cp_rc 0 (copy = b703ecb0…).
+  Decoded from /tmp copies only (/root/phase07-0712/state-decode-p04.py, dec_rc 0), against the post-surgery copy
+  (9f2d1ba7…): proto 4, keys {taghistory, tagprogress}; taghistory 6 -> 7, tagprogress 0 -> 0; the ONLY difference is
+    + (b'/downloads/complete/nzb/_inbox/02-review/Benson_Boone_-_American_Heart-WEB-2025-BENSONBOONE',)
+  i.e. a new taghistory entry for P04's staged path, and nothing else moved (P01/P09 still absent).
+(F4) Tree, atlantis as real root (id -u 0), TZ=UTC, 23:14:11Z:
+  `Benson Boone/American Heart [093624834588]/` 10 entries, 10 files, all .mp3, all apps:apps (568:568) 777, mtimes
+  23:11:42.86Z–23:11:43.18Z; names 01 Sorry I’m Here for Someone Else … 10 Young American Heart.
+  P02 `Benson Boone/American Heart/` 10 .flac, mtime AND ctime of every file 21:58:28.15Z–21:58:29.60Z (the P02
+  import), names unchanged — "Keep both" did not touch P02's files (a merge/remove, or a re-tag, would have moved
+  ctime). Directory mtime 21:58Z, unchanged.
+  Library-wide: entries not 568 by user or group 0; *.nfo 91 (the pre-existing 91); empty directories 0; files newer
+  than 23:00Z = 10, all .mp3 (P04); directories newer than 23:00Z = `Benson Boone/` and the new album dir only;
+  non-audio files newer than 21:50Z 0; audio files newer than 21:50Z 127 = 117 + 10. `zfs get written@pre-07-pilot
+  tank/media/Music` 2.45G. 02-review still holds 9 entries (import.copy).
+(F5) `Benson Boone/Fireworks & Rollerblades (2024)/` is PRE-EXISTING LIBRARY CONTENT, not created by this plan.
+  It is present in `tank/media/Music/.zfs/snapshot/pre-07-pilot/Benson Boone/` (32 entries: 15 `CD 01-NN Benson
+  Boone - <title>.flac` dated 2024-04-04, 15 .lrc/.txt lyrics dated 2025-10-28, album.nfo 2026-08-18, folder.jpg).
+  Live listing vs the snapshot, (name, size, mtime, owner) per entry, LC_ALL=C sorted: `diff` IDENTICAL. The
+  artist-level artist.nfo / backdrop.jpg / folder.jpg: sha256 IDENTICAL to the snapshot. So P03 (`Fireworks &
+  Rollerblades/`, landed 21:59Z) now sits BESIDE a pre-existing untracked copy of the same album — beets could not
+  see it (library.db held only P10 before this plan). Recorded as a finding for the Phase 8/9 duplicate
+  reconciliation: DEF-07-12-08.
+(F6) Jellyfin (jf-read-0711.sh, GET only, JELLYFIN_ADDR 192.168.90.37:8096 resolved 23:14:42Z, RC 0): Music
+  MetadataSavers [] , SaveLocalMetadata false, EnableRealtimeMonitor false, SaveLyricsWithMedia false.
+(F7) How the candidate search and the duplicate prompt behaved (resolves § E's prediction):
+  - § E predicted: "Searching P04's task by the release id sets duplicate_ids on all candidates, which should
+    enable the toggle. Predicted, not measured." MEASURED: the AddCandidatesSession set duplicate_ids '2' (album 2 =
+    P02) on FIVE of the six candidates — the four untouched preview cards and the NEW searched card 770a05e0 — and
+    left the ORIGINAL c33163f3 card 6d13e171 at ''. It also ADDED the searched release as a new candidate
+    (770a05e0), so the page showed TWO c33163f3 cards; the candidate set otherwise did not change (no
+    DEF-07-12-02-style drift: the five preview releases are all still present at the same distances).
+  - The frontend (folder_._path._hash-CXeTL_Hi.js, read-only) shows the duplicate-action toggle only when the
+    SELECTED candidate has duplicate_ids.length > 0, and stores the chosen action per TASK (setDuplicateAction(e,
+    taskIdx)), not per candidate. The request carried candidate 6d13e171 (duplicate_ids '') WITH
+    duplicate_actions {task: 'keep'}. Inferred, not measured: "Keep both" was chosen while the searched card
+    770a05e0 was selected, and the selection then moved to the original card with the same release and catno; the
+    per-task action persisted. Both cards are the same MusicBrainz release, so the landed result is the agreed one.
+  - § E's other prediction held: a plain retry sends duplicate_actions={} and fails (22:00:12Z); the search route
+    enabled the prompt; "Keep both" landed P04 beside P02 without touching P02.
+  - The %aunique{} outcome matches § E's rank-3 row exactly: `Benson Boone/American Heart [093624834588]/`,
+    disambiguator catalognum. Measured against the landed tree in Task 3 below.
+  Filed DEF-07-12-07 (the stale preview-time duplicate_ids and the search-as-retry route) for 07-17 / beets.md.
+LIVE-STATE: AGREES with "imported c33163f3".
+
+## F — DISPOSITION (Task 2, P04)
+DISPOSITION P04: imported
+  (answer at the gate: "rank 3 c33163f3"; re-decided answer: "imported c33163f3". The landed release is the one the
+  gate named, so this is `imported`, not imported-other. Rank note: c33163f3 was rank 3 of an EXACT three-way tie at
+  0.0175 (D-29 passes on all three: strong; 10 == 10; per-track 0) — see Task 1 § P04; the search's second card for
+  the same release is 770a05e0.)
+Landed now: P10 (07-11), P02, P03, P05, P06, P12, P04. Held: P09, P01. Moved to 07-13: P11.
+
+## Task 3 — BARRIER READ (before Task 3's reads, after the P04 import)
+/root/ma-read-0710.sh SINCE=2026-09-26T22:34:06Z (the last VERIFIED), RC 0, read 23:14:45Z: four
+music_sync_filesystem_local--XJaJWNUS_{track,playlist,album,artist} enabled=false next_run=null updated_at 15:55:04Z,
+schedule {"type":"hourly","enabled":false,"every":12,…}; control 16 other tasks enabled; pattern drive 1/0/0; log 236
+lines, last 00:14:45 local; server-start/sync lines later than SINCE: 0 (newest sync still 2026-09-26T09:17:24Z).
+BARRIER: VERIFIED (4/4 enabled=false, next_run null) at 2026-09-26T23:14:45Z
+MA provider-filtered counts (/root/ma-counts-0710.sh, RC 0, 23:14:46Z): filesystem_local--XJaJWNUS 70 / 1244 / 66 =
+the 07-07 baseline; control ZZBOGUS0 0/0/0.
