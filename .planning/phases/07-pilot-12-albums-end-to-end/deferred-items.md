@@ -186,3 +186,35 @@ DEF-07-12-08: P03 landed beside a PRE-EXISTING, untracked copy of the same album
   album.nfo + folder.jpg), which this plan did not touch (live == snapshot by name/size/mtime/owner). Jellyfin and
   MA will see two albums with the same name. Any pilot album whose artist already exists in the library can do the
   same; 07-15 should expect it when reading MA/Jellyfin counts.
+
+DEF-07-12-09: diff-music-tags.sh's join key (`audio_md5` = ffmpeg `-c copy` md5 of the ENCODED stream) is NOT tag-invariant for an MP3 whose last frame is truncated and which carries ID3v1 — P04 track 01 reads MISSING_AFTER 1 / NEW_AFTER 1 although nothing was lost
+  Filed by 07-12 Task 3 (2026-09-26T23:22Z), instrument defect for the scripts owner (Phase 8/9 relies on this diff
+  at volume). Measured: source vs landed copy, same size; the MPEG frame region between ID3v2 and ID3v1 is
+  byte-identical; the 1,346 differing bytes are 1,344 in ID3v2 and 2 in ID3v1; decoded PCM md5 equal (598bce1e…);
+  ffmpeg reports "Header missing" at the end of both, so the copy demuxer's final packet runs into the ID3v1 bytes
+  beets rewrote. Hand pairing: 0 fields dropped. Candidate fixes (not applied): hash the frame region with ID3v1
+  stripped, or fall back to a PCM md5 when the copy md5 changes but the PCM md5 and the path pairing agree. Until
+  fixed, any MISSING_AFTER on MP3 needs the same byte check before it is read as loss.
+
+DEF-07-12-10: A match whose MusicBrainz release has an EMPTY field keeps the file's junk value — P03 album/file country 'PMEDIA'
+  Filed by 07-12 Task 3 (2026-09-26T23:20Z), for Phase 9 tag hygiene. P03's release group tag 'PMEDIA' sat in
+  COMPILATION, PUBLISHER and RELEASECOUNTRY. The match overwrote COMPILATION (0) and PUBLISHER (Night Street Records),
+  but MB release ef528afc has no country, so RELEASECOUNTRY stayed 'PMEDIA' in the file and in library.db
+  (albums.country). Not a loss and not a criterion 3/4 failure. It is a wrong value surviving a match, and a `zero`
+  rule or an overwrite-null policy would catch it.
+
+DEF-07-12-11: Jellyfin's targeted file-scope `Created` update does NOT materialise an album under a NEW top-level artist directory — P06 (`CYRIL/…`) is absent from Jellyfin
+  Filed by 07-12 Task 3 (2026-09-26T23:28Z), for plan 07-15 (Jellyfin/MA reading) and the Phase 9 pipeline design.
+  One POST of 127 paths (204). Five albums under existing artist folders (`Benson Boone/`, `Various Artists/`)
+  appeared within ~90 s. P06's single file under the new `CYRIL/` did not: Jellyfin logged `Music (/media/Music) will
+  be refreshed`, and that refresh did not add the child folder. The library root has 14 children against 15 artist
+  dirs on disk, `SearchTerm=Stumblin` finds 0, and no MusicArtist Cyril exists, still at 23:28:48Z. With realtime
+  monitoring off for Music (by design, DEF-07-11-05), every new-artist import will stay invisible to Jellyfin until
+  something else refreshes the root's children. Not remedied (the plan allows ONE targeted POST). Options for the
+  operator: a targeted update naming the new directory itself, or a Music-library-only scan. The scan would need
+  its own no-sidecar check, because MetadataSavers is [] but a FullRefresh-class call is still banned.
+
+DEF-07-12-12: ADDED ORDER FAIL — P04 landed last (23:11Z) and P06 before P05, against the declared P02, P03, P04, P05, P06, P09, P12
+  Filed by 07-12 Task 3 (2026-09-26T23:30Z). Cause: P04's first import failed (DuplicateException, DEF-07-12-07) and
+  was re-decided after the others. P06 before P05 was the operator's click order. The %aunique{} premise (P02 before
+  P04) is MET, and the albums between them share no (albumartist, album) with either, so the firing is unaffected.

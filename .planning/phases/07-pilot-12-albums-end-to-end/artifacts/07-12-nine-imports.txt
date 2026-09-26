@@ -769,3 +769,256 @@ lines, last 00:14:45 local; server-start/sync lines later than SINCE: 0 (newest 
 BARRIER: VERIFIED (4/4 enabled=false, next_run null) at 2026-09-26T23:14:45Z
 MA provider-filtered counts (/root/ma-counts-0710.sh, RC 0, 23:14:46Z): filesystem_local--XJaJWNUS 70 / 1244 / 66 =
 the 07-07 baseline; control ZZBOGUS0 0/0/0.
+
+## Task 3 — per-album verification (07-10 Task 3 repeated for P02 P03 P04 P05 P06 P12)
+Scope: the six albums this plan landed. P10 was landed and verified in 07-10/07-11 (EQUALITY PASS, QUALITY PASS)
+and is not re-read album-by-album. It is covered here only where an instrument is library-wide (criterion 7 sweep,
+ownership, sidecars, barrier). Album-id -> P-ID map (library.db, mode=ro): 2 P02, 3 P03, 4 P06, 6 P05, 8 P12,
+9 P04 (1 = P10; 5 and 7 were P01/P09, undone). Scratch: LXC 100 /root/phase07-0712/t3/, atlantis /root/phase07-0712/.
+
+(DB) /root/phase07-0712/dbread-0712.py (docker exec -i -u 568 beets-flask /venv/bin/python -, sqlite mode=ro,
+  23:20:09Z, RC 0): items 177, albums 7, items with no album 0; sha256 /config/library.db c7a537cb… (= § F).
+  | P-ID | album id | albumartist / album | mb_albumid | albumtype comp year | label / catalognum / country | items; mb_albumid==album; mb_trackid set | disc: n, track range, tracktotal, disctotal |
+  |---|---|---|---|---|---|---|---|
+  | P02 | 2 | Benson Boone / American Heart | c0df8104-7b49-4fa3-bcec-cb3d310aa9a5 | album 0 2025 | Night Street Records / '' / US | 10; 10; 10 | 1: 10, 1..10, 10, 1 |
+  | P03 | 3 | Benson Boone / Fireworks & Rollerblades | ef528afc-c3de-4b4a-8ef2-a0dd43dc9c83 | album 0 2024 | Night Street Records / A10302B0008885094R / PMEDIA (!) | 15; 15; 15 | 1: 15, 1..15, 15, 1 |
+  | P06 | 4 | CYRIL / Stumblin’ In (LUNAX remix) (extended mix) | 39fb4603-ec25-472e-8277-1623bacb900f | single 0 2024 | Spinnin’ Records / '' / XW | 1; 1; 1 | 1: 1, 1..1, 1, 1 |
+  | P05 | 6 | Various Artists / NOW That’s What I Call Music! 121 | 0a74adf8-e7ff-4b37-a9b6-48d8632fe880 | album 1 2025 | Now That’s What I Call Music LLP / CDNOW121 / '' | 44; 44; 44 | 1: 44, 1..44, 44, 1 |
+  | P12 | 8 | Various Artists / Now That’s What I Call Music! 116 | 581244e0-4f08-467e-9e96-24115f0f9e76 | album 1 2023 | EMI / 0196588421822 / GB | 47; 47; 47 | 1: 23, 1..23, 23, 2; 2: 24, 1..24, 24, 2 |
+  | P04 | 9 | Benson Boone / American Heart | c33163f3-6217-4dc8-8e88-65f623b62c9b | album 0 2025 | Night Street Records / 093624834588 / US | 10; 10; 10 | 1: 10, 1..10, 10, 1 |
+  Directories (one per album): Benson Boone/American Heart; Benson Boone/Fireworks & Rollerblades; CYRIL/Stumblin’ In
+  (LUNAX remix) (extended mix); Various Artists/NOW That’s What I Call Music! 121; Various Artists/Now That’s What I
+  Call Music! 116; Benson Boone/American Heart [093624834588].
+  (!) P03's album country 'PMEDIA' is the release group's junk tag, KEPT: MB release ef528afc carries no country, and
+  beets does not overwrite a field with an empty match value. The file keeps RELEASECOUNTRY=PMEDIA too (ffprobe
+  after: COMPILATION 0, RELEASECOUNTRY PMEDIA, LABEL/PUBLISHER Night Street Records; before: COMPILATION PMEDIA,
+  PUBLISHER PMEDIA, RELEASECOUNTRY PMEDIA). Filed DEF-07-12-10. Not a criterion 3/4 failure (DB == file; nothing dropped).
+
+Criterion 3 — ffprobe vs DB, per file (LXC 100, /root/phase07-0712/crit3b.py = 07-10's crit3.py plus ID3 key
+  aliases for MP3 (`MusicBrainz Album Id`, `album_artist`), over items.tsv, 23:20:17Z):
+  CONTROL first (ctl.tsv: one P02 FLAC row and one P04 MP3 row with title ZZ_CONTROL, disc 7): 4 mismatches, 2 per
+  file, so the zero can be non-zero on BOTH containers (FLAC and MP3).
+  Real run, album ids 2,3,4,6,8,9: files ffprobed 127, rc-fail 0, field mismatches 0 (889 comparisons, 7 fields).
+  Per album [files, mismatches]: P02 [10,0] P03 [15,0] P06 [1,0] P05 [44,0] P12 [47,0] P04 [10,0]. (P10 re-driven
+  for the comparator only: 50 files, 0 mismatches.)
+  Ownership from atlantis as real root (§ F4, and again at 23:30:21Z): library-wide entries not 568:568 by user or
+  group 0; every album dir and file apps:apps (568:568).
+  EPERM-class lines (EPERM|PermissionError|Error writing|Operation not permitted), pattern driven on 3 planted lines
+  (3 hit, "Import candidate done" 0): /logs/beets-flask.log from the first import (line 173, 22:58:2x local =
+  21:58:2xZ) to the end: 0. /logs/redis_workers.log was recreated by the 22:35Z writer restart (§ C), so it only
+  covers P04's import (39 lines): 0; the other imports' redis lines were read in § A (A3) and carried none.
+  Tracebacks/[ERROR] since 21:58Z: 10, all accounted for: P04's DuplicateException (22:00:12Z, § A (A3)) and the
+  artwork.py fromhex errors after the 22:25Z undos (§ A (A3)). None from an import write.
+Criterion 3 (P02 P03 P04 P05 P06 P12): PASS (0 mismatches / 889; 127/127 568:568; 0 EPERM-class lines)
+
+Criterion 4 — tag diff (LXC 100, host /mnt/fast/stacks 245dfa7, porcelain 0; deployed diff/snapshot/check scripts
+  sha256 = the repo (4bbfaf60… / 60212666… / f75c577f…); `df -h /mnt/fast/safety` 18G avail read first).
+  /root/phase07-0712/crit4.sh, per P-ID: `bash scripts/snapshot-music-tags.sh post-07-PNN --roots "<album dir>"`
+  (refuses if the post file exists), then `diff-music-tags.sh pre-07-PNN post-07-PNN` text and `--json`. Outputs
+  under /mnt/fast/safety/phase07/diff/PNN/. 23:20:58Z–23:21:15Z. Every snap_rc 0 ("snapshot: complete").
+  | P-ID | text exit | json exit | matched | missing_after | new_after | dropped | gained | changed | empty-BEFORE | ambiguous B/A | dup keys B/A |
+  |---|---|---|---|---|---|---|---|---|---|---|---|
+  | P02 | 0 | 0 | 10 | 0 | 0 | 0 | 410 | 24 | 0 | 0/0 | 0/0 |
+  | P03 | 0 | 0 | 15 | 0 | 0 | 0 | 570 | 48 | 0 | 0/0 | 0/0 |
+  | P04 | 1 | 1 | 9 | 1 | 1 | 0 | 288 | 30 | 0 | 0/0 | 0/0 |
+  | P05 | 0 | 0 | 44 | 0 | 0 | 0 | 1336 | 214 | 0 | 0/0 | 0/0 |
+  | P06 | 0 | 0 | 1 | 0 | 0 | 0 | 33 | 4 | 0 | 0/0 | 0/0 |
+  | P12 | 0 | 0 | 47 | 0 | 0 | 0 | 1783 | 165 | 0 | 0/0 | 0/0 |
+  FIELDS_DROPPED 0 on every album, so no drop needs a reason and none is UNEXPLAINED.
+  FIELDS_GAINED: MusicBrainz-supplied fields only (ALBUMARTISTS*, ARTISTS*, *_CREDIT, *SORT, BARCODE, CATALOGNUMBER,
+    LABEL, MEDIA, ISRC/TSRC, MUSICBRAINZ_* ids/status/type, ORIGINALDATE/TDOR, RELEASECOUNTRY, RELEASESTATUS,
+    RELEASETYPE, SCRIPT, TOTALDISCS/TOTALTRACKS, BPM/TBPM 0, lyrics-XXX (empty), composer/TEXT/TIPL where MB has works).
+    Values read: P02 LABEL Night Street Records, RELEASECOUNTRY US; P03 CATALOGNUMBER A10302B0008885094R; P04
+    CATALOGNUMBER 093624834588, release country US; P05 LABEL Now That’s What I Call Music LLP; P06 release country XW,
+    album type single; P12 CATALOGNUMBER 0196588421822, LABEL EMI, release country GB.
+  FIELDS_CHANGED, by field (count), each reasoned:
+    P02: DATE 10 (2025 -> 2025-06-20, MB date, year same); disc 10 ("1/1" -> "1", same number); TITLE 4 (MB title
+      case / U+2019: the 4 renames predicted in Task 1).
+    P03: COMPILATION 15 (junk 'PMEDIA' -> 0); DATE 15 (2024 -> 2024-04-05); PUBLISHER 15 (junk 'PMEDIA' -> Night Street
+      Records); TITLE 3 (the 3 title-case renames predicted).
+    P04: date 9, language 9 (English -> eng, ISO code), publisher 9 (the long label string -> Night Street Records),
+      title 3 (+ the 4th on track 01, see below).
+    P05: album 44 (ASCII ' -> U+2019); artist 14 (MB credit expansions, e.g. Alex Warren -> Alex Warren with Jelly
+      Roll); date 44; publisher 44 (EMI -> Now That’s What I Call Music LLP); title 19 (MB titles, e.g. 'Back To
+      Friends' -> 'back to friends', "Can't Decide" -> 'Can’t Decide'); track 44 ('1/22' -> '1/44' on CD 1, '1/22' ->
+      '23/44' on CD 2 — the second CD renumbered 23–44, as predicted); TSRC 5 (MB adds a second ISRC).
+    P06: album, title (MB text: lower-case remix/extended mix, U+2019), artist (Cyril -> CYRIL), publisher (SPINNIN'
+      RECORDS -> Spinnin’ Records).
+    P12: album 47 ('Now That's What I Call Music 116' -> 'Now That’s What I Call Music! 116'); artist 14 (credit
+      expansions); date 47; title 10 (MB drops '(Edit)' and '[feat. …]' suffixes); track 47 ('01' -> '1/23' / '1/24').
+    All MATCH-CHANGED-TAG (MB values replacing the file's), none a loss.
+  P04's exit 1, investigated (the diff joins BEFORE to AFTER on `audio_md5` = ffmpeg `-map 0:a -c copy -f md5`, the
+  ENCODED bitstream): ONE file, track 01, has key 2ddbaffb… before and bc3a3a87… after, so the tool reads it as
+  MISSING_AFTER 1 + NEW_AFTER 1. Measured on the two files (source in music/, landed copy), read-only:
+    - same size 6,270,551 B; ID3v2 4,096 B on both (v2.3 -> v2.4); ID3v1 present on both; no APE.
+    - the MPEG frame region between the ID3v2 tag and the ID3v1 tag: 6,266,327 B on both, BYTE-IDENTICAL (sha256
+      equal, first sync at offset 0 on both).
+    - differing bytes 1,346: 1,344 inside ID3v2 and 2 inside the 128 B ID3v1 ("For" -> "for", "'" -> "?"); 0 elsewhere.
+    - decoded PCM md5 (`ffmpeg -map 0:a -f md5`) 598bce1e… on BOTH. ffmpeg reports "Header missing" at the end of
+      both files: the last MPEG frame is truncated, so the copy demuxer's final packet runs into the ID3v1 bytes, and
+      ID3v1 is what beets rewrote.
+    - hand pairing of the two records' tag sets: pre 12 keys, post 44; dropped 0; gained 32; changed 4 (date, language,
+      publisher, title 'Sorry I'm Here For Someone Else' -> 'Sorry I’m Here for Someone Else'); stream fields (codec,
+      rate, channels, duration, start, bit_rate, duration_ts) equal.
+    So the audio is untouched and no tag was lost. The key is not tag-invariant for an MP3 whose last frame is
+    truncated and which carries ID3v1. That is an INSTRUMENT defect, filed DEF-07-12-09, and it is not fixed here
+    (scripts are outside this plan's files). As 07-10 recorded DEF-07-10-03, the instrument's own reading stands on
+    the record, and the hand pairing is supplementary. It is not a substitute.
+Criterion 4 (P02 P03 P05 P06 P12): PASS (exit 0; matched = file count; 0 dropped; 0 UNEXPLAINED; MISSING_AFTER 0; 0 ambiguous; 0 empty-BEFORE)
+Criterion 4 (P04): FINDING — instrument exit 1 (MISSING_AFTER 1 / NEW_AFTER 1 on track 01, whose audio frames are byte-identical and whose tags lost nothing; DEF-07-12-09); FIELDS_DROPPED 0; UNEXPLAINED 0
+
+Oracle (D-07) — 07-EXPECTED-TREE.txt `^#` stripped (339 lines), each album's lines selected by its oracle directory;
+  actual = the item paths prefixed /media/Music/. Every actual file name was ALSO re-rendered from its own DB row
+  with the template (rule 4 `DD-TT <title>` when disctotal > 1, else rule 6 `NN <title>`, `/\?:*<>|"` -> `_`): 127 of
+  127 match. No `Disc N/` subdir, no `-1 - `. So TEMPLATE-DEFECT 0: every divergence below comes from the tags the
+  match wrote, i.e. MATCH-CHANGED-TAG. 07-EXPECTED-TREE.txt not edited.
+  | P-ID | kind | oracle dir | actual dir | lines | identical | file names identical (ignoring dir) | classification |
+  |---|---|---|---|---|---|---|---|
+  | P02 | FROZEN | Benson Boone/American Heart/ | same | 10 | 6 | 6 | 4 MATCH-CHANGED-TAG: 01 Sorry I’m Here for…, 03 Man in Me, 05 Reminds Me of You, 07 I Wanna Be the One You Call (MB title case / U+2019) |
+  | P03 | FROZEN | Benson Boone/Fireworks & Rollerblades/ | same | 15 | 12 | 12 | 3 MATCH-CHANGED-TAG: 07 In the Stars, 08 Drunk in My Mind, 13 Love of Mine |
+  | P04 | FROZEN | Benson Boone/American Heart [Night Street Records, Inc. - Warner Records Inc.]/ | Benson Boone/American Heart [093624834588]/ | 10 | 0 | 6 | directory: MATCH-CHANGED-TAG (MB label 'Night Street Records' is equal on both albums, so %aunique{} falls through to catalognum; the oracle's label suffix came from the file's own label tag); 4 file names as P02 (.mp3) |
+  | P05 | FROZEN | Various Artists/NOW That's What I Call Music! 121/ | Various Artists/NOW That’s What I Call Music! 121/ | 44 | 0 | 13 | directory: MATCH-CHANGED-TAG (U+2019 only; the Various Artists/ half matches, CONF-03 via the comp rule); files: CD 2 numbered 23–44 instead of the oracle's duplicated 01–22 (MB tracklist 1×44) and 19 MB titles |
+  | P06 | FROZEN | Singles/Cyril/ (singleton, `-s`) | CYRIL/Stumblin’ In (LUNAX remix) (extended mix)/ | 1 | 0 | 0 | ROUTE: album import, not a singleton (DEF-07-12-01, filed in Task 1); text: MATCH-CHANGED-TAG (CYRIL, lower-case remix/extended mix, U+2019, `01 ` track prefix of rule 6) |
+  | P12 | APPENDED | Various Artists/Now That's What I Call Music 116/ | Various Artists/Now That’s What I Call Music! 116/ | 47 | 0 | 0 | directory: MATCH-CHANGED-TAG (U+2019 and MB's '!'); files: DD- prefix gained on 47/47 (the files had no disc tag; the MB release is 23+24, rule 4), 10 MB titles (e.g. 'vampire' -> 'Vampire', 'What Was I Made For_ [From The Motion Picture _Barbie_]' -> 'What Was I Made For_', '(Edit)'/'[feat. …]' dropped) |
+  Every Task 1 prediction held: P02/P03 directories match, P04 per § E's rank-3 row, P05 '->’ plus 23–44, P06 album
+  route, P12 DD- prefix. Findings: no new DEF for the oracle; the divergences are the classified MATCH-CHANGED-TAG
+  set above plus DEF-07-12-01 (P06 route).
+
+Criterion 7 — `bash /mnt/fast/stacks/scripts/check-music-import.sh` (245dfa7, the fixed instrument), ONCE after all
+  imports, `timeout 180`, 23:23:20Z: EXIT 0, "Import sweep clean: 177 items, three classes checked, zero findings";
+  checkable class1=177 class2=177 class3=9; UNKNOWN 0; FINDINGS 0 (collision 0, empty mb_albumid 0, tracktotal 0,
+  on-disk-no-row 0, suffix-shaped 0). library.db / state.pickle sha256 identical before and after (c7a537cb… / b703ecb0…).
+  Output /root/phase07-0712/t3/crit7.txt. Class 1 looks inside each item's own directory, so it does not see P03's
+  pre-existing sibling `Fireworks & Rollerblades (2024)/` (DEF-07-12-08).
+Criterion 7 (library-wide, 177 items incl. P10): PASS (exit 0, findings 0, UNKNOWN 0)
+
+Criterion 8 — /root/phase07-0712/crit8.sh on atlantis as real root, 23:19:04Z–23:19:42Z, reads only: each SOURCE
+  re-manifested (relpath, size, sha256, mtime) and `cmp`'d with its pre-stage manifest (= the 07-07 rows), and each
+  staged copy's (relpath, sha256) set against the 07-07 rows:
+    P02 10 UNCHANGED / staged EQUAL; P03 15 / EQUAL; P04 10 / EQUAL; P05 44 / EQUAL; P06 1 / EQUAL; P12 50 / EQUAL;
+    P09 100 / EQUAL (held); P01 32 / EQUAL (held, before its unstage below).
+  import.copy + write wrote only to the library copies; neither the sources nor the staged copies were modified.
+Criterion 8 (P02 P03 P04 P05 P06 P12, and held P09 P01): PASS (every source unchanged; every staged copy == manifest)
+
+Criterion 6, Jellyfin half (FIRST; MA not touched). /root/phase07-0712/jf-0712.sh (07-10's jf-0710.sh generalised
+  to the six album directories; secrets gated `600 root`; key via -H @<(printf …) only):
+  Pre 23:23:44Z (JELLYFIN_ADDR 192.168.90.37:8096 resolved fresh): library MusicAlbum 71, Audio 1,294; MusicAlbum
+    items whose Path equals each of the six directories: 0 each. Control on the same read: P10's directory -> 1, so
+    the Path match can see a hit. The pre-existing `Benson Boone/Fireworks & Rollerblades (2024)` album is present
+    (cf4f6916…). Music MetadataSavers [] (§ F6).
+  ONE POST /Library/Media/Updated, 23:23:51Z, body = 127 {Path, UpdateType:"Created"} (every new file, from the DB
+    rows, LC_ALL=C sorted; /root/phase07-0712/t3/actual.txt, jf-body.json): HTTP 204. No Full[R]efresh, no per-item
+    refresh, no library scan.
+  Jellyfin's reaction (its log, not calls made here), 23:24:51Z: `LibraryMonitor: Various Artists (…) will be
+    refreshed` ×2, `Benson Boone (…)` ×3, `Music (/media/Music) will be refreshed` ×1; Apple Music image search for
+    "Benson Boone American Heart".
+  Polls: 23:24:13Z (22 s, too early: nothing yet); 23:24:54Z (63 s): 5 albums, probing in progress; bounded re-poll
+    (15 s, ≤ 10) -> 23:25:18Z: 0 unprobed, 5 of 6 found, unchanged through 23:27:37Z and again at 23:28:48Z.
+  | P-ID | MusicAlbum with this Path | Id | Name | AlbumArtist | Audio children | discs / IndexNumber |
+  |---|---|---|---|---|---|---|
+  | P02 | 1 | 018bd709… | American Heart | Benson Boone | 10 | [1] 1..10 |
+  | P04 | 1 | e44d9655… | American Heart | Benson Boone | 10 | [1] 1..10 |
+  | P03 | 1 | 6330bc9e… | Fireworks & Rollerblades | Benson Boone | 15 | [1] 1..15 |
+  | P05 | 1 | 7272b6e2… | NOW That’s What I Call Music! 121 | Various Artists | 44 | [1] 1..44 |
+  | P12 | 1 | 0b21c7de… | Now That’s What I Call Music! 116 | Various Artists | 47 | [1,2] 1..23 / 1..24 |
+  | P06 | 0 | — | — | — | 0 | — |
+  P02 and P04 are TWO albums (one per directory), not merged. P05 (S3) is ONE album under AlbumArtist `Various
+  Artists` with 44 children (not 44 one-track artists), as the plan requires.
+  Library totals 23:27:36Z: MusicAlbum 76 (+5), Audio 1,420 (+126). Expected +6 / +127: the missing one is P06.
+  P06: Jellyfin has NO item for it. `SearchTerm=Stumblin` returns 0 items of any type, and no MusicArtist `Cyril`
+    exists. The library root's children in Jellyfin number 14 against 15 artist directories on disk, and `CYRIL/`
+    is the one missing. `CYRIL/` is a NEW top-level directory: the targeted Created update made Jellyfin refresh
+    the root `Music (/media/Music)`, and that refresh did not add the new child folder. The other five sit under
+    `Benson Boone/` and `Various Artists/`, which already existed as Jellyfin folders, and all five materialised.
+    Filed DEF-07-12-11. Not remedied here: the plan allows ONE targeted POST, and a second POST, a folder-level update
+    or a library scan are all outside it. The remedy is an operator decision (07-15 reads Jellyfin and MA together).
+  Sidecar check, atlantis 23:30:21Z (≈ 6.5 min after the POST; 07-10's .nfo were born 80–100 s after its POST):
+    entries newer than 23:23:00Z anywhere in the library: 0; *.nfo 91 (the pre-existing 91); not 568: 0; every
+    album dir holds only its audio (non-audio 0, P10 included). MetadataSavers re-read 23:30:2xZ: [] (SaveLocalMetadata
+    false, EnableRealtimeMonitor false, SaveLyricsWithMedia false). NO SIDECAR APPEARED.
+  Self-caused noise, recorded: jf-0712.sh's poll also issued a GET /Items/<id> without a user id per album, which
+  Jellyfin rejects ("Guid can't be empty"): 55 read-only [ERR] lines in its log, 23:24:55Z–23:27:37Z (0 other [ERR] lines since the POST). GET only, no
+  state change.
+Criterion 6, Jellyfin half (P02 P03 P04 P05 P12): PASS (204; one album per directory; AlbumArtist as beets; child count = file count; discs and per-disc 1..N contiguous; no sidecar)
+Criterion 6, Jellyfin half (P06): FAIL — not materialised by the targeted update (new top-level artist directory CYRIL/; DEF-07-12-11)
+
+%aunique{} list (from the landed paths and library.db, 23:24Z):
+  Album directories carrying a disambiguator suffix: 1 —
+    `Benson Boone/American Heart [093624834588]/` (P04, album 9): disambiguator `catalognum`, rendered ` [093624834588]`.
+  Albums sharing (albumartist, album): 1 pair — (Benson Boone, American Heart): album 2 (P02, c0df8104, catalognum
+    '') and album 9 (P04, c33163f3, catalognum 093624834588). albumtype (album/album), year (2025/2025) and label
+    (Night Street Records on both) do not separate them; catalognum does. P02 renders no suffix (empty catalognum), so
+    it keeps its first-arrival directory.
+  No other pair among the 7 albums. `Fireworks & Rollerblades` vs the pre-existing `(2024)` copy is NOT a beets pair
+    (the old copy has no library.db row, DEF-07-12-08).
+  Prediction vs outcome: Task 1's 07-SAMPLE prediction (label suffix) did not survive the MB match, as Task 1 said;
+    § E's re-measured rank-3 row predicted exactly this directory and "P02 unchanged". Held.
+Compliant re-path check (D-27: `-l` on a COPY, `-c` overlay), inside beets-flask as uid 568, 23:24:32Z:
+  real /config/library.db c7a537cb… and state.pickle b703ecb0… read BEFORE; scratch /tmp/p6-p7aunique created (asserted
+  absent first); lib.db = sqlite backup-API copy of the real DB with the source opened mode=ro (177 items / 7 albums);
+  overlay.yaml: library + statefile inside the scratch, directory /media/Music, import copy/move/write/autotag no,
+  duplicate_action skip, ui.color no.
+  `beet -l /tmp/p6-p7aunique/lib.db -c /tmp/p6-p7aunique/overlay.yaml move -p` rc 0: stdout 0 lines, 0 ` -> ` lines;
+    stderr "Moving 0 items (177 already in place)." Copy sha 74a3c942… before and after.
+  CONTROL (the instrument can go non-zero): on a second copy lib-ctl.db with album 9's catalognum blanked, the same
+    command printed 20 ` -> ` lines ("Moving 20 items (157 already in place)"): BOTH Benson Boone albums re-path, to
+    `American Heart [2]/` and `American Heart [9]/`. That is the numeric-id fallback: if catalognum ever stops
+    separating them, both albums take non-reproducible album-id suffixes, and P02 moves too.
+  Real DB read AFTER: c7a537cb… / b703ecb0…, unchanged.
+  Cleanup through the oracle's fenced cleanup program (scripts/phase06-oracle.sh SCRATCH_FENCE_SH + CLEANUP_PROG,
+    extracted byte-exact; CLEANUP_PROG asserted to BEGIN with the fence text). Fence driven first (local): refuses
+    '/tmp/p6-x/../etc', '/tmp/p6-x /config', '/tmp/p6-', '/etc' (rc 3 each); accepts '/tmp/p6-p7aunique' (rc 0). Run
+    inside the container as 568 with the path as a parameter: "gone", rc 0; `test -e` rc 1 (absent). Real DB and
+    state sha256 unchanged after (c7a537cb… / b703ecb0…).
+MOVE -P (D-28 groundwork): 0 re-path lines — no landed album would move under the final collision set; the control shows the numeric-id fallback is one empty catalognum away (for 07-15)
+
+Import order, asserted after the fact (G-12): albums.added (library.db mode=ro, 23:20:09Z) for this plan's albums:
+  P02 21:58:27.98Z, P03 21:59:42.66Z, P06 22:01:12.02Z, P05 22:04:46.71Z, P12 22:07:04.35Z, P04 23:11:42.78Z.
+  Declared order: P02, P03, P04, P05, P06, P09, P12 (P09 held). Actual: P04 landed LAST, after P05/P06/P12, because
+  its first import failed (DuplicateException) and it was re-decided; and P06 landed before P05.
+ADDED ORDER: FAIL — P02 2026-09-26T21:58:27Z, P03 2026-09-26T21:59:42Z, P06 2026-09-26T22:01:12Z, P05 2026-09-26T22:04:46Z, P12 2026-09-26T22:07:04Z, P04 2026-09-26T23:11:42Z (DEF-07-12-12)
+  The %aunique{} prediction re-read against the ACTUAL order: the premise it needs is P02 before P04, and that still
+  holds (21:58Z < 23:11Z). P02 rendered no suffix at its arrival and P04 took the catalognum suffix. The albums that
+  came between them (P03, P05, P06, P12) share no (albumartist, album) with either, so the order change did not
+  affect the firing. The P02<P04 premise is MET. Only the declared total order is not.
+
+P01 (EXCEPTION DISPOSITION P01: hold) — unstaged exactly as 07-10 run 5 did:
+  Before: library.db (mode=ro, 23:29Z) items with the P01 releases (61f964df…, f890ca09…) or a `Michael Jackson` path:
+    0 (items 177). State: P01's taghistory entry was removed by § C's surgery (absent in § F3's decode).
+  atlantis as real root, /root/phase07-0712/unstage-p01-0712.sh (07-10's /root/unstage-p01.sh with only the header
+    comment, W= and the output file name changed; diff recorded): assertions target begins
+    /mnt/tank/downloads/complete/nzb/_inbox/02-review/, != source, both exist, realpath == path, staged file count 32:
+    all held. 23:29:17.523Z `rm -rf -- …/02-review/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost`
+    rc 0; staged copy GONE (reflink copy, no data freed or lost). Inboxes after: 01-auto 0/0; 02-review 8 entries /
+    277 audio (P02 10 + P03 15 + P04 10 + P05 44 + P06 1 + P09 100 + P12 47 + P10 50); 03-asis 0/0.
+    SOURCE re-manifested: UNCHANGED vs 07-07 (32 rows). T1 23:29:27.981Z.
+  Dangling rows, read-only (beets-flask DB mode=ro, 23:30:20Z, not edited): TWO folder rows for the P01 path now point
+    at nothing: d2772a06… / session 8ad1c311… PREVIEW_COMPLETED, nothing chosen (07-10); and 8569f3f4… / session
+    16ce72cc… DELETION_COMPLETED, chosen 6be164d9 (the imported-then-undone run). Counts 13/13/13/66. The watchdog
+    logged an inbox-handler line and "skipping enqueue" lines at 23:29:49Z, with 0 FileNotFoundError / Traceback this time
+    (07-10's unstage produced 33). beets-flask running, restarts 0, StartedAt 22:35:57Z.
+  P09 (DISPOSITION P09: hold) stays STAGED in 02-review (100 files). The plan's Task 3 unstages only P01. Because of
+    DEF-07-12-04 (no hold state in the UI), P09 is one click from import until someone removes it. Carried forward.
+
+BARRIER READ after the imports, the Jellyfin step and the unstage (/root/ma-read-0710.sh SINCE=2026-09-26T23:14:45Z,
+  RC 0, read 23:30:29Z): four tasks enabled=false next_run null (updated_at 15:55:04Z); control 16 enabled; pattern
+  drive 1/0/0; log 238 lines; server-start/sync lines later than SINCE: 0 (newest sync still 2026-09-26T09:17:24Z).
+BARRIER: VERIFIED (4/4 enabled=false, next_run null) at 2026-09-26T23:30:29Z
+  MA provider-filtered counts (/root/ma-counts-0710.sh, RC 0, 23:30:29Z): filesystem_local--XJaJWNUS 70 / 1244 / 66 =
+  the 07-07 baseline; ZZBOGUS0 0/0/0; local *117* 0. No count change: MA has seen none of the seven landed albums.
+  Fence, atlantis 23:30:30Z, exact whole-line: tank/media/Music@pre-07-pilot, fast/appdata/arrs@pre-07-pilot,
+  tank/media/Music@pre-06-41-conf04-reprobe — 3 of 3 PRESENT. No zfs write verb issued by this plan.
+
+## Task 3 — QUALITY (per album, computed; the same q1–q4 as 07-11, plus the Jellyfin half)
+  (q1) criterion 3 mismatches; (q2) owner not 568:568; (q3) diff exit / UNEXPLAINED drops / MISSING_AFTER;
+  (q4) check-music-import.sh exit and findings (library-wide); (q5) criterion 8; (q6) Jellyfin half of criterion 6.
+QUALITY (P02): PASS — q1 0; q2 0; q3 exit 0, UNEXPLAINED 0, MISSING_AFTER 0; q4 exit 0, findings 0; q5 unchanged; q6 PASS
+QUALITY (P03): PASS — q1 0; q2 0; q3 exit 0, UNEXPLAINED 0, MISSING_AFTER 0; q4 exit 0, findings 0; q5 unchanged; q6 PASS (findings outside q1–q6: DEF-07-12-08 pre-existing sibling copy, DEF-07-12-10 junk country kept)
+QUALITY (P04): FINDING — q3 diff exit 1, MISSING_AFTER 1 (instrument: audio_md5 key not tag-invariant on a truncated-final-frame MP3 with ID3v1; audio frames byte-identical, 0 tags lost; DEF-07-12-09); q1 0; q2 0; UNEXPLAINED 0; q4 exit 0; q5 unchanged; q6 PASS
+QUALITY (P05): PASS — q1 0; q2 0; q3 exit 0, UNEXPLAINED 0, MISSING_AFTER 0; q4 exit 0, findings 0; q5 unchanged; q6 PASS (ONE album, AlbumArtist Various Artists, 44 children)
+QUALITY (P06): FINDING — q6 FAIL (not in Jellyfin after the targeted update; DEF-07-12-11); q1 0; q2 0; q3 exit 0; q4 exit 0; q5 unchanged; route divergence DEF-07-12-01 (album, not singleton)
+QUALITY (P12): PASS — q1 0; q2 0; q3 exit 0, UNEXPLAINED 0, MISSING_AFTER 0; q4 exit 0, findings 0; q5 unchanged; q6 PASS
+07-12 VERDICT: LANDED AND READ WITH FINDINGS — 6 albums landed and read on every per-album criterion (P02 P03 P04 P05 P06 P12; P10 from 07-11); 2 held (P09, P01), none lost; criteria 3, 7, 8 PASS on all six; criterion 4 PASS on five and an instrument FINDING on P04 (DEF-07-12-09); Jellyfin half PASS on five and FAIL on P06 (DEF-07-12-11); ADDED ORDER FAIL (DEF-07-12-12, P02<P04 premise met); MA unchanged 70/1244/66
+  None of these reads UNKNOWN. The two non-PASS readings are filed findings, and the plan has no stop arm for them.
+  Its acceptance criteria route any deviation to a filed finding: "or the deviation is a filed finding". 07-10
+  handled its criterion-7 UNKNOWN (DEF-07-10-03) the same way. /gsd-verify 07 scores them. They are not re-scored here.
