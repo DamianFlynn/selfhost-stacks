@@ -617,3 +617,57 @@ actually landed (c0df8104, catalognum empty), not the rank-1 assumption made in 
 Import order so far (albums.added): P02 21:58:27Z, P03 21:59:42Z, P06 22:01:12Z, P05 22:04:46Z, P12 22:07:04Z.
 P05 came after P06, against the declared order (P02, P03, P04, P05, P06, P09, P12). Task 3 computes the
 ADDED ORDER line.
+
+## E — P04 RE-MEASURED against P02 as it actually landed (c0df8104, catalognum empty)
+Method (22:44:15Z, LXC 100, `docker exec -i -u 568 -w /tmp beets-flask /venv/bin/python -`, program
+/root/phase07-0712/p04-predict.py, output p04-predict.txt, RC 0). For each of P04's five stored candidates and
+as-is, the program: copied the REAL library.db with the sqlite backup API (source opened mode=ro) into
+/tmp/p7-p04-predict/lib-N.db; READ the 10 staged P04 files (Item.from_path; nothing written to any file); applied
+the candidate exactly as beets does (TrackInfo.merge_with_album → item.update; AlbumMatch.apply_album_metadata =
+album.update(info.item_data)), with AlbumInfo/TrackInfo rebuilt from beets-flask's stored JSON (mode=ro); ran
+beets' own duplicate query (Album.duplicates_query over import.duplicate_keys.album = albumartist album, the
+query ImportTask.find_duplicates uses); `lib.add_album` into the COPY; and rendered item.destination() for P04
+and for P02 (album 2) with the live config (aunique keys albumartist album; disambiguators albumtype year label
+catalognum albumdisambig releasegroupdisambig; duplicate_action ask; from_scratch false).
+The real library.db was 22a72aff… before and after, and no `beet` CLI was called. The copies were removed with a
+literal-path-guarded rmtree (6 files, removed True). The printed "would re-path"/"coincide" flags compared a
+relative path with an absolute one and are NOT used. The P02 re-render below is read from the rendered paths.
+  | option (P04 session ecac6a1b, task 0de63004) | candidate id | release (media, catno) | P04 lands at (/media/Music/…) | %aunique{} fired on | P02 re-rendered (on a later move) | duplicate query hits |
+  |---|---|---|---|---|---|---|
+  | rank 1 e4fdb1dc | 86237a06-70e0-4c0d-ba89-6aecde9add10 | 12" Vinyl, 093624834953 | Benson Boone/American Heart [093624834953]/ | catalognum | Benson Boone/American Heart/ — unchanged | album 2 (P02) |
+  | rank 2 c0df8104 (= P02's release) | be48cfc5-b3b4-44b1-ac40-71e99520f47d | CD, none | Benson Boone/American Heart [9]/ — NUMERIC-ID FALLBACK (landmine) | none separates → album id | Benson Boone/American Heart [2]/ — WOULD RE-PATH | album 2 |
+  | rank 3 c33163f3 (agreed at the gate) | 6d13e171-49b2-4301-b0c0-0c75d5664c9a | CD, 093624834588 | Benson Boone/American Heart [093624834588]/ | catalognum | Benson Boone/American Heart/ — unchanged | album 2 |
+  | rank 4 b3a1e018 | 08da9419-705e-4d6e-8b83-79ec2e12dd17 | Digital Media, none | Benson Boone/American Heart [9]/ — numeric fallback | none separates → album id | Benson Boone/American Heart [2]/ — would re-path | album 2 |
+  | rank 5 cfb585a2 | 8b094120-9cd0-4a06-817c-cfa9f12f132a | Digital Media, none | Benson Boone/American Heart [9]/ — numeric fallback | none separates → album id | Benson Boone/American Heart [2]/ — would re-path | album 2 |
+  | as-is (file tags) | asis-0de63004-… | — | Benson Boone/American Heart/ — P02's OWN directory, no suffix | albumtype ('' vs 'album'), rendered empty | Benson Boone/American Heart [album]/ — would re-path | album 2 |
+  File names for ranks 1–5: `01 Sorry I’m Here for Someone Else.mp3` … `10 Young American Heart.mp3` (the same 4 MB
+  title changes as P02). No name collides with P02's `.flac` in any branch.
+  `[9]` is the next album id on today's library (ids 1–8 used, with 5 and 7 now free). It changes if anything else
+  imports first, which is why a numeric suffix is non-reproducible.
+  The Task 1 prediction ("c0df8104 → NO SUFFIX, same directory as P02") assumed P02 on e4fdb1dc. With P02 on
+  c0df8104 it does not hold: choosing P02's own release gives the numeric fallback.
+  In every branch the FROZEN oracle `American Heart [Night Street Records, Inc. - Warner Records Inc.]/` diverges
+  at directory level (MATCH-CHANGED-TAG: MB's label is identical across the pair, so `label` never separates).
+
+DUPLICATE PROMPT — beets-flask WILL raise it again, on EVERY option. All six hit album 2 on albumartist+album, and
+duplicate_action is `ask`, so ImportSession.resolve_duplicate (session.py:817-825) raises DuplicateException
+unless the import request carries a duplicate action for task 0de63004.
+  Source reading (read-only, NOT measured): the folder page's duplicate-action toggle ("Skip new (don't import)" /
+  "Merge new and old into one album" / "Keep both, old and new" / "Remove old items") is DISABLED when the
+  selected candidate's `duplicate_ids` is empty (frontend `disabled: duplicate_ids.length===0`, title "No
+  duplicates found"). P04's five candidates still carry `duplicate_ids ''`, computed at PREVIEW time when P02 was
+  not yet in the library (beets-flask DB mode=ro, 22:31Z). The ImportSession never recomputes them: identify_duplicates
+  runs only in PreviewSession-type sessions (session.py:330-337, 455-475). So a plain retry from P04's page is
+  expected to send `duplicate_actions={}` and fail with the same DuplicateException.
+  The route that recomputes them: the folder page's candidate SEARCH (kind PREVIEW_ADD_CANDIDATES → AddCandidatesSession,
+  a PreviewSession subclass whose stages include identify_duplicates for every candidate of the searched task,
+  session.py:497-606). Searching P04's task by the release id sets duplicate_ids on all candidates, which should
+  enable the toggle. Predicted, not measured. It also adds the searched release as a candidate (MusicBrainz
+  lookup; a DEF-07-12-02-style candidate change is possible).
+  A full re-preview (inbox PREVIEW) would also recompute them, but it re-fetches the whole candidate set (DEF-07-12-02 risk).
+  NEVER "Remove old items" (deletes P02's landed album and files) and NEVER "Merge new and old into one album"
+  (folds P02's 10 FLAC into P04's album). "Skip new" imports nothing. Only "Keep both, old and new" lands P04
+  beside P02.
+
+P04 CHECKPOINT (operator decision; default hold). Returned to the orchestrator at 2026-09-26T22:4xZ. Nothing
+imported by this agent.
