@@ -183,12 +183,51 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=t3_proxy"
-      
-      # HTTP Router (public or protected based on use case)
+
+      # ─────────────────────────────────────────────────────────────────────────────────────
+      # INTERNAL + TAILNET ONLY. THIS ROUTER MUST NEVER BE PUBLICLY REACHABLE.
+      #
+      # The label block here previously said "HTTP Router (public or protected based on use
+      # case)" and carried NO auth middleware, so the use case it actually implemented was
+      # PUBLIC. That was latent rather than live only because kiosk.deercrest.info had no DNS
+      # record. On 2026-09-26 a CNAME was created for it during a DNS/rule reconciliation and
+      # the consequence was immediate and measured: `GET https://kiosk.deercrest.info/` served
+      # 200 unauthenticated and `/image` returned a real JPEG (verified by magic number
+      # ff d8 ff) — the family photo library, readable by anyone on the internet, with no
+      # login. The record was deleted within minutes and the name is NXDOMAIN again.
+      #
+      # Operator decision, same day: "that should be an internal and maybe also tailscale only".
+      #
+      # So the exposure is now closed at TWO layers, deliberately, because DNS absence is not a
+      # security control — it is one API call away from being reversed by anyone tidying a zone:
+      #
+      #   1. NO DNS RECORD. Deliberately absent. Do not create one.
+      #   2. ipallowlist, below. Even WITH a record, only the LAN and the tailnet are admitted.
+      #      Traefik matches on the immediate peer address, and a request arriving through the
+      #      Cloudflare proxy presents a Cloudflare edge IP, so this denies the public path by
+      #      construction rather than by configuration of the edge. Kiosk displays live on the
+      #      LAN; nothing off-tailnet has a legitimate reason to reach this.
+      #
+      # Kiosk is also the one service where auth cannot be the answer: a wall-mounted display
+      # cannot complete an Authelia login, which is exactly why it was left open in the first
+      # place. Network scope is the correct control here, not SSO.
       - "traefik.http.routers.immich-kiosk.entrypoints=web,websecure"
       - "traefik.http.routers.immich-kiosk.rule=Host(`kiosk.deercrest.info`)"
       - "traefik.http.routers.immich-kiosk.service=immich-kiosk"
+      - "traefik.http.routers.immich-kiosk.middlewares=kiosk-internal-only"
+      - "traefik.http.middlewares.kiosk-internal-only.ipallowlist.sourcerange=172.16.1.0/24,100.64.0.0/10,127.0.0.1/32"
       - "traefik.http.services.immich-kiosk.loadbalancer.server.port=3000"
+
+      # ── Tailnet exposure via tsbridge ────────────────────────────────────────────────────
+      # The sanctioned way to reach this from off-LAN. tsbridge runs tsnet in USERSPACE, so it
+      # needs no /dev/net/tun and grants no network privilege. It already serves nine services
+      # this way (chat, search, ollama, docling, photos, …) from containers on t3_proxy, which
+      # is the network this container is on, so no network change is required.
+      - "tsbridge.enabled=true"
+      - "tsbridge.service.name=kiosk"
+      - "tsbridge.service.port=3000"
+      - "tsbridge.service.tags=tag:server"
+      - "tsbridge.service.access_log=false"
     depends_on:
       - immich-server
 
