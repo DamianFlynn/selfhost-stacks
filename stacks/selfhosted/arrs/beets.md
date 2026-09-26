@@ -2517,10 +2517,10 @@ The raw readings are in
 |------|--------|--------|--------|-------------|
 | `beets/config.yaml` | at the 06-04 first-start proof (context only; not the previous digest) | `96a7c622779f95a13cd858c09b34072bcfc01405fecccd00b361ecdb5cb3e1f7` | recorded by plan 06-04 | `06-04-first-start.txt` (repo, appdata and in-container all matched then) |
 | `beets/config.yaml` | PREVIOUS — what CONF-01/02/05 in their final Phase 6 form were measured against | `661c729738a12be61d94dcf0cf0bfb6b0cdaa9c996d2ed9fffb9bc494394668f` | `1a6428608b8e6c42bc80ecad1187616eaace1a29` (2026-09-21) | 07-08 task 1: two hashers at the base commit; appdata and container equal |
-| `beets/config.yaml` | NEW — carries the D-22 edits (comments only; no key changed) | `7d7264546e7aafe791c3b2c28dc1b39cdf818ff3105f02f5834eb4208103fdab` | the D-22 commit | 07-08 task 2: sha256 of the staged file |
+| `beets/config.yaml` | NEW — carries the D-22 edits (comments only; no key changed) | `7d7264546e7aafe791c3b2c28dc1b39cdf818ff3105f02f5834eb4208103fdab` | `926f1ff6b0d8a123106d11bd4b41cf6ec0b03d10` (the D-22 commit, 2026-09-26) | 07-08 task 2: sha256 of the staged file |
 | `beets/flask-config.yaml` | at the 06-04 first-start proof (context only) | `949bd1f3b13501d448865ce2d19195db209050279f8a0022e97cd7e54d835db8` | recorded by plan 06-04 | `06-04-first-start.txt` |
 | `beets/flask-config.yaml` | PREVIOUS — unchanged since 06-04 | `949bd1f3b13501d448865ce2d19195db209050279f8a0022e97cd7e54d835db8` | `f1848e204621c9de54784f58b05b7c2660fdff46` (2026-09-20) | 07-08 task 1: two hashers at the base commit; appdata and container equal |
-| `beets/flask-config.yaml` | NEW — `01-auto` de-registered (D-21), dated notes | `875fcf7ef5246fbfaef373824653381c7e43d3801c099a94e4046fcae63813c8` | the D-22 commit | 07-08 task 2: sha256 of the staged file |
+| `beets/flask-config.yaml` | NEW — `01-auto` de-registered (D-21), dated notes | `875fcf7ef5246fbfaef373824653381c7e43d3801c099a94e4046fcae63813c8` | `926f1ff6b0d8a123106d11bd4b41cf6ec0b03d10` (the D-22 commit, 2026-09-26) | 07-08 task 2: sha256 of the staged file |
 
 **What the NEW `config.yaml` changes, stated so nobody reads a digest move as a behaviour move.**
 Only comments changed. The import keys (`copy: yes`, `move: no`, `write: yes`) are byte-for-byte

@@ -85,3 +85,59 @@ stacks/selfhosted/arrs/beets/flask-config.yaml
     audio files (mp3/flac/m4a/ogg/opus/wav/aac/wma/aiff/alac, find -type f, pipefail)  0   (find rc 0)
     entries of any kind (find -mindepth 1)                                                0   (find rc 0)
   The directory stays (D-21); only the registration goes.
+
+== TASK 2 STAGED (git add, not committed) — sha256 of the working-tree file at staging, shasum -a 256 ==
+  6ec436fced5fe69d4315a55813f7e56d2f3b72712d1007251f16aee2a66953b0  stacks/selfhosted/arrs/beets/flask.yaml   (staged blob 9c067f89c6de094b7475cb7f7120f6dbf06a825a)
+  890fc9e481040a1ff82e91a727f778bc027021b03f15b28c3c32a06aa06c5723  stacks/selfhosted/arrs/beets/beets.yaml   (staged blob 4e88f9d22548e6046d9977b486088bab988fdf5b)
+  875fcf7ef5246fbfaef373824653381c7e43d3801c099a94e4046fcae63813c8  stacks/selfhosted/arrs/beets/flask-config.yaml   (staged blob 22daf6d1d8842d74409e43a5401bb3bb6bbc2a87)
+  7d7264546e7aafe791c3b2c28dc1b39cdf818ff3105f02f5834eb4208103fdab  stacks/selfhosted/arrs/beets/config.yaml   (staged blob 33af3ccaa09f7c92bc8beba7ecdde5cbc10007e0)
+  Staged == working tree for all four: yes
+  C3 applied: gui.library.readonly stays true (value unchanged, dated comment added naming what it gates).
+  paths:/%aunique/per_disc_numbering/duplicate_action untouched (task-2 verify counted 0 changed rule lines).
+
+== TASK 3 — THE D-22 COMMIT ==
+  926f1ff6b0d8a123106d11bd4b41cf6ec0b03d10  feat(07-08): D-22 — grant /media rw to beets-flask with every flag that moves with it
+  `git show --stat --format= HEAD` listed exactly 7 files: scripts/check-music-freeze.sh,
+  scripts/quick-health-check.sh, stacks/selfhosted/arrs/beets.md, beets/beets.yaml, beets/config.yaml,
+  beets/flask-config.yaml, beets/flask.yaml.
+  Committed digests (git show 926f1ff:<path> | shasum -a 256):
+    config.yaml        7d7264546e7aafe791c3b2c28dc1b39cdf818ff3105f02f5834eb4208103fdab  (= staged, task 2)
+    flask-config.yaml  875fcf7ef5246fbfaef373824653381c7e43d3801c099a94e4046fcae63813c8  (= staged, task 2)
+  823fe04 is an ancestor of 926f1ff (git merge-base --is-ancestor): yes.
+
+== QHC NOTICE COUNT (header recipe, measured AFTER writing) ==
+  control: a one-line file holding the real header text → 1
+  /usr/bin/grep -c '^# ⚠️  EXIT-CODE BEHAVIOUR CHANGE[D]' scripts/quick-health-check.sh → 15 (was 14 after 07-03)
+  raw recipe → 19 (was 18). Dated observations, not pins.
+
+== D-04 COUNTS (the block's own git grep + comment strip + D04_INV_RE / D04_EXEMPT_RE, replayed locally over HEAD) ==
+  before (HEAD 7d1aa8b): raw=220 stripped=111 invocation-shaped=17 documentation=2 executable=15 exempt=12
+  after  (HEAD 926f1ff): raw=220 stripped=111 invocation-shaped=17 documentation=2 executable=15 exempt=12
+  Documentation count still 2 (D04_DOC_BASELINE). The plan's literal ask — D04_INV_RE over
+  `git grep -n -I -i beet HEAD -- '*.md'` (whole repo, incl. .planning) — reads 67 before and after; it
+  is not the pinned set (the block scans scripts/ and stacks/ only), recorded for completeness.
+
+== check-music-freeze.sh — the D-22 exception DRIVEN on the workstation with a synthetic docker (read-only) ==
+  A fake `docker` on PATH served fixed mount rows (name|state|src|dst|rw); beets-flask's config source was a
+  scratch file named library.db so is_tagger_mount classifies it tagger-capable. Summary of outcomes:
+    CTL  beets-flask /mnt/tank/media:/media ro          → D-22 exception 0, no red
+    A    beets-flask /mnt/tank/media:/media rw          → D-22 exception 1 in §1 and §6b, no red
+    B    A + beets-flask /mnt/tank/media/Music:/music rw → exception 1, the second mount ❌ tagger-capable (§1 and §6b)
+    Cc   beets (CLI arm) /mnt/tank/media:/media rw      → ❌ tagger-capable, exception 0
+    D    beets-flask2 (not the literal) same mapping    → ❌ tagger-capable, exception 0
+    E    the exact exception row twice                  → ❌ ">1 rows match" in §1 and §6b
+  §2 (declared), over a scratch copy of the tree:
+    working tree (flask.yaml :rw)                       → declared rw 0, D-22 exception 1
+    + appended /mnt/tank/media/Music:/music:rw          → ❌ declared rw 1 (the new line), exception stays 1
+    flask.yaml at HEAD (:ro)                            → declared rw 0, D-22 exception 0
+  Pins unmoved: DECLARED_INTERP_EXPECTED 13 (read 13), TAGGER_DEF_EXPECTED 2. The script has no --self-test.
+  (The workstation run also reds on "tagger definitions found 0" and similar — macOS has no /mnt/fast tree;
+   unrelated to this change.)
+
+== NOTHING DEPLOYED ==
+  No ssh write, no git pull on the host (/mnt/fast/stacks stays at 0c95427), no docker compose, no container
+  recreated, nothing installed under /mnt/fast/appdata, no write to the library or any beets DB. Every remote
+  command in this plan was a read (sha256sum, awk, python yaml parse, docker inspect, grep/sed over the image,
+  zfs list, find).
+  Until 07-09: quick-health-check.sh against the live estate reads the D-23 arm RED (beets-flask is still
+  RW=false) — and, once the host pulls, the vendored-drift block RED on both beets configs (C9). Expected.
