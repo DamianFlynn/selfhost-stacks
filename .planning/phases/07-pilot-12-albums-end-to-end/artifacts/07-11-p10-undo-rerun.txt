@@ -290,3 +290,119 @@ MA provider-filtered counts 20:20:50Z (/root/ma-counts-0710.sh, RC 0): filesyste
   album out now, same candidate). Options as the plan orders them: hold, undo, undo-rerun-other.
 
 Gate presented to the operator via the orchestrator (checkpoint:decision), 2026-09-26T20:2xZ. Awaiting the answer.
+
+## Task 1 — OPERATOR ANSWER (run 2, continuation agent)
+OPERATOR ANSWER (verbatim, relayed by the orchestrator, recorded 2026-09-26T20:26Z): undo
+  Relayed context: the operator pressed UNDO IMPORT in beets-flask on session 788f3bba-4a9a-48ae-b00a-fc7a85c124ba.
+  Before accepting it the executor re-took every reading itself (§ Task 2 below); live state agrees that
+  UNDO IMPORT ran: beets-flask session 788f3bba progress DELETION_COMPLETED, updated_at 2026-09-26 20:25:05 (UTC),
+  task b931b749 progress DELETION_COMPLETED; library root mtime 20:25:05.640Z (the delete). Nothing contradicts it.
+DISPOSITION: undo
+
+=== 07-11 RUN 2 — Task 2 (UNDO WITNESS) ===
+Readings 2026-09-26T20:26:44Z–20:30:15Z. Reads only, except the one planned Jellyfin `Deleted` update.
+
+## Task 2 — UNDO WITNESS
+(tree) atlantis as real root (id -u 0), TZ=UTC, 20:26:44Z, RC 0:
+  `test -e "/mnt/tank/media/Music/Various Artists/Now That’s What I Call Music! 117"` -> album dir ABSENT;
+  P10 destination files: 0 (the directory itself is gone, so `find … -type f | wc -l` has nothing to list).
+  Parent album-artist directory `Various Artists/` (Task 1's VA NORMALISATION reading): ABSENT — beets pruned it
+  with the album dir. `find /mnt/tank/media/Music -type d -empty` -> none (RC 0): no empty directory left behind.
+  Library-wide: names matching *117* 0; entries not 568 by user or group 0; *.nfo 91 (= the pre-existing 91);
+  files 2,586; top-level entries 14; library root 568:568, mtime 2026-09-26T20:25:05.640Z (the undo's delete).
+  Whole-tree control (stronger than a count): `find . -mindepth 1 -printf '%y %U:%G %p\n' | LC_ALL=C sort` of the
+  live tree vs the same listing of `/mnt/tank/media/Music/.zfs/snapshot/pre-07-pilot` (read-only snapshot dir):
+  2,673 = 2,673 lines, `cmp` IDENTICAL (type, owner and path of every entry). Re-taken after the Jellyfin step
+  (20:30:10Z): IDENTICAL again; entries with mtime/ctime after 20:25:30Z UTC: 0.
+  `zfs get written@pre-07-pilot tank/media/Music` = 170K (was 1.06G with P10 landed).
+(DB) LXC 100, `docker exec -i -u 568 beets-flask /venv/bin/python -`, sqlite mode=ro, 20:27:20Z, RC 0:
+  total items 0, total albums 0; mb_albumid b057dee8-02ea-4b48-8681-f5e3255bc47d items 0 / albums 0;
+  items with path like %117% 0; item_attributes 0, album_attributes 0.
+  sha256 /config/library.db bc651d7968978d60be6136e31cba2d16be3a612168cebc0c527a83abdefe4c3c
+    (pre-undo a9e7036f…; fence safety copy fbbdde0c… — the file changed, and it is not byte-equal to the fence
+    copy, which is expected of an SQLite file after inserts and deletes; the counts are the witness).
+(state) `docker exec beets-flask sha256sum /config/state.pickle` 20:27:05Z:
+  224fe2792fc67ed7c550155eaad0434d65c5bb24e8ee45d53e61c9a80580bae3 — UNCHANGED from the pre-undo reading.
+  Live file mtime 2026-09-26T19:44:28.92Z (listing in +0100: 20:44:28) = the IMPORT's write; UNDO IMPORT did not
+  write it at all.
+  Copy: `docker exec beets-flask cp /config/state.pickle /tmp/p7-state.postundo.r2.pickle` RC 0, sha256 224fe279…
+  Decoded (/venv/bin/python, container default user, pickle.load of /tmp copies only; /config never written), RC 0:
+    fence    keys ['taghistory','tagprogress']; taghistory len 0; tagprogress len 0
+    preundo  keys ['taghistory','tagprogress']; taghistory len 1; tagprogress len 0
+    postundo keys ['taghistory','tagprogress']; taghistory len 1; tagprogress len 0
+  Membership of each Task 1 `P10 STATE KEY(S)` entry in the post-undo copy:
+    taghistory (b'/downloads/complete/nzb/_inbox/02-review/VA.Now.That.s.What.I.Call.Music_.117.2024..CD.FLAC..CDNOW117',) -> PRESENT
+  Set difference post-undo - fence: taghistory +1 (the same P10 entry), tagprogress 0; fence - post-undo 0 on both.
+  Decoded post-undo == decoded pre-undo: True. No NEW entry was written by the undo; the import's entry survived.
+(source) atlantis, the staging script's recipe (relpath, size, sha256, mtime) over
+  …/unsorted/VA.Now.That.s.What.I.Call.Music_.117.2024..CD.FLAC..CDNOW117 -> /root/phase07-0710/p10-source-after-undo.tsv;
+  `cmp` vs p10-source-before.tsv: UNCHANGED (52 rows).
+(staging) `_inbox/02-review/VA.Now.That.s.What.I.Call.Music_.117.2024..CD.FLAC..CDNOW117` PRESENT, 52 files;
+  (relpath, sha256) set vs the 07-07 manifest's 52 P10 rows: EQUAL. 01-auto 0 / 02-review 1 / 03-asis 0 entries.
+  UNDO IMPORT (delete_files on the library copies only) left the staged copy intact — no re-stage is needed.
+(beets-flask own DB, mode=ro, not edited) folders 5, sessions 5; session 788f3bba progress DELETION_COMPLETED
+  (updated 20:25:05Z), exc None; task b931b749 DELETION_COMPLETED, choice_flag APPLY, chosen_candidate_id
+  073c7ff8-b50b-45d6-adfc-ca687650ccc7 retained; folder c455ff4d… still registered.
+(fence safety copies, atlantis) library.db fbbdde0c… / state.pickle f6a9a1ad… (= 07-09, unchanged).
+(snapshots, atlantis 20:26:44Z, exact whole-line) fast/appdata/arrs@pre-07-pilot, tank/media/Music@pre-07-pilot,
+  tank/media/Music@pre-06-41-conf04-reprobe, tank/downloads@pre-phase5 (listed only): all PRESENT.
+(Jellyfin) helper /root/phase07-0711/jf-del-0711.sh = jf-0710.sh with only the body file, the path list
+  (/root/phase07-0711/p10-paths.txt = 07-10's actual.txt, 50 lines, sha256 1a2575fb…, every line under the P10 dir)
+  and `UpdateType:"Deleted"` changed (diff read; one `-X POST`, 0 refresh verbs). Secrets gated `600 root`, key via
+  -H @<(printf …). JELLYFIN_ADDR 192.168.90.37:8096 resolved fresh 20:28:15Z and 20:28:20Z.
+  Pre 20:28:15Z: P10 MusicAlbum 1 (d18d5c99…); library MusicAlbum 71, Audio 1,294.
+  Music LibraryOptions re-read 20:28:20Z: MetadataSavers [] (DEF-07-11-05 remediation holds), SaveLocalMetadata false,
+  EnableRealtimeMonitor false.
+  ONE POST /Library/Media/Updated, 20:28:20Z, 50 paths, UpdateType Deleted -> HTTP 204. No Full[R]efresh, no scan call.
+  Poll (≥ 60 s) 20:29:31Z: P10 albums 0; library MusicAlbum 70, Audio 1,244 (= the pre-P10 totals of 07-10's pre-read).
+  Jellyfin log since 20:28:00Z, 4 lines: the two webhook notifier tasks; `LibraryMonitor: Music (/media/Music) will
+  be refreshed.`; `Removing item, Type: MusicArtist, Name: Various Artists`. The LibraryMonitor line is Jellyfin's
+  own reaction to the Deleted paths (the parent dir is gone), not a call this run made; with MetadataSavers [] the
+  tree was re-listed afterwards and is IDENTICAL to @pre-07-pilot (above) — nothing was written into Music.
+(MA barrier) /root/ma-read-0710.sh SINCE=2026-09-26T20:20:50Z, RC 0, read 20:28:25Z: 4/4
+  music_sync_filesystem_local--XJaJWNUS_* enabled=false next_run null (updated_at 15:55:04Z); control 16 enabled;
+  drive 1/0/0; log 219 lines; server-start/sync lines later than SINCE 0.
+BARRIER: VERIFIED (4/4 enabled=false, next_run null) at 2026-09-26T20:28:25Z
+  MA counts (/root/ma-counts-0710.sh, RC 0, 20:28:25Z): filesystem_local--XJaJWNUS 70 / 1244 / 66 = baseline; bogus
+  0/0/0; local *117* 0. MA never saw P10, so the undo leaves nothing behind in MA.
+
+## Task 2 — PAIRED VERDICTS (counts as measured; TREE = P10 destination files, DB = P10 items,
+## STATE = Task 1 `P10 STATE KEY(S)` entries present in the decoded copy)
+TREE COVERED yes (pre 50 → post 0)
+DB COVERED yes (pre 50 → post 0)
+STATE COVERED no (pre 1 → post 1)
+
+Reading: UNDO IMPORT covers the tree and library.db and does NOT touch state.pickle — the file is byte-identical
+before and after, and the incremental `taghistory` entry the import wrote survives. D-14's claim is falsified for
+the incremental state -> DEF-07-11-01 filed in the phase deferred-items.md. DB COVERED is yes, so DEF-07-11-03 is
+not filed and `restore-db-state-then-rerun` is not offered; TREE COVERED is yes, so DEF-07-11-04 is not filed.
+
+Why (from the beets-flask source in the running container, read-only — recorded as source reading, NOT measured):
+  beets_flask/importer/session.py undo path (`Cannot undo import from state …` / `delete_from_beets`) removes items
+  by `gui_import_id` with delete_files and sets DELETION_COMPLETED; it never touches beets' ImportState/taghistory.
+  Consequence for a re-run, two different entry points:
+    - Re-import of THIS beets-flask session (the UI button on 788f3bba): beets_flask/importer/stages.py read_tasks
+      yields the session's stored tasks when present and never calls `already_imported`, and ImportSession resets
+      DELETION_COMPLETED -> PREVIEW_COMPLETED. Expected: NOT skipped despite the surviving taghistory entry.
+    - Any NEW read of the same folder (a fresh beets-flask session, a re-staged folder picked up by the watchdog, or
+      `beet import`): beets/importer/tasks.py ImportTaskFactory calls `session.already_imported`, which returns True
+      when `incremental` is on and the path tuple is in taghistory. Expected: SKIPPED silently.
+  Neither expectation is a measurement; the re-run's result is the measurement.
+
+D-17 for this run: NOT FIRED by construction (STATE COVERED is `no`; condition (ii) cannot hold). The snapshot
+tank/media/Music@pre-06-41-conf04-reprobe stays HELD for plan 07-16's operator gate, whichever option is chosen.
+No zfs write verb, no file or directory removed by hand, no DB edit, no state.pickle write in this run.
+
+## Task 2 — GATE (presented; awaiting the operator)
+Question: re-run P10 now?
+  hold                — stop with P10 backed out (tree/DB clean, taghistory entry left); ledger STOP STATE 07-11-T2-HOLD.
+  restore-then-rerun  — the plan's sanctioned remedy for STATE COVERED no: beets-flask stopped, state.pickle FILE
+                        copy from /mnt/fast/appdata/arrs/.zfs/snapshot/pre-07-pilot/beets/config/state.pickle,
+                        restart, re-decode (entry ABSENT), then the operator re-imports. D-14 stays falsified for
+                        state; criterion 5's "no hand-repair" is for /gsd-verify 07; D-17 NOT FIRED.
+  rerun               — defined for "undo covered all three", which it did not. Listed so the choice is explicit:
+                        re-importing session 788f3bba with the taghistory entry still present tests the
+                        source-reading expectation above; D-17 NOT FIRED either way.
+  restore-db-state-then-rerun — NOT offered (DB COVERED yes).
+Recommendation: hold first per the plan's ordering; on the merits the executor recommends `restore-then-rerun`,
+because leaving the entry means every later fresh read of this folder is silently skipped.

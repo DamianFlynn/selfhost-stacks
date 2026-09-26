@@ -72,3 +72,16 @@ DEF-07-11-06: No check asserts the Jellyfin Music library's `MetadataSavers` is 
   `LibraryOptions.MetadataSavers == []` (fail closed
   on an unreadable response, CONVENTIONS §1), and assert no library entry is owned by anything but
   568:568. Out of scope for the operator-approved remediation.
+
+DEF-07-11-01: `UNDO IMPORT` does not cover `state.pickle`; D-14's claim is falsified for the incremental state
+  Filed by 07-11 run 2 Task 2 (UNDO WITNESS, 2026-09-26T20:27Z). After the operator pressed UNDO IMPORT on
+  beets-flask session 788f3bba (DELETION_COMPLETED 20:25:05Z): TREE COVERED yes (pre 50 → post 0; live tree
+  cmp-IDENTICAL to @pre-07-pilot), DB COVERED yes (pre 50 → post 0), STATE COVERED no (pre 1 → post 1).
+  /config/state.pickle sha256 224fe279… before and after (mtime = the import's 19:44:28Z write); the decoded
+  taghistory entry (b'/downloads/complete/nzb/_inbox/02-review/VA.Now.That.s.What.I.Call.Music_.117.2024..CD.FLAC..CDNOW117',)
+  survives. Source reading (not measured): beets-flask's undo deletes items by gui_import_id and never touches
+  beets' ImportState, so a fresh read of the same folder under `incremental: yes` is expected to be skipped
+  silently, while a re-import of the same beets-flask session reuses its stored tasks and is expected not to be.
+  `stacks/selfhosted/arrs/beets.md`'s recovery-fence text should say UNDO IMPORT covers tree + library only.
+  Remedy options at 07-11's Task 2 gate: hold / restore-then-rerun (file copy from the arrs snapshot) / rerun.
+  D-17 NOT FIRED for 07-11 run 2.
