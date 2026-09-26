@@ -423,3 +423,177 @@ the flat filenames' track numbers (each number appearing twice = two discs):
        of content MIS-tagged as one disc. Not a clean gate either.
   P02, P03, P04, P06: single-disc (disc {1} or {0}); not multi-disc.
   P01: multi-disc but incomplete (disc 1 tracks 1–6 absent) — the reason for the swap.
+
+=== 07-10 RUN 6 (gate album P10) ===
+# Revised plan (35fb235 / 320a703): gate slot P01 -> P10 (07-SAMPLE-AMENDMENT.md A1). Runs 1-5
+# above are P01's and are unchanged; every P10 check reads only this section.
+Run 6 start: 2026-09-26T18:42:53Z. Workstation HEAD 320a703; host /mnt/fast/stacks HEAD 29622d4,
+porcelain 0 lines (host lags workstation by planning-docs commits only: 35fb235, 320a703).
+Resume extraction: LC_ALL=C /usr/bin/grep -oE '^(STOP )?STATE 07-10-[A-Z][A-Z-]*[A-Z]' artifacts/07-pilot-ledger.txt | tail -n 1
+RESUME 07-10 TOKEN: STOP STATE 07-10-HOLD
+Dispatch (Step 2): newest token `STOP STATE 07-10-HOLD` -> a fresh P10 run from Step 3. `_inbox/02-review`
+asserted empty first (18:43:53Z, atlantis: 0 audio, 0 entries), so nothing is carried.
+
+## Step 1 — sample amendment (committed ALONE, before anything is staged)
+`07-SAMPLE-AMENDMENT.md` was not tracked; written and committed alone (one file, plain git commit):
+d59fd27 docs(07-10): 07-SAMPLE amendment A1 — gate slot P01 -> P10 (D-10). The five machine lines were
+checked verbatim with /usr/bin/grep -qxF before the commit (5/5). P01 DISPOSITION: PENDING line present.
+07-SAMPLE.md, 07-EXPECTED-TREE.txt and 07-EVIDENCE-MAP.md not touched.
+AMENDMENT COMMIT: d59fd27
+
+## Step 3 — preconditions and pre-staging reads
+(a) P7R2-05, 18:43Z.
+  07-09 extraction: LC_ALL=C /usr/bin/grep -oE '^(STOP )?STATE 07-09-[A-Z][A-Z-]*[A-Z]' <ledger> | tail -n 1 -> `STATE 07-09-GRANTED`
+PRECONDITION 07-09 TOKEN: 07-09-GRANTED
+  `bash scripts/check-beets-config.sh` from the workstation, 18:43:37Z: EXIT 0, FAILURES total 0,
+  arm 1 blind 0, arm 2 blind 0, READY_ROUTE watchdog-log-line; D-29 layer 3 byte-identical before
+  and after (library.db fbbdde0c…, state.pickle f6a9a1ad…). Values captured whole from the
+  ANSI-stripped output with anchored sed (`^ *✅ CONF-01 import\.<k> = ([^ ]+)$` and the
+  `REPORTED, not asserted: import\.write = ([a-z]+) in the server-committed config\.` line),
+  compared as exact strings: copy=[true] move=[false] write=[true].
+PRE-STAGING IMPORT KEYS: PASS (copy=true move=false write=true)
+  Watchdog registration line: inboxes ['/downloads/complete/nzb/_inbox/02-review',
+  '/downloads/complete/nzb/_inbox/03-asis'] — exactly two.                              TRUE
+  Fence (atlantis, `zfs list -H -t snapshot -o name | grep -xcE`, RC 0): 2 of 2 exact whole-line
+  names — tank/media/Music@pre-07-pilot, fast/appdata/arrs@pre-07-pilot.               TRUE
+  Inboxes (atlantis, 18:43:53Z): 01-auto 0 audio / 0 entries, 02-review 0 / 0, 03-asis 0 / 0. TRUE
+  tank/downloads used 3.51T avail 5.26T.
+  beets-flask mounts (docker inspect, RC 0): /media RW=true, /downloads RW=true.       TRUE
+  library.db (docker exec -u 568 beets-flask /venv/bin/python, sqlite mode=ro, RC 0): items 0,
+  albums 0.                                                                             TRUE
+  beets-flask own DB (mode=ro, not edited): folder rows 4, sessions 4; folder
+  d2772a06b651fa18aee99b9dbef116b9 (P01, full_path under _inbox/02-review, path gone) still present.
+  All TRUE -> no PRECONDITION stop.
+
+(b) D-13 (P10 is unsorted/): sha256 of /mnt/fast/stacks/scripts/diff-music-tags.sh on LXC 100 =
+  4bbfaf6046bd89fe… = the repo file's (workstation shasum). Comment-stripped
+  (`sed -E 's/[[:space:]]*#.*$//'`) the deployed script has 1 line containing AMBIGUOUS_BEFORE;
+  control token ZZ_NOT_A_TOKEN_QQ -> 0 (the count can read zero).
+D-13 CONDITION: PASS (sha256 4bbfaf6046bd89fe = repo; AMBIGUOUS_BEFORE present)
+
+(c) VA NORMALISATION (P10), read-only.
+  Effective config (check-beets-config arm 1, server-committed): va_name = "Various Artists";
+  per_disc_numbering = true; paths.comp == paths.default. Repo config.yaml `paths:` order:
+  1 singleton, 2 'albumtype:=dj disctotal:2..', 3 'albumtype:=dj', 4 'disctotal:2..'
+  ('$albumartist/$album%aunique{}/$disc-$track $title'), 5 comp, 6 default — rule 4 BEFORE comp.
+  beets 2.12.0 source in the container (read with sed/grep, nothing executed against the library):
+    beetsplug/musicbrainz.py:687-695  `info.va = info.artist_id == VARIOUS_ARTISTS_ID` (89ad4ac3-…);
+      if va: info.artist / artist_sort / artists / artist_credit = config["va_name"].
+    beets/autotag/hooks.py:291,301    album-level mapping artist -> albumartist, va -> comp.
+    beets/importer/tasks.py:423-437   as-is: plurality of (albumartist or artist); unanimous ->
+      albumartist kept, comp False; otherwise va_name, comp True.
+  Prediction: as-is (the oracle's input; albumartist `Various` on 50/50, unanimous) -> albumartist
+  `Various`, comp false -> rule 4 -> `Various/NOW That's What I Call Music! 117/DD-TT`. A MusicBrainz
+  release credited to Various Artists (89ad4ac3) -> albumartist `Various Artists`, comp true; rule 4
+  still precedes comp, so the disc prefix survives -> `Various Artists/<MB album title>/DD-TT`
+  (MB's album title, e.g. its apostrophe/case, is only known from the preview).
+VA NORMALISATION (P10): as-is -> Various/NOW That's What I Call Music! 117/; MB VA match -> Various Artists/NOW That's What I Call Music! 117/ (album text per MB); oracle -> Various/NOW That's What I Call Music! 117/; MISMATCH — DEF-07-10-01 filed
+
+(d) BARRIER READ + P-01, from LXC 100 (/root/ma-read-0710.sh, read-only; D-39 login exactly as
+  check-music-consumers.sh ma_login: secrets gated on `600 root` (read: 600 root), sourced without
+  set -a, jq builds the body from its own env, body on stdin, bearer via -H @<(printf …); no
+  credential in argv or here). Two reads: tasks/list (21,454 B), logging/get (22,578 B, 196 lines,
+  local time UTC+1, first line 2026-09-25 22:15:38 local = the server start). Read 18:45:16Z.
+    music_sync_filesystem_local--XJaJWNUS_track     enabled=false next_run=null updated_at 15:55:04.249Z
+    music_sync_filesystem_local--XJaJWNUS_playlist  enabled=false next_run=null updated_at 15:55:04.236Z
+    music_sync_filesystem_local--XJaJWNUS_album     enabled=false next_run=null updated_at 15:55:04.224Z
+    music_sync_filesystem_local--XJaJWNUS_artist    enabled=false next_run=null updated_at 15:55:04.213Z
+    schedule on all four: {"type":"hourly","enabled":false,"every":12,…}
+    present 4, disabled 4; control: 16 other tasks read schedule.enabled=true.
+  Sync pattern (run 3's) driven both ways first: real sync line -> 1; `Loaded music provider
+  Filesystem (local disk)` -> 0; `Genre mapping scan completed` -> 0.
+  Server-start + sync lines in the log (UTC): server-start 2026-09-25T21:15:38Z; sync 21:16:13Z,
+  21:16:13Z, 21:17:24Z; sync 2026-09-26T09:16:15Z, 09:17:24Z. Lines later than the reference
+  2026-09-26T15:55:55Z (the barrier's first verification; earlier than run 5's last VERIFIED, so
+  stricter): 0. No MA restart, no sync since the barrier.
+BARRIER: VERIFIED (4/4 enabled=false, next_run null) at 2026-09-26T18:45:16Z
+MA PERIODIC SYNC: FOUND — carried from run 3 (12-hourly scheduler tasks, logged 2026-09-25T21:16Z and 2026-09-26T09:16Z); schedule re-read 2026-09-26T18:45:16Z: all four {"type":"hourly","enabled":false,"every":12,"days_of_week":null,"hour":null,"minute":null}, next_run null
+P-01 (amended 2026-09-26): CONTINUE — FOUND with BARRIER VERIFIED at 2026-09-26T18:45:16Z
+
+## Step 4 — staging P10 (the 18:45:16Z BARRIER READ was the last MA reading before the copy)
+atlantis as real root, /root/stage-p10.sh (working files /root/phase07-0710/p10-*):
+  findmnt -T: source = tank/downloads, _inbox/02-review/ = tank/downloads (asserted).
+  07-07 manifest copy on atlantis sha256 8480c429… = repo artifacts/07-07-source-manifest-before.tsv;
+  P10 rows 52 (50 flac, 1 cue, 1 log).
+  18:46:21.920Z  cp -R --reflink=always -- "/mnt/tank/downloads/complete/nzb/unsorted/VA.Now.That.s.What.I.Call.Music_.117.2024..CD.FLAC..CDNOW117" /mnt/tank/downloads/complete/nzb/_inbox/02-review/
+                 rc 0, stderr empty; copied 18:46:22.521Z (0.6 s).
+METHOD: reflink
+  chown -R 568:568 on the staged copy ONLY, target asserted to begin
+                 /mnt/tank/downloads/complete/nzb/_inbox/02-review/ (case + [[ == prefix ]]), rc 0.
+  Staged (relpath, sha256) set, 52 files, vs 07-07 manifest P10 rows (52): EQUAL.
+  SOURCE manifest re-taken (relpath, size, sha256, mtime) vs 07-07 P10 rows: UNCHANGED (52 rows).
+  Staged owner 568:568 on the dir and all 52 files; dir mode 777 (NFSv4 ACL passthrough, expected).
+  tank/downloads used 3.51T avail 5.26T.
+
+## Step 5 — preview and D-29
+Watchdog (debounce 30 s): "Starting inbox handler task …/VA.Now.That.s.What.I.Call.Music_.117…" /
+"Enqueuing … as preview"; 0 traceback/error lines in beets-flask's log since 18:46:00Z.
+Read READ-ONLY from beets-flask's own sqlite (`file:/config/beets-flask/beets-flask-sqlite.db?mode=ro`,
+`docker exec -i -u 568 beets-flask /venv/bin/python -`, script on stdin), the run-5 route:
+  folder c455ff4def566892c4fdeb353d377857 created 18:46:53Z (full_path …/_inbox/02-review/VA.Now…CDNOW117);
+  session 788f3bba-4a9a-48ae-b00a-fc7a85c124ba progress PREVIEW_COMPLETED 18:47:00Z, exc None;
+  task b931b749-46cb-4b14-a715-d7ef09520188: cur_artist "Various", cur_album "NOW That's What I Call
+  Music! 117", 50 items, chosen_candidate_id None, choice_flag None (a preview never chooses).
+  5 candidates (= musicbrainz.search_limit 5, effective config re-read 18:4xZ).
+  Folder rows now 5 (the P01 row d2772a06… still present, not edited).
+Files per disc, from the task's items (the measurement): disc 1 = tracks 1..24 (24 files, contiguous,
+  tracktotal 24), disc 2 = tracks 1..26 (26 files, contiguous, tracktotal 26); albumartist `Various`
+  50/50, album "NOW That's What I Call Music! 117" 50/50, disctotal 2 50/50, mb_albumid empty.
+  Matches the oracle's expectation 24 + 26.
+
+CANDIDATE TABLE (rank = ascending album distance raw/max from the candidate's `distances` row;
+per-disc counts from its track_info `medium`; penalties decoded from beets-flask's packed float64):
+  rank mbid                                  country label                  catno        media          barcode       discs (cand vs files)  dist    title / rg disambig
+  1    b057dee8-02ea-4b48-8681-f5e3255bc47d  GB      Sony Music             CDNOW117     CD ×2          196588831829  24+26 vs 24+26         0.0061  Now That’s What I Call Music! 117 / UK
+  2    8a4b23b7-b00b-4423-9776-026c4469b788  GB      Now! Music             —            Digital Media  196871763004  50 (1 medium) vs 24+26 0.1270  Now That’s What I Call Music! 117 / UK
+  3    7247b584-afab-4c6e-b8c0-d1c00f62a07a  US      Sony Music             19658863252  CD             196588632525  22 vs 24+26            0.5331  NOW That’s What I Call Music 89 / USA
+  4    688a9668-af56-4969-beaf-1c20c83881bd  GB      EMI                    CDNOW119     CD ×2          198028304627  22+22 vs 24+26         0.5361  Now That’s What I Call Music! 119 / UK
+  5    562327cc-4f99-4398-9a31-c8420620a12f  US      Universal Music Group  602465256420 CD             602465256420  20 vs 24+26            0.6033  Now That's What I Call Music! 90 / USA
+  All five: album artist "Various Artists" (va true), 2024, albumtype album, source MusicBrainz.
+  Album-level penalties: rank 1 none non-zero except the per-track `tracks` vector (4 non-zero);
+  rank 2 mediums 1.0 (29 tracks penalised); rank 3 album 0.12, country 0.5, mediums 1.0,
+  unmatched_tracks ×28; rank 4 album 0.04, unmatched_tracks ×6 (44 tracks penalised, wrong
+  songs mapped: 1-01 Stick Season -> Please Please Please, …); rank 5 album 0.12, country 0.5,
+  mediums 1.0, unmatched_tracks ×30. Missing tracks: 0 on all five; unmatched items 0/0/28/6/30.
+  Catalogue number CDNOW117 on rank 1 = the folder's own suffix.
+
+D-29, APPLIED IN ORDER:
+  (1) recommendation. beets-flask does not persist `recommendation`; DERIVED here from the effective
+      server-committed config read fresh (get_config(commit_to_beets=True), the check-beets-config
+      arm-1 route): strong_rec_thresh 0.04, medium_rec_thresh 0.25, rec_gap_thresh 0.25, max_rec
+      {missing_tracks: medium, unmatched_tracks: medium}; beets 2.12.0 `match._recommendation`
+      source read in the container. Best distance 0.0061 < 0.04 -> `strong`; rank 1 carries no
+      missing_tracks / unmatched_tracks penalty (album-level or per-track), so max_rec does not
+      downgrade it. recommendation = strong (task-level). Not `none` -> step 1 refuses nothing.
+  (2) track count, PER DISC, candidate vs files 24 + 26:
+      Rank 1: 24 + 26 == 24 + 26 -> PASS
+      Rank 2: 50 on one medium != 24 + 26 -> REFUSED     Rank 3: 22 -> REFUSED
+      Rank 4: 22 + 22 -> REFUSED                          Rank 5: 20 -> REFUSED
+  (3) per-track distance, rank 1 (every track with a non-zero title/length/index penalty listed;
+      50 mapped pairs, every file -> the same disc-track position on MB, no track_index or
+      track_length penalty on any track):
+      1-07 'Used To Be Young' (file artist 'Miley Cyrus') -> MB 'Used to Be Young' (MILEY): track_artist 0.5, track dist 0.111
+      1-24 'Bextor - Murder On The Dancefloor' (file artist 'Sophie Ellis') -> MB 'Murder on the Dancefloor' (Sophie Ellis‐Bextor): track_title 0.222, track_artist 0.353, track dist 0.153
+           (the FILE's tag is split in the wrong place — the match corrects it)
+      2-01 'Dizzy' (file artist 'Olly Alexander (Years & Years)') -> MB (Olly Alexander): track_artist 0.15, track dist 0.033
+      2-22 'Lighthouse' (file artist 'Calum Scot') -> MB (Calum Scott): track_artist 0.1, track dist 0.022
+      The other 46: zero on every component. Title-case differences (e.g. 'Lovin On Me' vs MB
+      'Lovin on Me') are below beets' string-distance threshold and carry no penalty.
+D-29 VERDICT (P10): rank 1, b057dee8-02ea-4b48-8681-f5e3255bc47d passes all three (recommendation strong, 24+26 == 24+26, 4 tracks with small artist/title penalties, max track dist 0.153; search_limit rank 1 of 5)
+
+PREDICTED CONSEQUENCE OF CONFIRMING RANK 1 (for the gate; recorded before the import, oracle not edited):
+  albumartist -> `Various Artists` (va_name, MB va=true), comp -> true, album -> MB's
+  "Now That’s What I Call Music! 117" (Title case `Now`, U+2019 apostrophe) vs the oracle's
+  "NOW That's What I Call Music! 117" (as-is tag). Rule 4 precedes comp, so the disc prefix
+  survives. Predicted directory: /media/Music/Various Artists/Now That’s What I Call Music! 117/
+  vs oracle /media/Music/Various/NOW That's What I Call Music! 117/ -> all 50 APPENDED lines
+  diverge at directory level (DEF-07-10-01, plus the album-text half). Filenames take MB titles:
+  e.g. oracle `01-24 Bextor - Murder On The Dancefloor.flac` -> predicted `01-24 Murder on the
+  Dancefloor.flac`; title-case changes rename others (`Used To Be Young` -> `Used to Be Young`).
+  All MATCH-CHANGED-TAG class; to be measured in Task 3, not asserted here.
+
+Post-preview BARRIER READ (18:48:56Z, same script, SINCE 18:45:16Z): four tasks enabled=false,
+next_run null, updated_at unchanged 15:55:04Z; control 16 enabled; drive 1/0/0; 0 server-start or
+sync lines after 18:45:16Z (log 197 lines, last 19:48:56 local).
+BARRIER: VERIFIED (4/4 enabled=false, next_run null) at 2026-09-26T18:48:56Z
+library.db (mode=ro) items 0 after the preview. Nothing imported.
