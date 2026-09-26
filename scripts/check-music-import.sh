@@ -23,6 +23,13 @@
 #   D-04 invocation needing registration (D-27) — and no SQL statement that writes. The sweep's
 #   filesystem reads are `os.path.exists` and a one-level `os.scandir` of each directory that
 #   holds an item: stat and readdir, nothing else.
+#   ITEM PATHS ARE JOINED BEFORE THEY ARE READ (DEF-07-10-03). beets 2.x stores an item path
+#   RELATIVE to its `directory` (/media/Music here) whenever the file lies under it, so the dumper
+#   joins each relative path to `directory` — read through beets' own config loader inside the
+#   container, the way beets reads it — before any stat or readdir. Absolute stored paths are used
+#   unchanged. If `directory` cannot be read or is not absolute, the dumper refuses (exit 5, no
+#   trailer) and the run is UNKNOWN; the judge independently refuses any item path that is still
+#   not absolute. Reading the config writes nothing (confuse only mkdirs BEETSDIR, which exists).
 #
 #   Scope is the ITEMS BEETS IMPORTED, not the 1,244-file legacy tree (most of which no beets ever
 #   tagged). File-level tag truth (criterion 3) is a separate instrument (plans 07-10 / 07-17).
@@ -77,9 +84,12 @@
 #   and forces a non-zero exit. They exist so a red branch can be DRIVEN, never to silence one.
 #
 # --self-test:
-#   Ten fixture cases (ST_PLANNED_CASES, pinned in CONVENTIONS §5), written as NDJSON dumps in
-#   exactly the dumper's output shape and judged by the SAME judge function a live run uses —
-#   every zero-expecting class is driven red first, and the near-miss is characterised. Plus an
+#   Thirteen fixture cases (ST_PLANNED_CASES, pinned in CONVENTIONS §5). Cases 1–10 are NDJSON
+#   dumps in exactly the dumper's output shape, judged by the SAME judge function a live run uses —
+#   every zero-expecting class is driven red first, and the near-miss is characterised. Cases 11–13
+#   run the REAL dumper over a sqlite file with RELATIVE item paths (clean, .N-suffix collision, and
+#   `directory` unreadable) and then the judge; they need python3, and their skip decrements the
+#   pin beside its own warning. Plus an
 #   UNCOUNTED dumper-level check, run only when a local python3 exists: it builds a tiny sqlite
 #   file and a temp directory and runs the real dumper program against them, proving the SQL, the
 #   BLOB decode and the orphan enumeration. Its skip is printed, never silent.
@@ -161,6 +171,37 @@ def dec(p):
         return os.fsdecode(bytes(p))
     return str(p)
 
+# RELATIVE ITEM PATHS (DEF-07-10-03). beets >= 2.x stores an item path RELATIVE to its `directory`
+# whenever the file lies under it (beets.dbcore.pathutils.normalize_path_for_db), and expands it on
+# read by joining the two (expand_path_from_db). Every class-1 stat and readdir must see the JOINED
+# path — unjoined, os.scandir resolves it against the cwd and the sweep is blind. `directory` is
+# read the way beets itself reads it, from beets' own config loader (BEETSDIR=/config in the
+# container), never a hard-coded guess; it is read only when a relative path is actually present.
+# If it cannot be read, or is not absolute, the dumper REFUSES with exit 5 and no trailer, so the
+# run is UNKNOWN (CONVENTIONS §1). An absolute stored path is used unchanged, as beets does.
+_music_dir = []
+def music_dir():
+    if not _music_dir:
+        try:
+            from beets import config
+            md = config["directory"].as_filename()
+        except Exception as exc:
+            sys.stderr.write("item paths are stored relative, but beets' `directory` could not be read"
+                             " (%s: %s) — refusing to guess\n" % (type(exc).__name__, exc))
+            sys.exit(5)
+        md = os.fsdecode(md) if isinstance(md, bytes) else md
+        if not md or not os.path.isabs(md):
+            sys.stderr.write("item paths are stored relative, but beets' `directory` is %r, which is"
+                             " not absolute — refusing to guess\n" % (md,))
+            sys.exit(5)
+        _music_dir.append(os.path.normpath(md))
+    return _music_dir[0]
+
+def resolve(p):
+    if not p or os.path.isabs(p):
+        return p, False
+    return os.path.normpath(os.path.join(music_dir(), p)), True
+
 def sib(path):
     d, b = os.path.split(path)
     m = SFX.search(b)
@@ -184,12 +225,15 @@ con.close()
 item_paths = set()
 dirs = set()
 n_items = 0
+n_rel = 0
 for (iid, path, album_id, mb, track, tt, disc, dt, albumtype) in rows:
-    p = dec(path)
+    p, rel = resolve(dec(path))
+    n_rel += rel
     shaped, exists = sib(p) if p else (False, None)
     out({"id": iid, "path": p, "album_id": album_id, "mb_albumid": mb, "track": track,
          "tracktotal": tt, "disc": disc, "disctotal": dt, "albumtype": albumtype,
-         "suffix_shaped": shaped, "sibling_exists": exists, "orphan": False})
+         "suffix_shaped": shaped, "sibling_exists": exists, "orphan": False,
+         "stored_relative": rel})
     n_items += 1
     if p:
         item_paths.add(p)
@@ -217,7 +261,8 @@ for d in sorted(dirs):
              "suffix_shaped": shaped, "sibling_exists": exists})
         n_orphans += 1
 
-out({"end": True, "items": n_items, "orphans": n_orphans, "dirs": len(dirs)})
+out({"end": True, "items": n_items, "orphans": n_orphans, "dirs": len(dirs),
+     "relative": n_rel, "music_dir": _music_dir[0] if _music_dir else None})
 PY
 )
 
@@ -248,7 +293,8 @@ def isdj: ((.albumtype // "") | tostring | ascii_downcase) == "dj";
   "ORPHANS\t\($orphans | length)",
   "JUNK\t\($junk | length)",
   ( $direrrs[] | "DIRERR\t\(.dir_error | disp)\t\(.error | disp)" ),
-  ( $items[] | select((.path | type) != "string" or .path == "") | "BADPATH\t\(.id | disp)" ),
+  "RELATIVE\t\(($ends[0].relative // 0))\t\(($ends[0].music_dir // "") | disp)",
+  ( $items[] | select((.path | type) != "string" or .path == "" or ((.path | tostring | startswith("/")) | not)) | "BADPATH\t\(.id | disp)" ),
   ( ($items + $orphans)[] | select((.path | type) == "string") | select(shaped) |
       if .sibling_exists == true then "COLLISION-SUFFIX\t\(.path | disp)\t\(if .orphan == true then "orphan" else "item" end)"
       elif .sibling_exists == false then "SFXNOSIB\t\(.path | disp)"
@@ -293,7 +339,12 @@ judge() {
     pass "trailer present and consistent: $J_ITEMS item row(s), $J_ORPHANS on-disk orphan(s)"
   fi
   [[ "$junk" != "0" ]] && unknown "$junk dump record(s) are not JSON objects"
-  [[ "$badpath" != "0" ]] && unknown "$badpath item row(s) carry no usable path — class 1 cannot judge them"
+  # A path the dumper did not make absolute would be stat'ed against the cwd — DEF-07-10-03's
+  # blindness — so the judge refuses it too, not only the dumper.
+  [[ "$badpath" != "0" ]] && unknown "$badpath item row(s) carry no usable absolute path — class 1 cannot judge them"
+  local n_rel music_dir
+  n_rel="$(tagfield RELATIVE 2 "$tsv")"; music_dir="$(tagfield RELATIVE 3 "$tsv")"
+  [[ -n "$n_rel" && "$n_rel" != "0" ]] && info "$n_rel item path(s) stored relative to beets' directory, resolved against $music_dir"
   while IFS=$'\t' read -r _ d e; do
     unknown "directory could not be enumerated for class 1: $d ($e)"
   done < <(awk -F'\t' '$1 == "DIRERR"' "$tsv")
@@ -426,8 +477,10 @@ fx_clean() { # file — two albums, tracktotal matching, mb_albumid set
 run_self_test() {
   # ST_PLANNED_CASES is the ANNOUNCED count; st_cases is what actually ran. A mismatch is itself a
   # self-test failure (CONVENTIONS §5; check-beets-config.sh run_self_test is the pattern).
-  local ST_PLANNED_CASES=10
-  echo "🧪 --self-test — $ST_PLANNED_CASES fixture cases through the live judge, plus an uncounted dumper-level check"
+  # Reference environment for 13: python3 present (the workstation and LXC 100 both have one).
+  # Cases 11–13 are python3-conditional; their skip arm decrements this beside its own warn.
+  local ST_PLANNED_CASES=13
+  echo "🧪 --self-test — $ST_PLANNED_CASES fixture cases through the live judge (11–13 need python3), plus an uncounted dumper-level check"
   rule
   echo ""
   local st_failures=0 st_cases=0 st_red_cases=0
@@ -539,6 +592,86 @@ run_self_test() {
   fx_close "$f"
   run_case "on-disk Title.1.flac with no item row (class 1, filesystem)" 1 "$f" \
     "COLLISION-SUFFIX (orphan): /music/I/Iota/Title.1.flac" "on-disk, no item row:=>/music/I/Iota/Title.1.flac"
+
+  # 11–13. RELATIVE ITEM PATHS, THROUGH THE REAL DUMPER AND THEN THE JUDGE (DEF-07-10-03). beets
+  #    >= 2.x stores an item path RELATIVE to its `directory` when the file lies under it, which is
+  #    every imported file; the dumper must join it before any stat or readdir. Cases 1–10 are
+  #    post-dumper dumps and so can never see this — the fixture paths were absolute, which is how
+  #    the defect shipped. These three need python3 (they run the dumper), so each is
+  #    ENVIRONMENT-CONDITIONAL and the pin is decremented beside the skip (CONVENTIONS §5). beets'
+  #    `directory` comes from a stub `beets` package on PYTHONPATH exposing the one call the dumper
+  #    makes, `config["directory"].as_filename()`; the dumper runs from an EMPTY cwd, so a relative
+  #    path that was not joined cannot resolve by accident.
+  if command -v python3 > /dev/null 2>&1; then
+    local rd="$dir/relative" rlib rdb
+    rlib="$rd/lib"
+    mkdir -p "$rd/cwd" "$rd/stub-ok/beets" "$rd/stub-broken/beets" \
+             "$rlib/Artist/Album" "$rlib/Coll/Album"
+    : > "$rlib/Artist/Album/01.flac"; : > "$rlib/Artist/Album/02.flac"
+    : > "$rlib/Coll/Album/Title.flac"; : > "$rlib/Coll/Album/Title.1.flac"
+    : > "$rlib/Coll/Album/Song.flac"; : > "$rlib/Coll/Album/Song.1.flac"
+    python3 - "$rd/stub-ok/beets/__init__.py" "$rlib" <<'PY'
+import sys
+open(sys.argv[1], "w").write(
+    "class _V:\n"
+    "    def __init__(self, v): self._v = v\n"
+    "    def as_filename(self): return self._v\n"
+    "class _C:\n"
+    "    def __getitem__(self, k):\n"
+    "        if k != 'directory': raise KeyError(k)\n"
+    "        return _V(%r)\n"
+    "config = _C()\n" % sys.argv[2])
+PY
+    echo 'raise ImportError("self-test: beets deliberately unavailable")' > "$rd/stub-broken/beets/__init__.py"
+    # rel_db FILE PATH… — every PATH is stored as an X'' BLOB, album 1, tracktotal = number of paths.
+    rel_db() {
+      python3 - "$@" <<'PY'
+import sqlite3, sys
+db, paths = sys.argv[1], sys.argv[2:]
+sel = " UNION ALL ".join(
+    "SELECT %d AS id, X'%s' AS path, 1 AS album_id, 'mbid-r' AS mb_albumid, %d AS track,"
+    " %d AS tracktotal, 1 AS disc, 1 AS disctotal" % (i + 1, p.encode().hex(), i + 1, len(paths))
+    for i, p in enumerate(paths))
+c = sqlite3.connect(db)
+c.execute("CREATE TABLE albums AS SELECT 1 AS id, 'album' AS albumtype, 'mbid-r' AS mb_albumid")
+c.execute("CREATE TABLE items AS " + sel)
+c.commit(); c.close()
+PY
+    }
+    rel_dump() { # DB STUB OUT — run the real dumper from an empty cwd with the stub on PYTHONPATH
+      ( cd "$rd/cwd" && PYTHONPATH="$2" python3 -c "$DUMPER_PROG" "$1" ) > "$3" 2> "$3.err"
+    }
+
+    # 11. Clean, relative: two items under Artist/Album, nothing suffix-shaped.
+    rdb="$rd/clean.db"; rel_db "$rdb" "Artist/Album/01.flac" "Artist/Album/02.flac"
+    rel_dump "$rdb" "$rd/stub-ok" "$rd/11.ndjson"
+    run_case "relative item paths, clean (dumper + judge)" 0 "$rd/11.ndjson" \
+      "items read:                  2" "checkable rows per class:    class1=2 class2=2 class3=1" \
+      "2 item path(s) stored relative to beets' directory, resolved against $rlib"
+
+    # 12. Relative, and red twice over: an ITEM Title.1.flac beside item Title.flac, and an ON-DISK
+    #     Song.1.flac with no row beside item Song.flac. Both must be found at their joined paths.
+    rdb="$rd/coll.db"; rel_db "$rdb" "Coll/Album/Title.flac" "Coll/Album/Title.1.flac" "Coll/Album/Song.flac"
+    rel_dump "$rdb" "$rd/stub-ok" "$rd/12.ndjson"
+    run_case "relative item paths, .N-suffix collisions (dumper + judge, class 1)" 1 "$rd/12.ndjson" \
+      "COLLISION-SUFFIX (item): $rlib/Coll/Album/Title.1.flac" \
+      "COLLISION-SUFFIX (orphan): $rlib/Coll/Album/Song.1.flac" "collision findings:          2"
+
+    # 13. Relative paths but beets' `directory` cannot be read: the dumper must REFUSE (non-zero, no
+    #     trailer) rather than guess, so the judge can only read UNKNOWN (CONVENTIONS §1).
+    rel_dump "$rd/clean.db" "$rd/stub-broken" "$rd/13.ndjson"
+    rc=$?
+    if [[ $rc -eq 0 ]] || ! grep -qF "directory" "$rd/13.ndjson.err"; then
+      echo -e "  ${RED}❌ case 'unresolvable directory': dumper exit $rc (want non-zero, naming the directory)${NC}"
+      sed 's/^/        | /' "$rd/13.ndjson.err"
+      st_failures=$((st_failures + 1))
+    fi
+    run_case "relative item paths, beets directory unreadable (dumper refuses)" 3 "$rd/13.ndjson" \
+      "want exactly 1, and last"
+  else
+    ST_PLANNED_CASES=$((ST_PLANNED_CASES - 3))
+    echo -e "  ${YELLOW}⚠️  cases 11–13 (relative item paths, dumper + judge) skipped: no python3 on this host — pin decremented to $ST_PLANNED_CASES${NC}"
+  fi
 
   # UNCOUNTED: the dumper program itself, against a real sqlite file and a real directory. The
   # fixture database is built by CREATE TABLE … AS SELECT over VALUES (path as an X'' BLOB literal,

@@ -135,7 +135,10 @@ from the failure message unless the convention is written down, which is what th
   compared against `st_cases` (plan `07-02`, D-12).
 - `ST_PLANNED_CASES` — `scripts/check-music-import.sh`, the announced self-test case count,
   compared against `st_cases`. Its dumper-level check is deliberately **not** counted, because it
-  runs only where a local `python3` exists (plan `07-03`, D-25).
+  runs only where a local `python3` exists (plan `07-03`, D-25). Cases 11–13 (relative item paths
+  through the real dumper, `DEF-07-10-03`) are counted **and** python3-conditional, so their skip
+  arm decrements the pin beside its own warning; the base constant's reference environment is
+  "python3 present" (the workstation and LXC 100).
 - `D24_CENSUS_BASELINE_N` / `D24_CENSUS_BASELINE_SHA` — `scripts/check-music-consumers.sh`, the
   pinned count and sorted-path digest (with `D24_CENSUS_BASELINE_PATHS`, the list it digests) of
   Jellyfin Music items with `Artists` but no `ArtistItems`. Moves when any import, repair or
