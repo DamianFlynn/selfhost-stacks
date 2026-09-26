@@ -2494,3 +2494,55 @@ footgun. Its exit codes are four, not two: `0` zero-diff and every assertion gre
 diff was non-empty, an assertion failed, **or the dry run wrote something**), `2` usage or a
 precheck refusal, `3` **UNKNOWN, not green** — the positive control failed, so the diff was never
 evaluated. Three of the four are not "the tree is wrong".
+
+## Vendored config digest register (from Phase 7, D-22)
+
+**This is a register, not a phase-closure section.** It does not change the *Current state*
+pointer at the head of this file. It exists so every proof taken against a vendored config stays
+attributable to the exact object it measured, now that the Phase 7 D-22 commit has moved both
+digests. Rows are appended; a row is never edited except to fill in a commit hash that did not
+exist when the row was written.
+
+**Why the old digests are kept (D-22).** Every CONF-01, CONF-02 and CONF-05 proof was measured
+against one specific `config.yaml` object, and the vendored-drift block in
+`scripts/quick-health-check.sh` compares the appdata copy with that same object
+(`DEF-06-21-01`). Re-baselining without keeping the previous digest would orphan those proofs.
+**C10:** the PREVIOUS digests below were measured, not copied — `git show <base>:<path>` through
+two hashers (`shasum -a 256`, `openssl dgst -sha256`), plus the appdata copy on LXC 100 and the
+file inside the running beets-flask container. Base commit `003a7b23fa3e67c91490749c5831fcad5b755586`.
+The raw readings are in
+`.planning/phases/07-pilot-12-albums-end-to-end/artifacts/07-08-d22-measure.txt`.
+
+| file | object | sha256 | commit | measured by |
+|------|--------|--------|--------|-------------|
+| `beets/config.yaml` | at the 06-04 first-start proof (context only; not the previous digest) | `96a7c622779f95a13cd858c09b34072bcfc01405fecccd00b361ecdb5cb3e1f7` | recorded by plan 06-04 | `06-04-first-start.txt` (repo, appdata and in-container all matched then) |
+| `beets/config.yaml` | PREVIOUS — what CONF-01/02/05 in their final Phase 6 form were measured against | `661c729738a12be61d94dcf0cf0bfb6b0cdaa9c996d2ed9fffb9bc494394668f` | `1a6428608b8e6c42bc80ecad1187616eaace1a29` (2026-09-21) | 07-08 task 1: two hashers at the base commit; appdata and container equal |
+| `beets/config.yaml` | NEW — carries the D-22 edits (comments only; no key changed) | `7d7264546e7aafe791c3b2c28dc1b39cdf818ff3105f02f5834eb4208103fdab` | the D-22 commit | 07-08 task 2: sha256 of the staged file |
+| `beets/flask-config.yaml` | at the 06-04 first-start proof (context only) | `949bd1f3b13501d448865ce2d19195db209050279f8a0022e97cd7e54d835db8` | recorded by plan 06-04 | `06-04-first-start.txt` |
+| `beets/flask-config.yaml` | PREVIOUS — unchanged since 06-04 | `949bd1f3b13501d448865ce2d19195db209050279f8a0022e97cd7e54d835db8` | `f1848e204621c9de54784f58b05b7c2660fdff46` (2026-09-20) | 07-08 task 1: two hashers at the base commit; appdata and container equal |
+| `beets/flask-config.yaml` | NEW — `01-auto` de-registered (D-21), dated notes | `875fcf7ef5246fbfaef373824653381c7e43d3801c099a94e4046fcae63813c8` | the D-22 commit | 07-08 task 2: sha256 of the staged file |
+
+**What the NEW `config.yaml` changes, stated so nobody reads a digest move as a behaviour move.**
+Only comments changed. The import keys (`copy: yes`, `move: no`, `write: yes`) are byte-for-byte
+what they were. D-22 item 2 ("`import.move` → `copy`") turned out to be a **verification**:
+the repo copy, the appdata copy and the running server all read copy / no-move before the edit
+(C1). `write: yes` is **forced, not chosen** (criterion 3 needs the new tags on the file), and D-21
+is what bounds it. The new comments record that, correct the stale "`tank` has 9 T free" figure to
+the measured 5.26 T, and retract the `:ro` mount from the list of controls.
+
+**Until plan 07-09 installs both files to `/mnt/fast/appdata/arrs/beets/config/`, the drift
+block reads them as drifted (C9).** It compares the host checkout's HEAD with appdata, so the red
+starts when the host pulls the D-22 commit and ends at the install. That is the block working.
+
+**Every CONF-01/02/05 proof stays attributable to the PREVIOUS object**, `661c7297…` for
+`config.yaml` and `949bd1f3…` for `flask-config.yaml`. A re-run of any of them against the NEW
+object is a new measurement, and gets a new row here if it is recorded as evidence.
+
+**C7/C8: two Phase 6 instruments are retired from use once the grant deploys. The code does not
+change.** After the D-22 grant `scripts/phase06-oracle.sh --run` goes red on layer 1 (its
+read-only-media assertion) and on its fixture library sha pin. `scripts/phase06-incremental-control.sh`
+goes red on its baseline library sha pin. Both are **red by design**: they are Phase 6 dry-run
+instruments, they fail closed, and they assert a state (`/media` read-only, an unimported
+`library.db`) that Phase 7 ends on purpose. Plan 07-05 ran the oracle's one real run before the
+grant.
+A red from a post-grant `--run` of either is expected. It is not evidence of damage.

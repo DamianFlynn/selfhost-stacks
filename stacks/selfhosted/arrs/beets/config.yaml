@@ -308,6 +308,14 @@ import:
     # setting `move: yes` is REJECTED at validation rather than overridden. Do not read that as a
     # safety net: a rejected config is the friction-9 kill path — the watchdog dies and the page
     # keeps serving. The type is a tripwire, not a guard.
+    # CORRECTED 2026-09-26, plan 07-08, D-22: "`tank` has 9 T free" above is STALE by ~3.7 T, and
+    # stale in the direction that matters, since the reversibility argument leans on headroom.
+    # Measured from atlantis as real root on 2026-09-26 (UTC 2026-09-25T23:58:25Z):
+    # `zfs list -o name,used,avail,refer tank` → tank 41.9T used / 5.26T avail
+    # (artifacts/07-08-d22-measure.txt § TANK FREE). Re-measure before leaning on it — it moves.
+    # D-22 item 2 ("import.move → copy") is a VERIFICATION, not an edit, measured 2026-09-26: this
+    # file, the appdata copy on LXC 100 and the running beets-flask server all read copy: yes /
+    # move: no (C1, § C1 IMPORT KEYS). Nothing was changed from move to copy — it already was copy.
     copy: yes
     move: no
 
@@ -336,6 +344,18 @@ import:
     # (D-29) are three independent expressions of that, and this key is deliberately NOT one of
     # them — a phase that depended on this line being right would be one edit from writing.
     # The D-18 register below is what a `write: yes` import is required not to damage.
+    #
+    # D-22, 2026-09-26, plan 07-08 — `yes` IS FORCED, NOT CHOSEN, and it survived E11 on purpose.
+    # Phase 7's criterion 3 requires ffprobe to show the NEW tags on the file itself, which is
+    # impossible with `write: no`. So E11's decision is "keep yes, and name what bounds it": the
+    # bound is D-21 — 01-auto is de-registered in ./flask-config.yaml in the same commit, so no
+    # unattended importer reads this key any more; every import that does is confirmed per album
+    # in 02-review (D-20).
+    # CORRECTED 2026-09-26, plan 07-08, D-22: the clause above listing "the `:ro` mount (D-05)"
+    # among the three controls is RETRACTED in place — /mnt/tank/media is now `:rw` on beets-flask
+    # (./flask.yaml; the dormant CLI arm in ./beets.yaml stays `:ro`). For Phase 7 the D-16 snapshot
+    # fence (tank/media/Music@pre-07-pilot + fast/appdata/arrs@pre-07-pilot) and D-20's per-album
+    # confirmation replace it; D-23 in scripts/quick-health-check.sh asserts the rw as deliberate.
     write: yes
 
 # --------------------------------------------------------------------------------

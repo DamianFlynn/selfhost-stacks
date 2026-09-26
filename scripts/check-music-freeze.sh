@@ -133,6 +133,22 @@ ZFS_HOST="172.16.1.158"                 # Proxmox host "atlantis" - the only pla
 RENAMER_PATTERN='lidarr'
 CONSUMER_PATTERN='jellyfin'
 
+# PHASE 7 D-22/D-23 NAMED TAGGER EXCEPTION (plan 07-08, 2026-09-26). Phase 7's first act grants
+# /mnt/tank/media rw to beets-flask ONLY — the one importing runtime (D-20), the one container
+# Phase 6 D-04 permits to open the real library.db. It is a LITERAL, never a pattern: a regex here
+# would silently exempt any future container whose name happened to match, which is the exact
+# silent-skip this file exists to refuse. The exception is narrower than the name — it covers ONLY
+# the single mapping below, so any OTHER rw mount beets-flask gained on the library would still
+# fail as tagger-capable. It is counted on its own summary line (never folded into a total that
+# would then read as a pass) and more than one match is a red. Every other tagger-capable
+# container holding rw on Music still fails exactly as before — including the dormant CLI arm,
+# which stays :ro (D-22). D-23's caveat applies: this is a policy exception, weaker than the :ro
+# mount it replaces (CONVENTIONS §4); the snapshot fence is the primary control from Phase 7.
+PHASE7_RW_TAGGER="beets-flask"
+PHASE7_RW_TAGGER_SRC="/mnt/tank/media"
+PHASE7_RW_TAGGER_DST="/media"
+PHASE7_RW_TAGGER_DECL="stacks/selfhosted/arrs/beets/flask.yaml"
+
 # Phase 4 census constants (D-21, D-25). NOT overrides - see ENV OVERRIDES in the header.
 SURVIVOR_DB="/mnt/fast/appdata/arrs/beets/config/library.db"
 APPDATA_ROOT="/mnt/fast/appdata"
@@ -372,12 +388,16 @@ done <<< "$(printf '%s\n' "$MOUNT_ROWS" | awk -F'|' 'NF{print $1"|"$2}' | sort -
 TAGGER_WRITERS=""
 CONSUMER_WRITERS=""
 UNCLASSIFIED_WRITERS=""
+D22_WRITERS=""
 while IFS='|' read -r cname csrc cdst cflag; do
   [[ -z "${cname:-}" ]] && continue
   [[ "${cflag:-ro}" != "rw" ]] && continue
   touches_library "$csrc" || continue
   entry="$cname ($csrc:$cdst:rw)"
-  if printf '%s\n' "$TAGGER_CAPABLE_NAMES" | grep -qxF "$cname"; then
+  # Phase 7 D-22/D-23 named exception — literal name AND the one literal mapping (see the constant).
+  if [[ "$cname" == "$PHASE7_RW_TAGGER" ]] && [[ "${csrc%/}" == "$PHASE7_RW_TAGGER_SRC" ]] && [[ "${cdst%/}" == "$PHASE7_RW_TAGGER_DST" ]]; then
+    D22_WRITERS+="${entry}"$'\n'
+  elif printf '%s\n' "$TAGGER_CAPABLE_NAMES" | grep -qxF "$cname"; then
     TAGGER_WRITERS+="${entry}"$'\n'
   elif [[ "$cname" =~ $CONSUMER_PATTERN ]]; then
     CONSUMER_WRITERS+="${entry}"$'\n'
@@ -389,6 +409,7 @@ done <<< "$MOUNT_ROWS"
 count_lines() { printf '%s' "${1:-}" | grep -c . || true; }
 TAGGER_COUNT="$(count_lines "$TAGGER_WRITERS")"
 CONSUMER_COUNT="$(count_lines "$CONSUMER_WRITERS")"
+D22_COUNT="$(count_lines "$D22_WRITERS")"
 UNCLASSIFIED_COUNT="$(count_lines "$UNCLASSIFIED_WRITERS")"
 
 echo ""
@@ -396,6 +417,8 @@ echo "  tagger-class writers: $TAGGER_COUNT"
 [[ -n "$TAGGER_WRITERS" ]] && printf '%s' "$TAGGER_WRITERS" | sed 's/^/      /'
 echo "  consumer-class writers: $CONSUMER_COUNT (documented exception, D-21)"
 [[ -n "$CONSUMER_WRITERS" ]] && printf '%s' "$CONSUMER_WRITERS" | sed 's/^/      /'
+echo "  tagger-class D-22 exception: $D22_COUNT (exactly one named container: $PHASE7_RW_TAGGER, Phase 7 D-22/D-23)"
+[[ -n "$D22_WRITERS" ]] && printf '%s' "$D22_WRITERS" | sed 's/^/      /'
 echo "  unclassified writers: $UNCLASSIFIED_COUNT"
 [[ -n "$UNCLASSIFIED_WRITERS" ]] && printf '%s' "$UNCLASSIFIED_WRITERS" | sed 's/^/      /'
 echo ""
@@ -403,9 +426,12 @@ echo "  Note: a bare total is deliberately NOT asserted. Jellyfin is expected to
 echo "  sole rw holder (D-21), so 'total == 1' would read as a pass for the wrong reason."
 
 if [[ "$TAGGER_COUNT" -eq 0 ]]; then
-  pass "no tagger-class container holds rw on the library"
+  pass "no tagger-class container holds rw on the library (apart from the named D-22 exception, counted separately)"
 else
   fail "$TAGGER_COUNT tagger-class rw holders on the library (WRIT-01 requires 0)"
+fi
+if [[ "$D22_COUNT" -gt 1 ]]; then
+  fail "$D22_COUNT running rows match the Phase 7 D-22 tagger exception — it names exactly ONE container and ONE mapping"
 fi
 if [[ "$UNCLASSIFIED_COUNT" -eq 0 ]]; then
   pass "no unclassified rw holders"
@@ -538,13 +564,27 @@ fi
 echo ""
 
 DECLARED_MUSIC_RW=""
+DECLARED_D22=""
 while IFS='|' read -r f ln mapping sfx host_side; do
   [[ -z "${f:-}" ]] && continue
   [[ "$sfx" == "ro" ]] && continue
   touches_library "$host_side" || continue
   [[ "$f" == "stacks/selfhosted/media/jellyfin.yaml" ]] && continue
+  # Phase 7 D-22/D-23 named exception: the one literal declaration in the one literal file.
+  if [[ "$f" == "$PHASE7_RW_TAGGER_DECL" ]] && [[ "$mapping" == "$PHASE7_RW_TAGGER_SRC:$PHASE7_RW_TAGGER_DST:rw" ]]; then
+    DECLARED_D22+="${f}:${ln} ${mapping} [${sfx}]"$'\n'
+    continue
+  fi
   DECLARED_MUSIC_RW+="${f}:${ln} ${mapping} [${sfx}]"$'\n'
 done <<< "$DECLARED_ROWS"
+DECLARED_D22_COUNT="$(count_lines "$DECLARED_D22")"
+if [[ "$DECLARED_D22_COUNT" -gt 0 ]]; then
+  info "declared rw, Phase 7 D-22/D-23 tagger exception ($PHASE7_RW_TAGGER): $DECLARED_D22_COUNT"
+  printf '%s' "$DECLARED_D22" | sed 's/^/         /'
+fi
+if [[ "$DECLARED_D22_COUNT" -gt 1 ]]; then
+  fail "$DECLARED_D22_COUNT declarations match the Phase 7 D-22 exception — it names exactly ONE mapping in $PHASE7_RW_TAGGER_DECL"
+fi
 
 DECLARED_MUSIC_RW_COUNT="$(count_lines "$DECLARED_MUSIC_RW")"
 if [[ "$DECLARED_MUSIC_RW_COUNT" -eq 0 ]]; then
@@ -782,6 +822,7 @@ RETIRED_PRESENT=0
 RW_NONTAGGER="UNKNOWN"
 RW_TAGGER="UNKNOWN"
 RW_JELLYFIN="UNKNOWN"
+RW_TAGGER_D22="UNKNOWN"
 TAGGER_CAPABLE_ALL="UNKNOWN"
 
 if [[ $TAGGER_CENSUS_PROMOTED -eq 0 ]] && [[ "$CENSUS_CANDIDATE" != "1" ]]; then
@@ -1019,6 +1060,7 @@ else
     RW_NONTAGGER=0
     RW_TAGGER=0
     RW_JELLYFIN=0
+    RW_TAGGER_D22=0
     ALL_TAGGER_NAMES=""
     ALL_TAGGER_ROWS=""
     while IFS='|' read -r cname cstate csrc; do
@@ -1035,6 +1077,12 @@ else
     # until Phase 6 - so every container that does, in ANY state, fails here, whether or not it
     # is tagger-capable. Jellyfin is the single documented D-21 consumer exception and is counted
     # on its own line rather than being folded into a total that would then read as a pass.
+    # CORRECTED 2026-09-26, plan 07-08, D-22/D-23: "until Phase 6" and "the single documented
+    # exception" are kept as history. From Phase 7 there is a SECOND named exception — the D-22
+    # grant to beets-flask, a literal name and one literal mapping (PHASE7_RW_TAGGER) — counted on
+    # its own line, never folded into the pass. The same exception is applied, with the same
+    # literals, in section 1 (running holders) and section 2 (declared rw), because all three
+    # sections would otherwise go red on the one deliberate grant.
     while IFS='|' read -r cname cstate csrc cdst cflag; do
       [[ -z "${cname:-}" ]] && continue
       [[ "${cflag:-ro}" != "rw" ]] && continue
@@ -1042,6 +1090,13 @@ else
       if [[ "$cname" =~ $CONSUMER_PATTERN ]]; then
         RW_JELLYFIN=$((RW_JELLYFIN + 1))
         info "rw on Music, D-21 consumer exception: $cname [$cstate] $csrc:$cdst"
+        continue
+      fi
+      # Phase 7 D-22/D-23 named tagger exception (plan 07-08). A LITERAL name and ONE literal
+      # mapping — see PHASE7_RW_TAGGER. Counted on its own summary line; > 1 is a red below.
+      if [[ "$cname" == "$PHASE7_RW_TAGGER" ]] && [[ "${csrc%/}" == "$PHASE7_RW_TAGGER_SRC" ]] && [[ "${cdst%/}" == "$PHASE7_RW_TAGGER_DST" ]]; then
+        RW_TAGGER_D22=$((RW_TAGGER_D22 + 1))
+        info "rw on Music, Phase 7 D-22/D-23 tagger exception: $cname [$cstate] $csrc:$cdst"
         continue
       fi
       if printf '%s\n' "$ALL_TAGGER_NAMES" | grep -qxF "$cname"; then
@@ -1053,8 +1108,11 @@ else
       fi
     done <<< "$ALL_ROWS"
 
-    if [[ $RW_NONTAGGER -eq 0 ]] && [[ $RW_TAGGER -eq 0 ]]; then
-      pass "no container in any state holds rw reaching Music, apart from the D-21 consumer exception"
+    if [[ $RW_TAGGER_D22 -gt 1 ]]; then
+      fail "rw on Music: $RW_TAGGER_D22 rows match the Phase 7 D-22 tagger exception — it names exactly ONE container ($PHASE7_RW_TAGGER) and ONE mapping"
+    fi
+    if [[ $RW_NONTAGGER -eq 0 ]] && [[ $RW_TAGGER -eq 0 ]] && [[ $RW_TAGGER_D22 -le 1 ]]; then
+      pass "no container in any state holds rw reaching Music, apart from the D-21 consumer exception and the named D-22 tagger exception"
     fi
 
     # Pitfall 15: REPORTED, never asserted. sabnzbd is permanently tagger-capable by D-11 and
@@ -1082,11 +1140,13 @@ echo ""
 # 7. Summary
 echo "📊 7. Summary"
 rule
-echo "  tagger-class writers:        $TAGGER_COUNT   (target 0)"
+echo "  tagger-class writers:        $TAGGER_COUNT   (target 0, excluding the named D-22 exception)"
+echo "  tagger-class D-22 exception: $D22_COUNT   (target ≤ 1 — $PHASE7_RW_TAGGER only, Phase 7 D-22/D-23)"
 echo "  consumer-class writers:      $CONSUMER_COUNT   (Jellyfin, documented exception D-21)"
 echo "  unclassified writers:        $UNCLASSIFIED_COUNT   (target 0)"
 echo "  declared /mnt/tank/media:    $DECLARED_COUNT volume lines"
 echo "  declared rw reaching Music:  $DECLARED_MUSIC_RW_COUNT   (target 0, jellyfin.yaml excluded)"
+echo "  declared rw, D-22 exception: $DECLARED_D22_COUNT   (target ≤ 1 — $PHASE7_RW_TAGGER_DECL only, Phase 7 D-22/D-23)"
 echo "  media subtrees found:        $MEDIA_COUNT"
 echo "  artist folders:              $ARTIST_COUNT   (directories only)"
 echo "  stray top-level files:       $STRAY_COUNT"
@@ -1121,6 +1181,7 @@ if [[ $CENSUS_RAN -eq 1 ]]; then
   echo "  rw on Music, non-tagger:     $RW_NONTAGGER   (target 0, excluding the D-21 consumer exception)"
   echo "  rw on Music, tagger-capable: $RW_TAGGER   (target 0 — Phase 1 D-20, any container state)"
   echo "  rw on Music, Jellyfin D-21:  $RW_JELLYFIN   (documented consumer exception, printed separately)"
+  echo "  rw on Music, D-22 tagger exception: $RW_TAGGER_D22 (exactly one named container)"
   echo "  tagger-capable containers:   $TAGGER_CAPABLE_ALL   (mounts a beets/wrtag/soulbeet config or DB; reported)"
 fi
 echo "  fence assertions failed:     $FENCE_FAILURES"

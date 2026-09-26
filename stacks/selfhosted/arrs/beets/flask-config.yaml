@@ -51,6 +51,10 @@ gui:
     # --------------------------------------------------------------------------------------
     # D-06 — EXACTLY THREE INBOXES. The routing decision is a directory name.
     # --------------------------------------------------------------------------------------
+    # CORRECTED 2026-09-26, plan 07-08, D-22 (C4): "EXACTLY THREE" is retracted for the duration of
+    # Phase 7. From D-21 the registered set is EXACTLY TWO — 02-review and 03-asis. 01-auto is
+    # de-registered below (its directory stays); Phase 8 re-registers it and the count returns to three.
+    #
     # `autotag` is `Literal["auto", "preview", "bootleg", "off"]`, default `off`
     # [backend/beets_flask/config/schema.py@v2.0.0-rc6]. Note the shipped `config_bf_example.yaml`
     # documents only off/auto/preview and NEVER MENTIONS `bootleg` — it is confirmed present from
@@ -71,16 +75,24 @@ gui:
     # serving, so the inboxes go inert behind a UI that looks alive (Phase 3 friction 9, D-09).
     # That is why first start asserts the registration line and fails closed on FEWER THAN THREE,
     # and why "the UI loads" is not evidence of anything.
+    # CORRECTED 2026-09-26, plan 07-08, D-22 (C4): from Phase 7 D-21 the gate fails closed on FEWER
+    # THAN TWO — and a registration line that still names 01-auto is also a red while D-21 holds.
     #
     # These are CONTAINER paths: /mnt/tank/downloads is bound at /downloads (./flask.yaml).
     folders:
 
       # Bucket A — mainstream releases that should autotag cleanly. `auto` imports without asking
       # when the match clears the threshold.
-      "01-auto":
-        name: "01-auto"
-        path: /downloads/complete/nzb/_inbox/01-auto
-        autotag: auto
+      #
+      # 01-auto DE-REGISTERED 2026-09-26, Phase 7 D-21 (E11), plan 07-08, in the D-22 commit. Its
+      # `autotag: auto` watchdog reads the vendored ./config.yaml DIRECTLY, with /downloads mounted
+      # :rw and import.write: yes — and none of the three controls ./config.yaml used to name (the
+      # -c overlay, the :ro mount, the statefile sha256) reaches the watchdog. "Nobody has put a file
+      # there" is not a control; de-registration makes the hazard a STRUCTURAL ABSENCE. The mapping
+      # that stood here was: name "01-auto", path /downloads/complete/nzb/_inbox/01-auto, autotag auto.
+      # The DIRECTORY /downloads/complete/nzb/_inbox/01-auto STAYS (measured on atlantis 2026-09-26:
+      # present, 0 entries — artifacts/07-08-d22-measure.txt § 01-AUTO). Re-registered deliberately
+      # in Phase 8, when the inflow design is decided.
 
       # Bucket B — anything that needs a human to choose between candidates. `preview` generates
       # the candidate list and STOPS; nothing is imported until someone confirms in the UI. This
@@ -119,12 +131,30 @@ gui:
     # `path`, `name`, `auto_threshold` and `autotag` — there is NO per-inbox `set_fields`, so
     # D-13's `beet import --set albumtype=dj` has no flask-driven equivalent. The DJ routing
     # mechanism for a real flask import is an UNOWNED GAP.
+    # CORRECTED 2026-09-26, plan 07-08, D-22: the gap is no longer unowned — it is closed by Phase 7
+    # D-08, `scripts/route-dj-album.sh` (plan 07-04), which routes a DJ album AFTER its flask import
+    # and is registered in quick-health-check.sh's D-04 exemption register (D-27). There is still no
+    # per-inbox `set_fields`; the route is a post-import step, not a flask setting.
 
   library:
     # A cheap extra belt for a phase that writes nothing. ⚠ THIS IS A beets-flask UI GUARD, NOT A
     # MOUNT. It is strictly weaker than `/mnt/tank/media:/media:ro` and DOES NOT REPLACE D-05: a
     # UI flag can be flipped by a click or by a config reload, whereas a read-only bind cannot
     # fail open. Keep both.
+    #
+    # KEPT `true` THROUGH THE rw GRANT — decided 2026-09-26, plan 07-08, D-22 (C3), by READING what
+    # the flag gates in the running rc6 image, not by guessing (artifacts/07-08-d22-measure.txt
+    # § C3 READONLY GUARD). It gates exactly two helpers in
+    # /repo/backend/beets_flask/server/routes/library/resources.py — delete_entities() and
+    # update_entities() — i.e. the LIBRARY BROWSER's DELETE and PATCH on albums and items. It does
+    # NOT gate the inbox import, the candidate-confirm import (D-20), or UNDO IMPORT (D-14), which
+    # removes through importer/session.py delete_from_beets() and never calls delete_entities(). So
+    # it blocks nothing Phase 7 uses, and with /media now rw it is the only thing stopping a browser
+    # click editing or deleting real library files outside any per-album confirmation.
+    # CORRECTED 2026-09-26, plan 07-08, D-22: "A cheap extra belt for a phase that writes nothing"
+    # and "DOES NOT REPLACE D-05 ... Keep both" above are retracted in part — D-05's :ro mount is
+    # gone on beets-flask (./flask.yaml, now :rw). The MOUNT is what D-23 asserts in
+    # scripts/quick-health-check.sh; this flag is still a UI guard, still weaker, and still kept.
     readonly: true
 
   terminal:

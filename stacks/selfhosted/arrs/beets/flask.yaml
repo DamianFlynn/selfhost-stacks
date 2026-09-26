@@ -133,6 +133,9 @@ services:
       - /mnt/fast/appdata/arrs/beets/config/config.yaml:/config/config.yaml:ro
       # The vendored beets-flask config (./flask-config.yaml): three inboxes, terminal off, library
       # read-only. Also :ro — rc6 loads $BEETSFLASKDIR/config.yaml into the same eyconf schema.
+      # CORRECTED 2026-09-26, plan 07-08, D-22 (C4): "three inboxes" is no longer true — from Phase 7
+      # D-21 the registered set is TWO (02-review, 03-asis); 01-auto is de-registered, its directory
+      # kept, and Phase 8 re-registers it.
       - /mnt/fast/appdata/arrs/beets/config/beets-flask/config.yaml:/config/beets-flask/config.yaml:ro
       # /logs bound OUT of the container writable layer, deliberately. /mnt/fast is NOT a
       # mountpoint — only the CHILDREN of /mnt/fast/appdata are ZFS datasets — so this path and the
@@ -158,7 +161,27 @@ services:
       #
       # If you flip this to :rw to "just run one import", you have re-created the exact failure
       # this project exists to prevent: a fourth half-built tagging path.
-      - /mnt/tank/media:/media:ro
+      #
+      # GRANTED — Phase 7, D-22 (E3), plan 07-08, 2026-09-26. The flag below is now :rw, and it is
+      # deliberate. The paragraph above is kept visible, per this repo's standing style for a
+      # retracted claim, because it is still the right test for any FUTURE flip — and this flip is
+      # answered against it, in band:
+      #   - it is deployed (plan 07-09) only AFTER tank/media/Music@pre-07-pilot and
+      #     fast/appdata/arrs@pre-07-pilot both exist and are listed back (D-16): the snapshot fence
+      #     is what makes an import reversible, since beets has no undo;
+      #   - it lands in ONE commit with every flag that moves with it (D-22), so the estate is never
+      #     half-granted;
+      #   - 01-auto is DE-REGISTERED in ./flask-config.yaml in that same commit (D-21), so no
+      #     unattended importer can reach this mount;
+      #   - every import is confirmed PER ALBUM in 02-review (D-20) — one tagger, one front end, the
+      #     one Phase 3 chose; not a fourth path;
+      #   - scripts/quick-health-check.sh's D-03 block asserts RW=true here as standing assertion
+      #     D-23, with the owning phase named, so it can never read as accidental drift.
+      # Granted to THIS container only. ../beets.yaml (the dormant 2.13.1 CLI arm) stays :ro — it never
+      # opens the real library.db (Phase 6 D-04). D-23's accepted cost: a standing assertion is a
+      # policy control, weaker than the mount flag it replaces (CONVENTIONS §4); the snapshot fence is
+      # the primary control from here.
+      - /mnt/tank/media:/media:rw
 
     # -------------------------------------------------------------------------------------------
     # NO /config/requirements.txt IS CREATED, AND THAT IS A DECISION
@@ -225,6 +248,11 @@ services:
 # stricter eyconf schema and a rejected key kills the WATCHDOG while the server keeps serving a
 # page: the inboxes go inert behind a UI that looks alive (Phase 3 friction 9, D-09). "The UI
 # loads" is therefore not evidence of anything.
+#
+# CORRECTED 2026-09-26, plan 07-08, D-22 (C4): the count above is retracted, not deleted. From Phase 7
+# D-21 the registered set is TWO — 02-review and 03-asis — so "fewer than TWO" is the RED, and a line
+# naming 01-auto is ALSO a red while D-21 holds (it means the de-registration did not deploy). Phase 8
+# re-registers 01-auto deliberately, and the count returns to three then.
 
 # WR-02: t3_proxy is declared here as well as in ../compose.yaml, because this file has to be able
 # to stand on its own — brought up directly with `-f`, there is no parent to inherit the network

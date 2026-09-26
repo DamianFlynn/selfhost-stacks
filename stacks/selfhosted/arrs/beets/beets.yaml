@@ -113,7 +113,15 @@ services:
       # rewrote 83 of 91 .nfo files underneath it. A comment promising rw in the current phase is
       # an invitation to flip the flag one plan early and lose the only structural control.
       # The final sentence of the 2026-08-18 note stands unchanged and applies to both containers.
-      - /mnt/tank/media:/media:ro  # Existing library — READ-ONLY for all of Phase 6; rw is Phase 7's first act
+      #
+      # CORRECTED 2026-09-26, plan 07-08, D-22. The trailing comment on the mount line below used to
+      # read "Existing library — READ-ONLY for all of Phase 6; rw is Phase 7's first act". Phase 7
+      # granted rw to beets-flask ONLY (D-22, plan 07-08; ./flask.yaml). THIS dormant arm stays :ro:
+      # it never opens the real library.db (Phase 6 D-04), so it has no sanctioned write, and granting
+      # it rw would create an unsanctioned second writer — and turn check-music-freeze.sh's mount
+      # census red the first time anyone started it. Plan 07-09's gate keeps a `grant-both` override;
+      # flask-only is the decided default (07-CONTEXT D-22, ratified 2026-09-25).
+      - /mnt/tank/media:/media:ro  # Phase 7 granted rw to beets-flask ONLY (D-22, plan 07-08); this dormant arm stays :ro — it never opens the real library.db (Phase 6 D-04), so it has no sanctioned write
     # WR-02: THE networks: KEY AND THE HOST PORT ARE THE SAME DEFECT, SEEN FROM TWO SIDES.
     # Until 2026-09-14 this key was COMMENTED OUT while `traefik.enable=true` and a full
     # `chain-authelia@file` router sat in the labels below. Compose therefore attached this

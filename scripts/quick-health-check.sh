@@ -458,6 +458,10 @@
 #          red. AN EMPTY `docker inspect` RESULT IS UNKNOWN, never "no bad mounts". A
 #          `docker compose config` that renders `services: {}` — which is what a MISSING
 #          `--profile manual` looks like on this estate, measured — is likewise UNKNOWN.
+#          CORRECTED 2026-09-26, plan 07-08, D-22/D-23: "/mnt/tank/media must be read-only on both
+#          (D-05 ...)" above is RETRACTED for beets-flask and kept visible as history. From Phase 7
+#          the runtime arm asserts RW=TRUE on beets-flask (standing assertion D-23) and the dormant
+#          CLI arm still asserts ro (D-04/D-22). See the fifteenth notice below.
 #       H. THE D-04 THROWAWAY-`-l` ASSERTION. No invocation-shaped `beet` line in an executable
 #          file tracked under scripts/ or stacks/ may run without BOTH a `-l` outside
 #          /config/library.db AND a `-c` overlay, because `-l` alone does not redirect
@@ -721,6 +725,36 @@
 #          library, or ANY class with zero checkable rows. Three verdicts, never two.
 #       S. THE FOLD-IN RUN WITH A NON-DEFAULT IMPORT_SWEEP_SCRIPT. Same additive contract as
 #          CONSUMERS_SCRIPT (condition O): it may drive any arm and can never produce the tick.
+#
+# ⚠️  EXIT-CODE BEHAVIOUR CHANGED AGAIN — NO NEW BLOCK, AN INVERTED CONDITION AT AN EXISTING SITE (D-23, plan 07-08)
+#     2026-09-26 (plan 07-08, phase 7 D-22/D-23, E3).
+#
+#     NOTICE COUNT: measured AFTER this notice was written, with the header recipe the thirteenth
+#     notice gives, driven first against a control. The number is recorded in
+#     .planning/phases/07-pilot-12-albums-end-to-end/07-08-SUMMARY.md, NOT here.
+#
+#     BLOCK ordinal does NOT move: ten blocks remain. The D-03 mount block's beets-flask RUNTIME arm
+#     for /mnt/tank/media is INVERTED; the dormant CLI arm is only relabelled.
+#
+#     ⚠️ THE CONDITION LETTERS ARE T AND U. S was the last letter in use, measured with
+#     `grep -nE '^#[[:space:]]+[A-Z]\.[[:space:]]' scripts/quick-health-check.sh` before writing.
+#
+#     WHAT NOW EXITS THIS SCRIPT 1 THAT DID NOT BEFORE:
+#       T. /mnt/tank/media NOT rw ON beets-flask. The runtime mount must read RW=true — the D-22
+#          grant, asserted as standing assertion D-23 with the owning phase named, so the rw can
+#          never read as accidental drift. RW=false (a revert, or a container recreated from an
+#          older compose file) is now the red. ⚠️ EXPECT THIS RED FROM THE D-22 COMMIT UNTIL PLAN
+#          07-09 DEPLOYS IT BEHIND THE FENCE: the live container is still :ro until then.
+#     WHAT STOPPED EXITING 1:
+#       U. /mnt/tank/media rw ON beets-flask — formerly "D-05 VIOLATED" (condition G). Unchanged:
+#          NO mount from /mnt/tank/media at all is still a red, and the dormant CLI arm declaring
+#          anything but ro is still a red (now labelled D-04/D-22).
+#
+#     ⚠️ THE ACCEPTED COST, STATED RATHER THAN GLOSSED (D-23): the library's strongest structural
+#     protection is gone. D-05's argument was that a :ro mount CANNOT FAIL OPEN; this assertion is a
+#     POLICY control, weaker than the mount flag it replaces (CONVENTIONS §4 — a rule enforced by
+#     policy is weaker than one enforced by mechanism). From here the snapshot fence is the primary
+#     control, and this assertion only proves the rw is the deliberate one.
 #
 # ⚠️  KNOWN LIMIT, AND IT APPLIES TO THIS WHOLE FILE: THIS SCRIPT IS MANUAL. IT ONLY EVER FIRES
 #     WHEN SOMEBODY TYPES IT (D-22, phase 02.1).
@@ -1661,6 +1695,7 @@ else
     DRIFT_SABBEETS_Q=$(printf '%q' "$DRIFT_APPDATA_ROOT/arrs/sabnzbd/config/scripts/beets-config.yaml")
     DRIFT_SURVIVOR_Q=$(printf '%q' "$DRIFT_APPDATA_ROOT/arrs/beets/config/config.yaml")
     DRIFT_FLASK_Q=$(printf '%q' "$DRIFT_APPDATA_ROOT/arrs/beets/config/beets-flask/config.yaml")
+    # C9 (plan 07-08): the D-22 commit edits config.yaml and flask-config.yaml, so this block is RED BY DESIGN from the host's pull of that commit until plan 07-09 installs both files to appdata.
     DRIFT_CMD="set -o pipefail; cd $DRIFT_REPO_ROOT_Q || exit 3
 _drift_pair() {
   r=\$(timeout $REMOTE_TIMEOUT git show \"HEAD:\$2\" | sha256sum | cut -d' ' -f1) || exit 4
@@ -1756,6 +1791,15 @@ fi
 # read-only on BOTH containers for the whole of Phase 6. beets.yaml and flask.yaml both say so in
 # comments; this block is the half that checks the daemon agrees.
 #
+# CORRECTED 2026-09-26, plan 07-08, D-22/D-23. The paragraph above is kept as a dated retraction:
+# Phase 6 is over, and Phase 7's first act (E3, D-22) grants /mnt/tank/media rw to beets-flask ONLY.
+# From here the beets-flask runtime arm asserts RW=TRUE — standing assertion D-23, owning phase
+# Phase 7 — so the rw reads as a decision, never as drift; no mount at all is still a red. The
+# dormant CLI arm still asserts ro (D-04/D-22: it never opens the real library.db, so it has no
+# sanctioned write). ⚠️ D-23's caveat, at the site: the library's strongest structural protection
+# is gone. A standing assertion is a POLICY control, weaker than a mount flag that cannot fail open
+# (CONVENTIONS §4); from here the snapshot fence is the primary control.
+#
 # FAIL-CLOSED ON EVERY BRANCH, house S1 order (empty output first, deferring when the status is
 # 124; then 124; then any other non-zero; and only then is anything asserted). AN EMPTY
 # `docker inspect` RESULT IS `UNKNOWN`, NEVER "no bad mounts" — check-music-freeze.sh's row-22
@@ -1821,15 +1865,19 @@ else
             D03_BAD=$((D03_BAD + 1))
         fi
     fi
+    # INVERTED 2026-09-26, plan 07-08 (D-23, condition T). Was: RW != false -> "D-05 VIOLATED".
     D03_F_MEDIA=$(printf '%s\n' "$D03_FLASK_OUT" | awk -v s="$D03_MEDIA_SOURCE" '$1==s {print $3}')
     if [ -z "$D03_F_MEDIA" ]; then
-        echo "  ❌ $D03_FLASK_CONTAINER has NO mount from $D03_MEDIA_SOURCE — D-05 cannot be asserted from this runtime"
+        echo "  ❌ $D03_FLASK_CONTAINER has NO mount from $D03_MEDIA_SOURCE — D-23 cannot be asserted from this runtime"
         EXIT_CODE=1
         D03_BAD=$((D03_BAD + 1))
-    elif [ "$D03_F_MEDIA" != "false" ]; then
-        echo "  ❌ D-05 VIOLATED — $D03_FLASK_CONTAINER holds $D03_MEDIA_SOURCE at RW=$D03_F_MEDIA, expected RW=false"
+    elif [ "$D03_F_MEDIA" != "true" ]; then
+        echo "  ❌ D-23: $D03_FLASK_CONTAINER holds $D03_MEDIA_SOURCE at RW=$D03_F_MEDIA, expected RW=true since Phase 7 D-22"
         EXIT_CODE=1
         D03_BAD=$((D03_BAD + 1))
+    elif [ "$D03_OVERRIDDEN" -eq 0 ]; then
+        echo "  ✅ /media is RW=true on beets-flask DELIBERATELY — granted Phase 7 (D-22), standing assertion D-23; not drift"
+        echo "     (a policy control, weaker than the :ro mount it replaces — CONVENTIONS §4; the snapshot fence is the primary control)"
     fi
 fi
 
@@ -1882,18 +1930,20 @@ else
     fi
     D03_C_MEDIA=$(printf '%s\n' "$D03_CLI_MOUNTS" | awk -v s="$D03_MEDIA_SOURCE" '$1==s {print $3}')
     if [ -z "$D03_C_MEDIA" ]; then
-        echo "  ❌ the dormant CLI arm declares NO mount from $D03_MEDIA_SOURCE — D-05 cannot be asserted for it"
+        echo "  ❌ the dormant CLI arm declares NO mount from $D03_MEDIA_SOURCE — D-04/D-22 cannot be asserted for it"
         EXIT_CODE=1
         D03_BAD=$((D03_BAD + 1))
     elif [ "$D03_C_MEDIA" != "ro" ]; then
-        echo "  ❌ D-05 VIOLATED — the dormant CLI arm declares $D03_MEDIA_SOURCE as $D03_C_MEDIA, expected ro"
+        # Relabelled 2026-09-26, plan 07-08: still expects ro. Was "D-05 VIOLATED".
+        echo "  ❌ D-04/D-22: the dormant CLI arm stays ro — it declares $D03_MEDIA_SOURCE as $D03_C_MEDIA, expected ro"
         EXIT_CODE=1
         D03_BAD=$((D03_BAD + 1))
     fi
     if [ "$D03_LOOKED" -eq 1 ] && [ "$D03_BAD" -eq 0 ] && [ "$D03_OVERRIDDEN" -eq 0 ]; then
+        # Updated 2026-09-26, plan 07-08 (D-22/D-23): no longer claims /media :ro on both.
         echo "  ✅ one config, both containers: $D03_BEETS_CONFIG_SOURCE -> $D03_BEETS_CONFIG_DEST :ro"
-        echo "     runtime  ($D03_FLASK_CONTAINER, inspected): config :ro, $D03_MEDIA_SOURCE :ro"
-        echo "     declared (dormant CLI arm, rendered):       config :ro, $D03_MEDIA_SOURCE :ro"
+        echo "     runtime  ($D03_FLASK_CONTAINER, inspected): config :ro, $D03_MEDIA_SOURCE :rw (D-22, deliberate — D-23)"
+        echo "     declared (dormant CLI arm, rendered):       config :ro, $D03_MEDIA_SOURCE :ro (D-04/D-22)"
     fi
 fi
 
@@ -3305,6 +3355,9 @@ if [ "$EXIT_CODE" -ne 0 ]; then
     # attributed to it alone. Both runs are recorded in
     # .planning/phases/07-pilot-12-albums-end-to-end/artifacts/07-03-sweep-drive.txt.
     # Like the consumers audit, the sweep carries a ⚠️ BY DESIGN until the first pilot import.
+    #
+    # Extended again 2026-09-26 (plan 07-08, D-23) — NO SITE ADDED OR REMOVED: the D-03 flask
+    # runtime arm's expectation was inverted (RW=true), so the tail now states the new expectation.
     echo "❌ Health check FAILED. The failing block is whichever one above carries a ❌ or a ⚠️ —"
     echo "   that is any of: the Traefik or Authelia container probes, the Traefik dashboard"
     echo "   probe, the container counts, the music freeze harness, the consumers audit, the"
@@ -3322,6 +3375,9 @@ if [ "$EXIT_CODE" -ne 0 ]; then
     echo "      ROADMAP entry criterion E6 discharges CONF-04's Jellyfin half, and on nothing"
     echo "      else. Do not tune it out: the non-zero exit is what makes a later regression back"
     echo "      to the baseline detectable by tooling instead of only by a human reading yellow."
+    echo "   ⚠️ The D-03 mount block asserts /mnt/tank/media RW=true on beets-flask since Phase 7"
+    echo "      (D-22 grant, standing assertion D-23) and ro on the dormant CLI arm. RW=false on"
+    echo "      beets-flask is the red now — it is expected until plan 07-09 deploys the grant."
     echo "   ⚠️ The music import sweep carries a ⚠️ BY DESIGN until the first pilot import: the"
     echo "      library holds 0 items and the sweep refuses to call nothing clean (its exit 3)."
     echo "      Once items exist, a ⚠️ there is a could-not-look and a ❌ is a criterion-7 finding."
