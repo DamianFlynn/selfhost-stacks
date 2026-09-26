@@ -1610,7 +1610,7 @@ Plans:
 - [x] 07-08-PLAN.md — the ONE D-22 commit: rw for beets-flask + every flag and check that moves with it (D-21..D-23, C1..C10)
 - [x] 07-09-PLAN.md — GATED: two-dataset fence then the grant, first end-to-end quick-health-check (D-16, E3)
 - [x] 07-10-PLAN.md — GATED: P10 (Now That's What I Call Music! 117) imported through 02-review and verified — gate slot swapped from P01 by `07-SAMPLE-AMENDMENT.md` A1, written first; P01's disposition operator-gated; P-01 barrier rule (D-10 amended, D-20, D-29) — runs 1–5 PARTIAL on P01, resumes at run 6
-- [ ] 07-11-PLAN.md — GATED: P10 backed out with UNDO IMPORT on tree/DB/state.pickle, re-run equal; D-17 mechanical release (D-14, D-15, D-17)
+- [x] 07-11-PLAN.md — GATED: P10 backed out with UNDO IMPORT on tree/DB/state.pickle, re-run equal; D-17 mechanical release (D-14, D-15, D-17)
 - [ ] 07-12-PLAN.md — GATED: remaining bucket-A albums imported per album and verified (in-scope set from the amendment; P01 only via its D-29 exception gate)
 - [ ] 07-13-PLAN.md — GATED: the DJ pair imported and routed to DJ/ by D-08, DJ fields verified
 - [ ] 07-14-PLAN.md — GATED: E5 Def Leppard repair as a named operation (D-24)

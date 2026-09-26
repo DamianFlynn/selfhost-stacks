@@ -8,7 +8,7 @@ progress:
   total_phases: 10
   completed_phases: 5
   total_plans: 141
-  completed_plans: 134
+  completed_plans: 135
   percent: 50
 ---
 
@@ -21,13 +21,15 @@ See: .planning/PROJECT.md (updated 2026-08-17)
 **Core value:** New music downloads land in the library correctly tagged, through exactly one
 pipeline that someone owns.
 **Current focus:** Phase 07 — pilot-12-albums-end-to-end (**PLANNED 2026-09-25, 17 plans in
-13 waves, 10 of 17 executed — 07-01 … 07-10 done**; Phase 06 stays `In Progress` at `gaps_found` 5/6 with CONF-04 carried to
+13 waves, 11 of 17 executed — 07-01 … 07-11 done**; Phase 06 stays `In Progress` at `gaps_found` 5/6 with CONF-04 carried to
 Phase 7 E6 — `/gsd-verify 06` is still owed)
 
 **Definition of done (CONS-04):** a file is imported only when verified with `ffprobe` on the file
 *and* visible in both Jellyfin and Music Assistant. Never "tool configured".
 
 ## Current Position
+
+**PLAN 07-11 COMPLETE — `STATE 07-11-RERUN-LANDED` — 2026-09-26 (run 2).** Run 1 stopped RECONCILE-FAIL: Jellyfin's Music `MetadataSavers=["Nfo"]` wrote 2 `.nfo` sidecars despite `SaveLocalMetadata=false` (DEF-07-11-05) — saver cleared to `[]` and the two files removed as a recorded pre-undo cleanup (`3f1f3d4`, operator-approved); DEF-07-11-06 (no check asserts MetadataSavers) OPEN. Run 2: `UNDO IMPORT` covered TREE (50→0) and DB (50→0) but **NOT `state.pickle`** (DEF-07-11-01) — ⚠ **a complete undo = UNDO IMPORT + file-restore of `state.pickle` with beets-flask stopped**. Operator chose restore-then-rerun: state.pickle cp'd back from `fast/appdata/arrs@pre-07-pilot` (no rollback), re-import via the same session/candidate → **EQUALITY VERDICT: PASS**, **QUALITY: PASS**. **D-17 NOT FIRED** — `tank/media/Music@pre-06-41-conf04-reprobe` held for 07-16. P10 in library (50 items); MA barrier still up (70/1244/66). Next: 07-12.
 
 **PLAN 07-10 COMPLETE — `STATE 07-10-LANDED` — 2026-09-26 (run 6, gate album P10).** P10 (Now 117) imported through `02-review` at 19:44:19Z: rank 1 `b057dee8-02ea-4b48-8681-f5e3255bc47d` (D-29 strong, 24+26 == 24+26), 50 items at `/media/Music/Various Artists/Now That’s What I Call Music! 117/`. Criteria 3, 4, 8 and Jellyfin half of 6 PASS; oracle diff 50/50 MATCH-CHANGED-TAG (DEF-07-10-01 VA dir, DEF-07-10-02 13 MB-title names). ⚠ **Criterion 7 UNKNOWN (exit 3)** — DEF-07-10-03: `check-music-import.sh` does not join beets' relative item paths to `directory`, so class 1 is blind on a real library; 07-11's gate must decide. Barrier VERIFIED 5× in run 6; MA not synced (70/1244/66). P01 DISPOSITION `exception-gate` (07-12). The operator's first "imported" relay preceded the actual confirm; the pre-record live-state check caught it. Next: 07-11 (undo + re-run).
 
