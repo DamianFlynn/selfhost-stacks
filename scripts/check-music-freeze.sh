@@ -537,6 +537,37 @@ echo ""
 # for that, not the move itself, so a reader who greps 2f19870 lands on an account of what went
 # wrong rather than on a convention being presented as having been honoured.
 #
+# THIRTEEN BECAME NINE, 2026-09-26. Four lines LEFT the inventory — the opposite direction to
+# every note above, which all concern lines arriving. `stacks/selfhosted/media/audiobookshelf.yaml`
+# carried four interpolated volume lines:
+#       - ${APPDATA}/audiobookshelf:/config
+#       - ${APPDATA}/audiobookshelf/metadata:/metadata
+#       - ${MEDIA}/audiobooks:/audiobooks
+#       - ${MEDIA}/podcasts:/podcasts
+# and they were replaced with literal host paths because THEY NEVER RESOLVED. `${APPDATA}` and
+# `${MEDIA}` are not defined for that stack: the `media/` project's own .env declares only PUID,
+# PGID, TZ, DOMAINNAME and a few service secrets, and there is no root-level .env at
+# /mnt/fast/stacks. Compose substituted the empty string, so the service silently bind-mounted
+# /audiobookshelf, /audiobooks and /podcasts on LXC 100's ext4 ROOT filesystem and served zero
+# books for ~3.5 months while looking healthy. De-interpolating them is the fix, and it SHRINKS
+# this inventory, which is why the pin moves DOWN.
+#
+# Read by hand, the nine survivors are all safe against §2's actual concern (a rw host path
+# reaching /mnt/tank/media/Music): two immich lines (${UPLOAD_LOCATION}, ${DB_DATA_LOCATION} — an
+# upload dir and a postgres data dir, neither under the library), three listenarr lines
+# (${APPDATA}/listenarr, ${MEDIA}/audiobooks, ${DOWNLOADS} — and note these DO resolve, because
+# `arrs/.env` defines APPDATA, MEDIA and DOWNLOADS where `media/.env` does not; ${MEDIA}/audiobooks
+# is a sibling of Music, not inside it, and the container has never been deployed at all), and four
+# ${APPDATA_DIR} monitoring/automation lines (a DIFFERENT variable, defined in `monitoring/.env`,
+# pointing at /mnt/fast/appdata — verified live: grafana resolves to
+# /mnt/fast/appdata/monitoring/grafana).
+#
+# The same-commit rule of convention 5 was NOT honoured cleanly here either: the audiobookshelf fix
+# landed in 1a0f556 and this pin moved in the follow-up commit, after the check fired. Recorded as
+# what happened rather than dressed up as compliance — the same way the 2f19870 note above is.
+# The blind spot named in that note applies unchanged: this pin gates on inventory SIZE, never on
+# the CONTENT of a line, so re-read the lines rather than re-trusting this paragraph.
+#
 #   DECLARED_INTERP_EXPECTED  the pinned size of that inventory. Overridable so the failure branch
 #                             can be driven without editing this file. It can only ever move a
 #                             green to a red or a red to a green BY DECLARATION — it resolves
@@ -550,7 +581,7 @@ else
   pass "no long-form 'type: bind' mounts — every volume line in the tree is a form this parser can read"
 fi
 
-DECLARED_INTERP_EXPECTED="${DECLARED_INTERP_EXPECTED:-13}"
+DECLARED_INTERP_EXPECTED="${DECLARED_INTERP_EXPECTED:-9}"
 INTERP_ROWS="$(grep -rnE '^[[:space:]]*-[[:space:]]*"?\$\{?[A-Za-z_][^:]*:/' "$STACKS" --include='*.yaml' --include='*.yml' 2>/dev/null || true)"
 INTERP_COUNT="$(count_lines "$INTERP_ROWS")"
 if [[ "$INTERP_COUNT" -eq "$DECLARED_INTERP_EXPECTED" ]]; then
