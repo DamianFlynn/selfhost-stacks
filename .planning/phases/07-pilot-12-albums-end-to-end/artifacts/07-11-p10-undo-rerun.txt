@@ -183,3 +183,110 @@ Consequence for re-entry: the tree now agrees with STATE 07-10-LANDED (50 files,
 the targeted-update path can no longer write .nfo into Music. 07-11 re-enters from Task 1, which re-takes
 every reading itself; nothing in this section substitutes for them.
 Gap left open (filed as DEF-07-11-06): no health check asserts the Music MetadataSavers value.
+
+=== 07-11 RUN 2 (re-entry after STOP STATE 07-11-RECONCILE-FAIL) ===
+Run start: 2026-09-26T20:20:14Z. Workstation HEAD 3f1f3d4; host /mnt/fast/stacks HEAD 245dfa7, porcelain 0 lines.
+Dispatch: the ledger's newest 07-11 token is `STOP STATE 07-11-RECONCILE-FAIL`; the plan's re-entry rule for
+that stop is Task 1 from RESUME RECONCILIATION (only T1-HOLD / T2-HOLD resume at a gate). Run 1's records
+above are not edited. Every reading below is re-taken; nothing is carried from run 1 or the remediation.
+
+## Task 1 — RESUME RECONCILIATION (reads only, G-09)
+Ledger newest token (LC_ALL=C /usr/bin/grep -oE '^(STOP )?STATE 07-1[01]-[A-Z][A-Z-]*[A-Z]' <ledger> | tail -n 1):
+  `STOP STATE 07-11-RECONCILE-FAIL`. What it asserts: items 50, taghistory P10 entry present, snapshots 2/2 +
+  reprobe present, albums landed: P10, D-17 NOT FIRED — plus the tree disagreement (51 files) that made it a
+  stop. The operator-approved DEF-07-11-05 remediation (§ above, 20:15Z–20:18Z) removed exactly the two
+  non-beets files that caused that disagreement, so the landed state the reconciliation is checked against is
+  STATE 07-10-LANDED's: 50 files (all .flac, 568:568), 50 items / 1 album, P10 state entry present.
+
+Readings (2026-09-26T20:20:14Z–20:21Z):
+  (1) Snapshots, atlantis as real root (id -u 0), `zfs list -H -t snapshot -o name | grep -xE '<4 exact names>'`, RC 0, 20:20:24Z:
+        fast/appdata/arrs@pre-07-pilot            PRESENT
+        tank/media/Music@pre-07-pilot             PRESENT
+        tank/media/Music@pre-06-41-conf04-reprobe PRESENT
+        tank/downloads@pre-phase5                 PRESENT (listed only; never a target)
+      Both pre-07-pilot names present -> MATCHES.
+  (2) P10 destination, atlantis, `set -o pipefail; timeout 60 find "/mnt/tank/media/Music/Various Artists/Now That’s What I Call Music! 117" -type f | wc -l`, RC 0:
+        files 50; entries (any type, -mindepth 1) 50; *.flac 50; non-flac 0; owners 50 × 568:568 -> MATCHES.
+      Album dir and `Various Artists/` both 568:568 777; `Various Artists/` holds exactly one entry (the album dir).
+      Library-wide: entries not 568 by user or group 0 (RC 0); *.nfo 91 (= the pre-existing 91); entries with
+      mtime newer than 2026-09-26T20:17:30Z (after the remediation's verify): 0.
+  (3) P10 items/albums, read-only (`docker exec -i -u 568 beets-flask /venv/bin/python -`, sqlite mode=ro, RC 0, 20:20:36Z):
+        items 50, albums 1; mb_albumid b057dee8-02ea-4b48-8681-f5e3255bc47d: items 50, albums 1 -> MATCHES.
+      sha256 (docker exec beets-flask sha256sum, RC 0):
+        /config/library.db   a9e7036f39fbac698eea123d315f9e45c25a35cd4a32af4fc4b0b823108ea87d
+        /config/state.pickle 224fe2792fc67ed7c550155eaad0434d65c5bb24e8ee45d53e61c9a80580bae3
+  (4) state.pickle, decoded from fresh COPIES only (run 1's /tmp copies not reused):
+        live  -> `docker exec beets-flask cp /config/state.pickle /tmp/p7-state.preundo.r2.pickle` RC 0 (sha256 224fe279… = live)
+        fence -> atlantis /mnt/fast/safety/phase07/fence/state.pickle (sha256 f6a9a1ad7aa553e4… = 07-09 fence value),
+                 streamed to LXC 100 /root/phase07-0711/fence-state.r2.pickle (f6a9a1ad…), `docker cp` to
+                 beets-flask:/tmp/p7-state.fence.r2.pickle (f6a9a1ad…) RC 0; /config never written.
+      Decoded with /venv/bin/python as the container's default user (the /tmp copies are root-owned; the
+      uid-568 attempt read PermissionError on the copy — nothing else touched), RC 0:
+        fence: keys ['taghistory', 'tagprogress']; taghistory set len 0; tagprogress dict len 0
+        live:  keys ['taghistory', 'tagprogress']; taghistory set len 1; tagprogress dict len 0
+  (5) D-17 target `tank/media/Music@pre-06-41-conf04-reprobe`: PRESENT (reading (1)).
+
+RESUME RECONCILIATION: CONSISTENT (STOP STATE 07-11-RECONCILE-FAIL, re-checked against STATE 07-10-LANDED after the DEF-07-11-05 remediation: 50 files all .flac 568:568, 50 items / 1 album, taghistory P10 entry present, pre-07-pilot 2/2, reprobe present)
+
+## Task 1 — BARRIER (before the undo gate)
+/root/ma-read-0710.sh on LXC 100 (07-10 Task 1 Step 3(d), unchanged; D-39 login, credentials never in argv),
+SINCE=2026-09-26T20:07:55Z (run 1's VERIFIED), RC 0, read 20:20:50Z: tasks/list 21,454 B, logging/get 24,431 B;
+four music_sync_filesystem_local--XJaJWNUS_{track,playlist,album,artist} enabled=false, next_run null,
+updated_at 15:55:04Z, schedule {"type":"hourly","enabled":false,"every":12,…}; control 16 enabled; pattern drive
+1/0/0; log 217 lines; server-start/sync lines later than SINCE: 0 (newest sync still 2026-09-26T09:17:24Z).
+BARRIER: VERIFIED (4/4 enabled=false, next_run null) at 2026-09-26T20:20:50Z
+MA provider-filtered counts 20:20:50Z (/root/ma-counts-0710.sh, RC 0): filesystem_local--XJaJWNUS 70 / 1244 / 66
+= expected; control filesystem_local--ZZBOGUS0 0/0/0; local albums named *117*: 0. MA has not seen P10.
+
+## Task 1 — PRE-UNDO WITNESS
+  TREE  P10 destination files: 50 (command and RC at reading (2)) — PRESENT; equal to 07-10's first-import count.
+  DB    P10 albums 1, items 50 (reading (3)); total items 50, albums 1 — PRESENT.
+  sha256 library.db a9e7036f39fbac698eea123d315f9e45c25a35cd4a32af4fc4b0b823108ea87d
+  sha256 state.pickle 224fe2792fc67ed7c550155eaad0434d65c5bb24e8ee45d53e61c9a80580bae3
+  P10 STATE KEY(S) (set difference live copy - fence copy, per top-level key, every entry printed):
+    taghistory  +1: (b'/downloads/complete/nzb/_inbox/02-review/VA.Now.That.s.What.I.Call.Music_.117.2024..CD.FLAC..CDNOW117',)
+    tagprogress  0 entries
+    fence - live: 0 on both keys.
+    The staged `_inbox/02-review/<folder>` path IS among them — `(staged_bytes,) in live['taghistory']` -> True
+    (expected, and measured). STATE count for the paired witness: 1 entry PRESENT.
+  No part reads 0 and the set difference is non-empty -> no PAIRED WITNESS: VACUOUS line; DEF-07-11-02 not filed.
+  Staged copy: `_inbox/02-review/VA.Now.That.s.What.I.Call.Music_.117.2024..CD.FLAC..CDNOW117` PRESENT, 52 files
+    (atlantis, find -type f, RC 0) — beets-flask left it after the import (import.copy). 01-auto 0 / 03-asis 0 entries.
+  beets-flask own DB (mode=ro, not edited), 20:21Z: folders 5, sessions 5; P10 folder c455ff4def566892c4fdeb353d377857,
+    session 788f3bba-4a9a-48ae-b00a-fc7a85c124ba IMPORT_COMPLETED 19:44:29Z, task b931b749-46cb-4b14-a715-d7ef09520188
+    chosen_candidate_id 073c7ff8-b50b-45d6-adfc-ca687650ccc7 choice_flag APPLY. (The session to undo.)
+  Jellyfin (/root/phase07-0711/jf-read-0711.sh, GET only, grep -c POST = 0, RC 0, JELLYFIN_ADDR 192.168.90.37:8096
+    resolved 20:20:51Z): P10 MusicAlbum count 1 (d18d5c99c4451068e6b3d6999cd48a3d "Now That’s What I Call Music! 117").
+    Music LibraryOptions re-read: MetadataSavers [] (the remediation holds), SaveLocalMetadata false,
+    EnableRealtimeMonitor false, SaveLyricsWithMedia false.
+  Fence safety copies (atlantis): library.db fbbdde0c416e72b9… (= 07-09), state.pickle f6a9a1ad… (= 07-09).
+  `zfs get written@pre-07-pilot tank/media/Music` = 1.06G (= run 1).
+
+## Task 1 — ADJUDICATION (every P10 finding from 07-10, plus 07-11 run 1's, with the executor's reading)
+  1. DEF-07-10-01 — VA directory materialised (`Various Artists/Now That’s What I Call Music! 117/` vs the oracle's
+     `Various/NOW That's What I Call Music! 117/`). Class MATCH-CHANGED-TAG: MB release credited to Various Artists
+     (89ad4ac3) -> va_name, predicted exactly before the import. Reading: expected consequence of a correct match,
+     not a defect of the import; an oracle/expectation question for /gsd-verify 07. Does not block the undo.
+  2. DEF-07-10-02 — 13 of 50 file names follow MB titles (title case, U+2019, the split-wrong 01-24 corrected).
+     MATCH-CHANGED-TAG; DD-TT prefixes 50/50; TEMPLATE-DEFECT 0. Reading: expected; not a quality finding.
+  3. DEF-07-10-03 — criterion 7 instrument blind on relative item paths (exit 3 UNKNOWN). RESOLVED by 245dfa7,
+     deployed; live criterion 7 on P10 at 20:05:06Z EXIT 0, class1=50 class2=50 class3=2, findings 0.
+     Reading: resolved; the re-run's q4 reading uses the fixed instrument.
+  4. DEF-07-11-05 — Jellyfin wrote 2 .nfo (owner 100000) into Music during 07-10's targeted update. RESOLVED
+     pre-undo by the operator-approved remediation (MetadataSavers [] re-read now; the 2 files gone; library
+     entries not 568 now 0). Reading: q2 is 0 at this reading; Task 2's Jellyfin `Deleted` update and the
+     re-run's `Created` update are watched for any non-FLAC / non-568 file — if one appears the executor STOPS,
+     it does not delete. DEF-07-11-06 (no check asserts MetadataSavers) stays filed, out of scope.
+  5. Criterion 3 (ffprobe vs DB): 0 mismatches / 350 comparisons — no finding.
+  6. Criterion 4 (tag diff): exit 0, MATCHED 50, FIELDS_DROPPED 0, UNEXPLAINED 0, MISSING_AFTER 0 — no finding.
+     190 changes all reasoned (MB corrections).
+  7. Ownership: 50/50 568:568 at 07-10 and now — no finding.
+  8. Criterion 8 (source unchanged, 52 rows): PASS — no finding.
+  9. Jellyfin E6 note (ArtistItems 0 on 45 tracks after a file-scope update): recorded for E6, not a P10 finding.
+  10. Barrier: VERIFIED at 20:20:50Z, MA counts at baseline — MA has not captured P10, so an undo leaves no MA
+     entry behind. No barrier finding.
+  Executor reading overall: P10 passed; no unresolved criterion 3/4/7 finding; all three parts' pre-undo readings
+  are PRESENT, so every paired witness is capable of reading `yes`. Recommendation: `undo` (D-15 — back the gated
+  album out now, same candidate). Options as the plan orders them: hold, undo, undo-rerun-other.
+
+Gate presented to the operator via the orchestrator (checkpoint:decision), 2026-09-26T20:2xZ. Awaiting the answer.
