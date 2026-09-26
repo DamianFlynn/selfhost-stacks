@@ -132,7 +132,7 @@ migrate, so take the latest rather than replaying the 4→5 upgrade.
 - **Purpose**: Document management with OCR and full-text search
 - **Stack**: `documents` (new)
 - **Status**: ✅ Created documents/paperless.yaml
-- **Access**: https://docs.deercrest.info
+- **Access**: https://cabinet.deercrest.info
 - **Database**: PostgreSQL 18 + Redis
 - **Components**: Paperless + Tika OCR + Gotenberg PDF + Paperless-GPT
 - **Notes**: Complete DMS with AI-powered tagging via Paperless-GPT

@@ -34,7 +34,7 @@ services:
       - PAPERLESS_TIKA_ENDPOINT=http://tika:9998
       
       # URLs and Security
-      - PAPERLESS_URL=https://docs.deercrest.info
+      - PAPERLESS_URL=https://cabinet.deercrest.info
       - PAPERLESS_SECRET_KEY=${PAPERLESS_SECRET_KEY}
       - PAPERLESS_ADMIN_USER=${PAPERLESS_ADMIN_USER:-admin}
       - PAPERLESS_ADMIN_PASSWORD=${PAPERLESS_ADMIN_PASSWORD}
@@ -58,7 +58,7 @@ services:
       
       # HTTP Router with Authelia
       - "traefik.http.routers.paperless.entrypoints=web,websecure"
-      - "traefik.http.routers.paperless.rule=Host(`docs.deercrest.info`)"
+      - "traefik.http.routers.paperless.rule=Host(`cabinet.deercrest.info`)"
       - "traefik.http.routers.paperless.middlewares=chain-authelia@file"
       - "traefik.http.routers.paperless.service=paperless"
       - "traefik.http.services.paperless.loadbalancer.server.port=8000"
