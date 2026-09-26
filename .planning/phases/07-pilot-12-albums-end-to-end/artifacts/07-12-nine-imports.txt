@@ -371,3 +371,199 @@ P01 — D-29 EXCEPTION GATE: NONE PASSES (disc 1 21 vs 15); the pre-named f890ca
 
 Gate presented to the operator via the orchestrator (checkpoint:decision) at 2026-09-26T21:2xZ. Awaiting the
 per-album answers and the P01 exception answer. Nothing imported by this executor.
+
+=== 07-12 RUN 1 — Task 2 continued (continuation agent, 2026-09-26T22:30Z onward) ===
+The gate was answered, the UI import did not go as the gate intended, and an operator-approved remediation
+followed. The orchestrator's account was relayed to this agent. Every reading below was RE-TAKEN by this agent
+before anything was recorded. beets-flask log lines are UTC+1 and are converted to Z here. Only one write was
+made by this agent: the state.pickle surgery in § C, which is authorised below. This agent did not import, undo,
+edit a DB, run a zfs write verb, edit Jellyfin or write to MA.
+
+## A — LIVE-STATE VERIFICATION (reads only)
+
+(A1) library.db, read-only (`docker exec -i -u 568 beets-flask /venv/bin/python -`, sqlite mode=ro,
+     /root/phase07-0712/gate-read.py, 22:31:42Z, RC 0): items 167, albums 6; items with no album 0.
+  | album id | P-ID | albumartist / album | mb_albumid | added (UTC) | items |
+  |---|---|---|---|---|---|
+  | 1 | P10 | Various Artists / Now That’s What I Call Music! 117 | b057dee8-02ea-4b48-8681-f5e3255bc47d | 20:57:56Z (07-11) | 50 |
+  | 2 | P02 | Benson Boone / American Heart | c0df8104-7b49-4fa3-bcec-cb3d310aa9a5 | 21:58:27.98Z | 10 |
+  | 3 | P03 | Benson Boone / Fireworks & Rollerblades | ef528afc-c3de-4b4a-8ef2-a0dd43dc9c83 | 21:59:42.66Z | 15 |
+  | 4 | P06 | CYRIL / Stumblin’ In (LUNAX remix) (extended mix) | 39fb4603-ec25-472e-8277-1623bacb900f | 22:01:12.02Z | 1 |
+  | 6 | P05 | Various Artists / NOW That’s What I Call Music! 121 | 0a74adf8-e7ff-4b37-a9b6-48d8632fe880 | 22:04:46.71Z | 44 |
+  | 8 | P12 | Various Artists / Now That’s What I Call Music! 116 | 581244e0-4f08-467e-9e96-24115f0f9e76 | 22:07:04.35Z | 47 |
+  Album ids 5 and 7 were P01 (22:02:00Z, 32 items, 61f964df…) and P09 (22:06:10Z, 100 items, as-is, empty
+  mb_albumid). Both rows are gone, which agrees with the orchestrator's 22:08Z reading and the undo. No album row
+  exists for P04 because it never imported. 167 = 50 + 10 + 15 + 1 + 44 + 47.
+  sha256 /config/library.db 22a72aff2eab322d7e764afe28fbb72944983c88f1df1daf2dbb303ebe745f78 (mtime 22:25:49Z = the P09 undo).
+
+(A2) beets-flask's own DB (mode=ro, not edited, 22:31:42Z): folder 13, session 13, task 13, candidate 65, with
+     no new rows since Task 1. Per in-scope session (rank = ascending distance, stable over row order):
+  | P-ID | session | progress now | chosen candidate id | flag | chosen = MB release (rank) | agreed at the gate |
+  |---|---|---|---|---|---|---|
+  | P02 | 2d351339-29a9-4edf-bd6b-4934d2eaf8d3 | IMPORT_COMPLETED 21:58:29Z | 0491ed60-fc0e-4075-9777-d24b8e041980 | APPLY | c0df8104… (rank 2 of a 3-way tie) | rank 1 e4fdb1dc |
+  | P03 | 68afe5b2-1a8a-4f00-a7e1-654e07d60044 | IMPORT_COMPLETED 21:59:44Z | 2954abe9-23f6-4b92-80cc-6c7bc2bda7eb | APPLY | ef528afc… (rank 1) | rank 1 ef528afc |
+  | P04 | ecac6a1b-979a-4e0c-a506-e362ce71b9f0 | WAITING_FOR_USER_SELECTION 22:00:12Z, exc DuplicateException | 86237a06-70e0-4c0d-ba89-6aecde9add10 | APPLY | e4fdb1dc… (rank 1) | rank 3 c33163f3 |
+  | P05 | da12ca78-96cb-454c-898e-13f3123ef5d2 | IMPORT_COMPLETED 22:04:49Z | 1bf89e70-55aa-4764-b393-2c7b4b39c10e | APPLY | 0a74adf8… (rank 1) | rank 1 0a74adf8 |
+  | P06 | a8ce9c19-d71a-4f10-a872-309f77ddcdd8 | IMPORT_COMPLETED 22:01:12Z | 7bf7b2c8-e176-42a9-bbfe-0cb9498d2637 | APPLY | 39fb4603… (rank 1) | rank 1 39fb4603 |
+  | P09 | c5fa0855-b264-4ab8-bb67-587df88b1244 | DELETION_COMPLETED 22:25:49Z | asis-f11a22ac-5962-466e-8cbc-d2de65c8a4e2 | ASIS | as-is (not an MB candidate) | hold |
+  | P12 | c41ce6a1-5bdf-486d-b1e3-e603d20d2582 | IMPORT_COMPLETED 22:07:06Z | 86e00677-e4cf-4eb3-beb2-5320b2d15c65 | APPLY | 581244e0… (rank 1) | rank 1 581244e0 |
+  | P01 | 16ce72cc-fc15-4c94-b736-8058baae545d | DELETION_COMPLETED 22:25:37Z | 6be164d9-6438-44a6-8954-936530313128 | APPLY | 61f964df… (rank 1) | hold |
+  The dangling 07-10 P01 row (folder d2772a06…, session 8ad1c311…) is still PREVIEW_COMPLETED with nothing
+  chosen. P10's session 788f3bba is unchanged (IMPORT_COMPLETED 20:58:05Z).
+
+(A3) How each import was requested. Sources: /logs/redis_workers.log and /logs/beets-flask.log (copied off
+     read-only), plus the compiled frontend and backend source (read-only).
+  Each import is its OWN worker job, `run_import_candidate(<one folder hash>, <one path>,
+  candidate_ids={<that folder's one task>: <one candidate id>}, duplicate_actions={})`, eight jobs in all:
+    21:58:27Z P02 -> 0491ed60 (c0df8104) | 21:59:42Z P03 -> 2954abe9 | 22:00:12Z P04 -> 86237a06 (e4fdb1dc), FAILED |
+    22:01:11Z P06 -> 7bf7b2c8 | 22:01:59Z P01 -> 6be164d9 (61f964df) | 22:04:46Z P05 -> 1bf89e70 |
+    22:06:09Z P09 -> asis-f11a22ac | 22:07:03Z P12 -> 86e00677.
+  A bulk inbox action carries `candidate_ids=None` (the P10 job in 07-11 did). None of these jobs did, so there
+  was NO "import best" batch. Every job is the folder page's import button, whose request carries the task->candidate
+  map the page had selected (frontend index-*.js: `kind:IMPORT_CANDIDATE, selected:{hashes:[folder_hash],…},
+  candidate_ids, duplicate_actions`). This agrees with the operator's "per folder".
+  What the folder page preselects: `[...task.candidates, task.asis_candidate][0]`. The candidates are sorted with
+  a stable sort by distance (frontend: `e.candidates.sort((e,t)=>asis?-1:…:e.distance-t.distance)`) over the API
+  order. A read-only GET of /api_v1/session/full inside the container (127.0.0.1:5001) returns the row order.
+  So the default is rank 1 as this artifact numbers it.
+  - P01 (imported against "hold"): the request carried 6be164d9 = rank 1 = the page's DEFAULT. Pressing import
+    on P01's folder page, with nothing changed, imports the default candidate. The UI has no hold state and no
+    exception gate: every staged folder is one click from import.
+  - P09 (imported against "hold"): the request carried `asis-f11a22ac…`. As-is is NOT the default (the default is
+    rank 1 8727b085), so the "asis" card ("Metadata from disk", listed first on the page) was SELECTED before import.
+  - P02 (agreed rank 1 e4fdb1dc): ranks 1–3 tie EXACTLY (raw 0.25 / max 27.5 = 0.00909090909090909 on all three,
+    read to full precision). API order is e4fdb1dc, c0df8104, c33163f3, so the default was e4fdb1dc. The request
+    carried c0df8104 (card 2: media CD, catno None), so a card other than the default was SELECTED.
+  - P04 (agreed rank 3 c33163f3): the request carried 86237a06 = e4fdb1dc = the DEFAULT. The agreed card was not
+    selected. Ranks 1–3 again tie exactly (0.5067567567567568 / 29.0).
+  This agent cannot see which card was clicked, or why. Measured plainly, the UI request matched the agreed
+  candidate on P03, P05, P06 and P12 (4 of 6 albums that had an agreed candidate). It did not match on P02 or P04.
+  P01 and P09, both held, were imported.
+  P04 failure (beets-flask.log 23:00:12 local = 22:00:12Z): `DuplicateException: You have set the duplicate
+  action to 'ask' in your beets config.` raised at importer/stages.py:500 user_query -> session.resolve_duplicate
+  (session.py:823) with `duplicate_actions={}`. The duplicate is P02, which is album 2, Benson Boone / American
+  Heart. The session stays WAITING_FOR_USER_SELECTION with the exception stored. No library row, file or state
+  entry was written for P04: it is absent from library.db, the tree and the taghistory.
+  Undo jobs: `run_import_undo(8569f3f4… P01, delete_files=True)` 22:25:37Z -> "Import Undo done" 22:25:37.9Z, and
+  `run_import_undo(abbd2ac9… P09, delete_files=True)` 22:25:49Z -> done 22:25:49.9Z. Four
+  `artwork.py:189 ValueError: non-hexadecimal number found in fromhex()` tracebacks (22:25:44Z–22:25:51Z) are the
+  UI requesting cover art for the just-deleted items. They are read-only route errors with no effect on state.
+
+(A4) Tree, atlantis as real root (id -u 0), TZ=UTC, 22:33:43Z, `set -o pipefail; timeout …`:
+  | album dir under /mnt/tank/media/Music | files | entries |
+  |---|---|---|
+  | Various Artists/Now That’s What I Call Music! 117 (P10) | 50 | 50 |
+  | Benson Boone/American Heart (P02) | 10 | 10 |
+  | Benson Boone/Fireworks & Rollerblades (P03) | 15 | 15 |
+  | CYRIL/Stumblin’ In (LUNAX remix) (extended mix) (P06) | 1 | 1 |
+  | Various Artists/NOW That’s What I Call Music! 121 (P05) | 44 | 44 |
+  | Various Artists/Now That’s What I Call Music! 116 (P12) | 47 | 47 |
+  TREE witness P01: `Michael Jackson/` ABSENT (ls: No such file or directory); `find -iname '*Essential Michael
+    Jackson*'` 0. P01 TREE: 32 → 0.
+  TREE witness P09: `find -iname '*Mastermix 90s*'` 0. `Various Artists/` holds exactly the three NOW albums (117,
+    121, 116) and its mtime is 22:25:49.50Z (the P09 undo's rmdir). P09 TREE: 100 → 0.
+  Files newer than 21:50Z: 25 flac + 92 mp3 = 117 = 167 − 50 (P10's are older). Non-audio files newer than 21:50Z: 0.
+  Empty directories under Music: 0 (the undo removed its dirs). Entries not 568:568 by user or group: 0.
+  *.nfo 91 (= the pre-existing 91). `zfs get written@pre-07-pilot tank/media/Music` 2.39G.
+  Inboxes: 01-auto 0, 03-asis 0. 02-review holds 9 entries, and every staged copy is still present at its staged
+  count (import.copy): P02 10, P03 15, P04 10, P05 44, P06 1, P09 100, P12 50, P01 32, P10 52.
+
+(A5) Jellyfin (/root/phase07-0711/jf-read-0711.sh, GET only, JELLYFIN_ADDR 192.168.90.37:8096 resolved
+     22:33:58Z, RC 0): Music LibraryOptions MetadataSavers [] , SaveLocalMetadata false, EnableRealtimeMonitor
+     false, SaveLyricsWithMedia false. DEF-07-11-05's remediation holds. No Jellyfin update has been posted for
+     this plan's albums yet; that is Task 3's targeted POST.
+
+(A6) Authelia 431 fix, re-read read-only on LXC 100: /mnt/fast/appdata/traefik/authelia/configuration.yml sha256
+     cee7cb9e…, `server.buffers` read 16384 / write 16384. `diff` against the backup configuration.yml.bak-20260926-431
+     (sha256 10b08744bca3c53a…, 4096/4096) shows those two lines only. authelia running, StartedAt 21:54:22.54Z,
+     healthy; 0 buffer lines in its log since the restart. The file is NOT in git (appdata).
+
+LIVE-STATE: AGREES with the orchestrator's record. There are 6 albums / 167 items (P10, P02 on c0df8104, P03,
+P06, P05, P12). P01 and P09 were imported and then UNDO-IMPORTED, with tree and DB both back to 0. P04 was never
+written. The state.pickle still carried the P01 and P09 entries (§ C (1)).
+
+## B — BARRIER READ (after the imports and the undo)
+/root/ma-read-0710.sh on LXC 100, SINCE=2026-09-26T21:21:01Z (the gate's VERIFIED), RC 0, read 22:34:06Z:
+four music_sync_filesystem_local--XJaJWNUS_{track,playlist,album,artist} enabled=false next_run=null updated_at
+15:55:04Z, schedule {"type":"hourly","enabled":false,"every":12,…}; control 16 other tasks enabled; pattern
+drive 1/0/0; log 234 lines, last 23:34:06 local; server-start/sync lines later than SINCE: 0 (newest sync still
+2026-09-26T09:17:24Z).
+BARRIER: VERIFIED (4/4 enabled=false, next_run null) at 2026-09-26T22:34:06Z
+MA provider-filtered counts (/root/ma-counts-0710.sh, RC 0, 22:34:06Z): filesystem_local--XJaJWNUS 70 / 1244 / 66
+= the 07-07 baseline; control ZZBOGUS0 0/0/0. MA DID NOT SYNC. It never saw P01 or P09 while they were landed
+(22:02Z–22:25Z), and it has not seen the six albums that are now landed.
+
+## C — STATE SURGERY (a NEW procedure: NOT the 07-11 fence-copy restore)
+AUTHORISATION (operator, verbatim, relayed by the orchestrator): "i am explicitly authorising the work needed to
+get beets and the music system implemented, including live files like state.pickle"
+Operator decision it completes (verbatim, relayed): "Undo P01 + P09, keep rest". Per DEF-07-11-01, UNDO IMPORT
+alone does not revert state.pickle, so a full undo needs a state step as well.
+Why not the 07-11 restore: the fence copy (f6a9a1ad…, taghistory 0) would also erase the six entries that stay
+(P10, P02, P03, P05, P06, P12). With `incremental: yes` still set, their staged folders would then read as
+never-imported. This procedure instead removes EXACTLY two taghistory entries from the live content.
+
+(1) Decode, from /tmp COPIES only (/config never opened by the decoder). This runs as the container's default
+    user, because the /tmp copies are root-owned (07-11's finding). Script /root/phase07-0712/state-decode.py.
+    22:34:13Z `docker exec beets-flask cp /config/state.pickle /tmp/p7-state.pre0712surgery.pickle` cp_rc 0;
+    live /config/state.pickle and the copy both 585c5e56e4347d41e44c7f001025025c30900a27a004bb191410082148f80167
+    (989 B, mtime 22:07:05.78Z = P12's import write; the 22:25Z undos did not touch it).
+    fence copy /tmp/p7-state.fence.r2.pickle f6a9a1ad7aa553e42e53a8056fa80724785111180a5e2122be4f8732d1e4bc7c
+    (= snapshot file = /mnt/fast/safety/phase07/fence/state.pickle, re-hashed on atlantis 22:35Z).
+    dec_rc 0. Both are dicts with keys ['taghistory','tagprogress'] and pickle protocol 4. live taghistory 8 /
+    tagprogress 0; fence 0 / 0.
+    Diff per top-level key: taghistory live−fence +8, fence−live 0; tagprogress 0/0. The 8 entries, all
+    `(b'/downloads/complete/nzb/_inbox/02-review/<folder>',)`:
+      KEEP   P10 VA.Now.That.s.What.I.Call.Music_.117.2024..CD.FLAC..CDNOW117
+      KEEP   P02 Benson Boone-American Heart-24BIT-44KHZ-WEB-FLAC-2025-OBZEN-xpost
+      KEEP   P03 Benson.Boone.-.Fireworks.&.Rollerblades.(2024).[16Bit-44.1kHz].FLAC.[PMEDIA].⭐️-xpost
+      KEEP   P06 Cyril - Stumblin In (LUNAX Remix) (Extended Mix)-(5021732254740)-SINGLE-WEB-2024-ZzZz [9c1feafc0] [2af13ead9]-xpost
+      KEEP   P05 Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY
+      KEEP   P12 VA-Now_That.s_What_I_Call_Music__116__2023
+      REMOVE P01 Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost
+      REMOVE P09 VA-Mastermix.90.s.12.inch.USB.Top.Up-2024
+    Nothing else differs, so the procedure did not stop. P04 has no entry, as expected.
+    beets' own writer (beets/importer/state.py:100-110, read-only): `pickle.dump({"tagprogress": …, "taghistory":
+    …}, f)` at the default protocol, which is 4 on this image's Python 3.12.14. The live file is protocol 4.
+(2) Build (container /tmp only; script /root/phase07-0712/state-build.py, 22:35:07Z, build_rc 0). Asserted in
+    order, and each assertion must hold or no file is written: key set == {taghistory, tagprogress} on both;
+    tagprogress == {} on both; {P01, P09} ⊆ live; live.taghistory == fence ∪ KEEP6 ∪ {P01, P09} exactly. Then
+    wrote `{"tagprogress": live.tagprogress, "taghistory": live.taghistory − {P01, P09}}` with
+    pickle.dump (protocol 4, beets' key order) to /tmp/p7-state.new0712.pickle and decoded it back:
+      new 752 B, proto 4, sha256 9f2d1ba741fb533f4997fae1a1c1e6a1aad6e202a02f80689301301e8f3f9842
+      taghistory 6, tagprogress 0; P01 in new False, P09 in new False
+      new == fence ∪ {six kept}: True        new == live − {P01, P09}: True        fence ∩ {P01, P09}: 0
+    Transferred by `docker cp` to LXC 100 /root/phase07-0712/state.new0712.pickle (9f2d1ba7…), then streamed to
+    atlantis /mnt/fast/safety/phase07/0712-state/state.new0712.pickle (9f2d1ba7…).
+(3) Writer stopped. LXC 100, cwd /mnt/fast/stacks (HEAD 245dfa7, porcelain 0), 22:35:21Z: `docker compose -f
+    stacks/selfhosted/arrs/compose.yaml stop beets-flask` stop_rc 0; Running=false, exited, FinishedAt
+    22:35:23.82Z, exit 143, project label arrs.
+(4) Backup and replace. atlantis as real root (id -u 0), 22:35:50Z, both literals asserted, and the live sha
+    re-asserted == 585c5e56… before any write:
+      cp -p /mnt/fast/appdata/arrs/beets/config/state.pickle /mnt/fast/safety/phase07/0712-state/state.pickle.pre-0712-surgery
+        backup_rc 0; backup 585c5e56e4347d41e44c7f001025025c30900a27a004bb191410082148f80167 568:568 770 989 B mtime 22:07:05.78Z
+      new-file sha re-asserted == 9f2d1ba7… then
+      cp /mnt/fast/safety/phase07/0712-state/state.new0712.pickle /mnt/fast/appdata/arrs/beets/config/state.pickle
+        cp_rc 0
+      before: 585c5e56e4347d41e44c7f001025025c30900a27a004bb191410082148f80167 568:568 770 989 B inode 33942
+      after:  9f2d1ba741fb533f4997fae1a1c1e6a1aad6e202a02f80689301301e8f3f9842 568:568 770 752 B inode 33942
+    Owner, mode and inode were preserved (cp onto the existing file, as 07-11 did). library.db was not touched.
+    # zfs [r]ollback of fast/appdata/arrs is FORBIDDEN (D-16), and no zfs verb was used.
+(5) Writer started, readiness, re-decode. 22:35:57Z `docker compose -f stacks/selfhosted/arrs/compose.yaml start
+    beets-flask` start_rc 0. Running=true, StartedAt 22:35:57.83Z, project arrs, image metasauce/beets-flask:v2.0.0-rc6.
+    Readiness was ready at poll 1 (22:36:03Z): `docker exec -u 568 beets-flask test -r /config/config.yaml` rc 0
+    AND a new watchdog line "Registering watchdog with debounce of 30 seconds for inboxes:
+    ['/downloads/complete/nzb/_inbox/02-review', '/downloads/complete/nzb/_inbox/03-asis']".
+    Mounts: /mnt/tank/media -> /media RW=true; /config RW=true; /downloads RW=true; /logs RW=true; config.yaml
+    RW=false; beets-flask/config.yaml RW=false.
+    `bash scripts/check-beets-config.sh` (workstation, 22:36:49Z) cbc_rc 0, FAILURES total 0, arm 1 blind 0, arm 2
+    blind 0, READY_ROUTE watchdog-log-line; `CONF-01 import.copy = true`, `CONF-01 import.move = false`,
+    `import.write = true` (reported).
+POST-SURGERY IMPORT KEYS: PASS (copy=true move=false write=true)
+    Watchdog after the start: "skipping enqueue" for all 9 folders in 02-review, P01 and P09 included (a session
+    exists for each path). No new preview or import job ran. beets-flask DB 13/13/13/65, unchanged.
+    Re-decode at 22:37:30Z: `docker exec beets-flask cp /config/state.pickle /tmp/p7-state.post0712surgery.pickle`
+    cp_rc 0. Live and copy are both 9f2d1ba7…, so beets-flask did not rewrite the file on start. Decode dec_rc 0:
+    taghistory 6 = exactly the six KEEP entries above, tagprogress 0, proto 4, 752 B; fence − live 0.
+    library.db 22a72aff… is unchanged by the surgery; items 167, albums 6.
+STATE SURGERY: PASS (state.pickle 585c5e56… -> 9f2d1ba7…; P01 and P09 taghistory entries ABSENT; decoded == fence ∪ {P10 P02 P03 P05 P06 P12}; backup /mnt/fast/safety/phase07/0712-state/state.pickle.pre-0712-surgery 585c5e56…; writer up, keys PASS)
+P01 and P09 FULL UNDO: TREE yes (32→0, 100→0), DB yes (albums 5 and 7 gone, 167 items left), STATE yes (by this surgery)
