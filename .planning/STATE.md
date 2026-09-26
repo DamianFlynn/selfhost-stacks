@@ -8,7 +8,7 @@ progress:
   total_phases: 10
   completed_phases: 5
   total_plans: 141
-  completed_plans: 135
+  completed_plans: 136
   percent: 50
 ---
 
@@ -21,13 +21,15 @@ See: .planning/PROJECT.md (updated 2026-08-17)
 **Core value:** New music downloads land in the library correctly tagged, through exactly one
 pipeline that someone owns.
 **Current focus:** Phase 07 — pilot-12-albums-end-to-end (**PLANNED 2026-09-25, 17 plans in
-13 waves, 11 of 17 executed — 07-01 … 07-11 done**; Phase 06 stays `In Progress` at `gaps_found` 5/6 with CONF-04 carried to
+13 waves, 12 of 17 executed — 07-01 … 07-12 done**; Phase 06 stays `In Progress` at `gaps_found` 5/6 with CONF-04 carried to
 Phase 7 E6 — `/gsd-verify 06` is still owed)
 
 **Definition of done (CONS-04):** a file is imported only when verified with `ffprobe` on the file
 *and* visible in both Jellyfin and Music Assistant. Never "tool configured".
 
 ## Current Position
+
+**PLAN 07-12 COMPLETE (with findings) — `STATE 07-12-PARTIAL: P09 P01 held` — 2026-09-26/27.** Library 7 albums / 177 items: P10 + P02 (imported-other `c0df8104`, 3-way tie, UI sent the 2nd card), P03, P04 (`c33163f3` → `American Heart [093624834588]/`, %aunique by catno as predicted; via candidate search + "Keep both"), P05, P06, P12. P01 and P09 were imported **against hold** (beets-flask sends the *selected* card and has no hold state — DEF-07-12-04/05) and fully undone: UNDO IMPORT + operator-authorised **state.pickle surgery** (removed only their taghistory entries; backup `/mnt/fast/safety/phase07/0712-state/`; DEF-07-12-06). Inbox 431: Authelia `server.buffers` 4096 → 16384 (appdata, NOT in git; DEF-07-12-03 — inbox URL grows with folder count). Findings: ⚠ **P06 not in Jellyfin** (new top-level `CYRIL/` not added by the targeted update — DEF-07-12-11, fix owed before 07-15); P04 tag-diff exit 1 is an instrument defect on a truncated last frame (DEF-07-12-09); import-order check FAIL (DEF-07-12-12); P03 junk country `PMEDIA` (DEF-07-12-10); pre-existing `Fireworks & Rollerblades (2024)` beside P03 (DEF-07-12-08). ⚠ **P09 still staged in 02-review — one click from import.** MA barrier holds (70/1244/66). Next: 07-13 (DJ pair).
 
 **PLAN 07-11 COMPLETE — `STATE 07-11-RERUN-LANDED` — 2026-09-26 (run 2).** Run 1 stopped RECONCILE-FAIL: Jellyfin's Music `MetadataSavers=["Nfo"]` wrote 2 `.nfo` sidecars despite `SaveLocalMetadata=false` (DEF-07-11-05) — saver cleared to `[]` and the two files removed as a recorded pre-undo cleanup (`3f1f3d4`, operator-approved); DEF-07-11-06 (no check asserts MetadataSavers) OPEN. Run 2: `UNDO IMPORT` covered TREE (50→0) and DB (50→0) but **NOT `state.pickle`** (DEF-07-11-01) — ⚠ **a complete undo = UNDO IMPORT + file-restore of `state.pickle` with beets-flask stopped**. Operator chose restore-then-rerun: state.pickle cp'd back from `fast/appdata/arrs@pre-07-pilot` (no rollback), re-import via the same session/candidate → **EQUALITY VERDICT: PASS**, **QUALITY: PASS**. **D-17 NOT FIRED** — `tank/media/Music@pre-06-41-conf04-reprobe` held for 07-16. P10 in library (50 items); MA barrier still up (70/1244/66). Next: 07-12.
 
