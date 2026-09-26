@@ -406,3 +406,104 @@ Question: re-run P10 now?
   restore-db-state-then-rerun — NOT offered (DB COVERED yes).
 Recommendation: hold first per the plan's ordering; on the merits the executor recommends `restore-then-rerun`,
 because leaving the entry means every later fresh read of this folder is silently skipped.
+
+## Task 2 — OPERATOR ANSWER (run 2, continuation agent)
+OPERATOR ANSWER (verbatim, relayed by the orchestrator, recorded 2026-09-26T20:35Z): restore-then-rerun
+DISPOSITION: restore-then-rerun
+D-17 for this run: NOT FIRED (fixed by this branch, G-01; also by STATE COVERED no). Snapshot
+tank/media/Music@pre-06-41-conf04-reprobe HELD for plan 07-16's operator gate.
+
+=== 07-11 RUN 2 — Task 3 (restore-then-rerun arm, G-04 writer quiescence) ===
+Readings 2026-09-26T20:35:09Z–20:40:32Z. The only writes: compose stop/start of beets-flask and ONE literal `cp`
+of state.pickle. No zfs write verb, no library.db write, no beets-flask DB edit, no file removed.
+
+## Task 3 — RESTORE PRE-READS
+(atlantis as real root, id -u 0, 20:35:09Z)
+  snapshot file /mnt/fast/appdata/arrs/.zfs/snapshot/pre-07-pilot/beets/config/state.pickle
+    sha256 f6a9a1ad7aa553e42e53a8056fa80724785111180a5e2122be4f8732d1e4bc7c (568:568 770, 47 B) = fence safety copy
+    /mnt/fast/safety/phase07/fence/state.pickle f6a9a1ad… (= 07-09) -> SOURCE GATE PASS.
+  live /mnt/fast/appdata/arrs/beets/config/state.pickle 224fe2792fc67ed7c550155eaad0434d65c5bb24e8ee45d53e61c9a80580bae3,
+    568:568 mode 770, 155 B, mtime 2026-09-26T19:44:28.92Z (the import's write), inode 33942.
+  snapshots (exact whole-line, RC 0): fast/appdata/arrs@pre-07-pilot, tank/media/Music@pre-07-pilot,
+    tank/media/Music@pre-06-41-conf04-reprobe, tank/downloads@pre-phase5 (listed only) — all PRESENT.
+(LXC 100, 20:35:15Z) beets-flask Running=true, project label `arrs`,
+  config_files /mnt/fast/stacks/stacks/selfhosted/arrs/compose.yaml, image metasauce/beets-flask:v2.0.0-rc6;
+  host checkout HEAD 245dfa7, porcelain clean. library.db bc651d79… (= post-undo), state.pickle 224fe279….
+  beets-flask own DB (mode=ro): folders 5, sessions 5, tasks 5, candidates 25; P10 session 788f3bba
+  DELETION_COMPLETED (updated 20:25:05); task b931b749 chosen 073c7ff8, APPLY. Its 5 candidates, stored order,
+  distance: 073c7ff8 -> b057dee8-02ea-4b48-8681-f5e3255bc47d 0.00605 (rank 1); 409db422 -> 8a4b23b7… 0.127;
+  eabb8e46 -> 7247b584… 0.533; 5d9f6f53 -> 688a9668… 0.536; c5c0fe38 -> 562327cc… 0.603.
+
+## Task 3 — RESTORE (1) writer stopped
+  LXC 100, cwd /mnt/fast/stacks, 20:35:49Z: `docker compose -f stacks/selfhosted/arrs/compose.yaml stop beets-flask`
+  stop_rc 0; `docker inspect` -> Running=false, exited, FinishedAt 20:35:51.89Z, exit 143 (SIGTERM). PASS.
+## Task 3 — RESTORE (2) file copy (atlantis as real root, 20:36:00Z)
+  # zfs [r]ollback of fast/appdata/arrs is FORBIDDEN on every branch; this file copy is the only sanctioned restore
+  Both literals asserted, then the single command:
+    cp /mnt/fast/appdata/arrs/.zfs/snapshot/pre-07-pilot/beets/config/state.pickle /mnt/fast/appdata/arrs/beets/config/state.pickle
+  cp_rc 0.
+  before: 224fe2792fc67ed7c550155eaad0434d65c5bb24e8ee45d53e61c9a80580bae3  568:568 770 155 B inode 33942
+  after:  f6a9a1ad7aa553e42e53a8056fa80724785111180a5e2122be4f8732d1e4bc7c  568:568 770  47 B inode 33942
+  after == fence safety copy f6a9a1ad… -> BYTE-EQUALITY GATE PASS. Owner and mode preserved (same inode,
+  cp onto an existing file). library.db NOT touched (DB COVERED yes; not the DB branch).
+## Task 3 — RESTORE (3) writer started, readiness
+  20:36:07Z `docker compose -f stacks/selfhosted/arrs/compose.yaml start beets-flask` start_rc 0; Running=true,
+  StartedAt 20:36:08.16Z, project label `arrs`, config_files …/arrs/compose.yaml, image v2.0.0-rc6.
+  Readiness (bounded 180 s, 5 s polls): ready at poll 2, 20:36:13Z — `docker exec -u 568 beets-flask test -r
+  /config/config.yaml` rc 0 (uid 568 beetle; no `abc` on this image, 07-09 correction) AND a NEW watchdog line:
+    2026-09-26T20:36:11.555470292Z [INFO] beets-flask.wdog: Registering watchdog with debounce of 30 seconds for inboxes: ['/downloads/complete/nzb/_inbox/02-review', '/downloads/complete/nzb/_inbox/03-asis']
+  -> exactly 02-review and 03-asis; 01-auto 0. Migrations: none pending.
+  Mounts (docker inspect, all bind): /mnt/tank/media -> /media RW=true (D-22); config.yaml RW=false;
+    beets-flask/config.yaml RW=false; /config RW=true; /downloads RW=true; /logs RW=true.
+  `bash scripts/check-beets-config.sh` (workstation, 20:36:25Z) cbc_rc 0, FAILURES total 0, arm 1 blind 0, arm 2
+    blind 0, READY_ROUTE watchdog-log-line. Anchored sed on ANSI-stripped output, exact strings:
+    copy=[true] move=[false] write=[true]. D-29 before == after: library.db bc651d79… / state.pickle f6a9a1ad….
+POST-RESTORE IMPORT KEYS: PASS (copy=true move=false write=true)
+## Task 3 — RESTORE (4) re-decode after restart
+  20:36:47Z live /config/state.pickle sha256 f6a9a1ad… (beets-flask did NOT rewrite it on start; 568:568 770 47 B,
+  mtime 20:36:00.72Z = the cp). Fresh copy `docker exec beets-flask cp /config/state.pickle
+  /tmp/p7-state.postrestore.r2.pickle` rc 0, sha256 f6a9a1ad…. Fence copy /tmp/p7-state.fence.r2.pickle
+  (Task 1's, survived the stop/start) re-hashed f6a9a1ad…. Decoded with /venv/bin/python as the container's
+  default user, cwd /tmp, /tmp copies only (/config never written), dec_rc 0:
+    fence keys ['taghistory','tagprogress']; taghistory set 0; tagprogress dict 0
+    live  keys ['taghistory','tagprogress']; taghistory set 0; tagprogress dict 0
+    P10 STATE KEY taghistory (b'/downloads/complete/nzb/_inbox/02-review/VA.Now.That.s.What.I.Call.Music_.117.2024..CD.FLAC..CDNOW117',) -> ABSENT
+    set difference live - fence / fence - live: 0/0 on taghistory, 0/0 on tagprogress
+    decoded live == decoded fence: True
+RESTORE: PASS (state.pickle f6a9a1ad… = fence; P10 taghistory entry ABSENT; decoded == fence; writer up, keys PASS)
+
+## Task 3 — beets-flask after the restart (reads only; its DB not edited)
+  docker logs since 20:36:07Z, the only folder line:
+    2026-09-26T20:36:21.593057446Z [INFO] beets-flask.wdog: Watchdog: skipping enqueue /downloads/complete/nzb/_inbox/02-review/VA.Now.That.s.What.I.Call.Music_.117.2024..CD.FLAC..CDNOW117
+  beets-flask DB (mode=ro) 20:37:44Z: folders 5, sessions 5, tasks 5, candidates 25 — IDENTICAL to the pre-stop
+  read. No new folder row, session, task or candidate. Session 788f3bba still DELETION_COMPLETED (updated 20:25:05);
+  task b931b749 still chosen 073c7ff8 / APPLY.
+  Why (source, read-only, /repo/backend/beets_flask — recorded as source reading): watchdog/inbox.py:185-201 skips
+  the enqueue whenever a session already exists for the folder path, unless it is a PREVIEW and the folder hash
+  changed; the staged copy is unchanged, so no re-preview. importer/progress.py:35 `DELETION_COMPLETED = 21 #
+  after a successful deletion, we can restart import`; importer/session.py:671-677 resets such a session to
+  PREVIEW_COMPLETED when an import is enqueued; session.py:1047 keeps old_paths "to allow a reimport after an undo".
+  So the re-import goes through the EXISTING session 788f3bba and its stored candidate 073c7ff8 (rank 1, b057dee8).
+  Executor housekeeping: one read-only `find /` inside the container (looking for the source dir) walked into the
+  bind mounts and was killed from the host (`docker top` pids, 3 processes; 0 left). It wrote nothing.
+
+## Task 3 — pre-handoff state (reads only, 20:40:23Z–20:40:32Z)
+  atlantis: `Various Artists/` ABSENT; names *117* under Music 0; staged
+    _inbox/02-review/VA.Now.That.s.What.I.Call.Music_.117.2024..CD.FLAC..CDNOW117 PRESENT, 52 files (set equal to
+    the 07-07 manifest at Task 2, 20:2xZ; unchanged since — no re-stage needed); inboxes 01-auto 0 / 02-review 1 /
+    03-asis 0; `zfs get written@pre-07-pilot tank/media/Music` 170K (= post-undo).
+  library.db (mode=ro): items 0, albums 0.
+  MA barrier: /root/ma-read-0710.sh SINCE=2026-09-26T20:28:25Z, RC 0, read 20:40:23Z: 4/4
+    music_sync_filesystem_local--XJaJWNUS_{track,playlist,album,artist} enabled=false next_run null (updated_at
+    15:55:04Z); control 16 enabled; drive 1/0/0; log 221 lines; server-start/sync lines later than SINCE: 0.
+BARRIER: VERIFIED (4/4 enabled=false, next_run null) at 2026-09-26T20:40:23Z
+  MA counts (/root/ma-counts-0710.sh, RC 0, 20:40:23Z): filesystem_local--XJaJWNUS 70 / 1244 / 66 = baseline;
+  ZZBOGUS0 0/0/0; local *117* 0.
+
+## Task 3 — HANDOFF (checkpoint:human-action — the operator re-imports in the UI)
+Same candidate, same session: beets-flask session 788f3bba-4a9a-48ae-b00a-fc7a85c124ba (folder c455ff4d…,
+status DELETED), candidate 073c7ff8-b50b-45d6-adfc-ca687650ccc7 = MB release b057dee8-02ea-4b48-8681-f5e3255bc47d,
+rank 1, distance 0.00605 — the run-1 candidate. The operator replies only after the import finishes; the next agent
+verifies live state (library.db 50 items for b057dee8, a NEW taghistory entry for the staged path, session
+IMPORT_COMPLETED) before recording anything, then continues Task 3 (post-07-P10-rerun measurements, EQUALITY,
+QUALITY, D-17 NOT FIRED line, Phase 6 status line).
