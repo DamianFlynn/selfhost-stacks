@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-26T15:10:00.000Z"
+last_updated: "2026-09-26T16:30:00.000Z"
 progress:
   total_phases: 10
   completed_phases: 5
@@ -28,6 +28,8 @@ Phase 7 E6 — `/gsd-verify 06` is still owed)
 *and* visible in both Jellyfin and Music Assistant. Never "tool configured".
 
 ## Current Position
+
+**PLAN 07-10 STOPPED (PARTIAL) — `STOP STATE 07-10-HOLD` — 2026-09-26. No album landed.** P-01 measured via the MA API from LXC 100 (D-39): MA 2.11.0b2 syncs `filesystem_local--XJaJWNUS` every 12 h from its **task scheduler** (not provider config) — FOUND. Operator barrier: the four `music_sync_filesystem_local--XJaJWNUS_*` tasks **DISABLED 15:55:04Z** (orchestrator), verified read-only; operator override "P-01: FOUND with the barrier verified counts as continue." P01 staged by reflink, preview 5 MB candidates — **D-29 NONE PASSES**: P01 is incomplete at source (disc 1 = tracks 7–21, 15 files vs 21 in every release). Operator chose **"swap gate album"** (DISPOSITION hold): staged copy removed, source manifest unchanged, `library.db` items 0, inboxes 0; a dangling unconfirmed beets-flask preview row (`d2772a06…`) remains. Only P10 (Now 117, 2-disc tagged, gap-free) is a clean replacement candidate. Next: **replan the D-10 gate slot**. See `07-10-PARTIAL.md`.
 
 **PLAN 07-09 COMPLETE — `STATE 07-09-GRANTED` — 2026-09-26 (RUN 3, resume-post-grant).** Operator chose "rm + redeploy via arrs": the stopped stray-project `beets` container was `docker rm`-ed and beets-flask recreated via `arrs/compose.yaml` at 14:58:36Z (host HEAD `3ba4754`); **compose project label now `arrs`**. `/media` RW=true (D-22), watchdog lists `02-review` + `03-asis` only, import keys copy=true move=false write=true (PASS), inboxes 0, items 0, written 0. qhc exit 1 on the two expected blocks only (consumers CONF-04 exit 3, import sweep UNKNOWN on an empty library). Fence `pre-07-pilot` on both datasets held. ⚠ Readiness `-u abc` does not exist in this image — use uid 568 (beetle). Next: 07-10.
 
@@ -2299,6 +2301,8 @@ Recent decisions affecting current work:
 
 ### Blockers/Concerns
 
+- **⚠ OPEN (07-10): gate album swap needs a replan (D-10).** P01 is incomplete at source and D-29 refused all five candidates; the operator chose to swap the gated first album. Candidate: P10 Now 117 (only drawn bucket-A album multi-disc by tag and gap-free; MB per-disc count unchecked). The replan must carry the P-01 override/barrier and say what happens to P01 in 07-12. `07-10-PARTIAL.md`.
+- **⚠ OPEN, OWED: Music Assistant fs-sync tasks are DISABLED** (`music_sync_filesystem_local--XJaJWNUS_{artist,album,playlist,track}`, since 2026-09-26T15:55:04Z). RE-ENABLE (`tasks/set_enabled enabled:true`) at/after plan 07-15's MA proof. Until then MA sees no new local content. Re-verify read-only (all four `enabled=false`) immediately before every import 07-10…07-14 — an MA restart may re-create them enabled, and a restart itself triggers a sync.
 - ~~**⚠ OPEN, OPERATOR ACTION: LXC 100's `/mnt/fast/stacks` checkout has DIVERGED from
   `origin/main`.**~~ **RESOLVED by the operator 2026-09-25, same day, and verified.** Workstation
   `HEAD`, `origin/main` and host `HEAD` all measured at **`f6d94c3`** with **0 ahead / 0 behind**

@@ -381,3 +381,45 @@ D-29 VERDICT: NONE PASSES. Every candidate fails the per-disc track count (disc 
   Per Task 2: "Recommend `hold` if no candidate passes."
 
 Post-preview (16:1xZ): barrier re-read VERIFIED (4/4 disabled); library.db items 0. Nothing imported.
+
+## Task 2 — the import gate
+
+OPERATOR ANSWER: question "P01 (The Essential Michael Jackson) is incomplete at source (disc 1 = tracks 7–21 only). D-29 refuses all candidates on track count. What do you want to do?"; options "hold" / "import rank 1 (D-29 exception)" / "swap gate album"; verbatim answer "swap gate album"; selected option text: "Unstage P01 and pick a complete multi-disc album as the gated first import instead (D-10 change; needs a replan/redraw of the gate slot)." Relayed verbatim by the orchestrator ~2026-09-26T16:3xZ.
+  Normalisation: `swap` is not one of the plan's option ids (hold | imported | imported-other); the
+  answer imports nothing, so it is recorded as `hold`, with the verbatim answer as the reason.
+DISPOSITION: hold
+
+UNSTAGE (operator "swap gate album"), atlantis as real root, /root/unstage-p01.sh:
+  Assertions before removal: target begins /mnt/tank/downloads/complete/nzb/_inbox/02-review/,
+  != source, both dirs exist, realpath == path (no symlink), staged file count == 32.
+  16:24:21.136Z  rm -rf -- /mnt/tank/downloads/complete/nzb/_inbox/02-review/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost
+                 rc 0; staged copy GONE. Reflink copy, so no data was freed or lost.
+  Inboxes after: 01-auto 0 audio / 0 entries, 02-review 0 / 0, 03-asis 0 / 0.
+  SOURCE (…/nzb/music/Michael.Jackson.-…-xpost) re-manifested (relpath, size, sha256, mtime):
+  UNCHANGED vs 07-07 (32 rows).
+  NOT IMPORTED: library.db (mode=ro) items 0 after removal.
+  beets-flask state (read-only, sqlite mode=ro; not edited): the P01 folder row d2772a06… remains,
+  session 8ad1c311… progress PREVIEW_COMPLETED, task chosen_candidate_id None, choice_flag None —
+  never confirmed. It is now a DANGLING entry: a folder row whose full_path no longer exists (4
+  folder rows, 4 sessions in total). The watchdog reacted to the deletion by re-walking the path:
+  33 `FileNotFoundError … could not list directory …/02-review/Michael.Jackson…` tracebacks in
+  beets-flask's log at 16:24Z, then silence (count unchanged 30 s later); no new session created;
+  container running, restarts 0, StartedAt unchanged 14:58:36Z. Whether the UI still lists the
+  stale preview was not checked (the executor does not operate the UI).
+  Barrier re-read after unstage: VERIFIED (4/4 music_sync_filesystem_local--XJaJWNUS_* disabled).
+
+GATE-SLOT CANDIDATES (read-only, from 07-SAMPLE.md § The twelve and the 07-07 manifest; nothing
+staged). Bucket A = not the DJ set (P07, P08, P09, P11 excluded). Per-disc counts are derived from
+the flat filenames' track numbers (each number appearing twice = two discs):
+  P10  Now 117 (unsorted/, 50 flac + .cue/.log, CD rip)  disctotal {2}, disc {1,2}  track numbers
+       01–24 ×2 and 25, 26 ×1 = 26 + 24 (or 25 + 25) = 50, contiguous, no gaps. The ONLY drawn
+       bucket-A album that is multi-disc BY TAG and gap-free. MusicBrainz track count per disc NOT
+       yet checked — the preview is that check. Albumartist `Various` (not `Various Artists`),
+       comp false. -> the one candidate.
+  P12  Now 116 (unsorted/, 47 mp3)  disctotal {0}, disc {0} — NO disc tags. Numbers 01–23 ×2 and
+       24 ×1 = 24 + 23 = 47, contiguous. Two discs of content, but untagged: the D-29 per-disc
+       check and criterion 6's "discs {1,2}" cannot be read from the files. Not a clean gate.
+  P05  Now 121 (music/, 44 mp3)  disctotal {1}, disc {1} — numbers 01–22 ×2 = 22 + 22. Two discs
+       of content MIS-tagged as one disc. Not a clean gate either.
+  P02, P03, P04, P06: single-disc (disc {1} or {0}); not multi-disc.
+  P01: multi-disc but incomplete (disc 1 tracks 1–6 absent) — the reason for the swap.
