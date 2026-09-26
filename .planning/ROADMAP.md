@@ -1597,7 +1597,7 @@ item nobody owns.)*:
       `.planning/phases/06-tagger-configuration-and-dry-run/06-REVIEW-GAP.md` and
       `.planning/phases/06-tagger-configuration-and-dry-run/06-DISPOSITIONS-GAP.md`.
 
-**Plans**: 17 plans in 13 waves (planned 2026-09-25; revised the same day against cross-AI review round 1 — `07-REVIEWS.md`, all 15 CONFIRMED + 7 PLAUSIBLE findings — and again against round 2, all 16 CONFIRMED + operator-promoted P7R2-10 + PLAUSIBLE P7R2-18…20; 0/17 executed)
+**Plans**: 17 plans in 13 waves (planned 2026-09-25; revised the same day against cross-AI review round 1 — `07-REVIEWS.md`, all 15 CONFIRMED + 7 PLAUSIBLE findings — and again against round 2, all 16 CONFIRMED + operator-promoted P7R2-10 + PLAUSIBLE P7R2-18…20; 0/17 executed; **gap-replanned 2026-09-26** after 07-10 stopped PARTIAL on P01 — 07-10 … 07-17 revised in place for the operator's gate-slot swap to P10, the amended P-01 barrier rule and per-import barrier re-verify, recorded in `07-SAMPLE-AMENDMENT.md` A1 when 07-10 runs; 9/17 executed at that point)
 
 Plans:
 - [x] 07-01-PLAN.md — evidence map registered before the run (D-31) + argued D-13 amendment of the `unsorted` rule
@@ -1609,12 +1609,12 @@ Plans:
 - [x] 07-07-PLAN.md — per-album BEFORE capture, source manifests, D-24 census and consumer baselines
 - [x] 07-08-PLAN.md — the ONE D-22 commit: rw for beets-flask + every flag and check that moves with it (D-21..D-23, C1..C10)
 - [x] 07-09-PLAN.md — GATED: two-dataset fence then the grant, first end-to-end quick-health-check (D-16, E3)
-- [ ] 07-10-PLAN.md — GATED: P01 (Michael Jackson – The Essential) imported through 02-review and verified (D-10, D-20, D-29)
-- [ ] 07-11-PLAN.md — GATED: P01 backed out with UNDO IMPORT on tree/DB/state.pickle, re-run equal; D-17 mechanical release (D-14, D-15, D-17)
-- [ ] 07-12-PLAN.md — GATED: remaining bucket-A albums imported per album and verified
+- [ ] 07-10-PLAN.md — GATED: P10 (Now That's What I Call Music! 117) imported through 02-review and verified — gate slot swapped from P01 by `07-SAMPLE-AMENDMENT.md` A1, written first; P01's disposition operator-gated; P-01 barrier rule (D-10 amended, D-20, D-29) — runs 1–5 PARTIAL on P01, resumes at run 6
+- [ ] 07-11-PLAN.md — GATED: P10 backed out with UNDO IMPORT on tree/DB/state.pickle, re-run equal; D-17 mechanical release (D-14, D-15, D-17)
+- [ ] 07-12-PLAN.md — GATED: remaining bucket-A albums imported per album and verified (in-scope set from the amendment; P01 only via its D-29 exception gate)
 - [ ] 07-13-PLAN.md — GATED: the DJ pair imported and routed to DJ/ by D-08, DJ fields verified
 - [ ] 07-14-PLAN.md — GATED: E5 Def Leppard repair as a named operation (D-24)
-- [ ] 07-15-PLAN.md — GATED: Jellyfin first, one Music Assistant sync last; D-28, E6 second measurement (D-05), D-24 after
+- [ ] 07-15-PLAN.md — GATED: Jellyfin first, one Music Assistant sync last, then the MA fs-sync barrier lifted; D-28, E6 second measurement (D-05), D-24 after
 - [ ] 07-16-PLAN.md — GATED: project snapshot register + one-gate mechanical prune (D-19)
 - [ ] 07-17-PLAN.md — GATED: evidence assembled for /gsd-verify 07 (no verdict), beets.md closure, operator trust verdict (D-31)
 **Research**: not needed — the diff is a comparison over two `ffprobe` datasets, and the undo path
