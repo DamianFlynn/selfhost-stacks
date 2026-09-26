@@ -1,0 +1,99 @@
+# 07-11-p10-undo-rerun.txt — plan 07-11: P10 undo (UNDO IMPORT), re-run, D-17.
+# Append-only. Verbs that must never appear unbracketed here are written `zfs [d]estroy` and
+# `zfs [r]ollback`. Nothing credential-bearing is recorded (CONVENTIONS §7).
+
+=== 07-11 RUN 1 ===
+Run start: 2026-09-26T20:07:05Z. Workstation HEAD 884e396; host /mnt/fast/stacks at 245dfa7 (DEF-07-10-03 fix deployed).
+
+## Task 1 — RESUME RECONCILIATION (reads only, G-09)
+Ledger newest token (LC_ALL=C /usr/bin/grep -oE '^(STOP )?STATE 07-1[01]-[A-Z][A-Z-]*[A-Z]' <ledger> | tail -n 1):
+  `STATE 07-10-LANDED`, with its line `P10 LANDED at 2026-09-26T19:44:29Z — /media/Music/Various Artists/Now That’s What I Call Music! 117/, items 50, …`.
+  No 07-11 token exists (first entry). What the token asserts: 50 files, 50 items, P10 state entries present;
+  07-10 § Task 3 (ownership read 19:47:42Z): "The album dir holds exactly 50 entries, all .flac (no art, no .cue/.log copied)".
+
+Readings (2026-09-26T20:07Z–20:12Z):
+  (1) Snapshots, atlantis as real root, `zfs list -H -t snapshot -o name | grep -xE '<4 exact names>'`, RC 0:
+        fast/appdata/arrs@pre-07-pilot            PRESENT
+        tank/media/Music@pre-07-pilot             PRESENT
+        tank/media/Music@pre-06-41-conf04-reprobe PRESENT
+        tank/downloads@pre-phase5                 PRESENT (listed only; never a target)
+      Both pre-07-pilot names present -> MATCHES.
+  (2) P10 destination file count, atlantis, `set -o pipefail; timeout 60 find "/mnt/tank/media/Music/Various Artists/Now That’s What I Call Music! 117" -type f | wc -l`, RC 0:
+        51    <- token/07-10 asserts 50 -> DOES NOT MATCH
+      Composition: 50 *.flac + 1 `album.nfo`. One level up, `Various Artists/artist.nfo` also exists.
+      Library-wide `find -name '*.nfo'`: 91 apps:apps (pre-existing) + 2 owned 100000:100000 (exactly these two).
+      `find . ! -user 568`: exactly these two files, nothing else in the library.
+      stat (TZ=UTC), atlantis:
+        Various Artists/artist.nfo                                         birth 2026-09-26T19:51:43.870Z  owner 100000:100000 mode 777 size 600
+        Various Artists/Now That’s What I Call Music! 117/album.nfo        birth 2026-09-26T19:52:05.963Z  owner 100000:100000 mode 777 size 9315
+        Various Artists/ (dir)                                             birth 19:44:19.361Z (the import) mtime 19:51:43.871Z (the nfo write)
+      Attribution: both births fall inside 07-10's Jellyfin step (one targeted POST /Library/Media/Updated
+      at 19:50:23Z; polls 19:51:42Z–19:51:56Z; ArtistItems read 19:53:21Z) and AFTER 07-10's
+      19:47:42Z ownership/entry-count read, which is why 07-10 recorded 50 entries truthfully and
+      missed them. Owner 100000 = container uid 0 through LXC 100's idmap, i.e. Jellyfin writing as root.
+      Jellyfin library options, read-only (GET /Library/VirtualFolders, /root/phase07-0711/jf-read-0711.sh,
+      no POST in the script — grep -c POST = 0), 20:08:10Z, Music library (/media/Music):
+        SaveLocalMetadata=false, EnableRealtimeMonitor=false, SaveLyricsWithMedia=false,
+        MetadataSavers=["Nfo"], LocalMetadataReaderOrder=["Nfo"]
+      Reading: the documented Music freeze (SaveLocalMetadata off, CLAUDE.md § Constraints "Jellyfin side
+      effects") does NOT stop the Nfo MetadataSaver, which wrote on NEW-ITEM creation from a file-scope
+      targeted update, not only on an explicit FullRefresh. -> DEF-07-11-05.
+  (3) P10 items/albums, read-only (`docker exec -i -u 568 beets-flask /venv/bin/python -`, sqlite mode=ro, RC 0):
+        items 50, albums 1; mb_albumid b057dee8-02ea-4b48-8681-f5e3255bc47d: items 50, albums 1 -> MATCHES.
+      sha256 (docker exec beets-flask sha256sum):
+        /config/library.db   a9e7036f39fbac698eea123d315f9e45c25a35cd4a32af4fc4b0b823108ea87d (= 07-10 § DEF-07-10-03 FIX reading)
+        /config/state.pickle 224fe2792fc67ed7c550155eaad0434d65c5bb24e8ee45d53e61c9a80580bae3 (= same)
+  (4) state.pickle, decoded from COPIES only:
+        live -> `docker exec beets-flask cp /config/state.pickle /tmp/p7-state.preundo.pickle` (sha256 224fe279… = live)
+        fence -> atlantis /mnt/fast/safety/phase07/fence/state.pickle (sha256 f6a9a1ad… = 07-09 fence value)
+                 piped to LXC 100 /root/phase07-0711/fence-state.pickle, `docker cp` to beets-flask:/tmp/p7-state.fence.pickle (sha256 f6a9a1ad…); /config never written.
+      Decoded with /venv/bin/python (pickle.load of each /tmp copy):
+        fence: dict keys ['taghistory', 'tagprogress']; taghistory set len 0; tagprogress dict len 0
+        live:  dict keys ['taghistory', 'tagprogress']; taghistory set len 1; tagprogress dict len 0
+      P10 STATE KEY(S) (set difference live - fence, per top-level key):
+        taghistory  +1: (b'/downloads/complete/nzb/_inbox/02-review/VA.Now.That.s.What.I.Call.Music_.117.2024..CD.FLAC..CDNOW117',)
+        tagprogress  0
+        fence - live: 0 on both keys.
+      The staged `_inbox/02-review/<folder>` path IS the entry (as a 1-tuple of bytes) -> entries present, MATCHES.
+  (5) D-17 target `tank/media/Music@pre-06-41-conf04-reprobe`: PRESENT (reading (1)).
+  Also read (not part of the token's assertion): staged copy still in `_inbox/02-review` (1 dir, 52 files,
+  mtime 19:46 local); fence safety copies library.db fbbdde0c… / state.pickle f6a9a1ad… (= 07-09);
+  `zfs get written@pre-07-pilot tank/media/Music` = 1.06G; Jellyfin P10 MusicAlbum count 1 (d18d5c99…).
+
+RESUME RECONCILIATION: INCONSISTENT — P10 destination file count 51 (50 .flac + album.nfo written by Jellyfin 19:52:05Z, owner 100000:100000; plus Various Artists/artist.nfo 19:51:43Z) vs STATE 07-10-LANDED (50 files; "album dir holds exactly 50 entries, all .flac")
+
+Why this is a stop and not a footnote (recorded for the operator, not a decision):
+  - TREE witness: UNDO IMPORT reverses the beets import; these two files are not beets items. If they
+    survive the undo, the plan's TREE count reads `no (pre 51 -> post 1)` and `Various Artists/` stays
+    non-empty; removing them by hand is the hand-repair criterion 5 forbids. The pre-undo witness cannot
+    be taken against a tree that already disagrees with the token.
+  - Criterion 3 / QUALITY q2: 2 library files are not 568:568 — an owner finding that post-dates 07-10's
+    PASS reading (taken at 19:47:42Z) and would be an unresolved q2 count at 07-11's QUALITY line.
+  - The same Jellyfin step runs for every one of the 11 albums still to land (07-12/07-13).
+
+BARRIER READ (taken for the record; no gate presented): /root/ma-read-0710.sh on LXC 100, SINCE=2026-09-26T19:54:06Z, RC 0,
+  read 20:07:55Z: four music_sync_filesystem_local--XJaJWNUS_{track,playlist,album,artist} enabled=false,
+  next_run null, updated_at 15:55:04Z; control 16 enabled; pattern drive 1/0/0; log 215 lines; server-start/sync
+  lines later than SINCE: 0 (newest sync still 09:17:24Z).
+BARRIER: VERIFIED (4/4 enabled=false, next_run null) at 2026-09-26T20:07:55Z
+  MA provider-filtered counts 20:07:59Z (/root/ma-counts-0710.sh): 70 / 1244 / 66 = 07-07 baseline; bogus
+  instance 0/0/0; local albums *117*: 0.
+
+STOP: no gate presented; no UNDO IMPORT requested; no write to the estate by this run (reads only;
+the only files written were /root/phase07-0711/{fence-state.pickle,jf-read-0711.sh} on LXC 100 and
+/tmp copies inside beets-flask).
+DISPOSITION: reconcile-fail
+Ledger: STOP STATE 07-11-RECONCILE-FAIL appended. DEF-07-11-05 filed in the phase deferred-items.md.
+The operator decides out of band. On re-entry this plan re-runs Task 1 from RESUME RECONCILIATION.
+
+## Task 2 — skipped (DISPOSITION: reconcile-fail)
+
+## Task 3 — skip arm (reconcile-fail)
+No re-run, no restore, no staging. The D-17 conditions were not evaluated past (i): (ii)–(iv) have no
+UNDO WITNESS and no re-run to read.
+D-17 TRIGGER: NOT FIRED — RECONCILE-FAIL at Task 1 (no UNDO WITNESS, no re-run, no EQUALITY VERDICT)
+  `tank/media/Music@pre-06-41-conf04-reprobe` is HELD for plan 07-16's operator gate (or a re-entry of this
+  plan that reaches its four conditions). No zfs write verb issued; `tank/downloads@pre-phase5` listed only.
+  Verb recipes driven both ways in scratch (outside this artifact): `grep -cE 'zfs [d]estroy'` real verb -> 1,
+  bracketed form -> 0; `grep -cE 'zfs [r]ollback'` real verb -> 1, bracketed form -> 0.
+Phase 6 status line appended under DEF-06-52-01 (NOT FIRED; DEF-06-45-01 still OPEN).

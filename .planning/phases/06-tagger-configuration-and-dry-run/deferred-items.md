@@ -1878,6 +1878,12 @@ the live item is `DEF-06-45-01`, and its trigger is now mechanical.
 **Urgency:** discharged as a decision; **high to not destroy the snapshot by accident** until Phase 7
 Success Criterion 1 is satisfied.
 
+**Status 2026-09-26T20:12Z (plan 07-11 run 1):** trigger **NOT FIRED** — plan 07-11 stopped at
+`STOP STATE 07-11-RECONCILE-FAIL` before the undo gate (the P10 tree held 51 files vs 50: Jellyfin
+`.nfo` writes, `DEF-07-11-05` in the Phase 7 `deferred-items.md`). No UNDO IMPORT was witnessed and
+nothing was re-run. `tank/media/Music@pre-06-41-conf04-reprobe` is **HELD** (present, re-listed
+20:07Z) for a re-entry of 07-11 or plan 07-16's operator gate; `DEF-06-45-01` **still OPEN**.
+
 ---
 
 ## DEF-06-52-02 — PROCESS DEFECT: the entry-criteria block is not a closed world, and a criteria-only read is never sufficient evidence of absence

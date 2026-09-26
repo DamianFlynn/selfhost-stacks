@@ -35,3 +35,17 @@ DEF-07-10-03: check-music-import.sh class 1 is blind on a real beets 2.12 librar
   f75c577f… = repo. Live criterion 7 on P10, 2026-09-26T20:05:06Z: EXIT 0, class1=50 class2=50
   class3=2 checkable rows, FINDINGS 0, UNKNOWN 0; library.db sha256 unchanged. Details:
   artifacts/07-10-p01-import.txt § DEF-07-10-03 FIX.
+
+DEF-07-11-05: Jellyfin writes `.nfo` into the Music library on NEW-ITEM creation, despite the Music freeze — 07-10's targeted `POST /Library/Media/Updated` created `Various Artists/artist.nfo` (born 2026-09-26T19:51:43Z) and `Various Artists/Now That’s What I Call Music! 117/album.nfo` (born 19:52:05Z), both owner 100000:100000 (container root through LXC 100's idmap), mode 777
+  Filed by 07-11 run 1 Task 1 (RESUME RECONCILIATION -> INCONSISTENT, 51 files vs the token's 50;
+  STOP STATE 07-11-RECONCILE-FAIL). Jellyfin Music library options read-only 20:08:10Z:
+  SaveLocalMetadata=false, EnableRealtimeMonitor=false, but MetadataSavers=["Nfo"] — the Nfo saver is
+  not gated by SaveLocalMetadata. CLAUDE.md § Constraints "Jellyfin side effects" says the freeze
+  gates the automatic save path and that an explicit FullRefresh still writes; this is a third path
+  (targeted update of new files), not covered by that sentence. 07-10's 19:47:42Z entry/owner read
+  preceded the write, so its criterion-3 PASS was true when taken. Consequences: (a) the TREE paired
+  witness for UNDO IMPORT cannot read `post 0` if the undo leaves these non-beets files, and removing
+  them by hand is criterion 5's forbidden hand-repair; (b) 2 files not 568:568 = an unresolved q2
+  (criterion 3 owner) count; (c) the same step runs for every album still to land in 07-12/07-13.
+  Not fixed: operator decides out of band (e.g. whether to clear MetadataSavers for Music before any
+  further targeted update, how the undo witness counts non-beets files, and what happens to these two).
