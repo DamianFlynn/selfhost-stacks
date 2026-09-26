@@ -375,3 +375,59 @@ RE-ENTRY (P7R2-04): re-run Task 1 → POST-GRANT RECONCILIATION (both names pres
     (b) amend the plan's deploy/stop commands to the owning project `-f stacks/selfhosted/arrs/beets/flask.yaml`.
   Note for (a)/(b): while stopped, /media is still :ro, so no path to the library exists; the new
   configs are already in appdata, so any restart of the old container would read two inboxes.
+
+## RUN 3 — 2026-09-26T14:56:41Z
+
+Re-entry after RUN 2's GRANT-FAIL (P7R2-04). Task 1 in its post-grant form, then Task 2 as resume-post-grant.
+
+LEDGER READ: `LC_ALL=C /usr/bin/grep -oE '^(STOP )?STATE 07-09-[A-Z][A-Z-]*[A-Z]' artifacts/07-pilot-ledger.txt | tail -n 1`
+  → STOP STATE 07-09-GRANT-FAIL
+NEWEST 07-09 TOKEN: 07-09-GRANT-FAIL
+GOVERNING 07-09 TOKEN: 07-09-GRANT-FAIL
+Expected reading for a post-grant stop: both pre-07-pilot names PRESENT, written 0, fence safety copies
+at their fence sha256, beets-flask State.Running=false, item count 0 from a copy.
+
+MEASURED STATE (2026-09-26T14:56:41Z .. 14:58Z)
+(a) instruments: unchanged since RUN 2 (823fe04, 70cd38c, 88beeff, 926f1ff ancestors of HEAD).
+(b) workstation: clean; HEAD 29f8062 (RUN 2's docs commit), ahead of origin/main by 1, behind 0.
+(c) host LXC 100: status_rc 0, 0 lines → CLEAN; HEAD dc84c5b; 0 ahead → pull --ff-only possible.
+(d) atlantis, list_rc 0, exact whole-line counts on the name column:
+    tank/media/Music@pre-07-pilot   = 1 PRESENT
+    fast/appdata/arrs@pre-07-pilot  = 1 PRESENT
+    tank/downloads@pre-phase5       = 1 PRESENT
+    written tank/media/Music = 0
+    fence safety copies (atlantis): library.db fbbdde0c416e72b9884e56c562fd88eaa4da447926e1cb6cc17c3e04aee7da1a,
+      state.pickle f6a9a1ad7aa553e42e53a8056fa80724785111180a5e2122be4f8732d1e4bc7c (= the RUN 2 fence values)
+(e) container stopped, so read from a COPY: library.db copied to atlantis
+    /mnt/fast/safety/phase07/reentry/library.db (copy_rc 0, sha256 fbbdde0c… = fixture); atlantis
+    /usr/bin/python3 sqlite3 mode=ro → items 0, albums 0 (count_rc 0). live state.pickle f6a9a1ad… (= fixture).
+    (A first attempt made the copy on LXC 100, where /mnt/fast/safety is the container's ext4 root,
+    not the dataset — that copy and its empty reentry dir were removed; the atlantis copy is the reading.)
+(f) inboxes (atlantis): 01-auto 0/0, 02-review 0/0, 03-asis 0/0 (audio/entries), rc 0.
+(g) beets-flask: running=false status=exited, compose project label `beets`, id 6e84f0c9853f…;
+    Mounts — ALL type=bind, no named volume:
+      /mnt/tank/media -> /media RW=false        (the grant failed before the recreate)
+      /mnt/fast/appdata/arrs/beets/config -> /config RW=true
+      …/beets-flask/config.yaml -> /config/beets-flask/config.yaml RW=false
+      …/config.yaml -> /config/config.yaml RW=false
+      /mnt/tank/downloads -> /downloads RW=true
+      /mnt/fast/appdata/arrs/beets/logs -> /logs RW=true
+(h) appdata configs as installed in RUN 2: 7d726454… / 875fcf7e… (= repo), mode 760 568:568 (nfsv4 ACL).
+(i) consumers: as RUN 2 (Jellyfin 200 from workstation; MA 200 from LXC 100).
+POST-GRANT RECONCILIATION: CONSISTENT (07-09-GRANT-FAIL)
+
+DEPENDENCY REASONING
+1-2. Instruments and evidence map unchanged since RUN 2 (same ancestors). 3. Host clean, 0 ahead;
+the one new commit is docs only. 4. Room unchanged (written 0). 5. Grant is beets-flask only.
+6. Review budget unspent. Cause of the GRANT-FAIL: the live container belonged to compose project
+`beets`, not `arrs`. Because every mount is a bind, removing the stopped container loses no data.
+RECOMMENDATION: resume-post-grant with the container removed, then deploy through arrs/compose.yaml.
+
+GATE (post-grant form): hold / review-first / resume-post-grant (offered: CONSISTENT above).
+OPERATOR ANSWER (2026-09-26, after 14:48Z; relayed verbatim by the orchestrator from the operator's
+  AskUserQuestion response to "beets-flask is owned by a stray compose project 'beets' instead of the
+  'arrs' stack the repo declares. How should 07-09 resume the grant?" — options "rm + redeploy via arrs
+  (Recommended)" / "deploy via beets project" / "hold"): "rm + redeploy via arrs (Recommended)"
+OPERATOR'S STATED FIX: `docker rm beets-flask` (the stopped stray-project container only), then
+  redeploy through stacks/selfhosted/arrs/compose.yaml.
+DISPOSITION: resume-post-grant
