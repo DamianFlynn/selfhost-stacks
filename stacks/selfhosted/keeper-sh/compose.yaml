@@ -154,7 +154,7 @@ services:
   mcp:
     container_name: cal-mcp
     hostname: keeper-mcp
-    image: ghcr.io/ridafkih/keeper-mcp:2.23
+    image: ghcr.io/ridafkih/keeper-mcp:2.24
     restart: unless-stopped
     env_file: .env
     environment:
