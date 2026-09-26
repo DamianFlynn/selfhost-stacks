@@ -8,7 +8,7 @@ progress:
   total_phases: 10
   completed_phases: 5
   total_plans: 141
-  completed_plans: 133
+  completed_plans: 134
   percent: 50
 ---
 
@@ -21,13 +21,15 @@ See: .planning/PROJECT.md (updated 2026-08-17)
 **Core value:** New music downloads land in the library correctly tagged, through exactly one
 pipeline that someone owns.
 **Current focus:** Phase 07 — pilot-12-albums-end-to-end (**PLANNED 2026-09-25, 17 plans in
-13 waves, 9 of 17 executed — 07-01 … 07-09 done**; Phase 06 stays `In Progress` at `gaps_found` 5/6 with CONF-04 carried to
+13 waves, 10 of 17 executed — 07-01 … 07-10 done**; Phase 06 stays `In Progress` at `gaps_found` 5/6 with CONF-04 carried to
 Phase 7 E6 — `/gsd-verify 06` is still owed)
 
 **Definition of done (CONS-04):** a file is imported only when verified with `ffprobe` on the file
 *and* visible in both Jellyfin and Music Assistant. Never "tool configured".
 
 ## Current Position
+
+**PLAN 07-10 COMPLETE — `STATE 07-10-LANDED` — 2026-09-26 (run 6, gate album P10).** P10 (Now 117) imported through `02-review` at 19:44:19Z: rank 1 `b057dee8-02ea-4b48-8681-f5e3255bc47d` (D-29 strong, 24+26 == 24+26), 50 items at `/media/Music/Various Artists/Now That’s What I Call Music! 117/`. Criteria 3, 4, 8 and Jellyfin half of 6 PASS; oracle diff 50/50 MATCH-CHANGED-TAG (DEF-07-10-01 VA dir, DEF-07-10-02 13 MB-title names). ⚠ **Criterion 7 UNKNOWN (exit 3)** — DEF-07-10-03: `check-music-import.sh` does not join beets' relative item paths to `directory`, so class 1 is blind on a real library; 07-11's gate must decide. Barrier VERIFIED 5× in run 6; MA not synced (70/1244/66). P01 DISPOSITION `exception-gate` (07-12). The operator's first "imported" relay preceded the actual confirm; the pre-record live-state check caught it. Next: 07-11 (undo + re-run).
 
 **PHASE 07 GAP-REPLANNED — 2026-09-26 (after 07-10 PARTIAL).** Plans 07-10 … 07-17 revised in place, none renumbered; 07-01 … 07-09, their summaries and artifacts untouched. Operator scope: **gate slot P01 → P10** (`Now 117`, 50 FLAC, discs {1,2}; "ok now 117"), recorded by the revised 07-10 as its FIRST act in a new `07-SAMPLE-AMENDMENT.md` (A1; 07-SAMPLE/EXPECTED-TREE/EVIDENCE-MAP never edited; downstream reads SAMPLE + AMENDMENT). **P01's disposition is an operator gate** at 07-10 Task 2 — `hold` (default) | `exclude` | `exception-gate` (re-staged last in 07-12 behind a separate D-29 EXCEPTION gate, default hold). **P-01 amended:** FOUND continues only with the MA barrier verified read-only immediately before staging; the BARRIER READ (07-10 Task 1 Step 3(d)) runs before every import/write in 07-10 … 07-14; 07-15 re-enables the four fs-sync tasks after its MA proof (or records the re-enable OWED). Mechanical fixes: readiness uid 568, `arrs/compose.yaml … beets-flask`, `/venv/bin/beet` 2.12.0, MA calls from LXC 100, atlantis scratch for bulk. 07-10 resumes at **run 6** from `STOP STATE 07-10-HOLD`. Next: `/gsd-execute-phase 07`.
 
