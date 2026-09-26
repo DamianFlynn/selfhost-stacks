@@ -1,0 +1,183 @@
+# 07-09 — the two-dataset fence and the D-22 grant (D-16, E3, C11, G-04..G-06, P7R2-01/04/08)
+# Each run writes under its own `## RUN <n>` heading; earlier sections are never edited, and both task
+# verifies read only the newest section. Write verbs are written bracketed in prose (`zfs [s]napshot`,
+# `zfs [r]ollback`, `zfs [d]estroy`) so the unbracketed-verb counts stay honest (CONVENTIONS §8/§9).
+#
+# ⛔ D-16 fence, stated once here and repeated at the Task 2 call site: `zfs [r]ollback` on
+# fast/appdata/arrs is FORBIDDEN on every branch (Sonarr/Radarr/Lidarr state lives there) — recovery
+# of library.db / state.pickle is a file copy from
+# /mnt/fast/appdata/arrs/.zfs/snapshot/pre-07-pilot/beets/config/. `zfs [d]estroy` is not issued.
+# tank/downloads@pre-phase5 is out of scope on every branch (E4, D-17).
+
+## RUN 1 — 2026-09-26T00:08:37Z
+
+Task 1 only (measure, reason, ask). No write issued by this section: every remote command below is a
+read. The one side effect is `git fetch origin` in the host checkout, which the plan's (c) requires
+and which updates remote-tracking refs only (working tree and HEAD untouched).
+
+LEDGER READ: `LC_ALL=C /usr/bin/grep -oE '^(STOP )?STATE 07-09-[A-Z][A-Z-]*[A-Z]' artifacts/07-pilot-ledger.txt | tail -n 1`
+  → the ledger file does not exist yet (`ls` rc 1: No such file or directory). No token has ever been written.
+NEWEST 07-09 TOKEN: none
+GOVERNING 07-09 TOKEN: none
+Expected reading for GOVERNING=none: the fresh reading — both pre-07-pilot names ABSENT,
+tank/downloads@pre-phase5 PRESENT, /media RW=false, three inboxes registered, item count 0.
+
+MEASURED STATE
+
+(a) instruments landed — workstation, 2026-09-26T00:08:37Z
+  07-01 … 07-08 SUMMARY.md: all eight present and non-empty (test -s).
+  git merge-base --is-ancestor <c> HEAD (HEAD = ad80b2e2583ec3528c12050e6117acd0f3e36a77):
+    07-EVIDENCE-MAP.md    added in 823fe04   rc=0 (ancestor)
+    07-SAMPLE.md          added in 70cd38c   rc=0 (ancestor)
+    07-EXPECTED-TREE.txt  added in 88beeff   rc=0 (ancestor)
+    D-22 commit           926f1ff            rc=0 (ancestor; found by git log --grep='D-22 — grant /media rw')
+
+(b) workstation git
+  git status --porcelain: empty (clean) before this artifact was written.
+  after git fetch origin: origin/main = 7b7bc980d45648d53ffe80871790dcf010127ecd
+  git rev-list --count origin/main..HEAD = 30   (commits to push; +1 once this artifact is committed)
+  git rev-list --count HEAD..origin/main = 0    (PASS — push is a fast-forward)
+
+(c) host checkout — LXC 100 (172.16.1.159), /mnt/fast/stacks; ssh rc 0
+  `git status --porcelain` (timeout 30, rc captured into a variable, then counted): status_rc=0, lines=0 → CLEAN
+    (read through a variable and its RC, not a compound pipe — the memory "host-has-uncommitted-
+    production-changes" trap; nothing printed AND rc 0 AND count 0.)
+  rev-parse HEAD = 0c95427bbad615c25b9c9471b610fc261f97507b
+  git fetch origin (timeout 60): fetch_rc=0; main 0c95427..7b7bc98
+  vs origin/main 7b7bc98: ahead=0 behind=10 → PASS (0 ahead; `pull --ff-only` can succeed once the
+    workstation's 30(+1) commits are pushed on top of 7b7bc98).
+  Note: the same fetch showed a new Renovate branch `renovate/lscr.io-linuxserver-beets-2.x`. It is
+    not on main and does not touch beets-flask's image (metasauce/beets-flask:v2.0.0-rc6); recorded only.
+
+(d) ZFS — atlantis (172.16.1.158), id -u = 0, hostname atlantis; ssh rc 0; every zfs list rc 0
+  zfs list -t snapshot -H -o name -r tank/media/Music:
+    tank/media/Music@pre-project
+    tank/media/Music@safe05-watch-t0
+    tank/media/Music@pre-chown
+    tank/media/Music@pre-phase5-chown
+    tank/media/Music@backup-20260922
+    tank/media/Music@inc-20260923-1319
+    tank/media/Music@pre-06-41-conf04-reprobe
+    tank/media/Music@backup-20260925
+    tank/media/Music@inc-20260925-1343
+    tank/media/Music@inc-20260925-1755
+    tank/media/Music@inc-20260925-2149
+    tank/media/Music@inc-20260926-0020
+  zfs list -t snapshot -H -o name -r fast/appdata/arrs:
+    fast/appdata/arrs@backup-20260925
+    fast/appdata/arrs@inc-20260925-1343
+    fast/appdata/arrs@inc-20260925-1755
+    fast/appdata/arrs@inc-20260925-2149
+    fast/appdata/arrs@inc-20260926-0020
+  zfs list -t snapshot -H -o name -r tank/downloads:
+    tank/downloads@pre-project
+    tank/downloads@pre-chown
+    tank/downloads@pre-phase5
+    tank/downloads@pre-phase5-chown
+    tank/downloads/mybook-music-archive@copied-from-mybook-20260922
+    tank/downloads/mybook-music-archive@post-rescue-20260922
+    tank/downloads/mybook-music-archive@backup-20260922
+    tank/downloads/mybook-music-archive@with-m4-20260922
+    tank/downloads/mybook-music-archive@inc-20260923-1319
+    tank/downloads/mybook-music-archive@backup-20260925
+    tank/downloads/mybook-music-archive@inc-20260925-1343
+    tank/downloads/mybook-music-archive@inc-20260925-1755
+    tank/downloads/mybook-music-archive@inc-20260925-2149
+    tank/downloads/mybook-music-archive@inc-20260926-0020
+  Exact whole-line counts (grep -cxF over the combined listing, list_rc=0):
+    tank/media/Music@pre-07-pilot    = 0   ABSENT  (expected ABSENT — PASS)
+    fast/appdata/arrs@pre-07-pilot   = 0   ABSENT  (expected ABSENT — PASS)
+    tank/downloads@pre-phase5        = 1   PRESENT (expected PRESENT — PASS)
+  zfs list -o name,used,avail,refer (rc 0):
+    fast                465G  1.30T   136K
+    fast/appdata/arrs  4.88G  1.30T  4.82G
+    tank               41.9T  5.26T   160K
+    tank/media/Music   33.9G  5.26T  33.9G
+  zfs get -H -o value mountpoint fast/appdata/arrs = /mnt/fast/appdata/arrs   (PASS, read from atlantis)
+  zfs get -H -p -o value written tank/media/Music = 0   (recorded; the library is still :ro)
+  Observation: the `inc-20260926-0020` snapshots show the backup incremental ran at 00:20 local; it
+    takes its own names and does not collide with pre-07-pilot.
+  → fresh reading, as GOVERNING=none expects. Reconciled: CONSISTENT with `none`.
+
+(e) beets DB — LXC 100, docker exec beets-flask (timeout 60); ssh rc 0
+  sha256sum: sha_rc=0
+    fbbdde0c416e72b9884e56c562fd88eaa4da447926e1cb6cc17c3e04aee7da1a  /config/library.db     (= fixture, 07-05 § 4)
+    f6a9a1ad7aa553e42e53a8056fa80724785111180a5e2122be4f8732d1e4bc7c  /config/state.pickle   (= fixture, 07-05 § 4)
+  /venv/bin/python sqlite3 `file:/config/library.db?mode=ro`: items 0, albums 0; count_rc=0 (expected 0 — PASS)
+
+(f) inboxes — atlantis as root; find -type f over the audio extension set (mp3 flac m4a ogg opus wav
+    aac wma aiff alac), pipefail, timeout 60; ssh rc 0
+    _inbox/01-auto     audio=0 rc=0 entries=0
+    _inbox/02-review   audio=0 rc=0 entries=0
+    _inbox/03-asis     audio=0 rc=0 entries=0
+  All 0 (expected — PASS).
+
+(g) beets-flask container — docker inspect (inspect_rc=0), docker logs (logs_rc=0)
+  running running=true started=2026-09-25T23:31:10.593073583Z image=metasauce/beets-flask:v2.0.0-rc6
+  Mounts:
+    /mnt/fast/appdata/arrs/beets/logs -> /logs RW=true
+    /mnt/tank/media -> /media RW=false                           (expected false now — PASS)
+    /mnt/fast/appdata/arrs/beets/config -> /config RW=true
+    /mnt/fast/appdata/arrs/beets/config/beets-flask/config.yaml -> /config/beets-flask/config.yaml RW=false
+    /mnt/fast/appdata/arrs/beets/config/config.yaml -> /config/config.yaml RW=false
+    /mnt/tank/downloads -> /downloads RW=true
+  Current watchdog registration line (newest):
+    [INFO] beets-flask.wdog: Registering watchdog with debounce of 30 seconds for inboxes: ['/downloads/complete/nzb/_inbox/01-auto', '/downloads/complete/nzb/_inbox/02-review', '/downloads/complete/nzb/_inbox/03-asis']
+  Three inboxes, 01-auto included (expected pre-grant — PASS).
+
+(h) appdata modes/owners (stat from LXC 100) and digests
+  660 568:568 /mnt/fast/appdata/arrs/beets/config/config.yaml              sha256 661c729738a12be61d94dcf0cf0bfb6b0cdaa9c996d2ed9fffb9bc494394668f
+  660 568:568 /mnt/fast/appdata/arrs/beets/config/beets-flask/config.yaml  sha256 949bd1f3b13501d448865ce2d19195db209050279f8a0022e97cd7e54d835db8
+  Both equal the PREVIOUS digests in beets.md's register (661c7297… commit 1a64286; 949bd1f3… commit f1848e2).
+  The install in Task 2 must produce the NEW digests 7d726454… / 875fcf7e… with `install -m 660 -o 568 -g 568`.
+
+(i) consumers reachable — workstation, curl --max-time 15
+  Jellyfin  http://172.16.1.76:8096/System/Info/Public  http=200 rc=0  (Version 10.11.11)
+  Music Assistant  http://172.16.1.31:8095/info  http=200 rc=0  (server_version 2.11.0b2)
+
+DEPENDENCY REASONING
+
+1. Instruments hardened and committed? Yes. D-11/D-12: 07-02 commits 506f74f (self-test) and 0e3775f
+   (diff-music-tags fails closed on an ambiguous join), driven on real data in d4de9a0. D-25: 07-03
+   commits e8d24c2 (check-music-import.sh) and 317c1a4 (folded into qhc). D-27: 07-04 commit 40cc63d
+   (route-dj-album.sh, registered in the D-04 exemption register). D-30: 07-05 commits d39af8a / 7e1cc71
+   (first live oracle --run pre-grant, library.db/state.pickle IDENTICAL to fixture afterwards). All are
+   ancestors of HEAD; all eight SUMMARYs present ((a)).
+2. Evidence map committed before any write? Yes — 823fe04 is an ancestor of HEAD ((a)), and no write
+   has been taken in this phase: both pre-07-pilot names absent, written=0, /media RW=false ((d),(g)).
+3. Can the host fast-forward? Yes — host checkout clean (status_rc 0, 0 lines), HEAD 0c95427, 0 ahead
+   / 10 behind origin/main 7b7bc98; the workstation is 0 behind origin/main and 30 ahead, so push then
+   `pull --ff-only` is a pure fast-forward with no divergence to resolve ((b),(c)).
+4. Room? The twelve pilot folders total 8,303,985,089 bytes (7.73 GiB, 347 files) by summing column 3
+   of 07-07's source-manifest-before.tsv. import.copy duplicates that once onto tank/media/Music:
+   ~8.3 GB against tank's 5.26T avail (<0.2 %). fast has 1.30T avail against library.db growth of
+   a few MB and two safety copies of files that are currently near-empty. Ample on both pools.
+5. Dormant-arm interpretation (07-08), plainly: the D-22 commit grants rw to beets-flask ONLY. The
+   CLI beets container (beets.yaml, not included in arrs/compose.yaml) keeps /media:ro, and qhc's CLI
+   arm still asserts ro. So after the grant there is exactly one process that can write the library,
+   and it is the one with the per-album confirm UI. `grant-both` would make the dormant CLI arm a
+   second writer (D-04 forbids it the real library) and turn the freeze census red when it is started.
+   gui.library.readonly stays true, which is what blocks browser DELETE/PATCH on library items.
+6. The single budgeted review (D-31): `/gsd-code-review 07` now would cover the source diffs of plans
+   07-02 … 07-08 — diff-music-tags.sh ambiguous-join guard, check-music-import.sh and its qhc fold-in,
+   route-dj-album.sh, the oracle/arm1 edits to check-beets-config.sh, and the D-22 commit's seven files
+   (flask.yaml/beets.yaml mounts, both beets configs, qhc D-23 arm, check-music-freeze.sh exception).
+   It would NOT cover 07-14/07-15's later consumer edits, which do not exist yet. 07-REVIEWS.md is the
+   cross-AI PLAN review, not a code review; the budget is unspent. The budget is spent the moment it runs.
+
+RECOMMENDATION: every precondition reads green — no could-not-look, no reconciliation gap, host able
+to fast-forward, instruments committed, room ample. The measurements support `proceed`. `review-first`
+is the defensible alternative if you want the one budgeted review spent on the instruments before
+they meet a writable library (the cheapest point for a finding, D-31) rather than kept for later.
+`grant-both` is not recommended (question 5). Resume options are not offered (GOVERNING=none).
+
+GATE: Take the two-dataset fence and deploy the D-22 grant now?
+  hold          — take nothing, deploy nothing
+  review-first  — run the ONE budgeted /gsd-code-review 07 over 07-02 … 07-08, then re-gate
+  proceed       — push, pull on the host, fence, grant, verify
+  grant-both    — proceed, but grant rw to the dormant CLI arm too
+  (resume-partial-fence / resume-post-grant: NOT offered — no CONSISTENT reconciliation of either kind on record)
+  Any other answer is treated as `hold`.
+
+AWAITING OPERATOR ANSWER (no answer recorded yet; the `OPERATOR ANSWER` and `DISPOSITION:` lines are
+written by the continuation run once the operator has answered).
