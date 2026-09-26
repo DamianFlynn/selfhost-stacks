@@ -597,3 +597,10 @@ next_run null, updated_at unchanged 15:55:04Z; control 16 enabled; drive 1/0/0; 
 sync lines after 18:45:16Z (log 197 lines, last 19:48:56 local).
 BARRIER: VERIFIED (4/4 enabled=false, next_run null) at 2026-09-26T18:48:56Z
 library.db (mode=ro) items 0 after the preview. Nothing imported.
+
+## Task 2 — the import gate (P10) and P01's disposition
+BARRIER READ immediately before presenting (18:49:53Z, SINCE 18:48:56Z): four tasks enabled=false,
+next_run null; control 16 enabled; drive 1/0/0; 0 server-start or sync lines after 18:48:56Z.
+BARRIER: VERIFIED (4/4 enabled=false, next_run null) at 2026-09-26T18:49:53Z
+Staged copy present in _inbox/02-review (52 files); library.db items 0.
+Gate presented to the operator via the orchestrator (checkpoint:decision). Awaiting both answers.
