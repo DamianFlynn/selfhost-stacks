@@ -1,0 +1,373 @@
+# 07-12-nine-imports.txt — plan 07-12: the remaining bucket-A albums through 02-review (D-10, D-20, D-29)
+# Revised plan (07-SAMPLE-AMENDMENT.md A1): P10 was the gate album (07-10/07-11) and is NOT in this set;
+# P11 moves to 07-13 as a DJ twin; P01 is staged LAST behind its own D-29 EXCEPTION gate.
+# Every UTC time below is read off the host that did the work. LXC 100 and atlantis logs print local
+# time (UTC+1); beets-flask's /logs/*.log lines are UTC+1 and are converted where quoted.
+# Nothing in this plan issues a `beet` command, a zfs write verb, a Jellyfin refresh or an MA write.
+
+=== 07-12 RUN 1 (2026-09-26, 21:09Z onward) ===
+Workstation HEAD 8a0c2ec; host /mnt/fast/stacks HEAD 245dfa7, porcelain 0 lines (the host lags the
+workstation by planning-docs commits only).
+
+## Task 1 — preconditions (G-08, P7R2-10), read from the LEDGER
+
+Extraction (the Task 1 verify's own recipe): newest line containing `P10 LANDED (re-run` = ledger line 22;
+newest `STOP STATE 07-11-` = ledger line 21 (`07-11-RECONCILE-FAIL`, run 1), which is EARLIER than line 22,
+so no 07-11 stop token follows the verdict; newest `QUALITY: ` line quoted below.
+PRECONDITION P10 VERDICT: P10 LANDED (re-run) — EQUALITY VERDICT: PASS
+PRECONDITION P10 QUALITY: QUALITY: PASS (P10; ffprobe/DB mismatches 0; owner not 568:568 0; UNEXPLAINED drops 0; MISSING_AFTER 0; diff exit 0; sweep exit 0; 07-10 findings unresolved 0)
+PRECONDITION: PASS
+
+Further preconditions (read-only):
+  Fence (atlantis as real root, 21:10:28Z, `zfs list -H -t snapshot -o name | grep -xcE`): 2 of 2 exact
+    whole-line names — tank/media/Music@pre-07-pilot (creation 1790434107), fast/appdata/arrs@pre-07-pilot
+    (creation 1790434108).                                                                  TRUE
+  Inboxes (atlantis, 21:10:28Z): 01-auto 0 entries / 0 audio; 03-asis 0 / 0; 02-review 1 entry / 50 audio =
+    `VA.Now.That.s.What.I.Call.Music_.117.2024..CD.FLAC..CDNOW117` — the P10 remnant that import.copy leaves
+    (07-11 re-run; its beets-flask session 788f3bba is IMPORT_COMPLETED and the watchdog skips it). No other
+    audio.                                                                                   TRUE (recorded)
+  `git ls-files --error-unmatch .planning/phases/07-pilot-12-albums-end-to-end/07-SAMPLE-AMENDMENT.md`: tracked. TRUE
+  beets-flask (docker inspect, 21:10:39Z): running, StartedAt 2026-09-26T20:36:08Z, restarts 0; mounts
+    /downloads RW=true, /media RW=true, /config RW=true, config.yaml RW=false, beets-flask/config.yaml RW=false.
+  library.db (docker exec -u 568 beets-flask /venv/bin/python, sqlite mode=ro): items 50, albums 1 —
+    album id 1 'Various Artists' / 'Now That’s What I Call Music! 117' / b057dee8… (P10, the only album).
+  beets-flask own DB (mode=ro, not edited): folder 5, session 5, task 5, candidate 25 before staging.
+  tank/downloads 3.51T used / 5.42T avail (atlantis 21:10:28Z).
+
+BARRIER READ before staging (/root/ma-read-0710.sh on LXC 100, SINCE=2026-09-26T21:04:58Z = 07-11's last
+VERIFIED, RC 0; D-39 login, secrets gated `600 root`, no credential in argv), read 21:10:44Z:
+    music_sync_filesystem_local--XJaJWNUS_track     enabled=false next_run=null updated_at 15:55:04.249Z
+    music_sync_filesystem_local--XJaJWNUS_playlist  enabled=false next_run=null updated_at 15:55:04.236Z
+    music_sync_filesystem_local--XJaJWNUS_album     enabled=false next_run=null updated_at 15:55:04.224Z
+    music_sync_filesystem_local--XJaJWNUS_artist    enabled=false next_run=null updated_at 15:55:04.213Z
+    schedule on all four {"type":"hourly","enabled":false,"every":12,…}; present 4, disabled 4; control 16
+    other tasks enabled=true; pattern drive 1/0/0; log 227 lines, last 22:10:44 local; server-start/sync lines
+    later than SINCE: 0 (newest sync still 2026-09-26T09:17:24Z, server start 2026-09-25T21:15:38Z).
+BARRIER: VERIFIED (4/4 enabled=false, next_run null) at 2026-09-26T21:10:44Z
+
+## Task 1 — in-scope set (P7R2-03, amended)
+EXECUTION SET SOURCE: 07-SAMPLE-AMENDMENT.md
+  Amendment line read: `EXECUTION SET 07-12: P02 P03 P04 P05 P06 P09 P11 P12` (07-SAMPLE.md's older
+  `EXECUTION SET 07-12:` line, which still lists P10, is superseded and not read).
+  `DJ TWINS AMONG FRESH DRAWS: P11` read from 07-SAMPLE.md (the amendment does not restate it).
+IN-SCOPE P-IDS: P02 P03 P04 P05 P06 P09 P12
+MOVED TO 07-13: P11
+  Union {P02 P03 P04 P05 P06 P09 P12} ∪ {P11} = the amendment's EXECUTION SET 07-12 exactly. P10 is not in scope.
+EXCEPTION CANDIDATE 07-12: P01 (amendment) — handled in its own section below.
+
+## Task 1 — D-13 condition (before any `unsorted/` folder is staged; P09 and P12 are unsorted/)
+  LXC 100, 21:10:39Z: sha256 /mnt/fast/stacks/scripts/diff-music-tags.sh =
+  4bbfaf6046bd89fe5d83e8276657bf74c478f06b4d9aa07e12b7fe2e01e4cc24 = the workstation repo file (shasum -a 256).
+  Comment-stripped (`sed -E 's/[[:space:]]*#.*$//'`) the deployed script has 1 line containing
+  AMBIGUOUS_BEFORE; control token ZZ_NOT_A_TOKEN_QQ -> 0 (the count can read zero).
+D-13 CONDITION: PASS (sha256 4bbfaf6046bd89fe = repo; AMBIGUOUS_BEFORE present) — unsorted/ folders may be staged
+
+## Task 1 — P01 disposition
+P01 DISPOSITION READ: exception-gate
+  The amendment's NEWEST `P01 DISPOSITION:` line: `P01 DISPOSITION: exception-gate — 2026-09-26T19:45Z —
+  operator: "exception-gate"`. P01 is staged LAST (below), after every in-scope album.
+
+## Task 1 — staging (atlantis as real root, /root/stage-0712.sh <PID> <SRC>; working files /root/phase07-0712/)
+Method per album, exactly as 07-10 did it: source and inbox asserted on the same dataset (findmnt -T ->
+tank/downloads for both); SOURCE re-manifested BEFORE the copy and asserted equal to the 07-07 manifest rows
+(the atlantis copy of the manifest has sha256 8480c429… = repo artifacts/07-07-source-manifest-before.tsv);
+`cp -R --reflink=always` with no fallback (a refused reflink would exit 20); chown -R 568:568 on the staged
+copy ONLY, target asserted to begin /mnt/tank/downloads/complete/nzb/_inbox/02-review/ and to differ from the
+source; staged (relpath, sha256) set vs the 07-07 rows; SOURCE (relpath, size, sha256, mtime) re-taken after.
+zfs_bclone_enabled 1.
+
+| P-ID | Source (…/complete/nzb/) | T0 cp (UTC) | METHOD | rows 07-07 | staged sha set | source after | owner |
+|---|---|---|---|---|---|---|---|
+| P02 | music/Benson Boone-American Heart-24BIT-44KHZ-WEB-FLAC-2025-OBZEN-xpost | 21:11:29.201Z | reflink | 10 | EQUAL (10) | UNCHANGED (10) | 568:568 dir + 10 files |
+| P03 | music/Benson.Boone.-.Fireworks.&.Rollerblades.(2024).[16Bit-44.1kHz].FLAC.[PMEDIA].⭐️-xpost | 21:11:31.933Z | reflink | 15 | EQUAL (15) | UNCHANGED (15) | 568:568 dir + 15 |
+| P04 | music/Benson_Boone_-_American_Heart-WEB-2025-BENSONBOONE | 21:11:33.649Z | reflink | 10 | EQUAL (10) | UNCHANGED (10) | 568:568 dir + 10 |
+| P05 | music/Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY | 21:11:36.247Z | reflink | 44 | EQUAL (44) | UNCHANGED (44) | 568:568 dir + 44 |
+| P06 | music/Cyril - Stumblin In (LUNAX Remix) (Extended Mix)-(5021732254740)-SINGLE-WEB-2024-ZzZz [9c1feafc0] [2af13ead9]-xpost | 21:11:37.553Z | reflink | 1 | EQUAL (1) | UNCHANGED (1) | 568:568 dir + 1 |
+| P09 | unsorted/VA-Mastermix.90.s.12.inch.USB.Top.Up-2024 | 21:11:44.675Z | reflink | 100 | EQUAL (100) | UNCHANGED (100) | 568:568 dir + 100 |
+| P12 | unsorted/VA-Now_That.s_What_I_Call_Music__116__2023 | 21:11:56.998Z | reflink | 50 (47 mp3, 1 m3u, 2 webp) | EQUAL (50) | UNCHANGED (50) | 568:568 dir + 50 |
+Every cp rc 0 with empty stderr; every stage script RC 0. Dir modes 777 (NFSv4 ACL passthrough, expected).
+Staging order = the execution order (P02, P03, P04, P05, P06, P09, P12). 02-review afterwards holds the seven
+plus the P10 remnant (8 entries). tank/downloads 3.51T used / 5.42T avail after.
+
+## Task 1 — previews (watchdog, debounce 30 s) and how they are read
+beets-flask /logs/beets-flask.log (UTC+1), 22:12:03–22:12:37 local = 21:12:03–21:12:37Z: one "Enqueuing … as
+preview" and one "Preview done" per folder, 7 of 7; 0 Traceback/ERROR lines. The preview reader is
+/root/phase07-0712/preview.py, run as `docker exec -i -u 568 beets-flask /venv/bin/python -` with the program
+on stdin, sqlite `file:/config/beets-flask/beets-flask-sqlite.db?mode=ro` (never edited). Rank = ascending
+album distance raw/max (stable over the DB's row order, which is beets' own order for ties); per-disc counts
+from each candidate's track_info `medium`; penalties decoded from beets-flask's packed float64 blobs;
+per-track distance = the album match's `tracks` vector and each child distance's penalties.
+CONTROL (the reader is capable of the reading): run over P10's session 788f3bba it reproduces 07-10's table
+exactly — rank 1 b057dee8… GB CDNOW117 24+26 dist 0.0061, 4 non-zero tracks, max 0.153 (1-24 Murder on the
+Dancefloor, track_title 0.222 + track_artist 0.353); rank 2 8a4b23b7… 50 on 1 medium 0.1270; rank 3 7247b584…
+0.5331; rank 4 688a9668… 22+22 0.5361. The first pass over P05/P09/P12 crashed on a sort-key bug in the
+reader's item listing (TypeError comparing path dicts); fixed (paths decoded from base64) and re-run; the
+crash had happened before any candidate line was printed for those three, so nothing was read wrongly.
+Raw outputs: LXC 100 /root/phase07-0712/previews-full.txt, previews-full-2.txt, preview-p01.txt, predict.txt.
+
+Recommendation is DERIVED (beets-flask does not persist it) with beets 2.12.0's `_recommendation` and the
+effective thresholds read in 07-10 (strong_rec_thresh 0.04, medium_rec_thresh 0.25, rec_gap_thresh 0.25,
+max_rec {missing_tracks: medium, unmatched_tracks: medium}); config.yaml is unchanged since (the host moved
+only to 245dfa7, a script fix).
+
+Folder / session registry (all PREVIEW_COMPLETED, exc None, chosen_candidate_id None, choice_flag None —
+a preview never chooses; duplicate_ids '' on every candidate at preview time):
+| P-ID | beets-flask folder hash | session id | task id | items |
+|---|---|---|---|---|
+| P02 | 5fb195c736b0c01ad8d42ec9f235181b | 2d351339-29a9-4edf-bd6b-4934d2eaf8d3 | 1a002edb-f07a-41d1-932b-8311e047d1f6 | 10 |
+| P03 | a5ec3d651badccb9fcf69110939fd417 | 68afe5b2-1a8a-4f00-a7e1-654e07d60044 | 1e83d0f4-1345-4f8c-b23e-2cd807425602 | 15 |
+| P04 | 8c4fb033ea94d0210ae807cf13f76b76 | ecac6a1b-979a-4e0c-a506-e362ce71b9f0 | 0de63004-f272-4e8c-abc3-caa47964f659 | 10 |
+| P05 | f6999e64ddd3f028e71d301ad23e6641 | da12ca78-96cb-454c-898e-13f3123ef5d2 | 7b581f08-65bb-4431-9820-7827f2d1a7f8 | 44 |
+| P06 | 83e29345e58292689ed7ddbdb41d7554 | a8ce9c19-d71a-4f10-a872-309f77ddcdd8 | 1668a373-c969-40f2-a40a-be53f4071da4 | 1 |
+| P09 | abbd2ac9417115ee1256fcac6b06351b | c5fa0855-b264-4ab8-bb67-587df88b1244 | f11a22ac-5962-466e-8cbc-d2de65c8a4e2 | 100 |
+| P12 | 4f812e49b9cc18da632cf65c0d3e1e86 | c41ce6a1-5bdf-486d-b1e3-e603d20d2582 | b89c56d9-9f84-4ce8-af07-b50c2d6464cd | 47 |
+
+## Task 1 — D-29 per album (recommendation -> per-disc track count -> per-track distance, in that order)
+
+### P02 — Benson Boone / American Heart (FLAC, S1a)
+Files: 10 on disc 1 (tracks 1..10, tracktotal 10, disctotal tag 0); albumartist 'Benson Boone' 10/10;
+label/country tags empty.
+  rank mbid                                  country media        label                catno          barcode       discs  dist    album penalties
+  1    e4fdb1dc-f4a5-4d73-8e53-3f4d12c8df60  US      12" Vinyl    Night Street Records 093624834953   093624834953  10     0.0091  country 0.5   (albumdisambig 'red, white & blue marble ("America" marbled)')
+  2    c0df8104-7b49-4fa3-bcec-cb3d310aa9a5  US      CD           Night Street Records —              093624834588  10     0.0091  country 0.5
+  3    c33163f3-6217-4dc8-8e88-65f623b62c9b  US      CD           Night Street Records 093624834588   093624834588  10     0.0091  country 0.5
+  4    b3a1e018-845b-44bd-a9a3-4f46c2e39d49  XW      Digital      Night Street Records —              093624830603  10     0.0182  country 1.0
+  5    cfb585a2-856d-4875-8ef4-1d4c017bab17  XW      Digital      Night Street Records —              093624834960  10     0.0182  country 1.0
+  All: 'American Heart' / 'Benson Boone', 2025, albumtype album, va false. Ranks 1–3 TIE at 0.0091.
+  (1) recommendation: 0.0091 < 0.04 -> strong; no missing/unmatched penalty -> strong.
+  (2) per-disc: 10 == 10 on all five -> PASS.
+  (3) per-track: 0 non-zero on every candidate (4 title-case differences are below beets' threshold).
+D-29 VERDICT (P02): rank 1, e4fdb1dc-f4a5-4d73-8e53-3f4d12c8df60 passes all three (strong; 10 == 10; per-track 0) — search_limit rank 1 of 5, tied at 0.0091 with ranks 2 and 3 (both also pass)
+  Predicted landing (rank 1): /media/Music/Benson Boone/American Heart/NN <MB title>.flac — P02 lands first, so
+  `%aunique{}` returns "" (the library has no other American Heart). vs FROZEN oracle `/media/Music/Benson
+  Boone/American Heart/`: DIRECTORY MATCHES. File names: 4 of 10 change by MB title case/U+2019
+  (01 "Sorry I'm Here For Someone Else" -> "Sorry I’m Here for Someone Else", 03 "Man In Me" -> "Man in Me",
+  05 "Reminds Me Of You" -> "Reminds Me of You", 07 "I Wanna Be The One You Call" -> "I Wanna Be the One You
+  Call") — MATCH-CHANGED-TAG, to be measured in Task 3.
+
+### P03 — Benson Boone / Fireworks & Rollerblades (FLAC, S1b)
+Files: 15 on disc 1 (tracks 1..15, tracktotal 0, disctotal 1); label and country tags both 'PMEDIA' (the
+release group's tag, junk).
+  rank mbid                                  country media    label                catno               discs  dist    album penalties
+  1    ef528afc-c3de-4b4a-8ef2-a0dd43dc9c83  —       Digital  Night Street Records A10302B0008885094R  15     0.0123  label 0.9444
+  2    2b2822ff-c2b4-41cd-ac49-6318bd55388b  US      CD       Warner Records       093624852469        15     0.0182  country 0.5, label 0.9231
+  3    20d98b93-a4eb-434e-a680-1b61690da200  —       Digital  Night Street Records A10302B0009994851R  16     0.0421  label, missing_tracks ×1 (1-15 'Pretty Slowly')
+  4    a9283c59-a664-4168-83ee-411643ac32a2  —       Digital  Night Street Records —                   16     0.0421  label, missing_tracks ×1
+  5    aeed0766-db67-41fa-833d-3b3482c97c59  XW      CD       Warner Records       —                   16     0.0663  year 0.5, country 1.0, label, missing_tracks ×1
+  (1) 0.0123 -> strong. (2) ranks 1, 2: 15 == 15 PASS; ranks 3–5: 16 != 15 REFUSED. (3) rank 1: 0 non-zero.
+D-29 VERDICT (P03): rank 1, ef528afc-c3de-4b4a-8ef2-a0dd43dc9c83 passes all three (strong; 15 == 15; per-track 0) — search_limit rank 1 of 5
+  Predicted landing: /media/Music/Benson Boone/Fireworks & Rollerblades/ vs FROZEN oracle: DIRECTORY MATCHES.
+  File names: 3 of 15 change (07 In The Stars -> In the Stars, 08 Drunk In My Mind -> Drunk in My Mind,
+  13 Love Of Mine -> Love of Mine) — MATCH-CHANGED-TAG.
+
+### P04 — Benson Boone / American Heart (MP3, S1c) — the %aunique{} album
+Files: 10 on disc 1 (tracks 1..10, tracktotal 10, disctotal 1); label tag 'Night Street Records, Inc. -
+Warner Records Inc.' 10/10.
+  Same five releases as P02, same order: 1 e4fdb1dc… 0.0175 / 2 c0df8104… 0.0175 / 3 c33163f3… 0.0175 /
+  4 b3a1e018… 0.0261 / 5 cfb585a2… 0.0261. Album penalties: country (0.5 US, 1.0 XW) and label 0.5135 (the
+  file's long label string vs MB's 'Night Street Records'). Ranks 1–3 TIE.
+  (1) 0.0175 -> strong. (2) 10 == 10 on all five -> PASS. (3) per-track 0 non-zero on every candidate.
+D-29 VERDICT (P04): rank 1, e4fdb1dc-f4a5-4d73-8e53-3f4d12c8df60 passes all three (strong; 10 == 10; per-track 0) — search_limit rank 1 of 5, tied at 0.0175 with ranks 2 and 3 (both also pass)
+  %aunique{} PREDICTION (read against the MB values, beets 2.12.0 models.py:1439-1526 `_tmpl_unique`; keys
+  albumartist album; disambiguators albumtype year label catalognum albumdisambig releasegroupdisambig). The
+  07-SAMPLE prediction (P04 separated by `label`, ` [Night Street Records, Inc. - Warner Records Inc.]`) is
+  CONDITIONAL ON AS-IS TAGS and does NOT survive any MB match: every candidate for P02 and P04 carries label
+  'Night Street Records', year 2025, albumtype album, so the first separating field is `catalognum` — or none.
+  With P02 on rank 1 (catno 093624834953), P04's suffix depends on P04's release:
+    P04 = e4fdb1dc (rank 1, the SAME release as P02): nothing separates -> NUMERIC-ID FALLBACK ` [<album id>]`,
+      predicted ` [4]` if P02, P03, P04 land in that order (P10 is album id 1) — the config's documented
+      LANDMINE (a non-reproducible path). -> /media/Music/Benson Boone/American Heart [4]/
+    P04 = c33163f3 (rank 3, catno 093624834588): separated by catalognum -> ` [093624834588]`
+      -> /media/Music/Benson Boone/American Heart [093624834588]/
+    P04 = c0df8104 (rank 2) or rank 4/5 (catno empty): catalognum separates, but P04's value is empty -> NO
+      SUFFIX -> /media/Music/Benson Boone/American Heart/ — the SAME directory as P02 (.flac and .mp3 side by side).
+  In every branch the FROZEN oracle `American Heart [Night Street Records, Inc. - Warner Records Inc.]/`
+  diverges at directory level (MATCH-CHANGED-TAG: MB's label replaces the file's). P02's own directory was
+  rendered at its import with no suffix; whether it would re-path now is Task 3's compliant `move -p` check.
+  ⚠ DUPLICATE PROMPT (source reading, not measured): P04 is a beets duplicate of P02 (same albumartist +
+  album). config `import.duplicate_action: ask`; beets-flask 's ImportSession.resolve_duplicate
+  (importer/session.py:807-848) raises DuplicateException on `ask`, so the UI should ask for a duplicate
+  action for P04. `keep` lands P04 beside P02. `remove` would DELETE P02's landed album, `merge` folds P02's
+  items into P04's album, `skip` imports nothing.
+  File names: the same 4 title changes as P02 (.mp3).
+
+### P05 — NOW That's What I Call Music! 121 (MP3, S3 — the compilation; CONF-03/CONF-05)
+Files: 44, all tagged disc 1 / disctotal 1, tracks 1..22 each TWICE (two CDs tagged as one), tracktotal 22,
+albumartist empty (as-is guess Various Artists), comp true, label tag 'EMI'.
+  rank mbid                                  country media        label                          catno     discs      dist    album penalties
+  1    0a74adf8-e7ff-4b37-a9b6-48d8632fe880  —       Digital      Now That’s What I Call Music LLP —       44 (1 med) 0.0787  label 0.92
+  2    79144c8f-8ed3-4072-b180-17fac7314673  GB      CD           EMI                            CDNOW121  22+22      0.0836  mediums 1.0
+  3    e2efdc06-0fa7-4e9d-835c-2a99b255b4b6  GB      12" Vinyl    Virgin EMI (Now 1, 1983)       NOW 1     16+14      0.6391  album, mediums, label, catno, unmatched ×14
+  4    07971e8a-9b1a-31a0-a111-f69955974138  GB      CD           Virgin EMI (Now 1, 2009)       NOW 1     16+14      0.6474  … unmatched ×14
+  5    68012214-a808-48e5-9428-72aeba3b4806  NZ      CD           EMI (Now 1997)                 8217092   18         0.6547  … unmatched ×26
+  Ranks 1–2: album 'NOW That’s What I Call Music! 121' (rank 1) / 'Now That’s What I Call Music! 121' (rank 2),
+  artist Various Artists, va true, 2025, rg disambig UK.
+  (1) 0.0787 -> medium (not < 0.04, <= 0.25); rank 1 carries no missing/unmatched -> medium. Not none.
+  (2) per-disc, read from the TAGS (the rule as 07-10 applied it): files 44 on tagged disc 1.
+      Rank 1: 44 on one medium == 44 -> PASS.   Rank 2: 22+22 vs 44 on one tagged disc -> REFUSED (by tag).
+      Ranks 3–5: REFUSED. Content reading, recorded because it is true and the operator may weigh it: the
+      track-number multiset {1..22}×2 is exactly CDNOW121's 22+22, and beets' own mapping for rank 2 puts 22
+      files on each medium with the right songs; rank 2's only album penalty is `mediums` (tag disctotal 1 vs 2).
+  (3) rank 1: 29 of 44 tracks penalised, max 0.253 (file 1-18 Elton John 'Little Richard's Bible' -> MB 1-40
+      'Elton John & Brandi Carlile', track_artist 0.64 + track_index); 22 track_index penalties (the second
+      CD's files are numbered 1–22, MB numbers them 23–44), artist-credit expansions (…& Sia, …& Clementine
+      Douglas) and three edit-suffix titles ('(Radio Edit)', '(Levi Heron Edit)', 'twilght zone' as MB spells
+      it). Every file maps to the same song; no wrong-song mapping.
+D-29 VERDICT (P05): rank 1, 0a74adf8-e7ff-4b37-a9b6-48d8632fe880 passes all three (medium; 44 == 44 by tag; max track dist 0.253, all same-song) — search_limit rank 1 of 5
+  CONF-05 on real content: GB candidates are ranks 2, 3, 4 (no US candidate in the five). The preferred-country
+  candidate does NOT rank first: rank 1 has NO country (MusicBrainz digital release), so it gets no country
+  penalty either, and it wins because rank 2's `mediums` 1.0 (from the files' wrong disctotal 1) outweighs rank
+  1's `label` 0.92. preferred.countries works (GB carries 0 country penalty) but cannot overcome a mis-tagged disc count.
+  Predicted landing (rank 1): comp rule (disctotal 1) -> /media/Music/Various Artists/NOW That’s What I Call
+  Music! 121/NN <MB title>.mp3, NN = 01..44. vs FROZEN oracle `/media/Music/Various Artists/NOW That's What I
+  Call Music! 121/`: directory differs ONLY by U+2019 for the ASCII apostrophe (MATCH-CHANGED-TAG); the
+  albumartist half matches (Various Artists/, CONF-03 via va_name). File names: the 22 second-CD files take
+  numbers 23–44 instead of the oracle's duplicated 01–22, and 19 titles change (e.g. 'Sports Car' -> 'Sports
+  car', 'Fufn' -> 'FUFN', 'Twilight Zone' -> 'twilght zone', "Can't Decide" -> 'Can’t Decide').
+  If the operator instead chooses rank 2 (79144c8f, GB CDNOW121) — imported-other, D-29-refused on the tag
+  reading only: rule 4 (disctotal 2) -> /media/Music/Various Artists/Now That’s What I Call Music! 121/DD-TT <title>.mp3.
+
+### P06 — Cyril / Stumblin' In (LUNAX Remix) (Extended Mix) (1 MP3, S7 — the singleton folder)
+Files: 1, disc 0 / disctotal 0, track 1/1, albumartist empty, artist 'Cyril', label tag "SPINNIN' RECORDS".
+  rank mbid                                  country title (MB)                                   barcode        dist    penalties
+  1    39fb4603-ec25-472e-8277-1623bacb900f  XW      Stumblin’ In (LUNAX remix) (extended mix)    5021732254740  0.0500  country 1.0; per-track 0
+  2    dfb8789c-e966-4c4e-b89c-e6ae0e8eb163  —       Stumblin’ In (extended mix) (2023)           5054197910487  0.0949  album 0.0968; track 0.305 (length 0.771)
+  3    fb7c18ce-7809-42c5-b02f-afc07ce905c5  —       Stumblin’ In (LUNAX remix)                   5021732254726  0.1150  track 0.387 (length 1.0)
+  4    4aa0c0ef-fcda-4d3f-866a-37bf97fb71c4  XW      Stumblin' In (Sonny Wern remix) (extended)   5054197973024  0.1153  track 0.224 (length 0.568)
+  5    4c625df6-cd67-41bc-8826-990aaba03dfe  XW      Stumblin’ In (NewEra remix)                  5021732390066  0.1709  track 0.401 (length 1.0)
+  All: artist CYRIL, Spinnin’ Records, albumtype single+remix, 1 medium / 1 track. Rank 1's barcode is the
+  folder's own (5021732254740). Ranks 2–5 are OTHER MIXES (a confident wrong match if chosen).
+  (1) 0.0500 -> medium. (2) 1 == 1 on all five -> PASS. (3) rank 1: 0 per-track penalty.
+D-29 VERDICT (P06): rank 1, 39fb4603-ec25-472e-8277-1623bacb900f passes all three (medium; 1 == 1; per-track 0) — search_limit rank 1 of 5
+  SINGLETON HANDLING: the UI does NOT offer a singleton import. The preview built an ALBUM task (1 item, album
+  candidates), and beets-flask does not support singletons at all (source, read-only: importer/session.py:212
+  "Importing singletons is not supported yet.", :445-447 NotImplementedError; importer/stages.py:484 TODO;
+  disk.py:43). So through 02-review P06 can only land as a one-track ALBUM:
+  predicted /media/Music/CYRIL/Stumblin’ In (LUNAX remix) (extended mix)/01 Stumblin’ In (LUNAX remix) (extended mix).mp3
+  vs FROZEN row `/media/Music/Singles/Cyril/Stumblin' In (LUNAX Remix) (Extended Mix).mp3`, which assumed
+  `beet import -s` (the `singleton:` path rule). What the frozen row needs: a singleton import route, which the
+  D-20 front end does not have. The divergence is two-fold: ROUTE (album vs singleton; filed DEF-07-12-01) and
+  MB text (CYRIL, lower-case 'remix'/'extended mix', U+2019 — MATCH-CHANGED-TAG).
+
+### P09 — Mastermix 90s 12inch USB Top Up (100 MP3, fresh F1-reallocated, unsorted/)
+Files: 100, disc 0, track 0 on ALL 100 (no track numbers), tracktotal 0, albumartist 'Various Artists' 100/100,
+comp false, BPM appended to every title (e.g. 'I Want You Back (Long Version) 112'), years 1990–1999 mixed.
+  rank mbid                                  country title                                        discs  dist    unmatched files
+  1    8727b085-655b-4a7c-8279-0c60c935e16a  XW      90s Top Tracks (X5 Music Group)              50     0.7679  50
+  2    fbde13d7-30db-4d1b-a4b9-cb539e9a1c43  FR      Top 90’s (Versailles)                        18+19  0.7985  63
+  3    77489ae7-e871-4179-8a59-770436d13bee  XE      12inch Mixes / Soft Cell                     8      0.8895  92
+  4    6631ab19-733e-43da-adb2-40180fc034bf  —       Mastermix The Mastermix Collection : 90s 2   10     0.9345  90
+  5    700407bf-b116-404d-9a56-a22226254fba  GB      Mastermix: 90s Retro Mixes (CD787)           5      0.9407  95
+  (1) best 0.7679 > 0.25; five candidates; gap to rank 2 = 0.0306 < rec_gap_thresh 0.25 -> recommendation NONE.
+      Step 1 refuses all five. (2)/(3) recorded for completeness: no candidate has 100 tracks; every candidate
+      leaves 50–95 files unmatched.
+D-29 VERDICT (P09): NONE PASSES — recommendation none on every candidate (best 0.7679); no candidate carries the 100 files
+  Recommended: hold. (DJ-service content that is not a name twin; MusicBrainz does not carry this release.)
+  Oracle (APPENDED, 100 lines under /media/Music/Various Artists/Mastermix 90s 12inch USB Top Up/00 …): not
+  reachable through a MusicBrainz match; as-is (03-asis) is out of this plan's scope (D-20).
+
+### P12 — Now That's What I Call Music 116 (47 MP3, fresh F4, unsorted/)
+Files: 47, NO disc tags (disc 0, disctotal 0), tracks 1..23 twice + 24 once, tracktotal 0, albumartist empty,
+genre and comment on all 47; staged folder also carries 1 .m3u and 2 .webp (not audio; not items).
+  rank mbid                                  country media   label/catno                         discs  dist    album penalties
+  1    581244e0-4f08-467e-9e96-24115f0f9e76  GB      CD      EMI 0196588421822                   23+24  0.0406  none
+  2    73c98721-10a4-4f6e-ad61-899ccd4c565a  GB      CD      Now! Music CDNOW115 (Now 115)       26+24  0.5676  album 0.04, missing ×3
+  3    62e96c97-de2d-4956-ae3a-cd93a465f273  GB      Digital Now! Music (Now 115)                50     0.5840  album 0.04, missing ×3
+  4    24314b00-14ed-408a-90c1-a57aace4271a  US      CD      UMG (US Now 88)                     21     0.6055  album, country 0.5, unmatched ×26
+  5    20d4caed-5669-4ee3-a052-27de27f2485d  GB      CD      Sony CDNOW15 (2023 version)         15+16  0.6502  album, year, unmatched ×16
+  (1) 0.0406 -> medium (0.0006 above strong); no missing/unmatched -> medium.
+  (2) per-disc: the files carry no disc tag, so the tag reading is unavailable; read from beets' own mapping for
+      rank 1 instead: 23 files -> medium 1, 24 -> medium 2, 0 unmatched, 0 missing, and the file track-number
+      multiset {1..23}×2 + {24} equals MB's positions 1–23 + 1–24 -> 23+24 == 23+24 PASS. Ranks 2–5: 26+24,
+      50, 21, 15+16 vs 47 -> REFUSED.
+  (3) rank 1: 17 of 47 penalised, max 0.174 (will.i.am 'MIND YOUR BUSINESS' -> 'will.i.am & Britney Spears');
+      all are artist-credit expansions or edit-suffix titles, plus one track_length 0.455 ('Paint The Town
+      Red'); no track_index or medium penalty; every file maps to the same song.
+D-29 VERDICT (P12): rank 1, 581244e0-4f08-467e-9e96-24115f0f9e76 passes all three (medium; 23+24 == 23+24 by mapping, files untagged by disc; max track dist 0.174) — search_limit rank 1 of 5
+  CONF-05: rank 1 is GB (the first preferred country) and ranks first.
+  Predicted landing: rule 4 (disctotal 2) -> /media/Music/Various Artists/Now That’s What I Call Music! 116/DD-TT <MB title>.mp3
+  vs APPENDED oracle `/media/Music/Various Artists/Now That's What I Call Music 116/TT …`: directory text
+  differs (U+2019 and MB's '!'); every file name gains the DD- disc prefix (47/47; the files had no disc tag);
+  10 titles change (e.g. 'vampire' -> 'Vampire', 'What Was I Made For_ [From The Motion Picture _Barbie_]' ->
+  'What Was I Made For?' rendered 'What Was I Made For_'). All MATCH-CHANGED-TAG; TEMPLATE-DEFECT predicted 0.
+
+## Task 1 — P01 (EXCEPTION CANDIDATE 07-12), staged LAST
+(1) Dangling-row read, read-only, BEFORE staging (sqlite mode=ro, docker exec -u 568, 21:17:53Z): folder
+    d2772a06b651fa18aee99b9dbef116b9 (full_path …/02-review/Michael.Jackson.-.The.Essential.Michael.Jackson.-.(2005).[upc.827969428726].[FLAC.24-96]-maladicta-xpost,
+    created 16:03:02Z); session 8ad1c311-f958-4e4f-a269-8e98f8a322f9 PREVIEW_COMPLETED, exc None, rev 0,
+    updated 16:03:13Z; task 12b53f52-eed4-4270-9003-e47db5e40a81 PREVIEW_COMPLETED, chosen_candidate_id None,
+    choice_flag None; 5 candidates. Still dangling, nothing chosen. Not edited.
+(2) Staged after all seven (stage-0712.sh P01): source pre-stage == 07-07 (32 rows); T0 21:18:09.530Z
+    cp -R --reflink=always rc 0, stderr empty;
+METHOD (P01): reflink
+    chown 568:568 on the staged copy only (target asserted); staged sha set == 07-07 P01 rows (32): EQUAL;
+    SOURCE (size, sha256, mtime) UNCHANGED (32 rows); owner 568:568 dir + 32 files.
+(3) Preview: NEW SESSION, no collision. Log 22:18:42 local = 21:18:42Z "Enqueuing … as preview", "Preview task on
+    hash='8569f3f454c9064752756bebbd1e3eb3'", "Preview done" 21:18:50Z. New folder 8569f3f454c9064752756bebbd1e3eb3,
+    session 16ce72cc-fc15-4c94-b736-8058baae545d, task 072f9e78-aeb4-4529-8dcc-3aeb6144b891, 32 items,
+    PREVIEW_COMPLETED. The content hash of the re-staged copy differs from the dangling row's (d2772a06…), so
+    the watchdog did not skip it. Which session the UI serves for the path, read by a GET of
+    /api_v1/inbox/tree (192.168.90.39:5001, HTTP 200, 64,314 B; read-only): hash 8569f3f4… for the P01 path,
+    i.e. the NEW session, not the stale one. The dangling row d2772a06… / 8ad1c311… is still present and
+    unchanged, so the beets-flask DB now holds TWO folder rows for one path (folder rows 13). Not a collision
+    under the plan's definition (a new preview exists and the stale session is not the one served); recorded.
+    Files per disc (the measurement): disc 1 = tracks 7..21 (15 files), disc 2 = tracks 1..17 (17), as in run 5.
+(4) D-29, re-applied in order to the NEW preview:
+  rank mbid                                  country media    label/catno              discs   dist    album penalties
+  1    61f964df-4e66-4b9b-902f-f5462d6cf5d9  US      Digital  — / —                    21+17   0.1014  country 0.5, missing ×6 (MB 1-1..1-6)
+  2    4b7a5129-0311-416c-bbbb-84eb9c75cb86  US      CD       Legacy EPC5204222        21+17   0.2551  country 0.5, missing ×6
+  3    acc1a8e4-7d30-498e-bf9c-2ead2daaca8b  XE      CD       Epic 88697571192         21+16   0.2571  country 1.0, missing ×5
+  4    a1f33a31-19c2-43f9-854d-c5c6a41ac46d  AU      CD       Epic 5204222000          21+17   0.2583  country 1.0, missing ×6
+  5    f5ef2123-0faa-4779-856e-c8075c5fb3ce  XE      CD       Epic 520422 2            21+17   0.2583  country 1.0, missing ×6
+  (1) rank 1 0.1014 -> medium; max_rec caps missing_tracks at medium -> medium. Not none.
+  (2) disc 1: 21 in every candidate vs 15 files -> ALL FIVE REFUSED (rank 3 also 16 vs 17 on disc 2).
+  (3) recorded although step 2 refused: rank 1 12 of 32 penalised, max 0.231 (MB titles carry '(single
+      version)' suffixes the files lack or spell differently); ranks 2, 4, 5 (barcode 5099752042227) map WRONG
+      SONGS (file 2-15 'Dangerous' -> MB 'Earth Song' 0.619; file 1-07 'Enjoy Yourself' -> MB 'Got to Be There'
+      0.505) — the confident wrong match 07-10 run 5 recorded.
+  ⚠ CANDIDATE-SET DRIFT: 07-10's pre-named exception candidate f890ca09-0b44-4539-ae13-238266b242fa (US CD,
+  Epic E2K 94287, barcode 827969428726 = the folder's UPC, rank 1 at 0.1207 in run 5) is NOT among the five
+  candidates of the new preview, and neither are run 5's ranks 2 and 3 (60fa00b3…, b8a2b280…). Same files
+  (sha set == the manifest), same config, a different MusicBrainz candidate set eleven hours later — filed
+  DEF-07-12-02. The plan names f890ca09 "only if it is still rank 1 and fails ONLY step 2"; it is not rank 1
+  (it is absent), so it is NOT named as the exception candidate. The new rank 1, 61f964df…, fails only step
+  2, but it is a US digital release with no label or barcode that no gate has seen before.
+D-29 VERDICT (P01): NONE PASSES — every candidate fails step 2 (disc 1: 21 vs 15 files); f890ca09-0b44-4539-ae13-238266b242fa is absent from the new preview (DEF-07-12-02), so no pre-named exception candidate exists; new rank 1 61f964df-4e66-4b9b-902f-f5462d6cf5d9 fails only step 2
+  Predicted landing IF excepted with 61f964df: rule 4 -> /media/Music/Michael Jackson/The Essential Michael
+  Jackson/DD-TT <MB title>.flac; 32 files on a 21+17 release, six MB tracks (1-01..1-06) missing, tracktotal 21
+  against 15 files on disc 1 (criterion-7 finding, unresolved); 22 of 32 titles change (mostly '(single version)'
+  added). FROZEN oracle `Michael Jackson/The Essential Michael Jackson/`: directory matches.
+
+## Task 1 — state after previews (read-only)
+  library.db (mode=ro, 21:20:5xZ): items 50, albums 1 (P10 only) — NOTHING IMPORTED. sha256 /config/library.db
+  8c9a06c8…, /config/state.pickle 224fe279… (= 07-11's post-rerun value).
+  Jellyfin (/root/phase07-0711/jf-read-0711.sh, GET only, JELLYFIN_ADDR 192.168.90.37:8096 resolved 21:20:53Z):
+  Music library MetadataSavers [] (DEF-07-11-05 remediation holds), SaveLocalMetadata false, EnableRealtimeMonitor
+  false; P10 album present (1). Library tree from atlantis: files not owned by uid 568: 0.
+  beets-flask DB: folder 13, session 13 (5 old + 7 in-scope + 1 new P01), all new sessions PREVIEW_COMPLETED.
+
+DEF-07-12-01 filed (P06 singleton route unavailable in the D-20 front end); DEF-07-12-02 filed (P01 candidate-set
+drift between two previews of identical content). See deferred-items.md.
+
+## Task 2 — the import gate (7 albums + the P01 exception gate)
+BARRIER READ immediately before presenting (21:21:01Z, SINCE 21:10:44Z, RC 0): four tasks enabled=false,
+next_run null; control 16 enabled; drive 1/0/0; log 233 lines, last 22:21:01 local; server-start/sync lines
+after 21:10:44Z: 0.
+BARRIER: VERIFIED (4/4 enabled=false, next_run null) at 2026-09-26T21:21:01Z
+Staged in _inbox/02-review: the 7 in-scope albums + P01 + the P10 remnant (9 entries); library.db items 50.
+
+GATE TABLE (as presented; operator imports in the beets-flask UI, https://beets.deercrest.info, inbox 02-review,
+in the order P02, P03, P04, P05, P06, P09, P12, then P01 last on its own gate):
+| P-ID | folder | recommended candidate (D-29) | rank | predicted destination vs oracle | warning |
+|---|---|---|---|---|---|
+| P02 | Benson Boone-American Heart-24BIT-44KHZ-WEB-FLAC-2025-OBZEN-xpost | e4fdb1dc-f4a5-4d73-8e53-3f4d12c8df60 (US 12" vinyl) | 1 of 5 (tie ×3 at 0.0091) | Benson Boone/American Heart/ = FROZEN dir; 4 title-case renames | tie with c0df8104 / c33163f3; the choice sets P04's suffix |
+| P03 | Benson.Boone.-.Fireworks.&.Rollerblades…⭐️-xpost | ef528afc-c3de-4b4a-8ef2-a0dd43dc9c83 (digital) | 1 of 5 | Benson Boone/Fireworks & Rollerblades/ = FROZEN dir; 3 renames | — |
+| P04 | Benson_Boone_-_American_Heart-WEB-2025-BENSONBOONE | e4fdb1dc-f4a5-4d73-8e53-3f4d12c8df60 | 1 of 5 (tie ×3 at 0.0175) | American Heart [4]/ if same release as P02 (numeric-id fallback) ≠ FROZEN `[Night Street Records, Inc. - Warner Records Inc.]` | DUPLICATE prompt expected: choose keep; same-release → numeric suffix |
+| P05 | Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY | 0a74adf8-e7ff-4b37-a9b6-48d8632fe880 (digital, 1×44) | 1 of 5 | Various Artists/NOW That’s What I Call Music! 121/ vs FROZEN `'`→`’`; files 01–44 | GB CDNOW121 is rank 2 (refused by tag only) |
+| P06 | Cyril - Stumblin In (LUNAX Remix) (Extended Mix)-…-xpost | 39fb4603-ec25-472e-8277-1623bacb900f | 1 of 5 | CYRIL/Stumblin’ In (LUNAX remix) (extended mix)/01 … vs FROZEN Singles/Cyril/… | album import only — no singleton route (DEF-07-12-01) |
+| P09 | VA-Mastermix.90.s.12.inch.USB.Top.Up-2024 | hold — NONE PASSES (rec none, best 0.7679) | — | not reachable by MB | recommend hold |
+| P12 | VA-Now_That.s_What_I_Call_Music__116__2023 | 581244e0-4f08-467e-9e96-24115f0f9e76 (GB CD 23+24) | 1 of 5 | Various Artists/Now That’s What I Call Music! 116/DD-TT … vs APPENDED Now That's … 116/TT … | — |
+P01 — D-29 EXCEPTION GATE: NONE PASSES (disc 1 21 vs 15); the pre-named f890ca09 is absent; default and recommended: hold.
+
+Gate presented to the operator via the orchestrator (checkpoint:decision) at 2026-09-26T21:2xZ. Awaiting the
+per-album answers and the P01 exception answer. Nothing imported by this executor.

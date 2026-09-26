@@ -93,3 +93,26 @@ DEF-07-11-01: `UNDO IMPORT` does not cover `state.pickle`; D-14's claim is falsi
   complete undo in beets-flask is UNDO IMPORT **plus** the state.pickle file restore — UNDO IMPORT alone does not
   revert the incremental state. Still OPEN for plan 07-17 to write into stacks/selfhosted/arrs/beets.md. Not
   measured: whether a same-session re-import goes through without the restore.
+
+DEF-07-12-01: P06 (S7, the singleton folder) cannot take its FROZEN singleton route through the D-20 front end — beets-flask 02-review imports albums only
+  Filed by 07-12 run 1 Task 1 (2026-09-26T21:2xZ, before any import). The preview built an ALBUM task for the
+  one-file folder; beets-flask does not implement singletons (source, read-only, beets_flask 2.x in the container:
+  importer/session.py:212 "Importing singletons is not supported yet.", :445-447 NotImplementedError,
+  importer/stages.py:484 TODO, disk.py:43). The FROZEN oracle row
+  `/media/Music/Singles/Cyril/Stumblin' In (LUNAX Remix) (Extended Mix).mp3` assumed `beet import -s` and the
+  `singleton:` path rule, so it cannot be met by any 02-review import; an album import of rank 1 39fb4603… is
+  predicted at `/media/Music/CYRIL/Stumblin’ In (LUNAX remix) (extended mix)/01 Stumblin’ In (LUNAX remix) (extended mix).mp3`.
+  Route divergence, not a template defect; 07-EXPECTED-TREE.txt not edited (D-07). Consequence for Phase 9: the
+  config's `singleton:` rule is unreachable from the chosen front end; singles need a decision (album-of-one,
+  or a CLI arm). Outcome recorded by 07-12 Task 3 if P06 is imported.
+
+DEF-07-12-02: P01's re-stage produced a DIFFERENT MusicBrainz candidate set from identical files — 07-10's pre-named exception candidate f890ca09… is absent
+  Filed by 07-12 run 1 Task 1 (preview 2026-09-26T21:18:50Z). Staged sha256 set == the 07-07 manifest (32) in both
+  07-10 run 5 (16:03Z) and here; config unchanged (search_limit 5). Run 5's top five: f890ca09 (US CD E2K 94287,
+  0.1207), 60fa00b3 (CA), b8a2b280 (FR Qobuz), 4b7a5129, f5ef2123. Now: 61f964df (US digital, no label/barcode,
+  0.1014), 4b7a5129, acc1a8e4, a1f33a31, f5ef2123 — three of five replaced, including the rank 1 named at
+  07-10's gate. Not measured: why (MusicBrainz search ranking/data changes, or beets' extra_tags query). Effect:
+  a D-29 decision is tied to a preview, not to a folder — a re-preview can change the candidate a prior gate
+  named; any re-run (D-17/07-16) that expects the same rank 1 must re-read the preview, not assume it. The
+  new preview's beets-flask folder hash (8569f3f4…) differs from the dangling row's (d2772a06…), so both rows
+  now share one path in beets-flask's DB (not edited).
