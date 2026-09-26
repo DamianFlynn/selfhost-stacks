@@ -116,3 +116,53 @@ DEF-07-12-02: P01's re-stage produced a DIFFERENT MusicBrainz candidate set from
   named; any re-run (D-17/07-16) that expects the same rank 1 must re-read the preview, not assume it. The
   new preview's beets-flask folder hash (8569f3f4…) differs from the dangling row's (d2772a06…), so both rows
   now share one path in beets-flask's DB (not edited).
+
+DEF-07-12-03: The beets-flask inbox page puts every staged folder's hash+path into ONE GET query string — it hit Authelia's 4096 B read buffer (HTTP 431) at 10 folders, and grows with the inbox
+  Filed by 07-12 run 1 (2026-09-26). Measured by the orchestrator: the inbox loader GETs /api_v1/session/minimal
+  and /api_v1/session/status with repeated folder_hash/folder_path params for every folder; Traefik forward-auth
+  hands the whole URI to Authelia; `server.buffers.read: 4096` → fasthttp "small read buffer" → 431 (traefik
+  access.log 21:49:57–58Z). Operator-approved fix applied 21:54:22Z: /mnt/fast/appdata/traefik/authelia/configuration.yml
+  `server.buffers` read/write 4096 → 16384 (backup configuration.yml.bak-20260926-431, sha256 10b08744…; live
+  cee7cb9e…; validate-config rc 0; healthy; 0 buffer errors since). NOT IN GIT: the Authelia config lives in
+  appdata, so the change is invisible to the repo and would be lost by a rebuild from the repo. It is also
+  estate-wide (see project memory "431 on any *.deercrest.info = Authelia's read buffer").
+  Open: (1) Phase 9's bulk inbox (144 folders, long paths) scales the same URL roughly 14× beyond the 10 folders
+  that broke 4096 B, so 16384 B is expected to be exceeded. Measure bytes per folder and decide: a larger buffer,
+  bypass forward-auth for /api_v1 on the beets host, or batch the inbox in chunks. (2) Record the buffer value
+  in the repo (DEPLOYMENT.md / the traefik stack docs) so the drift is visible.
+
+DEF-07-12-04: P01 and P09 were imported against the operator's `hold` — the beets-flask UI has no hold state, so a staged folder is one click from import
+  Filed by 07-12 run 1 (2026-09-26T22:40Z). Measured (worker log + beets-flask DB + frontend source, read-only):
+  each import was its own per-folder job from the folder page (`candidate_ids={task: cand}`, not an "import
+  best" batch). P01's request carried the page's DEFAULT (rank 1 61f964df), so pressing import on its page with
+  nothing changed imported it despite D-29 NONE PASSES. P09's request carried `asis-f11a22ac…`, which is not the
+  default, so the as-is card was selected. Both were undone at the operator's instruction ("Undo P01 + P09, keep
+  rest") with UNDO IMPORT (tree and DB) and then a state.pickle surgery (state), because UNDO IMPORT does not
+  revert state (DEF-07-11-01). The D-29 exception gate and the `hold` disposition exist only in the plan and the
+  artifact; the front end does not enforce them, and a held album left staged in 02-review stays importable.
+  Consequence for Phase 9 and the pilot's remaining plans: unstage held folders promptly (move them out of
+  02-review) rather than leaving them beside importable ones. Alternatively, stage one album at a time into
+  02-review, so the inbox never shows a held folder next to an importable one. Undo cost measured here: two
+  UNDO IMPORTs plus a stop/replace/start of state.pickle.
+
+DEF-07-12-05: P02 landed on c0df8104 (rank 2), not the agreed rank 1 e4fdb1dc, and P04's request carried e4fdb1dc, not the agreed c33163f3 — the UI shows an exact three-way tie as near-identical cards
+  Filed by 07-12 run 1 (2026-09-26T22:40Z). Measured: ranks 1–3 tie to full float precision on both Benson Boone
+  folders (P02 0.25/27.5; P04 0.5067567567567568/29.0). The frontend's stable distance sort keeps API (row) order
+  e4fdb1dc, c0df8104, c33163f3, so the default is e4fdb1dc on both. P02's request carried c0df8104 (card 2: CD,
+  no catalognum), a non-default card. P04's carried the default e4fdb1dc, not the agreed card 3. The agreed
+  candidate reached the request on 4 of 6 albums (P03, P05, P06, P12). The operator KEPT P02 on c0df8104
+  (verbatim "Undo P01 + P09, keep rest"). c0df8104 passes D-29 identically to e4fdb1dc, but its empty
+  catalognum changes the %aunique{} outcome for P04 (measured in 07-12 § E). Proposed, not implemented: the gate
+  table names candidates by the fields the UI displays (media, catno, country) as well as by MBID, and every
+  landing is checked against the agreed MBID before the next folder is imported.
+
+DEF-07-12-06: New procedure — PARTIAL state.pickle surgery (remove named taghistory entries), for when a full undo must keep other albums' incremental state
+  Filed by 07-12 run 1 (2026-09-26T22:37Z) with DEF-07-11-01, for plan 07-17 / stacks/selfhosted/arrs/beets.md.
+  07-11's restore (file-copy the fence state.pickle) is only correct when NO other album has landed since the
+  fence. Here six had, so copying the fence back would have erased their taghistory. Procedure used (07-12 § C):
+  decode /tmp copies; assert live == fence ∪ keep ∪ remove exactly; build {tagprogress, taghistory − remove} with
+  pickle.dump (protocol 4, beets' own writer, beets/importer/state.py:100-110); prove new == fence ∪ keep; stop
+  beets-flask; `cp -p` a backup; `cp` the new file onto the live one (owner/mode/inode preserved); start; keys
+  check; re-decode. The procedure was authorised by the operator's verbatim statement recorded in § C. Not
+  measured: behaviour if tagprogress is non-empty (it was {} throughout); the procedure asserts {} and stops
+  otherwise.

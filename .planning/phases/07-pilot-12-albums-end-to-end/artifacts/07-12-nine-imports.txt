@@ -567,3 +567,53 @@ POST-SURGERY IMPORT KEYS: PASS (copy=true move=false write=true)
     library.db 22a72aff… is unchanged by the surgery; items 167, albums 6.
 STATE SURGERY: PASS (state.pickle 585c5e56… -> 9f2d1ba7…; P01 and P09 taghistory entries ABSENT; decoded == fence ∪ {P10 P02 P03 P05 P06 P12}; backup /mnt/fast/safety/phase07/0712-state/state.pickle.pre-0712-surgery 585c5e56…; writer up, keys PASS)
 P01 and P09 FULL UNDO: TREE yes (32→0, 100→0), DB yes (albums 5 and 7 gone, 167 items left), STATE yes (by this surgery)
+
+## D — GATE RECORD (Task 2), written after the live-state verification above
+Chronology (UTC 2026-09-26; the orchestrator's record, each point re-checked in § A where it is checkable):
+  1. Answers were given BEFORE any UI action and relayed by the orchestrator. The 431 incident began at 21:49:57Z,
+     so the answers were given at or before 21:49:57Z.
+  2. First UI attempt: the inbox page returned HTTP 431, and nothing imported. Cause (orchestrator, measured): the
+     inbox loader GETs /api_v1/session/minimal and /api_v1/session/status with every staged folder's hash+path in
+     the query string (10 folders → several KB). Traefik forward-auth passes the URI to Authelia, whose
+     `server.buffers.read: 4096` produces fasthttp "small read buffer" (traefik access.log 21:49:57–58Z; authelia log).
+  3. Operator-approved fix (verbatim: "Raise Authelia buffers (Recommended)"), done by the orchestrator:
+     buffers read/write 4096 → 16384, backup configuration.yml.bak-20260926-431 (10b08744…), validate-config rc 0,
+     restarted 21:54:22Z healthy. Re-read in § A (A6). Not in git. Filed DEF-07-12-03.
+  4. Operator retried, per folder (§ A (A3): eight separate jobs 21:58:27Z–22:07:03Z). Operator report, verbatim:
+     "one had duplicate and failed the others imported", later that imports were done "per folder".
+  5. Operator decision, verbatim: "Undo P01 + P09, keep rest". The operator pressed UNDO IMPORT on P01 (22:25:37Z)
+     and P09 (22:25:49Z) and reported, verbatim: "Both undone; per folder". This agent completed the undo with
+     the state surgery in § C.
+
+OPERATOR ANSWER (verbatim, relayed by the orchestrator, given at or before 2026-09-26T21:49:57Z, recorded 2026-09-26T22:40Z): P04 → "rank 3 c33163f3"; P05 → "rank 1 0a74adf8 (digital)"; P01 → "hold"; others → "Yes, as recommended" (P02 rank 1 e4fdb1dc, P03 rank 1 ef528afc, P06 rank 1 39fb4603 as one-track album, P12 rank 1 581244e0; P09 hold)
+OPERATOR ANSWER (after the imports, verbatim, relayed, recorded 2026-09-26T22:40Z): "Undo P01 + P09, keep rest" — P02 kept on c0df8104 as imported-other; P04 re-decided afterwards
+OPERATOR ANSWER (P01 EXCEPTION): "hold" (in the answer above; verbatim P01 → "hold"). No exception statement was made.
+
+Normalised dispositions. Each row records what is TRUE NOW, as measured in § A, and the gate answer is given
+beside it:
+DISPOSITION P02: imported-other c0df8104-7b49-4fa3-bcec-cb3d310aa9a5
+  (answer: rank 1 e4fdb1dc. Landed on rank 2 of an exact three-way tie, and the operator chose to keep it:
+  "keep rest". c0df8104 passes D-29 exactly as rank 1 did (strong; 10 == 10; per-track 0). Filed DEF-07-12-05.)
+DISPOSITION P03: imported
+DISPOSITION P05: imported
+DISPOSITION P06: imported
+DISPOSITION P09: hold
+  (answer: hold. It was IMPORTED AGAINST THE HOLD at 22:06:10Z as-is with 100 items, then fully undone: UNDO IMPORT
+  22:25:49Z plus the state surgery 22:35:50Z. It is staged and not imported. Filed DEF-07-12-04.)
+DISPOSITION P12: imported
+EXCEPTION DISPOSITION P01: hold
+  (answer: hold. It was IMPORTED AGAINST THE HOLD at 22:02:00Z with 61f964df and 32 items, then fully undone:
+  UNDO IMPORT 22:25:37Z plus the state surgery 22:35:50Z. It is staged and not imported, so Task 3's hold arm
+  unstages it. Filed DEF-07-12-04.)
+P04 DISPOSITION PENDING — the import request (22:00:12Z, candidate e4fdb1dc, not the agreed c33163f3) FAILED with
+  DuplicateException (duplicate_action ask; the duplicate is P02's album 2). Nothing was written. P04 is staged and
+  its session ecac6a1b is WAITING_FOR_USER_SELECTION. The operator re-decides P04 at the checkpoint below; its ONE
+  `DISPOSITION P04:` row is written from that answer, after a live-state check. Until then P04 is not landed.
+
+Landed now: P10 (07-11), P02, P03, P05, P06, P12. Held: P09, P01. Pending: P04. Moved to 07-13: P11.
+%aunique{} so far: none fired. P02 landed at `Benson Boone/American Heart/` with no suffix (FROZEN dir), and the
+first-seen album of a pair never carries one. The P04 prediction is re-measured in § E against P02 as it
+actually landed (c0df8104, catalognum empty), not the rank-1 assumption made in Task 1.
+Import order so far (albums.added): P02 21:58:27Z, P03 21:59:42Z, P06 22:01:12Z, P05 22:04:46Z, P12 22:07:04Z.
+P05 came after P06, against the declared order (P02, P03, P04, P05, P06, P09, P12). Task 3 computes the
+ADDED ORDER line.
