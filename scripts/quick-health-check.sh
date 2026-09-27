@@ -3384,6 +3384,8 @@ if [ "$EXIT_CODE" -ne 0 ]; then
     #
     # Extended again 2026-09-26 (plan 07-08, D-23) — NO SITE ADDED OR REMOVED: the D-03 flask
     # runtime arm's expectation was inverted (RW=true), so the tail now states the new expectation.
+    # 07-REVIEW WR7-04 (2026-09-27): the RW=false line no longer pre-excuses the red (07-09 has
+    # deployed), and the sweep line states its durable rule rather than a pre-import state.
     echo "❌ Health check FAILED. The failing block is whichever one above carries a ❌ or a ⚠️ —"
     echo "   that is any of: the Traefik or Authelia container probes, the Traefik dashboard"
     echo "   probe, the container counts, the music freeze harness, the consumers audit, the"
@@ -3403,9 +3405,10 @@ if [ "$EXIT_CODE" -ne 0 ]; then
     echo "      to the baseline detectable by tooling instead of only by a human reading yellow."
     echo "   ⚠️ The D-03 mount block asserts /mnt/tank/media RW=true on beets-flask since Phase 7"
     echo "      (D-22 grant, standing assertion D-23) and ro on the dormant CLI arm. RW=false on"
-    echo "      beets-flask is the red now — it is expected until plan 07-09 deploys the grant."
-    echo "   ⚠️ The music import sweep carries a ⚠️ BY DESIGN until the first pilot import: the"
-    echo "      library holds 0 items and the sweep refuses to call nothing clean (its exit 3)."
-    echo "      Once items exist, a ⚠️ there is a could-not-look and a ❌ is a criterion-7 finding."
+    echo "      beets-flask is a REGRESSION of the D-22 grant (a container recreated from an older"
+    echo "      compose file?) — it is NOT expected."
+    echo "   ⚠️ The music import sweep refuses to call nothing clean: an empty library, or a class"
+    echo "      with 0 checkable rows, is its exit 3 (⚠️), never green. Otherwise a ⚠️ there is a"
+    echo "      could-not-look and a ❌ is a criterion-7 finding."
     exit 1
 fi
