@@ -34,4 +34,11 @@ This verdict is separate from `/gsd-verify 07`. That command scores the eight cr
 
 ## Appendix: deploy record
 
-(filled in below by the deploy step)
+Deploy performed on `deploy: yes`, after the verdict commit f130944.
+
+- `git push origin main` sent `aa1daab..f130944  main -> main` to github.com:DamianFlynn/selfhost-stacks.git.
+- 2026-09-27T19:41:59Z, on LXC 100: `git -C /mnt/fast/stacks status --porcelain` returned RC 0 with empty output. The host tree was clean, so the pull went ahead.
+- 2026-09-27T19:42:05Z: `git -C /mnt/fast/stacks pull --ff-only` returned RC 0 (fast-forward).
+- The host HEAD was `f130944be8ae84ec3004a691e9417eb1910c238e` and the workstation HEAD was the same, so **host HEAD == workstation HEAD**.
+- This appendix commit and the 07-17 SUMMARY commit come after that assertion. Both are pushed and pulled the same way, and the equality is re-asserted and recorded in `07-17-SUMMARY.md`.
+- The estate was otherwise read only. No container was restarted and no compose was run: the deploy changed only the git checkout.
