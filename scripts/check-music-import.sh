@@ -79,7 +79,14 @@
 # KNOBS (additive only, CONVENTIONS §4 — an override may only ever make this check redder):
 #   IMPORT_SWEEP_CONTAINER  default beets-flask
 #   IMPORT_SWEEP_DB         default /config/library.db
-#   IMPORT_SWEEP_TIMEOUT    default 120 (seconds, applied Linux-side to the docker exec)
+#   IMPORT_SWEEP_TIMEOUT    default 600 (seconds, applied Linux-side to the docker exec)
+#   WHY 600 AND NOT 120 (07-REVIEW WR7-06): the quick-health-check fold-in wraps this whole script
+#   in `timeout $REMOTE_TIMEOUT` (default 120) and, on a 124, tells the operator to re-run with a
+#   larger REMOTE_TIMEOUT. With an inner default equal to the outer one, a larger REMOTE_TIMEOUT
+#   just made THIS bound the binding one, and the only knob that could lift it forces exit 1 — so
+#   a slow sweep over a growing library had no sanctioned way to finish. The inner bound is now a
+#   generous backstop (it still bounds a standalone run) and the caller's REMOTE_TIMEOUT is the
+#   knob; a REMOTE_TIMEOUT below 600 is never overtaken by this one.
 #   Any non-default value prints "override in effect — this run cannot report the sweep green"
 #   and forces a non-zero exit. They exist so a red branch can be DRIVEN, never to silence one.
 #
@@ -119,7 +126,7 @@ done
 
 IMPORT_SWEEP_CONTAINER_DEFAULT="beets-flask"
 IMPORT_SWEEP_DB_DEFAULT="/config/library.db"
-IMPORT_SWEEP_TIMEOUT_DEFAULT="120"
+IMPORT_SWEEP_TIMEOUT_DEFAULT="600"
 IMPORT_SWEEP_CONTAINER="${IMPORT_SWEEP_CONTAINER:-$IMPORT_SWEEP_CONTAINER_DEFAULT}"
 IMPORT_SWEEP_DB="${IMPORT_SWEEP_DB:-$IMPORT_SWEEP_DB_DEFAULT}"
 IMPORT_SWEEP_TIMEOUT="${IMPORT_SWEEP_TIMEOUT:-$IMPORT_SWEEP_TIMEOUT_DEFAULT}"

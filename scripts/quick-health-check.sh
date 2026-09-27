@@ -2907,6 +2907,7 @@ elif [ "$IMPORT_SWEEP_RC" -eq 124 ]; then
     echo "  This is NOT a clean sweep. Nothing was measured — the command never returned. A wedged"
     echo "  dockerd is the usual cause (read /proc/pressure/io on atlantis 172.16.1.158). Re-run with"
     echo "  a larger budget before concluding anything: REMOTE_TIMEOUT=300 bash scripts/quick-health-check.sh"
+    echo "  (the sweep's own inner bound is 600s, so any REMOTE_TIMEOUT below that is the one that binds)"
     if [ "$IMPORT_SWEEP_OVERRIDDEN" -eq 1 ]; then   # GC-14
         echo "  ⚠️  IMPORT_SWEEP_SCRIPT override in effect — ran: $IMPORT_SWEEP_SCRIPT (not the"
         echo "  deployed path). What exceeded the bound was THAT file; dockerd is not implicated."
