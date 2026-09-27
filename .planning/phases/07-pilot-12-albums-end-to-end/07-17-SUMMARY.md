@@ -73,3 +73,11 @@ None.
 ## Next
 
 `/gsd-verify 07` scores the eight criteria once, from committed evidence. The five reservations feed Phase 8/9 planning. The single budgeted code review (D-31) is still unspent and remains the one optional next step.
+
+## Final deploy re-assertion
+
+At 2026-09-27T19:42:43Z: push `f130944..9289b0d` succeeded. Host `status --porcelain` returned RC 0 with empty output, and `pull --ff-only` returned RC 0. Host HEAD and workstation HEAD were both `9289b0d94c28…`. This section's own commit is pushed and pulled the same way, and its equality is reported in the executor's handback.
+
+## Self-Check: PASSED
+
+The verdict file, the evidence file and this SUMMARY all exist. Commits f3a4987, 809ea8e, f130944, d985922 and 9289b0d are all in `git log`. `git diff HEAD -- .planning/REQUIREMENTS.md` is empty, and STATE.md and ROADMAP.md were not touched by this continuation.
