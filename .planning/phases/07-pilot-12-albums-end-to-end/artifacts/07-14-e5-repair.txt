@@ -182,3 +182,140 @@ RECOMMENDATION: apply. The defect is live in MA and the file-level change is pro
   window (rw on Music, barrier holding, Jellyfin scan ≈ 10.5 h away) exists now. Excluding CD 01-06 has no
   file-level reason, because its "hard error" is MA's and not the file's; excluding it would leave the one visible
   MA failure unrepaired.
+
+== OPERATOR ANSWER ==
+OPERATOR ANSWER (verbatim, relayed by the orchestrator, recorded 2026-09-27T13:14:55Z): apply
+DISPOSITION: apply
+
+== TASK 2: APPLY AND VERIFY == (2026-09-27T13:15Z–13:19Z; DISPOSITION apply, so all 14 files, no exclusion)
+
+-- Re-verify before writing (all reads) --
+  atlantis 13:15:10Z: `sha256sum -c /root/e5-live.sha` on the live dir 14 OK (RC 0), and the same manifest against
+    .zfs/snapshot/pre-07-pilot/Def Leppard/Def Leppard (2015)/ 14 OK. So the files are byte-identical to the fence and
+    to the bytes the pre-07-e5 capture (12:54:43Z) read. Owner 14/14 568:568 777; tank/media/Music readonly=off;
+    tank/media/Music@pre-07-pilot present (Sat Sep 26 15:48 2026 local).
+  Whole-library manifest lib-pre.tsv (find, .zfs pruned: path, type, size, mtime, ctime, owner, mode): 2,885 entries,
+    13:15:27Z.
+  beets-flask fingerprint (fingerprint.py over the 14 live paths) fp-lib-prewrite.json == Task 1's fp-lib-before.json:
+    True. Tags, blocks, vendor and audio sha are unchanged since the gate.
+  Jellyfin scan margin (jf-tasks-0713.sh, GET, 13:15:31Z): Scan Media Library Idle, last 09:10:34Z..11:33:29Z, 12-h
+    interval, so next ≈ 23:33:29Z. Margin ≈ 10 h 18 min. Running: Generate Trickplay Images only.
+
+-- Apply program (NEW, separate from the scratch-only scratchwrite.py) --
+  /root/phase07-0714/e5apply.py on LXC 100, sha256 0b1267234bf73d62680bb6274f087fff80821dbe8f00d0157ca701ba712164cb.
+  It handles ONE path per invocation (argv[1]) and is fed on stdin to `docker exec -i -u 568 beets-flask /venv/bin/python -`.
+  Guards, all before any write:
+  - exact allowlist of the 14 container paths (/media/Music/Def Leppard/Def Leppard (2015)/<name>, U+2019 as on disk);
+  - uid == 568;
+  - a regular file, not a symlink;
+  - precondition: mediafile albumartist None, album 'Def Leppard', artist 'Def Leppard', and none of the raw keys
+    ALBUMARTIST / ALBUM ARTIST / ALBUM_ARTIST present.
+  It sets albumartist only, save()s, re-reads, and exits non-zero on any after-value mismatch. The loop aborts on the
+  first non-zero RC.
+  Refusals driven first (nothing opened for writing): a Taylor Swift path -> REFUSE not-in-allowlist RC 3; uid 0 ->
+    REFUSE uid RC 4; a `..` spelling of an allowed path -> REFUSE not-in-allowlist RC 3.
+
+-- BARRIER READ immediately before the first save() --
+  /root/ma-read-0710.sh SINCE=2026-09-27T12:56:37Z, RC 0, 13:16:29Z: 4/4 music_sync_filesystem_local--XJaJWNUS_*
+  enabled=false next_run=null (updated_at 2026-09-26T15:55:04Z); control 16 enabled; pattern drive 1/0/0; log 294
+  lines; server-start/sync lines later than SINCE: 0. The write loop ran in the same shell and was gated on this line:
+BARRIER: VERIFIED (4/4 enabled=false, next_run null) at 2026-09-27T13:16:29Z
+
+-- Writes (WRITE START 13:16:29Z, WRITE END 13:16:31Z, written 14, no abort) --
+  CD 01-01 RC 0 | albumartist None -> 'Def Leppard' (album, artist 'Def Leppard' before and after) | +3 keys | inode 538->538 | size 40619456->40619456 | 568:568 | OK
+  CD 01-02 RC 0 | albumartist None -> 'Def Leppard' (album, artist 'Def Leppard' before and after) | +3 keys | inode 540->540 | size 28730110->28730110 | 568:568 | OK
+  CD 01-03 RC 0 | albumartist None -> 'Def Leppard' (album, artist 'Def Leppard' before and after) | +3 keys | inode 542->542 | size 27346018->27346018 | 568:568 | OK
+  CD 01-04 RC 0 | albumartist None -> 'Def Leppard' (album, artist 'Def Leppard' before and after) | +3 keys | inode 544->544 | size 36983736->36983736 | 568:568 | OK
+  CD 01-05 RC 0 | albumartist None -> 'Def Leppard' (album, artist 'Def Leppard' before and after) | +3 keys | inode 546->546 | size 28201939->28201939 | 568:568 | OK
+  CD 01-06 RC 0 | albumartist None -> 'Def Leppard' (album, artist 'Def Leppard' before and after) | +3 keys | inode 548->548 | size 33369374->33369374 | 568:568 | OK
+  CD 01-07 RC 0 | albumartist None -> 'Def Leppard' (album, artist 'Def Leppard' before and after) | +3 keys | inode 552->552 | size 26015433->26015433 | 568:568 | OK
+  CD 01-08 RC 0 | albumartist None -> 'Def Leppard' (album, artist 'Def Leppard' before and after) | +3 keys | inode 556->556 | size 35226389->35226389 | 568:568 | OK
+  CD 01-09 RC 0 | albumartist None -> 'Def Leppard' (album, artist 'Def Leppard' before and after) | +3 keys | inode 560->560 | size 21363511->21363511 | 568:568 | OK
+  CD 01-10 RC 0 | albumartist None -> 'Def Leppard' (album, artist 'Def Leppard' before and after) | +3 keys | inode 564->564 | size 27004896->27004896 | 568:568 | OK
+  CD 01-11 RC 0 | albumartist None -> 'Def Leppard' (album, artist 'Def Leppard' before and after) | +3 keys | inode 568->568 | size 19276494->19276494 | 568:568 | OK
+  CD 01-12 RC 0 | albumartist None -> 'Def Leppard' (album, artist 'Def Leppard' before and after) | +3 keys | inode 572->572 | size 23253750->23253750 | 568:568 | OK
+  CD 01-13 RC 0 | albumartist None -> 'Def Leppard' (album, artist 'Def Leppard' before and after) | +3 keys | inode 576->576 | size 34089218->34089218 | 568:568 | OK
+  CD 01-14 RC 0 | albumartist None -> 'Def Leppard' (album, artist 'Def Leppard' before and after) | +3 keys | inode 580->580 | size 35446380->35446380 | 568:568 | OK
+  "+3 keys" = ['ALBUM ARTIST', 'ALBUMARTIST', 'ALBUM_ARTIST'] on every file, matching the scratch proof. Each write was
+  in place (same inode, same size), and the owner is unchanged.
+
+-- Verification --
+V1 file structure (fingerprint.py post vs pre, 14 files): 0 files with issues. On every file, size, audio_offset,
+   audio-frame sha256, STREAMINFO md5 and vendor are unchanged. STREAMINFO and SEEKTABLE blocks are byte-identical, block
+   order is unchanged, and all 13 existing comments are unchanged in value, order and key case. The only additions are
+   the 3 keys above. VORBIS_COMMENT +83 bytes and PADDING −83 bytes on each file.
+V2 decoded PCM (`ffmpeg -nostdin -v error -i <f> -map 0:a -f md5 -`, live files): `cmp` against Task 1's pcm-before.txt
+   gives IDENTICAL 14/14.
+V3 ffprobe format tags on each of the 14: album=Def Leppard, album_artist=Def Leppard, "ALBUM ARTIST"=Def Leppard,
+   artist=Def Leppard. The new value is on the file.
+V4 CD 01-06 Sea of Love (MA's hard-erroring file): `ffprobe -v error` rc 0, stderr ""; full decode rc 0, 0 errors.
+   These are the same readings as before, because the error was never in the file (Task 1). Whether MA's failure clears
+   is 07-15's reading.
+V5 ownership/mode from atlantis (real root) after the write, and again after Jellyfin: 14/14 568:568 777.
+V6 QUAL-02, the instrument (LXC 100 /mnt/fast/stacks at 998625b; snapshot-music-tags.sh 60212666…, diff-music-tags.sh
+   4bbfaf60… = the Task 1 hashes):
+   `bash scripts/snapshot-music-tags.sh post-07-e5 --roots "/mnt/tank/media/Music/Def Leppard/Def Leppard (2015)"`
+     RC 0, 14 records, .failed 0 bytes; post-07-e5.ndjson.gz sha256
+     253701e9b27a29f5a1cdf51ff1f3dcddf3e592e94f7462f3acac50bf7e4ad26e. pre-07-e5.ndjson.gz is still 5eb49bfe… (unchanged).
+   `bash scripts/diff-music-tags.sh <tags>/pre-07-e5.ndjson.gz <tags>/post-07-e5.ndjson.gz`: exit 0.
+     MATCHED 14, MISSING_AFTER 0, NEW_AFTER 0, AMBIGUOUS 0/0, FIELDS_DROPPED 0, FIELDS_CHANGED 0,
+     FIELDS_GAINED 28 = `ALBUM ARTIST` + `album_artist` × 14, all value "Def Leppard". This is exactly the Task 1 prediction.
+     Output /root/phase07-0714/diff-e5.txt sha256 e849de8a….
+     (A first invocation with bare capture names returned RC 2 "input not found: pre-07-e5". That was a usage error
+     that read nothing, and the script takes paths. It was re-run with full paths as above.)
+V7 no other file in the library changed (atlantis, find over /mnt/tank/media/Music, .zfs pruned):
+   lib-pre.tsv 13:15:27Z vs lib-post.tsv 13:17:41Z: 2,885 vs 2,885 entries and an identical path set. Changed entries:
+   14, all `Def Leppard/Def Leppard (2015)/CD 01-*.flac` (f, 568:568, 777, mtime/ctime only). No directory changed.
+   lib-postjf.tsv, taken after the Jellyfin POST and re-read, differs from lib-post.tsv in 0 lines, and no .nfo was
+   created after 13:17:00Z.
+
+-- Jellyfin (targeted, file scope) --
+  Pre-read 13:17:49Z (jf-0714.sh MODE=read): Music MetadataSavers=[] SaveLocalMetadata=false. Album 71465f78… AlbumArtist
+    Def Leppard. The dir holds album.nfo (Aug 18), cdart.png, folder.jpg, and nothing new.
+  ONE POST: jf-0714.sh MODE=post, body = jf-paths.txt (the 14 /media/Music/... file paths, UpdateType Modified), address
+    resolved fresh 192.168.90.37:8096 -> HTTP 204 at 2026-09-27T13:17:50Z. No folder entry, no refresh call, no scan.
+  Re-read 13:18:21Z (31 s after the POST; the atlantis checks after it ran to 13:18:36Z, and the census read at
+    13:18:36Z is 46 s after it. The album was re-read at 31 s, not ≥ 60 s. See the note below):
+    MetadataSavers=[] SaveLocalMetadata=false; album 71465f782666839c6786530ab9c9e589 Name=Def Leppard |
+    AlbumArtist=Def Leppard | AlbumArtists=["Def Leppard"]; audio children 14; all 14 Artists=["Def Leppard"]
+    ArtistItems=["Def Leppard"] AlbumArtist=Def Leppard. No sidecar was written (V7).
+    As Task 1 predicted, Jellyfin shows no visible change: it already derived the album artist without the tag.
+  D-24 census (GET /Items, Audio under the Music library, 13:18:36Z): Audio total 1,441; the predicate (Artists non-empty
+    AND ArtistItems empty) counts 29, the pinned 29 of 07-07, and 0 of them are in Def Leppard (2015)/. The Def Leppard
+    track the prose names, `On Through the Night (1980)/Digital Media 01-11 Def Leppard - Overture.flac`, reads Artists=[]
+    ArtistItems=[], unchanged and outside the predicate. The census did not move and was not expected to (Task 1).
+    The after-reading proper stays with 07-15.
+
+-- Music Assistant (read-only; NOT synced; 07-15 syncs) --
+  BARRIER READ after the write: /root/ma-read-0710.sh SINCE=2026-09-27T13:16:29Z, RC 0: 4/4 enabled=false next_run null;
+  control 16; pattern drive 1/0/0; log 295 lines; later-than-SINCE 0.
+BARRIER: VERIFIED (4/4 enabled=false, next_run null) at 2026-09-27T13:18:42Z
+  ma-0714.sh 13:18:42Z: albums 70 tracks 1244. ma-artists-0714.sh (the same login, music/artists/library_items with the
+    provider filter, read-only) 13:19:01Z: artists 66. That is 70/1244/66, equal to the baseline.
+  The Def Leppard (2015) rows are exactly as in Task 1: 13 tracks album "Def Leppard" album_artists=[] track_artists
+    ["Brian Coll"], and "Sea Of Love" album=<none>. MA has not re-read the files, which is correct while the barrier holds.
+  The "Brian Coll" artist-id anomaly is filed as DEF-07-14-01 for 07-15 (deferred-items.md). It is not E5.
+
+-- Note on the ≥ 60 s re-read --
+  The plan asks for the Jellyfin re-read "after ≥ 60 s". The album and track read above was taken 31 s after the POST.
+  Everything it read was already true BEFORE the write (Task 1 12:56:01Z and the pre-read at 13:17:49Z), so the timing
+  cannot make it a false pass on the thing that matters, which is no sidecar and no savers. It cannot show whether
+  Jellyfin has re-read the new tag. A second re-read at ≥ 60 s follows.
+  Second re-read at 2026-09-27T13:20:10Z, 140 s after the POST (GET only): MetadataSavers=[] SaveLocalMetadata=false;
+    album AlbumArtist=Def Leppard AlbumArtists=["Def Leppard"]; children 14, AlbumArtist on all ["Def Leppard"],
+    ArtistItems on all ["Def Leppard"]. The same result.
+    DateLastRefreshed and DateModified came back null through this query (no UserId), so it cannot show whether Jellyfin
+    re-probed the files. That is not a finding, because the values it would re-derive are the ones it already shows.
+  Library manifest atlantis 13:20:13Z (lib-final.tsv): 2,885 entries, 0 diff lines against lib-post.tsv. Still only
+    the 14 intended files have changed since 13:15:27Z, and there is no sidecar.
+
+== TASK 2 VERDICT ==
+E5 REPAIR (named operation, not one of the twelve): APPLIED and VERIFIED on 14/14 files in Def Leppard/Def Leppard (2015)/.
+  albumartist absent -> "Def Leppard" (3 Vorbis keys), album unchanged. QUAL-02 diff exit 0 (28 gained / 0 dropped /
+  0 changed). Audio frames, STREAMINFO md5 and decoded PCM are identical 14/14, and ownership is 568:568. No other
+  library file changed. Jellyfin got one targeted Modified POST (HTTP 204), with MetadataSavers [] and no sidecar. MA
+  was not synced, reads 70/1244/66, and the barrier was VERIFIED before (13:16:29Z) and after (13:18:42Z) the write.
+  The D-24 census is unchanged at 29, with 0 in this folder, as expected. Recovery, if it is ever wanted, is the Task 1
+  route: a file copy out of .zfs/snapshot/pre-07-pilot/.
+  For 07-15: after the MA sync, read album 116 / the (2015) mapping, the album_artists of the 14, whether "Sea Of Love"
+  gets an album, and DEF-07-14-01 ("Brian Coll").

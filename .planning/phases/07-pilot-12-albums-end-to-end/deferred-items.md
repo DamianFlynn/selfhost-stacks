@@ -265,3 +265,12 @@ DEF-07-13-03: P08 (Mastermix Issue 421) carries no disc tag — two CDs tagged a
   disc 0 and Jellyfin shows one disc indexed 1,1,2,2,…,5,5. The file names still render uniquely, because the titles
   differ, and the FROZEN oracle lines already expect this. Fixing it is tag normalisation (the Phase 9 mutagen script),
   not beets, and not a `beet write` over DJ/ (DEF-07-13-01's open hazard). Evidence: § G2, § Criterion 6.
+
+DEF-07-14-01: Music Assistant reports the track artist "Brian Coll" on 86 Def Leppard tracks across 5 albums, and no file carries that string
+  Filed 2026-09-27 by 07-14. This is an MA-side observation, not E5, and not a file defect. The MA read-only API (ma-0714.sh,
+  2026-09-27T12:56:02Z, re-read 13:18:42Z unchanged) gives track_artists ["Brian Coll"] with artist item_id "116",
+  the same number as the Def Leppard album id 116. It covers 13 of the 14 tracks of Def Leppard (2015), plus Las Vegas
+  Residency 18, High ’n’ Dry 10, On Through the Night 10 and Rock of Ages 35. The files carry Artist=Def Leppard, and
+  Jellyfin reads Def Leppard. The likely class is an MA join/id collision in its library DB, but that is unmeasured. The E5 repair does not touch it.
+  For 07-15: after the MA sync, read it separately from E5, and do not score it as E5 success or failure. If it
+  persists, it is a Phase 8 MA item. Evidence: artifacts/07-14-e5-repair.txt § 3 OBSERVATION and § TASK 2.
