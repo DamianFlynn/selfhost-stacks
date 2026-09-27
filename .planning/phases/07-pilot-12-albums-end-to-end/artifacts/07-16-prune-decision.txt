@@ -1,0 +1,459 @@
+================================================================================
+07-16 — SNAPSHOT REGISTER AND THE ONE-GATE PRUNE (D-19)
+================================================================================
+Plan    : 07-16, phase 07-pilot-12-albums-end-to-end, wave 12 (gap closure)
+Task 1  : measure, write the register, compute eligibility, ask once. NO WRITE OF ANY KIND.
+Written : 2026-09-27T14:12:11Z (UTC); measurement 14:07:16Z (listing), 14:08:59Z (written@ pairs)
+Base    : repository HEAD 05bef73e9934b58972050d135ee495154d567e84, branch main, tree clean
+Host    : atlantis (172.16.1.158) as REAL root (id=0, hostname atlantis). LXC 100 has no zfs.
+Register: .planning/SNAPSHOT-REGISTER.md (project level; created by this plan)
+
+NOTATION, BINDING ON THIS WHOLE FILE. The destructive ZFS verbs are written bracketed —
+`zfs [d]estroy`, `zfs [r]ollback` — everywhere as narrative, including where they are forbidden.
+The only place the unbracketed destroy verb may appear is an `ISSUED:` line for a command that was
+actually issued (P-06). Task 1 issued only `zfs list` and `zfs get` — reads.
+
+BOUNDING (CONVENTIONS §2). Every remote command ran under Linux-side `timeout` (60 s list, 30 s per
+get, 600 s outer), with `set -o pipefail` in the remote string; the ssh RC was read (0 both times)
+and every zfs RC was recorded (all 0). The pair script was written locally and piped over ssh
+(`bash -s`), never escaped through a heredoc inside the ssh string.
+
+⛔ Scope fence: zfs verbs are list/get only; `zfs [d]estroy` only of exactly the names the operator
+approves, one invocation per name, in Task 2, after re-verification. `zfs [r]ollback` forbidden on
+every branch. `tank/downloads@pre-phase5` is listed and never offered.
+
+================================================================================
+MEASURED STATE
+================================================================================
+(a) The whole estate's snapshot set — `zfs list -t snapshot -H -p -o name,used,refer,written,creation
+    -r tank fast` (LIST_RC=0), verbatim, so nothing is looked up by name only. Column `written` is
+    bytes written since the PREVIOUS snapshot of that dataset. Then pool figures (POOL_RC=0),
+    `zfs list -H -p -o name,used,avail,refer tank fast`:
+
+    id=0 host=atlantis utc=2026-09-27T14:07:16Z
+    fast/appdata/arrs@backup-20260925	2560000	5177315328	5177315328	1790339909
+    fast/appdata/arrs@inc-20260925-1343	2449408	5177335808	2580480	1790340214
+    fast/appdata/arrs@inc-20260925-1755	4960256	5177548800	10866688	1790355326
+    fast/appdata/arrs@inc-20260925-2149	4771840	5177769984	12779520	1790369389
+    fast/appdata/arrs@inc-20260926-0020	11444224	5177495552	22872064	1790378437
+    fast/appdata/arrs@pre-07-pilot	32284672	5170823168	163139584	1790434108
+    fast/appdata/arrs@inc-20260927-0015	39137280	5153468416	102776832	1790464556
+    fast/appdata/automation@backup-20260925	1572864	2130423808	2130423808	1790339939
+    fast/appdata/automation@inc-20260925-1343	1601536	2130452480	1601536	1790340214
+    fast/appdata/automation@inc-20260925-1755	34533376	2137927680	41517056	1790355328
+    fast/appdata/automation@inc-20260925-2149	24248320	2145320960	47472640	1790369390
+    fast/appdata/automation@inc-20260926-0020	30572544	2140495872	41820160	1790378438
+    fast/appdata/automation@inc-20260927-0015	42115072	2135486464	81174528	1790464561
+    fast/appdata/buzz@backup-20260925	65536	44531712	44531712	1790339951
+    fast/appdata/buzz@inc-20260925-1343	65536	44531712	65536	1790340215
+    fast/appdata/buzz@inc-20260925-1755	0	44539904	258048	1790355328
+    fast/appdata/buzz@inc-20260925-2149	0	44539904	0	1790369390
+    fast/appdata/buzz@inc-20260926-0020	0	44539904	0	1790378438
+    fast/appdata/buzz@inc-20260927-0015	0	44539904	0	1790464563
+    fast/appdata/code-server@backup-20260925	0	1077248	1077248	1790339952
+    fast/appdata/code-server@inc-20260925-1343	0	1077248	0	1790340215
+    fast/appdata/code-server@inc-20260925-1755	0	1077248	81920	1790355329
+    fast/appdata/code-server@inc-20260925-2149	0	1077248	0	1790369390
+    fast/appdata/code-server@inc-20260926-0020	0	1077248	0	1790378438
+    fast/appdata/code-server@inc-20260927-0015	0	1077248	0	1790464563
+    fast/appdata/dawarich@backup-20260925	5705728	107700224	107700224	1790339952
+    fast/appdata/dawarich@inc-20260925-1343	5709824	107704320	5709824	1790340215
+    fast/appdata/dawarich@inc-20260925-1755	6873088	107679744	9588736	1790355329
+    fast/appdata/dawarich@inc-20260925-2149	7114752	107732992	9486336	1790369391
+    fast/appdata/dawarich@inc-20260926-0020	47939584	173862912	134615040	1790378438
+    fast/appdata/dawarich@inc-20260927-0015	13561856	171360256	45625344	1790464563
+    fast/appdata/homarr@backup-20260925	0	3928064	3928064	1790339953
+    fast/appdata/homarr@inc-20260925-1343	0	3928064	0	1790340215
+    fast/appdata/homarr@inc-20260925-1755	0	3928064	0	1790355329
+    fast/appdata/homarr@inc-20260925-2149	0	3928064	0	1790369391
+    fast/appdata/homarr@inc-20260926-0020	0	3928064	0	1790378440
+    fast/appdata/homarr@inc-20260927-0015	0	3928064	0	1790464564
+    fast/appdata/immich@backup-20260925	0	98304	98304	1790339954
+    fast/appdata/immich@inc-20260925-1343	0	98304	0	1790340216
+    fast/appdata/immich@inc-20260925-1755	0	98304	0	1790355329
+    fast/appdata/immich@inc-20260925-2149	0	98304	0	1790369391
+    fast/appdata/immich@inc-20260926-0020	0	98304	0	1790378440
+    fast/appdata/immich@inc-20260927-0015	0	98304	0	1790464564
+    fast/appdata/immich/postgres@pre-v3-20260918	1281875968	2098147328	2098147328	1789725187
+    fast/appdata/immich/postgres@backup-20260925	348160	2355757056	1539485696	1790339954
+    fast/appdata/immich/postgres@inc-20260925-1343	339968	2355748864	339968	1790340216
+    fast/appdata/immich/postgres@inc-20260925-1755	364544	2339373056	8691712	1790355330
+    fast/appdata/immich/postgres@inc-20260925-2149	471040	2339381248	483328	1790369391
+    fast/appdata/immich/postgres@inc-20260926-0020	2105344	2339381248	4542464	1790378440
+    fast/appdata/immich/postgres@inc-20260927-0015	1392640	2324045824	20295680	1790464564
+    fast/appdata/llm-ai@backup-20260925	0	2373386240	2373386240	1790339965
+    fast/appdata/llm-ai@inc-20260925-1343	0	2373386240	0	1790340216
+    fast/appdata/llm-ai@inc-20260925-1755	94208	2373386240	102400	1790355330
+    fast/appdata/llm-ai@inc-20260925-2149	0	2373386240	94208	1790369391
+    fast/appdata/llm-ai@inc-20260926-0020	0	2373386240	0	1790378441
+    fast/appdata/llm-ai@inc-20260927-0015	110592	2373390336	430080	1790464566
+    fast/appdata/media@backup-20260925	602112	13772775424	13772775424	1790339977
+    fast/appdata/media@inc-20260925-1343	602112	13772775424	602112	1790340216
+    fast/appdata/media@inc-20260925-1755	27693056	13774299136	49094656	1790355331
+    fast/appdata/media@inc-20260925-2149	211664896	13769428992	214999040	1790369392
+    fast/appdata/media@inc-20260926-0020	256417792	13611749376	3745234944	1790378441
+    fast/appdata/media@inc-20260927-0015	350433280	12612587520	700583936	1790464566
+    fast/appdata/minecraft@backup-20260925	90112	834093056	834093056	1790340063
+    fast/appdata/minecraft@inc-20260925-1343	90112	834093056	90112	1790340217
+    fast/appdata/minecraft@inc-20260925-1755	90112	834093056	90112	1790355332
+    fast/appdata/minecraft@inc-20260925-2149	90112	834093056	90112	1790369394
+    fast/appdata/minecraft@inc-20260926-0020	356352	827113472	351780864	1790378492
+    fast/appdata/minecraft@inc-20260927-0015	151552	827109376	389120	1790464586
+    fast/appdata/mpe@backup-20260925	253952	46780416	46780416	1790340069
+    fast/appdata/mpe@inc-20260925-1343	192512	46776320	249856	1790340217
+    fast/appdata/mpe@inc-20260925-1755	847872	46784512	1286144	1790355332
+    fast/appdata/mpe@inc-20260925-2149	798720	46850048	1187840	1790369394
+    fast/appdata/mpe@inc-20260926-0020	954368	46858240	1069056	1790378495
+    fast/appdata/mpe@inc-20260927-0015	1138688	46825472	2600960	1790464586
+    fast/appdata/postiz@backup-20260925	0	14950400	14950400	1790340069
+    fast/appdata/postiz@inc-20260925-1343	0	14950400	0	1790340217
+    fast/appdata/postiz@inc-20260925-1755	0	14950400	0	1790355332
+    fast/appdata/postiz@inc-20260925-2149	0	14950400	0	1790369394
+    fast/appdata/postiz@inc-20260926-0020	0	14950400	0	1790378496
+    fast/appdata/postiz@inc-20260927-0015	0	14950400	0	1790464586
+    fast/appdata/teleport@backup-20260925	188416	13443072	13443072	1790340070
+    fast/appdata/teleport@inc-20260925-1343	188416	13443072	188416	1790340217
+    fast/appdata/teleport@inc-20260925-1755	0	13455360	307200	1790355332
+    fast/appdata/teleport@inc-20260925-2149	0	13455360	0	1790369394
+    fast/appdata/teleport@inc-20260926-0020	0	13455360	0	1790378496
+    fast/appdata/teleport@inc-20260927-0015	0	13455360	0	1790464586
+    fast/appdata/termix@backup-20260925	0	8884224	8884224	1790340070
+    fast/appdata/termix@inc-20260925-1343	0	8884224	0	1790340217
+    fast/appdata/termix@inc-20260925-1755	0	8884224	0	1790355332
+    fast/appdata/termix@inc-20260925-2149	0	8884224	0	1790369394
+    fast/appdata/termix@inc-20260926-0020	0	8884224	0	1790378496
+    fast/appdata/termix@inc-20260927-0015	0	8884224	0	1790464586
+    fast/appdata/traefik@backup-20260925	163840	50872320	50872320	1790340070
+    fast/appdata/traefik@inc-20260925-1343	163840	50872320	163840	1790340218
+    fast/appdata/traefik@inc-20260925-1755	188416	50917376	249856	1790355332
+    fast/appdata/traefik@inc-20260925-2149	184320	50954240	225280	1790369395
+    fast/appdata/traefik@inc-20260926-0020	241664	50987008	286720	1790378496
+    fast/appdata/traefik@inc-20260927-0015	258048	51687424	1093632	1790464587
+    fast/ix-apps@ix-apps-backup-system-update--2025-11-18_10:57:04	65536	159744	159744	1763463424
+    fast/ix-apps@ix-apps-backup-system-update--2025-12-31_21:34:15	57344	196608	102400	1767216855
+    fast/ix-apps/app_configs@ix-apps-backup-system-update--2025-11-18_10:57:04	8192	348160	348160	1763463424
+    fast/ix-apps/app_configs@ix-apps-backup-system-update--2025-12-31_21:34:15	8192	348160	8192	1767216855
+    fast/ix-apps/app_mounts@ix-apps-backup-system-update--2025-11-18_10:57:04	0	98304	98304	1763463424
+    fast/ix-apps/app_mounts@ix-apps-backup-system-update--2025-12-31_21:34:15	0	98304	0	1767216855
+    tank/backups/hufflepuff-scavenge@pre-mybook-wipe-20260922	600160	1249594052608	1249594052608	1790032144
+    tank/backups/hufflepuff-scavenge@post-rescue-20260922	0	1306318158640	56724706192	1790060724
+    tank/backups/hufflepuff-scavenge@backup-20260922	0	1306318158640	0	1790060959
+    tank/backups/hufflepuff-scavenge@inc-20260923-1319	0	1307172360912	998371616	1790166009
+    tank/backups/hufflepuff-scavenge@backup-20260925	0	1307172360912	0	1790339908
+    tank/backups/hufflepuff-scavenge@inc-20260925-1343	0	1307172360912	0	1790340206
+    tank/backups/hufflepuff-scavenge@inc-20260925-1755	0	1307172360912	0	1790355325
+    tank/backups/hufflepuff-scavenge@inc-20260925-2149	0	1307172360912	0	1790369387
+    tank/backups/hufflepuff-scavenge@inc-20260926-0020	0	1307172360912	0	1790378429
+    tank/backups/hufflepuff-scavenge@inc-20260927-0015	0	1307172360912	0	1790464537
+    tank/backups/icloud-photos-library@backup-20260922	0	367221541456	367221541456	1790060958
+    tank/backups/icloud-photos-library@inc-20260923-1319	0	367221541456	0	1790166009
+    tank/backups/icloud-photos-library@backup-20260925	0	367221541456	0	1790339908
+    tank/backups/icloud-photos-library@inc-20260925-1343	0	367221541456	0	1790340206
+    tank/backups/icloud-photos-library@inc-20260925-1755	0	367221541456	0	1790355324
+    tank/backups/icloud-photos-library@inc-20260925-2149	0	367221541456	0	1790369387
+    tank/backups/icloud-photos-library@inc-20260926-0020	0	367221541456	0	1790378429
+    tank/backups/icloud-photos-library@inc-20260927-0015	0	367221541456	0	1790464536
+    tank/backups/immich-db@backup-20260922	0	857786864	857786864	1790074249
+    tank/backups/immich-db@inc-20260923-1319	0	857786864	0	1790166025
+    tank/backups/immich-db@backup-20260925	0	1715633744	857923264	1790339908
+    tank/backups/immich-db@inc-20260925-1343	0	1715633744	0	1790340206
+    tank/backups/immich-db@inc-20260925-1755	0	1715633744	0	1790355325
+    tank/backups/immich-db@inc-20260925-2149	0	1715633744	0	1790369388
+    tank/backups/immich-db@inc-20260926-0020	0	1715633744	857912352	1790378429
+    tank/backups/immich-db@inc-20260927-0015	0	1715633744	0	1790464537
+    tank/backups/terraform-state@backup-20260925	0	141856	141856	1790369496
+    tank/backups/terraform-state@inc-20260926-0020	0	141856	0	1790378436
+    tank/backups/terraform-state@inc-20260927-0015	0	141856	0	1790464556
+    tank/buzz@pre-landmine-20260925	0	14774848	14774848	1790369543
+    tank/downloads@pre-project	469216	2202432407824	2202432407824	1787054882
+    tank/downloads@pre-chown	469216	2202432407824	469216	1787089404
+    tank/downloads@pre-phase5	862048	2281925291184	79494891168	1789742526
+    tank/downloads@pre-phase5-chown	9209728	2387898084880	108257144512	1789850522
+    tank/downloads/mybook-music-archive@copied-from-mybook-20260922	491040	1409527793872	1409527793872	1790058593
+    tank/downloads/mybook-music-archive@post-rescue-20260922	0	1410334927232	807624400	1790060724
+    tank/downloads/mybook-music-archive@backup-20260922	0	1410334927232	0	1790060961
+    tank/downloads/mybook-music-archive@with-m4-20260922	20858288	1430266901008	19932541200	1790108319
+    tank/downloads/mybook-music-archive@inc-20260923-1319	0	1430803504064	557461344	1790166026
+    tank/downloads/mybook-music-archive@backup-20260925	0	1430803504064	0	1790339909
+    tank/downloads/mybook-music-archive@inc-20260925-1343	0	1430803504064	0	1790340213
+    tank/downloads/mybook-music-archive@inc-20260925-1755	0	1430803504064	0	1790355326
+    tank/downloads/mybook-music-archive@inc-20260925-2149	0	1430803504064	0	1790369388
+    tank/downloads/mybook-music-archive@inc-20260926-0020	0	1430803504064	0	1790378436
+    tank/downloads/mybook-music-archive@inc-20260927-0015	0	1430803504064	0	1790464555
+    tank/media/Books@post-mybook-books-20260922	0	22757996272	22757996272	1790032145
+    tank/media/Books@backup-20260922	0	22757996272	0	1790060959
+    tank/media/Books@inc-20260923-1319	0	22757996272	0	1790166025
+    tank/media/Books@backup-20260925	0	22757996272	0	1790339908
+    tank/media/Books@inc-20260925-1343	0	22757996272	0	1790340213
+    tank/media/Books@inc-20260925-1755	0	22757996272	0	1790355325
+    tank/media/Books@inc-20260925-2149	0	22757996272	0	1790369388
+    tank/media/Books@inc-20260926-0020	0	22757996272	0	1790378436
+    tank/media/Books@inc-20260927-0015	0	22867760080	109883840	1790464537
+    tank/media/Music@pre-project	1167584	36444295888	36444295888	1787054881
+    tank/media/Music@safe05-watch-t0	87296	36444290432	1162128	1787064168
+    tank/media/Music@pre-chown	87296	36444290432	87296	1787088578
+    tank/media/Music@pre-phase5-chown	0	36444268608	1243968	1789850522
+    tank/media/Music@backup-20260922	0	36444268608	0	1790060960
+    tank/media/Music@inc-20260923-1319	0	36444268608	0	1790166025
+    tank/media/Music@pre-06-41-conf04-reprobe	0	36444268608	0	1790237113
+    tank/media/Music@backup-20260925	0	36444268608	109120	1790339909
+    tank/media/Music@inc-20260925-1343	0	36444268608	0	1790340213
+    tank/media/Music@inc-20260925-1755	0	36444268608	0	1790355326
+    tank/media/Music@inc-20260925-2149	0	36444268608	0	1790369388
+    tank/media/Music@inc-20260926-0020	0	36444268608	0	1790378436
+    tank/media/Music@pre-07-pilot	0	36444268608	0	1790434107
+    tank/media/Music@inc-20260927-0015	163680	39079985824	2636000928	1790464539
+    tank/media/Photos@pre-takeout-20260918	3223404800	452629181664	452629181664	1789768224
+    tank/media/Photos@backup-20260922	11915904	692933136544	243527359680	1790060958
+    tank/media/Photos@inc-20260923-1319	2913504	693209843040	895886112	1790165999
+    tank/media/Photos@backup-20260925	0	693770174240	1785006784	1790339908
+    tank/media/Photos@inc-20260925-1343	0	693770174240	0	1790340192
+    tank/media/Photos@inc-20260925-1755	0	693770174240	0	1790355324
+    tank/media/Photos@inc-20260925-2149	0	693770174240	0	1790369387
+    tank/media/Photos@inc-20260926-0020	0	693770174240	0	1790378428
+    tank/media/Photos@inc-20260927-0015	436480	694060335232	899721680	1790464529
+    LIST_RC=0
+    fast	501909692416	1429695606784	221184
+    tank	45879402731184	5957403611856	163680
+    POOL_RC=0
+
+    Pool avail: tank 5,957,403,611,856 B = 5.42 TiB (re-measured, not restated — CLAUDE.md's 5.26 T
+    was 2026-09-24); fast 1,429,695,606,784 B = 1.30 TiB.
+
+(b) Project snapshots, filtered from (a): every snapshot on tank/downloads, tank/media/Music,
+    tank/downloads/mybook-music-archive (no children exist), fast/appdata/arrs, plus any other name
+    matching `pre-|safe0|copied-from`:
+
+    tank/downloads@pre-project                     used 469216     creation 1787054882 (2026-08-18T12:08:02Z)
+    tank/downloads@pre-chown                       used 469216     creation 1787089404 (2026-08-18T21:43:24Z)
+    tank/downloads@pre-phase5                      used 862048     creation 1789742526 (2026-09-18T14:42:06Z)
+    tank/downloads@pre-phase5-chown                used 9209728    creation 1789850522 (2026-09-19T20:42:02Z)
+    tank/media/Music@pre-project                   used 1167584    creation 1787054881 (2026-08-18T12:08:01Z)
+    tank/media/Music@safe05-watch-t0               used 87296      creation 1787064168 (2026-08-18T14:42:48Z)
+    tank/media/Music@pre-chown                     used 87296      creation 1787088578 (2026-08-18T21:29:38Z)
+    tank/media/Music@pre-phase5-chown              used 0          creation 1789850522 (2026-09-19T20:42:02Z)
+    tank/media/Music@pre-06-41-conf04-reprobe      used 0          creation 1790237113 (2026-09-24T08:05:13Z)  PRESENT
+    tank/media/Music@pre-07-pilot                  used 0          creation 1790434107 (2026-09-26T14:48:27Z)
+    fast/appdata/arrs@pre-07-pilot                 used 32284672   creation 1790434108 (2026-09-26T14:48:28Z)
+    tank/downloads/mybook-music-archive@copied-from-mybook-20260922  used 491040    (outside owner)
+    tank/downloads/mybook-music-archive@post-rescue-20260922         used 0         (outside owner)
+    tank/downloads/mybook-music-archive@with-m4-20260922             used 20858288  (outside owner)
+    backup-*/inc-* series on Music (8), arrs (6), mybook (8): backup-script owned (outside)
+    Pattern matches elsewhere (outside owner): tank/buzz@pre-landmine-20260925,
+      tank/media/Photos@pre-takeout-20260918, fast/appdata/immich/postgres@pre-v3-20260918,
+      tank/backups/hufflepuff-scavenge@pre-mybook-wipe-20260922.
+    Absent from the listing, as expected: nothing — every name 07-CONTEXT D-19 lists is present.
+
+(c) `written@<older>` for EVERY ordered pair (older = each non-backup snapshot, newer = each strictly
+    newer snapshot on the same dataset, ordered by creation) —
+    `zfs get -H -p -o value written@<older> <dataset>@<newer>`, per-call rc recorded:
+
+    id=0 host=atlantis utc=2026-09-27T14:08:59Z
+    DATASET tank/media/Music count=14 list_rc=0
+    PAIR	tank/media/Music	pre-project	safe05-watch-t0	written@pre-project=1162128	rc=0
+    PAIR	tank/media/Music	pre-project	pre-chown	written@pre-project=1162128	rc=0
+    PAIR	tank/media/Music	pre-project	pre-phase5-chown	written@pre-project=1762288	rc=0
+    PAIR	tank/media/Music	pre-project	backup-20260922	written@pre-project=1762288	rc=0
+    PAIR	tank/media/Music	pre-project	inc-20260923-1319	written@pre-project=1762288	rc=0
+    PAIR	tank/media/Music	pre-project	pre-06-41-conf04-reprobe	written@pre-project=1762288	rc=0
+    PAIR	tank/media/Music	pre-project	backup-20260925	written@pre-project=1762288	rc=0
+    PAIR	tank/media/Music	pre-project	inc-20260925-1343	written@pre-project=1762288	rc=0
+    PAIR	tank/media/Music	pre-project	inc-20260925-1755	written@pre-project=1762288	rc=0
+    PAIR	tank/media/Music	pre-project	inc-20260925-2149	written@pre-project=1762288	rc=0
+    PAIR	tank/media/Music	pre-project	inc-20260926-0020	written@pre-project=1762288	rc=0
+    PAIR	tank/media/Music	pre-project	pre-07-pilot	written@pre-project=1762288	rc=0
+    PAIR	tank/media/Music	pre-project	inc-20260927-0015	written@pre-project=2637490416	rc=0
+    PAIR	tank/media/Music	safe05-watch-t0	pre-chown	written@safe05-watch-t0=87296	rc=0
+    PAIR	tank/media/Music	safe05-watch-t0	pre-phase5-chown	written@safe05-watch-t0=1243968	rc=0
+    PAIR	tank/media/Music	safe05-watch-t0	backup-20260922	written@safe05-watch-t0=1243968	rc=0
+    PAIR	tank/media/Music	safe05-watch-t0	inc-20260923-1319	written@safe05-watch-t0=1243968	rc=0
+    PAIR	tank/media/Music	safe05-watch-t0	pre-06-41-conf04-reprobe	written@safe05-watch-t0=1243968	rc=0
+    PAIR	tank/media/Music	safe05-watch-t0	backup-20260925	written@safe05-watch-t0=1243968	rc=0
+    PAIR	tank/media/Music	safe05-watch-t0	inc-20260925-1343	written@safe05-watch-t0=1243968	rc=0
+    PAIR	tank/media/Music	safe05-watch-t0	inc-20260925-1755	written@safe05-watch-t0=1243968	rc=0
+    PAIR	tank/media/Music	safe05-watch-t0	inc-20260925-2149	written@safe05-watch-t0=1243968	rc=0
+    PAIR	tank/media/Music	safe05-watch-t0	inc-20260926-0020	written@safe05-watch-t0=1243968	rc=0
+    PAIR	tank/media/Music	safe05-watch-t0	pre-07-pilot	written@safe05-watch-t0=1243968	rc=0
+    PAIR	tank/media/Music	safe05-watch-t0	inc-20260927-0015	written@safe05-watch-t0=2636972096	rc=0
+    PAIR	tank/media/Music	pre-chown	pre-phase5-chown	written@pre-chown=1243968	rc=0
+    PAIR	tank/media/Music	pre-chown	backup-20260922	written@pre-chown=1243968	rc=0
+    PAIR	tank/media/Music	pre-chown	inc-20260923-1319	written@pre-chown=1243968	rc=0
+    PAIR	tank/media/Music	pre-chown	pre-06-41-conf04-reprobe	written@pre-chown=1243968	rc=0
+    PAIR	tank/media/Music	pre-chown	backup-20260925	written@pre-chown=1243968	rc=0
+    PAIR	tank/media/Music	pre-chown	inc-20260925-1343	written@pre-chown=1243968	rc=0
+    PAIR	tank/media/Music	pre-chown	inc-20260925-1755	written@pre-chown=1243968	rc=0
+    PAIR	tank/media/Music	pre-chown	inc-20260925-2149	written@pre-chown=1243968	rc=0
+    PAIR	tank/media/Music	pre-chown	inc-20260926-0020	written@pre-chown=1243968	rc=0
+    PAIR	tank/media/Music	pre-chown	pre-07-pilot	written@pre-chown=1243968	rc=0
+    PAIR	tank/media/Music	pre-chown	inc-20260927-0015	written@pre-chown=2636972096	rc=0
+    PAIR	tank/media/Music	pre-phase5-chown	backup-20260922	written@pre-phase5-chown=0	rc=0
+    PAIR	tank/media/Music	pre-phase5-chown	inc-20260923-1319	written@pre-phase5-chown=0	rc=0
+    PAIR	tank/media/Music	pre-phase5-chown	pre-06-41-conf04-reprobe	written@pre-phase5-chown=0	rc=0
+    PAIR	tank/media/Music	pre-phase5-chown	backup-20260925	written@pre-phase5-chown=109120	rc=0
+    PAIR	tank/media/Music	pre-phase5-chown	inc-20260925-1343	written@pre-phase5-chown=109120	rc=0
+    PAIR	tank/media/Music	pre-phase5-chown	inc-20260925-1755	written@pre-phase5-chown=109120	rc=0
+    PAIR	tank/media/Music	pre-phase5-chown	inc-20260925-2149	written@pre-phase5-chown=109120	rc=0
+    PAIR	tank/media/Music	pre-phase5-chown	inc-20260926-0020	written@pre-phase5-chown=109120	rc=0
+    PAIR	tank/media/Music	pre-phase5-chown	pre-07-pilot	written@pre-phase5-chown=109120	rc=0
+    PAIR	tank/media/Music	pre-phase5-chown	inc-20260927-0015	written@pre-phase5-chown=2636033664	rc=0
+    PAIR	tank/media/Music	pre-06-41-conf04-reprobe	backup-20260925	written@pre-06-41-conf04-reprobe=109120	rc=0
+    PAIR	tank/media/Music	pre-06-41-conf04-reprobe	inc-20260925-1343	written@pre-06-41-conf04-reprobe=109120	rc=0
+    PAIR	tank/media/Music	pre-06-41-conf04-reprobe	inc-20260925-1755	written@pre-06-41-conf04-reprobe=109120	rc=0
+    PAIR	tank/media/Music	pre-06-41-conf04-reprobe	inc-20260925-2149	written@pre-06-41-conf04-reprobe=109120	rc=0
+    PAIR	tank/media/Music	pre-06-41-conf04-reprobe	inc-20260926-0020	written@pre-06-41-conf04-reprobe=109120	rc=0
+    PAIR	tank/media/Music	pre-06-41-conf04-reprobe	pre-07-pilot	written@pre-06-41-conf04-reprobe=109120	rc=0
+    PAIR	tank/media/Music	pre-06-41-conf04-reprobe	inc-20260927-0015	written@pre-06-41-conf04-reprobe=2636033664	rc=0
+    PAIR	tank/media/Music	pre-07-pilot	inc-20260927-0015	written@pre-07-pilot=2636000928	rc=0
+    DATASET tank/downloads count=4 list_rc=0
+    PAIR	tank/downloads	pre-project	pre-chown	written@pre-project=469216	rc=0
+    PAIR	tank/downloads	pre-project	pre-phase5	written@pre-project=79494891168	rc=0
+    PAIR	tank/downloads	pre-project	pre-phase5-chown	written@pre-project=187751173632	rc=0
+    PAIR	tank/downloads	pre-chown	pre-phase5	written@pre-chown=79494891168	rc=0
+    PAIR	tank/downloads	pre-chown	pre-phase5-chown	written@pre-chown=187751173632	rc=0
+    PAIR	tank/downloads	pre-phase5	pre-phase5-chown	written@pre-phase5=108257144512	rc=0
+    DATASET fast/appdata/arrs count=7 list_rc=0
+    PAIR	fast/appdata/arrs	pre-07-pilot	inc-20260927-0015	written@pre-07-pilot=102776832	rc=0
+    DATASET tank/downloads/mybook-music-archive count=11 list_rc=0
+    PAIR	tank/downloads/mybook-music-archive	copied-from-mybook-20260922	post-rescue-20260922	written@copied-from-mybook-20260922=807624400	rc=0
+    PAIR	tank/downloads/mybook-music-archive	copied-from-mybook-20260922	backup-20260922	written@copied-from-mybook-20260922=807624400	rc=0
+    PAIR	tank/downloads/mybook-music-archive	copied-from-mybook-20260922	with-m4-20260922	written@copied-from-mybook-20260922=20739652736	rc=0
+    PAIR	tank/downloads/mybook-music-archive	copied-from-mybook-20260922	inc-20260923-1319	written@copied-from-mybook-20260922=21276255792	rc=0
+    PAIR	tank/downloads/mybook-music-archive	copied-from-mybook-20260922	backup-20260925	written@copied-from-mybook-20260922=21276255792	rc=0
+    PAIR	tank/downloads/mybook-music-archive	copied-from-mybook-20260922	inc-20260925-1343	written@copied-from-mybook-20260922=21276255792	rc=0
+    PAIR	tank/downloads/mybook-music-archive	copied-from-mybook-20260922	inc-20260925-1755	written@copied-from-mybook-20260922=21276255792	rc=0
+    PAIR	tank/downloads/mybook-music-archive	copied-from-mybook-20260922	inc-20260925-2149	written@copied-from-mybook-20260922=21276255792	rc=0
+    PAIR	tank/downloads/mybook-music-archive	copied-from-mybook-20260922	inc-20260926-0020	written@copied-from-mybook-20260922=21276255792	rc=0
+    PAIR	tank/downloads/mybook-music-archive	copied-from-mybook-20260922	inc-20260927-0015	written@copied-from-mybook-20260922=21276255792	rc=0
+    PAIR	tank/downloads/mybook-music-archive	post-rescue-20260922	backup-20260922	written@post-rescue-20260922=0	rc=0
+    PAIR	tank/downloads/mybook-music-archive	post-rescue-20260922	with-m4-20260922	written@post-rescue-20260922=19932541200	rc=0
+    PAIR	tank/downloads/mybook-music-archive	post-rescue-20260922	inc-20260923-1319	written@post-rescue-20260922=20469144256	rc=0
+    PAIR	tank/downloads/mybook-music-archive	post-rescue-20260922	backup-20260925	written@post-rescue-20260922=20469144256	rc=0
+    PAIR	tank/downloads/mybook-music-archive	post-rescue-20260922	inc-20260925-1343	written@post-rescue-20260922=20469144256	rc=0
+    PAIR	tank/downloads/mybook-music-archive	post-rescue-20260922	inc-20260925-1755	written@post-rescue-20260922=20469144256	rc=0
+    PAIR	tank/downloads/mybook-music-archive	post-rescue-20260922	inc-20260925-2149	written@post-rescue-20260922=20469144256	rc=0
+    PAIR	tank/downloads/mybook-music-archive	post-rescue-20260922	inc-20260926-0020	written@post-rescue-20260922=20469144256	rc=0
+    PAIR	tank/downloads/mybook-music-archive	post-rescue-20260922	inc-20260927-0015	written@post-rescue-20260922=20469144256	rc=0
+    PAIR	tank/downloads/mybook-music-archive	with-m4-20260922	inc-20260923-1319	written@with-m4-20260922=557461344	rc=0
+    PAIR	tank/downloads/mybook-music-archive	with-m4-20260922	backup-20260925	written@with-m4-20260922=557461344	rc=0
+    PAIR	tank/downloads/mybook-music-archive	with-m4-20260922	inc-20260925-1343	written@with-m4-20260922=557461344	rc=0
+    PAIR	tank/downloads/mybook-music-archive	with-m4-20260922	inc-20260925-1755	written@with-m4-20260922=557461344	rc=0
+    PAIR	tank/downloads/mybook-music-archive	with-m4-20260922	inc-20260925-2149	written@with-m4-20260922=557461344	rc=0
+    PAIR	tank/downloads/mybook-music-archive	with-m4-20260922	inc-20260926-0020	written@with-m4-20260922=557461344	rc=0
+    PAIR	tank/downloads/mybook-music-archive	with-m4-20260922	inc-20260927-0015	written@with-m4-20260922=557461344	rc=0
+
+(d) D-17 outcome, quoted from artifacts/07-11-p10-undo-rerun.txt:670 (the run-2 verdict; run 1's
+    line 94 was also NOT FIRED, at RECONCILE-FAIL):
+    "D-17 TRIGGER: NOT FIRED — (ii) STATE COVERED no (UNDO IMPORT left the taghistory entry;
+    DEF-07-11-01) and (iii) the Task 2 answer was restore-then-rerun (file restore used); (i) and
+    (iv) hold"
+    So tank/media/Music@pre-06-41-conf04-reprobe is HELD for this gate and evaluated like any row.
+
+(e) Owner / undo-for / release-condition searches. Owner: `/usr/bin/grep -rnF '<short name>' .planning
+    stacks/selfhosted/arrs/beets.md`, hit counts: pre-project 452, pre-chown 66, pre-phase5 412,
+    pre-phase5-chown 59, safe05-watch-t0 22, pre-06-41-conf04-reprobe 201, pre-07-pilot 234,
+    copied-from-mybook-20260922 6, post-rescue-20260922 4, with-m4-20260922 4,
+    pre-landmine-20260925 0, pre-takeout-20260918 0, pre-v3-20260918 1, pre-mybook-wipe-20260922 0.
+    Creating plans: 01-02 (both @pre-project, D-09), 01-06 (@safe05-watch-t0), 01-08 (both
+    @pre-chown), 05-01 (@pre-phase5), 05-10 (both @pre-phase5-chown, scripts/phase05-downloads-chown.sh
+    lines 246-248), 06-41 (@pre-06-41-conf04-reprobe), 07-09 (both @pre-07-pilot).
+    Release condition: `/usr/bin/grep -rnE '(releas|destroy|prune|keep until|must not be deleted)'
+    .planning stacks/selfhosted/arrs/beets.md | /usr/bin/grep -F '<dataset-qualified name>'`:
+      Music@pre-project 1, downloads@pre-project 1, downloads@pre-chown 1 (all three the same line,
+      03-VERIFICATION.md:65, recording them KEPT, no condition); @safe05-watch-t0 1 (07-16-PLAN.md:17,
+      this plan, no condition); Music@pre-chown 0; Music@pre-phase5-chown 0; downloads@pre-phase5-chown
+      0; copied-from/post-rescue/with-m4 0. Each is written in the register as `none recorded — could
+      not look further` with this command. Stated conditions exist only for @pre-phase5 (E4, D-17,
+      D-32; 05-10-SUMMARY:326), @pre-06-41-conf04-reprobe (DEF-06-52-01) and, written by this plan,
+      the two @pre-07-pilot.
+
+================================================================================
+ELIGIBILITY — computed by the register's rule, row by row
+================================================================================
+Rule: ELIGIBLE iff (a) a strictly newer snapshot on the same dataset, (b) written@<older> of it = 0,
+(c) the register names it (a project row) as covering the older's undo with the covered change.
+
+  tank/downloads@pre-project            NOT ELIGIBLE (b): next newer @pre-chown written@ = 469216; every newer > 0
+  tank/downloads@pre-chown              NOT ELIGIBLE (b): @pre-phase5 written@ = 79494891168
+  tank/downloads@pre-phase5             NOT ELIGIBLE by rule (E4/D-17 operator-gated); (b) also fails, 108257144512
+  tank/downloads@pre-phase5-chown       NOT ELIGIBLE (a): no newer snapshot on tank/downloads
+  tank/media/Music@pre-project          NOT ELIGIBLE (b): @safe05-watch-t0 written@ = 1162128; all newer >= that
+  tank/media/Music@safe05-watch-t0      NOT ELIGIBLE (b): @pre-chown written@ = 87296
+  tank/media/Music@pre-chown            NOT ELIGIBLE (b): @pre-phase5-chown written@ = 1243968
+  tank/media/Music@pre-phase5-chown     ELIGIBLE: (a) @pre-06-41-conf04-reprobe newer; (b) written@pre-phase5-chown
+                                        of it = 0; (c) register names @pre-06-41-conf04-reprobe as the cover;
+                                        covered change: none — 05-10's chown wrote 0 bytes to the library
+                                        (05-10-SUMMARY:306, zfs diff 0 lines), corroborated by written@ = 0.
+                                        (@backup-20260922 and @inc-20260923-1319 also read 0 but are
+                                        backup-owned and cannot be named as covers — register interpretation 1.)
+  tank/media/Music@pre-06-41-conf04-reprobe
+                                        NOT ELIGIBLE (b): every newer snapshot >= 109120 (the 06-41 mtime
+                                        touches, first captured by @backup-20260925); project cover @pre-07-pilot
+                                        = 109120. Not offered; HELD; DEF-06-45-01 / DEF-06-52-01 stay OPEN.
+  tank/media/Music@pre-07-pilot         NOT ELIGIBLE (c): no newer project row (only @inc-20260927-0015,
+                                        backup-owned, written@ = 2636000928). Refused at the call site anyway.
+  fast/appdata/arrs@pre-07-pilot        NOT ELIGIBLE (c): no newer project row (@inc-20260927-0015 written@
+                                        = 102776832). Refused at the call site anyway.
+  mybook set, backup-*/inc-*, and the four outside `pre-` names
+                                        owner outside the music pipeline — not offered.
+
+ELIGIBLE LIST (exactly one name):
+  tank/media/Music@pre-phase5-chown
+
+================================================================================
+DEPENDENCY REASONING
+================================================================================
+tank/media/Music@pre-phase5-chown
+  What is lost if destroyed: nothing byte-wise. written@pre-phase5-chown of
+    tank/media/Music@pre-06-41-conf04-reprobe = 0, so a restore to the reprobe point yields the
+    identical tree. Its evidentiary role (05-10's "library untouched" proof) is discharged: the
+    proof's result (0 lines) is committed in 05-10-SUMMARY.md and artifacts/05-10-chown-verification.txt,
+    and nothing open depends on the object — 0 release/destroy hits for the qualified name, and it is
+    named in no open DEF entry.
+  What is lost if kept: its `used` = 0 B, i.e. 0.000 % of tank's 5,957,403,611,856 B avail. Keeping
+    it costs no space; the only cost is one more standing object to reason about.
+  What changes if destroyed: its undo is inherited by tank/media/Music@pre-06-41-conf04-reprobe
+    (register interpretation 6). That cover is itself HELD and NOT ELIGIBLE, so the chain is not
+    broken — but when DEF-06-52-01 later fires and the reprobe goes, nothing on the Music dataset
+    will stand between @pre-chown (2026-08-18) and @pre-07-pilot (2026-09-26) except the backup
+    series. With a 0-byte difference, that is a loss of a label, not of bytes.
+  Hazard noted, not decisive: this is the Music half of the pair; the DOWNLOADS half
+    (tank/downloads@pre-phase5-chown, 05-REVIEW CR-01's substring hazard) is NOT eligible and not
+    offered.
+
+tank/media/Music@pre-06-41-conf04-reprobe (HELD BY D-17) — see the gate's own heading below.
+
+================================================================================
+THE GATE — awaiting the operator (ONE gate, D-19; the 06-52 shape)
+================================================================================
+DECISION ASKED: Destroy the snapshots the register marks ELIGIBLE?
+
+ELIGIBLE LIST, with reasons and figures:
+  1. tank/media/Music@pre-phase5-chown
+       used 0 B vs tank avail 5,957,403,611,856 B (5.42 TiB) — frees nothing measurable
+       written@pre-phase5-chown of tank/media/Music@pre-06-41-conf04-reprobe = 0 (rc 0, 14:08:59Z)
+       covered by: tank/media/Music@pre-06-41-conf04-reprobe (HELD, not eligible itself)
+
+HELD BY D-17 (NOT FIRED)
+  tank/media/Music@pre-06-41-conf04-reprobe — PRESENT (listed 14:07:16Z).
+  07-11's reason: "(ii) STATE COVERED no (UNDO IMPORT left the taghistory entry; DEF-07-11-01) and
+    (iii) the Task 2 answer was restore-then-rerun (file restore used); (i) and (iv) hold".
+  Computed eligibility: NOT ELIGIBLE — clause (b): no newer snapshot has written@ = 0 (minimum
+    109,120 B, the 06-41 mtime touches). It is NOT offered at this gate and stays held;
+    DEF-06-45-01 / DEF-06-52-01 stay OPEN. The operator may decide it out of band; this plan does not.
+
+NEVER OFFERED: tank/downloads@pre-phase5 (E4/D-17), both @pre-07-pilot, every outside-owner row.
+
+OPTIONS (default first):
+  hold              — destroy nothing; keep the register. Zero risk; costs 0 B here.
+  release-listed    — release exactly the ELIGIBLE list: tank/media/Music@pre-phase5-chown. Irreversible.
+  release-subset <name,...> — release a named subset of the ELIGIBLE list (with a one-name list this
+                      is equivalent to release-listed or hold). Irreversible for those named.
+  Any other answer, or any name not on the list, is treated as `hold` for that name.
+
+OPERATOR ANSWER (verbatim) : AWAITED — not yet given. Task 2 does not start until it is recorded here
+                             with its UTC time.
+EXECUTED                   : nothing. Task 1 issued zfs list and zfs get only.
+
+================================================================================
+END OF TASK 1 — the operator's answer follows
+================================================================================
