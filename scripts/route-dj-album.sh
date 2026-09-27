@@ -45,13 +45,34 @@
 # MODES:
 #   default (no --apply)  READ-ONLY. (1) version guard, (2) `ls -a` of the one album, (3) print
 #                         which paths: rule it will reach once albumtype=dj is set. Writes nothing.
-#   --apply               (a) repeat (1)+(2); (b) read `modify -h` and require `-M/--nomove` and
-#                         `-y/--yes`; (c) album-level `modify -a -M -y id:N albumtype=dj` (every
-#                         item inherits; `import.write: yes` means the field is written to the
-#                         files too); (d) `move -a -p` and print every ` -> ` line; (e) `move -a`;
-#                         (f) item-level `ls album_id:N` and assert every item reads albumtype dj
-#                         and sits under /media/Music/DJ/. Stops at the first non-zero status.
+#   --apply               (a) repeat (1)+(2); (b) read `modify -h` and require `-M/--nomove`,
+#                         `-W/--nowrite` and `-y/--yes`; (c) album-level
+#                         `modify -a -M -W -y id:N albumtype=dj` - DATABASE ONLY, no tag is written
+#                         (every item inherits the field in library.db); (d) `move -a -p` and print
+#                         every ` -> ` line; (e) `move -a` (a rename; beets' move writes no tags);
+#                         (f) item-level `ls album_id:N` - a DATABASE read - and assert every item
+#                         reads albumtype dj and sits under /media/Music/DJ/. Stops at the first
+#                         non-zero status. NOTHING in --apply writes a tag into an audio file.
 #   Its first --apply is plan 07-13's, behind that plan's `autonomous: false` gate.
+#
+# WHY `-W` (DB-ONLY) - DEF-07-13-01, fixed 2026-09-27 before the first --apply:
+#   Until then step (c) ran without `-W`, and `import.write: yes` made beets REWRITE EVERY TAG of
+#   every item from its database row. Measured on scratch copies of the staged DJ pilot folders
+#   (artifacts/07-13-dj-pair.txt § PREDICTION and § ROUTE -W FIX), that rewrite DAMAGES DJ tags:
+#   TBPM ranges are truncated to an integer ('116-117' -> '116', beets models bpm as INTEGER), TKEY
+#   is lower-cased ('5A' -> '5a'), ID3 v2.3 is re-saved as v2.4, and filler frames appear (TBPM '0'
+#   and TDRC '0000' where there were none). And it could not even deliver `albumtype=dj` to the
+#   file: mediafile maps albumtype and albumtypes onto ONE frame, and the item's empty albumtypes,
+#   written second, deletes it. The DJ fields are the operator's working material; the paths:
+#   rules read the DATABASE, so routing needs no tag at all. The DB is the sole record of `dj`.
+#   Do NOT drop `-W` to "also tag the files" - that is exactly the defect.
+#   CONSEQUENCE, stated so nobody is surprised by it: the files carry no `dj`, so a later
+#   `beet update` over a routed album reads albumtype '' back from the tags into the DB (and can
+#   move it out of DJ/), and a later `beet write` does the tag rewrite above. Neither is run by
+#   this pipeline; both are hazards on DJ content for any future caller.
+#   `move` writes no tags in beets 2.12.0: move.py move_items -> Album.move -> Item.move ->
+#   Item.move_file -> util.move (a rename, or copy+unlink across filesystems) + a DB store; no
+#   try_write anywhere on that path. Proven byte-for-byte on the same scratch copies.
 #
 # QUERY KEYS: album-level calls (`-a`) query `id:N` - on an album the id field is `id`; `album_id`
 #   is an ITEM field. The item-level read-back in (f) queries `album_id:N`.
@@ -182,13 +203,15 @@ OUT="$(timeout "$ROUTE_TIMEOUT" docker exec -u "$ROUTE_USER" "$ROUTE_CONTAINER" 
 classify "the modify help text"
 MISSING=""
 printf '%s\n' "$OUT" | grep -qE -e '-M, --nomove' || MISSING="$MISSING -M/--nomove"
+printf '%s\n' "$OUT" | grep -qE -e '-W, --nowrite' || MISSING="$MISSING -W/--nowrite"
 printf '%s\n' "$OUT" | grep -qE -e '-y, --yes' || MISSING="$MISSING -y/--yes"
 [ -z "$MISSING" ] || refuse "modify -h in $ROUTE_CONTAINER does not offer:$MISSING. Nothing written."
 
-# (c) Album-level field, move suppressed. Items inherit (no -I).
+# (c) Album-level field, move suppressed, tag write suppressed (-W: DEF-07-13-01, see header).
+#     Items inherit (no -I). The field lands in library.db only; the audio files are not opened.
 RC=0
-timeout "$ROUTE_TIMEOUT" docker exec -u "$ROUTE_USER" "$ROUTE_CONTAINER" "$BEET_REALLIB" modify -a -M -y "id:$ALBUM_ID" albumtype=dj || RC=$?
-echo "  rc=$RC  (step c: modify albumtype=dj, no move)"
+timeout "$ROUTE_TIMEOUT" docker exec -u "$ROUTE_USER" "$ROUTE_CONTAINER" "$BEET_REALLIB" modify -a -M -W -y "id:$ALBUM_ID" albumtype=dj || RC=$?
+echo "  rc=$RC  (step c: modify albumtype=dj in the DB only - no move, no tag write)"
 [ "$RC" -eq 0 ] || fail "step (c) modify failed (exit $RC). The album may be PARTIALLY modified; nothing was moved."
 
 # (d) Pretend move - show every planned rename.
@@ -206,7 +229,9 @@ timeout "$ROUTE_TIMEOUT" docker exec -u "$ROUTE_USER" "$ROUTE_CONTAINER" "$BEET_
 echo "  rc=$RC  (step e: move)"
 [ "$RC" -eq 0 ] || fail "step (e) move failed (exit $RC). albumtype=dj IS SET; some files may already have moved."
 
-# (f) Post-condition, over ITEMS: every item dj, every path under the DJ/ tree.
+# (f) Post-condition, over ITEMS, read from the DATABASE: every item dj, every path under DJ/.
+#     The file tags are deliberately NOT where `dj` lives (DEF-07-13-01); a caller proving the tags
+#     survived compares the files' bytes before and after, not a tag this script never writes.
 RC=0
 # shellcheck disable=SC2016  # the \$fields are beets format tokens, deliberately unexpanded
 OUT="$(timeout "$ROUTE_TIMEOUT" docker exec -u "$ROUTE_USER" "$ROUTE_CONTAINER" "$BEET_REALLIB" ls -f '$albumtype|$path' "album_id:$ALBUM_ID")" || RC=$?
@@ -227,7 +252,7 @@ if [ "$N_ITEMS" -eq 0 ]; then
   fail "album_id:$ALBUM_ID has ZERO items after the move."
 fi
 if [ "$N_BAD_PREFIX" -ne 0 ] || [ "$N_GOOD" -ne "$N_ITEMS" ]; then
-  fail "$N_BAD_PREFIX of $N_ITEMS items do not read albumtype dj under $LIB_DJ_PREFIX."
+  fail "$N_BAD_PREFIX of $N_ITEMS items do not read albumtype dj (DB) under $LIB_DJ_PREFIX."
 fi
-echo "  ✅ album $ALBUM_ID routed: $N_ITEMS of $N_ITEMS items albumtype=dj under $LIB_DJ_PREFIX"
+echo "  ✅ album $ALBUM_ID routed: $N_ITEMS of $N_ITEMS items albumtype=dj (DB) under $LIB_DJ_PREFIX; no tag written"
 exit 0

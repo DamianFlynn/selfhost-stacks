@@ -2057,7 +2057,7 @@ fi
 #      for the incremental control.
 #   4. `scripts/route-dj-album.sh` (plan 07-04, D-27) IS THE D-08 OPERATION AND CANNOT BE
 #      COMPLIANT. Reasons 1-3 do not apply to it and are not claimed: it has no overlay, because
-#      routing a REAL imported album into `DJ/` (`modify -a -M -y id:N albumtype=dj`, then a
+#      routing a REAL imported album into `DJ/` (`modify -a -M -W -y id:N albumtype=dj`, then a
 #      pretend move, then the move) is by definition a write to the real `/config/library.db`,
 #      and D-04 names beets-flask's own beets 2.12.0 as the ONLY sanctioned opener of that file.
 #      So the exemption rests on four controls instead, each checkable in the script:
