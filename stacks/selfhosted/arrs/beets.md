@@ -2677,8 +2677,10 @@ capture basename must not already exist: the snapshot script resumes into an exi
 
 ### What changed in the operating model
 
-- **The library is writable, for good (D-22, D-23).** beets-flask alone mounts `/media` `rw`; the
-  dormant CLI container stays `:ro`, and `quick-health-check.sh` asserts the grant as deliberate.
+- **The library is writable, for good (D-22, D-23).** beets-flask alone mounts `/media/Music` `rw`
+  (narrowed 2026-09-27, WR7-01: the parent `/media`, holding TV and Movies, stays `:ro`, so rw
+  reaches only where the snapshot fence does); the dormant CLI container stays `:ro`, and
+  `quick-health-check.sh` asserts that exact shape as deliberate.
   The strongest structural protection is gone; **the snapshot fence is now the primary control.**
 - **Imports copy, and write tags.** `import.copy: yes`, `import.move: no`, `import.write: yes`
   (measured, C1). The source folder is left as it was; the staged copy in `02-review` stays behind

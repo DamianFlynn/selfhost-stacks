@@ -170,6 +170,8 @@ gui:
     # and "DOES NOT REPLACE D-05 ... Keep both" above are retracted in part — D-05's :ro mount is
     # gone on beets-flask (./flask.yaml, now :rw). The MOUNT is what D-23 asserts in
     # scripts/quick-health-check.sh; this flag is still a UI guard, still weaker, and still kept.
+    # NARROWED 2026-09-27, operator (07-REVIEW WR7-01): the rw is now /media/Music only; the parent
+    # /media (TV, Movies) is :ro again on beets-flask, so this flag guards the library, not the tree.
     readonly: true
 
   terminal:

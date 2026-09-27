@@ -756,6 +756,31 @@
 #     policy is weaker than one enforced by mechanism). From here the snapshot fence is the primary
 #     control, and this assertion only proves the rw is the deliberate one.
 #
+# ⚠️  EXIT-CODE BEHAVIOUR CHANGED AGAIN — NO NEW BLOCK, D-23 NARROWED TO THE FENCED DATASET (07-REVIEW WR7-01)
+#     2026-09-27 (operator decision; phase 7 D-22/D-23).
+#
+#     NOTICE COUNT: measured AFTER this notice was written, with the header recipe the thirteenth
+#     notice gives. The number is recorded in
+#     .planning/phases/07-pilot-12-albums-end-to-end/07-REVIEW-FIX.md, NOT here.
+#
+#     BLOCK ordinal does NOT move: ten blocks remain. The D-22 grant is narrowed from the whole of
+#     /mnt/tank/media to /mnt/tank/media/Music, the only dataset the D-16 fence covers, so D-23 now
+#     asserts an exact two-mount SHAPE on the beets-flask runtime instead of one flag.
+#
+#     ⚠️ THE CONDITION LETTERS ARE V AND W. U was the last letter in use, measured with
+#     `grep -nE '^#[[:space:]]+[A-Z]\.[[:space:]]' scripts/quick-health-check.sh` before writing.
+#
+#     WHAT NOW EXITS THIS SCRIPT 1 THAT DID NOT BEFORE:
+#       V. /mnt/tank/media -> /media RW=true ON beets-flask. The parent must now read RW=false:
+#          the pre-WR7-01 shape, the one condition T used to require, is now a RED. ⚠️ EXPECT THIS
+#          RED FROM THE HOST'S PULL OF THE WR7-01 COMMIT UNTIL beets-flask IS RECREATED from it.
+#       W. /mnt/tank/media/Music -> /media/Music MISSING or not RW=true ON beets-flask, or ANY
+#          OTHER mount on beets-flask whose source is under /mnt/tank/media or whose destination is
+#          under /media. Any shape but the exact two is a red, never a silent pass.
+#     WHAT STOPPED EXITING 1:
+#       T, as written. RW=false on the PARENT is now the requirement, not the red; the Music mount
+#       carries the RW=true requirement instead (W).
+#
 # ⚠️  KNOWN LIMIT, AND IT APPLIES TO THIS WHOLE FILE: THIS SCRIPT IS MANUAL. IT ONLY EVER FIRES
 #     WHEN SOMEBODY TYPES IT (D-22, phase 02.1).
 #     There is no cron entry, no systemd timer and no notification path. Nothing here will tell
@@ -945,6 +970,11 @@ D03_FLASK_CONTAINER_Q=$(printf '%q' "$D03_FLASK_CONTAINER")
 D03_BEETS_CONFIG_SOURCE="${D03_BEETS_CONFIG_SOURCE:-/mnt/fast/appdata/arrs/beets/config/config.yaml}"
 D03_BEETS_CONFIG_DEST="${D03_BEETS_CONFIG_DEST:-/config/config.yaml}"
 D03_MEDIA_SOURCE="${D03_MEDIA_SOURCE:-/mnt/tank/media}"
+# WR7-01, 2026-09-27. The parent's container side, and the one rw mapping D-22 now grants on
+# beets-flask. Same ADDITIVE contract: any non-default value forces EXIT_CODE=1.
+D03_MEDIA_DEST="${D03_MEDIA_DEST:-/media}"
+D03_MUSIC_SOURCE="${D03_MUSIC_SOURCE:-/mnt/tank/media/Music}"
+D03_MUSIC_DEST="${D03_MUSIC_DEST:-/media/Music}"
 D03_CLI_COMPOSE="${D03_CLI_COMPOSE:-stacks/selfhosted/arrs/beets/beets.yaml}"
 # R3-01, 2026-09-23 (plan 06-30). Same rule, same siting reason as D03_FLASK_CONTAINER_Q above.
 D03_CLI_COMPOSE_Q=$(printf '%q' "$D03_CLI_COMPOSE")
@@ -1800,6 +1830,13 @@ fi
 # is gone. A standing assertion is a POLICY control, weaker than a mount flag that cannot fail open
 # (CONVENTIONS §4); from here the snapshot fence is the primary control.
 #
+# NARROWED 2026-09-27, operator (07-REVIEW WR7-01). The grant reached TV and Movies on the parent
+# dataset, which no snapshot covers. The runtime arm now asserts an EXACT SHAPE: the parent
+# /mnt/tank/media -> /media RW=false, the Music dataset /mnt/tank/media/Music -> /media/Music
+# RW=true, and NO OTHER mount whose source is under /mnt/tank/media or whose destination is under
+# /media. Missing, wrong flag, or anything extra is a red. RW=true proves what the daemon attached,
+# not that a write lands; the fence is still the primary control.
+#
 # FAIL-CLOSED ON EVERY BRANCH, house S1 order (empty output first, deferring when the status is
 # 124; then 124; then any other non-zero; and only then is anything asserted). AN EMPTY
 # `docker inspect` RESULT IS `UNKNOWN`, NEVER "no bad mounts" — check-music-freeze.sh's row-22
@@ -1813,6 +1850,9 @@ if [ "$D03_FLASK_CONTAINER" != "beets-flask" ] \
    || [ "$D03_BEETS_CONFIG_SOURCE" != "/mnt/fast/appdata/arrs/beets/config/config.yaml" ] \
    || [ "$D03_BEETS_CONFIG_DEST" != "/config/config.yaml" ] \
    || [ "$D03_MEDIA_SOURCE" != "/mnt/tank/media" ] \
+   || [ "$D03_MEDIA_DEST" != "/media" ] \
+   || [ "$D03_MUSIC_SOURCE" != "/mnt/tank/media/Music" ] \
+   || [ "$D03_MUSIC_DEST" != "/media/Music" ] \
    || [ "$D03_CLI_COMPOSE" != "stacks/selfhosted/arrs/beets/beets.yaml" ] \
    || [ "$D03_REPO_ROOT" != "/mnt/fast/stacks" ] \
    || [ "$D03_CLI_PROFILE" != "manual" ]; then
@@ -1866,17 +1906,52 @@ else
         fi
     fi
     # INVERTED 2026-09-26, plan 07-08 (D-23, condition T). Was: RW != false -> "D-05 VIOLATED".
-    D03_F_MEDIA=$(printf '%s\n' "$D03_FLASK_OUT" | awk -v s="$D03_MEDIA_SOURCE" '$1==s {print $3}')
-    if [ -z "$D03_F_MEDIA" ]; then
-        echo "  ❌ $D03_FLASK_CONTAINER has NO mount from $D03_MEDIA_SOURCE — D-23 cannot be asserted from this runtime"
+    # NARROWED 2026-09-27 (07-REVIEW WR7-01, conditions V and W): an exact two-mount shape. Each
+    # row is matched on source AND destination; the two RW values are read separately, so a swap
+    # (parent rw, Music ro) is two reds, never a pass. The third query is the catch-all: any other
+    # row under the parent source or the /media destination — including a row the space-split
+    # cannot parse into exactly three fields — is printed and is a red.
+    D03_BAD_BEFORE_MEDIA=$D03_BAD
+    D03_F_PARENT_N=$(printf '%s\n' "$D03_FLASK_OUT" | awk -v s="$D03_MEDIA_SOURCE" -v d="$D03_MEDIA_DEST" 'NF==3 && $1==s && $2==d {n++} END {print n+0}')
+    D03_F_PARENT=$(printf '%s\n' "$D03_FLASK_OUT" | awk -v s="$D03_MEDIA_SOURCE" -v d="$D03_MEDIA_DEST" 'NF==3 && $1==s && $2==d {print $3}')
+    D03_F_MUSIC_N=$(printf '%s\n' "$D03_FLASK_OUT" | awk -v s="$D03_MUSIC_SOURCE" -v d="$D03_MUSIC_DEST" 'NF==3 && $1==s && $2==d {n++} END {print n+0}')
+    D03_F_MUSIC=$(printf '%s\n' "$D03_FLASK_OUT" | awk -v s="$D03_MUSIC_SOURCE" -v d="$D03_MUSIC_DEST" 'NF==3 && $1==s && $2==d {print $3}')
+    D03_F_OTHER=$(printf '%s\n' "$D03_FLASK_OUT" | awk -v ps="$D03_MEDIA_SOURCE" -v pd="$D03_MEDIA_DEST" -v ms="$D03_MUSIC_SOURCE" -v md="$D03_MUSIC_DEST" '
+      function under(p, root) { return p == root || index(p, root "/") == 1 }
+      !/^\// { next }
+      NF != 3 { if (index($0, ps) || index($0, pd)) print; next }
+      $1 == ps && $2 == pd { next }
+      $1 == ms && $2 == md { next }
+      under($1, ps) || under($2, pd) { print }')
+    if [ "$D03_F_PARENT_N" -ne 1 ]; then
+        echo "  ❌ D-23: $D03_FLASK_CONTAINER has $D03_F_PARENT_N mounts $D03_MEDIA_SOURCE -> $D03_MEDIA_DEST, expected exactly 1 (RW=false)"
         EXIT_CODE=1
         D03_BAD=$((D03_BAD + 1))
-    elif [ "$D03_F_MEDIA" != "true" ]; then
-        echo "  ❌ D-23: $D03_FLASK_CONTAINER holds $D03_MEDIA_SOURCE at RW=$D03_F_MEDIA, expected RW=true since Phase 7 D-22"
+    elif [ "$D03_F_PARENT" != "false" ]; then
+        echo "  ❌ D-23 (WR7-01): $D03_FLASK_CONTAINER holds $D03_MEDIA_SOURCE -> $D03_MEDIA_DEST at RW=$D03_F_PARENT, expected RW=false"
+        echo "     TV and Movies sit on the parent dataset and NO snapshot covers them. RW=true here is the pre-WR7-01"
+        echo "     shape: a container not yet recreated from the narrowed flask.yaml, or a revert."
         EXIT_CODE=1
         D03_BAD=$((D03_BAD + 1))
-    elif [ "$D03_OVERRIDDEN" -eq 0 ]; then
-        echo "  ✅ /media is RW=true on beets-flask DELIBERATELY — granted Phase 7 (D-22), standing assertion D-23; not drift"
+    fi
+    if [ "$D03_F_MUSIC_N" -ne 1 ]; then
+        echo "  ❌ D-23: $D03_FLASK_CONTAINER has $D03_F_MUSIC_N mounts $D03_MUSIC_SOURCE -> $D03_MUSIC_DEST, expected exactly 1 (RW=true)"
+        EXIT_CODE=1
+        D03_BAD=$((D03_BAD + 1))
+    elif [ "$D03_F_MUSIC" != "true" ]; then
+        echo "  ❌ D-23: $D03_FLASK_CONTAINER holds $D03_MUSIC_SOURCE -> $D03_MUSIC_DEST at RW=$D03_F_MUSIC, expected RW=true since Phase 7 D-22"
+        EXIT_CODE=1
+        D03_BAD=$((D03_BAD + 1))
+    fi
+    if [ -n "$D03_F_OTHER" ]; then
+        echo "  ❌ D-23: $D03_FLASK_CONTAINER has mounts under $D03_MEDIA_SOURCE or $D03_MEDIA_DEST outside the two expected rows:"
+        printf '%s\n' "$D03_F_OTHER" | sed 's/^/       /'
+        EXIT_CODE=1
+        D03_BAD=$((D03_BAD + 1))
+    fi
+    if [ "$D03_BAD" -eq "$D03_BAD_BEFORE_MEDIA" ] && [ "$D03_OVERRIDDEN" -eq 0 ]; then
+        echo "  ✅ /media/Music is RW=true on beets-flask DELIBERATELY — granted Phase 7 (D-22), standing assertion D-23; not drift"
+        echo "     and the parent /media (TV, Movies) is RW=false — rw reaches only where the D-16 fence does (WR7-01)"
         echo "     (a policy control, weaker than the :ro mount it replaces — CONVENTIONS §4; the snapshot fence is the primary control)"
     fi
 fi
@@ -1942,7 +2017,7 @@ else
     if [ "$D03_LOOKED" -eq 1 ] && [ "$D03_BAD" -eq 0 ] && [ "$D03_OVERRIDDEN" -eq 0 ]; then
         # Updated 2026-09-26, plan 07-08 (D-22/D-23): no longer claims /media :ro on both.
         echo "  ✅ one config, both containers: $D03_BEETS_CONFIG_SOURCE -> $D03_BEETS_CONFIG_DEST :ro"
-        echo "     runtime  ($D03_FLASK_CONTAINER, inspected): config :ro, $D03_MEDIA_SOURCE :rw (D-22, deliberate — D-23)"
+        echo "     runtime  ($D03_FLASK_CONTAINER, inspected): config :ro, $D03_MEDIA_SOURCE :ro, $D03_MUSIC_SOURCE :rw (D-22 narrowed WR7-01 — D-23)"
         echo "     declared (dormant CLI arm, rendered):       config :ro, $D03_MEDIA_SOURCE :ro (D-04/D-22)"
     fi
 fi
@@ -3404,10 +3479,11 @@ if [ "$EXIT_CODE" -ne 0 ]; then
     echo "      ROADMAP entry criterion E6 discharges CONF-04's Jellyfin half, and on nothing"
     echo "      else. Do not tune it out: the non-zero exit is what makes a later regression back"
     echo "      to the baseline detectable by tooling instead of only by a human reading yellow."
-    echo "   ⚠️ The D-03 mount block asserts /mnt/tank/media RW=true on beets-flask since Phase 7"
-    echo "      (D-22 grant, standing assertion D-23) and ro on the dormant CLI arm. RW=false on"
-    echo "      beets-flask is a REGRESSION of the D-22 grant (a container recreated from an older"
-    echo "      compose file?) — it is NOT expected."
+    echo "   ⚠️ The D-03 mount block asserts an exact shape on beets-flask since WR7-01: /media"
+    echo "      RW=false and /media/Music RW=true (D-22 grant, standing assertion D-23), and ro on"
+    echo "      the dormant CLI arm. /media RW=true means beets-flask was not recreated from the"
+    echo "      narrowed flask.yaml; /media/Music missing or RW=false is a REGRESSION of the grant."
+    echo "      Neither is expected."
     echo "   ⚠️ The music import sweep refuses to call nothing clean: an empty library, or a class"
     echo "      with 0 checkable rows, is its exit 3 (⚠️), never green. Otherwise a ⚠️ there is a"
     echo "      could-not-look and a ❌ is a criterion-7 finding."

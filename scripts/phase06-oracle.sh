@@ -783,6 +783,17 @@ assert_media_readonly() { # $1 = mounts file  $2 = container destination that mu
         return 1
       fi
     fi
+    # 07-REVIEW WR7-01 (2026-09-27): beets-flask now mounts the parent :ro and re-mounts
+    # /media/Music :rw ON TOP of it. A parent-only test would read that shape as "/media is
+    # read-only" - a silent pass over a writable library. Anything writable BELOW '$want' is a red.
+    case "$dst" in
+      "$want"/*)
+        if [ "$flag" != "ro" ]; then
+          RW_WHY="'$dst' is mounted RW=true beneath '$want' (source $src). A read-only parent
+    does not make a writable nested mount read-only; D-05 is violated."
+          return 1
+        fi ;;
+    esac
   done < "$mf"
   if [ "$found" -eq 0 ]; then
     RW_WHY="no mount with destination '$want' was enumerated at all. This is NOT '/media is
@@ -2029,6 +2040,9 @@ self_test_core() {
   printf '/mnt/tank/media|/media|rw\n' > "$td/st.mounts.rw"
   rc=0; assert_media_readonly "$td/st.mounts.rw" /media || rc=$?
   st_case 1 "$rc" "/media enumerated as rw - D-05 violated, and this must be a RED not a warning."
+  printf '/mnt/tank/media|/media|ro\n/mnt/tank/media/Music|/media/Music|rw\n' > "$td/st.mounts.nested"
+  rc=0; assert_media_readonly "$td/st.mounts.nested" /media || rc=$?
+  st_case 1 "$rc" "/media ro with /media/Music rw on top (the WR7-01 shape) - a RED, never 'read-only'."
   printf '/mnt/tank/downloads|/downloads|rw\n' > "$td/st.mounts.none"
   rc=0; assert_media_readonly "$td/st.mounts.none" /media || rc=$?
   st_case 2 "$rc" "no /media mount enumerated at all - UNKNOWN, never 'it is read-only'."
@@ -2702,7 +2716,9 @@ if [ "$MODE" = "self-test" ]; then
   #     by a delta MEASURED BY ABLATION (force the arm, read ST_RUN off the gate, diff against an
   #     unforced run) - never counted by eye, because st_mc, st_assert and st_grep_why all funnel
   #     into st_case. Deltas as measured 2026-09-23: core/root 1, classes/no-python3 2,
-  #     vacuity/root 4; additive, and 140-1-2-4 = 133 with all three taken.
+  #     vacuity/root 4; additive, and 141-1-2-4 = 134 with all three taken. (Base 140 -> 141 on
+  #     2026-09-27 for the WR7-01 nested-mount case in layer 1, read off a green run in the
+  #     reference environment.)
   #   - THIS IS WHY THE GUARD IS NOT WEAKENED: a DELIBERATE skip adjusts the announcement, while a
   #     DROPPED SECTION adjusts nothing - so the gate still fires for exactly the case it was built
   #     for. That control is driven, not asserted: dropping `self_test_fences` from the dispatcher
@@ -2711,7 +2727,7 @@ if [ "$MODE" = "self-test" ]; then
   #   - RE-MEASURING THE BASE IS VALID IN THE REFERENCE ENVIRONMENT ONLY: NON-ROOT, WITH `python3`
   #     PRESENT. Read it off a green run there. A figure read anywhere else is a shortfall figure
   #     wearing the base's name, which is the defect this paragraph replaces.
-  ST_PLANNED_CASES=140
+  ST_PLANNED_CASES=141
   ST_FAIL=0
   ST_RUN=0
   REDS=0

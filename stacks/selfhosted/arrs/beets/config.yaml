@@ -139,7 +139,8 @@ plugins: [musicbrainz]
 # and one of those three is a delete. Each is pinned below with rc6's default named as the thing
 # being refused.
 
-# The real library root as the flask container sees it (/mnt/tank/media:/media:ro).
+# The real library root as the flask container sees it (/mnt/tank/media:/media:ro in Phase 6; from
+# Phase 7 the parent stays :ro and /mnt/tank/media/Music:/media/Music is :rw — D-22, narrowed WR7-01).
 # rc6's schema default is `/music/imported` — a path that does not exist in either container, so
 # leaving this silent aims every import at a directory that has to be created before it can be
 # wrong. NOTE: this key does not make anything safe. The `:ro` mount is what prevents writes to
@@ -356,6 +357,8 @@ import:
     # (./flask.yaml; the dormant CLI arm in ./beets.yaml stays `:ro`). For Phase 7 the D-16 snapshot
     # fence (tank/media/Music@pre-07-pilot + fast/appdata/arrs@pre-07-pilot) and D-20's per-album
     # confirmation replace it; D-23 in scripts/quick-health-check.sh asserts the rw as deliberate.
+    # NARROWED 2026-09-27, operator (07-REVIEW WR7-01): the rw is /mnt/tank/media/Music only — the
+    # parent /mnt/tank/media is `:ro` again, so rw reaches only where the D-16 fence does.
     # CORRECTED 2026-09-27 (07-REVIEW CR7-01): "no unattended importer reads this key any more" in
     # the D-22 paragraph above was FALSE when written — 03-asis was still registered with
     # `autotag: bootleg`, an as-is importer with no per-album confirmation, bounded only by its

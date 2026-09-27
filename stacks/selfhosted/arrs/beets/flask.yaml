@@ -185,7 +185,14 @@ services:
       # opens the real library.db (Phase 6 D-04). D-23's accepted cost: a standing assertion is a
       # policy control, weaker than the mount flag it replaces (CONVENTIONS §4); the snapshot fence is
       # the primary control from here.
-      - /mnt/tank/media:/media:rw
+      #
+      # NARROWED 2026-09-27, operator (07-REVIEW WR7-01): the grant was the whole of /mnt/tank/media,
+      # but the D-16 fence covers only tank/media/Music — TV and Movies sit on the parent dataset with
+      # no snapshot. rw now reaches ONLY where the fence does: the parent stays :ro and Music is
+      # re-mounted :rw on top of it. ORDER MATTERS — the nested mount comes after its parent. D-23
+      # asserts exactly this shape: /media RW=false AND /media/Music RW=true; any other shape is red.
+      - /mnt/tank/media:/media:ro
+      - /mnt/tank/media/Music:/media/Music:rw   # D-22, narrowed by WR7-01: rw only where the D-16 fence reaches
 
     # -------------------------------------------------------------------------------------------
     # NO /config/requirements.txt IS CREATED, AND THAT IS A DECISION

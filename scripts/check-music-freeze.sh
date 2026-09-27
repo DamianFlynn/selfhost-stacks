@@ -144,9 +144,13 @@ CONSUMER_PATTERN='jellyfin'
 # container holding rw on Music still fails exactly as before — including the dormant CLI arm,
 # which stays :ro (D-22). D-23's caveat applies: this is a policy exception, weaker than the :ro
 # mount it replaces (CONVENTIONS §4); the snapshot fence is the primary control from Phase 7.
+# NARROWED 2026-09-27, operator (07-REVIEW WR7-01): the one mapping is now the Music dataset, the
+# only place the D-16 fence reaches; the parent /mnt/tank/media is :ro on beets-flask again. So a
+# beets-flask that still holds the PARENT rw no longer matches the exception and fails here as a
+# tagger-capable writer — the old, wider shape is a red, not a silent pass.
 PHASE7_RW_TAGGER="beets-flask"
-PHASE7_RW_TAGGER_SRC="/mnt/tank/media"
-PHASE7_RW_TAGGER_DST="/media"
+PHASE7_RW_TAGGER_SRC="/mnt/tank/media/Music"
+PHASE7_RW_TAGGER_DST="/media/Music"
 PHASE7_RW_TAGGER_DECL="stacks/selfhosted/arrs/beets/flask.yaml"
 
 # Phase 4 census constants (D-21, D-25). NOT overrides - see ENV OVERRIDES in the header.
