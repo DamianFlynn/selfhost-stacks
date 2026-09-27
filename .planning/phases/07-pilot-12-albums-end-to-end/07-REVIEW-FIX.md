@@ -209,3 +209,16 @@ Second pass (operator decisions, 2026-09-27):
 _Fixed: 2026-09-27T20:03:56Z (first pass); 2026-09-27T21:26:13Z (operator-decision pass)_
 _Fixer: Claude (gsd-code-fixer)_
 _Iteration: 1_
+
+## Deploy and live verification (2026-09-27, 21:32Z)
+
+The operator authorised the deploy. `main` was pushed at `09d5f96` and the host pulled it with `--ff-only` from a clean checkout. `_inbox/03-asis` held 0 entries before the switch.
+
+- **Install:** before installing, the appdata configs were backed up as `*.pre-07fix.20260927T213212Z` alongside the originals. Against the repo, `config.yaml` differed in comments only. `flask-config.yaml` differed in exactly one non-comment line, `autotag: bootleg` → `"off"`. After `install`, the modes came out wrong (0744); they were restored from the backups (`0760`, `568:568`).
+- **Recreate:** `docker compose up -d --force-recreate --no-deps beets-flask`. The container started at `2026-09-27T21:32:21.821570896Z` with 0 restarts.
+- **Mounts (live verification item 1): CLOSED.** `inspect` shows `/media rw=false` and `/media/Music rw=true`. A probe as root inside the container: a `touch` under `/media/Music` succeeded and was removed, while `/media/TV` and `/media` both returned `Read-only file system`.
+- **Does an `"off"` inbox stay registered (item 2): CLOSED, yes.** The newest registration line after the recreate reads `inboxes: ['/downloads/complete/nzb/_inbox/02-review', '/downloads/complete/nzb/_inbox/03-asis']`.
+- **Does `docker logs --since` accept the nanosecond StartedAt (item 3): CLOSED, yes** (Docker 29.2.1).
+- **`check-beets-config.sh`:** exit 0, and § 1b is green on the live line.
+- **`quick-health-check.sh`:** exit 1. The only red is the LXC 100 `/` headroom from `check-jellyfin-transcode.sh`: 16.22 GiB against the 20 GiB D-17 floor. That shortfall **predates this deploy**: Phase 7 already recorded 16.90 GiB. D-23, the freeze, the vendored-file drift check and the import sweep are all green.
+- **Unrelated finding:** `scripts/quick-health-check.sh` is `100644` in git (it already was at `bcbfe0a`), so it has to be run as `bash scripts/quick-health-check.sh`.
