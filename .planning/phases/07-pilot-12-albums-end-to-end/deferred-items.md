@@ -274,3 +274,14 @@ DEF-07-14-01: Music Assistant reports the track artist "Brian Coll" on 86 Def Le
   Jellyfin reads Def Leppard. The likely class is an MA join/id collision in its library DB, but that is unmeasured. The E5 repair does not touch it.
   For 07-15: after the MA sync, read it separately from E5, and do not score it as E5 success or failure. If it
   persists, it is a Phase 8 MA item. Evidence: artifacts/07-14-e5-repair.txt § 3 OBSERVATION and § TASK 2.
+
+DEF-07-15-01: Music Assistant artist-entity DISPLAY NAMES drift without their links moving — ARTPOP row 1 now reads `Twista | Lady Gaga | Too $hort` where 06-13 read `T.I. | Lady GaGa | Too $hort`
+  Filed 2026-09-27 by 07-15 Task 3. The pinned D-22 row 1 (`Jewels n’ Drugs`, ARTISTS tag of 4) still links the SAME
+  three MA entities (159, 209, 217) and so still reads 3 — at its MA baseline — but entity 159, displayed `T.I.` on
+  2026-09-21, is now displayed `Twista` (with a Spotify mapping for Twista), and 209 `Lady GaGa` is now `Lady Gaga`.
+  `T.I.` now exists nowhere in the provider's artists. The rename predates 07-15's sync (Task 2's 13:29Z pre-read shows
+  it). Same class as DEF-07-14-01 (entity 116 displayed "Brian Coll", now `Def Leppard`). Consequences: (1) section 4e's
+  runtime text "'Twista' exists nowhere in MA's library artists" is now factually stale; (2) the E6 second measurement's
+  discriminator ("a different missing name than Twista") reads a display name that can move on its own, so a future
+  reading must record entity ids, not only names. Owner: CONF-04 / E6 (Phase 8 MA work). Evidence:
+  artifacts/07-15-consumers.txt § E6 SECOND MEASUREMENT (OBSERVATION).

@@ -53,7 +53,8 @@
 #   4a. The D-34 library options           CONF-04, plan 06-03, T-06-13
 #   4b. D-22 artist entities in Jellyfin   CONF-04, plan 06-03
 #   4c. Artists-without-ArtistItems census D-24, plan 07-07 (exit 3 on a measured change)
-#   4d. D-22 artist entities in MA         CONF-04, plan 06-13 (fails closed while MA is down)
+#   4d. %aunique{} albums in MA (D-28)     D-28/G-07, plan 07-15 (album artist read directly)
+#   4e. D-22 artist entities in MA         CONF-04, plan 06-13 (fails closed while MA is down)
 #   5. Mount liveness                      CONS-03, D-11 adjacent
 #   6. Summary
 #
@@ -80,7 +81,7 @@
 #        ticked. See the ARTIST_PROOF_ROWS table for why that third state exists and why it is
 #        not a fudge: the option is probe-time, and the refresh that would re-probe is forbidden.
 #
-#   4d — THE MA HALF, WRITTEN NOW AND FAILING CLOSED. MA unreachable emits `ma_fail` with
+#   4e — THE MA HALF, WRITTEN NOW AND FAILING CLOSED. MA unreachable emits `ma_fail` with
 #        `UNKNOWN, not green`, NOT `warn` and NOT the out-of-scope branch, so criterion 4 stays
 #        OPEN instead of reading as passed while the consumer that would falsify it is down.
 #        ⚠ `music/tracks/library_items` is research assumption A2 — inferred, not confirmed
@@ -109,7 +110,7 @@
 #
 # EXIT 3 - THE PENDING STATE, MADE MACHINE-READABLE (WR-03, plan 06-17, 2026-09-22):
 #
-#   Sections 4b and 4d carry a deliberate THIRD state: a D-22 artist row sitting at its RECORDED
+#   Sections 4b and 4e carry a deliberate THIRD state: a D-22 artist row sitting at its RECORDED
 #   BASELINE rather than at its target is PENDING - reported, counted in the summary, never ticked.
 #   The design is right and is argued at length at the ARTIST_PROOF_ROWS table. The DEFECT this
 #   exit code fixes is that the third state was invisible to the only machine-readable output this
@@ -142,7 +143,7 @@
 #         one purpose - deciding whether ANY row is off target - and that is a different question
 #         from whether CONF-04 is closed. CONF-04 closes when BOTH halves read at target, and the
 #         two halves are at different points for different reasons: 4b is a probe-time option
-#         whose ONE remaining route is a Phase 7 write or import, 4d is a measured MA
+#         whose ONE remaining route is a Phase 7 write or import, 4e is a measured MA
 #         artist-ENTITY-stage discrepancy. Do not publish "N of M pending" as a CONF-04 completion
 #         figure, and never let a green MA half offset a pending Jellyfin one.
 #
@@ -151,7 +152,7 @@
 #         DIFFERENT measurements inside one criterion. 4b's mtime route was driven and measured
 #         not to discharge it (see the target-column paragraph at ARTIST_PROOF_ROWS), so the
 #         Jellyfin half is carried to Phase 7 entry criterion E6 under an explicit recorded
-#         override — a carry of an OPEN requirement, never a close. 4d's surviving row belongs to
+#         override — a carry of an OPEN requirement, never a close. 4e's surviving row belongs to
 #         E6's SECOND measurement: whether a second >=4-artist track yields four artists in MA or
 #         three, the only thing that separates "MA caps the list at 3" from "Twista specifically
 #         failed to map". Round 5 produced NO evidence bearing on that second measurement and did
@@ -577,6 +578,28 @@ D24_CENSUS_BASELINE_PATHS=(
   '/media/Music/Lady Gaga/Joanne (2016)/12 Vinyl 02-05 Lady Gaga - Grigio Girls.flac'
   '/media/Music/Lady Gaga/Joanne (2016)/12 Vinyl 02-06 Lady Gaga - Just Another Day.flac'
   '/media/Music/Lady Gaga/Joanne (2016)/12 Vinyl 02-07 Lady Gaga - Angel Down (work tape).flac'
+)
+
+# D-28 pin (section 4d, plan 07-15). CONVENTIONS §5 live pin: the `%aunique{}` firings in the
+# landed library, one row per album of every firing set — `album dir|expected album artist`.
+# `album dir` is relative to the library root, which is exactly the form MA's filesystem provider
+# uses for an album-level mapping item_id (and the directory beets rendered).
+# BUILT FROM plan 07-15's REBUILT inventory (07-15-consumers.txt § AUNIQUE INVENTORY (rebuilt after
+# 07-13), G-07) — never from 07-12's superseded list. Measured 2026-09-27: 9 landed albums read, DJ
+# pair included; exactly ONE firing set — the Benson Boone `American Heart` pair, P02 (FLAC,
+# catalognum '' -> no suffix) and P04 (MP3, catalognum 093624834588 -> ` [093624834588]`). The DJ
+# path rules carry `%aunique{}` too but rendered "" on both DJ albums, so they are not rows.
+# MOVES WITH EVERY FUTURE IMPORT THAT PRODUCES A `%aunique{}` FIRING — a change elsewhere in the
+# tree, unrelated to this check — which is why it is registered in CONVENTIONS §5. Remedy: rebuild
+# the inventory from the library, add every album of the new firing set by hand, same commit.
+AUNIQUE_ROWS=(
+  # P02 — the unsuffixed twin. Its folder name and its album tag agree, so MA's folder_name action
+  # COULD fire here; a correct read proves the album artist came from the tag.
+  "Benson Boone/American Heart|Benson Boone"
+  # P04 — the suffixed twin. Folder and album tag DIFFER by construction (` [093624834588]`), which
+  # is exactly the case where MA's `missing_album_artist_action: folder_name` silently yields
+  # `Various Artists` while config/providers/get still reads back `folder_name`.
+  "Benson Boone/American Heart [093624834588]|Benson Boone"
 )
 
 # Colors
@@ -1539,7 +1562,87 @@ fi
 echo ""
 
 # ---------------------------------------------------------------------------------------------
-# 4d. D-22 — the same rows in Music Assistant (CONF-04, plan 06-13 owns closing it)
+# 4d. %aunique{} albums in Music Assistant (D-28)
+#
+# D-28 / E8 / G-07 (plan 07-15). MA's `missing_album_artist_action: folder_name` fires ONLY when a
+# file's album tag agrees with its album folder name, and on a mismatch it silently yields
+# `Various Artists` — while `config/providers/get` still reads the setting back as `folder_name`
+# (measured 2026-09-01, plan 02-07). A `%aunique{}` suffix makes folder and tag differ BY
+# CONSTRUCTION, so reading the setting back is never evidence. The only evidence is MA's album
+# artist, read DIRECTLY for each album of each firing set. That is what this section does.
+#
+# IDENTITY BY PATH, NEVER BY TITLE (P-02). The album is located by its ALBUM-LEVEL provider
+# mapping for the pinned local instance: the mapping item_id equals the row's `album dir`. Title
+# search is not used — the Benson Boone twins legitimately give TWO title hits. MEASURED at the
+# first sync (2026-09-27): MA holds the twins as two albums (one mapping each) that share the SAME
+# ten MA tracks, each track carrying two provider mappings (FLAC + MP3). A title-keyed check would
+# either double-count or pick one twin at random.
+#
+# Outcomes (CONVENTIONS §1, §3):
+#   pass    - exactly one MA album maps this directory and its album artist is the expected one.
+#   ma_fail - album artist `Various Artists` or EMPTY: the silent folder_name fallback (D-28).
+#   ma_fail - any other album artist: a mis-attribution nobody planned.
+#   ma_fail - no MA album maps the directory, or two do, or the directory is gone from disk, or MA
+#             is unreachable: UNKNOWN, never green. An absent album is not a passing album.
+# ---------------------------------------------------------------------------------------------
+echo "🧬 4d. %aunique{} albums in Music Assistant (D-28)"
+rule
+AUNIQUE_OK=0
+if [[ "$MA_ROUTE" == "unavailable" ]]; then
+  ma_fail "D-28: MA unreachable — ${#AUNIQUE_ROWS[@]} %aunique{} album(s) are UNKNOWN, not green"
+elif [[ -z "$MA_LOCAL_PROVIDER_INSTANCE" ]]; then
+  ma_fail "D-28: no provider instance pinned — an album-level mapping cannot be attributed (section 2)"
+elif [[ ${#AUNIQUE_ROWS[@]} -eq 0 ]]; then
+  ma_fail "D-28: AUNIQUE_ROWS is EMPTY — nothing was asserted, which is UNKNOWN, not green"
+else
+  AU_ALBUMS="$(ma_api music/albums/library_items \
+              "$(provider_filter "$(jq -nc --argjson l "$MA_LIBRARY_SCAN_LIMIT" '{limit:$l}')")")"
+  if ! printf '%s' "$AU_ALBUMS" | jq -e 'type == "array"' >/dev/null 2>&1; then
+    ma_fail "D-28: music/albums/library_items did not return an array — UNKNOWN, not green"
+  else
+    AU_RETURNED="$(printf '%s' "$AU_ALBUMS" | jq -r 'length')"
+    for row in "${AUNIQUE_ROWS[@]}"; do
+      IFS='|' read -r AU_DIR AU_EXPECT <<< "$row"
+      info "[D-28] $AU_DIR  (expected album artist: $AU_EXPECT)"
+      if [[ ! -d "${LIBRARY}/${AU_DIR}" ]]; then
+        ma_fail "D-28: '$AU_DIR' does not exist under $LIBRARY — the pin is stale; rebuild the inventory (CONVENTIONS §5)"
+        continue
+      fi
+      AU_HITS="$(printf '%s' "$AU_ALBUMS" | jq -c --arg i "$MA_LOCAL_PROVIDER_INSTANCE" --arg d "$AU_DIR" \
+        '[.[] | select([.provider_mappings[]? | select(.provider_instance == $i) | .item_id] | index($d))]')"
+      AU_N="$(printf '%s' "$AU_HITS" | jq -r 'length')"
+      if [[ "$AU_N" -eq 0 ]]; then
+        if [[ "$AU_RETURNED" -ge "$MA_LIBRARY_SCAN_LIMIT" ]]; then
+          ma_fail "D-28: no MA album maps '$AU_DIR' and the album list came back AT the limit ($MA_LIBRARY_SCAN_LIMIT) — UNKNOWN, not green"
+        else
+          ma_fail "D-28: no MA album maps '$AU_DIR' for $MA_LOCAL_PROVIDER_INSTANCE — UNKNOWN, not green (MA not synced since the import?)"
+        fi
+        continue
+      fi
+      if [[ "$AU_N" -gt 1 ]]; then
+        ma_fail "D-28: $AU_N MA albums map the SAME directory '$AU_DIR' — a duplicate, identity is ambiguous"
+        echo "         item_ids: $(printf '%s' "$AU_HITS" | jq -r '[.[].item_id] | join(",")')"
+        continue
+      fi
+      AU_ID="$(printf '%s' "$AU_HITS" | jq -r '.[0].item_id')"
+      AU_ARTISTS="$(printf '%s' "$AU_HITS" | jq -r '[.[0].artists[]?.name] | join(" | ")')"
+      if [[ -z "$AU_ARTISTS" || "$AU_ARTISTS" == "Various Artists" ]]; then
+        ma_fail "D-28: silent folder_name fallback — MA album $AU_ID ('$AU_DIR') has album artist '${AU_ARTISTS:-<empty>}', want '$AU_EXPECT'"
+        echo "         config/providers/get reading back folder_name is NOT evidence it fired (02-07)."
+      elif [[ "$AU_ARTISTS" == "$AU_EXPECT" ]]; then
+        pass "D-28: MA album $AU_ID maps '$AU_DIR' and reads album artist '$AU_ARTISTS'"
+        AUNIQUE_OK=$((AUNIQUE_OK + 1))
+      else
+        ma_fail "D-28: MA album $AU_ID ('$AU_DIR') reads album artist '$AU_ARTISTS', want '$AU_EXPECT'"
+      fi
+    done
+  fi
+fi
+echo ""
+
+# ---------------------------------------------------------------------------------------------
+# 4e. D-22 — the same rows in Music Assistant (CONF-04, plan 06-13 owns closing it)
+#     (Numbered 4d until 2026-09-27; renumbered 4e by plan 07-15 when the D-28 section took 4d.)
 #
 # Written now and FAILING CLOSED, so criterion 4 stays OPEN rather than reading as passed while
 # the consumer that would falsify it is unreachable. MA being down is COULD NOT LOOK.
@@ -1549,7 +1652,7 @@ echo ""
 #   /mnt/tank/downloads); it is the WRONG precedent for a consumer that is merely down. An
 #   unreachable consumer is a failed assertion, not an out-of-scope row.
 # ---------------------------------------------------------------------------------------------
-echo "🎧 4d. D-22 artist entities in Music Assistant (CONF-04, plan 06-13)"
+echo "🎧 4e. D-22 artist entities in Music Assistant (CONF-04, plan 06-13)"
 rule
 MA_ARTIST_OK=0
 MA_ARTIST_PENDING=0
@@ -1797,6 +1900,7 @@ echo "  artist rows PENDING (JF):    $JELLYFIN_ARTIST_PENDING   (at the 2026-09-
 echo "  artist rows at target (MA):  $MA_ARTIST_OK"
 echo "  artist rows REPORTED (MA):   $MA_ARTIST_PENDING   (measured discrepancy against the tag — NOT green; plan 06-13 owns it)"
 echo "  D-24 census (Artists, no ArtistItems): $D24_CENSUS_N   (pinned $D24_CENSUS_BASELINE_N; TotalRecordCount=$D24_CENSUS_TOTAL Items=$D24_CENSUS_LEN; changed=$D24_CENSUS_CHANGED)"
+echo "  D-28 aunique albums (MA):    $AUNIQUE_OK   (target ${#AUNIQUE_ROWS[@]}, album artist read directly by album-level mapping)"
 echo "  MA albums, local provider:   $MA_PROVIDER_ALBUM_COUNT   (target >= 3)"
 echo "  toolchain missing:           $TOOLS_MISSING"
 echo "  export assertions failed:    $EXPORT_FAILURES"
@@ -1867,7 +1971,7 @@ fi
 if [[ $(( JELLYFIN_ARTIST_PENDING + MA_ARTIST_PENDING )) -gt 0 ]]; then
   echo -e "${YELLOW}⚠️  CONF-04 IS NOT CLOSED: $JELLYFIN_ARTIST_PENDING Jellyfin and $MA_ARTIST_PENDING MA artist row(s) are at a recorded"
   echo -e "   baseline, not at target. The two counts are SEPARATE and are NEVER summed into one"
-  echo -e "   CONF-04 answer. See 4b/4d and stacks/selfhosted/arrs/beets.md § 'Phase 6'.${NC}"
+  echo -e "   CONF-04 answer. See 4b/4e and stacks/selfhosted/arrs/beets.md § 'Phase 6'.${NC}"
   echo -e "${YELLOW}   JF half: the mtime route was driven 2026-09-24 and measured NOT to discharge it"
   echo -e "   (06-43, BRANCH: B) — carried to E6 under a recorded override; a carry, never a close."
   echo -e "   MA half: E6's SECOND measurement — a second >=4-artist track — untouched by round 5."

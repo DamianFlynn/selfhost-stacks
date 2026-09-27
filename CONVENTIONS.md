@@ -145,6 +145,11 @@ from the failure message unless the convention is written down, which is what th
   consumer re-scan changes that set, for reasons unrelated to this check. A changed set exits 3,
   never green; remedy per this section — adjudicate every added/removed path by hand, re-pin all
   three in the same commit with the reason, never via an override (plan `07-07`, D-24).
+- `AUNIQUE_ROWS` — `scripts/check-music-consumers.sh`, the pinned `%aunique{}` firings (`album dir|expected
+  album artist`, one row per album of every firing set) whose Music Assistant album artist section 4d
+  reads directly. Moves when any import produces a new `%aunique{}` firing, for reasons unrelated to
+  this check; rebuild the inventory from the landed library and add every album of the set by hand,
+  same commit (plan `07-15`, D-28).
 
 **The remedy, which the failure output now prints (plan `06-46`):** read every new line **by hand**
 — they are invisible to the driving grep, so the section is `UNKNOWN`, not clean, until they are —

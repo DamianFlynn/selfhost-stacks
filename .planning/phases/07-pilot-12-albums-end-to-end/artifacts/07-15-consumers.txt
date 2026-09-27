@@ -236,3 +236,137 @@ MA SYNC SINCE 07-10: NONE SEEN (logging/get covers 2026-09-25T21:15:38Z..2026-09
   write in the phase has happened, ROUTE-PARTIAL is `none`, the barrier is VERIFIED and no unplanned sync or restart
   occurred since it was applied — so nothing argues for `hold` except keeping MA's database untouched; `sync` is the
   only answer that takes the MA half of criterion 6 and D-28, which are this plan's purpose.
+
+  OPERATOR ANSWER (verbatim, received by the continuation executor and recorded 2026-09-27T13:54Z): sync
+DISPOSITION: sync
+  Barrier RE-READ before any MA write (/root/ma-read-0710.sh, SINCE=2026-09-27T13:29:38Z = Task 2's VERIFIED, RC 0):
+    4/4 music_sync_filesystem_local--XJaJWNUS_{track,playlist,album,artist} enabled=false next_run=null (updated_at
+    2026-09-26T15:55:04.2xZ); present 4; control 16 other tasks enabled=true; pattern drive 1/0/0; log 303 lines, single
+    boot (server-start 2026-09-25T21:15:38Z only); sync/server-start lines later than SINCE: 0.
+BARRIER: VERIFIED (4/4 enabled=false, next_run null) at 2026-09-27T13:54:58Z
+
+## TASK 3 — the one sync, Music Assistant LAST, D-28, E6 second measurement, standing checks
+
+### THE ONE SYNC (DISPOSITION: sync)
+  Helper /root/phase07-0715/ma-sync-0715.sh (D-39 login, password via $ENV in jq, bearer via process substitution;
+  a sentinel file /root/phase07-0715/ma-sync.ISSUED refuses a second run; provider list asserted == exactly
+  ["filesystem_local--XJaJWNUS"] before the call). Output /root/phase07-0715/ma-sync.out.
+  Command issued ONCE: music/sync {"providers":["filesystem_local--XJaJWNUS"]} at 2026-09-27T13:55:48.611Z.
+  Response: 4 BackgroundTasks = the four scheduled tasks music_sync_filesystem_local--XJaJWNUS_{artist,album,track,
+    playlist} run on demand (artist/album success at once, track/playlist running). No other provider in the response.
+  Polled tasks/list every 15 s (bound 30 min): all four status=success, last_error null; finished: artist
+    13:55:48.624921Z, album 13:55:48.628914Z, track 13:56:37.104804Z, playlist 13:56:37.366132Z. Poll end 13:56:49Z.
+    Still enabled=false next_run=null after the on-demand run (the run did not re-enable the schedule).
+  MA log (logging/get, local time UTC+1), the lines this sync wrote:
+    2026-09-27 14:55:52.171 INFO [music_assistant.Filesystem (local disk)] Found 211 changed/new items to process for Filesystem (local disk)
+    2026-09-27 14:56:37.362 INFO [music_assistant.Filesystem (local disk)] Found 0 changed/new items to process for Filesystem (local disk)
+    211 = the 197 pilot files + the 14 E5-repaired Def Leppard (2015) files — every write of the phase, nothing else.
+    No server-start line; the log's only boot is still 2026-09-25T21:15:38Z.
+MA SYNCED ONCE: 2026-09-27T13:55:48Z (music/sync filesystem_local--XJaJWNUS only; complete 13:56:37Z; 211 changed/new items)
+
+  Post-sync counts (provider-filtered music/{albums,tracks,artists}/library_items, 13:57:08Z): albums 79 (was 70),
+    tracks 1412 (was 1244), artists 201 (was 66). +9 albums = the nine landed albums (P12 attached its local mapping to
+    the PRE-EXISTING Spotify-sourced MA album 3, so it enters the provider-filtered count now). +168 tracks, not +197,
+    because MA models a track as a recording entity that can carry several provider mappings, and 29 pilot files
+    attached to an existing or sibling recording (10 P04 onto P02's tracks, 15 P03 onto the 2024 copy's tracks, 2 P05
+    onto P02's, 1 P10 onto P03's, 1 P10 onto TRUSTFALL's): 197 − 29 = 168.
+  Helpers (read-only): ma-dump-0715.sh (login + library_items + albums/get + albums/album_tracks), ma-analyse2-0715.py
+    (local analysis over the dump). Outputs ma-post/, ma-analyse2.out.
+
+### CRITERION 6 — MUSIC ASSISTANT
+  Read 2026-09-27T13:57:41Z. Identity by PATH (P-02): the MA album is the one whose ALBUM-level local provider mapping
+  item_id equals the album's final directory (relative to the library root); its tracks read via music/albums/
+  album_tracks. Checks per album: every file of the directory maps to exactly one MA track; every such track is in that
+  album; every album track has >= 1 local mapping under the directory (the twin pair: under the UNION of the two twin
+  directories, P7R2-07). Title hits are recorded, never used for identity. ROUTE-PARTIAL is `none`, so no album is
+  excluded. Verdict column left for /gsd-verify.
+  | P-ID | final dir | MA album id | MA name | MA album_artist | album_type | album_tracks | files mapped once | discs (track counts) | tracks with no local mapping under dir | title hits |
+  |---|---|---|---|---|---|---|---|---|---|---|
+  | P10 | Various Artists/Now That’s What I Call Music! 117 | 166 | Now That’s What I Call Music! 117 | Various Artists | compilation | 50 | 50/50 | {1:24, 2:26} | 0 | [166] |
+  | P02 | Benson Boone/American Heart | 167 | American Heart | Benson Boone | album | 10 | 10/10 | {1:10} | 0 (union) | [167, 169] |
+  | P03 | Benson Boone/Fireworks & Rollerblades | 168 | Fireworks & Rollerblades | Benson Boone | album | 15 | 15/15 | {1:15} | 0 | [137, 168] |
+  | P04 | Benson Boone/American Heart [093624834588] | 169 | American Heart | Benson Boone | album | 10 | 10/10 | {1:10} | 0 (union) | [167, 169] |
+  | P05 | Various Artists/NOW That’s What I Call Music! 121 | 165 | NOW That’s What I Call Music! 121 | Various Artists | compilation | 44 | 44/44 | {1:44} | 0 | [165] |
+  | P06 | CYRIL/Stumblin’ In (LUNAX remix) (extended mix) | 164 | Stumblin’ In (version "LUNAX remix extended mix") | CYRIL | single | 1 | 1/1 | {1:1} | 0 | [164] |
+  | P12 | Various Artists/Now That’s What I Call Music! 116 | 3 | NOW That's What I Call Music! 116 (Spotify's name; also mapped spotify--g2SQC45P) | Various Artists | compilation | 47 | 47/47 | {1:23, 2:24} | 0 | [3] |
+  | P07 | DJ/Mastermix/Issue 420 | 163 | Issue 420 | Mastermix | unknown | 10 | 10/10 | {1:5, 2:5} | 0 | [163] |
+  | P08 | DJ/Various Artists/Mastermix Issue 421 | 162 | Mastermix Issue 421 | Various Artists | unknown | 10 | 10/10 | {0:10} | 0 | [162] |
+  Every directory: exactly ONE MA album carries its album-level mapping. DUPLICATES (a pilot file mapped by more than
+  one MA track): 0. A duplicate is two MA entries mapping the SAME files; none exists.
+  Measured notes:
+  - P05: ONE album (165), album artist `Various Artists`, 44 tracks — not 44 single-track artist albums.
+  - P10 (the amended multi-disc gate album): ONE album (166), 50 tracks, discs {1,2} (24 + 26) — matches Jellyfin.
+  - P01 is not read: no `P01 LANDED (D-29 EXCEPTION …)` line on the ledger.
+  - P12 merged into MA album 3, which already existed from Spotify (the memory note "MA's library already holds NOW 116
+    ... from Spotify"); the album name displayed is Spotify's straight-apostrophe spelling, the local mapping is P12's
+    directory, 47 tracks, discs {1,2}. Recorded, no verdict attached.
+  - P06: MA splits the title into name `Stumblin’ In` + version `LUNAX remix extended mix`; album_type single.
+  - P07/P08: album_type `unknown` (beets' albumtype `dj` has no MA equivalent). P08 is disc 0 in MA too (DEF-07-13-03).
+  - Shared recordings (MA's track model, not a duplicate): P10 `Beautiful Things` also maps P03's and the 2024 copy's
+    file; P10 `All Out Of Fight` also maps P!nk/TRUSTFALL (2023); P05 `Mystical Magical` and `Sorry I’m Here for Someone
+    Else` also map both American Heart twins. Each is one MA track with several provider mappings; each album still lists
+    it, and each album's track has a mapping under that album's own directory.
+TWIN REPRESENTATION (P02/P04): other: two albums (167 → `Benson Boone/American Heart`, 169 → `Benson Boone/American Heart [093624834588]`), each with its own album-level mapping, sharing the SAME ten MA tracks — each track carries two provider mappings (the FLAC and the MP3)
+  Measured: album_tracks(167) and album_tracks(169) return identical 10-id sets (intersection 10). Each twin's 10 files map
+  to MA tracks (10/10 each, each file exactly once); every track of either album has all its twin mappings under the
+  union of the two directories (the two P05 mappings on `Mystical Magical`/`Sorry I’m Here…` are shared recordings, as
+  above). No verdict attached — the correct representation is undecided (P7R2-07).
+
+### D-28 — %aunique{} albums read DIRECTLY in Music Assistant
+  Firing set, from Task 1's AUNIQUE INVENTORY (rebuilt after 07-13) only: {P02, P04}. Located by album-level mapping.
+    P02 `Benson Boone/American Heart` -> MA album 167, album_artist ["Benson Boone"] (expected Benson Boone).
+    P04 `Benson Boone/American Heart [093624834588]` -> MA album 169, album_artist ["Benson Boone"] (expected Benson Boone).
+  Neither is `Various Artists` or empty: the silent folder_name fallback did NOT fire on the suffixed album. P04's
+    folder (`… [093624834588]`) and album tag (`American Heart`) differ by construction; MA read the album artist from
+    the tag, which beets wrote (albumartist Benson Boone). Beside it, Task 1's copy-based `move -p` re-run: 0 re-path
+    lines over 197 items.
+D-28: 2 of 2 %aunique{} albums read directly in MA with album artist `Benson Boone` (album 167 P02, album 169 P04); fallback fired 0
+
+### E6 SECOND MEASUREMENT (D-05 / G-11)
+E6 SECOND MEASUREMENT: NOT TAKEN — F1 (P09) was drawn but did not land (held; imported against the hold and fully undone, DEF-07-12-04), and no landed track's post-import ARTISTS tag carries >= 4 values (maximum 3, Task 1 mutagen census)
+  So no F1 row is added to ARTIST_PROOF_ROWS. Measured beside it (MA side of the first measurement, not the second):
+  the 33 landed multi-artist tracks (2–3 ARTISTS values) read in MA 33 of 33 with the same artist COUNT and the same
+  name SET as the tag. MA's artists-per-track distribution over the provider now: 1 → 1355, 2 → 49, 3 → 8, none above 3.
+  OBSERVATION bearing on E6 (not a measurement of it): the pinned row 1 (ARTPOP `Jewels n’ Drugs`, tag 4) still reads
+    3 artists in MA — AT its MA baseline 3 — but the NAMES changed: 06-13 (2026-09-21) read `T.I. | Lady GaGa | Too
+    $hort`; now `Twista | Lady Gaga | Too $hort`. The linked entity ids are the SAME (159, 209, 217); entity 159 was
+    displayed `T.I.` and is now displayed `Twista` (with a Spotify mapping for Twista), and 209 `Lady GaGa` → `Lady Gaga`.
+    The change predates this plan's sync (Task 2's 13:29Z pre-read already shows 159=Twista, 209=Lady Gaga). `T.I.`
+    now exists nowhere in MA's provider artists. So "which name is missing" is not a stable reading of MA: an entity's
+    display name can move without its links moving. Filed DEF-07-15-01; the 4e runtime text "'Twista' exists nowhere in
+    MA's library artists" is now factually stale (not edited here — it belongs to the CONF-04/E6 owner).
+
+### Other MA readings requested for 07-15 (recorded, not scored as pilot or E5 results)
+  DEF-07-14-01 ("Brian Coll"): after the sync, 0 MA tracks carry an artist named `Brian Coll`. Artist entity 116 reads
+    `Def Leppard` (mappings filesystem_local--XJaJWNUS:`Def Leppard` + spotify). Provider-local Def Leppard tracks by
+    artist list: `Def Leppard` 257, `Def Leppard, Brian May` 2, `Def Leppard, Hothouse Flowers` 1, `…, Ian Hunter` 1,
+    `…, Tom Morello` 1, and 1 track whose MA artist is `Digital Media 01-11 Def Leppard` (entity 225 — the
+    `On Through the Night (1980)/… Overture.flac` whose Artists list is empty, D-24's 30th item; MA derived an artist
+    from the file name; present in Task 2's pre-read too, so not caused by the sync). The "Brian Coll" display cleared
+    with the sync; the mechanism is unmeasured (same entity-name drift class as DEF-07-15-01).
+  Album 116 / Def Leppard (2015): MA album 116 name `Def Leppard`, album_artist now ["Def Leppard"] (was EMPTY at 07-14),
+    album-level mapping still the TOP-LEVEL `Def Leppard` folder (no MA album maps `Def Leppard/Def Leppard (2015)`).
+    All 14 (2015) tracks read album 116, artist `Def Leppard` (#116).
+  "Sea Of Love": now album 116 (was album=<none>, the 02-07 hard error). Cleared by the sync that read E5's files.
+  Fireworks pair (DEF-07-12-08): two MA albums — 137 → `Benson Boone/Fireworks & Rollerblades (2024)` (pre-existing,
+    untracked copy) and 168 → `Benson Boone/Fireworks & Rollerblades` (P03) — both album_artist Benson Boone, 15 tracks
+    each, and album_tracks returns the SAME 15 track ids for both (each track two provider mappings). The same shape as
+    the twin pair. Recorded, not touched (Phase 8/9 duplicate reconciliation).
+
+### Standing checks — scripts/check-music-consumers.sh
+  Added section `4d. %aunique{} albums in Music Assistant (D-28)` with the pinned AUNIQUE_ROWS (2 rows, P02 and P04,
+  from the rebuilt inventory). The pre-existing `4d. D-22 …` MA section is renumbered `4e` (header list, header
+  paragraphs, section banner, echo line and the CONF-04 block's "See 4b/4e" — same line count, the `Discharges on
+  ROADMAP` last line untouched). CONVENTIONS §5 gains the `AUNIQUE_ROWS` bullet (same commit). No F1 row (E6 second
+  measurement NOT TAKEN). D-24 pin NOT moved (AFTER == BEFORE by sha, Task 1).
+  Run of the edited script on LXC 100 (scp'd as /root/phase07-0715/cmc-0715.sh, sha256 886da4eb… equal to the repo
+    file), 2026-09-27T13:59Z: EXIT 3 (CONF-04's pending rows, as expected; FAILURES 0). New section lines:
+      ✅ D-28: MA album 167 maps 'Benson Boone/American Heart' and reads album artist 'Benson Boone'
+      ✅ D-28: MA album 169 maps 'Benson Boone/American Heart [093624834588]' and reads album artist 'Benson Boone'
+      summary: D-28 aunique albums (MA):    2   (target 2, album artist read directly by album-level mapping)
+    Also read: MA albums, local provider 79; D-24 census 29 (pinned 29, changed 0); artist rows MA at target 2, REPORTED 1.
+  Driven red (CONVENTIONS §3) on a throwaway copy with four substituted rows (deleted after): EXIT 1, FAILURES 4, each
+    arm fired once — mis-attribution (`want 'Nobody'`), `silent folder_name fallback` (a VA directory expected as
+    Benson Boone → album 165 `Various Artists`), stale pin (`does not exist under /mnt/tank/media/Music`), and absence
+    (`no MA album maps 'Def Leppard/Def Leppard (2015)' … UNKNOWN, not green`). The script has no self-test mode, so
+    the drive was done this way rather than via a new override knob (CONVENTIONS §4).
