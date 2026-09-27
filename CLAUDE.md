@@ -109,7 +109,9 @@ outcome that must not happen.
 
 ### Constraints
 
-- **Storage semantics**: `import.move: yes` is currently set — a bulk run *moves* files out of
+- **Storage semantics**: *(Retracted 2026-09-27 by plan 07-17, kept legible: the next sentence did
+  not describe the repo, the appdata copy or the running server when Phase 7 measured it — see the
+  measured reading at the end of this bullet.)* `import.move: yes` is currently set — a bulk run *moves* files out of
   the source rather than copying. First passes must switch to `copy`; `tank` has **5.26 T free**,
   so the duplication is affordable and reversible. *(Corrected 2026-09-24 by plan 06-52. This
   bullet read "9 T free" from 2026-08-17 until then — **stale by ~3.7 T**, and stale in the
@@ -119,6 +121,15 @@ outcome that must not happen.
   `.planning/phases/06-tagger-configuration-and-dry-run/artifacts/06-52-snapshot-decision.txt`
   § MEASURED STATE (e). Restating an unverified number launders it; the measurement is the
   number and the prose is not. Re-measure before leaning on this figure again — it moves.)*
+  **Measured (C1, plan 07-08, 2026-09-25T23:5xZ; re-read before import by plan 07-10 on 2026-09-26):**
+  the repo `config.yaml`, the appdata copy and the running beets-flask server all read
+  `import.copy: yes`, `import.move: no`, `import.write: yes`
+  (`.planning/phases/07-pilot-12-albums-end-to-end/artifacts/07-08-d22-measure.txt` § C1 IMPORT KEYS).
+  Imports copy out of the source: after the pilot, all twelve source folders re-manifested
+  byte-identical, 347 of 347 files (07-17 criterion 8). `write: yes` is deliberate — criterion 3
+  needs the tags on the file. `tank` free re-measured **5.42 TiB** on 2026-09-27
+  (`.planning/SNAPSHOT-REGISTER.md`, 14:07:16Z; re-read 19:05:13Z by plan 07-17); earlier free-space
+  figures in this bullet are older readings.
 - **Filesystem**: `rsync -a` fails writing to `tank` (`mkstemp ... Operation not permitted`) due
   to `acltype=nfsv4` + `aclmode=restricted` (confirmed on both `tank/media` and `tank/downloads`),
   while printing stats that look like success and exiting 23. Use `rsync -rlt --no-p --no-o --no-g`.
@@ -151,12 +162,28 @@ outcome that must not happen.
   track *stubs* against 15–20 track releases, so a confident wrong match is more likely than no
   match. **Discogs carries 430, 433 and DMC 350 outright** and is the correct source for this
   content. Never accept a match without a track-count check.
+  *(Added 2026-09-27 by plan 07-17.)* Beside the ~46: **450 distinct DJ releases** were measured in
+  `tank/downloads/mybook-music-archive` on 2026-09-22 (`07-CONTEXT.md` D-01). The two numbers measure
+  different things — ~46 counts MusicBrainz *entries* for these labels, 450 counts DJ releases
+  *held* in one archive — so neither corrects the other; together they say the collection holds far
+  more DJ releases than MusicBrainz describes.
 - **Storage layout**: `/mnt/tank/downloads` and `/mnt/tank/media/Music` are **separate ZFS
   datasets**. Every library "move" is copy-then-unlink, not an atomic rename — interruptible, needs
   transient double space, and `cp --reflink` fails `EXDEV` across them despite
   `feature@block_cloning` being active on the pool. Reflink only helps *within* `tank/downloads`,
   which is why staging belongs there.
-- **Reversibility**: **beets has no `undo` command** — verified against the live CLI. Backing up the
+- **Reversibility**: **beets has no `undo` command** — verified against the live CLI.
+  *(Qualified 2026-09-27 by plan 07-17; closes DEF-04-01.)* That is true of the beets **CLI**.
+  beets-flask rc6's `UNDO IMPORT`, measured by plan 07-11 on one album (P10), covers **tree yes**
+  (50 → 0 files), **database yes** (50 → 0 items) and **`state.pickle` no** (1 → 1: the `incremental`
+  taghistory entry survives, DEF-07-11-01). A complete undo is therefore `UNDO IMPORT`, then stop
+  beets-flask, then fix `state.pickle`: a file copy of the fence copy when nothing else has been
+  imported since the fence (07-11), otherwise removal of only the affected taghistory entries
+  (07-12, DEF-07-12-06). Never a snapshot rollback of `fast/appdata/arrs` — that would also revert
+  every later album's state. After the 07-11 undo and file copy, re-importing through the same
+  beets-flask session reproduced the import byte-equal (paths, audio, tags, `state.pickle`). It was
+  measured on one album and exercised on two more (P01, P09) in 07-12; it undoes an import, not tag
+  writes made to files in place. Backing up the
   `library.db` files is necessary but insufficient: take a `zfs snapshot` of `tank/media/Music` in
   the *same step*, because rolling back only the tree leaves `incremental` state claiming the work
   is done. Add the `ffprobe` tag-dump of `dj-mixes` and the cover-scan archive to the same fence.
@@ -168,6 +195,7 @@ outcome that must not happen.
 
 ## Corrections after Phase 4 (2026-09-11)
 - **Dated 2026-08-17 snapshot, corrected in place 2026-09-11 by plan 04-04 (D-07, D-14):** beets won the Phase 3 decision, and Phase 4 deleted the wrtag definition and its Renovate pin (plan 04-03), so nothing on this page is an instruction to pin, fix, unpin or deploy wrtag. The backlog denominator is 144 folders. Each correction is dated inline.
+- *(Added 2026-09-27 by plan 07-17.)* Phase 7's D-06 draw population (folders directly under `nzb/music/` and `nzb/unsorted/` holding ≥1 audio file, EXCLUDING the 115 `Vol NNN` folders of `VA-Now_That.s_What_I_Call_Music__1-115_2023` and that parent, and the eight reused sample folders) measured **159 folders / 3,163 audio files** on 2026-09-26 (`.planning/phases/07-pilot-12-albums-end-to-end/07-SAMPLE.md` § *The population, measured*) — a different population from the 144 backlog denominator, not comparable with it.
 ## Headline: three findings that change the plan
 ### 1. The wrtag version pin is inverted — v0.20.0 is the *broken* one, not v0.30.0
 - **Corrected 2026-09-11 (plan 04-04; D-07, D-14):** the v0.20.0 half of this finding is right, but the fix it implied is not. The pin and the wrtag definition were deleted in Phase 4 (plan 04-03), so there is nothing to keep, fix or unpin. Measured in Phase 3: *this repository's `WRTAG_PATH_FORMAT` works on none of v0.20.0, v0.33.0 or v0.34.0 — it renders `-1 - ` on every single-disc track and hard-errors on multi-disc at v0.20.0, and is refused at startup by both current tags — and the sole cause of the startup refusal is the `Disc N/` **subdirectory**, proven by an ablation that changes nothing else and validates at both current tags.*

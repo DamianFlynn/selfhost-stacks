@@ -18,10 +18,18 @@ sections).
 > deliberately as retractions. Do not read an early section as current.
 >
 > The authoritative current state is the section headed
+> *Phase 7 pilot — 2026-09-27: 9 of 12 albums landed, undo exercised on tree/DB/state (tree yes, DB yes, state no — closed by a state.pickle fix)*.
+> Its evidence is the sub-section headed *The eight criteria — evidence, not verdicts* (Phase 7's
+> criteria are scored once by `/gsd-verify 07`, not in this file); what remains open is the
+> sub-section headed *Still open at Phase 7 close*; re-running is *How to re-run the Phase 7
+> evidence*; and what the pilot changed about running the library is *What changed in the operating
+> model*. *(Pointer moved 2026-09-27 by plan 07-17.)*
+>
+> The record Phase 7 started from is the section headed
 > *Phase 6 closed 2026-09-21 — four criteria TRUE, one OPEN on a named half, all five RE-MEASURED at close*.
 > Its verdict table is the sub-section headed *The five criteria* **under that heading** — the same
 > sub-heading text also appears in the Phase 5 closure above it, so disambiguate by the parent — and
-> what remains open is the sub-section headed *Still open at Phase 6 close*.
+> what it left open is the sub-section headed *Still open at Phase 6 close*.
 >
 > **Cited by heading text, never by line number:** line citations in this repository go stale the
 > moment anything is inserted above them, and this file only ever grows by append. (`06-REVIEW.md`
@@ -1060,6 +1068,20 @@ one import, in a release candidate, and it reverses the import, not the tag writ
 files. Phase 4 owns amending the constraint in `CLAUDE.md` and `PROJECT.md`; **Phase 7's "undo
 exercised" criterion now has two candidate mechanisms rather than one.**
 
+*Amended 2026-09-27 (plan 07-17), from what plan 07-11 measured.* `UNDO IMPORT` covers the tree and
+the database but **not `state.pickle`**. On P10 it read tree 50 → 0 files, `library.db` 50 → 0 items,
+and `state.pickle` 1 → 1: the file was byte-unchanged, so the `incremental` taghistory entry that
+makes beets skip a folder it has seen survived the undo (`DEF-07-11-01`). A complete undo is three
+steps: press `UNDO IMPORT`; stop beets-flask; fix `state.pickle`. When nothing else has been
+imported since the fence, the fix is a file copy of the fence copy (from
+`/mnt/fast/appdata/arrs/.zfs/snapshot/pre-07-pilot/beets/config/state.pickle` on atlantis), which
+is what 07-11 did. When other albums have landed since, copying the fence back would erase their
+state too, so remove only the affected taghistory entries (07-12, `DEF-07-12-06`). Never a snapshot
+rollback of `fast/appdata/arrs`. After the file copy, re-importing through the same beets-flask
+session reproduced the import byte-equal — same paths, same audio, same tags, same `state.pickle`.
+`CLAUDE.md` and `.planning/PROJECT.md` carry the same qualification from this date, which closes
+`DEF-04-01`.
+
 ### Correction: the wrtag pin's stated cause was reversed (2026-09-11, Phase 4 D-14)
 
 This page's advice was written while the repo pinned wrtag below v0.30.0 behind a Renovate rule.
@@ -1387,6 +1409,9 @@ Real, out of Phase 4's scope, and written down rather than silently carried:
   in writing as **DEF-04-01**, in
   `.planning/phases/04-collapse-to-one-tagger/deferred-items.md`, to **Phase 7**, which owns the
   "undo exercised" criterion and now has two candidate mechanisms rather than one.
+  *Closed 2026-09-27 by plan 07-17:* both files now carry a dated qualification with 07-11's three
+  measured parts (tree yes, database yes, `state.pickle` no) — see the amendment under § *One
+  correction to this page's own § The recovery fence*.
 
 ### `Replaygain Tagging: ENABLED` in `Audio.txt` is not what it looks like
 
@@ -2546,3 +2571,130 @@ instruments, they fail closed, and they assert a state (`/media` read-only, an u
 `library.db`) that Phase 7 ends on purpose. Plan 07-05 ran the oracle's one real run before the
 grant.
 A red from a post-grant `--run` of either is expected. It is not evidence of damage.
+
+## Phase 7 pilot — 2026-09-27: 9 of 12 albums landed, undo exercised on tree/DB/state (tree yes, DB yes, state no — closed by a state.pickle fix)
+
+The first real imports into the library, twelve albums drawn in advance and taken one at a time
+through beets-flask's `02-review` inbox. The narrative — every plan, its measurements and its
+deviations — is in `.planning/phases/07-pilot-12-albums-end-to-end/`. The evidence for the eight
+criteria was assembled from live state on 2026-09-27 between 19:01Z and 19:05Z, in
+`artifacts/07-17-evidence.txt`.
+
+**This section carries no verdicts.** Phase 7's criteria are scored once, by `/gsd-verify 07`,
+against the evidence map registered before the first import (`07-EVIDENCE-MAP.md`, D-31). The
+operator's separate answer to "do you believe this flow?" is recorded in `07-TRUST-VERDICT.md`.
+
+**Outcome.** Landed nine: P10 (*Now 117*, the multi-disc gate album, undone and re-run), P02, P03,
+P04 (the *American Heart* pair), P05 (*Now 121*, the compilation), P06 (a one-track release, as an
+album), P12 (*Now 116*), and the DJ pair P07/P08 (Mastermix 420/421, imported as-is and routed
+under `DJ/`). Held three: P01 (*The Essential Michael Jackson* — incomplete at source, no
+MusicBrainz candidate passes the per-disc count), P09 (no candidate passes) and P11 (its files
+carry two album values). E5, the Def Leppard (2015) `albumartist` repair, ran as a separate named
+operation. `library.db` now holds 9 albums / 197 items.
+
+### The eight criteria — evidence, not verdicts
+
+Each line names the section of `artifacts/07-17-evidence.txt` that holds the measurement.
+
+1. **Fence and undo** — § criterion 1: both `@pre-07-pilot` snapshots re-listed present; undo on
+   P10 read tree 50 → 0, DB 50 → 0, `state.pickle` 1 → 1 (then fixed by a file copy); 9 of 12
+   landed, P01 held at its exception gate.
+2. **Hard shapes named first** — § criterion 2: the sample and its amendment both precede the
+   first import artifact by `git merge-base --is-ancestor` (exit 0 twice).
+3. **Tags on the file, ownership** — § criterion 3: 197 files probed = 197 DB items, 0 field
+   mismatches, 197/197 `568:568` read from atlantis.
+4. **No net metadata loss** — § criterion 4: one diff over all 197 landed files; 0 fields
+   dropped, 0 ambiguous; one MISSING_AFTER pair that is P04 track 01, the known key defect
+   `DEF-07-12-09` (decoded audio identical).
+5. **Undo demonstrated** — § criterion 5: the 07-11 witness and the byte-equal re-run.
+6. **Both consumers** — § criterion 6: all nine landed albums read in Jellyfin then Music
+   Assistant; the compilation is one `Various Artists` album and the multi-disc album keeps its
+   two discs in both.
+7. **Detection sweep** — § criterion 7: self-test first, then a clean sweep over 197 items.
+8. **Sources survive** — § criterion 8: all twelve source folders re-manifested from atlantis,
+   347 of 347 files byte-identical to the before-manifest.
+
+### Still open at Phase 7 close
+
+- **CONF-04 stays unticked.** E6's first measurement (new imports in Jellyfin): 33 of 33
+  multi-artist tracks read the same artist set as the tag. The second (a ≥4-artist track in Music
+  Assistant) was **not taken** — the only candidate album, P09, did not land.
+- **The UI has no hold state** (`DEF-07-12-04`), **imports the selected candidate card, not the
+  one agreed at the gate** (`DEF-07-12-05` — the agreed release reached beets on 4 of 6 albums), and
+  shows exact ties as near-identical cards. Two albums were imported against a `hold` and had to be
+  undone. Anything staged in `02-review` is one click from import: unstage held folders at once.
+- **Authelia's read buffer** (`DEF-07-12-03`): the inbox page puts every staged folder into one
+  URL, which overflowed 4096 B at 10 folders. It was raised to 16384 in appdata, **not in git**;
+  Phase 9's inbox is expected to exceed 16 KB.
+- **`DEF-07-11-06`:** no check asserts that the Jellyfin Music library's `MetadataSavers` is
+  empty. It was `["Nfo"]` and wrote sidecars into the library despite `SaveLocalMetadata=false`
+  (`DEF-07-11-05`, now `[]`).
+- **`DEF-07-12-09`:** `diff-music-tags.sh`'s join key moves on an MP3 whose last frame is
+  truncated and which carries ID3v1. Until fixed, check any MP3 MISSING_AFTER by decoded audio
+  before reading it as loss.
+- **The DJ routing hazard** (`DEF-07-13-01`): routing is DB-only, so `dj` lives in `library.db`
+  alone. A `beet update` over `DJ/` would clear it, and a `beet write` would redo the tag damage the
+  `-W` fix prevented. Nothing in the pipeline runs either; Phase 9 must not.
+- **No singleton route** through `02-review` (`DEF-07-12-01`); **candidate sets drift between
+  previews** of identical files (`DEF-07-12-02`); **DuplicateException** needs the folder page's
+  candidate search re-run, and only "Keep both" is safe (`DEF-07-12-07`).
+- **Pre-existing untracked copies** sit beside imports (`DEF-07-12-08`, *Fireworks & Rollerblades
+  (2024)*); junk values survive a match whose MusicBrainz field is empty (`DEF-07-12-10`); P08 has
+  no disc tag (`DEF-07-13-03`); Music Assistant artist display names drift over stable ids
+  (`DEF-07-15-01`).
+- **Not enacted:** the inserted archive phase and the DUPE-01/02 fold-in (D-02/D-03) are
+  `/gsd-phase` work; DJ key/energy generation is deferred; the bootleg `03-asis` route is untested
+  by import (E2); `tank/downloads@pre-phase5` is not released (E4).
+- **Snapshots held:** both `@pre-07-pilot` snapshots until Phase 9 batch 1's fence, and
+  `tank/media/Music@pre-06-41-conf04-reprobe` (D-17 did not fire) — see
+  `.planning/SNAPSHOT-REGISTER.md`.
+- **The one budgeted code review** (D-31) was not run at 07-09; it is the single next step if
+  wanted.
+
+### How to re-run the Phase 7 evidence
+
+Read-only throughout. Run on LXC 100 from `/mnt/fast/stacks` after `git pull --ff-only`, except the
+manifest, which runs on atlantis as real root.
+
+```bash
+# Criterion 7 — the sweep: self-test first (13 cases, 9 red by design), then the library.
+bash scripts/check-music-import.sh --self-test
+bash scripts/check-music-import.sh
+
+# Criterion 4 — AFTER capture, one invocation per landed album directory, same basename;
+# then the diff against the landed albums' concatenated per-album BEFORE captures.
+bash scripts/snapshot-music-tags.sh <new-basename> --roots "/mnt/tank/media/Music/<artist>/<album>"
+bash scripts/diff-music-tags.sh <before>.ndjson.gz <after>.ndjson.gz --json
+
+# Criterion 6 — both consumers, including the D-28 %aunique{} section 4d.
+bash scripts/check-music-consumers.sh
+
+```
+
+Criterion 3's comparator and criterion 8's manifest are plan-owned programs recorded in the
+evidence file with their sha256 (`crit3d.py`, and 07-07's `manifest.sh`, re-used unchanged). A new
+capture basename must not already exist: the snapshot script resumes into an existing one.
+
+### What changed in the operating model
+
+- **The library is writable, for good (D-22, D-23).** beets-flask alone mounts `/media` `rw`; the
+  dormant CLI container stays `:ro`, and `quick-health-check.sh` asserts the grant as deliberate.
+  The strongest structural protection is gone; **the snapshot fence is now the primary control.**
+- **Imports copy, and write tags.** `import.copy: yes`, `import.move: no`, `import.write: yes`
+  (measured, C1). The source folder is left as it was; the staged copy in `02-review` stays behind
+  after import and has to be cleared deliberately.
+- **`01-auto` is de-registered until Phase 8 (D-21).** Only `02-review` imports.
+- **A complete undo is three steps**, not one button — see the correction under § *One correction
+  to this page's own § The recovery fence*: `UNDO IMPORT`, stop beets-flask, fix `state.pickle`.
+- **DJ releases route by script (D-08).** `scripts/route-dj-album.sh --apply` sets `albumtype dj`
+  in the database only (`modify -W`) and moves the album under `DJ/`; the files keep their bytes.
+- **The post-import sweep** (`scripts/check-music-import.sh`) runs in the health check and catches
+  `.1` collisions, empty `mb_albumid` and track counts that disagree with `tracktotal`.
+- **Jellyfin** is told about each import with one targeted update — include the new top-level
+  folder in the body when an artist directory is new (`DEF-07-13-02`). It also runs its own
+  12-hourly library scan whatever the plans do. Music `MetadataSavers` must stay `[]`.
+- **Music Assistant** syncs from scheduler tasks, not provider config; they were disabled for the
+  pilot and re-enabled 2026-09-27T14:03:56Z. Read multi-value ID3v2.4 artist tags with mutagen, not
+  `ffprobe`, which keeps only the first value.
+- **Every project snapshot is in `.planning/SNAPSHOT-REGISTER.md`**, with its owner, what it undoes
+  and what releases it. Nothing is released except at an operator gate.
