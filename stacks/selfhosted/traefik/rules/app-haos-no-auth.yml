@@ -1,0 +1,17 @@
+http:
+  routers:
+    haos-rtr:
+      rule: "Host(`hass.deercrest.info`)" 
+      entryPoints:
+        - websecure
+      middlewares:
+        - chain-no-auth
+      service: haos-svc
+      tls:
+        certResolver: dns-cloudflare
+  services:
+    haos-svc:
+      loadBalancer:
+        servers:
+          - url: "http://172.16.1.31:8123"
+

@@ -1,0 +1,128 @@
+##############################################################
+# Traefik 3 Middleware Chains
+##############################################################
+
+http:
+  middlewares:
+    ##############################################################
+    # Rate Limit Middleware
+    ##############################################################
+    rate-limit:
+      rateLimit:
+        burst: 100
+        average: 50
+        period: 60s
+
+    ##############################################################
+    # Error Pages Middleware
+    ##############################################################
+    error-pages:
+      errors:
+        status:
+          - "400-599"
+        service: error-pages@docker
+        query: /{status}.html
+
+    ##############################################################
+    # IP Whitelist Middleware
+    ##############################################################
+    whitelist:
+      ipWhiteList:
+        sourceRange:
+          - "10.0.0.0/8"
+          - "192.168.0.0/16"
+          - "172.16.0.0/12"
+          - "127.0.0.1/32"
+
+    ##############################################################
+    # Default Headers Middleware
+    ##############################################################
+    default-headers:
+      headers:
+        frameDeny: true
+        browserXssFilter: true
+        contentTypeNosniff: true
+        forceSTSHeader: true
+        stsIncludeSubdomains: true
+        stsPreload: true
+        stsSeconds: 31536000
+        customFrameOptionsValue: SAMEORIGIN
+        customRequestHeaders:
+          X-Forwarded-Proto: https
+
+    ##############################################################
+    # Secure Headers Middleware
+    ##############################################################
+    secure-headers:
+      headers:
+        accessControlAllowMethods:
+          - GET
+          - OPTIONS
+          - PUT
+        accessControlMaxAge: 100
+        hostsProxyHeaders:
+          - "X-Forwarded-Host"
+        referrerPolicy: "same-origin"
+
+    ##############################################################
+    # REMOVED 2026-09-27: the `buffering` middleware. Do not reinstate.
+    ##############################################################
+    # It was added to "fix 431 errors". It cannot do that. A 431 is
+    # "Request Header Fields Too Large", raised by Authelia while parsing
+    # REQUEST HEADERS; `buffering` caps request/response BODIES and never
+    # sees a header. The real lever is Authelia's own `server.buffers.read`
+    # (already 16384 in authelia/configuration.yml). 431s were still being
+    # logged in access.log while this middleware was active -- that is the
+    # proof it never addressed them.
+    #
+    # What it DID do: maxResponseBodyBytes 10485760 made Traefik hold each
+    # response in full before forwarding a single byte, and reject anything
+    # over 10 MB. That silently broke every download and every stream larger
+    # than 10 MB on all ~49 routers using chain-authelia.
+    #
+    # Measured on Silo before removal (same session, same stream token):
+    #   internal 127.0.0.1:8090 -> HTTP 200, 929 MB in 15 s, ttfb 0.30 s
+    #   via Traefik             -> no response headers at all, 0 bytes, hung
+    # Silo logged a healthy 200 held open 13 s, streaming into a buffer that
+    # was never drained; the player then gave up and called stopPlayback.
+    # A finite 5.21 MB response passed in 33 ms, confirming the cap, not the
+    # chain, was the fault.
+    #
+    # If a request-body cap is ever wanted, scope it to the single router
+    # that needs it -- never to the shared auth chain.
+
+    ##############################################################
+    # Authelia Middleware
+    ##############################################################
+    authelia:
+      forwardAuth:
+        address: "http://authelia:9091/api/verify?rd=https://auth.deercrest.info/"
+        trustForwardHeader: true
+        authResponseHeaders:
+          - "Remote-User"
+          - "Remote-Groups"
+          - "Remote-Name"
+          - "Remote-Email"
+
+    ##############################################################
+    # Middleware Chains
+    ##############################################################
+    chain-no-auth:
+      chain:
+        middlewares:
+          - default-headers
+          - secure-headers
+
+    chain-authelia:
+      chain:
+        middlewares:
+          - default-headers
+          - secure-headers
+          - authelia
+
+    chain-oauth:
+      chain:
+        middlewares:
+          - default-headers
+          - secure-headers
+          - oauth

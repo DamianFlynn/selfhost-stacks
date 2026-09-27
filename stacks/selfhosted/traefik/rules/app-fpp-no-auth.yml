@@ -1,0 +1,17 @@
+http:
+  routers:
+    fpp-rtr:
+      rule: "Host(`illuminations.deercrest.info`)" 
+      entryPoints:
+        - websecure
+      middlewares:
+        - chain-authelia
+      service: fpp-svc
+      tls:
+        certResolver: dns-cloudflare
+  services:
+    fpp-svc:
+      loadBalancer:
+        servers:
+          - url: "http://172.16.1.29:80"
+
