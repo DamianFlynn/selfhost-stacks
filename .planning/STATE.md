@@ -8,7 +8,7 @@ progress:
   total_phases: 10
   completed_phases: 5
   total_plans: 141
-  completed_plans: 139
+  completed_plans: 140
   percent: 50
 ---
 
@@ -21,13 +21,15 @@ See: .planning/PROJECT.md (updated 2026-08-17)
 **Core value:** New music downloads land in the library correctly tagged, through exactly one
 pipeline that someone owns.
 **Current focus:** Phase 07 — pilot-12-albums-end-to-end (**PLANNED 2026-09-25, 17 plans in
-13 waves, 15 of 17 executed — 07-01 … 07-15 done**; Phase 06 stays `In Progress` at `gaps_found` 5/6 with CONF-04 carried to
+13 waves, 16 of 17 executed — 07-01 … 07-16 done**; Phase 06 stays `In Progress` at `gaps_found` 5/6 with CONF-04 carried to
 Phase 7 E6 — `/gsd-verify 06` is still owed)
 
 **Definition of done (CONS-04):** a file is imported only when verified with `ffprobe` on the file
 *and* visible in both Jellyfin and Music Assistant. Never "tool configured".
 
 ## Current Position
+
+**PLAN 07-16 COMPLETE — `PRUNE OUTCOME: NONE (hold)` — 2026-09-27.** `.planning/SNAPSHOT-REGISTER.md` gives all 11 project snapshots an owner, purpose and release condition (tank 5.42 TiB free, measured). One eligible (`tank/media/Music@pre-phase5-chown`, 0 B, covered by `@pre-06-41-conf04-reprobe`, written@=0) — operator **hold**; reprobe still held (D-17 NOT FIRED; DEF-06-45-01/DEF-06-52-01 open); both `@pre-07-pilot` fences release at Phase 9 batch 1's fence. No zfs write verb ran; 181 snapshots before = after. Next: 07-17 (trust verdict).
 
 **PLAN 07-15 COMPLETE — `STATE 07-15-CONSUMERS-READ` — 2026-09-27.** Criterion 6 both halves: Jellyfin 9/9 albums (1 MusicAlbum at final path, artist/tracks/discs = beets); MA one sync (`music/sync` XJaJWNUS, 13:55:48Z, 49 s; 70/1244/66 → 79/1412/201) → 9/9 albums, 0 duplicates. D-28 2/2 (P02/P04 album artist Benson Boone, no Various Artists fallback). E6 second measurement NOT TAKEN (P09 not landed); first measurement 33/33 (ffprobe truncates ID3v2.4 multi-value ARTISTS — use mutagen). D-24 census unchanged (29). E5 confirmed in MA: album 116 now has album artist Def Leppard, "Sea Of Love" has its album; "Brian Coll" gone. Standing check `4d. %aunique{} albums in MA (D-28)` added (old 4d → 4e), deployed (`c246e2f`). **MA fs-sync tasks RE-ENABLED 4/4 at 14:03:56Z** (next run 2026-09-28T01:55:48Z) — barrier lifted. DEF-07-15-01: MA artist display names drift over stable ids (row 1 now `Twista|…`; 4e's "Twista exists nowhere" message now false). Next: 07-16 (snapshot prune gate).
 
