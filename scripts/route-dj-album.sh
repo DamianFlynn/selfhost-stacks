@@ -20,10 +20,16 @@
 #   TREE. Callers must not trigger a Jellyfin library scan inside that window.
 #
 # Where it runs:
-#   ON LXC 100 (root@172.16.1.159), from /mnt/fast/stacks. Every beets call is a bounded
+#   ON LXC 100 (root@172.16.1.159), from /mnt/fast/stacks. Every beets call is
 #   `timeout 120 docker exec -u beetle beets-flask "$BEET_REALLIB" ...` with argv passed straight
 #   to the binary - there is NO shell inside the container (its /bin/sh is dash, no pipefail) and
 #   no pipeline there. The query is its own argv element.
+#   THE BOUND IS ON THE docker CLIENT ONLY (07-REVIEW WR7-02; CONVENTIONS §2's KNOWN LIMIT):
+#   `timeout` signals the `docker` CLI and `docker exec` does not forward it, so a 124 from a
+#   WRITING step (c) or (e) means the beets process inside the container may STILL be writing.
+#   writer_timed_out() therefore never reports that as a finished failure: it lists the
+#   container's processes with `docker top` and exits 3 UNVERIFIED, telling the operator not to
+#   roll back, re-run, undo or scan until the writer is gone.
 #
 # D-04 - WHICH beets MAY OPEN THE REAL LIBRARY:
 #   Only beets-flask's own beets 2.12.0 opens the real /config/library.db. The 2.13.1 `beets`
@@ -79,10 +85,11 @@
 #
 # EXIT CODES (CONVENTIONS §1 - "could not look" is never "nothing is wrong"):
 #   0  success (default: the album was read and its rule printed; --apply: routed and verified)
-#   1  --apply: a writing step failed, or the post-condition in (f) failed
+#   1  --apply: a writing step failed (non-zero, not 124), or the post-condition in (f) failed
 #   2  usage error
 #   3  could not look, or refused: missing tool, timeout, non-zero read, wrong beets version,
-#      not exactly one album, `modify -h` lacking a required flag
+#      not exactly one album, `modify -h` lacking a required flag; ALSO a writing step (c) or (e)
+#      that hit its bound (124) - the writer may still be running, so the state is UNVERIFIED
 #
 # No credential is used. No top-level `set -e`: every status is read and printed explicitly.
 
@@ -98,6 +105,8 @@ ROUTE_VERSION=2.12.0
 readonly ROUTE_VERSION
 LIB_DJ_PREFIX=/media/Music/DJ/
 readonly LIB_DJ_PREFIX
+ROUTE_TOP_TIMEOUT=20
+readonly ROUTE_TOP_TIMEOUT
 
 usage() {
   echo "usage: route-dj-album.sh --album-id N [--apply]   (N: digits only)" >&2
@@ -132,6 +141,31 @@ refuse() { # $1 = message; could-not-look / refusal
 fail() { # $1 = message; a writing step or the post-condition failed
   echo "  ❌ $1" >&2
   exit 1
+}
+
+# A 124 on a WRITING step killed only the docker CLIENT (see "Where it runs"): the beets process
+# inside the container may still be writing. Look for it once with `docker top` (host-side ps, no
+# tool needed inside the image), print what was seen, and exit 3 UNVERIFIED either way - one look
+# that finds nothing is not proof the writer has finished (07-REVIEW WR7-02).
+writer_timed_out() { # $1 = step letter, $2 = the beets subcommand that was running (modify|move)
+  echo "  ⚠️  step ($1) exceeded its ${ROUTE_TIMEOUT}s bound. Only the docker CLIENT was killed;" >&2
+  echo "      '$2' on album $ALBUM_ID may STILL be running inside $ROUTE_CONTAINER." >&2
+  TOP_RC=0
+  TOP_OUT="$(timeout "$ROUTE_TOP_TIMEOUT" docker top "$ROUTE_CONTAINER" -eo pid,args)" || TOP_RC=$?
+  if [ "$TOP_RC" -ne 0 ] || [ -z "$TOP_OUT" ]; then
+    echo "  ⚠️  could not list the processes in $ROUTE_CONTAINER (docker top rc=$TOP_RC): whether" >&2
+    echo "      the writer is still running is UNKNOWN." >&2
+  else
+    LIVE=$(printf '%s\n' "$TOP_OUT" | grep -E -e " $2 -a .*id:$ALBUM_ID( |\$)")
+    if [ -n "$LIVE" ]; then
+      echo "  the writer IS still running:" >&2
+      printf '%s\n' "$LIVE" | sed 's/^/    /' >&2
+    else
+      echo "  no '$2 -a ... id:$ALBUM_ID' process was listed at this one look - that is not proof" >&2
+      echo "  it finished cleanly; re-check before acting." >&2
+    fi
+  fi
+  refuse "step ($1) UNVERIFIED: do NOT roll back, re-run, undo or start a Jellyfin scan until 'docker top $ROUTE_CONTAINER' lists no '$2 -a ... id:$ALBUM_ID' process; then re-read the album before deciding anything."
 }
 
 # House S1 order over a captured read: 124 first, then any non-zero, then empty.
@@ -212,6 +246,7 @@ printf '%s\n' "$OUT" | grep -qE -e '-y, --yes' || MISSING="$MISSING -y/--yes"
 RC=0
 timeout "$ROUTE_TIMEOUT" docker exec -u "$ROUTE_USER" "$ROUTE_CONTAINER" "$BEET_REALLIB" modify -a -M -W -y "id:$ALBUM_ID" albumtype=dj || RC=$?
 echo "  rc=$RC  (step c: modify albumtype=dj in the DB only - no move, no tag write)"
+[ "$RC" -eq 124 ] && writer_timed_out c modify
 [ "$RC" -eq 0 ] || fail "step (c) modify failed (exit $RC). The album may be PARTIALLY modified; nothing was moved."
 
 # (d) Pretend move - show every planned rename.
@@ -227,6 +262,7 @@ echo "  planned renames: $N_ARROWS"
 RC=0
 timeout "$ROUTE_TIMEOUT" docker exec -u "$ROUTE_USER" "$ROUTE_CONTAINER" "$BEET_REALLIB" move -a "id:$ALBUM_ID" || RC=$?
 echo "  rc=$RC  (step e: move)"
+[ "$RC" -eq 124 ] && writer_timed_out e move
 [ "$RC" -eq 0 ] || fail "step (e) move failed (exit $RC). albumtype=dj IS SET; some files may already have moved."
 
 # (f) Post-condition, over ITEMS, read from the DATABASE: every item dj, every path under DJ/.
