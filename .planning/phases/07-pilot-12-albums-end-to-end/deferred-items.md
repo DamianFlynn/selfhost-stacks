@@ -249,3 +249,19 @@ DEF-07-13-01: route-dj-album.sh's `modify` wrote every tag of every DJ file (imp
   STILL OPEN as a hazard, not a defect: DJ files carry no `dj`, so a future `beet update` over a routed album un-sets
   it in the DB (`update -p` shows `albumtype: dj -> ''` on 10/10 items), and `beet write` would redo the damage. Phase 9
   must not run either over DJ/. Evidence: artifacts/07-13-dj-pair.txt § 07-13 ROUTE -W FIX (F1–F5).
+
+DEF-07-13-02: A targeted `Created` update that INCLUDES the new top-level folder path materialised both DJ albums under the new `DJ/` — DEF-07-12-11 did not recur
+  Filed 2026-09-27 by 07-13 Task 3. OBSERVATION, not a defect. 07-12's P06 POST carried file paths only, and the new
+  top-level `CYRIL/` did not appear until Jellyfin's scheduled 12-h scan (DEF-07-12-11). 07-13's one POST (12:41:26Z, HTTP
+  204) carried `/media/Music/DJ` itself plus the 20 file paths. Both albums were present 80 s later: MusicAlbum 77 -> 79,
+  Audio 1,421 -> 1,441, one album per directory, no sidecar, MetadataSavers still []. One observation on one Jellyfin
+  version, not a controlled comparison: the body differed in the folder entry, and nothing else was varied. For 07-15 and
+  Phase 9: include the new top-level folder in the targeted body before concluding a scheduled scan is needed. Evidence:
+  artifacts/07-13-dj-pair.txt § Criterion 6, Jellyfin half.
+
+DEF-07-13-03: P08 (Mastermix Issue 421) carries no disc tag — two CDs tagged as one, so tracks 1..5 appear twice
+  Filed 2026-09-27 by 07-13 Task 3. Source-tag quality, not a pipeline defect. The files' own tags put all ten tracks on
+  disc 0 with track numbers 1..5 twice. As-is import keeps that, and routing writes no tag (DEF-07-13-01), so beets holds
+  disc 0 and Jellyfin shows one disc indexed 1,1,2,2,…,5,5. The file names still render uniquely, because the titles
+  differ, and the FROZEN oracle lines already expect this. Fixing it is tag normalisation (the Phase 9 mutagen script),
+  not beets, and not a `beet write` over DJ/ (DEF-07-13-01's open hazard). Evidence: § G2, § Criterion 6.

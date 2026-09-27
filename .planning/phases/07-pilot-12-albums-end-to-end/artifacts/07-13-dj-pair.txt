@@ -491,3 +491,192 @@ DISPOSITION P08: imported-asis
 DISPOSITION P11: hold
   (P11: D-26 FALSE — two album values — and D-29 NONE PASSES; never imported; staged copy removed 12:22:44Z, source
   unchanged. Album-id map: 10 = P07, 11 = P08.)
+
+## Task 3 — D-08 routing (LXC 100, /mnt/fast/stacks at 998625b; transcripts /root/phase07-0713/route/p0N-{ro,apply}.txt)
+Deployed route-dj-album.sh sha256 51c5279986d32a41b7cc109036350b294482f41b33cf45ea3cb71f33fcd72720 asserted equal to the
+fixed script (998625b) immediately before each album's run; the run was refused otherwise (exit 9 guard, not hit).
+Album-id map (library.db mode=ro, § G2): 10 = P07, 11 = P08.
+
+### P07 — `bash scripts/route-dj-album.sh --album-id 10` (read-only), 12:37:42.125Z, RC 0
+  version guard rc=0 "beets version 2.12.0" (plugins: musicbrainz); album row rc=0
+  `10|00||Mastermix|Issue 420|/media/Music/Mastermix/Issue 420`; rule 3 'albumtype:=dj' ->
+  DJ/$albumartist/$album%aunique{}/$track $title (disctotal='00'); current albumtype ''; "nothing written".
+### P07 — `bash scripts/route-dj-album.sh --album-id 10 --apply`, 12:37:48.018Z -> 12:37:52.165Z, RC 0
+  (1) version rc=0 2.12.0; (2) album row rc=0 (as above); (b) `modify -h` rc=0 (-M, -W, -y present);
+  (c) "Modifying 1 albums. Mastermix - Issue 420  albumtype:  -> dj" rc=0 (DB only: -M -W);
+  (d) pretend move rc=0, planned renames 10:
+      -> /media/Music/DJ/Mastermix/Issue 420/01 Club Cuts.mp3
+      -> /media/Music/DJ/Mastermix/Issue 420/02 Mastermixed 5.mp3
+      -> /media/Music/DJ/Mastermix/Issue 420/03 Reggae Fusion.mp3
+      -> /media/Music/DJ/Mastermix/Issue 420/04 Into The 80s.mp3
+      -> /media/Music/DJ/Mastermix/Issue 420/05 Triple Tracker_ Crazibiza.mp3
+      -> /media/Music/DJ/Mastermix/Issue 420/01 The Ibiza Sessions_ Jackin' House.mp3
+      -> /media/Music/DJ/Mastermix/Issue 420/02 Party On Fire.mp3
+      -> /media/Music/DJ/Mastermix/Issue 420/03 Classic Disco vs. Nu Disco.mp3
+      -> /media/Music/DJ/Mastermix/Issue 420/04 Hit The Dancefloor_ Latin Pop.mp3
+      -> /media/Music/DJ/Mastermix/Issue 420/05 Summer Slam_ 00s Club Classics.mp3
+  (e) "Moving 1 album." rc=0; (f) item read-back rc=0: 10 lines `dj|/media/Music/DJ/Mastermix/Issue 420/…`;
+  "items: 10, routed: 10, not routed: 0"; "✅ album 10 routed: 10 of 10 items albumtype=dj (DB) under /media/Music/DJ/;
+  no tag written". (beets' ANSI colour codes stripped in this copy; raw transcript on LXC 100.)
+  WINDOW P07: landed 12:32:54.10Z (albums.added) -> move complete by 12:37:52.17Z = 4 min 58 s in the artist tree.
+### P08 — `bash scripts/route-dj-album.sh --album-id 11` (read-only), 12:38:00.146Z, RC 0
+  version rc=0 2.12.0; album row rc=0 `11|00||Various Artists|Mastermix Issue 421|/media/Music/Various Artists/Mastermix
+  Issue 421`; rule 3 (disctotal='00'); current albumtype ''; nothing written.
+### P08 — `bash scripts/route-dj-album.sh --album-id 11 --apply`, 12:38:01.284Z -> 12:38:05.489Z, RC 0
+  (1) rc=0; (2) rc=0; (b) rc=0; (c) "Various Artists - Mastermix Issue 421  albumtype:  -> dj" rc=0;
+  (d) pretend move rc=0, planned renames 10:
+      -> /media/Music/DJ/Various Artists/Mastermix Issue 421/01 Club Cuts.mp3
+      -> /media/Music/DJ/Various Artists/Mastermix Issue 421/01 The Ibiza Sessions (Balearic Beats).mp3
+      -> /media/Music/DJ/Various Artists/Mastermix Issue 421/02 Deep House Covers 2021.mp3
+      -> /media/Music/DJ/Various Artists/Mastermix Issue 421/02 Pride (The Mix 2021).mp3
+      -> /media/Music/DJ/Various Artists/Mastermix Issue 421/03 Electro Swing Party.mp3
+      -> /media/Music/DJ/Various Artists/Mastermix Issue 421/03 Where The Rap Party At.mp3
+      -> /media/Music/DJ/Various Artists/Mastermix Issue 421/04 Jackin' House Floorfillers.mp3
+      -> /media/Music/DJ/Various Artists/Mastermix Issue 421/04 Lounge & Bar Grooves.mp3
+      -> /media/Music/DJ/Various Artists/Mastermix Issue 421/05 Cool Summer Dance Triple Tracker.mp3
+      -> /media/Music/DJ/Various Artists/Mastermix Issue 421/05 The Secret Garden.mp3
+  (e) rc=0; (f) rc=0, 10 lines `dj|/media/Music/DJ/Various Artists/Mastermix Issue 421/…`; "items: 10, routed: 10, not
+  routed: 0"; ✅ album 11 routed, no tag written.
+  WINDOW P08: landed 12:33:21.89Z -> move complete by 12:38:05.49Z = 4 min 44 s.
+No Jellyfin POST was issued inside either window (the one POST is 12:41:26Z, below), and Jellyfin's pre-POST read
+(12:41:13Z) holds 0 items at the transient paths or any path containing `Mastermix` or `/DJ/`: it never indexed them.
+No ROUTE-PARTIAL: every RC in both --apply runs is 0.
+
+## Task 3 — per-album verification (P07, P08)
+(DB) library.db mode=ro (dbread-0713.py + dbread-0713b.py, 12:38:28Z): items 197, albums 9, items with no album 0.
+  album 10 'Mastermix'/'Issue 420' albumtype 'dj'; items albumtype {'dj': 10}; dirs {DJ/Mastermix/Issue 420}; disc 1 t1..5,
+    disc 2 t1..5; tracktotal 0, disctotal 0; mb_albumid '' (as-is).
+  album 11 'Various Artists'/'Mastermix Issue 421' albumtype 'dj'; items albumtype {'dj': 10}; dirs
+    {DJ/Various Artists/Mastermix Issue 421}; disc 0, tracks 1..5 twice; mb_albumid ''.
+  added unchanged by routing (10: 12:32:54.097261Z, 11: 12:33:21.889708Z). library.db 2ff94600e607584… (was ff6f55f8…,
+  the two modify+move writes); state.pickle d1958008… UNCHANGED by routing (modify/move do not touch it).
+DB ALBUMTYPE P07: dj 10/10
+DB ALBUMTYPE P08: dj 10/10
+  (album row 'dj' on both, and every item — 10/10 each.)
+
+FILE BYTES — atlantis as real root, /root/phase07-0713/bytes-0713.sh (sha256 of every file under the FINAL dir joined BY
+  CONTENT to the 07-07 manifest rows; paths moved, so the join is the hash), 12:38:37Z:
+  P07 /mnt/tank/media/Music/DJ/Mastermix/Issue 420: files 10, sha == a 07-07 row 10 (10 distinct rows: 4200101..4200205),
+    changed 0, non-audio 0, not 568:568 0 (files and dirs).
+  P08 /mnt/tank/media/Music/DJ/Various Artists/Mastermix Issue 421: files 10, sha == 07-07 row 10 (01.–05. ×2), changed 0,
+    non-audio 0, not 568:568 0.
+FILE BYTES P07: UNCHANGED 10/10
+FILE BYTES P08: UNCHANGED 10/10
+  The same 20 hashes were read at the transient paths before routing (§ G4): import, modify -W and move wrote nothing
+  into any DJ file. This is the proof DEF-07-13-01's fix was for, now on real content.
+
+Transient dirs and leftovers (atlantis, 12:38:37Z): `Mastermix/Issue 420/` ABSENT, `Mastermix/` ABSENT (beets pruned the
+  emptied artist dir), `Various Artists/Mastermix Issue 421/` ABSENT; `Various Artists/` keeps its 3 albums (P10, P05,
+  P12). Empty directories library-wide 0. Top level 16: the 15 artist dirs + `DJ/` (Mastermix/ gone). DJ tree = DJ/,
+  DJ/Mastermix/, DJ/Mastermix/Issue 420/ (10 .mp3), DJ/Various Artists/, DJ/Various Artists/Mastermix Issue 421/ (10
+  .mp3), all apps:apps 777. Total entries 2,884 = 2,860 + 24. *.nfo 91; entries not 568:568 0.
+
+Criterion 3 — ffprobe vs DB, per file. 07-12's crit3b.py run first, unmodified (12:39:07Z): 20 files, 30 "mismatches",
+  ALL of exactly two classes — MUSICBRAINZ_ALBUMID file=None db='' (20) and DISC file=None db='0' (10, P08, no disc tag).
+  Both are the as-is shape: the tag is ABSENT from the file and the DB holds beets' null default. /root/phase07-0713/
+  crit3c.py = crit3b.py plus ONE rule: an absent tag matches only the DB's null default ('' text, '0' TRACK/DISC),
+  counted separately; an absent tag against any other DB value is still a mismatch.
+  CONTROL first (ctl.tsv: P07 row with title ZZ_CONTROL; P08 row with disc 7 and mb_albumid ZZ): mismatches 3 of 3
+  planted (TITLE; DISC None vs '7'; MB id None vs 'ZZ'), absent==default 1 (the P07 row's real empty MB id). The rule
+  does not swallow an absent tag against a real value.
+  Real run (12:39:36Z): files ffprobed 20, rc-fail 0, field MISMATCHES 0, absent==default 30 (140 compared). Per album:
+  P07 [10 files, 0, 10], P08 [10, 0, 20]. Output /root/phase07-0713/t3/crit3c.txt; raw crit3b output crit3b-raw.txt.
+  Ownership: 20/20 files and 5/5 DJ dirs 568:568 (atlantis). EPERM-class lines in /logs/beets-flask.log and
+  /logs/redis_workers.log: 0 (§ G1).
+Criterion 3 (P07 P08): PASS (0 mismatches / 140; 20/20 568:568; 0 EPERM-class lines; albumtype half DB-side above)
+
+Criterion 4 — tag diff (LXC 100; deployed diff/snapshot/check scripts sha256 4bbfaf60… / 60212666… / f75c577f… = repo;
+  /mnt/fast/safety 17G avail). /root/phase07-0713/crit4-0713.sh = 07-12's crit4.sh with the two FINAL DJ roots: per P-ID
+  `snapshot-music-tags.sh post-07-PNN --roots "<DJ album dir>"` (refuses if the post file exists), then
+  `diff-music-tags.sh pre-07-PNN post-07-PNN` text and --json; outputs /mnt/fast/safety/phase07/diff/PNN/. Started 12:39:52Z (P07) and 12:39:57Z (P08).
+  | P-ID | snap | text exit | json exit | matched | missing_after | new_after | dropped | gained | changed | empty-BEFORE | ambiguous B/A | dup keys B/A |
+  |---|---|---|---|---|---|---|---|---|---|---|---|---|
+  | P07 | 0 complete | 0 | 0 | 10 | 0 | 0 | 0 | 0 | 0 | 0 | 0/0 | 0/0 |
+  | P08 | 0 complete | 0 | 0 | 10 | 0 | 0 | 0 | 0 | 0 | 0 | 0/0 | 0/0 |
+  0 gained and 0 changed, not merely 0 dropped: the tags are identical, as the bytes are. DEF-07-12-09's truncated-final-
+  frame caveat does not arise (exit 0, missing_after 0). AMBIGUOUS 0/0: these folders have `unsorted/` twins, but the
+  per-album BEFORE capture pre-07-PNN holds only the dj-mixes folder's 10 records (before_records 10), so a twin cannot
+  collide with it; a library-wide BEFORE would be the case to watch.
+Criterion 4 (P07 P08): PASS (exit 0; matched 10/10 each; 0 dropped, 0 gained, 0 changed; MISSING_AFTER 0; 0 ambiguous)
+
+Protected DJ fields — per file, BEFORE (pre-07-PNN) vs AFTER (post-07-PNN), joined on audio_md5
+  (/root/phase07-0713/protfields-0713.py; keys TBPM/BPM, TKEY/initialkey, EnergyLevel, genre, comment):
+  P07 (bpm 10, genre 10 in BEFORE): every value kept —
+    01 Club Cuts TBPM=127 GENRE=Dance; 02 Mastermixed 5 TBPM=116-117 Pop Dance; 03 Reggae Fusion TBPM=92-103 Reggae;
+    04 Into The 80s TBPM=110-118 (GENRE reads Folk via ffprobe's ID3v1-index reading of '80s', F3 note; bytes identical);
+    05 Triple Tracker_ Crazibiza TBPM=125 Dance; 01 The Ibiza Sessions_ Jackin' House TBPM=123-126 Jackin' House;
+    02 Party On Fire TBPM=132-153 Indie Rock; 03 Classic Disco vs. Nu Disco TBPM=127-129 Disco; 04 Hit The Dancefloor_
+    Latin Pop TBPM=121-126 Latin Pop; 05 Summer Slam_ 00s Club Classics TBPM=128 Dance.
+    P07: protected values kept 20, changed 0, dropped 0. All seven BPM RANGES intact (none truncated).
+  P08 (genre 10 in BEFORE): GENRE=Various on 10/10; kept 10, changed 0, dropped 0. No TBPM 0 added.
+  Key case: neither P07 nor P08 carries TKEY (the key-case risk was P11's, which is held). EnergyLevel/comment: absent
+    in BEFORE on both, absent after.
+  ID3 version (first 4 bytes of each file, atlantis): `ID3\x03` on 20/20 = ID3 v2.3, as BEFORE (F3: P07/P08 were 2.3).
+PROTECTED FIELDS (P07 P08): PRESERVED — 30 of 30 values equal, 0 changed, 0 dropped; ID3 v2.3 20/20; no reject candidate
+
+Oracle (D-07) — 07-EXPECTED-TREE.txt lines 157–176 (FROZEN, 20 lines under DJ/), not edited; actual = the 20 item paths
+  from library.db prefixed /media/Music/, LC_ALL=C sorted both: `diff` IDENTICAL, 20 of 20 lines equal. No divergence
+  to classify. Rendering-defect recipes driven on a 5-line control first (`/-1 - ` 1, `/00-` 1, `/Disc N/` 1, bracketed
+  non-year integer 1 of 1 each; a `[1999]` year line not counted), then on the 20 actual paths: 0 / 0 / 0 / 0.
+  %aunique{} returned "" for both (no other Issue 420 / Mastermix Issue 421 album), as predicted.
+ORACLE (P07 P08): IDENTICAL — 20/20 final paths equal the FROZEN lines 157–176
+
+Criterion 7 — `timeout 180 bash scripts/check-music-import.sh` ONCE after routing, 12:40:59Z: EXIT 0, "Import sweep clean:
+  197 items, three classes checked, zero findings"; `DJ as-is exception:          20   (D-08: albumtype dj imported as-is
+  — counted, not a failure)`; checkable class1=197 class2=177 class3=9; uncheckable album-discs 3 (P07 d1, P07 d2, P08 d0:
+  no non-zero tracktotal); UNKNOWN 0; FINDINGS 0. library.db / state.pickle sha256 identical before and after
+  (2ff94600… / d1958008…). Output /root/phase07-0713/t3/crit7.txt.
+Criterion 7 (library-wide, 197 items): PASS (exit 0, findings 0, UNKNOWN 0; DJ as-is exception 20 = P07 10 + P08 10)
+
+Criterion 8 — /root/phase07-0713/crit8-0713.sh (07-12's crit8.sh with the 07-13 set), atlantis real root, 12:40:38Z–12:40:48Z:
+  P07 source dj-mixes/Mastermix.Issue.420.2021 11 rows UNCHANGED vs 07-07 (relpath, size, sha256, mtime) | staged copy EQUAL
+  P08 source dj-mixes/Mastermix.Issue.421.2021 11 rows UNCHANGED | staged copy EQUAL
+  P11 source unsorted/Mastermix_Issue_415 11 rows UNCHANGED | staged copy ABSENT (unstaged F6)
+  Inboxes: 02-review 9 entries (7 earlier imported copies + P07 + P08 staged copies, import.copy); 01-auto 0; 03-asis 0.
+Criterion 8 (P07 P08, and held P11): PASS (every source unchanged; P07/P08 staged copies == manifest)
+
+Criterion 6, Jellyfin half. /root/phase07-0713/jf-0713.sh = 07-12's jf-0712.sh with W=/root/phase07-0713/t3, the body read
+  from jf-paths.txt, and the user-less `GET /Items/<id>` line REMOVED (07-12's 55 self-caused [ERR] lines); key via
+  -H @<(printf …) only; secrets gated `600 root`.
+  Pre 12:41:13Z (JELLYFIN_ADDR 192.168.90.37:8096 resolved fresh): MusicAlbum 77, Audio 1,421; MusicAlbum with Path = each
+    DJ dir: 0 / 0. Control on the same read: P10's dir -> 1, CYRIL's -> 1 (the Path match can hit); transient paths
+    `Mastermix/Issue 420`, `Various Artists/Mastermix Issue 421` -> 0; any Path containing Mastermix or /DJ/ -> 0.
+  ONE POST /Library/Media/Updated, 12:41:26Z, HTTP 204, body = 21 {Path, UpdateType:"Created"}: `/media/Music/DJ` (the NEW
+    top-level folder — a final path; the shape the post-07-12 R2 remediation prepared for CYRIL/) + the 20 final file paths.
+    No Full[R]efresh, no per-item refresh, no library scan. Issued after both moves completed (12:37:52Z / 12:38:05Z).
+  Jellyfin's reaction (its log): 12:42:26Z `LibraryMonitor: Music (/media/Music) will be refreshed`; Apple Music artist
+    search "Mastermix" (0 results). [ERR] lines since the POST: 0.
+  Poll 12:42:46Z (80 s): both albums present; P08 still probing (10 unprobed). Bounded re-poll (15 s, ≤ 10) -> 12:43:09Z:
+  | P-ID | MusicAlbum with this Path | Id | Name | AlbumArtist | Audio children | discs / IndexNumber |
+  |---|---|---|---|---|---|---|
+  | P07 | 1 | 0fd979ca… | Issue 420 | Mastermix | 10 | [1,2] 1..5 / 1..5 |
+  | P08 | 1 | 350bffb9… | Mastermix Issue 421 | Various Artists | 10 | [null] 1,1,2,2,3,3,4,4,5,5 |
+  Totals 12:43:08Z: MusicAlbum 79 (+2), Audio 1,441 (+20) — exactly the two DJ albums.
+  DEF-07-12-11 did NOT recur: `DJ/` is a new top-level directory and both albums materialised from the targeted update.
+    The difference from P06 is the body: it carried the folder path itself. One observation, not a proof (DEF-07-13-02).
+  P08's track numbers read 1..5 twice with no disc: the files' own tags (two CDs tagged as one, disc 0), kept by as-is
+    and byte-identical; Jellyfin shows exactly what the files say (DEF-07-13-03).
+  Sidecar check, atlantis 12:46:48Z (5 min 22 s after the POST; 07-10's .nfo were born 80–100 s after its POST): entries
+    with mtime OR ctime newer than 12:41:00Z anywhere under /mnt/tank/media/Music: 0; *.nfo 91; not 568: 0; DJ non-audio 0;
+    total entries 2,884. MetadataSavers re-read 12:46:49Z: [] (SaveLocalMetadata false, EnableRealtimeMonitor false,
+    SaveLyricsWithMedia false). NO SIDECAR APPEARED.
+Criterion 6, Jellyfin half (P07 P08): PASS (204; one album per DJ directory; AlbumArtist as beets; child count 10 = file count; no sidecar)
+
+Import order, asserted after the fact (G-12): albums.added (library.db mode=ro): every 07-12 album — P02 2026-09-26T21:58:27Z,
+  P03 21:59:42Z, P06 22:01:12Z, P05 22:04:46Z, P12 22:07:04Z, P04 23:11:42Z (latest) — then P07 2026-09-27T12:32:54Z, P08
+  2026-09-27T12:33:21Z. Both DJ albums later than every 07-12 album, and P07 before P08.
+ADDED ORDER: PASS — P07 2026-09-27T12:32:54Z, P08 2026-09-27T12:33:21Z (both after 07-12's latest, P04 2026-09-26T23:11:42Z; P07 < P08)
+
+BARRIER READ after routing (/root/ma-read-0710.sh SINCE=2026-09-27T12:36:22Z, RC 0, read 12:43:18Z): 4/4
+  music_sync_filesystem_local--XJaJWNUS_* enabled=false next_run null; server-start/sync lines later than SINCE 0 (newest
+  sync still 2026-09-26T09:17:24Z).
+BARRIER: VERIFIED (4/4 enabled=false, next_run null) at 2026-09-27T12:43:18Z
+  MA provider-filtered counts (/root/ma-counts-0710.sh, RC 0, 12:43:18Z): filesystem_local--XJaJWNUS 70 / 1244 / 66 = the
+  07-07 baseline; ZZBOGUS0 0/0/0. No count change: MA has seen none of the nine landed albums.
+  Fence, atlantis 12:43:19Z, exact whole-line: tank/media/Music@pre-07-pilot, fast/appdata/arrs@pre-07-pilot,
+  tank/media/Music@pre-06-41-conf04-reprobe — 3 of 3 PRESENT. No zfs write verb issued by this plan.
+
+## Task 3 — QUALITY (per album; q1 criterion 3, q2 owner, q3 diff, q4 sweep, q5 criterion 8, q6 Jellyfin, q7 bytes)
+QUALITY (P07): PASS — q1 0; q2 0; q3 exit 0, 0 dropped/gained/changed, MISSING_AFTER 0; q4 exit 0, DJ exception counted; q5 unchanged; q6 PASS; q7 UNCHANGED 10/10 (BPM ranges intact)
+QUALITY (P08): PASS — q1 0; q2 0; q3 exit 0, 0 dropped/gained/changed, MISSING_AFTER 0; q4 exit 0, DJ exception counted; q5 unchanged; q6 PASS; q7 UNCHANGED 10/10 (findings outside q1–q7: DEF-07-13-03 disc tags absent in the source)
+07-13 VERDICT: ROUTED AND READ — P07 and P08 imported as-is and routed by D-08 to /media/Music/DJ/ with 20/20 files byte-identical, DB albumtype dj 20/20, final paths = FROZEN lines 157–176, every protected DJ field preserved, criteria 3/4/7/8 and the Jellyfin half PASS, MA unchanged 70/1244/66; P11 held (D-26 FALSE); E1's routing mechanism proven on real, imported content
