@@ -56,6 +56,7 @@
 # What it covers:
 #   0. Toolchain preconditions                    harness
 #   1. Readiness gate (the watchdog line)         T-06-34
+#   1b. Inbox registration, newest line only      07-REVIEW WR7-05 (the D-21 / CR7-01 inbox set)
 #   2. ARM 1 - the server-committed config        D-30 arm 1
 #   3. ARM 2 - the CLI/confuse view               D-30 arm 2, redaction no-op (T-06-33)
 #   4. Assertions, all read from ARM 1            CONF-01, CONF-02, CONF-05, SAFE-01, T-06-31
@@ -68,7 +69,9 @@
 #   default mode  - every red finding increments FAILURES and the script ends non-zero.
 #   --baseline    - every finding is printed and the script always ends zero, so a before-state
 #                   can be recorded while a config is still being brought to its target.
-#   --self-test   - no ssh, no docker. SEVEN cases, SIX of which MUST go red, exiting non-zero
+#   --self-test   - no ssh, no docker. THIRTEEN cases, ELEVEN of which MUST go red (the first
+#                   seven are described next; the six inbox-registration cases, added 2026-09-27
+#                   for WR7-05, are described at assert_inbox_registration), exiting non-zero
 #                   unless every expectation is met. Six drive the assertion function over
 #                   synthetic dumps; the sixth of those (case 7) is deliberately larger than the
 #                   64 KiB pipe buffer, because the GC-01 defect was invisible to every smaller
@@ -147,6 +150,14 @@ REMOTE_TIMEOUT=120
 READY_ATTEMPTS=6
 READY_SLEEP=5
 READY_LINE="Registering watchdog with debounce"
+# WR7-05 (2026-09-27). The inbox set the watchdog must register while Phase 7 holds: 01-auto is
+# de-registered (D-21) and 03-asis is registered `autotag: "off"` (CR7-01), so EXACTLY these two
+# paths, sorted, space-separated. Plain constants, not overrides - an override could name whatever
+# set happens to be registered and call it a pass. Phase 8 moves them in the commit that
+# re-registers 01-auto.
+REG_EXPECTED="/downloads/complete/nzb/_inbox/02-review /downloads/complete/nzb/_inbox/03-asis"
+REG_FORBIDDEN_NAME="01-auto"
+REG_MARKER="for inboxes: "
 
 # --- the one env override; ADDITIVE, so it can only make this check redder ---
 EXTRA_FORBIDDEN_SUBSTRINGS="${EXTRA_FORBIDDEN_SUBSTRINGS:-}"
@@ -197,6 +208,7 @@ trap cleanup EXIT
 CONFIG_ROUTE="unavailable"        # arm 1 - the server-committed object
 CONFIG_ROUTE_CLI="unavailable"    # arm 2 - the confuse/CLI view
 READY_ROUTE="unavailable"         # how readiness was established
+INBOX_REG="UNKNOWN"               # WR7-05: PASS | RED | UNKNOWN - never defaults to PASS
 ARM1_BLIND=1
 ARM2_BLIND=1
 ARM1_JSON=""
@@ -676,6 +688,80 @@ assert_effective_config() {
 }
 
 # =============================================================================================
+# WR7-05 - THE INBOX REGISTRATION ASSERTION. Pure: log text in, verdict out. No ssh, no docker.
+#
+# Reads the MOST RECENT registration line in the text it is given, never "any line": a line from
+# before a restart is exactly what the old READY_LINE grep accepted, and it is how a stale 01-auto
+# registration could satisfy a gate. The live caller narrows the text further, to
+# `docker logs --since <the container's StartedAt>`, so only the current process can answer.
+#
+# The line format is OBSERVED, not assumed - rc6 prints a Python list repr of the inbox PATHS:
+#   [INFO] beets-flask.wdog: Registering watchdog with debounce of 30 seconds for inboxes: ['/downloads/complete/nzb/_inbox/02-review', '/downloads/complete/nzb/_inbox/03-asis']
+# (07-09-fence-and-grant.txt § Step 3 and 07-11-p10-undo-rerun.txt § RESTORE (3), both captured
+# after D-21 deployed). The list is re-joined from its parsed items and compared with the original,
+# so a format the parser does not fully understand is UNKNOWN, never a partial read.
+#
+# Returns 0 PASS, 1 RED (01-auto named; fewer than two; any path outside REG_EXPECTED; or any
+# sorted list that is not exactly REG_EXPECTED), 2 UNKNOWN (no registration line; list unparseable).
+# ⚠ UNOBSERVED: whether rc6 lists an `autotag: "off"` inbox on this line. 03-asis was `bootleg` in
+# every capture above. If `off` inboxes are not listed, this reads ONE inbox and goes RED - loud,
+# which is the right direction; resolve it from a live capture, never by widening REG_EXPECTED.
+# =============================================================================================
+INBOX_REG_WHY=""
+INBOX_REG_LINE=""
+INBOX_REG_NAMES=""
+assert_inbox_registration() {  # $1 = log text; -> rc 0/1/2, INBOX_REG_WHY / _LINE / _NAMES
+  local text="$1" line inner items rejoined sorted n bad=0 item why=""
+  INBOX_REG_WHY=""; INBOX_REG_LINE=""; INBOX_REG_NAMES=""
+  line="$(printf '%s\n' "$text" | grep -F -- "$READY_LINE" | grep -F -- "$REG_MARKER" | tail -n 1 || true)"
+  line="${line%$'\r'}"
+  if [[ -z "$line" ]]; then
+    INBOX_REG_WHY="no registration line naming inboxes was found in the text read. That is NOT 'the set is right' - nothing was compared."
+    return 2
+  fi
+  INBOX_REG_LINE="$line"
+  inner="${line#*"$REG_MARKER"}"
+  inner="${inner%"${inner##*[![:space:]]}"}"
+  if [[ "$inner" != \[*\] ]]; then
+    INBOX_REG_WHY="the registration line does not end in a [...] list, so its inboxes could not be read: $inner"
+    return 2
+  fi
+  inner="${inner#[}"; inner="${inner%]}"
+  items="$(printf '%s' "$inner" | grep -oE "'[^']*'" | sed "s/^'//; s/'\$//" || true)"
+  rejoined="$(printf '%s\n' "$items" | awk 'NF { printf "%s\x27%s\x27", (n++ ? ", " : ""), $0 }')"
+  if [[ "$rejoined" != "$inner" ]]; then
+    INBOX_REG_WHY="the inbox list did not parse cleanly (re-joined items differ from the line), so nothing was compared: [$inner]"
+    return 2
+  fi
+  n="$(printf '%s\n' "$items" | grep -c . || true)"
+  INBOX_REG_NAMES="$(printf '%s\n' "$items" | sed 's#.*/##' | grep . | tr '\n' ' ' | sed 's/ $//' || true)"
+  while IFS= read -r item; do
+    [[ -z "$item" ]] && continue
+    if [[ "${item##*/}" == "$REG_FORBIDDEN_NAME" ]]; then
+      why+="${why:+; }$REG_FORBIDDEN_NAME is registered ($item) - D-21 did not deploy, or was reverted"
+      bad=1
+    elif [[ " $REG_EXPECTED " != *" $item "* ]]; then
+      why+="${why:+; }unexpected inbox $item"
+      bad=1
+    fi
+  done <<< "$items"
+  if [[ $n -lt 2 ]]; then
+    why+="${why:+; }fewer than two inboxes registered ($n)"
+    bad=1
+  fi
+  sorted="$(printf '%s\n' "$items" | grep . | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//' || true)"
+  if [[ $bad -eq 0 && "$sorted" != "$REG_EXPECTED" ]]; then
+    why="the registered set is not exactly the expected set (duplicate?): got [$sorted]"
+    bad=1
+  fi
+  if [[ $bad -ne 0 ]]; then
+    INBOX_REG_WHY="$why"
+    return 1
+  fi
+  return 0
+}
+
+# =============================================================================================
 # --self-test. SEVEN cases, SIX of which MUST go red: 6 synthetic dumps plus one assertion over
 # this file's own source. Same device as scripts/spike03-wrtag-arms.sh:23-27: drive the
 # fail-closed branches without touching the estate. A control that can only pass is uninformative.
@@ -737,8 +823,8 @@ run_self_test() {
   # compared at the end. A banner that says one number while another number of cases ran is the
   # self-invalidating-prose defect this phase has already hit twice - so the closing banners are
   # DERIVED, and a mismatch between the announcement and reality is itself a self-test failure.
-  local ST_PLANNED_CASES=7
-  echo "🧪 --self-test — $ST_PLANNED_CASES cases: 6 synthetic dumps, plus the D-04 contract over this file's own source"
+  local ST_PLANNED_CASES=13
+  echo "🧪 --self-test — $ST_PLANNED_CASES cases: 6 synthetic dumps, the D-04 contract over this file's own source, and 6 inbox-registration lines (WR7-05)"
   rule
   echo ""
 
@@ -861,6 +947,41 @@ $(synthetic_correct_dump)"
   fi
   run_case "a forbidden substring at the TOP of a >64 KiB dump (GC-01 regression)" 1 "$raw7"
 
+  # 8-13. WR7-05, the inbox registration assertion. Expected return codes, not red counts: 0 PASS,
+  #   1 RED, 2 UNKNOWN - and UNKNOWN is its own expectation, so a blind read that came back RED
+  #   (or PASS) fails its case. The line prefix is the observed rc6 shape (see the function).
+  local reg_pre="[INFO] beets-flask.wdog: Registering watchdog with debounce of 30 seconds for inboxes: "
+  local ib="/downloads/complete/nzb/_inbox"
+  run_reg_case() {  # name, expected rc, log text
+    local rc=0
+    echo -e "  ${BLUE}case: $1  (expect rc $2)${NC}"
+    assert_inbox_registration "$3" || rc=$?
+    st_cases=$((st_cases + 1))
+    if [[ $2 -ne 0 ]]; then st_red_cases=$((st_red_cases + 1)); fi
+    if [[ $rc -eq $2 ]]; then
+      echo -e "  ${GREEN}✅ case '$1': rc $rc, as expected${NC}${INBOX_REG_WHY:+ — $INBOX_REG_WHY}"
+    else
+      echo -e "  ${RED}❌ case '$1': rc $rc, expected $2${NC}${INBOX_REG_WHY:+ — $INBOX_REG_WHY}"
+      st_failures=$((st_failures + 1))
+    fi
+    echo ""
+  }
+  run_reg_case "registration: the expected set {02-review, 03-asis}" 0 \
+    "2026-09-26T14:58:40Z ${reg_pre}['${ib}/02-review', '${ib}/03-asis']"
+  run_reg_case "registration: 01-auto present (the pre-D-21 line)" 1 \
+    "${reg_pre}['${ib}/01-auto', '${ib}/02-review', '${ib}/03-asis']"
+  run_reg_case "registration: one inbox only" 1 \
+    "${reg_pre}['${ib}/02-review']"
+  run_reg_case "registration: an unexpected name" 1 \
+    "${reg_pre}['${ib}/02-review', '${ib}/04-hold']"
+  run_reg_case "registration: no registration line at all (UNKNOWN)" 2 \
+    "[INFO] beets-flask: server started
+[INFO] something else entirely"
+  # The NEWEST line decides, in both directions: an old good line must not rescue a bad newest one.
+  run_reg_case "registration: an older good line, the NEWEST names 01-auto" 1 \
+    "${reg_pre}['${ib}/02-review', '${ib}/03-asis']
+${reg_pre}['${ib}/01-auto', '${ib}/02-review', '${ib}/03-asis']"
+
   rule
   # The announced count and the count that actually ran must agree, or the banner below is prose
   # that invalidates itself.
@@ -947,6 +1068,66 @@ else
       # attempts x sleep. Rendering the larger number overstates what was actually waited.
       fail "readiness: UNKNOWN, not green — the watchdog registration line never appeared in $(( (READY_ATTEMPTS - 1) * READY_SLEEP ))s. A rejected config kills the WATCHDOG while the page keeps serving, so a serving UI is not evidence."
     fi
+  done
+fi
+echo ""
+
+# =============================================================================================
+# 1b. Inbox registration (WR7-05). The readiness gate above only proves a registration line
+#     exists SOMEWHERE in the log history - a line from before a restart satisfies it. This
+#     section reads the logs of the CURRENT process only (`--since` the container's StartedAt)
+#     and asserts the inbox set on its NEWEST registration line: exactly 02-review and 03-asis.
+#     See assert_inbox_registration for the verdicts and the observed line format.
+#     One remote command, bounded Linux-side at each docker call, with no pipe; its exit status
+#     is read, and 124 / 97 (StartedAt empty) / any other non-zero are UNKNOWN, never a pass.
+#     Polled like the readiness gate: a restart can put the gate above on a PRE-restart line
+#     while the new process has not registered yet, and that window is "not yet", not a red.
+# =============================================================================================
+echo "📥 1b. Inbox registration — the newest line since the container's StartedAt (WR7-05)"
+rule
+if [[ "$READY_ROUTE" == "unavailable" ]]; then
+  fail "inbox registration: UNKNOWN, not green — the readiness gate never opened, so no registration line was read"
+else
+  REG_REMOTE="set -o pipefail; s=\$(timeout ${REMOTE_TIMEOUT} docker inspect -f '{{.State.StartedAt}}' ${CONTAINER}) || exit \$?; [ -n \"\$s\" ] || exit 97; echo \"STARTED_AT=\$s\"; timeout ${REMOTE_TIMEOUT} docker logs --since \"\$s\" ${CONTAINER} 2>&1"
+  attempt=0
+  while [[ $attempt -lt $READY_ATTEMPTS ]]; do
+    attempt=$((attempt + 1))
+    REG_RC=0
+    ssh "${SSH_OPTS[@]}" "root@${LXC_HOST}" "$REG_REMOTE" \
+      >"$WORKDIR/registration.log" 2>"$WORKDIR/registration.log.err" || REG_RC=$?
+    if [[ $REG_RC -eq 124 ]]; then
+      fail "inbox registration: UNKNOWN, not green — a docker call exceeded its ${REMOTE_TIMEOUT}s bound (rc=124). Nothing was compared."
+      break
+    elif [[ $REG_RC -eq 97 ]]; then
+      fail "inbox registration: UNKNOWN, not green — ${CONTAINER} reported an EMPTY StartedAt, so the current process's logs could not be bounded. Nothing was compared."
+      break
+    elif [[ $REG_RC -ne 0 ]]; then
+      fail "inbox registration: UNKNOWN, not green — the StartedAt/logs read exited $REG_RC: $(head -1 "$WORKDIR/registration.log.err" 2>/dev/null)"
+      break
+    fi
+    REG_STARTED="$(sed -n '1s/^STARTED_AT=//p' "$WORKDIR/registration.log")"
+    if [[ -z "$REG_STARTED" ]]; then
+      fail "inbox registration: UNKNOWN, not green — the read returned no STARTED_AT header, so what was read is not known to be the current process's log"
+      break
+    fi
+    REG_TEXT="$(sed '1d' "$WORKDIR/registration.log")"
+    REG_VERDICT=0
+    assert_inbox_registration "$REG_TEXT" || REG_VERDICT=$?
+    if [[ $REG_VERDICT -eq 2 && $attempt -lt $READY_ATTEMPTS ]]; then
+      warn "inbox registration: not yet — $INBOX_REG_WHY (attempt $attempt of $READY_ATTEMPTS, since $REG_STARTED); sleeping ${READY_SLEEP}s"
+      sleep "$READY_SLEEP"
+      continue
+    fi
+    info "StartedAt $REG_STARTED; newest registration line: ${INBOX_REG_LINE:-(none)}"
+    case "$REG_VERDICT" in
+      0) INBOX_REG="PASS"
+         pass "inbox registration: exactly {$INBOX_REG_NAMES} on the newest line of the current process — 01-auto absent (D-21), 03-asis present (CR7-01)" ;;
+      1) INBOX_REG="RED"
+         fail "inbox registration: RED — $INBOX_REG_WHY. Registered: {${INBOX_REG_NAMES}}; expected exactly {02-review 03-asis}." ;;
+      *) INBOX_REG="UNKNOWN"
+         fail "inbox registration: UNKNOWN, not green — $INBOX_REG_WHY" ;;
+    esac
+    break
   done
 fi
 echo ""
@@ -1195,6 +1376,7 @@ rule
 echo "  CONFIG_ROUTE (arm 1):        $CONFIG_ROUTE"
 echo "  CONFIG_ROUTE_CLI (arm 2):    $CONFIG_ROUTE_CLI"
 echo "  READY_ROUTE:                 $READY_ROUTE"
+echo "  inbox registration (WR7-05): $INBOX_REG   (newest line since StartedAt; expected: 02-review 03-asis)"
 echo "  arm 1 blind:                 $ARM1_BLIND   (1 = nothing below section 4 was measured)"
 echo "  arm 2 blind:                 $ARM2_BLIND"
 echo "  inter-arm differences:       $DIFF_ROWS of ${#COMPARE_KEYS[@]} compared keys (reported, not asserted)"

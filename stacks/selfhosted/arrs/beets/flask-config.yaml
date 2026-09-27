@@ -77,13 +77,11 @@ gui:
     # and why "the UI loads" is not evidence of anything.
     # CORRECTED 2026-09-26, plan 07-08, D-22 (C4): from Phase 7 D-21 the gate fails closed on FEWER
     # THAN TWO — and a registration line that still names 01-auto is also a red while D-21 holds.
-    # RETRACTED 2026-09-27 (07-REVIEW WR7-05): NO SCRIPT IMPLEMENTS EITHER HALF of that gate — not
-    # "fewer than three", not "fewer than two", not "names 01-auto". The only readiness check,
-    # scripts/check-beets-config.sh (READY_LINE), asserts that the registration line is PRESENT
-    # anywhere in `docker logs` history (a pre-restart line satisfies it); it counts no inboxes and
-    # never reads their names, and quick-health-check.sh has no registration assertion at all. The
-    # D-21 de-registration was verified once, by hand, in 07-09. Treat the inbox set as UNASSERTED
-    # until a standing check exists; its expected set waits on the 03-asis decision (CR7-01).
+    # IMPLEMENTED 2026-09-27 (07-REVIEW WR7-05; until then the gate above was described but not
+    # built): scripts/check-beets-config.sh § 1b reads the NEWEST registration line after the
+    # container's StartedAt and asserts exactly {02-review, 03-asis}. 01-auto, fewer than two, or
+    # any other name is a red; no line is UNKNOWN. Change this folder list and REG_EXPECTED there
+    # in the same commit.
     #
     # These are CONTAINER paths: /mnt/tank/downloads is bound at /downloads (./flask.yaml).
     folders:
