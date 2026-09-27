@@ -1,0 +1,171 @@
+# 07-15-consumers.txt — criterion 6 in both consumers (Jellyfin FIRST, Music Assistant LAST), D-28, E6, D-24 after.
+# Plan 07-15. Every value below is a measurement with its time; nothing is inferred from config read-back.
+# Credentials: none in this file (Jellyfin key and MA password reach curl/jq only via process substitution / $ENV,
+# secrets files gated `600 root` by each helper). Helpers live in /root/phase07-0715/ on LXC 100 (dir mode 700).
+
+## TASK 1 — Jellyfin first (read-only: GETs only; no POST, no refresh, no scan)
+
+ROUTE-PARTIAL (NOT FINAL): none
+  Ledger read 2026-09-27T13:23Z: 0 `STOP STATE 07-13-ROUTE-PARTIAL:` tokens. DJ routing is final (P07, P08 routed,
+  STATE 07-13-PARTIAL). No album is excluded from the per-album readings below.
+
+Landed albums (ledger `PNN LANDED` lines, distinct P-IDs): P02 P03 P04 P05 P06 P07 P08 P10 P12 (9).
+Not landed: P01 (held, unstaged), P09 (held; imported against hold and fully undone, DEF-07-12-04), P11 (held).
+  P01 is NOT read: the ledger carries no `P01 LANDED (D-29 EXCEPTION …)` line.
+
+### Expected values — library.db (read-only, sqlite mode=ro, /root/phase07-0715/dbread-0715.py, 13:24Z)
+  items 197, albums 9; library.db 2ff94600e607584… state.pickle d1958008… (= the post-07-13 values; E5 wrote no DB).
+  | album id | P-ID | albumartist | album | albumtype | comp | catalognum | items | disc:count |
+  |---|---|---|---|---|---|---|---|---|
+  | 1  | P10 | Various Artists | Now That’s What I Call Music! 117 | album | 1 | CDNOW117 | 50 | 1:24, 2:26 |
+  | 2  | P02 | Benson Boone | American Heart | album | 0 | '' | 10 | 1:10 |
+  | 3  | P03 | Benson Boone | Fireworks & Rollerblades | album | 0 | A10302B0008885094R | 15 | 1:15 |
+  | 4  | P06 | CYRIL | Stumblin’ In (LUNAX remix) (extended mix) | single | 0 | '' | 1 | 1:1 |
+  | 6  | P05 | Various Artists | NOW That’s What I Call Music! 121 | album | 1 | CDNOW121 | 44 | 1:44 |
+  | 8  | P12 | Various Artists | Now That’s What I Call Music! 116 | album | 1 | 0196588421822 | 47 | 1:23, 2:24 |
+  | 9  | P04 | Benson Boone | American Heart | album | 0 | 093624834588 | 10 | 1:10 |
+  | 10 | P07 | Mastermix | Issue 420 | dj | 0 | '' | 10 | 1:5, 2:5 |
+  | 11 | P08 | Various Artists | Mastermix Issue 421 | dj | 0 | '' | 10 | 0:10 |
+  P10's album artist as beets stored it: `Various Artists` (not `Various`).
+
+### CRITERION 6 — JELLYFIN
+  Read 2026-09-27T13:25:36Z, /root/phase07-0715/jf-0715.sh (GET only), JELLYFIN_ADDR 192.168.90.37:8096 resolved fresh
+  (docker inspect t3_proxy). Music library: MetadataSavers=[] SaveLocalMetadata=false EnableRealtimeMonitor=false
+  SaveLyricsWithMedia=false. Library totals: MusicAlbum 79, Audio 1,441 (= 07-13's post-POST totals 79 / 1,441).
+  Album located by EXACT MusicAlbum Path = the album's final directory; children read under that album id.
+  | P-ID | album (final dir under /media/Music/) | album artist expected (beets) | Jellyfin AlbumArtist (AlbumArtists) | tracks expected | Jellyfin tracks | discs (ParentIndexNumber set) | IndexNumber per disc | verdict |
+  |---|---|---|---|---|---|---|---|---|
+  | P10 | Various Artists/Now That’s What I Call Music! 117 | Various Artists | Various Artists (["Various Artists"]) | 50 | 50 | [1,2] | d1 1..24, d2 1..26 | |
+  | P02 | Benson Boone/American Heart | Benson Boone | Benson Boone (["Benson Boone"]) | 10 | 10 | [1] | 1..10 | |
+  | P03 | Benson Boone/Fireworks & Rollerblades | Benson Boone | Benson Boone (["Benson Boone"]) | 15 | 15 | [1] | 1..15 | |
+  | P04 | Benson Boone/American Heart [093624834588] | Benson Boone | Benson Boone (["Benson Boone"]) | 10 | 10 | [1] | 1..10 | |
+  | P05 | Various Artists/NOW That’s What I Call Music! 121 | Various Artists | Various Artists (["Various Artists"]) | 44 | 44 | [1] | 1..44 | |
+  | P06 | CYRIL/Stumblin’ In (LUNAX remix) (extended mix) | CYRIL | CYRIL (["CYRIL"]) | 1 | 1 | [1] | 1 | |
+  | P12 | Various Artists/Now That’s What I Call Music! 116 | Various Artists | Various Artists (["Various Artists"]) | 47 | 47 | [1,2] | d1 1..23, d2 1..24 | |
+  | P07 | DJ/Mastermix/Issue 420 | Mastermix | Mastermix (["Mastermix"]) | 10 | 10 | [1,2] | d1 1..5, d2 1..5 | |
+  | P08 | DJ/Various Artists/Mastermix Issue 421 | Various Artists | Various Artists (["Various Artists"]) | 10 | 10 | [null] | 1,1,2,2,3,3,4,4,5,5 (source tags, DEF-07-13-03) | |
+  Every album: exactly 1 MusicAlbum with that Path; every child Path under the album's directory (all under dir: true).
+  Verdict column deliberately empty (for /gsd-verify). Measured notes:
+  - P05: ONE album, AlbumArtist `Various Artists`, 44 children — not 44 single-track artist albums.
+  - P10 (the amended multi-disc gate album): ONE album, 50 tracks, discs {1,2}, per-disc numbering contiguous.
+  - P06: now PRESENT (1 album, 1 track). At 07-12 it was absent (DEF-07-12-11); it was already present at 07-13's
+    12:41Z pre-read ("CYRIL's -> 1"), i.e. materialised by Jellyfin's own scheduled library scan (last completed
+    2026-09-27T11:33:29Z per 07-13's task read), not by any POST of this plan.
+  - P02/P04 (the twins): two distinct MusicAlbum ids (018bd709…, e44d9655…), each `American Heart` / Benson Boone,
+    10 children each, each under its own directory.
+  Sampled tracks (first, middle, last by disc/track; Name | Artists | ArtistItems):
+    P10 [1-1] Stick Season | ["Noah Kahan"] | ["Noah Kahan"];  [2-2] Houdini | ["Dua Lipa"] | ["Dua Lipa"];
+        [2-26] Unwritten | ["Natasha Bedingfield"] | ["Natasha Bedingfield"]
+    P02 [1-1] Sorry I’m Here for Someone Else; [1-6] Momma Song; [1-10] Young American Heart — all ["Benson Boone"] / ["Benson Boone"]
+    P03 [1-1] Intro; [1-8] Drunk in My Mind; [1-15] What Do You Want — all ["Benson Boone"] / ["Benson Boone"]
+    P04 [1-1] Sorry I’m Here for Someone Else; [1-6] Momma Song; [1-10] Young American Heart — all ["Benson Boone"] / ["Benson Boone"]
+    P05 [1-1] Blessings | ["Calvin Harris","Clementine Douglas"] | ["Calvin Harris","Clementine Douglas"];
+        [1-23] Busy Woman | ["Sabrina Carpenter"] | same;  [1-44] Wasted Love | ["JJ"] | ["JJ"]
+    P06 [1-1] Stumblin’ In (LUNAX remix) (extended mix) | ["CYRIL"] | ["CYRIL"]
+    P12 [1-1] Desire | ["Calvin Harris","Sam Smith"] | same;  [2-1] Angry | ["The Rolling Stones"] | same;
+        [2-24] Where Do We Go From Here? | ["Agnetha Fältskog"] | same
+    P07 [1-1] Club Cuts; [2-1] The Ibiza Sessions: Jackin' House; [2-5] Summer Slam: 00s Club Classics — all ["Mastermix"] / ["Mastermix"]
+    P08 [null-1] Club Cuts; [null-3] Where The Rap Party At; [null-5] The Secret Garden — all ["Various Artists"] / ["Various Artists"]
+
+### E6 FIRST MEASUREMENT — Jellyfin re-probe on genuine new imports (tag count vs ArtistItems count)
+  Instrument finding first (recorded, bears on every future E6/D-05 read): `ffprobe` TRUNCATES an ID3v2.4 multi-value
+  TXXX:ARTISTS frame to its FIRST value. Measured on P05 `01 Blessings.mp3`: ffprobe `ARTISTS: "Calvin Harris"`;
+  mutagen `TXXX:ARTISTS ['Calvin Harris', 'Clementine Douglas']`. A first ffprobe-only pass therefore found only P10's
+  12 FLAC multi-artist tracks and missed every MP3 one. The count below uses mutagen (read-only `mutagen.File`, inside
+  beets-flask as uid 568, /root/phase07-0715/mfartists.py) for all 197 files; on the FLAC files it agrees with ffprobe
+  (P10's 12 rows identical in both passes). ffprobe rc-fail 0 of 197.
+  ARTISTS value-count distribution over the 197 landed files: 1 value 144 | 2 values 27 | 3 values 6 | no ARTISTS tag 20
+  (the 20 are P07+P08, as-is DJ imports whose source tags carry none). Maximum: 3. NO landed track carries >= 4.
+  | P-ID | tracks with >= 2 ARTISTS values | Jellyfin ArtistItems count == tag count | differing |
+  |---|---|---|---|
+  | P10 | 12 (11 x2, 1 x3) | 12 | 0 |
+  | P05 | 7 (6 x2, 1 x3) | 7 | 0 |
+  | P12 | 14 (10 x2, 4 x3) | 14 | 0 |
+  | total | 33 | 33 | 0 |
+  Per track (tag values = ArtistItems names, same order, all 33 EQUAL):
+    P10 1-11 Ella Henderson;Rudimental | 1-12 Zara Larsson;David Guetta | 1-13 Becky Hill;Sonny Fodera |
+        1-14 Jax Jones;D.O.D;Ina Wroldsen | 1-17 PinkPantheress;Central Cee | 2-6 Eliza Rose;Calvin Harris |
+        2-11 Sia;Kylie Minogue | 2-12 Jason Derulo;Michael Bublé | 2-13 David Guetta;Kim Petras |
+        2-14 Nathan Dawe;Bebe Rexha | 2-16 Jonas Brothers;Bailey Zimmerman | 2-18 Liam Gallagher;John Squire
+    P05 1-1 Calvin Harris;Clementine Douglas | 1-19 David Guetta;Sia | 1-20 Max Dean;Luke Dean;Locky |
+        1-21 Sonny Fodera;Clementine Douglas | 1-25 Alex Warren;Jelly Roll | 1-40 Elton John;Brandi Carlile |
+        1-41 Robbie Williams;Tony Iommi
+    P12 1-1 Calvin Harris;Sam Smith | 1-7 Beyond Chicago;Majestic;Alex Mills | 1-8 Becky Hill;Chase & Status |
+        1-10 Sonny Fodera;MK;Clementine Douglas | 1-11 Billy Gillies;Hannah Boleyn | 1-12 Hannah Laing;RoRo |
+        1-13 Joel Corry;MK;Rita Ora | 1-14 Stormzy;RAYE | 1-19 Olivia Dean;Leon Bridges | 2-7 Sam Smith;Madonna |
+        2-8 will.i.am;Britney Spears | 2-9 Timbaland;Nelly Furtado;Justin Timberlake | 2-12 Leigh‐Anne;Ayra Starr |
+        2-14 Mae Stephens;Meghan Trainor
+  Pinned ARTIST_PROOF_ROWS re-read (existing library files; the pilot wrote none of them and E5 touched none — E5's
+  14 files are Def Leppard (2015), none of these three):
+    row 1 ARTPOP CD 01-05 Jewels n’ Drugs: tag 4 [Lady Gaga, T.I., Too $hort, Twista] | ArtistItems 0 | Artists ["Lady GaGa"]  (target 4, JF baseline 0 — AT BASELINE)
+    row 2 Teenage Dream CD 01-03 California Gurls: tag 2 [Katy Perry, Snoop Dogg] | ArtistItems 1 ["Katy Perry"]  (target 2, JF baseline 1 — AT BASELINE)
+    row 3 Truth About Love CD 01-04 Just Give Me a Reason: tag 2 [Nate Ruess, P!nk] | ArtistItems 1 ["P!nk"]  (target 2, JF baseline 1 — AT BASELINE)
+  Result, measured terms only: on 33 of 33 genuinely new imports carrying 2–3 ARTISTS values, Jellyfin's ArtistItems
+  count equals the tag's value count (and the names match in order), across FLAC (P10) and ID3v2.4 MP3 (P05, P12). The
+  three pinned pre-existing rows are unchanged at their 2026-09-20 baselines. This plan does NOT call CONF-04 closed and
+  REQUIREMENTS.md is not touched: the pinned rows are still pending a re-probe of those files, and no >= 4-artist
+  track has landed.
+
+### AUNIQUE INVENTORY (rebuilt after 07-13)
+AUNIQUE INVENTORY SCOPE: 9 landed albums read; DJ included: yes
+  Sources: library.db read-only (albums/items, above; 9 albums / 197 items) + landed directory names listed on atlantis
+  as real root (2026-09-27T13:25:05Z, `ls -1` of Benson Boone/, Various Artists/, CYRIL/, DJ/, DJ/Mastermix/,
+  DJ/Various Artists/, Def Leppard/; and `find … -name '*[*]'` depth 2–3 over the whole library) + beets' own
+  `%aunique{}` rendered per album over a COPY of the DB (below). The path rules carrying `%aunique{}`: the default
+  `$albumartist/$album%aunique{}/…`, `disctotal:2..`, and both `albumtype:=dj` rules (DJ/$albumartist/$album%aunique{}/…).
+  `%aunique{}` rendered by beets for every album (`beet -l <copy> -c <overlay> ls -a -f '…[%aunique{}]'`):
+    album 2  P02 Benson Boone / American Heart                         -> ""  (catalognum '')
+    album 9  P04 Benson Boone / American Heart                         -> " [093624834588]"  (disambiguator: catalognum)
+    album 3  P03 Benson Boone / Fireworks & Rollerblades               -> ""
+    album 4  P06 CYRIL / Stumblin’ In (LUNAX remix) (extended mix)     -> ""
+    album 10 P07 Mastermix / Issue 420 (DJ)                            -> ""
+    album 11 P08 Various Artists / Mastermix Issue 421 (DJ)            -> ""
+    album 8  P12 Various Artists / Now That’s What I Call Music! 116    -> ""
+    album 1  P10 Various Artists / Now That’s What I Call Music! 117    -> ""
+    album 6  P05 Various Artists / NOW That’s What I Call Music! 121   -> ""
+  Album directories carrying a `%aunique{}` suffix: 1 — `Benson Boone/American Heart [093624834588]/` (P04, album 9),
+    disambiguator `catalognum`, rendered ` [093624834588]`. The whole-library `find` for a bracketed directory at depth
+    2–3 returns exactly this one directory.
+  Albums sharing (albumartist, album): 1 pair — (Benson Boone, American Heart): album 2 (P02, catalognum '') and album 9
+    (P04, catalognum 093624834588). P02 renders no suffix and keeps `Benson Boone/American Heart/`.
+  DJ pair: `DJ/Mastermix/Issue 420` and `DJ/Various Artists/Mastermix Issue 421` — `%aunique{}` rule present, rendered
+    "" on both (no other album shares either (albumartist, album)); they are NOT a %aunique firing.
+  E5 change: Def Leppard (2015) has no library.db row (E5 was a mediafile write outside beets), so it cannot enter a
+    beets %aunique set. Pre-existing `Benson Boone/Fireworks & Rollerblades (2024)/` has no library.db row either
+    (DEF-07-12-08); its ` (2024)` is part of a legacy directory name, not a %aunique rendering.
+  D-28 set for Task 3 (built from THIS inventory only): {P02 `Benson Boone/American Heart`, P04 `Benson Boone/American
+    Heart [093624834588]`} — expected MA album artist `Benson Boone` on both.
+AUNIQUE INVENTORY DIFF vs 07-12: no change (07-12 list: 1 suffixed directory, P04 catalognum ` [093624834588]`, and 1 pair (Benson Boone, American Heart) P02/P04; rebuilt list identical; the DJ pair P07/P08 was added to the scope and renders no suffix, so it adds no entry)
+  Compliant re-path re-run (D-27: `-l` on a COPY, `-c` overlay), exactly as 07-12 Task 3, inside beets-flask as uid 568,
+  2026-09-27T13:24:50Z (/root/phase07-0715/aunique-scratch.sh, output aunique-scratch.out):
+    real /config/library.db 2ff94600e607584365bfec78922ad77eb33a07d05f40c9a34eace37591f7df9e and state.pickle
+      d195800848286fbeede802d6f12b58df48b780dab3245ca98896d314fc539d1e read BEFORE;
+    scratch /tmp/p6-p7aunique asserted absent, created mode 700; lib.db = sqlite backup-API copy, source opened mode=ro
+      (197 items / 9 albums); overlay.yaml: library + statefile inside the scratch, directory /media/Music, import
+      copy/move/write/autotag no, duplicate_action skip, ui.color no.
+    `beet -l /tmp/p6-p7aunique/lib.db -c /tmp/p6-p7aunique/overlay.yaml move -p` rc 0: stdout 0 lines, 0 ` -> ` lines;
+      stderr "Moving 0 items (197 already in place)." Copy sha f211e864… before and after.
+    Cleanup through the oracle's fenced CLEANUP_PROG (extracted from scripts/phase06-oracle.sh SCRATCH_FENCE_SH +
+      cleanup tail; sha256 1d3f04f7… = 07-12's cleanup-prog.sh byte-for-byte). Fence driven first (local): refuses
+      '/tmp/p6-x/../etc', '/tmp/p6-x /config', '/tmp/p6-', '/etc' (rc 3 each); accepts '/tmp/p6-p7aunique15' and '/tmp/p6-p7aunique' (rc 0 each).
+      Run inside the container as 568 with the path as a parameter: "gone", rc 0; `test -e` rc 1.
+    Real DB read AFTER (13:24:59Z): library.db 2ff94600… / state.pickle d1958008… — UNCHANGED.
+MOVE -P RE-RUN (07-15): 0 re-path lines over 197 items (no ` -> ` line); real library.db sha256 unchanged before/after
+
+### D-24 AFTER — Artists-without-ArtistItems census
+  Selector = section 4c's exactly (one GET /Items, IncludeItemTypes=Audio, Recursive, ParentId=Music library,
+  Fields=ArtistItems,Artists,Path; select Artists non-empty AND ArtistItems empty), from jf-audio.json read 13:25:36Z;
+  computed by /root/phase07-0715/e6-census.py.
+  Coverage (P-03): TotalRecordCount 1441 == Items length 1441 — covered.
+  BEFORE (07-07 pin, D24_CENSUS_BASELINE_*): 29 paths, sha256 fa2e7a51e6852fae1c015e46c13f201209dd0636dc84e4bd1ae1936debf1fc77
+  AFTER  (13:25:36Z):                          29 paths, sha256 fa2e7a51e6852fae1c015e46c13f201209dd0636dc84e4bd1ae1936debf1fc77
+  Removed paths: none.  Added paths: none (no pilot track has Artists without ArtistItems: 197 new items, 0 in the set).
+  The Def Leppard track `Def Leppard/On Through the Night (1980)/Digital Media 01-11 Def Leppard - Overture.flac`:
+    Artists [] and ArtistItems [] — it is NOT in this predicate's set before or after (its Artists list is empty, as
+    07-07 established); E5 repaired a different folder (Def Leppard (2015)) and did not touch it. Items with ZERO
+    ArtistItems regardless of Artists: 30 = the 29 + this one track (the prose "30").
+  DEF-06-45-03: row 1 (ARTPOP CD 01-05) did NOT move — ArtistItems 0, Artists ["Lady GaGa"], still in the census set.
+    The Def Leppard track did not leave any set (it was never in the D-24 set; it is still in the zero-ArtistItems 30).
+    The pilot's writes (9 imports, DJ routing, E5) produced no movement in the census. Nothing in this reading tests
+    DEF-06-45-03's "row 1 is an E5 import problem" hypothesis, because no pilot write touched an ARTPOP or Joanne file.
+  Pin: unchanged (AFTER == BEFORE by sha); nothing to re-pin.
