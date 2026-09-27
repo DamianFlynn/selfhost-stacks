@@ -256,6 +256,13 @@ services:
 # D-21 the registered set is TWO — 02-review and 03-asis — so "fewer than TWO" is the RED, and a line
 # naming 01-auto is ALSO a red while D-21 holds (it means the de-registration did not deploy). Phase 8
 # re-registers 01-auto deliberately, and the count returns to three then.
+#
+# RETRACTED 2026-09-27 (07-REVIEW WR7-05): the paragraphs above describe a gate NO SCRIPT
+# IMPLEMENTS. scripts/check-beets-config.sh (READY_LINE) asserts only that the registration line is
+# PRESENT somewhere in `docker logs` history — a line from before a restart satisfies it — and it
+# counts no inboxes and never looks for 01-auto; scripts/quick-health-check.sh has no registration
+# assertion. The D-21 de-registration was verified once, by hand, in 07-09. The inbox set is
+# UNASSERTED until a standing check exists; its expected set waits on the 03-asis decision (CR7-01).
 
 # WR-02: t3_proxy is declared here as well as in ../compose.yaml, because this file has to be able
 # to stand on its own — brought up directly with `-f`, there is no parent to inherit the network
