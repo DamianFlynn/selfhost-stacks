@@ -370,3 +370,24 @@ E6 SECOND MEASUREMENT: NOT TAKEN — F1 (P09) was drawn but did not land (held; 
     Benson Boone → album 165 `Various Artists`), stale pin (`does not exist under /mnt/tank/media/Music`), and absence
     (`no MA album maps 'Def Leppard/Def Leppard (2015)' … UNKNOWN, not green`). The script has no self-test mode, so
     the drive was done this way rather than via a new override knob (CONVENTIONS §4).
+
+### Deploy of the standing check
+  Pushed c246e2f to origin/main. Host porcelain read SEPARATELY first (`git status --porcelain` to a file, rc 0, 0 lines
+  — clean) at /mnt/fast/stacks, HEAD 998625b; then `git pull --ff-only` rc 0 → HEAD c246e2fd0c3d…; host
+  scripts/check-music-consumers.sh sha256 886da4eb7424499072ea169ba4ea60da135d810dcdaaf7f73535dc3c9bd7ef06 == workstation
+  file == the copy run above (2026-09-27T14:03:35Z).
+
+### RE-ENABLE — the barrier lifted AFTER the MA proof above
+  Helper /root/phase07-0715/ma-reenable-0715.sh (D-39 login; one tasks/set_enabled {task_id, enabled:true} per id, the
+  four ids only, no retry; no schedule touched). Before: 4/4 enabled=false next_run=null; 16 other tasks enabled=true.
+  Calls at 2026-09-27T14:03:54.553Z / .567Z / .586Z / .606Z (artist, album, playlist, track), each returned enabled true.
+  Read-back with tasks/list at 14:03:56Z:
+    _track    enabled=true next_run=2026-09-28T01:55:48.632567Z   schedule hourly every 12 (unchanged)
+    _playlist enabled=true next_run=2026-09-28T01:55:48.636088Z
+    _album    enabled=true next_run=2026-09-28T01:55:48.628578Z
+    _artist   enabled=true next_run=2026-09-28T01:55:48.624676Z
+    other tasks enabled=true (excluding the four): 16 — unchanged.
+  next_run = last_run (this plan's on-demand sync, 13:55:48Z) + 12 h, so MA's own schedule resumes from the one sync.
+MA FS-SYNC TASKS RE-ENABLED: 4/4 enabled=true, next_run set at 2026-09-27T14:03:56Z
+  Note: an MA restart can re-create these tasks enabled, and a restart itself triggers a sync, so a later reading of
+  enabled=true is NOT evidence this step ran — the read-back time above is.
