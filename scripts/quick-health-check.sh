@@ -2788,8 +2788,16 @@ elif [ "$CONSUMERS_RC" -eq 3 ]; then
     # The anchor guard is applied exactly as the `-eq 0` arm applies it. A renumbered `📊 6.`
     # heading must not be able to hide behind this new arm — an audit whose summary cannot be
     # read is UNKNOWN even when its exit status is one we understand.
+    #
+    # TWO CAUSES SHARE EXIT 3 (07-REVIEW WR7-03). Plan 07-07 routed a measured D-24 census change
+    # into the same exit 3 as CONF-04 pending, printed as its own `D-24 CENSUS CHANGED` block above
+    # the CONF-04 block. So the header is chosen by WHICH banner the audit printed, never assumed:
+    # a D-24-only exit 3 must not be labelled CONF-04, and a D-24 change alongside pending CONF-04
+    # rows must not be invisible here. Neither banner found = the cause is not established.
     SUMMARY=$(echo "$CONSUMERS_OUT" | sed -n '/^📊 6\. Summary/,$p' \
-              | grep -E 'MA version|artist rows|FAILURES total')
+              | grep -E 'MA version|artist rows|D-24 census|D-28 aunique|FAILURES total')
+    CONS_CONF04_OPEN=$(printf '%s\n' "$CONSUMERS_OUT" | grep -c 'CONF-04 IS NOT CLOSED')
+    CONS_D24_CHANGED=$(printf '%s\n' "$CONSUMERS_OUT" | grep -c 'D-24 CENSUS CHANGED')
     if [ -z "$SUMMARY" ]; then
         echo "⚠️  UNKNOWN — the audit exited 3 but its '📊 6. Summary' block was not found."
         echo "  The section heading this fold-in anchors on has changed, so the pending counts"
@@ -2801,26 +2809,44 @@ elif [ "$CONSUMERS_RC" -eq 3 ]; then
         fi
         EXIT_CODE=1
     else
-        echo "⚠️  CONF-04 MEASURED AND OPEN — artist rows at baseline, not at target (exit 3)"
-        echo "  This is NOT an audit failure and NOT a pass. The Jellyfin and MA counts belong to"
-        echo "  TWO DIFFERENT measurements inside ROADMAP entry criterion E6 and are never summed"
-        echo "  into one CONF-04 answer: the Jellyfin half is carried to E6 under the recorded"
-        echo "  2026-09-24 override after the mtime route was driven and measured not to discharge"
-        echo "  it, and the MA half awaits E6's second, >=4-artist measurement. A carry is not a"
-        echo "  close — CONF-04 stays open. The audit's own words:"
-        # BOUNDED range. The end pattern is emitted by the same exit-3 block that produces status
-        # 3, so it exists whenever this arm is reached — but a sed range whose end never matches
-        # runs to EOF, so the `1,8p` cap is the guard rather than a trust in the end pattern.
-        # (`sed -n '1,8p'` is used rather than `head -8`: `head` closes the pipe and the upstream
-        # sed takes a SIGPIPE, which is the 141-propagation shape this phase has been bitten by.)
-        echo "$CONSUMERS_OUT" | sed -n '/CONF-04 IS NOT CLOSED/,/Discharges on ROADMAP/p' \
-            | sed -n '1,8p' | sed 's/^ */    /'
+        if [ "$CONS_CONF04_OPEN" -gt 0 ] && [ "$CONS_D24_CHANGED" -gt 0 ]; then
+            echo "⚠️  consumers audit exit 3 — measured, not at target: CONF-04 OPEN AND D-24 census CHANGED"
+        elif [ "$CONS_D24_CHANGED" -gt 0 ]; then
+            echo "⚠️  D-24 CENSUS CHANGED — measured, not at the pin (exit 3); CONF-04 rows not pending"
+        elif [ "$CONS_CONF04_OPEN" -gt 0 ]; then
+            echo "⚠️  CONF-04 MEASURED AND OPEN — artist rows at baseline, not at target (exit 3)"
+        else
+            echo "⚠️  consumers audit exit 3 — measured, not at target, but NEITHER the CONF-04 nor the"
+            echo "  D-24 banner was found in its output, so the CAUSE is not established. Not green."
+        fi
+        if [ "$CONS_D24_CHANGED" -gt 0 ]; then
+            echo "  D-24 (the Artists-without-ArtistItems census moved off its pin). The audit's own words:"
+            # Bounded the same way as the CONF-04 range below: the `1,4p` cap is the guard, not a
+            # trust in the end pattern. Remedy per CONVENTIONS §5 — adjudicate, re-pin, never override.
+            echo "$CONSUMERS_OUT" | sed -n '/D-24 CENSUS CHANGED/,/NOT green/p' \
+                | sed -n '1,4p' | sed 's/^ */    /'
+        fi
+        if [ "$CONS_CONF04_OPEN" -gt 0 ]; then
+            echo "  This is NOT an audit failure and NOT a pass. The Jellyfin and MA counts belong to"
+            echo "  TWO DIFFERENT measurements inside ROADMAP entry criterion E6 and are never summed"
+            echo "  into one CONF-04 answer: the Jellyfin half is carried to E6 under the recorded"
+            echo "  2026-09-24 override after the mtime route was driven and measured not to discharge"
+            echo "  it, and the MA half awaits E6's second, >=4-artist measurement. A carry is not a"
+            echo "  close — CONF-04 stays open. The audit's own words:"
+            # BOUNDED range. The end pattern is emitted by the same exit-3 block that produces status
+            # 3, so it exists whenever this arm is reached — but a sed range whose end never matches
+            # runs to EOF, so the `1,8p` cap is the guard rather than a trust in the end pattern.
+            # (`sed -n '1,8p'` is used rather than `head -8`: `head` closes the pipe and the upstream
+            # sed takes a SIGPIPE, which is the 141-propagation shape this phase has been bitten by.)
+            echo "$CONSUMERS_OUT" | sed -n '/CONF-04 IS NOT CLOSED/,/Discharges on ROADMAP/p' \
+                | sed -n '1,8p' | sed 's/^ */    /'
+        fi
         echo "  Summary:"
         echo "$SUMMARY" | sed 's/^/    /'
         if [ "$CONSUMERS_OVERRIDDEN" -eq 1 ]; then   # GC-14
             echo "  ⚠️  CONSUMERS_SCRIPT override in effect — ran: $CONSUMERS_SCRIPT (not the"
             echo "  deployed path). Exit 3 from an overridden audit is evidence about THAT file,"
-            echo "  not about the estate. CONF-04's state has NOT been measured by this run."
+            echo "  not about the estate. Neither CONF-04's nor D-24's state has been measured by this run."
         fi
         EXIT_CODE=1
     fi
