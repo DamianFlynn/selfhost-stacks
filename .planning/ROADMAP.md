@@ -1616,7 +1616,7 @@ Plans:
 - [x] 07-14-PLAN.md — GATED: E5 Def Leppard repair as a named operation (D-24)
 - [x] 07-15-PLAN.md — GATED: Jellyfin first, one Music Assistant sync last, then the MA fs-sync barrier lifted; D-28, E6 second measurement (D-05), D-24 after
 - [x] 07-16-PLAN.md — GATED: project snapshot register + one-gate mechanical prune (D-19)
-- [ ] 07-17-PLAN.md — GATED: evidence assembled for /gsd-verify 07 (no verdict), beets.md closure, operator trust verdict (D-31)
+- [x] 07-17-PLAN.md — GATED: evidence assembled for /gsd-verify 07 (no verdict), beets.md closure, operator trust verdict (D-31)
 **Research**: not needed — the diff is a comparison over two `ffprobe` datasets, and the undo path
 is ZFS rollback plus a documented `incremental` state reset. The compilation and multi-disc cases
 are already covered by the Phase 6 config work; this phase runs them, it does not investigate them.

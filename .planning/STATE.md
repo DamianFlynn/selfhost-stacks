@@ -8,7 +8,7 @@ progress:
   total_phases: 10
   completed_phases: 5
   total_plans: 141
-  completed_plans: 140
+  completed_plans: 141
   percent: 50
 ---
 
@@ -21,13 +21,15 @@ See: .planning/PROJECT.md (updated 2026-08-17)
 **Core value:** New music downloads land in the library correctly tagged, through exactly one
 pipeline that someone owns.
 **Current focus:** Phase 07 — pilot-12-albums-end-to-end (**PLANNED 2026-09-25, 17 plans in
-13 waves, 16 of 17 executed — 07-01 … 07-16 done**; Phase 06 stays `In Progress` at `gaps_found` 5/6 with CONF-04 carried to
+13 waves, 17 of 17 executed — all plans done; `/gsd-verify 07` owed**; Phase 06 stays `In Progress` at `gaps_found` 5/6 with CONF-04 carried to
 Phase 7 E6 — `/gsd-verify 06` is still owed)
 
 **Definition of done (CONS-04):** a file is imported only when verified with `ffprobe` on the file
 *and* visible in both Jellyfin and Music Assistant. Never "tool configured".
 
 ## Current Position
+
+**PLAN 07-17 COMPLETE — `STOP STATE 07-17-FINAL` — 2026-09-27. ALL 17 PLANS EXECUTED; `/gsd-verify 07` OWED.** Evidence assembled unscored (`artifacts/07-17-evidence.txt`; 07-EVIDENCE-MAP measured column): 9/12 landed (P01/P09/P11 held); crit 3 0/1,379 mismatches, 197/197 568:568; crit 4 196 matched + P04 t01 (DEF-07-12-09, PCM identical); crit 5 re-run equal; crit 6 9/9 both consumers; crit 7 sweep exit 0; crit 8 347/347 sources unchanged. Docs corrected (`809ea8e`): beets.md Phase 7 closure + three-step undo; PROJECT.md/CLAUDE.md undo qualification (DEF-04-01 closed), `import.move: yes` retracted, tank 5.42 TiB. **TRUST VERDICT: believe-with-reservations** (`07-TRUST-VERDICT.md`): (1) UI imports the selected card, no hold state; (2) inbox URL growth vs 16 KB; (3) `dj` DB-only — `beet update`/`write` over DJ/ unsafe; (4) no MetadataSavers assertion; (5) full undo needs the manual state.pickle step. Deployed: host == workstation == origin at `bcbfe0a`.
 
 **PLAN 07-16 COMPLETE — `PRUNE OUTCOME: NONE (hold)` — 2026-09-27.** `.planning/SNAPSHOT-REGISTER.md` gives all 11 project snapshots an owner, purpose and release condition (tank 5.42 TiB free, measured). One eligible (`tank/media/Music@pre-phase5-chown`, 0 B, covered by `@pre-06-41-conf04-reprobe`, written@=0) — operator **hold**; reprobe still held (D-17 NOT FIRED; DEF-06-45-01/DEF-06-52-01 open); both `@pre-07-pilot` fences release at Phase 9 batch 1's fence. No zfs write verb ran; 181 snapshots before = after. Next: 07-17 (trust verdict).
 
