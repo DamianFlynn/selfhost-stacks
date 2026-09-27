@@ -8,7 +8,7 @@ progress:
   total_phases: 10
   completed_phases: 5
   total_plans: 141
-  completed_plans: 137
+  completed_plans: 138
   percent: 50
 ---
 
@@ -21,13 +21,15 @@ See: .planning/PROJECT.md (updated 2026-08-17)
 **Core value:** New music downloads land in the library correctly tagged, through exactly one
 pipeline that someone owns.
 **Current focus:** Phase 07 — pilot-12-albums-end-to-end (**PLANNED 2026-09-25, 17 plans in
-13 waves, 13 of 17 executed — 07-01 … 07-13 done**; Phase 06 stays `In Progress` at `gaps_found` 5/6 with CONF-04 carried to
+13 waves, 14 of 17 executed — 07-01 … 07-14 done**; Phase 06 stays `In Progress` at `gaps_found` 5/6 with CONF-04 carried to
 Phase 7 E6 — `/gsd-verify 06` is still owed)
 
 **Definition of done (CONS-04):** a file is imported only when verified with `ffprobe` on the file
 *and* visible in both Jellyfin and Music Assistant. Never "tool configured".
 
 ## Current Position
+
+**PLAN 07-14 COMPLETE — `STATE 07-14-REPAIRED` — 2026-09-27.** E5 repaired: `albumartist="Def Leppard"` set on the 14 FLAC in `Def Leppard/Def Leppard (2015)/` via a guarded MediaFile save (3 Vorbis album-artist keys; tag diff 14 matched / 28 gained / 0 dropped / 0 changed; audio + PCM identical; only these 14 of 2,885 entries changed). Taylor Swift (2006) same shape, not broken, untouched. Jellyfin shows AlbumArtist on all 14; MetadataSavers still []. D-24 census unmoved (29, none from this folder — not the DEF-06-45-03 experiment). For 07-15: DEF-07-14-01 MA "Brian Coll" artist on 86 Def Leppard tracks; verify album 116 / "Sea Of Love" after the MA sync. MA barrier holds (70/1244/66). Next: 07-15 (MA sync + re-enable).
 
 **PLAN 07-13 COMPLETE — `STATE 07-13-PARTIAL: P11 held` — 2026-09-27.** D-29 NONE PASSES on all three DJ folders (P07's rank-3 `Issue 456` = 10-track stub trap). ⚠ **`route-dj-album.sh` damaged DJ tags** via `modify` + `write: yes` (BPM ranges truncated, key case lowered, ID3 2.3→2.4, junk BPM 0/year 0000; RED 30/30 changed) — fixed to `modify -W` DB-only (`998625b`, deployed 51c52799; GREEN 0/30), plan amended to DB ALBUMTYPE + FILE BYTES UNCHANGED (DEF-07-13-01). ⚠ Open hazard: `dj` lives only in the DB — `beet update` over `DJ/` clears it, `beet write` redoes the damage. P07 → `DJ/Mastermix/Issue 420/`, P08 → `DJ/Various Artists/Mastermix Issue 421/`, as-is, FILE BYTES UNCHANGED 20/20, oracle 20/20, criteria 3/4/7/8 PASS; Jellyfin targeted update incl. the new `DJ` folder showed both in ~80 s (DEF-07-13-02). P11 held (D-26 FALSE) and unstaged. Library 9 albums / 197 items; MA barrier holds (70/1244/66). Next: 07-14 (E5 repair).
 
