@@ -1601,41 +1601,46 @@ else
     ma_fail "D-28: music/albums/library_items did not return an array — UNKNOWN, not green"
   else
     AU_RETURNED="$(printf '%s' "$AU_ALBUMS" | jq -r 'length')"
-    for row in "${AUNIQUE_ROWS[@]}"; do
-      IFS='|' read -r AU_DIR AU_EXPECT <<< "$row"
-      info "[D-28] $AU_DIR  (expected album artist: $AU_EXPECT)"
-      if [[ ! -d "${LIBRARY}/${AU_DIR}" ]]; then
-        ma_fail "D-28: '$AU_DIR' does not exist under $LIBRARY — the pin is stale; rebuild the inventory (CONVENTIONS §5)"
-        continue
-      fi
-      AU_HITS="$(printf '%s' "$AU_ALBUMS" | jq -c --arg i "$MA_LOCAL_PROVIDER_INSTANCE" --arg d "$AU_DIR" \
-        '[.[] | select([.provider_mappings[]? | select(.provider_instance == $i) | .item_id] | index($d))]')"
-      AU_N="$(printf '%s' "$AU_HITS" | jq -r 'length')"
-      if [[ "$AU_N" -eq 0 ]]; then
-        if [[ "$AU_RETURNED" -ge "$MA_LIBRARY_SCAN_LIMIT" ]]; then
-          ma_fail "D-28: no MA album maps '$AU_DIR' and the album list came back AT the limit ($MA_LIBRARY_SCAN_LIMIT) — UNKNOWN, not green"
-        else
-          ma_fail "D-28: no MA album maps '$AU_DIR' for $MA_LOCAL_PROVIDER_INSTANCE — UNKNOWN, not green (MA not synced since the import?)"
+    # TRUNCATION IS CHECKED BEFORE ANY ROW IS JUDGED (07-REVIEW WR7-07). A list that came back AT
+    # the limit may be missing albums past it, so "exactly one MA album maps this directory" cannot
+    # be established — a second mapping of the same directory could sit beyond the cut, and a
+    # single hit would then pass as unique. The provider filter cannot be relied on to keep the
+    # list small (MA ignores `provider` on some album endpoints). So every row is UNKNOWN here.
+    if [[ "$AU_RETURNED" -ge "$MA_LIBRARY_SCAN_LIMIT" ]]; then
+      ma_fail "D-28: album list came back AT the limit ($AU_RETURNED >= $MA_LIBRARY_SCAN_LIMIT) — whether 0, 1 or 2 MA albums map each of the ${#AUNIQUE_ROWS[@]} %aunique{} dir(s) cannot be established; UNKNOWN, not green"
+    else
+      for row in "${AUNIQUE_ROWS[@]}"; do
+        IFS='|' read -r AU_DIR AU_EXPECT <<< "$row"
+        info "[D-28] $AU_DIR  (expected album artist: $AU_EXPECT)"
+        if [[ ! -d "${LIBRARY}/${AU_DIR}" ]]; then
+          ma_fail "D-28: '$AU_DIR' does not exist under $LIBRARY — the pin is stale; rebuild the inventory (CONVENTIONS §5)"
+          continue
         fi
-        continue
-      fi
-      if [[ "$AU_N" -gt 1 ]]; then
-        ma_fail "D-28: $AU_N MA albums map the SAME directory '$AU_DIR' — a duplicate, identity is ambiguous"
-        echo "         item_ids: $(printf '%s' "$AU_HITS" | jq -r '[.[].item_id] | join(",")')"
-        continue
-      fi
-      AU_ID="$(printf '%s' "$AU_HITS" | jq -r '.[0].item_id')"
-      AU_ARTISTS="$(printf '%s' "$AU_HITS" | jq -r '[.[0].artists[]?.name] | join(" | ")')"
-      if [[ -z "$AU_ARTISTS" || "$AU_ARTISTS" == "Various Artists" ]]; then
-        ma_fail "D-28: silent folder_name fallback — MA album $AU_ID ('$AU_DIR') has album artist '${AU_ARTISTS:-<empty>}', want '$AU_EXPECT'"
-        echo "         config/providers/get reading back folder_name is NOT evidence it fired (02-07)."
-      elif [[ "$AU_ARTISTS" == "$AU_EXPECT" ]]; then
-        pass "D-28: MA album $AU_ID maps '$AU_DIR' and reads album artist '$AU_ARTISTS'"
-        AUNIQUE_OK=$((AUNIQUE_OK + 1))
-      else
-        ma_fail "D-28: MA album $AU_ID ('$AU_DIR') reads album artist '$AU_ARTISTS', want '$AU_EXPECT'"
-      fi
-    done
+        AU_HITS="$(printf '%s' "$AU_ALBUMS" | jq -c --arg i "$MA_LOCAL_PROVIDER_INSTANCE" --arg d "$AU_DIR" \
+          '[.[] | select([.provider_mappings[]? | select(.provider_instance == $i) | .item_id] | index($d))]')"
+        AU_N="$(printf '%s' "$AU_HITS" | jq -r 'length')"
+        if [[ "$AU_N" -eq 0 ]]; then
+          ma_fail "D-28: no MA album maps '$AU_DIR' for $MA_LOCAL_PROVIDER_INSTANCE — UNKNOWN, not green (MA not synced since the import?)"
+          continue
+        fi
+        if [[ "$AU_N" -gt 1 ]]; then
+          ma_fail "D-28: $AU_N MA albums map the SAME directory '$AU_DIR' — a duplicate, identity is ambiguous"
+          echo "         item_ids: $(printf '%s' "$AU_HITS" | jq -r '[.[].item_id] | join(",")')"
+          continue
+        fi
+        AU_ID="$(printf '%s' "$AU_HITS" | jq -r '.[0].item_id')"
+        AU_ARTISTS="$(printf '%s' "$AU_HITS" | jq -r '[.[0].artists[]?.name] | join(" | ")')"
+        if [[ -z "$AU_ARTISTS" || "$AU_ARTISTS" == "Various Artists" ]]; then
+          ma_fail "D-28: silent folder_name fallback — MA album $AU_ID ('$AU_DIR') has album artist '${AU_ARTISTS:-<empty>}', want '$AU_EXPECT'"
+          echo "         config/providers/get reading back folder_name is NOT evidence it fired (02-07)."
+        elif [[ "$AU_ARTISTS" == "$AU_EXPECT" ]]; then
+          pass "D-28: MA album $AU_ID maps '$AU_DIR' and reads album artist '$AU_ARTISTS'"
+          AUNIQUE_OK=$((AUNIQUE_OK + 1))
+        else
+          ma_fail "D-28: MA album $AU_ID ('$AU_DIR') reads album artist '$AU_ARTISTS', want '$AU_EXPECT'"
+        fi
+      done
+    fi
   fi
 fi
 echo ""
