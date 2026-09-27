@@ -1,0 +1,184 @@
+# 07-14-e5-repair.txt — E5: the Def Leppard (2015) repair (D-19a / D-24), a NAMED OPERATION distinct from the twelve.
+# Written by plan 07-14. Nothing in Task 1 wrote to /mnt/tank/media, beets state, Jellyfin or Music Assistant.
+# The only writes Task 1 made were: its own pre-07-e5 capture and two drive captures in the fence tags dir, scratch COPIES
+# under /mnt/fast/appdata/arrs/beets/logs/ (removed after measurement), and helpers under /root/phase07-0714/ on LXC 100.
+
+== E5 MEASUREMENT == (Task 1, 2026-09-27T12:51Z–12:57Z)
+
+-- 1. The repair set --
+(a) 06-11's record. artifacts/06-11-oracle-run.txt § 7.7, quoted:
+      "album directories whose basename equals their parent's, case-folded .... 0"
+      "album directories whose basename starts with the parent's basename followed by ' (' — the shape of the live
+       `Def Leppard/Def Leppard (2015)/` defect .... 0"
+      "That defect is scheduled for repair in Phase 7 ...; this sample happens to contain none of it."
+    06-11-SUMMARY.md: no other directory is reported in this shape (searched for leppard / "folder ==" / "== artist" /
+    "same shape" / "album-folder": no hits).
+    So 06-11 adds nothing beyond Def Leppard.
+(b) Live search from atlantis (real root, 12:51:36Z). Every parent/child directory pair under /mnt/tank/media/Music,
+    .zfs excluded (101 directories), where the child basename with a trailing " (YYYY)" stripped equals the parent
+    basename, case-folded:
+      cd /mnt/tank/media/Music && find . -mindepth 2 -type d -not -path "*/.zfs/*" | while IFS= read -r d; do
+        p=$(basename "$(dirname "$d")"); b=$(basename "$d"); s=$(printf "%s" "$b" | sed -E "s/ \([0-9]{4}\)$//");
+        [ "$(printf %s "$s" | tr "[:upper:]" "[:lower:]")" = "$(printf %s "$p" | tr "[:upper:]" "[:lower:]")" ] && echo "HIT: $d"; done
+    The same result came from a depth-2 artist/album loop:
+      HIT: ./Def Leppard/Def Leppard (2015)
+      HIT: ./Taylor Swift/Taylor Swift (2006)
+(c) Disposition of the hits:
+      Def Leppard/Def Leppard (2015)/  — IN the repair set. albumartist is ABSENT on 14/14 and the album tag
+          "Def Leppard" equals the artist folder, so MA's folder_name fallback lands on the top-level folder (02-07).
+      Taylor Swift/Taylor Swift (2006)/ — measured, EXCLUDED, not defective. album_artist "Taylor Swift" is present on
+          30/30 MP3s, and the album tag "Taylor Swift (Big Machine Radio Release Special) Big Machine Records, LLC"
+          differs from both folders, so the fallback never fires. MA reads album 128 "Taylor Swift Big Machine Records,
+          LLC", artists ["Taylor Swift"], mapped to "Taylor Swift/Taylor Swift (2006)". Jellyfin reads AlbumArtist
+          Taylor Swift, 30/30 ArtistItems ["Taylor Swift"]. Shape only; no repair proposed.
+REPAIR SET: /mnt/tank/media/Music/Def Leppard/Def Leppard (2015)/ — 14 FLAC (+ 13 .txt/.lrc lyric sidecars,
+  album.nfo 2026-08-18, cdart.png, folder.jpg; none of these are touched)
+
+-- 2. Per file (atlantis stat, real root, 12:56:33Z; ffprobe on LXC 100; mediafile inside beets-flask) --
+Owner/mode: 14/14 `568:568 777`; tank/media/Music acltype=nfsv4 aclmode=restricted aclinherit=passthrough.
+Tools: `flac`/`metaflac` NOT INSTALLED (atlantis, LXC 100, beets-flask). ffprobe/ffmpeg on LXC 100.
+  beets-flask: mediafile 0.17.0, mutagen 1.48.1, beets 2.12.0, /venv/bin/python 3.12, uid 568 = beetle.
+Common to all 14 (ffprobe format tags and raw Vorbis comments via mutagen, identical order and case on every file):
+  vendor 'reference libFLAC 1.2.1 20070917'; blocks STREAMINFO(34) SEEKTABLE(558) VORBIS_COMMENT(311–327) PADDING;
+  0 pictures; 44.1 kHz / 16-bit / 2 ch.
+  Comments: Language=English, TRACKNUMBER=<n>, Artist=Def Leppard, Title=<t>, Rip Date=2015-11-01, Date=2015,
+            Retail Date=2015-00-00, Media=CD, Release Type=Normal release, Genre=Hard Rock, ORGANIZATION=Mailboat,
+            Related=pantera.com/, Album=Def Leppard
+  mediafile: album='Def Leppard' albumartist=None artist='Def Leppard' artists=None disc=None
+| file                                                | size     | track | title (tag)              | ffprobe -v error | full decode | mediafile |
+|-----------------------------------------------------|----------|-------|--------------------------|------------------|-------------|-----------|
+| CD 01-01 Def Leppard - Let’s Go.flac                | 40619456 | 1     | Let's Go                 | rc 0, stderr ""  | rc 0, 0 err | OPEN OK   |
+| CD 01-02 Def Leppard - Dangerous.flac               | 28730110 | 2     | Dangerous                | rc 0, stderr ""  | rc 0, 0 err | OPEN OK   |
+| CD 01-03 Def Leppard - Man Enough.flac              | 27346018 | 3     | Man Enough               | rc 0, stderr ""  | rc 0, 0 err | OPEN OK   |
+| CD 01-04 Def Leppard - We Belong.flac               | 36983736 | 4     | We Belong                | rc 0, stderr ""  | rc 0, 0 err | OPEN OK   |
+| CD 01-05 Def Leppard - Invincible.flac              | 28201939 | 5     | Invincible               | rc 0, stderr ""  | rc 0, 0 err | OPEN OK   |
+| CD 01-06 Def Leppard - Sea of Love.flac             | 33369374 | 6     | Sea Of Love              | rc 0, stderr ""  | rc 0, 0 err | OPEN OK   |
+| CD 01-07 Def Leppard - Energized.flac               | 26015433 | 7     | Energized                | rc 0, stderr ""  | rc 0, 0 err | OPEN OK   |
+| CD 01-08 Def Leppard - All Time High.flac           | 35226389 | 8     | All Time High            | rc 0, stderr ""  | rc 0, 0 err | OPEN OK   |
+| CD 01-09 Def Leppard - Battle of My Own.flac        | 21363511 | 9     | Battle Of My Own         | rc 0, stderr ""  | rc 0, 0 err | OPEN OK   |
+| CD 01-10 Def Leppard - Broke ’n’ Brokenhearted.flac | 27004896 | 10    | Broke 'N' Brokenhearted  | rc 0, stderr ""  | rc 0, 0 err | OPEN OK   |
+| CD 01-11 Def Leppard - Forever Young.flac           | 19276494 | 11    | Forever Young            | rc 0, stderr ""  | rc 0, 0 err | OPEN OK   |
+| CD 01-12 Def Leppard - Last Dance.flac              | 23253750 | 12    | Last Dance               | rc 0, stderr ""  | rc 0, 0 err | OPEN OK   |
+| CD 01-13 Def Leppard - Wings of an Angel.flac       | 34089218 | 13    | Wings Of An Angel        | rc 0, stderr ""  | rc 0, 0 err | OPEN OK   |
+| CD 01-14 Def Leppard - Blind Faith.flac             | 35446380 | 14    | Blind Faith              | rc 0, stderr ""  | rc 0, 0 err | OPEN OK   |
+  "full decode" = `ffmpeg -nostdin -v error -i <f> -map 0:a -f null -` (read-only, no output file). albumartist,
+  artists and disc are ABSENT on all 14.
+
+THE HARD-ERRORING FLAC, identified: `CD 01-06 Def Leppard - Sea of Love.flac`. The source is 02-07-SUMMARY.md §
+  "The one failure in the sync": MA `Failed to process Def Leppard/Def Leppard (2015)/CD 01-06 Def Leppard - Sea of
+  Love.flac` after `missing ID3 tag [albumartist], using foldername  as fallback` (an EMPTY foldername).
+  LOCATION OF THE ERROR: in NEITHER the audio stream NOR the metadata blocks. The error is in Music Assistant's
+  processing of an absent albumartist. Measured today: ffprobe rc 0 with empty stderr, a full decode with 0 errors,
+  mediafile opens it, and its block layout is identical to the other 13. The live MA state still carries it:
+  "Sea Of Love" is the only one of the 14 with album=<none>. Disposition: INCLUDED in the repair on the same single
+  field; no re-encode.
+
+-- 3. Consumer readings (from LXC 100) --
+Jellyfin (jf-0714.sh MODE=read, GET only, 12:56:01Z; address resolved fresh 192.168.90.37:8096 via docker inspect t3_proxy):
+  Music library MetadataSavers=[] SaveLocalMetadata=false (DEF-07-11-05 remediation holds); the dir holds the pre-freeze
+    album.nfo (2026-08-18) and no new sidecar.
+  album 71465f782666839c6786530ab9c9e589 Name=Def Leppard | AlbumArtist=Def Leppard | AlbumArtists=["Def Leppard"]
+  audio children 14; ALL 14: Artists=["Def Leppard"] ArtistItems=["Def Leppard"] AlbumArtist=Def Leppard.
+  => Jellyfin shows NO E5 symptom. It derives the album artist without the tag.
+  D-24 census: the pinned 29 (07-07) are all Lady Gaga (ARTPOP 15 + Joanne 14) and contain NO track from this folder.
+    07-07 already measured the prose "one Def Leppard track" as `On Through the Night (1980)/… Overture.flac`, which has
+    EMPTY Artists, is outside D-24's predicate, and is NOT in this folder. So this repair CANNOT move the D-24 census,
+    and it is not the experiment DEF-06-45-03 asks for. Recorded; the census after-reading stays with 07-15.
+  Jellyfin scheduled "Scan Media Library" (jf-tasks-0713.sh, 12:56:36Z): Idle, last 09:10:34Z..11:33:29Z Completed,
+    IntervalTrigger 12 h -> next ≈ 2026-09-27T23:33:29Z (derived). Running now: Generate Trickplay Images only.
+    The next scan falls outside a same-afternoon Task 2 window (margin ≈ 10 h 36 min at 12:56Z). Task 2 re-reads it,
+    and a scan that runs between Task 2's write and 07-15's reading would be a second, uncontrolled reader of the new tag.
+Music Assistant (ma-0714.sh, READ-ONLY library_items, D-39 login with credentials via $ENV in jq, 12:56:02Z):
+  provider filesystem_local--XJaJWNUS albums 70, tracks 1244 (= baseline).
+  NO album is mapped to ".../Def Leppard (2015)". MA album item_id=116 name "Def Leppard", artists=[] (EMPTY), is
+    mapped to "Def Leppard", the TOP-LEVEL artist folder. That is exactly 02-07's diagnosis.
+  The 14 tracks: 13 carry album "Def Leppard" (116) with album_artists=[]; "Sea Of Love" carries album=<none> (the
+    02-07 hard error, still live).
+  OBSERVATION (MA-side, NOT E5, for 07-15): track artists read "Brian Coll" with artist item_id "116", the same number
+    as the album id, on 13 of these 14 tracks and on 86 Def Leppard tracks across 5 albums (13 here, Las Vegas
+    Residency 18, High ’n’ Dry 10, On Through the Night 10, Rock of Ages 35). No file here carries that string. This is
+    an MA join/id anomaly wider than this folder. The repair does not address it, and 07-15 should not read it as E5
+    success or failure.
+BARRIER READ (context; Task 2 re-takes it immediately before the write):
+  /root/ma-read-0710.sh SINCE=2026-09-27T12:43:18Z, RC 0: 4/4 music_sync_filesystem_local--XJaJWNUS_* enabled=false,
+  next_run null (updated_at 2026-09-26T15:55:04Z); control 16 enabled; pattern drive 1/0/0; log 292 lines; server-start
+  or sync lines later than SINCE: 0. MA counts 70/1244/66, ZZBOGUS0 0/0/0.
+BARRIER: VERIFIED (4/4 enabled=false, next_run null) at 2026-09-27T12:56:37Z
+
+-- 4. Fresh capture --
+`bash scripts/snapshot-music-tags.sh pre-07-e5 --roots "/mnt/tank/media/Music/Def Leppard/Def Leppard (2015)"`
+  (LXC 100 /mnt/fast/stacks; deployed script sha256 60212666… = repo HEAD) at 12:54:43Z -> RC 0, 14 records, .failed
+  0 bytes. /mnt/fast/safety/music-pre-project/tags/pre-07-e5.ndjson.gz sha256
+  5eb49bfeffbdf7fffefde5859a27783223011c1bf698806265a14ccc52a0f2bc
+
+-- 5. Recovery source (fence) --
+tank/media/Music@pre-07-pilot (creation epoch 1790434107) is present. For each of the 14 files, sha256 in
+  /mnt/tank/media/Music/.zfs/snapshot/pre-07-pilot/Def Leppard/Def Leppard (2015)/ equals the live file: `sha256sum -c`
+  reports 14 OK (manifest /root/e5-live.sha on atlantis, sha256 395e596d…). A bad repair is undone by a FILE COPY of
+  the named files out of that directory, as real root on atlantis, on the operator's answer. ⛔ never a pool-level
+  roll back (D-16).
+
+-- 6. Scratch-copy write test (the tool measured on COPIES of these exact files BEFORE any proposal; DEF-07-13-01 lesson) --
+Copies: `cp -p` of the 14 into /mnt/fast/appdata/arrs/beets/logs/phase07-0714-scratch (= /logs/... in beets-flask),
+  chown 568:568. The before-fingerprint of the copies was BYTE-IDENTICAL to the fingerprint of the library originals.
+Program (scratchwrite.py sha256 a3e8a136…): per file, `MediaFile(p)`; assert (albumartist, album) == (None,
+  'Def Leppard'); `albumartist = 'Def Leppard'`; `save()`. Run as `docker exec -i -u 568 beets-flask /venv/bin/python -`.
+  A path guard refuses anything outside /logs/phase07-0714-scratch*. The guard was DRIVEN: a first run on scratch2
+  was refused (AssertionError, write_rc 1, nothing written), and the capture diff of that no-write run was exit 0
+  with 0 changes. That serves as the control.
+  write_rc 0; 14/14 before (None, 'Def Leppard') -> after ('Def Leppard', 'Def Leppard').
+Fingerprint diff (fingerprint.py sha256 b83b65b9…: raw FLAC block walk, mutagen raw comments, audio-frame sha256):
+  14/14 identical in every respect except the two below:
+    - size UNCHANGED; audio_offset UNCHANGED; audio-frame sha256 UNCHANGED; STREAMINFO md5 UNCHANGED
+    - vendor string UNCHANGED ('reference libFLAC 1.2.1 20070917')
+    - STREAMINFO and SEEKTABLE blocks byte-identical
+    - existing 13 comments: none removed, values/order/key CASE preserved (Artist/Title/Album mixed case kept)
+    - ADDED comments (3 keys, one mediafile field): ('ALBUM ARTIST','Def Leppard'), ('ALBUM_ARTIST','Def Leppard'),
+      ('ALBUMARTIST','Def Leppard'). This is mediafile's storage list for `albumartist` on Vorbis.
+    - VORBIS_COMMENT grows +83 bytes and PADDING shrinks −83 bytes. The file is not rewritten or resized.
+  Decoded PCM md5 (ffmpeg -f md5, 14 files): IDENTICAL 14/14.
+  No container or version change is possible here: FLAC has no ID3-style version, and the vendor is unchanged.
+QUAL-02 instrument driven on a second fresh scratch set (phase07-0714-scratch2):
+  snapshot drive-07-14-scratch-pre -> write -> snapshot drive-07-14-scratch-post2 -> `diff-music-tags.sh` (sha256
+  4bbfaf60… = repo): exit 0; MATCHED 14 on the encoded-audio key (audio bitstream unchanged); MISSING_AFTER 0,
+  NEW_AFTER 0, AMBIGUOUS 0/0; FIELDS_DROPPED 0; FIELDS_CHANGED 0; FIELDS_GAINED 28 = `ALBUM ARTIST` + `album_artist`
+  × 14 (ffprobe folds ALBUM_ARTIST/ALBUMARTIST into album_artist). Output /root/phase07-0714/drive-diff2.txt
+  sha256 1f5782ca…
+  => Task 2's expected diff over pre-07-e5 -> post-07-e5: exit 0, FIELDS_GAINED 28 (those two keys × 14),
+     dropped 0, changed 0. Any other line is a finding.
+Scratch copies removed after measurement (28 files, 2 dirs). Fingerprint JSONs and drive captures are kept.
+VERDICT (tool): the planned tool touches NOTHING outside the albumartist field. The only item to note is that one
+  field is three Vorbis keys, which is mediafile's standard behaviour and is what beets writes for albumartist on
+  FLAC. No stop-and-ask condition fired.
+
+== PROPOSAL ==
+Operation: E5 REPAIR (named operation, not one of the twelve), Def Leppard/Def Leppard (2015)/, 14 files.
+Per file (all 14 FLAC listed in § 2, INCLUDING the MA-hard-erroring CD 01-06 Sea of Love):
+  field albumartist : current <absent> (mediafile None) -> new "Def Leppard"
+      (on the file: + ALBUM ARTIST=Def Leppard, + ALBUM_ARTIST=Def Leppard, + ALBUMARTIST=Def Leppard)
+  field album       : current "Def Leppard" -> NO CHANGE. The release IS the self-titled 2015 album "Def Leppard", so
+      the tag agrees with the intended album name. Renaming the album tag would be wrong, and MA's fallback will no
+      longer be consulted once albumartist is present.
+  No other field, no file outside the 14, no rename, no directory change, no sidecar touched.
+Tool: `mediafile` inside beets-flask, ONE `docker exec -i -u 568 beets-flask /venv/bin/python -` program per file (fed on
+  stdin, path as argv). It asserts the CURRENT values (albumartist None, album 'Def Leppard', artist 'Def Leppard') and
+  refuses the file on any mismatch, sets albumartist only, calls `save()`, and prints the before/after values. No
+  `beet` invocation, so there is no D-04 registration and nothing lands in library.db. It runs as uid 568 (beetle), an
+  in-place write with no new inode, so ownership stays 568:568.
+Guard sequence in Task 2: BARRIER READ immediately before the first save() (FAIL or COULD NOT LOOK -> STOP STATE
+  07-14-BARRIER-FAIL, nothing written) -> 14 guarded writes -> ffprobe -> owner/mode from atlantis -> post-07-e5
+  capture + diff -> `ffprobe -v error` + full decode on CD 01-06 -> ONE targeted Jellyfin POST (UpdateType Modified,
+  14 paths) -> Jellyfin re-read after ≥ 60 s -> BARRIER READ again. MA is NOT synced (07-15).
+Expected consumer effect: Jellyfin no visible change (it already reads AlbumArtist Def Leppard). MA, at 07-15's sync:
+  the fallback stops firing for these files, so album 116's empty artist and Sea of Love's failure should clear. That
+  is 07-15's reading, not this plan's.
+Recovery: file copy of the named files from /mnt/tank/media/Music/.zfs/snapshot/pre-07-pilot/Def Leppard/Def Leppard
+  (2015)/ (14/14 sha256-equal to live today), as real root on atlantis, on the operator's answer. Never a pool-level roll back.
+Risk: in-place tag writes to legacy files that no beets undo covers. Mitigations: the snapshot above, the pre-07-e5
+  capture, the per-file current-value precondition, and a scratch-proven tool whose only change is the albumartist
+  keys, with audio bytes and PCM identical.
+Options (hold first, per the plan): hold | apply | apply-excluding <file,...>
+RECOMMENDATION: apply. The defect is live in MA and the file-level change is proven minimal on the exact files. The
+  window (rw on Music, barrier holding, Jellyfin scan ≈ 10.5 h away) exists now. Excluding CD 01-06 has no
+  file-level reason, because its "hard error" is MA's and not the file's; excluding it would leave the one visible
+  MA failure unrepaired.
