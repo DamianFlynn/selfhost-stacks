@@ -450,10 +450,55 @@ OPTIONS (default first):
                       is equivalent to release-listed or hold). Irreversible for those named.
   Any other answer, or any name not on the list, is treated as `hold` for that name.
 
-OPERATOR ANSWER (verbatim) : AWAITED — not yet given. Task 2 does not start until it is recorded here
-                             with its UTC time.
+OPERATOR ANSWER (verbatim) : hold
+ANSWER RECORDED (UTC)      : 2026-09-27T18:58:12Z (relayed by the orchestrator to the continuation executor)
 EXECUTED                   : nothing. Task 1 issued zfs list and zfs get only.
 
 ================================================================================
-END OF TASK 1 — the operator's answer follows
+END OF TASK 1
+================================================================================
+
+================================================================================
+TASK 2 — EXECUTE THE ANSWER: `hold` arm
+================================================================================
+Answer  : `hold` (verbatim, above). Under the plan's hold arm NOTHING is issued: no destroy, and no
+          zfs write verb of any kind. The approved set is EMPTY, so there is nothing to re-assert,
+          nothing to refuse and nothing to fail. tank/media/Music@pre-phase5-chown stays ELIGIBLE and
+          HELD; its register row now reads `held (operator, 2026-09-27T18:58:12Z)`.
+Written : 2026-09-27T18:58:12Z onward (UTC). Task 2 verbs on atlantis: `zfs list` only.
+
+VERB RECIPES DRIVEN BOTH WAYS (controls in a scratch file outside this artifact, P-06):
+  recipe A, issued acts   : grep -cE '^ISSUED: '
+  recipe B, stray verb    : grep -E 'zfs [d]estroy' | grep -cvE '^ISSUED: zfs [d]estroy [^ ]+@[^ ]+ RC=[0-9]+$'
+  recipe C, rollback      : grep -cE 'zfs [r]ollback'
+  positive control (one well-formed ISSUED line)          : A=1  B=0  C=0  — A fires
+  negative control (bracketed refusal + bracketed narrative): A=0  B=0  C=0  — nothing fires
+  violation control (bare destroy + bare rollback lines)  : B=1  C=1        — B and C fire
+  So each recipe reads 1 on a control that should trip it and 0 on one that should not.
+
+ACCOUNTING (P7R2-15):
+SET APPROVED: none
+SET DESTROYED: none
+SET REFUSED: none
+SET FAILED: none
+
+RE-LIST, read-only — `zfs list -t snapshot -H -p -o name -r tank fast | sort` under `timeout 60`,
+`set -o pipefail`; id=0 host=atlantis utc=2026-09-27T18:58:12Z; LIST_RC=0; SSH_RC=0.
+  before (Task 1 listing, 14:07:16Z) : 181 names
+  after  (18:58:12Z)                 : 181 names
+  computed with `comm` over the two sorted name sets:
+SET DIFFERENCE (before - after): none
+SET DIFFERENCE (after - before): none
+  which equals SET DESTROYED (none). Judged on names, not on `avail`.
+  Whole-line presence after (grep -cxF, each = 1):
+    tank/downloads@pre-phase5                  1
+    tank/media/Music@pre-07-pilot              1
+    fast/appdata/arrs@pre-07-pilot             1
+    tank/media/Music@pre-phase5-chown          1   (ELIGIBLE, held by the operator's answer)
+    tank/media/Music@pre-06-41-conf04-reprobe  1   (HELD BY D-17 NOT FIRED; NOT ELIGIBLE; DEF-06-45-01 / DEF-06-52-01 stay open)
+
+PRUNE OUTCOME: NONE (hold)
+
+================================================================================
+END OF 07-16
 ================================================================================
