@@ -169,3 +169,70 @@ MOVE -P RE-RUN (07-15): 0 re-path lines over 197 items (no ` -> ` line); real li
     The pilot's writes (9 imports, DJ routing, E5) produced no movement in the census. Nothing in this reading tests
     DEF-06-45-03's "row 1 is an E5 import problem" hypothesis, because no pilot write touched an ARTPOP or Joanne file.
   Pin: unchanged (AFTER == BEFORE by sha); nothing to re-pin.
+
+## TASK 2 — gate: sync Music Assistant once? (pre-state measured read-only, from LXC 100, D-39 login)
+  Helpers: /root/phase07-0715/ma-pre-0715.sh (auth/login + reads only), /root/phase07-0715/ma-provcfg.sh (config read),
+  /root/ma-read-0710.sh (BARRIER READ). No `music/sync`, no `tasks/set_enabled`, no other MA write issued in Task 2.
+  MA reached at http://172.16.1.31:8095 from LXC 100 (not reachable from the workstation).
+
+  MA version (GET /info, 13:29Z): server_version 2.11.0b2, schema_version 68 (= MA_VERSION_PROVEN 2.11.0b2).
+  Sync command, read from MA's OWN API docs for this build (GET /api-docs/commands.json on the live 2.11.0b2, 190,819 B):
+    `music/sync` — "Start running the sync of (all or selected) musicproviders."; parameters `media_types` (Array of
+    MediaType, optional, None = all) and `providers` (Array of string, optional, None = ALL providers); returns Array of
+    BackgroundTask; required_scope library.manage. The one sync this gate would authorise is therefore
+    `music/sync {"providers":["filesystem_local--XJaJWNUS"]}` — the provider list is never empty/omitted (omitted =
+    every provider, T-07-15-01).
+  Filesystem provider (config/providers/get, 13:29Z): instance_id filesystem_local--XJaJWNUS (= the pinned
+    MA_LOCAL_PROVIDER_INSTANCE), domain filesystem_local, enabled true, available true; missing_album_artist_action
+    "folder_name"; library_sync_{artists,albums,tracks,playlists} true. Path: the filesystem_local provider exposes no
+    path key in its config values; its mapping item_ids are paths relative to the music root (read: e.g. `Katy Perry/143
+    (2024)` for an album, `Ed Sheeran/No.6 Collaborations Project (2019)/CD 01-13 Ed Sheeran - 1000 Nights.flac` for a
+    track) — the root is the HAOS /media network-storage mount of the atlantis export (Phase 2).
+  MA counts, provider-filtered `music/{albums,tracks,artists}/library_items` (NOT `music/albums/count`, which ignores
+    its provider arg): albums 70, tracks 1244, artists 66 — the 07-07 baseline, unchanged (meaning: library items that
+    carry a filesystem_local--XJaJWNUS provider mapping; albums / tracks / artists respectively).
+  Any pilot album already visible in MA? NO. For each of the 9 landed directories, MA tracks and MA albums whose local
+    provider-mapping item_id lies under that directory: 0 / 0 on all 9 (P10 P02 P03 P04 P05 P06 P12 P07 P08).
+    Selector control on the same read: `Katy Perry/143 (2024)/` 12 tracks, `Def Leppard/Def Leppard (2015)/` 14,
+    `Benson Boone/Fireworks & Rollerblades (2024)/` 15 (the pre-existing DEF-07-12-08 copy — MA already holds it, so
+    after a sync MA will show it beside P03's new `Fireworks & Rollerblades/`; recorded, not touched).
+
+  BARRIER READ (/root/ma-read-0710.sh, SINCE=2026-09-27T13:18:42Z = last VERIFIED (07-14), RC 0, read 13:29:38Z):
+    4/4 music_sync_filesystem_local--XJaJWNUS_{track,playlist,album,artist} enabled=false next_run=null
+    (updated_at 2026-09-26T15:55:04.2xZ, schedule hourly every 12); present 4; control: 16 other tasks enabled=true;
+    pattern drive 1/0/0; server-start/sync lines later than SINCE 0.
+BARRIER: VERIFIED (4/4 enabled=false, next_run null) at 2026-09-27T13:29:38Z
+  tasks/list last_run of the four (13:29:22Z): artist 2026-09-26T09:16:11.97Z, album 09:16:11.97Z, playlist 09:16:13.76Z,
+    track 09:17:23.38Z — all BEFORE the barrier (15:55:04Z); none has run since.
+  logging/get span (same helper run with SINCE=2026-09-26T15:55:04Z, the barrier itself; 301 lines): first line
+    2026-09-25 22:15:38 local = 2026-09-25T21:15:38Z (`Starting Music Assistant Server` — the ONLY server-start line, so
+    MA has not restarted since, and the log's single boot covers the whole span barrier→now), last 14:29:38 local
+    (13:29:38Z). Pattern `\[music_assistant\.Filesystem \(local disk\)\] Found [0-9]+ changed/new items to process for
+    Filesystem \(local disk\)` driven both ways first (real sync line 1, 'Loaded music provider' 0, genre-scan 0). Sync
+    lines in the log: 2026-09-25T21:16:13Z x2, 21:17:24Z, 2026-09-26T09:16:15Z, 09:17:24Z — all before the barrier; later
+    than 2026-09-26T15:55:04Z: 0. MA restart in the span: none.
+MA SYNC SINCE 07-10: NONE SEEN (logging/get covers 2026-09-25T21:15:38Z..2026-09-27T13:29:38Z in one boot; 0 sync lines and 0 server-start lines after the barrier 2026-09-26T15:55:04Z; tasks/list last_run of all four fs-sync tasks <= 2026-09-26T09:17:23Z)
+
+  Writes still planned in this phase (ledger + 07-16/07-17 objectives read 13:30Z): NONE to the library tree.
+    E5 done (STATE 07-14-REPAIRED); DJ routing done (STATE 07-13-PARTIAL, P07/P08 routed; 0 ROUTE-PARTIAL tokens —
+    Task 1's line reads `none`); undo cycle done (STATE 07-11-RERUN-LANDED; 07-12's P01/P09 undo + state surgery done).
+    07-16 is the snapshot register/prune (zfs list/get, and destroy only of operator-approved snapshots — no tree
+    write); 07-17 is evidence assembly and document corrections ("No import, no zfs write, no MA or Jellyfin write").
+    P09 is still staged in 02-review (DEF-07-12-04) but is held; nothing plans to import it in this phase.
+  What a sync does: it writes MA's OWN database, which no ZFS snapshot fences (the fence covers tank/media/Music and
+    fast/appdata/arrs only) and which never purges stale entries — whatever the tree holds at sync time, MA keeps.
+  What each answer does to the barrier:
+    - `hold`: no sync; the four fs-sync tasks stay disabled; the ledger records `MA RE-ENABLE: OWED` (carried to
+      07-17's open items). MA then never sees new local content until someone re-enables or syncs. Criterion 6's MA
+      half, D-28 and E6's second measurement are NOT taken.
+    - `sync`: exactly one `music/sync {"providers":["filesystem_local--XJaJWNUS"]}`, completion polled (≤ 30 min), the
+      per-album MA readings (identity by provider-mapping paths), D-28 on P02/P04, E6 second measurement (NOT TAKEN
+      either way: F1 = P09 did not land and no landed track carries >= 4 ARTISTS values), the standing checks added to
+      check-music-consumers.sh — THEN the four fs-sync tasks re-enabled (tasks/set_enabled enabled:true, four ids, read
+      back 4/4 enabled=true with next_run set).
+    - `reenable-only`: no executor sync; the four tasks re-enabled now; MA's scheduler syncs on its own within 12 h,
+      outside this plan's readings, so criterion 6's MA half, D-28 and E6's second measurement are NOT taken here.
+  Recommendation (stated; `hold` listed first as the plan requires): the preconditions for `sync` are all met — every
+  write in the phase has happened, ROUTE-PARTIAL is `none`, the barrier is VERIFIED and no unplanned sync or restart
+  occurred since it was applied — so nothing argues for `hold` except keeping MA's database untouched; `sync` is the
+  only answer that takes the MA half of criterion 6 and D-28, which are this plan's purpose.
