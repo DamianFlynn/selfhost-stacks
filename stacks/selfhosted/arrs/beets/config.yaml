@@ -356,6 +356,14 @@ import:
     # (./flask.yaml; the dormant CLI arm in ./beets.yaml stays `:ro`). For Phase 7 the D-16 snapshot
     # fence (tank/media/Music@pre-07-pilot + fast/appdata/arrs@pre-07-pilot) and D-20's per-album
     # confirmation replace it; D-23 in scripts/quick-health-check.sh asserts the rw as deliberate.
+    # CORRECTED 2026-09-27 (07-REVIEW CR7-01): "no unattended importer reads this key any more" in
+    # the D-22 paragraph above is FALSE and is retracted in place. 03-asis stays registered in
+    # ./flask-config.yaml with `autotag: bootleg`, which imports AS-IS with no per-album
+    # confirmation — so a folder that lands in /downloads/complete/nzb/_inbox/03-asis is imported
+    # into /media/Music with `write: yes` OUTSIDE D-20. What bounds that path today is only that the
+    # directory is empty, which is not a control. Closing it structurally (de-register 03-asis, or
+    # register it `autotag: "off"` for Phase 7) is an OPEN OPERATOR DECISION (07-REVIEW-FIX.md);
+    # until it is taken, stage nothing into 03-asis.
     write: yes
 
 # --------------------------------------------------------------------------------
