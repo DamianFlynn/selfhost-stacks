@@ -411,3 +411,83 @@ BARRIER: VERIFIED (4/4 enabled=false, next_run null) at 2026-09-27T12:24:01Z
   Revised prediction for the continuation: route --apply writes NO tag; the FROZEN final paths (lines 157–176) are
   unchanged by the fix (the path rule reads the DB, and GREEN rendered the same `DJ/<albumartist>/<album>/NN title`
   names as RED); each routed file's sha256 must equal its 07-07 manifest row.
+
+=== 07-13 RUN 1 — Task 2 answer and Task 3 (continuation agent, 2026-09-27T12:34Z onward) ===
+Workstation HEAD af40083; LXC 100 /mnt/fast/stacks HEAD 998625b, porcelain 0 lines (the host lags by docs commits only).
+The only writes by this continuation: `route-dj-album.sh --apply` for albums 10 and 11 (library.db + renames inside
+/media/Music); /tmp copies inside beets-flask; scratch under /root/phase07-0713/ on LXC 100 and atlantis; post-07-PNN
+tag snapshots and diff outputs under /mnt/fast/safety; the Jellyfin step (below). No import, no undo, no zfs write verb,
+no Full[R]efresh, no library scan, no beets-flask DB edit, no MA write.
+
+## G — LIVE-STATE VERIFICATION after the operator's imports (reads only), before recording the answer
+(G1) beets-flask (running, StartedAt 2026-09-26T22:35:57Z, restarts 0). Own DB mode=ro (/root/phase07-0712/gate-read.py,
+  12:35:02Z):
+    P07 folder c2f736cd… session f5b04401-745f-4f58-949c-674ce87725c5 IMPORT_COMPLETED, exc none, updated 12:32:57 (UTC);
+        task 99eab301-d08b-4829-a3ca-f01835e16734 IMPORT_COMPLETED, flag ASIS, chosen asis-99eab301-d08b-4829-a3ca-f01835e16734.
+    P08 folder 7dbf0c28… session fb3ca216-383d-460c-98bb-81eaa9cac8ed IMPORT_COMPLETED, exc none, updated 12:33:24;
+        task 3d932a57-9475-4e82-9a3c-17df6d287081 IMPORT_COMPLETED, flag ASIS, chosen asis-3d932a57-9475-4e82-9a3c-17df6d287081.
+    P11 folder f86bce3a… session c811b63d… still PREVIEW_COMPLETED, chosen None (unstaged in F6; not imported).
+    The chosen card is the as-is card on both — the one named at the gate (not the default rank-1 cards c30c72fb /
+    5100aebf). The UI-selected-card hazard (DEF-07-12-05) did not fire.
+  /logs/beets-flask.log (UTC+1 converted): 12:32:53.8Z Import task on c2f736cd… -> Running ImportSession f5b04401 12:32:54.1Z
+    -> Completed 12:32:56.9Z -> "Import candidate done" 12:32:57.3Z; 12:33:21.5Z Import task on 7dbf0c28… -> Running
+    fb3ca216 12:33:21.9Z -> Completed 12:33:24.9Z -> "Import candidate done" 12:33:25.0Z. One [ERROR] after them,
+    12:33:25.5Z "non-hexadecimal number found in fromhex()" — the artwork.py noise 07-12 recorded (§ A (A3)), not an
+    import write. EPERM-class lines (EPERM|PermissionError|Error writing|Operation not permitted) in both logs: 0.
+(G2) library.db mode=ro (/root/phase07-0713/dbread-0713.py, 12:35:20Z): items 197, albums 9, items with no album 0.
+    album 10 'Mastermix' / 'Issue 420', mb_albumid '', albumtype '', comp 0, year 2021, disctotal 0,
+      added 2026-09-27T12:32:54.097261Z, items 10 — = P07 (album/albumartist are P07's own tags; D-26 TRUE).
+    album 11 'Various Artists' / 'Mastermix Issue 421', mb_albumid '', albumtype '', comp 0, year 0, disctotal 0,
+      added 2026-09-27T12:33:21.889708Z, items 10 — = P08.
+    Transient paths (DB): P07 `Mastermix/Issue 420/NN <title>.mp3` (d1 t1..5 + d2 t1..5; e.g. 01 Club Cuts, 01 The
+      Ibiza Sessions_ Jackin' House); P08 `Various Artists/Mastermix Issue 421/NN <title>.mp3` (d0, t1..5 twice).
+      Exactly § PREDICTION's transient landing. albums 1–9 unchanged (ids, added, items as in Task 1). 197 = 177 + 20.
+    DB bpm on P07 reads 127 116 92 110 125 123 132 127 121 128 — beets' INTEGER model of the range tags, in the DB only
+      (the files are checked by bytes below); P08 bpm 0 ×10; initial_key NULL ×20; genres P07 as the tags, P08 'Various'.
+(G3) state.pickle live d195800848286fbeede802d6f12b58df48b780dab3245ca98896d314fc539d1e, 988 B, mtime 12:33:24.89Z;
+    library.db ff6f55f8371eeb79f73415d54135088dd55db03381b5472d1afa2e0bfb39119d, mtime 12:33:24.89Z.
+    `docker exec beets-flask cp /config/state.pickle /tmp/p7-state.post0713imports.pickle` cp_rc 0 (copy = d1958008…).
+    Decoded from /tmp copies only (/root/phase07-0713/state-decode-0713.py, dec_rc 0) against /tmp/p7-state.postP04.pickle
+    (b703ecb0…, the state 07-13 Task 1 read): proto 4, keys {taghistory, tagprogress}; taghistory 7 -> 9, tagprogress 0 -> 0;
+    the ONLY differences are
+      + (b'/downloads/complete/nzb/_inbox/02-review/Mastermix.Issue.420.2021',)
+      + (b'/downloads/complete/nzb/_inbox/02-review/Mastermix.Issue.421.2021',)
+    i.e. exactly the two staged paths, nothing removed. /config was never opened by the decoder.
+(G4) Files, atlantis as real root (/root/phase07-0713/bytes-0713.sh PID DIR: sha256 of every file under DIR joined BY
+    CONTENT to the 07-07 manifest rows p0N-manifest-rel-sha.tsv; owner per file; non-audio flagged), 12:35:56Z:
+    P07 /mnt/tank/media/Music/Mastermix/Issue 420: files 10, sha == a 07-07 row 10 (10 distinct rows), changed 0,
+      non-audio 0, not 568:568 0 (files and dirs).
+    P08 /mnt/tank/media/Music/Various Artists/Mastermix Issue 421: files 10, sha == 07-07 row 10, changed 0, non-audio 0,
+      not 568:568 0.
+    As-is wrote NOTHING into the files (importer/tasks.py:498, as predicted and as F3 measured on scratch). album.nfo
+    stayed in the inbox (beets copies items only).
+  Library-wide (12:36:08Z): entries not 568 by user or group 0; *.nfo 91 (the pre-existing 91); empty directories 0;
+    entries newer than 12:30Z = the library root, `Mastermix/` (NEW top-level dir), `Mastermix/Issue 420/` + 10 .mp3,
+    `Various Artists/` (dir mtime), `Various Artists/Mastermix Issue 421/` + 10 .mp3 — nothing else; non-audio files newer
+    than 2026-09-26T23:23Z 0. Top level 16 entries (15 + Mastermix); `DJ/` ABSENT. Total entries 2,882 (2,860 + 22).
+(G5) Jellyfin (jf-read-0711.sh, GET only, JELLYFIN_ADDR 192.168.90.37:8096 resolved 12:36:32Z): Music MetadataSavers [],
+    SaveLocalMetadata false, EnableRealtimeMonitor false, SaveLyricsWithMedia false.
+LIVE-STATE: AGREES with "P07 imported-asis" and "P08 imported-asis".
+
+## G — BARRIER and the D-08 window margin, re-read before routing
+BARRIER READ (/root/ma-read-0710.sh, SINCE=2026-09-27T12:24:01Z = last VERIFIED, RC 0), read 12:36:22Z: 4/4
+  music_sync_filesystem_local--XJaJWNUS_{track,playlist,album,artist} enabled=false next_run=null (updated_at
+  2026-09-26T15:55:04.2xZ); present 4; control 16 other tasks enabled=true; pattern drive 1/0/0; log 287 lines;
+  server-start/sync lines later than SINCE 0 (newest sync 2026-09-26T09:17:24Z).
+  MA counts (/root/ma-counts-0710.sh, RC 0, 12:36:22Z): XJaJWNUS albums 70, tracks 1244, artists 66; ZZBOGUS0 0/0/0.
+BARRIER: VERIFIED (4/4 enabled=false, next_run null) at 2026-09-27T12:36:22Z
+Jellyfin scheduled scan (jf-tasks-0713.sh, GET only, 12:36:23Z, RC 0): Scan Media Library key=RefreshLibrary state=Idle,
+  last 09:10:34Z..11:33:29Z Completed, IntervalTrigger 12 h -> next ≈ 2026-09-27T23:33:29Z (derived). Running now:
+  Generate Trickplay Images only. MARGIN ≈ 10 h 57 min (> 60 min): routing proceeds. The window is already open: P07
+  has sat in the artist tree since 12:32:54Z, P08 since 12:33:21Z.
+
+## G — GATE RECORD (Task 2)
+OPERATOR ANSWER (verbatim, relayed by the orchestrator, recorded 2026-09-27T12:37Z): "P07 imported-asis", "P08 imported-asis"
+  P11: held — unstaged in F6 per the operator's earlier gate choice, verbatim: "Fix script (-W), then import (Recommended)"
+  (which included "P11 unstaged (hold)"). The imports were done in the UI in the order P07 (12:32:54Z) then P08
+  (12:33:21Z). The answer authorises `route-dj-album.sh --album-id N --apply` for both.
+DISPOSITION P07: imported-asis
+DISPOSITION P08: imported-asis
+DISPOSITION P11: hold
+  (P11: D-26 FALSE — two album values — and D-29 NONE PASSES; never imported; staged copy removed 12:22:44Z, source
+  unchanged. Album-id map: 10 = P07, 11 = P08.)
