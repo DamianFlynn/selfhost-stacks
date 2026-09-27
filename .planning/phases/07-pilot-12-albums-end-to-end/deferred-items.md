@@ -144,6 +144,11 @@ DEF-07-12-04: P01 and P09 were imported against the operator's `hold` — the be
   02-review) rather than leaving them beside importable ones. Alternatively, stage one album at a time into
   02-review, so the inbox never shows a held folder next to an importable one. Undo cost measured here: two
   UNDO IMPORTs plus a stop/replace/start of state.pickle.
+  PARTLY RESOLVED 2026-09-27 (post-07-12 remediation, operator: P09 -> "Unstage it now (Recommended)"): P09's staged
+  reflink copy was removed from 02-review at 11:46:45Z (staged sha set == 07-07 manifest before; source unchanged
+  100/100 after; library.db 177 items unchanged). P01 was unstaged by 07-12 Task 3. No held folder is staged now:
+  02-review holds only the seven already-imported albums' copies. The UI still has no hold state. That gap stays
+  open for Phase 9. Evidence: artifacts/07-12-nine-imports.txt § POST-07-12 REMEDIATION R1.
 
 DEF-07-12-05: P02 landed on c0df8104 (rank 2), not the agreed rank 1 e4fdb1dc, and P04's request carried e4fdb1dc, not the agreed c33163f3 — the UI shows an exact three-way tie as near-identical cards
   Filed by 07-12 run 1 (2026-09-26T22:40Z). Measured: ranks 1–3 tie to full float precision on both Benson Boone
@@ -213,6 +218,14 @@ DEF-07-12-11: Jellyfin's targeted file-scope `Created` update does NOT materiali
   something else refreshes the root's children. Not remedied (the plan allows ONE targeted POST). Options for the
   operator: a targeted update naming the new directory itself, or a Music-library-only scan. The scan would need
   its own no-sidecar check, because MetadataSavers is [] but a FullRefresh-class call is still banned.
+  RESOLVED 2026-09-27, but NOT by the remediation: Jellyfin's own SCHEDULED `Scan Media Library` (12-h interval,
+  09:10:34Z–11:33:29Z) added it. MusicArtist CYRIL was created 09:11:06Z and the album 09:11:08Z. At 11:49:43Z
+  there was 1 album (AlbumArtist CYRIL, 1 track) and the totals were 77 / 1,421 (+1 / +1). The operator-approved
+  targeted POST naming `/media/Music/CYRIL` was therefore NOT issued (precondition failed). No sidecar was written:
+  0 entries newer than 23:23Z, .nfo 91, all 568:568, MetadataSavers []. Consequence for Phase 9: a new-artist
+  import becomes visible within ≤ 12 h with no action. The stronger point is that Jellyfin scans the WHOLE library
+  every 12 h regardless of what the plans issue, so "no library scan" constrains only our own calls. Evidence:
+  artifacts/07-12-nine-imports.txt § POST-07-12 REMEDIATION R2.
 
 DEF-07-12-12: ADDED ORDER FAIL — P04 landed last (23:11Z) and P06 before P05, against the declared P02, P03, P04, P05, P06, P09, P12
   Filed by 07-12 Task 3 (2026-09-26T23:30Z). Cause: P04's first import failed (DuplicateException, DEF-07-12-07) and
