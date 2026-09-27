@@ -357,13 +357,13 @@ import:
     # fence (tank/media/Music@pre-07-pilot + fast/appdata/arrs@pre-07-pilot) and D-20's per-album
     # confirmation replace it; D-23 in scripts/quick-health-check.sh asserts the rw as deliberate.
     # CORRECTED 2026-09-27 (07-REVIEW CR7-01): "no unattended importer reads this key any more" in
-    # the D-22 paragraph above is FALSE and is retracted in place. 03-asis stays registered in
-    # ./flask-config.yaml with `autotag: bootleg`, which imports AS-IS with no per-album
-    # confirmation — so a folder that lands in /downloads/complete/nzb/_inbox/03-asis is imported
-    # into /media/Music with `write: yes` OUTSIDE D-20. What bounds that path today is only that the
-    # directory is empty, which is not a control. Closing it structurally (de-register 03-asis, or
-    # register it `autotag: "off"` for Phase 7) is an OPEN OPERATOR DECISION (07-REVIEW-FIX.md);
-    # until it is taken, stage nothing into 03-asis.
+    # the D-22 paragraph above was FALSE when written — 03-asis was still registered with
+    # `autotag: bootleg`, an as-is importer with no per-album confirmation, bounded only by its
+    # directory being empty. RESOLVED 2026-09-27, operator: 03-asis is registered `autotag: "off"`
+    # in ./flask-config.yaml for the rest of Phase 7, so the watchdog runs no action on it and an
+    # as-is import happens only when a human starts it in the UI. With 01-auto de-registered
+    # (D-21), no inbox imports unattended; what bounds `write: yes` is D-20's confirmation plus the
+    # D-16 fence. Re-enabling `bootleg` is a Phase 8 inflow decision.
     write: yes
 
 # --------------------------------------------------------------------------------

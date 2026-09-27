@@ -173,9 +173,10 @@ services:
       #     half-granted;
       #   - 01-auto is DE-REGISTERED in ./flask-config.yaml in that same commit (D-21), so no
       #     unattended importer can reach this mount;
-      #     CORRECTED 2026-09-27 (07-REVIEW CR7-01): FALSE as written — 03-asis (`autotag: bootleg`)
-      #     is still registered and imports unattended; see ./config.yaml's `write:` note. Closing
-      #     it is an open operator decision;
+      #     CORRECTED 2026-09-27 (07-REVIEW CR7-01): FALSE as written — 03-asis was still registered
+      #     `autotag: bootleg`, an unattended as-is importer. RESOLVED 2026-09-27, operator: 03-asis
+      #     is `autotag: "off"` in ./flask-config.yaml for the rest of Phase 7 (listed, no automatic
+      #     action); re-enabling bootleg is a Phase 8 inflow decision;
       #   - every import is confirmed PER ALBUM in 02-review (D-20) — one tagger, one front end, the
       #     one Phase 3 chose; not a fourth path;
       #   - scripts/quick-health-check.sh's D-03 block asserts RW=true here as standing assertion

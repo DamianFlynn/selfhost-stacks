@@ -115,10 +115,18 @@ gui:
       # bucket — Phase 3 recorded that tag NORMALISATION must precede a bootleg import, never
       # follow it. Registered here because D-06 says so; nothing stages into it during Phase 6,
       # which makes it a Phase 7 concern.
+      #
+      # `autotag: "off"` FOR THE REST OF PHASE 7 — decided 2026-09-27 by the operator (07-REVIEW
+      # CR7-01). `bootleg` was a second UNATTENDED importer into the rw library with `write: yes`,
+      # outside D-20's per-album confirmation; "the directory is empty" was the only bound, and
+      # that is not a control. `off` keeps the inbox registered and LISTED but runs no automatic
+      # action, so an as-is import happens only when a human starts it in the UI. Quoted because a
+      # bare `off` is a YAML 1.1 boolean, and rc6's schema wants the string. Re-enabling `bootleg`
+      # is a Phase 8 inflow decision, taken with bucket C normalisation in place.
       "03-asis":
         name: "03-asis"
         path: /downloads/complete/nzb/_inbox/03-asis
-        autotag: bootleg
+        autotag: "off"
 
     # ----------------------------------------------------------------------------------------
     # D-08 (read-only answer for Phase 9) — there is NO pagination knob, and that is measured
