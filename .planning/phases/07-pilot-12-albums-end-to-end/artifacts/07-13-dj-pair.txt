@@ -239,3 +239,21 @@ PREDICTED LANDING (as-is keeps the file tags; paths from stacks/selfhosted/arrs/
   The import -> --apply -> read-back window needs minutes. Opening it before ~22:30Z leaves more than an hour's
   margin. The next agent RE-READS this task immediately before the imports and stops if the margin is under 60 min.
   No trigger has been changed.
+
+## Task 2 — gate (checkpoint:decision), presented 2026-09-27T12:0xZ
+BARRIER READ immediately before presenting (/root/ma-read-0710.sh, SINCE=2026-09-27T11:54:11Z, RC 0): 4/4
+music_sync_filesystem_local--XJaJWNUS_* enabled=false next_run=null; server-start/sync lines later than SINCE 0;
+MA counts 70 / 1244 / 66. library.db 177 items / 7 albums (nothing imported); the three sessions are still
+PREVIEW_COMPLETED.
+BARRIER: VERIFIED (4/4 enabled=false, next_run null) at 2026-09-27T12:02:09Z
+
+GATE TABLE (as presented; the operator imports in the beets-flask UI, 02-review, in the order P07 then P08):
+| P-ID | recommended | card to select in the UI | final path (FROZEN) | what --apply is predicted to do to the files |
+|---|---|---|---|---|
+| P07 | imported-asis, then route | "Metadata from disk" = asis-99eab301-d08b-4829-a3ca-f01835e16734 (NOT the default rank-1 card c30c72fb "420 / Chopstick Dubplate") | /media/Music/DJ/Mastermix/Issue 420/ (lines 157–166) | TBPM ranges truncated on 7 of 10 files; albumtype NOT written to the file; ID3 2.3->2.4 + filler frames |
+| P08 | imported-asis, then route | "Metadata from disk" = asis-3d932a57-9475-4e82-9a3c-17df6d287081 (NOT the default rank-1 card 5100aebf "Mastermix Issue 295") | /media/Music/DJ/Various Artists/Mastermix Issue 421/ (lines 167–176) | genre kept; TBPM '0' and TDRC '0000' ADDED; albumtype NOT written; ID3 2.3->2.4 |
+| P11 | hold (D-26 FALSE; D-29 none passes) | do not touch; unstaging recommended so it is not one click from import | (FROZEN DJ/Mastermix/Mastermix Issue 415 (Januar 2021)/) | if routed: TKEY lower-cased on 9 files |
+`route-dj-album.sh --apply` runs, in order: version guard (2.12.0), `ls -a id:N`, `modify -h` flag check,
+`modify -a -M -y id:N albumtype=dj` (write: yes, so it rewrites every tag of every item), `move -a -p id:N` (shown),
+`move -a id:N` (renames inside /media/Music), then an item read-back. `hold` is first and the default.
+Nothing was imported by this executor.
