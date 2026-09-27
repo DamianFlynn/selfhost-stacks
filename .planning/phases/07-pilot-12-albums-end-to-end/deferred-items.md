@@ -231,3 +231,21 @@ DEF-07-12-12: ADDED ORDER FAIL — P04 landed last (23:11Z) and P06 before P05, 
   Filed by 07-12 Task 3 (2026-09-26T23:30Z). Cause: P04's first import failed (DuplicateException, DEF-07-12-07) and
   was re-decided after the others. P06 before P05 was the operator's click order. The %aunique{} premise (P02 before
   P04) is MET, and the albums between them share no (albumartist, album) with either, so the firing is unaffected.
+
+DEF-07-13-01: route-dj-album.sh's `modify` wrote every tag of every DJ file (import.write: yes) — BPM ranges truncated, keys lower-cased, ID3 2.3 -> 2.4, TBPM 0 / TDRC 0000 added — and still could not put `albumtype=dj` on the file
+  Filed 2026-09-27 by 07-13 (Task 1 § PREDICTION, then re-measured through the script itself). Step (c) ran
+  `modify -a -M -y id:N albumtype=dj` without `-W`, so beets 2.12.0 inherited import.write and rewrote each file from
+  its DB row. On scratch copies of the staged P07/P08/P11 (throwaway -l/-c library, beets-flask's own beets), the old
+  script changed 30/30 files: P07 TBPM '116-117' -> '116' on 7/10, P11 TKEY '5A' -> '5a' on 9/9, TBPM '0' and TDRC
+  '0000' added on P08/P11, frames +5 to +8 per file. The album-type frame was never written, because mediafile maps
+  albumtype and albumtypes onto one frame and the item's empty albumtypes, written second, deletes it. The script's
+  own DB read-back printed ✅ over the damaged files. The DJ fields are the operator's working material (D-17), so no
+  DJ album could be routed as written. Caught before any real --apply; nothing in the library was touched.
+  RESOLVED 2026-09-27 (commit 998625b, deployed to LXC 100 12:19:32Z, sha256 51c52799… = repo): step (c) is
+  `modify -a -M -W -y` (DB-only), step (b) refuses without `-W, --nowrite`, and `move` was shown in source to write
+  no tag. The fixed script, driven over the same copies, left 30/30 files byte-identical through import -A, modify
+  and move, and routed 30/30 under DJ/ with albumtype dj in the DB. 07-13-PLAN.md was amended (641498a): the check
+  is now DB-side plus file-bytes-unchanged, and there is no file-tag albumtype. D-04 pins unchanged (exempt 12).
+  STILL OPEN as a hazard, not a defect: DJ files carry no `dj`, so a future `beet update` over a routed album un-sets
+  it in the DB (`update -p` shows `albumtype: dj -> ''` on 10/10 items), and `beet write` would redo the damage. Phase 9
+  must not run either over DJ/. Evidence: artifacts/07-13-dj-pair.txt § 07-13 ROUTE -W FIX (F1–F5).

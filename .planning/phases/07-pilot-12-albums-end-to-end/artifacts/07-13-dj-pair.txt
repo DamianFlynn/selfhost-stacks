@@ -257,3 +257,157 @@ GATE TABLE (as presented; the operator imports in the beets-flask UI, 02-review,
 `modify -a -M -y id:N albumtype=dj` (write: yes, so it rewrites every tag of every item), `move -a -p id:N` (shown),
 `move -a id:N` (renames inside /media/Music), then an item read-back. `hold` is first and the default.
 Nothing was imported by this executor.
+
+=== 07-13 ROUTE -W FIX (2026-09-27, 12:04Z onward) — between the Task 2 gate (036202d) and its continuation ===
+Operator-approved. Standing authorisation 2026-09-26, verbatim: "i am explicitly authorising the work needed to get
+beets and the music system implemented, including live files like state.pickle". Operator's choice at the gate,
+verbatim: "Fix script (-W), then import (Recommended)" — described to them as: route-dj-album.sh uses `modify -W`
+(DB-only); prove on scratch copies that tags stay byte-identical (BPM ranges, key case, ID3 version); self-test;
+deploy; amend 07-13's "albumtype on the file" check to DB-only; then the operator imports P07+P08 as-is and they get
+routed; P11 unstaged (hold). Not written here: no import, no undo, no route --apply, no zfs write verb, no Jellyfin
+or MA write, no beets-flask DB edit, no ledger token. P07/P08 dispositions are still the Task 2 gate's to record.
+
+## F1 — the defect (DEF-07-13-01) and the fix
+  § PREDICTION above measured it; this section re-measures it through the script itself. Without `-W`, step (c)
+  `modify -a -M -y id:N albumtype=dj` inherits `import.write: yes` (beets 2.12.0 ui/commands/modify.py:116
+  `ui.should_write(opts.write)` -> ui/__init__.py:150-154 falls back to import.write) and Album.try_sync ->
+  Item.try_sync(write=True) rewrites every tag of every item from its DB row.
+  Fix, commit 998625b (12:19:11Z): step (c) is `modify -a -M -W -y id:N albumtype=dj` (modify.py:148-154:
+  `-W/--nowrite` sets write False, so try_sync only stores); step (b) also requires `-W, --nowrite` in `modify -h`
+  and refuses (exit 3) without it; (f) is unchanged in substance — `ls -f '$albumtype|$path' album_id:N` is a
+  DATABASE read — and its messages now say "(DB)". The header records why, and the one consequence: the files carry
+  no `dj`, so a later `beet update` reads albumtype '' back (probed below) and a later `beet write` does the damage.
+  `move` writes no tag — read in the container's own source (beets 2.12.0, /venv/lib/python3.12/site-packages/beets):
+  ui/commands/move.py:134-147 move_items -> obj.move(MoveOperation.MOVE); library/models.py:452-480 Album.move ->
+  store() + Item.move(with_album=False); :1109+ Item.move -> move_file (:997-1045) -> util.move + plugins.send
+  (before_item_moved/item_moved) + store. No try_write/write on that path. Plugins loaded: `musicbrainz` only
+  (config.yaml `plugins: [musicbrainz]`; `beet --version` prints `plugins: musicbrainz`), which hooks no move event.
+  Also stated in quick-health-check.sh's D-04 register comment (reason 4 now quotes `-M -W -y`).
+
+## F2 — D-04 register re-measured (07-04's method: d04-measure.sh, reproduced verbatim from
+##      artifacts/07-04-d27-register-drive.txt § 5, in a scratch clone; matcher /usr/bin/grep)
+  BEFORE (036202d):   raw=222 comment-stripped=111 invocation-shaped=17 EXE=15 ASSERT=3 EXEMPT=12 DOC=2
+  AFTER (fix):        raw=224 comment-stripped=111 invocation-shaped=17 EXE=15 ASSERT=3 EXEMPT=12 DOC=2
+    route-dj-album.sh: 7 lines in EXEMPT, 0 in ASSERT, before and after. raw +2 = the two new header comment lines
+    that name `beet update` / `beet write`; stripped by the comment filter, so every pinned count holds (rule 5:
+    the pin did not move, so no pin edit was needed).
+  MUTANT DRIVE (scratch only): raw=228 ... ASSERT=5 EXEMPT=14. Placement: oracle without $SCRATCH_OVERLAY -> ASSERT;
+    oracle with it -> EXEMPT; route script with "$BEET_OTHER" (a -W modify line) -> ASSERT; with "$BEET_REALLIB"
+    -> EXEMPT. The overlay-key half still discriminates, for both files.
+  Scratch clone deleted with an exact-prefix fence; mutant markers in the real tree: 0 (route script, oracle).
+  Deployed tree, quick-health-check.sh from the workstation (12:2xZ, 34.9 s): D-04 block
+    "counts: raw=224 comment-stripped=111 invocation-shaped=17 (executable 15 = asserted 3 + exempt 12,
+    documentation 2)" and the ✅ line. Overall exit 1 from two pre-existing reds, neither touched by this work:
+    CONF-04 (by design) and check-jellyfin-transcode.sh's "/ headroom 16.90 GiB is BELOW the D-17 floor of 20.00 GiB".
+    LXC 100's root read 17G free at 12:16Z, BEFORE the simulation, and 17306M after it.
+
+## F3 — scratch proof, RED (old script) vs GREEN (fixed script), P07 + P08 + P11
+  WHERE: beets-flask's own beets 2.12.0 (`/venv/bin/beet`, user 568), on COPIES in the container's /tmp/routefix/,
+  each run with its OWN throwaway overlay (`library:`, `statefile:`, `directory:` all under /tmp/routefix/<run>/)
+  passed as `-l <run>/lib.db -c <run>/ovl.yaml`. The live /config/config.yaml supplies everything else
+  (import.write yes, copy yes, the paths: rules). Never /config/library.db, never /config/state.pickle, never /media.
+  Driver: LXC 100 /root/phase07-0713/routefix/routefix-sim.sh (sha256 5c647fd8…), fp.py (bf2847ac…); raw per-run
+  output in /root/phase07-0713/routefix/out/<RUN>-<PID>/ and <RUN>-<PID>.log.
+  Sequence per run: cp -a of the staged 02-review folder -> `import -A -q` (as-is, copy into the throwaway directory)
+  -> the ROUTE SCRIPT ITSELF, derived by exactly two sed substitutions ("$BEET_REALLIB" gains the -l/-c pair on its
+  7 invocation lines; LIB_DJ_PREFIX points at <run>/lib/DJ/). Diff checked every run: 9 changed lines, 0 that are
+  not one of the two substitutions. Read-only mode, then --apply. Fingerprints (sha256 of the whole file + ID3
+  version, TBPM, TKEY, TXXX:EnergyLevel, TCON, TDRC, album-type frame, frame count) at src, after import, after
+  routing, joined per beets item id (paths move).
+  RED = route-dj-album.sh at 036202d (sha256 7688a829… = what LXC 100 had deployed). GREEN = 998625b (51c52799…).
+  Source copies: sha256 of the 10 mp3 of every run == the 07-07 manifest rows (/root/phase07-0713/p0N-manifest-
+  rel-sha.tsv on atlantis): EQUAL in all six runs.
+
+  | run | import -A | --apply | DB album / items | src == imported | imported == routed | paths under DJ/ |
+  |---|---|---|---|---|---|---|
+  | RED P07   | rc 0 | rc 0 ✅ | dj / 10 dj | EQUAL 10/10 | CHANGED 10/10 | 10/10 |
+  | RED P08   | rc 0 | rc 0 ✅ | dj / 10 dj | EQUAL 10/10 | CHANGED 10/10 | 10/10 |
+  | RED P11   | rc 0 | rc 0 ✅ | dj / 10 dj | EQUAL 10/10 | CHANGED 10/10 | 10/10 |
+  | GREEN P07 | rc 0 | rc 0 ✅ | dj / 10 dj | EQUAL 10/10 | SAME 10/10    | 10/10 |
+  | GREEN P08 | rc 0 | rc 0 ✅ | dj / 10 dj | EQUAL 10/10 | SAME 10/10    | 10/10 |
+  | GREEN P11 | rc 0 | rc 0 ✅ | dj / 10 dj | EQUAL 10/10 | SAME 10/10    | 10/10 |
+  RED 30/30 files rewritten; GREEN 0/30. The old script's own post-condition printed ✅ over damaged files. Its
+  read-back is the DB, so it cannot see what it did to the tags — which is why the byte check lives in the plan.
+  As-is import wrote nothing (src == imported, 30/30), confirming § PREDICTION's reading of importer/tasks.py:498.
+
+  RED damage, per file (imported -> routed):
+    P07: ID3 2.3->2.4 on 10/10; frames 18->23; TBPM truncated on 7/10: 116-117->116, 92-103->92, 110-118->110,
+         123-126->123, 132-153->132, 127-129->127, 121-126->121; single values kept (127, 125, 128); TCON, TDRC kept.
+    P08: ID3 2.3->2.4 on 10/10; frames 7->14; TBPM '0' ADDED and TDRC '0000' ADDED on 10/10; TCON 'Various' kept.
+    P11: TKEY lower-cased on 9/9 keyed files (5A->5a, 4A->4a, 10A->10a, 8A->8a, 4A->4a, 4A->4a, 5A->5a, 9A->9a,
+         2A->2a); TBPM '0' + TDRC '0000' ADDED on 10/10; frames +7/+8; ID3 2.3->2.4 on 1 file (101). The other 9
+         were ALREADY v2.4, so § PREDICTION's "ID3 2.3 -> 2.4" is true for P07/P08 and one P11 file only.
+         TXXX:EnergyLevel kept.
+    No run produced a `TXXX:MusicBrainz Album Type` frame (§ PREDICTION (a) reproduced through the CLI).
+  GREEN, per file: sha256 identical 30/30, so every frame is identical by construction: P07 TBPM ranges intact
+    (116-117 … 121-126), P11 TKEY upper-case intact (5A … 2A), ID3 versions unchanged (P07/P08 2.3, P11 2.3×1 + 2.4×9),
+    frame counts unchanged, no TBPM 0 / TDRC 0000 added.
+  HAZARD PROBE (GREEN only, `update -p album_id:1`, pretend): 10/10 items per album report `albumtype: dj -> ''`.
+    A future `beet update` over a routed DJ album would un-set dj in the DB (the file has no album-type frame).
+    Recorded in the script header and DEF-07-13-01. Nothing in this pipeline runs `update`.
+  Instrument note (no change, no finding): P07 4200104 carries TCON '80s' (mutagen, and no ID3v1 tag). § Task 1's
+    BEFORE list reads it as 'Folk' because ffmpeg takes a leading "80" as the ID3v1 genre index 80 (= Folk). Both
+    BEFORE and AFTER captures use ffprobe, so the QUAL-02 diff is self-consistent; the file never said Folk.
+  Containment: every run removed its /tmp/routefix/<run> behind a two-layer fence (checked absent), then the empty
+    /tmp/routefix was rmdir'd (absent). Real state, read on LXC 100 before (12:16:49Z) and after (12:18:52Z) the six
+    runs: library.db c7a537cbbec7c2ad… and state.pickle b703ecb0ec66830d… both times, mtimes 2026-09-26 23:11:43Z.
+
+## F4 — deploy
+  Pushed 998625b to origin/main. LXC 100 `git -C /mnt/fast/stacks status --porcelain`: rc 0, 0 lines (read apart).
+  `git pull --ff-only` 245dfa7 -> 998625b at 12:19:32Z (reflog), rc 0; porcelain after 0 lines.
+  `git diff --stat 245dfa7 998625b -- scripts stacks`: quick-health-check.sh (2 +-, the register comment) and
+  route-dj-album.sh only. sha256 deployed == repo: route-dj-album.sh 51c5279986d32a41b7cc109036350b294482f41b33cf45ea3cb71f33fcd72720,
+  quick-health-check.sh 504cbd11c0d57633ff3f6f58fde90082adfcac8e3b3f7ee801eddf1f1caa805e. The deployed route script
+  is byte-identical to the file GREEN drove.
+
+## F5 — plan amended in band (641498a, 12:21:57Z)
+  07-13-PLAN.md: frontmatter `amended:`; the D-08 truth now quotes `modify -a -M -W -y`; the protected-fields truth
+  and Task 3's criterion 3 replace "albumtype reads dj on the file itself" with a DB-side check (album + every item)
+  plus a FILE BYTES check (every routed file's sha256 == its staged copy's), each with a fixed line form; the gate
+  text and threat model say routing writes no tag. Task 3's automated verify gained the two lines on the imported arm
+  (a CHANGED file needs its own DEF-07-13-NN); driven on 8 synthetic fixtures in a scratch repo — (a) DB 10/10 +
+  UNCHANGED 10/10 rc 0; (b) no bytes line rc 1; (c) UNCHANGED 9/10 rc 1; (d1) CHANGED without DEF rc 1; (d2) with
+  DEF rc 0; (e) DB 9/10 rc 1; (f) ROUTE-PARTIAL, no DB/bytes lines rc 0; (g) lines not at line start rc 1.
+
+## F6 — P11 unstaged (operator: "P11 unstaged (hold)")
+  Before, LXC 100 12:22:11Z: beets-flask running, restarts 0, StartedAt 2026-09-26T22:35:57Z. library.db (mode=ro):
+    items 177, albums 7 (ids 1 2 3 4 6 8 9); items with `mastermix` in path/album/albumartist 0; albums 0.
+    beets-flask DB (mode=ro): folder 16 / session 16 / task 16 / candidate 81; P07 f5b04401…, P08 fb3ca216…,
+    P11 c811b63d… all PREVIEW_COMPLETED (P11 is NOT imported). library.db c7a537cb…, state.pickle b703ecb0….
+  atlantis as real root, /root/phase07-0713/unstage-p11-0713.sh (sha256 eea485c5…): the P09 script
+    (/root/phase07-0712/unstage-p09-post0712.sh) with NAME/SRC/W/count set for P11, the manifests from 07-13's
+    staging, and a --fence-only mode. Fence layer 1 driven first: '../etc', 'a b', '.x', '', 'x/y' REFUSED;
+    'Mastermix_Issue_415' ACCEPTED. Then prefix, != source, both exist, realpath == path, staged file count 11;
+    layer 2 restated immediately before `rm -rf`.
+  Run: staged (relpath, sha256) set == 07-07 manifest p11-manifest-rel-sha.tsv (11 rows): EQUAL. SOURCE
+    /mnt/tank/downloads/complete/nzb/unsorted/Mastermix_Issue_415 pre-rm == 07-07 (11 rows, size+sha256+mtime).
+    T0 12:22:44.048Z `rm -rf -- /mnt/tank/downloads/complete/nzb/_inbox/02-review/Mastermix_Issue_415` rc 0; GONE.
+    SOURCE after: UNCHANGED vs 07-07 (11 rows). T1 12:22:44.418Z. tank/downloads 3.51T used / 5.42T avail.
+  Inboxes after: 01-auto 0/0; 03-asis 0/0; 02-review 9 entries / 197 audio = the 7 imported albums' staged copies
+    (177) + P07 Mastermix.Issue.420.2021 11 files + P08 Mastermix.Issue.421.2021 11 files. P07 and P08 staged sets
+    re-hashed == their 07-07 manifests (11 rows each).
+  After, 12:23:44Z: library.db 177 items / 7 albums, c7a537cb…; state.pickle b703ecb0… (both unchanged). beets-flask
+    DB 16/16/16/81 (unchanged; P11's folder row f86bce3a… and its session c811b63d… stay, PREVIEW_COMPLETED, now
+    dangling, as P09's did). Watchdog (docker logs --since 12:22:30Z): 74 lines, 12 Traceback + 12 FileNotFoundError
+    (the removed dir + its 11 files), one "skipping enqueue" for the P02 folder; no enqueue, preview or import.
+    Still running, restarts 0, same StartedAt.
+P11 UNSTAGE: DONE (staged copy gone, source unchanged 11/11, library.db 177 unchanged, no beets write)
+
+## F7 — live re-verification (LXC 100)
+  BARRIER READ (/root/ma-read-0710.sh, SINCE=2026-09-27T12:02:09Z = last VERIFIED, RC 0), read 12:24:01Z: 4/4
+    music_sync_filesystem_local--XJaJWNUS_{track,playlist,album,artist} enabled=false next_run=null (updated_at
+    2026-09-26T15:55:04.2xZ); present 4; control 16 other tasks enabled=true; pattern drive 1/0/0; log 285 lines;
+    server-start/sync lines later than SINCE 0 (newest sync 2026-09-26T09:17:24Z).
+  MA counts (/root/ma-counts-0710.sh, 12:24:01Z): XJaJWNUS albums 70, tracks 1244, artists 66; bogus control 0/0/0.
+BARRIER: VERIFIED (4/4 enabled=false, next_run null) at 2026-09-27T12:24:01Z
+  Jellyfin (/root/phase07-0713/jf-tasks-0713.sh, GET only, 12:24:02Z, RC 0): Scan Media Library key=RefreshLibrary
+    state=Idle, last 09:10:34Z..11:33:29Z Completed, IntervalTrigger 12 h -> next ≈ 23:33:29Z (derived). Running now:
+    Generate Trickplay Images only. Margin at 12:24Z ≈ 11 h 09 min; the continuation re-reads it and stops under 60 min.
+  Library 177 items / 7 albums (unchanged since 07-12). P07 and P08 staged, previews unchanged:
+    P07 folder c2f736cdf6a89764bdc0727d20b468db, session f5b04401-745f-4f58-949c-674ce87725c5 PREVIEW_COMPLETED,
+        task 99eab301-d08b-4829-a3ca-f01835e16734 (as-is card asis-99eab301-d08b-4829-a3ca-f01835e16734), chosen None.
+    P08 folder 7dbf0c28235b9cb00a5729e88ad25513, session fb3ca216-383d-460c-98bb-81eaa9cac8ed PREVIEW_COMPLETED,
+        task 3d932a57-9475-4e82-9a3c-17df6d287081 (as-is card asis-3d932a57-9475-4e82-9a3c-17df6d287081), chosen None.
+  Revised prediction for the continuation: route --apply writes NO tag; the FROZEN final paths (lines 157–176) are
+  unchanged by the fix (the path rule reads the DB, and GREEN rendered the same `DJ/<albumartist>/<album>/NN title`
+  names as RED); each routed file's sha256 must equal its 07-07 manifest row.
