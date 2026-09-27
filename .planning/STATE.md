@@ -8,7 +8,7 @@ progress:
   total_phases: 10
   completed_phases: 5
   total_plans: 141
-  completed_plans: 138
+  completed_plans: 139
   percent: 50
 ---
 
@@ -21,13 +21,15 @@ See: .planning/PROJECT.md (updated 2026-08-17)
 **Core value:** New music downloads land in the library correctly tagged, through exactly one
 pipeline that someone owns.
 **Current focus:** Phase 07 — pilot-12-albums-end-to-end (**PLANNED 2026-09-25, 17 plans in
-13 waves, 14 of 17 executed — 07-01 … 07-14 done**; Phase 06 stays `In Progress` at `gaps_found` 5/6 with CONF-04 carried to
+13 waves, 15 of 17 executed — 07-01 … 07-15 done**; Phase 06 stays `In Progress` at `gaps_found` 5/6 with CONF-04 carried to
 Phase 7 E6 — `/gsd-verify 06` is still owed)
 
 **Definition of done (CONS-04):** a file is imported only when verified with `ffprobe` on the file
 *and* visible in both Jellyfin and Music Assistant. Never "tool configured".
 
 ## Current Position
+
+**PLAN 07-15 COMPLETE — `STATE 07-15-CONSUMERS-READ` — 2026-09-27.** Criterion 6 both halves: Jellyfin 9/9 albums (1 MusicAlbum at final path, artist/tracks/discs = beets); MA one sync (`music/sync` XJaJWNUS, 13:55:48Z, 49 s; 70/1244/66 → 79/1412/201) → 9/9 albums, 0 duplicates. D-28 2/2 (P02/P04 album artist Benson Boone, no Various Artists fallback). E6 second measurement NOT TAKEN (P09 not landed); first measurement 33/33 (ffprobe truncates ID3v2.4 multi-value ARTISTS — use mutagen). D-24 census unchanged (29). E5 confirmed in MA: album 116 now has album artist Def Leppard, "Sea Of Love" has its album; "Brian Coll" gone. Standing check `4d. %aunique{} albums in MA (D-28)` added (old 4d → 4e), deployed (`c246e2f`). **MA fs-sync tasks RE-ENABLED 4/4 at 14:03:56Z** (next run 2026-09-28T01:55:48Z) — barrier lifted. DEF-07-15-01: MA artist display names drift over stable ids (row 1 now `Twista|…`; 4e's "Twista exists nowhere" message now false). Next: 07-16 (snapshot prune gate).
 
 **PLAN 07-14 COMPLETE — `STATE 07-14-REPAIRED` — 2026-09-27.** E5 repaired: `albumartist="Def Leppard"` set on the 14 FLAC in `Def Leppard/Def Leppard (2015)/` via a guarded MediaFile save (3 Vorbis album-artist keys; tag diff 14 matched / 28 gained / 0 dropped / 0 changed; audio + PCM identical; only these 14 of 2,885 entries changed). Taylor Swift (2006) same shape, not broken, untouched. Jellyfin shows AlbumArtist on all 14; MetadataSavers still []. D-24 census unmoved (29, none from this folder — not the DEF-06-45-03 experiment). For 07-15: DEF-07-14-01 MA "Brian Coll" artist on 86 Def Leppard tracks; verify album 116 / "Sea Of Love" after the MA sync. MA barrier holds (70/1244/66). Next: 07-15 (MA sync + re-enable).
 
