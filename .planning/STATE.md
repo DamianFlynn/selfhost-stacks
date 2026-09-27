@@ -8,7 +8,7 @@ progress:
   total_phases: 10
   completed_phases: 5
   total_plans: 141
-  completed_plans: 136
+  completed_plans: 137
   percent: 50
 ---
 
@@ -21,13 +21,15 @@ See: .planning/PROJECT.md (updated 2026-08-17)
 **Core value:** New music downloads land in the library correctly tagged, through exactly one
 pipeline that someone owns.
 **Current focus:** Phase 07 — pilot-12-albums-end-to-end (**PLANNED 2026-09-25, 17 plans in
-13 waves, 12 of 17 executed — 07-01 … 07-12 done**; Phase 06 stays `In Progress` at `gaps_found` 5/6 with CONF-04 carried to
+13 waves, 13 of 17 executed — 07-01 … 07-13 done**; Phase 06 stays `In Progress` at `gaps_found` 5/6 with CONF-04 carried to
 Phase 7 E6 — `/gsd-verify 06` is still owed)
 
 **Definition of done (CONS-04):** a file is imported only when verified with `ffprobe` on the file
 *and* visible in both Jellyfin and Music Assistant. Never "tool configured".
 
 ## Current Position
+
+**PLAN 07-13 COMPLETE — `STATE 07-13-PARTIAL: P11 held` — 2026-09-27.** D-29 NONE PASSES on all three DJ folders (P07's rank-3 `Issue 456` = 10-track stub trap). ⚠ **`route-dj-album.sh` damaged DJ tags** via `modify` + `write: yes` (BPM ranges truncated, key case lowered, ID3 2.3→2.4, junk BPM 0/year 0000; RED 30/30 changed) — fixed to `modify -W` DB-only (`998625b`, deployed 51c52799; GREEN 0/30), plan amended to DB ALBUMTYPE + FILE BYTES UNCHANGED (DEF-07-13-01). ⚠ Open hazard: `dj` lives only in the DB — `beet update` over `DJ/` clears it, `beet write` redoes the damage. P07 → `DJ/Mastermix/Issue 420/`, P08 → `DJ/Various Artists/Mastermix Issue 421/`, as-is, FILE BYTES UNCHANGED 20/20, oracle 20/20, criteria 3/4/7/8 PASS; Jellyfin targeted update incl. the new `DJ` folder showed both in ~80 s (DEF-07-13-02). P11 held (D-26 FALSE) and unstaged. Library 9 albums / 197 items; MA barrier holds (70/1244/66). Next: 07-14 (E5 repair).
 
 **PLAN 07-12 COMPLETE (with findings) — `STATE 07-12-PARTIAL: P09 P01 held` — 2026-09-26/27.** Library 7 albums / 177 items: P10 + P02 (imported-other `c0df8104`, 3-way tie, UI sent the 2nd card), P03, P04 (`c33163f3` → `American Heart [093624834588]/`, %aunique by catno as predicted; via candidate search + "Keep both"), P05, P06, P12. P01 and P09 were imported **against hold** (beets-flask sends the *selected* card and has no hold state — DEF-07-12-04/05) and fully undone: UNDO IMPORT + operator-authorised **state.pickle surgery** (removed only their taghistory entries; backup `/mnt/fast/safety/phase07/0712-state/`; DEF-07-12-06). Inbox 431: Authelia `server.buffers` 4096 → 16384 (appdata, NOT in git; DEF-07-12-03 — inbox URL grows with folder count). Findings: ⚠ **P06 not in Jellyfin** (new top-level `CYRIL/` not added by the targeted update — DEF-07-12-11, fix owed before 07-15); P04 tag-diff exit 1 is an instrument defect on a truncated last frame (DEF-07-12-09); import-order check FAIL (DEF-07-12-12); P03 junk country `PMEDIA` (DEF-07-12-10); pre-existing `Fireworks & Rollerblades (2024)` beside P03 (DEF-07-12-08). ⚠ **P09 still staged in 02-review — one click from import.** MA barrier holds (70/1244/66). Next: 07-13 (DJ pair).
 
