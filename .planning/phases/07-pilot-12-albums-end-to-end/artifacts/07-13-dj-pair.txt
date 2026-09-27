@@ -1,0 +1,241 @@
+# 07-13-dj-pair.txt — plan 07-13: the DJ pair (P07, P08) and DJ twin P11 through 02-review, and E1 routing by
+# scripts/route-dj-album.sh (D-04, D-08, D-26, D-29).
+# Every UTC time below is read off the host that did the work. beets-flask /logs lines are UTC+1 and are
+# converted where quoted. Up to the gate this plan issues no `beet` command against the real library, no zfs
+# write verb, no Jellyfin write and no MA write. The only writes are the three reflink staging copies and a
+# scratch prediction run on /tmp COPIES inside the container (below, § PREDICTION).
+
+=== 07-13 RUN 1 (2026-09-27, 11:53Z onward) ===
+Workstation HEAD d4ef81f; host /mnt/fast/stacks HEAD 245dfa7, porcelain 0 lines. `git diff --stat 245dfa7 HEAD --
+scripts stacks` is empty: the host lags the workstation by planning-docs commits only.
+
+## Task 1 — preconditions (read-only)
+
+Ledger: newest 07-12 token `STATE 07-12-PARTIAL: P09 P01 held` (ledger's last line); the post-07-12 remediation
+(d4ef81f) unstaged P09. Library as the ledger says: 7 albums / 177 items.
+  Fence (atlantis as real root, `zfs list -H -t snapshot -o name,creation -p`, 11:53:46Z):
+    tank/media/Music@pre-07-pilot 1790434107, fast/appdata/arrs@pre-07-pilot 1790434108 (2 of 2 present);
+    tank/media/Music@pre-06-41-conf04-reprobe 1790237113 also present.                              TRUE
+  route-dj-album.sh: sha256 on LXC 100 /mnt/fast/stacks = 7688a829911e1050243ebc1788fc2eab9560183ee21ce8a762b40cfec19e994a
+    = workstation repo (shasum -a 256).                                                             EQUAL
+  Register: /mnt/fast/stacks/scripts/quick-health-check.sh sha256 f1145e19c0280297… = repo; its `D04_EXEMPT_RE`
+    (line 2186) names `^HEAD:scripts/route-dj-album\.sh:[0-9]*:.*\$BEET_REALLIB`.                     TRUE
+  D-13 (P11 is `unsorted/`): diff-music-tags.sh on LXC 100 sha256 4bbfaf6046bd89fe… = repo.         PASS
+  check-music-import.sh f75c577f… = repo; snapshot-music-tags.sh 60212666… = repo (the 07-07 BEFORE instrument).
+  beets-flask: running, StartedAt 2026-09-26T22:35:57Z, restarts 0.
+  library.db (docker exec -u 568, sqlite mode=ro, 11:54:43Z): items 177, albums 7 —
+    1 P10 Various Artists / Now That’s What I Call Music! 117          added 20:57:56.05Z (09-26)
+    2 P02 Benson Boone / American Heart                                 added 21:58:27.98Z
+    3 P03 Benson Boone / Fireworks & Rollerblades                       added 21:59:42.66Z
+    4 P06 CYRIL / Stumblin’ In (LUNAX remix) (extended mix)             added 22:01:12.02Z
+    6 P05 Various Artists / NOW That’s What I Call Music! 121           added 22:04:46.71Z
+    8 P12 Various Artists / Now That’s What I Call Music! 116           added 22:07:04.35Z
+    9 P04 Benson Boone / American Heart                                 added 23:11:42.78Z
+  state.pickle sha256 b703ecb0ec66830d3cb5fda8d3d741dece09bedb2e7e78c9fb413e3f0a2765f1 (read, not edited).
+  beets-flask own DB (mode=ro): folder 13, session 13, task 13, candidate 66 before staging.
+  Inboxes (atlantis 11:53:46Z): 01-auto 0, 03-asis 0; 02-review 7 entries = copies of already-imported albums
+    (P02 P03 P04 P05 P06 P10 P12), per the post-07-12 remediation.
+  /mnt/tank/media/Music top level: 15 artist dirs; `DJ/` ABSENT; `Mastermix/` ABSENT.
+
+BARRIER READ before staging (/root/ma-read-0710.sh on LXC 100, SINCE=2026-09-27T11:50:22Z = last VERIFIED, RC 0;
+D-39 login, secrets `600 root`, no credential in argv), read 11:54:11Z:
+    music_sync_filesystem_local--XJaJWNUS_{track,playlist,album,artist} enabled=false next_run=null
+    (updated_at 2026-09-26T15:55:04.2xZ on all four); present 4, disabled 4; control 16 other tasks enabled=true;
+    pattern drive 1/0/0; log 278 lines; server-start/sync lines later than SINCE: 0 (newest sync 2026-09-26T09:17:24Z).
+  MA provider-filtered counts (/root/ma-counts-0710.sh, 11:54:12Z): filesystem_local--XJaJWNUS albums 70, tracks
+    1244, artists 66 (= baseline); bogus-provider control 0/0/0.
+BARRIER: VERIFIED (4/4 enabled=false, next_run null) at 2026-09-27T11:54:11Z
+
+## Task 1 — in-scope set (P7R2-03, amended)
+EXECUTION SET SOURCE: 07-SAMPLE-AMENDMENT.md
+  Amendment line read: `EXECUTION SET 07-13: P07 P08`.
+  `DJ TWINS AMONG FRESH DRAWS: P11` read from 07-SAMPLE.md (the amendment does not restate it); 07-12 recorded
+  `MOVED TO 07-13: P11` (07-12-nine-imports.txt line 54).
+IN-SCOPE P-IDS: P07 P08 P11
+
+## Task 1 — staging (atlantis as real root, /root/stage-0713.sh <PID> <SRC>; working files /root/phase07-0713/)
+/root/stage-0713.sh (sha256 140ce47a59e4bf7c1cef96b5f363a5b5031b13e0edd58019726f54429da3d312) is 07-12's
+stage-0712.sh with exactly two changes, shown by diff: the working dir is /root/phase07-0713, and `dj-mixes/`
+is admitted as a source root beside `music/` and `unsorted/` (P07 and P08 live there). Method unchanged: source and
+inbox asserted on the same dataset (findmnt -T -> tank/downloads for both); SOURCE re-manifested BEFORE the copy
+and asserted equal to the 07-07 rows (atlantis manifest sha256 8480c429… = repo 07-07-source-manifest-before.tsv);
+`cp -R --reflink=always` with no fallback; chown -R 568:568 on the staged copy ONLY (target asserted under
+_inbox/02-review/ and different from the source); staged (relpath, sha256) set vs 07-07; SOURCE re-taken after.
+zfs_bclone_enabled 1.
+
+| P-ID | Source (…/complete/nzb/) | T0 cp (UTC) | METHOD | rows 07-07 | staged sha set | source after | owner |
+|---|---|---|---|---|---|---|---|
+| P07 | dj-mixes/Mastermix.Issue.420.2021 | 11:54:51.211Z | reflink | 11 (10 mp3 + album.nfo) | EQUAL (11) | UNCHANGED (11) | 568:568 dir + 11 |
+| P08 | dj-mixes/Mastermix.Issue.421.2021 | 11:54:55.146Z | reflink | 11 (10 mp3 + album.nfo) | EQUAL (11) | UNCHANGED (11) | 568:568 dir + 11 |
+| P11 | unsorted/Mastermix_Issue_415 | 11:55:00.058Z | reflink | 11 (10 mp3 + .nzb) | EQUAL (11) | UNCHANGED (11) | 568:568 dir + 11 |
+Every cp rc 0 with empty stderr; every stage RC 0. 02-review now holds 10 entries (7 imported copies + these 3).
+The inbox page's query string grows with the entry count (DEF-07-12-03): 10 entries is the count that first hit
+HTTP 431 at the old 4096 B buffer; the buffer is now 16384 B, so this is inside the ceiling but worth knowing.
+tank/downloads 3.51T used / 5.42T avail after.
+
+## Task 1 — previews
+beets-flask /logs/beets-flask.log: Enqueue + "Preview done" for each folder, 12:55:24–12:55:40 local =
+11:55:24Z–11:55:40Z. The log holds 10 Traceback/ERROR lines in total, none of them in this window.
+Reader: 07-12's /root/phase07-0712/preview.py (unchanged; it was controlled against P10 in 07-12), run as
+`FOLDERS=… FULL=1 docker exec -i -u 568 beets-flask /venv/bin/python -`, sqlite mode=ro. Raw output: LXC 100
+/root/phase07-0713/previews-full.txt (431 lines).
+beets-flask own DB after: folder 16, session 16, task 16, candidate 81 (+3/+3/+3/+15). All three sessions
+PREVIEW_COMPLETED, chosen None, flag None, duplicate_ids '' on every candidate (no duplicate expected).
+
+| P-ID | beets-flask folder hash | session id | task id (= as-is card `asis-<task id>`) | items |
+|---|---|---|---|---|
+| P07 | c2f736cdf6a89764bdc0727d20b468db | f5b04401-745f-4f58-949c-674ce87725c5 | 99eab301-d08b-4829-a3ca-f01835e16734 | 10 |
+| P08 | 7dbf0c28235b9cb00a5729e88ad25513 | fb3ca216-383d-460c-98bb-81eaa9cac8ed | 3d932a57-9475-4e82-9a3c-17df6d287081 | 10 |
+| P11 | f86bce3a3c9ddcd6767350d9ec4dc796 | c811b63d-d51a-436b-aaf0-db65b6b5884c | 66787cc9-0908-4a69-b811-27fdad4a8032 | 10 |
+
+Recommendation is DERIVED (beets-flask does not persist it) with beets 2.12.0's `_recommendation` and 07-10's
+thresholds (strong 0.04, medium 0.25, rec_gap 0.25): rank-1 distance above 0.25 with more than one candidate and a
+gap to rank 2 under 0.25 -> `none`.
+
+## Task 1 — D-29 per folder (recommendation -> per-disc track count -> per-track distance, in that order)
+CLAUDE.md § Autotagging ceiling: MusicBrainz coverage of these labels stops around 2016 and its entries are often
+stubs. Every candidate below is a DIFFERENT Mastermix issue or a different artist entirely. None is Issue 420, 421
+or 415.
+
+### P07 — Mastermix / Issue 420 (10 MP3, dj-mixes/, S5a)
+Files: disc 1 tracks 1..5, disc 2 tracks 1..5 (disctotal tag 0, tracktotal 0); albumartist 'Mastermix' 10/10;
+album 'Issue 420' 10/10; label 'Mastermix'; year 2021; comp false.
+  rank mbid                                  title / artist                         media     per-disc  dist    reading
+  1    c30c72fb-996a-49ad-b03a-43dbd97f8694  '420' / Chopstick Dubplate (2021)      Digital   4         0.7230  unmatched files 6
+  2    7f12ce4d-1f75-4627-90cf-dd52c1c21d36  '420' / PurpleStickey (2021)           CD        4         0.7315  unmatched files 6
+  3    73b11021-b685-4c15-a3cb-c2539a47fc3e  'Mastermix Issue 456' / Various Artists Digital  10 (1 med) 0.7630  every track a different song
+  4    604fc343-eb98-4678-9a32-5f17ca94711c  'Grandmaster 70s' / Mastermix (2004)   CD        30        0.7798  20 MB tracks missing
+  5    2696265f-c368-4fd5-8312-18a0526a62d9  'Grandmaster 2002' / Mastermix (2002)  CD        31+23     0.8189  44 MB tracks missing
+  (1) recommendation: 0.7230 > 0.25, gap to rank 2 0.0085 < 0.25 -> none.
+  (2) per-disc (files 5+5 on tagged discs 1,2): rank 1 4 REFUSED; rank 2 4 REFUSED; rank 3 10 on ONE medium vs
+      5+5 REFUSED (the stub trap: the TOTAL is 10 = 10, but it is Issue 456, not 420, and every mapped track is a
+      different song — per-track max 0.921); rank 4 30 REFUSED; rank 5 31+23 REFUSED.
+  (3) not reached — no candidate survives (2).
+D-29 VERDICT (P07): NONE PASSES (rec none; every candidate refused on track count; rank 3 is a total-count stub of a different issue)
+RECOMMENDED ACTION (P07): imported-asis — as-is inside 02-review (the UI's "Metadata from disk" card), NOT the
+  `03-asis` bootleg inbox (D-26). As-is keeps the files' own tags.
+
+### P08 — Various Artists / Mastermix Issue 421 (10 MP3, dj-mixes/, S5b)
+Files: disc 0 (no disc tag), tracks 1..5 each TWICE (two CDs tagged as one), tracktotal 0, disctotal 0;
+albumartist 'Various Artists' 10/10; album 'Mastermix Issue 421' 10/10; year 0; label ''; comp false.
+  rank mbid                                  title                    media per-disc  dist    reading
+  1    5100aebf-eae6-4cc7-b640-df2b0c79c4e9  Mastermix Issue 295 (2011) CD  6+6       0.5725  2 MB tracks missing; different issue
+  2    908c77ce-299b-4915-9590-fad61750a527  Mastermix Issue 297 (2011) CD  7+7       0.6478  4 missing
+  3    dd6f1884-c658-4040-8520-9081ddc21b4c  Mastermix Issue 301 (2011) CD  7+7       0.6484  4 missing
+  4    bc077959-83b2-45e7-804f-82ee285eb4ef  Mastermix Issue 231 (2005) CD  8+11      0.6695  9 missing
+  5    303db0f3-394a-4a9b-b11b-e63fbd7200e2  Mastermix Issue 300 (2011) CD  7+7+3     0.6790  7 missing
+  (1) 0.5725 > 0.25, gap 0.0753 < 0.25 -> none.
+  (2) files 10: 12, 14, 14, 19, 17 — every candidate REFUSED. All five are pre-2016 Music Factory issues, the
+      coverage ceiling CLAUDE.md records; none is 421.
+D-29 VERDICT (P08): NONE PASSES (rec none; all five refused on track count, all five a different issue)
+RECOMMENDED ACTION (P08): imported-asis — as-is inside 02-review, not `03-asis` (D-26).
+
+### P11 — Mastermix_Issue_415 (10 MP3, unsorted/, the DJ twin, DUPE-01)
+Files: disc 0, tracks {1, 102..105, 201..205} (disc and track encoded together in the track number), tracktotal 0;
+albumartist 'Mastermix' 9 / '' 1; album 'Mastermix' 9 / 'Mastermix Issue 415 (Januar 2021)' 1.
+  rank mbid                                  title                     media per-disc  dist    reading
+  1    fe77c780-b02f-4c52-9d1a-32bb57348077  Mastermix 307 (2012)      CD    6+7       0.5755  3 missing
+  2    43f203bd-9b60-44d4-a0a0-d96e166aafba  Mastermix 60s (2005)      CD    9         0.5790  1 file unmatched
+  3    2aa23ee7-db7c-4e04-9740-9d8b765658af  Mastermix 250 (2007)      CD    6+9       0.6120  5 missing
+  4    17fede86-d18b-4aea-9480-d341718c8778  Mastermix 247 (2007)      CD    7+23      0.7780  20 missing
+  5    e583db7e-5178-4244-9e3d-f7165106354c  Mastermix 224 (2005)      CD    9+13      0.8106  12 missing
+  (1) 0.5755, gap 0.0035 -> none.   (2) files 10: 13, 9, 15, 30, 22 — all REFUSED.
+D-29 VERDICT (P11): NONE PASSES (rec none; all five refused on track count, all five a different issue)
+RECOMMENDED ACTION (P11): hold — as-is would group it wrongly (D-26 FALSE, below).
+
+## Task 1 — D-26 restated (07-SAMPLE § D-26: every file's `album` non-empty AND one distinct value per folder)
+  P07 Mastermix.Issue.420.2021 — TRUE (10/10 'Issue 420'; re-read today off the preview's item rows: album {'Issue 420': 10})
+  P08 Mastermix.Issue.421.2021 — TRUE (10/10 'Mastermix Issue 421'; today: {'Mastermix Issue 421': 10})
+  P11 Mastermix_Issue_415      — FALSE (two values; today: {'Mastermix': 9, 'Mastermix Issue 415 (Januar 2021)': 1};
+                                 albumartist {'Mastermix': 9, '': 1}). As-is would build the album row from
+                                 one file's values and path the other nine by it. Recommendation: hold.
+`03-asis` / bootleg is NOT used (D-26). Every as-is import in this plan is the as-is card inside `02-review`.
+
+## Task 1 — the protected DJ fields per file (BEFORE list, from pre-07-PNN, raw ffprobe format-tag key presence)
+Source: LXC 100 /mnt/fast/safety/music-pre-project/tags/pre-07-P07|P08|P11.ndjson.gz (07-07 capture; sha256 in
+07-07-before-state.txt). Keys looked for, case-insensitive: TBPM/bpm, TKEY/initialkey, EnergyLevel, genre, comment.
+Anything not listed is ABSENT in BEFORE.
+P07 (bpm 10, genre 10, TKEY 0, EnergyLevel 0, comment 0 — equals 07-SAMPLE's register):
+  4200101 Club Cuts                              TBPM=127      genre=Dance
+  4200102 Mastermixed 5                          TBPM=116-117  genre=Pop Dance
+  4200103 Reggae Fusion                          TBPM=92-103   genre=Reggae
+  4200104 Into The 80s                           TBPM=110-118  genre=Folk
+  4200105 Triple Tracker Crazibiza               TBPM=125      genre=Dance
+  4200201 The Ibiza Sessions Jackin' House       TBPM=123-126  genre=Jackin' House
+  4200202 Party On Fire                          TBPM=132-153  genre=Indie Rock
+  4200203 Classic Disco vs. Nu Disco             TBPM=127-129  genre=Disco
+  4200204 Hit The Dancefloor Latin Pop           TBPM=121-126  genre=Latin Pop
+  4200205 Summer Slam 00s Club Classics          TBPM=128      genre=Dance
+P08 (genre 10 only — equals the register): all ten files genre=Various; no bpm, TKEY, EnergyLevel or comment.
+P11 (TKEY 9, EnergyLevel 9, genre 9 — equals the register):
+  101 Club Beats                  EnergyLevel=7 TKEY=5A   (no genre)
+  102 Cool Cuts Nu Disco          EnergyLevel=7 TKEY=4A   genre=DJ Mix
+  103 Cool Cuts Nu Funky House    EnergyLevel=7 TKEY=10A  genre=DJ Mix
+  104 Party With Me Tonight       EnergyLevel=6 TKEY=8A   genre=DJ Mix
+  105 Classic Cuts Funky House    (no key, no energy)     genre=DJ Mix
+  201 Mix That Funky Music        EnergyLevel=7 TKEY=4A   genre=DJ Mix
+  202 Disco On The Dancefloor     EnergyLevel=7 TKEY=4A   genre=DJ Mix
+  203 The Pop Train 80s           EnergyLevel=7 TKEY=5A   genre=DJ Mix
+  204 Smooth Grooves 1            EnergyLevel=7 TKEY=9A   genre=DJ Mix
+  205 Mastermixed 1               EnergyLevel=7 TKEY=2A   genre=DJ Mix
+Note: seven of P07's ten TBPM values are RANGES ("116-117"), not integers. beets models `bpm` as an INTEGER.
+
+## Task 1 — PREDICTION: what `route-dj-album.sh --apply` will write into the files (measured on scratch copies)
+Why this was measured: step (c) is `modify -a -M -y id:N albumtype=dj` with `import.write: yes`, so beets REWRITES
+every tag of every item. An as-is import itself writes nothing (beets 2.12.0 importer/tasks.py:498:
+`if write and (self.apply or self.choice_flag == Action.RETAG): item.try_write()` — ASIS is neither), so the
+import leaves each file byte-identical to its staged copy. The modify is the first write.
+Method: LXC 100 /root/phase07-0713/sim0713.py and sim0713b.py, run as `docker exec -i -u 568 beets-flask
+/venv/bin/python -` with BEETSDIR=/config (the live config read, import.write True, id3v23 False). Each copies
+chosen staged files to the container's /tmp/sim0713*/, builds an IN-MEMORY library (`Library(":memory:")` — never
+/config/library.db, no beet CLI, no move), imports them as-is (Item.from_path + add_album), then does exactly what
+`modify -a` does: `album.set_parse("albumtype","dj"); album.try_sync(write=True, move=False, inherit=True)`.
+Raw frames read by mutagen before and after. Scratch removed after each run (printed True). Outputs:
+/root/phase07-0713/sim0713.txt, sim0713b.txt. Files: P07 4200101, 4200102, 4200201; P08 01. Club Cuts;
+P11 101, 102.
+
+PREDICTED (measured on copies):
+  (a) albumtype is NOT written to the file. item.albumtype reads 'dj' in the DB, but the file gets no
+      `TXXX:MusicBrainz Album Type` frame. Cause, isolated in sim0713b: mediafile defines
+      `albumtype = albumtypes.single_field()`, so both fields share ONE frame; `Item.write` passes both, in the
+      order albumtype then albumtypes; the item's `albumtypes` is [] (an as-is item has none), and writing []
+      after 'dj' deletes the frame. Control: `update({albumtype:'dj'})` alone -> frame 'dj';
+      `update({albumtype:'dj', albumtypes:[]})` -> no frame. The plan's must-have "albumtype reads dj on the file
+      itself" CANNOT be met by route-dj-album.sh as written. Routing is unaffected: the path rule reads the DB.
+  (b) TBPM ranges are TRUNCATED to their lower bound: '116-117' -> '116', '123-126' -> '123' (beets reads bpm as
+      an int; mediafile's int cast keeps the leading number). Single values survive ('127' -> '127'). On P07 this
+      is 7 of 10 files: 116-117, 92-103, 110-118, 123-126, 132-153, 127-129, 121-126. A changed protected field =
+      REJECT CANDIDATE under this plan.
+  (c) TKEY is lower-cased: '5A' -> '5a', '4A' -> '4a' (beets' MusicalKey type normalises). Changed value on a
+      protected field (P11, 9 files). TXXX:EnergyLevel survives unchanged (not a beets field, untouched).
+  (d) genre (TCON) survives unchanged on every tested file.
+  (e) Collateral, not protected fields: ID3 v2.3 -> v2.4; TPOS '1' -> '1/0', TRCK '01' -> '1/0'; added TCMP '0',
+      TDOR '0000', TXXX:LABEL, an empty MusicBrainz UFID, an empty USLT; on P08/P11 also TBPM '0' ADDED where no
+      bpm existed and TDRC '0000'. A DJ app would read TBPM 0 as a tempo.
+  Scope: measured on 6 of 30 files. The code path is the same for every file. (b) applies wherever TBPM holds a
+  range, which is 7 of P07's 10 files.
+
+PREDICTED LANDING (as-is keeps the file tags; paths from stacks/selfhosted/arrs/beets/config.yaml `paths:`):
+  Transient, after the import and before `--apply` (default rule: albumtype '' , disctotal 0, comp false):
+    P07 -> /media/Music/Mastermix/Issue 420/NN <title>.mp3   (a NEW top-level artist dir)
+    P08 -> /media/Music/Various Artists/Mastermix Issue 421/NN <title>.mp3   (inside the existing VA dir)
+  Final, after `--apply` (rule 3 `albumtype:=dj` -> DJ/$albumartist/$album%aunique{}/$track $title; disctotal 0 so
+  not rule 2):
+    P07 -> /media/Music/DJ/Mastermix/Issue 420/   — the 10 FROZEN lines 157–166 exactly (e.g. "01 Club Cuts.mp3",
+           "01 The Ibiza Sessions_ Jackin' House.mp3"; ':' -> '_'). %aunique{} returns "" (no other Issue 420).
+    P08 -> /media/Music/DJ/Various Artists/Mastermix Issue 421/ — the 10 FROZEN lines 167–176 exactly.
+  No duplicate prompt is expected (duplicate_ids '' on every candidate; no other album shares either key).
+  Non-audio `album.nfo` in P07/P08 stays in the inbox: beets copies items only.
+  Jellyfin: `DJ/` is a NEW top-level directory. DEF-07-12-11 says a targeted file-scope update does not add a new
+  top-level directory, so the POST alone is predicted NOT to make the DJ albums appear until Jellyfin's scheduled
+  scan runs.
+
+## Task 1 — the D-08 window vs Jellyfin's scheduled "Scan Media Library" (GET /ScheduledTasks only, 11:59:35Z)
+  LXC 100 /root/phase07-0713/jf-tasks-0713.sh (key via process substitution; GET only), RC 0:
+    Scan Media Library key=RefreshLibrary state=Idle, last run 2026-09-27T09:10:34Z..11:33:29Z Completed,
+    trigger IntervalTrigger 432000000000 ticks = 12 h. Tasks running now: Generate Trickplay Images (unrelated).
+  NEXT RUN (derived, not read: Jellyfin's IntervalTrigger fires at last END + interval) ≈ 2026-09-27T23:33:29Z.
+  A Jellyfin restart re-arms the trigger. The last scan took 2 h 23 min.
+  The import -> --apply -> read-back window needs minutes. Opening it before ~22:30Z leaves more than an hour's
+  margin. The next agent RE-READS this task immediately before the imports and stops if the margin is under 60 min.
+  No trigger has been changed.
