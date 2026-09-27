@@ -1,9 +1,9 @@
 ---
-status: complete
+status: diagnosed
 phase: 07-pilot-12-albums-end-to-end
 source: [07-01-SUMMARY.md, 07-02-SUMMARY.md, 07-03-SUMMARY.md, 07-04-SUMMARY.md, 07-05-SUMMARY.md, 07-06-SUMMARY.md, 07-07-SUMMARY.md, 07-08-SUMMARY.md, 07-09-SUMMARY.md, 07-10-SUMMARY.md, 07-11-SUMMARY.md, 07-12-SUMMARY.md, 07-13-SUMMARY.md, 07-14-SUMMARY.md, 07-15-SUMMARY.md, 07-16-SUMMARY.md, 07-17-SUMMARY.md]
 started: 2026-09-27T21:48:57Z
-updated: 2026-09-27T23:23:07Z
+updated: 2026-09-27T23:32:18Z
 ---
 
 <!-- Test expectations are taken from artifacts/07-17-evidence.txt (measured 2026-09-27T19:0xZ).
@@ -89,27 +89,49 @@ blocked: 0
   reason: "User reported: both pass, but cover art is wrong on 117"
   severity: major
   test: 2
-  root_cause: ""     # Filled by diagnosis
-  artifacts: []      # Filled by diagnosis
-  missing: []        # Filled by diagnosis
-  debug_session: ""  # Filled by diagnosis
-  related: "Same symptom family as the test 5 cover gap: cover art crossing between pilot albums (Jellyfin: 117 shows NOW Disney 3; MA: American Heart shows NOW 121)"
+  root_cause: "P10 (NOW 117) carries NO art: 0/50 embedded pictures, no sidecar, and none at source either. beets runs plugins [musicbrainz] only, no fetchart, embedart.auto no, and albums.artpath is NULL for all nine. So Jellyfin's MusicAlbum ImageFetcherOrder [Apple Music, Fanart, TheAudioDB] fell back to an Apple Music NAME search in the default US storefront, which lacks the UK-only NOW 1xx series. Its top hit is 'NOW That's What I Call Disney 3' (id 1440812619). The stored folder.jpg (sha256 09d8b5f8c9dd…) is byte-identical to Apple's Disney 3 artwork. The log at 20:51:47+01:00 shows 'Apple Music album ID is not available, using search'. Cover Art Archive has the correct 117 image (b057dee8), and MA uses it."
+  artifacts:
+    - path: "/mnt/fast/appdata/arrs/beets/config/config.yaml (+ repo copy stacks/selfhosted/arrs/beets/)"
+      issue: "No art plugin: an album without art at source lands with none"
+    - path: "Jellyfin Music library options — MusicAlbum ImageFetcherOrder; /config/plugins/Apple Music_3.0.6.2 (no config, US store)"
+      issue: "Apple Music name-search is first in order and guesses wrong for UK compilations"
+    - path: "Jellyfin /config/metadata/library/d1/d18d5c99c4451068e6b3d6999cd48a3d/folder.jpg"
+      issue: "Stored wrong (Disney 3) primary image. Adding cover.jpg alone will not replace it"
+  missing:
+    - "Pipeline: every imported album carries its own art (e.g. beets fetchart from Cover Art Archive writing cover.jpg with embedart off to respect no-file-rewrite, or a pre-import gate that holds art-less albums)"
+    - "Backfill cover.jpg for P10 (and P04), a write to /mnt/tank/media/Music, needs operator authorisation"
+    - "Jellyfin: demote/disable Apple Music for MusicAlbum or set GB storefront"
+    - "Jellyfin: replace item d18d5c99…'s Primary image (single-item image replace or DELETE /Items/…/Images/Primary). This is a consumer write needing operator authorisation. Verify MetadataSavers=[] first (Music freeze / .nfo history)"
+  debug_session: ".planning/debug/pilot-cover-art-crossover.md"
 - truth: "Each pilot album shows its own cover art in Music Assistant"
   status: failed
   reason: "User reported: benson boon is in twice (was also on jellygin, but the cover art is wrong here) and 117 cover art is ok"
   severity: major
   test: 5
-  root_cause: ""     # Filled by diagnosis
-  artifacts: []      # Filled by diagnosis
-  missing: []        # Filled by diagnosis
-  debug_session: ""  # Filled by diagnosis
-  related: "Test 2 gap (Jellyfin 117 wrong cover). In MA, one American Heart album (P02 or P04, twin) shows the NOW 121 (P05) cover"
+  root_cause: "P04 (American Heart [093624834588]) has no art of its own (0/10 embedded, no sidecar). 'Sorry I'm Here for Someone Else' is on P02, P04 and NOW 121 (P05) #27 with the same recording MBID 545aa58c… and ISRC USWB12500464, so MA merges them into ONE library track (1541) whose album is NOW 121 (165). Through that track, MA albums 167 and 169 pick up NOW 121's external ids (MB album 0a74adf8, release group b3cb0f03, barcode 00196872951165) and images. P02 still shows correctly only because its own embedded FLAC art ranks first. P04's first image is NOW 121's #27 embedded picture. The P04 file tags carry only their own ids, so the contamination is MA-internal."
+  artifacts:
+    - path: "MA library albums 167 and 169 (images, external_ids), track 1541"
+      issue: "Cross-album id/image bleed through a shared recording"
+    - path: "Library dir Benson Boone/American Heart [093624834588]/"
+      issue: "No art"
+  missing:
+    - "Same pipeline fix as the test 2 gap (own art on every album): the durable fix, since the bleed recurs for any art-less album sharing a recording with a compilation"
+    - "MA: 'Refresh item' (or remove + re-sync) on albums 169 and 167. A consumer write needing operator authorisation. Album 167 carries the latent NOW 121 MB album id first, even though it displays correctly"
+  debug_session: ".planning/debug/pilot-cover-art-crossover.md"
 - truth: "Benson Boone's American Heart appears once per consumer, or the two appearances are an accepted, deliberate twin"
   status: failed
   reason: "User reported: benson boon is in twice (was also on jellygin, but the cover art is wrong here)"
   severity: minor
   test: 5
-  root_cause: ""     # Filled by diagnosis. Known context: P02 (FLAC 24-bit, library.db album 2) and P04 (MP3 WEB, album 9, dir 'American Heart [093624834588]') both landed by design to exercise %aunique{} (07-SAMPLE P04 note; DEF-07-12-05 exact MB tie). MA shows both albums sharing the SAME ten tracks (07-15 TWIN REPRESENTATION). The decision is keep-both vs dedupe (DUPE-01/02 work)
-  artifacts: []
-  missing: []
-  debug_session: ""
+  root_cause: "Three stacked causes, no single defect. (a) Designed outcome with an undecided policy: the pair was drawn deliberately (07-CONTEXT D-04), P04 landed via the operator's 'Keep both' (DEF-07-12-07), and no same-album-different-format policy exists (DUPE-01/02 cover folder-name collisions only; live duplicate_action: ask). (c) Both matches are the wrong format: c0df8104 (P02) and c33163f3 (P04) are two MB entries for the SAME US CD (barcode 093624834588, same 10 recordings), while the sources are WEB rips. The correct targets are the XW Digital Media releases b3a1e018 (093624830603) or cfb585a2 (093624834960). This is structural: match.preferred.countries ['GB','US'] with no preferred.media means an XW digital release can never win, so the DEF-07-12-05 tie contained only CD/vinyl. The %aunique suffix [093624834588] is that shared barcode (catalognum '' vs '093624834588') and tells a listener nothing. (b) MA's recording-identity track merge (by design) shows both albums over one set of 10 tracks, with P04's MP3s shadowed by P02's FLAC. Jellyfin holds each album's own files correctly, but the two cannot be told apart. Durations match pair-for-pair to 0.1 ms (24/44.1 FLAC vs 320k MP3, same master)."
+  artifacts:
+    - path: "/mnt/fast/appdata/arrs/beets/config/config.yaml:381-392"
+      issue: "preferred.countries without preferred.media: WEB downloads match physical CD/vinyl releases"
+    - path: "library.db albums 2 and 9"
+      issue: "Two format-wrong matches of one CD"
+    - path: "/mnt/tank/media/Music/Benson Boone/American Heart/ and …/American Heart [093624834588]/"
+      issue: "Same audio, two formats, indistinguishable names"
+  missing:
+    - "OPERATOR DECISION: policy for the same album in two formats. A = back out P04 (UNDO IMPORT + stop + partial state.pickle surgery per beets.md + MA sync + Jellyfin scan, all writes needing authorisation). B = keep both, re-match to Digital Media releases and disambiguate by format. C = defer to the DUPE/archive phase (not yet inserted) with a named policy"
+    - "Regardless of decision: add match.preferred.media (e.g. Digital Media) or an equivalent gate, filed for Phase 8/9, or every WEB download keeps matching CD/vinyl"
+  debug_session: ".planning/debug/american-heart-twin.md"
