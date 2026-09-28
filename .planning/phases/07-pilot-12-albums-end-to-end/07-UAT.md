@@ -82,6 +82,13 @@ pending: 0
 skipped: 0
 blocked: 0
 
+## Operator Decisions (gap-closure scope)
+
+Asked 2026-09-28T07:45:22Z after diagnosis, and answered verbatim by option label:
+- Twin policy: "Back out the MP3 (P04)". Keep the P02 FLAC. UNDO IMPORT of P04, stop beets-flask, partial state.pickle surgery removing only P04's taghistory entry (beets.md procedure, DEF-07-12-06), then an MA sync and a Jellyfin scan. The operator authorised these estate writes by choosing this option.
+- Round scope: "Pipeline + pilot repair (Recommended)". beets fetchart (Cover Art Archive → cover.jpg, embedart stays OFF) + match.preferred.media, art backfill for P10 (P04 is moot if backed out), a single-item replacement of Jellyfin's stored 117 Primary image, an MA refresh of albums 167 (and 169 if it still exists), and Apple Music demoted/disabled for MusicAlbum. The operator authorised these library and consumer writes by choosing this option.
+HARD EXCLUSIONS for the planner: no zfs rollback of any dataset; no Jellyfin FullRefresh or library-wide metadata refresh (image-only, single item); no `beet write`/`beet update`/embedart over the library (DJ/ tags are DB-only, DEF-07-13-01); no re-match of P02 in this round (its CD match is recorded, and preferred.media applies to future imports); no new pilot draws.
+
 ## Gaps
 
 - truth: "All nine pilot albums are present in Jellyfin with MusicBrainz titles and correct cover art"
