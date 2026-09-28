@@ -101,4 +101,31 @@ services:
       - traefik.http.routers.trek-rtr.tls.certresolver=dns-cloudflare
       - traefik.http.routers.trek-rtr.middlewares=chain-authelia@file
       - traefik.http.routers.trek-rtr.service=trek-svc
+
+      # --- MCP bypass router, added 2026-09-28 ---------------------------------------
+      # /mcp is the ONLY way to write to TREK. Its public REST API is read-only -- just
+      # GET /api/v1/{trips,trips/{id},stats,bucket-list} -- while create_trip,
+      # create_accommodation, create_transport and import_airtrail_flights all live
+      # behind /mcp.
+      #
+      # Authelia was returning 302 on /mcp EVEN WITH a bearer token, so an MCP client got
+      # a login page instead of an auth challenge and could never authenticate. The
+      # estate-wide `^/api/.*$` Authelia bypass does NOT cover this -- different prefix.
+      #
+      # Dropping chain-authelia here does NOT leave it open: TREK authenticates /mcp
+      # itself. Healthy unauthenticated response is 401 with WWW-Authenticate: Bearer,
+      # and access needs a static API token (Admin -> MCP Access) or a completed OAuth 2.1
+      # flow. Note from upstream MCP-Scopes: "Static tokens and web session JWTs have full
+      # access equivalent to all scopes" -- a static token is NOT scope-limited, so treat
+      # one as a full-access credential and revoke it on that same Admin page when done.
+      #
+      # Deliberately scoped to /mcp alone. An OAuth-based MCP client would additionally
+      # need /.well-known/oauth-* and the authorize/token endpoints opened here.
+      - traefik.http.routers.trek-mcp-rtr.entrypoints=websecure
+      - traefik.http.routers.trek-mcp-rtr.rule=Host(`trek.deercrest.info`) && PathPrefix(`/mcp`)
+      - traefik.http.routers.trek-mcp-rtr.priority=100
+      - traefik.http.routers.trek-mcp-rtr.tls=true
+      - traefik.http.routers.trek-mcp-rtr.tls.certresolver=dns-cloudflare
+      - traefik.http.routers.trek-mcp-rtr.service=trek-svc
+
       - traefik.http.services.trek-svc.loadbalancer.server.port=3000
