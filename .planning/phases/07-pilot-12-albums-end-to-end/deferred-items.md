@@ -324,3 +324,12 @@ DEF-07-20-01: check-beets-config.sh T-06-33 goes red as soon as fetchart loads, 
   printed. Self-test 15 -> 20 cases (RED before, GREEN after, artifact § R3-R4). Live: check-beets-config RC=0 at
   12:29:09Z with "plugin-defaults-only [fanarttv_key=empty google_engine=default google_key=empty lastfm_key=empty]".
   The deploy and the P10 backfill then completed (§ B resumed, § C). A future real key in any of the four still trips it.
+
+DEF-07-21-01: a targeted `/Library/Media/Updated` Deleted notification makes Jellyfin's LibraryMonitor revalidate the parent folder
+  Filed 2026-09-28 by 07-21 Task 3 W2. OBSERVATION, no action. One minute after the P04 Deleted POST, Jellyfin logged
+  "IO.LibraryMonitor: Benson Boone (/media/Music/Benson Boone) will be refreshed." and then removed item e44d9655…. So the
+  "targeted" update works by revalidating the parent artist folder, which here holds artist.nfo and folder.jpg. It is
+  not a call on a single item. With MetadataSavers [] and SaveLocalMetadata false, nothing was written: `find -newer` the
+  Task 1 stamp over /mnt/tank/media/Music returned 0, and .nfo stayed 91. The freeze is therefore what makes this safe,
+  not the narrowness of the call. Any future targeted update should keep the before-write freeze assertion. Evidence:
+  artifacts/07-21-jellyfin.txt § W2, § AFTER ALL WRITES.

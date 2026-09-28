@@ -102,3 +102,90 @@ C3. p10-cover.b64 = base64 (-w0) of `/mnt/tank/media/Music/Various Artists/Now T
 PRIMARY IMAGE SOURCE: P10 cover.jpg (07-20 backfill, CAA front)
 
 TASK 1: DONE — state witnessed, three bodies prepared and self-checked, NONE SENT.
+
+--------------------------------------------------------------------------------
+## TASK 2 — GATE (checkpoint:decision)
+--------------------------------------------------------------------------------
+Presented, in run order, each with its undo:
+  1. LibraryOptions: MusicAlbum ImageFetchers minus "Apple Music", moved last in ImageFetcherOrder (C1 one-line diff).
+     Remaining enabled for album images: Fanart, TheAudioDB. Undo: POST the saved lo-before-7e64e319….json.
+  2. P04 Deleted update: 11 paths (C2). Undo: a Jellyfin scan re-adds P04 only if its files return.
+  3. P10 Primary image upload: cover.jpg 6d83625a…64e8 replacing Disney 3 09d8b5f8…. Undo: upload p10-primary-before.jpg.
+OPERATOR ANSWER (AskUserQuestion, recorded 2026-09-28T12:41:57Z): "apply (Recommended)" — "Send all three writes in order, re-reading the freeze before each."
+DISPOSITION: apply
+
+--------------------------------------------------------------------------------
+## TASK 3 — WRITES (DISPOSITION apply). One write per run of /root/phase07-0721/w-0721.sh <W1|W2|W3> on LXC 100.
+--------------------------------------------------------------------------------
+Each run resolves JELLYFIN_ADDR fresh from t3_proxy (192.168.90.37:8096 every time), gates the key on "600 root",
+re-reads GET /Library/VirtualFolders and asserts the Music freeze, and re-checks the prepared body sha. Only then does
+it send exactly one POST. The script contains no refresh or scan endpoint; `grep -ciE "refresh|/Scan"` = 1, and that
+one hit is its own comment line saying so.
+
+### W1 — LibraryOptions
+FREEZE (pre-W1, 2026-09-28T12:42:41Z): PASS (MetadataSavers [] ; SaveLocalMetadata false)
+body sha c5d78287…24c8 == prepared: PASS
+POST /Library/VirtualFolders/LibraryOptions at 12:42:41Z -> HTTP 204, curl RC 0, 0 B response.
+AFTER (GET 12:42:54Z), canonical jq -S -c sha256 per library:
+  Music          7e64e319…  before cc00f50da735  after c68f71f49e82  CHANGED
+  Shows          a656b907…  before 894579bbafe3  after 894579bbafe3  SAME
+  Collections    9d7ad6af…  before d7ffd872864a  after d7ffd872864a  SAME
+  Movies         f137a2dd…  before 1fdaea74ef4e  after 1fdaea74ef4e  SAME
+  TV Recordings  8d73cb25…  before c56daf0d6289  after c56daf0d6289  SAME
+  AFTER Music LibraryOptions == lo-body.json LibraryOptions (canonical): EQUAL
+    (c68f71f49e8210504efe500331f1399a5d70a1f42fdc267b8d94feff54fa24d8). Jellyfin stored the body exactly as sent.
+  Music freeze fields after: MetadataSavers [] SaveLocalMetadata false EnableRealtimeMonitor false SaveLyricsWithMedia false.
+  MetadataFetchers unchanged: ["Apple Music","MusicBrainz","TheAudioDB"] (out of scope, per § A).
+Jellyfin log since 12:42:41Z (read after 20 s), lines matching scan|refresh|nfo|saver: 0. There were 3 lines in total:
+  a WebSocket keep-alive and the two webhook notifier tasks.
+APPLE MUSIC (MusicAlbum): DISABLED — ImageFetchers ["Fanart","TheAudioDB"]; ImageFetcherOrder ["Fanart","TheAudioDB","Apple Music"]
+
+### W2 — P04 targeted Deleted update
+FREEZE (pre-W2, 2026-09-28T12:43:21Z): PASS (MetadataSavers [] ; SaveLocalMetadata false)
+body sha 3f7903c1…661e == prepared: PASS (11 Deleted paths, all under the P04 dir)
+POST /Library/Media/Updated at 12:43:21Z -> HTTP 204, curl RC 0.
+Poll GET /Items by Path (MusicAlbum, ParentId Music):
+  12:44:22Z +60s: P04 items=1, MusicAlbum total 79
+  12:44:52Z +91s: P04 items=0, MusicAlbum total 78 (= BEFORE 79 − 1)
+  GET /Items?Ids=e44d9655…: TotalRecordCount 0.
+P02 by Path: 018bd709583c4cecaccfe616bb2b7d1c present, 10 Audio children, all under
+  /media/Music/Benson Boone/American Heart/. JELLYFIN P02: PRESENT, 10 children.
+Jellyfin log since 12:43:21Z:
+  [13:44:21] IO.LibraryMonitor: Benson Boone (/media/Music/Benson Boone) will be refreshed.
+  [13:44:22] LibraryManager: Removing item, Type: MusicAlbum, Name: American Heart,
+             Path: /media/Music/Benson Boone/American Heart [093624834588], Id: e44d9655-02c9-f1f4-a9df-62622c7164fa
+  [13:44:46] Webhook Item Deleted Notifier Completed
+  (Log timestamps are +01:00.) One line matches scan|refresh|nfo|saver: LibraryMonitor's own revalidation of the parent
+  folder, which is how Jellyfin processes a Media/Updated notification. This plan made no refresh call. The folder holds
+  artist.nfo and folder.jpg, and the atlantis `find -newer` below shows neither was rewritten. Filed as DEF-07-21-01
+  (observation).
+JELLYFIN P04: REMOVED (targeted Deleted update)
+
+### W3 — P10 Primary image
+FREEZE (pre-W3, 2026-09-28T12:45:00Z): PASS (MetadataSavers [] ; SaveLocalMetadata false)
+payload p10-cover.b64 base64-decodes to 6d83625a…64e8 (== cover.jpg): PASS
+POST /Items/d18d5c99c4451068e6b3d6999cd48a3d/Images/Primary, Content-Type image/jpeg, at 12:45:01Z -> HTTP 204, curl RC 0.
+Re-read GET /Items/d18d5c99…/Images: one image, Primary, Path /config/metadata/library/d1/d18d5c99…/folder.jpg,
+  Size 9041762, 3540x3540, ImageTag 10908426f9c347d7ce2d68dac8906271 (was 0a6ed4c7…, 658823 B, 1400x1400).
+Inside the jellyfin container: sha256 6d83625a7035f576f86b3ddf63b03e01e544f99923675497190e0c92384664e8, 9041762 B,
+  mtime 2026-09-28 13:45:01 +0100, root:root 770. The item metadata dir holds only folder.jpg. Jellyfin did not re-encode.
+Jellyfin log since 12:45:01Z, lines matching scan|refresh|nfo|saver: 0.
+PRIMARY IMAGE: REPLACED (stored 6d83625a7035f576f86b3ddf63b03e01e544f99923675497190e0c92384664e8; == cover.jpg: yes; != Disney 09d8b5f8…: yes)
+  Undo if ever wanted: upload /mnt/fast/safety/phase07/0721/p10-primary-before.jpg (09d8b5f8…) the same way.
+  Visual check by the operator is at 07-23.
+
+### AFTER ALL WRITES
+Freeze re-read (GET 12:45:13Z): MetadataSavers [] SaveLocalMetadata false. Music LibraryOptions sha still c68f71f4….
+Atlantis as real root (id -u 0), TZ=UTC, 12:45:24Z:
+  /mnt/tank/media/Music: *.nfo 91 (== baseline 91); *.jpg 89 (== Task 1); entries not 568:568 = 0.
+  find /mnt/tank/media/Music -newer /root/phase07-0721/start.stamp (12:38:23Z): 0 entries.
+  P10 dir: 51 files = 50 .flac + cover.jpg; folder.jpg/album.nfo: 0.
+    Listing regenerated as (name, size, mtime), sorted: sha256 407c00e0…226b == Task 1's p10-listing-before.tsv. IDENTICAL.
+    (Task 1 wrote the dir row under its basename and `find .` writes it as ".". That one name is normalised before the
+    compare; the row's size and mtime are unchanged.)
+  `Benson Boone/`: American Heart, Fireworks & Rollerblades, Fireworks & Rollerblades (2024), artist.nfo, backdrop.jpg,
+    folder.jpg. This is the Task 1 set.
+JELLYFIN NO-SIDECAR: PASS (.nfo 91; nothing new under /media/Music)
+
+No beets write, no Music Assistant write, no scan or refresh call of any kind. Every credential stayed out of argv.
+TASK 3: DONE — three writes sent in order, each preceded by a freeze PASS, each effect read back.
