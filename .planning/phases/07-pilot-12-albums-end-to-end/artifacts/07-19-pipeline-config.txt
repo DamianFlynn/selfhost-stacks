@@ -1,0 +1,1385 @@
+================================================================================
+PHASE 7 / PLAN 07-19 — PIPELINE CONFIG: fetchart (Cover Art Archive, cover.jpg, no embed)
+and match.preferred.media, taught to check-beets-config.sh and proven in a throwaway
+================================================================================
+
+Run          2026-09-28 09:39Z – 09:53Z, workstation + LXC 100 `selfhost` (172.16.1.159)
+Container    beets-flask, metasauce/beets-flask:v2.0.0-rc6, beets 2.12.0,
+             StartedAt 2026-09-28T09:33:06Z (restarted by 07-18; NOT restarted here)
+Repo commit  1e054a6 feat(07-19): the config + check change (Task 1). Local only, NOT pushed.
+Operator     OD-2 (2026-09-28, "Pipeline + pilot repair"), items 1–3, repo copy only.
+Writes       the repo, and the throwaway /tmp/p7-0719/ inside beets-flask (removed through a
+             two-layer fence, § CLEANUP). Nothing installed to appdata. Nothing pushed.
+             /config/library.db and /config/state.pickle are byte-identical from the first read
+             of this plan to the last:
+               8f5994b824af5d43dacf8069d1ae3ffc2ac5a5694d90574763e2317bb1097813  /config/library.db
+               b8ce8afdc5e3ba1c858d3fbc07c4f8ee90538343817af1200c24d5389f1a66c6  /config/state.pickle
+             (read at 09:42:26Z, 09:46:35Z, 09:47:33Z and 09:48:48Z, and by the live check at 09:49:5xZ.)
+
+VERDICT LINES
+RC6 COMMIT KEEPS NEW KEYS: yes — nothing dropped (plugins, fetchart, art_filename, match.preferred.media all present in the server-committed object)
+BEETS-FLASK RUNS PLUGIN IMPORT STAGES: yes (beets_flask/importer/session.py:712-726 appends every plugin's get_import_stages(); stages.py:606 -> beets/importer/tasks.py:505 sends import_task_files, fetchart's assign_art listener)
+RANKING P02 NEW: rank 1 b3a1e018-845b-44bd-a9a3-4f46c2e39d49 (Digital Media, XW) — exact tie with cfb585a2 (Digital Media, XW) at 0.017544
+RANKING P02 CURRENT: rank 1 c0df8104-7b49-4fa3-bcec-cb3d310aa9a5 (CD, US) — three-way physical tie with c33163f3 (CD) and e4fdb1dc (12" Vinyl) at 0.009091
+RANKING P10 NEW: rank 1 b057dee8-02ea-4b48-8681-f5e3255bc47d (CD, GB) — also rank 1 under CURRENT
+THROWAWAY IMPORT: PASS (cover.jpg 6cd3a814e043888624327ec8776bed67ec0907d4b960c5d1ec6e77ad6848cb1a, artpath set, embedded pictures unchanged 15/15, as-is control no art) — album P03 ef528afc (P06 was skipped by -q, see § THROWAWAY IMPORT (1))
+PRE-DEPLOY LIVE RED SET: plugins, OD-2 fetchart.auto, OD-2 fetchart.sources, OD-2 match.preferred.media (exit 1, 4 failed checks; OD-2 art_filename already green at beets' default `cover`)
+ORACLE IMPACT: none — no DEF-07-19-03 (§ ORACLE)
+
+--------------------------------------------------------------------------------
+## T1 RED
+--------------------------------------------------------------------------------
+The self-test was edited first: synthetic_correct_dump moved to the target shape, cases 5a
+(embedart appended) and 5b (media line removed) were added, case 1 was set to 26 and
+ST_PLANNED_CASES to 15. No assertion had been added yet. Result: exit 1, 6 of 15 cases wrong.
+
+The shape of the failure differs from the plan's prediction ("the correct dump passes and 5a/5b
+give 0 red"), and here is why, taken from the per-case output. The OLD plugins assertion demanded
+EXACTLY ONE entry, so the two-entry target list made it go red in every dump-based case. So
+"fully correct" gave 1 red, not 0, and cases 2, 3, 4 and 7 each gave one more than expected. 5a and
+5b each gave 1 red, but it was that same plugins red, not the one each case exists to drive:
+5b's red was `plugins`, not `preferred.media`. The empty dump gave 22, with no OD-2 lines, because
+those assertions did not exist. RED is established either way. The self-test cannot pass the new
+shape without the new code.
+
+Verbatim (ANSI stripped):
+
+    🧪 --self-test — 15 cases: 8 synthetic dumps, the D-04 contract over this file's own source, and 6 inbox-registration lines (WR7-05)
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+      case: empty dump (blind)  (expect 26 red)
+        · positive control: gui.num_preview_workers='UNKNOWN' gui.terminal.start_path='UNKNOWN' — neither vendored file sets these, so their absence means this is NOT the server-committed object. Every reading below is UNKNOWN, not green.
+        · CONF-01 import.copy: UNKNOWN, not green — absent from the server-committed dump, or unreadable
+        · CONF-01 import.move: UNKNOWN, not green — absent from the server-committed dump, or unreadable
+        · CONF-02 import.incremental: UNKNOWN, not green — absent from the server-committed dump, or unreadable
+        · CONF-02 import.incremental_skip_later: UNKNOWN, not green — absent from the server-committed dump, or unreadable
+        · CONF-05 match.preferred.countries: UNKNOWN, not green — absent, or not a list
+        · CONF-05 match.preferred.original_year: UNKNOWN, not green — absent from the server-committed dump, or unreadable
+        · CONF-05 musicbrainz.extra_tags: UNKNOWN, not green — absent, or not a list
+        · T-06-31 import.duplicate_action: UNKNOWN, not green — absent from the server-committed dump, or unreadable
+        · match.medium_rec_thresh: UNKNOWN, not green — absent from the server-committed dump, or unreadable
+        · directory: UNKNOWN, not green — absent from the server-committed dump, or unreadable
+        · statefile: UNKNOWN, not green — absent from the server-committed dump, or unreadable
+        · library: UNKNOWN, not green — absent from the server-committed dump, or unreadable
+        · SAFE-01 scrub.auto: UNKNOWN, not green — absent from the server-committed dump, or unreadable
+        · SAFE-01 lastgenre.auto: UNKNOWN, not green — absent from the server-committed dump, or unreadable
+        · SAFE-01 embedart.auto: UNKNOWN, not green — absent from the server-committed dump, or unreadable
+        · paths.comp / paths.default: UNKNOWN, not green — one or both absent (comp='UNKNOWN' default='UNKNOWN')
+        · paths: UNKNOWN, not green — the stanza is absent or is not a mapping
+        · per_disc_numbering: UNKNOWN, not green — absent from the server-committed dump, or unreadable
+        · asciify_paths: UNKNOWN, not green — absent from the server-committed dump, or unreadable
+        · va_name: UNKNOWN, not green — absent from the server-committed dump, or unreadable
+        · plugins: UNKNOWN, not green — absent, or not a list
+      ❌ case 'empty dump (blind)': 22 red, expected 26
+
+      case: the silent-delete duplicate action  (expect 1 red)
+        · positive control: rc6 schema keys present in the dump (gui.num_preview_workers=4, gui.terminal.start_path=/repo) — this IS the server-committed object
+        · CONF-01 import.copy = true
+        · CONF-01 import.move = false
+        · CONF-02 import.incremental = true
+        · CONF-02 import.incremental_skip_later = true
+        · CONF-05 match.preferred.countries contains GB — ["GB","US"]
+        · CONF-05 match.preferred.countries contains UK = false (not 'true')
+        · CONF-05 match.preferred.original_year = true
+        · CONF-05 musicbrainz.extra_tags is a non-empty list (2 entries): ["year","catalognum"]
+        · T-06-31 import.duplicate_action = 'remove' — want 'ask'
+        · match.medium_rec_thresh = 0.25
+        · directory = /media/Music
+        · statefile = /config/state.pickle
+        · library = /config/library.db
+        · SAFE-01 scrub.auto = false
+        · SAFE-01 lastgenre.auto = false
+        · SAFE-01 embedart.auto = false
+        · paths.comp equals paths.default — the inherited compilation rule is OVERRIDDEN, which is the only way to neutralise it (there is no syntax for deleting an inherited path rule)
+        · paths: no rule routes anything into a Compilations/ tree
+        · per_disc_numbering = true
+        · asciify_paths = false
+        · va_name = Various Artists
+        · plugins = ["musicbrainz","fetchart"] — want exactly one entry, musicbrainz
+      ❌ case 'the silent-delete duplicate action': 2 red, expected 1
+
+      case: incremental set, incremental_skip_later not  (expect 1 red)
+        · positive control: rc6 schema keys present in the dump (gui.num_preview_workers=4, gui.terminal.start_path=/repo) — this IS the server-committed object
+        · CONF-01 import.copy = true
+        · CONF-01 import.move = false
+        · CONF-02 import.incremental = true
+        · CONF-02 import.incremental_skip_later = 'false' — want 'true'
+        · CONF-05 match.preferred.countries contains GB — ["GB","US"]
+        · CONF-05 match.preferred.countries contains UK = false (not 'true')
+        · CONF-05 match.preferred.original_year = true
+        · CONF-05 musicbrainz.extra_tags is a non-empty list (2 entries): ["year","catalognum"]
+        · T-06-31 import.duplicate_action = ask
+        · match.medium_rec_thresh = 0.25
+        · directory = /media/Music
+        · statefile = /config/state.pickle
+        · library = /config/library.db
+        · SAFE-01 scrub.auto = false
+        · SAFE-01 lastgenre.auto = false
+        · SAFE-01 embedart.auto = false
+        · paths.comp equals paths.default — the inherited compilation rule is OVERRIDDEN, which is the only way to neutralise it (there is no syntax for deleting an inherited path rule)
+        · paths: no rule routes anything into a Compilations/ tree
+        · per_disc_numbering = true
+        · asciify_paths = false
+        · va_name = Various Artists
+        · plugins = ["musicbrainz","fetchart"] — want exactly one entry, musicbrainz
+      ❌ case 'incremental set, incremental_skip_later not': 2 red, expected 1
+
+      case: preferred.countries carrying the wrong country code  (expect 2 red)
+        · positive control: rc6 schema keys present in the dump (gui.num_preview_workers=4, gui.terminal.start_path=/repo) — this IS the server-committed object
+        · CONF-01 import.copy = true
+        · CONF-01 import.move = false
+        · CONF-02 import.incremental = true
+        · CONF-02 import.incremental_skip_later = true
+        · CONF-05 match.preferred.countries does NOT contain GB — ["UK","US"]
+        · CONF-05 match.preferred.countries contains UK = 'true' — MusicBrainz stores GB, so UK matches nothing and fails SILENTLY: the import simply prefers a different release
+        · CONF-05 match.preferred.original_year = true
+        · CONF-05 musicbrainz.extra_tags is a non-empty list (2 entries): ["year","catalognum"]
+        · T-06-31 import.duplicate_action = ask
+        · match.medium_rec_thresh = 0.25
+        · directory = /media/Music
+        · statefile = /config/state.pickle
+        · library = /config/library.db
+        · SAFE-01 scrub.auto = false
+        · SAFE-01 lastgenre.auto = false
+        · SAFE-01 embedart.auto = false
+        · paths.comp equals paths.default — the inherited compilation rule is OVERRIDDEN, which is the only way to neutralise it (there is no syntax for deleting an inherited path rule)
+        · paths: no rule routes anything into a Compilations/ tree
+        · per_disc_numbering = true
+        · asciify_paths = false
+        · va_name = Various Artists
+        · plugins = ["musicbrainz","fetchart"] — want exactly one entry, musicbrainz
+      ❌ case 'preferred.countries carrying the wrong country code': 3 red, expected 2
+
+      case: fully correct  (expect 0 red)
+        · positive control: rc6 schema keys present in the dump (gui.num_preview_workers=4, gui.terminal.start_path=/repo) — this IS the server-committed object
+        · CONF-01 import.copy = true
+        · CONF-01 import.move = false
+        · CONF-02 import.incremental = true
+        · CONF-02 import.incremental_skip_later = true
+        · CONF-05 match.preferred.countries contains GB — ["GB","US"]
+        · CONF-05 match.preferred.countries contains UK = false (not 'true')
+        · CONF-05 match.preferred.original_year = true
+        · CONF-05 musicbrainz.extra_tags is a non-empty list (2 entries): ["year","catalognum"]
+        · T-06-31 import.duplicate_action = ask
+        · match.medium_rec_thresh = 0.25
+        · directory = /media/Music
+        · statefile = /config/state.pickle
+        · library = /config/library.db
+        · SAFE-01 scrub.auto = false
+        · SAFE-01 lastgenre.auto = false
+        · SAFE-01 embedart.auto = false
+        · paths.comp equals paths.default — the inherited compilation rule is OVERRIDDEN, which is the only way to neutralise it (there is no syntax for deleting an inherited path rule)
+        · paths: no rule routes anything into a Compilations/ tree
+        · per_disc_numbering = true
+        · asciify_paths = false
+        · va_name = Various Artists
+        · plugins = ["musicbrainz","fetchart"] — want exactly one entry, musicbrainz
+      ❌ case 'fully correct': 1 red, expected 0
+
+      case: embedart appended to plugins (OD-2)  (expect 1 red)
+        · positive control: rc6 schema keys present in the dump (gui.num_preview_workers=4, gui.terminal.start_path=/repo) — this IS the server-committed object
+        · CONF-01 import.copy = true
+        · CONF-01 import.move = false
+        · CONF-02 import.incremental = true
+        · CONF-02 import.incremental_skip_later = true
+        · CONF-05 match.preferred.countries contains GB — ["GB","US"]
+        · CONF-05 match.preferred.countries contains UK = false (not 'true')
+        · CONF-05 match.preferred.original_year = true
+        · CONF-05 musicbrainz.extra_tags is a non-empty list (2 entries): ["year","catalognum"]
+        · T-06-31 import.duplicate_action = ask
+        · match.medium_rec_thresh = 0.25
+        · directory = /media/Music
+        · statefile = /config/state.pickle
+        · library = /config/library.db
+        · SAFE-01 scrub.auto = false
+        · SAFE-01 lastgenre.auto = false
+        · SAFE-01 embedart.auto = false
+        · paths.comp equals paths.default — the inherited compilation rule is OVERRIDDEN, which is the only way to neutralise it (there is no syntax for deleting an inherited path rule)
+        · paths: no rule routes anything into a Compilations/ tree
+        · per_disc_numbering = true
+        · asciify_paths = false
+        · va_name = Various Artists
+        · plugins = ["musicbrainz","fetchart","embedart"] — want exactly one entry, musicbrainz
+      ✅ case 'embedart appended to plugins (OD-2)': 1 red, as expected
+
+      case: preferred.media absent (OD-2)  (expect 1 red)
+        · positive control: rc6 schema keys present in the dump (gui.num_preview_workers=4, gui.terminal.start_path=/repo) — this IS the server-committed object
+        · CONF-01 import.copy = true
+        · CONF-01 import.move = false
+        · CONF-02 import.incremental = true
+        · CONF-02 import.incremental_skip_later = true
+        · CONF-05 match.preferred.countries contains GB — ["GB","US"]
+        · CONF-05 match.preferred.countries contains UK = false (not 'true')
+        · CONF-05 match.preferred.original_year = true
+        · CONF-05 musicbrainz.extra_tags is a non-empty list (2 entries): ["year","catalognum"]
+        · T-06-31 import.duplicate_action = ask
+        · match.medium_rec_thresh = 0.25
+        · directory = /media/Music
+        · statefile = /config/state.pickle
+        · library = /config/library.db
+        · SAFE-01 scrub.auto = false
+        · SAFE-01 lastgenre.auto = false
+        · SAFE-01 embedart.auto = false
+        · paths.comp equals paths.default — the inherited compilation rule is OVERRIDDEN, which is the only way to neutralise it (there is no syntax for deleting an inherited path rule)
+        · paths: no rule routes anything into a Compilations/ tree
+        · per_disc_numbering = true
+        · asciify_paths = false
+        · va_name = Various Artists
+        · plugins = ["musicbrainz","fetchart"] — want exactly one entry, musicbrainz
+      ✅ case 'preferred.media absent (OD-2)': 1 red, as expected
+
+      case: the -l + -c contract over this script's own source  (gate: real violations=0 AND synthetic rejected=1)
+        · D-04 contract: every beet invocation in this script's own source carries -l ${THROWAWAY_DB} AND -c ${OVERLAY}
+        · D-04 contract, driven: the synthetic -c-only invocation was REJECTED, as it must be —  beet_exec "${BEET_BIN} -c ${OVERLAY} config -d"
+      ✅ case 'the -l + -c contract over this script's own source': real violations=0, synthetic rejected=1
+
+      case 7 precondition: raw dump is 71126 bytes, above the 65536-byte pipe-buffer ceiling
+      case: a forbidden substring at the TOP of a >64 KiB dump (GC-01 regression)  (expect 1 red)
+        · positive control: rc6 schema keys present in the dump (gui.num_preview_workers=4, gui.terminal.start_path=/repo) — this IS the server-committed object
+        · CONF-01 import.copy = true
+        · CONF-01 import.move = false
+        · CONF-02 import.incremental = true
+        · CONF-02 import.incremental_skip_later = true
+        · CONF-05 match.preferred.countries contains GB — ["GB","US"]
+        · CONF-05 match.preferred.countries contains UK = false (not 'true')
+        · CONF-05 match.preferred.original_year = true
+        · CONF-05 musicbrainz.extra_tags is a non-empty list (2 entries): ["year","catalognum"]
+        · T-06-31 import.duplicate_action = ask
+        · match.medium_rec_thresh = 0.25
+        · directory = /media/Music
+        · statefile = /config/state.pickle
+        · library = /config/library.db
+        · SAFE-01 scrub.auto = false
+        · SAFE-01 lastgenre.auto = false
+        · SAFE-01 embedart.auto = false
+        · paths.comp equals paths.default — the inherited compilation rule is OVERRIDDEN, which is the only way to neutralise it (there is no syntax for deleting an inherited path rule)
+        · paths: no rule routes anything into a Compilations/ tree
+        · per_disc_numbering = true
+        · asciify_paths = false
+        · va_name = Various Artists
+        · plugins = ["musicbrainz","fetchart"] — want exactly one entry, musicbrainz
+        · forbidden substring present in the server-committed dump: 'Compilations'
+      ❌ case 'a forbidden substring at the TOP of a >64 KiB dump (GC-01 regression)': 2 red, expected 1
+
+      case: registration: the expected set {02-review, 03-asis}  (expect rc 0)
+      ✅ case 'registration: the expected set {02-review, 03-asis}': rc 0, as expected
+
+      case: registration: 01-auto present (the pre-D-21 line)  (expect rc 1)
+      ✅ case 'registration: 01-auto present (the pre-D-21 line)': rc 1, as expected — 01-auto is registered (/downloads/complete/nzb/_inbox/01-auto) - D-21 did not deploy, or was reverted
+
+      case: registration: one inbox only  (expect rc 1)
+      ✅ case 'registration: one inbox only': rc 1, as expected — fewer than two inboxes registered (1)
+
+      case: registration: an unexpected name  (expect rc 1)
+      ✅ case 'registration: an unexpected name': rc 1, as expected — unexpected inbox /downloads/complete/nzb/_inbox/04-hold
+
+      case: registration: no registration line at all (UNKNOWN)  (expect rc 2)
+      ✅ case 'registration: no registration line at all (UNKNOWN)': rc 2, as expected — no registration line naming inboxes was found in the text read. That is NOT 'the set is right' - nothing was compared.
+
+      case: registration: an older good line, the NEWEST names 01-auto  (expect rc 1)
+      ✅ case 'registration: an older good line, the NEWEST names 01-auto': rc 1, as expected — 01-auto is registered (/downloads/complete/nzb/_inbox/01-auto) - D-21 did not deploy, or was reverted
+
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ❌ --self-test: 6 of 15 cases did not behave as expected
+
+--------------------------------------------------------------------------------
+## T1 GREEN
+--------------------------------------------------------------------------------
+Plugins block replaced (sorted list must equal ["fetchart","musicbrainz"]; UNKNOWN arm kept);
+four OD-2 expect_eq assertions added after SAFE-01; header "What it covers", the --self-test
+paragraph and the closing summary updated. Result: exit 0, 15/15 cases as expected, 13 red.
+
+Empty dump = 26 = 22 + 4. The four new reds, each named from the case-1 output:
+    · OD-2 fetchart.auto: UNKNOWN, not green
+    · OD-2 fetchart.sources: UNKNOWN, not green
+    · OD-2 art_filename: UNKNOWN, not green
+    · OD-2 match.preferred.media: UNKNOWN, not green
+(plugins was already one of the 22 and stays one: modified, not added.)
+5a's single red is `plugins = ["musicbrainz","fetchart","embedart"] — want exactly {musicbrainz,
+fetchart}; embedart must never be listed …`. 5b's single red is `OD-2 match.preferred.media:
+UNKNOWN`. Each case goes red for its own reason.
+
+Task 1 grep verify (the plan's <automated> block): T1-VERIFY-PASS. The added lines of the config
+diff were screened for credential-shaped content (token|secret|password|passwd|api_key|user_token|
+auth, e-mail, URL-embedded credentials): 0 matches. The config's credential screen banner asks
+for a re-screen on every change.
+
+Verbatim (ANSI stripped):
+
+    🧪 --self-test — 15 cases: 8 synthetic dumps, the D-04 contract over this file's own source, and 6 inbox-registration lines (WR7-05)
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+      case: empty dump (blind)  (expect 26 red)
+        · positive control: gui.num_preview_workers='UNKNOWN' gui.terminal.start_path='UNKNOWN' — neither vendored file sets these, so their absence means this is NOT the server-committed object. Every reading below is UNKNOWN, not green.
+        · CONF-01 import.copy: UNKNOWN, not green — absent from the server-committed dump, or unreadable
+        · CONF-01 import.move: UNKNOWN, not green — absent from the server-committed dump, or unreadable
+        · CONF-02 import.incremental: UNKNOWN, not green — absent from the server-committed dump, or unreadable
+        · CONF-02 import.incremental_skip_later: UNKNOWN, not green — absent from the server-committed dump, or unreadable
+        · CONF-05 match.preferred.countries: UNKNOWN, not green — absent, or not a list
+        · CONF-05 match.preferred.original_year: UNKNOWN, not green — absent from the server-committed dump, or unreadable
+        · CONF-05 musicbrainz.extra_tags: UNKNOWN, not green — absent, or not a list
+        · T-06-31 import.duplicate_action: UNKNOWN, not green — absent from the server-committed dump, or unreadable
+        · match.medium_rec_thresh: UNKNOWN, not green — absent from the server-committed dump, or unreadable
+        · directory: UNKNOWN, not green — absent from the server-committed dump, or unreadable
+        · statefile: UNKNOWN, not green — absent from the server-committed dump, or unreadable
+        · library: UNKNOWN, not green — absent from the server-committed dump, or unreadable
+        · SAFE-01 scrub.auto: UNKNOWN, not green — absent from the server-committed dump, or unreadable
+        · SAFE-01 lastgenre.auto: UNKNOWN, not green — absent from the server-committed dump, or unreadable
+        · SAFE-01 embedart.auto: UNKNOWN, not green — absent from the server-committed dump, or unreadable
+        · OD-2 fetchart.auto: UNKNOWN, not green — absent from the server-committed dump, or unreadable
+        · OD-2 fetchart.sources: UNKNOWN, not green — absent from the server-committed dump, or unreadable
+        · OD-2 art_filename: UNKNOWN, not green — absent from the server-committed dump, or unreadable
+        · OD-2 match.preferred.media: UNKNOWN, not green — absent from the server-committed dump, or unreadable
+        · paths.comp / paths.default: UNKNOWN, not green — one or both absent (comp='UNKNOWN' default='UNKNOWN')
+        · paths: UNKNOWN, not green — the stanza is absent or is not a mapping
+        · per_disc_numbering: UNKNOWN, not green — absent from the server-committed dump, or unreadable
+        · asciify_paths: UNKNOWN, not green — absent from the server-committed dump, or unreadable
+        · va_name: UNKNOWN, not green — absent from the server-committed dump, or unreadable
+        · plugins: UNKNOWN, not green — absent, or not a list
+      ✅ case 'empty dump (blind)': 26 red, as expected
+
+      case: the silent-delete duplicate action  (expect 1 red)
+        · positive control: rc6 schema keys present in the dump (gui.num_preview_workers=4, gui.terminal.start_path=/repo) — this IS the server-committed object
+        · CONF-01 import.copy = true
+        · CONF-01 import.move = false
+        · CONF-02 import.incremental = true
+        · CONF-02 import.incremental_skip_later = true
+        · CONF-05 match.preferred.countries contains GB — ["GB","US"]
+        · CONF-05 match.preferred.countries contains UK = false (not 'true')
+        · CONF-05 match.preferred.original_year = true
+        · CONF-05 musicbrainz.extra_tags is a non-empty list (2 entries): ["year","catalognum"]
+        · T-06-31 import.duplicate_action = 'remove' — want 'ask'
+        · match.medium_rec_thresh = 0.25
+        · directory = /media/Music
+        · statefile = /config/state.pickle
+        · library = /config/library.db
+        · SAFE-01 scrub.auto = false
+        · SAFE-01 lastgenre.auto = false
+        · SAFE-01 embedart.auto = false
+        · OD-2 fetchart.auto = true
+        · OD-2 fetchart.sources = ["coverart"]
+        · OD-2 art_filename = cover
+        · OD-2 match.preferred.media = ["Digital Media","CD"]
+        · paths.comp equals paths.default — the inherited compilation rule is OVERRIDDEN, which is the only way to neutralise it (there is no syntax for deleting an inherited path rule)
+        · paths: no rule routes anything into a Compilations/ tree
+        · per_disc_numbering = true
+        · asciify_paths = false
+        · va_name = Various Artists
+        · plugins is exactly {musicbrainz, fetchart}
+      ✅ case 'the silent-delete duplicate action': 1 red, as expected
+
+      case: incremental set, incremental_skip_later not  (expect 1 red)
+        · positive control: rc6 schema keys present in the dump (gui.num_preview_workers=4, gui.terminal.start_path=/repo) — this IS the server-committed object
+        · CONF-01 import.copy = true
+        · CONF-01 import.move = false
+        · CONF-02 import.incremental = true
+        · CONF-02 import.incremental_skip_later = 'false' — want 'true'
+        · CONF-05 match.preferred.countries contains GB — ["GB","US"]
+        · CONF-05 match.preferred.countries contains UK = false (not 'true')
+        · CONF-05 match.preferred.original_year = true
+        · CONF-05 musicbrainz.extra_tags is a non-empty list (2 entries): ["year","catalognum"]
+        · T-06-31 import.duplicate_action = ask
+        · match.medium_rec_thresh = 0.25
+        · directory = /media/Music
+        · statefile = /config/state.pickle
+        · library = /config/library.db
+        · SAFE-01 scrub.auto = false
+        · SAFE-01 lastgenre.auto = false
+        · SAFE-01 embedart.auto = false
+        · OD-2 fetchart.auto = true
+        · OD-2 fetchart.sources = ["coverart"]
+        · OD-2 art_filename = cover
+        · OD-2 match.preferred.media = ["Digital Media","CD"]
+        · paths.comp equals paths.default — the inherited compilation rule is OVERRIDDEN, which is the only way to neutralise it (there is no syntax for deleting an inherited path rule)
+        · paths: no rule routes anything into a Compilations/ tree
+        · per_disc_numbering = true
+        · asciify_paths = false
+        · va_name = Various Artists
+        · plugins is exactly {musicbrainz, fetchart}
+      ✅ case 'incremental set, incremental_skip_later not': 1 red, as expected
+
+      case: preferred.countries carrying the wrong country code  (expect 2 red)
+        · positive control: rc6 schema keys present in the dump (gui.num_preview_workers=4, gui.terminal.start_path=/repo) — this IS the server-committed object
+        · CONF-01 import.copy = true
+        · CONF-01 import.move = false
+        · CONF-02 import.incremental = true
+        · CONF-02 import.incremental_skip_later = true
+        · CONF-05 match.preferred.countries does NOT contain GB — ["UK","US"]
+        · CONF-05 match.preferred.countries contains UK = 'true' — MusicBrainz stores GB, so UK matches nothing and fails SILENTLY: the import simply prefers a different release
+        · CONF-05 match.preferred.original_year = true
+        · CONF-05 musicbrainz.extra_tags is a non-empty list (2 entries): ["year","catalognum"]
+        · T-06-31 import.duplicate_action = ask
+        · match.medium_rec_thresh = 0.25
+        · directory = /media/Music
+        · statefile = /config/state.pickle
+        · library = /config/library.db
+        · SAFE-01 scrub.auto = false
+        · SAFE-01 lastgenre.auto = false
+        · SAFE-01 embedart.auto = false
+        · OD-2 fetchart.auto = true
+        · OD-2 fetchart.sources = ["coverart"]
+        · OD-2 art_filename = cover
+        · OD-2 match.preferred.media = ["Digital Media","CD"]
+        · paths.comp equals paths.default — the inherited compilation rule is OVERRIDDEN, which is the only way to neutralise it (there is no syntax for deleting an inherited path rule)
+        · paths: no rule routes anything into a Compilations/ tree
+        · per_disc_numbering = true
+        · asciify_paths = false
+        · va_name = Various Artists
+        · plugins is exactly {musicbrainz, fetchart}
+      ✅ case 'preferred.countries carrying the wrong country code': 2 red, as expected
+
+      case: fully correct  (expect 0 red)
+        · positive control: rc6 schema keys present in the dump (gui.num_preview_workers=4, gui.terminal.start_path=/repo) — this IS the server-committed object
+        · CONF-01 import.copy = true
+        · CONF-01 import.move = false
+        · CONF-02 import.incremental = true
+        · CONF-02 import.incremental_skip_later = true
+        · CONF-05 match.preferred.countries contains GB — ["GB","US"]
+        · CONF-05 match.preferred.countries contains UK = false (not 'true')
+        · CONF-05 match.preferred.original_year = true
+        · CONF-05 musicbrainz.extra_tags is a non-empty list (2 entries): ["year","catalognum"]
+        · T-06-31 import.duplicate_action = ask
+        · match.medium_rec_thresh = 0.25
+        · directory = /media/Music
+        · statefile = /config/state.pickle
+        · library = /config/library.db
+        · SAFE-01 scrub.auto = false
+        · SAFE-01 lastgenre.auto = false
+        · SAFE-01 embedart.auto = false
+        · OD-2 fetchart.auto = true
+        · OD-2 fetchart.sources = ["coverart"]
+        · OD-2 art_filename = cover
+        · OD-2 match.preferred.media = ["Digital Media","CD"]
+        · paths.comp equals paths.default — the inherited compilation rule is OVERRIDDEN, which is the only way to neutralise it (there is no syntax for deleting an inherited path rule)
+        · paths: no rule routes anything into a Compilations/ tree
+        · per_disc_numbering = true
+        · asciify_paths = false
+        · va_name = Various Artists
+        · plugins is exactly {musicbrainz, fetchart}
+      ✅ case 'fully correct': 0 red, as expected
+
+      case: embedart appended to plugins (OD-2)  (expect 1 red)
+        · positive control: rc6 schema keys present in the dump (gui.num_preview_workers=4, gui.terminal.start_path=/repo) — this IS the server-committed object
+        · CONF-01 import.copy = true
+        · CONF-01 import.move = false
+        · CONF-02 import.incremental = true
+        · CONF-02 import.incremental_skip_later = true
+        · CONF-05 match.preferred.countries contains GB — ["GB","US"]
+        · CONF-05 match.preferred.countries contains UK = false (not 'true')
+        · CONF-05 match.preferred.original_year = true
+        · CONF-05 musicbrainz.extra_tags is a non-empty list (2 entries): ["year","catalognum"]
+        · T-06-31 import.duplicate_action = ask
+        · match.medium_rec_thresh = 0.25
+        · directory = /media/Music
+        · statefile = /config/state.pickle
+        · library = /config/library.db
+        · SAFE-01 scrub.auto = false
+        · SAFE-01 lastgenre.auto = false
+        · SAFE-01 embedart.auto = false
+        · OD-2 fetchart.auto = true
+        · OD-2 fetchart.sources = ["coverart"]
+        · OD-2 art_filename = cover
+        · OD-2 match.preferred.media = ["Digital Media","CD"]
+        · paths.comp equals paths.default — the inherited compilation rule is OVERRIDDEN, which is the only way to neutralise it (there is no syntax for deleting an inherited path rule)
+        · paths: no rule routes anything into a Compilations/ tree
+        · per_disc_numbering = true
+        · asciify_paths = false
+        · va_name = Various Artists
+        · plugins = ["musicbrainz","fetchart","embedart"] — want exactly {musicbrainz, fetchart}; embedart must never be listed (SAFE-01: it rewrites audio files), nor any plugin outside the reviewed set
+      ✅ case 'embedart appended to plugins (OD-2)': 1 red, as expected
+
+      case: preferred.media absent (OD-2)  (expect 1 red)
+        · positive control: rc6 schema keys present in the dump (gui.num_preview_workers=4, gui.terminal.start_path=/repo) — this IS the server-committed object
+        · CONF-01 import.copy = true
+        · CONF-01 import.move = false
+        · CONF-02 import.incremental = true
+        · CONF-02 import.incremental_skip_later = true
+        · CONF-05 match.preferred.countries contains GB — ["GB","US"]
+        · CONF-05 match.preferred.countries contains UK = false (not 'true')
+        · CONF-05 match.preferred.original_year = true
+        · CONF-05 musicbrainz.extra_tags is a non-empty list (2 entries): ["year","catalognum"]
+        · T-06-31 import.duplicate_action = ask
+        · match.medium_rec_thresh = 0.25
+        · directory = /media/Music
+        · statefile = /config/state.pickle
+        · library = /config/library.db
+        · SAFE-01 scrub.auto = false
+        · SAFE-01 lastgenre.auto = false
+        · SAFE-01 embedart.auto = false
+        · OD-2 fetchart.auto = true
+        · OD-2 fetchart.sources = ["coverart"]
+        · OD-2 art_filename = cover
+        · OD-2 match.preferred.media: UNKNOWN, not green — absent from the server-committed dump, or unreadable
+        · paths.comp equals paths.default — the inherited compilation rule is OVERRIDDEN, which is the only way to neutralise it (there is no syntax for deleting an inherited path rule)
+        · paths: no rule routes anything into a Compilations/ tree
+        · per_disc_numbering = true
+        · asciify_paths = false
+        · va_name = Various Artists
+        · plugins is exactly {musicbrainz, fetchart}
+      ✅ case 'preferred.media absent (OD-2)': 1 red, as expected
+
+      case: the -l + -c contract over this script's own source  (gate: real violations=0 AND synthetic rejected=1)
+        · D-04 contract: every beet invocation in this script's own source carries -l ${THROWAWAY_DB} AND -c ${OVERLAY}
+        · D-04 contract, driven: the synthetic -c-only invocation was REJECTED, as it must be —  beet_exec "${BEET_BIN} -c ${OVERLAY} config -d"
+      ✅ case 'the -l + -c contract over this script's own source': real violations=0, synthetic rejected=1
+
+      case 7 precondition: raw dump is 71126 bytes, above the 65536-byte pipe-buffer ceiling
+      case: a forbidden substring at the TOP of a >64 KiB dump (GC-01 regression)  (expect 1 red)
+        · positive control: rc6 schema keys present in the dump (gui.num_preview_workers=4, gui.terminal.start_path=/repo) — this IS the server-committed object
+        · CONF-01 import.copy = true
+        · CONF-01 import.move = false
+        · CONF-02 import.incremental = true
+        · CONF-02 import.incremental_skip_later = true
+        · CONF-05 match.preferred.countries contains GB — ["GB","US"]
+        · CONF-05 match.preferred.countries contains UK = false (not 'true')
+        · CONF-05 match.preferred.original_year = true
+        · CONF-05 musicbrainz.extra_tags is a non-empty list (2 entries): ["year","catalognum"]
+        · T-06-31 import.duplicate_action = ask
+        · match.medium_rec_thresh = 0.25
+        · directory = /media/Music
+        · statefile = /config/state.pickle
+        · library = /config/library.db
+        · SAFE-01 scrub.auto = false
+        · SAFE-01 lastgenre.auto = false
+        · SAFE-01 embedart.auto = false
+        · OD-2 fetchart.auto = true
+        · OD-2 fetchart.sources = ["coverart"]
+        · OD-2 art_filename = cover
+        · OD-2 match.preferred.media = ["Digital Media","CD"]
+        · paths.comp equals paths.default — the inherited compilation rule is OVERRIDDEN, which is the only way to neutralise it (there is no syntax for deleting an inherited path rule)
+        · paths: no rule routes anything into a Compilations/ tree
+        · per_disc_numbering = true
+        · asciify_paths = false
+        · va_name = Various Artists
+        · plugins is exactly {musicbrainz, fetchart}
+        · forbidden substring present in the server-committed dump: 'Compilations'
+      ✅ case 'a forbidden substring at the TOP of a >64 KiB dump (GC-01 regression)': 1 red, as expected
+
+      case: registration: the expected set {02-review, 03-asis}  (expect rc 0)
+      ✅ case 'registration: the expected set {02-review, 03-asis}': rc 0, as expected
+
+      case: registration: 01-auto present (the pre-D-21 line)  (expect rc 1)
+      ✅ case 'registration: 01-auto present (the pre-D-21 line)': rc 1, as expected — 01-auto is registered (/downloads/complete/nzb/_inbox/01-auto) - D-21 did not deploy, or was reverted
+
+      case: registration: one inbox only  (expect rc 1)
+      ✅ case 'registration: one inbox only': rc 1, as expected — fewer than two inboxes registered (1)
+
+      case: registration: an unexpected name  (expect rc 1)
+      ✅ case 'registration: an unexpected name': rc 1, as expected — unexpected inbox /downloads/complete/nzb/_inbox/04-hold
+
+      case: registration: no registration line at all (UNKNOWN)  (expect rc 2)
+      ✅ case 'registration: no registration line at all (UNKNOWN)': rc 2, as expected — no registration line naming inboxes was found in the text read. That is NOT 'the set is right' - nothing was compared.
+
+      case: registration: an older good line, the NEWEST names 01-auto  (expect rc 1)
+      ✅ case 'registration: an older good line, the NEWEST names 01-auto': rc 1, as expected — 01-auto is registered (/downloads/complete/nzb/_inbox/01-auto) - D-21 did not deploy, or was reverted
+
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ✅ --self-test: all 15 cases behaved as expected (13 of them red)
+
+--------------------------------------------------------------------------------
+## (a) IMAGE CAPABILITY (inside beets-flask, -u 568)
+--------------------------------------------------------------------------------
+    uid=568(beetle) gid=568(beetle)   BEETSDIR=/config   BEETSFLASKDIR=/config/beets-flask
+    beets 2.12.0
+    import beetsplug.fetchart -> /venv/lib/python3.12/site-packages/beetsplug/fetchart.py  OK
+    import requests -> 2.34.2  OK
+    art resizer: ArtResizer().local = True, backend IMBackend (/usr/bin/convert, /usr/bin/magick);
+                 PIL 12.2.0 also importable.  INFORMATIONAL — no size/resize option is set.
+No package was installed (T-07-SC accept holds).
+
+--------------------------------------------------------------------------------
+## (b) RC6 COMMIT KEEPS THE NEW KEYS
+--------------------------------------------------------------------------------
+The repo's NEW config.yaml (sha 9b48263262f5…, = HEAD 1e054a6) was copied to
+/tmp/p7-0719/cfgdir/config.yaml; the live /config/config.yaml (sha adf838ddec5a…, = HEAD~1) to
+/tmp/p7-0719/cfgcur/config.yaml. The same server-committed route as check-beets-config arm 1,
+`get_config(commit_to_beets=True)` then `beets.config.dump(full=True, redact=True)`, was run with
+BEETSDIR pointing at each. That keeps the running server and /config out of it. BEETSFLASKDIR
+stayed /config/beets-flask (read-only mount, file present, so write_examples_as_user_defaults()
+copies nothing).
+
+
+    === BEETSDIR=/tmp/p7-0719/cfgdir
+    BEETSDIR=/tmp/p7-0719/cfgdir
+    config_dir=/tmp/p7-0719/cfgdir
+    sources=[null, "/tmp/p7-0719/cfgdir/config.yaml", "/venv/lib/python3.12/site-packages/beets/config_default.yaml", null, null, null, null, null, null, null, null, null, null]
+    plugins = ["musicbrainz", "fetchart"]
+    fetchart = {"auto": true, "sources": ["coverart"], "minwidth": 0, "maxwidth": 0, "quality": 0, "max_filesize": 0, "enforce_ratio": false, "cautious": false, "cover_names": ["cover", "front", "art", "album", "folder"], "fallback": null, "store_source": false, "high_resolution": false, "deinterlace": false, "cover_format": null, "google_key": "REDACTED", "google_engine": "REDACTED", "fanarttv_key": "REDACTED", "lastfm_key": "REDACTED"}
+    art_filename = "cover"
+    embedart = {"auto": false}
+    match.preferred = {"countries": ["GB", "US"], "original_year": true, "media": ["Digital Media", "CD"]}
+    plugins_loaded = ["fetchart", "musicbrainz"]
+    === BEETSDIR=/tmp/p7-0719/cfgcur
+    BEETSDIR=/tmp/p7-0719/cfgcur
+    config_dir=/tmp/p7-0719/cfgcur
+    sources=[null, "/tmp/p7-0719/cfgcur/config.yaml", "/venv/lib/python3.12/site-packages/beets/config_default.yaml", null, null, null, null, null, null]
+    plugins = ["musicbrainz"]
+    fetchart = null
+    art_filename = "cover"
+    embedart = {"auto": false}
+    match.preferred = {"countries": ["GB", "US"], "original_year": true, "media": []}
+    plugins_loaded = ["musicbrainz"]
+
+RC6 COMMIT KEEPS NEW KEYS: yes. EYConf accepted `fetchart`, `art_filename` and `match.preferred.media`.
+rc6's schema has no field for them, and they are passed through as extra fields. The plugin set
+LOADED is {fetchart, musicbrainz}. fetchart shows its defaults filled in under our two keys, and its
+API-key fields are REDACTED placeholders, not credentials: no source that uses them is enabled. No DEF-07-19-01.
+
+--------------------------------------------------------------------------------
+## (c) BEETS-FLASK IMPORT-STAGE REACHABILITY (read-only source read)
+--------------------------------------------------------------------------------
+/venv/lib/python3.12/site-packages/beets_flask/importer/session.py
+    :608   class ImportSession(BaseSession)
+    :688   @property stages: user_query, then
+    :697-710   for p in plugins.find_plugins(): for stage in p.get_early_import_stages(): plugin_stage(...)
+    :712-726   for p in plugs: for stage in p.get_import_stages(): stages.append(plugin_stage(...),
+               name=f"plugin_stage_{p.__class__.__name__}_{stage.__name__}")
+    :728-729   manipulate_files, finalize
+    :851   BootlegImportSession(ImportSession) and :911 AutoImportSession(ImportSession) inherit
+           these stages (super().stages + an inserted stage).
+beets_flask/importer/stages.py:606  manipulate_files -> task.manipulate_files(...)
+beets/importer/tasks.py:505         plugins.send("import_task_files", session=session, task=self)
+beetsplug/fetchart.py:1400-1403     if self.config["auto"]: self.import_stages = [self.fetch_art];
+                                    self.register_listener("import_task_files", self.assign_art)
+beetsplug/fetchart.py:1472-1498     fetch_art: ASIS -> local only; APPLY/RETAG -> all sources; other -> nothing
+
+BEETS-FLASK RUNS PLUGIN IMPORT STAGES: yes. Both halves of fetchart are reachable in a beets-flask
+import session: the fetch_art stage through session.py:712-726, and the assign_art listener through
+the import_task_files event. This is proven by the source, not yet by a live beets-flask import.
+The first 02-review import after deploy is the first live proof (07-20/Phase 8). It is not a
+DEF-07-19-02, because the source reading is complete.
+
+--------------------------------------------------------------------------------
+## RANKING
+--------------------------------------------------------------------------------
+Instrument: a read-only probe (/tmp/p7-0719/rank.py, shape of 06-12-conf05-probe.py). It builds
+Item.from_path objects (tag read only) and opens no library. It commits the config under test
+through rc6's get_config(commit_to_beets=True) with BEETSDIR = cfgcur (CURRENT) or cfgdir (NEW),
+then set_file()s an overlay that redirects library/statefile/directory into /tmp/p7-0719. It then
+calls beets.autotag.match.tag_album(items, search_ids=…). Nothing is applied. media_pen and
+ctry_pen are the RAW add_priority values (0 = first preference, 1/n per step, 1.0 = no match).
+"weighted terms" are beets' Distance.items(), and zero terms are omitted by beets.
+
+Verified in the installed beets 2.12.0 before the config comment was committed:
+config_default.yaml distance_weights media: 1.0, country: 0.5; autotag/distance.py:455-462 wraps
+each media pattern as rf"(\d+x)?({pat})", case-insensitive, and only compares
+when album_info.media is set.
+
+
+    ### P02 CURRENT  BEETSDIR=/tmp/p7-0719/cfgcur  beets 2.12.0  plugins=['musicbrainz']
+        preferred.countries=['GB', 'US'] preferred.media=[] library=/tmp/p7-0719/rank-lib.db statefile=/tmp/p7-0719/rank-state.pickle
+        source files=10  likely media='' country='' search_ids=['c0df8104-7b49-4fa3-bcec-cb3d310aa9a5', 'c33163f3-6217-4dc8-8e88-65f623b62c9b', 'e4fdb1dc-f4a5-4d73-8e53-3f4d12c8df60', 'b3a1e018-845b-44bd-a9a3-4f46c2e39d49', 'cfb585a2-856d-4875-8ef4-1d4c017bab17']
+        recommendation=3  candidates=5
+        rk  distance media          ctry  trk  media_pen ctry_pen  album_id
+         0  0.009091 CD             US     10     0.0000   0.5000  c0df8104-7b49-4fa3-bcec-cb3d310aa9a5
+           weighted terms: {"country": 0.0091}
+         1  0.009091 CD             US     10     0.0000   0.5000  c33163f3-6217-4dc8-8e88-65f623b62c9b
+           weighted terms: {"country": 0.0091}
+         2  0.009091 12" Vinyl      US     10     0.0000   0.5000  e4fdb1dc-f4a5-4d73-8e53-3f4d12c8df60
+           weighted terms: {"country": 0.0091}
+         3  0.018182 Digital Media  XW     10     0.0000   1.0000  b3a1e018-845b-44bd-a9a3-4f46c2e39d49
+           weighted terms: {"country": 0.0182}
+         4  0.018182 Digital Media  XW     10     0.0000   1.0000  cfb585a2-856d-4875-8ef4-1d4c017bab17
+           weighted terms: {"country": 0.0182}
+    rc=0
+    ### P02 NEW  BEETSDIR=/tmp/p7-0719/cfgdir  beets 2.12.0  plugins=['fetchart', 'musicbrainz']
+        preferred.countries=['GB', 'US'] preferred.media=['Digital Media', 'CD'] library=/tmp/p7-0719/rank-lib.db statefile=/tmp/p7-0719/rank-state.pickle
+        source files=10  likely media='' country='' search_ids=['c0df8104-7b49-4fa3-bcec-cb3d310aa9a5', 'c33163f3-6217-4dc8-8e88-65f623b62c9b', 'e4fdb1dc-f4a5-4d73-8e53-3f4d12c8df60', 'b3a1e018-845b-44bd-a9a3-4f46c2e39d49', 'cfb585a2-856d-4875-8ef4-1d4c017bab17']
+        recommendation=3  candidates=5
+        rk  distance media          ctry  trk  media_pen ctry_pen  album_id
+         0  0.017544 Digital Media  XW     10     0.0000   1.0000  b3a1e018-845b-44bd-a9a3-4f46c2e39d49
+           weighted terms: {"country": 0.0175}
+         1  0.017544 Digital Media  XW     10     0.0000   1.0000  cfb585a2-856d-4875-8ef4-1d4c017bab17
+           weighted terms: {"country": 0.0175}
+         2  0.026316 CD             US     10     0.5000   0.5000  c0df8104-7b49-4fa3-bcec-cb3d310aa9a5
+           weighted terms: {"media": 0.0175, "country": 0.0088}
+         3  0.026316 CD             US     10     0.5000   0.5000  c33163f3-6217-4dc8-8e88-65f623b62c9b
+           weighted terms: {"media": 0.0175, "country": 0.0088}
+         4  0.043860 12" Vinyl      US     10     1.0000   0.5000  e4fdb1dc-f4a5-4d73-8e53-3f4d12c8df60
+           weighted terms: {"media": 0.0351, "country": 0.0088}
+    rc=0
+
+    ### P10 CURRENT  BEETSDIR=/tmp/p7-0719/cfgcur  beets 2.12.0  plugins=['musicbrainz']
+        preferred.countries=['GB', 'US'] preferred.media=[] library=/tmp/p7-0719/rank-lib.db statefile=/tmp/p7-0719/rank-state.pickle
+        source files=50  likely media='' country='' search_ids=default search
+        recommendation=3  candidates=5
+        rk  distance media          ctry  trk  media_pen ctry_pen  album_id
+         0  0.006051 CD             GB     50     0.0000   0.0000  b057dee8-02ea-4b48-8681-f5e3255bc47d
+           weighted terms: {"tracks": 0.0061}
+         1  0.127012 Digital Media  GB     50     0.0000   0.0000  8a4b23b7-b00b-4423-9776-026c4469b788
+           weighted terms: {"tracks": 0.1175, "mediums": 0.0095}
+         2  0.603291 CD             US     20     0.0000   0.5000  562327cc-4f99-4398-9a31-c8420620a12f
+           weighted terms: {"tracks": 0.2945, "unmatched_tracks": 0.2835, "mediums": 0.0157, "album": 0.0057, "country": 0.0039}
+         3  0.630287 CD             GB     29     0.0000   0.0000  8f3233a3-a021-454d-a353-370e1cff4430
+           weighted terms: {"tracks": 0.4507, "unmatched_tracks": 0.1656, "year": 0.0124, "album": 0.0016}
+         4  0.636238 CD             GB     28     0.0000   0.0000  16e69908-9026-446f-b44a-975677311576
+           weighted terms: {"tracks": 0.4437, "unmatched_tracks": 0.1767, "year": 0.0126, "album": 0.0032}
+    ### P10 NEW  BEETSDIR=/tmp/p7-0719/cfgdir  beets 2.12.0  plugins=['fetchart', 'musicbrainz']
+        preferred.countries=['GB', 'US'] preferred.media=['Digital Media', 'CD'] library=/tmp/p7-0719/rank-lib.db statefile=/tmp/p7-0719/rank-state.pickle
+        source files=50  likely media='' country='' search_ids=default search
+        recommendation=3  candidates=5
+        rk  distance media          ctry  trk  media_pen ctry_pen  album_id
+         0  0.010689 CD             GB     50     0.5000   0.0000  b057dee8-02ea-4b48-8681-f5e3255bc47d
+           weighted terms: {"tracks": 0.006, "media": 0.0047}
+         1  0.125819 Digital Media  GB     50     0.0000   0.0000  8a4b23b7-b00b-4423-9776-026c4469b788
+           weighted terms: {"tracks": 0.1164, "mediums": 0.0094}
+         2  0.601690 CD             US     20     0.5000   0.5000  562327cc-4f99-4398-9a31-c8420620a12f
+           weighted terms: {"tracks": 0.2899, "unmatched_tracks": 0.2791, "mediums": 0.0155, "media": 0.0078, "album": 0.0056, "country": 0.0039}
+         3  0.628597 CD             GB     29     0.5000   0.0000  8f3233a3-a021-454d-a353-370e1cff4430
+           weighted terms: {"tracks": 0.4449, "unmatched_tracks": 0.1634, "year": 0.0122, "media": 0.0065, "album": 0.0016}
+         4  0.634438 CD             GB     28     0.5000   0.0000  16e69908-9026-446f-b44a-975677311576
+           weighted terms: {"tracks": 0.4378, "unmatched_tracks": 0.1744, "year": 0.0125, "media": 0.0066, "album": 0.0032}
+
+Staged copies: sha256 SET (sorted relpath+sha) before and after all four runs:
+
+    Benson Boone-American Heart-24BIT-44KHZ-WEB-FLAC-2025-OBZEN-xpost files=10 set_sha=553b00071755f2735d3679bd5ee3f9810a470f1bc9949e7138b828353c3ae32b
+    VA.Now.That.s.What.I.Call.Music_.117.2024..CD.FLAC..CDNOW117 files=52 set_sha=424d4fe664bd766ec11be2a449f7fc1e737464261c9c9c260bdb8e97b6ff586e
+    (after: byte-identical — `diff` empty, STAGED-UNCHANGED)
+
+RANKING P02 NEW: rank 1 b3a1e018-845b-44bd-a9a3-4f46c2e39d49 (Digital Media, XW)
+RANKING P02 CURRENT: rank 1 c0df8104-7b49-4fa3-bcec-cb3d310aa9a5 (CD, US)
+RANKING P10 NEW: rank 1 b057dee8-02ea-4b48-8681-f5e3255bc47d (CD, GB)
+RANKING P10 CURRENT: rank 1 b057dee8-02ea-4b48-8681-f5e3255bc47d (CD, GB)
+
+Readings, measured and for 07-20's gate:
+  R1. P02 NEW flips to Digital Media, as intended. The two XW digital entries TIE exactly (0.017544).
+      Rank order within the tie is the order returned, not a preference. Either is a correct-format
+      match, so the same-format ambiguity moves from "two MB entries for one CD" to "Spotify vs
+      iTunes/Deezer digital". Under NEW the physical entries sit at 0.026316 (CD) and 0.043860 (vinyl).
+  R2. P02 CURRENT reproduces the american-heart-twin diagnosis: a three-way tie at 0.009091 of
+      CD/CD/12" Vinyl. The source carries no media tag (likely media ''), so under CURRENT no media
+      term exists at all, and only country separates candidates, which puts XW last.
+  R3. P10 (the CD-rip control) keeps b057dee8 under both. The CD now carries media_pen 0.5, as
+      the second preference, which is +0.0047 weighted. The margin to rank 2 (8a4b23b7, Digital
+      Media, GB, 50 tracks) narrows from 0.120961 to 0.115130. The rank-2 digital edition loses
+      on tracks/mediums (1 medium vs 2), not on media.
+  R4. OBSERVATION (filed DEF-07-19-05): the preference ranks Digital Media above CD for EVERY
+      source. These files carry no media tag, so beets cannot tell a CD rip from a WEB rip. A CD rip
+      whose MusicBrainz Digital Media edition has the SAME tracklist and medium count would now
+      match the digital edition. P10 escaped only because its digital edition differs in mediums.
+      The plan's truth "a CD rip still prefers a CD over vinyl" holds. "A CD rip prefers a CD" does
+      NOT hold in general.
+  R5. The GB/US country preference penalises XW (the usual country of a WEB release) by the full
+      1.0 raw. On a one-track release that alone is 0.0455 > strong_rec_thresh 0.04 (§ THROWAWAY
+      IMPORT (1)). The new media term does not change that for P06: its release IS Digital Media,
+      so its media_pen is 0.
+
+--------------------------------------------------------------------------------
+## THROWAWAY IMPORT
+--------------------------------------------------------------------------------
+(1) Album choice. CAA front for P06's release 39fb4603-ec25-472e-8277-1623bacb900f: redirects
+    [307, 302] -> final 200 image/jpeg, 413,254 B. So P06 was used first. The -q import
+    SKIPPED it ("Skipping.", IMPORT_RC=0, no tree): the recommendation was medium (2), distance
+    0.045455, entirely the XW country term (weighted 0.0455) against strong_rec_thresh 0.04. That
+    is a matcher outcome under -q, not a fetchart outcome. The P06 as-is control in the same run
+    landed 1 item with artpath=None and no image. The real state was unchanged either side
+    (transcript (1a)). The plan's named fallback P03 was then used: CAA front for
+    ef528afc-c3de-4b4a-8ef2-a0dd43dc9c83 -> [307, 302] -> 200 image/jpeg, 3,620,959 B.
+    No threshold was lowered and no overlay was tuned to force P06 through.
+(2) P03's staged copy (_inbox/02-review/Benson.Boone.-.Fireworks.&.Rollerblades.(2024).[16Bit-44.1kHz].FLAC.[PMEDIA].⭐️-xpost,
+    15 FLAC) was copied with `cp -a` into /tmp/p7-0719/src-p03/. The sha256 set is below and is
+    equal to the staged copy's.
+(3) Overlay /tmp/p7-0719/overlay-p03.yaml (verbatim below): the NEW plugins, fetchart,
+    art_filename and match keys, plus library/statefile/directory in /tmp/p7-0719. BEETSDIR stayed
+    /config, so the live vendored config loads underneath (copy yes, write yes, incremental yes, all
+    against the throwaway).
+(4) One compliant invocation (D-04: -l outside /config/library.db AND -c):
+      /venv/bin/beet -l /tmp/p7-0719/p03-lib.db -c /tmp/p7-0719/overlay-p03.yaml import -q --search-id ef528afc-c3de-4b4a-8ef2-a0dd43dc9c83 <src-p03 copy>
+    IMPORT_RC=0; "Match (98.8%) … MusicBrainz, Digital Media, 2024 … Night Street Records".
+(5) Assertions:
+    - exactly one cover.jpg in the album dir, magic ffd8ff (JPEG). sha 6cd3a814e043888624327ec8776bed67ec0907d4b960c5d1ec6e77ad6848cb1a,
+      3,620,959 B, equal to CAA's content-length for that release's front. COVER_COUNT=1, and it is
+      the only image file under the throwaway library. PASS
+    - albums.artpath = "Benson Boone/Fireworks & Rollerblades/cover.jpg". beets 2.12 stores it
+      relative to `directory`, and it resolves to the cover.jpg above (isfile True). PASS
+    - embedded pictures: the source has 1 per file on 15/15, and the imported copies have 1 per
+      file on 15/15. The set of embedded-picture sha256 is IDENTICAL ({3f9a0657e4d1a2b4…}), and the
+      fetched cover's sha is NOT in the embedded set. So nothing was embedded. The file bytes
+      differ from the source, as expected: import.write yes wrote MB tags, for example "In The
+      Stars" -> "In the Stars". PASS
+    - /config/library.db 8f5994b8… and /config/state.pickle b8ce8afd… are unchanged across the
+      run. PASS
+(6) As-is control: a second throwaway root (p03-asis-lib, own db and statefile), `import -q -A`
+    of the same copy. It landed 15 files, ASIS_IMAGE_COUNT=0, and albums.artpath=None. No art,
+    because as-is imports look only at local sources and `coverart` is remote. PASS
+(7) THROWAWAY IMPORT: PASS (see VERDICT LINES).
+
+Method note, stated so it cannot be mistaken for a reading. The P03 driver was derived from the
+P06 driver with macOS sed, and BSD sed does not honour `\b`. So the tree listing, the cover count
+and the imported-picture lines in transcript (4b) still point at /tmp/p7-0719/lib and asis-lib,
+which are P06's roots. The import and DB lines in (4b) are correct. Every P03 assertion above is
+read from transcript (4c), a read-only re-read of the correct P03 roots, taken before cleanup.
+
+(1a) P06 attempt, verbatim:
+
+    == real state BEFORE
+    8f5994b824af5d43dacf8069d1ae3ffc2ac5a5694d90574763e2317bb1097813  /config/library.db
+    b8ce8afdc5e3ba1c858d3fbc07c4f8ee90538343817af1200c24d5389f1a66c6  /config/state.pickle
+    == staged copy (read only)
+    84d70008d50ab5cc5e200e66d24510f50670e90e23b7b210919ec7836e1342b8  ./01-cyril_-_stumblin_in_(lunax_remix)_(extended_mix)-zzzz.mp3
+    == throwaway src sha256 set
+    84d70008d50ab5cc5e200e66d24510f50670e90e23b7b210919ec7836e1342b8  ./01-cyril_-_stumblin_in_(lunax_remix)_(extended_mix)-zzzz.mp3
+    == source embedded pictures
+    PICS 1 MP3 /tmp/p7-0719/src/Cyril - Stumblin In (LUNAX Remix) (Extended Mix)-(5021732254740)-SINGLE-WEB-2024-ZzZz [9c1feafc0] [2af13ead9]-xpost/01-cyril_-_stumblin_in_(lunax_remix)_(extended_mix)-zzzz.mp3
+    == IMPORT (fetchart)  2026-09-28T09:46:35Z
+
+    /tmp/p7-0719/src/Cyril - Stumblin In (LUNAX Remix) (Extended Mix)-(5021732254740)-SINGLE-WEB-2024-ZzZz [9c1feafc0] [2af13ead9]-xpost (1 items)
+    Skipping.
+    IMPORT_RC=0
+    == landed tree
+    find: ‘/tmp/p7-0719/lib’: No such file or directory
+    == cover.jpg count / magic
+    find: ‘/tmp/p7-0719/lib’: No such file or directory
+    find: ‘/tmp/p7-0719/lib’: No such file or directory
+    COVER_COUNT=0
+    == albums.artpath / items
+    == imported embedded pictures
+    == AS-IS control  2026-09-28T09:46:36Z
+    /tmp/p7-0719/src/Cyril - Stumblin In (LUNAX Remix) (Extended Mix)-(5021732254740)-SINGLE-WEB-2024-ZzZz [9c1feafc0] [2af13ead9]-xpost
+    ASIS_RC=0
+    d 4096 /tmp/p7-0719/asis-lib
+    d 4096 /tmp/p7-0719/asis-lib/Cyril
+    d 4096 /tmp/p7-0719/asis-lib/Cyril/Stumblin' In (LUNAX Remix) (Extended Mix)
+    f 9814077 /tmp/p7-0719/asis-lib/Cyril/Stumblin' In (LUNAX Remix) (Extended Mix)/01 Stumblin' In (LUNAX Remix) (Extended Mix).mp3
+    ASIS_COVER_COUNT=0
+    ASIS ALBUM 1 Stumblin' In (LUNAX Remix) (Extended Mix) artpath=None
+    == throwaway src after (unchanged?)
+    84d70008d50ab5cc5e200e66d24510f50670e90e23b7b210919ec7836e1342b8  ./01-cyril_-_stumblin_in_(lunax_remix)_(extended_mix)-zzzz.mp3
+    == staged copy after
+    84d70008d50ab5cc5e200e66d24510f50670e90e23b7b210919ec7836e1342b8  ./01-cyril_-_stumblin_in_(lunax_remix)_(extended_mix)-zzzz.mp3
+    == real state AFTER
+    8f5994b824af5d43dacf8069d1ae3ffc2ac5a5694d90574763e2317bb1097813  /config/library.db
+    b8ce8afdc5e3ba1c858d3fbc07c4f8ee90538343817af1200c24d5389f1a66c6  /config/state.pickle
+
+(1b) Why -q skipped P06 (the same probe, NEW config, search_id 39fb4603), verbatim:
+
+    ### P06 NEW (why -q skipped)  BEETSDIR=/tmp/p7-0719/cfgdir  beets 2.12.0  plugins=['fetchart', 'musicbrainz']
+        preferred.countries=['GB', 'US'] preferred.media=['Digital Media', 'CD'] library=/tmp/p7-0719/rank-lib.db statefile=/tmp/p7-0719/rank-state.pickle
+        source files=1  likely media='' country='' search_ids=['39fb4603-ec25-472e-8277-1623bacb900f']
+        recommendation=2  candidates=1
+        rk  distance media          ctry  trk  media_pen ctry_pen  album_id
+         0  0.045455 Digital Media  XW      1     0.0000   1.0000  39fb4603-ec25-472e-8277-1623bacb900f
+           weighted terms: {"country": 0.0455}
+    P03 CAA [307, 302] 200 image/jpeg 3620959
+
+(3) overlay-p03.yaml, verbatim:
+
+    # 07-19 (e) throwaway overlay: the NEW config's plugins, fetchart, art_filename and match keys,
+    # plus library/statefile/directory redirected into /tmp/p7-0719.
+    plugins: [musicbrainz, fetchart]
+    art_filename: cover
+    fetchart:
+        auto: yes
+        sources: [coverart]
+    match:
+        medium_rec_thresh: 0.25
+        preferred:
+            countries: ['GB', 'US']
+            original_year: yes
+            media: ['Digital Media', 'CD']
+    library: /tmp/p7-0719/p03-lib.db
+    statefile: /tmp/p7-0719/p03-state.pickle
+    directory: /tmp/p7-0719/p03-lib
+
+(4b) P03 driver run, verbatim (see method note):
+
+    == real state BEFORE
+    8f5994b824af5d43dacf8069d1ae3ffc2ac5a5694d90574763e2317bb1097813  /config/library.db
+    b8ce8afdc5e3ba1c858d3fbc07c4f8ee90538343817af1200c24d5389f1a66c6  /config/state.pickle
+    == staged copy (read only)
+    7cb650502d0ddd0feb8c685e6fd84f0885583eddb90e7bf610f93e00aacf2223  ./01..Intro.flac
+    382277b7c15daec20b78cd5565dbc22dfc7d3875c2adfaa35c30bb35f0059b70  ./02..Be.Someone.flac
+    a85d4d235fde1fadf7fae39c7e36b7b80f4e2eee22ada5f105633edb9bfa0f48  ./03..Slow.It.Down.flac
+    55b6efbd1f5b152df50400162da7f1adc0b6c7788018ea72cc9a4d66ae9cd803  ./04..Beautiful.Things.flac
+    f27ae2baffea7d4cc77bed62ca5e7eb6286a166268237e6d637f35186b273a08  ./05..Cry.flac
+    506ad513e3618c02cafdf00a1755c287741bbaf3189e8ffd9bb9cc9be9d6ee34  ./06..Forever.and.a.Day.flac
+    f320761d6dcd5a7a273de000715ad7f3ff424d5d68cbf7e9b4a6589a9d1af0eb  ./07..In.The.Stars.flac
+    eb6c74c89a9a392fe4fedda840a2e3b39966e8d2805ce6d8e1a6d2e9cfba21e6  ./08..Drunk.In.My.Mind.flac
+    bb35c79b7389e037d9c3ea5a270e6b3a840b64d0ca7ef2568ee53640c6f1f8e6  ./09..My.Greatest.Fear.flac
+    ead0317e6b70a6b7f3444e97eaaba2f0c367765134354e89c71bffedda7afe71  ./10..There.She.Goes.flac
+    de01f6c549286fa40b4298a77c0b56a381e4d5eda0f1ed13bb5f7fa30aceb476  ./11..Hello.Love.flac
+    93f0b1866a4544966acb643dcb1a40422cbd396bff6ce0350ec76d435348dc36  ./12..Ghost.Town.flac
+    6238df0d7769ec5eee01a2ad0c9cfcbe2fddabdeba964bda121177e3b39f187e  ./13..Love.Of.Mine.flac
+    ebb209b01e81ea8dd0c54ba2b159987418acc7a513bea0560c0310a4fa27396c  ./14..Friend.flac
+    6ab70145b126b0ff77612d6d8da84817142b606b679c52a676795ede9b4d066a  ./15..What.Do.You.Want.flac
+    == throwaway src sha256 set
+    7cb650502d0ddd0feb8c685e6fd84f0885583eddb90e7bf610f93e00aacf2223  ./01..Intro.flac
+    382277b7c15daec20b78cd5565dbc22dfc7d3875c2adfaa35c30bb35f0059b70  ./02..Be.Someone.flac
+    a85d4d235fde1fadf7fae39c7e36b7b80f4e2eee22ada5f105633edb9bfa0f48  ./03..Slow.It.Down.flac
+    55b6efbd1f5b152df50400162da7f1adc0b6c7788018ea72cc9a4d66ae9cd803  ./04..Beautiful.Things.flac
+    f27ae2baffea7d4cc77bed62ca5e7eb6286a166268237e6d637f35186b273a08  ./05..Cry.flac
+    506ad513e3618c02cafdf00a1755c287741bbaf3189e8ffd9bb9cc9be9d6ee34  ./06..Forever.and.a.Day.flac
+    f320761d6dcd5a7a273de000715ad7f3ff424d5d68cbf7e9b4a6589a9d1af0eb  ./07..In.The.Stars.flac
+    eb6c74c89a9a392fe4fedda840a2e3b39966e8d2805ce6d8e1a6d2e9cfba21e6  ./08..Drunk.In.My.Mind.flac
+    bb35c79b7389e037d9c3ea5a270e6b3a840b64d0ca7ef2568ee53640c6f1f8e6  ./09..My.Greatest.Fear.flac
+    ead0317e6b70a6b7f3444e97eaaba2f0c367765134354e89c71bffedda7afe71  ./10..There.She.Goes.flac
+    de01f6c549286fa40b4298a77c0b56a381e4d5eda0f1ed13bb5f7fa30aceb476  ./11..Hello.Love.flac
+    93f0b1866a4544966acb643dcb1a40422cbd396bff6ce0350ec76d435348dc36  ./12..Ghost.Town.flac
+    6238df0d7769ec5eee01a2ad0c9cfcbe2fddabdeba964bda121177e3b39f187e  ./13..Love.Of.Mine.flac
+    ebb209b01e81ea8dd0c54ba2b159987418acc7a513bea0560c0310a4fa27396c  ./14..Friend.flac
+    6ab70145b126b0ff77612d6d8da84817142b606b679c52a676795ede9b4d066a  ./15..What.Do.You.Want.flac
+    == source embedded pictures
+    PICS 1 FLAC /tmp/p7-0719/src-p03/Benson.Boone.-.Fireworks.&.Rollerblades.(2024).[16Bit-44.1kHz].FLAC.[PMEDIA].⭐️-xpost/01..Intro.flac
+    PICS 1 FLAC /tmp/p7-0719/src-p03/Benson.Boone.-.Fireworks.&.Rollerblades.(2024).[16Bit-44.1kHz].FLAC.[PMEDIA].⭐️-xpost/02..Be.Someone.flac
+    PICS 1 FLAC /tmp/p7-0719/src-p03/Benson.Boone.-.Fireworks.&.Rollerblades.(2024).[16Bit-44.1kHz].FLAC.[PMEDIA].⭐️-xpost/03..Slow.It.Down.flac
+    PICS 1 FLAC /tmp/p7-0719/src-p03/Benson.Boone.-.Fireworks.&.Rollerblades.(2024).[16Bit-44.1kHz].FLAC.[PMEDIA].⭐️-xpost/04..Beautiful.Things.flac
+    PICS 1 FLAC /tmp/p7-0719/src-p03/Benson.Boone.-.Fireworks.&.Rollerblades.(2024).[16Bit-44.1kHz].FLAC.[PMEDIA].⭐️-xpost/05..Cry.flac
+    PICS 1 FLAC /tmp/p7-0719/src-p03/Benson.Boone.-.Fireworks.&.Rollerblades.(2024).[16Bit-44.1kHz].FLAC.[PMEDIA].⭐️-xpost/06..Forever.and.a.Day.flac
+    PICS 1 FLAC /tmp/p7-0719/src-p03/Benson.Boone.-.Fireworks.&.Rollerblades.(2024).[16Bit-44.1kHz].FLAC.[PMEDIA].⭐️-xpost/07..In.The.Stars.flac
+    PICS 1 FLAC /tmp/p7-0719/src-p03/Benson.Boone.-.Fireworks.&.Rollerblades.(2024).[16Bit-44.1kHz].FLAC.[PMEDIA].⭐️-xpost/08..Drunk.In.My.Mind.flac
+    PICS 1 FLAC /tmp/p7-0719/src-p03/Benson.Boone.-.Fireworks.&.Rollerblades.(2024).[16Bit-44.1kHz].FLAC.[PMEDIA].⭐️-xpost/09..My.Greatest.Fear.flac
+    PICS 1 FLAC /tmp/p7-0719/src-p03/Benson.Boone.-.Fireworks.&.Rollerblades.(2024).[16Bit-44.1kHz].FLAC.[PMEDIA].⭐️-xpost/10..There.She.Goes.flac
+    PICS 1 FLAC /tmp/p7-0719/src-p03/Benson.Boone.-.Fireworks.&.Rollerblades.(2024).[16Bit-44.1kHz].FLAC.[PMEDIA].⭐️-xpost/11..Hello.Love.flac
+    PICS 1 FLAC /tmp/p7-0719/src-p03/Benson.Boone.-.Fireworks.&.Rollerblades.(2024).[16Bit-44.1kHz].FLAC.[PMEDIA].⭐️-xpost/12..Ghost.Town.flac
+    PICS 1 FLAC /tmp/p7-0719/src-p03/Benson.Boone.-.Fireworks.&.Rollerblades.(2024).[16Bit-44.1kHz].FLAC.[PMEDIA].⭐️-xpost/13..Love.Of.Mine.flac
+    PICS 1 FLAC /tmp/p7-0719/src-p03/Benson.Boone.-.Fireworks.&.Rollerblades.(2024).[16Bit-44.1kHz].FLAC.[PMEDIA].⭐️-xpost/14..Friend.flac
+    PICS 1 FLAC /tmp/p7-0719/src-p03/Benson.Boone.-.Fireworks.&.Rollerblades.(2024).[16Bit-44.1kHz].FLAC.[PMEDIA].⭐️-xpost/15..What.Do.You.Want.flac
+    == IMPORT (fetchart)  2026-09-28T09:47:33Z
+
+    /tmp/p7-0719/src-p03/Benson.Boone.-.Fireworks.&.Rollerblades.(2024).[16Bit-44.1kHz].FLAC.[PMEDIA].⭐️-xpost (15 items)
+
+      Match (98.8%):
+      Benson Boone - Fireworks & Rollerblades
+      ≠ label
+      MusicBrainz, Digital Media, 2024, None, Night Street Records, A10302B0008885094R, None
+      https://musicbrainz.org/release/ef528afc-c3de-4b4a-8ef2-a0dd43dc9c83
+      * Artist: Benson Boone
+      * Album: Fireworks & Rollerblades
+         ≠ (#7) In The Stars (3:36) -> (#7) In the Stars (3:36)
+         ≠ (#8) Drunk In My Mind (3:47) -> (#8) Drunk in My Mind (3:47)
+         ≠ (#13) Love Of Mine (3:22) -> (#13) Love of Mine (3:22)
+    IMPORT_RC=0
+    == landed tree
+    find: ‘/tmp/p7-0719/lib’: No such file or directory
+    == cover.jpg count / magic
+    find: ‘/tmp/p7-0719/lib’: No such file or directory
+    find: ‘/tmp/p7-0719/lib’: No such file or directory
+    COVER_COUNT=0
+    == albums.artpath / items
+    ALBUM 1 Benson Boone Fireworks & Rollerblades ef528afc-c3de-4b4a-8ef2-a0dd43dc9c83 artpath=Benson Boone/Fireworks & Rollerblades/cover.jpg
+    ITEM 1 Benson Boone/Fireworks & Rollerblades/01 Intro.flac
+    ITEM 2 Benson Boone/Fireworks & Rollerblades/02 Be Someone.flac
+    ITEM 3 Benson Boone/Fireworks & Rollerblades/03 Slow It Down.flac
+    ITEM 4 Benson Boone/Fireworks & Rollerblades/04 Beautiful Things.flac
+    ITEM 5 Benson Boone/Fireworks & Rollerblades/05 Cry.flac
+    ITEM 6 Benson Boone/Fireworks & Rollerblades/06 Forever and a Day.flac
+    ITEM 7 Benson Boone/Fireworks & Rollerblades/07 In the Stars.flac
+    ITEM 8 Benson Boone/Fireworks & Rollerblades/08 Drunk in My Mind.flac
+    ITEM 9 Benson Boone/Fireworks & Rollerblades/09 My Greatest Fear.flac
+    ITEM 10 Benson Boone/Fireworks & Rollerblades/10 There She Goes.flac
+    ITEM 11 Benson Boone/Fireworks & Rollerblades/11 Hello Love.flac
+    ITEM 12 Benson Boone/Fireworks & Rollerblades/12 Ghost Town.flac
+    ITEM 13 Benson Boone/Fireworks & Rollerblades/13 Love of Mine.flac
+    ITEM 14 Benson Boone/Fireworks & Rollerblades/14 Friend.flac
+    ITEM 15 Benson Boone/Fireworks & Rollerblades/15 What Do You Want.flac
+    == imported embedded pictures
+    == AS-IS control  2026-09-28T09:47:40Z
+    /tmp/p7-0719/src-p03/Benson.Boone.-.Fireworks.&.Rollerblades.(2024).[16Bit-44.1kHz].FLAC.[PMEDIA].⭐️-xpost
+    ASIS_RC=0
+    d 4096 /tmp/p7-0719/asis-lib
+    d 4096 /tmp/p7-0719/asis-lib/Cyril
+    d 4096 /tmp/p7-0719/asis-lib/Cyril/Stumblin' In (LUNAX Remix) (Extended Mix)
+    f 9814077 /tmp/p7-0719/asis-lib/Cyril/Stumblin' In (LUNAX Remix) (Extended Mix)/01 Stumblin' In (LUNAX Remix) (Extended Mix).mp3
+    ASIS_COVER_COUNT=0
+    ASIS ALBUM 1 Fireworks & Rollerblades artpath=None
+    == throwaway src after (unchanged?)
+    7cb650502d0ddd0feb8c685e6fd84f0885583eddb90e7bf610f93e00aacf2223  ./01..Intro.flac
+    382277b7c15daec20b78cd5565dbc22dfc7d3875c2adfaa35c30bb35f0059b70  ./02..Be.Someone.flac
+    a85d4d235fde1fadf7fae39c7e36b7b80f4e2eee22ada5f105633edb9bfa0f48  ./03..Slow.It.Down.flac
+    55b6efbd1f5b152df50400162da7f1adc0b6c7788018ea72cc9a4d66ae9cd803  ./04..Beautiful.Things.flac
+    f27ae2baffea7d4cc77bed62ca5e7eb6286a166268237e6d637f35186b273a08  ./05..Cry.flac
+    506ad513e3618c02cafdf00a1755c287741bbaf3189e8ffd9bb9cc9be9d6ee34  ./06..Forever.and.a.Day.flac
+    f320761d6dcd5a7a273de000715ad7f3ff424d5d68cbf7e9b4a6589a9d1af0eb  ./07..In.The.Stars.flac
+    eb6c74c89a9a392fe4fedda840a2e3b39966e8d2805ce6d8e1a6d2e9cfba21e6  ./08..Drunk.In.My.Mind.flac
+    bb35c79b7389e037d9c3ea5a270e6b3a840b64d0ca7ef2568ee53640c6f1f8e6  ./09..My.Greatest.Fear.flac
+    ead0317e6b70a6b7f3444e97eaaba2f0c367765134354e89c71bffedda7afe71  ./10..There.She.Goes.flac
+    de01f6c549286fa40b4298a77c0b56a381e4d5eda0f1ed13bb5f7fa30aceb476  ./11..Hello.Love.flac
+    93f0b1866a4544966acb643dcb1a40422cbd396bff6ce0350ec76d435348dc36  ./12..Ghost.Town.flac
+    6238df0d7769ec5eee01a2ad0c9cfcbe2fddabdeba964bda121177e3b39f187e  ./13..Love.Of.Mine.flac
+    ebb209b01e81ea8dd0c54ba2b159987418acc7a513bea0560c0310a4fa27396c  ./14..Friend.flac
+    6ab70145b126b0ff77612d6d8da84817142b606b679c52a676795ede9b4d066a  ./15..What.Do.You.Want.flac
+    == staged copy after
+    7cb650502d0ddd0feb8c685e6fd84f0885583eddb90e7bf610f93e00aacf2223  ./01..Intro.flac
+    382277b7c15daec20b78cd5565dbc22dfc7d3875c2adfaa35c30bb35f0059b70  ./02..Be.Someone.flac
+    a85d4d235fde1fadf7fae39c7e36b7b80f4e2eee22ada5f105633edb9bfa0f48  ./03..Slow.It.Down.flac
+    55b6efbd1f5b152df50400162da7f1adc0b6c7788018ea72cc9a4d66ae9cd803  ./04..Beautiful.Things.flac
+    f27ae2baffea7d4cc77bed62ca5e7eb6286a166268237e6d637f35186b273a08  ./05..Cry.flac
+    506ad513e3618c02cafdf00a1755c287741bbaf3189e8ffd9bb9cc9be9d6ee34  ./06..Forever.and.a.Day.flac
+    f320761d6dcd5a7a273de000715ad7f3ff424d5d68cbf7e9b4a6589a9d1af0eb  ./07..In.The.Stars.flac
+    eb6c74c89a9a392fe4fedda840a2e3b39966e8d2805ce6d8e1a6d2e9cfba21e6  ./08..Drunk.In.My.Mind.flac
+    bb35c79b7389e037d9c3ea5a270e6b3a840b64d0ca7ef2568ee53640c6f1f8e6  ./09..My.Greatest.Fear.flac
+    ead0317e6b70a6b7f3444e97eaaba2f0c367765134354e89c71bffedda7afe71  ./10..There.She.Goes.flac
+    de01f6c549286fa40b4298a77c0b56a381e4d5eda0f1ed13bb5f7fa30aceb476  ./11..Hello.Love.flac
+    93f0b1866a4544966acb643dcb1a40422cbd396bff6ce0350ec76d435348dc36  ./12..Ghost.Town.flac
+    6238df0d7769ec5eee01a2ad0c9cfcbe2fddabdeba964bda121177e3b39f187e  ./13..Love.Of.Mine.flac
+    ebb209b01e81ea8dd0c54ba2b159987418acc7a513bea0560c0310a4fa27396c  ./14..Friend.flac
+    6ab70145b126b0ff77612d6d8da84817142b606b679c52a676795ede9b4d066a  ./15..What.Do.You.Want.flac
+    == real state AFTER
+    8f5994b824af5d43dacf8069d1ae3ffc2ac5a5694d90574763e2317bb1097813  /config/library.db
+    b8ce8afdc5e3ba1c858d3fbc07c4f8ee90538343817af1200c24d5389f1a66c6  /config/state.pickle
+
+(4c) P03 read-only re-read of the correct roots, verbatim:
+
+    == landed tree (p03-lib)
+    d 4096 /tmp/p7-0719/p03-lib
+    d 4096 /tmp/p7-0719/p03-lib/Benson Boone
+    d 4096 /tmp/p7-0719/p03-lib/Benson Boone/Fireworks & Rollerblades
+    f 5546797 /tmp/p7-0719/p03-lib/Benson Boone/Fireworks & Rollerblades/01 Intro.flac
+    f 28131724 /tmp/p7-0719/p03-lib/Benson Boone/Fireworks & Rollerblades/02 Be Someone.flac
+    f 18894147 /tmp/p7-0719/p03-lib/Benson Boone/Fireworks & Rollerblades/03 Slow It Down.flac
+    f 20319864 /tmp/p7-0719/p03-lib/Benson Boone/Fireworks & Rollerblades/04 Beautiful Things.flac
+    f 20293710 /tmp/p7-0719/p03-lib/Benson Boone/Fireworks & Rollerblades/05 Cry.flac
+    f 24012945 /tmp/p7-0719/p03-lib/Benson Boone/Fireworks & Rollerblades/06 Forever and a Day.flac
+    f 24369412 /tmp/p7-0719/p03-lib/Benson Boone/Fireworks & Rollerblades/07 In the Stars.flac
+    f 26099754 /tmp/p7-0719/p03-lib/Benson Boone/Fireworks & Rollerblades/08 Drunk in My Mind.flac
+    f 25314043 /tmp/p7-0719/p03-lib/Benson Boone/Fireworks & Rollerblades/09 My Greatest Fear.flac
+    f 24445319 /tmp/p7-0719/p03-lib/Benson Boone/Fireworks & Rollerblades/10 There She Goes.flac
+    f 21722028 /tmp/p7-0719/p03-lib/Benson Boone/Fireworks & Rollerblades/11 Hello Love.flac
+    f 19012214 /tmp/p7-0719/p03-lib/Benson Boone/Fireworks & Rollerblades/12 Ghost Town.flac
+    f 19100706 /tmp/p7-0719/p03-lib/Benson Boone/Fireworks & Rollerblades/13 Love of Mine.flac
+    f 20062372 /tmp/p7-0719/p03-lib/Benson Boone/Fireworks & Rollerblades/14 Friend.flac
+    f 29760944 /tmp/p7-0719/p03-lib/Benson Boone/Fireworks & Rollerblades/15 What Do You Want.flac
+    f 3620959 /tmp/p7-0719/p03-lib/Benson Boone/Fireworks & Rollerblades/cover.jpg
+    == cover files
+    IMAGE /tmp/p7-0719/p03-lib/Benson Boone/Fireworks & Rollerblades/cover.jpg magic=ffd8ff sha=6cd3a814e043888624327ec8776bed67ec0907d4b960c5d1ec6e77ad6848cb1a size=3620959
+    COVER_COUNT=1 ALL_IMAGE_COUNT=1
+    ARTPATH Benson Boone/Fireworks & Rollerblades/cover.jpg -> resolves /tmp/p7-0719/p03-lib/Benson Boone/Fireworks & Rollerblades/cover.jpg isfile= True
+    == imported embedded pictures (p03-lib)
+    PICS 1 FLAC Benson Boone/Fireworks & Rollerblades/01 Intro.flac
+    PICS 1 FLAC Benson Boone/Fireworks & Rollerblades/02 Be Someone.flac
+    PICS 1 FLAC Benson Boone/Fireworks & Rollerblades/03 Slow It Down.flac
+    PICS 1 FLAC Benson Boone/Fireworks & Rollerblades/04 Beautiful Things.flac
+    PICS 1 FLAC Benson Boone/Fireworks & Rollerblades/05 Cry.flac
+    PICS 1 FLAC Benson Boone/Fireworks & Rollerblades/06 Forever and a Day.flac
+    PICS 1 FLAC Benson Boone/Fireworks & Rollerblades/07 In the Stars.flac
+    PICS 1 FLAC Benson Boone/Fireworks & Rollerblades/08 Drunk in My Mind.flac
+    PICS 1 FLAC Benson Boone/Fireworks & Rollerblades/09 My Greatest Fear.flac
+    PICS 1 FLAC Benson Boone/Fireworks & Rollerblades/10 There She Goes.flac
+    PICS 1 FLAC Benson Boone/Fireworks & Rollerblades/11 Hello Love.flac
+    PICS 1 FLAC Benson Boone/Fireworks & Rollerblades/12 Ghost Town.flac
+    PICS 1 FLAC Benson Boone/Fireworks & Rollerblades/13 Love of Mine.flac
+    PICS 1 FLAC Benson Boone/Fireworks & Rollerblades/14 Friend.flac
+    PICS 1 FLAC Benson Boone/Fireworks & Rollerblades/15 What Do You Want.flac
+    == imported picture sha vs source (is it the SAME embedded picture?)
+    SRC_PIC_SHAS ['3f9a0657e4d1a2b4'] DST_PIC_SHAS ['3f9a0657e4d1a2b4'] SAME= True files 15 15
+    COVER_SHA_IN_EMBEDDED_SET= False
+    == AS-IS control (p03-asis-lib)
+    d 4096 /tmp/p7-0719/p03-asis-lib
+    d 4096 /tmp/p7-0719/p03-asis-lib/Benson Boone
+    d 4096 /tmp/p7-0719/p03-asis-lib/Benson Boone/Fireworks & Rollerblades
+    f 5546797 /tmp/p7-0719/p03-asis-lib/Benson Boone/Fireworks & Rollerblades/01 Intro.flac
+    f 28131724 /tmp/p7-0719/p03-asis-lib/Benson Boone/Fireworks & Rollerblades/02 Be Someone.flac
+    f 18894147 /tmp/p7-0719/p03-asis-lib/Benson Boone/Fireworks & Rollerblades/03 Slow It Down.flac
+    f 20319864 /tmp/p7-0719/p03-asis-lib/Benson Boone/Fireworks & Rollerblades/04 Beautiful Things.flac
+    f 20293710 /tmp/p7-0719/p03-asis-lib/Benson Boone/Fireworks & Rollerblades/05 Cry.flac
+    f 24012945 /tmp/p7-0719/p03-asis-lib/Benson Boone/Fireworks & Rollerblades/06 Forever and a Day.flac
+    f 24369412 /tmp/p7-0719/p03-asis-lib/Benson Boone/Fireworks & Rollerblades/07 In The Stars.flac
+    f 26099754 /tmp/p7-0719/p03-asis-lib/Benson Boone/Fireworks & Rollerblades/08 Drunk In My Mind.flac
+    f 25314043 /tmp/p7-0719/p03-asis-lib/Benson Boone/Fireworks & Rollerblades/09 My Greatest Fear.flac
+    f 24445319 /tmp/p7-0719/p03-asis-lib/Benson Boone/Fireworks & Rollerblades/10 There She Goes.flac
+    f 21722028 /tmp/p7-0719/p03-asis-lib/Benson Boone/Fireworks & Rollerblades/11 Hello Love.flac
+    f 19012214 /tmp/p7-0719/p03-asis-lib/Benson Boone/Fireworks & Rollerblades/12 Ghost Town.flac
+    f 19100706 /tmp/p7-0719/p03-asis-lib/Benson Boone/Fireworks & Rollerblades/13 Love Of Mine.flac
+    f 20062372 /tmp/p7-0719/p03-asis-lib/Benson Boone/Fireworks & Rollerblades/14 Friend.flac
+    f 29760944 /tmp/p7-0719/p03-asis-lib/Benson Boone/Fireworks & Rollerblades/15 What Do You Want.flac
+    ASIS_IMAGE_COUNT=0
+    == whole throwaway listing
+    total 400
+    drwxr-xr-x 9 beetle beetle  4096 Sep 28 10:48 .
+    drwxrwxrwt 1 root   root    4096 Sep 28 10:47 ..
+    drwxr-xr-x 3 beetle beetle  4096 Sep 28 10:46 asis-lib
+    -rw-r--r-- 1 beetle beetle 53248 Sep 28 10:46 asis-lib.db
+    -rw-r--r-- 1 beetle beetle   186 Sep 28 10:46 asis-state.pickle
+    drwxr-xr-x 2 beetle beetle  4096 Sep 28 10:42 cfgcur
+    drwxr-xr-x 2 beetle beetle  4096 Sep 28 10:42 cfgdir
+    -rw-r--r-- 1 beetle beetle  2787 Sep 28 10:47 drive-e-p03.sh
+    -rw-r--r-- 1 beetle beetle  2761 Sep 28 10:46 drive-e.sh
+    -rw-r--r-- 1 beetle beetle 53248 Sep 28 10:46 lib.db
+    -rw-r--r-- 1 beetle beetle   519 Sep 28 10:46 overlay-asis.yaml
+    -rw-r--r-- 1 beetle beetle   531 Sep 28 10:47 overlay-p03-asis.yaml
+    -rw-r--r-- 1 beetle beetle   516 Sep 28 10:47 overlay-p03.yaml
+    -rw-r--r-- 1 beetle beetle   109 Sep 28 10:44 overlay-rank.yaml
+    -rw-r--r-- 1 beetle beetle   504 Sep 28 10:46 overlay.yaml
+    drwxr-xr-x 3 beetle beetle  4096 Sep 28 10:47 p03-asis-lib
+    -rw-r--r-- 1 beetle beetle 61440 Sep 28 10:47 p03-asis-lib.db
+    -rw-r--r-- 1 beetle beetle   164 Sep 28 10:47 p03-asis-state.pickle
+    drwxr-xr-x 3 beetle beetle  4096 Sep 28 10:47 p03-lib
+    -rw-r--r-- 1 beetle beetle 69632 Sep 28 10:47 p03-lib.db
+    -rw-r--r-- 1 beetle beetle   164 Sep 28 10:47 p03-state.pickle
+    -rw-r--r-- 1 beetle beetle   762 Sep 28 10:46 pics.py
+    -rw-r--r-- 1 beetle beetle  2257 Sep 28 10:44 rank.py
+    -rw-r--r-- 1 beetle beetle   664 Sep 28 10:42 rc6dump.py
+    -rw-r--r-- 1 beetle beetle  2096 Sep 28 10:48 read-p03.sh
+    -rw-r--r-- 1 beetle beetle   365 Sep 28 10:44 shaset.sh
+    drwxr-xr-x 3 beetle beetle  4096 Sep 28 10:46 src
+    drwxr-xr-x 3 beetle beetle  4096 Sep 28 10:47 src-p03
+    -rw-r--r-- 1 beetle beetle 53248 Sep 28 10:47 x.db
+
+--------------------------------------------------------------------------------
+## CLEANUP (two-layer fence, CONVENTIONS §6, written at this call site)
+--------------------------------------------------------------------------------
+Layer 1, on the workstation where the value is accepted: the value must equal the literal
+/tmp/p7-0719, contain no `..`, and match the charset [A-Za-z0-9/._-]. Layer 2 is the same rule
+RESTATED, not imported, inside the container program, immediately before `rm -rf -- "$1"`.
+The call-site program, verbatim:
+
+    #!/bin/bash
+    # 07-19 (e.8): remove the throwaway /tmp/p7-0719 through a two-layer fence written AT THIS CALL SITE
+    # (CONVENTIONS §6: not hoisted, not shared). Layer 1 runs here on the workstation, where the value is
+    # accepted; layer 2 is re-checked inside the container immediately before `rm -rf --`.
+    set -uo pipefail
+    TARGET="${1:-}"
+    # ---- layer 1: the value must be the literal, carry no `..`, and pass the charset.
+    case "$TARGET" in
+      /tmp/p7-0719) : ;;
+      *) echo "REFUSED (layer 1): cleanup target '$TARGET' is not the literal /tmp/p7-0719" >&2; exit 3 ;;
+    esac
+    case "$TARGET" in *..*) echo "REFUSED (layer 1): '..' in cleanup target" >&2; exit 3 ;; esac
+    case "$TARGET" in *[!A-Za-z0-9/._-]*) echo "REFUSED (layer 1): cleanup target charset" >&2; exit 3 ;; esac
+    # ---- layer 2: the SAME rule restated inside the container (not imported), then the rm.
+    FENCE2='case "$1" in
+      /tmp/p7-0719) : ;;
+      *) echo "REFUSED (layer 2, rm -rf inside beets-flask): not the literal /tmp/p7-0719" >&2; exit 3 ;;
+    esac
+    case "$1" in *..*) echo "REFUSED (layer 2): .. in target" >&2; exit 3 ;; esac
+    case "$1" in *[!A-Za-z0-9/._-]*) echo "REFUSED (layer 2): charset" >&2; exit 3 ;; esac'
+    PROG="$FENCE2"'
+    rm -rf -- "$1"
+    [ -e "$1" ] && echo "STILL PRESENT: $1" || echo "GONE: $1"'
+    if [[ "${2:-}" == "--drive" ]]; then
+      # Drive layer 2's EXACT fence text with a harmless tail, against negatives and the literal.
+      DRV="$FENCE2"'
+    echo "ACCEPTED: $1"'
+      for v in '/tmp/p7-0719/../config' '/config' '/tmp/p7-0719 /config' '' '/tmp/p7-07199' '/tmp/p7-0719/' '/tmp/p7-0719'; do
+        printf '%s' "$DRV" > "$(dirname "$0")/drv.sh"
+        out="$(timeout 30 ssh root@172.16.1.159 "timeout 20 docker exec -i -u 568 beets-flask sh -s -- '$v'" < "$(dirname "$0")/drv.sh" 2>&1)"; rc=$?
+        echo "drive [$v] rc=$rc $out"
+      done
+      exit 0
+    fi
+    printf '%s' "$PROG" > "$(dirname "$0")/prog.sh"
+    timeout 60 ssh root@172.16.1.159 "timeout 50 docker exec -i -u 568 beets-flask sh -s -- '$TARGET'" < "$(dirname "$0")/prog.sh"
+
+Layer 2's exact fence text driven with a harmless tail (echo ACCEPTED), plus layer-1 negatives:
+
+    (re-driven at 2026-09-28T09:52:22Z for capture; first drive at ~09:48:3xZ gave the identical 7 lines, before the real run)
+    drive [/tmp/p7-0719/../config] rc=3 REFUSED (layer 2, rm -rf inside beets-flask): not the literal /tmp/p7-0719
+    drive [/config] rc=3 REFUSED (layer 2, rm -rf inside beets-flask): not the literal /tmp/p7-0719
+    drive [/tmp/p7-0719 /config] rc=3 REFUSED (layer 2, rm -rf inside beets-flask): not the literal /tmp/p7-0719
+    drive [] rc=3 REFUSED (layer 2, rm -rf inside beets-flask): not the literal /tmp/p7-0719
+    drive [/tmp/p7-07199] rc=3 REFUSED (layer 2, rm -rf inside beets-flask): not the literal /tmp/p7-0719
+    drive [/tmp/p7-0719/] rc=3 REFUSED (layer 2, rm -rf inside beets-flask): not the literal /tmp/p7-0719
+    drive [/tmp/p7-0719] rc=0 ACCEPTED: /tmp/p7-0719
+    ---- layer 1 negatives
+    REFUSED (layer 1): cleanup target '/config' is not the literal /tmp/p7-0719
+    rc=3
+    REFUSED (layer 1): cleanup target '/tmp/p7-0719/../x' is not the literal /tmp/p7-0719
+    rc=3
+    REFUSED (layer 1): cleanup target '/tmp/p7-07199' is not the literal /tmp/p7-0719
+    rc=3
+    REFUSED (layer 1): cleanup target '' is not the literal /tmp/p7-0719
+    rc=3
+
+The real run (09:48:4xZ), then the absence check:
+    GONE: /tmp/p7-0719
+    rc=0
+
+    ABSENT
+    beets
+    p6-cbc-throwaway.blb
+    p7-state.new0718.pickle
+    p7-state.post-undo.pickle
+    p7-state.post0718surgery.pickle
+    p7-state.pre0718.pickle
+    p7-state.pre0718surgery.pickle
+    phase06-check-beets-config-noop.yaml
+    8f5994b824af5d43dacf8069d1ae3ffc2ac5a5694d90574763e2317bb1097813  /config/library.db
+    b8ce8afdc5e3ba1c858d3fbc07c4f8ee90538343817af1200c24d5389f1a66c6  /config/state.pickle
+    2026-09-28T09:48:48Z
+
+/tmp/p7-0719 is ABSENT (re-checked at 09:52:22Z after the capture re-drive: ABSENT). The other
+/tmp entries listed belong to earlier plans (p6-cbc-throwaway.blb, the check's no-op overlay and
+07-18's pickles) and were not touched.
+Stray-command disclosure: the (1b) remote command carried two leftovers from composing it. One was
+a `beet -l /tmp/p7-0719/x.db -c … config` read. It created /tmp/p7-0719/x.db inside the throwaway,
+which the fence then removed, and it printed nothing. The other was an `rm -f /dev/null.x` on LXC
+100, against a path that did not exist, so it was a no-op. Neither touched /config or the estate.
+
+--------------------------------------------------------------------------------
+## ORACLE (scripts/phase06-oracle.sh impact) — read, not run, not edited
+--------------------------------------------------------------------------------
+Would --run now fetch art? It LOADS fetchart but FETCHES NOTHING. The oracle's scratch overlay
+(lines ~2975-2999) sets library, statefile, directory, import.copy/move/write/autotag no,
+incremental no, duplicate_action keep and ui.color. It sets no `plugins` and no `fetchart`, so
+after deploy it inherits [musicbrainz, fetchart] with fetchart.auto yes from the vendored config
+underneath (BEETSDIR=/config, its lines 183-199). Every oracle import is `import -A -q` (line
+3018), and with autotag: no the import_asis stage sets Action.ASIS (beets/importer/stages.py:229-241).
+fetch_art on ASIS calls art_for_album(local_only=True), which keeps only sources with
+LOC == "local" (fetchart.py:1582-1583). The only configured source, CoverArtArchive, is
+LOC "remote" (fetchart.py:430, 524). So no candidate and no set_art call are possible. That is
+measured in the P06 and P03 as-is controls above: 0 images, artpath None.
+Would its enumeration count a cover.jpg as divergence? The tree comparison is over `beet move -p`
+destinations (items only, lines 3031-3177). The `find … -type f` sites are the source-folder
+manifests and the -newer sweep over the SAMPLED SOURCE folders (lines 1520-1526, 3153). None of
+these can see a cover.jpg, because none is written.
+No DEF-07-19-03. The residual is named, not filed: if `fetchart.sources` ever gains a LOCAL source
+(`filesystem`), an as-is import with copy: no would set_art into the album dir, which is the
+sampled source folder, and the oracle's -newer sweep would report it as a write. The remedies
+would then be the two the plan names: `fetchart: {auto: no}` in the oracle's scratch overlay, or
+filtering images out of the comparison.
+
+Other consumers of a new cover.jpg in /media/Music (checked because they enumerate the tree):
+  - scripts/check-music-import.sh: the orphan scan skips any non-audio extension (AUDIO_EXT,
+    line 264), so a cover.jpg is never an ONDISK orphan. No impact.
+  - scripts/check-music-freeze.sh § 5 sidecar inventory (never asserts): its .jpg count will grow
+    by one per album that fetchart serves, and a future SAFE-05 sidecar diff cannot tell a
+    beets-written cover.jpg from a Jellyfin-written one by extension. Filed DEF-07-19-04 as an
+    OBSERVATION.
+
+--------------------------------------------------------------------------------
+## PRE-DEPLOY LIVE RED (CONVENTIONS §8.3 control)
+--------------------------------------------------------------------------------
+`bash scripts/check-beets-config.sh` from the workstation, 2026-09-28T09:49:51Z, against the live
+server (appdata unchanged, config sha adf838dd…): EXIT=1, "4 failed checks". Readiness PASS, inbox
+registration PASS {02-review 03-asis}, arm 1 read (257 lines), T-06-33 PASS, and D-29 layer 3
+byte-identical. The red lines, verbatim:
+
+      ❌ OD-2 fetchart.auto: UNKNOWN, not green — absent from the server-committed dump, or unreadable
+      ❌ OD-2 fetchart.sources: UNKNOWN, not green — absent from the server-committed dump, or unreadable
+      ✅ OD-2 art_filename = cover
+      ❌ OD-2 match.preferred.media = '[]' — want '["Digital Media","CD"]'
+      ❌ plugins = ["musicbrainz"] — want exactly {musicbrainz, fetchart}; embedart must never be listed (SAFE-01: it rewrites audio files), nor any plugin outside the reviewed set
+    ❌ 4 failed checks
+
+PRE-DEPLOY LIVE RED SET: plugins, OD-2 fetchart.auto, OD-2 fetchart.sources, OD-2 match.preferred.media
+Exactly the expected set. OD-2 art_filename is green because `cover` is beets' default, which the
+plan anticipated. No other assertion moved. After 07-20 installs the appdata copy, the same run
+must go to exit 0. That is 07-20's check, not this plan's.
+
+Full live transcript (ANSI stripped):
+
+    🧰 0. Toolchain preconditions
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      ✅ ssh /usr/bin/ssh — OpenSSH_10.3p1, LibreSSL 3.3.6
+      ✅ jq /usr/bin/jq — jq-1.7.1-apple
+      ✅ python3 /opt/homebrew/bin/python3 — Python 3.14.7
+      ✅ base64 /usr/bin/base64 — base64: invalid option -- V
+      ✅ docker (remote, root@172.16.1.159) server 29.2.1
+
+    ⏳ 1. Readiness gate — the watchdog registration line
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      ✅ readiness: the watchdog registration line is present (attempt 1 of 6)
+      [INFO] beets-flask.wdog: Registering watchdog with debounce of 30 seconds for inboxes: ['/downloads/complete/nzb/_inbox/02-review', '/downloads/complete/nzb/_inbox/03-asis']
+
+    📥 1b. Inbox registration — the newest line since the container's StartedAt (WR7-05)
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      StartedAt 2026-09-28T09:33:06.126406143Z; newest registration line: [INFO] beets-flask.wdog: Registering watchdog with debounce of 30 seconds for inboxes: ['/downloads/complete/nzb/_inbox/02-review', '/downloads/complete/nzb/_inbox/03-asis']
+      ✅ inbox registration: exactly {02-review 03-asis} on the newest line of the current process — 01-auto absent (D-21), 03-asis present (CR7-01)
+
+    🅰  2. ARM 1 — the server-committed effective config (CONFIG_ROUTE)
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      D-29 layer 3, before: 8f5994b824af5d43dacf8069d1ae3ffc2ac5a5694d90574763e2317bb1097813 /config/library.db b8ce8afdc5e3ba1c858d3fbc07c4f8ee90538343817af1200c24d5389f1a66c6 /config/state.pickle 
+      arm1.dump bytes: 5801
+      ✅ ARM 1 read via CONFIG_ROUTE=server-committed — 257 lines, 44 top-level keys
+
+    🅱  3. ARM 2 — the CLI/confuse view (CONFIG_ROUTE_CLI)
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      ✅ ARM 2 no-op overlay /tmp/phase06-check-beets-config-noop.yaml: truncated, then MEASURED at 0 bytes — nothing in it can outrank the vendored config
+      ✅ ARM 2 read via CONFIG_ROUTE_CLI=confuse — 227 lines
+      ✅ ARM 2 assembled from 3 file(s):
+          /tmp/phase06-check-beets-config-noop.yaml
+          /config/config.yaml
+          /venv/lib/python3.12/site-packages/beets/config_default.yaml
+      ✅ T-06-33: the redacted and unredacted dumps are byte-identical — no beets credential exists, asserted rather than assumed
+      D-29 layer 3, after:  8f5994b824af5d43dacf8069d1ae3ffc2ac5a5694d90574763e2317bb1097813 /config/library.db b8ce8afdc5e3ba1c858d3fbc07c4f8ee90538343817af1200c24d5389f1a66c6 /config/state.pickle 
+      ✅ D-29 layer 3: library.db and state.pickle are byte-identical either side of this run
+
+    🔎 4. Assertions over the server-committed config (ARM 1 only)
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      ✅ positive control: rc6 schema keys present in the dump (gui.num_preview_workers=4, gui.terminal.start_path=/repo) — this IS the server-committed object
+      ✅ CONF-01 import.copy = true
+      ✅ CONF-01 import.move = false
+      ✅ CONF-02 import.incremental = true
+      ✅ CONF-02 import.incremental_skip_later = true
+      ✅ CONF-05 match.preferred.countries contains GB — ["GB","US"]
+      ✅ CONF-05 match.preferred.countries contains UK = false (not 'true')
+      ✅ CONF-05 match.preferred.original_year = true
+      ✅ CONF-05 musicbrainz.extra_tags is a non-empty list (5 entries): ["year","catalognum","country","media","label"]
+      ✅ T-06-31 import.duplicate_action = ask
+      ✅ match.medium_rec_thresh = 0.25
+      ✅ directory = /media/Music
+      ✅ statefile = /config/state.pickle
+      ✅ library = /config/library.db
+      ✅ SAFE-01 scrub.auto = false
+      ✅ SAFE-01 lastgenre.auto = false
+      ✅ SAFE-01 embedart.auto = false
+      ❌ OD-2 fetchart.auto: UNKNOWN, not green — absent from the server-committed dump, or unreadable
+      ❌ OD-2 fetchart.sources: UNKNOWN, not green — absent from the server-committed dump, or unreadable
+      ✅ OD-2 art_filename = cover
+      ❌ OD-2 match.preferred.media = '[]' — want '["Digital Media","CD"]'
+      ✅ paths.comp equals paths.default — the inherited compilation rule is OVERRIDDEN, which is the only way to neutralise it (there is no syntax for deleting an inherited path rule)
+      ✅ paths: no rule routes anything into a Compilations/ tree
+      ✅ per_disc_numbering = true
+      ✅ asciify_paths = false
+      ✅ va_name = Various Artists
+      ❌ plugins = ["musicbrainz"] — want exactly {musicbrainz, fetchart}; embedart must never be listed (SAFE-01: it rewrites audio files), nor any plugin outside the reviewed set
+
+    ⚖️  5. ARM 1 vs ARM 2 — reported, not asserted equal
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      KEY                                        ARM 1 (server-committed)     ARM 2 (confuse/CLI)
+      .library                                   "/config/library.db"         "/tmp/p6-cbc-throwaway.blb"
+      .gui.num_preview_workers                   4                            UNKNOWN
+      .gui.terminal.start_path                   "/repo"                      UNKNOWN
+      3 of 26 compared keys differ — expected, and the point of D-30
+
+      ⚠️  REPORTED, not asserted: import.write = true in the server-committed config. That is Phase 7 behaviour; a Phase 6 invocation overrides it to no through its own -c overlay.
+
+    📊 6. Summary
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      CONFIG_ROUTE (arm 1):        server-committed
+      CONFIG_ROUTE_CLI (arm 2):    confuse
+      READY_ROUTE:                 watchdog-log-line
+      inbox registration (WR7-05): PASS   (newest line since StartedAt; expected: 02-review 03-asis)
+      arm 1 blind:                 0   (1 = nothing below section 4 was measured)
+      arm 2 blind:                 0
+      inter-arm differences:       3 of 26 compared keys (reported, not asserted)
+      redaction no-op (T-06-33):   no-op
+      no-op overlay size (WR-04):  0   (bytes; anything but 0 refuses arm 2)
+      D-29 before:                 8f5994b824af5d43dacf8069d1ae3ffc2ac5a5694d90574763e2317bb1097813 /config/library.db b8ce8afdc5e3ba1c858d3fbc07c4f8ee90538343817af1200c24d5389f1a66c6 /config/state.pickle 
+      D-29 after:                  8f5994b824af5d43dacf8069d1ae3ffc2ac5a5694d90574763e2317bb1097813 /config/library.db b8ce8afdc5e3ba1c858d3fbc07c4f8ee90538343817af1200c24d5389f1a66c6 /config/state.pickle 
+      toolchain missing:           0
+      arm-1 assertion failures:    4
+      FAILURES total:              4
+
+    ❌ 4 failed checks
+
+--------------------------------------------------------------------------------
+## EXTERNAL PUSH EVENT — 1e054a6 reached origin and the host WITHOUT the appdata install
+--------------------------------------------------------------------------------
+NOT an action of this plan. It is recorded because the plan's objective names this exact outcome
+as the thing to avoid ("If the host pulled this commit without the appdata install, the drift check
+would go red"), and because the plan's Task 2 verify conjunct `! git merge-base --is-ancestor HEAD
+origin/main` is now FALSE.
+
+Measured 2026-09-28T09:53Z–09:55Z:
+  - local reflog: 1e054a6 committed by this executor at 10:41:20 +0100. A concurrent session then
+    committed 548b951 "feat(teslamate): add TeslaMateApi so Dawarich can import completed drives"
+    ON TOP of it at 10:52:35 +0100, in the same working tree, and pushed main. origin/main = 548b951,
+    which contains 1e054a6. This executor ran no `git push`.
+  - LXC 100 /mnt/fast/stacks HEAD = 548b951 (HOST_HAS_1e054a6). The concurrent session pulled it
+    to deploy teslamate.
+      9b48263262f5…  /mnt/fast/stacks/stacks/selfhosted/arrs/beets/config.yaml   (NEW, repo)
+      adf838ddec5a…  /mnt/fast/appdata/arrs/beets/config/config.yaml           (live, unchanged)
+  - scripts/quick-health-check.sh at 09:54:27Z: EXIT=1.
+      10:  ❌ survivor-config.yaml DRIFTED — repo=9b48263262f5ba101d9be2307fa033d3292b2fe0f89fa8f3e0ae7544fbe3400f host=adf838ddec5a9149d407a0e30513b48bd8be2df1c111a0c66c42cd392d571e21
+      43:Music consumers audit: ❌ BROKEN (check-music-consumers.sh exit 1)
+      45:    ❌ D-28: 'Benson Boone/American Heart [093624834588]' does not exist under /mnt/tank/media/Music — the pin is stale; rebuild the inventory (CONVENTIONS §5)
+    The D-28 consumers red is NOT from this plan. It is the pinned AUNIQUE row for P04's album
+    dir, which 07-18 removed, and the pin belongs to 07-21/07-22 (CONVENTIONS §5).
+
+Effect on the estate: NONE on import behaviour. beets-flask mounts the appdata copy (read-only
+file mount /config/config.yaml, § (b) mounts), which is still adf838dd…, and the live
+check-beets-config run at 09:49:51Z read plugins [musicbrainz] and media []. What changed is that
+the vendored-file drift block is RED until 07-20 installs the appdata copy, or until the commit is
+reverted on main and the host is re-pulled. Either is an estate or push action outside this plan's
+hard exclusions, so it is left to the operator (07-20's gate).

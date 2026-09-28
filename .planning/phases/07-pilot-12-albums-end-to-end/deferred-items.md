@@ -285,3 +285,22 @@ DEF-07-15-01: Music Assistant artist-entity DISPLAY NAMES drift without their li
   discriminator ("a different missing name than Twista") reads a display name that can move on its own, so a future
   reading must record entity ids, not only names. Owner: CONF-04 / E6 (Phase 8 MA work). Evidence:
   artifacts/07-15-consumers.txt § E6 SECOND MEASUREMENT (OBSERVATION).
+
+DEF-07-19-04: A fetchart `cover.jpg` in /media/Music is indistinguishable, by extension, from a Jellyfin-written `.jpg` sidecar
+  Filed 2026-09-28 by 07-19 Task 2. OBSERVATION, not a defect. After 07-20 deploys OD-2, every MusicBrainz-matched album
+  that Cover Art Archive serves lands with `cover.jpg` (beets `artpath`). `scripts/check-music-freeze.sh` § 5's sidecar
+  inventory never asserts, but its `.jpg` count will grow by one per such album. A future SAFE-05 watched-folder diff
+  keyed on extension would then read beets' write as a Jellyfin write. Before calling a new `.jpg` a Jellyfin sidecar,
+  attribute it: a `cover.jpg` that equals an album's `artpath` is beets'. `check-music-import.sh` is unaffected, because its
+  orphan scan skips non-audio. Owner: whoever next runs a SAFE-05 sidecar diff (Phase 8/9). Evidence:
+  artifacts/07-19-pipeline-config.txt § ORACLE (other consumers).
+
+DEF-07-19-05: `preferred.media: ['Digital Media', 'CD']` ranks a Digital Media release above a CD for a CD rip too
+  Filed 2026-09-28 by 07-19 Task 2. OBSERVATION for 07-20's deploy gate. The staged files carry no `media` tag (likely
+  media '' on P02 and P10), so beets cannot tell a CD rip from a WEB rip, and the preference applies to every source. It
+  does what OD-2 asked for WEB rips: P02 flips from c0df8104 (CD) to b3a1e018 (Digital Media, an exact tie with cfb585a2).
+  It also keeps CD above vinyl. But a CD rip whose MusicBrainz Digital Media edition has the SAME tracklist and medium
+  count would now match the digital edition. P10 kept b057dee8 (CD) only because its digital edition 8a4b23b7 differs
+  in mediums: the margin was 0.115 under NEW, against 0.121 under CURRENT. Nothing has gone wrong yet. It is a measured
+  consequence of the ordering for the operator to accept or refine at 07-20. Evidence:
+  artifacts/07-19-pipeline-config.txt § RANKING, readings R1–R5.
