@@ -52,6 +52,22 @@ services:
       # issue secure cookies and the HSTS/upgrade-insecure-requests headers.
       - TRUST_PROXY=1
       - FORCE_HTTPS=true
+      # Added 2026-09-28. TREK's strict SSRF guard resolves every integration hostname to an
+      # IP BEFORE connecting and blocks private ranges, so the Immich integration failed with
+      # "Requests to private/internal network addresses are not allowed".
+      #
+      # Why it hits Immich specifically: photos.deercrest.info is GREY-CLOUDED (done
+      # 2026-09-17 because Cloudflare's 100 MB body cap was breaking Immich uploads), so this
+      # LAN resolves it to 172.16.1.159 -- the LXC's own private address. Orange-clouded names
+      # resolve to Cloudflare's public IPs and pass the guard untouched, which is exactly why
+      # airtrail. and findme. worked without this and photos. did not. Re-orange-clouding
+      # photos. is NOT the alternative fix: it would reinstate the 100 MB upload cap.
+      #
+      # What this opens: private LAN ranges only, and only for the strict guard's integrations
+      # (Immich, Synology Photos, AirTrail, Dawarich, document stores, webhooks, ntfy).
+      # Loopback (127.0.0.0/8, ::1), link-local (169.254.0.0/16, fe80::/10) and the AWS and
+      # Alibaba cloud-metadata addresses stay blocked regardless of this value.
+      - ALLOW_INTERNAL_NETWORK=true
       # Sibling *.deercrest.info hosts are not all HTTPS-only yet.
       - HSTS_INCLUDE_SUBDOMAINS=false
     volumes:
