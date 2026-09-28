@@ -119,10 +119,20 @@ services:
       # access equivalent to all scopes" -- a static token is NOT scope-limited, so treat
       # one as a full-access credential and revoke it on that same Admin page when done.
       #
-      # Deliberately scoped to /mcp alone. An OAuth-based MCP client would additionally
-      # need /.well-known/oauth-* and the authorize/token endpoints opened here.
+      # /oauth and /.well-known are included because the STATIC `trek_` token is DEPRECATED
+      # upstream and is refused by /mcp ("Access token required"). The supported route for
+      # a script is a MACHINE CLIENT: POST /oauth/token with grant_type=client_credentials,
+      # which returns a 1-hour access token. Measured 2026-09-28, before this change:
+      #     /oauth/token                             -> 302 (Authelia)
+      #     /.well-known/oauth-authorization-server  -> 302 (Authelia)
+      #     /mcp/.well-known/oauth-authorization-server -> 200 (already covered by /mcp)
+      # so the token endpoint was unreachable and no machine client could authenticate.
+      #
+      # Opening these is safe and intended: /oauth IS an OAuth authorization server, which
+      # authenticates its own callers by client_id/client_secret, and per upstream
+      # "Anything else below /.well-known answers a JSON 404, never the web app."
       - traefik.http.routers.trek-mcp-rtr.entrypoints=websecure
-      - traefik.http.routers.trek-mcp-rtr.rule=Host(`trek.deercrest.info`) && PathPrefix(`/mcp`)
+      - traefik.http.routers.trek-mcp-rtr.rule=Host(`trek.deercrest.info`) && (PathPrefix(`/mcp`) || PathPrefix(`/oauth`) || PathPrefix(`/.well-known`))
       - traefik.http.routers.trek-mcp-rtr.priority=100
       - traefik.http.routers.trek-mcp-rtr.tls=true
       - traefik.http.routers.trek-mcp-rtr.tls.certresolver=dns-cloudflare
