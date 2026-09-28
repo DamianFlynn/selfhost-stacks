@@ -337,3 +337,127 @@ R6. Pinned counts moved (CONVENTIONS §5): ST_PLANNED_CASES in scripts/check-bee
     pinned; they are re-read at R11.
     Fix commit: 58e2d3d fix(07-20): key-scope check-beets-config T-06-33 to fetchart's
     shipped-default redacted keys.
+
+R7. Push and host pull (12:28Z). `git fetch` showed origin/main == e92720e, not diverged, so there
+    was no rebase. `git push origin main`: e92720e..5b8ee93 (58e2d3d fix + 5b8ee93 docs). Host
+    `git -C /mnt/fast/stacks pull --ff-only` from porcelain 0 put HEAD at
+    5b8ee939096d4dbe49ac848eee8b5c1542d5bf99 == workstation HEAD == origin/main, porcelain 0.
+    Host repo config.yaml 9b48263262f5…400f == appdata config 9b48263262f5…400f, 760 568:568
+    (unchanged since B4). `config --services`: beets-flask is line 4 now (it was 9 at A1/B5; the
+    ordering changed, the name did not).
+
+--------------------------------------------------------------------------------
+## B (resumed) — DEPLOY, steps B5–B11 re-run after the fix
+--------------------------------------------------------------------------------
+B5'. PRE library.db 8f5994b8…7813, state.pickle b8ce8afd…66c6. At T0 12:28:50Z,
+     `docker compose -f stacks/selfhosted/arrs/compose.yaml up -d --force-recreate --no-deps
+     beets-flask` Recreated and Started, StartedAt 2026-09-28T12:28:51.045Z. Only beets-flask was
+     recreated: sabnzbd, lidarr, radarr and the exporters still read "Up 2 days".
+B6'. Ready after 15 s (bound 180 s). `test -r /config/config.yaml` as 568 ok. The NEW watchdog
+     line since StartedAt reads "Registering watchdog with debounce of 30 seconds for inboxes:
+     ['/downloads/complete/nzb/_inbox/02-review', '/downloads/complete/nzb/_inbox/03-asis']".
+     Zero error/Traceback lines since StartedAt.
+B7'. Mounts: /mnt/tank/media/Music -> /media/Music RW=true; /mnt/tank/media -> /media RW=false;
+     /mnt/fast/appdata/arrs/beets/config/config.yaml -> /config/config.yaml RW=false
+     (flask config.yaml RW=false too).
+B8'. POST-recreate library.db 8f5994b8…7813 and state.pickle b8ce8afd…66c6: both == A6.
+B9'. `bash scripts/check-beets-config.sh` (workstation, 12:29:09Z): RC=0, FAILURES total 0,
+     arm-1 assertion failures 0.
+       ✅ SAFE-01 embedart.auto = false        ✅ OD-2 fetchart.auto = true
+       ✅ OD-2 fetchart.sources = ["coverart"]  ✅ OD-2 art_filename = cover
+       ✅ OD-2 match.preferred.media = ["Digital Media","CD"]
+       ✅ plugins is exactly {musicbrainz, fetchart}
+       ✅ inbox registration (WR7-05): exactly {02-review 03-asis}, 01-auto absent
+       ✅ T-06-33: the dumps differ ONLY on 4 allowlisted fetchart key(s), each empty or at the
+          installed plugin default [fanarttv_key=empty google_engine=default google_key=empty
+          lastfm_key=empty]
+       ✅ D-29 layer 3: library.db and state.pickle byte-identical either side of the run
+       ✅ CONF-01/CONF-02/CONF-05 and the SAFE-01 three, all PASS
+     Summary line: "redaction no-op (T-06-33): plugin-defaults-only [fanarttv_key=empty
+     google_engine=default google_key=empty lastfm_key=empty]".
+POST-DEPLOY CHECK: PASS
+B10. Server route, in the running container as 568 (12:29:42Z): get_config(commit_to_beets=True),
+     then beets.plugins.load_plugins(). Reads: beets 2.12.0; config plugins ['musicbrainz',
+     'fetchart']; loaded ['fetchart', 'musicbrainz']; import_stages ['fetch_art']. The first attempt
+     passed the names positionally and raised TypeError, because load_plugins() takes no arguments
+     in 2.12.0. It was a read, with nothing written: library.db/state.pickle sha unchanged
+     (8f5994b8…, b8ce8afd…).
+SERVER LOADS FETCHART: yes
+B11. `bash scripts/quick-health-check.sh` (workstation, 12:29:51Z): EXIT=1.
+       ✅ vendored files match (4): audio.bash, sabnzbd beets-config.yaml, survivor config.yaml,
+          flask-config.yaml   (the A9 survivor-config drift red is CLEARED)
+       D-04 counts: raw=228  comment-stripped=114  invocation-shaped=17  (executable 15 = asserted
+          3 + exempt 12, documentation 2). Pinned values (exempt 12, documentation 2) are at
+          their pins, and invocation-shaped 17 / asserted 3 are unchanged from A9. raw 225->228 and
+          comment-stripped 112->114 are the unpinned reported counts. They moved because
+          58e2d3d's new lines carry `BEET_*` tokens (e.g. BEET_EXEC_RC). None of those lines is
+          invocation-shaped.
+       ✅ D-03 mount shape, extended.conf, Music freeze harness Intact, Music import sweep 187
+          items / 0 findings, Jellyfin transcode retention, image drift (14, reported).
+       The ONE non-green: ❌ Music consumers audit exit 1, FAILURES 1 = D-28 "'Benson Boone/American
+          Heart [093624834588]' does not exist under /mnt/tank/media/Music — the pin is stale".
+          This is the red A9 recorded BEFORE the deploy. It pins P04's dir, which 07-18 removed on
+          purpose, and G5 of the gate the operator approved stated that "D-28 consumers red
+          [is] expected to remain (A9)". Its owner is 07-22. The plan's B11 text accepts only the
+          CONF-04 exit 3. That text predates 07-18's back-out, so this red is recorded as a
+          deviation, not a regression. It is the same line with the same count as A9.
+DEPLOY: PASS (host 5b8ee93 == origin; appdata sha == repo; drift match 4; check-beets-config 0)
+
+--------------------------------------------------------------------------------
+## C — BACKFILL
+--------------------------------------------------------------------------------
+C1. Before.
+    P10 dir (atlantis, real root uid 0, 12:31:04Z), "/mnt/tank/media/Music/Various Artists/Now
+    That’s What I Call Music! 117": 50 .flac, 50 files total, 0 image files, 0 subdirs; dir
+    568:568 777. Manifest (relpath, size, sha256, mtime) of the 50 FLAC:
+    /root/phase07-0720/p10-before.tsv, sha256
+    097df6e4b45635998bd635ff8c0ba122034ef667c8beab22de8e4acacde95c54.
+    library.db, opened file:…?mode=ro inside beets-flask as 568 (12:31:19Z); journal_mode delete
+    (no WAL, so the file copy is consistent). Canonical dumps (PRAGMA column header + every
+    column, ORDER BY id, one JSON row per line) on LXC 100 at /root/phase07-0720/:
+      albums-before.jsonl  8 rows    a6d81c722d2547ab8d63bf28e74ad42af5eb4390e873a1561060fe7703c0cc3c
+      items-before.jsonl   187 rows  f83b2220f4c5a8c0e18275cd7cd00afc05032e38c2e029ba46186ad6ab90e89e
+    Safety copy `cp -p` (taken on LXC 100, where the /mnt/fast/safety path lives, like B3):
+      /mnt/fast/safety/phase07/0720/library.db.pre-backfill  sha256 8f5994b8…7813 == live
+      library.db, 770 568:568 536576.
+    state.pickle b8ce8afdc5e3ba1c858d3fbc07c4f8ee90538343817af1200c24d5389f1a66c6.
+    Fence re-listed by exact name (atlantis, 12:31:36Z): fast/appdata/arrs@pre-07-18 and
+    tank/media/Music@pre-07-18, creation 1790587371 (== A4).
+    Library-wide: .nfo 91, *.jpg 88, entries not 568:568 0. 02-review still 8 entries.
+C2. The one invocation. Read-only pre-count: albums with mb_albumid
+    b057dee8-02ea-4b48-8681-f5e3255bc47d = 1 (album 1, artpath None; non-empty artpath 0).
+    `beet` is not on PATH for a `docker exec` (`command -v beet` empty), so the same binary was
+    named absolutely. Exactly once, 12:31:57Z -> 12:32:03Z:
+      docker exec -u 568 beets-flask /venv/bin/beet fetchart mb_albumid:b057dee8-02ea-4b48-8681-f5e3255bc47d
+    Output: "Various Artists - Now That’s What I Call Music! 117: found album art". FETCHART_RC=0.
+C3. After (12:32:22Z – 12:32:54Z).
+    - P10 dir: 51 files = 50 .flac + exactly one other, cover.jpg: 9041762 bytes, 568:568 (numeric,
+      atlantis), mode 777 (the dataset's aclmode=restricted default). Magic ff d8 ff; `file`: JPEG
+      JFIF, 3540x3540. sha256 6d83625a7035f576f86b3ddf63b03e01e544f99923675497190e0c92384664e8.
+    - FLAC manifest: /root/phase07-0720/p10-after.tsv sha256 097df6e4…5c54 == p10-before.tsv
+      (`cmp` equal): 50/50 FLAC byte-identical, sizes and mtimes unchanged, so no embed and no tag
+      write.
+    - CAA: `curl -L https://coverartarchive.org/release/b057dee8-02ea-4b48-8681-f5e3255bc47d/front`
+      (workstation, exit 0) gives 9041762 bytes, sha256 6d83625a…64e8 == cover.jpg == the debug
+      record's `6d83625a…`. That is the Cover Art Archive's own front for the matched release.
+    - DB re-dump: items-after.jsonl sha f83b2220…e89e == before (187 rows, identical).
+      albums-after.jsonl a286c402affcd30987b37ff0bab27c11c73437ffdea1eaa9acbb76566e3973b5 !=
+      before. A column-wise diff finds exactly ONE changed cell: album id 1 (mb_albumid
+      b057dee8…), column artpath, None -> b"Various Artists/Now That’s What I Call Music!
+      117/cover.jpg". beets 2.12 stores the path relative to `directory`, /media/Music. No other album
+      row or column moved. Non-empty artpath rows: exactly [(1, b057dee8…)].
+    - library.db sha now 131255fc17f177640c219f15385320e333b9f0a90668781921c8aae780f4184e (the one
+      artpath write). state.pickle b8ce8afd…66c6: UNCHANGED.
+    - Library-wide: .nfo 91 (unchanged); entries not 568:568 0; *.jpg 88 -> 89, the +1 being this
+      cover.jpg, attributable via album 1's artpath (DEF-07-19-04's prediction, met exactly).
+    - `bash scripts/check-music-import.sh` on LXC 100 (/mnt/fast/stacks): IMPORT_RC=0 — "Import
+      sweep clean: 187 items, three classes checked, zero findings"; 0 on-disk orphans.
+    - Post-backfill `quick-health-check.sh` (12:33:05Z): unchanged from B11. Vendored files match
+      (4), D-04 counts identical, Music freeze harness ✅ Intact (the new .jpg does not trip it),
+      import sweep ✅. The only red is the same D-28 consumers line (EXIT=1).
+BACKFILL: PASS (cover.jpg 6d83625a7035f576f86b3ddf63b03e01e544f99923675497190e0c92384664e8, 568:568; artpath album 1 only; 50/50 FLAC byte-identical; items unchanged; state.pickle unchanged)
+    Undo, if ever wanted, is an operator decision: remove cover.jpg and file-copy library.db from
+    /mnt/fast/safety/phase07/0720/library.db.pre-backfill with beets-flask stopped, or take it from
+    the @pre-07-18 view. Never a zfs [r]ollback.
+    No beet write/update, no embedart, no fetchart beyond this one album, no Jellyfin or MA write.
+    Estate at close: beets-flask RUNNING (StartedAt 12:28:51Z), 02-review 8 entries untouched.

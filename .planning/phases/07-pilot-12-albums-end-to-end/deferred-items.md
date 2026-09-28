@@ -316,3 +316,11 @@ DEF-07-20-01: check-beets-config.sh T-06-33 goes red as soon as fetchart loads, 
   alternative is to pin the four keys explicitly in config.yaml. A future real key still has to trip it. State at
   filing: new config installed, beets-flask STOPPED, backfill not taken. Evidence:
   artifacts/07-20-deploy-backfill.txt § B9, B9a, B-STOP.
+  RESOLVED 2026-09-28 (operator: "Fix check, resume (Recommended)", 12:22:07Z) by commit 58e2d3d. T-06-33 is now
+  assert_redaction_noop in scripts/check-beets-config.sh, key-scoped as the candidate fix above proposed. Byte-identical
+  dumps still PASS. Otherwise only fetchart's four allowlisted keys may differ, each reading REDACTED with an empty value
+  or the installed plugin's default. That default is derived live from beetsplug.fetchart's add_default_config against a
+  bare confuse root, not pinned. Every other difference is RED, and unreadable or undiffable input is UNKNOWN. No value is
+  printed. Self-test 15 -> 20 cases (RED before, GREEN after, artifact § R3-R4). Live: check-beets-config RC=0 at
+  12:29:09Z with "plugin-defaults-only [fanarttv_key=empty google_engine=default google_key=empty lastfm_key=empty]".
+  The deploy and the P10 backfill then completed (§ B resumed, § C). A future real key in any of the four still trips it.
