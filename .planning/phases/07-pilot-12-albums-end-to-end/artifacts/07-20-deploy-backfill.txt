@@ -276,3 +276,64 @@ B-STOP. The plan's failure path (11:56:38Z): `docker compose -f stacks/selfhoste
      stops at the first failure. Section C (BACKFILL) was NOT RUN: no fetchart invocation, no
      write to the library tree or library.db.
 STOP STATE 07-20-DEPLOY-FAIL: step B9 check-beets-config.sh RC=1 on T-06-33 redaction no-op DIFFERS (fetchart's plugin-default keys fanarttv_key/google_key/google_engine/lastfm_key are marked redact; three are empty and google_engine is beets' shipped default; no credential in the repo); every art/media assertion PASS; host == origin == workstation at eb794b5; appdata config == repo 9b482632…; writer stopped (Running=false 11:56:41Z); previous config at /mnt/fast/safety/phase07/0720/config.yaml.pre-0720 (adf838dd…); library.db and state.pickle unchanged; backfill not taken
+
+--------------------------------------------------------------------------------
+## R — RESUME AFTER 07-20-DEPLOY-FAIL (continuation executor, 2026-09-28)
+--------------------------------------------------------------------------------
+R0. OPERATOR ANSWER to the halt (2026-09-28T12:22:07Z, `date -u` at the continuation executor's
+    start; answered via AskUserQuestion), verbatim selection: "Fix check, resume (Recommended)".
+    The option text the operator chose read, verbatim: "Narrow T-06-33 so a difference passes only
+    if every differing key is one of fetchart's four known redacted keys AND its value is empty or
+    the beets default. Anything else still fails closed. Self-test it, then restart beets-flask and
+    re-run B9–B11 and the P10 backfill."
+    The gate DISPOSITION above (deploy-and-backfill) stands; this answer authorises the check
+    change and the resume, and nothing else.
+
+R1. Start state (12:21:52Z): workstation HEAD == origin/main == e92720e, porcelain 0.
+    beets-flask Running=false, FinishedAt 2026-09-28T11:56:41.053951295Z (unchanged since B-STOP).
+
+R2. Defaults derived from the INSTALLED plugin, not guessed. In a throwaway container of the same
+    image (`docker run --rm --network none`, no mounts), each beetsplug.fetchart source class's
+    add_default_config was called against a bare `confuse.RootView([])` and the root's redactions
+    read back: exactly {fanarttv_key, google_engine, google_key, lastfm_key}. fanarttv_key,
+    google_key and lastfm_key are null, and google_engine is a 33-char string. Printed masked (length
+    only). Source lines: fetchart.py 662-670 (GoogleImages), 739-741 (FanartTV), 1149-1151
+    (LastFM). The live check derives them the same way inside the running container on every run.
+
+R3. RED before the fix. The pre-fix `cmp` semantics were extracted unchanged into
+    assert_redaction_noop and driven by the five new self-test cases:
+      ✅ byte-identical dumps                      rc 0, as expected
+      ❌ only the four fetchart keys differ, each empty or at the default   rc 1, expected 0
+      ✅ an allowlisted key holds a NON-default value   rc 1, as expected
+      ✅ a NON-allowlisted key differs                  rc 1, as expected
+      ✅ the unredacted dump is unreadable (UNKNOWN)    rc 2, as expected
+      ❌ --self-test: 1 of 20 cases did not behave as expected   (EXIT=1)
+    The one red is exactly the DEF-07-20-01 shape. The other four already held under the old
+    semantics, and they stay as regression guards on the narrowed rule.
+
+R4. GREEN after the fix (key-scoped judge):
+      ✅ byte-identical dumps: rc 0
+      ✅ only the four fetchart keys differ: rc 0 [fanarttv_key=empty google_engine=default
+         google_key=empty lastfm_key=empty]
+      ✅ allowlisted non-default: rc 1 [google_key=NON-DEFAULT]
+      ✅ non-allowlisted key: rc 1 — "differ OUTSIDE the allowlisted fetchart keys: 1 line(s) in
+         section(s) musicbrainz. Presumed a credential; no line text is printed"
+      ✅ unreadable unredacted dump: rc 2 (UNKNOWN)
+    Full self-test: "✅ --self-test: all 20 cases behaved as expected (16 of them red)" (was 15/15,
+    13 red). The fixture's non-default string does not appear in the self-test output (grep count 0).
+
+R5. Preflight on REAL dumps before restarting the writer. A throwaway container (`--network none`,
+    uid 568, the installed appdata config mounted :ro, `-l /tmp/pf.blb`, an empty `-c` overlay) ran
+    `config -d` and `config -d -c`. Both are 251 lines. The committed judge over those dumps plus
+    the derived defaults returned rc 0 "differ ONLY on 4 allowlisted fetchart key(s), each empty or
+    at the installed plugin default" [fanarttv_key=empty google_engine=default google_key=empty
+    lastfm_key=empty]. The dump files were deleted from the scratchpad immediately afterwards. No
+    live container was touched.
+
+R6. Pinned counts moved (CONVENTIONS §5): ST_PLANNED_CASES in scripts/check-beets-config.sh,
+    15 -> 20, in the same commit. D-04 pins: none moved. No invocation-shaped line was added; the
+    one new remote read is a `${PY_BIN} -c` exec, the same shape as arm 1. D04_DOC_BASELINE 2 and
+    D04_EXEMPT_BASELINE 12 are unchanged. The raw and comment-stripped counts are reported, not
+    pinned; they are re-read at R11.
+    Fix commit: 58e2d3d fix(07-20): key-scope check-beets-config T-06-33 to fetchart's
+    shipped-default redacted keys.
