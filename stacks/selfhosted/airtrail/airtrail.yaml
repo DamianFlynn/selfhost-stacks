@@ -1,0 +1,141 @@
+# AirTrail - self-hosted flight logbook
+# https://github.com/johanohly/AirTrail   image: johly/airtrail (Docker Hub only, no GHCR)
+#
+# Fragment only. Deploy through compose.yaml in this directory, which declares the
+# t3_proxy network and the volumes -- `docker compose -f airtrail.yaml` fails with
+# "refers to undefined network t3_proxy". (Learned the hard way on trek, 2026-09-28.)
+
+services:
+  ########################### DATABASE
+  airtrail-db:
+    # PostgreSQL 16, NOT 18, deliberately. Upstream tests on 16 and claims migrations
+    # apply "down to 11"; nothing upstream mentions 17 or 18. Pinning 16 also sidesteps
+    # the PG18 mount trap this estate already hit on silo-db: PG18 images want
+    # /var/lib/postgresql with PGDATA=/var/lib/postgresql/18/docker, and getting it wrong
+    # exits 1 in a restart loop that surfaces as "dependency failed to start ... unhealthy",
+    # which points at the healthcheck rather than the mount. 16.x keeps the classic
+    # /var/lib/postgresql/data path below.
+    # renovate: datasource=docker depName=postgres
+    image: postgres:16.15-alpine3.24
+    container_name: airtrail-db
+    restart: unless-stopped
+    # Upstream measures ~190 MB under a 10k-flight load and documents running capped at 256m.
+    mem_limit: 256m
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - airtrail
+    environment:
+      - POSTGRES_DB=${AIRTRAIL_DB_NAME:-airtrail}
+      - POSTGRES_USER=${AIRTRAIL_DB_USER:-airtrail}
+      - POSTGRES_PASSWORD=${AIRTRAIL_DB_PASSWORD:?AIRTRAIL_DB_PASSWORD must be set in .env}
+      - TZ=${TZ:-Europe/Dublin}
+    volumes:
+      # Lands on LXC 100's ext4 root: /mnt/fast/appdata is NOT a mountpoint, only some
+      # children are datasets (see MEMORY fast-appdata-not-a-mountpoint). Accepted here
+      # because the payload is tiny -- upstream measures ~25 MB for 10,000 flights plus
+      # reference data, ~290 MB for Postgres itself. Revisit if / headroom tightens.
+      - /mnt/fast/appdata/airtrail/db:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${AIRTRAIL_DB_USER:-airtrail} -d ${AIRTRAIL_DB_NAME:-airtrail}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  ########################### APPLICATION
+  airtrail:
+    # renovate: datasource=docker depName=johly/airtrail
+    image: johly/airtrail:v3.13.0
+    container_name: airtrail
+    restart: unless-stopped
+    # 768m not 512m. Upstream documents a ~600 MB transient peak on FIRST START while it
+    # loads ~86,000 airports, settling to ~75 MB idle, and ~375 MB peak for a 10k-flight
+    # export. 512m is documented to boot but leaves nothing for the export path.
+    mem_limit: 768m
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      airtrail-db:
+        condition: service_healthy
+    networks:
+      - airtrail
+      - t3_proxy
+    environment:
+      # ORIGIN must match the browser address EXACTLY (scheme+host+port) or every sign-in
+      # fails with "Cross-site POST form submissions are forbidden". Upstream's #1 support
+      # issue. It is also what OAuth redirect URIs are built from.
+      - ORIGIN=https://airtrail.${DOMAINNAME}
+      - DB_URL=postgres://${AIRTRAIL_DB_USER:-airtrail}:${AIRTRAIL_DB_PASSWORD:?}@airtrail-db:5432/${AIRTRAIL_DB_NAME:-airtrail}
+      # Login and OAuth rate limits are keyed on the client IP taken from this header.
+      # Unset behind a proxy means the WHOLE estate shares one bucket and everybody gets
+      # "Too many login attempts". XFF_DEPTH counts proxies from the RIGHT: Cloudflare sets
+      # the client, Traefik appends the CF edge, so 2 is the expectation -- VERIFY the IP
+      # AirTrail actually reports before trusting it rather than assuming this is right.
+      - ADDRESS_HEADER=X-Forwarded-For
+      - XFF_DEPTH=2
+      - UPLOAD_LOCATION=/app/uploads
+      # Bulk import parses client-side then POSTs one payload; files are capped at 5 MB
+      # upstream, so 20M here is headroom, not a target.
+      - BODY_SIZE_LIMIT=20M
+      # PUID/PGID, never `user:`. Since v3.13 the entrypoint chowns UPLOAD_LOCATION on
+      # start, but ONLY when the container is not pinned with `user:` -- setting `user:`
+      # silently skips the chown and icon uploads then fail EACCES.
+      - PUID=568
+      - PGID=568
+      - TZ=${TZ:-Europe/Dublin}
+      # --- OIDC: deliberately NOT enabled yet -------------------------------------------
+      # Operator chose forward-auth (chain-authelia) over OIDC on 2026-09-28, which means
+      # TWO logins: Authelia, then AirTrail's own account. Enabling these makes the second
+      # seamless. Note the redirect URI is ORIGIN + /login, NOT /callback.
+      #   - OAUTH_ENABLED=true
+      #   - OAUTH_ISSUER_URL=https://auth.${DOMAINNAME}/.well-known/openid-configuration
+      #   - OAUTH_CLIENT_ID=airtrail
+      #   - OAUTH_CLIENT_SECRET=${AIRTRAIL_OIDC_SECRET}
+      #   - OAUTH_HIDE_PASSWORD_FORM=true
+      # An EMPTY value counts as unset, and a bad value in any app-mirrored setting makes
+      # the server exit with "Invalid app config in .env" -- so comment lines out, do not
+      # leave KEY= behind.
+    volumes:
+      # Airline icons only. Small.
+      - /mnt/fast/appdata/airtrail/uploads:/app/uploads
+    # No ports published: reachable through Traefik only. 3000 on the host is already
+    # taken by cal-web (keeper-sh) anyway.
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=t3_proxy"
+
+      # --- UI router: behind Authelia ---------------------------------------------------
+      - "traefik.http.routers.airtrail-rtr.entrypoints=websecure"
+      - "traefik.http.routers.airtrail-rtr.rule=Host(`airtrail.${DOMAINNAME}`)"
+      - "traefik.http.routers.airtrail-rtr.middlewares=chain-authelia@file"
+      - "traefik.http.routers.airtrail-rtr.tls=true"
+      - "traefik.http.routers.airtrail-rtr.tls.certresolver=dns-cloudflare"
+      - "traefik.http.routers.airtrail-rtr.service=airtrail-svc"
+
+      # --- Bypass router: the paths forward-auth would BREAK -----------------------------
+      # Higher priority so it wins over the Host-only rule above. These four prefixes must
+      # NOT see chain-authelia:
+      #   /api          REST v1 + /api/mcp -- bearer-token clients send no Authelia cookie,
+      #                 and upstream states these endpoints authenticate from the request
+      #                 alone and never use cookies.
+      #   /oauth        AirTrail's OWN OAuth authorization server (MCP dynamic client reg).
+      #   /.well-known  its OAuth discovery documents.
+      #   /share        public read-only share links, intentionally unauthenticated.
+      #
+      # NO middleware here, and that is deliberate rather than an omission -- the shape this
+      # repo otherwise treats as a hazard. Reasons, recorded because CONVENTIONS requires it:
+      #   - chain-authelia@file  -> forwardAuth bounces bearer/API clients to a login page.
+      #   - chain-no-auth@file   -> its secure-headers middleware caps
+      #                             accessControlAllowMethods (GET/OPTIONS/PUT), which breaks
+      #                             the API's documented any-origin CORS for POST. Same
+      #                             reasoning already recorded on neocortex-memory and couchdb.
+      # Authentication on these paths is AirTrail's own scoped API keys / OAuth, not the edge.
+      # This prefix list WILL grow as upstream adds endpoints -- it is real maintenance.
+      - "traefik.http.routers.airtrail-api-rtr.entrypoints=websecure"
+      - "traefik.http.routers.airtrail-api-rtr.rule=Host(`airtrail.${DOMAINNAME}`) && (PathPrefix(`/api`) || PathPrefix(`/oauth`) || PathPrefix(`/.well-known`) || PathPrefix(`/share`))"
+      - "traefik.http.routers.airtrail-api-rtr.priority=100"
+      - "traefik.http.routers.airtrail-api-rtr.tls=true"
+      - "traefik.http.routers.airtrail-api-rtr.tls.certresolver=dns-cloudflare"
+      - "traefik.http.routers.airtrail-api-rtr.service=airtrail-svc"
+
+      - "traefik.http.services.airtrail-svc.loadbalancer.server.port=3000"

@@ -1,0 +1,42 @@
+# AirTrail Stack - self-hosted flight logbook
+# https://github.com/johanohly/AirTrail
+#
+# Why this exists: Flighty is the current logbook and TripIt holds many years of history.
+# AirTrail is the only self-hosted option with a FIRST-CLASS Flighty CSV importer (actual
+# vs scheduled gate/takeoff/landing times, terminals, gates, PNR, seat, cabin class, tail
+# number, aircraft type, notes, with per-airport timezones).
+#
+# ⚠️ TripIt import is NOT equivalent and is unverified here. The only accepted format is
+# .ics, and an event only counts as a flight when its SUMMARY matches
+#     ^([A-Z]{1,3}\d{1,4})\s+([A-Z]{3})\s+to\s+([A-Z]{3})       e.g. "SK2535 CPH to BHX"
+# -- note NO space between carrier code and number. If TripIt emits "SK 2535 CPH to BHX"
+# or "Flight to Birmingham", every event silently fails the regex and NOTHING imports, with
+# no error. Test one trip's ICS before planning a bulk migration. Fallback is scripting the
+# history into AirTrail's documented JSON export format, or POST /api/v1/flights.
+# Import dedupe (date + route + flight number + registration + times) means TripIt history
+# can be layered UNDER the Flighty import without creating doubles.
+#
+# Deployed 2026-09-28. Upstream v3.13.0 (2026-09-26): stable v3, GPL-3.0, ~1.6k stars,
+# 5 open non-PR issues -- but BUS FACTOR 1 (one architect, drive-by contributors).
+#
+# ⚠️ Migrations run automatically on EVERY container start and are FORWARD-ONLY. Rolling a
+# version back requires restoring a pre-update database backup. Back up before updating --
+# trek taught this the hard way on 2026-09-28, where release notes that said nothing about
+# migrations still applied four of them.
+#
+# ⚠️ First start needs OUTBOUND HTTPS to fetch ~86,000 airports plus airline data. Without
+# it the instance comes up with silently missing reference data rather than an error.
+
+name: airtrail
+
+########################### NETWORKS
+networks:
+  # Back-end only: the database is never reachable from the proxy network.
+  airtrail:
+    driver: bridge
+  t3_proxy:
+    external: true
+
+########################### SERVICES
+include:
+  - airtrail.yaml
