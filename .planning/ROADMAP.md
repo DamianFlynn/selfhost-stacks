@@ -1622,7 +1622,7 @@ Plans:
 - [x] 07-20-PLAN.md — GAP (OD-2): GATED: deploy the config to appdata (drift green) + NOW 117 cover.jpg backfill, one album
 - [x] 07-21-PLAN.md — GAP (07-UAT gaps 1, 3): GATED: Jellyfin — Apple Music off for MusicAlbum, NOW 117 Primary replaced (image-only), P04 dropped
 - [x] 07-22-PLAN.md — GAP (07-UAT gaps 2-3): GATED: Music Assistant — one fs sync drops P04, refresh album 167, D-28 control row
-- [ ] 07-23-PLAN.md — GAP: GATED: end-state re-measure, operator view + count re-confirm, closure evidence into 07-UAT.md (no verdict)
+- [x] 07-23-PLAN.md — GAP: GATED: end-state re-measure, operator view + count re-confirm, closure evidence into 07-UAT.md (no verdict)
 **Research**: not needed — the diff is a comparison over two `ffprobe` datasets, and the undo path
 is ZFS rollback plus a documented `incremental` state reset. The compilation and multi-disc cases
 are already covered by the Phase 6 config work; this phase runs them, it does not investigate them.
