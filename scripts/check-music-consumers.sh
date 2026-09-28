@@ -584,22 +584,18 @@ D24_CENSUS_BASELINE_PATHS=(
 # landed library, one row per album of every firing set — `album dir|expected album artist`.
 # `album dir` is relative to the library root, which is exactly the form MA's filesystem provider
 # uses for an album-level mapping item_id (and the directory beets rendered).
-# BUILT FROM plan 07-15's REBUILT inventory (07-15-consumers.txt § AUNIQUE INVENTORY (rebuilt after
-# 07-13), G-07) — never from 07-12's superseded list. Measured 2026-09-27: 9 landed albums read, DJ
-# pair included; exactly ONE firing set — the Benson Boone `American Heart` pair, P02 (FLAC,
-# catalognum '' -> no suffix) and P04 (MP3, catalognum 093624834588 -> ` [093624834588]`). The DJ
-# path rules carry `%aunique{}` too but rendered "" on both DJ albums, so they are not rows.
+# BUILT FROM the landed library's `%aunique{}` inventory (07-15-consumers.txt § AUNIQUE INVENTORY),
+# never from a superseded list. Since plan 07-18 backed out P04 (07-UAT gap 3, OD-1) the library holds
+# NO firing set, so the one row kept is a CONTROL: a directory whose folder name and album tag agree,
+# which keeps the section asserting, because an empty AUNIQUE_ROWS is UNKNOWN by its own rule.
 # MOVES WITH EVERY FUTURE IMPORT THAT PRODUCES A `%aunique{}` FIRING — a change elsewhere in the
 # tree, unrelated to this check — which is why it is registered in CONVENTIONS §5. Remedy: rebuild
 # the inventory from the library, add every album of the new firing set by hand, same commit.
 AUNIQUE_ROWS=(
-  # P02 — the unsuffixed twin. Its folder name and its album tag agree, so MA's folder_name action
-  # COULD fire here; a correct read proves the album artist came from the tag.
+  # P02 — the section's live CONTROL row (plan 07-18 left no `%aunique{}` firing set). Folder name
+  # and album tag agree, so MA's `folder_name` action COULD fire here; a correct read proves the
+  # album artist came from the tag and that exactly one MA album maps the directory.
   "Benson Boone/American Heart|Benson Boone"
-  # P04 — the suffixed twin. Folder and album tag DIFFER by construction (` [093624834588]`), which
-  # is exactly the case where MA's `missing_album_artist_action: folder_name` silently yields
-  # `Various Artists` while config/providers/get still reads back `folder_name`.
-  "Benson Boone/American Heart [093624834588]|Benson Boone"
 )
 
 # Colors

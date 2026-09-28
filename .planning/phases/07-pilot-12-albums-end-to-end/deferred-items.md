@@ -333,3 +333,14 @@ DEF-07-21-01: a targeted `/Library/Media/Updated` Deleted notification makes Jel
   Task 1 stamp over /mnt/tank/media/Music returned 0, and .nfo stayed 91. The freeze is therefore what makes this safe,
   not the narrowness of the call. Any future targeted update should keep the before-write freeze assertion. Evidence:
   artifacts/07-21-jellyfin.txt § W2, § AFTER ALL WRITES.
+
+DEF-07-22-04: a provider-scoped MA fs sync re-created the P02 album under a new id rather than updating it in place
+  Filed 2026-09-28 by 07-22 Task 3 § R. OBSERVATION, no action. The one `music/sync {"providers":["filesystem_local--
+  XJaJWNUS"]}` at 13:32:51Z deleted album 167 (P02) with the backed-out 169 (P04). It also deleted all ten P02 tracks
+  (1541, 1548, 1621–1628) and re-created them as album 170 and tracks 1629–1638. The re-created album is clean: own
+  first image, own external ids only, and no NOW 121 ids. Two consequences: (1) any MA favourite, playlist entry or
+  play history pinned to the old ids is gone, and none of those was measured before the sync; (2) nothing in the repo
+  pins an MA numeric album id (the D-28 check keys on the directory mapping), so no check moved. Separately, NOW 117's
+  cover.jpg, written by 07-20 at 12:32Z, was not picked up because no NOW 117 track changed; album 166 still shows the
+  correct CAA front for its own MBID. Owner: Phase 8's MA work, if MA ids or folder images ever need to be stable.
+  Evidence: artifacts/07-22-ma.txt § R, § F, § P.

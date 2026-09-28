@@ -97,3 +97,89 @@ MA ALBUM 169: PRESENT (BEFORE)
   downstream of beets, which is fenced by `@pre-07-18`: MA's library state is re-derivable by a filesystem re-sync.
   Timing fact: MA's scheduled fs sync fires at 13:55:48Z today regardless of this gate. `hold` therefore does not
   keep MA untouched past 13:55Z — it only means the executor issues no write and takes no readings.
+
+  OPERATOR ANSWER (AskUserQuestion, recorded 2026-09-28T13:32:37Z; answer received before this time, executor clock read with date -u):
+    verbatim selection: "apply (Recommended)"
+    option description as shown: "Run the sync, the refreshes and the conditional 169 removal, then deploy the D-28 check fix."
+    The gate text restated the accepted no-MA-backup limitation above; the operator saw it before answering.
+DISPOSITION: apply
+
+## TASK 3 — apply (operator DISPOSITION: apply). All MA calls from LXC 100 via /root/phase07-0722/ma-lib.sh.
+
+### S. Sync (13:32Z, before the 13:55:48Z scheduled run, so the plan's NOT NEEDED arm did not apply)
+  Script /root/phase07-0722/ma-sync-0722.sh = the 07-15 model with only the header and the sentinel/work paths changed
+  (diff recorded on LXC 100). It refuses unless the provider list is exactly ["filesystem_local--XJaJWNUS"] and writes a
+  sentinel (/root/phase07-0722/ma-sync.ISSUED) so a second run refuses. Output: /root/phase07-0722/ma-sync-run.log.
+  Issued `music/sync {"providers":["filesystem_local--XJaJWNUS"]}` at 2026-09-28T13:32:51.300Z. The response was
+  4 BackgroundTasks (the four fs-sync ids), with artist and album already success and track and playlist running.
+  First poll 13:33:06Z: 0 not finished. track finished 13:32:53.528Z, playlist 13:32:55.748Z, last_error null on all four.
+  MA log (local = UTC+1): 14:32:53.076 `Found 0 changed/new items`, 14:32:53.660 `Found 12 changed/new items`,
+  14:32:55.787 `Genre scan: removed 10 stale genre mappings`. No restart line: the only `Starting Music Assistant
+  Server` line is still 2026-09-25 22:15:38.
+MA SYNC: ISSUED 2026-09-28T13:32:51.300Z, complete 2026-09-28T13:32:55.748Z
+  Side effect on the schedule: MA moved the four tasks' next_run to 2026-09-29T01:32:5xZ (12 h after this run). The
+  13:55:48Z scheduled run therefore did not happen.
+
+### R. Reads after the sync (/root/phase07-0722/ma-read-0722.sh after-sync, 2026-09-28T13:33:12.536Z, plus direct gets)
+  Provider-filtered counts: albums 78 (was 79), tracks 1412 (unchanged), artists 201 (unchanged). None truncated
+    (limit 5000).
+  Album library_items diff BEFORE → AFTER: −167 American Heart, −169 American Heart, +170 American Heart.
+  Track library_items diff: −1541 and −1548 (the two P02 tracks MA had merged with NOW 121 recordings), −1621..−1628
+    (the other eight P02 tracks), +1629..+1638 (10 new tracks, all on album 170). So the sync DELETED album 167 along
+    with 169, and re-created P02 as a new album 170 with new track ids. Net album count −1 (the P04 twin).
+  `music/albums/get 167` and `169`: MediaNotFoundError "album not found in library" (MA log 14:33:13.419 and .448).
+  `music/tracks/get 1541`: MediaNotFoundError.
+MA ALBUM 169: ABSENT (after sync)
+  Album 170 (P02, the successor of 167): name "American Heart", artists ["Benson Boone"], album_type album, local
+    mapping ["Benson Boone/American Heart"] (the only mapping instance is filesystem_local--XJaJWNUS), album_tracks 10.
+    external_ids in order: barcode 00093624834588, musicbrainz_releasegroupid 8e25d6da…, musicbrainz_albumid
+    c0df8104-7b49-4fa3-bcec-cb3d310aa9a5 (its own). NOW 121's 0a74adf8…, b3cb0f03… and 00196872951165: ABSENT.
+    Images (2 total): [0] local `Benson Boone/American Heart/01 Sorry I’m Here for Someone Else.flac` (embedded),
+    [1] local `…/03 Man in Me.flac` (embedded). No foreign image: the two NOW 121 images that trailed on 167 are gone.
+  Albums mapping an `American Heart` dir (library_items): exactly one, 170 → `Benson Boone/American Heart`.
+  Recording successor of track 1541 is track 1629, "Sorry I’m Here for Someone Else", album 165. Its local mappings (2)
+    are `Various Artists/NOW That’s What I Call Music! 121/27 …mp3` and `Benson Boone/American Heart/01 …flac`.
+    NO P04 path. Track 1630 "Mystical Magical" (successor of 1548) maps NOW 121 06 and P02 04 in the same way. MA's
+    recording merge persists by design, but it no longer carries NOW 121's album ids onto the P02 album.
+  Album 166 (P10, NOW 117): 1 image, CAA
+    https://dn710609.ca.archive.org/0/items/mbid-b057dee8-02ea-4b48-8681-f5e3255bc47d/mbid-b057dee8-02ea-4b48-8681-f5e3255bc47d-40802828337_thumb1200.jpg
+    (the front for its own MBID b057dee8, so it shows the correct 117 cover). The local cover.jpg that 07-20 wrote (on
+    disk: 9,041,762 B, apps:apps, mtime 12:32Z) was NOT picked up by this sync. The sync counts changed track files,
+    and no NOW 117 track changed. Recorded as an observation (DEF-07-22-04). The displayed cover is correct either way.
+
+### X. 169 if it survives — NOT ENTERED. 169 was ABSENT after the sync: no refresh of 169, no `music/albums/remove`.
+  `music/library/remove_item` was never issued. STOP STATE 07-22-P04-STILL-MAPPED did not arise.
+MA ALBUM 169: ABSENT (sync)
+
+### F. Refresh 167 — NOT ISSUED (target no longer exists). Deviation, recorded.
+  The sync deleted album 167 (see R), so `music/refresh_item` on 167 has no target. The gate authorised a refresh of
+  album 167. It did not authorise a write on the successor id 170, and one is not needed: everything F was meant to
+  measure already reads clean on 170. Its first image is its own, the only external ids are its own, and there is no
+  foreign image. The executor therefore issued no refresh, because a write on an id the operator did not name would be
+  improvising. This is a reduction of the writes, not a substitute for them. The lines below record the measured state
+  of the P02 album, now id 170. The label keeps the plan's 167 so that the plan's verify still binds to this reading.
+MA ALBUM 167 FIRST IMAGE: OWN (album 167 deleted by the sync; successor album 170, the P02 dir: local `Benson Boone/American Heart/01 Sorry I’m Here for Someone Else.flac`, filesystem_local--XJaJWNUS embedded)
+MA ALBUM 167 EXTERNAL IDS: CLEAN (successor album 170: barcode 00093624834588, mb_rg 8e25d6da…, mb_albumid c0df8104… (own). NOW 121's 0a74adf8…, b3cb0f03… and 00196872951165 are absent. Its own musicbrainz_albumid c0df8104… is the only album id, so there is nothing for it to lead. BEFORE on 167, 0a74adf8… led and c0df8104… came last)
+  DEF-07-22-02 is NOT filed: the id bleed did not persist.
+
+### T. Tasks (tasks/list, read 13:33:12Z after every MA write in this plan; no later MA write was made)
+  _artist, _album, _track, _playlist: enabled=true, status=success, last_error null, next_run
+  2026-09-29T01:32:51.316Z / .319Z / .326Z / .331Z. Other enabled tasks: 16 (unchanged). No tasks/set_enabled issued.
+MA FS-SYNC TASKS: 4/4 enabled
+
+### P. Per-album first image, the 8 landed pilot albums (07-18 KEEP set: P02 P03 P05 P06 P07 P08 P10 P12)
+  | P | MA album | first image | own? |
+  |---|---|---|---|
+  | P02 | 170 | local `Benson Boone/American Heart/01 …flac` embedded | OWN (own files) |
+  | P03 | 168 | local `Benson Boone/Fireworks & Rollerblades/13 Love of Mine.flac` embedded | OWN (own files) |
+  | P05 | 165 | local `…NOW That’s What I Call Music! 121/19 Beautiful People.mp3` embedded | OWN (own files) |
+  | P06 | 164 | local `CYRIL/Stumblin’ In (LUNAX remix) (extended mix)/01 ….mp3` embedded | OWN (own files) |
+  | P07 | 163 | local `DJ/Mastermix/Issue 420/02 Mastermixed 5.mp3` embedded | OWN (own files) |
+  | P08 | 162 | local `DJ/Various Artists/Mastermix Issue 421/01 The Ibiza Sessions (Balearic Beats).mp3` embedded | OWN (own files) |
+  | P10 | 166 | CAA mbid-b057dee8… front (thumb1200) | OWN (CAA, own release MBID) |
+  | P12 | 3 | Spotify https://i.scdn.co/image/ab67616d0000b273b08c02a4b9e0d73473079a1f (album 3 also maps spotify--g2SQC45P) | NOT in the plan's three classes |
+  Album 3 detail: the Spotify image was fetched and viewed (640×640 JPEG, sha256 bb33c39d254f9cd9…). It is the NOW 116
+    cover (title "NOW 116", the same release), so it is not foreign content. It sits outside the plan's definition of own
+    (embedded, own cover.jpg, CAA for own MBID). Its own embedded images are [1] and [2]. It is pre-existing: the BEFORE read
+    showed the same order, and this plan did not change it.
+MA OWN COVERS: 7/8 (strict definition; the exception is P12 album 3, whose first image is Spotify's NOW 116 cover for the same release; it shows correct art but not from an own source. No album shows a foreign album's cover.)

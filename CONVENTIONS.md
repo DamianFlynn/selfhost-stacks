@@ -149,7 +149,9 @@ from the failure message unless the convention is written down, which is what th
   album artist`, one row per album of every firing set) whose Music Assistant album artist section 4d
   reads directly. Moves when any import produces a new `%aunique{}` firing, for reasons unrelated to
   this check; rebuild the inventory from the landed library and add every album of the set by hand,
-  same commit (plan `07-15`, D-28).
+  same commit (plan `07-15`, D-28). When no firing set exists in the landed library, one control row
+  is kept (a directory whose folder name and album tag agree), so the section still asserts (plan
+  07-18/07-22).
 
 **The remedy, which the failure output now prints (plan `06-46`):** read every new line **by hand**
 — they are invisible to the driving grep, so the section is `UNKNOWN`, not clean, until they are —
