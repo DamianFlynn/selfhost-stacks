@@ -1,0 +1,124 @@
+# 07-18 — P04 back-out (07-UAT gap 3, American Heart twin — beets half)
+# Operator decision OD-1 (07-UAT.md § Operator Decisions, 2026-09-28T07:45:22Z, verbatim option label):
+#   "Back out the MP3 (P04)". Keep the P02 FLAC.
+# Standing authorisation (operator, 2026-09-26, verbatim): "i am explicitly authorising the work needed to get
+#   beets and the music system implemented, including live files like state.pickle". It does NOT waive this
+#   plan's gate, the backup-before-write fence, or the zfs [r]ollback ban.
+# Hard exclusions this round: no zfs [r]ollback of any dataset; no Jellyfin Full[R]efresh or library-wide refresh;
+#   no `beet write` / `beet update` / embedart over the library; no re-match of P02; no new pilot draws; nothing
+#   staged under /media/Music untagged. This plan issues no Jellyfin or MA write.
+# Destructive / refresh verbs are written bracketed in this file (CONVENTIONS §8). Times UTC.
+# Scratch: LXC 100 /root/phase07-0718/ ; atlantis /root/phase07-0718/.
+
+## A — PRE-STATE (reads only)
+
+(A1) library.db, read-only (`docker exec -i -u 568 beets-flask /venv/bin/python -` < /root/phase07-0718/dbread-0718.py,
+     sqlite mode=ro; /root/phase07-0718/read-a-0718.sh pre0718, 2026-09-28T09:21:30Z, dbread_rc 0).
+  beets-flask Running=true Restarts=0 StartedAt=2026-09-27T22:32:55Z (the UAT test 1 recreate).
+  LIBRARY items 197, albums 9; items with no album 0.
+  | album id | P-ID | albumartist / album | mb_albumid | albumtype | added (UTC) | items |
+  |---|---|---|---|---|---|---|
+  | 1 | P10 | Various Artists / Now That’s What I Call Music! 117 | b057dee8-02ea-4b48-8681-f5e3255bc47d | album | 2026-09-26T20:57:56.04Z | 50 |
+  | 2 | P02 | Benson Boone / American Heart | c0df8104-7b49-4fa3-bcec-cb3d310aa9a5 | album | 2026-09-26T21:58:27.98Z | 10 |
+  | 3 | P03 | Benson Boone / Fireworks & Rollerblades | ef528afc-c3de-4b4a-8ef2-a0dd43dc9c83 | album | 2026-09-26T21:59:42.65Z | 15 |
+  | 4 | P06 | CYRIL / Stumblin’ In (LUNAX remix) (extended mix) | 39fb4603-ec25-472e-8277-1623bacb900f | single | 2026-09-26T22:01:12.01Z | 1 |
+  | 6 | P05 | Various Artists / NOW That’s What I Call Music! 121 | 0a74adf8-e7ff-4b37-a9b6-48d8632fe880 | album | 2026-09-26T22:04:46.70Z | 44 |
+  | 8 | P12 | Various Artists / Now That’s What I Call Music! 116 | 581244e0-4f08-467e-9e96-24115f0f9e76 | album | 2026-09-26T22:07:04.34Z | 47 |
+  | 9 | P04 | Benson Boone / American Heart | c33163f3-6217-4dc8-8e88-65f623b62c9b | album | 2026-09-26T23:11:42.77Z | 10 |
+  | 10 | P07 | Mastermix / Issue 420 | '' (as-is) | dj | 2026-09-27T12:32:54.09Z | 10 |
+  | 11 | P08 | Various Artists / Mastermix Issue 421 | '' (as-is) | dj | 2026-09-27T12:33:21.88Z | 10 |
+  197 = 50+10+15+1+44+47+10+10+10. Album 9 path0 'Benson Boone/American Heart [093624834588]/01 Sorry I’m Here for
+  Someone Else.mp3'; album 2 path0 'Benson Boone/American Heart/01 Sorry I’m Here for Someone Else.flac'.
+  items with mb_albumid c33163f3… = 10; items with mb_albumid c0df8104… = 10.
+  P02 DB digests (sha256 over repr of each row, for the § D comparison):
+    ALBUM2 ROW DIGEST ba989d2ee63f4ac2273a5a47591848ca89b951a7a0da8b339a15b989cd940dde
+    ALBUM2 ITEMS DIGEST 424bf87bfb26811a9f991e6dffa890f402f95c4a55437a245dd3acbb84700bc0 (n 10)
+    ALBUM2 FLEXATTR DIGEST fa9ee8969134f92122a9315cf367b48452698f6a404639fc05dd027440850289
+    ALBUM2 ITEM FLEXATTR DIGEST d4812b0fd12472b7d960faad0b3a76442d7fdc54bcf91f171b8e74113e44bec5
+  /config/library.db  sha256 2ff94600e607584365bfec78922ad77eb33a07d05f40c9a34eace37591f7df9e 536576 B 568:568 770 inode 75642 mtime 2026-09-27T12:38:04.86Z
+  /config/state.pickle sha256 d195800848286fbeede802d6f12b58df48b780dab3245ca98896d314fc539d1e 988 B 568:568 770 inode 33942 mtime 2026-09-27T12:33:24.89Z
+  (Both equal UAT test 1's 22:32:52Z readings 2ff94600… / d1958008…: nothing has written either since.)
+
+(A2) state.pickle decode from a /tmp COPY only (`docker exec beets-flask cp /config/state.pickle
+     /tmp/p7-state.pre0718.pickle` cp_rc 0, copy d1958008… = live; decoder /root/phase07-0718/state-decode-0718.py,
+     reads the copy only, dec_rc 0).
+  988 B, pickle protocol 4, dict, keys ['taghistory', 'tagprogress']; tagprogress {} (== {}: True);
+  taghistory set, size 9. Full sorted key list (all `(b'/downloads/complete/nzb/_inbox/02-review/<folder>',)`):
+    P02 Benson Boone-American Heart-24BIT-44KHZ-WEB-FLAC-2025-OBZEN-xpost
+    P03 Benson.Boone.-.Fireworks.&.Rollerblades.(2024).[16Bit-44.1kHz].FLAC.[PMEDIA].\xe2\xad\x90\xef\xb8\x8f-xpost
+    P04 Benson_Boone_-_American_Heart-WEB-2025-BENSONBOONE
+    P06 Cyril - Stumblin In (LUNAX Remix) (Extended Mix)-(5021732254740)-SINGLE-WEB-2024-ZzZz [9c1feafc0] [2af13ead9]-xpost
+    P07 Mastermix.Issue.420.2021
+    P08 Mastermix.Issue.421.2021
+    P05 Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY
+    P12 VA-Now_That.s_What_I_Call_Music__116__2023
+    P10 VA.Now.That.s.What.I.Call.Music_.117.2024..CD.FLAC..CDNOW117
+  P04 key `(b'/downloads/complete/nzb/_inbox/02-review/Benson_Boone_-_American_Heart-WEB-2025-BENSONBOONE',)` in
+  taghistory: True (the 07-12 § F3 key).
+P04 STATE KEY: PRESENT
+
+(A3) Tree, atlantis as real root (id -u 0, TZ=UTC), /root/phase07-0718/tree-read-0718.sh before,
+     2026-09-28T09:21:55Z–09:22:00Z, tree_rc 0.
+  P04 `Benson Boone/American Heart [093624834588]/`: PRESENT, 10 files, 10 .mp3, 10 entries, not 568:568 0.
+  P02 `Benson Boone/American Heart/`: 10 files, 10 .flac, 10 entries (no art sidecar), dir mtime 2026-09-26T21:58:29.41Z.
+    Per-file manifest (relpath, size, sha256, mtime, ctime; ns precision) saved as atlantis
+    /root/phase07-0718/p02-before.tsv, sha256 171e12029ca1f5bb8522ec11e483b3e511ab4bb429359dcb50d02238cfa6388b.
+  `Benson Boone/` children: American Heart, American Heart [093624834588], Fireworks & Rollerblades,
+    Fireworks & Rollerblades (2024) (pre-existing, DEF-07-12-08), artist.nfo, backdrop.jpg, folder.jpg.
+  Library-wide: *.nfo 91 (baseline 91), *.jpg 88, entries not 568:568 0.
+
+(A4) P04 SOURCE `/mnt/tank/downloads/complete/nzb/music/Benson_Boone_-_American_Heart-WEB-2025-BENSONBOONE`
+     re-manifested (P-ID, relpath, size, sha256, mtime), LC_ALL=C sorted, vs the 10 P04 rows of
+     07-07-source-manifest-before.tsv (copied to atlantis as p04-source-07-07.tsv; cmp-equal to 07-12's
+     p04-source-before.tsv): rows 10 vs 10, UNCHANGED.
+  P04 STAGED copy `_inbox/02-review/Benson_Boone_-_American_Heart-WEB-2025-BENSONBOONE`: 10 files; (relpath, sha256)
+    set vs the 07-07 manifest: EQUAL. Inboxes: 02-review 9 entries, 03-asis 0.
+
+(A5) beets-flask DB (mode=ro, never edited; same read 09:21:30Z): counts folder/session/task/candidate 16/16/16/81.
+  P04 folder 8c4fb033ea94d0210ae807cf13f76b76 …/02-review/Benson_Boone_-_American_Heart-WEB-2025-BENSONBOONE
+    (created 2026-09-26 21:12:06); session ecac6a1b-979a-4e0c-a506-e362ce71b9f0 IMPORT_COMPLETED, exc none, updated
+    2026-09-26 23:11:43; task 0de63004-f272-4e8c-abc3-caa47964f659 IMPORT_COMPLETED, chosen 6d13e171… flag APPLY.
+  P02 folder 5fb195c736b0c01ad8d42ec9f235181b …/02-review/Benson Boone-American Heart-24BIT-44KHZ-WEB-FLAC-2025-OBZEN-xpost;
+    session 2d351339-29a9-4edf-bd6b-4934d2eaf8d3 IMPORT_COMPLETED, updated 2026-09-26 21:58:29.
+  rq (`/venv/bin/rq info --url redis://localhost:6379`, rq_rc 0): 0 queues, 0 jobs total; 5 workers, all idle
+    (4 preview, 1 import). Nothing queued or in flight.
+
+(A6) Consumers, read verbs only (/root/phase07-0718/consumers-read-0718.sh before, LXC 100, 09:22:20Z, rc 0;
+     credentials sourced from /mnt/fast/secrets/*.env, mode 600 root, passed only via -H @<(printf …)/stdin).
+  Jellyfin (JELLYFIN_ADDR 192.168.90.37:8096 resolved fresh from t3_proxy 09:22:20Z), MusicAlbum "American Heart" count 2:
+    018bd709583c4cecaccfe616bb2b7d1c | Benson Boone | /media/Music/Benson Boone/American Heart | MBAlbum c0df8104… (P02)
+    e44d965502c9f1f4a9df62622c7164fa | Benson Boone | /media/Music/Benson Boone/American Heart [093624834588] | MBAlbum c33163f3… (P04)
+  Music Assistant (http://172.16.1.31:8095, login OK; music/albums/get only):
+    album 167 "American Heart" maps filesystem_local--XJaJWNUS 'Benson Boone/American Heart' (P02);
+      first image 'Benson Boone/American Heart/04 Mystical Magical.flac'
+    album 169 "American Heart" maps filesystem_local--XJaJWNUS 'Benson Boone/American Heart [093624834588]' (P04);
+      first image 'Various Artists/NOW That’s What I Call Music! 121/27 Sorry I’m Here for Someone Else.mp3' (the
+      NOW 121 bleed, 07-UAT gap 2/3 root cause)
+  No write verb went to either consumer.
+
+Precondition: album 9 present with 10 items; P04 state key PRESENT; P04 dir 10 files; P04 source == 07-07 rows.
+PRECONDITION: PASS
+
+## B — FENCE
+
+# zfs [r]ollback of any dataset is FORBIDDEN — recovery is a file copy from .zfs/snapshot/pre-07-18/
+ONE remote invocation on atlantis as real root (`ssh root@172.16.1.158 'bash -s' < fence-0718.sh`; script and
+output kept at atlantis /root/phase07-0718/fence-0718.{sh,out}), 2026-09-28T09:22:51.488Z–09:22:51.980Z:
+  1. absent-assert: tank/media/Music@pre-07-18 count 0, fast/appdata/arrs@pre-07-18 count 0 (whole-line -cxF over
+     `zfs list -t snapshot -H -o name`; driven once against a control containing the real name: count 1).
+  2. `zfs snapshot tank/media/Music@pre-07-18` rc 0 at 09:22:51.734Z
+  3. `zfs snapshot fast/appdata/arrs@pre-07-18` rc 0 at 09:22:51.860Z (two pools, one step, 126 ms apart; not one
+     atomic snapshot — beets-flask rq idle, nothing writing)
+  4. listed back (`zfs list -t snapshot -H -p -o name,creation`, rc 0), exact whole-line match on the name column:
+     tank/media/Music@pre-07-18 count 1, creation 2026-09-28T09:22:51Z (epoch 1790587371)
+     fast/appdata/arrs@pre-07-18 count 1, creation 2026-09-28T09:22:51Z (epoch 1790587371)
+  zfs [d]estroy was not issued.
+  Safety copies `cp -p` → /mnt/fast/safety/phase07/0718/ (rc 0 0), sha256 as strings, live / copy / snapshot view
+  /mnt/fast/appdata/arrs/.zfs/snapshot/pre-07-18/beets/config/:
+    library.db   2ff94600e607584365bfec78922ad77eb33a07d05f40c9a34eace37591f7df9e ×3 EQUAL (copy apps:apps 770 536576 B)
+    state.pickle d195800848286fbeede802d6f12b58df48b780dab3245ca98896d314fc539d1e ×3 EQUAL (copy apps:apps 770 988 B)
+  Re-measured 09:22:59Z (`zfs list -t snapshot -H -p -o name,creation,used,written`):
+    tank/media/Music@pre-07-18 used 0; `written@pre-07-pilot` of it 3,382,174,400
+    fast/appdata/arrs@pre-07-18 used 565,248; `written@pre-07-pilot` of it 223,690,752
+    pool avail: tank 5,955,690,302,368 B; fast 1,425,339,154,432 B.
+FENCE: PASS (tank/media/Music@pre-07-18 2026-09-28T09:22:51Z, fast/appdata/arrs@pre-07-18 2026-09-28T09:22:51Z; safety copies sha-equal)
