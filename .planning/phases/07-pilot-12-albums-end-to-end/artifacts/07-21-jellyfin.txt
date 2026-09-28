@@ -1,0 +1,104 @@
+07-21 — Jellyfin repair: Apple Music off for MusicAlbum images, NOW 117 Primary image, P04 album drop
+======================================================================================================
+Plan: .planning/phases/07-pilot-12-albums-end-to-end/07-21-PLAN.md (07-UAT gap 1; Jellyfin half of gap 3; OD-1, OD-2)
+Jellyfin jellyfin/jellyfin:10.11.11. JELLYFIN_ADDR resolved fresh from the container's t3_proxy network on
+LXC 100 (192.168.90.37:8096, 12:37:34Z). Key: /mnt/fast/secrets/jellyfin-deercrest.env gated on "600 root",
+passed only as -H @<(printf …) (CONVENTIONS §7); nothing credential-bearing is recorded here.
+Helpers on LXC 100 (Task 1, GET only): /root/phase07-0721/jf-read-0721.sh, /root/phase07-0721/prep-0721.sh;
+`grep -c POST` over each = 0 / 0. Scratch: /root/phase07-0721/ (LXC 100) and /root/phase07-0721/ (atlantis, stamp only).
+Hard exclusions honoured: no library-wide metadata refresh, no scan call, no per-item refresh call; no beets write,
+no Music Assistant write. Task 1 issued GET requests only.
+
+--------------------------------------------------------------------------------
+## A — FREEZE AND LIBRARY OPTIONS (GET /Library/VirtualFolders, 2026-09-28T12:37:34Z, RC 0)
+--------------------------------------------------------------------------------
+Music (/media/Music, ItemId 7e64e319657a9516ec78490da03edccb):
+  MetadataSavers=[]  SaveLocalMetadata=false  EnableRealtimeMonitor=false  SaveLyricsWithMedia=false
+  LocalMetadataReaderOrder=["Nfo"]
+FREEZE: PASS (MetadataSavers [] ; SaveLocalMetadata false)
+
+BEFORE — canonical sha256 of each library's LibraryOptions (jq -S -c):
+  Music          music       7e64e319657a9516ec78490da03edccb  cc00f50da735befa61a498786eb08e6bffe09c15c5871aa20b50151c8f195ad1
+  Shows          tvshows     a656b907eb3a73532e40e44b968d0225  894579bbafe3f697c69185ad760e7c695e78b81216df661d7ba083fd54ac3fce
+  Collections    boxsets     9d7ad6afe9afa2dab1a2f6e00ad28fa6  d7ffd872864af97c44d6f2b110447fde33a8f4a4ef8fa4f7ce86bc4839fcbbbb
+  Movies         movies      f137a2dd21bbc1b99aa5c0f6bf02a805  1fdaea74ef4e3a4c19b8c7e75381a0b72a8a25bcc4f0ebf5ea75bcc52095f29f
+  TV Recordings  homevideos  8d73cb254e556faef9d9987273477294  c56daf0d628966418d2550076c7d5ec03e318f1becf37a9d452350009f63026a
+  (Music = the 07-11 DEF-07-11-05 AFTER hash cc00f50d…; the other four equal 07-11's. Nothing has changed the options since.)
+Safety copy of BEFORE (LXC 100, /mnt/fast/safety/phase07/0721/):
+  vf-before.json (full GET response)                        d2168e300799a8de3696535d7a7a37d8be5134473a080b08c7ec08aff1f8e430
+  lo-before-<ItemId>.json × 5, each sha256 == its row above.
+
+Music TypeOptions order: ["MusicArtist","MusicAlbum","Audio","MusicVideo"]; the MusicAlbum entry is index 1:
+  ImageFetchers        ["Apple Music","Fanart","TheAudioDB"]
+  ImageFetcherOrder    ["Apple Music","Fanart","TheAudioDB"]
+  MetadataFetchers     ["Apple Music","MusicBrainz","TheAudioDB"]
+  MetadataFetcherOrder ["Apple Music","MusicBrainz","TheAudioDB"]
+  ImageOptions         Primary limit 1, Disc limit 1, Backdrop limit 0 minWidth 1280, all others limit 0
+  (Apple Music as a METADATA fetcher is out of this plan's scope and is left unchanged; OD-2 names image fetching.)
+
+GET /Libraries/AvailableOptions?LibraryContentType=music, MusicAlbum:
+  ImageFetchers:    Fanart DefaultEnabled=true; TheAudioDB DefaultEnabled=true; Apple Music DefaultEnabled=true
+  MetadataFetchers: MusicBrainz true; TheAudioDB false; Apple Music true
+
+Apple Music plugin storefront option (OD-2: GB storefront only if one exists):
+  GET /Plugins: "Apple Music 3.0.6.2 status=Active", Id a9f62a44fea546c3ac2655abba29c7c8,
+    ConfigurationFileName Jellyfin.Plugin.AppleMusic.xml (the name it would use).
+  /config/plugins/configurations/ holds no AppleMusic file; /config/plugins/Apple Music_3.0.6.2/ holds only the DLLs,
+    image.png and meta.json.
+  GET /Plugins/a9f62a44…/Configuration -> HTTP 200, body {} (the configuration has NO fields).
+  STOREFRONT OPTION: ABSENT (expected). Disabling for MusicAlbum images is the action.
+
+--------------------------------------------------------------------------------
+## B — ITEMS (by Path; GET /Items, ParentId = Music, Recursive, MusicAlbum, 12:37:35Z)
+--------------------------------------------------------------------------------
+Library MusicAlbum total: 79.
+P10 `/media/Music/Various Artists/Now That’s What I Call Music! 117` -> 1 item: d18d5c99c4451068e6b3d6999cd48a3d,
+  MB album b057dee8-02ea-4b48-8681-f5e3255bc47d.
+  GET /Items/d18d5c99c4451068e6b3d6999cd48a3d/Images: one image, Primary,
+    Path /config/metadata/library/d1/d18d5c99c4451068e6b3d6999cd48a3d/folder.jpg, Size 658823, 1400x1400,
+    ImageTag 0a6ed4c7ffceb349371a60909f91821e.
+  Inside the jellyfin container (read-only): sha256 09d8b5f8c9dd9e57595ed07628bed020709f027c8b05f0268040e671e3bf6761
+    (== the Disney 3 artwork 09d8b5f8c9dd…), 658823 B, mtime 2026-09-26 20:52:05.919 +0100, root:root 770.
+  Undo copy for the image write: LXC 100 /mnt/fast/safety/phase07/0721/p10-primary-before.jpg, 658823 B,
+    sha256 09d8b5f8c9dd9e57595ed07628bed020709f027c8b05f0268040e671e3bf6761 (== stored).
+P04 `/media/Music/Benson Boone/American Heart [093624834588]` -> 1 item: e44d965502c9f1f4a9df62622c7164fa, MB c33163f3…,
+  10 Audio children (01–10 .mp3). JELLYFIN P04 ITEM: PRESENT.
+  Why still present: "Scan Media Library" last ran 2026-09-28T09:12:36Z→09:17:40Z Completed, BEFORE 07-18's undo
+  (09:29:41Z). Trigger IntervalTrigger 432000000000 ticks (12 h) -> next run ≈ 2026-09-28T21:17Z.
+P02 `/media/Music/Benson Boone/American Heart` -> 1 item: 018bd709583c4cecaccfe616bb2b7d1c, MB c0df8104…,
+  10 Audio children (01–10 .flac). JELLYFIN P02: PRESENT, 10 children.
+
+Atlantis, real root (id -u 0), TZ=UTC, 12:38:23Z:
+  stamp /root/phase07-0721/start.stamp touched 2026-09-28 12:38:23.334 +0000 (the Task 3 `find -newer` reference).
+  /mnt/tank/media/Music: *.nfo 91 (baseline 91); *.jpg 89 (88 + P10 cover.jpg, DEF-07-19-04, expected);
+    entries not 568:568 = 0.
+  P10 dir: 51 files = 50 .flac + cover.jpg (9041762 B, 568:568). No folder.jpg, no album.nfo.
+    Listing (name, size, mtime) /root/phase07-0721/p10-listing-before.tsv sha256
+    407c00e0c751ccb3acd3b515d1129353f20fc0eb9be966923dbc7564bb5f226b.
+  `Benson Boone/` children: American Heart, Fireworks & Rollerblades, Fireworks & Rollerblades (2024), artist.nfo,
+    backdrop.jpg, folder.jpg. The P04 directory is ABSENT on disk (07-18 § G).
+
+--------------------------------------------------------------------------------
+## C — PREPARED BODIES (on LXC 100 under /root/phase07-0721/; NONE SENT)
+--------------------------------------------------------------------------------
+C1. lo-body.json = {Id: 7e64e319…, LibraryOptions: <BEFORE Music LibraryOptions, jq -S -c form>} with only the MusicAlbum
+    TypeOptions entry changed. 3611 B, sha256 c5d78287faf2b65277e9049d881aab6af39e0c0f577d4773af6047c453fa24c8.
+    Base (lo-before-wrapped.json) LibraryOptions canonical sha == cc00f50d… (BEFORE).
+    ImageFetchers was PRESENT and non-null, so the explicit-defaults branch was not needed.
+    jq self-check vs BEFORE: top-level keys differing = ["TypeOptions"]; key set equal; TypeOptions length equal;
+      TypeOptions indices differing = [1] (MusicAlbum); fields differing inside it = ["ImageFetcherOrder","ImageFetchers"];
+      Id equal.
+    One-line diff:
+      MusicAlbum ImageFetchers ["Apple Music","Fanart","TheAudioDB"] -> ["Fanart","TheAudioDB"];
+      ImageFetcherOrder ["Apple Music","Fanart","TheAudioDB"] -> ["Fanart","TheAudioDB","Apple Music"]
+C2. deleted-body.json = {"Updates":[…]}: 11 entries, UpdateType "Deleted" only; the 10 P04 file paths exactly as
+    Jellyfin lists them (children of e44d9655…, /media/Music/Benson Boone/American Heart [093624834588]/01…10 .mp3)
+    plus the album directory path. All 11 start with the P04 dir prefix (asserted); none names P02's dir.
+    sha256 3f7903c1ac3840ea98899de168e528c25d6dfd01c621bddd61e67231780d661e.
+C3. p10-cover.b64 = base64 (-w0) of `/mnt/tank/media/Music/Various Artists/Now That’s What I Call Music! 117/cover.jpg`
+    read on LXC 100 (9041762 B, source sha256 6d83625a7035f576f86b3ddf63b03e01e544f99923675497190e0c92384664e8).
+    12055684 B; base64-decoded sha256 6d83625a7035f576f86b3ddf63b03e01e544f99923675497190e0c92384664e8
+    == 07-20 § C3 cover.jpg sha (6d83625a…64e8). PASS.
+PRIMARY IMAGE SOURCE: P10 cover.jpg (07-20 backfill, CAA front)
+
+TASK 1: DONE — state witnessed, three bodies prepared and self-checked, NONE SENT.
