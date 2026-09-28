@@ -304,3 +304,15 @@ DEF-07-19-05: `preferred.media: ['Digital Media', 'CD']` ranks a Digital Media r
   in mediums: the margin was 0.115 under NEW, against 0.121 under CURRENT. Nothing has gone wrong yet. It is a measured
   consequence of the ordering for the operator to accept or refine at 07-20. Evidence:
   artifacts/07-19-pipeline-config.txt § RANKING, readings R1–R5.
+
+DEF-07-20-01: check-beets-config.sh T-06-33 goes red as soon as fetchart loads, from plugin DEFAULTS rather than a credential
+  Filed 2026-09-28 by 07-20 Task 2 step B9. It halted the deploy. T-06-33 asserts that `beet config -d` (redacted) is
+  byte-identical to `beet config -d -c`. fetchart marks fanarttv_key, google_key, google_engine and lastfm_key
+  `.redact = True` whatever their value, so the redacted dump prints REDACTED where the unredacted dump prints null (three
+  keys) or beets' shipped google_engine default. The two dumps also list the keys in a different order. The repo
+  config.yaml sets none of the four. 07-19 did not catch it because its live pre-deploy run had no fetchart loaded.
+  Candidate fix, for the operator to decide: key-scope T-06-33 so it compares the redacted keys' unredacted values
+  against the plugin defaults (null, or fetchart's shipped google_engine) and fails only on a non-default value. The
+  alternative is to pin the four keys explicitly in config.yaml. A future real key still has to trip it. State at
+  filing: new config installed, beets-flask STOPPED, backfill not taken. Evidence:
+  artifacts/07-20-deploy-backfill.txt § B9, B9a, B-STOP.

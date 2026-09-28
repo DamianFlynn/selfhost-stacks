@@ -211,3 +211,68 @@ DISPOSITION: deploy-and-backfill
 --------------------------------------------------------------------------------
 ## B — DEPLOY
 --------------------------------------------------------------------------------
+B0. Origin re-read before the push (11:54:07Z): origin/main 548b951, unmoved; workstation ahead by
+    82bc490, 0513593, 6ed1d90 and the gate-answer commit eb794b5; behind 0. Host re-read: porcelain
+    0, HEAD 548b951.
+B1. `git push origin main` (11:54Z): 548b951..eb794b5 main -> main. origin/main = eb794b5.
+B2. Host `git -C /mnt/fast/stacks pull --ff-only`: HEAD eb794b5600c328b982027e67ddad7efd85cd62e2 ==
+    workstation HEAD == origin/main. Porcelain 0. Host repo config sha 9b48263262f5…400f
+    (unchanged by the pull, as A2 predicted).
+B3. Safety copy (LXC 100, 11:54:43Z): /mnt/fast/safety/phase07/0720/config.yaml.pre-0720
+    sha256 adf838ddec5a9149d407a0e30513b48bd8be2df1c111a0c66c42cd392d571e21, 760 568:568 37707
+    (== A3).
+B4. `install -m 760 -o 568 -g 568 /mnt/fast/stacks/stacks/selfhosted/arrs/beets/config.yaml
+    /mnt/fast/appdata/arrs/beets/config/config.yaml` at 11:54:43Z: sha256 now
+    9b48263262f5ba101d9be2307fa033d3292b2fe0f89fa8f3e0ae7544fbe3400f == repo; 760 568:568 39470.
+B5. Service name re-read: `config --services` line 9 = beets-flask. `up -d --force-recreate
+    --no-deps beets-flask` at T0 11:54:50Z: Recreated, Started 2026-09-28T11:54:52.958Z,
+    metasauce/beets-flask:v2.0.0-rc6. Only beets-flask recreated (sabnzbd 2 days, lidarr/sonarr/
+    radarr/prowlarr 5 weeks, exporters 3 months).
+B6. Readiness: ready after 10 s (bound 180 s). `test -r /config/config.yaml` as 568: ok. NEW
+    watchdog line since T0: "Registering watchdog with debounce of 30 seconds for inboxes:
+    ['/downloads/complete/nzb/_inbox/02-review', '/downloads/complete/nzb/_inbox/03-asis']".
+    No error or Traceback in the log since T0.
+B7. Mounts: /mnt/tank/media/Music -> /media/Music RW=true; /mnt/tank/media -> /media RW=false;
+    /mnt/fast/appdata/arrs/beets/config/config.yaml -> /config/config.yaml RW=false.
+B8. After the recreate: library.db 8f5994b8…7813 and state.pickle b8ce8afd…66c6, both == A6.
+B9. `bash scripts/check-beets-config.sh` (workstation, ~11:55Z): RC=1, FAILURES total 1.
+    Every art/media assertion in arm 1 PASS:
+      ✅ SAFE-01 embedart.auto = false
+      ✅ OD-2 fetchart.auto = true
+      ✅ OD-2 fetchart.sources = ["coverart"]
+      ✅ OD-2 art_filename = cover
+      ✅ OD-2 match.preferred.media = ["Digital Media","CD"]
+      ✅ plugins is exactly {musicbrainz, fetchart}
+      arm-1 assertion failures 0; inbox registration (WR7-05) PASS; D-29 before == after.
+    The one failure is in arm 2:
+      ❌ T-06-33: the redacted and unredacted dumps DIFFER — that difference is a credential, in a
+         config destined for a public repo. Stop.
+      redaction no-op (T-06-33): DIFFERS
+POST-DEPLOY CHECK: FAIL — ❌ T-06-33 redaction no-op DIFFERS (check-beets-config.sh RC=1, FAILURES 1; every art/media assertion PASS)
+
+B9a. Diagnosis of the T-06-33 red. Read-only. `beet -l /tmp/diag0720.blb config -d` against
+     `config -d -c` inside the container, throwaway -l removed afterwards, and every value masked
+     in the output. The two dumps differ ONLY in the fetchart block, lines 29-32: fanarttv_key,
+     google_key, google_engine and lastfm_key. The redacted dump prints REDACTED for all four, and
+     the unredacted dump lists them in a different order. The unredacted values, read by class:
+       google_key, lastfm_key, fanarttv_key: EMPTY (null). Line lengths 15/15/17 equal the bare
+         "    <key>:", so no value is set.
+       google_engine: 33 chars, the length of beets' shipped default
+         "001442825323518660753:hrh5ch1gjzm" (fetchart.py:666).
+     Source: fetchart.py marks all four keys `.redact = True` (669-670, 741, and the lastfm one)
+     whatever their value. None of the four appears in the repo config.yaml.
+     READING: fetchart's plugin DEFAULTS cause the difference. The repo carries no credential. The
+     T-06-33 assertion assumes that no redacted key exists, and loading fetchart invalidates that.
+     07-19 never exercised it live: its pre-deploy run had no fetchart loaded, so its red set was
+     4 and T-06-33 was green. This is a gap in the check, not a leak. Per the plan, any failure in B
+     stops the deploy. Changing the check is for the operator or a follow-up plan to decide, not an
+     improvisation here. Filed as DEF-07-20-01.
+
+B-STOP. The plan's failure path (11:56:38Z): `docker compose -f stacks/selfhosted/arrs/compose.yaml
+     stop beets-flask`, then Running=false, FinishedAt 2026-09-28T11:56:41.054Z.
+     After the stop: library.db 8f5994b8…7813 == A6, state.pickle b8ce8afd…66c6 == A6, appdata
+     config 9b48263262f5…400f (the NEW config stays installed). 02-review still holds 8 entries.
+     Steps B10 (server loads fetchart) and B11 (quick-health-check) were NOT RUN because the plan
+     stops at the first failure. Section C (BACKFILL) was NOT RUN: no fetchart invocation, no
+     write to the library tree or library.db.
+STOP STATE 07-20-DEPLOY-FAIL: step B9 check-beets-config.sh RC=1 on T-06-33 redaction no-op DIFFERS (fetchart's plugin-default keys fanarttv_key/google_key/google_engine/lastfm_key are marked redact; three are empty and google_engine is beets' shipped default; no credential in the repo); every art/media assertion PASS; host == origin == workstation at eb794b5; appdata config == repo 9b482632…; writer stopped (Running=false 11:56:41Z); previous config at /mnt/fast/safety/phase07/0720/config.yaml.pre-0720 (adf838dd…); library.db and state.pickle unchanged; backfill not taken
