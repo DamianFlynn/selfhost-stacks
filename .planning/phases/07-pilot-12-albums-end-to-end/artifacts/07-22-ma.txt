@@ -1,0 +1,99 @@
+# 07-22-ma.txt — Music Assistant repair after the P04 back-out (07-UAT gap 2, MA half of gap 3) + the D-28 control row.
+# Plan 07-22. Every value below is a measurement with its time (UTC). Nothing is inferred from config read-back.
+# Credentials: none in this file. The MA password reaches jq only via $ENV and curl only via stdin; the bearer
+# reaches curl only via -H @<(printf …) (CONVENTIONS §7). Secrets file gated `600 root` by the helper.
+# Helpers on LXC 100 in /root/phase07-0722/ (dir mode 700): ma-lib.sh (login + ma_api, sourced),
+# ma-read-0722.sh (READ-ONLY; every */get passes allow_update_metadata:false). MA reached at 172.16.1.31:8095
+# from LXC 100 only.
+
+## TASK 1 — reads only (no MA write, no Jellyfin or beets verb)
+
+### A. Command docs (GET /api-docs/commands.json on the live build, read 2026-09-28T12:48Z)
+  MA version (GET /info): server_version 2.11.0b2, schema_version 68 (unchanged since 07-15).
+  commands.json: HTTP 200, 190,819 B, sha256 620a313724a6c4b1… (same size as 07-15's read).
+  - `music/sync` — "Start running the sync of (all or selected) musicproviders." params `media_types` (Array of
+    MediaType, optional, None = all), `providers` (Array of string, optional, None = ALL). Returns Array of
+    BackgroundTask. Scope library.manage. The only form this plan may issue:
+    `music/sync {"providers":["filesystem_local--XJaJWNUS"]}`.
+  - `music/refresh_item` — "Try to refresh a mediaitem by requesting it's full object or search for substitutes."
+    param `media_item` (required; string | Artist | Album | Track | …). Returns the media item. Scope library.manage.
+  - Library-item removal for albums, two docs-named commands exist:
+      `music/albums/remove` — "Delete item from the library(database)." params `item_id` (required), `recursive`
+      (optional). Scope library.manage. Returns null.
+      `music/library/remove_item` — "Remove item from the library. Destructive! Will remove the item and all
+      dependants." params `media_type` (required), `library_item_id` (required), `recursive` (optional). Scope
+      library.write.
+    Chosen for X.2 if ever needed: `music/albums/remove {"item_id":"169","recursive":false}` — album-scoped, and
+    recursive:false so it does not cascade to track 1541 (which P02 and NOW 121 still map).
+  - `tasks/list` — "Return all visible managed tasks." no params. Scope system.read.
+  - `tasks/set_enabled` — params `task_id`, `enabled` (both required). Scope system.manage.
+  - Read verbs used here: `music/albums/get` / `music/tracks/get` (item_id, provider_instance_id_or_domain,
+    allow_update_metadata, recursive), `music/albums/album_tracks`, `music/{albums,tracks,artists}/library_items`,
+    `logging/get`. Every get in this plan passes allow_update_metadata:false.
+
+### B. State BEFORE (/root/phase07-0722/ma-read-0722.sh before, RC 0, read 2026-09-28T12:49:13.528Z)
+  tasks/list, the four fs-sync tasks:
+    _artist   enabled=true status=success started 2026-09-28T01:55:48.626Z next_run 2026-09-28T13:55:48.626Z last_error null
+    _album    enabled=true status=success started 2026-09-28T01:55:48.673Z next_run 2026-09-28T13:55:48.673Z last_error null
+    _track    enabled=true status=success started 2026-09-28T01:55:48.674Z finished 01:55:50.892Z next_run 2026-09-28T13:55:48.674Z
+    _playlist enabled=true status=success started 2026-09-28T01:55:50.893Z next_run 2026-09-28T13:55:50.893Z last_error null
+    other tasks enabled=true: 16 (unchanged from 07-15).
+  Scheduled sync after 07-18's back-out? NO. 07-18's UNDO IMPORT ran 09:29:41Z–09:29:42Z and the staged copy was
+    removed by 09:36Z; the only scheduled run since 07-15 was 01:55:48Z (log: `Found 0 changed/new items` ×2 at
+    02:55:50 local = 01:55:50Z). The next scheduled run is 13:55:48Z TODAY, and it is not held by anything.
+  Sync after 07-20's backfill (cover.jpg written ~12:3xZ)? NO (same reason).
+  MA log: one boot only (`Starting Music Assistant Server` 2026-09-25 22:15:38 local); 473 lines; no restart.
+
+  Provider-filtered counts (music/{albums,tracks,artists}/library_items provider=filesystem_local--XJaJWNUS,
+  limit 5000, NOT music/albums/count): albums 79, tracks 1412, artists 201 (= 07-15's post-sync values; not truncated).
+
+  | MA album | P-ID | name | artists | local album mapping item_id | external_ids (in order) | images (all, in order) |
+  |---|---|---|---|---|---|---|
+  | 165 | P05 | NOW That’s What I Call Music! 121 | Various Artists | Various Artists/NOW That’s What I Call Music! 121 | barcode 00196872951165, mb_albumid 0a74adf8…, mb_rg b3cb0f03… | [0] local `…121/19 Beautiful People.mp3` (embedded), [1] CAA mbid-0a74adf8…_thumb1200 |
+  | 166 | P10 | Now That’s What I Call Music! 117 | Various Artists | Various Artists/Now That’s What I Call Music! 117 | mb_albumid b057dee8…, mb_rg 62315ade…, barcode 00196588831829 | [0] CAA mbid-b057dee8…-40802828337_thumb1200 (the correct 117 front; no local cover.jpg image yet — MA has not synced since 07-20) |
+  | 167 | P02 | American Heart | Benson Boone | Benson Boone/American Heart | mb_albumid 0a74adf8… (NOW 121), mb_rg 8e25d6da…, barcode 00196872951165 (NOW 121), barcode 00093624834588 (P04), mb_rg b3cb0f03… (NOW 121), mb_albumid c0df8104… (own) | [0] local `American Heart/04 Mystical Magical.flac`, [1] `…/01 Sorry I’m Here for Someone Else.flac`, [2] `…/09 Take Me Home.flac`, [3] local `NOW…121/27 Sorry I’m Here for Someone Else.mp3` (FOREIGN), [4] CAA mbid-0a74adf8… (FOREIGN, NOW 121) — 5 total |
+  | 169 | P04 | American Heart | Benson Boone | Benson Boone/American Heart [093624834588] (dir GONE from disk since 07-18) | mb_albumid 0a74adf8… (NOW 121), mb_rg 8e25d6da…, barcode 00196872951165 (NOW 121), barcode 00093624834588, mb_rg b3cb0f03… (NOW 121), mb_albumid c33163f3… (own) | [0] local `NOW…121/27 Sorry I’m Here for Someone Else.mp3` (FOREIGN), [1] CAA mbid-0a74adf8… (FOREIGN) — 2 total |
+  album_tracks: 165 44, 166 50, 167 10, 169 10. All four map only filesystem_local--XJaJWNUS.
+  First image BEFORE: 165 OWN (own embedded), 166 OWN (CAA for its own MBID b057dee8), 167 OWN (own FLAC embedded;
+    two foreign images trail at [3],[4]), 169 FOREIGN (NOW 121 — the UAT gap 2 tile).
+MA ALBUM 169: PRESENT (BEFORE)
+  Track 1541 "Sorry I’m Here for Someone Else", album 165, local mappings (3):
+    `Various Artists/NOW That’s What I Call Music! 121/27 Sorry I’m Here for Someone Else.mp3`
+    `Benson Boone/American Heart [093624834588]/01 Sorry I’m Here for Someone Else.mp3`   ← P04, file gone since 07-18
+    `Benson Boone/American Heart/01 Sorry I’m Here for Someone Else.flac`
+  Albums mapping an `American Heart` directory (library_items): 167 → `Benson Boone/American Heart`,
+    169 → `Benson Boone/American Heart [093624834588]`.
+  Other landed pilot albums, first image BEFORE (for § P later): 168 (P03) local `Fireworks & Rollerblades/13 Love of
+    Mine.flac`; 164 (P06) local own mp3 embedded ([1] is CAA mbid-fb7c18ce…, not its own 39fb4603…); 3 (P12) Spotify
+    i.scdn.co thumb first, then own embedded; 163 (P07) own embedded; 162 (P08) own embedded.
+  Disk (LXC 100, 12:5xZ): `/mnt/tank/media/Music/Benson Boone/` holds `American Heart` (10 entries),
+    `Fireworks & Rollerblades`, `Fireworks & Rollerblades (2024)`; `American Heart [093624834588]` ABSENT.
+
+### C. The check edit (prepared, NOT committed or pushed in Task 1)
+  scripts/check-music-consumers.sh: the P04 row `Benson Boone/American Heart [093624834588]|Benson Boone` and its
+  comment removed. The P02 row kept, re-commented as the section's live CONTROL row (plan 07-18 left no `%aunique{}`
+  firing set; folder and tag agree so `folder_name` COULD fire; a correct read proves the album artist came from the
+  tag and that exactly one MA album maps the dir). Header paragraph above AUNIQUE_ROWS rewritten to say why
+  (07-18 backed out P04 → no firing set → one control row, because an empty AUNIQUE_ROWS is UNKNOWN by rule).
+  CONVENTIONS.md §5 AUNIQUE_ROWS bullet: + "When no firing set exists in the landed library, one control row is kept
+  (a directory whose folder name and album tag agree), so the section still asserts (plan 07-18/07-22)."
+  `bash -n scripts/check-music-consumers.sh`: OK. Diff: 2 files, +10 −12 (script −4 rows/comment lines net; §5 +3).
+
+## TASK 2 — gate (checkpoint:decision). Presented to the operator 2026-09-28T12:5xZ.
+  1. SYNC: exactly one `music/sync {"providers":["filesystem_local--XJaJWNUS"]}` — NEEDED: 169 is PRESENT and no
+     sync has run since 07-18's back-out or 07-20's backfill. (If the answer arrives after 13:55:48Z, MA's own
+     scheduled sync will already have run; the executor then re-reads and records `NOT NEEDED` if 169 is ABSENT and
+     that run's log line is present.)
+  2. ONE `music/refresh_item` of album 167. The NOW 121 id bleed (0a74adf8…, b3cb0f03…, 00196872951165) rides on
+     track 1541's shared-recording merge, by MA design, so a refresh may not clear it. What is measured is the first
+     image and the ids, before and after.
+  3. 169 if it survives the sync: one refresh of 169; if still present with NO local mapping, one
+     `music/albums/remove {"item_id":"169","recursive":false}`. If still present WITH a local mapping: STOP, no removal.
+  4. Deploy the check edit: commit, push, host `git pull --ff-only`, run check-music-consumers.sh (expect 4d 1/1).
+  No MA restart. No Jellyfin or beets write. Provider list is always exactly ["filesystem_local--XJaJWNUS"].
+  ACCEPTED LIMITATION (decision, not omission): MA's database gets NO backup before these writes. The MA add-on has
+  no snapshot or export path in this estate (07-15's sync was equally unfenced, T-07-22-01). A sync writes MA's DB
+  permanently, and MA does not purge a transient path it has captured. The residual risk is accepted because MA is
+  downstream of beets, which is fenced by `@pre-07-18`: MA's library state is re-derivable by a filesystem re-sync.
+  Timing fact: MA's scheduled fs sync fires at 13:55:48Z today regardless of this gate. `hold` therefore does not
+  keep MA untouched past 13:55Z — it only means the executor issues no write and takes no readings.
