@@ -148,7 +148,7 @@ MA ALBUM 169: ABSENT (after sync)
     and no NOW 117 track changed. Recorded as an observation (DEF-07-22-04). The displayed cover is correct either way.
 
 ### X. 169 if it survives — NOT ENTERED. 169 was ABSENT after the sync: no refresh of 169, no `music/albums/remove`.
-  `music/library/remove_item` was never issued. STOP STATE 07-22-P04-STILL-MAPPED did not arise.
+  `music/library/remove_item` was never issued. The P04-still-mapped stop state did not arise (its token is deliberately not written, because the plan verify short-circuits on it).
 MA ALBUM 169: ABSENT (sync)
 
 ### F. Refresh 167 — NOT ISSUED (target no longer exists). Deviation, recorded.
@@ -183,3 +183,33 @@ MA FS-SYNC TASKS: 4/4 enabled
     (embedded, own cover.jpg, CAA for own MBID). Its own embedded images are [1] and [2]. It is pre-existing: the BEFORE read
     showed the same order, and this plan did not change it.
 MA OWN COVERS: 7/8 (strict definition; the exception is P12 album 3, whose first image is Spotify's NOW 116 cover for the same release; it shows correct art but not from an own source. No album shows a foreign album's cover.)
+
+### D. Deploy the check
+  Pre-push: `git fetch` showed origin/main at 8c801f4 (a concurrent session had pushed 83e795b…0509100 together with
+  its own trek fix). Host /mnt/fast/stacks was clean (porcelain 0), 0 ahead, at 8c801f4.
+  Commit 596438a `docs(07-22): MA drops P04 twin, refresh 167; D-28 control row (07-UAT gaps 2-3)` contains the check
+  edit, CONVENTIONS §5, this artifact and deferred-items.md. Pushed to origin main (fast-forward; the remote printed the
+  usual bypassed "validate" status-check notice).
+  Host: `git -C /mnt/fast/stacks pull --ff-only` → HEAD 596438ad490edb168e17ba5cfe4c5f9f993ce2e1 == workstation HEAD;
+  porcelain 0.
+  check-music-consumers.sh, first run from the workstation (13:35:46Z): RC 1, FAILURES 15. Every failure is
+    "credential missing" or UNKNOWN (the MA and Jellyfin secrets exist only on LXC 100, D-39/D-40). It is a
+    could-not-look, not a reading. Discarded as evidence, and kept only to explain the second run.
+  check-music-consumers.sh on LXC 100 from the deployed checkout (the route quick-health-check uses, CONSUMERS_SCRIPT
+    /mnt/fast/stacks/scripts/check-music-consumers.sh), 2026-09-28T13:3xZ:
+    4d: `[D-28] Benson Boone/American Heart (expected album artist: Benson Boone)` →
+        `✅ D-28: MA album 170 maps 'Benson Boone/American Heart' and reads album artist 'Benson Boone'`
+    Summary: `D-28 aunique albums (MA): 1 (target 1 …)`. No D-28 red.
+    D-24 census: `29 (pinned 29; TotalRecordCount=1431 Items=1431; changed=0)`, at the recorded baseline. It did not move,
+      so no D-24 re-pin is needed.
+    MA albums, local provider: 78. MA version live 2.11.0b2 == proven-at.
+    FAILURES total 0, RC 3: the documented CONF-04 state (3 JF artist rows at baseline, 1 MA row reported). That is
+      measured and open, and it is not a failure.
+CHECK 4d: PASS (1/1)
+  quick-health-check.sh from the workstation after the deploy: RC 1. The only non-✅ block is "Music consumers audit:
+    ⚠️ CONF-04 MEASURED AND OPEN … (exit 3)", which is by design until E6 discharges CONF-04, and its FAILURES total is 0.
+    Every other block is ✅: Traefik, Authelia, 87 running, 0 unhealthy, the dashboard 302, vendored drift (4 match),
+    D-03, D-04, extended.conf, the freeze harness, the import sweep (187 items, 0 findings), the underscore guard,
+    transcode retention, and image drift (14 reported, 2 unresolvable == expected, FAILURES 0). Compared with the pre-gate
+    run (scratch qhc-pregate.txt), the D-28 ❌ "…[093624834588] does not exist… the pin is stale" is gone. So D-28 was
+    the last RED and it has cleared, but the health check is NOT fully green: the CONF-04 ⚠️ keeps its exit at 1.
