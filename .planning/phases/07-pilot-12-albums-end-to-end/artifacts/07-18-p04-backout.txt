@@ -183,3 +183,98 @@ STATE: P04 key PRESENT after UNDO (DEF-07-11-01 reproduced)
   (relpath, sha256) == 07-07 manifest: EQUAL. Inboxes: 02-review 9 entries, 03-asis 0.
 Stop conditions: album 9 absent (no NO-UNDO); P02 DB and bytes equal (no WRONG-UNDO); P04 state key present (surgery
   is NOT vacuous). Proceeding to § E.
+
+## E — STATE SURGERY (partial, DEF-07-12-06: remove ONLY P04's taghistory entry; NOT the fence file copy)
+AUTHORISATION (operator, 2026-09-26, verbatim): "i am explicitly authorising the work needed to get beets and the
+music system implemented, including live files like state.pickle". Operator decision it completes: OD-1 "Back out
+the MP3 (P04)" + gate answer "undo-unstage (Recommended)". The fence file copy is WRONG here: P02..P08 landed after
+@pre-07-pilot, and restoring it would erase their taghistory.
+(1) Decode from a /tmp copy (09:32:16.745Z): `docker exec beets-flask cp /config/state.pickle
+    /tmp/p7-state.pre0718surgery.pickle` cp_rc 0; live and copy both d1958008…; 988 B.
+(2)+(3) Build (container /tmp only; script /root/phase07-0718/state-build-0718.py, build_rc 0). Assertions in order,
+    each failing closed before any file is written:
+      A1 key set == {taghistory, tagprogress}: True
+      A2 tagprogress == {}: True
+      A3 live.taghistory == Task 1 § A2 decoded list (9): True
+      A4 P04 key in live: True
+    Then `pickle.dump({"tagprogress": live.tagprogress, "taghistory": live.taghistory − {P04}}, f, protocol=4)`
+    (beets' writer, beets/importer/state.py; Python 3.12.14 in the image) to /tmp/p7-state.new0718.pickle,
+    decoded back:
+      new 892 B, proto 4, sha256 b8ce8afdc5e3ba1c858d3fbc07c4f8ee90538343817af1200c24d5389f1a66c6
+      taghistory 8, tagprogress 0; P04 in new False; new == live − {P04} True; |new| == |live| − 1 (8 == 9 − 1)
+      True; every other key identical True. KEEP: P02 P03 P06 P07 P08 P05 P12 P10.
+    `docker cp` to LXC 100 /root/phase07-0718/state.new0718.pickle (b8ce8afd…), streamed to atlantis
+    /mnt/fast/safety/phase07/0718/state.new0718.pickle (b8ce8afd…).
+(4) Writer stopped. LXC 100, cwd /mnt/fast/stacks (HEAD 0b67ea2, porcelain 0), 09:32:48.043Z: `docker compose -f
+    stacks/selfhosted/arrs/compose.yaml stop beets-flask` stop_rc 0; Running=false, Status=exited, FinishedAt
+    09:32:50.51Z, exit 143, project arrs.
+(5) Backup and replace. atlantis as real root, /root/phase07-0718/state-replace-0718.sh (written locally, scp'd;
+    output state-replace-0718.out), 09:32:56.502Z–09:32:56.585Z, script_rc 0:
+      live sha re-asserted == step-1 d1958008…; refuses if the backup path already exists
+      cp -p /mnt/fast/appdata/arrs/beets/config/state.pickle /mnt/fast/safety/phase07/0718/state.pickle.pre-0718-surgery
+        backup_rc 0; backup d195800848286fbeede802d6f12b58df48b780dab3245ca98896d314fc539d1e apps:apps(568:568) 770 988 B
+      new-file sha re-asserted == b8ce8afd…, then
+      cp /mnt/fast/safety/phase07/0718/state.new0718.pickle /mnt/fast/appdata/arrs/beets/config/state.pickle  cp_rc 0
+      before: d195800848286fbeede802d6f12b58df48b780dab3245ca98896d314fc539d1e 568:568 770 988 B inode 33942
+      after:  b8ce8afdc5e3ba1c858d3fbc07c4f8ee90538343817af1200c24d5389f1a66c6 568:568 770 892 B inode 33942
+      (mtime 2026-09-28T09:32:56.57Z). Owner, mode and inode preserved. library.db 8f5994b8… not touched.
+    # zfs [r]ollback of any dataset is FORBIDDEN (D-16); no zfs verb was used.
+(6) Writer started. 09:33:05.720Z `docker compose -f stacks/selfhosted/arrs/compose.yaml start beets-flask`
+    start_rc 0; Running=true, StartedAt 09:33:06.13Z, Restarts 0, image metasauce/beets-flask:v2.0.0-rc6.
+    Ready at poll 1 (09:33:11.439Z, bound 180 s): `docker exec -u 568 beets-flask test -r /config/config.yaml`
+    rc 0 AND a NEW line "Registering watchdog with debounce of 30 seconds for inboxes:
+    ['/downloads/complete/nzb/_inbox/02-review', '/downloads/complete/nzb/_inbox/03-asis']".
+    Watchdog after start: "skipping enqueue" for all 9 folders in 02-review, P04's included (its session
+    ecac6a1b… exists, DELETION_COMPLETED). rq 0 jobs, 5 workers idle, 0 finished. No preview or import ran.
+(7) Re-decode 09:34:00Z: /tmp/p7-state.post0718surgery.pickle; live and copy both b8ce8afd… (beets-flask did not
+    rewrite on start); 892 B, proto 4, taghistory 8, tagprogress {}; P04 key present: False.
+(8) library.db 8f5994b824af5d43dacf8069d1ae3ffc2ac5a5694d90574763e2317bb1097813 before and after the surgery
+    (the undo's write, § D); items 187, albums 8.
+(9) `bash scripts/check-beets-config.sh` (workstation, 09:34:09Z) cbc_rc 0: FAILURES total 0, arm 1 blind 0, arm 2
+    blind 0, READY_ROUTE watchdog-log-line; `CONF-01 import.copy = true`, `CONF-01 import.move = false`,
+    `import.write = true` (reported).
+POST-SURGERY IMPORT KEYS: PASS (copy=true move=false write=true)
+STATE SURGERY: PASS (state.pickle d1958008… -> b8ce8afd…; P04 taghistory entry ABSENT; decoded new == live − {P04}; backup /mnt/fast/safety/phase07/0718/state.pickle.pre-0718-surgery d1958008…; writer up, keys PASS)
+P04 FULL UNDO: TREE yes (10 -> 0), DB yes (album 9 gone, 187 items), STATE yes (by this surgery)
+
+## F — UNSTAGE (DISPOSITION: undo-unstage)
+atlantis as real root, /root/phase07-0718/unstage-p04-0718.sh (07-12 R1's unstage-p09-post0712.sh with NAME/SRC/count
+set for P04; written locally and scp'd, `bash -n` clean; output unstage-p04-0718.out), 09:35:13.581Z–09:35:13.906Z,
+script_rc 0. Two-layer fence (CONVENTIONS §6):
+  layer 1 on the value where it is accepted (^[A-Za-z0-9._-]+$, not beginning '.'), driven first:
+    '../etc' REFUSED, 'a b' REFUSED, '.x' REFUSED, '' REFUSED, 'x/y' REFUSED;
+    'Benson_Boone_-_American_Heart-WEB-2025-BENSONBOONE' ACCEPTED.
+  asserted: target begins /mnt/tank/downloads/complete/nzb/_inbox/02-review/, != source
+    /mnt/tank/downloads/complete/nzb/music/Benson_Boone_-_American_Heart-WEB-2025-BENSONBOONE, both exist, realpath ==
+    path, staged files 10; staged (relpath, sha256) set == 07-07 manifest (10 rows): EQUAL; SOURCE pre-unstage == 07-07
+    (10 rows).
+  layer 2 restated immediately before the destructive verb: prefix, charset, no '..'.
+  T-rm 09:35:13.772Z `rm -rf -- /mnt/tank/downloads/complete/nzb/_inbox/02-review/Benson_Boone_-_American_Heart-WEB-2025-BENSONBOONE`
+    rc 0; staged copy GONE.
+  SOURCE re-manifested after (size, sha256, mtime): UNCHANGED vs 07-07 (10 rows). tank/downloads 3.51T used / 5.42T avail.
+Inboxes after: 01-auto 0/0; 03-asis 0/0; 02-review 8 entries / 187 audio — P02 10, P03 15, P06 1, P07 11 files,
+  P08 11 files, P05 44, P12 50 files, P10 52 files. Every remaining entry is an already-imported album's staged copy.
+Watchdog (docker logs --since 09:35:13Z, read 09:36:08Z): 68 lines = 11 `could not list directory` + 11 Traceback + 11
+  FileNotFoundError from beets `sorted_walk` on the removed dir and its 10 files (expected noise, as in 07-12 R1), then
+  ONE `Starting inbox handler task` + ONE `skipping enqueue` (P02's folder). No enqueue, preview or import; rq 0 jobs.
+  beets-flask Running=true Restarts=0 StartedAt 09:33:06Z. library.db 8f5994b8… and state.pickle b8ce8afd… unchanged
+  by the unstage.
+beets-flask DB (not edited): P04's folder row 8c4fb033… and its session ecac6a1b… (DELETION_COMPLETED) stay, now
+  dangling — the same shape as P09 after 07-12 R1.
+P04 UNSTAGE: DONE (staged copy gone, source unchanged 10/10, library.db 187 unchanged, no beets write)
+
+## G — CLOSE
+Tree (atlantis, /root/phase07-0718/tree-read-0718.sh close, 09:36:16.516Z–09:36:18.894Z, tree_rc 0):
+  P04 DIR ABSENT; P04 STAGED ABSENT; P02 manifest p02-close.tsv 171e1202… `cmp`-equal to p02-before.tsv (10 flac,
+  dir mtime unchanged); library *.nfo 91, *.jpg 88, entries not 568:568 0; 02-review 8, 03-asis 0.
+  P04 SOURCE: rows 10 vs 07-07 rows 10: UNCHANGED.
+CRITERION 8 (P04): UNCHANGED (10 rows)
+Import sweep: `bash scripts/check-music-import.sh` on LXC 100 from /mnt/fast/stacks (HEAD 0b67ea2), cmi_rc 0:
+  items read 187, FINDINGS total 0, UNKNOWN total 0, DJ as-is exception 20, checkable class1=187 class2=167 class3=8
+  — "Import sweep clean: 187 items, three classes checked, zero findings".
+Fence: tank/media/Music@pre-07-18 and fast/appdata/arrs@pre-07-18 re-listed by exact whole-line name at 09:36Z:
+  count 2. Held; nothing released; zfs [d]estroy not issued.
+Consumers: no Jellyfin or MA verb of any kind was issued in Task 3. Jellyfin still holds e44d9655… and MA album 169
+  for P04 (§ A6) — they are 07-21 and 07-22.
+Findings: no new DEF-07-18-NN. DEF-07-11-01 reproduced as expected (UNDO IMPORT left state.pickle untouched); the
+  dangling beets-flask folder/session row for P04 matches 07-12 R1's P09 shape (known, DEF-07-12-04/05).
