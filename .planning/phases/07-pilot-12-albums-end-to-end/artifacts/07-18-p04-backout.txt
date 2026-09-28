@@ -123,7 +123,7 @@ output kept at atlantis /root/phase07-0718/fence-0718.{sh,out}), 2026-09-28T09:2
     pool avail: tank 5,955,690,302,368 B; fast 1,425,339,154,432 B.
 FENCE: PASS (tank/media/Music@pre-07-18 2026-09-28T09:22:51Z, fast/appdata/arrs@pre-07-18 2026-09-28T09:22:51Z; safety copies sha-equal)
 
-## GATE (Task 2) — presented, answer pending
+## GATE (Task 2)
 
 Pre-presentation re-read (library.db mode=ro, 2026-09-28T09:24:21Z, rc 0): LIBRARY items 197, albums 9; album 9
   Benson Boone / American Heart c33163f3-6217-4dc8-8e88-65f623b62c9b, 10 items, still PRESENT; album 2 c0df8104…
@@ -134,4 +134,52 @@ Presented to the operator: act on P04's staged folder `Benson_Boone_-_American_H
   there removes the album the operator chose to KEEP; the UI does not confirm which album it undoes
   (DEF-07-12-04/05). UNDO IMPORT covers tree + DB, not state.pickle (DEF-07-11-01); the executor then runs the
   partial state surgery with beets-flask stopped ~30 s. Staged-copy question (DEF-07-12-04). Fence as § B.
-Awaiting: the operator presses UNDO IMPORT on P04's folder page, then answers undo-unstage / undo-keep-staged / hold.
+Awaited: the operator presses UNDO IMPORT on P04's folder page, then answers undo-unstage / undo-keep-staged / hold.
+OPERATOR ANSWER (AskUserQuestion, answered ~09:3xZ, recorded 2026-09-28T09:31:25Z; relayed by the orchestrator), verbatim selection:
+  "undo-unstage (Recommended)" — option text: "I pressed UNDO IMPORT on P04. Remove the staged copy too, so nothing
+  is one click from being imported again. Its nzb/music source stays untouched."
+  The answer's claim (UNDO pressed on P04) was MEASURED before any write — § D.
+DISPOSITION: undo-unstage
+
+## D — UNDO WITNESSES (reads only, taken BEFORE any write in Task 3)
+
+beets-flask job (container /logs/redis_workers.log l.122-124 and /logs/beets-flask.log l.444-445, UTC+1 converted):
+  `beets_flask.invoker.enqueue.run_import_undo('8c4fb033ea94d0210ae807cf13f76b76', '/downloads/complete/nzb/_inbox/02-review/Benson_Boone_-_American_Heart-WEB..., delete_files=True)`
+  job 440115b2-bc2b-4e0e-a3ea-30a3311ad750; "Import Undo task on hash='8c4fb033…'" 09:29:41.407Z -> "Import Undo
+  done. hash='8c4fb033…' path='…/02-review/Benson_Boone_-_American_Heart-WEB-2025-BENSONBOONE'" 09:29:42.204Z.
+  Folder hash 8c4fb033… is P04's folder (§ A5), NOT P02's 5fb195c7…. This is the only undo job since 2026-09-26.
+(D-DB) /root/phase07-0718/read-a-0718.sh post-undo (LXC 100, 09:30:19.688Z–09:30:20.671Z, dbread_rc 0, script_rc 0;
+     output /root/phase07-0718/read-a-post-undo.out):
+  beets-flask Running=true Restarts=0 StartedAt=2026-09-27T22:32:55Z (not restarted by the undo).
+  LIBRARY items 187, albums 8 (ids 1 2 3 4 6 8 10 11); album 9 ABSENT; items with mb_albumid c33163f3… 0; items
+    with no album 0; the other seven album rows read as in § A1 (id, mb_albumid, added, item count).
+  library.db 8f5994b824af5d43dacf8069d1ae3ffc2ac5a5694d90574763e2317bb1097813 536576 B inode 75642 mtime
+    09:29:41.97Z (written by the undo job; was 2ff94600…).
+  beets-flask DB (mode=ro): P04 folder 8c4fb033… session ecac6a1b… DELETION_COMPLETED updated 09:29:42, task
+    0de63004… DELETION_COMPLETED; P02 folder 5fb195c7… session 2d351339… IMPORT_COMPLETED updated 2026-09-26
+    21:58:29 (unchanged); counts 16/16/16/81 (unchanged). rq: 0 jobs, import worker idle, 1 finished 0 failed.
+DB: P04 10 -> 0 (albums 8, items 187)
+(D-TREE) /root/phase07-0718/tree-read-0718.sh postundo (atlantis, real root, TZ=UTC, 09:30:33.360Z–09:30:35.589Z,
+     tree_rc 0; output /root/phase07-0718/tree-postundo.out):
+  P04 `Benson Boone/American Heart [093624834588]/`: ABSENT. `Benson Boone/` children: American Heart, Fireworks &
+    Rollerblades, Fireworks & Rollerblades (2024), artist.nfo, backdrop.jpg, folder.jpg (the P04 dir alone gone).
+  Library-wide: *.nfo 91, *.jpg 88 (unchanged: P04 had no sidecar), entries not 568:568 0.
+TREE: P04 10 -> 0
+(D-P02) Album 2 DB digests at 09:30:20Z, compared as strings with § A1:
+    ALBUM2 ROW DIGEST       ba989d2ee63f4ac2273a5a47591848ca89b951a7a0da8b339a15b989cd940dde  EQUAL
+    ALBUM2 ITEMS DIGEST     424bf87bfb26811a9f991e6dffa890f402f95c4a55437a245dd3acbb84700bc0 (n 10)  EQUAL
+    ALBUM2 FLEXATTR DIGEST  fa9ee8969134f92122a9315cf367b48452698f6a404639fc05dd027440850289  EQUAL
+    ALBUM2 ITEM FLEXATTR    d4812b0fd12472b7d960faad0b3a76442d7fdc54bcf91f171b8e74113e44bec5  EQUAL
+  P02 dir per-file manifest (relpath, size, sha256, mtime ns, ctime ns) /root/phase07-0718/p02-postundo.tsv sha256
+    171e12029ca1f5bb8522ec11e483b3e511ab4bb429359dcb50d02238cfa6388b == p02-before.tsv 171e1202…; `cmp` EQUAL.
+    10 files, 10 .flac, 10 entries, dir mtime 2026-09-26T21:58:29.41Z (unchanged).
+P02 UNCHANGED: PASS
+(D-STATE) state.pickle decoded from /tmp/p7-state.post-undo.pickle (copy sha = live, dec_rc 0):
+  d195800848286fbeede802d6f12b58df48b780dab3245ca98896d314fc539d1e 988 B, proto 4, keys ['taghistory','tagprogress'],
+  tagprogress {}, taghistory 9 — the same nine keys as § A2; P04 key present: True. The undo did not touch the file
+  (mtime still 2026-09-27T12:33:24.89Z).
+STATE: P04 key PRESENT after UNDO (DEF-07-11-01 reproduced)
+(D-SRC) P04 SOURCE re-manifested 09:30:34Z: rows 10 vs 07-07 rows 10: UNCHANGED. P04 STAGED copy: 10 files,
+  (relpath, sha256) == 07-07 manifest: EQUAL. Inboxes: 02-review 9 entries, 03-asis 0.
+Stop conditions: album 9 absent (no NO-UNDO); P02 DB and bytes equal (no WRONG-UNDO); P04 state key present (surgery
+  is NOT vacuous). Proceeding to § E.
