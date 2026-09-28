@@ -127,7 +127,26 @@
 # A config block is NOT proof a plugin loaded: `beet config -d` prints a full block for a plugin
 # that raised while building. The authoritative instrument is the `plugins:` line of
 # `beet ... version`, which plan 04-09 runs inside the dormant container.
-plugins: [musicbrainz]
+#
+# OD-2 (2026-09-28, 07-UAT gaps 1 and 2): `fetchart` is the one reviewed addition. It writes a
+# sidecar image beside the album and never touches the audio. `embedart` is deliberately NOT
+# listed: it is the plugin that rewrites audio files to embed that image (SAFE-01, below).
+# scripts/check-beets-config.sh asserts this exact set.
+plugins: [musicbrainz, fetchart]
+
+# --------------------------------------------------------------------------------
+# OD-2 — album art from Cover Art Archive (07-UAT gaps 1 and 2)
+# --------------------------------------------------------------------------------
+# An album that lands with no art leaves every consumer to guess, and both guesses were wrong:
+# Jellyfin's Apple Music name search gave NOW 117 the Disney 3 cover, and Music Assistant's
+# recording merge gave the American Heart MP3 twin NOW 121's cover. `coverart` is keyed by the
+# matched MusicBrainz release id, so the image fetched is that release's own. As-is imports make
+# fetchart look only at local files, so DJ as-is imports fetch nothing remote. No size or resize
+# option is set: those need an image backend and change nothing the gaps need.
+art_filename: cover
+fetchart:
+    auto: yes
+    sources: [coverart]
 
 # --------------------------------------------------------------------------------
 # The four keys rc6 would otherwise default FOR us (06-RESEARCH.md § "D-30's two arms")
@@ -391,6 +410,14 @@ match:
         # reissue MusicBrainz happens to rank first. Keeps a 1983 album filed as 1983 when its
         # 2015 remaster is the higher-scoring candidate.
         original_year: yes
+
+        # A WEB rip must prefer a Digital Media release (07-UAT gap 3: two MB entries for one US CD
+        # won the tie because no media preference existed); CD second, so a CD rip still beats
+        # vinyl. Regexes too: beets wraps each as `(\d+x)?(…)`, so `CD` also matches `2xCD`.
+        # Media carries weight 1.0 against country's 0.5 in beets' distance, so for WEB content
+        # this can outrank the GB/US preference above. That is intended, and was measured before
+        # deploy (07-19 § RANKING).
+        media: ['Digital Media', 'CD']
 
 # Extra fields sent to MusicBrainz's search so the candidate ranking has something to discriminate
 # ON. Without these, two pressings of the same album that differ only by country/label/media are

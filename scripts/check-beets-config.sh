@@ -60,6 +60,7 @@
 #   2. ARM 1 - the server-committed config        D-30 arm 1
 #   3. ARM 2 - the CLI/confuse view               D-30 arm 2, redaction no-op (T-06-33)
 #   4. Assertions, all read from ARM 1            CONF-01, CONF-02, CONF-05, SAFE-01, T-06-31
+#      4b. OD-2: fetchart from Cover Art Archive, art_filename, preferred.media, the plugin set
 #   5. The two-arm comparison, REPORTED           D-30
 #   6. Summary
 #
@@ -69,11 +70,12 @@
 #   default mode  - every red finding increments FAILURES and the script ends non-zero.
 #   --baseline    - every finding is printed and the script always ends zero, so a before-state
 #                   can be recorded while a config is still being brought to its target.
-#   --self-test   - no ssh, no docker. THIRTEEN cases, ELEVEN of which MUST go red (the first
-#                   seven are described next; the six inbox-registration cases, added 2026-09-27
-#                   for WR7-05, are described at assert_inbox_registration), exiting non-zero
-#                   unless every expectation is met. Six drive the assertion function over
-#                   synthetic dumps; the sixth of those (case 7) is deliberately larger than the
+#   --self-test   - no ssh, no docker. FIFTEEN cases, THIRTEEN of which MUST go red (cases 1-7
+#                   are described next; 5a/5b drive the OD-2 plugin-set and media reds; the six
+#                   inbox-registration cases, added 2026-09-27 for WR7-05, are described at
+#                   assert_inbox_registration), exiting non-zero unless every expectation is met.
+#                   Eight drive the assertion function over synthetic dumps; the last of those
+#                   (case 7) is deliberately larger than the
 #                   64 KiB pipe buffer, because the GC-01 defect was invisible to every smaller
 #                   case. The remaining one is a SOURCE assertion, because the assertion
 #                   function is pure over a dump and cannot see an invocation flag - it requires
@@ -607,6 +609,16 @@ assert_effective_config() {
   expect_eq "SAFE-01 lastgenre.auto" "false" "$(jget "$json" '.lastgenre.auto')"
   expect_eq "SAFE-01 embedart.auto"  "false" "$(jget "$json" '.embedart.auto')"
 
+  # ---- OD-2 (07-UAT gaps 1–3): album art from Cover Art Archive, and media preference.
+  # An album that lands with no art leaves every consumer to guess, and both guesses were wrong
+  # (07-UAT gaps 1 and 2). fetchart writes a sidecar cover.jpg and never touches the audio;
+  # embedart is the plugin that would. `media` entries are regexes that beets wraps as
+  # `(\d+x)?(…)`, so `CD` also matches `2xCD` (07-UAT gap 3).
+  expect_eq "OD-2 fetchart.auto"            "true"                  "$(jget "$json" '.fetchart.auto')"
+  expect_eq "OD-2 fetchart.sources"         '["coverart"]'          "$(jget "$json" '.fetchart.sources | @json')"
+  expect_eq "OD-2 art_filename"             "cover"                 "$(jget "$json" '.art_filename')"
+  expect_eq "OD-2 match.preferred.media"    '["Digital Media","CD"]' "$(jget "$json" '.match.preferred.media | @json')"
+
   # ---- The path stanza.
   local comp_v def_v
   comp_v="$(jget "$json" '.paths.comp')"
@@ -633,18 +645,19 @@ assert_effective_config() {
   expect_eq "asciify_paths"      "false"           "$(jget "$json" '.asciify_paths')"
   expect_eq "va_name"            "Various Artists" "$(jget "$json" '.va_name')"
 
-  # ---- plugins: exactly one entry, and it is musicbrainz. Since beets 2.4.0 MusicBrainz is
+  # ---- plugins: exactly {musicbrainz, fetchart}, in any order. Since beets 2.4.0 MusicBrainz is
   # itself a plugin; a customised list that omits it silently disables autotagging and the
-  # symptom presents as "no match found", never as a config error.
-  local plug_n plug_has
-  plug_n="$(jget "$json" '.plugins | if type=="array" then length else "UNKNOWN" end')"
-  plug_has="$(jget "$json" '.plugins | if type=="array" then (index("musicbrainz") != null) else "UNKNOWN" end')"
-  if [[ "$plug_n" == "UNKNOWN" ]]; then
+  # symptom presents as "no match found", never as a config error. fetchart is the one reviewed
+  # addition (OD-2, below). embedart must never be listed: it rewrites the audio file (SAFE-01),
+  # and neither may any plugin outside this reviewed set.
+  local plug_set
+  plug_set="$(jget "$json" '.plugins | if type=="array" then (sort | @json) else "UNKNOWN" end')"
+  if [[ "$plug_set" == "UNKNOWN" ]]; then
     cfg_fail "plugins: UNKNOWN, not green — absent, or not a list"
-  elif [[ "$plug_n" -eq 1 && "$plug_has" == "true" ]]; then
-    cfg_pass "plugins is a one-entry list containing musicbrainz"
+  elif [[ "$plug_set" == '["fetchart","musicbrainz"]' ]]; then
+    cfg_pass "plugins is exactly {musicbrainz, fetchart}"
   else
-    cfg_fail "plugins = $(jget "$json" '.plugins | @json') — want exactly one entry, musicbrainz"
+    cfg_fail "plugins = $(jget "$json" '.plugins | @json') — want exactly {musicbrainz, fetchart}; embedart must never be listed (SAFE-01: it rewrites audio files), nor any plugin outside the reviewed set"
   fi
 
   # ---- Forbidden substrings over the RAW dump text, built-ins plus the additive override.
@@ -783,7 +796,8 @@ gui:
 directory: /media/Music
 library: /config/library.db
 statefile: /config/state.pickle
-plugins: [musicbrainz]
+plugins: [musicbrainz, fetchart]
+art_filename: cover
 per_disc_numbering: yes
 asciify_paths: no
 va_name: Various Artists
@@ -800,6 +814,7 @@ match:
     preferred:
         countries: [GB, US]
         original_year: yes
+        media: [Digital Media, CD]
 musicbrainz:
     extra_tags:
     - year
@@ -815,6 +830,9 @@ lastgenre:
     auto: no
 embedart:
     auto: no
+fetchart:
+    auto: yes
+    sources: [coverart]
 DUMPEOF
 }
 
@@ -823,8 +841,8 @@ run_self_test() {
   # compared at the end. A banner that says one number while another number of cases ran is the
   # self-invalidating-prose defect this phase has already hit twice - so the closing banners are
   # DERIVED, and a mismatch between the announcement and reality is itself a self-test failure.
-  local ST_PLANNED_CASES=13
-  echo "🧪 --self-test — $ST_PLANNED_CASES cases: 6 synthetic dumps, the D-04 contract over this file's own source, and 6 inbox-registration lines (WR7-05)"
+  local ST_PLANNED_CASES=15
+  echo "🧪 --self-test — $ST_PLANNED_CASES cases: 8 synthetic dumps, the D-04 contract over this file's own source, and 6 inbox-registration lines (WR7-05)"
   rule
   echo ""
 
@@ -856,7 +874,7 @@ run_self_test() {
   }
 
   # 1. An EMPTY dump. Every sentinel must stay UNKNOWN and the positive control must fire.
-  run_case "empty dump (blind)" 22 ""
+  run_case "empty dump (blind)" 26 ""
 
   # 2. The rc6 schema default for the duplicate-handling key - the silent delete path. Exactly
   #    one red, and it must be that key: a case that goes red for two reasons proves nothing
@@ -875,6 +893,15 @@ run_self_test() {
 
   # 5. Fully correct. Zero red.
   run_case "fully correct" 0 "$(synthetic_correct_dump)"
+
+  # 5a. embedart listed beside the reviewed pair. Exactly one red, the plugins assertion: the
+  #     embedart.auto switch below stays off, so this proves the plugin SET is checked, not the switch.
+  run_case "embedart appended to plugins (OD-2)" 1 \
+    "$(synthetic_correct_dump | sed 's/^plugins: \[musicbrainz, fetchart\]$/plugins: [musicbrainz, fetchart, embedart]/')"
+
+  # 5b. No media preference - the 07-UAT gap 3 shape. Exactly one red, preferred.media.
+  run_case "preferred.media absent (OD-2)" 1 \
+    "$(synthetic_correct_dump | sed '/^ *media: \[Digital Media, CD\]$/d')"
 
   # 6. NOT a dump case. The five above drive a pure function over synthetic TEXT and therefore
   #    cannot see an invocation flag; this one reads this script's own SOURCE and requires the
@@ -1401,5 +1428,6 @@ fi
 
 echo -e "${GREEN}✅ CONF-01 (copy not move), CONF-02 (incremental AND incremental_skip_later), CONF-05"
 echo -e "   (GB not UK, original_year, musicbrainz.extra_tags), the four rc6 schema-default"
-echo -e "   landmines, the SAFE-01 three and the path stanza are all asserted TRUE of the"
+echo -e "   landmines, the SAFE-01 three, the OD-2 art and media keys with the exact plugin set,"
+echo -e "   and the path stanza are all asserted TRUE of the"
 echo -e "   SERVER-COMMITTED config — the object that will actually import.${NC}"
