@@ -1617,11 +1617,11 @@ Plans:
 - [x] 07-15-PLAN.md — GATED: Jellyfin first, one Music Assistant sync last, then the MA fs-sync barrier lifted; D-28, E6 second measurement (D-05), D-24 after
 - [x] 07-16-PLAN.md — GATED: project snapshot register + one-gate mechanical prune (D-19)
 - [x] 07-17-PLAN.md — GATED: evidence assembled for /gsd-verify 07 (no verdict), beets.md closure, operator trust verdict (D-31)
-- [ ] 07-18-PLAN.md — GAP (07-UAT gap 3, OD-1): GATED: P04 backed out (UNDO IMPORT + partial state.pickle surgery), P02 kept; round fence `@pre-07-18`
-- [ ] 07-19-PLAN.md — GAP (07-UAT gaps 1-3, OD-2): fetchart (CAA cover.jpg, no embed) + preferred.media in the repo config and `check-beets-config.sh`, proven in a throwaway
-- [ ] 07-20-PLAN.md — GAP (OD-2): GATED: deploy the config to appdata (drift green) + NOW 117 cover.jpg backfill, one album
-- [ ] 07-21-PLAN.md — GAP (07-UAT gaps 1, 3): GATED: Jellyfin — Apple Music off for MusicAlbum, NOW 117 Primary replaced (image-only), P04 dropped
-- [ ] 07-22-PLAN.md — GAP (07-UAT gaps 2-3): GATED: Music Assistant — one fs sync drops P04, refresh album 167, D-28 control row
+- [x] 07-18-PLAN.md — GAP (07-UAT gap 3, OD-1): GATED: P04 backed out (UNDO IMPORT + partial state.pickle surgery), P02 kept; round fence `@pre-07-18`
+- [x] 07-19-PLAN.md — GAP (07-UAT gaps 1-3, OD-2): fetchart (CAA cover.jpg, no embed) + preferred.media in the repo config and `check-beets-config.sh`, proven in a throwaway
+- [x] 07-20-PLAN.md — GAP (OD-2): GATED: deploy the config to appdata (drift green) + NOW 117 cover.jpg backfill, one album
+- [x] 07-21-PLAN.md — GAP (07-UAT gaps 1, 3): GATED: Jellyfin — Apple Music off for MusicAlbum, NOW 117 Primary replaced (image-only), P04 dropped
+- [x] 07-22-PLAN.md — GAP (07-UAT gaps 2-3): GATED: Music Assistant — one fs sync drops P04, refresh album 167, D-28 control row
 - [ ] 07-23-PLAN.md — GAP: GATED: end-state re-measure, operator view + count re-confirm, closure evidence into 07-UAT.md (no verdict)
 **Research**: not needed — the diff is a comparison over two `ffprobe` datasets, and the undo path
 is ZFS rollback plus a documented `incremental` state reset. The compilation and multi-disc cases

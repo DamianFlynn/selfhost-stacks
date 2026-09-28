@@ -348,3 +348,36 @@ File by file, keyed (P-ID, relpath), comparing size + sha256:
     DEF-07-15-01 MA artist display names drift over stable entity ids — OPEN (CONF-04/E6 owner)
 - Instrument notes carried: ffprobe truncates ID3v2.4 multi-value TXXX:ARTISTS (use mutagen, 07-15); section 4e's
   MA_LIBRARY_SCAN_LIMIT=2000 has no truncation guard (1,412 provider tracks now; 07-15).
+
+## ADDENDUM 2026-09-28 — post-UAT gap round (07-18..07-23); measured state changed; no verdict
+
+Appended by plan 07-23. Nothing above this heading was edited. This addendum records how the measured state moved
+after the 07-UAT gap round. It scores nothing: /gsd-verify 07 scores the criteria, once, after this round.
+Destructive and refresh verbs stay bracketed (CONVENTIONS §8): zfs [r]ollback, zfs [d]estroy, Full[R]efresh.
+
+- Landed and held (criterion 1). Landed 8: P10 P02 P03 P05 P06 P12 P07 P08. P04 was backed out by the operator's
+  own OD-1 (07-UAT § Operator Decisions: "Back out the MP3 (P04)") via UNDO IMPORT plus the partial state.pickle
+  surgery (artifacts/07-18-p04-backout.txt). Held 3: P01 P09 P11, unchanged. library.db 8 albums / 187 items
+  (artifacts/07-23-end-state.txt § 1). At 07-23's gate the operator re-confirmed "8 landed + P04 backed out (OD-1) +
+  3 held" as the pilot count (DISPOSITION COUNT: reconfirm, 07-23-end-state.txt § GATE; 07-UAT § Gap Round).
+- Criterion 3. The landed set is now 187 files = 187 DB items. The per-file ffprobe comparator (crit3d.py) was not
+  re-run in this round. What was re-read: entries not 568:568 under /mnt/tank/media/Music 0 of 2,875 (07-23 § 2),
+  and the import sweep over 187 items, FINDINGS 0 (07-23 § 5). P02's per-file manifest equals 07-18's before
+  (07-23 § 2), and no landed audio file was written by the round: embedart is off, and the P10 backfill added one
+  cover.jpg (07-20 § C).
+- Criterion 4. The one MISSING_AFTER pair, P04 track 01 (DEF-07-12-09), is no longer in the library: 0 items whose
+  path contains 093624834588, and 0 tree entries matching *093624834588* (07-23 § 1, § 2). The other 186 landed
+  files are the ones criterion 4 already diffed; the round wrote no tag.
+- Criterion 6. Jellyfin: the 8 pilot albums are present by Path, P04 (e44d9655…) is absent, there is one American
+  Heart, and the NOW 117 Primary is 6d83625a… (== its cover.jpg, != Disney 3 09d8b5f8…), freeze PASS (07-23 § 3;
+  07-21). Music Assistant: 169 absent, one American Heart (170), each of the 8 pilot dirs is mapped by exactly one
+  album, and the strict own-source first image is 7/8 (P12 leads with Spotify's copy of its own NOW 116 front), with
+  4d 1/1 (07-23 § 4; 07-22).
+- Criterion 8. All twelve source folders re-manifested with 07-07's program and folder list: 347/347, byte-identical
+  to the 07-07 before-manifest (sha256 8480c429…) (07-23 § 2).
+- Round fence. tank/media/Music@pre-07-18 and fast/appdata/arrs@pre-07-18, beside both @pre-07-pilot snapshots,
+  all four present and held (07-23 § 2). None was rolled back.
+- Pointers: artifacts/07-18-p04-backout.txt, 07-19-pipeline-config.txt, 07-20-deploy-backfill.txt,
+  07-21-jellyfin.txt, 07-22-ma.txt, 07-23-end-state.txt; 07-UAT.md § Gaps (closed_by, closure_evidence).
+- DEFs filed this round: DEF-07-19-04, DEF-07-19-05, DEF-07-20-01 (resolved 58e2d3d), DEF-07-21-01, DEF-07-22-04,
+  DEF-07-23-01, DEF-07-23-02 (deferred-items.md).

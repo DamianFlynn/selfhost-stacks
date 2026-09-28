@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-09-26T16:30:00.000Z"
+last_updated: "2026-09-28T14:45:00.000Z"
 progress:
   total_phases: 10
   completed_phases: 5
@@ -28,6 +28,8 @@ Phase 7 E6 — `/gsd-verify 06` is still owed)
 *and* visible in both Jellyfin and Music Assistant. Never "tool configured".
 
 ## Current Position
+
+**PLANS 07-18..07-23 COMPLETE — post-UAT gap round — 2026-09-28.** `STOP STATE 07-23-FINAL`. All three 07-UAT gaps are closed, each measured closed by 07-23's read-only end-state re-measure (`artifacts/07-23-end-state.txt`) and accepted by the operator at the gate ("accept"). Gap 1: the Jellyfin NOW 117 Primary is 6d83625a…, equal to its own cover.jpg (CAA), and not Disney 3; Apple Music is off for MusicAlbum. Gap 2: MA 169 is gone and each pilot dir is mapped by exactly one album; strict own-source first image 7/8 (P12 via Spotify's copy of its own NOW 116 front). Gap 3: P04 backed out (OD-1) from tree, DB, state, Jellyfin and MA; one American Heart. Criterion 1 count, operator answer "reconfirm (Recommended)": 8 landed (P10 P02 P03 P05 P06 P12 P07 P08) + P04 backed out (OD-1) + 3 held (P01 P09 P11); library 8 albums / 187 items; criterion 8 347/347. Pipeline deployed (fetchart CAA → cover.jpg, embedart off; preferred.media Digital Media, CD). Live-import proof is still pending (DEF-07-23-02). qhc RC 1 on CONF-04 exit 3 only, FAILURES 0. Fence `@pre-07-18` held. 07-UAT.md `status: resolved`; VERIFICATION.md not written. Next: `/gsd-verify 07`.
 
 **PLAN 07-17 COMPLETE — `STOP STATE 07-17-FINAL` — 2026-09-27. ALL 17 PLANS EXECUTED; `/gsd-verify 07` OWED.** Evidence assembled unscored (`artifacts/07-17-evidence.txt`; 07-EVIDENCE-MAP measured column): 9/12 landed (P01/P09/P11 held); crit 3 0/1,379 mismatches, 197/197 568:568; crit 4 196 matched + P04 t01 (DEF-07-12-09, PCM identical); crit 5 re-run equal; crit 6 9/9 both consumers; crit 7 sweep exit 0; crit 8 347/347 sources unchanged. Docs corrected (`809ea8e`): beets.md Phase 7 closure + three-step undo; PROJECT.md/CLAUDE.md undo qualification (DEF-04-01 closed), `import.move: yes` retracted, tank 5.42 TiB. **TRUST VERDICT: believe-with-reservations** (`07-TRUST-VERDICT.md`): (1) UI imports the selected card, no hold state; (2) inbox URL growth vs 16 KB; (3) `dj` DB-only — `beet update`/`write` over DJ/ unsafe; (4) no MetadataSavers assertion; (5) full undo needs the manual state.pickle step. Deployed: host == workstation == origin at `bcbfe0a`.
 

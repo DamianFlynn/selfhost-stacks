@@ -2650,6 +2650,11 @@ Each line names the section of `artifacts/07-17-evidence.txt` that holds the mea
   `.planning/SNAPSHOT-REGISTER.md`.
 - **The one budgeted code review** (D-31) was not run at 07-09; it is the single next step if
   wanted.
+- **Added by the post-UAT gap round (2026-09-28):** the own-art pipeline has no live import proof
+  yet (`DEF-07-23-02`); Music Assistant album 168 carries a second MusicBrainz album id
+  (`DEF-07-23-01`) and a sync can re-create an album under a new id (`DEF-07-22-04`); a Digital
+  Media release now outranks a CD for CD rips too (`DEF-07-19-05`); the round fence `@pre-07-18` is
+  held.
 
 ### How to re-run the Phase 7 evidence
 
@@ -2700,3 +2705,25 @@ capture basename must not already exist: the snapshot script resumes into an exi
   `ffprobe`, which keeps only the first value.
 - **Every project snapshot is in `.planning/SNAPSHOT-REGISTER.md`**, with its owner, what it undoes
   and what releases it. Nothing is released except at an operator gate.
+
+### Post-UAT gap round — 2026-09-28
+
+The 07-UAT walk-through found three gaps: Jellyfin showed the *Now 117* album with the *Disney 3* cover,
+Music Assistant showed a compilation's cover on the second *American Heart*, and that album appeared twice.
+Plans 07-18 to 07-23 closed all three. The operator accepted what both consumers show and re-confirmed the
+pilot count as 8 landed, P04 backed out and 3 held. The library now holds 8 albums / 187 items.
+**Own art on every import.** fetchart is loaded with Cover Art Archive as its only source. It writes
+`cover.jpg` beside the tracks and sets the album's `artpath`. embedart stays off, because the audio files
+are never rewritten for art, and as-is (DJ) imports fetch nothing remote. An album without art had let each
+consumer guess, and both guessed from another release.
+**`match.preferred.media` is Digital Media, then CD.** Before it, only countries were preferred, so a WEB
+download could only ever match a CD or vinyl edition. It applies to CD rips too (`DEF-07-19-05`).
+**Jellyfin's MusicAlbum image fetchers no longer include Apple Music.** It searched by name in the US
+storefront, which lacks the UK-only *Now* series, and stored its top hit (*Disney 3*) as the cover.
+**The P04 back-out** was the second use of the partial `state.pickle` surgery (`DEF-07-12-06`): only its
+taghistory entry was removed, so every other album's incremental state survived.
+**Music Assistant merges tracks by recording identity**, so an album sharing a recording with a compilation
+can pick up the compilation's ids and image. Its fs sync cleared that for P02, re-creating it under a new
+id (07-22 § R, `DEF-07-22-04`); album 168 still carries a second MusicBrainz album id (`DEF-07-23-01`).
+**The round fence** is `tank/media/Music@pre-07-18` with `fast/appdata/arrs@pre-07-18`, held beside both
+`@pre-07-pilot` snapshots. No live import has yet run on the new config (`DEF-07-23-02`).

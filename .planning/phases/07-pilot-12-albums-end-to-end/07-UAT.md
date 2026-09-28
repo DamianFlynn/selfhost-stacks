@@ -1,9 +1,9 @@
 ---
-status: diagnosed
+status: resolved
 phase: 07-pilot-12-albums-end-to-end
 source: [07-01-SUMMARY.md, 07-02-SUMMARY.md, 07-03-SUMMARY.md, 07-04-SUMMARY.md, 07-05-SUMMARY.md, 07-06-SUMMARY.md, 07-07-SUMMARY.md, 07-08-SUMMARY.md, 07-09-SUMMARY.md, 07-10-SUMMARY.md, 07-11-SUMMARY.md, 07-12-SUMMARY.md, 07-13-SUMMARY.md, 07-14-SUMMARY.md, 07-15-SUMMARY.md, 07-16-SUMMARY.md, 07-17-SUMMARY.md]
 started: 2026-09-27T21:48:57Z
-updated: 2026-09-27T23:32:18Z
+updated: 2026-09-28T14:41:02Z
 ---
 
 <!-- Test expectations are taken from artifacts/07-17-evidence.txt (measured 2026-09-27T19:0xZ).
@@ -89,10 +89,24 @@ Asked 2026-09-28T07:45:22Z after diagnosis, and answered verbatim by option labe
 - Round scope: "Pipeline + pilot repair (Recommended)". beets fetchart (Cover Art Archive → cover.jpg, embedart stays OFF) + match.preferred.media, art backfill for P10 (P04 is moot if backed out), a single-item replacement of Jellyfin's stored 117 Primary image, an MA refresh of albums 167 (and 169 if it still exists), and Apple Music demoted/disabled for MusicAlbum. The operator authorised these library and consumer writes by choosing this option.
 HARD EXCLUSIONS for the planner: no zfs rollback of any dataset; no Jellyfin FullRefresh or library-wide metadata refresh (image-only, single item); no `beet write`/`beet update`/embedart over the library (DJ/ tags are DB-only, DEF-07-13-01); no re-match of P02 in this round (its CD match is recorded, and preferred.media applies to future imports); no new pilot draws.
 
+## Gap Round 2026-09-28
+
+Plans 07-18..07-23 ran the gap-closure round the operator scoped above (OD-1 and OD-2). 07-23 re-measured the
+end state read-only (`artifacts/07-23-end-state.txt`) and measured all three gaps closed. The operator then looked
+at both consumers and answered at 07-23's gate. Both answers were given through AskUserQuestion and are recorded
+verbatim (2026-09-28T14:39:32Z, the time recorded in 07-23-end-state.txt):
+- View ("do both show the correct covers and exactly one American Heart?"): "accept"
+- Count ("'8 landed + P04 backed out (OD-1) + 3 held' — does that still meet the pilot count?"): "reconfirm (Recommended)"
+
+Normalised: `DISPOSITION VIEW: accept`, `DISPOSITION COUNT: reconfirm`. Criterion 1's pilot count, accepted at test 9
+as "9 landed + 3 held", is re-confirmed by the operator as 8 landed (P10 P02 P03 P05 P06 P12 P07 P08), P04 backed out
+by the operator's own OD-1, and 3 held (P01 P09 P11). The Tests section above is left as the historical record. This
+file scores nothing: `/gsd-verify 07` scores the phase, once, after this round.
+
 ## Gaps
 
 - truth: "All nine pilot albums are present in Jellyfin with MusicBrainz titles and correct cover art"
-  status: failed
+  status: closed
   reason: "User reported: both pass, but cover art is wrong on 117"
   severity: major
   test: 2
@@ -110,8 +124,10 @@ HARD EXCLUSIONS for the planner: no zfs rollback of any dataset; no Jellyfin Ful
     - "Jellyfin: demote/disable Apple Music for MusicAlbum or set GB storefront"
     - "Jellyfin: replace item d18d5c99…'s Primary image (single-item image replace or DELETE /Items/…/Images/Primary). This is a consumer write needing operator authorisation. Verify MetadataSavers=[] first (Music freeze / .nfo history)"
   debug_session: ".planning/debug/pilot-cover-art-crossover.md"
+  closed_by: [07-19, 07-20, 07-21, 07-23]
+  closure_evidence: "Closed 2026-09-28. Pipeline: fetchart with Cover Art Archive as its only source, writing cover.jpg with embedart off, plus match.preferred.media, proven in a throwaway (artifacts/07-19-pipeline-config.txt) and deployed with the NOW 117 cover.jpg backfill, sha256 6d83625a… and artpath set on album 1 (artifacts/07-20-deploy-backfill.txt § B, § C). Jellyfin: Apple Music removed from the MusicAlbum ImageFetchers and the NOW 117 Primary replaced image-only (artifacts/07-21-jellyfin.txt § W1, § W3). Re-measured read-only by 07-23: the stored Primary of d18d5c99… is 6d83625a…, equal to P10's cover.jpg and not the Disney 3 artwork 09d8b5f8…; the freeze PASSes; .nfo 91; entries not 568:568 0 (artifacts/07-23-end-state.txt § 3 and the line 'GAP 1 (Jellyfin NOW 117 cover): MEASURED CLOSED'). Operator look at 07-23's gate: DISPOSITION VIEW: accept."
 - truth: "Each pilot album shows its own cover art in Music Assistant"
-  status: failed
+  status: closed
   reason: "User reported: benson boon is in twice (was also on jellygin, but the cover art is wrong here) and 117 cover art is ok"
   severity: major
   test: 5
@@ -125,8 +141,10 @@ HARD EXCLUSIONS for the planner: no zfs rollback of any dataset; no Jellyfin Ful
     - "Same pipeline fix as the test 2 gap (own art on every album): the durable fix, since the bleed recurs for any art-less album sharing a recording with a compilation"
     - "MA: 'Refresh item' (or remove + re-sync) on albums 169 and 167. A consumer write needing operator authorisation. Album 167 carries the latent NOW 121 MB album id first, even though it displays correctly"
   debug_session: ".planning/debug/pilot-cover-art-crossover.md"
+  closed_by: [07-18, 07-19, 07-20, 07-22, 07-23]
+  closure_evidence: "Closed 2026-09-28. The art-less P04 album (MA 169) that carried NOW 121's image was backed out (artifacts/07-18-p04-backout.txt), the own-art pipeline was proven and deployed (07-19, 07-20), and one provider-scoped MA fs sync removed 169 and re-created P02 as album 170 with its own first image and its own external ids only (artifacts/07-22-ma.txt § S, § R, § F, § P; DEF-07-22-04). Re-measured read-only by 07-23: 169 is absent; each of the 8 pilot directories is mapped by exactly one MA album; no album's first image is another album's cover. The strict own-SOURCE count is 7/8, because P12 (album 3) leads with Spotify's copy of its own NOW 116 front, which is pre-existing, recorded in 07-22 § P, and named rather than smoothed. P03 (album 168) carries a second MB album id, filed as DEF-07-23-01, an observation and not a cover defect (artifacts/07-23-end-state.txt § 4 and the line 'GAP 2 (MA cover per album): MEASURED CLOSED'). Operator look at 07-23's gate: DISPOSITION VIEW: accept."
 - truth: "Benson Boone's American Heart appears once per consumer, or the two appearances are an accepted, deliberate twin"
-  status: failed
+  status: closed
   reason: "User reported: benson boon is in twice (was also on jellygin, but the cover art is wrong here)"
   severity: minor
   test: 5
@@ -142,3 +160,5 @@ HARD EXCLUSIONS for the planner: no zfs rollback of any dataset; no Jellyfin Ful
     - "OPERATOR DECISION: policy for the same album in two formats. A = back out P04 (UNDO IMPORT + stop + partial state.pickle surgery per beets.md + MA sync + Jellyfin scan, all writes needing authorisation). B = keep both, re-match to Digital Media releases and disambiguate by format. C = defer to the DUPE/archive phase (not yet inserted) with a named policy"
     - "Regardless of decision: add match.preferred.media (e.g. Digital Media) or an equivalent gate, filed for Phase 8/9, or every WEB download keeps matching CD/vinyl"
   debug_session: ".planning/debug/american-heart-twin.md"
+  closed_by: [07-18, 07-19, 07-20, 07-21, 07-22, 07-23]
+  closure_evidence: "Closed 2026-09-28 by the operator's OD-1 policy A (back out the MP3, keep the P02 FLAC). 07-18 ran UNDO IMPORT of P04 plus the partial state.pickle surgery removing only P04's taghistory entry, under the round fence @pre-07-18 (artifacts/07-18-p04-backout.txt). 07-19 and 07-20 added and deployed match.preferred.media ['Digital Media', 'CD'] for future imports (DEF-07-19-05 records its effect on CD rips). 07-21 dropped the P04 MusicAlbum from Jellyfin, and 07-22's sync dropped MA album 169, with check 4d 1/1. Re-measured read-only by 07-23: tree 0 entries matching *093624834588* and one American Heart directory, P02 manifest equal to 07-18; beets 8 albums / 187 items with album 9, P04's items and P04's state key all absent; Jellyfin one American Heart and e44d9655… count 0; MA one American Heart (170); criterion 8 347/347 (artifacts/07-23-end-state.txt § 1-4 and the line 'GAP 3 (American Heart twin): MEASURED CLOSED'). Operator look at 07-23's gate: DISPOSITION VIEW: accept. P02 keeps its CD match c0df8104…, by the round's hard exclusion (no re-match of P02)."

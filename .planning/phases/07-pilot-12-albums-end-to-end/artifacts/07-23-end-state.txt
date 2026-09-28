@@ -192,7 +192,7 @@ HEALTH: as UAT test 11 — RC 1 solely from the consumers audit's documented "CO
 
 TASK 1: DONE — end state read live from beets, tree, Jellyfin, MA and health; nothing written to the estate.
 
-## GATE (Task 2, checkpoint:decision) — presented, AWAITING the operator
+## GATE (Task 2, checkpoint:decision) — presented, answered
 
 Presented 2026-09-28 (after 13:45Z) with the five verdict lines above. The operator is asked to look, in the UIs:
   1. Jellyfin (https://jellyfin.deercrest.info) → Music → Albums: "Now That's What I Call Music! 117" shows the NOW 117
@@ -208,4 +208,14 @@ Presented 2026-09-28 (after 13:45Z) with the five verdict lines above. The opera
   out by the operator's own choice. Re-confirm "8 landed + P04 backed out (OD-1) + 3 held" as meeting criterion 1's
   pilot count, or leave the count to /gsd-verify 07?
 Options: accept-reconfirm | accept-revisit | issue — <what you see>. Unrecognised VIEW → issue; unrecognised COUNT → revisit.
-(The operator's answer, verbatim with its UTC time, and the two DISPOSITION lines are written by the continuation.)
+
+OPERATOR ANSWER (recorded 2026-09-28T14:39:32Z, via AskUserQuestion; both questions shown with the five UI items above, in Jellyfin and MA):
+  View question — "do both show the correct covers and exactly one American Heart?": "accept"
+  Count question — "'8 landed + P04 backed out (OD-1) + 3 held' — does that still meet the pilot count?": "reconfirm (Recommended)"
+Normalised (VIEW "accept" is a recognised value; COUNT "reconfirm (Recommended)" is the recognised value "reconfirm",
+  the "(Recommended)" suffix being the option label's marker, not part of the answer):
+DISPOSITION VIEW: accept
+DISPOSITION COUNT: reconfirm
+GATE: RESOLVED — accept-reconfirm. The operator's look agrees with GAP 1, GAP 2 and GAP 3 MEASURED CLOSED; criterion 1's
+  pilot count is re-confirmed by the operator as "8 landed + P04 backed out (OD-1) + 3 held". No verdict on the phase
+  is written here; /gsd-verify 07 scores it.

@@ -344,3 +344,33 @@ DEF-07-22-04: a provider-scoped MA fs sync re-created the P02 album under a new 
   cover.jpg, written by 07-20 at 12:32Z, was not picked up because no NOW 117 track changed; album 166 still shows the
   correct CAA front for its own MBID. Owner: Phase 8's MA work, if MA ids or folder images ever need to be stable.
   Evidence: artifacts/07-22-ma.txt § R, § F, § P.
+
+DEF-07-23-01: Music Assistant album 168 (P03, Fireworks & Rollerblades) carries two musicbrainz_albumid values, 2b2822ff… and its own ef528afc…
+  Filed 2026-09-28 by 07-23 Task 3. OBSERVATION, not a cover defect. Album 168's first image is its own (local embedded
+  art from `13 Love of Mine.flac`), and it is the only MA album mapping `Benson Boone/Fireworks & Rollerblades`. Where
+  the extra id 2b2822ff… comes from is not measured. The pre-existing untracked `Fireworks & Rollerblades (2024)/`
+  directory (MA album 137, DEF-07-12-08) carries no MB album tag, so it is not an obvious source. The likely class is
+  the same recording-identity merge that carried NOW 121's ids onto the P04 and P02 albums before 07-22 (07-UAT gap 2
+  root cause; artifacts/07-22-ma.txt § R), but that is unmeasured here. Owner: Phase 8's MA work, together with
+  DEF-07-22-04. Evidence: artifacts/07-23-end-state.txt § 4 (Observation).
+
+DEF-07-23-02: the own-art pipeline has no LIVE import proof yet — no 02-review import has run since the 07-20 deploy
+  Filed 2026-09-28 by 07-23 Task 3. OPEN, by design of the round. The proof so far: the 07-19 throwaway (P03: CAA
+  cover.jpg, artpath set, 0 embedded-picture change, as-is fetches nothing), the running server loading fetchart
+  (07-20 B10), and the P10 backfill (07-20 § C). beets-flask's stage path is proven by source reading only (07-19 (c)).
+  At 07-23 rq read 0 finished jobs, and the newest album was added 2026-09-27. The first live 02-review import after
+  07-20 is therefore the first live proof. It should read: `cover.jpg` present, album `artpath` set, and 0 embedded
+  pictures changed; for an as-is (DJ) import, no remote fetch. Owner: the next plan that imports (Phase 8/9 batch 1).
+  Evidence: artifacts/07-23-end-state.txt § 1 (rq) and the PIPELINE line.
+
+Round owner index, 07-18..07-23 (added 2026-09-28 by 07-23; the entries above are not edited):
+  DEF-07-19-04 — owner: whoever next runs a SAFE-05 sidecar diff (Phase 8/9), as filed.
+  DEF-07-19-05 — owner: Phase 9 batch 1 (the first CD-rip import after the deploy should check the edition picked);
+                 accepted as deployed at 07-20.
+  DEF-07-20-01 — RESOLVED 58e2d3d; no owner needed.
+  DEF-07-21-01 — owner: any future Jellyfin targeted-update plan (keep the before-write freeze assertion); no action.
+  DEF-07-22-04 — owner: Phase 8's MA work, as filed.
+  DEF-07-23-01 — owner: Phase 8's MA work.
+  DEF-07-23-02 — owner: the next plan that imports (Phase 8/9 batch 1).
+  Not filed, by design: DEF-07-19-01, -02, -03 (07-19 records why), DEF-07-22-02 (the id bleed did not persist,
+  07-22 § F).
