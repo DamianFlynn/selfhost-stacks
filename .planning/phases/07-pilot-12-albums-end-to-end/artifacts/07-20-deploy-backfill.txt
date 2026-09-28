@@ -1,0 +1,205 @@
+================================================================================
+PHASE 7 / PLAN 07-20 — DEPLOY the fetchart + preferred.media config (07-19), then BACKFILL
+NOW 117's cover.jpg with one fetchart call scoped to album b057dee8 alone
+================================================================================
+
+Run          2026-09-28 11:14Z – (gate open), workstation + LXC 100 `selfhost` (172.16.1.159)
+             + atlantis (172.16.1.158, real root, uid 0)
+Container    beets-flask, metasauce/beets-flask:v2.0.0-rc6, StartedAt 2026-09-28T09:33:06Z
+             (restarted by 07-18; NOT restarted by this plan so far)
+Operator     OD-2 (2026-09-28, "Pipeline + pilot repair"). Standing authorisation 2026-09-26,
+             verbatim: "i am explicitly authorising the work needed to get beets and the music
+             system implemented, including live files like state.pickle".
+             The orchestrator relayed that the operator chose "Proceed to 07-20" to clear the
+             drift through this plan's gated appdata install. That choice is NOT this plan's
+             gate answer. The gate below is presented as written and is still open.
+Writes so far  NONE on the estate. This file only. Every reading in § A is read-only
+             (sqlite opened mode=ro; ls/find/stat/sha256sum; zfs list; rq info; git fetch/status).
+
+--------------------------------------------------------------------------------
+## A — PRE-GATE
+--------------------------------------------------------------------------------
+
+A1. Host checkout /mnt/fast/stacks (LXC 100, read 11:14:52Z)
+    porcelain lines        0            (clean)
+    HEAD                   548b951f5175ed68c5b40afb73f3854c5d94cc79
+    origin/main (fetched)  548b951f5175ed68c5b40afb73f3854c5d94cc79
+    ahead / behind         0 / 0        -> `pull --ff-only` can succeed
+    compose service name   beets-flask  (`docker compose -f stacks/selfhosted/arrs/compose.yaml
+                                         config --services`, line 9)
+
+A2. Workstation main vs origin/main (after `git fetch`)
+    ahead by 2, behind by 0:
+      0513593 docs(07-19): complete the pipeline-config plan (summary)
+      82bc490 docs(07-19): prove the fetchart + preferred.media config in a throwaway, measure the
+              ranking, drive the live check red
+    NOT ahead by 07-18's commits or by 1e054a6, as the plan predicted. Measured cause: a concurrent
+    session committed 548b951 (teslamate) on top of 1e054a6 and pushed main, then pulled it to the
+    host (07-19 artifact § EXTERNAL PUSH EVENT). So 07-19's CONFIG commit 1e054a6 is already on
+    origin and in the host checkout. The two commits still unpushed are docs only; neither touches
+    stacks/selfhosted/arrs/beets/config.yaml or scripts/check-beets-config.sh
+    (`git diff origin/main HEAD --stat` over those two paths: empty).
+    Adapted deploy step B1-B2: `git push origin main` pushes the docs commits (plus this plan's
+    commits); the host `pull --ff-only` then moves the host from 548b951 to the pushed HEAD and does
+    not change the beets config file, which the host already holds.
+
+A3. Appdata config vs repo (LXC 100, 11:14:52Z)
+    /mnt/fast/appdata/arrs/beets/config/config.yaml
+      sha256  adf838ddec5a9149d407a0e30513b48bd8be2df1c111a0c66c42cd392d571e21
+      mode 760, owner 568:568, size 37707, mtime 2026-09-27 21:32:18.937981315 +0000
+    host repo file   9b48263262f5ba101d9be2307fa033d3292b2fe0f89fa8f3e0ae7544fbe3400f
+    `git show origin/main:stacks/selfhosted/arrs/beets/config.yaml | sha256sum`
+                     9b48263262f5ba101d9be2307fa033d3292b2fe0f89fa8f3e0ae7544fbe3400f
+    `git show 1e054a6~1:stacks/selfhosted/arrs/beets/config.yaml | sha256sum`
+                     adf838ddec5a9149d407a0e30513b48bd8be2df1c111a0c66c42cd392d571e21
+    Last commit to touch the file: 1e054a6.
+    READING: the plan's pre-condition "appdata sha == origin/main" is FALSE, and that is expected
+    from A2. The appdata copy is byte-equal to the repo file immediately BEFORE 1e054a6. So the ONLY
+    drift is 07-19's own change. There is no other, pre-existing drift for the install to paper over.
+    The install mode/owner to preserve: 760, 568:568.
+
+A4. Fence @pre-07-18 listed back by exact whole-line name (atlantis, 11:15:05Z)
+    fast/appdata/arrs@pre-07-18   creation 1790587371 (2026-09-28T09:22:51Z)  used 3981312   count 1
+    tank/media/Music@pre-07-18    creation 1790587371 (2026-09-28T09:22:51Z)  used 0         count 1
+    Also still held: tank/media/Music@pre-07-pilot count 1, fast/appdata/arrs@pre-07-pilot count 1.
+
+A5. rq and inboxes (beets-flask, 11:15:17Z)
+    rq info: 0 queues, 0 jobs total; 5 workers (4 preview, 1 import), all idle, 0 finished 0 failed.
+    01-auto: empty. 03-asis: empty.
+    02-review, 8 entries:
+      Benson Boone-American Heart-24BIT-44KHZ-WEB-FLAC-2025-OBZEN-xpost
+      Benson.Boone.-.Fireworks.&.Rollerblades.(2024).[16Bit-44.1kHz].FLAC.[PMEDIA].⭐️-xpost
+      Cyril - Stumblin In (LUNAX Remix) (Extended Mix)-(5021732254740)-SINGLE-WEB-2024-ZzZz [9c1feafc0] [2af13ead9]-xpost
+      Mastermix.Issue.420.2021
+      Mastermix.Issue.421.2021
+      Now_.That.s.What.I.Call.Music.121.2025.320kbps.MP3.InChY
+      VA-Now_That.s_What_I_Call_Music__116__2023
+      VA.Now.That.s.What.I.Call.Music_.117.2024..CD.FLAC..CDNOW117
+    (Equal to 07-18 § F's "02-review 8 entries" after P04's unstage.)
+
+A6. library.db (opened file:…?mode=ro inside beets-flask as uid 568, 11:15:17Z)
+    albums 8, items 187
+    album 1 = (1, 'b057dee8-02ea-4b48-8681-f5e3255bc47d', 'Various Artists',
+               'Now That’s What I Call Music! 117', artpath None)
+    albums with mb_albumid b057dee8-02ea-4b48-8681-f5e3255bc47d: 1
+    albums with a non-empty artpath: 0
+    items with album_id 1: 50
+    sha256 (LXC 100 host side):
+      8f5994b824af5d43dacf8069d1ae3ffc2ac5a5694d90574763e2317bb1097813  library.db
+      b8ce8afdc5e3ba1c858d3fbc07c4f8ee90538343817af1200c24d5389f1a66c6  state.pickle
+    Both equal to 07-19's readings (unchanged since 07-18's surgery).
+
+A7. P10 dir on atlantis as real root (11:15:05Z)
+    /mnt/tank/media/Music/Various Artists/Now That’s What I Call Music! 117
+    dir 568:568 777, mtime 2026-09-26 21:58:05 +0100
+    .flac 50, files total 50, image files (jpg/jpeg/png/webp/gif) 0, subdirectories 0
+    -> the art-less baseline holds.
+
+A8. Stop conditions
+    - `RC6 COMMIT KEEPS NEW KEYS: yes` in 07-19's artifact -> `hold` is NOT forced.
+    - Ledger: the newest 07-18 line is `STATE 07-18-BACKED-OUT` (line 51, also the file's last
+      line). No `STOP STATE 07-18-…` and no `07-18-HOLD` after it. Nothing to raise.
+
+A9. Estate health right now (read-only runs from the workstation)
+    `bash scripts/quick-health-check.sh` at 11:15:33Z: EXIT=1. Non-green blocks:
+      ❌ survivor-config.yaml DRIFTED — repo=9b48263262f5… host=adf838ddec5a…
+         (the 07-19 drift; this plan's install is what clears it)
+      ❌ Music consumers audit BROKEN (check-music-consumers.sh exit 1):
+         D-28: 'Benson Boone/American Heart [093624834588]' does not exist under
+         /mnt/tank/media/Music — the pin is stale. This pins P04's album dir, which 07-18
+         removed on purpose. Owned by 07-22 (and the Jellyfin/MA side by 07-21/07-22), NOT by
+         this plan. Recorded so that Task 2's health-check reading is not mistaken for a
+         regression: after deploy the drift red should clear and this D-28 red will remain.
+      D-04 counts line: raw=225  comment-stripped=112  invocation-shaped=17
+                        (executable 15 = asserted 3 + exempt 12, documentation 2)
+      Music import sweep: green, 187 items read.
+    `bash scripts/check-beets-config.sh` at 11:16:16Z: rc=1, exactly 4 failed checks, the same
+    set as 07-19's PRE-DEPLOY LIVE RED SET:
+      ❌ OD-2 fetchart.auto: UNKNOWN   ❌ OD-2 fetchart.sources: UNKNOWN
+      ❌ OD-2 match.preferred.media = '[]'   ❌ plugins = ["musicbrainz"]
+      ✅ OD-2 art_filename = cover (beets' default)
+
+--------------------------------------------------------------------------------
+## GATE (presented to the operator; answer pending)
+--------------------------------------------------------------------------------
+Decision: deploy the fetchart + preferred.media config to the live beets-flask, and backfill
+NOW 117's cover.jpg?
+
+G1. Config diff. `git diff origin/main -- stacks/selfhosted/arrs/beets/config.yaml` is EMPTY,
+    because origin already carries 1e054a6 (A2). The diff that the install puts live is appdata ->
+    repo, which is `git diff 1e054a6~1 origin/main -- …/config.yaml`: 28 insertions, 1 deletion.
+      plugins: [musicbrainz]  ->  plugins: [musicbrainz, fetchart]   (embedart NOT listed)
+      + art_filename: cover
+      + fetchart: {auto: yes, sources: [coverart]}
+      + match.preferred.media: ['Digital Media', 'CD']
+      (plus WHY comments). check-beets-config.sh now asserts plugins == {musicbrainz, fetchart}
+      exactly, plus fetchart.auto, fetchart.sources, art_filename and preferred.media; its
+      self-test is 15/15.
+
+G2. Ranking (07-19 § RANKING, read-only probe in beets 2.12.0):
+      P02 (WEB FLAC) CURRENT: c0df8104 (CD, US), three-way tie with c33163f3 (CD) and e4fdb1dc
+                     (12" Vinyl) at 0.009091 — the American Heart twin diagnosis reproduced.
+      P02 NEW:       b3a1e018 (Digital Media, XW), EXACT tie with cfb585a2 (Digital Media, XW) at
+                     0.017544. So WEB rips shaped like P02 now pick a Digital Media release. The
+                     ambiguity moves to "which of two digital editions", both correct-format.
+      P10 (CD rip) control: b057dee8 (CD, GB) stays rank 1 under both. Margin to rank 2 (8a4b23b7,
+                     Digital Media, GB, 50 tracks) narrows 0.120961 -> 0.115130; rank 2 loses on
+                     tracks/mediums (1 medium vs 2), NOT on media.
+    SURPRISE / RISK — DEF-07-19-05 (observation, filed by 07-19, put before the operator here):
+      The staged files carry NO media tag, so beets cannot tell a CD rip from a WEB rip, and the
+      preference ranks Digital Media ABOVE CD for EVERY source, CD rips included. A CD rip whose
+      MusicBrainz Digital Media edition has the SAME tracklist and medium count would now match
+      the digital edition. P10 kept its CD only because its digital edition differs in mediums.
+      "A CD rip prefers a CD over vinyl" still holds; "a CD rip prefers a CD" does NOT, in
+      general. Accepting the deploy accepts this ordering; refining it (e.g. a per-source
+      preference) is a later config change, not something this plan can do.
+
+G3. Plugin import stages in beets-flask: `BEETS-FLASK RUNS PLUGIN IMPORT STAGES: yes` by SOURCE
+    proof (session.py:712-726 appends every plugin's import stages; import_task_files reaches
+    fetchart's assign_art). The LIVE proof is still the first 02-review import after deploy.
+    DEF-07-19-02 was not filed because the source reading is complete; the gap is named here.
+    Task 2 step 10 adds a runtime read (fetch_art among beets.plugins.import_stages()).
+
+G4. Oracle: `ORACLE IMPACT: none — no DEF-07-19-03`. The oracle loads fetchart but cannot fetch
+    (every oracle import is -A and coverart is remote).
+    Also for the operator — DEF-07-19-04 (observation): after deploy, every MusicBrainz-matched
+    album that Cover Art Archive serves lands with a `cover.jpg` (its beets `artpath`). By
+    extension that file is indistinguishable from a Jellyfin-written `.jpg` sidecar, so
+    check-music-freeze.sh § 5's `.jpg` count grows by one per such album (P10's backfill
+    included: 88 -> 89 expected). Attribute a new `cover.jpg` via `artpath` before calling it a
+    Jellyfin write. check-music-import.sh is unaffected (its orphan scan skips non-audio).
+
+G5. What `deploy` does, in order, stopping at the first failure:
+      1. `git push origin main` (workstation; pushes 82bc490, 0513593 and this plan's commits).
+      2. LXC 100: `git -C /mnt/fast/stacks pull --ff-only`; assert host HEAD == workstation HEAD.
+      3. `cp -p` the appdata config to /mnt/fast/safety/phase07/0720/config.yaml.pre-0720, sha
+         recorded (expect adf838dd…).
+      4. `install -m 760 -o 568 -g 568` the repo file over
+         /mnt/fast/appdata/arrs/beets/config/config.yaml; assert sha == 9b48263262f5….
+      5. `docker compose -f stacks/selfhosted/arrs/compose.yaml up -d --force-recreate --no-deps
+         beets-flask` — beets-flask ONLY.
+      6. Readiness bounded at 180 s (config readable as 568, a NEW watchdog line listing exactly
+         02-review and 03-asis). Note: the 8 folders in 02-review already carry sessions, so the
+         watchdog should log "skipping enqueue" for them and run no import.
+      7. Mount shape, library.db/state.pickle sha unchanged by the recreate.
+      8. check-beets-config.sh exit 0; server-side read that fetchart loads with fetch_art stage;
+         quick-health-check: drift block green (vendored files match [(]4)), D-04 counts at pins;
+         D-28 consumers red expected to remain (A9).
+    On failure: stop beets-flask, record a stop-state line, previous config kept at the safety
+    path; reinstalling it is an operator decision.
+
+G6. What the backfill writes (only on deploy-and-backfill, only after DEPLOY PASS):
+      ONE `docker exec -u 568 beets-flask beet fetchart mb_albumid:b057dee8-02ea-4b48-8681-f5e3255bc47d`
+      after a read-only count proves exactly 1 album matches. Expected writes: one `cover.jpg` in
+      the P10 dir (568:568) and album 1's `artpath` in the real library.db. Covered by
+      @pre-07-18 (A4) and a fresh `cp -p` library.db safety copy at
+      /mnt/fast/safety/phase07/0720/library.db.pre-backfill. Proven by: 50-FLAC manifest
+      byte-equal before/after, items table dump sha-equal, albums differing only in album 1's
+      artpath, state.pickle sha unchanged, cover.jpg sha compared with CAA's own front.
+      Never `beet write`/`update`/embedart, never fetchart over DJ/ or the library, never a zfs
+      [r]ollback. No Jellyfin or MA write.
+
+Options:  deploy-and-backfill (Recommended) | deploy-only | hold
+          Any other answer normalises to hold.
+
+(Answer and disposition lines are written here by the continuation executor.)
