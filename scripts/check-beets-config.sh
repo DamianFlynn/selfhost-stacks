@@ -10,7 +10,8 @@
 #   makes is named below rather than denied.
 #
 # READ-ONLY BY CONTRACT, WITH ONE NAMED EXCEPTION. Every remote invocation is a read - a `docker
-# logs` fetch, a `docker exec` that dumps configuration, and a `sha256sum` - with exactly one
+# logs` fetch, a `docker exec` that dumps configuration (or, for T-06-33, reads the installed
+# fetchart plugin's shipped defaults off a bare confuse root), and a `sha256sum` - with exactly one
 # exception: arm 2 TRUNCATES a zero-byte no-op overlay at a fixed path inside the container's
 # /tmp (${OVERLAY}, below). It is truncated rather than created-if-absent, its emptiness is
 # MEASURED before it is used rather than assumed, and nothing removes it afterwards. That single
@@ -58,7 +59,8 @@
 #   1. Readiness gate (the watchdog line)         T-06-34
 #   1b. Inbox registration, newest line only      07-REVIEW WR7-05 (the D-21 / CR7-01 inbox set)
 #   2. ARM 1 - the server-committed config        D-30 arm 1
-#   3. ARM 2 - the CLI/confuse view               D-30 arm 2, redaction no-op (T-06-33)
+#   3. ARM 2 - the CLI/confuse view               D-30 arm 2, redaction no-op (T-06-33, key-scoped
+#                                                 to fetchart's four shipped-default keys)
 #   4. Assertions, all read from ARM 1            CONF-01, CONF-02, CONF-05, SAFE-01, T-06-31
 #      4b. OD-2: fetchart from Cover Art Archive, art_filename, preferred.media, the plugin set
 #   5. The two-arm comparison, REPORTED           D-30
@@ -70,10 +72,12 @@
 #   default mode  - every red finding increments FAILURES and the script ends non-zero.
 #   --baseline    - every finding is printed and the script always ends zero, so a before-state
 #                   can be recorded while a config is still being brought to its target.
-#   --self-test   - no ssh, no docker. FIFTEEN cases, THIRTEEN of which MUST go red (cases 1-7
+#   --self-test   - no ssh, no docker. TWENTY cases, SIXTEEN of which MUST go red (cases 1-7
 #                   are described next; 5a/5b drive the OD-2 plugin-set and media reds; the six
 #                   inbox-registration cases, added 2026-09-27 for WR7-05, are described at
-#                   assert_inbox_registration), exiting non-zero unless every expectation is met.
+#                   assert_inbox_registration; the five T-06-33 redaction cases, added 2026-09-28
+#                   for DEF-07-20-01, are described at assert_redaction_noop), exiting non-zero
+#                   unless every expectation is met.
 #                   Eight drive the assertion function over synthetic dumps; the last of those
 #                   (case 7) is deliberately larger than the
 #                   64 KiB pipe buffer, because the GC-01 defect was invisible to every smaller
@@ -775,6 +779,180 @@ assert_inbox_registration() {  # $1 = log text; -> rc 0/1/2, INBOX_REG_WHY / _LI
 }
 
 # =============================================================================================
+# T-06-33 - THE REDACTION NO-OP, as a pure function: two dump FILES and a defaults FILE in,
+# verdict out. No ssh, no docker. Returns 0 PASS, 1 RED, 2 UNKNOWN.
+#
+# WHY IT IS NOT A WHOLE-FILE `cmp` ANY MORE (DEF-07-20-01, plan 07-20). `beet config -d` prints
+# REDACTED for every key a plugin marks `.redact = True`, WHATEVER ITS VALUE. fetchart marks four
+# keys that way from its source classes' add_default_config: fanarttv_key, google_key,
+# google_engine and lastfm_key. So the moment fetchart loads, the redacted and unredacted dumps
+# differ even though the repo sets none of the four. Three are null, and google_engine holds a
+# default that beets ships. The whole-file comparison read that as a credential and halted the
+# 07-20 deploy. The repo still holds no beets credential, and this function still asserts that.
+#
+# THE RULE, which is narrow on purpose:
+#   * byte-identical                                   -> PASS (the old green, unchanged)
+#   * otherwise, delete the four allowlisted keys' lines from the `fetchart:` block of BOTH dumps.
+#     The remaining lines must be IDENTICAL, in order, or the verdict is RED (a difference
+#     elsewhere is presumed to be a credential). Every allowlisted key that still differs must
+#     read REDACTED on the redacted side. Its unredacted value must be empty/null or EQUAL TO
+#     THE INSTALLED PLUGIN'S DEFAULT, or the verdict is RED.
+#   * UNKNOWN, never green: an unreadable/empty dump, non-UTF-8 text, a key present in only one
+#     dump or present twice, a defaults file that does not name EXACTLY the allowlist, a redacted
+#     side that does not say REDACTED, or bytes that differ with no key-level difference found.
+# The defaults are NOT a literal here. The live caller derives them inside the running container
+# from the installed beetsplug.fetchart: it calls each source's add_default_config against a
+# bare confuse root, so the real config is never read, and it keeps the keys that root marks
+# redacted. The allowlist IS a literal, because it is policy. If the installed plugin ever marks a
+# different set, the defaults file stops naming exactly the allowlist and the verdict is
+# UNKNOWN. Widening the allowlist is a reviewed edit in the commit that changes the policy.
+#
+# NO VALUE IS EVER PRINTED. The judge reports classes only (empty / default / NON-DEFAULT) and,
+# for a difference elsewhere, the TOP-LEVEL SECTION names and a line count, never line text.
+# Values reach the judge as file CONTENTS, never argv (CONVENTIONS §7): its argv is three
+# $WORKDIR paths and the allowlist.
+# =============================================================================================
+REDACTION_ALLOWLIST="fanarttv_key google_engine google_key lastfm_key"
+REDACTION_SECTION="fetchart"
+read -r -d '' REDACTION_JUDGE <<'PYEOF' || true
+import difflib, json, sys
+
+red_p, unred_p, def_p, allow_s, section = sys.argv[1:6]
+ALLOW = set(allow_s.split())
+
+def out(rc, why, classes=''):
+    json.dump({'rc': rc, 'why': why, 'classes': classes}, sys.stdout)
+    sys.exit(0)
+
+def readb(p):
+    try:
+        with open(p, 'rb') as fh:
+            return fh.read()
+    except Exception:
+        return None
+
+rb, ub = readb(red_p), readb(unred_p)
+if not rb:
+    out(2, 'the redacted dump is unreadable or empty')
+if not ub:
+    out(2, 'the unredacted dump is unreadable or empty')
+if rb == ub:
+    out(0, 'the redacted and unredacted dumps are byte-identical')
+try:
+    rt, ut = rb.decode('utf-8'), ub.decode('utf-8')
+except UnicodeDecodeError:
+    out(2, 'a dump is not UTF-8 text, so it cannot be diffed by key')
+
+def indent(ln):
+    return len(ln) - len(ln.lstrip(' '))
+
+def extract(text):
+    """-> (kept lines, their top-level sections, {allowlisted key: raw value, or None if multi-line})"""
+    lines, kept, secs, found, top, i = text.splitlines(), [], [], {}, None, 0
+    while i < len(lines):
+        ln = lines[i]
+        if ln.strip() and indent(ln) == 0:
+            top = ln.rstrip()[:-1] if ln.rstrip().endswith(':') else None
+        if top == section and indent(ln) == 4 and ':' in ln:
+            k = ln.strip().split(':', 1)[0]
+            if k in ALLOW:
+                if k in found:
+                    raise ValueError('an allowlisted key appears twice in one dump')
+                j = i + 1
+                while j < len(lines) and lines[j].strip() and (
+                        indent(lines[j]) > 4 or lines[j].lstrip().startswith('- ')):
+                    j += 1
+                found[k] = ln.strip()[len(k) + 1:].strip() if j == i + 1 else None
+                i = j
+                continue
+        kept.append(ln)
+        secs.append(top if indent(ln) > 0 or not ln.strip() else ln.split(':', 1)[0])
+        i += 1
+    return kept, secs, found
+
+try:
+    rk, rs, rf = extract(rt)
+    uk, us, uf = extract(ut)
+except ValueError as e:
+    out(2, 'cannot diff by key: %s' % e)
+
+if rk != uk:
+    n, where = 0, set()
+    for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(None, rk, uk, autojunk=False).get_opcodes():
+        if tag != 'equal':
+            n += max(i2 - i1, j2 - j1)
+            where.update(s or '<top level>' for s in rs[i1:i2] + us[j1:j2])
+    out(1, 'the dumps differ OUTSIDE the allowlisted %s keys: %d line(s) in section(s) %s. '
+           'Presumed a credential; no line text is printed' % (section, n, ', '.join(sorted(where)) or '<unlocated>'))
+
+if set(rf) != set(uf):
+    out(2, 'allowlisted key(s) present in only one dump (%s), so they cannot be diffed'
+        % ', '.join(sorted(set(rf) ^ set(uf))))
+
+try:
+    with open(def_p) as fh:
+        defaults = json.load(fh)
+except Exception:
+    out(2, 'the installed plugin defaults could not be read, so no difference can be judged')
+if not isinstance(defaults, dict) or set(defaults) != ALLOW:
+    out(2, 'the installed plugin marks a different redacted set (%s) than the allowlist (%s)'
+        % (' '.join(sorted(defaults)) if isinstance(defaults, dict) else '<not a map>', ' '.join(sorted(ALLOW))))
+
+def norm(v):
+    v = v.strip()
+    if len(v) >= 2 and v[0] == v[-1] and v[0] in ("'", '"'):
+        v = v[1:-1]
+    return None if v in ('', 'null', 'Null', 'NULL', '~') else v
+
+classes, bad, differing = [], [], 0
+for k in sorted(ALLOW):
+    if k not in rf:
+        classes.append(k + '=absent')
+        continue
+    if rf[k] == uf[k]:
+        classes.append(k + '=unredacted')
+        continue
+    differing += 1
+    if rf[k] != 'REDACTED':
+        out(2, '%s differs but its redacted side does not read REDACTED, so it cannot be judged' % k)
+    if uf[k] is None:
+        classes.append(k + '=NON-DEFAULT(multi-line)')
+        bad.append(k)
+        continue
+    v, d = norm(uf[k]), defaults[k]
+    if v is None:
+        classes.append(k + '=empty')
+    elif d is not None and v == str(d):
+        classes.append(k + '=default')
+    else:
+        classes.append(k + '=NON-DEFAULT')
+        bad.append(k)
+if bad:
+    out(1, 'allowlisted key(s) %s hold a NON-default value: that is a credential, in a config destined for a public repo'
+        % ', '.join(bad), ' '.join(classes))
+if differing == 0:
+    out(2, 'the dumps differ in bytes but no key-level difference was found, so the difference cannot be attributed',
+        ' '.join(classes))
+out(0, 'the dumps differ ONLY on %d allowlisted %s key(s), each empty or at the installed plugin default'
+    % (differing, section), ' '.join(classes))
+PYEOF
+
+REDACTION_WHY=""
+REDACTION_CLASSES=""
+assert_redaction_noop() {  # $1 redacted dump, $2 unredacted dump, $3 defaults JSON -> rc 0/1/2
+  local res rc
+  REDACTION_WHY=""; REDACTION_CLASSES=""
+  res="$(python3 -c "$REDACTION_JUDGE" "$1" "$2" "$3" "$REDACTION_ALLOWLIST" "$REDACTION_SECTION" 2>/dev/null || true)"
+  rc="$(printf '%s' "$res" | jq -r '.rc' 2>/dev/null || true)"
+  REDACTION_WHY="$(printf '%s' "$res" | jq -r '.why' 2>/dev/null || true)"
+  REDACTION_CLASSES="$(printf '%s' "$res" | jq -r '.classes' 2>/dev/null || true)"
+  case "$rc" in
+    0|1|2) return "$rc" ;;
+    *) REDACTION_WHY="the judge returned no verdict, so nothing was compared"; REDACTION_CLASSES=""; return 2 ;;
+  esac
+}
+
+# =============================================================================================
 # --self-test. SEVEN cases, SIX of which MUST go red: 6 synthetic dumps plus one assertion over
 # this file's own source. Same device as scripts/spike03-wrtag-arms.sh:23-27: drive the
 # fail-closed branches without touching the estate. A control that can only pass is uninformative.
@@ -841,8 +1019,8 @@ run_self_test() {
   # compared at the end. A banner that says one number while another number of cases ran is the
   # self-invalidating-prose defect this phase has already hit twice - so the closing banners are
   # DERIVED, and a mismatch between the announcement and reality is itself a self-test failure.
-  local ST_PLANNED_CASES=15
-  echo "🧪 --self-test — $ST_PLANNED_CASES cases: 8 synthetic dumps, the D-04 contract over this file's own source, and 6 inbox-registration lines (WR7-05)"
+  local ST_PLANNED_CASES=20
+  echo "🧪 --self-test — $ST_PLANNED_CASES cases: 8 synthetic dumps, the D-04 contract over this file's own source, 6 inbox-registration lines (WR7-05), and 5 redaction dump pairs (T-06-33)"
   rule
   echo ""
 
@@ -1008,6 +1186,55 @@ $(synthetic_correct_dump)"
   run_reg_case "registration: an older good line, the NEWEST names 01-auto" 1 \
     "${reg_pre}['${ib}/02-review', '${ib}/03-asis']
 ${reg_pre}['${ib}/01-auto', '${ib}/02-review', '${ib}/03-asis']"
+
+
+  # 14-18. T-06-33, the redaction no-op (DEF-07-20-01, plan 07-20). Expected return codes: 0 PASS,
+  #   1 RED, 2 UNKNOWN - UNKNOWN is its own expectation, so a blind read that came back RED fails
+  #   its case. The fixture default is SYNTHETIC on purpose: the function is pure over the defaults
+  #   file, and the live run derives the real one from the installed plugin.
+  local rd="$WORKDIR/st-redaction" st_default="st-synthetic-default:engine0"
+  mkdir -p "$rd"
+  printf '{"fanarttv_key": null, "google_engine": "%s", "google_key": null, "lastfm_key": null}\n' \
+    "$st_default" >"$rd/defaults.json"
+  synthetic_correct_dump >"$rd/plain.dump"
+  { synthetic_correct_dump
+    printf '    google_key: REDACTED\n    google_engine: REDACTED\n    fanarttv_key: REDACTED\n    lastfm_key: REDACTED\n'
+  } >"$rd/redacted.dump"
+  # The unredacted dump lists the four in a DIFFERENT order, as rc6 measured does (B9a).
+  { synthetic_correct_dump
+    printf '    fanarttv_key:\n    google_key:\n    google_engine: %s\n    lastfm_key:\n' "$st_default"
+  } >"$rd/unred-default.dump"
+  local st_nondefault="st-synthetic-nondefault-value"
+  { synthetic_correct_dump
+    printf '    fanarttv_key:\n    google_key: %s\n    google_engine: %s\n    lastfm_key:\n' "$st_nondefault" "$st_default"
+  } >"$rd/unred-nondefault.dump"
+  { synthetic_correct_dump | sed 's/^    extra_tags:$/    pass: REDACTED\n    extra_tags:/'
+  } >"$rd/redacted-other.dump"
+  { synthetic_correct_dump | sed "s/^    extra_tags:\$/    pass: ${st_nondefault}\n    extra_tags:/"
+  } >"$rd/unred-other.dump"
+  run_red_case() {  # name, expected rc, redacted file, unredacted file
+    local rc=0
+    echo -e "  ${BLUE}case: $1  (expect rc $2)${NC}"
+    assert_redaction_noop "$3" "$4" "$rd/defaults.json" || rc=$?
+    st_cases=$((st_cases + 1))
+    if [[ $2 -ne 0 ]]; then st_red_cases=$((st_red_cases + 1)); fi
+    if [[ $rc -eq $2 ]]; then
+      echo -e "  ${GREEN}✅ case '$1': rc $rc, as expected${NC}${REDACTION_WHY:+ — $REDACTION_WHY}${REDACTION_CLASSES:+ [$REDACTION_CLASSES]}"
+    else
+      echo -e "  ${RED}❌ case '$1': rc $rc, expected $2${NC}${REDACTION_WHY:+ — $REDACTION_WHY}${REDACTION_CLASSES:+ [$REDACTION_CLASSES]}"
+      st_failures=$((st_failures + 1))
+    fi
+    echo ""
+  }
+  run_red_case "redaction: byte-identical dumps" 0 "$rd/plain.dump" "$rd/plain.dump"
+  run_red_case "redaction: only the four fetchart keys differ, each empty or at the default" 0 \
+    "$rd/redacted.dump" "$rd/unred-default.dump"
+  run_red_case "redaction: an allowlisted key holds a NON-default value" 1 \
+    "$rd/redacted.dump" "$rd/unred-nondefault.dump"
+  run_red_case "redaction: a NON-allowlisted key differs" 1 \
+    "$rd/redacted-other.dump" "$rd/unred-other.dump"
+  run_red_case "redaction: the unredacted dump is unreadable (UNKNOWN)" 2 \
+    "$rd/redacted.dump" "$rd/does-not-exist.dump"
 
   rule
   # The announced count and the count that actually ran must agree, or the banner below is prose
@@ -1236,7 +1463,9 @@ echo ""
 # `beet config -d` REDACTS fields marked sensitive unless -c/--clear is passed. This repo holds
 # no beets credential (Phase 4 D-24), so redaction must be a NO-OP - and that is ASSERTED here
 # rather than assumed. A difference between the redacted and unredacted dumps is a credential in
-# a config destined for a public repo, and it stops the plan.
+# a config destined for a public repo, and it stops the plan - with ONE exception: fetchart's
+# four always-redacted keys, each empty or at the installed plugin's shipped default
+# (DEF-07-20-01). The rule and its fail-closed branches are stated at assert_redaction_noop.
 # =============================================================================================
 echo "🅱  3. ARM 2 — the CLI/confuse view (CONFIG_ROUTE_CLI)"
 rule
@@ -1304,17 +1533,66 @@ else
       sed 's/^/      /' "$WORKDIR/arm2.paths"
     fi
 
-    # T-06-33: the redaction no-op, asserted.
+    # T-06-33: the redaction no-op, asserted - by assert_redaction_noop, whose header states the
+    # rule (DEF-07-20-01). A plugin's shipped defaults may differ; anything else may not.
     if [[ "$CONFIG_ROUTE_CLI" == "confuse" ]]; then
       beet_exec "${BEET_BIN} -l ${THROWAWAY_DB} -c ${OVERLAY} config -d -c"
       if [[ $BEET_EXEC_RC -ne 0 || ! -s "$WORKDIR/exec.out" ]]; then
         fail "T-06-33 redaction no-op: UNKNOWN, not green — the unredacted dump could not be read (rc=$BEET_EXEC_RC)"
-      elif cmp -s "$WORKDIR/arm2.dump" "$WORKDIR/exec.out"; then
-        REDACTION_VERDICT="no-op"
-        pass "T-06-33: the redacted and unredacted dumps are byte-identical — no beets credential exists, asserted rather than assumed"
       else
-        REDACTION_VERDICT="DIFFERS"
-        fail "T-06-33: the redacted and unredacted dumps DIFFER — that difference is a credential, in a config destined for a public repo. Stop."
+        cp "$WORKDIR/exec.out" "$WORKDIR/arm2.unredacted.dump"
+        : >"$WORKDIR/redaction.defaults.json"
+        if ! cmp -s "$WORKDIR/arm2.dump" "$WORKDIR/arm2.unredacted.dump"; then
+          # The installed fetchart's redacted keys and their shipped defaults, read from its
+          # source classes against a bare confuse root. The real config is never read, and no
+          # beets command runs. A failed read leaves the defaults file empty -> UNKNOWN.
+          read -r -d '' PY_REDACT_DEFAULTS <<'PYDEF' || true
+import json, confuse, beetsplug.fetchart as f
+out = {}
+for name in sorted(dir(f)):
+    cls = getattr(f, name)
+    if isinstance(cls, type) and issubclass(cls, f.ArtSource) and 'add_default_config' in cls.__dict__:
+        root = confuse.RootView([])
+        cls.add_default_config(root['fetchart'])
+        for path in sorted(root.redactions):
+            key = '.'.join(map(str, path))
+            if len(path) == 2 and path[0] == 'fetchart':
+                v = root['fetchart'][path[1]].get()
+                out[path[1]] = None if v is None else str(v)
+            else:
+                out['?' + key] = None
+print(json.dumps(out, sort_keys=True))
+PYDEF
+          PY_REDACT_DEFAULTS_B64="$(printf '%s' "$PY_REDACT_DEFAULTS" | base64 | tr -d '\n')"
+          beet_exec "${PY_BIN} -c \"import base64;exec(base64.b64decode('${PY_REDACT_DEFAULTS_B64}'))\""
+          if [[ $BEET_EXEC_RC -eq 0 && -s "$WORKDIR/exec.out" ]]; then
+            cp "$WORKDIR/exec.out" "$WORKDIR/redaction.defaults.json"
+          else
+            info "T-06-33: the installed fetchart defaults could not be read (rc=$BEET_EXEC_RC)"
+          fi
+        fi
+        REDACTION_RC=0
+        assert_redaction_noop "$WORKDIR/arm2.dump" "$WORKDIR/arm2.unredacted.dump" \
+          "$WORKDIR/redaction.defaults.json" || REDACTION_RC=$?
+        case "$REDACTION_RC" in
+          0)
+            if [[ -z "$REDACTION_CLASSES" ]]; then
+              REDACTION_VERDICT="no-op"
+              pass "T-06-33: the redacted and unredacted dumps are byte-identical — no beets credential exists, asserted rather than assumed"
+            else
+              REDACTION_VERDICT="plugin-defaults-only [$REDACTION_CLASSES]"
+              pass "T-06-33: $REDACTION_WHY — no beets credential exists, asserted rather than assumed [$REDACTION_CLASSES]"
+            fi
+            ;;
+          1)
+            REDACTION_VERDICT="DIFFERS"
+            fail "T-06-33: $REDACTION_WHY. Stop.${REDACTION_CLASSES:+ [$REDACTION_CLASSES]}"
+            ;;
+          *)
+            REDACTION_VERDICT="UNKNOWN"
+            fail "T-06-33 redaction no-op: UNKNOWN, not green — $REDACTION_WHY${REDACTION_CLASSES:+ [$REDACTION_CLASSES]}"
+            ;;
+        esac
       fi
     fi
   fi
