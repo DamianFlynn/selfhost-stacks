@@ -1597,7 +1597,7 @@ item nobody owns.)*:
       `.planning/phases/06-tagger-configuration-and-dry-run/06-REVIEW-GAP.md` and
       `.planning/phases/06-tagger-configuration-and-dry-run/06-DISPOSITIONS-GAP.md`.
 
-**Plans**: 17 plans in 13 waves (planned 2026-09-25; revised the same day against cross-AI review round 1 — `07-REVIEWS.md`, all 15 CONFIRMED + 7 PLAUSIBLE findings — and again against round 2, all 16 CONFIRMED + operator-promoted P7R2-10 + PLAUSIBLE P7R2-18…20; 0/17 executed; **gap-replanned 2026-09-26** after 07-10 stopped PARTIAL on P01 — 07-10 … 07-17 revised in place for the operator's gate-slot swap to P10, the amended P-01 barrier rule and per-import barrier re-verify, recorded in `07-SAMPLE-AMENDMENT.md` A1 when 07-10 runs; 9/17 executed at that point)
+**Plans**: 17 plans in 13 waves (planned 2026-09-25; revised the same day against cross-AI review round 1 — `07-REVIEWS.md`, all 15 CONFIRMED + 7 PLAUSIBLE findings — and again against round 2, all 16 CONFIRMED + operator-promoted P7R2-10 + PLAUSIBLE P7R2-18…20; 0/17 executed; **gap-replanned 2026-09-26** after 07-10 stopped PARTIAL on P01 — 07-10 … 07-17 revised in place for the operator's gate-slot swap to P10, the amended P-01 barrier rule and per-import barrier re-verify, recorded in `07-SAMPLE-AMENDMENT.md` A1 when 07-10 runs; 9/17 executed at that point; **UAT gap round planned 2026-09-28**: 07-18 … 07-23 (6 plans, 5 waves) close the three 07-UAT gaps under the operator decisions in `07-UAT.md` § Operator Decisions)
 
 Plans:
 - [x] 07-01-PLAN.md — evidence map registered before the run (D-31) + argued D-13 amendment of the `unsorted` rule
@@ -1617,6 +1617,12 @@ Plans:
 - [x] 07-15-PLAN.md — GATED: Jellyfin first, one Music Assistant sync last, then the MA fs-sync barrier lifted; D-28, E6 second measurement (D-05), D-24 after
 - [x] 07-16-PLAN.md — GATED: project snapshot register + one-gate mechanical prune (D-19)
 - [x] 07-17-PLAN.md — GATED: evidence assembled for /gsd-verify 07 (no verdict), beets.md closure, operator trust verdict (D-31)
+- [ ] 07-18-PLAN.md — GAP (07-UAT gap 3, OD-1): GATED: P04 backed out (UNDO IMPORT + partial state.pickle surgery), P02 kept; round fence `@pre-07-18`
+- [ ] 07-19-PLAN.md — GAP (07-UAT gaps 1-3, OD-2): fetchart (CAA cover.jpg, no embed) + preferred.media in the repo config and `check-beets-config.sh`, proven in a throwaway
+- [ ] 07-20-PLAN.md — GAP (OD-2): GATED: deploy the config to appdata (drift green) + NOW 117 cover.jpg backfill, one album
+- [ ] 07-21-PLAN.md — GAP (07-UAT gaps 1, 3): GATED: Jellyfin — Apple Music off for MusicAlbum, NOW 117 Primary replaced (image-only), P04 dropped
+- [ ] 07-22-PLAN.md — GAP (07-UAT gaps 2-3): GATED: Music Assistant — one fs sync drops P04, refresh album 167, D-28 control row
+- [ ] 07-23-PLAN.md — GAP: GATED: end-state re-measure, operator view + count re-confirm, closure evidence into 07-UAT.md (no verdict)
 **Research**: not needed — the diff is a comparison over two `ffprobe` datasets, and the undo path
 is ZFS rollback plus a documented `incremental` state reset. The compilation and multi-disc cases
 are already covered by the Phase 6 config work; this phase runs them, it does not investigate them.
