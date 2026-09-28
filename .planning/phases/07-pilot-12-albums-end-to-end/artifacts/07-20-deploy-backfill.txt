@@ -203,3 +203,11 @@ Options:  deploy-and-backfill (Recommended) | deploy-only | hold
           Any other answer normalises to hold.
 
 (Answer and disposition lines are written here by the continuation executor.)
+
+OPERATOR ANSWER (2026-09-28T11:54:15Z, recorded by the continuation executor; answered via AskUserQuestion with
+DEF-07-19-05 and DEF-07-19-04 shown explicitly), verbatim: "deploy-and-backfill (Recommended)"
+DISPOSITION: deploy-and-backfill
+
+--------------------------------------------------------------------------------
+## B — DEPLOY
+--------------------------------------------------------------------------------
