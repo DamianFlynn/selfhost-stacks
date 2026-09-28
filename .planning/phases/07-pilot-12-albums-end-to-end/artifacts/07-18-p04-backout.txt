@@ -122,3 +122,16 @@ output kept at atlantis /root/phase07-0718/fence-0718.{sh,out}), 2026-09-28T09:2
     fast/appdata/arrs@pre-07-18 used 565,248; `written@pre-07-pilot` of it 223,690,752
     pool avail: tank 5,955,690,302,368 B; fast 1,425,339,154,432 B.
 FENCE: PASS (tank/media/Music@pre-07-18 2026-09-28T09:22:51Z, fast/appdata/arrs@pre-07-18 2026-09-28T09:22:51Z; safety copies sha-equal)
+
+## GATE (Task 2) — presented, answer pending
+
+Pre-presentation re-read (library.db mode=ro, 2026-09-28T09:24:21Z, rc 0): LIBRARY items 197, albums 9; album 9
+  Benson Boone / American Heart c33163f3-6217-4dc8-8e88-65f623b62c9b, 10 items, still PRESENT; album 2 c0df8104…
+  10 items. library.db 2ff94600… and state.pickle d1958008… unchanged since § A.
+Presented to the operator: act on P04's staged folder `Benson_Boone_-_American_Heart-WEB-2025-BENSONBOONE`
+  (folder 8c4fb033…, session ecac6a1b-979a-4e0c-a506-e362ce71b9f0), with the bold warning that P02's folder
+  `Benson Boone-American Heart-24BIT-44KHZ-WEB-FLAC-2025-OBZEN-xpost` also displays "American Heart" and that UNDO
+  there removes the album the operator chose to KEEP; the UI does not confirm which album it undoes
+  (DEF-07-12-04/05). UNDO IMPORT covers tree + DB, not state.pickle (DEF-07-11-01); the executor then runs the
+  partial state surgery with beets-flask stopped ~30 s. Staged-copy question (DEF-07-12-04). Fence as § B.
+Awaiting: the operator presses UNDO IMPORT on P04's folder page, then answers undo-unstage / undo-keep-staged / hold.
