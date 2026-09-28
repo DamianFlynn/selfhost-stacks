@@ -38,6 +38,10 @@ include:
   - teslamate-db.yaml
   - teslamate.yaml
   - teslamate-grafana.yaml
+  # Read-only REST API over the TeslaMate database, added 2026-09-28 so Dawarich can import
+  # completed drives. Dawarich talks to TeslaMateApi, never to TeslaMate itself. It has NO
+  # router and NO published port on purpose -- its read endpoints are unauthenticated.
+  - teslamateapi.yaml
 
 ########################### VOLUMES
 # Plain named volumes, as upstream. /mnt/fast/appdata is NOT a mountpoint

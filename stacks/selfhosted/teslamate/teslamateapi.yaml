@@ -1,0 +1,65 @@
+# TeslaMateApi - read-only REST API over TeslaMate's database
+# https://github.com/tobiasehlert/teslamateapi
+#
+# WHY THIS EXISTS: Dawarich's TeslaMate integration does NOT talk to TeslaMate. It talks to
+# TeslaMateApi, a separate companion project -- Dawarich's own setup label is literally
+# "Setup guide (TeslaMateApi v1.25.0 or newer)". Without this container the integration has
+# nothing to connect to, which is not obvious from either UI.
+#
+# What Dawarich gets from it: COMPLETED DRIVES ONLY, synced once a day. Dawarich's own help
+# text: "Current drives and parked positions are not available through TeslaMateApi." So this
+# backfills the car's trip history; it is not a live tracker. Live position already reaches
+# Dawarich by a different path entirely (Home Assistant -> Dawarich, tracker_id "Kitt").
+
+services:
+  teslamateapi:
+    # renovate: datasource=docker depName=tobiasehlert/teslamateapi
+    image: tobiasehlert/teslamateapi:1.25.0
+    container_name: teslamateapi
+    restart: unless-stopped
+    # Small Go binary that only queries Postgres. 128m is generous.
+    mem_limit: 128m
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      # Reaches the database. Note the DB's compose SERVICE name is `database`
+      # (container_name teslamate-db), which is why DATABASE_HOST below is `database`.
+      - teslamate
+      # Dawarich lives in a different compose project and reaches this container by name
+      # over the shared proxy network: http://teslamateapi:8080
+      - t3_proxy
+    depends_on:
+      database:
+        condition: service_healthy
+    environment:
+      - DATABASE_USER=teslamate
+      - DATABASE_NAME=teslamate
+      - DATABASE_HOST=database
+      - DATABASE_PASS=${TESLAMATE_DB_PASS:?TESLAMATE_DB_PASS must be set in .env}
+      # Same key TeslaMate itself uses -- it decrypts the stored Tesla tokens.
+      - ENCRYPTION_KEY=${TESLAMATE_ENCRYPTION_KEY:?TESLAMATE_ENCRYPTION_KEY must be set in .env}
+      - TZ=${TZ:-Europe/Dublin}
+      # MQTT is for live data only. Dawarich takes completed drives from the database, so
+      # there is nothing to gain from a broker connection -- and plenty to lose: TeslaMate
+      # deliberately shares HOME ASSISTANT's broker (see compose.yaml departure 4), so a
+      # second subscriber here would add coupling to HA for no benefit.
+      - DISABLE_MQTT=true
+      # ─── SAFETY: this API can command the car. Keep every one of these off. ────────────
+      # Upstream defaults ENABLE_COMMANDS and every COMMANDS_* to false, but this is stated
+      # explicitly because the surface includes POST /api/v1/cars/:id/wake_up and
+      # /command/:Command -- and the standing estate rule is to LEAVE THE CAR ASLEEP.
+      # Waking it drains the battery and defeats TeslaMate's own sleep handling.
+      # Do not set any COMMANDS_* to true without a specific reason.
+      - ENABLE_COMMANDS=false
+    # ─── NO PORTS AND NO TRAEFIK LABELS, DELIBERATELY ───────────────────────────────────
+    # This is the security boundary for this service, so it is recorded rather than assumed.
+    # TeslaMateApi has NO authentication on its read endpoints: its API_TOKEN guards the
+    # command endpoints, and Dawarich confirms "Canonical TeslaMateApi read endpoints do not
+    # use its API_TOKEN". So anything that can reach port 8080 can read the car's complete
+    # drive and charge history, including every location it has ever been.
+    #
+    # It therefore gets NO Host() router and NO published port, and is reachable only by
+    # containers on t3_proxy. Do NOT give it a *.deercrest.info router "behind Authelia" as
+    # a shortcut: Authelia's access_control BYPASSES `^/api/.*$` for *.deercrest.info
+    # estate-wide, so a router would publish exactly the endpoints that matter, unauthenticated,
+    # to the internet. Verified in authelia/configuration.yml on 2026-09-28.
