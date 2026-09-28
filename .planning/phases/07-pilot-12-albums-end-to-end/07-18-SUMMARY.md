@@ -33,11 +33,11 @@ source is untouched.**
 
 ## What was done
 
-- **Task 1** (3300cbd, gate pre-read 20d2188) recorded the pre-state. That was 9 albums / 197 items, P04's state key
+- **Task 1** (ee350c3, gate pre-read d6429be) recorded the pre-state. That was 9 albums / 197 items, P04's state key
   PRESENT, P02's per-file manifest `171e1202…`, and the P04 source equal to its 07-07 rows. It then took the
   round fence `@pre-07-18` on both datasets in one step, with safety copies that were sha-equal, and registered it.
 - **Task 2 gate:** the operator pressed UNDO IMPORT and answered `undo-unstage (Recommended)`. This is recorded
-  verbatim with `DISPOSITION: undo-unstage` (d796a5c).
+  verbatim with `DISPOSITION: undo-unstage` (5e262cb).
 - **Verified before any write (§ D):** the `run_import_undo` job carried P04's folder hash `8c4fb033…`, not
   P02's `5fb195c7…` (09:29:41Z–09:29:42Z). Album 9 and its 10 items were absent, leaving 8 albums / 187 items.
   The P02 DB digests (row, items, both flexattr tables) and the per-file manifest (size, sha256, mtime, ctime)
@@ -81,5 +81,5 @@ snapshots and re-lists.
 
 ## Self-Check: PASSED
 
-- Commits 3300cbd, 20d2188, d796a5c and eb74f36 are present in `git log`.
+- Commits ee350c3, d6429be, 5e262cb and eb74f36 are present on main (the first three were created as 3300cbd, 20d2188 and d796a5c. A concurrent session's `pull --rebase` at 09:3xZ rewrote them with identical content).
 - The artifact and ledger lines are present, and the plan's Task 2 and Task 3 `<automated>` verify both exit 0.
