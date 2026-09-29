@@ -40,7 +40,7 @@ services:
     # measured 1720 MB 2026-09-06; cap bounds a runaway, not steady state.
     mem_limit: 6g
     # renovate: datasource=docker depName=ghcr.io/immich-app/immich-server
-    image: ghcr.io/immich-app/immich-server:v3.2.2
+    image: ghcr.io/immich-app/immich-server:v3.2.4
     pull_policy: always
     env_file:
       - /mnt/fast/stacks/stacks/selfhosted/immich/.env
@@ -89,7 +89,7 @@ services:
   immich-machine-learning:
     container_name: immich_machine_learning
     # renovate: datasource=docker depName=ghcr.io/immich-app/immich-machine-learning
-    image: ghcr.io/immich-app/immich-machine-learning:v3.2.2
+    image: ghcr.io/immich-app/immich-machine-learning:v3.2.4
     pull_policy: always
     env_file:
       - /mnt/fast/stacks/stacks/selfhosted/immich/.env
