@@ -24,7 +24,7 @@
 
 services:
   grafana:
-    image: teslamate/grafana:4.2.0
+    image: teslamate/grafana:4.3.0
     container_name: teslamate-grafana
     hostname: grafana
     mem_limit: 512m
