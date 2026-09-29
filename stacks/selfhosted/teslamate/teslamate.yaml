@@ -31,7 +31,7 @@
 
 services:
   teslamate:
-    image: teslamate/teslamate:4.2.0
+    image: teslamate/teslamate:4.3.0
     container_name: teslamate
     hostname: teslamate
     # Upstream asks for >=1 GB. The cap bounds a runaway, not steady state.
