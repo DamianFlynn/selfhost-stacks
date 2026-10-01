@@ -157,7 +157,7 @@ services:
     # measured 912 MB 2026-09-06; cap bounds a runaway, not steady state
     mem_limit: 2g
     # renovate: datasource=docker depName=quay.io/docling-project/docling-serve
-    image: quay.io/docling-project/docling-serve:v1.35.0
+    image: quay.io/docling-project/docling-serve:v1.36.0
     pull_policy: always
     restart: unless-stopped
     environment:
