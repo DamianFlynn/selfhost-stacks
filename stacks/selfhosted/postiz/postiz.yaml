@@ -1,7 +1,7 @@
 services:
   postiz:
     profiles: ["dormant"]   # classified DORMANT 2026-09-25 -- see .planning/plans/service-classification.plan.md
-    image: ghcr.io/gitroomhq/postiz-app:v2.24.0
+    image: ghcr.io/gitroomhq/postiz-app:v2.25.0
     container_name: postiz
     # measured 969 MB 2026-09-06; cap bounds a runaway, not steady state
     mem_limit: 2g
