@@ -1,7 +1,7 @@
 services:
   teleport:
     profiles: ["dormant"]   # classified DORMANT 2026-09-25 -- see .planning/plans/service-classification.plan.md
-    image: public.ecr.aws/gravitational/teleport-distroless:18.11.2
+    image: public.ecr.aws/gravitational/teleport-distroless:18.11.3
     container_name: teleport
     restart: unless-stopped
     hostname: teleport
