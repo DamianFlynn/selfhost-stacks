@@ -257,7 +257,7 @@ services:
     # the actual mitigation for the DuckDuckGo/Brave/Startpage CAPTCHAs and 429s this
     # instance was serving on 2026.6.23. `impersonate` is set in engine code and is NOT
     # admin-configurable, so the fix comes from the image, never from settings.yml.
-    image: searxng/searxng:2026.9.25-d8ae3abd5
+    image: searxng/searxng:2026.10.4-d48c4b555
     pull_policy: always
     restart: unless-stopped
     cap_add:
