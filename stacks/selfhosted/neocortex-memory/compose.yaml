@@ -77,7 +77,7 @@ services:
     # (MEMORY_API_SERVER_EMBEDDINGS=1), so steady state is dominated by the ONNX session, not by
     # request concurrency. TODO-315's acceptance records the p50 of 20 server-side-embedded
     # searches and the container's peak RSS; set this from that number and delete this note.
-    mem_limit: 2g
+    mem_limit: 4g
     mem_reservation: 512m
     read_only: true
     tmpfs:
