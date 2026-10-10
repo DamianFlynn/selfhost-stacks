@@ -131,7 +131,7 @@ services:
     # This digest is build-923, revision 54dcc2f3, built 2026-09-26T15:47:38Z.
     # `latest` moves 10-20 times a day, so a tag pin here would be meaningless.
     # renovate: datasource=docker depName=ghcr.io/silo-server/silo-server
-    image: ghcr.io/silo-server/silo-server@sha256:78c3911f083d2bd46353150f6017c8900478b33d512fb8d7462182c63a00718a
+    image: ghcr.io/silo-server/silo-server@sha256:621ddece70df36d9168a439dd1b88f43d5b9f389cefae1a34598290db64e0a2f
     container_name: silo
     restart: unless-stopped
     # Bounds a runaway. Chosen deliberately low because LXC 100 had ~8 GiB available of
