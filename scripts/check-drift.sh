@@ -34,8 +34,10 @@
 #   DRIFT_GIT_FETCH=1 is passed deliberately (off by default - see below). The ONLY byte it ever
 #   writes is the node-exporter textfile in --prom mode, into DRIFT_PROM_DIR.
 #
-# V1 IS ALERT-ONLY (D-01). It detects and it tells you. Enabling an auto-apply path later is a flag
-#   flip at IMAGE_DRIFT_AUTOAPPLY below, not a rewrite. The apply path is deliberately NOT written.
+# V1 IS ALERT-ONLY (D-01). It detects and it tells you. The apply path was written SEPARATELY as
+#   scripts/deploy-stacks.sh (quick 261022-025), with its own gate, dry-run, hold list and rollback,
+#   as the AUTO-APPLY SEAM block below demanded; it runs this file as its classifier.
+#   IMAGE_DRIFT_AUTOAPPLY is no longer the switch, and flipping it does nothing.
 #
 # ---------------------------------------------------------------------------------------------
 # HOW THE PIN IS RESOLVED - the crux, and every step of it exists because a MEASURED fact on this
@@ -244,6 +246,7 @@ set -euo pipefail
 # i.e. it would become a DEPLOY TOOL RUNNING ON AN HOURLY TIMER WITH NOBODY WATCHING. That is a
 # separate decision with its own blast radius (D-03), and it needs its own gate, its own dry-run
 # and its own rollback before it is written. Do not write the apply path here to "save a step".
+# That path now exists as scripts/deploy-stacks.sh (quick 261022-025); this constant is not its switch.
 IMAGE_DRIFT_AUTOAPPLY=0
 
 # --- shell/platform guard (exit 2 - environment error, not a failed assertion) -----------------

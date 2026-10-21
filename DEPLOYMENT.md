@@ -237,6 +237,8 @@ detection.
 > ⛔ **It alerts. It does not deploy.** The pull and the recreate are still manual and deliberately
 > so (v1 is alert-only). Nothing will clear a drift alert but a human.
 
+The apply half is `scripts/deploy-stacks.sh` — dry-run by default, apply only via the systemd drop-in, held services stay manual — see [stacks/selfhosted/monitoring/README.md](stacks/selfhosted/monitoring/README.md) § Deploy agent.
+
 Two limits worth knowing before you trust a green:
 
 - **A floating tag that has moved upstream reads as no drift** — `:latest`, `:main` and two-part

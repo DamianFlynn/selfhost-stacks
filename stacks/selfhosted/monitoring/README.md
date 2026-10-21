@@ -284,6 +284,8 @@ mounts):
 
 ## Image drift detection
 
+check-drift.sh stays alert-only; the apply half is § Deploy agent.
+
 **The question this answers:** *which containers are running an image that git no longer pins?*
 
 Renovate automerges image-tag PRs into this repo at any hour and **nothing deploys** — the host
@@ -433,6 +435,188 @@ exists after you message it once.
 reported health `unhealthy`. Note that **`docker ps` showed it `Up 2 weeks (health: starting)`
 while `docker inspect` on the same container id showed `exited`, code 137, finished 2026-09-02** —
 sixteen days dead behind a `docker ps` line that said it was up. Believe `inspect`.
+
+## Deploy agent
+
+**The question this answers:** *what would it take to get the drift `check-drift.sh` reports onto
+the host — and which of it should never go there unattended?*
+
+### What it is
+
+`scripts/deploy-stacks.sh` is the apply half that § Image drift detection deliberately left
+unwritten. **Drift is the trigger:** it runs `check-drift.sh` in report mode and consumes its
+`IMAGE_DRIFT` lines and `📊 Summary` block, so the two can never disagree about what has drifted. It
+then deploys **only the drifted services**, grouped per compose project (`pull` + `up -d
+--no-deps`, with `-p` and `--project-directory` read from the container's own labels so a recreate
+never mints a second project). **It is DRY-RUN BY DEFAULT.** It exists because on 2026-10-21 the host
+was 101 commits behind with ~40 containers drifted, and a batch pull then hit **ENOSPC on the 126G
+LXC rootfs** because nothing ever pruned the old images.
+
+### The instrument
+
+```bash
+ssh root@172.16.1.159 'bash /mnt/fast/stacks/scripts/deploy-stacks.sh'               # dry-run: what would deploy, what is held
+ssh root@172.16.1.159 'bash /mnt/fast/stacks/scripts/deploy-stacks.sh --stack arrs'  # one compose project only
+ssh root@172.16.1.159 'bash /mnt/fast/stacks/scripts/deploy-stacks.sh --help'        # the full contract
+```
+
+`--apply` exists, but the unattended path to it is the systemd drop-in (D3 below), **not** a flag
+someone types. There is no environment variable that turns apply on.
+
+| Exit | Meaning |
+|------|---------|
+| 0 | run completed, no failure — **a dry-run with pending drift is 0**; the metric is the signal |
+| 1 | a counted failure, or could-not-look (classifier red, docker down, unknown hold name) |
+| 2 | usage / environment — bash < 4, non-GNU df, unknown flag, unknown `--stack`, malformed knob |
+| 3 | **REFUSED** — `/mnt/fast/stacks` is dirty or HEAD is not an ancestor of `origin/main` |
+| 4 | another run holds `/run/selfhost-deploy.lock` |
+
+> ⛔ **On REFUSED the agent never stashes, resets, checks out or overwrites.** The host has carried
+> uncommitted production edits before. A human commits the edit or deliberately discards it.
+
+### Hold list
+
+Held drift prints `pending (held: <reason>)` and is cleared **only by a human** following the
+procedure. **The script's `DEPLOY_HOLD` array is authoritative; this table is a mirror.**
+
+| Container | Reason |
+|-----------|--------|
+| `jellyfin` | major-upgrade procedure; HW transcode stays OFF (D-30); Renovate manual-review |
+| `immich_server` | Immich upgrade procedure — server/ml/postgres/redis move together |
+| `immich_machine_learning` | Immich upgrade procedure — server/ml/postgres/redis move together |
+| `immich_postgres` | Immich upgrade procedure — server/ml/postgres/redis move together |
+| `immich_redis` | Immich upgrade procedure — server/ml/postgres/redis move together |
+| `karakeep-meilisearch` | Meilisearch dump/upgrade procedure; never a bare image bump |
+| `couchdb` | Obsidian LiveSync replicates live; Renovate manual-review — deploy by hand, check `_up` and `doc_count` |
+| `neocortex-memory-api` | Node bump needs `docker compose run --rm deps` then `/v1/health` |
+| `beets` | music project #305 — manual; Renovate manual-review |
+| `beets-flask` | music project #305 — manual; Renovate manual-review |
+
+`immich_kiosk` is **deliberately not held** — it is stateless and expected to deploy.
+
+**To ADD a hold** without a code change, set `DEPLOY_HOLD_EXTRA` (space- or comma-separated) in a
+drop-in `Environment=` line. **Removing a built-in hold is a code change reviewed in git, by
+design** — no knob does it. Every hold name must match a container on the host, or (for `beets`,
+which only exists while `run --rm` is running) a `container_name:` declared in the repo; **a hold
+that matches nothing is fatal**, because a renamed container would otherwise deploy straight past it.
+
+### Quiet hours
+
+`dispatcharr`, `seerr`, `audiobookshelf`, `wizarr`, `jellystat` and `jellystat-db` (the media stack;
+`jellyfin` itself is held) deploy only inside `DEPLOY_MEDIA_WINDOW`, default **`03-06` in the LXC's
+local time** (start inclusive, end exclusive). LXC 100 runs **UTC**. Outside the window they are
+**`QUIET-DEFERRED` — pending, not failed**; the next run inside the window takes them.
+`DEPLOY_MEDIA_EXTRA` adds names to the class.
+
+### Disk guard and pruning
+
+Before each stack the agent measures free space on `/` **and** on docker's `DockerRootDir`, and uses
+the smaller. It requires the **20 GiB D-17 floor + 10 GiB headroom = 30 GiB**
+(`DEPLOY_DISK_HEADROOM_BYTES` may raise the headroom, never lower it). In apply mode, below that it
+runs `docker image prune -af` and re-measures; still below, it **stops the run** — no further stacks
+— and sets `selfhost_deploy_disk_guard_tripped`. After **every** stack, success or failure, it prunes
+again.
+
+> ⚠️ **`docker image prune -af` removes every image no container references.** That includes one-shot
+> `run --rm` images (they re-pull next time) and **the previous image of anything just upgraded**.
+> There is no local rollback image. **Rollback is a `git revert` of the bump on `main`**; the next
+> apply run then sees the old tag as drift and deploys it.
+
+### The metrics
+
+Written atomically to `/mnt/fast/appdata/monitoring/node-exporter-textfile/deploy.prom`. Every name
+starts `selfhost_deploy_`, so a grep never confuses them with `selfhost_image_drift_`.
+
+| Metric | Meaning |
+|--------|---------|
+| `selfhost_deploy_last_run_timestamp_seconds` | this run completed (dry-run and refused runs included) |
+| `selfhost_deploy_last_success_timestamp_seconds` | last run with zero failures and not refused |
+| `selfhost_deploy_apply_mode` | 1 apply, 0 dry-run |
+| `selfhost_deploy_refused` | 1 when the checkout gate refused |
+| `selfhost_deploy_refused_reason{reason}` | `dirty` and/or `not-fast-forward` |
+| `selfhost_deploy_commits_behind` | commits behind `origin/main` after this run (fetched — not a lower bound) |
+| `selfhost_deploy_deployed_services` | services pulled and recreated by this run |
+| `selfhost_deploy_pending_services` | deployable but not deployed: dry-run/refused would-deploy, run-budget and disk-guard deferrals |
+| `selfhost_deploy_held_services` | drifted services on the hold list |
+| `selfhost_deploy_held_service{name,reason}` | one series per held drifted container |
+| `selfhost_deploy_quiet_deferred_services` | drifted media-class services waiting for the window |
+| `selfhost_deploy_failed_stacks` | stacks (or unattributable drifted containers) that failed |
+| `selfhost_deploy_disk_guard_tripped` | 1 when the disk guard stopped the run |
+
+> ⚠️ **`last_run` vs `last_success`.** `last_run` is written on every run that got past the
+> classifier, refused included, so the dry-run observation period also proves the timer. On a
+> **could-not-look** (classifier red, docker down, unknown hold name, lock busy) the file is left
+> **byte-identical**, so it goes stale and `Deploy agent is stale` fires. `last_success` is carried
+> forward from the previous file when a run is not a success, so `max()` never goes no-data.
+
+### ⚠️ The timer period and the staleness threshold are ONE decision
+
+`Deploy agent is stale` fires at **7500 s**, and that number is a sum of three terms held in three
+files: **35 min** (`selfhost-deploy.timer`: `OnCalendar=*:0/30` + `RandomizedDelaySec=5m`) **+ 60 min**
+(`selfhost-deploy.service`: `TimeoutStartSec=60min`; `deploy-stacks.sh`'s `RUN_BUDGET_SECONDS=1200`
+and per-stack timeouts keep a run inside it) **+ 30 min** (one whole missed run) **= 125 min =
+7500 s**. **Change any term and you must change 7500 in `rules.yaml` in the same commit.** All three
+files say so.
+
+### Known limits
+
+1. **Dry-run measures drift against HEAD.** When the host is behind, apply pulls first and can
+   deploy **more** than the dry-run listed. The dry-run prints the commits and the compose files a
+   pull would change, so the difference is visible.
+2. **Floating tags and digest-pinned mismatches are never deployed** — `check-drift.sh` does not
+   call them `IMAGE_DRIFT`.
+3. **A red `check-drift.sh` blocks every deploy** — e.g. a new unresolvable container. Fail closed,
+   by design.
+
+### ⛔ Gated host steps — NOT EXECUTED BY THIS CHANGE
+
+Numbered **D0–D3** so they cannot be confused with the drift section's G0–G4. Nothing in the
+commits that added the agent was installed, enabled or applied on the host.
+
+#### D0 — pull on the host · **NOT EXECUTED BY THIS CHANGE**
+
+```bash
+ssh root@172.16.1.159 'cd /mnt/fast/stacks && git pull --ff-only'
+```
+
+#### D1 — install the service and timer (this is DRY-RUN) · **NOT EXECUTED BY THIS CHANGE**
+
+```bash
+ssh root@172.16.1.159
+cp /mnt/fast/stacks/scripts/systemd/selfhost-deploy.{service,timer} /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now selfhost-deploy.timer
+systemctl list-timers selfhost-deploy.timer          # confirm it is scheduled
+systemctl start selfhost-deploy.service              # one immediate run — dry-run
+cat /mnt/fast/appdata/monitoring/node-exporter-textfile/deploy.prom
+```
+
+#### D2 — recreate grafana so the deploy rules load · **NOT EXECUTED BY THIS CHANGE**
+
+**Only after D1.** Loaded before the timer has written `deploy.prom`, `Deploy agent is stale`
+(`noDataState: Alerting`) fires immediately — correctly, because there is no data — exactly as the
+drift stale rule does before G3.
+
+```bash
+ssh root@172.16.1.159 'cd /mnt/fast/stacks && docker compose -f stacks/selfhosted/monitoring/compose.yaml up -d grafana'
+```
+
+#### D3 — enable apply · **NOT EXECUTED BY THIS CHANGE** · only after watching several dry runs
+
+```bash
+ssh root@172.16.1.159
+install -D -m 0644 /mnt/fast/stacks/scripts/systemd/selfhost-deploy-apply.conf \
+  /etc/systemd/system/selfhost-deploy.service.d/apply.conf
+systemctl daemon-reload
+systemctl cat selfhost-deploy.service | grep ExecStart    # must show --apply
+```
+
+The two ways back:
+
+```bash
+rm /etc/systemd/system/selfhost-deploy.service.d/apply.conf && systemctl daemon-reload   # back to dry-run
+systemctl disable --now selfhost-deploy.timer                                            # stop entirely
+```
 
 ## Backup
 
