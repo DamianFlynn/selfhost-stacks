@@ -120,7 +120,7 @@ services:
 
   tika:
     # renovate: datasource=docker depName=apache/tika
-    image: apache/tika:3.3.1.0-full
+    image: apache/tika:3.3.3.0-full
     container_name: paperless_tika
     restart: unless-stopped
     networks:

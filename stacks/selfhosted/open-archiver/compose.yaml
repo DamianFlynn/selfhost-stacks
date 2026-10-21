@@ -103,7 +103,7 @@ services:
   
   tika:
     profiles: ["dormant"]   # classified DORMANT 2026-09-25 -- see .planning/plans/service-classification.plan.md
-    image: apache/tika:3.3.1.0-full
+    image: apache/tika:3.3.3.0-full
     container_name: open-archiver_tika
     hostname: tika
     restart: unless-stopped
