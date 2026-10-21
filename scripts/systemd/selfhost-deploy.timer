@@ -1,0 +1,42 @@
+# selfhost-deploy.timer — every-30-minute schedule for selfhost-deploy.service.
+#
+# NOT INSTALLED BY THE COMMIT THAT ADDED IT. Installing it is gated host step D1 in
+# stacks/selfhosted/monitoring/README.md § Deploy agent. Installed alone it runs DRY-RUN; apply
+# needs the separate drop-in selfhost-deploy-apply.conf (gated step D3).
+#
+# ⚠️ THE PERIOD AND THE STALENESS THRESHOLD ARE ONE DECISION, NOT TWO. DO NOT TUNE EITHER ALONE.
+#
+#   The Grafana rule `Deploy agent is stale` in
+#   stacks/selfhosted/monitoring/grafana/provisioning/alerting/rules.yaml fires at
+#
+#       time() - max(selfhost_deploy_last_run_timestamp_seconds) > 7500
+#
+#   and 7500 is the sum of three terms held in three files:
+#
+#       35 min   this timer: OnCalendar=*:0/30 + RandomizedDelaySec=5m — worst gap between starts
+#     + 60 min   selfhost-deploy.service: TimeoutStartSec=60min — worst runtime before last_run
+#                is written (scripts/deploy-stacks.sh's RUN_BUDGET_SECONDS=1200 and per-stack
+#                timeouts are what keep a run inside that cap)
+#     + 30 min   one whole missed run of slack
+#     = 125 min = 7500 s
+#
+#   A THRESHOLD BELOW THAT FALSE-ALARMS on an ordinary long run; one far above it HIDES A DEAD
+#   TIMER, which is the failure the rule exists to catch. Change any term and you MUST change 7500
+#   in rules.yaml in the SAME COMMIT, and vice versa. rules.yaml says so too.
+#
+# The 03-06 media quiet window (DEPLOY_MEDIA_WINDOW) gets six chances a night at this period.
+#
+# Persistent=true so a run missed while the host was down fires on the next boot — same reasoning
+# as selfhost-image-drift.timer, from which this unit's shape is copied.
+
+[Unit]
+Description=Every-30-minute git-driven deploy agent run
+Documentation=file:///mnt/fast/stacks/stacks/selfhosted/monitoring/README.md
+
+[Timer]
+OnCalendar=*:0/30
+RandomizedDelaySec=5m
+Persistent=true
+
+[Install]
+WantedBy=timers.target

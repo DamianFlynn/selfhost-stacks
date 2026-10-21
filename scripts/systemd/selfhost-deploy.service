@@ -1,0 +1,36 @@
+# selfhost-deploy.service — the git-driven deploy agent (scripts/deploy-stacks.sh), as a oneshot.
+#
+# NOT INSTALLED BY THE COMMIT THAT ADDED IT. This file is a repo-side declaration; installing it is
+# gated host step D1 in stacks/selfhosted/monitoring/README.md § Deploy agent.
+#
+# AS SHIPPED IT RUNS DRY-RUN. The ExecStart below carries no --apply, and the script has no
+# environment variable that turns apply on. THE ONLY SWITCH TO APPLY is the drop-in
+# scripts/systemd/selfhost-deploy-apply.conf, installed to
+# /etc/systemd/system/selfhost-deploy.service.d/apply.conf (gated step D3). `systemctl cat
+# selfhost-deploy.service` shows which mode is live.
+#
+# EXIT 3 (REFUSED) AND EXIT 1 LEAVE THIS UNIT `failed` ON PURPOSE. Unlike check-drift.sh --prom,
+# whose non-zero would only duplicate a standing condition, these are conditions a human must act
+# on: a dirty or diverged checkout, a failed stack, a tripped disk guard, a red classifier. The
+# deploy.prom gauges say the same thing to Grafana. A dry-run with pending drift exits 0.
+#
+# Shape copied from selfhost-image-drift.service.
+
+[Unit]
+Description=Git-driven deploy agent: pull + recreate drifted services (dry-run unless the apply drop-in is installed)
+Documentation=file:///mnt/fast/stacks/stacks/selfhosted/monitoring/README.md
+After=docker.service network-online.target
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+# git under systemd has no HOME; without it the root gitconfig (safe.directory) is not read.
+Environment=HOME=/root
+ExecStart=/mnt/fast/stacks/scripts/deploy-stacks.sh
+# Runtime cap. ONE TERM of the 7500 s staleness threshold in
+# stacks/selfhosted/monitoring/grafana/provisioning/alerting/rules.yaml (`Deploy agent is stale`):
+# 35 min timer gap + 60 min this cap + 30 min one missed run = 125 min = 7500 s. The script's
+# RUN_BUDGET_SECONDS (20 min) and per-stack timeouts keep a run inside it. Change this and you MUST
+# change 7500 in the same commit — see selfhost-deploy.timer.
+TimeoutStartSec=60min

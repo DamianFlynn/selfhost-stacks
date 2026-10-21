@@ -1,6 +1,8 @@
-# Grafana provisioned alert rules for the image-drift instrument.
+# Grafana provisioned alert rules for the image-drift instrument (group `image-drift`) and the
+# deploy agent, scripts/deploy-stacks.sh (group `deploy`).
 #
-# ⚠️ `noDataState: Alerting` ON ALL THREE RULES IS THE FAIL-CLOSED LEVER, IN GRAFANA'S VOCABULARY.
+# ⚠️ `noDataState: Alerting` ON ALL THREE `image-drift` RULES IS THE FAIL-CLOSED LEVER, IN GRAFANA'S
+#    VOCABULARY. (The `deploy` group gives it to its stale rule only — see that group's comment.)
 #    It is not a style choice and it must not be relaxed to OK or NoData "to reduce noise".
 #
 #    Grafana's DEFAULT for a rule with no data is NoData, which does not notify. So without this
@@ -27,6 +29,13 @@
 #    scripts/systemd/selfhost-image-drift.timer. Hourly + RandomizedDelaySec=10m means two healthy
 #    runs land at most 70 minutes apart; 7200s adds one whole missed run of slack. Change the timer
 #    period and you MUST change this number in the same commit, and vice versa. Both files say so.
+#
+# ⚠️ THE 7500s IN THE `deploy` GROUP'S STALE RULE IS LIKEWISE ONE DECISION ACROSS THREE FILES:
+#    scripts/systemd/selfhost-deploy.timer (OnCalendar=*:0/30 + RandomizedDelaySec=5m = 35 min worst
+#    gap), scripts/systemd/selfhost-deploy.service (TimeoutStartSec=60min runtime cap) and
+#    scripts/deploy-stacks.sh (RUN_BUDGET_SECONDS + per-stack timeouts, which keep a run inside that
+#    cap). 35 + 60 + one whole missed run of 30 = 125 min = 7500 s. Change any term and you MUST
+#    change 7500 in the same commit. The timer says so too.
 
 apiVersion: 1
 
@@ -58,7 +67,9 @@ groups:
             Run: ssh root@172.16.1.159 'bash /mnt/fast/stacks/scripts/check-drift.sh'
             for the per-container list (running tag -> declared tag).
 
-            Alert-only: nothing deploys itself, so only a human clears this.
+            Nothing deploys itself unless selfhost-deploy.timer runs with the apply drop-in
+            (scripts/systemd/selfhost-deploy-apply.conf), and held services are only ever cleared
+            by a human — see monitoring/README.md § Deploy agent.
             Why it exists, and the floating-tag limit: monitoring/README.md § Image drift detection.
         data:
           - refId: A
@@ -234,6 +245,218 @@ groups:
                       # OnCalendar/RandomizedDelaySec in selfhost-image-drift.timer are ONE
                       # decision. Do not tune either alone.
                       - 7200
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    type: last
+                    params: []
+
+  # ===============================================================================================
+  # deploy — scripts/deploy-stacks.sh (quick 261022-025). Runbook: monitoring/README.md § Deploy agent.
+  #
+  # noDataState (D-H): the STALE rule carries `Alerting` — it owns "deploy.prom is absent or frozen".
+  # The FAILED and REFUSED rules carry `OK` on purpose: an absent deploy.prom is ONE condition, and
+  # three pages for one cause trains the reader to ignore all three. That relaxation is safe only
+  # because every series those two rules read is written by the same atomic write as the stale
+  # rule's timestamp (verified against a real dry-run file when this group was added).
+  # ===============================================================================================
+  - orgId: 1
+    name: deploy
+    folder: Estate
+    interval: 5m
+    rules:
+
+      # -----------------------------------------------------------------------------------------
+      # 1. Deploy failed — a stack failed, or the disk guard stopped the run.
+      # -----------------------------------------------------------------------------------------
+      - uid: selfhost-deploy-failed
+        title: Deploy failed
+        condition: C
+        # No `for:` — each run is a discrete event, and the next run overwrites the gauges.
+        # noDataState OK: the stale rule owns an absent deploy.prom (D-H, group comment above).
+        noDataState: OK
+        execErrState: Alerting
+        isPaused: false
+        labels:
+          severity: critical
+          area: estate
+        annotations:
+          summary: >-
+            The last deploy run had {{ $values.A.Value }} failure(s) (failed stacks + disk guard).
+          description: >-
+            Run: ssh root@172.16.1.159 'journalctl -u selfhost-deploy.service -n 200'
+            A disk-guard trip STOPS the run before later stacks — they stay pending until free
+            space on / (and DockerRootDir) is back above the 20 GiB D-17 floor + 10 GiB headroom.
+            Runbook: monitoring/README.md § Deploy agent.
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 10800
+              to: 0
+            datasourceUid: PBFA97CFB590B2093
+            model:
+              refId: A
+              editorMode: code
+              expr: max(selfhost_deploy_failed_stacks) + max(selfhost_deploy_disk_guard_tripped)
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              range: false
+          - refId: C
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  evaluator:
+                    type: gt
+                    params:
+                      - 0
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    type: last
+                    params: []
+
+      # -----------------------------------------------------------------------------------------
+      # 2. Deploy refused — the checkout is dirty or not fast-forwardable.
+      # -----------------------------------------------------------------------------------------
+      - uid: selfhost-deploy-refused
+        title: Deploy refused (checkout not clean or not fast-forward)
+        condition: C
+        # noDataState OK: the stale rule owns an absent deploy.prom (D-H, group comment above).
+        noDataState: OK
+        execErrState: Alerting
+        isPaused: false
+        labels:
+          severity: warning
+          area: estate
+        annotations:
+          summary: >-
+            The deploy agent REFUSED to run: /mnt/fast/stacks is dirty or has diverged from
+            origin/main. Nothing deploys until a human resolves it.
+          description: >-
+            Run: ssh root@172.16.1.159 'git -C /mnt/fast/stacks status --short'
+            THE FIX IS TO COMMIT THE HOST EDIT OR DELIBERATELY DISCARD IT. THE AGENT NEVER STASHES
+            OR RESETS, BECAUSE THE HOST HAS CARRIED PRODUCTION-ONLY EDITS BEFORE.
+            Runbook: monitoring/README.md § Deploy agent.
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 10800
+              to: 0
+            datasourceUid: PBFA97CFB590B2093
+            model:
+              refId: A
+              editorMode: code
+              expr: max(selfhost_deploy_refused)
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              range: false
+          - refId: C
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  evaluator:
+                    type: gt
+                    params:
+                      - 0
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    type: last
+                    params: []
+
+      # -----------------------------------------------------------------------------------------
+      # 3. Deploy agent is stale — THE RULE THAT WATCHES THE DEPLOY TIMER.
+      # -----------------------------------------------------------------------------------------
+      - uid: selfhost-deploy-stale
+        title: Deploy agent is stale
+        condition: C
+        # No `for:` — the 7500s threshold IS the debounce.
+        noDataState: Alerting
+        execErrState: Alerting
+        isPaused: false
+        labels:
+          severity: critical
+          area: estate
+        annotations:
+          summary: >-
+            The deploy agent has not completed a run for {{ $values.A.Value }}s — the failed and
+            refused rules are now reading a frozen file.
+          description: >-
+            Run: ssh root@172.16.1.159 'systemctl list-timers selfhost-deploy.timer;
+            journalctl -u selfhost-deploy.service -n 100'
+            A stale deploy.prom after a could-not-look run is CORRECT: the script leaves the file
+            untouched so this rule fires.
+
+            This rule fires from the next Grafana restart until the timer is installed (gated host
+            step D1 in monitoring/README.md § Deploy agent), exactly as the drift stale rule does
+            for G3 — so install the timer BEFORE recreating Grafana.
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 10800
+              to: 0
+            datasourceUid: PBFA97CFB590B2093
+            model:
+              refId: A
+              editorMode: code
+              expr: time() - max(selfhost_deploy_last_run_timestamp_seconds)
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              range: false
+          - refId: C
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  evaluator:
+                    type: gt
+                    params:
+                      # 7500s = 35 min (timer period + jitter) + 60 min (service TimeoutStartSec)
+                      # + 30 min (one whole missed run). ONE decision with selfhost-deploy.timer,
+                      # selfhost-deploy.service and deploy-stacks.sh's run budget — see the
+                      # warning at the top of this file. Do not tune any term alone.
+                      - 7500
                   operator:
                     type: and
                   query:
