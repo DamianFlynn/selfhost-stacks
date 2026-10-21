@@ -444,6 +444,27 @@
       ]
     },
     {
+      "description": "LSIO arrs: LSIO tag scheme, versioning ONLY. Default docker versioning treats the '-lsNNN' suffix as a COMPATIBILITY suffix, so Renovate never proposed an update for these images -- the same bug fixed for beets below. Evidence: the Dependency Dashboard listed sonarr 4.0.16.2944-ls303, radarr 6.0.4.10291-ls294, prowlarr 2.3.0.5236-ls138 (and the other arr pins) with no update since they were pinned 2026-03-05, while sonarr 4.0.20, radarr 6.4.4 and prowlarr 2.6.5 exist. The optional fourth numeric group covers the .NET arrs' four-part versions; the optional 'v' covers bazarr; the '-rN' alternative covers qbittorrent's old '5.1.2-r3-ls421' form and the '_v[\\d.]+' alternative covers its newer '5.3.0_v2.1.2-ls484' form. sonarr's newest LSIO counter reset to -ls1, which is harmless because the upstream version components order before the revision. No matchUpdateTypes here because renovate-config-validator rejects combining it with versioning ('packageRules cannot combine both matchUpdateTypes and versioning'), so the default automerge/label rules continue to apply to these images. Both ghcr.io and lscr.io names are listed so a registry switch in any one compose file stays covered. Added 2026-10-21.",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "ghcr.io/linuxserver/sonarr",
+        "lscr.io/linuxserver/sonarr",
+        "ghcr.io/linuxserver/radarr",
+        "lscr.io/linuxserver/radarr",
+        "ghcr.io/linuxserver/prowlarr",
+        "lscr.io/linuxserver/prowlarr",
+        "ghcr.io/linuxserver/lidarr",
+        "lscr.io/linuxserver/lidarr",
+        "ghcr.io/linuxserver/bazarr",
+        "lscr.io/linuxserver/bazarr",
+        "ghcr.io/linuxserver/qbittorrent",
+        "lscr.io/linuxserver/qbittorrent"
+      ],
+      "versioning": "regex:^v?(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)(?:\\.(?<build>\\d+))?(?:-r\\d+|_v[\\d.]+)?-ls(?<revision>\\d+)$"
+    },
+    {
       "description": "beets (1 of 2): LSIO tag scheme, versioning ONLY. Default docker versioning treats the '-ls349' in '2.13.1-ls349' as a COMPATIBILITY suffix, so Renovate never proposed a single update for this image -- the Dependency Dashboard listed 2.5.1-ls295 with no update for months. This regex makes the LSIO build number a real version component; build (lsNNN) bumps are handled like PATCH and so still automerge. A packageRules object may NOT combine versioning with matchUpdateTypes (renovate-config-validator rejects it: 'packageRules cannot combine both matchUpdateTypes and versioning'), which is why versioning lives here alone and the manual-review rule is the separate object that follows. Keep the two together and in this order.",
       "matchDatasources": [
         "docker"
