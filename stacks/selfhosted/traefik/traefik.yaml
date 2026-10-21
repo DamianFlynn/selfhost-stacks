@@ -63,7 +63,9 @@ services:
       - --accessLog=true
       - --accessLog.filePath=/logs/access.log
       - --accessLog.bufferingSize=100 # Configuring a buffer of 100 lines
-      - --accessLog.filters.statusCodes=204-299,400-499,500-599
+      # Temporarily 200-299 (was 204-299) for remote-access RA-01: one week of successful
+      # responses for the skip-rule audit. Restored by RA-03 (projects/remote-access/PROJECT.md).
+      - --accessLog.filters.statusCodes=200-299,400-499,500-599
       - --providers.docker=true
       - --providers.docker.endpoint=tcp://socket-proxy:2375 # Enable for Socket Proxy. Disable otherwise.
       - --providers.docker.exposedByDefault=false
