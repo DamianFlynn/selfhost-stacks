@@ -374,7 +374,7 @@ services:
     # measured 372 MB 2026-09-06; cap bounds a runaway, not steady state
     mem_limit: 1g
     # renovate: datasource=docker depName=apache/tika
-    image: apache/tika:3.3.1.0-full
+    image: apache/tika:3.3.3.0-full
     pull_policy: always
     restart: unless-stopped
     networks:
