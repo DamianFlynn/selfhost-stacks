@@ -26,7 +26,7 @@ services:
   qbittorrent:
     hostname: "qbittorrent"
     container_name: qbittorrent
-    image: ghcr.io/linuxserver/qbittorrent:5.1.2-r3-ls421
+    image: ghcr.io/linuxserver/qbittorrent:5.3.0_v2.1.2-ls484
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped
