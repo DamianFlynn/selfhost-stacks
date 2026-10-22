@@ -78,7 +78,10 @@ services:
     # mitigation) so transcodes are CPU-side and bursty, and library scans
     # spike independently of playback.
     mem_limit: 3g
-    image: jellyfin/jellyfin:10.11.11
+    # 12.2 pinned to the dated build tag, not the moving `12.2`. Upgraded 2026-10-22 from 10.11.11
+    # with all plugins moved aside to plugins.pre12/ (configurations kept) and snapshot
+    # fast/appdata/media@pre-jellyfin12-20261022 as the rollback.
+    image: jellyfin/jellyfin:12.2.20261005-225228
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped
