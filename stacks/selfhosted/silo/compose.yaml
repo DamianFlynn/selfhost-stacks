@@ -226,8 +226,9 @@ services:
       - /mnt/fast/appdata/silo/artwork:/var/lib/silo/artwork
       - /mnt/fast/appdata/silo/compat:/var/lib/silo/compat
       # Transcode scratch. Bound to real disk on purpose — left unbound it lands on the
-      # container filesystem, i.e. LXC 100's 126 G ext4 root, which is the exact failure
-      # that once put 19 GB of Jellyfin transcode cache on / and emptied it.
+      # container filesystem, i.e. LXC 100's ext4 root, which is the exact failure that
+      # once put 19 GB of Jellyfin transcode cache on / and emptied it. The backing store
+      # is ZFS dataset `fast/appdata/silo` (LXC mp36), not root.
       # Deliberately NOT under /mnt/fast/transcode: that dataset carries a 50 G quota
       # sized for Jellyfin, and sharing it would let a Silo transcode starve a live TV
       # stream of its ENOSPC headroom.

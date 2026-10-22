@@ -46,7 +46,7 @@ services:
       - GF_SERVER_DOMAIN=teslamate-grafana.deercrest.info
       - GF_SERVER_ROOT_URL=https://%(domain)s/
     volumes:
-      - teslamate-grafana-data:/var/lib/grafana
+      - /mnt/fast/appdata/teslamate/grafana:/var/lib/grafana
     networks:
       - t3_proxy
       - teslamate

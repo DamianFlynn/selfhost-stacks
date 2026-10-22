@@ -10,9 +10,10 @@
 #      the database holds the vehicle's complete location history, and upstream
 #      explicitly warns its default setup is safe on a home network only.
 #   3. Upstream's `./import:/opt/app/import` relative bind would put runtime
-#      data inside the git working tree at /mnt/fast/stacks. Replaced with the
-#      named volume `teslamate-import`. To load a Tesla data export, copy it in
-#      with `docker cp <file> teslamate:/opt/app/import/`.
+#      data inside the git working tree at /mnt/fast/stacks. All state (db,
+#      grafana, import) instead binds into ZFS dataset `fast/appdata/teslamate`
+#      (LXC mp32, recordsize 16K). To load a Tesla data export, copy it into
+#      /mnt/fast/appdata/teslamate/import/.
 #   4. Upstream's bundled `mosquitto` service is REMOVED. TeslaMate and Home
 #      Assistant must share one MQTT broker to exchange vehicle data, and HA
 #      already runs one - so a private broker here would have meant HA could
@@ -43,11 +44,9 @@ include:
   # router and NO published port on purpose -- its read endpoints are unauthenticated.
   - teslamateapi.yaml
 
-########################### VOLUMES
-# Plain named volumes, as upstream. /mnt/fast/appdata is NOT a mountpoint
-# (see MEDIA.md 3), so a bind there would land on LXC 100's ext4 root just
-# as these do, with no dataset or quota to show for it.
-volumes:
-  teslamate-db:
-  teslamate-grafana-data:
-  teslamate-import:
+########################### STATE
+# No named volumes. db, grafana and import bind to /mnt/fast/appdata/teslamate/*,
+# which is its own ZFS dataset `fast/appdata/teslamate` (LXC mp32, recordsize 16K
+# for Postgres), snapshotted and sent to the backup pool nightly. /mnt/fast/appdata
+# itself is NOT a mountpoint (MEDIA.md 3): a bind there without its own dataset
+# lands on LXC 100's ext4 root. Moved off the named volumes by 261022-cg6.

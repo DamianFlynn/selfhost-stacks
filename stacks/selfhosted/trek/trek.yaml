@@ -24,7 +24,7 @@
 #
 # Notes:
 #   ENCRYPTION_KEY protects stored secrets. If it is lost or changed, the values
-#   it wrapped become unreadable. Back it up with the volumes.
+#   it wrapped become unreadable. Back it up with the data (fast/appdata/trek).
 #   read_only + cap_drop are upstream's own hardening; /tmp is a tmpfs so the
 #   app still has scratch space.
 
@@ -71,8 +71,8 @@ services:
       # Sibling *.deercrest.info hosts are not all HTTPS-only yet.
       - HSTS_INCLUDE_SUBDOMAINS=false
     volumes:
-      - trek_data:/app/data
-      - trek_uploads:/app/uploads
+      - /mnt/fast/appdata/trek/data:/app/data
+      - /mnt/fast/appdata/trek/uploads:/app/uploads
     networks:
       - t3_proxy
     read_only: true

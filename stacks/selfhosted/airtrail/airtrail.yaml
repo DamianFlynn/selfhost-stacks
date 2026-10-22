@@ -31,10 +31,10 @@ services:
       - POSTGRES_PASSWORD=${AIRTRAIL_DB_PASSWORD:?AIRTRAIL_DB_PASSWORD must be set in .env}
       - TZ=${TZ:-Europe/Dublin}
     volumes:
-      # Lands on LXC 100's ext4 root: /mnt/fast/appdata is NOT a mountpoint, only some
-      # children are datasets (see MEMORY fast-appdata-not-a-mountpoint). Accepted here
-      # because the payload is tiny -- upstream measures ~25 MB for 10,000 flights plus
-      # reference data, ~290 MB for Postgres itself. Revisit if / headroom tightens.
+      # ZFS dataset `fast/appdata/airtrail` (LXC mp35, recordsize 16K for Postgres),
+      # snapshotted and sent to the backup pool nightly. /mnt/fast/appdata itself is NOT
+      # a mountpoint, so this path only escapes LXC 100's ext4 root because of that
+      # dataset (moved by 261022-cg6).
       - /mnt/fast/appdata/airtrail/db:/var/lib/postgresql/data
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U ${AIRTRAIL_DB_USER:-airtrail} -d ${AIRTRAIL_DB_NAME:-airtrail}']

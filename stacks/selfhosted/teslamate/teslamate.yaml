@@ -65,7 +65,7 @@ services:
       - VIRTUAL_HOST=teslamate.deercrest.info
       - CHECK_ORIGIN=true
     volumes:
-      - teslamate-import:/opt/app/import
+      - /mnt/fast/appdata/teslamate/import:/opt/app/import
     networks:
       - t3_proxy
       - teslamate

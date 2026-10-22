@@ -564,7 +564,17 @@ echo ""
 # is a sibling of Music, not inside it, and the container has never been deployed at all), and four
 # ${APPDATA_DIR} monitoring/automation lines (a DIFFERENT variable, defined in `monitoring/.env`,
 # pointing at /mnt/fast/appdata — verified live: grafana resolves to
-# /mnt/fast/appdata/monitoring/grafana).
+# /mnt/fast/appdata/monitoring/grafana). *Corrected 2026-10-22:* "verified live" held for the
+# three MONITORING lines only. `automation/.env` never defined APPDATA_DIR, so the automation line
+# resolved to /automation/n8n-postgres on LXC 100's root — the audiobookshelf failure again.
+#
+# NINE BECAME EIGHT, 2026-10-22 (261022-cg6). The removed line is
+#       - ${APPDATA_DIR}/automation/n8n-postgres:/var/lib/postgresql
+# in `stacks/selfhosted/automation/n8n-postgres.yaml`. It is now the literal
+# /mnt/fast/appdata/automation/n8n-postgres, inside the `fast/appdata/automation` dataset, so §2's
+# driving grep can read it (it is not under Music). The three monitoring lines stay interpolated:
+# they resolve, and their host path is unchanged when `fast/appdata/monitoring` mounts at the same
+# place. This pin moved in the same commit as the line, per convention 5.
 #
 # The same-commit rule of convention 5 was NOT honoured cleanly here either: the audiobookshelf fix
 # landed in 1a0f556 and this pin moved in the follow-up commit, after the check fired. Recorded as
@@ -585,7 +595,7 @@ else
   pass "no long-form 'type: bind' mounts — every volume line in the tree is a form this parser can read"
 fi
 
-DECLARED_INTERP_EXPECTED="${DECLARED_INTERP_EXPECTED:-9}"
+DECLARED_INTERP_EXPECTED="${DECLARED_INTERP_EXPECTED:-8}"
 INTERP_ROWS="$(grep -rnE '^[[:space:]]*-[[:space:]]*"?\$\{?[A-Za-z_][^:]*:/' "$STACKS" --include='*.yaml' --include='*.yml' 2>/dev/null || true)"
 INTERP_COUNT="$(count_lines "$INTERP_ROWS")"
 if [[ "$INTERP_COUNT" -eq "$DECLARED_INTERP_EXPECTED" ]]; then

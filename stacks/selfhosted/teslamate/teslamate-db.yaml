@@ -30,7 +30,8 @@ services:
       - POSTGRES_PASSWORD=${TESLAMATE_DB_PASS}
       - POSTGRES_DB=teslamate
     volumes:
-      - teslamate-db:/var/lib/postgresql
+      # Dataset fast/appdata/teslamate (LXC mp32). Keep /var/lib/postgresql, the PG18 layout (see silo/compose.yaml).
+      - /mnt/fast/appdata/teslamate/db:/var/lib/postgresql
     networks:
       - teslamate
     healthcheck:

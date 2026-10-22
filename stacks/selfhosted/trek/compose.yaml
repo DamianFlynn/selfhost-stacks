@@ -15,12 +15,11 @@ include:
   ########################### SERVICES
   - trek.yaml
 
-########################### VOLUMES
-# Plain named volumes rather than the /mnt/fast/appdata bind used elsewhere.
-# Both land on LXC 100's ext4 root either way (/mnt/fast/appdata is NOT a
-# mountpoint - see MEDIA.md 3), so the bind buys nothing here and the named
-# volume keeps the data out of the git working tree. TREK's SQLite database and
-# uploads are small; revisit if uploads grow.
-volumes:
-  trek_data:
-  trek_uploads:
+########################### STATE
+# No named volumes. /app/data (SQLite) and /app/uploads bind to
+# /mnt/fast/appdata/trek/{data,uploads}, which is its own ZFS dataset
+# `fast/appdata/trek` (LXC mp33, default 128K recordsize), snapshotted and sent to
+# the backup pool nightly. /mnt/fast/appdata itself is NOT a mountpoint (MEDIA.md
+# 3), so this only escapes LXC 100's ext4 root because of that dataset. Moved off
+# the trek_data/trek_uploads named volumes by 261022-cg6; both subdirs are owned
+# 1000:1000 as the volumes were.
