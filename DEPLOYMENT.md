@@ -146,6 +146,11 @@ docker compose -f stacks/selfhosted/<stack>/compose.yaml ps
 
 Ownership `apps:apps` = **568:568**.
 
+BookOrbit was created on its own datasets from day one (`fast/appdata/bookorbit` on mp37 and
+`fast/appdata/bookorbit/postgres` on mp38, 16K) on 2026-10-22 by the four-step recipe in
+README § Per-app datasets: create the dataset, hotplug with `pct set`, reconcile
+`infra/lxc-selfhost.tf`, full send to the backup pool.
+
 **DVR deployment:** `infra/dispatcharr-recordings.tf` declares the recording
 dataset and reconciles `mp31`; `infra/lxc-selfhost.tf` also declares the path.
 Review a saved plan before applying: the LXC resource's `mount_point` changes are

@@ -86,6 +86,12 @@ Immich v3 upgrade, hufflepuff scavenge).
 
 File-level safety copies (e.g. under `/mnt/fast/safety/`) are not snapshots and are out of scope.
 
+### Added 2026-10-23 by quick task 261022-wp7 (outside the music pipeline)
+
+| dataset | snapshot | creation (UTC) | used | owner (plan) | undo for | release condition | eligible? (reason) |
+|---|---|---|---|---|---|---|---|
+| tank/media/Books | `@pre-wp7-20261022` | 2026-10-22T23:01:59Z | 0 (measured 2026-10-23) | quick 261022-wp7, Task 2 Block A | The recursive `chown -R 568:568` of all 1,035 entries and the 10 hand copies (7 Rowling ebooks, 3 wap2013 files). The exact owner map at atlantis `/root/bookorbit/books-owner-pre.tsv0` is the finer-grained undo for the chown alone | the operator confirms Audiobookshelf, Readarr (Bookshelf) and BookOrbit are healthy one week after 2026-10-23; until then `zfs [d]estroy` is not offered, and a `zfs [r]ollback` would also discard every later Books write | NOT ELIGIBLE — (b) fails: `written@pre-wp7-20261022` of the next newer (`@inc-20261023-0016`) = 163,598,160 |
+
 ## How to add a row
 
 Every plan that takes a fence snapshot adds its row here **in the same commit** as the artifact that

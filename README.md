@@ -415,6 +415,13 @@ precisely so a negative control needs no file edit.
 - **Bazarr** - Subtitle management
 - **Prowlarr** - Indexer manager
 - **Autobrr** - IRC announce grabber
+- **Bookshelf** (container `readarr`) - Book and audiobook management; Readarr fork on the
+  hardcover (Hardcover.app) flavour since 2026-10-22
+
+### Books
+- **BookOrbit** - Ebook and audiobook reader at `books.deercrest.info`, own login, library
+  read-only (replaced Booklore 2026-10-22; see `stacks/selfhosted/bookorbit/README.md`)
+- **Audiobookshelf** - Audiobooks and podcasts at `audiobooks.deercrest.info`
 
 ### Development
 - **Code Server** - Web-based VS Code

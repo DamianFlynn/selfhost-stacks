@@ -134,6 +134,25 @@ it gets a dataset.
 anonymous volume under `/var/lib/docker/volumes` — i.e. on `/`. That is exactly how 19 GB of
 transcode cache emptied the root filesystem mid-Phase-3.
 
+### `tank/media/Books` — books and audiobooks
+
+Three readers share it, author/title layout, audio and ebooks side by side:
+
+| Container | Path in container | RW |
+|-----------|-------------------|-----|
+| `audiobookshelf` | `/audiobooks` | true |
+| `readarr` (Bookshelf) | `/media/Books` | true |
+| `bookorbit-app` | `/books` | **false** |
+
+Ownership was normalised to `568:568` (all 1,035 entries) on 2026-10-22 (261022-wp7), after
+Readarr imports failed on root-owned directories that LXC 100 sees as `65534`. The dataset is
+`aclmode=passthrough`, so new directories inherit ACL-derived modes (775/777), not the mode asked
+for. The fence snapshot `tank/media/Books@pre-wp7-20261022` and the exact NUL-delimited owner map
+(`/root/bookorbit/books-owner-pre.tsv0`) live on atlantis only — the repo is public and the map
+lists file names. Bookshelf moved from the softcover (Goodreads) flavour to hardcover on a fresh
+database the same day; the old config is kept at
+`/mnt/fast/appdata/arrs/readarr/config.softcover-pre-261022`.
+
 ### Who can write to the library
 
 Deliberately asymmetric (D-19 narrowing, D-21 carve-out). **Note `lidarr`: broad but read-only —
