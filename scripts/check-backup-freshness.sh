@@ -135,6 +135,23 @@ while IFS='|' read -r ds created snap; do
     fi
     continue
   fi
+  # FROZEN ARCHIVES are asserted on IDENTITY, not age: the newest snapshot must be exactly the
+  # declared one. Staleness is their whole point, so an age check can only ever be red; an
+  # identity check still goes red if anything writes to the archive again.
+  # backup/buzz-archive: Buzz was retired 2026-09 (no container); this is its last snapshot.
+  frozen=""
+  case "$ds" in
+    "$POOL/buzz-archive") frozen="pre-landmine-20260925" ;;
+  esac
+  if [ -n "$frozen" ]; then
+    if [ "${snap##*@}" = "$frozen" ]; then
+      grn "FROZEN: $ds — newest snapshot is the declared archive @$frozen"
+    else
+      red "VIOLATION: frozen archive $ds changed — newest is @${snap##*@}, declared @$frozen"
+      fail=1
+    fi
+    continue
+  fi
   leaf=$((leaf + 1))
   age_s=$(( now - created ))
   age_h=$(( age_s / 3600 ))
