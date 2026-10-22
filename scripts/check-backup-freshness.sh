@@ -120,7 +120,7 @@ done)
 
 now=$(date +%s)
 max_age_s=$(( MAX_AGE_HOURS * 3600 ))
-n=0; stale=0; nosnap=0; leaf=0
+n=0; stale=0; nosnap=0; leaf=0; frozenbad=0
 while IFS='|' read -r ds created snap; do
   [ -z "$ds" ] && continue
   n=$((n + 1))
@@ -148,7 +148,7 @@ while IFS='|' read -r ds created snap; do
       grn "FROZEN: $ds — newest snapshot is the declared archive @$frozen"
     else
       red "VIOLATION: frozen archive $ds changed — newest is @${snap##*@}, declared @$frozen"
-      fail=1
+      frozenbad=$((frozenbad + 1)); fail=1
     fi
     continue
   fi
@@ -179,10 +179,11 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo "  datasets examined:  $n  (of which snapshotted: $leaf)"
 echo "  stale:              $stale"
 echo "  holding data, no snapshot: $nosnap"
+echo "  frozen archive changed:    $frozenbad"
 if [ "$fail" -eq 0 ]; then
   grn "FAILURES total: 0"
 else
-  red "FAILURES total: $((stale + nosnap))+"
+  red "FAILURES total: $((stale + nosnap + frozenbad))+"
   ylw "The off-box backup is NOT current. Fix before trusting any restore."
 fi
 exit "$fail"
