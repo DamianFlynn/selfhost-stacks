@@ -10,7 +10,7 @@ Drag services between stacks to reorganize. **Bold** = deployed, *Italic* = prop
 
 | **arrs** (Automation) | **media** (Servers) | **social** | **documents** | **books** | **gaming** | **saas** | **automation** | **mcp** (AI Agents) |
 |---|---|---|---|---|---|---|---|---|
-| **sabnzbd** | **jellyfin** | **postiz** | **paperless-ngx** | **booklore** | *romm* ⏸️ | **cal.com** | **n8n** | **atlassian** |
+| **sabnzbd** | **jellyfin** | **postiz** | **paperless-ngx** | **bookorbit** | *romm* ⏸️ | **cal.com** | **n8n** | **atlassian** |
 | **qbittorrent** | **seerr** | **rybbit** | **paperless-gpt** | **audiobookshelf** | | | **oxidized** | **notion** |
 | **prowlarr** | **jellystat** | | **tika** | *readarr?* | | | **pwpush** | **d365fo** |
 | **radarr** | **wizarr** | | **gotenberg** | | | | **tesla-static** | *home-assistant* |
@@ -145,14 +145,12 @@ migrate, so take the latest rather than replaying the 4→5 upgrade.
 - **Access**: https://docs-ai.deercrest.info
 - **Notes**: Automatic tagging, correspondent detection, and document type classification
 
-### Booklore
+### ~~Booklore~~ — retired 2026-10-22, replaced by BookOrbit
 - **Repository**: https://github.com/booklore-app/booklore
 - **Purpose**: Book tracking and library management
-- **Stack**: `books` (new)
-- **Status**: ✅ Created books/booklore.yaml
-- **Access**: https://books.deercrest.info
-- **Database**: PostgreSQL 18
-- **Notes**: Personal book collection tracker with reading progress
+- **Status**: 🗑️ Retired 2026-10-22 (261022-wp7). It was never running on the host: no container,
+  no appdata, no volume. The `books/` stack and its wrapper were deleted.
+- **Replaced by**: BookOrbit (`stacks/selfhosted/bookorbit/`) at https://books.deercrest.info
 
 ### Cal.com
 - **Repository**: https://github.com/calcom/cal.com
@@ -169,7 +167,7 @@ migrate, so take the latest rather than replaying the 4→5 upgrade.
 
 - **social**: Postiz (social media scheduling) + Rybbit (Reddit client)
 - **documents**: Paperless-ngx + Paperless-GPT + Tika + Gotenberg
-- **books**: Booklore (book tracking)
+- **bookorbit**: BookOrbit (ebook and audiobook reader; replaced Booklore 2026-10-22)
 - ~~**gaming**: ROMM (ROM library management)~~ — released 2026-08-17, never deployed (see ROMM above)
 - **saas**: Cal.com (booking and scheduling platform)
 

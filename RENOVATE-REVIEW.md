@@ -16,7 +16,7 @@
 - `open-archiver` - postgres:17-alpine → postgres:18-alpine
 - `automation/n8n` - postgres:16-alpine → postgres:18-alpine
 - `automation/pwpush` - postgres:16 → postgres:18
-- `books/booklore` - postgres:17-alpine → postgres:18-alpine
+- `books/booklore` - postgres:17-alpine → postgres:18-alpine (Booklore retired 2026-10-22)
 - `documents/paperless` - postgres:17-alpine → postgres:18-alpine
 - `media/jellystat` - postgres:15.17 → postgres:18
 - `postiz` - postgres:17-alpine → postgres:18-alpine
@@ -122,7 +122,7 @@
 - `rustdesk` (remote desktop)
 - `open-archiver` (archive service)
 - `dawarich` (location tracking)
-- `books` (booklore)
+- `books` (booklore) (Booklore retired 2026-10-22)
 - `social` stack
 - `saas` stack
 
@@ -140,7 +140,7 @@
 ### Short Term (This Week)
 1. 📝 Document PostgreSQL migration procedure
 2. 📋 Create pg_dump backup script for all Postgres stacks
-3. 🧪 Test Postgres 18 migration on non-critical stack (pwpush or booklore)
+3. 🧪 Test Postgres 18 migration on non-critical stack (pwpush or booklore) (Booklore retired 2026-10-22)
 4. ✅ Merge Grafana, Ollama, Dawarich after testing
 
 ### Long Term (This Month)

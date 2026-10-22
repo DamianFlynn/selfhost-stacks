@@ -221,14 +221,6 @@ do_pwpush() {
     "pwpush-db"
 }
 
-do_booklore() {
-  migrate_pg \
-    "booklore_postgres" \
-    "$STACKS/books" \
-    "compose.yaml" \
-    "booklore_postgres"
-}
-
 do_paperless() {
   migrate_pg \
     "paperless_postgres" \
@@ -308,7 +300,6 @@ run_all() {
   do_n8n
   do_pwpush
   # PG17
-  do_booklore
   do_paperless
   do_keeper
   do_open_archiver
@@ -327,7 +318,6 @@ case "${1:-all}" in
   jellystat)     do_jellystat ;;
   n8n)           do_n8n ;;
   pwpush)        do_pwpush ;;
-  booklore)      do_booklore ;;
   paperless)     do_paperless ;;
   keeper)        do_keeper ;;
   open-archiver) do_open_archiver ;;
@@ -338,7 +328,7 @@ case "${1:-all}" in
   teleport)      do_teleport ;;
   *)
     echo "Unknown instance: $1"
-    echo "Valid: all openwebui jellystat n8n pwpush booklore paperless"
+    echo "Valid: all openwebui jellystat n8n pwpush paperless"
     echo "       keeper open-archiver postiz calcom social-postiz rybbit teleport"
     exit 1
     ;;
