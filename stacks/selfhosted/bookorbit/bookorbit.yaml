@@ -1,0 +1,137 @@
+# BookOrbit - self-hosted ebook and audiobook reader
+#
+# Purpose:
+#   One reader for the household's books and audiobooks, reachable by the BookOrbit iPhone/Watch
+#   app and by KOReader, Kobo and OPDS clients. It reads /mnt/tank/media/Books, which
+#   Audiobookshelf (rw) and Readarr/Bookshelf (rw) also use; BookOrbit gets it read-only.
+#
+# Workflow:
+#   Client -> Cloudflare (orange cloud) -> Traefik (TLS, chain-no-auth) -> bookorbit-app:3000
+#   bookorbit-app -> bookorbit-db:5432 on the private `bookorbit` bridge
+#
+# Access:
+#   URL: https://books.deercrest.info
+#   Middleware: chain-no-auth@file. BookOrbit's own accounts are the only gate (see the router
+#   comment below and README.md).
+#
+# Notes:
+#   Every start runs forward-only migrations (migrate.js). pg_dump before ANY image bump - the
+#   Renovate rule makes BookOrbit bumps manual-review for this reason.
+
+services:
+  bookorbit-app:
+    # renovate: datasource=docker depName=ghcr.io/bookorbit/bookorbit
+    image: ghcr.io/bookorbit/bookorbit:3.5.0
+    container_name: bookorbit-app
+    init: true
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - POSTGRES_HOST=bookorbit-db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=${POSTGRES_USER:?set in .env}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?set in .env}
+      - POSTGRES_DB=${POSTGRES_DB:?set in .env}
+      - JWT_SECRET=${JWT_SECRET:?set in .env}
+      - PODCAST_ENCRYPTION_KEY=${PODCAST_ENCRYPTION_KEY:?set in .env}
+      # Required by POST /api/v1/auth/setup (x-setup-token header). Setup answers 409 once the
+      # first admin exists, so this token is spent after first run.
+      - SETUP_BOOTSTRAP_TOKEN=${SETUP_BOOTSTRAP_TOKEN:?set in .env}
+      # Public URL, used by e-mails and by the Kobo device endpoints.
+      - APP_URL=https://books.deercrest.info
+      - TZ=${TZ:-Europe/Dublin}
+      # apps:apps, the estate service account. The entrypoint chowns /data and /tmp only and
+      # skips /books, so the read-only library is never touched.
+      - PUID=568
+      - PGID=568
+      - NODE_MAX_OLD_SPACE_SIZE=auto
+      - LIBRARY_BROWSE_ROOT=/books
+      - DISABLE_LOCAL_AUTH=false
+      # BOOK_DOCK_PATH is deliberately UNSET: a Book Dock imports INTO the library, and /books is
+      # mounted :ro. Set it only in the same change that makes the library mount rw (README).
+    volumes:
+      - /mnt/tank/media/Books:/books:ro
+      - /mnt/fast/appdata/bookorbit/data:/data
+    read_only: true
+    tmpfs:
+      - /tmp:size=1g
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 30s
+    mem_limit: 2g
+    mem_reservation: 256m
+    networks:
+      - t3_proxy
+      - bookorbit
+    depends_on:
+      bookorbit-db:
+        condition: service_healthy
+    # No healthcheck override: the image's own HEALTHCHECK polls /api/v1/health.
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=t3_proxy
+
+      # --- One router, NO forward-auth: deliberate (261022-wp7, R2) --------------------------
+      # chain-no-auth on the whole host is a decision, not an omission. Reasons:
+      #   - Every native client lives under /api/: the iOS/Watch app (/api/v1/*), KOReader
+      #     (/api/v1/koreader/*), Kobo (/api/kobo/<deviceToken>/v1/*), OPDS (/api/v1/opds) and
+      #     audiobook streaming. A "narrow" bypass for them already exposes 100% of the
+      #     application logic; forward-auth on the rest would guard only the static SPA bundle
+      #     and the /socket.io/ handshake, which BookOrbit authenticates itself.
+      #   - chain-authelia@file bounces bearer/API clients to a login page, and a forward-auth
+      #     cookie is something native apps never carry. It would also cost a second login and
+      #     an Authelia account for Breege, who has none.
+      #   - This router does not lean on the estate-wide `^/api` Authelia bypass, which is
+      #     flagged for repair.
+      # Compensating controls: 64-hex setup token (setup answers 409 after first run),
+      # registration closed (POST /api/v1/auth/register = 403), Swagger off (SWAGGER_ENABLED
+      # unset), OPDS left disabled until opted in, upstream login throttle (5/min), Cloudflare
+      # proxying. Authelia OIDC is supported upstream and optional; not configured.
+      # No rate-limit middleware (50/60 s starves an SPA) and no buffering middleware.
+      # Uploads are chunked at 16 MiB, so Cloudflare's 100 MB request cap does not bite.
+      - traefik.http.routers.bookorbit-rtr.entrypoints=websecure
+      - traefik.http.routers.bookorbit-rtr.rule=Host(`books.deercrest.info`)
+      - traefik.http.routers.bookorbit-rtr.middlewares=chain-no-auth@file
+      - traefik.http.routers.bookorbit-rtr.tls=true
+      - traefik.http.routers.bookorbit-rtr.tls.certresolver=dns-cloudflare
+      - traefik.http.routers.bookorbit-rtr.service=bookorbit-svc
+      - traefik.http.services.bookorbit-svc.loadbalancer.server.port=3000
+
+  bookorbit-db:
+    # renovate: datasource=docker depName=pgvector/pgvector
+    image: pgvector/pgvector:0.8.7-pg18
+    container_name: bookorbit-db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:?set in .env}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?set in .env}
+      - POSTGRES_DB=${POSTGRES_DB:?set in .env}
+      # No PGDATA, diverging from upstream on purpose. Upstream binds /var/lib/postgresql/data
+      # with PGDATA=.../data/pgdata, but the pg18 image declares VOLUME /var/lib/postgresql,
+      # so that layout leaves an anonymous volume on LXC 100's rootfs at the parent. Binding the
+      # parent (as upstream's own docker-compose.dev.yml does, and as teslamate-db does) keeps
+      # the pg18 default PGDATA=/var/lib/postgresql/18/docker on the 16K dataset.
+    volumes:
+      - /mnt/fast/appdata/bookorbit/postgres:/var/lib/postgresql
+    networks:
+      - bookorbit
+    mem_limit: 1g
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD-SHELL", 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s

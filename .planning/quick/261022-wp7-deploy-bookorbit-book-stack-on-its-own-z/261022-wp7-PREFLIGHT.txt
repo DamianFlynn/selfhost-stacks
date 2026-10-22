@@ -1,0 +1,22 @@
+# 261022-wp7 PREFLIGHT — keyed baselines and results. Measured 2026-10-22 (T1 read-only).
+# Repo is public: counts and names only, never a secret, never a per-file owner map.
+FENCE-START: /etc/pve/lxc/100.conf sha256 6c8a075e3d2022af…; running containers 85
+SLOTS: mp31..mp36 used (Recordings, teslamate, trek, monitoring, airtrail, silo); mp29, mp30, mp37, mp38 absent; [pve:pending] lines 0
+DATASETS-ABSENT: fast/appdata/bookorbit absent; host /mnt/fast/appdata/bookorbit absent; backup/appdata/bookorbit absent
+BOOKS-OWNERS: 982 0:0 + 42 568:0 + 11 568:568 = 1035 entries (matches planner). aclmode passthrough, acltype nfsv4, 5.18T avail. 7 destination title folders under J.K. Rowling/ absent; Damian Flynn/ absent. NOTE J.K. Rowling/ is not fully flat: 183 entries = 255 mp3 total incl. a nested J.K. Rowling/J.K. Rowling/ subfolder (Order of the Phoenix mp3s + The Christmas Pig.mobi), plus The Christmas Pig.m4b, cover.jpg, metadata.json
+SOURCES-SHA: /root/bookorbit/sources-pre.sha256 on atlantis (dir 700) = 18 files (12 under the 9 nzb/readarr folders — Gene Kim folder empty, Fantastic Beasts -CTO and -CTO.1 jkrfb1g1.epub hash-identical — plus 3 wap2013 files x 2 locations). WAP vs luma: all 3 EQUAL (epub, kf8.epub, mobi; same size, mtime 2015-07-16 17:36–17:44 +0100)
+BOOKLORE-HOST: no *booklore* container; /mnt/fast/appdata/books absent; no book* docker volume
+HOST-CHECKOUT: /mnt/fast/stacks at 210902d, status clean (behind origin/main by Renovate merges only)
+ABS-BASELINE: library Audiobooks (book, folder /audiobooks) total=13 items; /audiobooks/J.K. Rowling = 1 item, 256 audio files, has ebook; users [damian] (breege absent)
+READARR-OLD: image ghcr.io/pennydreadful/bookshelf:softcover (v0.4.20.129), compose file stacks/selfhosted/arrs/compose.yaml; queue 9 = 8 Rowling (importFailed, Sabnzbd/usenet, completed) + 1 Gene Kim (importPending); rootfolders [/media/Books]; clients qBittorrent(QBittorrent, enabled, cat readarr) + Sabnzbd(Sabnzbd, enabled, cat audiobooks); authors 12; bookfiles 796; config.xml elements BindAddress Port SslPort EnableSsl LaunchBrowser ApiKey AuthenticationMethod AuthenticationRequired Branch LogLevel SslCertPath SslCertPassword UrlBase InstanceName UpdateMechanism; arrs .env PUID=568 PGID=568
+PROWLARR-APP: id=3 name=Readarr syncLevel=fullSync baseUrl=http://readarr:8787 prowlarrUrl=http://prowlarr:9696 (port 9696)
+SAB-LEFTOVERS: history 9 entries in category audiobooks, all storage inside the 9 nzb/readarr folders (8 Rowling incl. both Fantastic Beasts -CTO and -CTO.1, 1 Gene Kim); queue 0 in audiobooks/readarr
+QBIT-LEFTOVERS: 0 torrents in category readarr (WebUI login via old readarr.db creds, never printed)
+BOOKSHELF-TAG: hardcover-v0.4.21.182 (newest four-part hardcover-v tag of 80 on ghcr)
+DNS-BOOKS: PRESENT — CNAME books -> deercrest.info proxied=true (pre-existing; no router served it before this task)
+HEALTH-BASELINE-RC: 1 — sole red: "Music consumers audit: ❌ BROKEN (check-music-consumers.sh exit 1)" / "❌ CONF-04 (D-22): '/media/Music/Lady Gaga/ARTPOP (2013)/CD 01-05 Lady Gaga - Jewels n’ Drugs.flac' has 1 artist entities — expected 4 (post-re-probe)"
+BACKUP-BASELINE-RC: 0 — FAILURES total 0
+INTERP-COUNT: 8
+DRIFT-BASELINE: rc 1 (6 IMAGE_DRIFT: immich_kiosk, karakeep-web, karakeep-workers, freshrss, tesla-static, karakeep-meilisearch); unresolvable 2 == expected 2; readarr not listed (floating tag)
+DEPLOY-DRYRUN-RC: 0 — DRY-RUN, FAILURES total 0, WOULD-DEPLOY automation/tesla-static, freshrss, immich/immich-kiosk, karakeep/web+workers; no book* or readarr
+FENCE-END: /etc/pve/lxc/100.conf sha256 6c8a075e3d2022af… (unchanged); running containers 85

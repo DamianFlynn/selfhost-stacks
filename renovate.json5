@@ -197,6 +197,21 @@
       ]
     },
     {
+      "description": "BookOrbit: manual review for every update. Each start runs forward-only database migrations (migrate.js), so a bump cannot be rolled back by re-pinning the image; take a pg_dump of bookorbit-db first (stacks/selfhosted/bookorbit/README.md). Added 2026-10-22 (261022-wp7).",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "ghcr.io/bookorbit/bookorbit"
+      ],
+      "automerge": false,
+      "addLabels": [
+        "stack:bookorbit",
+        "component:app",
+        "manual-review-required"
+      ]
+    },
+    {
       "description": "Auto-label by stack: Immich",
       "matchFileNames": [
         "**/stacks/selfhosted/immich/**"
@@ -308,12 +323,12 @@
       ]
     },
     {
-      "description": "Auto-label by stack: Books",
+      "description": "Auto-label by stack: BookOrbit",
       "matchFileNames": [
-        "**/stacks/selfhosted/books/**"
+        "**/stacks/selfhosted/bookorbit/**"
       ],
       "addLabels": [
-        "stack:books"
+        "stack:bookorbit"
       ]
     },
     {

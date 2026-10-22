@@ -1,0 +1,28 @@
+# BookOrbit Stack - Self-hosted ebook and audiobook reader
+# https://github.com/bookorbit/bookorbit
+#
+# Two services: bookorbit-app (NestJS + SPA, port 3000) and bookorbit-db (Postgres 18 with
+# pgvector). Upstream has no Redis. No published host port: reachable through Traefik only, at
+# https://books.deercrest.info. Replaced Booklore on 2026-10-22 (261022-wp7). See README.md.
+
+name: bookorbit
+
+########################### NETWORKS
+networks:
+  t3_proxy:
+    external: true
+  bookorbit:
+    driver: bridge
+
+include:
+  ########################### SERVICES
+  - bookorbit.yaml
+
+########################### STATE
+# No named volumes, and nothing on LXC 100's rootfs. Two ZFS datasets, created 2026-10-22:
+#   fast/appdata/bookorbit           (LXC mp37, default 128K recordsize) -> data/ = app /data
+#                                     (covers, book-bucket, uploads)
+#   fast/appdata/bookorbit/postgres  (LXC mp38, recordsize=16K)         -> /var/lib/postgresql
+# Both are snapshotted and sent to the backup pool nightly. /mnt/fast/appdata itself is NOT a
+# mountpoint (MEDIA.md 3): these paths escape LXC 100's ext4 root only because of the datasets.
+# The library, /mnt/tank/media/Books, is mounted READ-ONLY at /books.
