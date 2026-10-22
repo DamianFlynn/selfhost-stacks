@@ -13,6 +13,13 @@
 # protected today with no Terraform dependency. backup-incremental.sh enumerates
 # fast/appdata/* dynamically, so these are picked up with no further change.
 #
+# UPDATE 2026-10-22 (261022-cg6): teslamate-db (fast/appdata/teslamate) and n8n-db
+# (fast/appdata/automation/n8n-postgres) are now on replicated ZFS datasets, so `zfs send`
+# reaches them. Their dumps are KEPT on purpose, as an independent, version-portable logical
+# fence: a snapshot of a PGDATA restores only into the same Postgres major. paperless_postgres
+# is still genuinely on root. The installed copy in /usr/local/bin on LXC 100 behaves the same
+# as this file (only this comment changed), so there is nothing to sync.
+#
 # ASSERTS SIZE, because a broken pipe exits 0 and leaves a small file that looks like a
 # backup -- the exact failure run-backup.sh already guards against for Immich.
 set -o pipefail

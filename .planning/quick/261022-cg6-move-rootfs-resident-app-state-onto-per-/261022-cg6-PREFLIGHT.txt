@@ -124,3 +124,18 @@ open-archiver 67M   newest 2026-09-06 valkey/dump.rdb. No open-archiver containe
 rustdesk      1.4M  newest 2026-09-23 db_v2.sqlite3-wal. No rustdesk/hbbs/hbbr container -> leftover that holds the relay keypair. Do NOT delete.
 _ops          16K   newest 2026-09-27 image-prune-20260927T214453Z.txt -> operator log artefact.
 buzz          4K    empty -> mount-target shadow from the 2026-09-25 mp29 delete.
+
+== T3/T4/T5 RESULTS (appended 2026-10-22 by the T4/T5 executor) ==
+PROBE-RESULT: HOTPLUG (operator, T3: mp32/mp33 live, no [pve:pending], dockerd saw zfs, owner 568:568 755). Variant H used.
+Step 0: branch replayed onto origin/main c32c9d22 (cherry-pick, no conflicts) and pushed as e14a4b32; host checkout ff-pulled to e14a4b3.
+Window (UTC, stop -> up): monitoring 12:48:36-12:48:57 (21s); airtrail 12:50:14-12:50:42 (28s); trek 12:51:22-12:52:40 (78s, incl. pull of 4.3.4);
+  n8n 12:53:29-12:53:36 (7s); teslamate 12:54:33-12:54:41 (8s; fence teslamate-pre-cg6-20261022T1254Z.dump 12592843 B, 16 TABLE DATA,
+  sha256 40cdc289...0fce4a identical in pgdumps and /mnt/tank/backups/teslamate-db/); silo copied, still exited.
+mp34 monitoring, mp35 airtrail, mp36 silo hotplugged live; pending section count 0 throughout.
+CV proofs: 9 /root/cg6/*.ok (monitoring 1336 files, airtrail 1881, trek-data 8, trek-uploads 5, n8n-postgres 5111, teslamate-db 1383, teslamate-grafana 5, teslamate-import 0, silo 3555).
+Post-move baselines: drives max(id)=510 positions=688075 charging=25; flight=374; workflow_entity=70; prom lowest ts 1790035201, up 10/10. All equal T1.
+In-container fstype: busybox stat prints UNKNOWN for zfs, so asserted on magic %t=2fc12fc1 for every migrated state mount.
+Step 8: backup/appdata/{teslamate,trek,monitoring,airtrail,silo}@backup-20261022-cg6; backup/appdata children 15 -> 20.
+T5 terraform (mount_point lifted out of ignore_changes): Plan: 0 to add, 1 to change, 0 to destroy (mpe memory.dedicated only); must be replaced = 0. Restored: same.
+T5 health: rc=1 (T1 rc=1). Consumers audit moved from the CONF-04 warning (exit 3) to ❌ exit 1 on the Jellyfin artist-entity check (Lady Gaga ARTPOP: 1 entity, expected 4). Jellyfin was upgraded to 12.2 today and the operator is reinstalling plugins; nothing in this task touches Jellyfin or Music. Interp inventory 8 = expected 8.
+T5 backup freshness: rc=1. Only red is backup/buzz-archive (640h, pre-existing since 2026-09-25); 35 datasets examined.

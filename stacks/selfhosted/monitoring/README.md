@@ -173,8 +173,10 @@ Grafana → Create → Import → Enter Dashboard ID:
 
 ### Data Retention
 - Default: 30 days (configurable via `PROMETHEUS_RETENTION` in `.env`)
-- Storage: `/mnt/fast/appdata/monitoring/prometheus`
-- Estimated disk usage: ~5-10GB for 30 days
+- Storage: `/mnt/fast/appdata/monitoring/prometheus`, on the ZFS dataset `fast/appdata/monitoring`
+  (LXC mp34, since 2026-10-22). Grafana and the node-exporter textfile dir share it.
+- Estimated disk usage: ~5-10GB for 30 days. The dataset has a **25G `quota`**, so runaway TSDB
+  growth hits `ENOSPC` there instead of filling LXC 100's root.
 
 ### Adding New Scrape Targets
 
@@ -620,7 +622,8 @@ systemctl disable --now selfhost-deploy.timer                                   
 
 ## Backup
 
-Critical files to backup:
+All of `/mnt/fast/appdata/monitoring` is on `fast/appdata/monitoring`, which is snapshotted and
+sent to `backup/appdata/monitoring` nightly. Critical files within it:
 - `/mnt/fast/appdata/monitoring/grafana/grafana.db` - Dashboards and settings
 - `/mnt/fast/appdata/monitoring/prometheus/` - Metrics data (optional)
 - `stacks/selfhosted/monitoring/.env` - Configuration

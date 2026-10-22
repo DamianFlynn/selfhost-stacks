@@ -52,6 +52,38 @@ be invisible to them.
 five Jellyfin retention settings, and exits non-zero on drift. It is folded into
 `scripts/quick-health-check.sh`.
 
+#### Per-app datasets
+
+`/mnt/fast/appdata` itself is **still not a mountpoint**: it is a plain directory on LXC 100's
+ext4 root, and only its children are ZFS datasets. The stacks below moved off that root on
+2026-10-22 (quick task 261022-cg6). Each has its own dataset, its own LXC bind mount and a full
+send to the `backup` pool, so the nightly incremental carries it.
+
+| Dataset | LXC mount | recordsize | Quota | Why |
+|---------|-----------|------------|-------|-----|
+| `fast/appdata/teslamate` | mp32 | 16K | — | TeslaMate Postgres (the car's whole history), Grafana, import dir. Was three named volumes on `/` |
+| `fast/appdata/trek` | mp33 | 128K | — | TREK SQLite (`data/`) and uploads. Was two named volumes on `/` |
+| `fast/appdata/monitoring` | mp34 | 128K | **25G** | Prometheus TSDB, Grafana, node-exporter textfile dir. The one continuously growing tenant, so it is bounded |
+| `fast/appdata/airtrail` | mp35 | 16K | — | AirTrail Postgres and uploads |
+| `fast/appdata/silo` | mp36 | 16K | — | Silo (dormant: `silo-db` and `silo` stay stopped) |
+
+n8n's Postgres moved to `/mnt/fast/appdata/automation/n8n-postgres`, inside the existing
+`fast/appdata/automation` dataset, with no new mount. It had been on `/automation/n8n-postgres`,
+because `${APPDATA_DIR}` was undefined in `automation/.env`.
+
+16K follows `fast/appdata/immich/postgres`, the estate's other Postgres-tuned dataset. There is no
+quota on the Postgres datasets on purpose: `ENOSPC` under Postgres WAL is a PANIC.
+
+**A new stack needs all four of these, in this order**, or its state lands on `/`:
+
+1. `zfs create fast/appdata/<name>` on atlantis (owner `568:568`, mode `0755`).
+2. `pct set 100 -mpN /mnt/fast/appdata/<name>,mp=/mnt/fast/appdata/<name>`. A *new* `mpN` hotplugs
+   live with no LXC reboot (measured 2026-10-22). Next free indices: mp29, mp30, mp37+.
+3. Append the matching `mount_point` block to `infra/lxc-selfhost.tf` in host index order. Never
+   `terraform apply` it (see the lifecycle note there).
+4. Do a full `zfs send | zfs recv` to `backup/appdata/<name>`. `backup-incremental.sh` **skips** a
+   dataset that has no target on the backup pool, so it is not backed up until this is done.
+
 ### Media and TV — high-level design
 
 ```mermaid

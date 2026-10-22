@@ -159,7 +159,7 @@ settings; verify the ZFS quota separately on Proxmox.
 
 ### ⚠️ `/mnt/fast/appdata` is not a mountpoint — check before you assume
 
-`/mnt/fast` and `/mnt/fast/appdata` are **plain directories on LXC 100's 126 G ext4 root disk**.
+`/mnt/fast` and `/mnt/fast/appdata` are **plain directories on LXC 100's 200 G ext4 root disk**.
 Only the *children* are ZFS datasets. A new stack directory under `/mnt/fast/appdata/` with no
 dataset behind it writes to `/` — and looks identical to one that doesn't.
 
@@ -168,8 +168,30 @@ dataset behind it writes to `/` — and looks identical to one that doesn't.
 mountpoint -q /mnt/fast/appdata/<stack> && echo "dataset ✓" || echo "ON / — unbounded ⚠"
 ```
 
-Five stacks are currently in this state (`monitoring`, `agentic-os`, `documents`,
-`open-archiver`, `rustdesk`) — see [MEDIA.md](MEDIA.md) § 8.
+`teslamate`, `trek`, `monitoring`, `airtrail`, `silo` and n8n's Postgres moved onto datasets on
+2026-10-22 (README § Per-app datasets). What is still on `/`, measured that day:
+
+- `documents` — **LIVE**. paperless binds it through `driver_opts` bind volumes
+  (`type=none,o=bind,device=/mnt/fast/appdata/documents/...`), so `docker inspect` shows
+  `Source: /var/lib/docker/volumes/...` and a "Source not under /mnt/" check misses it. It is the
+  next candidate for its own dataset.
+- `open-archiver` and `rustdesk` — leftovers of undeployed stacks. Keep them: `rustdesk` holds the
+  relay keypair (`id_ed25519`) that clients pin.
+- `_ops` (one operator log) and `buzz` (an empty mount-target shadow) — artefacts.
+
+See [MEDIA.md](MEDIA.md) § 8.
+
+**Checklist for a new dataset**, in this order:
+
+1. `zfs create fast/appdata/<name>` on atlantis, owned `568:568`, mode `0755`.
+2. `pct set 100 -mpN /mnt/fast/appdata/<name>,mp=/mnt/fast/appdata/<name>`. A new `mpN` hotplugs
+   live. Then check from inside a container, not only the LXC shell:
+   `docker run --rm -v /mnt/fast/appdata/<name>:/p alpine stat -f -c %t /p` must print `2fc12fc1`
+   (ZFS; busybox prints the name as `UNKNOWN`).
+3. Append the `mount_point` block to `infra/lxc-selfhost.tf` in host index order. Plan only.
+4. **A new dataset is not backed up until a full send creates `backup/appdata/<name>`.
+   `backup-incremental.sh` skips it** (it logs "needs a FULL send" and moves on), and
+   `check-backup-freshness.sh` cannot see a dataset that is not on the backup pool.
 
 ### ⛔ Never leave an anonymous volume
 

@@ -113,6 +113,11 @@ findmnt -no TARGET,SOURCE,FSTYPE | grep /mnt/fast   # authoritative
 `df /mnt/fast/appdata` reports `126G ... 72%` — the root disk's numbers — while `du` reports
 **170 G** of content. Both are "right"; the discrepancy is the tell that it is not a mountpoint.
 
+This is still true after 2026-10-22, when `teslamate`, `trek`, `monitoring`, `airtrail` and `silo`
+got their own datasets (mp32..mp36) and n8n's Postgres moved inside `fast/appdata/automation`
+(README § Per-app datasets). Those paths now pass the test above. A new name still does not until
+it gets a dataset.
+
 ### Jellyfin's mounts (verified)
 
 | Host path | Container | Mode | Notes |
@@ -321,7 +326,7 @@ for the design rules.
 | Gap | Detail |
 |-----|--------|
 | **`audiobookshelf` stores on `/`** | Its binds are `/audiobooks` and `/audiobookshelf` — root-level paths on the **LXC ext4 root disk**, not under `/mnt/fast/appdata` and not on any dataset. Currently tiny (4 K + 548 K) so it is latent, not urgent — but loading a real audiobook library into it writes to `/`. Violates the STANDARDS base-path convention. |
-| **Five other stacks are also on `/`** | `monitoring` (3.9 G), `agentic-os` (674 M), `documents`/paperless (95 M), `open-archiver` (67 M), `rustdesk` (1.2 M) — all under `/mnt/fast/appdata/` with **no backing dataset**. ~4.7 G total today, down from ~5 G after `mattermost` (250 M) was retired on 2026-09-06. `monitoring` is the one to watch: Prometheus TSDB grows continuously. See § 3. |
+| **Other stacks still on `/`** | Measured 2026-10-22, after `monitoring`, `teslamate`, `trek`, `airtrail`, `silo` and n8n's Postgres moved to datasets: `documents`/paperless (142 M, **live**, and the next candidate), `open-archiver` (67 M) and `rustdesk` (1.4 M, holds the relay keypair) are undeployed leftovers, and `_ops`/`buzz` are artefacts. All are under `/mnt/fast/appdata/` with **no backing dataset**. See § 3 and DEPLOYMENT.md § 3. |
 | **`deinterlace_vaapi` on the Radeon 890M** | ffmpeg exits 251. Moot while hardware acceleration is off. |
 | **Live TV latency** | ~7.7 s per channel change in Jellyfin, inherent. Use TiviMate. |
 

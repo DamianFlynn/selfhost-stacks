@@ -94,24 +94,22 @@ wrapped is permanently unreadable** — a volume restore without the matching ke
 install. Back it up *with* the volumes, not separately.
 
 Leaving it unset is worse than it looks: TREK generates one on first boot that then exists only
-inside `trek_data`, so the key and the data it protects share a single failure.
+inside `/app/data` (`fast/appdata/trek/data`), so the key and the data it protects share a single failure.
 
 Deer Crest: the live value is backed up in `~/.claude/secrets/trek.env`.
 
 ## Storage
 
-| Volume | Mount | Holds |
+| Host path (bind) | Mount | Holds |
 |---|---|---|
-| `trek_data` | `/app/data` | SQLite database, generated `.jwt_secret`, logs |
-| `trek_uploads` | `/app/uploads` | User uploads — trip documents and photos |
+| `/mnt/fast/appdata/trek/data` | `/app/data` | SQLite database, generated `.jwt_secret`, logs |
+| `/mnt/fast/appdata/trek/uploads` | `/app/uploads` | User uploads — trip documents and photos |
 
-Named volumes rather than the `/mnt/fast/appdata` bind used by older stacks. That bind buys nothing
-here: **`/mnt/fast/appdata` is not a mountpoint** (only its children are ZFS datasets — see
-[MEDIA.md § 3](../../../MEDIA.md)), so both land on LXC 100's **126 G ext4 root** regardless. The
-named volume at least keeps runtime data out of the git working tree at `/mnt/fast/stacks`.
-
-Both are small today. `trek_uploads` is the one to watch — photo uploads grow without a quota, on
-a root filesystem with no dataset behind it.
+Both live on the ZFS dataset `fast/appdata/trek` (LXC mp33), which is snapshotted and sent to the
+`backup` pool nightly. Both subdirectories are owned `1000:1000`, as the old volumes were. They
+moved off the `trek_data`/`trek_uploads` named volumes on LXC 100's root on 2026-10-22 (quick task
+261022-cg6). The dataset matters because `/mnt/fast/appdata` itself is **not** a mountpoint (see
+[MEDIA.md § 3](../../../MEDIA.md)): without it, a bind there would land on `/`.
 
 ## The WebSocket
 
@@ -171,5 +169,6 @@ docker compose -f stacks/selfhosted/trek/compose.yaml up -d
 - **Registration and invite policy has not been reviewed.** TREK supports invite links and open
   registration; which is in force here has not been checked. Given sharp edge 2, this is worth
   confirming rather than assuming.
-- **No backup of the SQLite database.** `trek_data` is not covered by any snapshot or backup job
-  documented in this repo.
+- **The SQLite backup is crash-consistent only.** Since 2026-10-22 `fast/appdata/trek` is
+  snapshotted and sent to `backup/appdata/trek` nightly. That is a ZFS snapshot of a live SQLite
+  file plus its WAL, so it is crash-consistent: there is no `.backup` or logical dump.

@@ -166,6 +166,8 @@ resource "proxmox_virtual_environment_container" "selfhost" {
   # points inside an unprivileged LXC.  Every child dataset must be listed here
   # explicitly.  When a new appdata ZFS dataset is created on the host, add a
   # mount_point block here and run terraform apply (container restart required).
+  # (Superseded in practice: apply is not run against this resource. Datasets are created by
+  # hand with `zfs create`, mounted with `pct set`, and only then reconciled here. No null_resource.)
 
   mount_point {
     volume = "/mnt/fast/stacks"
@@ -205,8 +207,9 @@ resource "proxmox_virtual_environment_container" "selfhost" {
   #   The mount is added BY HAND, because ignore_changes means Terraform cannot do it:
   #     pct set 100 -mpNN /mnt/fast/appdata/agentic-os,mp=/mnt/fast/appdata/agentic-os
   #     pct reboot 100
-  #   (pick the next free index at the time — do NOT assume 32; two slots were freed on
-  #   2026-09-25 when the orphaned buzz mounts were detached.)
+  #   (pick the next free index at the time: mp29, mp30 or mp37+. mp32..mp36 were taken on
+  #   2026-10-22 by 261022-cg6; mp29/mp30 were freed on 2026-09-25 when the orphaned buzz mounts
+  #   were detached. A slot below 31 must be inserted before Recordings, in index order.)
   #
   #   Mounting the empty dataset over the live directory HIDES the data rather than moving it, so
   #   the mount and the copy are ONE operation, in the order given in:
@@ -347,6 +350,30 @@ resource "proxmox_virtual_environment_container" "selfhost" {
   mount_point {
     volume = "/mnt/tank/media/Recordings"
     path   = "/mnt/tank/media/Recordings"
+  }
+
+  # Per-app fast/appdata datasets, mp32..mp36: added by hand 2026-10-22 via pct set (261022-cg6);
+  # config order MUST equal host mp index order — positional TypeList, see lifecycle note; next
+  # free: mp29, mp30, mp37+. Each was hotplugged live (no [pve:pending], no LXC reboot).
+  mount_point {
+    volume = "/mnt/fast/appdata/teslamate"
+    path   = "/mnt/fast/appdata/teslamate"
+  }
+  mount_point {
+    volume = "/mnt/fast/appdata/trek"
+    path   = "/mnt/fast/appdata/trek"
+  }
+  mount_point {
+    volume = "/mnt/fast/appdata/monitoring"
+    path   = "/mnt/fast/appdata/monitoring"
+  }
+  mount_point {
+    volume = "/mnt/fast/appdata/airtrail"
+    path   = "/mnt/fast/appdata/airtrail"
+  }
+  mount_point {
+    volume = "/mnt/fast/appdata/silo"
+    path   = "/mnt/fast/appdata/silo"
   }
 
   # DO NOT REMOVE prevent_destroy WITHOUT READING THIS.
