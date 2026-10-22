@@ -9,7 +9,8 @@
 #   - Author and series monitoring
 #   - Multiple edition support (ebook, audiobook, hardcover, etc.)
 #   - Quality profiles (EPUB, MOBI, PDF, M4B, MP3)
-#   - Metadata management (Goodreads, Google Books)
+#   - Hardcover.app metadata (hardcover flavour; switched from softcover/Goodreads 2026-10-22,
+#     fresh DB, old config preserved at config.softcover-pre-261022)
 #   - Calibre integration for ebook library management
 #   - Automatic renaming and organization
 #   - Import existing library with matching
@@ -27,11 +28,15 @@
 #
 services:
   # Readarr - Ebook and audiobook management
-  # Note: Using Bookshelf (Readarr fork) which has better audiobook support
+  # Note: Using Bookshelf (Readarr fork) which has better audiobook support.
+  # Bookshelf has native MyAnonaMouse (MAM) indexer support without Prowlarr: use it in the MAM
+  # task. Authors were added 2026-10-23 with monitor=none; switch to `existing` once indexers
+  # are ready (one API call per author).
   readarr:
     hostname: "readarr"
     container_name: readarr
-    image: ghcr.io/pennydreadful/bookshelf:softcover
+    # renovate: datasource=docker depName=ghcr.io/pennydreadful/bookshelf
+    image: ghcr.io/pennydreadful/bookshelf:hardcover-v0.4.21.182
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped

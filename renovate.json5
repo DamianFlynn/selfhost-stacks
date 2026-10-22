@@ -480,6 +480,16 @@
       "versioning": "regex:^v?(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)(?:\\.(?<build>\\d+))?(?:-r\\d+|_v[\\d.]+)?-ls(?<revision>\\d+)$"
     },
     {
+      "description": "Bookshelf (the readarr container): hardcover flavour, versioning ONLY. Tags look like `hardcover-v0.4.21.182`; the non-numeric `hardcover-v` prefix is unparseable by Renovate's default docker versioning, which fails SILENTLY -- no PR is ever raised (the SearXNG failure mode, see that rule). The regex is anchored on `hardcover-v`, so neither the `softcover-*` tags nor the floating `hardcover` tag can match: Renovate can never propose a cross-flavour 'update', which matters because the two flavours use incompatible databases (hardcover is not backward-compatible with a softcover/Goodreads DB). No matchUpdateTypes, because renovate-config-validator rejects combining it with versioning; the default arr automerge/label rules continue to apply, as for the LSIO arrs above. Added 2026-10-22 (261022-wp7) with the switch from :softcover to a pinned hardcover tag.",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "ghcr.io/pennydreadful/bookshelf"
+      ],
+      "versioning": "regex:^hardcover-v(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)(?:\\.(?<build>\\d+))?$"
+    },
+    {
       "description": "beets (1 of 2): LSIO tag scheme, versioning ONLY. Default docker versioning treats the '-ls349' in '2.13.1-ls349' as a COMPATIBILITY suffix, so Renovate never proposed a single update for this image -- the Dependency Dashboard listed 2.5.1-ls295 with no update for months. This regex makes the LSIO build number a real version component; build (lsNNN) bumps are handled like PATCH and so still automerge. A packageRules object may NOT combine versioning with matchUpdateTypes (renovate-config-validator rejects it: 'packageRules cannot combine both matchUpdateTypes and versioning'), which is why versioning lives here alone and the manual-review rule is the separate object that follows. Keep the two together and in this order.",
       "matchDatasources": [
         "docker"
