@@ -1,0 +1,126 @@
+261022-cg6 PREFLIGHT (Task 1). READ-ONLY measurement. Evidence for T3-T6, not a report.
+Measured 2026-10-22T12:19:34Z .. 12:21:38Z UTC from the workstation, by ssh to atlantis
+(172.16.1.158) and LXC 100 (172.16.1.159). Every remote command was bounded Linux-side with `timeout`, and the ssh rc was read (all 0).
+Where this differs from the planner's 00:30 numbers, these numbers win.
+
+== HOST-UNCHANGED FENCE ==
+START 12:19:34Z  /etc/pve/lxc/100.conf sha256=7d8bebc37213ea055e47368fa10b4e70392f07ab45d0c2c0eb3a4fd5b1877c86  running containers=85
+END   12:21:38Z  /etc/pve/lxc/100.conf sha256=7d8bebc37213ea055e47368fa10b4e70392f07ab45d0c2c0eb3a4fd5b1877c86  running containers=85
+Identical. Nothing was mutated on either host. (A python xattr probe was streamed over stdin,
+`python3 -I -`. A first attempt wrote and immediately removed /root/.cg6-xattr-probe.py on LXC 100,
+without running it. That is the only filesystem touch. It was not in a data path.)
+
+== KEYED LINES ==
+HOTPLUG-PREDICTION: HOTPLUG. In Config.pm (pve-container 6.1.2), vmconfig_hotplug_pending @1577, the mp branch @1674 dies "skip" only if exists($conf->{mpN}) (@1676). Otherwise it calls apply_pending_mountpoint(...,1) @1679. In apply_pending_mountpoint @1808, a bind (non-volume) with no $old calls PVE::LXC::mountpoint_hotplug (LXC.pm @2433) when $running. mp32..mp36 are absent, so pct set should hotplug. Unproven until the T3 probe, which must also show dockerd's view.
+PENDING-SECTION: none (grep -c '^\[pve:pending\]' /etc/pve/lxc/100.conf = 0)
+ROOTFS: LANDED. pct config: rootfs local-lvm:vm-100-disk-0,size=200G. lvs lv_size=200.00g. df / in the LXC: 197G size, 83G used, 105G avail, 45%. The operator reports that infra/terraform.tfvars (gitignored) already says lxc_disk_gb = 200 and that plan showed selfhost unchanged, so T5's tfvars step is already done. variables.tf default 128 -> 200 is still T5's.
+INTERP-COUNT: 9 (n8n-postgres.yaml:28 `${APPDATA_DIR}/automation/n8n-postgres` is one of them); check-music-freeze.sh:588 DECLARED_INTERP_EXPECTED default 9
+HEALTH-BASELINE-RC: 1 (bash scripts/quick-health-check.sh, 12:21:07Z-12:21:30Z). The only non-green block is "Music consumers audit: ⚠️ CONF-04 MEASURED AND OPEN ... (exit 3)", which is pre-existing and by design. Every other block is ✅.
+BASELINE-teslamate: drives max(id)=510 max(start_date)=2026-10-22 10:44:38.86; positions=688075; charging_processes=25 (12:20:39Z; the car drove this morning, so max(id) may only grow)
+BASELINE-airtrail: flight=374
+BASELINE-n8n: workflow_entity=70
+BASELINE-prometheus: prometheus_tsdb_lowest_timestamp_seconds=1790035201 (2026-09-22, 30d retention); count(up==1)=10 of count(up)=10
+
+== 1. HOTPLUG EVIDENCE (atlantis) ==
+pve-manager/9.1.6/71482d1833ded40a (running kernel: 7.0.14-4-pve)
+pve-container 6.1.2, lxc-pve 6.0.5-4
+/usr/share/perl5/PVE/LXC/Config.pm:
+  1577 sub vmconfig_hotplug_pending
+  1674 } elsif ($opt =~ m/^mp(\d+)$/) {
+  1676     die "skip\n"; # don't try to hotplug over existing mp
+  1679     $class->apply_pending_mountpoint($vmid, $conf, $opt, $storecfg, 1);
+  1808 sub apply_pending_mountpoint
+  1833     die "skip\n" if $running && defined($old);
+           ... if ($running) { PVE::LXC::mountpoint_hotplug(...) }
+/usr/share/perl5/PVE/LXC.pm:
+  2433 sub mountpoint_hotplug. It stages the bind in the monitor's mount namespace and moves it into the
+       container's mnt ns. It goes into init's namespace, so the T3 dockerd probe is the real test.
+Used mp keys: mp0..mp28, mp31. Free: mp29, mp30, mp32+. `pct config 100 | grep -E '^mp3[2-6]:'` is empty.
+Chosen slots (unchanged from the plan): teslamate=mp32 trek=mp33 monitoring=mp34 airtrail=mp35 silo=mp36
+
+== 2. ROOTFS == see the ROOTFS key line.
+
+== 3. DATASET PRE-ABSENCE + PROPERTY BASELINE (atlantis) ==
+fast/appdata/{teslamate,trek,monitoring,airtrail,silo}: zfs list FAILS for all five, and /mnt/fast/appdata/<a> is absent on the host for all five.
+fast free: 1.42T
+fast/appdata                 acltype posix (inh fast), aclmode discard (inh), aclinherit discard (inh), xattr sa (local), recordsize 128K (default), lz4 (inh), atime off (inh), quota none
+fast/appdata/immich/postgres acltype nfsv4, aclmode passthrough, aclinherit passthrough (inh immich), xattr sa, recordsize 16K (LOCAL), lz4, atime off
+fast/appdata/automation      acltype nfsv4, aclmode passthrough, aclinherit passthrough (local), xattr sa, recordsize 128K, atime off (local)
+Host owners: agentic-os 568:568 755; immich/postgres 100999:568 700; automation 568:568 770
+
+== 4. SOURCES AND OWNERS (LXC 100, container view). All on ext4 /, none a mountpoint ==
+src                                                        du -sb       entries  root owner/mode   first-level children
+/mnt/fast/appdata/monitoring                               1733175442   1549     568:568 755       grafana, prometheus, node-exporter-textfile: all 568:568 755
+/mnt/fast/appdata/airtrail                                 83533642     1911     568:568 755       db 70:568 700; uploads 568:568 755
+/var/lib/docker/volumes/trek_trek_data/_data               10530103     13       1000:1000 755     backups/logs/tmp 1000:1000 755; travel.db(+shm,wal,2 .bak) 1000:1000 644
+/var/lib/docker/volumes/trek_trek_uploads/_data            1606866      15       1000:1000 755     avatars covers files journey photos places: 1000:1000 755
+/automation/n8n-postgres                                   72915137     5141     70:0 755          18 0:0 755
+/var/lib/docker/volumes/teslamate_teslamate-db/_data       165861705    1414     999:999 1777      18 0:0 755
+/var/lib/docker/volumes/teslamate_teslamate-grafana-data/_data 3368645  16       472:0 777         csv/pdf/png 472:0 700; grafana.db 472:0 640; plugins 472:0 777; unified-search 472:0 750
+/var/lib/docker/volumes/teslamate_teslamate-import/_data   0            1        0:0 755           (empty)
+/mnt/fast/appdata/silo                                     927718471    3607     0:0 750           artwork compat plugins postgres transcode: 0:0 755
+(silo grew from the planner's 886M by du -sh rounding. The operator reports artwork was emptied; the du above is after that.)
+Host-side ids the idmap will produce: 999->100999, 70->100070, 472->100472, 1000->101000, 0->100000, 568->568.
+
+xattr/ACL: getfattr, getfacl and rsync are all ABSENT in LXC 100. Measured instead with python3 os.listxattr
+over every entry of all nine sources: files_with_xattr=0 and files_with_posix_acl=0 in every source.
+Hard-linked files, symlinks, sockets and fifos: 0 in every source. So `cp -a` has nothing it could silently drop.
+
+docker inspect (12:20Z):
+/teslamate-db       running unless-stopped healthy  postgres:18-trixie   volume:teslamate_teslamate-db -> /var/lib/postgresql
+/teslamate-grafana  running unless-stopped -        teslamate/grafana:4.3.0  volume:teslamate_teslamate-grafana-data -> /var/lib/grafana
+/teslamate          running unless-stopped -        teslamate/teslamate:4.3.0  volume:teslamate_teslamate-import -> /opt/app/import
+/teslamateapi       running unless-stopped -        tobiasehlert/teslamateapi:1.25.0  (no mounts)
+/trek               running unless-stopped healthy  mauriceboe/trek:4.3.3  volume trek_trek_data -> /app/data, volume trek_trek_uploads -> /app/uploads
+                    (NOTE: main now pins 4.3.4, not yet deployed. The T4 H3 `up -d` will also pull 4.3.4, so the version bump rides the migration)
+/airtrail-db        running unless-stopped healthy  postgres:16.15-alpine3.24  bind /mnt/fast/appdata/airtrail/db -> /var/lib/postgresql/data
+/airtrail           running unless-stopped healthy  johly/airtrail:v3.13.0  bind /mnt/fast/appdata/airtrail/uploads -> /app/uploads
+/n8n-db             running unless-stopped healthy  postgres:18-alpine  bind /automation/n8n-postgres -> /var/lib/postgresql
+/n8n                running unless-stopped -        ghcr.io/damianflynn/custom-n8n:2.22.0  binds all literal /mnt/fast/appdata/automation/n8n*
+/grafana            running unless-stopped -        grafana/grafana:13.2.4  bind /mnt/fast/appdata/monitoring/grafana -> /var/lib/grafana (+3 provisioning binds from /mnt/fast/stacks)
+/prometheus         running unless-stopped -        prom/prometheus:v3.15.1  bind /mnt/fast/appdata/monitoring/prometheus -> /prometheus
+/node-exporter      running unless-stopped -        prom/node-exporter:v1.12.1  bind .../monitoring/node-exporter-textfile -> textfile_collector (+ /proc /sys /)
+/silo-db            exited  unless-stopped (unhealthy, last state)  pgvector/pgvector:pg18  bind /mnt/fast/appdata/silo/postgres -> /var/lib/postgresql
+/silo               exited  unless-stopped (unhealthy, last state)  silo-server@sha256:279ff2...  binds silo/{plugins,artwork,compat,transcode}
+APPDATA_DIR in stacks/selfhosted/automation/.env (host): grep -c = 0 (rc 1). In monitoring/.env: 1. This confirms the cause of /automation/n8n-postgres.
+Host checkout /mnt/fast/stacks: 3aad9a3, `git status --short` empty.
+
+== 5. APP BASELINES (12:20:39Z) ==
+See the BASELINE-* keys. Also:
+trek Health.Status=healthy
+grafana (192.168.90.28) /api/health: {"database":"ok","version":"13.2.4"}
+teslamate-grafana (192.168.90.16) /api/health: {"database":"ok","version":"13.2.2"}
+n8n /healthz on 127.0.0.1:5678: {"status":"ok"}
+airtrail http://<ip>:3000/ -> 200; teslamate http://<ip>:4000/ -> 200
+running containers: 85
+selfhost-image-drift.timer: active. Next run 13:07:04Z (hourly-ish; last 12:01:07Z). H1 must stop it.
+Postgres roles (env, no passwords read): teslamate/teslamate, airtrail/airtrail, n8n/n8n
+
+== 6. BACKUP COVERAGE (atlantis) ==
+/usr/local/bin/backup-incremental.sh:
+  4  # WHY THIS EXISTS: run-backup.sh does FULL sends and *skips* any dataset already present
+  17 DATASETS="  ...  31-34 DATASETS="$DATASETS $(zfs list -H -o name -r fast/appdata ... | grep -vE '^fast/appdata/(hoarder|agentic-os)$')"
+  38-39 if ! zfs list "$tgt"; then say "$tgt not on backup -- needs a FULL send (run-backup.sh), skipping"
+/usr/local/bin/run-backup.sh: send() @36. `zfs send -Lec "$ds@$snap" | zfs recv -F "$target"` @50. fast_datasets() @82.
+zfs list -d1 backup/appdata: 15 children (arrs automation buzz code-server dawarich homarr immich llm-ai media
+  minecraft mpe postiz teleport termix traefik). None of teslamate/trek/monitoring/airtrail/silo.
+Last ALL DONE: 2026-10-22T00:17:28+01:00. backup pool ONLINE, 10.8T free.
+CONCLUSION: the five new datasets are NOT backed up until an explicit full send creates backup/appdata/<a>. That is T4 Step 8.
+After Step 8, expect 20 children under backup/appdata.
+
+== 7. PINS AND HEALTH BASELINE ==
+Inventory grep: 9 lines. listenarr x3 (${APPDATA} ${MEDIA} ${DOWNLOADS}), monitoring x3 (${APPDATA_DIR}), n8n-postgres x1,
+immich x2 (${UPLOAD_LOCATION} ${DB_DATA_LOCATION}).
+quick-health-check.sh: committed with mode 100644, so `scripts/quick-health-check.sh` fails 126 (permission denied).
+Run it as `bash scripts/quick-health-check.sh`. Baseline rc=1. Red/UNKNOWN lines verbatim:
+  Music consumers audit: ⚠️  CONF-04 MEASURED AND OPEN — artist rows at baseline, not at target (exit 3)
+  ❌ Health check FAILED. (summary line; driven only by the CONF-04 ⚠️ above)
+Green and notable: Containers running 85, no unhealthy containers. "/ headroom: 112339705856 bytes (104.62 GiB) (target >= 21474836480)".
+Image drift: 7 drifted (REPORTED), unresolvable 2 (asserted), unhealthy 2 (silo/silo-db last state), FAILURES 0.
+
+== 8. OUT-OF-SCOPE CLASSIFICATION (re-measured 12:21Z). All rows unchanged in verdict ==
+documents     142M  not a mountpoint  newest 2026-10-22 redis/dump.rdb. paperless, paperless_postgres, _redis, _tika, _gotenberg and paperless-gpt are all Up -> LIVE. Follow-up quick task.
+open-archiver 67M   newest 2026-09-06 valkey/dump.rdb. No open-archiver container (the only meilisearch is karakeep-meilisearch) -> undeployed leftover. Keep.
+rustdesk      1.4M  newest 2026-09-23 db_v2.sqlite3-wal. No rustdesk/hbbs/hbbr container -> leftover that holds the relay keypair. Do NOT delete.
+_ops          16K   newest 2026-09-27 image-prune-20260927T214453Z.txt -> operator log artefact.
+buzz          4K    empty -> mount-target shadow from the 2026-09-25 mp29 delete.
