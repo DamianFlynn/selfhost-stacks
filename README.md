@@ -66,6 +66,8 @@ send to the `backup` pool, so the nightly incremental carries it.
 | `fast/appdata/monitoring` | mp34 | 128K | **25G** | Prometheus TSDB, Grafana, node-exporter textfile dir. The one continuously growing tenant, so it is bounded |
 | `fast/appdata/airtrail` | mp35 | 16K | — | AirTrail Postgres and uploads |
 | `fast/appdata/silo` | mp36 | 16K | — | Silo (dormant: `silo-db` and `silo` stay stopped) |
+| `fast/appdata/bookorbit` | mp37 | 128K | — | BookOrbit covers and book-bucket (`data/`). Created on its own dataset 2026-10-22 (261022-wp7) |
+| `fast/appdata/bookorbit/postgres` | mp38 | 16K | — | BookOrbit Postgres (`18/docker`) |
 
 n8n's Postgres moved to `/mnt/fast/appdata/automation/n8n-postgres`, inside the existing
 `fast/appdata/automation` dataset, with no new mount. It had been on `/automation/n8n-postgres`,
@@ -78,7 +80,7 @@ quota on the Postgres datasets on purpose: `ENOSPC` under Postgres WAL is a PANI
 
 1. `zfs create fast/appdata/<name>` on atlantis (owner `568:568`, mode `0755`).
 2. `pct set 100 -mpN /mnt/fast/appdata/<name>,mp=/mnt/fast/appdata/<name>`. A *new* `mpN` hotplugs
-   live with no LXC reboot (measured 2026-10-22). Next free indices: mp29, mp30, mp37+.
+   live with no LXC reboot (measured 2026-10-22). Next free indices: mp29, mp30, mp39+.
 3. Append the matching `mount_point` block to `infra/lxc-selfhost.tf` in host index order. Never
    `terraform apply` it (see the lifecycle note there).
 4. Do a full `zfs send | zfs recv` to `backup/appdata/<name>`. `backup-incremental.sh` **skips** a
