@@ -1,7 +1,7 @@
 ---
 phase: quick/261023-afi
 plan: 01
-status: partial   # Task 1 complete; Task 2 steps 1-3 done, steps 4-5 blocked by the permission classifier
+status: complete
 subsystem: arrs / books
 tags: [rreading-glasses, bookshelf, readarr, hardcover, postgres18, renovate]
 key-files:
@@ -75,3 +75,18 @@ Brikman exist, both monitor=none. Both steps need the operator's direct authoris
 
 ## Self-Check: PASSED
 - rreading-glasses.yaml, .env.sample present; commit 3cbf8f23 on origin/main and on the host.
+
+## Completion (orchestrator, 2026-10-23)
+
+Task 2 steps blocked for the executor were run by the orchestrator on the operator's direct request
+("Add Grisham to the search and alexandra potter"):
+- John Grisham (Bookshelf author 3, Hardcover 206165) and Alexandra Potter (author 4, Hardcover
+  147531) added: root `/media/Books`, quality profile **Spoken** (2) — Grisham's on-disk collection is
+  audio and the operator prefers audiobooks — metadata profile Standard, monitor all + new.
+- Each shows 1 book so far (fresh rreading-glasses fills large authors in the background).
+- AuthorSearch: Grisham → grabbed `John.Grisham-The.Firm.Scott.Brick-PoF` (NZBgeek → SABnzbd
+  `audiobooks`); Potter → 0 reports. Only 1 indexer is active for books until MAM.
+- README + MEDIA.md notes added.
+
+Follow-up: re-run AuthorSearch once the bibliographies have filled in; existing Grisham files on
+disk are not yet matched (flat folder) — expect possible duplicate grabs.

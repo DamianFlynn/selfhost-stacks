@@ -416,7 +416,8 @@ precisely so a negative control needs no file edit.
 - **Prowlarr** - Indexer manager
 - **Autobrr** - IRC announce grabber
 - **Bookshelf** (container `readarr`) - Book and audiobook management; Readarr fork on the
-  hardcover (Hardcover.app) flavour since 2026-10-22
+  hardcover (Hardcover.app) flavour since 2026-10-22; metadata from the self-hosted
+  **rreading-glasses** (internal only, `http://rreading-glasses:8788`) since 2026-10-23
 
 ### Books
 - **BookOrbit** - Ebook and audiobook reader at `books.deercrest.info`, own login, library

@@ -153,6 +153,14 @@ lists file names. Bookshelf moved from the softcover (Goodreads) flavour to hard
 database the same day; the old config is kept at
 `/mnt/fast/appdata/arrs/readarr/config.softcover-pre-261022`.
 
+Since 2026-10-23 Bookshelf's *Metadata Provider Source* is the self-hosted **rreading-glasses**
+(`stacks/selfhosted/arrs/rreading-glasses.yaml`), not the shared `https://hardcover.bookinfo.pro`,
+which was returning 429s and timing out so no author could be added. It authenticates to Hardcover
+with `HARDCOVER_AUTH` in the host's `arrs/.env` (operator's Hardcover API token, `Bearer …`; never
+in git). Its Postgres is a rebuildable cache on the `arrs` dataset. Large authors fill in over
+hours on a fresh instance, so a new author may show only a few books at first. Fallback if it is
+down: point the setting back at the hosted URL (Settings → Development → Metadata Provider Source).
+
 ### Who can write to the library
 
 Deliberately asymmetric (D-19 narrowing, D-21 carve-out). **Note `lidarr`: broad but read-only —
