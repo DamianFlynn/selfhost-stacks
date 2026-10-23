@@ -84,6 +84,12 @@ services:
       # MOUNT AT /var/lib/postgresql, NOT /var/lib/postgresql/data - the PG18 image layout
       # (PGDATA=/var/lib/postgresql/18/docker); one level deeper and it refuses to start. See the
       # silo-db note in stacks/selfhosted/silo/compose.yaml.
+      # NFSv4-ACL TRAP (fast/appdata/arrs is acltype=nfsv4, aclmode=passthrough - unlike the
+      # posix-ACL silo/bookorbit datasets): on first start the entrypoint, as root, created `18/`
+      # as 0770 root:root, chowned `18/docker` to 70, then dropped to postgres (uid 70), which
+      # could not traverse `18/` -> "mkdir: can't create directory '/var/lib/postgresql/18/docker':
+      # Permission denied" and a restart loop. Fixed 2026-10-23 with `chmod 0755 .../postgres/18`.
+      # On a fresh host pre-create it:  install -d -m 0755 .../postgres/18
       # Literal host path on purpose: an interpolated one would move check-music-freeze.sh's
       # pinned interpolated-host-path inventory (CONVENTIONS rule 5).
       - /mnt/fast/appdata/arrs/rreading-glasses/postgres:/var/lib/postgresql
