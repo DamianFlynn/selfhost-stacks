@@ -161,6 +161,18 @@ in git). Its Postgres is a rebuildable cache on the `arrs` dataset. Large author
 hours on a fresh instance, so a new author may show only a few books at first. Fallback if it is
 down: point the setting back at the hosted URL (Settings → Development → Metadata Provider Source).
 
+Since 2026-10-23 every author folder is **one folder per book** (`Author/Title/files`). Grisham and
+Rowling had been flat (all parts of every book loose in the author folder, plus a nested
+`Author/Author/` copy), which made Audiobookshelf — and so Music Assistant — show each author as one
+505- or 218-file "book" and stopped Bookshelf matching anything. The nested copies were the same
+recordings with different tags; they sit outside the library in `/mnt/tank/media/Books-duplicates-20261023/`
+until the snapshot `tank/media/Books@pre-regroup-20261023` is released. Audiobookshelf's metadata
+precedence was changed so the folder name beats file tags (several files carry another book's title).
+
+Music Assistant streams audiobooks through its Audiobookshelf provider as the ABS user **`house`**
+(play-only; password in `/mnt/fast/secrets/abs-house.env` on LXC 100), so speakers keep their own
+progress separate from personal accounts.
+
 ### Who can write to the library
 
 Deliberately asymmetric (D-19 narrowing, D-21 carve-out). **Note `lidarr`: broad but read-only —
