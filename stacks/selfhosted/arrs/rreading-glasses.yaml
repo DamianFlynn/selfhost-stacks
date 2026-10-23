@@ -1,0 +1,95 @@
+# rreading-glasses - self-hosted Hardcover metadata server for Bookshelf (readarr)
+#
+# Purpose:
+#   Bookshelf's hardcover flavour asks a metadata server for authors, works and editions. The
+#   default is the hosted https://hardcover.bookinfo.pro, which was answering 429 and timing out
+#   (2026-10-23), so author adds and refreshes failed. This runs the same server
+#   (github.com/blampe/rreading-glasses) locally against Hardcover's API with our own token.
+#   Bookshelf points at it via Settings -> Metadata Provider Source = http://rreading-glasses:8788
+#   (API: /api/v1/config/development, field metadataSource). Quick task 261023-afi.
+#
+# Access:
+#   INTERNAL ONLY. No published ports, no Traefik labels. readarr reaches it by container name on
+#   t3_proxy (the only network readarr is on). Postgres sits on a private internal network that
+#   only rreading-glasses joins, so the DB is not reachable from the ~100 containers on t3_proxy.
+#
+# Secrets (arrs/.env, names only - this repo is public):
+#   HARDCOVER_AUTH                full "Bearer <token>" from hardcover.app -> Settings -> API.
+#                                 Added by the operator, never by an agent.
+#   RREADING_GLASSES_DB_PASSWORD  random alphanumeric, generated on the host.
+#
+# Postgres is used as a key-value cache, not a system of record: losing it costs a re-fetch from
+# Hardcover, nothing else. It still lives on ZFS (fast/appdata/arrs), never on the LXC rootfs.
+
+networks:
+  rreading-glasses:
+    name: rreading-glasses
+    # internal: no route out. Only the DB is solely on it; rreading-glasses gets egress to
+    # api.hardcover.app through t3_proxy.
+    internal: true
+
+services:
+  rreading-glasses:
+    container_name: rreading-glasses
+    hostname: rreading-glasses
+    # Pinned by DIGEST: upstream publishes no version tags, only the moving `hardcover` and
+    # `latest` (Goodreads flavour) tags. The tag is kept beside the digest so Renovate tracks the
+    # HARDCOVER tag - a digest-only ref (silo's form) would be resolved against `latest`, which is
+    # the wrong flavour here. Digest = `hardcover` as published 2026-09-09T23:04:40Z.
+    # Renovate never automerges this image (renovate.json5, "rreading-glasses" rule).
+    # renovate: datasource=docker depName=blampe/rreading-glasses
+    image: blampe/rreading-glasses:hardcover@sha256:3f017a51d9007b715303a20f481c822e4df66485fc9e5f57f6fdf1de840dc02f
+    entrypoint: ["/main", "serve"]
+    restart: unless-stopped
+    # Upstream: "the app will use as much memory as it has available for in-memory caching".
+    # It sets the Go memory limit to 90% of what the cgroup allows and gives the in-memory LRU
+    # half of that, on top of Postgres as the durable cache. Upstream's example is 128m; 512m
+    # leaves ~230 MB of hot cache - ample for one library - while bounding it on LXC 100, whose
+    # free memory is the constraint (see silo's mem_limit note).
+    mem_limit: 512m
+    security_opt:
+      - no-new-privileges:true
+    # No healthcheck: the image is gcr.io/distroless/static:nonroot (no shell, no curl, no wget),
+    # so there is nothing to run inside it. Probe from outside instead:
+    #   docker run --rm --network t3_proxy curlimages/curl -s -o /dev/null -w '%{http_code}' \
+    #     http://rreading-glasses:8788/swagger.json
+    depends_on:
+      rreading-glasses-db:
+        condition: service_healthy
+    networks:
+      - t3_proxy
+      - rreading-glasses
+    environment:
+      HARDCOVER_AUTH: ${HARDCOVER_AUTH:-}
+      POSTGRES_HOST: rreading-glasses-db
+      POSTGRES_DATABASE: rreading-glasses
+      POSTGRES_USER: rreading-glasses
+      POSTGRES_PASSWORD: ${RREADING_GLASSES_DB_PASSWORD:?RREADING_GLASSES_DB_PASSWORD must be set in arrs/.env}
+
+  rreading-glasses-db:
+    container_name: rreading-glasses-db
+    hostname: rreading-glasses-db
+    image: postgres:18-alpine
+    restart: unless-stopped
+    mem_limit: 512m
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - rreading-glasses
+    environment:
+      POSTGRES_USER: rreading-glasses
+      POSTGRES_PASSWORD: ${RREADING_GLASSES_DB_PASSWORD:?RREADING_GLASSES_DB_PASSWORD must be set in arrs/.env}
+      POSTGRES_DB: rreading-glasses
+    volumes:
+      # MOUNT AT /var/lib/postgresql, NOT /var/lib/postgresql/data - the PG18 image layout
+      # (PGDATA=/var/lib/postgresql/18/docker); one level deeper and it refuses to start. See the
+      # silo-db note in stacks/selfhosted/silo/compose.yaml.
+      # Literal host path on purpose: an interpolated one would move check-music-freeze.sh's
+      # pinned interpolated-host-path inventory (CONVENTIONS rule 5).
+      - /mnt/fast/appdata/arrs/rreading-glasses/postgres:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rreading-glasses -d rreading-glasses"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s

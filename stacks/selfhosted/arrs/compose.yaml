@@ -29,6 +29,7 @@ include:
   - sonarr.yaml
   - lidarr.yaml
   - readarr.yaml
+  - rreading-glasses.yaml  # Self-hosted Hardcover metadata server for Bookshelf (readarr); internal only. Quick 261023-afi.
 #  - listenarr.yaml  # Image not yet published
   - bazarr.yaml
   - flaresolverr.yaml
