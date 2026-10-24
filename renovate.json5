@@ -519,6 +519,21 @@
       ]
     },
     {
+      "description": "qBittorrent: excluded from ALL automerge. Added 2026-10-24. MyAnonamouse rule 2.3 bans unlisted client versions ('Unauthorized Client') and requires client auto-update to be off; Renovate automerge plus the deploy agent IS auto-update. 5.3.0 was automerged on 2026-10-22 and is not on MAM's approved list, so the pin went back to 5.1.4. A human checks MAM's approved-clients list before merging any qBittorrent bump. Must stay after the two 'Default: Auto-merge' rules so that automerge:false wins.",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "ghcr.io/linuxserver/qbittorrent",
+        "lscr.io/linuxserver/qbittorrent"
+      ],
+      "automerge": false,
+      "addLabels": [
+        "stack:arrs",
+        "manual-review-required"
+      ]
+    },
+    {
       "description": "CouchDB (neocortex LiveSync): excluded from ALL automerge -- patch, minor and digest as well as major. Added 2026-09-16 (neocortex v2 TODO-214). Every Obsidian device replicates continuously against this server, so an unattended bump of the database under live replication is the one update this estate must not take unseen; a human merges it, then deploys it deliberately and checks _up and the neocortex doc_count. Merging deploys nothing: see the README 'Renovate deploy drift' check (git -C /mnt/fast/stacks log -1 vs docker ps). Must stay after the two 'Default: Auto-merge' rules so that automerge:false wins. Same KNOWN COSMETIC WART as the Jellyfin and beets rules: a CouchDB patch/minor PR still carries 'automerge' and 'safe' labels from the default rules while NOT automerging. Filter on 'manual-review-required'.",
       "matchDatasources": [
         "docker"

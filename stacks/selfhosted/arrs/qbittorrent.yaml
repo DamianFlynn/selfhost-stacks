@@ -26,7 +26,11 @@ services:
   qbittorrent:
     hostname: "qbittorrent"
     container_name: qbittorrent
-    image: ghcr.io/linuxserver/qbittorrent:5.3.0_v2.1.2-ls484
+    # PINNED to MyAnonamouse's allowed-client list (MAM rule 2.3: unlisted versions get
+    # "Unauthorized Client", and client auto-update must be off). 5.3.0 is NOT allowed; 5.1.4 is
+    # the newest allowed at 2026-10-24. Renovate never automerges this image — check MAM's
+    # approved-clients list before accepting any bump.
+    image: ghcr.io/linuxserver/qbittorrent:5.1.4-r3-ls453
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped
