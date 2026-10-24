@@ -37,8 +37,13 @@ services:
     # profiles: ["apps", "downloads", "all"]
     networks:
       - t3_proxy
+    # BitTorrent listening port — TCP AND UDP. qBittorrent's Session\Port must also be 7889
+    # (it was 6881 until 2026-10-24, so this mapping pointed at nothing and the client was never
+    # connectable). The router (UCG) must forward TCP+UDP 7889 → 172.16.1.159:7889 for private
+    # tracker seeding (MyAnonamouse).
     ports:
       - "7889:7889"
+      - "7889:7889/udp"
     volumes:
       - /mnt/fast/appdata/arrs/qbittorrent/config:/config:rw  # Application config, torrents, and state
       - /mnt/fast/appdata/arrs/qbittorrent/arr-scripts:/custom-cont-init.d  # Custom initialization scripts
