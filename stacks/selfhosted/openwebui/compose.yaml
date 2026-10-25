@@ -395,7 +395,7 @@ services:
     # measured 609 MB 2026-09-06; cap bounds a runaway, not steady state
     mem_limit: 1536m
     # renovate: datasource=docker depName=ghcr.io/open-webui/open-webui
-    image: ghcr.io/open-webui/open-webui:v0.12.3
+    image: ghcr.io/open-webui/open-webui:v0.12.4
     pull_policy: always
     restart: unless-stopped
     
