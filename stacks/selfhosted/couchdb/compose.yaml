@@ -45,7 +45,7 @@ services:
     # renovate: datasource=docker depName=couchdb
     # Excluded from ALL automerge in renovate.json5: an unattended bump must not land under live
     # LiveSync replication. Merging still deploys nothing - see README "Renovate deploy drift".
-    image: couchdb:3.5.2
+    image: couchdb:3.5.3
     restart: unless-stopped
     user: "${PUID:-5984}:${PGID:-5984}"
     # A personal vault: small steady state. The cap bounds a runaway (README: memory headroom).
