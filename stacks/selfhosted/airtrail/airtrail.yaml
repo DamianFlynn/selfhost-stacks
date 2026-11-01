@@ -45,7 +45,7 @@ services:
   ########################### APPLICATION
   airtrail:
     # renovate: datasource=docker depName=johly/airtrail
-    image: johly/airtrail:v3.13.1
+    image: johly/airtrail:v3.14.0
     container_name: airtrail
     restart: unless-stopped
     # 768m not 512m. Upstream documents a ~600 MB transient peak on FIRST START while it
