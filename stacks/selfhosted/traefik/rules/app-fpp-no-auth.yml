@@ -13,5 +13,5 @@ http:
     fpp-svc:
       loadBalancer:
         servers:
-          - url: "http://172.16.1.29:80"
+          - url: "http://172.16.50.11:80"
 
