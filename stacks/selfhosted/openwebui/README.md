@@ -50,7 +50,7 @@ This stack provides a complete AI-powered environment with the following compone
 
 ### Minimum Requirements
 - **CPU**: AMD Ryzen with integrated graphics (tested on Ryzen AI 9 HX PRO 370)
-- **GPU**: AMD Radeon with ROCm support (tested on Radeon 890M)
+- **GPU**: AMD Radeon iGPU via Vulkan (tested on Radeon 890M / gfx1150; Ollama needs `OLLAMA_IGPU_ENABLE=1`)
 - **RAM**: 16GB minimum (32GB recommended)
 - **Storage**: 50GB for base installation + model storage
 
@@ -64,7 +64,7 @@ This stack provides a complete AI-powered environment with the following compone
 ### Prerequisites
 1. Docker and Docker Compose installed
 2. Traefik reverse proxy with SSL certificates
-3. AMD GPU drivers and ROCm support
+3. `/dev/dri` passed into the container (render 110 / video 44 groups). ROCm and `/dev/kfd` are NOT used
 4. DNS records pointing to your server:
    - `chat.deercrest.info`
    - `search.deercrest.info`
@@ -289,7 +289,7 @@ docker compose logs -f ai-ollama
 ```
 
 ### Performance Monitoring
-- **GPU Usage**: `watch -n 1 'rocm-smi'`
+- **GPU Usage**: `docker logs ai-ollama 2>&1 | grep "inference compute"` should show `library=Vulkan`; `docker exec ai-ollama ollama ps` PROCESSOR column should read `100% GPU`
 - **Memory**: `docker stats`
 - **Database**: Connect to PostgreSQL and check `pg_stat_activity`
 - **Redis**: Use RedisInsight at Redis console
@@ -327,10 +327,12 @@ tar -czf openwebui-backup.tar.gz /mnt/fast/appdata/llm-ai/
 
 **AMD GPU Not Detected**:
 ```bash
-# Check ROCm installation
-rocm-smi
-# Verify device access
-ls -la /dev/kfd /dev/dri
+# Verify device access (Vulkan uses /dev/dri only)
+ls -la /dev/dri
+# Ollama's discovery line should show library=Vulkan and the Radeon 890M
+docker logs ai-ollama 2>&1 | grep "inference compute"
+# Any hit here means OLLAMA_IGPU_ENABLE=1 is missing
+docker logs ai-ollama 2>&1 | grep "dropping integrated GPU"
 ```
 
 **Models Not Loading**:
@@ -377,8 +379,7 @@ curl https://docling.deercrest.info/health
 
 **GPU Optimization**:
 - Set `OLLAMA_NUM_GPU=1` for single GPU systems
-- Adjust `HSA_OVERRIDE_GFX_VERSION` for compatibility
-- Monitor VRAM usage with `rocm-smi`
+- `docker exec ai-ollama ollama ps` shows each loaded model's size and GPU/CPU split
 
 ## 📝 License
 

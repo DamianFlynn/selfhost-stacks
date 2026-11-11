@@ -58,7 +58,8 @@ services:
       test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
       timeout: 3s
 
-  # Ollama AI model server with AMD GPU (ROCm) acceleration
+  # Ollama AI model server with AMD iGPU (Vulkan) acceleration
+  # Not ROCm: /dev/kfd is not passed into LXC 100 and the image is the non-`-rocm` build.
   # Public API: https://ollama.deercrest.info
   # Internal API: http://ai-ollama:11434
   # Manages and runs local LLMs (Large Language Models)
@@ -73,6 +74,12 @@ services:
       - OLLAMA_DEBUG=0
       - OLLAMA_FLASH_ATTENTION=true
       - OLLAMA_HOST=0.0.0.0:11434
+      # 2026-11-11 (quick 261111-swk): 0.40.x drops the iGPU unless this is set
+      # ("dropping integrated GPU; to enable, set OLLAMA_IGPU_ENABLE=1"). It stayed off partly for
+      # amdgpu userptr exposure; kernel 7.0.14-28 carries the amdgpu_hmm_invalidate_gfx fix (#7905).
+      # qwen2.5:3b: CPU 0.26 tok/s at ~770% CPU vs Vulkan 18.4 tok/s, 37/37 layers offloaded.
+      # OLLAMA_NUM_THREAD below is ignored by 0.40.x (still 12 threads); use per-model num_thread.
+      - OLLAMA_IGPU_ENABLE=1
       - OLLAMA_LOAD_TIMOUT=10m
       - OLLAMA_MLOCK=true
       - OLLAMA_MMAP=true
