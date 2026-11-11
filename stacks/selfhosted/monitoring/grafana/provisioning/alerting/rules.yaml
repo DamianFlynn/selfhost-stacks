@@ -1,5 +1,6 @@
-# Grafana provisioned alert rules for the image-drift instrument (group `image-drift`) and the
-# deploy agent, scripts/deploy-stacks.sh (group `deploy`).
+# Grafana provisioned alert rules for the image-drift instrument (group `image-drift`), the
+# deploy agent, scripts/deploy-stacks.sh (group `deploy`), and the container restart exporter,
+# scripts/export-container-restarts.sh (group `container-restarts`).
 #
 # ⚠️ `noDataState: Alerting` ON ALL THREE `image-drift` RULES IS THE FAIL-CLOSED LEVER, IN GRAFANA'S
 #    VOCABULARY. (The `deploy` group gives it to its stale rule only — see that group's comment.)
@@ -36,6 +37,13 @@
 #    scripts/deploy-stacks.sh (RUN_BUDGET_SECONDS + per-stack timeouts, which keep a run inside that
 #    cap). 35 + 60 + one whole missed run of 30 = 125 min = 7500 s. Change any term and you MUST
 #    change 7500 in the same commit. The timer says so too.
+#
+# ⚠️ THE 360s IN THE `container-restarts` GROUP'S STALE RULE IS LIKEWISE ONE DECISION ACROSS THREE
+#    FILES: scripts/systemd/selfhost-container-restarts.timer (OnCalendar=*:0/2 + AccuracySec=5s =
+#    125 s worst start gap), scripts/systemd/selfhost-container-restarts.service (TimeoutStartSec=60
+#    runtime cap) and scripts/export-container-restarts.sh (whose timeouts keep a run inside it).
+#    125 + 60 + one missed run of 120 + a 15 s scrape ≈ 320 s, rounded up to 360. Change any term
+#    and you MUST change 360 in the same commit. All three files say so.
 
 apiVersion: 1
 
@@ -127,11 +135,17 @@ groups:
           area: estate
         annotations:
           summary: >-
-            {{ $values.A.Value }} container(s) are unhealthy or stuck in state `created`.
+            {{ $values.A.Value }} RUNNING container(s) unhealthy, or container(s) stuck in state
+            `created`.
+          # `{{ "{{" }}` renders a literal double open-brace: unescaped, Grafana's template engine evaluated the
+          # docker --format string and failed every evaluation ("can't evaluate field State").
           description: >-
             Run: ssh root@172.16.1.159 'docker ps -a'  (NOT `docker ps` — it hides `created`,
             and it reported cadvisor "Up 2 weeks" while inspect showed it exited 16 days earlier).
-            Then: docker inspect <name> --format '{{ .State.Status }} {{ .State.ExitCode }}'
+            Then: docker inspect <name> --format '{{ "{{" }} .State.Status }} {{ "{{" }} .State.ExitCode }}'
+
+            Unhealthy counts RUNNING containers only: an Exited container keeps its last health
+            status forever, and counting it held this rule red from 2026-10-22 (261111-rmv).
 
             Believe inspect over ps. Background: monitoring/README.md § Image drift detection.
         data:
@@ -457,6 +471,214 @@ groups:
                       # selfhost-deploy.service and deploy-stacks.sh's run budget — see the
                       # warning at the top of this file. Do not tune any term alone.
                       - 7500
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    type: last
+                    params: []
+
+  # ===============================================================================================
+  # container-restarts — scripts/export-container-restarts.sh every 2 min (quick 261111-rmv: Jellyfin
+  # crash-looped ~21 h and nothing alerted). Runbook: monitoring/README.md § Restart-loop detection.
+  #
+  # The exporter writes selfhost_container_restarting{name} (0/1) and
+  # selfhost_container_restart_count{name} for EVERY running or restarting container, so both
+  # per-container queries return data on a quiet estate and `noDataState: Alerting` cannot page on a
+  # healthy day. Two per-container rules because they catch different shapes: a container stuck in
+  # `restarting` (rule 1), and one that runs more than ~10 s between crashes and is therefore mostly
+  # `running` when sampled (rule 2 — the Jellyfin shape). Neither query is wrapped in
+  # `or vector(0)`: that would invent a series with no `name`. The notification policy groups by
+  # `name`, so each container fires and resolves as its own message.
+  # ===============================================================================================
+  - orgId: 1
+    name: container-restarts
+    folder: Estate
+    interval: 1m
+    rules:
+
+      # -----------------------------------------------------------------------------------------
+      # 1. Container restarting — stuck in docker state `restarting` for 5+ minutes.
+      # -----------------------------------------------------------------------------------------
+      - uid: selfhost-container-restarting
+        title: Container restarting
+        condition: C
+        for: 5m
+        noDataState: Alerting
+        execErrState: Alerting
+        isPaused: false
+        labels:
+          severity: critical
+          area: estate
+        annotations:
+          summary: >-
+            {{ $labels.name }} has been in state restarting for 5+ minutes.
+          description: >-
+            Run: ssh root@172.16.1.159 'docker inspect {{ $labels.name }} --format
+            "{{ "{{" }}.State.Status}} {{ "{{" }}.RestartCount}} {{ "{{" }}.State.ExitCode}}"'
+            then 'docker logs --tail 100 {{ $labels.name }}'. Believe inspect over ps.
+            Runbook: monitoring/README.md § Restart-loop detection.
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: PBFA97CFB590B2093
+            model:
+              refId: A
+              editorMode: code
+              expr: max by (name) (selfhost_container_restarting)
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              range: false
+          - refId: C
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  evaluator:
+                    type: gt
+                    params:
+                      - 0
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    type: last
+                    params: []
+
+      # -----------------------------------------------------------------------------------------
+      # 2. Container restart loop — more than 3 restarts in 10 minutes. No `for`: the 10m window is
+      #    the debounce. increase() reads the drop to 0 on a recreate as a counter reset.
+      # -----------------------------------------------------------------------------------------
+      - uid: selfhost-container-restart-loop
+        title: Container restart loop
+        condition: C
+        noDataState: Alerting
+        execErrState: Alerting
+        isPaused: false
+        labels:
+          severity: critical
+          area: estate
+        annotations:
+          summary: >-
+            {{ $labels.name }} restarted {{ $values.A.Value }} times in 10 minutes.
+          description: >-
+            A container that runs more than ~10 s between crashes is mostly `running` when
+            sampled, so `Container restarting` never holds for 5 minutes; this rule exists beside
+            it for that shape (Jellyfin crash-looped ~21 h that way, 261111-rmv).
+            Run: ssh root@172.16.1.159 'docker logs --tail 100 {{ $labels.name }}' and
+            'docker inspect {{ $labels.name }}'.
+            Runbook: monitoring/README.md § Restart-loop detection.
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: PBFA97CFB590B2093
+            model:
+              refId: A
+              editorMode: code
+              expr: max by (name) (increase(selfhost_container_restart_count[10m]))
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              range: false
+          - refId: C
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  evaluator:
+                    type: gt
+                    params:
+                      - 3
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    type: last
+                    params: []
+
+      # -----------------------------------------------------------------------------------------
+      # 3. Restart exporter is stale — the two rules above are reading a frozen snapshot.
+      # -----------------------------------------------------------------------------------------
+      - uid: selfhost-container-restarts-stale
+        title: Restart exporter is stale
+        condition: C
+        noDataState: Alerting
+        execErrState: Alerting
+        isPaused: false
+        labels:
+          severity: critical
+          area: estate
+        annotations:
+          summary: >-
+            The restart exporter has not succeeded for {{ $values.A.Value }}s — the restart rules
+            are reading a frozen snapshot.
+          description: >-
+            Run: ssh root@172.16.1.159 'systemctl list-timers selfhost-container-restarts.timer;
+            journalctl -u selfhost-container-restarts.service -n 50'.
+            A stale file after a failed run is CORRECT: the exporter never writes on a failed read.
+            Runbook: monitoring/README.md § Restart-loop detection.
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: PBFA97CFB590B2093
+            model:
+              refId: A
+              editorMode: code
+              expr: time() - max(selfhost_container_restarts_last_success_timestamp_seconds)
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              range: false
+          - refId: C
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              datasource:
+                type: __expr__
+                uid: __expr__
+              conditions:
+                - type: query
+                  evaluator:
+                    type: gt
+                    # 360 s and the timer/service are ONE decision (see the file-top comment).
+                    params:
+                      - 360
                   operator:
                     type: and
                   query:

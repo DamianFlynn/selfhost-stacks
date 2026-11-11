@@ -11,8 +11,18 @@
 #    channel. 12h is long enough that the message stays worth reading and short enough that a
 #    genuinely new condition is not sat on overnight.
 #
-#    group_by on alertname keeps the three rules below as three separate conversations rather than
-#    one merged blob, so "the timer is dead" never arrives buried inside "12 containers drifted".
+#    group_by on alertname keeps each rule a separate conversation rather than one merged blob, so
+#    "the timer is dead" never arrives buried inside "12 containers drifted".
+#
+#    `name` IS IN group_by FOR THE PER-CONTAINER RULES (261111-rmv). `Container restarting` and
+#    `Container restart loop` fire one instance per container, labelled `name`. Grouped only by
+#    alertname those instances collapse into ONE group: one message listing every container, a
+#    second container joining an already-firing group surfaces only after group_interval inside the
+#    same message, and one container's resolution is buried in the group. With `name` added, each
+#    container fires and resolves as its own notification. Every other rule aggregates with
+#    `max(...)` / `time() - max(...)` and carries no `name` label, and a missing label groups as one
+#    empty value, so those rules group exactly as before. No second route is added: the one-route
+#    principle above still holds.
 
 apiVersion: 1
 
@@ -22,6 +32,7 @@ policies:
     group_by:
       - alertname
       - grafana_folder
+      - name
     group_wait: 30s
     group_interval: 5m
     repeat_interval: 12h

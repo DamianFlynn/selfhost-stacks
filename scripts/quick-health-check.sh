@@ -781,6 +781,24 @@
 #       T, as written. RW=false on the PARENT is now the requirement, not the red; the Music mount
 #       carries the RW=true requirement instead (W).
 #
+# ⚠️  EXIT-CODE BEHAVIOUR CHANGED AGAIN — NO NEW BLOCK, TWO NEW FATAL CONDITIONS ON CONTAINER STATE
+#     2026-11-11 (quick 261111-rmv: Jellyfin crash-looped ~21 h and nothing here looked).
+#
+#     NOTICE COUNT: measured AFTER this notice was written, with the header recipe the thirteenth
+#     notice gives. The number is recorded in
+#     .planning/quick/261111-rmv-restart-loop-alerting/261111-rmv-SUMMARY.md, NOT here.
+#
+#     BLOCK ordinal does NOT move: ten blocks remain. Both conditions sit beside the legacy
+#     container-count checks, which are outside the numbered blocks; no script is folded in.
+#
+#     ⚠️ THE CONDITION LETTERS ARE X AND Y. W was the last letter in use, measured with
+#     `grep -nE '^#[[:space:]]+[A-Z]\.[[:space:]]' scripts/quick-health-check.sh` before writing.
+#
+#     WHAT NOW EXITS THIS SCRIPT 1 THAT DID NOT BEFORE:
+#       X. A RUNNING container reports health `unhealthy`. That arm printed and left EXIT_CODE at 0.
+#       Y. Any container in docker state `restarting`, or the restarting query could not look
+#          (timeout, ssh/docker failure, or no `INSPECTED <n>` line with n > 0) — UNKNOWN, not green.
+#
 # ⚠️  KNOWN LIMIT, AND IT APPLIES TO THIS WHOLE FILE: THIS SCRIPT IS MANUAL. IT ONLY EVER FIRES
 #     WHEN SOMEBODY TYPES IT (D-22, phase 02.1).
 #     There is no cron entry, no systemd timer and no notification path. Nothing here will tell
@@ -804,6 +822,9 @@
 #     Music library, and on any morning the estate feels odd. Recorded here rather than only in
 #     a planning document because the person about to trust a green tick is the person who needs
 #     to know it only ran because they typed it.
+#
+#     Restart loops are now also covered unattended, by the Grafana `container-restarts` rule group
+#     (stacks/selfhosted/monitoring/README.md § Restart-loop detection, 261111-rmv).
 
 EXIT_CODE=0
 
@@ -1394,10 +1415,41 @@ elif [ "$UNHEALTHY_RC" -ne 0 ] || ! echo "$UNHEALTHY" | grep -qE '^[0-9]+$'; the
     echo "  returned '$UNHEALTHY'). dockerd may be blocked. This is NOT 'no unhealthy containers'."
     EXIT_CODE=1
 elif [ "$UNHEALTHY" -gt 0 ]; then
-    echo "⚠️  Unhealthy containers: $UNHEALTHY"
+    # FATAL since 261111-rmv (condition X): this arm used to print and leave EXIT_CODE at 0.
+    # `docker ps` without -a is running-only, the same definition check-drift.sh now uses.
+    echo "❌ Unhealthy running containers: $UNHEALTHY"
     ssh -n $SSH_OPTS root@172.16.1.159 "timeout $REMOTE_TIMEOUT docker ps --format '{{.Names}}' --filter health=unhealthy"
+    EXIT_CODE=1
 else
     echo "✅ No unhealthy containers"
+fi
+
+# Containers in state `restarting` (261111-rmv, condition Y). Jellyfin crash-looped ~21 h with
+# nothing looking, and this file never read restart state. `docker ps -aq` because a bare
+# `docker ps` hides non-running states; `docker inspect` because ps has lied about state here
+# before (cadvisor). Same CR-03 shape as the two counts above: pipefail in the remote string,
+# ssh's status read on the NEXT line with no local pipe, 124 split out first. `INSPECTED <n>` is
+# the proof the query looked: without it, or with n = 0, the answer is UNKNOWN, never "none"
+# (an empty `docker ps -aq` exits 5 remotely — a broken daemon, not an empty estate).
+# The `\$` escapes make $ids and the awk fields expand REMOTELY.
+RESTARTING_OUT=$(ssh -n $SSH_OPTS root@172.16.1.159 "set -o pipefail; ids=\$(timeout $REMOTE_TIMEOUT docker ps -aq) || exit \$?; [ -n \"\$ids\" ] || exit 5; timeout $REMOTE_TIMEOUT docker inspect --format '{{.Name}} {{.State.Status}} {{.RestartCount}}' \$ids | awk '\$2==\"restarting\" {n=\$1; sub(/^\\//,\"\",n); print \"RESTARTING \" n \" restarts=\" \$3} END {print \"INSPECTED \" NR}'")
+RESTARTING_RC=$?   # ssh propagates the remote status — NO local pipe above, see the CR-03 note
+RESTARTING_INSPECTED=$(printf '%s\n' "$RESTARTING_OUT" | sed -n 's/^INSPECTED \([0-9][0-9]*\)$/\1/p')
+RESTARTING_LINES=$(printf '%s\n' "$RESTARTING_OUT" | grep '^RESTARTING ' || true)
+if [ "$RESTARTING_RC" -eq 124 ]; then
+    echo "⚠️  UNKNOWN — the restarting-container query exceeded its ${REMOTE_TIMEOUT}s bound and"
+    echo "  was killed. Nothing was inspected. This is NOT 'no restarting containers'."
+    EXIT_CODE=1
+elif [ "$RESTARTING_RC" -ne 0 ] || [ -z "$RESTARTING_INSPECTED" ] || [ "$RESTARTING_INSPECTED" -eq 0 ]; then
+    echo "⚠️  UNKNOWN — could not look for restarting containers (ssh exit $RESTARTING_RC,"
+    echo "  inspected '${RESTARTING_INSPECTED}'). This is NOT 'no restarting containers'."
+    EXIT_CODE=1
+elif [ -n "$RESTARTING_LINES" ]; then
+    echo "❌ Containers in state restarting: $(printf '%s\n' "$RESTARTING_LINES" | grep -c .)"
+    printf '%s\n' "$RESTARTING_LINES" | sed 's/^RESTARTING /  /'
+    EXIT_CODE=1
+else
+    echo "✅ No container in state restarting (inspected $RESTARTING_INSPECTED)"
 fi
 
 # The Traefik dashboard probe.

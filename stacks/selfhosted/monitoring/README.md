@@ -281,8 +281,8 @@ mounts):
 | File | What it declares |
 |------|------------------|
 | `contact-points.yaml` | the `telegram-estate` receiver — **token and chat id as `$__env{}` placeholders only** |
-| `notification-policies.yaml` | one default route to that receiver, `repeat_interval: 12h` |
-| `rules.yaml` | the three rules below, all `noDataState: Alerting` |
+| `notification-policies.yaml` | one default route to that receiver, `repeat_interval: 12h`; `group_by` includes `name` so per-container alerts notify and resolve separately (§ Restart-loop detection) |
+| `rules.yaml` | three groups: `image-drift` (§ Image drift detection), `deploy` (§ Deploy agent) and `container-restarts` (§ Restart-loop detection) |
 
 ## Image drift detection
 
@@ -323,7 +323,7 @@ picked up by node-exporter's textfile collector.
 | `selfhost_image_drift_containers` | count of running containers on a tag git no longer pins |
 | `selfhost_image_drift_unresolvable_containers` | pins that cannot be read from the repo at all |
 | `selfhost_image_drift_container{name,running,declared}` | one series per drifted container |
-| `selfhost_containers_unhealthy` | docker health status `unhealthy` |
+| `selfhost_containers_unhealthy` | RUNNING containers with docker health status `unhealthy` (Exited containers keep a stale status and are excluded since 261111-rmv) |
 | `selfhost_containers_created` | stuck in state `created` — the documented blind spot |
 | `selfhost_repo_commits_behind_origin` | **lower bound**, see limits below |
 | `selfhost_image_drift_last_success_timestamp_seconds` | when the measurement last **ran** |
@@ -437,6 +437,99 @@ exists after you message it once.
 reported health `unhealthy`. Note that **`docker ps` showed it `Up 2 weeks (health: starting)`
 while `docker inspect` on the same container id showed `exited`, code 137, finished 2026-09-02** —
 sixteen days dead behind a `docker ps` line that said it was up. Believe `inspect`.
+
+Since 261111-rmv the unhealthy count is **RUNNING containers only**, so an Exited container with a
+stale `unhealthy` status (cadvisor then; `silo` and `silo-db` held the rule red from 2026-10-22)
+no longer counts. A dead container is found with `docker ps -a` and `docker inspect`, not this rule.
+
+## Restart-loop detection
+
+**The question this answers:** *is any container crash-looping right now?*
+
+**The trigger:** Jellyfin crash-looped for ~21 h (2026-11-10 22:02 → 2026-11-11 19:12 UTC,
+`RestartCount` 1,229) and **nothing alerted**. `check-drift.sh` emits no restart signal and runs
+hourly; the only container rule had been standing red since 2026-10-22 on two Exited containers,
+so it could not signal anything new; and `quick-health-check.sh` never looked at restart state.
+History: `.planning/quick/261111-rmv-restart-loop-alerting/`.
+
+### The instrument
+
+`scripts/export-container-restarts.sh`, run every 2 minutes on LXC 100 by
+`scripts/systemd/selfhost-container-restarts.{service,timer}`. One `docker ps -aq` + one
+`docker inspect` pass, written atomically to
+`/mnt/fast/appdata/monitoring/node-exporter-textfile/container-restarts.prom`. It **fails closed**:
+on any could-not-look (docker error, empty enumeration, unparseable inspect line) it exits 1 and
+leaves the file **byte-identical**, so the timestamp goes stale and `Restart exporter is stale`
+fires. It exits 0 on a successful measurement whatever the counts — the rules own the alert.
+
+### The metrics
+
+| Metric | Meaning |
+|--------|---------|
+| `selfhost_container_restarting{name}` | 1 if the container is in state `restarting`, else 0 — one series per running or restarting container |
+| `selfhost_container_restart_count{name}` | docker `RestartCount` — one series per running or restarting container; resets on recreate |
+| `selfhost_containers_restarting` | count of containers in state `restarting` |
+| `selfhost_containers_running_unhealthy` | RUNNING containers with health `unhealthy` |
+| `selfhost_container_restarts_last_success_timestamp_seconds` | when the measurement last **ran** |
+
+The per-container series are emitted for **every** running or restarting container, not only the
+bad ones, so the per-container queries return data on a quiet estate and `noDataState: Alerting`
+cannot page on a healthy day.
+
+> `selfhost_containers_running_unhealthy` **duplicates** `check-drift.sh`'s
+> `selfhost_containers_unhealthy` at 2-minute resolution, **on purpose**, and **no rule reads it**.
+> The `Containers unhealthy or stuck created` rule keeps reading check-drift's gauge because its
+> two terms come from one atomic write. Do not "fix" the duplication by deleting either half.
+
+(`promtool check metrics` lints the `_count` suffix on a gauge; that is a naming lint, not a parse
+error — the file parses cleanly with `--lint=none --extended`.)
+
+### The rules — group `container-restarts`, evaluated every 1 m
+
+| Rule | Expression | Fires when |
+|------|------------|------------|
+| `Container restarting` | `max by (name) (selfhost_container_restarting)` | > 0 for 5 m |
+| `Container restart loop` | `max by (name) (increase(selfhost_container_restart_count[10m]))` | > 3, no `for` (the 10 m window is the debounce) |
+| `Restart exporter is stale` | `time() - max(selfhost_container_restarts_last_success_timestamp_seconds)` | > 360 |
+
+Two per-container rules because they catch different shapes. A container stuck in `restarting`
+trips the first. A container that runs more than ~10 s between crashes is mostly `running` when
+sampled, so the first never holds for 5 minutes — that was Jellyfin's shape, and the second rule
+exists for it. Expected time to page for a Jellyfin-like loop: about 10 minutes.
+
+### ⚠️ The timer period and the staleness threshold are ONE decision
+
+`Restart exporter is stale` fires at **360 s**: **125 s** worst start gap
+(`selfhost-container-restarts.timer`: `OnCalendar=*:0/2` + `AccuracySec=5s`) **+ 60 s** runtime cap
+(`selfhost-container-restarts.service`: `TimeoutStartSec=60`) **+ 120 s** (one missed run) **+ 15 s**
+scrape ≈ 320 s, rounded up to 360. **Change any term and you must change 360 in `rules.yaml` in the
+same commit.** All three files say so.
+
+### Notification grouping
+
+The root policy groups by `alertname`, `grafana_folder` **and `name`**. Without `name`, every
+container's instance of one rule collapses into one notification group: one message listing them
+all, a second container surfacing only after `group_interval` inside it, and one container's
+resolution buried. With `name`, each container fires and resolves as its own message. Every other
+rule aggregates with `max(...)` and has no `name` label, so it groups exactly as before. There is
+still one route.
+
+### Host install — executed by 261111-rmv
+
+```bash
+ssh root@172.16.1.159
+cd /mnt/fast/stacks && git pull --ff-only
+cp /mnt/fast/stacks/scripts/systemd/selfhost-container-restarts.{service,timer} /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now selfhost-container-restarts.timer
+systemctl start selfhost-container-restarts.service      # one immediate run
+systemctl list-timers selfhost-container-restarts.timer  # next run within 2 min
+docker restart grafana                                   # re-reads the provisioning directory
+```
+
+`docker restart`, not `compose up -d`: provisioning is a directory bind mount, so the pulled files
+are already visible inside, and `compose up -d` does not recreate a container whose config did not
+change.
 
 ## Deploy agent
 
