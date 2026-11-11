@@ -207,28 +207,39 @@ count of one otherwise reads as a failure.
 
 ## 4. Transcoding
 
-### Hardware acceleration is OFF, deliberately
+### Hardware acceleration is ON (VAAPI) since 2026-11-11
 
 ```
-HardwareAccelerationType : none
-EnableHardwareEncoding   : false
+HardwareAccelerationType : vaapi
+EnableHardwareEncoding   : true
 ```
 
-`/dev/dri` **is** mapped into the container and the Radeon 890M **is** capable — Jellyfin simply
-does not use it. Everything transcodes on CPU via `libx264`. **High CPU during a transcode is
-correct behaviour, not a fault.**
+`/dev/dri` is mapped into the container and Jellyfin transcodes on the Radeon 890M. VAAPI was
+re-enabled on 2026-11-11 because atlantis runs kernel **`7.0.14-28-pve`**, whose changelog carries
+"fix #7905" — upstream **631849ff** (`drm/amdgpu: fix check in amdgpu_hmm_invalidate_gfx`,
+**CVE-2026-68101**), the null-ptr deref behind D-30. A Jellyfin-driven h264 transcode with PGS
+subtitles burned in (the 08-31 trigger class) ran as an all-VAAPI pipeline at 9–13x with 0 oopses,
+taint unchanged and no orphaned `ffmpeg`. The pre-change config is kept at
+`/mnt/fast/appdata/media/jellyfin/config/encoding.xml.pre-hwaccel-enable-20261111` (named outside the
+script's `*.bak.*` glob on purpose).
 
-This is the **D-30 amdgpu mitigation**, applied 2026-08-31 by `scripts/disable-jellyfin-hwaccel.sh`
-during recovery from a ~6 hour outage.
+**Toggle through the encoding API only** (GET then POST `/System/Configuration/encoding`, changing
+only those two fields). **Never run `scripts/disable-jellyfin-hwaccel.sh enable`**: it restores the
+whole newest `encoding.xml.bak.*`, which is the pre-Jellyfin-12 file with
+`<EncoderPreset xsi:nil="true"/>`; Jellyfin 12 cannot deserialise it, the whole file fails to load,
+and the transcode guards below reset to defaults. `disable` remains the emergency off-switch.
 
-**Failure mode if re-enabled:** a kernel oops in the `amdgpu` HMM path triggered by GPU userptr
-mappings. The blast radius is counter-intuitive — `dockerd` reads `/proc/*/smaps`, so **Traefik and
-every `*.deercrest.info` service die** while direct-macvlan containers keep serving. Diagnose from
+**History: D-30 (2026-08-31 → 2026-11-11).** Hardware acceleration was off for ten weeks after a
+~6 hour outage caused by a kernel oops in the `amdgpu` HMM path, triggered by GPU userptr mappings.
+The blast radius is counter-intuitive — `dockerd` reads `/proc/*/smaps`, so **Traefik and every
+`*.deercrest.info` service die** while direct-macvlan containers keep serving. Diagnose from
 `/proc/pressure/io` `full` ≈ 96% with an **idle CPU** and kernel `tainted` bit 7 — *not* from load
-average, which lags and false-greens after reboot. Proxmox kernel 7.0.14-8 does not carry a fix.
+average, which lags and false-greens after reboot. **If it recurs:** on atlantis run
+`dmesg | grep amdgpu_hmm_invalidate_gfx` and read `/proc/sys/kernel/tainted` (4097 = clean ZFS
+baseline; +128 = oops), then run `scripts/disable-jellyfin-hwaccel.sh disable`.
 
 Ollama is not the only GPU userptr source: orphaned Jellyfin VAAPI `ffmpeg` processes are a second
-one, which is why the mitigation is at Jellyfin rather than only at Ollama.
+one, which is why the off-switch is at Jellyfin rather than only at Ollama.
 
 ### Retention levers
 
@@ -258,11 +269,11 @@ ssh root@172.16.1.159 "docker top jellyfin | grep ffmpeg || true"
 | Evidence | Meaning |
 |----------|---------|
 | `-codec:v:0 copy` + `-readrate 10` | **remux** — container repackaged, video stream copied |
-| `libx264` (no `-readrate 10`) | **re-encode** |
+| `h264_vaapi` (or `libx264` with hwaccel off), no `-readrate 10` | **re-encode** |
 | *no output at all* | **direct play** — no transcode happened |
 
 ⚠️ **Image-based (PGS) subtitles force burn-in, which forces a re-encode.** Enabling a PGS track
-silently converts a remux into a `libx264` encode. If you are testing the remux path, subtitles must
+silently converts a remux into a re-encode. If you are testing the remux path, subtitles must
 be off — look for `-map -0:s` in the command line.
 
 A seek-back past `SegmentKeepSeconds` costs a transcode **restart**, not a failure: a new ffmpeg

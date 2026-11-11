@@ -6,7 +6,7 @@ Repository guidance for code agents and maintainers.
 
 - **[NETWORK.md](NETWORK.md)**: Complete network infrastructure map, all hosts, IPs, access methods, and cleanup tasks
 - **[MEDIA.md](MEDIA.md)**: Media stack low-level design — Jellyfin and friends, the macvlan
-  exposure, which filesystem every byte lands on, transcoding and the D-30 amdgpu constraint, the
+  exposure, which filesystem every byte lands on, transcoding and the D-30 amdgpu history, the
   Live TV chain, and the known gaps
 - **[DEPLOYMENT.md](DEPLOYMENT.md)**: How change reaches the estate — Terraform for infra, git for
   stacks, secrets handling, and the post-deploy health check
@@ -30,9 +30,13 @@ Repository guidance for code agents and maintainers.
 - **`terraform apply` in `infra/` can destroy LXC 100.** A bare apply has planned `1 to destroy` on
   the Docker host and its ~100 containers. Guarded by `prevent_destroy` + `ignore_changes` — which
   also means genuine bind-mount edits plan clean and do nothing. Always read the plan.
-- **Jellyfin hardware transcoding is OFF deliberately** (`HardwareAccelerationType: none`). This is
-  the D-30 amdgpu mitigation after the 2026-08-31 outage (~6 h). Do not re-enable it. High CPU
-  during a Jellyfin transcode is correct. See README § GPU Hardware Acceleration.
+- **Jellyfin VAAPI transcoding is ON again since 2026-11-11** — kernel `7.0.14-28-pve` carries the
+  amdgpu fix for the D-30 / 2026-08-31 outage. **Never run
+  `scripts/disable-jellyfin-hwaccel.sh enable`** (it restores a pre-Jellyfin-12 `encoding.xml` that
+  fails to load); toggle via the encoding API, two fields only. `disable` is still the off-switch.
+  If oopses recur, check on atlantis `dmesg | grep amdgpu_hmm_invalidate_gfx` and
+  `/proc/sys/kernel/tainted` (4097 baseline, +128 = oops), then run `disable`. See MEDIA.md § 4
+  Transcoding.
 - **Jellyfin is exposed LAN-wide at `172.16.1.76:8096`** via `iot_macvlan`, and is *not* reachable
   from LXC 100 itself. It publishes no host port, but that is not a security control — see
   NETWORK.md § Notable host ports.

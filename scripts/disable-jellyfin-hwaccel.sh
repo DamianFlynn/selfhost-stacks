@@ -12,13 +12,22 @@
 # Usage:
 #   bash scripts/disable-jellyfin-hwaccel.sh check     # read-only: report current state
 #   bash scripts/disable-jellyfin-hwaccel.sh disable   # turn VAAPI off, restart, verify
-#   bash scripts/disable-jellyfin-hwaccel.sh enable    # restore the most recent backup EXCEPT the
+#   bash scripts/disable-jellyfin-hwaccel.sh enable    # (DO NOT USE since 2026-11-11 — see STATUS)
+#                                                      # restore the most recent backup EXCEPT the
 #                                                      # five transcode-retention values, which are
 #                                                      # preserved from the live config and verified
 #   bash scripts/disable-jellyfin-hwaccel.sh verify-retention
 #                                                      # read-only: compare $JELLYFIN_CONFIG's five
 #                                                      # transcode-retention values against
 #                                                      # $TRAN09_EXPECT; non-zero on any mismatch
+#
+# STATUS 2026-11-11
+#   atlantis runs kernel 7.0.14-28-pve, which carries the amdgpu fix (#7905 / upstream 631849ff /
+#   CVE-2026-68101). VAAPI was re-enabled through the encoding API, changing only the two fields.
+#   DO NOT run `enable`: it restores the newest encoding.xml.bak.*, the pre-Jellyfin-12 file with
+#   <EncoderPreset xsi:nil="true"/>, which Jellyfin 12 cannot load - the transcode guards reset.
+#   `disable` remains the emergency off-switch. Recurrence check on atlantis:
+#   `dmesg | grep amdgpu_hmm_invalidate_gfx` and /proc/sys/kernel/tainted (4097 baseline, +128 = oops).
 #
 # ⚠️  `disable` and `enable` MUTATE live state: they rewrite encoding.xml and restart a
 #     container that is serving the house. `check` and `verify-retention` never write anything.

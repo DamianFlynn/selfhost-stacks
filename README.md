@@ -326,25 +326,28 @@ AMD Radeon 890M GPU is passed through to LXC `100`:
 
 **Services:**
 - **Immich:** hardware-accelerated photo/video processing — active
-- **Jellyfin:** ⚠️ **hardware transcoding is DISABLED, deliberately.** Jellyfin transcodes in
-  **software (`libx264`)**. `/dev/dri` is still mapped into the container, but Jellyfin does not
-  use it.
+- **Jellyfin:** hardware transcoding (VAAPI) — active since 2026-11-11.
 
-> ### ⚠️ Do not "re-enable" Jellyfin hardware acceleration
+> ### ⚠️ Jellyfin hardware acceleration: re-enabled 2026-11-11 — toggle it safely
 >
-> Jellyfin's live config is `HardwareAccelerationType: none` and `EnableHardwareEncoding: false`.
-> This is the **D-30 amdgpu mitigation**, applied after the 2026-08-31 outage that cost ~6 hours.
+> VAAPI was re-enabled (`HardwareAccelerationType: vaapi`, `EnableHardwareEncoding: true`) once
+> atlantis ran kernel **`7.0.14-28-pve`**, which carries "fix #7905" — upstream **631849ff**
+> (`drm/amdgpu: fix check in amdgpu_hmm_invalidate_gfx`, **CVE-2026-68101**), the bug behind the
+> D-30 outage of 2026-08-31 (~6 h). It was proven on the 08-31 trigger class — an h264 transcode
+> with PGS subtitles burned in, built as an all-VAAPI pipeline — with 0 oopses and taint unchanged.
 >
-> The failure mode is a kernel oops in the `amdgpu` HMM path triggered by GPU userptr mappings.
-> Its blast radius is counter-intuitive: `dockerd` reads `/proc/*/smaps`, so **Traefik and every
-> `*.deercrest.info` service die** while direct-macvlan containers keep serving. It presents as
-> `/proc/pressure/io` `full` ≈ 96% with an **idle CPU** and kernel `tainted` bit 7 — not as load
-> average, which lags and false-greens after reboot. Proxmox kernel 7.0.14-8 does **not** carry a
-> fix.
+> **Never run `scripts/disable-jellyfin-hwaccel.sh enable`.** It restores the whole newest
+> `encoding.xml.bak.*`, the pre-Jellyfin-12 file with `<EncoderPreset xsi:nil="true"/>`; Jellyfin 12
+> cannot load it, so the transcode guards silently reset to defaults. Toggle through the encoding
+> API, changing only those two fields. `disable` remains the emergency off-switch.
 >
-> High CPU during a Jellyfin transcode is therefore **correct behaviour**, not a fault to
-> investigate. `scripts/check-jellyfin-transcode.sh` reports both values on every run so drift is
-> visible; `scripts/disable-jellyfin-hwaccel.sh` is the recovery lever.
+> **If it recurs:** the failure mode is a kernel oops in the `amdgpu` HMM path triggered by GPU
+> userptr mappings. Its blast radius is counter-intuitive: `dockerd` reads `/proc/*/smaps`, so
+> **Traefik and every `*.deercrest.info` service die** while direct-macvlan containers keep serving.
+> It presents as `/proc/pressure/io` `full` ≈ 96% with an **idle CPU** — not as load average, which
+> lags and false-greens after reboot. On atlantis check `dmesg | grep amdgpu_hmm_invalidate_gfx` and
+> `/proc/sys/kernel/tainted` (4097 = clean ZFS baseline; +128 = oops), then run
+> `scripts/disable-jellyfin-hwaccel.sh disable`. History: MEDIA.md § 4 Transcoding.
 
 ## 🩺 Health Checks
 

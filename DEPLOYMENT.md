@@ -216,6 +216,23 @@ See [STANDARDS.md](STANDARDS.md) § Volume Mounting.
 `/tmp` is **tmpfs, backed by host RAM**. 1.1 GB of XML there took the whole 28 GB box down and
 killed SSH on host *and* LXC while ping still worked. Stage under `/mnt/fast/` instead.
 
+### Host-only atlantis tuning (2026-11-11) — not in Terraform
+
+Two changes live only on atlantis (`172.16.1.158`). Terraform does not manage them and the repo
+holds no copy, so **a rebuilt atlantis loses both — re-create them by hand.**
+
+- **ZFS ARC ceiling.** `/etc/modprobe.d/zfs.conf` sets `zfs_arc_max=6442450944` (6 GiB; was
+  `3113222144`). Not higher: the host routinely has only 2–6 GB available (LXC 100 capped at 24 GB
+  plus `mpe` at 8 GB on a 28 GB host), so a bigger ARC recreates the memory exhaustion. The real fix
+  is the empty second DIMM slot — a CT32G56C46S5 (32 GB DDR5-5600 SODIMM). Backup:
+  `/root/zfs.conf.bak-20261111`.
+- **Scrub window.** `/usr/local/sbin/zfs-scrub-window` (`pause|resume`, all pools, logs via
+  `logger -t zfs-scrub-window`), driven by `/etc/cron.d/zfs-scrub-window`: pause any in-progress
+  scrub at 17:00, resume any paused scrub at 01:00. The stock zfsutils-linux cron still *starts* the
+  monthly scrub (2nd Sunday, 00:24). A full `tank` scrub takes ~35 h, and on 2026-11-08 its
+  393 MB/s of reads on the spinning pool stalled Jellyfin DirectPlay for hours. A paused scrub
+  survives reboot.
+
 ---
 
 ## 4. Secrets

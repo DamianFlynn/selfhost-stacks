@@ -111,7 +111,7 @@ main() {
   # L-03. `name|reason`. There is deliberately NO knob that removes an entry: DEPLOY_HOLD_EXTRA only
   # adds. immich_kiosk is deliberately NOT held (stateless; expected to deploy).
   local -a DEPLOY_HOLD=(
-    "jellyfin|major-upgrade procedure; HW transcode stays OFF (D-30); Renovate manual-review"
+    "jellyfin|major-upgrade procedure; HW transcode ON since 2026-11-11, toggle via API only (never disable-jellyfin-hwaccel.sh enable); Renovate manual-review"
     "immich_server|Immich upgrade procedure — server/ml/postgres/redis move together"
     "immich_machine_learning|Immich upgrade procedure — server/ml/postgres/redis move together"
     "immich_postgres|Immich upgrade procedure — server/ml/postgres/redis move together"

@@ -13,15 +13,14 @@
 #   - Rich metadata from TMDb, TVDb, MusicBrainz
 #   - Plugin system (intro skipper, playback reporting, etc.)
 #
-# Hardware Acceleration:  *** CURRENTLY DISABLED -- see the block above the
-#                         *** jellyfin: service for why. Read that before you
-#                         *** re-enable anything here.
+# Hardware Acceleration:  *** VAAPI ACTIVE since 2026-11-11 -- see the block
+#                         *** above the jellyfin: service before you toggle it.
+#                         *** NEVER use `disable-jellyfin-hwaccel.sh enable`.
 #   AMD Ryzen AI 9 HX PRO 370 with AMD Radeon 890M GPU
-#   The hardware is CAPABLE of VA-API transcoding for H.264, HEVC 10-bit and
-#   VP9 10-bit. Jellyfin is NOT configured to use it: HardwareAccelerationType
-#   is "none" as of 2026-08-31. The /dev/dri passthrough and the video/render
-#   group_add below are retained deliberately so re-enabling is a settings
-#   change rather than a compose change.
+#   VA-API transcoding for H.264, HEVC 10-bit and VP9 10-bit. Jellyfin uses it:
+#   HardwareAccelerationType is "vaapi" since 2026-11-11 (it was "none" from
+#   2026-08-31, D-30). The /dev/dri passthrough and the video/render group_add
+#   below are what make it a settings toggle rather than a compose change.
 #
 # Access:
 #   URL: https://jellyfin.deercrest.info
@@ -37,46 +36,38 @@ services:
   # Jellyfin - Media Server
   # Hardware: AMD Ryzen AI 9 HX PRO 370 with AMD Radeon 890M GPU
   #
-  # NOTE (2026-09-02): the block that used to sit here listed a VAAPI transcoding
-  # configuration that HAS NOT BEEN LIVE SINCE 2026-08-31. It is corrected rather
-  # than deleted, because a stale comment asserting the opposite of reality is
-  # worse than no comment — someone debugging a slow transcode would have spent an
-  # evening looking for a VAAPI fault that could not exist.
+  # Jellyfin Transcoding Settings — CURRENT since 2026-11-11, verified live:
+  #   - HardwareAccelerationType: vaapi
+  #   - EnableHardwareEncoding: true
   #
-  # Jellyfin Transcoding Settings — CURRENT, verified against the live API:
-  #   - HardwareAccelerationType: none        <-- NOT "VAAPI"
-  #   - EnableHardwareEncoding: false
-  #   - Everything transcodes on CPU.
+  # Why it is on: atlantis runs kernel 7.0.14-28-pve, which carries "fix #7905"
+  # (upstream 631849ff, CVE-2026-68101) for the amdgpu HMM null-ptr deref behind
+  # the 2026-08-31 outage (D-30). From 2026-08-31 to 2026-11-11 both values were
+  # off as a deliberate mitigation; MEDIA.md § 4 holds that history and the
+  # recurrence check. Orphaned VAAPI ffmpeg processes holding DRM handles and VRAM
+  # were a confirmed contributor to that oops, which is why the off-switch lives
+  # at Jellyfin.
   #
-  # Why: the amdgpu HMM mitigation. Set 2026-08-31 18:27 by
-  # scripts/disable-jellyfin-hwaccel.sh during recovery from the amdgpu kernel
-  # oops. This is a DELIBERATE MITIGATION, NOT DRIFT — do not "restore" it because
-  # the comment used to say VAAPI. Orphaned VAAPI ffmpeg processes holding DRM
-  # handles and VRAM are a confirmed contributor to that oops (they were found
-  # stuck on anon_pipe_write, holding userptr mappings), which is why the setting
-  # is off and why it stays off here.
-  #
-  # RE-ENABLING VAAPI IS DELIBERATELY OUT OF SCOPE for this phase (D-30). It is
-  # its own investigation — the failure mode is a whole-host hang recovered only
-  # by sysrq, and it must not be reintroduced as a side effect of a retention fix.
+  # How to toggle: through the encoding API, changing only these two fields.
+  # NEVER run `scripts/disable-jellyfin-hwaccel.sh enable` — it restores a
+  # pre-Jellyfin-12 encoding.xml that Jellyfin 12 cannot load, resetting the
+  # transcode guards. `disable` remains the emergency off-switch.
   #
   # The /dev/dri device passthrough and the video(44)/render(110) group_add below
-  # are RETAINED on purpose. Removing them would make re-enabling a compose change
-  # and a container recreate; keeping them makes it a settings change. They are
-  # inert while HardwareAccelerationType is none.
+  # are what VAAPI uses, and they keep the off-switch a settings change rather
+  # than a compose change and a container recreate.
   #
-  # A trap in the API, recorded because this phase writes these values back: the
-  # encoding endpoint is a FULL-OBJECT REPLACE, and EnableHardwareEncoding's
-  # constructor default is TRUE. Any partial POST silently re-enables hardware
-  # encoding. Both fields are therefore written back deliberately and asserted
-  # after the write (D-30).
+  # A trap in the API: the encoding endpoint is a FULL-OBJECT REPLACE, and
+  # EnableHardwareEncoding's constructor default is TRUE. Any partial POST
+  # silently sets hardware encoding on, whatever the intended value. Every write
+  # must therefore carry both fields explicitly and assert them afterwards.
   jellyfin:
     hostname: jellyfin
     container_name: jellyfin
     # measured 1022 MB 2026-09-06; cap bounds a runaway, not steady state.
-    # Deliberately generous at 3g: hardware transcode is off (D-30 amdgpu
-    # mitigation) so transcodes are CPU-side and bursty, and library scans
-    # spike independently of playback.
+    # Deliberately generous at 3g: with VAAPI on (since 2026-11-11) the encode
+    # work sits on the GPU, so 3g remains generous; library scans spike
+    # independently of playback.
     mem_limit: 3g
     # 12.2 pinned to the dated build tag, not the moving `12.2`. Upgraded 2026-10-22 from 10.11.11
     # with all plugins moved aside to plugins.pre12/ (configurations kept) and snapshot
@@ -117,17 +108,17 @@ services:
       JELLYFIN_PublishedServerUrl: jellyfin.deercrest.info
       
     devices:
-      # AMD Radeon 890M GPU. The device IS mapped in, and the hardware is capable of
-      # H.264 / HEVC / VP9 / AV1 decode+encode — but JELLYFIN DOES NOT USE IT.
+      # AMD Radeon 890M GPU. The device is mapped in and Jellyfin USES IT for VAAPI
+      # transcoding (H.264 / HEVC / VP9 / AV1 decode+encode) since 2026-11-11.
       #
-      # HardwareAccelerationType: none and EnableHardwareEncoding: false. Everything
-      # transcodes on CPU (libx264). This is the amdgpu HMM mitigation applied
-      # 2026-08-31 by scripts/disable-jellyfin-hwaccel.sh, NOT drift. Re-enabling VAAPI
-      # is deliberately out of scope (D-30).
+      # HardwareAccelerationType: vaapi and EnableHardwareEncoding: true, re-enabled
+      # after the amdgpu kernel fix (7.0.14-28-pve). Toggle via the encoding API, two
+      # fields only; never `scripts/disable-jellyfin-hwaccel.sh enable`. `disable` is
+      # the emergency off-switch (the D-30 mitigation, 2026-08-31 to 2026-11-11).
       #
-      # The mapping is left in place so the mitigation is a one-setting revert rather
-      # than a compose change. See the header block at the top of this file (~L21, L43-72)
-      # for the full reasoning and the recovery path.
+      # Keeping the mapping makes that off-switch a one-setting change rather than a
+      # compose change. See the block above the `jellyfin:` key for the full
+      # reasoning and the recovery path.
       #
       # ⚠️ Do not "restore" this comment to claim hardware transcoding is active — it
       # said exactly that until 2026-09-03, three days after the setting was turned off.
@@ -236,12 +227,12 @@ services:
       # someone turns segment deletion off to "keep the cache warm", they also
       # remove the rate cap without knowing it.
       #
-      # Deliberately UNCHANGED: HardwareAccelerationType: none and
-      # EnableHardwareEncoding: false. These are the amdgpu HMM mitigation applied
-      # 2026-08-31 18:27 by scripts/disable-jellyfin-hwaccel.sh — NOT drift. See the
-      # block above the `jellyfin:` key. The encoding endpoint is a full-object
-      # replace and EnableHardwareEncoding's constructor default is true, so this
-      # phase writes both back deliberately and asserts them after the write (D-30).
+      # HardwareAccelerationType and EnableHardwareEncoding are vaapi / true since
+      # 2026-11-11 (none / false 2026-08-31 to 2026-11-11, D-30). See the block
+      # above the `jellyfin:` key. The encoding endpoint is a full-object replace and
+      # EnableHardwareEncoding's constructor default is true, so any write of the
+      # retention values must carry both hwaccel fields explicitly and assert them
+      # afterwards.
       #
       # Deliberately LEFT ALONE rather than changed blind: PUID / PGID / UMASK_SET
       # above are present but INERT on the official jellyfin/jellyfin image — they
