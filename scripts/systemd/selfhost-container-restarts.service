@@ -1,0 +1,24 @@
+# selfhost-container-restarts.service — 2-minute container RESTART measurement into a node-exporter
+# textfile (scripts/export-container-restarts.sh).
+#
+# INSTALLED by quick 261111-rmv (Task 3), with the commands in stacks/selfhosted/monitoring/README.md
+# § Restart-loop detection.
+#
+# Shape copied from selfhost-image-drift.service. The script exits 0 on a SUCCESSFUL MEASUREMENT
+# REGARDLESS OF THE COUNTS (the Grafana rules own the alert), and 1 on could-not-look, leaving the
+# textfile untouched so `Restart exporter is stale` fires.
+
+[Unit]
+Description=Measure container restart state into a node-exporter textfile
+Documentation=file:///mnt/fast/stacks/stacks/selfhosted/monitoring/README.md
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/mnt/fast/stacks/scripts/export-container-restarts.sh
+# Runtime cap. ONE TERM of the 360 s staleness threshold in
+# stacks/selfhosted/monitoring/grafana/provisioning/alerting/rules.yaml (`Restart exporter is stale`):
+# 125 s timer gap + 60 s this cap + 120 s one missed run + 15 s scrape ≈ 320 s -> 360 s. Change this
+# and you MUST change 360 in the same commit — see selfhost-container-restarts.timer.
+TimeoutStartSec=60

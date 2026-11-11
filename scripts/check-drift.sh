@@ -44,8 +44,9 @@
 # estate breaks the obvious approach:
 #
 #   1. Enumerate containers with `docker ps -aq` and `docker inspect` them ONCE, in a single pass.
-#      Drift is classified for RUNNING containers only; the `created` and `unhealthy` tallies need
-#      the whole set, which is why the enumeration is `-a` and the classification is filtered.
+#      Drift is classified for RUNNING containers only, and so is the `unhealthy` tally (an Exited
+#      container keeps its last health status forever - 261111-rmv); the `created` tally still
+#      needs the whole set, which is why the enumeration is `-a` and the rest is filtered.
 #      (`docker ps` without `-a` does NOT show `created` containers. That blind spot once hid
 #      dispatcharr and teleport down for six weeks under a green check.)
 #
@@ -145,7 +146,8 @@
 #   `running / Up 2 weeks (health: starting)` while `docker inspect` on the SAME container id
 #   reported `exited`, exit code 137, finished 2026-09-02. Sixteen days dead behind a `docker ps`
 #   line that says it is up. This file believes `docker inspect` - which is why cadvisor is
-#   excluded from the drift classification (state != running) and counted once under `unhealthy`.
+#   excluded from the drift classification (state != running) and counted once under `unhealthy`
+#   (no longer, since 261111-rmv: the `unhealthy` tally is now RUNNING containers only).
 #   Left as an estate finding rather than fixed here: it is outside this change's scope and is
 #   logged to the phase's deferred-items.md.
 #
@@ -453,7 +455,7 @@ MEASURED=0
 if [[ $DOCKER_OK -eq 1 && $REPO_OK -eq 1 ]]; then
   # One inspect pass over ALL containers. `-a` on purpose: `created` containers do not appear in a
   # bare `docker ps`, and that blind spot once hid two down containers for six weeks. Drift is
-  # classified for RUNNING containers only; the tallies below need the whole set.
+  # classified for RUNNING containers only, as is `unhealthy`; the `created` tally needs the whole set.
   SEP='|:|'
   FMT="{{.Name}}${SEP}{{.State.Status}}${SEP}{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}${SEP}{{.Config.Image}}${SEP}{{index .Config.Labels \"com.docker.compose.service\"}}${SEP}{{index .Config.Labels \"com.docker.compose.project.config_files\"}}"
 
@@ -481,7 +483,10 @@ if [[ $DOCKER_OK -eq 1 && $REPO_OK -eq 1 ]]; then
         service="${rest%%"$SEP"*}"; config_files="${rest#*"$SEP"}"
         name="${name#/}"
 
-        [[ "$health" == "unhealthy" ]] && UNHEALTHY_COUNT=$((UNHEALTHY_COUNT + 1))
+        # RUNNING containers only. An Exited container keeps its last health status forever, so
+        # counting it held the Grafana `Containers unhealthy or stuck created` rule red from
+        # 2026-10-22 on two Exited containers, unable to signal anything new (261111-rmv).
+        [[ "$state" == "running" && "$health" == "unhealthy" ]] && UNHEALTHY_COUNT=$((UNHEALTHY_COUNT + 1))
         [[ "$state" == "created" ]] && CREATED_COUNT=$((CREATED_COUNT + 1))
 
         [[ "$state" != "running" ]] && continue
@@ -595,9 +600,9 @@ if [[ $MEASURED -eq 0 ]]; then
   warn "not measured — unhealthy and created counts are UNKNOWN, not 0"
 else
   if [[ "$UNHEALTHY_COUNT" -eq 0 ]]; then
-    pass "no container reports health status 'unhealthy'"
+    pass "no running container reports health status 'unhealthy'"
   else
-    warn "$UNHEALTHY_COUNT container(s) report 'unhealthy' (REPORTED here; the Grafana rule alerts)"
+    warn "$UNHEALTHY_COUNT running container(s) report 'unhealthy' (REPORTED here; the Grafana rule alerts)"
   fi
   if [[ "$CREATED_COUNT" -eq 0 ]]; then
     pass "no container is stuck in state 'created'"
@@ -672,7 +677,7 @@ if [[ $PROM_MODE -eq 1 ]]; then
         printf 'selfhost_image_drift_container{name="%s",running="%s",declared="%s"} 1\n' \
           "$(prom_escape "$nm")" "$(prom_escape "$rn")" "$(prom_escape "$dn")"
       done
-      echo "# HELP selfhost_containers_unhealthy Containers reporting docker health status 'unhealthy'."
+      echo "# HELP selfhost_containers_unhealthy RUNNING containers reporting docker health status 'unhealthy'."
       echo "# TYPE selfhost_containers_unhealthy gauge"
       echo "selfhost_containers_unhealthy $UNHEALTHY_COUNT"
       echo "# HELP selfhost_containers_created Containers stuck in state 'created' (the documented blind spot)."

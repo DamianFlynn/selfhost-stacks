@@ -1,0 +1,37 @@
+# selfhost-container-restarts.timer — every-2-minute schedule for selfhost-container-restarts.service.
+#
+# INSTALLED by quick 261111-rmv (Task 3), with the commands in stacks/selfhosted/monitoring/README.md
+# § Restart-loop detection.
+#
+# ⚠️ THE PERIOD AND THE STALENESS THRESHOLD ARE ONE DECISION, NOT TWO. DO NOT TUNE EITHER ALONE.
+#
+#   OnCalendar=*:0/2 with AccuracySec=5s means two healthy consecutive starts land AT MOST ~125 s
+#   apart. The Grafana rule `Restart exporter is stale` in
+#   grafana/provisioning/alerting/rules.yaml fires at
+#
+#       time() - max(selfhost_container_restarts_last_success_timestamp_seconds) > 360
+#
+#   125 s worst start gap + 60 s runtime cap (TimeoutStartSec=60 in the .service) + 120 s for one
+#   missed run + 15 s scrape ≈ 320 s, rounded up to 360.
+#
+#   A threshold below that false-alarms on ordinary gaps; one far above it hides a dead timer, and
+#   a dead timer leaves the restart rules reading a frozen snapshot whose silence means nothing.
+#
+#   So: change any term here or in the .service and you MUST change 360 in rules.yaml in the SAME
+#   COMMIT, and vice versa. All three files say so.
+#
+# Persistent=true so a run missed while the host was down fires on the next boot.
+
+[Unit]
+Description=Every-2-minute container restart measurement
+Documentation=file:///mnt/fast/stacks/stacks/selfhosted/monitoring/README.md
+
+[Timer]
+OnCalendar=*:0/2
+# systemd's default AccuracySec is 1 minute, which would add up to a minute of jitter to a
+# 2-minute period. 5 s keeps the start gap inside the 125 s term of the threshold above.
+AccuracySec=5s
+Persistent=true
+
+[Install]
+WantedBy=timers.target
