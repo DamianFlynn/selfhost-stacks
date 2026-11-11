@@ -21,7 +21,7 @@
 services:
   bookorbit-app:
     # renovate: datasource=docker depName=ghcr.io/bookorbit/bookorbit
-    image: ghcr.io/bookorbit/bookorbit:3.7.0
+    image: ghcr.io/bookorbit/bookorbit:3.8.0
     container_name: bookorbit-app
     init: true
     restart: unless-stopped
