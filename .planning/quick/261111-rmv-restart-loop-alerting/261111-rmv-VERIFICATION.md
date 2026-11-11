@@ -1,7 +1,7 @@
 ---
 phase: quick-261111-rmv
 verified: 2026-11-11T20:45:00Z
-status: human_needed
+status: passed
 score: 6/6 must-haves verified (Telegram arrival on the phone not observable)
 overrides_applied: 0
 human_verification:
@@ -56,3 +56,7 @@ human_verification:
 No gaps found.
 
 _Verifier: Claude (gsd-verifier)_
+
+## Human check — resolved 2026-11-11
+
+Operator confirmed the four Telegram messages for `alerttest-crashloop` (two firing, two resolved) arrived on the phone. Status upgraded human_needed → passed.
