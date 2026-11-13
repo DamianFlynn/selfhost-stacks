@@ -16,7 +16,7 @@ services:
     # which points at the healthcheck rather than the mount. 16.x keeps the classic
     # /var/lib/postgresql/data path below.
     # renovate: datasource=docker depName=postgres
-    image: postgres:16.15-alpine3.24
+    image: postgres:16.16-alpine3.24
     container_name: airtrail-db
     restart: unless-stopped
     # Upstream measures ~190 MB under a 10k-flight load and documents running capped at 256m.
