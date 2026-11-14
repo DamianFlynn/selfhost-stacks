@@ -69,10 +69,15 @@ services:
     # work sits on the GPU, so 3g remains generous; library scans spike
     # independently of playback.
     mem_limit: 3g
-    # 12.2 pinned to the dated build tag, not the moving `12.2`. Upgraded 2026-10-22 from 10.11.11
+    # Pinned to the dated build tag, not the moving minor tag. Upgraded 2026-10-22 from 10.11.11
     # with all plugins moved aside to plugins.pre12/ (configurations kept) and snapshot
-    # fast/appdata/media@pre-jellyfin12-20261022 as the rollback.
-    image: jellyfin/jellyfin:12.2.20261005-225228
+    # fast/appdata/media@pre-jellyfin12-20261022 as the rollback. 12.2 -> 12.4 on 2026-11-14
+    # (.NET 10.0.14 security bump; no migration). Known 12.4 regression jellyfin#18584: the
+    # upgrade can silently reset HardwareAccelerationType to none -- read the encoding config
+    # after every Jellyfin bump and restore vaapi via the API with BOTH fields (see the trap above).
+    # Rollback: snapshot fast/appdata/media@pre-jellyfin12.4-20261114 + this tag's previous value
+    # 12.2.20261005-225228.
+    image: jellyfin/jellyfin:12.4.20261026-211555
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped
