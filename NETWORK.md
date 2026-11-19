@@ -60,6 +60,12 @@ Full design and runbook: **[TAILSCALE.md](TAILSCALE.md)**
     - Service Account: apps:apps (568:568)
     - GPU: AMD iGPU passthrough (video:44, render:110)
     
+  - **VM 103 "wintools"** (172.16.1.188, DHCP — UniFi reservation recommended, not yet made)
+    - Role: Windows 11 Pro tools VM — VictronConnect 6.43.1 and VEConfigure installed;
+      C-Bus Toolkit and ElkRP2 PENDING-OPERATOR (installers are login/bot-gated)
+    - **Powered off by default** (`onboot: 0`, 4 GiB RAM); started only for a session
+    - Built 2026-11-19 (quick 261111-woo); see § Windows tools VM (VM 103) below and DEPLOYMENT.md § VM 103
+
   - **LXC 101 "cerebro"** - REMOVED 2026-06-11
     - Decommissioned - AI/memory workload moved to Oracle vault
     - Memories backed up to agent-os/Archives/Projects/Oracle-Agent-Platform/cerebro-notes/cerebro-memories-20260611/
@@ -213,6 +219,38 @@ From the UniFi data, current naming patterns include:
 | zgate | 172.16.1.135 | pi | Z-Wave/Zigbee |
 | cgate | 172.16.1.128 | pi | C-Bus gateway |
 | UCG Max | 172.16.1.1 | - | Network gateway |
+| wintools (VM 103) | 172.16.1.188 | tools | Windows tools VM — key auth only (`administrators_authorized_keys`); reachable only while running |
+
+### Windows tools VM (VM 103) — operating it
+
+Windows 11 Pro (build 28000), hostname `WINTOOLS`, IP 172.16.1.188 by DHCP. Admin account `tools`;
+password in `~/.claude/secrets/winvm.env` (`WINVM_ADMIN_PASSWORD`). Lifecycle, rebuild, failure exit
+and rollback: DEPLOYMENT.md § VM 103.
+
+- **Start and stop from Termix.** Add an SSH host for `root@172.16.1.158` in Termix and run
+  `qm start 103` / `qm shutdown 103`. Check `grep MemAvailable /proc/meminfo` first (the guest needs
+  4 GiB) and confirm `qm status 103` reads `status: stopped` when done. **The Termix SSH and RDP hosts
+  are not yet configured (PENDING-OPERATOR).**
+- **RDP host in Termix:** host 172.16.1.188, port 3389, user `tools` (or `WINTOOLS\tools`), security
+  NLA, ignore the self-signed certificate. NLA is enforced (`UserAuthentication=1`). Whether Termix
+  exposes the security-mode and ignore-certificate fields is unverified. 3389 was measured open from
+  LXC 100 and from the workstation on 2026-11-19.
+- **ELK M1 (ElkRP2):** the M1XEP accepts **one** TCP session. Disable Home Assistant's `elkm1`
+  integration for the ElkRP2 session, then re-enable it. Connect on the secure port 2601 ("Connect
+  Non-Secure" unticked). M1XEP firmware must be ≥ 2.0.42 for Windows 11's TLS (operator check);
+  2101 non-secure is the fallback. ElkRP2 wants .NET 2.0+, and on this build (26H1, 28000) .NET 3.5
+  is **not** an optional feature (`dism` reports `NetFx3` unknown), so install Microsoft's standalone
+  .NET Framework 3.5 package if ElkRP2 asks for it.
+- **Victron — Remote VEConfigure via VRM** (there is no USB and no Bluetooth to this VM):
+  1. On the GX: Settings → VRM Online Portal → VRM Portal = **Full**.
+  2. VRM → Device list → **Remote VEConfigure** → download the `.rvsc` file.
+  3. Edit it in VEConfigure, then close with **Close** — not Save As (that writes an un-uploadable `.vsc`).
+  4. Upload the same `.rvsc`.
+  VictronConnect reaches GX-attached devices through VictronConnect-Remote over VRM (needs Full
+  access and a VRM login).
+- **C-Bus:** Toolkit works through a CNI/Wiser on the LAN. A USB PC interface conflicts with the
+  no-USB decision for this VM — which interface the site uses is an open question (the `cgate` Pi
+  at 172.16.1.128 is the existing C-Gate host).
 
 ### Host-level services on LXC 100 (NOT Docker, NOT in `stacks/`)
 

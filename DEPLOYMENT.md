@@ -47,8 +47,8 @@ terraform apply
 ```
 
 Terraform manages: the ZFS pool and datasets, LXC 100 (unprivileged, GPU passthrough, bind mounts),
-VM 102, the `apps:apps` (568:568) service account, and GPU device mapping (`video:44`,
-`render:110`).
+VM 102, VM 103 `wintools` (the Windows tools VM shell only — see below), the `apps:apps` (568:568)
+service account, and GPU device mapping (`video:44`, `render:110`).
 
 > ### 🔴 `terraform apply` can destroy LXC 100
 >
@@ -68,6 +68,84 @@ never created by hand. `infra/jellyfin-transcode-dataset.tf` is the worked examp
 
 Use **`quota`, not `refquota`**: `quota` counts descendants and returns `ENOSPC`, which is the errno
 this estate's log greps key on. `refquota` returns `EDQUOT` and would be invisible to them.
+
+### VM 103 `wintools` (Windows 11 Pro tools VM)
+
+Built 2026-11-19 by quick task 261111-woo. Definition: `infra/vm-wintools.tf`; install tooling:
+`scripts/wintools-unattend.sh` + `scripts/wintools-autounattend.xml.tmpl`. Operating it (Termix,
+RDP, ELK and Victron workflows): NETWORK.md § *Windows tools VM (VM 103) — operating it*.
+
+- **Purpose:** vendor configuration tools — C-Bus Toolkit, ElkRP2, VictronConnect, VEConfigure.
+- **Powered off by default.** `on_boot = false`. The guest takes 4 GiB against roughly 5–6 GiB
+  host MemAvailable on a host with a record of memory-exhaustion freezes, so read MemAvailable
+  (`grep MemAvailable /proc/meminfo` on atlantis) before `qm start 103`, and `qm shutdown 103` when
+  the session ends. Prove `qm status 103` reads `status: stopped` afterwards.
+- **Terraform defines the VM shell only and holds no credential.** Change it only with a targeted,
+  saved plan, kept outside the repo, then apply exactly that file:
+
+  ```bash
+  cd infra
+  terraform plan -target=proxmox_virtual_environment_vm.wintools -out=/path/outside/repo/wintools.tfplan
+  terraform apply /path/outside/repo/wintools.tfplan
+  ```
+
+  Anything other than the expected counts (and any address other than
+  `proxmox_virtual_environment_vm.wintools`) means stop — never a bare plan or apply here.
+- **Why `ignore_changes = [cdrom, started]`:** bpg/proxmox 0.95.0 allows exactly one `cdrom`
+  block, so only the Windows ISO on `ide2` is in Terraform. virtio-win (`ide0`) and the unattend ISO
+  (`sata0`) are attached by `qm set` in the script; `ide2` is ejected after install; and the
+  operator starts and stops the VM by hand. None of that is drift.
+- **Pinned machine version `pc-q35-11.1`.** Do not upgrade it casually: Windows re-enumerates the
+  NIC and the network profile can flip to Public, which closes RDP.
+- **Keep BitLocker off.** Device encryption **did** auto-start during the 2026-11-19 install (100 %
+  used-space encrypted, no protectors); it was reversed with `manage-bde -off C:` to
+  `FullyDecrypted`, and `HKLM\SYSTEM\CurrentControlSet\Control\BitLocker\PreventDeviceEncryption=1`
+  was set so it does not recur. A vTPM reset with BitLocker on would lock the disk.
+- **Installed (2026-11-19):** VictronConnect 6.43.1 and VEConfigure (VE Configuration tools).
+  C-Bus Toolkit and ElkRP2 are PENDING-OPERATOR (installers are gated). .NET 3.5 is not an
+  optional feature on this build (26H1, 28000); ElkRP2 may need Microsoft's standalone installer.
+- **Admin account `tools`.** Its password lives only in `~/.claude/secrets/winvm.env` (mode 600) as
+  `WINVM_ADMIN_PASSWORD` — never in tfvars, tfstate or this repo. The install-time password was
+  rotated after install; the retired value is kept there only so leak greps can search for it.
+- **Activation** is the operator's own key (Settings → Activation → Change product key). The
+  generic key in the answer file only selects the Pro image.
+
+**Rebuild path.**
+1. ISO: put the Windows 11 x64 ISO at `/var/lib/vz/template/iso/Win11_x64_en-us.iso` on atlantis
+   (browser download — Microsoft bot-checks scripts — then `scp`). Compare its sha256 by machine,
+   fail closed: `[ -n "$a" ] && [ "$a" = "$b" ]` with `a` from `sha256sum` on atlantis and `b` the
+   expected hash lower-cased and whitespace-stripped. Never eyeball it.
+2. Create the shell with the targeted plan above (it must read `Plan: 1 to add, 0 to change, 0 to destroy.`).
+3. Copy the script and template to `/root/wintools-build/` (mode 700) on atlantis, then pipe the
+   password (line 1, `printf` builtin from a subshell that sources `winvm.env`) and the public keys
+   for `administrators_authorized_keys` into `bash /root/wintools-build/wintools-unattend.sh build`.
+   It refuses to start below 5 GiB MemAvailable (exit 42).
+4. Wait for `qm agent 103 ping`, then for `C:\ProgramData\wintools\firstlogon.done`.
+5. Run `wintools-unattend.sh cleanup` (ejects and shreds the unattend ISO and rendered XML, then
+   asserts they are gone), delete the guest's Panther answer-file copies and Winlogon
+   `DefaultPassword`, and **rotate the install password** — `shred` is best-effort on the ext4/LVM
+   storage underneath, so the rotation is what makes any surviving copy a dead credential.
+
+**Failure exit.** `ssh root@172.16.1.158 'timeout 400 bash /root/wintools-build/wintools-unattend.sh failexit'`
+runs `cleanup`, then `qm shutdown 103` (falling back to `qm stop`), deletes `ide0`/`sata0`, and
+asserts `status: stopped`, printing `FAILEXIT_STATUS=stopped` and `FAILEXIT_MEMAVAILABLE_KB=`. Run
+it whenever a build or session is abandoned; `build` runs it itself from its EXIT trap on any
+failure. If it cannot reach `stopped`, act on atlantis immediately — a running 4 GiB guest is the
+memory hazard.
+
+**Rollback (not run unless decided).** First copy `infra/terraform.tfstate` and
+`infra/terraform.tfstate.backup` somewhere outside the repo.
+- **R1 (preferred):** `terraform plan -destroy -target=proxmox_virtual_environment_vm.wintools -out=<outside-repo>/wintools-destroy.tfplan`.
+  It must read exactly `Plan: 0 to add, 0 to change, 1 to destroy.` and show only
+  `proxmox_virtual_environment_vm.wintools` — anything else (LXC 100 above all) means stop. Apply
+  that file, then delete it. Never a bare `terraform destroy`.
+- **R2:** failure exit first, then `qm destroy 103 --purge --destroy-unreferenced-disks 1`, then
+  `terraform state rm proxmox_virtual_environment_vm.wintools`, proving with `terraform state list`
+  that only that address disappeared.
+- After either: `pvesm list local-lvm | grep -E 'vm-103-'` must be empty; free any leftover
+  efidisk/tpmstate volume with `pvesm free <volid>`, each volid matching `^local-lvm:vm-103-disk-[0-9]+$`.
+  Remove `/var/lib/vz/template/iso/virtio-win-0.1.302.iso` (exact path) and, only if the operator
+  says so, the Windows ISO.
 
 ---
 

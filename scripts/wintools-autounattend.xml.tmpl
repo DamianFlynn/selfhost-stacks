@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  wintools-autounattend.xml.tmpl — answer file for VM 103 "wintools" (Windows 11 Pro).
+  Quick task 261111-woo. This TEMPLATE holds NO secret: the two password placeholders are substituted on
+  atlantis by scripts/wintools-unattend.sh (password arrives on stdin, bash parameter expansion,
+  never argv), and the rendered file plus the ISO built from it are shredded by `cleanup`.
+  The product key is Microsoft's public generic Pro key: it selects the Pro image and does NOT
+  activate. The operator activates with their own key (Settings > Activation > Change product key).
+-->
+<unattend xmlns="urn:schemas-microsoft-com:unattend" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+ <settings pass="windowsPE">
+  <component name="Microsoft-Windows-International-Core-WinPE" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+   <SetupUILanguage><UILanguage>en-US</UILanguage></SetupUILanguage>
+   <InputLocale>en-US</InputLocale><SystemLocale>en-IE</SystemLocale><UILanguage>en-US</UILanguage><UserLocale>en-IE</UserLocale>
+  </component>
+  <component name="Microsoft-Windows-PnpCustomizationsWinPE" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+   <DriverPaths>
+    <!-- CD letters in WinPE are not deterministic: list D..G for each driver. Keys must be unique. -->
+    <PathAndCredentials wcm:action="add" wcm:keyValue="1"><Path>D:\vioscsi\w11\amd64</Path></PathAndCredentials>
+    <PathAndCredentials wcm:action="add" wcm:keyValue="2"><Path>E:\vioscsi\w11\amd64</Path></PathAndCredentials>
+    <PathAndCredentials wcm:action="add" wcm:keyValue="3"><Path>F:\vioscsi\w11\amd64</Path></PathAndCredentials>
+    <PathAndCredentials wcm:action="add" wcm:keyValue="4"><Path>G:\vioscsi\w11\amd64</Path></PathAndCredentials>
+    <PathAndCredentials wcm:action="add" wcm:keyValue="5"><Path>D:\NetKVM\w11\amd64</Path></PathAndCredentials>
+    <PathAndCredentials wcm:action="add" wcm:keyValue="6"><Path>E:\NetKVM\w11\amd64</Path></PathAndCredentials>
+    <PathAndCredentials wcm:action="add" wcm:keyValue="7"><Path>F:\NetKVM\w11\amd64</Path></PathAndCredentials>
+    <PathAndCredentials wcm:action="add" wcm:keyValue="8"><Path>G:\NetKVM\w11\amd64</Path></PathAndCredentials>
+    <PathAndCredentials wcm:action="add" wcm:keyValue="9"><Path>D:\Balloon\w11\amd64</Path></PathAndCredentials>
+    <PathAndCredentials wcm:action="add" wcm:keyValue="10"><Path>E:\Balloon\w11\amd64</Path></PathAndCredentials>
+    <PathAndCredentials wcm:action="add" wcm:keyValue="11"><Path>F:\Balloon\w11\amd64</Path></PathAndCredentials>
+    <PathAndCredentials wcm:action="add" wcm:keyValue="12"><Path>G:\Balloon\w11\amd64</Path></PathAndCredentials>
+   </DriverPaths>
+  </component>
+  <component name="Microsoft-Windows-Setup" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+   <DiskConfiguration><Disk wcm:action="add"><DiskID>0</DiskID><WillWipeDisk>true</WillWipeDisk>
+    <CreatePartitions>
+     <CreatePartition wcm:action="add"><Order>1</Order><Type>EFI</Type><Size>300</Size></CreatePartition>
+     <CreatePartition wcm:action="add"><Order>2</Order><Type>MSR</Type><Size>16</Size></CreatePartition>
+     <CreatePartition wcm:action="add"><Order>3</Order><Type>Primary</Type><Extend>true</Extend></CreatePartition>
+    </CreatePartitions>
+    <ModifyPartitions>
+     <ModifyPartition wcm:action="add"><Order>1</Order><PartitionID>1</PartitionID><Format>FAT32</Format><Label>System</Label></ModifyPartition>
+     <ModifyPartition wcm:action="add"><Order>2</Order><PartitionID>2</PartitionID></ModifyPartition>
+     <ModifyPartition wcm:action="add"><Order>3</Order><PartitionID>3</PartitionID><Format>NTFS</Format><Label>Windows</Label><Letter>C</Letter></ModifyPartition>
+    </ModifyPartitions></Disk></DiskConfiguration>
+   <ImageInstall><OSImage>
+    <InstallFrom><MetaData wcm:action="add"><Key>/IMAGE/NAME</Key><Value>Windows 11 Pro</Value></MetaData></InstallFrom>
+    <InstallTo><DiskID>0</DiskID><PartitionID>3</PartitionID></InstallTo>
+   </OSImage></ImageInstall>
+   <UserData><AcceptEula>true</AcceptEula>
+    <ProductKey><Key>VK7JG-NPHTM-C97JM-9MPGT-3V66T</Key><WillShowUI>OnError</WillShowUI></ProductKey>
+   </UserData>
+  </component>
+ </settings>
+ <settings pass="specialize">
+  <component name="Microsoft-Windows-Shell-Setup" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+   <ComputerName>WINTOOLS</ComputerName><TimeZone>GMT Standard Time</TimeZone>
+  </component>
+  <component name="Microsoft-Windows-Deployment" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+   <RunSynchronous>
+    <RunSynchronousCommand wcm:action="add"><Order>1</Order><Path>reg add "HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server" /v fDenyTSConnections /t REG_DWORD /d 0 /f</Path></RunSynchronousCommand>
+    <RunSynchronousCommand wcm:action="add"><Order>2</Order><Path>reg add "HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" /v UserAuthentication /t REG_DWORD /d 1 /f</Path></RunSynchronousCommand>
+    <RunSynchronousCommand wcm:action="add"><Order>3</Order><Path>reg add HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\OOBE /v BypassNRO /t REG_DWORD /d 1 /f</Path></RunSynchronousCommand>
+   </RunSynchronous>
+  </component>
+ </settings>
+ <settings pass="oobeSystem">
+  <component name="Microsoft-Windows-International-Core" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+   <InputLocale>en-US</InputLocale><SystemLocale>en-IE</SystemLocale><UILanguage>en-US</UILanguage><UserLocale>en-IE</UserLocale>
+  </component>
+  <component name="Microsoft-Windows-Shell-Setup" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+   <OOBE><HideEULAPage>true</HideEULAPage><HideOEMRegistrationScreen>true</HideOEMRegistrationScreen>
+    <HideOnlineAccountScreens>true</HideOnlineAccountScreens><HideWirelessSetupInOOBE>true</HideWirelessSetupInOOBE><ProtectYourPC>3</ProtectYourPC></OOBE>
+   <UserAccounts><LocalAccounts><LocalAccount wcm:action="add">
+    <Name>tools</Name><Group>Administrators</Group><Password><Value>@@ADMIN_PASSWORD@@</Value><PlainText>true</PlainText></Password>
+   </LocalAccount></LocalAccounts></UserAccounts>
+   <!-- One autologon only: Windows decrements LogonCount and disables AutoLogon after FirstLogonCommands. -->
+   <AutoLogon><Enabled>true</Enabled><LogonCount>1</LogonCount><Username>tools</Username>
+    <Password><Value>@@ADMIN_PASSWORD@@</Value><PlainText>true</PlainText></Password></AutoLogon>
+   <FirstLogonCommands>
+    <SynchronousCommand wcm:action="add"><Order>1</Order><CommandLine>cmd /c for %d in (D E F G) do if exist %d:\virtio-win-guest-tools.exe start /wait %d:\virtio-win-guest-tools.exe /install /quiet /norestart</CommandLine></SynchronousCommand>
+    <SynchronousCommand wcm:action="add"><Order>2</Order><CommandLine>powershell -NoProfile -Command "Get-NetConnectionProfile | Set-NetConnectionProfile -NetworkCategory Private; Enable-NetFirewallRule -Group '@FirewallAPI.dll,-28752'"</CommandLine></SynchronousCommand>
+    <SynchronousCommand wcm:action="add"><Order>3</Order><CommandLine>cmd /c powercfg /change standby-timeout-ac 0 &amp; powercfg /change monitor-timeout-ac 0 &amp; powercfg /h off &amp; net accounts /maxpwage:unlimited</CommandLine></SynchronousCommand>
+    <SynchronousCommand wcm:action="add"><Order>4</Order><CommandLine>cmd /c for %d in (D E F G) do if exist %d:\sources\sxs DISM /Online /Enable-Feature /FeatureName:NetFx3 /All /LimitAccess /Source:%d:\sources\sxs</CommandLine></SynchronousCommand>
+    <!-- Sentinel: highest Order, so it runs only after Orders 1-4 have returned. Agent ping proves only Order 1. -->
+    <SynchronousCommand wcm:action="add"><Order>5</Order><CommandLine>cmd /c mkdir C:\ProgramData\wintools 2>nul &amp; echo done> C:\ProgramData\wintools\firstlogon.done</CommandLine></SynchronousCommand>
+   </FirstLogonCommands>
+  </component>
+ </settings>
+</unattend>
