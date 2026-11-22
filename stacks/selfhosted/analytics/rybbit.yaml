@@ -171,6 +171,19 @@ services:
       - "traefik.http.routers.rybbit-track.middlewares=default-headers@file"
       - "traefik.http.routers.rybbit-track.service=rybbit-backend"
 
+      # API-KEY router (2026-11-22) - lets AI/agent clients read stats and use Rybbit's MCP server
+      # from outside without an Authelia session. Matches ONLY requests carrying
+      # `Authorization: Bearer rb_...` AND either a GET under /api/sites/ (stats API) or a POST to
+      # /api/mcp (server/src/mcp/index.ts). Rybbit itself verifies the key (auth.api.verifyApiKey),
+      # so a forged header gets 401; the key's own scopes bound what it can do - hand agents
+      # read-only keys. Signup, auth and admin paths never match this rule and stay behind
+      # Authelia via rybbit-api below.
+      - "traefik.http.routers.rybbit-keyapi.entrypoints=web,websecure"
+      - "traefik.http.routers.rybbit-keyapi.priority=75"
+      - "traefik.http.routers.rybbit-keyapi.rule=Host(`pulse.deercrest.info`) && HeaderRegexp(`Authorization`, `^Bearer rb_[A-Za-z0-9_-]+$`) && ((Method(`GET`) && PathPrefix(`/api/sites/`)) || (Method(`POST`) && Path(`/api/mcp`)))"
+      - "traefik.http.routers.rybbit-keyapi.middlewares=rate-limit@file,default-headers@file"
+      - "traefik.http.routers.rybbit-keyapi.service=rybbit-backend"
+
       # GATED API router - everything else the backend serves.
       - "traefik.http.routers.rybbit-api.entrypoints=web,websecure"
       - "traefik.http.routers.rybbit-api.priority=50"

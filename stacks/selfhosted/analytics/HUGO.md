@@ -149,10 +149,26 @@ d. An ad blocker may still block the script. Note it; do not try to work around 
   (`api/getting-started.mdx`, `api/overview/metric.mdx`); `GET /api/sites/<id>/export/pdf` returns a
   PDF (`api/sites/export-pdf.mdx`).
 
-**Deployment caveat.** In this deployment every non-tracking `/api` path is behind Authelia, so an
-API-key call from outside gets an Authelia redirect, not data. Run API calls on LXC 100 against the
-backend container's internal port, with the key read from a root-only file on stdin, never in argv
-(CONVENTIONS § 7):
+**API-key access from outside (since 2026-11-22).** Requests that carry
+`Authorization: Bearer rb_...` bypass Authelia for exactly two shapes, and Rybbit verifies the key
+itself (a forged or revoked key gets `401`):
+
+- `GET https://pulse.deercrest.info/api/sites/<siteId>/...` — the stats API (overview, metric,
+  events, export). Example: `/api/sites/82add8b3b627/events/names?start_date=…&end_date=…&time_zone=Europe/Dublin`.
+- `POST https://pulse.deercrest.info/api/mcp` — Rybbit's MCP server, for AI clients:
+  ```bash
+  claude mcp add --transport http rybbit https://pulse.deercrest.info/api/mcp \
+    --header "Authorization: Bearer ${RYBBIT_API_KEY}"
+  ```
+  OAuth-based MCP login does **not** work through this route (it needs Authelia-gated paths); use an
+  API key.
+
+Anything else under `/api` — signup, auth, admin — still redirects to Authelia. Give each agent its
+own key, restricted to read permissions when you create it, so one can be revoked without the rest.
+
+**On-host fallback.** The original method still works and needs no key exposure to the internet: run
+the call on LXC 100 against the backend's internal port, with the key read from a root-only file on
+stdin, never in argv (CONVENTIONS § 7):
 
 ```bash
 # On LXC 100. /root/rybbit-api-key is mode 600.
