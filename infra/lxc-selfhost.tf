@@ -269,10 +269,8 @@ resource "proxmox_virtual_environment_container" "selfhost" {
     volume = "/mnt/fast/appdata/minecraft"
     path   = "/mnt/fast/appdata/minecraft"
   }
-  mount_point {
-    volume = "/mnt/fast/appdata/postiz"
-    path   = "/mnt/fast/appdata/postiz"
-  }
+  # mp12 (/mnt/fast/appdata/postiz) removed 2026-11-22 with the Postiz retirement (261122-fkq):
+  # `pct set 100 --delete mp12` sits in [pve:pending] until LXC 100's next reboot.
   mount_point {
     volume = "/mnt/fast/appdata/teleport"
     path   = "/mnt/fast/appdata/teleport"
@@ -355,7 +353,7 @@ resource "proxmox_virtual_environment_container" "selfhost" {
 
   # Per-app fast/appdata datasets, mp32..mp36: added by hand 2026-10-22 via pct set (261022-cg6);
   # config order MUST equal host mp index order — positional TypeList, see lifecycle note; next
-  # free: mp29, mp30, mp39+. Each was hotplugged live (no [pve:pending], no LXC reboot).
+  # free: mp29, mp30, mp39+ (mp12 also frees once its pending delete applies at reboot). Each was hotplugged live (no [pve:pending], no LXC reboot).
   # mp37/mp38 added by hand 2026-10-22 via pct set (261022-wp7); parent before child, as immich.
   mount_point {
     volume = "/mnt/fast/appdata/teslamate"
