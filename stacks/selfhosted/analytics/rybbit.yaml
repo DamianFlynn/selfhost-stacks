@@ -68,7 +68,7 @@ services:
 
   rybbit-redis:
     # renovate: datasource=docker depName=redis
-    image: redis:8.6.4-alpine
+    image: redis:8.10.3-alpine
     container_name: rybbit-redis
     restart: unless-stopped
     networks:
