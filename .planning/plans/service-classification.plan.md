@@ -215,3 +215,10 @@ not an answer.
   replicated off-box. Release is gated on the restore proof that the parent backup plan still has
   open.
 - **The reduced deploy set has not yet been recalculated** and handed to the deploy plan.
+
+### 2026-11-22 — postiz DORMANT → DELETED
+
+- **Reason:** self-hosted Postiz cannot connect a personal LinkedIn profile (upstream gitroomhq/postiz-app#1582, still open), and LinkedIn is the primary platform. Posting, scheduling and social analytics moved to Zernio (SaaS). Operator: *"I prefer self-hosted every time, but if it will not work, it's dead."*
+- **Removed (quick task 261122-fkq):** `stacks/selfhosted/postiz/` (compose, stack, README), `stacks/selfhosted/wrappers/postiz.app.yaml`, the `stack:postiz` Renovate label rule, the `do_postiz` pg-migrate target, and on LXC 100 the four `postiz_*` bind volumes and the `postiz-app` image. No containers existed.
+- **Archive:** atlantis `/mnt/tank/backups/retired-stacks/postiz-appdata-20261122.tar.gz` (7,919,241 bytes, 1,620 entries, sha256 `42c5aa5603998a121127f71ef6d560530b96decde2388e006ba836e535b88ea0`, mode 600). `fast/appdata/postiz` is its own dataset and carries the snapshot `fast/appdata/postiz@retire-postiz-20261122`.
+- **Still pending operator approval:** the Terraform bind mount `/mnt/fast/appdata/postiz` (`infra/lxc-selfhost.tf`) and its backing dataset remain, as does the Cloudflare `social.deercrest.info` record. Appdata files were not deleted.

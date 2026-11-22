@@ -245,14 +245,7 @@ do_open_archiver() {
     "postgres"
 }
 
-do_postiz() {
-  # postiz.yaml is included by postiz/compose.yaml which defines volumes
-  migrate_pg \
-    "postiz_postgres" \
-    "$STACKS/postiz" \
-    "compose.yaml" \
-    "postiz_postgres"
-}
+# The postiz migration target was removed 2026-11-22 with the postiz stack (retired: no personal-LinkedIn support self-hosted).
 
 do_calcom() {
   migrate_pg \
@@ -289,7 +282,6 @@ run_all() {
   do_paperless
   do_keeper
   do_open_archiver
-  do_postiz
   do_calcom
   do_teleport
   echo ""
@@ -305,13 +297,12 @@ case "${1:-all}" in
   paperless)     do_paperless ;;
   keeper)        do_keeper ;;
   open-archiver) do_open_archiver ;;
-  postiz)        do_postiz ;;
   calcom)        do_calcom ;;
   teleport)      do_teleport ;;
   *)
     echo "Unknown instance: $1"
     echo "Valid: all openwebui jellystat n8n pwpush paperless"
-    echo "       keeper open-archiver postiz calcom teleport"
+    echo "       keeper open-archiver calcom teleport"
     exit 1
     ;;
 esac

@@ -377,15 +377,6 @@
       ]
     },
     {
-      "description": "Auto-label by stack: Postiz (Social Media Manager)",
-      "matchFileNames": [
-        "**/stacks/selfhosted/postiz/**"
-      ],
-      "addLabels": [
-        "stack:postiz"
-      ]
-    },
-    {
       "description": "Auto-label by stack: ARRs (Media Automation)",
       "matchFileNames": [
         "**/stacks/selfhosted/arrs/**"

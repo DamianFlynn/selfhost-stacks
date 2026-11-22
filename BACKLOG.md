@@ -10,7 +10,7 @@ Drag services between stacks to reorganize. **Bold** = deployed, *Italic* = prop
 
 | **arrs** (Automation) | **media** (Servers) | **analytics** | **documents** | **books** | **gaming** | **saas** | **automation** | **mcp** (AI Agents) |
 |---|---|---|---|---|---|---|---|---|
-| **sabnzbd** | **jellyfin** | **postiz** (own stack, dormant) | **paperless-ngx** | **bookorbit** | *romm* ⏸️ | **cal.com** | **n8n** | **atlassian** |
+| **sabnzbd** | **jellyfin** | ~~postiz~~ (retired 2026-11-22 → Zernio) | **paperless-ngx** | **bookorbit** | *romm* ⏸️ | **cal.com** | **n8n** | **atlassian** |
 | **qbittorrent** | **seerr** | **rybbit** | **paperless-gpt** | **audiobookshelf** | | | **oxidized** | **notion** |
 | **prowlarr** | **jellystat** | | **tika** | *readarr?* | | | **pwpush** | **d365fo** |
 | **radarr** | **wizarr** | | **gotenberg** | | | | **tesla-static** | *home-assistant* |
@@ -165,7 +165,8 @@ migrate, so take the latest rather than replaying the 4→5 upgrade.
 
 ## 📦 New Stacks Created
 
-- **analytics**: Rybbit (web analytics). Postiz (social media scheduling) lives in its own `postiz/` stack
+- **analytics**: Rybbit (web analytics). Postiz (social media scheduling) was retired 2026-11-22 — self-hosted Postiz cannot connect a personal LinkedIn profile (upstream gitroomhq/postiz-app#1582, open), and LinkedIn is the primary platform. Posting, scheduling and social analytics moved to Zernio (SaaS). Research: neocortex/clients/deer-crest/postiz-vs-zernio-comparison/index.md (2026-07-06). Appdata archived to atlantis /mnt/tank/backups/retired-stacks/postiz-appdata-20261122.tar.gz.
+  Operator, 2026-11-22: "I prefer self-hosted every time, but if it will not work, it's dead."
 - **documents**: Paperless-ngx + Paperless-GPT + Tika + Gotenberg
 - **bookorbit**: BookOrbit (ebook and audiobook reader; replaced Booklore 2026-10-22)
 - ~~**gaming**: ROMM (ROM library management)~~ — released 2026-08-17, never deployed (see ROMM above)

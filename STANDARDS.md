@@ -86,7 +86,7 @@ services:
 12. ✅ **open-archiver/compose.yaml** - "Open Archiver Stack - Digital content archiving platform"
 13. ✅ **openwebui/compose.yaml** - "Open WebUI Stack - AI chat interface with LLM integration"
 14. ✅ **podsync/compose.yaml** - "Podsync Stack - YouTube/Vimeo to podcast converter"
-15. ✅ **postiz/compose.yaml** - Already had proper header (newly created)
+15. ~~postiz/compose.yaml~~ - stack retired 2026-11-22 and removed from the repo
 16. ✅ **teleport/compose.yaml** - Already had proper header (newly created)
 17. ✅ **termix/compose.yaml** - Already had proper header (newly created)
 18. ✅ **traefik/compose.yaml** - "Traefik Stack - Reverse proxy and load balancer"
@@ -134,7 +134,7 @@ These stacks already had proper headers following the dispatcharr.yaml pattern:
 ### Network Configuration
 - **External Network**: `t3_proxy` - Used by Traefik for reverse proxy access
 - **Internal Networks**: Created per-stack for service-to-service communication
-  - Examples: `postiz`, `teleport`, `dawarich`, `pwpush`, etc.
+  - Examples: `analytics`, `teleport`, `dawarich`, `pwpush`, etc.
 
 ### Volume Mounting
 - **Base Path**: `/mnt/fast/appdata/{stack}/{component}`
