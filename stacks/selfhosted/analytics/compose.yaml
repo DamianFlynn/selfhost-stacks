@@ -1,0 +1,58 @@
+# Analytics Stack - Rybbit
+# Open-source, cookieless web analytics (page views, sources, UTM campaigns) for the Hugo sites.
+# https://github.com/rybbit-io/rybbit
+#
+# Based on upstream v2.9.3 docker-compose.yml. Upstream runs FIVE containers: ClickHouse (events),
+# PostgreSQL (users/orgs/sites), Redis (sessions, sticky identity, bot counters, rate limits), the
+# backend (:3001) and the Next.js client (:3002). Upstream's optional Caddy is dropped; Traefik
+# replaces it. This stack replaces the former `social` stack, whose Rybbit definition referenced an
+# image that never existed and so never started (#307).
+#
+# Hostname: pulse.deercrest.info. Deliberately neutral, because `analytics.` and `rybbit.` hosts sit
+# on ad-blocker lists and would undercount visits.
+#
+# Routing (three Traefik routers, see rybbit.yaml):
+#   - rybbit-track (priority 100): the tracking script and ingest paths only, PUBLIC (no Authelia).
+#     It uses default-headers@file alone: secure-headers@file (inside chain-no-auth) carries CORS
+#     options, which makes Traefik answer the /api/track preflight itself WITHOUT POST and breaks
+#     every cross-site pageview. The backend's own CORS reflects any origin on these paths.
+#   - rybbit-api (priority 50): every other /api path, behind chain-authelia@file.
+#   - rybbit (priority 10): the dashboard (client), behind chain-authelia@file, then Rybbit's login.
+#
+# WARNING: /mnt/fast/appdata/analytics is on LXC 100's root disk, not its own ZFS dataset
+# (DEPLOYMENT.md § 3). Candidate for the README § Per-app datasets recipe.
+
+name: analytics
+
+########################### NETWORKS
+networks:
+  t3_proxy:
+    external: true
+  # Back-end only: ClickHouse, PostgreSQL and Redis attach here and never to the proxy network.
+  analytics:
+    driver: bridge
+
+########################### VOLUMES
+volumes:
+  rybbit_clickhouse:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/fast/appdata/analytics/clickhouse
+  rybbit_postgres:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/fast/appdata/analytics/postgres
+  rybbit_redis:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/fast/appdata/analytics/redis
+
+########################### SERVICES
+include:
+  - rybbit.yaml

@@ -1,0 +1,7 @@
+# Analytics - Rybbit web analytics (pulse.deercrest.info)
+# Wrapper for TrueNAS SCALE Apps
+
+services: {}
+
+include:
+  - path: /mnt/fast/stacks/stacks/selfhosted/analytics/compose.yaml

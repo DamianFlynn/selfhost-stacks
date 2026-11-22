@@ -262,22 +262,8 @@ do_calcom() {
     "calcom_postgres"
 }
 
-do_social_postiz() {
-  # social/compose.yaml is self-contained (defines networks+volumes inline)
-  migrate_pg \
-    "postiz_postgres" \
-    "$STACKS/social" \
-    "compose.yaml" \
-    "postiz_postgres"
-}
-
-do_rybbit() {
-  migrate_pg \
-    "rybbit_postgres" \
-    "$STACKS/social" \
-    "compose.yaml" \
-    "rybbit_postgres"
-}
+# The social-postiz and rybbit migration targets were removed 2026-11-22 with the former `social` stack; the new
+# rybbit-postgres (analytics stack) is a fresh PG17 and not a migration target.
 
 do_teleport() {
   migrate_pg \
@@ -305,8 +291,6 @@ run_all() {
   do_open_archiver
   do_postiz
   do_calcom
-  do_social_postiz
-  do_rybbit
   do_teleport
   echo ""
   echo "All migrations complete. Backups retained at $BACKUP_DIR"
@@ -323,13 +307,11 @@ case "${1:-all}" in
   open-archiver) do_open_archiver ;;
   postiz)        do_postiz ;;
   calcom)        do_calcom ;;
-  social-postiz) do_social_postiz ;;
-  rybbit)        do_rybbit ;;
   teleport)      do_teleport ;;
   *)
     echo "Unknown instance: $1"
     echo "Valid: all openwebui jellystat n8n pwpush paperless"
-    echo "       keeper open-archiver postiz calcom social-postiz rybbit teleport"
+    echo "       keeper open-archiver postiz calcom teleport"
     exit 1
     ;;
 esac

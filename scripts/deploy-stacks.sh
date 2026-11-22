@@ -121,6 +121,9 @@ main() {
     "neocortex-memory-api|Node bump needs 'docker compose run --rm deps' then /v1/health"
     "beets|music project #305 — manual; Renovate manual-review"
     "beets-flask|music project #305 — manual; Renovate manual-review"
+    "rybbit-backend|Rybbit upgrade: backend/client/clickhouse move together to upstream compose pins; Renovate manual-review"
+    "rybbit-client|Rybbit upgrade: backend/client/clickhouse move together to upstream compose pins; Renovate manual-review"
+    "rybbit-clickhouse|Rybbit upgrade: backend/client/clickhouse move together to upstream compose pins; Renovate manual-review"
   )
   # L-04. Deployed only inside DEPLOY_MEDIA_WINDOW; jellyfin itself is held outright.
   local -a DEPLOY_MEDIA=( dispatcharr seerr audiobookshelf wizarr jellystat jellystat-db )

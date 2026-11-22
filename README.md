@@ -439,6 +439,10 @@ precisely so a negative control needs no file edit.
 ### Photo Management
 - **Immich** - Google Photos alternative
 
+### Analytics
+- **Rybbit** - Web analytics for the Hugo sites at `pulse.deercrest.info` (tracking public, dashboard
+  behind Authelia + own login; see `stacks/selfhosted/analytics/HUGO.md`)
+
 ### Infrastructure
 - **Traefik** - Reverse proxy and SSL termination
 - **Authelia** - SSO authentication

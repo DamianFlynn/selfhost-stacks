@@ -332,12 +332,12 @@
       ]
     },
     {
-      "description": "Auto-label by stack: Social",
+      "description": "Auto-label by stack: Analytics",
       "matchFileNames": [
-        "**/stacks/selfhosted/social/**"
+        "**/stacks/selfhosted/analytics/**"
       ],
       "addLabels": [
-        "stack:social"
+        "stack:analytics"
       ]
     },
     {
@@ -515,6 +515,26 @@
       "addLabels": [
         "stack:arrs",
         "major-update",
+        "manual-review-required"
+      ]
+    },
+    {
+      "description": "Rybbit (analytics stack): excluded from ALL automerge, grouped. Added 2026-11-22 (quick 261122-e3e, #307). Upstream pins one exact ClickHouse version per Rybbit release, and the backend runs its ClickHouse and Postgres migrations on start, so backend, client and clickhouse-server move TOGETHER, to the versions in the upstream docker-compose.yml at the new tag -- never one image on its own. A human reads that compose, merges, then deploys by hand (deploy-stacks.sh holds all three). NO allowedVersions ceiling (repo policy: see the retired wrtag <0.30.0 pin). Scoped by matchFileNames so another stack's clickhouse image is not caught. Must stay after the two 'Default: Auto-merge' rules so that automerge:false wins. Same KNOWN COSMETIC WART as the CouchDB rule: the PR may still carry 'automerge'/'safe' labels while NOT automerging. Filter on 'manual-review-required'.",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchFileNames": [
+        "**/stacks/selfhosted/analytics/**"
+      ],
+      "matchPackageNames": [
+        "ghcr.io/rybbit-io/rybbit-backend",
+        "ghcr.io/rybbit-io/rybbit-client",
+        "clickhouse/clickhouse-server"
+      ],
+      "groupName": "rybbit",
+      "automerge": false,
+      "addLabels": [
+        "stack:analytics",
         "manual-review-required"
       ]
     },

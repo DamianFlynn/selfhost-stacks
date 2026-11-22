@@ -8,9 +8,9 @@ Services and applications to evaluate for future deployment.
 
 Drag services between stacks to reorganize. **Bold** = deployed, *Italic* = proposed
 
-| **arrs** (Automation) | **media** (Servers) | **social** | **documents** | **books** | **gaming** | **saas** | **automation** | **mcp** (AI Agents) |
+| **arrs** (Automation) | **media** (Servers) | **analytics** | **documents** | **books** | **gaming** | **saas** | **automation** | **mcp** (AI Agents) |
 |---|---|---|---|---|---|---|---|---|
-| **sabnzbd** | **jellyfin** | **postiz** | **paperless-ngx** | **bookorbit** | *romm* ⏸️ | **cal.com** | **n8n** | **atlassian** |
+| **sabnzbd** | **jellyfin** | **postiz** (own stack, dormant) | **paperless-ngx** | **bookorbit** | *romm* ⏸️ | **cal.com** | **n8n** | **atlassian** |
 | **qbittorrent** | **seerr** | **rybbit** | **paperless-gpt** | **audiobookshelf** | | | **oxidized** | **notion** |
 | **prowlarr** | **jellystat** | | **tika** | *readarr?* | | | **pwpush** | **d365fo** |
 | **radarr** | **wizarr** | | **gotenberg** | | | | **tesla-static** | *home-assistant* |
@@ -120,12 +120,12 @@ migrate, so take the latest rather than replaying the 4→5 upgrade.
 
 ### Rybbit
 - **Repository**: https://github.com/rybbit-io/rybbit
-- **Purpose**: Self-hosted Reddit client and content curator
-- **Stack**: `social` (new)
-- **Status**: ✅ Created social/rybbit.yaml
-- **Access**: https://rybbit.deercrest.info
-- **Database**: PostgreSQL 18
-- **Notes**: Integrates with Postiz for social posting and Hugo static site
+- **Purpose**: Self-hosted, privacy-friendly web analytics (page views, sources, UTM) for the Hugo sites
+- **Stack**: `analytics`
+- **Status**: Deployed 2026-11-22 (v2.9.3, 5 containers)
+- **Access**: https://pulse.deercrest.info (tracking public, dashboard behind Authelia + Rybbit login)
+- **Database**: ClickHouse 26.3 + PostgreSQL 17 + Redis 8
+- **Notes**: Hugo: `stacks/selfhosted/analytics/HUGO.md`; #307. Replaces the former `social` stack's definition, which never started
 
 ### Paperless-ngx (Full Stack)
 - **Repository**: https://github.com/paperless-ngx/paperless-ngx
@@ -165,7 +165,7 @@ migrate, so take the latest rather than replaying the 4→5 upgrade.
 
 ## 📦 New Stacks Created
 
-- **social**: Postiz (social media scheduling) + Rybbit (Reddit client)
+- **analytics**: Rybbit (web analytics). Postiz (social media scheduling) lives in its own `postiz/` stack
 - **documents**: Paperless-ngx + Paperless-GPT + Tika + Gotenberg
 - **bookorbit**: BookOrbit (ebook and audiobook reader; replaced Booklore 2026-10-22)
 - ~~**gaming**: ROMM (ROM library management)~~ — released 2026-08-17, never deployed (see ROMM above)
