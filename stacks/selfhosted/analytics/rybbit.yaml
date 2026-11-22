@@ -47,7 +47,7 @@ services:
     # Upstream pin. Not the repo's usual postgres:18-alpine: PG18's data path differs and upstream
     # tests 17.
     # renovate: datasource=docker depName=postgres
-    image: postgres:17.4
+    image: postgres:17.12
     container_name: rybbit-postgres
     restart: unless-stopped
     networks:
