@@ -34,7 +34,7 @@
 services:
   blockbusterr:
     profiles: ["dormant"]   # classified DORMANT 2026-09-25 -- see .planning/plans/service-classification.plan.md
-    image: ghcr.io/mahcks/blockbusterr:v1.5.2
+    image: ghcr.io/mahcks/blockbusterr:v2.0.1
     container_name: blockbusterr
     restart: unless-stopped
     security_opt:
