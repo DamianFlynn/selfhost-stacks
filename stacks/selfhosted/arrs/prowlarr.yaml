@@ -30,7 +30,7 @@ services:
   prowlarr:
     hostname: "prowlarr"
     container_name: prowlarr
-    image: ghcr.io/linuxserver/prowlarr:3.0.2.5780-ls169
+    image: ghcr.io/linuxserver/prowlarr:3.1.0.5799-ls170
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped
