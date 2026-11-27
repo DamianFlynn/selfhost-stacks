@@ -8,7 +8,7 @@
 services:
   rybbit-clickhouse:
     # renovate: datasource=docker depName=clickhouse/clickhouse-server
-    image: clickhouse/clickhouse-server:26.10.11.12
+    image: clickhouse/clickhouse-server:26.11.4.11
     container_name: rybbit-clickhouse
     restart: unless-stopped
     networks:
